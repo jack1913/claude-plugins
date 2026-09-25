@@ -128,6 +128,7 @@ Vertical toolbar behavior, including `toolbarVerticalEdge`, belongs in [toolbar-
 ```swift
 struct AdaptivePlayer: View {
     var body: some View {
+        #if os(iOS) && !targetEnvironment(macCatalyst)
         if #available(iOS 27.1, *) {
             ArrangementView {
                 PlayerView()
@@ -136,20 +137,29 @@ struct AdaptivePlayer: View {
             }
             .arrangementViewStyle(.split.axes(.horizontal))
         } else {
-            ViewThatFits {
-                HStack {
-                    PlayerView()
-                    UpNextView()
-                }
-                VStack {
-                    PlayerView()
-                    UpNextView()
-                }
+            fallback
+        }
+        #else
+        fallback
+        #endif
+    }
+
+    private var fallback: some View {
+        ViewThatFits {
+            HStack {
+                PlayerView()
+                UpNextView()
+            }
+            VStack {
+                PlayerView()
+                UpNextView()
             }
         }
     }
 }
 ```
+
+`ArrangementView` exists only on iOS and iPadOS: Apple lists no macOS, Mac Catalyst or visionOS release, so no `#available` version admits it there. Keep the gate inside `#if os(iOS) && !targetEnvironment(macCatalyst)` as above whenever the target also builds for one of those platforms.
 
 Both split and overlay styles accept `axes(_:)`. Leave the axes unconstrained when either orientation is valid. Restrict the set only when the content relationship requires it; if a split cannot use the permitted axis in the current proposal, the arrangement may show a single region instead of forcing an unsuitable split. Keep the earlier-OS fallback equivalent in hierarchy and functionality.
 
@@ -191,7 +201,7 @@ Do not treat an inactive region as a current obstruction; inspect `isActive` bef
 
 The query's `layoutDirectionBehavior` defaults to `.mirrors`, so directional geometry follows right-to-left layout. Preserve that default for interface content. Override it only when coordinates intentionally represent physical hardware placement rather than leading/trailing UI, and keep the reason explicit.
 
-These APIs require the Xcode 27.1 SDK and iOS 27.1 at runtime. Put declarations that name the new types in an `@available(iOS 27.1, *)` scope, select them with `#available`, and keep a safe-area or ordinary adaptive-layout fallback for earlier systems.
+These APIs require the Xcode 27.1 SDK and iOS 27.1 at runtime, and exist only on iOS and iPadOS. Put declarations that name the new types in an `@available(iOS 27.1, *)` scope, select them with `#available`, and keep a safe-area or ordinary adaptive-layout fallback for earlier systems. When the target also builds for macOS, Mac Catalyst or visionOS, put both the declarations and the `#available` check inside `#if os(iOS) && !targetEnvironment(macCatalyst)`, with the fallback in the `#else` branch.
 
 ## Own Your Container
 

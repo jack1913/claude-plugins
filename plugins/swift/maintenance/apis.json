@@ -755,6 +755,36 @@
         "macOS": "26.0",
         "visionOS": false
       }
+    },
+    {
+      "name": "ArrangementView",
+      "path": "swiftui/arrangementview",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": false,
+        "macOS": false,
+        "visionOS": false
+      }
+    },
+    {
+      "name": "arrangementViewStyle(_:)",
+      "path": "swiftui/view/arrangementviewstyle(_:)",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": false,
+        "macOS": false,
+        "visionOS": false
+      }
+    },
+    {
+      "name": "GeometryProxy.reservedRegions(kind:options:layoutDirectionBehavior:)",
+      "path": "swiftui/geometryproxy/reservedregions(kind:options:layoutdirectionbehavior:)",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": false,
+        "macOS": false,
+        "visionOS": false
+      }
     }
   ],
   "ignore": {
