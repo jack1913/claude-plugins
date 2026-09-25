@@ -62,7 +62,7 @@ Text(subtitle)
 
 - Colour never carries meaning alone. Pair every status colour with a symbol shape or a text label, because people with colour blindness can struggle with pairs such as red and green or blue and orange ([HIG: Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility), [HIG: Color](https://developer.apple.com/design/human-interface-guidelines/color))
 - Use the system colours (`.green`, `.orange`, `.red`) for status so they keep their contrast variants ([HIG: Color](https://developer.apple.com/design/human-interface-guidelines/color), [HIG: Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility)), and check what each one means where the app ships: red signals danger in some cultures and something positive in others ([HIG: Color](https://developer.apple.com/design/human-interface-guidelines/color))
-- Colour the symbol and leave the words in the primary style, so the text keeps full contrast and the colour only repeats what the words say:
+- A convention that follows from the contrast minimums above ([HIG: Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility)): colour the symbol and leave the words in the primary style, so the text keeps full contrast and the colour only repeats what the words say:
 
 ```swift
 struct SyncStatusLabel: View {

@@ -58,14 +58,14 @@ struct MailboxRow: View {
 ## Weight and Emphasis
 
 - Weight, size and colour together express importance, and their relative order has to survive a change in text size ([HIG: Typography](https://developer.apple.com/design/human-interface-guidelines/typography))
-- To emphasise text, apply `.bold()` to its text style and let the system choose the weight: each style has its own emphasised weight, from Medium to Heavy; on iOS, Body becomes Semibold and Title 1 becomes Bold ([HIG: Typography](https://developer.apple.com/design/human-interface-guidelines/typography)). Keep `.fontWeight(_:)` for the rare case where one specific weight is the point
+- To emphasise text, apply `.bold()` to its text style and let the system choose the weight: each style has its own emphasised weight, from Medium to Heavy; on iOS, Body becomes Semibold and Title 1 becomes Bold ([HIG: Typography](https://developer.apple.com/design/human-interface-guidelines/typography)). Keep `.fontWeight(_:)` for the rare case where one specific weight is the point (a convention, not an Apple rule)
 - Stay with Regular, Medium, Semibold and Bold. Ultralight, Thin and Light are hard to see, most of all at small sizes ([HIG: Typography](https://developer.apple.com/design/human-interface-guidelines/typography)); a secondary line gets a smaller style or `.foregroundStyle(.secondary)` (`color.md`), not a lighter weight
 - The system fonts react to the Bold Text setting by themselves; a custom font must do the same ([HIG: Typography](https://developer.apple.com/design/human-interface-guidelines/typography))
 - Leading: `.leading(.tight)` on a font helps two lines fit a height-constrained row, `.leading(.loose)` helps long passages and wide columns, and text of three or more lines shouldn't be tightened ([HIG: Typography](https://developer.apple.com/design/human-interface-guidelines/typography), [SwiftUI: Font.leading(_:)](https://developer.apple.com/documentation/swiftui/font/leading(_:)))
 
 ## Numbers and Monospaced Text
 
-- Numbers that change in place (timers, counters, prices, progress) or sit in columns get `.monospacedDigit()`. Only the digits become fixed-width, the rest of the text stays proportional and keeps its style, and numbers line up ([SwiftUI: monospacedDigit()](https://developer.apple.com/documentation/swiftui/view/monospaceddigit())); a value that counts up then holds its width instead of shifting its neighbours
+- Numbers that change in place (timers, counters, prices, progress) or sit in columns get `.monospacedDigit()`. Only the digits become fixed-width, the rest of the text stays proportional and keeps its style, and numbers line up ([SwiftUI: monospacedDigit()](https://developer.apple.com/documentation/swiftui/view/monospaceddigit())). Using it on a value that counts up, so it holds its width instead of shifting its neighbours, is a convention, not an Apple rule
 - `.monospaced()` makes the whole font fixed-width ([SwiftUI: monospaced(_:)](https://developer.apple.com/documentation/swiftui/view/monospaced(_:))). Keep it for text where every character has to line up or be told apart: code, terminal output, hashes and similar identifiers. For plain numbers it only adds a typeface ([HIG: Typography](https://developer.apple.com/design/human-interface-guidelines/typography))
 
 ```swift

@@ -18,7 +18,7 @@ The mechanics (implicit and explicit animation, transitions, completion handlers
 ## Springs by Default
 
 - Springs keep both position and velocity continuous, take over a gesture's speed as it ends, and come to rest gradually, so they read as physical motion; an eased curve can't start from a gesture's velocity ([WWDC23 10158](https://developer.apple.com/videos/play/wwdc2023/10158/))
-- SwiftUI's `default` animation, which `withAnimation` uses when you pass none, is a spring ([SwiftUI: default](https://developer.apple.com/documentation/swiftui/animation/default), [WWDC23 10158](https://developer.apple.com/videos/play/wwdc2023/10158/))
+- SwiftUI's `default` animation, which `withAnimation` uses when you pass none, is a spring; before iOS 17 and macOS 14 it is ease-in-out ([SwiftUI: default](https://developer.apple.com/documentation/swiftui/animation/default), [WWDC23 10158](https://developer.apple.com/videos/play/wwdc2023/10158/))
 
 | Preset | What it is | Fits |
 |---|---|---|
