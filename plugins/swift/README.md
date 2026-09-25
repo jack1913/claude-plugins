@@ -1,0 +1,36 @@
+# swift-plugin
+
+Private Claude Code marketplace with one plugin, `swift`: skills that make an agent write correct, current, Apple-native SwiftUI.
+
+| Skill | Covers |
+|---|---|
+| `swift:swiftui` | SwiftUI correctness and current APIs. A fork of [AvdLee/SwiftUI-Agent-Skill](https://github.com/AvdLee/SwiftUI-Agent-Skill) with visionOS, preview and platform-availability fixes (`UPSTREAM.md`) |
+| `swift:design` | Apple-native design: hierarchy, typography, color, SF Symbols, Liquid Glass, platform idioms, motion, tokens |
+
+## Enable it in a Swift repo
+
+Run inside that repo. `--scope project` writes its committed `.claude/settings.json`; `--scope local` writes the gitignored `.claude/settings.local.json`.
+
+```bash
+claude plugin marketplace add jack1913/swift-plugin --scope project
+claude plugin install swift@swift-plugin --scope project
+```
+
+A repo without these entries never sees the plugin. Installs are copies: a repo picks up a new release with `claude plugin marketplace update swift-plugin` and `claude plugin update swift@swift-plugin`.
+
+## Work on it
+
+| Task | Command |
+|---|---|
+| Try a change | `claude --plugin-dir ~/Dev/claude_skills/swift-plugin/plugins/swift` |
+| Check APIs against Apple | `python3 maintenance/check-apis.py --strict` |
+| Unit tests | `python3 -m unittest discover maintenance/tests` |
+| Evals | `claude plugin eval plugins/swift --scaffold --trust-plugin --max-cost-usd <budget> --allow-tools Write Edit` |
+| Upstream changes | `maintenance/upstream-diff.sh [ref]` |
+| Validate manifests | `claude plugin validate . && claude plugin validate plugins/swift` |
+
+Release flow and design: `docs/superpowers/specs/2026-09-24-swift-plugin-design.md` §6.
+
+## Licenses
+
+Third-party text and its MIT notices: `plugins/swift/NOTICE.md`. Upstream's license: `plugins/swift/skills/swiftui/LICENSE-upstream`.
