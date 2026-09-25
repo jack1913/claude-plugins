@@ -212,6 +212,13 @@ Claude Code (docs and CLI 2.1.282, checked 2026-09-24):
 - `claude plugin tag` accepts a marketplace entry without a `version` (`--dry-run`).
 - `claude plugin eval` finds the suite in `plugins/swift/evals/` and runs the baseline arm against a `--plugin-dir`-style path target.
 - Resolved in the spec review (§8): a `version` bump is required to refresh an install; `name: swiftui` yields `/swift:swiftui`. Confirm both once in a live install.
+- Confirmed 2026-09-25, first release (0.1.0, `swift--v0.1.0`):
+  - `claude plugin validate` accepts the names (one warning: no marketplace description);
+  - the private GitHub marketplace resolved with the existing credentials (`marketplace add` + `install --scope project` in a scratch repo);
+  - `claude plugin tag` accepted the marketplace entry without a `version`;
+  - `claude plugin eval` found the suite in `plugins/swift/evals/`;
+  - the live install listed `swift:swiftui` and `swift:design` in that repo, and none in `~/Dev/claude-configs`;
+  - `plugin update` reported 0.1.0 as the latest version.
 
 ## 10. Out of scope / later
 

@@ -9,8 +9,6 @@ Component inventory
 
 That is `claude --plugin-dir plugins/swift plugin details swift`, run from the repo root.
 
-> **Not published yet.** `jack1913/swift-plugin` does not exist on GitHub until the first release is pushed, so the install commands below fail until then. Until the release, load the plugin with `--plugin-dir`, as in [Work on the plugin](../work-on-it.md#try-a-change).
-
 ## Install it into one repo
 
 Run inside the Swift repo:
