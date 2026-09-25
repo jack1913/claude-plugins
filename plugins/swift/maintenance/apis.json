@@ -825,6 +825,56 @@
         "macOS": false,
         "visionOS": false
       }
+    },
+    {
+      "name": "ReservedRegion",
+      "path": "swiftui/reservedregion",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": false,
+        "macOS": false,
+        "visionOS": false
+      }
+    },
+    {
+      "name": "ToolbarContent.axisBehavior(_:)",
+      "path": "swiftui/toolbarcontent/axisbehavior(_:)",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": false,
+        "macOS": false,
+        "visionOS": false
+      }
+    },
+    {
+      "name": "toolbarVerticalCompressionBehavior(_:)",
+      "path": "swiftui/view/toolbarverticalcompressionbehavior(_:)",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": false,
+        "macOS": false,
+        "visionOS": false
+      }
+    },
+    {
+      "name": "toolbarVerticalBehavior(_:)",
+      "path": "swiftui/view/toolbarverticalbehavior(_:)",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": false,
+        "macOS": false,
+        "visionOS": false
+      }
+    },
+    {
+      "name": "DeviceHingeContext",
+      "path": "swiftui/devicehingecontext",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": false,
+        "macOS": false,
+        "visionOS": false
+      }
     }
   ],
   "ignore": {

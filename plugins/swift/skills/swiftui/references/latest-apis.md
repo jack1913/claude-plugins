@@ -538,7 +538,7 @@ Search this file's lookup table when migrating an API that the 27 SDK marks soft
 - `ToolbarContent.axisBehavior(_:)`, `toolbarVerticalEdge`, `toolbarVerticalCompressionBehavior(_:)`, and `toolbarVerticalBehavior(_:)` support adaptive vertical bars. See [`toolbar-patterns.md`](toolbar-patterns.md).
 - `onHingeChange` and the optional `DeviceHingeContext.hinge` support live effects and interactions, not layout decisions. For iPhone Duo-specific use, see [`iphone-duo.md`](iphone-duo.md).
 
-These APIs are from the beta iOS 27.1 SDK. Gate runtime use with `#available(iOS 27.1, *)`, provide an earlier-system fallback, and recheck semantics against the shipping SDK.
+These APIs are from the beta iOS 27.1 SDK and exist only on iOS and iPadOS. Gate runtime use with `#available(iOS 27.1, *)`, provide an earlier-system fallback, and recheck semantics against the shipping SDK. Apple lists no macOS, Mac Catalyst or visionOS release for them, so no `#available` version admits them there: when the target also builds for one of those platforms, put the declarations and the `#available` check inside `#if os(iOS) && !targetEnvironment(macCatalyst)`, with the fallback in `#else`.
 
 ---
 
