@@ -901,7 +901,9 @@
       "name": "NavigationTransition.zoom(sourceID:in:)",
       "path": "swiftui/navigationtransition/zoom(sourceid:in:)",
       "claims": {
-        "macOS": false
+        "iOS": "18.0",
+        "macOS": false,
+        "visionOS": "2.0"
       }
     }
   ],

@@ -78,7 +78,7 @@ Attach `matchedTransitionSource(id:in:)` to toolbar content that presents anothe
 }
 ```
 
-The view `matchedTransitionSource(id:in:)` is available on iOS 18+, macOS 15+, tvOS 18+, watchOS 11+, and visionOS 2+. Its toolbar-content form is available on iOS 26+ and is unavailable on macOS, tvOS, watchOS, and visionOS. The zoom navigation transition is available on iOS 18+, macOS 15+, tvOS 18+, watchOS 11+, and visionOS 2+.
+The view `matchedTransitionSource(id:in:)` is available on iOS 18+, macOS 15+, tvOS 18+, watchOS 11+, and visionOS 2+. Its toolbar-content form is available on iOS 26+ and is unavailable on macOS, tvOS, watchOS, and visionOS. The zoom transition, `zoom(sourceID:in:)`, is available on iOS, iPadOS, and Mac Catalyst 18+, tvOS 18+, watchOS 11+, and visionOS 2+, and is unavailable on macOS; `navigationTransition(_:)` itself is available on macOS 15+.
 
 ## Adaptive vertical bars (iOS 27.1+)
 
