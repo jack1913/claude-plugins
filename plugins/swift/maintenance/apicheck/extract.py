@@ -15,8 +15,11 @@ BUILTIN_IGNORES = frozenset({"Self", "Type", "Protocol", "Any"})
 # same 3-char marker, then nothing but trailing whitespace.
 _FENCE_OPEN = re.compile(r"^([ \t]*)(```|~~~)[ \t]*([^\n]*)$")
 _FENCE_CLOSE = re.compile(r"^([ \t]*)(```|~~~)[ \t]*$")
-# CommonMark lets the closing fence's indentation differ from the opening
-# fence's by up to 3 spaces, in either direction.
+# CommonMark lets a closing fence dedent to any smaller indentation than its
+# opener (its list-item container may end anywhere at or below the fence),
+# and additionally tolerates up to 3 spaces of *extra* indentation. At the
+# top level the opener's indent is already 0, so "any smaller" is moot and
+# only the +3 tolerance is observable -- which reads as symmetric there.
 _CLOSE_INDENT_TOLERANCE = 3
 _INLINE = re.compile(r"`([^`\n]+)`")
 _TRIPLE_STRING = re.compile(r'"""(?:.|\n)*?"""')
@@ -57,10 +60,12 @@ def strip_code(code: str) -> str:
 def _find_fences(lines: list[str]):
     """Yield (open_index, close_index, indent, info) for each fenced block.
 
-    A closing candidate must carry the same fence character as its opener
-    and be indented within `_CLOSE_INDENT_TOLERANCE` spaces of it -- CommonMark's
-    rule, generalised so it also covers a fence's own indentation baseline
-    inside list items nested to any depth, not just the top level.
+    A closing candidate must carry the same fence character as its opener,
+    and its indentation must be no more than `_CLOSE_INDENT_TOLERANCE` spaces
+    past the opener's -- but it may dedent by any amount, including past the
+    opener's own list-item level. That is CommonMark's rule, generalised so
+    it also covers a fence's own indentation baseline inside list items
+    nested to any depth, not just the top level.
     """
     i = 0
     while i < len(lines):
@@ -76,7 +81,7 @@ def _find_fences(lines: list[str]):
             if (
                 close_match
                 and close_match.group(2) == marker
-                and abs(len(close_match.group(1)) - open_len) <= _CLOSE_INDENT_TOLERANCE
+                and len(close_match.group(1)) - open_len <= _CLOSE_INDENT_TOLERANCE
             ):
                 close_at = j
                 break

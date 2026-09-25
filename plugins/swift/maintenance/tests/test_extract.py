@@ -51,6 +51,28 @@ class FragmentTests(unittest.TestCase):
         md = "- outer\n  - item:\n      ```swift\n      GlassEffectContainer {}\n    ```\n"
         self.assertIn(("GlassEffectContainer", "type"), names(md))
 
+    def test_deep_fence_closing_may_dedent_past_three_spaces(self):
+        # A fence opened deep inside nested list items (indent 6) can close
+        # at any smaller indent, not just within 3 spaces of the opener --
+        # CommonMark's "matching or smaller indent" rule for a fence nested
+        # inside a list item. The old symmetric abs(close - open) <= 3 rule
+        # never closed a fence dedented by more than 3 spaces, so it stayed
+        # open, swallowed the rest of the document as its body, and the
+        # unmatched literal "```" was then read as a new (empty-info, so
+        # "swift") opener, pairing fences up wrong from there on.
+        md = (
+            "- outer\n"
+            "  - item:\n"
+            "      ```swift\n"
+            "      GlassEffectContainer {}\n"
+            "```\n"
+            "\n"
+            "Prose `.padding()` here.\n"
+        )
+        found = names(md)
+        self.assertIn(("GlassEffectContainer", "type"), found)
+        self.assertIn(("padding", "member"), found)
+
     def test_indented_non_swift_fence_inside_list_item_is_not_code(self):
         # The non-swift fence's closer is dedented (indent 2, opener indent
         # 4) -- valid CommonMark, in the new tolerance. The old code's exact
