@@ -207,18 +207,11 @@ Claude Code (docs and CLI 2.1.282, checked 2026-09-24):
 
 ## 9. Verify during implementation
 
-- Marketplace and plugin naming rules accept `swift-plugin` and `swift` (`claude plugin validate`); no clash with installed plugins (`swift-lsp` is distinct).
-- Private GitHub marketplace resolves with the existing `gh`/git credentials.
-- `claude plugin tag` accepts a marketplace entry without a `version` (`--dry-run`).
-- `claude plugin eval` finds the suite in `plugins/swift/evals/` and runs the baseline arm against a `--plugin-dir`-style path target.
-- Resolved in the spec review (§8): a `version` bump is required to refresh an install; `name: swiftui` yields `/swift:swiftui`. Confirm both once in a live install.
-- Confirmed 2026-09-25, first release (0.1.0, `swift--v0.1.0`):
-  - `claude plugin validate` accepts the names (one warning: no marketplace description);
-  - the private GitHub marketplace resolved with the existing credentials (`marketplace add` + `install --scope project` in a scratch repo);
-  - `claude plugin tag` accepted the marketplace entry without a `version`;
-  - `claude plugin eval` found the suite in `plugins/swift/evals/`;
-  - the live install listed `swift:swiftui` and `swift:design` in that repo, and none in `~/Dev/claude-configs`;
-  - `plugin update` reported 0.1.0 as the latest version.
+- Marketplace and plugin naming rules accept `swift-plugin` and `swift` (`claude plugin validate`); no clash with installed plugins (`swift-lsp` is distinct). Confirmed 2026-09-25, first release (0.1.0, `swift--v0.1.0`): `claude plugin validate` accepts the names (one warning: no marketplace description); `claude plugin list` shows `swift-lsp@claude-plugins-official` installed, but it is a different plugin name shipping an LSP server and no skills, so it neither clashes with `swift` nor with the `swift:swiftui` / `swift:design` skill commands.
+- Private GitHub marketplace resolves with the existing `gh`/git credentials. Confirmed 2026-09-25: the private GitHub marketplace resolved with the existing credentials (`marketplace add` + `install --scope project` in a scratch repo).
+- `claude plugin tag` accepts a marketplace entry without a `version` (`--dry-run`). Confirmed 2026-09-25: `claude plugin tag` accepted the marketplace entry without a `version`.
+- `claude plugin eval` finds the suite in `plugins/swift/evals/` and runs the baseline arm against a `--plugin-dir`-style path target. Confirmed 2026-09-25: `claude plugin eval` found the suite in `plugins/swift/evals/`, and its `with-without` ablation ran the baseline (`without`) arm against the plugin's path target — e.g. `glass-button-ios17` WITH 1.00 vs W/OUT 0.67, `preview-debug-guard` WITH 1.00 vs W/OUT 0.50 (`plugins/swift/evals/results/2026-09-25T09-03-55-011Z/aggregate-result.json`, gitignored).
+- Resolved in the spec review (§8): a `version` bump is required to refresh an install; `name: swiftui` yields `/swift:swiftui`. The `name: swiftui` → `/swift:swiftui` mapping was confirmed live 2026-09-25 (the live install listed `swift:swiftui` and `swift:design` in a scratch repo, and neither in `~/Dev/claude-configs`). The version-bump rule stays documented, not confirmed live: the repo has cut only one release (0.1.0), so no second version has existed to bump and no update run has exercised it; `plugin update` reported 0.1.0 as the latest version, which is consistent with "already installed" rather than evidence of the bump path.
 
 ## 10. Out of scope / later
 
