@@ -86,3 +86,6 @@ Before coding, understand the context and commit to an Apple-native direction:
 | Text styles, Dynamic Type, weights | `references/typography.md` |
 | System and semantic colour, dark mode, contrast | `references/color.md` |
 | SF Symbols: rendering modes, variants, effects | `references/sf-symbols.md` |
+| When Liquid Glass fits, regular vs clear, tinting, concentric corners | `references/liquid-glass-design.md` |
+| iPhone, iPad, Mac, Vision Pro idioms and hit targets | `references/platform-idioms.md` |
+| Springs, meaningful motion, Reduce Motion | `references/motion.md` |

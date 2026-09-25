@@ -529,6 +529,155 @@
         "macOS": "26.0",
         "visionOS": "26.0"
       }
+    },
+    {
+      "name": "Glass.regular",
+      "path": "swiftui/glass/regular",
+      "claims": {
+        "visionOS": false
+      }
+    },
+    {
+      "name": "Glass.clear",
+      "path": "swiftui/glass/clear",
+      "claims": {
+        "visionOS": false
+      }
+    },
+    {
+      "name": "Glass.tint(_:)",
+      "path": "swiftui/glass/tint(_:)",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "presentationBackground(_:)",
+      "path": "swiftui/view/presentationbackground(_:)",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "concentric(minimum:)",
+      "path": "swiftui/edge/corner/style/concentric(minimum:)",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "containerShape(_:)",
+      "path": "swiftui/view/containershape(_:)",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "TabRole.search",
+      "path": "swiftui/tabrole/search",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "inspector(isPresented:content:)",
+      "path": "swiftui/view/inspector(ispresented:content:)",
+      "claims": {
+        "iOS": "17.0",
+        "macOS": "14.0",
+        "visionOS": false
+      }
+    },
+    {
+      "name": "InspectorCommands",
+      "path": "swiftui/inspectorcommands",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "fullScreenCover(isPresented:onDismiss:content:)",
+      "path": "swiftui/view/fullscreencover(ispresented:ondismiss:content:)",
+      "claims": {
+        "macOS": false
+      }
+    },
+    {
+      "name": "commands(content:)",
+      "path": "swiftui/scene/commands(content:)",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "keyboardShortcut(_:modifiers:)",
+      "path": "swiftui/view/keyboardshortcut(_:modifiers:)",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "controlSize(_:)",
+      "path": "swiftui/view/controlsize(_:)",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "openWindow",
+      "path": "swiftui/environmentvalues/openwindow",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "Animation.smooth",
+      "path": "swiftui/animation/smooth",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "Animation.snappy",
+      "path": "swiftui/animation/snappy",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "Animation.bouncy",
+      "path": "swiftui/animation/bouncy",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "Animation.default",
+      "path": "swiftui/animation/default",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "smooth(duration:extraBounce:)",
+      "path": "swiftui/animation/smooth(duration:extrabounce:)",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "spring(duration:bounce:blendDuration:)",
+      "path": "swiftui/animation/spring(duration:bounce:blendduration:)",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "accessibilityReduceMotion",
+      "path": "swiftui/environmentvalues/accessibilityreducemotion",
+      "claims": {
+        "deprecated": false
+      }
     }
   ],
   "ignore": {
@@ -665,7 +814,9 @@
       "AppColor",
       "ConcertView",
       "DesignTokens",
+      "ForYouView",
       "InboxView",
+      "LibraryView",
       "StageView"
     ],
     "SwiftUI runtime symbols named in Instruments output": [
