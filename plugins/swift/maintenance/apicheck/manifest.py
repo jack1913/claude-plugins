@@ -42,6 +42,8 @@ def load_manifest(path: Path) -> Manifest:
         data = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         raise ManifestError(f"{path}: invalid JSON: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ManifestError(f"{path}: manifest root must be a JSON object")
     unknown = set(data) - _TOP_KEYS
     if unknown:
         raise ManifestError(f"{path}: unknown keys {sorted(unknown)}")
@@ -55,8 +57,11 @@ def load_manifest(path: Path) -> Manifest:
             f"{path}: 'frameworks' must be a non-empty list of Apple framework slugs"
         )
 
+    apis_data = data.get("apis", [])
+    if not isinstance(apis_data, list):
+        raise ManifestError(f"{path}: 'apis' must be a list of API entries")
     apis, seen = [], set()
-    for i, raw in enumerate(data.get("apis", [])):
+    for i, raw in enumerate(apis_data):
         where = f"{path}: apis[{i}]"
         if (
             not isinstance(raw, dict)

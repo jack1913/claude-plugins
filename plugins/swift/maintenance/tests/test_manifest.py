@@ -89,6 +89,20 @@ class LoadManifestTests(unittest.TestCase):
             with self.assertRaises(ManifestError):
                 load_manifest(path)
 
+    def test_manifest_root_must_be_an_object(self):
+        # A JSON array, string, number, bool or null root used to reach
+        # `set(data)` / `data.get(...)` and crash with an uncaught
+        # TypeError/AttributeError instead of a ManifestError.
+        for root in ([1, 2], "just a string", 1.5, True, None):
+            with self.subTest(root=root):
+                self.assertRejected(root, "must be a JSON object")
+
+    def test_apis_must_be_a_list(self):
+        # A non-list 'apis' (e.g. a bare number) used to reach
+        # `enumerate(data.get("apis", []))` and crash with an uncaught
+        # TypeError instead of a ManifestError.
+        self.assertRejected({**VALID, "apis": 123}, "'apis' must be a list")
+
     def test_frameworks_must_be_a_list_not_a_bare_string(self):
         # A bare string is iterable character-by-character, so a naive
         # "all(isinstance(f, str) ...)" check would accept it.
