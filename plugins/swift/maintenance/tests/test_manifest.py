@@ -89,6 +89,52 @@ class LoadManifestTests(unittest.TestCase):
             with self.assertRaises(ManifestError):
                 load_manifest(path)
 
+    def test_frameworks_must_be_a_list_not_a_bare_string(self):
+        # A bare string is iterable character-by-character, so a naive
+        # "all(isinstance(f, str) ...)" check would accept it.
+        self.assertRejected({**VALID, "frameworks": "swiftui"}, "frameworks")
+
+    def test_framework_entry_must_be_a_string(self):
+        self.assertRejected({**VALID, "frameworks": ["swiftui", 1]}, "frameworks")
+
+    def test_api_name_must_be_a_string(self):
+        self.assertRejected(
+            {**VALID, "apis": [{"name": 1, "path": "swiftui/x"}]}, "'name'"
+        )
+
+    def test_api_path_must_be_a_string(self):
+        self.assertRejected({**VALID, "apis": [{"name": "x", "path": 1}]}, "'path'")
+
+    def test_api_claims_must_be_an_object(self):
+        self.assertRejected(
+            {
+                **VALID,
+                "apis": [{"name": "x", "path": "swiftui/x", "claims": ["visionOS"]}],
+            },
+            "'claims'",
+        )
+
+    def test_api_table_must_be_a_bool(self):
+        self.assertRejected(
+            {**VALID, "apis": [{"name": "x", "path": "swiftui/x", "table": "true"}]},
+            "'table'",
+        )
+
+    def test_ignore_must_be_an_object(self):
+        self.assertRejected({**VALID, "ignore": ["CardView"]}, "'ignore'")
+
+    def test_ignore_value_must_be_a_list_not_a_bare_string(self):
+        # Same character-iteration trap as 'frameworks': a bare string must
+        # not be silently treated as a list of one-letter names.
+        self.assertRejected(
+            {**VALID, "ignore": {"example views": "CardView"}}, "'ignore'"
+        )
+
+    def test_ignore_list_entries_must_be_strings(self):
+        self.assertRejected(
+            {**VALID, "ignore": {"example views": ["CardView", 1]}}, "'ignore'"
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

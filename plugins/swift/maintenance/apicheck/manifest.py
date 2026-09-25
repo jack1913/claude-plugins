@@ -46,7 +46,11 @@ def load_manifest(path: Path) -> Manifest:
     if unknown:
         raise ManifestError(f"{path}: unknown keys {sorted(unknown)}")
     frameworks = data.get("frameworks")
-    if not frameworks or not all(isinstance(f, str) for f in frameworks):
+    if (
+        not isinstance(frameworks, list)
+        or not frameworks
+        or not all(isinstance(f, str) for f in frameworks)
+    ):
         raise ManifestError(
             f"{path}: 'frameworks' must be a non-empty list of Apple framework slugs"
         )
@@ -62,6 +66,10 @@ def load_manifest(path: Path) -> Manifest:
             raise ManifestError(
                 f"{where}: needs 'name' and 'path'; allowed keys are {sorted(_API_KEYS)}"
             )
+        if not isinstance(raw["name"], str):
+            raise ManifestError(f"{where}: 'name' must be a string")
+        if not isinstance(raw["path"], str):
+            raise ManifestError(f"{where}: 'path' must be a string")
         if raw["name"] in seen:
             raise ManifestError(f"{where}: duplicate name {raw['name']!r}")
         seen.add(raw["name"])
@@ -69,6 +77,10 @@ def load_manifest(path: Path) -> Manifest:
             raise ManifestError(
                 f"{where}: path is relative to /documentation/ without .json, e.g. swiftui/view/glasseffect(_:in:)"
             )
+        if "claims" in raw and not isinstance(raw["claims"], dict):
+            raise ManifestError(f"{where}: 'claims' must be an object")
+        if "table" in raw and not isinstance(raw["table"], bool):
+            raise ManifestError(f"{where}: 'table' must be true or false")
         claims = raw.get("claims", {})
         for key, value in claims.items():
             if not _valid_claim(key, value):
@@ -82,8 +94,17 @@ def load_manifest(path: Path) -> Manifest:
             )
         )
 
+    ignore_data = data.get("ignore", {})
+    if not isinstance(ignore_data, dict):
+        raise ManifestError(
+            f"{path}: 'ignore' must be an object mapping a reason to a list of names"
+        )
     ignore: dict[str, str] = {}
-    for reason, names in data.get("ignore", {}).items():
+    for reason, names in ignore_data.items():
+        if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
+            raise ManifestError(
+                f"{path}: 'ignore' entry {reason!r} must be a list of name strings"
+            )
         for name in names:
             if name in ignore:
                 raise ManifestError(f"{path}: {name!r} is ignored twice")
