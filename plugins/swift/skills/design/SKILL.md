@@ -1,6 +1,6 @@
 ---
 name: design
-description: Use when designing or restyling SwiftUI screens and components for iOS, iPadOS, macOS or visionOS, including information hierarchy and layout, typography and Dynamic Type, color and dark mode, SF Symbols, when and how to use Liquid Glass, platform idioms (tab bar vs sidebar vs ornaments, toolbars, inspectors, sheets vs windows), motion, and design tokens. Also use when a view looks like a web page, when choosing between native primitives, or when a project has no design tokens yet.
+description: Use when building a new SwiftUI screen or view (a settings screen, form, list, detail or onboarding view), or designing or restyling screens and components, for iOS, iPadOS, macOS or visionOS, including information hierarchy and layout, typography and Dynamic Type, color and dark mode, SF Symbols, when and how to use Liquid Glass, platform idioms (tab bar vs sidebar vs ornaments, toolbars, inspectors, sheets vs windows), motion, and design tokens. Also use when a view looks like a web page, when choosing between native primitives, or when a project has no design tokens yet.
 ---
 
 # Apple-Native Design
@@ -9,8 +9,9 @@ This skill decides *what* to build: which native primitive fits, how a screen ra
 
 ## Operating Rules
 
+- When the task writes or changes SwiftUI code, load `swift:swiftui` as well before writing it: it holds the code rules this skill leaves out (availability gates, `#if DEBUG` around previews, deprecated APIs)
 - If the project has its own design layer (tokens, a project design skill), translate every literal in these examples into it; the project layer wins on conflict
-- With no project layer, use system text styles and semantic colours, and suggest the starter token set in `references/tokens.md` instead of scattering literals
+- With no project layer (no token types, colour sets or project design skill in the repo), use system text styles and semantic colours instead of literals, and end your reply with one sentence saying the project has no design tokens yet and offering the starter set of named spacing, radius and motion values in `references/tokens.md`
 - Adopt Liquid Glass where `references/liquid-glass-design.md` says it fits; `swift:swiftui` keeps the API rules
 
 ## Design Thinking
@@ -59,6 +60,7 @@ Before coding, understand the context and commit to an Apple-native direction:
 
 **Tokens**
 - [ ] No literal spacing, radius, colour, font or animation value: the project's tokens, or system text styles, semantic colours and the `references/tokens.md` set
+- [ ] No project tokens: the reply says so and offers the `references/tokens.md` starter set
 
 **Structure**
 - [ ] Grouped input uses `Form`, `Section` and `LabeledContent`, not stacks with dividers
