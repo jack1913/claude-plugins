@@ -9,6 +9,7 @@
 - [@ViewBuilder](#viewbuilder)
 - [SDK 27 `@ContentBuilder`](#sdk-27-contentbuilder)
 - [Keep View Body Simple and Avoid High-Cost Operations](#keep-view-body-simple-and-avoid-high-cost-operations)
+- [Keep Actions and Side Effects Out of body](#keep-actions-and-side-effects-out-of-body)
 - [Keep View `init` Cheap](#keep-view-init-cheap)
 - [Single-Child Group](#single-child-group)
 - [When to Extract Subviews](#when-to-extract-subviews)
@@ -30,7 +31,7 @@ SwiftUI's diffing algorithm compares view hierarchies to determine what needs up
 
 ## View File Structure (optional readability suggestion)
 
-Property ordering has no effect on correctness or performance, so treat this as a personal/team readability preference rather than a rule. Some developers find a consistent order easier to scan — for example, environment, then state, then passed-in properties, then `init`, body, and helper subviews. Adopt it only if your team wants the consistency; never reorder existing code solely to match it.
+Property ordering has no effect on correctness or performance, so treat this as a personal/team readability preference rather than a rule. Some developers find a consistent order easier to scan — for example, environment, then state, then passed-in properties, then `init`, body, and helper subviews. In such an order, computed properties that aren't views sit just before `init`, view helpers follow `body`, and helper and async functions come last. Adopt it only if your team wants the consistency; never reorder existing code solely to match it.
 
 ```swift
 struct ContentView: View {
@@ -299,6 +300,34 @@ General guidance:
 - avoid heavy branching in large view trees
 - move data preparation into the model layer or dedicated helpers; do not filter in `init`
 
+## Keep Actions and Side Effects Out of body
+
+`body` should read as a description of the UI. When a button action or a `.task` / `.onChange` closure grows past a line or two, move it into a small private method and reference that method from the view. Business logic itself (validation, persistence, networking, search) belongs in the model or a service, where it can be tested without a view; the view's method only forwards the event and updates view state.
+
+```swift
+var body: some View {
+    List(results) { result in
+        Text(result.title)
+    }
+    .searchable(text: $query)
+    .task(id: query) { await reload(for: query) }
+    .toolbar {
+        Button("Save", action: save)
+    }
+}
+
+private func save() {
+    model.saveSearch(query)
+    showsSavedBanner = true
+}
+
+private func reload(for query: String) async {
+    results = await model.results(matching: query)
+}
+```
+
+One-line state changes such as `isExpanded.toggle()` can stay inline.
+
 ## Keep View `init` Cheap
 
 A view's `init` runs every time the parent re-evaluates its body, which can be many times per second for views inside `List`, `LazyVStack`, scroll containers, or animated parents. Treat `init` as a constant-time copy of inputs into stored properties. Don't decode JSON, build a `DateFormatter`, touch the file system, or allocate large structures there — that work repeats on every parent body pass even when the inputs are identical.
@@ -353,6 +382,7 @@ Extract complex views into separate subviews when:
 - You need to isolate state changes for performance
 - The view is becoming large (keep views small for better performance)
 - The section may evolve independently over time
+- The file grows past roughly 300 lines: split it into dedicated view types rather than organizing it with `// MARK: -` extensions, and move subviews that are reused elsewhere into their own files
 
 ## Container View Pattern
 

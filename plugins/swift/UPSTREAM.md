@@ -22,6 +22,7 @@
 | `SKILL.md` checklist | Items for deployment targets below 26 and for the visionOS glass branch | Upstream's generic `#available` item doesn't name the 26 boundary or visionOS |
 | `SKILL.md` Operating Rules | Project-layer rule | A repo's own tokens and design skill override example literals (example-app-design depends on this) |
 | `references/latest-apis.md` | `overlay(_:alignment:)` and `Text + Text` deprecation entries (from twostraws, see NOTICE.md) | Apple deprecates both (27.2, 26.0); upstream had neither |
+| `references/view-structure.md` | Ordering detail, actions-out-of-body section, 300-line split rule (from Dimillian, see NOTICE.md) | Gaps in upstream's view-structure guidance |
 
 ## Ported
 
