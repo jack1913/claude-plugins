@@ -327,6 +327,208 @@
         "macOS": "15.0",
         "visionOS": "2.0"
       }
+    },
+    {
+      "name": "GroupBox",
+      "path": "swiftui/groupbox",
+      "claims": {
+        "tvOS": false,
+        "watchOS": false
+      }
+    },
+    {
+      "name": "extraLargeTitle",
+      "path": "swiftui/font/extralargetitle",
+      "claims": {
+        "visionOS": "1.0",
+        "iOS": false,
+        "iPadOS": false,
+        "Mac Catalyst": false,
+        "macOS": false,
+        "watchOS": false,
+        "tvOS": false
+      }
+    },
+    {
+      "name": "extraLargeTitle2",
+      "path": "swiftui/font/extralargetitle2",
+      "claims": {
+        "visionOS": "1.0",
+        "iOS": false,
+        "iPadOS": false,
+        "Mac Catalyst": false,
+        "macOS": false,
+        "watchOS": false,
+        "tvOS": false
+      }
+    },
+    {
+      "name": "monospacedDigit()",
+      "path": "swiftui/view/monospaceddigit()",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "monospaced(_:)",
+      "path": "swiftui/view/monospaced(_:)",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "symbolRenderingMode(_:)",
+      "path": "swiftui/view/symbolrenderingmode(_:)",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "symbolVariant(_:)",
+      "path": "swiftui/view/symbolvariant(_:)",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "imageScale(_:)",
+      "path": "swiftui/view/imagescale(_:)",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "Image(systemName:variableValue:)",
+      "path": "swiftui/image/init(systemname:variablevalue:)",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "symbolEffect(_:options:value:)",
+      "path": "swiftui/view/symboleffect(_:options:value:)",
+      "claims": {
+        "iOS": "17.0",
+        "macOS": "14.0",
+        "visionOS": "1.0"
+      }
+    },
+    {
+      "name": "symbolEffect(_:options:isActive:)",
+      "path": "swiftui/view/symboleffect(_:options:isactive:)",
+      "claims": {
+        "iOS": "17.0",
+        "macOS": "14.0",
+        "visionOS": "1.0"
+      }
+    },
+    {
+      "name": "BounceSymbolEffect",
+      "path": "symbols/bouncesymboleffect",
+      "claims": {
+        "iOS": "17.0",
+        "macOS": "14.0",
+        "visionOS": "1.0"
+      }
+    },
+    {
+      "name": "PulseSymbolEffect",
+      "path": "symbols/pulsesymboleffect",
+      "claims": {
+        "iOS": "17.0",
+        "macOS": "14.0",
+        "visionOS": "1.0"
+      }
+    },
+    {
+      "name": "ScaleSymbolEffect",
+      "path": "symbols/scalesymboleffect",
+      "claims": {
+        "iOS": "17.0",
+        "macOS": "14.0",
+        "visionOS": "1.0"
+      }
+    },
+    {
+      "name": "VariableColorSymbolEffect",
+      "path": "symbols/variablecolorsymboleffect",
+      "claims": {
+        "iOS": "17.0",
+        "macOS": "14.0",
+        "visionOS": "1.0"
+      }
+    },
+    {
+      "name": "ReplaceSymbolEffect",
+      "path": "symbols/replacesymboleffect",
+      "claims": {
+        "iOS": "17.0",
+        "macOS": "14.0",
+        "visionOS": "1.0"
+      }
+    },
+    {
+      "name": "AppearSymbolEffect",
+      "path": "symbols/appearsymboleffect",
+      "claims": {
+        "iOS": "17.0",
+        "macOS": "14.0",
+        "visionOS": "1.0"
+      }
+    },
+    {
+      "name": "DisappearSymbolEffect",
+      "path": "symbols/disappearsymboleffect",
+      "claims": {
+        "iOS": "17.0",
+        "macOS": "14.0",
+        "visionOS": "1.0"
+      }
+    },
+    {
+      "name": "WiggleSymbolEffect",
+      "path": "symbols/wigglesymboleffect",
+      "claims": {
+        "iOS": "18.0",
+        "macOS": "15.0",
+        "visionOS": "2.0"
+      }
+    },
+    {
+      "name": "BreatheSymbolEffect",
+      "path": "symbols/breathesymboleffect",
+      "claims": {
+        "iOS": "18.0",
+        "macOS": "15.0",
+        "visionOS": "2.0"
+      }
+    },
+    {
+      "name": "RotateSymbolEffect",
+      "path": "symbols/rotatesymboleffect",
+      "claims": {
+        "iOS": "18.0",
+        "macOS": "15.0",
+        "visionOS": "2.0"
+      }
+    },
+    {
+      "name": "DrawOnSymbolEffect",
+      "path": "symbols/drawonsymboleffect",
+      "claims": {
+        "iOS": "26.0",
+        "macOS": "26.0",
+        "visionOS": "26.0"
+      }
+    },
+    {
+      "name": "DrawOffSymbolEffect",
+      "path": "symbols/drawoffsymboleffect",
+      "claims": {
+        "iOS": "26.0",
+        "macOS": "26.0",
+        "visionOS": "26.0"
+      }
     }
   ],
   "ignore": {

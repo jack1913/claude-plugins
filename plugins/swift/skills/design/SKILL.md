@@ -82,3 +82,7 @@ Before coding, understand the context and commit to an Apple-native direction:
 | Topic | Reference |
 |-------|-----------|
 | Design tokens: using a project's, or introducing a starter set | `references/tokens.md` |
+| Hierarchy, grouping, spacing and alignment | `references/hierarchy-layout.md` |
+| Text styles, Dynamic Type, weights | `references/typography.md` |
+| System and semantic colour, dark mode, contrast | `references/color.md` |
+| SF Symbols: rendering modes, variants, effects | `references/sf-symbols.md` |
