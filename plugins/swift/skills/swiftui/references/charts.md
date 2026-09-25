@@ -30,12 +30,14 @@ Base `Chart`, custom axes, scales, and most marks require iOS 16 or later.
 - Chart3D and Z-axis APIs exist on iOS 26+; this reference is primarily about 2D `Chart`, with a dedicated Chart3D section below
 
 ```swift
-if #available(iOS 17, *) {
+if #available(iOS 17, macOS 14, *) {
     // Selection, SectorMark, scrollable axes
 } else {
     // Base Chart, axes, scales, and core marks
 }
 ```
+
+Name every platform the project targets in each gate. For a platform the gate leaves out, the `*` treats the branch as reachable at that platform's deployment target, so `#available(iOS 17, *)` fails to compile `SectorMark` in a package that also targets macOS 13. Apple's matching releases are macOS 14 for the iOS 17 APIs, macOS 15 and visionOS 2 for the iOS 18 plot types, and macOS 26 and visionOS 26 for Chart3D.
 
 ## Core APIs
 
@@ -193,7 +195,7 @@ iOS 18 adds data-driven plot wrappers: `AreaPlot`, `BarPlot`, `LinePlot`, `Point
 `LinePlot` and `AreaPlot` also accept function closures for plotting mathematical functions without discrete data:
 
 ```swift
-if #available(iOS 18, *) {
+if #available(iOS 18, macOS 15, visionOS 2, *) {
     Chart {
         LinePlot(x: "x", y: "sin(x)") { x in
             sin(x)
@@ -211,7 +213,7 @@ Use plot types when you want a data-first API surface or need function plotting.
 `Chart3D` is a separate API for 3D chart content. It supports 3D `PointMark`, `RectangleMark`, `RuleMark`, and `SurfacePlot`.
 
 ```swift
-if #available(iOS 26, *) {
+if #available(iOS 26, macOS 26, visionOS 26, *) {
     Chart3D(points) { point in
         PointMark(
             x: .value("X", point.x),
@@ -220,14 +222,16 @@ if #available(iOS 26, *) {
         )
     }
     .chart3DPose(.front)
+    #if !os(visionOS)
     .chart3DCameraProjection(.perspective)
+    #endif
 }
 ```
 
 `SurfacePlot` visualizes mathematical surfaces by evaluating a two-variable function:
 
 ```swift
-if #available(iOS 26, *) {
+if #available(iOS 26, macOS 26, visionOS 26, *) {
     Chart3D {
         SurfacePlot(x: "x", y: "height", z: "z") { x, z in
             sin(x) * cos(z)
@@ -240,12 +244,12 @@ if #available(iOS 26, *) {
 
 Camera and pose configuration:
 
-- **Projection**: `.chart3DCameraProjection(.orthographic)` (default, precise measurements) or `.perspective` (depth effect)
+- **Projection**: `.chart3DCameraProjection(.orthographic)` (default, precise measurements) or `.perspective` (depth effect). iOS and macOS only: visionOS has no `chart3DCameraProjection(_:)`, so keep it inside `#if !os(visionOS)` as above
 - **Pose presets**: `.chart3DPose(.default)`, `.front`, `.back`, `.left`, `.right`
 - **Custom pose**: `.chart3DPose(azimuth: .degrees(45), inclination: .degrees(30))`
 - On visionOS, Chart3D supports natural 3D interaction gestures for rotation and exploration
 
-**Always** gate `Chart3D` with `#available(iOS 26, *)` — it is not available on earlier OS versions.
+**Always** gate `Chart3D` with `#available(iOS 26, macOS 26, visionOS 26, *)`, trimmed to the platforms the project targets — it is not available on earlier OS versions, and a platform the gate leaves out is admitted at its deployment target.
 
 ## Axis Tweaks
 

@@ -695,6 +695,66 @@
       "claims": {
         "deprecated": false
       }
+    },
+    {
+      "name": "SectorMark",
+      "path": "charts/sectormark",
+      "claims": {
+        "iOS": "17.0",
+        "macOS": "14.0"
+      }
+    },
+    {
+      "name": "chartXSelection(value:)",
+      "path": "swiftui/view/chartxselection(value:)",
+      "claims": {
+        "iOS": "17.0",
+        "macOS": "14.0"
+      }
+    },
+    {
+      "name": "chartScrollableAxes(_:)",
+      "path": "swiftui/view/chartscrollableaxes(_:)",
+      "claims": {
+        "iOS": "17.0",
+        "macOS": "14.0"
+      }
+    },
+    {
+      "name": "LinePlot",
+      "path": "charts/lineplot",
+      "claims": {
+        "iOS": "18.0",
+        "macOS": "15.0",
+        "visionOS": "2.0"
+      }
+    },
+    {
+      "name": "Chart3D",
+      "path": "charts/chart3d",
+      "claims": {
+        "iOS": "26.0",
+        "macOS": "26.0",
+        "visionOS": "26.0"
+      }
+    },
+    {
+      "name": "SurfacePlot",
+      "path": "charts/surfaceplot",
+      "claims": {
+        "iOS": "26.0",
+        "macOS": "26.0",
+        "visionOS": "26.0"
+      }
+    },
+    {
+      "name": "chart3DCameraProjection(_:)",
+      "path": "swiftui/view/chart3dcameraprojection(_:)",
+      "claims": {
+        "iOS": "26.0",
+        "macOS": "26.0",
+        "visionOS": false
+      }
     }
   ],
   "ignore": {
