@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Show what upstream changed in skills/swiftui-expert-skill/ between our baseline (UPSTREAM.md) and a ref.
-# Usage: maintenance/upstream-diff.sh [ref]   (default ref: upstream's newest tag)
+# Usage: maintenance/upstream-diff.sh [ref]   (default ref: upstream's newest plain X.Y.Z tag, pre-releases skipped)
 # Read-only: clones into a temp dir and never writes to this repo. Porting is manual.
 set -euo pipefail
 
@@ -19,7 +19,10 @@ trap 'rm -rf "$tmp"' EXIT
 git clone --quiet "$upstream_url" "$tmp/upstream"
 cd "$tmp/upstream"
 
-ref="${1:-$(git tag --sort=-v:refname | head -n 1)}"
+# `git tag --sort=-v:refname | head -n 1` would also pick a pre-release tag
+# (e.g. 5.2.0-beta.1) if upstream cut one after the last plain release; filter
+# to plain X.Y.Z tags (an optional leading "v") before taking the newest.
+ref="${1:-$(git tag --list | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)}"
 for r in "$baseline" "$ref"; do
   if ! git rev-parse --verify --quiet "$r^{commit}" >/dev/null; then
     echo "error: upstream has no ref '$r'" >&2
