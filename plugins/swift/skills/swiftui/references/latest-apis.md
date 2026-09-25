@@ -27,7 +27,7 @@ These replacements have minimal API shape changes. Most are near-direct swaps; a
 - **`toolbar { ToolbarItem(...) }`** instead of `navigationBarItems(...)` (structural change)
 - **`ignoresSafeArea(_:edges:)`** instead of `edgesIgnoringSafeArea(_:)`
 - **`preferredColorScheme(_:)`** instead of `colorScheme(_:)`
-- **`foregroundStyle(_:)`** instead of `foregroundColor(_:)` (e.g., `.foregroundStyle(.primary)`)
+- **`foregroundStyle(_:)`** instead of `foregroundColor(_:)` (e.g., `.foregroundStyle(.primary)`). One exception: to color a `Text` interpolated into another `Text` below iOS 17 / macOS 14, use `Text`'s own `foregroundColor(_:)`, which returns `Text` (see [Text](#text))
 - **`clipShape(.rect(cornerRadius:))`** instead of `cornerRadius()`
 - **`textInputAutocapitalization(_:)`** instead of `autocapitalization(_:)` (note: `.never` replaces `.none`)
 - **`animation(_:value:)`** instead of `animation(_:)` (adds required `value:` parameter; back-deploys to iOS 13+)
@@ -422,7 +422,7 @@ Slider(value: $speed, in: 0.5...2.0, step: 0.25) {
 
 **Interpolate `Text` values instead of concatenating them with `+`.** SDK 26 deprecates `Text`'s `+` operator. Interpolating one `Text` into another is older (iOS 14, macOS 11, tvOS 14, watchOS 7, visionOS 1), so the switch needs no availability check. A styled `Text` interpolated into another keeps its modifiers, and the result is one string translators can reorder (see [`localization.md`](localization.md)).
 
-Only a value that is still a `Text` interpolates as one. `foregroundStyle(_:)` returns `Text` from iOS 17 and macOS 14; below that it returns a view, the interpolation falls back to a debug description, and the compiler warns that `appendInterpolation` is deprecated. There, style with a modifier that returns `Text`, such as `foregroundColor(_:)`.
+Only a value that is still a `Text` interpolates as one. `foregroundStyle(_:)` returns `Text` from iOS 17 and macOS 14; below that it returns a view, the interpolation falls back to a debug description, and the compiler warns that `appendInterpolation` is deprecated. There, style with a modifier that returns `Text`, such as `Text`'s `foregroundColor(_:)`: the one exception to the `foregroundStyle(_:)` rule under Always Use.
 
 ```swift
 // Deprecated in SDK 26
@@ -552,7 +552,7 @@ These APIs are from the beta iOS 27.1 SDK. Gate runtime use with `#available(iOS
 | `statusBar(hidden:)` / `statusBarHidden(_:)` | `toolbarVisibility(_:for: .statusBar)` | iOS 27+; retain old API in earlier fallback |
 | `edgesIgnoringSafeArea(_:)` | `ignoresSafeArea(_:edges:)` | iOS 15+ |
 | `colorScheme(_:)` | `preferredColorScheme(_:)` | iOS 15+ |
-| `foregroundColor(_:)` | `foregroundStyle(_:)` | iOS 15+ |
+| `foregroundColor(_:)` | `foregroundStyle(_:)` | iOS 15+; except `Text`-in-`Text` interpolation below iOS 17 / macOS 14 (see [Text](#text)) |
 | `cornerRadius(_:)` | `clipShape(.rect(cornerRadius:))` | iOS 15+ |
 | `overlay(_:alignment:)` | `overlay(alignment:content:)` | iOS 15+; old form deprecated in SDK 27.2 |
 | `Text + Text` | `Text` interpolation: `Text("\(a)\(b)")` | iOS 14+; `+` deprecated in SDK 26 |
