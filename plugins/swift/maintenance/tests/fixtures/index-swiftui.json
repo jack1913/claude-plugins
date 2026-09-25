@@ -1,0 +1,26 @@
+{
+  "interfaceLanguages": {
+    "swift": [
+      {
+        "title": "SwiftUI",
+        "path": "/documentation/swiftui",
+        "type": "module",
+        "children": [
+          {"title": "Essentials", "path": null, "type": "groupMarker"},
+          {"title": "Adopting Liquid Glass", "path": "/documentation/technologyoverviews/adopting-liquid-glass", "type": "article"},
+          {"title": "GlassEffectContainer", "path": "/documentation/swiftui/glasseffectcontainer", "type": "struct"},
+          {"title": "View", "path": "/documentation/swiftui/view", "type": "protocol", "children": [
+            {"title": "func glassEffect(Glass, in: some Shape) -> some View", "path": "/documentation/swiftui/view/glasseffect(_:in:)", "type": "method"},
+            {"title": "func glassBackgroundEffect<S>(in: S, displayMode: GlassBackgroundDisplayMode) -> some View", "path": "/documentation/swiftui/view/glassbackgroundeffect(in:displaymode:)", "type": "method"},
+            {"title": "func cornerRadius(CGFloat, antialiased: Bool) -> some View", "path": "/documentation/swiftui/view/cornerradius(_:antialiased:)", "type": "method", "deprecated": true}
+          ]},
+          {"title": "Text", "path": "/documentation/swiftui/text", "type": "struct", "children": [
+            {"title": "func bold() -> Text", "path": "/documentation/swiftui/text/bold()", "type": "method"}
+          ]},
+          {"title": "macro Previewable()", "path": "/documentation/swiftui/previewable()", "type": "macro"},
+          {"title": "WebView", "path": "/documentation/webkit/webview-swift.struct", "type": "struct"}
+        ]
+      }
+    ]
+  }
+}
