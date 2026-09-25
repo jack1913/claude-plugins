@@ -420,7 +420,9 @@ Slider(value: $speed, in: 0.5...2.0, step: 0.25) {
 
 ### Text
 
-**Interpolate `Text` values instead of concatenating them with `+`.** SDK 26 deprecates `Text`'s `+` operator. A styled `Text` interpolated into another keeps its modifiers, and the result is one string translators can reorder (see [`localization.md`](localization.md)).
+**Interpolate `Text` values instead of concatenating them with `+`.** SDK 26 deprecates `Text`'s `+` operator. Interpolating one `Text` into another is older (iOS 14, macOS 11, tvOS 14, watchOS 7, visionOS 1), so the switch needs no availability check. A styled `Text` interpolated into another keeps its modifiers, and the result is one string translators can reorder (see [`localization.md`](localization.md)).
+
+Only a value that is still a `Text` interpolates as one. `foregroundStyle(_:)` returns `Text` from iOS 17 and macOS 14; below that it returns a view, the interpolation falls back to a debug description, and the compiler warns that `appendInterpolation` is deprecated. There, style with a modifier that returns `Text`, such as `foregroundColor(_:)`.
 
 ```swift
 // Deprecated in SDK 26
@@ -553,6 +555,7 @@ These APIs are from the beta iOS 27.1 SDK. Gate runtime use with `#available(iOS
 | `foregroundColor(_:)` | `foregroundStyle(_:)` | iOS 15+ |
 | `cornerRadius(_:)` | `clipShape(.rect(cornerRadius:))` | iOS 15+ |
 | `overlay(_:alignment:)` | `overlay(alignment:content:)` | iOS 15+; old form deprecated in SDK 27.2 |
+| `Text + Text` | `Text` interpolation: `Text("\(a)\(b)")` | iOS 14+; `+` deprecated in SDK 26 |
 | `actionSheet(...)` | `confirmationDialog(...)` | iOS 15+ |
 | `alert(isPresented:content:)` | `alert(_:isPresented:actions:message:)` | iOS 15+ |
 | `autocapitalization(_:)` | `textInputAutocapitalization(_:)` | iOS 15+ |
@@ -577,7 +580,6 @@ These APIs are from the beta iOS 27.1 SDK. Gate runtime use with `#available(iOS
 | Manual 1:1 `animatableData` synthesis | `@Animatable` macro; keep manual logic for clamping/normalization | iOS 26+ |
 | `presentationBackground(_:)` on sheets | Default Liquid Glass sheet material | iOS 26+ |
 | Custom toolbar background hacks | `scrollEdgeEffectStyle(_:for:)` | iOS 26+ |
-| `Text + Text` | `Text` interpolation: `Text("\(a)\(b)")` | iOS 26+ |
 | `CarouselTabViewStyle` (watchOS) | `VerticalTabViewStyle` | SDK 27 soft-deprecated |
 | `ControlActiveState` / `controlActiveState` (macOS) | `appearsActive` | SDK 27 soft-deprecated |
 | `AnimatableModifier` | Conform the modifier to `Animatable` directly | SDK 27 soft-deprecated |

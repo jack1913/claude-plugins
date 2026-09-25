@@ -320,6 +320,23 @@
       }
     },
     {
+      "name": "Text interpolation of a Text",
+      "path": "swiftui/localizedstringkey/stringinterpolation/appendinterpolation(_:)-4qyfo",
+      "claims": {
+        "iOS": "14.0",
+        "macOS": "11.0",
+        "deprecated": false
+      }
+    },
+    {
+      "name": "Text.foregroundStyle(_:)",
+      "path": "swiftui/text/foregroundstyle(_:)",
+      "claims": {
+        "iOS": "17.0",
+        "macOS": "14.0"
+      }
+    },
+    {
       "name": "sidebarAdaptable",
       "path": "swiftui/tabviewstyle/sidebaradaptable",
       "claims": {
