@@ -19,6 +19,9 @@ PAGES = {
 
 
 class FakeFetcher:
+    def __init__(self, oldest_cache_age_days=None):
+        self._oldest_cache_age_days = oldest_cache_age_days
+
     def index(self, framework):
         if framework != "swiftui":
             raise NotFound(framework)
@@ -28,6 +31,9 @@ class FakeFetcher:
         if doc_path not in PAGES:
             raise NotFound(doc_path)
         return json.loads((FIXTURES / PAGES[doc_path]).read_text(encoding="utf-8"))
+
+    def oldest_cache_age_days(self):
+        return self._oldest_cache_age_days
 
 
 class CliTests(unittest.TestCase):
@@ -66,7 +72,7 @@ class CliTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def run_cli(self, *flags):
+    def run_cli(self, *flags, fetcher=None):
         self.manifest_path.write_text(json.dumps(self.manifest))
         argv = [
             "--manifest",
@@ -78,13 +84,38 @@ class CliTests(unittest.TestCase):
             *flags,
         ]
         out = io.StringIO()
-        code = cli.run(cli.parse_args(argv), FakeFetcher(), out=out)
+        code = cli.run(cli.parse_args(argv), fetcher or FakeFetcher(), out=out)
         return code, out.getvalue()
 
     def test_clean_tree_passes_strict(self):
         code, out = self.run_cli("--strict")
         self.assertEqual(code, 0, out)
         self.assertIn("2 manifest APIs, 0 failures, 0 warnings", out)
+
+    def test_no_cache_age_line_when_nothing_was_cached(self):
+        # FakeFetcher's default oldest_cache_age_days() is None, like a
+        # Fetcher that used no cache entries.
+        code, out = self.run_cli("--strict")
+        self.assertEqual(code, 0)
+        self.assertNotIn("oldest cache entry", out)
+
+    def test_fresh_cache_is_reported_but_not_a_warning(self):
+        code, out = self.run_cli(
+            "--strict", fetcher=FakeFetcher(oldest_cache_age_days=1.0)
+        )
+        self.assertEqual(code, 0, out)
+        self.assertIn("oldest cache entry: 1.0 days old", out)
+        self.assertNotIn("WARN", out)
+
+    def test_stale_cache_warns_and_fails_only_under_strict(self):
+        stale = FakeFetcher(oldest_cache_age_days=31.0)
+        code, out = self.run_cli(fetcher=stale)
+        self.assertEqual(code, 0)
+        self.assertIn("oldest cache entry: 31.0 days old", out)
+        self.assertIn("WARN cache is up to 31 days old", out)
+        self.assertIn("--refresh", out)
+        code, out = self.run_cli("--strict", fetcher=stale)
+        self.assertEqual(code, 1, out)
 
     def test_unresolved_name_warns_and_fails_only_under_strict(self):
         (self.skills / "swiftui" / "extra.md").write_text("Use `.glassMagic()`.\n")

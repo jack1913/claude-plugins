@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from . import apple, extract, table
-from .fetch import Fetcher, FetchError, NotFound
+from .fetch import DEFAULT_MAX_AGE_DAYS, Fetcher, FetchError, NotFound
 from .manifest import ManifestError, load_manifest
 
 REPO = Path(__file__).resolve().parents[2]
@@ -111,6 +111,14 @@ def run(args, fetcher, out=sys.stdout) -> int:
 
     failures, rows = _check_manifest(manifest, fetcher)
     warnings = _check_coverage(manifest, lookup, args.skills)
+
+    oldest_days = fetcher.oldest_cache_age_days()
+    if oldest_days is not None:
+        print(f"oldest cache entry: {oldest_days:.1f} days old", file=out)
+        if oldest_days > DEFAULT_MAX_AGE_DAYS:
+            warnings.append(
+                f"cache is up to {oldest_days:.0f} days old (> {DEFAULT_MAX_AGE_DAYS}); run --refresh"
+            )
 
     if args.write_table:
         if failures:

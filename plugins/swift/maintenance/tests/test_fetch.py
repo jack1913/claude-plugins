@@ -1,4 +1,5 @@
 import io
+import os
 import sys
 import tempfile
 import unittest
@@ -6,7 +7,13 @@ import urllib.error
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from apicheck.fetch import Fetcher, FetchError, NotFound, url_for  # noqa: E402
+from apicheck.fetch import (  # noqa: E402
+    DEFAULT_MAX_AGE_DAYS,
+    Fetcher,
+    FetchError,
+    NotFound,
+    url_for,
+)
 
 
 class FakeOpener:
@@ -94,6 +101,51 @@ class FetcherTests(unittest.TestCase):
         with self.assertRaises(FetchError) as ctx:
             fetcher.index("swiftui")
         self.assertIn("--refresh", str(ctx.exception))
+
+    def test_oldest_cache_age_is_none_before_any_fetch(self):
+        fetcher = Fetcher(self.cache, opener=FakeOpener({}))
+        self.assertIsNone(fetcher.oldest_cache_age_days())
+
+    def test_freshly_fetched_entry_has_near_zero_age(self):
+        opener = FakeOpener({self.url: b'{"a": 1}'})
+        fetcher = Fetcher(self.cache, opener=opener)
+        fetcher.index("swiftui")
+        age = fetcher.oldest_cache_age_days()
+        self.assertGreaterEqual(age, 0.0)
+        self.assertLess(age, 0.001)  # well under a minute
+
+    def test_reports_age_of_a_cache_hit(self):
+        opener = FakeOpener({self.url: b'{"a": 1}'})
+        Fetcher(self.cache, opener=opener).index("swiftui")
+        (cached,) = self.cache.glob("*.json")
+        five_days_ago = cached.stat().st_mtime - 5 * 86400
+        os.utime(cached, (five_days_ago, five_days_ago))
+
+        clock = [cached.stat().st_mtime + 5 * 86400]
+        fetcher = Fetcher(self.cache, opener=FakeOpener({}), now=lambda: clock[0])
+        fetcher.index("swiftui")
+        self.assertAlmostEqual(fetcher.oldest_cache_age_days(), 5.0, places=6)
+
+    def test_oldest_cache_age_is_the_max_across_entries_used(self):
+        url2 = url_for("index/foundation")
+        opener = FakeOpener({self.url: b'{"a": 1}', url2: b'{"b": 2}'})
+        fetcher = Fetcher(self.cache, opener=opener)
+        fetcher.index("swiftui")
+        fetcher.index("foundation")
+        cached_files = list(self.cache.glob("*.json"))
+        self.assertEqual(len(cached_files), 2)
+        older, newer = cached_files
+        now = older.stat().st_mtime
+        os.utime(older, (now - 10 * 86400, now - 10 * 86400))
+        os.utime(newer, (now - 1 * 86400, now - 1 * 86400))
+
+        fetcher2 = Fetcher(self.cache, opener=FakeOpener({}), now=lambda: now)
+        fetcher2.index("swiftui")
+        fetcher2.index("foundation")
+        self.assertAlmostEqual(fetcher2.oldest_cache_age_days(), 10.0, places=6)
+
+    def test_default_max_age_is_30_days(self):
+        self.assertEqual(DEFAULT_MAX_AGE_DAYS, 30)
 
 
 if __name__ == "__main__":
