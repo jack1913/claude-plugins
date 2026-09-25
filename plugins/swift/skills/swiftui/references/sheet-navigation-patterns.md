@@ -381,7 +381,7 @@ For older `alert` and `confirmationDialog` API patterns, see `latest-apis.md`. P
 - [ ] Use `NavigationStack` with `navigationDestination(for:)` for type-safe navigation
 - [ ] Use `NavigationPath` for programmatic navigation
 - [ ] Use `NavigationSplitView` for sidebar-driven multi-column layouts
-- [ ] Use `Inspector` for trailing-edge supplementary panels
+- [ ] Use `inspector(isPresented:content:)` for trailing-edge supplementary panels
 - [ ] Set column widths with `navigationSplitViewColumnWidth(min:ideal:max:)` or `inspectorColumnWidth(min:ideal:max:)`
 - [ ] Use appropriate presentation modifiers (sheet, fullScreenCover, popover)
 - [ ] Alerts and confirmation dialogs use modern API with actions; prefer the SDK 27 `item:` overload for an optional value

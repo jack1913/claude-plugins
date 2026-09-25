@@ -27,7 +27,7 @@
 | `windowIdealPlacement(_:)` | macOS 15.0+ | No | Closure with display geometry for precise window positioning |
 | `menuBarExtraStyle(_:)` | macOS 13.0+ | Yes | Sets MenuBarExtra to `.menu` or `.window` style |
 | `NavigationSplitView` | macOS 13.0+ | No | Columns always visible side-by-side on macOS; translucent sidebar |
-| `Inspector` | macOS 14.0+ | No | Trailing-edge sidebar panel; resizable by dragging |
+| `inspector(isPresented:content:)` | macOS 14.0+ | No | Trailing-edge sidebar panel; resizable by dragging |
 
 ---
 
@@ -298,6 +298,6 @@ struct ToolbarActions: View {
 - **Set min frame sizes on content** and use `.windowResizability(.contentMinSize)` to enforce them
 - **Always provide `defaultSize`** so new windows start at a reasonable size
 - **Use `NavigationSplitView`** for sidebar navigation — not `HSplitView`
-- **Use `Inspector`** for supplementary panels — it integrates with the toolbar automatically
+- **Use `inspector(isPresented:content:)`** for supplementary panels — it integrates with the toolbar automatically
 - **Define `Commands`** for all repeatable actions — users expect keyboard shortcuts on macOS
 - **Use `#if os(macOS)`** to wrap macOS-only window configuration in multiplatform projects
