@@ -18,7 +18,6 @@ Manual stop options, most to least automated:
     workflows where there's no interactive terminal.
   * Pass --time-limit 30s / 5m / etc. — xctrace stops itself.
 """
-
 from __future__ import annotations
 
 import argparse
@@ -36,69 +35,35 @@ from pathlib import Path
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Record an Instruments .trace file.")
     list_mode = parser.add_mutually_exclusive_group()
-    list_mode.add_argument(
-        "--list-devices",
-        action="store_true",
-        help="List devices and simulators as JSON, then exit.",
-    )
-    list_mode.add_argument(
-        "--list-templates",
-        action="store_true",
-        help="List template names as JSON, then exit.",
-    )
+    list_mode.add_argument("--list-devices", action="store_true",
+                           help="List devices and simulators as JSON, then exit.")
+    list_mode.add_argument("--list-templates", action="store_true",
+                           help="List template names as JSON, then exit.")
 
-    parser.add_argument(
-        "--template", default="SwiftUI", help="Template name (default: SwiftUI)."
-    )
-    parser.add_argument(
-        "--device", default=None, help="Device name or UDID. Defaults to the host."
-    )
-    parser.add_argument(
-        "--output",
-        type=Path,
-        default=None,
-        help="Output .trace path. Defaults to ./<template>-<timestamp>.trace.",
-    )
-    parser.add_argument(
-        "--time-limit",
-        default=None,
-        help="Cap recording duration (e.g. 30s, 5m, 1h). Optional.",
-    )
-    parser.add_argument(
-        "--stop-file",
-        type=Path,
-        default=None,
-        help="When this path appears on disk, stop the recording.",
-    )
-    parser.add_argument(
-        "--env",
-        action="append",
-        default=[],
-        metavar="KEY=VALUE",
-        help="Env var for the launched process. Can repeat. Launch mode only.",
-    )
-    parser.add_argument(
-        "--instrument",
-        action="append",
-        default=[],
-        help="Extra --instrument flag passthrough (can repeat).",
-    )
+    parser.add_argument("--template", default="SwiftUI",
+                        help="Template name (default: SwiftUI).")
+    parser.add_argument("--device", default=None,
+                        help="Device name or UDID. Defaults to the host.")
+    parser.add_argument("--output", type=Path, default=None,
+                        help="Output .trace path. Defaults to ./<template>-<timestamp>.trace.")
+    parser.add_argument("--time-limit", default=None,
+                        help="Cap recording duration (e.g. 30s, 5m, 1h). Optional.")
+    parser.add_argument("--stop-file", type=Path, default=None,
+                        help="When this path appears on disk, stop the recording.")
+    parser.add_argument("--env", action="append", default=[],
+                        metavar="KEY=VALUE",
+                        help="Env var for the launched process. Can repeat. Launch mode only.")
+    parser.add_argument("--instrument", action="append", default=[],
+                        help="Extra --instrument flag passthrough (can repeat).")
     parser.add_argument("--run-name", default=None)
 
     target = parser.add_mutually_exclusive_group()
-    target.add_argument(
-        "--launch", metavar="APP", help="Launch this .app path and record it."
-    )
-    target.add_argument(
-        "--attach",
-        metavar="PID_OR_NAME",
-        help="Attach to a running process by pid or name.",
-    )
-    target.add_argument(
-        "--all-processes",
-        action="store_true",
-        help="Record every process (system-wide).",
-    )
+    target.add_argument("--launch", metavar="APP",
+                        help="Launch this .app path and record it.")
+    target.add_argument("--attach", metavar="PID_OR_NAME",
+                        help="Attach to a running process by pid or name.")
+    target.add_argument("--all-processes", action="store_true",
+                        help="Record every process (system-wide).")
     parser.add_argument(
         "--allow-system-wide-recording",
         action="store_true",
@@ -115,19 +80,15 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if not (args.launch or args.attach or args.all_processes):
-        print(
-            "error: need one of --launch, --attach, or --all-processes.",
-            file=sys.stderr,
-        )
+        print("error: need one of --launch, --attach, or --all-processes.",
+              file=sys.stderr)
         return 2
 
     if args.env and not args.launch:
         # xctrace silently ignores --env outside launch mode; surfacing this
         # explicitly saves agents a confusing "why didn't my env var apply?".
-        print(
-            "error: --env only applies to --launch; remove it or switch target mode.",
-            file=sys.stderr,
-        )
+        print("error: --env only applies to --launch; remove it or switch target mode.",
+              file=sys.stderr)
         return 2
 
     if args.all_processes and not args.allow_system_wide_recording:
@@ -183,10 +144,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         rc = proc.wait(timeout=60)
     except subprocess.TimeoutExpired:
-        print(
-            "[record] xctrace did not exit within 60s after stop; killing.",
-            file=sys.stderr,
-        )
+        print("[record] xctrace did not exit within 60s after stop; killing.",
+              file=sys.stderr)
         proc.kill()
         rc = proc.wait()
 
@@ -196,10 +155,8 @@ def main(argv: list[str] | None = None) -> int:
     if output.exists():
         print(f"[record] done. trace written: {output}", flush=True)
     else:
-        print(
-            "[record] done but output file not found — did xctrace error?",
-            file=sys.stderr,
-        )
+        print("[record] done but output file not found — did xctrace error?",
+              file=sys.stderr)
         return rc or 1
     return rc
 
@@ -249,10 +206,8 @@ def _wait_with_stop(proc: subprocess.Popen, stop_file: Path | None) -> None:
         if rc is not None:
             return
         if stop_file and stop_file.exists():
-            print(
-                f"[record] stop-file detected ({stop_file}); stopping xctrace.",
-                flush=True,
-            )
+            print(f"[record] stop-file detected ({stop_file}); stopping xctrace.",
+                  flush=True)
             _forward_sigint(proc)
             return
         time.sleep(0.5)
@@ -302,14 +257,12 @@ def _print_devices() -> None:
         if not m:
             continue
         name, os_ver, udid = m.group(1).strip(), m.group(2), m.group(3)
-        devices.append(
-            {
-                "kind": section or "unknown",
-                "name": name,
-                "os": os_ver,
-                "udid": udid,
-            }
-        )
+        devices.append({
+            "kind": section or "unknown",
+            "name": name,
+            "os": os_ver,
+            "udid": udid,
+        })
     print(json.dumps({"devices": devices}, indent=2))
 
 
