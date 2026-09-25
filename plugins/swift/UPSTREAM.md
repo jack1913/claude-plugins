@@ -29,7 +29,8 @@ Names upstream uses that Apple's documentation index did not have on 2026-09-25.
 | Name | Upstream file | Nearest Apple API |
 |---|---|---|
 | `AXDateDataAxisDescriptor` | `references/charts-accessibility.md` | `AXNumericDataAxisDescriptor`, `AXCategoricalDataAxisDescriptor` |
-| `VerticalTabViewStyle` | `references/latest-apis.md` | `VerticalPageTabViewStyle` |
+| `VerticalTabViewStyle` | `references/latest-apis.md` | `VerticalPageTabViewStyle` (Apple's `CarouselTabViewStyle` metadata says renamed: `VerticalTabViewStyle`, but its deprecation text says `VerticalPageTabViewStyle`) |
 | `navigationTransitionSource` | `references/latest-apis.md` | `matchedTransitionSource(id:in:)`, `navigationTransition(_:)` |
 | `navigationTransitionDestination` | `references/latest-apis.md` | `matchedTransitionSource(id:in:)`, `navigationTransition(_:)` |
-| `sliderNeutralValue` | `references/latest-apis.md` | `neutralValue` (`UISlider.TrackConfiguration`, `NSSlider`) |
+| `sliderNeutralValue` | `references/latest-apis.md` | SwiftUI `Slider.init(value:in:neutralValue:enabledBounds:…)`; also `neutralValue` on `UISlider.TrackConfiguration` and `NSSlider` |
+| `Inspector` | `references/macos-window-styling.md`, `references/sheet-navigation-patterns.md` | no `Inspector` type; the API is the `inspector(isPresented:content:)` modifier |

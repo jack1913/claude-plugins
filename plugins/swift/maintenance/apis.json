@@ -174,7 +174,6 @@
       "CategoriesView",
       "ClearButton",
       "CodeEditorView",
-      "CollectionID",
       "CompactBanner",
       "CompactCard",
       "CompactCompassControl",
@@ -210,7 +209,6 @@
       "HeaderView",
       "HomeView",
       "ImageSnapshot",
-      "Inspector",
       "InspectorContent",
       "InspectorView",
       "ItemCard",
@@ -331,10 +329,14 @@
     ],
     "upstream names not in Apple's index (see UPSTREAM.md Findings)": [
       "AXDateDataAxisDescriptor",
+      "Inspector",
       "VerticalTabViewStyle",
       "navigationTransitionDestination",
       "navigationTransitionSource",
       "sliderNeutralValue"
+    ],
+    "Apple generic parameter names (not index entries)": [
+      "CollectionID"
     ]
   }
 }
