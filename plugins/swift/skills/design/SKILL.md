@@ -12,7 +12,7 @@ This skill decides *what* to build: which native primitive fits, how a screen ra
 - When the task writes or changes SwiftUI code, load `swift:swiftui` as well before writing it: it holds the code rules this skill leaves out (availability gates, `#if DEBUG` around previews, deprecated APIs)
 - If the project has its own design layer (tokens, a project design skill), translate every literal in these examples into it; the project layer wins on conflict
 - With no project layer (no token types, no colour sets beyond the template's AccentColor set, and no project design skill in the repo), use system text styles and semantic colours instead of literals, and end your reply with one sentence saying the project has no design tokens yet and offering the starter set of named spacing, radius and motion values in `references/tokens.md`
-- Adopt Liquid Glass where `references/liquid-glass-design.md` says it fits; `swift:swiftui` keeps the API rules
+- When glass is in scope (the user asked for it, or the project's design layer makes it the default), adopt it where `references/liquid-glass-design.md` says it fits; `swift:swiftui` keeps the API rules and its opt-in rule
 
 ## Design Thinking
 
