@@ -295,6 +295,20 @@
         "watchOS": false,
         "tvOS": false
       }
+    },
+    {
+      "name": "overlay(_:alignment:)",
+      "path": "swiftui/view/overlay(_:alignment:)",
+      "claims": {
+        "deprecated": true
+      }
+    },
+    {
+      "name": "Text + Text",
+      "path": "swiftui/text/+(_:_:)",
+      "claims": {
+        "deprecated": true
+      }
     }
   ],
   "ignore": {

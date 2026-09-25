@@ -418,6 +418,19 @@ Slider(value: $speed, in: 0.5...2.0, step: 0.25) {
 
 > Source: "Build a SwiftUI app with the new design" (WWDC25, session 323)
 
+### Text
+
+**Interpolate `Text` values instead of concatenating them with `+`.** SDK 26 deprecates `Text`'s `+` operator. A styled `Text` interpolated into another keeps its modifiers, and the result is one string translators can reorder (see [`localization.md`](localization.md)).
+
+```swift
+// Deprecated in SDK 26
+Text("Hello").foregroundStyle(.red) + Text(" world")
+
+// Use interpolation
+let hello = Text("Hello").foregroundStyle(.red)
+Text("\(hello) world")
+```
+
 ### Rich Text
 
 **Use `TextEditor` with an `AttributedString` binding for rich text editing.** Supports bold, italic, underline, strikethrough, custom fonts, foreground/background colors, paragraph styles, and Genmoji.
@@ -492,6 +505,8 @@ Use the focused topic references for detailed guidance:
 
 On iOS 27+, use `toolbarVisibility(_:for: .statusBar)` instead of `statusBarHidden(_:)`. `ToolbarPlacement.statusBar` is iOS-only; on visionOS, remove `statusBarHidden` because it has no effect. The newer `dropDestination(for:isEnabled:action:)` overload is also available on visionOS 26+ (as well as iOS/macOS 26+).
 
+Use `overlay(alignment:content:)` instead of `overlay(_:alignment:)`: SDK 27.2 deprecates the overload that takes the overlay view as an argument, and the view-builder form has shipped since iOS 15, so switching needs no availability check.
+
 ### Additional SDK 27 soft-deprecated families
 
 Use `Menu` / `MenuStyle` instead of `MenuButton`, `MenuButtonStyle`, and the legacy menu-button styles (`PullDownMenuButtonStyle`, `BorderlessPullDownMenuButtonStyle`, `BorderlessButtonMenuButtonStyle`, `DefaultMenuButtonStyle`, `BorderedButtonMenuStyle`, and `BorderlessButtonMenuStyle`). Use `.menuStyle(.menu)` or `.menuStyle(.button)` with a button style instead of `PopUpButtonPickerStyle`.
@@ -537,6 +552,7 @@ These APIs are from the beta iOS 27.1 SDK. Gate runtime use with `#available(iOS
 | `colorScheme(_:)` | `preferredColorScheme(_:)` | iOS 15+ |
 | `foregroundColor(_:)` | `foregroundStyle(_:)` | iOS 15+ |
 | `cornerRadius(_:)` | `clipShape(.rect(cornerRadius:))` | iOS 15+ |
+| `overlay(_:alignment:)` | `overlay(alignment:content:)` | iOS 15+; old form deprecated in SDK 27.2 |
 | `actionSheet(...)` | `confirmationDialog(...)` | iOS 15+ |
 | `alert(isPresented:content:)` | `alert(_:isPresented:actions:message:)` | iOS 15+ |
 | `autocapitalization(_:)` | `textInputAutocapitalization(_:)` | iOS 15+ |
@@ -561,6 +577,7 @@ These APIs are from the beta iOS 27.1 SDK. Gate runtime use with `#available(iOS
 | Manual 1:1 `animatableData` synthesis | `@Animatable` macro; keep manual logic for clamping/normalization | iOS 26+ |
 | `presentationBackground(_:)` on sheets | Default Liquid Glass sheet material | iOS 26+ |
 | Custom toolbar background hacks | `scrollEdgeEffectStyle(_:for:)` | iOS 26+ |
+| `Text + Text` | `Text` interpolation: `Text("\(a)\(b)")` | iOS 26+ |
 | `CarouselTabViewStyle` (watchOS) | `VerticalTabViewStyle` | SDK 27 soft-deprecated |
 | `ControlActiveState` / `controlActiveState` (macOS) | `appearsActive` | SDK 27 soft-deprecated |
 | `AnimatableModifier` | Conform the modifier to `Animatable` directly | SDK 27 soft-deprecated |
