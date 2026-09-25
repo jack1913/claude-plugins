@@ -33,7 +33,7 @@ Python 3 stdlib + `xctrace` (ships with Xcode at `/usr/bin/xctrace`).
 ### 1. Full analysis (default)
 
 ```bash
-python3 "${SKILL_DIR}/scripts/analyze_trace.py" \
+python3 "${CLAUDE_SKILL_DIR}/scripts/analyze_trace.py" \
   --trace "/path/to/file.trace" \
   --top 10 --top-hitches 5 \
   [--window START_MS:END_MS] \
@@ -54,7 +54,7 @@ python3 "${SKILL_DIR}/scripts/analyze_trace.py" \
 ### 2. `--list-logs` — find os_log timestamps
 
 ```bash
-python3 "${SKILL_DIR}/scripts/analyze_trace.py" --trace <path> --list-logs \
+python3 "${CLAUDE_SKILL_DIR}/scripts/analyze_trace.py" --trace <path> --list-logs \
   [--log-subsystem com.myapp.net] \
   [--log-category "Network"] \
   [--log-type Fault] \
@@ -71,7 +71,7 @@ AND-combined; `--log-message-contains` is case-insensitive substring match.
 ### 3. `--list-signposts` — find signpost intervals
 
 ```bash
-python3 "${SKILL_DIR}/scripts/analyze_trace.py" --trace <path> --list-signposts \
+python3 "${CLAUDE_SKILL_DIR}/scripts/analyze_trace.py" --trace <path> --list-signposts \
   [--signpost-name-contains "ImageDecode"] \
   [--signpost-subsystem com.myapp.feed] \
   [--signpost-category "Rendering"] \
@@ -88,7 +88,7 @@ match.
 ### 4. `--fanin-for` — who keeps invalidating this view?
 
 ```bash
-python3 "${SKILL_DIR}/scripts/analyze_trace.py" --trace <path> \
+python3 "${CLAUDE_SKILL_DIR}/scripts/analyze_trace.py" --trace <path> \
   --fanin-for "TextStyleModifier" \
   [--window START_MS:END_MS] \
   [--top 10]

@@ -31,7 +31,7 @@ local process-inspection tools may still expose process arguments.
 ### A) Attach to a running app on a connected device
 
 ```bash
-python3 "${SKILL_DIR}/scripts/record_trace.py" \
+python3 "${CLAUDE_SKILL_DIR}/scripts/record_trace.py" \
   --device "Pol's iPhone" \
   --attach "Helm" \
   --output ~/Desktop/helm-session.trace
@@ -42,7 +42,7 @@ Leave it running while the user exercises the app. Stop with **Ctrl+C**.
 ### B) Launch an app and record from the first frame
 
 ```bash
-python3 "${SKILL_DIR}/scripts/record_trace.py" \
+python3 "${CLAUDE_SKILL_DIR}/scripts/record_trace.py" \
   --device "<UDID>" \
   --launch "/path/to/App.app" \
   --output ~/Desktop/launch.trace
@@ -58,7 +58,7 @@ recording to end cleanly:
 
 ```bash
 # Start recording (background)
-python3 "${SKILL_DIR}/scripts/record_trace.py" \
+python3 "${CLAUDE_SKILL_DIR}/scripts/record_trace.py" \
   --attach Helm --stop-file /tmp/stop-trace \
   --output ~/Desktop/session.trace
 
@@ -74,7 +74,7 @@ when it appears, and waits up to 60s for the trace to finalise.
 ### D) Time-boxed recording
 
 ```bash
-python3 "${SKILL_DIR}/scripts/record_trace.py" \
+python3 "${CLAUDE_SKILL_DIR}/scripts/record_trace.py" \
   --attach Helm --time-limit 30s --output ~/Desktop/30s.trace
 ```
 
@@ -84,10 +84,10 @@ xctrace stops itself at the limit.
 
 ```bash
 # List every connected device, simulator, and the host — JSON.
-python3 "${SKILL_DIR}/scripts/record_trace.py" --list-devices
+python3 "${CLAUDE_SKILL_DIR}/scripts/record_trace.py" --list-devices
 
 # List all Instruments templates — JSON with a flat list + by-section map.
-python3 "${SKILL_DIR}/scripts/record_trace.py" --list-templates
+python3 "${CLAUDE_SKILL_DIR}/scripts/record_trace.py" --list-templates
 ```
 
 Device entries have `kind` (`devices`, `devices offline`, `simulators`),
@@ -124,7 +124,7 @@ For ad-hoc hang hunting on any target, `Time Profiler` or
 For an explicitly approved system-wide recording:
 
 ```bash
-python3 "${SKILL_DIR}/scripts/record_trace.py" \
+python3 "${CLAUDE_SKILL_DIR}/scripts/record_trace.py" \
   --all-processes --allow-system-wide-recording \
   --time-limit 30s --output ~/Desktop/system-wide.trace
 ```
@@ -135,10 +135,10 @@ The recording script prints `trace written: <path>` on exit. Feed that
 path straight into `analyze_trace.py`:
 
 ```bash
-TRACE=$(python3 "${SKILL_DIR}/scripts/record_trace.py" \
+TRACE=$(python3 "${CLAUDE_SKILL_DIR}/scripts/record_trace.py" \
     --attach Helm --stop-file /tmp/stop-trace --output ~/Desktop/session.trace \
     2>&1 | awk '/trace written:/ {print $NF}')
-python3 "${SKILL_DIR}/scripts/analyze_trace.py" --trace "$TRACE" --json-only
+python3 "${CLAUDE_SKILL_DIR}/scripts/analyze_trace.py" --trace "$TRACE" --json-only
 ```
 
 If the user wanted a specific scope, combine with `--list-logs` /

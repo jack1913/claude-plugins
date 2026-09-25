@@ -47,12 +47,12 @@ Trigger when the user asks to "record a trace", "profile the app", "capture a se
 
 1. **Confirm target** — attach to a running app, launch an app, or record all processes? If the user didn't say, ask. List connected devices when useful:
    ```bash
-   python3 "${SKILL_DIR}/scripts/record_trace.py" --list-devices
+   python3 "${CLAUDE_SKILL_DIR}/scripts/record_trace.py" --list-devices
    ```
 2. **Pick a template based on target kind** — the `SwiftUI` template populates the SwiftUI lane on any **real device**: a physical iOS/iPadOS device **or the host Mac**. The only exception is the **iOS Simulator**, where the SwiftUI lane comes back empty — switch to `--template "Time Profiler"` in that case (still gives Time Profiler + Hangs + Animation Hitches). Always check `--list-devices`: `simulators` kind → `Time Profiler`; `devices` kind (real devices and the host Mac) → default `SwiftUI`. Full decision table in `references/trace-recording.md`.
 3. **Start the recording**. For agent-driven sessions where the user says "I'll tell you when I'm done", start in the background and use a stop-file:
    ```bash
-   python3 "${SKILL_DIR}/scripts/record_trace.py" \
+   python3 "${CLAUDE_SKILL_DIR}/scripts/record_trace.py" \
        --device "<name|udid>" --attach "<AppName>" \
        --stop-file /tmp/stop-trace --output ~/Desktop/session.trace
    ```
@@ -71,16 +71,16 @@ Full reference: `references/trace-analysis.md`. Summary of the composition patte
 2. **Resolve a window (only if the user scoped).** The parser exposes two discovery modes:
    ```bash
    # Find a log that marks the start/end of the region of interest:
-   python3 "${SKILL_DIR}/scripts/analyze_trace.py" --trace <path> \
+   python3 "${CLAUDE_SKILL_DIR}/scripts/analyze_trace.py" --trace <path> \
        --list-logs --log-message-contains "loaded feed" --log-limit 5
    # Or list os_signpost intervals (paired begin/end), filterable by name:
-   python3 "${SKILL_DIR}/scripts/analyze_trace.py" --trace <path> \
+   python3 "${CLAUDE_SKILL_DIR}/scripts/analyze_trace.py" --trace <path> \
        --list-signposts --signpost-name-contains "ImageDecode"
    ```
    Both modes accept `--window START_MS:END_MS` to scope discovery. Pick the `time_ms` (for logs) or `start_ms`/`end_ms` (for signposts) that match the user's description. Build a window like `--window 10400:11700`.
 3. **Run the main analysis** (with or without `--window`):
    ```bash
-   python3 "${SKILL_DIR}/scripts/analyze_trace.py" --trace <path> \
+   python3 "${CLAUDE_SKILL_DIR}/scripts/analyze_trace.py" --trace <path> \
        --json-only --top 10 [--window START_MS:END_MS]
    ```
 4. **Interpret with `references/trace-analysis.md`** — key diagnostics:

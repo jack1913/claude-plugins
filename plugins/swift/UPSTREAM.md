@@ -12,6 +12,7 @@
 |---|---|---|
 | `agents/`, `assets/` | Deleted | Codex agent config and logos (~430 KB); Claude Code uses neither |
 | `SKILL.md` frontmatter | `name: swiftui`; description names iOS, iPadOS, macOS, visionOS and the visionOS topics | Plugin skill command is `/swift:<name>`; visionOS work must trigger the skill |
+| `SKILL.md`, `references/trace-analysis.md`, `references/trace-recording.md` | `${SKILL_DIR}` → `${CLAUDE_SKILL_DIR}` (18 places) | Claude Code substitutes `${CLAUDE_SKILL_DIR}`; `${SKILL_DIR}` would leave commands pointing at `/scripts/…` |
 
 ## Ported
 
