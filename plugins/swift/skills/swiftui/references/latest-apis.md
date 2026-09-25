@@ -385,7 +385,7 @@ struct Wedge: Shape {
 }
 ```
 
-Apple lists the toolbar-content form of `matchedTransitionSource(id:in:)` for iOS, iPadOS and Mac Catalyst 26 only, and gives `zoom(sourceID:in:)` no macOS release, so this snippet doesn't compile for macOS or visionOS. When the target also builds for either, put it inside `#if os(iOS)`. See [`toolbar-patterns.md`](toolbar-patterns.md) → Transitioning from toolbar controls.
+Apple lists the toolbar-content form of `matchedTransitionSource(id:in:)` for iOS, iPadOS and Mac Catalyst 26 only, and gives `zoom(sourceID:in:)` no macOS release, so this snippet compiles only for iOS, iPadOS and Mac Catalyst. When the target also builds for another platform, put it inside `#if os(iOS)`. See [`toolbar-patterns.md`](toolbar-patterns.md) → Transitioning from toolbar controls.
 
 > Source: "Build a SwiftUI app with the new design" (WWDC25, session 323)
 
