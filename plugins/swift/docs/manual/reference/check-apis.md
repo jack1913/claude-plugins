@@ -40,9 +40,25 @@ From `run` and `main` in `maintenance/apicheck/cli.py`:
 
 | Code | Meaning |
 | --- | --- |
-| `0` | No failures. Warnings are allowed unless `--strict` is set. |
-| `1` | A manifest check failed (Apple has no page, or a recorded claim contradicts Apple); or `--strict` and there are warnings; or `--find` matched nothing. |
+| `0` | No failures. Warnings — including a stale cache (below) — are allowed unless `--strict` is set. |
+| `1` | A manifest check failed (Apple has no page, or a recorded claim contradicts Apple); or `--strict` and there are warnings (a stale cache counts); or `--find` matched nothing. |
 | `2` | The manifest or a file is unreadable or invalid, the framework index is missing, or the network or cache failed. The message starts with `error:` and usually names the URL, file or framework. |
+
+## Cache staleness
+
+`Fetcher` (`maintenance/apicheck/fetch.py`) never expires a cache entry on its own, so a run reports the age of the oldest entry it read or wrote (file mtime), and WARNs once that entry is older than `DEFAULT_MAX_AGE_DAYS` — 30 days:
+
+```text illustrative
+oldest cache entry: 31.0 days old
+WARN cache is up to 31 days old (> 30); run --refresh
+80 manifest APIs, 0 failures, 1 warnings
+```
+
+Like any other warning, it only fails the run under `--strict`. Clear it with `--refresh`, which bypasses the cache and re-fetches everything the run touches:
+
+```bash
+python3 maintenance/check-apis.py --refresh
+```
 
 ## `maintenance/apis.json`
 
