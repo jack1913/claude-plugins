@@ -61,7 +61,7 @@ The variants are described in [WWDC25 219](https://developer.apple.com/videos/pl
 - System views provide the container shape; a custom container declares its own with `containerShape(_:)` ([SwiftUI: ConcentricRectangle](https://developer.apple.com/documentation/swiftui/concentricrectangle)). Standard toolbar items are already concentric with the bar, and a custom item in a toolbar has to be as well ([HIG: Toolbars](https://developer.apple.com/design/human-interface-guidelines/toolbars))
 - Capsules suit touch layouts; on the desktop, save them for actions that must stand out. On macOS, controls at the mini, small and medium sizes keep rounded rectangles, which suit dense areas such as inspectors, while large controls become capsules ([WWDC25 356](https://developer.apple.com/videos/play/wwdc2025/356/), [WWDC25 323](https://developer.apple.com/videos/play/wwdc2025/323/))
 
-The radii below are literals only to keep the example short; take them from the project's tokens or `tokens.md`. Below the deployment target that `platform-availability.md` gives for `ConcentricRectangle`, gate it with `if #available` and fall back to a fixed radius, as `swift:swiftui` requires.
+The radii below are literals only to keep the example short; take them from the project's tokens; with none, prefer a standard or concentric shape over a hand-picked radius and offer the `tokens.md` starter set rather than using its numbers. Below the deployment target that `platform-availability.md` gives for `ConcentricRectangle`, gate it with `if #available` and fall back to a fixed radius, as `swift:swiftui` requires.
 
 ```swift
 struct AlbumTile: View {
