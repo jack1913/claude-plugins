@@ -31,6 +31,7 @@ When a partially folded book-like pose requires displacement, a trailing region 
 `onHingeChange` provides live hinge state and angle for optional interactions or effects. Do not use it to drive layout; use size classes, `ArrangementView`, and reserved regions instead. `DeviceHingeContext.hinge` is optional, so reset effect state when there is no hinge or when the relevant hinge status ends.
 
 ```swift
+#if os(iOS) && !targetEnvironment(macCatalyst)
 @available(iOS 27.1, *)
 struct HingeReactiveArtwork: View {
     @State private var foldEffect = 0.0
@@ -48,9 +49,10 @@ struct HingeReactiveArtwork: View {
             }
     }
 }
+#endif
 ```
 
-Select this view behind `#available(iOS 27.1, *)`; the fallback omits the optional effect.
+Select this view behind `#available(iOS 27.1, *)`; the fallback omits the optional effect. `onHingeChange` exists only on iOS and iPadOS (Apple lists no macOS, Mac Catalyst or visionOS release), so no `#available` version admits it elsewhere: when the target also builds for another platform, keep the view and the `#available` check inside `#if os(iOS) && !targetEnvironment(macCatalyst)` and use the fallback in the `#else` branch.
 
 ## Scene Accessories
 

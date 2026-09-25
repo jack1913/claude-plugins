@@ -815,6 +815,16 @@
         "macOS": false,
         "visionOS": false
       }
+    },
+    {
+      "name": "onHingeChange(isEnabled:_:)",
+      "path": "swiftui/view/onhingechange(isenabled:_:)",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": false,
+        "macOS": false,
+        "visionOS": false
+      }
     }
   ],
   "ignore": {
