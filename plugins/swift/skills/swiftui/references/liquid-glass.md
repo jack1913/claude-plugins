@@ -354,7 +354,7 @@ struct GlassSegmentedControl: View {
 
 ## Fallback Strategies
 
-List every platform the project targets in each gate (`#available(iOS 26, macOS 26, *)` for an iOS and macOS project): on a platform the gate leaves out, the `*` treats the branch as reachable at the deployment target, so `#available(iOS 26, *)` fails to compile the glass branch in a package whose macOS target is below 26.
+List every non-visionOS platform the project targets in each gate (`#available(iOS 26, macOS 26, *)` for an iOS and macOS project): on a platform the gate leaves out, the `*` treats the branch as reachable at the deployment target, so `#available(iOS 26, *)` fails to compile the glass branch in a package whose macOS target is below 26. visionOS has none of these glass APIs (see `platform-availability.md`), so no `#available` version can gate them there: put the gate in the non-visionOS branch of `#if os(visionOS)` and give the visionOS branch `glassBackgroundEffect` (see `visionos.md`).
 
 ### Using Materials
 
