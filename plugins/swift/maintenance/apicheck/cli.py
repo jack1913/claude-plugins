@@ -19,7 +19,7 @@ def parse_args(argv):
     p.add_argument(
         "--strict",
         action="store_true",
-        help="also fail on unresolved names and stale ignore entries",
+        help="also fail on unresolved names, stale ignore entries, and a stale cache",
     )
     p.add_argument("--refresh", action="store_true", help="bypass the cache")
     p.add_argument(
@@ -115,9 +115,10 @@ def run(args, fetcher, out=sys.stdout) -> int:
     oldest_days = fetcher.oldest_cache_age_days()
     if oldest_days is not None:
         print(f"oldest cache entry: {oldest_days:.1f} days old", file=out)
-        if oldest_days > DEFAULT_MAX_AGE_DAYS:
+        rounded_days = round(oldest_days)
+        if rounded_days > DEFAULT_MAX_AGE_DAYS:
             warnings.append(
-                f"cache is up to {oldest_days:.0f} days old (> {DEFAULT_MAX_AGE_DAYS}); run --refresh"
+                f"cache is up to {rounded_days} days old (> {DEFAULT_MAX_AGE_DAYS}); run --refresh"
             )
 
     if args.write_table:

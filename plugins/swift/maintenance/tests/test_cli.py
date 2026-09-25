@@ -117,6 +117,18 @@ class CliTests(unittest.TestCase):
         code, out = self.run_cli("--strict", fetcher=stale)
         self.assertEqual(code, 1, out)
 
+    def test_stale_cache_message_and_threshold_round_the_same_way(self):
+        # 30.4 rounds to 30, which is not > DEFAULT_MAX_AGE_DAYS (30): the
+        # printed message and the pass/fail decision must agree, so this
+        # must not warn. Before the fix, the raw (unrounded) age was
+        # compared while the message printed the rounded age, so this case
+        # warned "cache is up to 30 days old (> 30)" -- a message that
+        # contradicts its own threshold.
+        just_under = FakeFetcher(oldest_cache_age_days=30.4)
+        code, out = self.run_cli("--strict", fetcher=just_under)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("WARN", out)
+
     def test_unresolved_name_warns_and_fails_only_under_strict(self):
         (self.skills / "swiftui" / "extra.md").write_text("Use `.glassMagic()`.\n")
         code, out = self.run_cli()
