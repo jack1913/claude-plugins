@@ -20,6 +20,7 @@
 | `references/visionos.md` | New | Upstream has no visionOS coverage; glass APIs missing there need a branch |
 | `references/previews.md`, `SKILL.md` checklist | New section and checklist items: wrap every `#Preview` in `#if DEBUG` | `#Preview` compiles into Release; DEBUG-only helpers it references break archiving |
 | `SKILL.md` checklist | Items for deployment targets below 26 and for the visionOS glass branch | Upstream's generic `#available` item doesn't name the 26 boundary or visionOS |
+| `SKILL.md` Operating Rules | Project-layer rule | A repo's own tokens and design skill override example literals (example-app-design depends on this) |
 
 ## Ported
 

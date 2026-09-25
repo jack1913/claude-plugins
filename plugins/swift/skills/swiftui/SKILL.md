@@ -15,6 +15,7 @@ description: Use when writing, reviewing, or refactoring SwiftUI code for iOS, i
 - Encourage separating business logic from views for testability without mandating how
 - Follow Apple's Human Interface Guidelines and API design patterns
 - Only adopt Liquid Glass when explicitly requested by the user (see `references/liquid-glass.md`)
+- If the project has its own design layer (tokens, a project design skill), translate every literal in these examples into it; the project layer wins on conflict
 - Present performance optimizations as suggestions, not requirements
 - Use `#available` gating with sensible fallbacks for version-specific APIs
 - For layout and rendering inputs, read the value nearest the SwiftUI view that consumes it; do not substitute process-global screen state
