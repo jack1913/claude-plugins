@@ -35,6 +35,7 @@ A private Claude Code plugin marketplace with one plugin, `swift`, whose skills 
 | Implementation plan | `docs/superpowers/plans/2026-09-24-swift-plugin.md` |
 | Operator manual | `docs/manual/README.md` |
 | Changelog | `CHANGELOG.md` |
+| Agent instruction layout, rule-vs-skill decision rule | `docs/internals/agent-instructions.md` |
 
 ### Auto-loaded rules
 Each loads only when Claude reads a file matching its `paths:` frontmatter, so an
@@ -56,8 +57,6 @@ invoked, so reference material belongs here rather than in a rule.
 
 The plugin's own skills live in `plugins/swift/skills/`, not in `.claude/skills/`.
 
-| Agent instruction layout, rule-vs-skill decision rule | `docs/internals/agent-instructions.md` |
-
 ## 4. Project constraints
 - Docs describe implemented state.
 - `docs/archive/**` is frozen — never edited.
@@ -67,6 +66,7 @@ The plugin's own skills live in `plugins/swift/skills/`, not in `.claude/skills/
 - Names are fixed: marketplace `swift-plugin`, plugin `swift`, skills `swift:swiftui` and `swift:design`; the example-app layer depends on them (spec §1 goal 2; ExampleApp companion spec named in the spec header).
 - A change under `plugins/swift/skills/swiftui/` is its own commit, with its `UPSTREAM.md` → Deviations row in that commit (spec §4). This applies while writing, when no `paths:` rule has loaded.
 - Never hand-edit the block between the `BEGIN GENERATED` / `END GENERATED` markers in `platform-availability.md`; run `python3 maintenance/check-apis.py --write-table`.
+- New code in `maintenance/apicheck/` or `maintenance/check-apis.py` stays standard-library-only, including while a file is being created (`.claude/rules/apicheck-stdlib-only.md` only loads on read); see `docs/internals/agent-instructions.md`.
 - Release through `changelog-release`, then `claude plugin tag plugins/swift`; see `docs/manual/work-on-it.md#release`.
 
 ## 5. Documentation map
