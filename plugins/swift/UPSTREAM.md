@@ -19,7 +19,7 @@
 | `SKILL.md` Topic Router | Rows for `references/platform-availability.md` and `references/visionos.md` | The router is how the skill reaches a reference file |
 | `references/visionos.md` | New | Upstream has no visionOS coverage; glass APIs missing there need a branch |
 | `references/previews.md`, `SKILL.md` checklist | New section and checklist items: wrap every `#Preview` in `#if DEBUG` | `#Preview` compiles into Release; DEBUG-only helpers it references break archiving |
-| `SKILL.md` checklist | Items for deployment targets below 26 and for the visionOS glass branch | Upstream's generic `#available` item doesn't name the 26 boundary or visionOS |
+| `SKILL.md` checklist | Items for deployment targets below 26 (a material fallback in the same shape, glass button styles included) and for the visionOS glass branch | Upstream's generic `#available` item doesn't name the 26 boundary or visionOS; in the 2026-09-25 eval run agents fell back from `.buttonStyle(.glass)` to `.bordered` |
 | `SKILL.md` Operating Rules | Project-layer rule | A repo's own tokens and design skill override example literals (example-app-design depends on this) |
 | `references/latest-apis.md` | `overlay(_:alignment:)` and `Text + Text` deprecation entries (from twostraws, see NOTICE.md); the "since iOS 15" claim for `overlay(alignment:content:)` is pinned in `apis.json` | Apple deprecates both (27.2, 26.0); upstream had neither |
 | `references/view-structure.md` | Ordering detail, actions-out-of-body section, 300-line split rule (from Dimillian, see NOTICE.md) | Gaps in upstream's view-structure guidance |
