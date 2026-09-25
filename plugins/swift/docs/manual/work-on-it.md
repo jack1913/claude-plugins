@@ -96,7 +96,7 @@ Results go to `plugins/swift/evals/results/`, which is gitignored.
 maintenance/upstream-diff.sh [ref]
 ```
 
-With no `ref` it compares against upstream's newest tag:
+With no `ref` it compares against upstream's newest plain `X.Y.Z` tag (a leading `v` is allowed; pre-release tags are skipped):
 
 ```text capture=upstream-diff
 upstream: https://github.com/AvdLee/SwiftUI-Agent-Skill (skills/swiftui-expert-skill)
