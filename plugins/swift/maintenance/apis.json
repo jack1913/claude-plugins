@@ -1,0 +1,340 @@
+{
+  "frameworks": [
+    "swiftui",
+    "swift",
+    "foundation",
+    "uikit",
+    "appkit",
+    "charts",
+    "webkit",
+    "swiftdata",
+    "coregraphics",
+    "corefoundation",
+    "combine",
+    "accessibility",
+    "os",
+    "dispatch",
+    "objectivec",
+    "mapkit",
+    "corelocation",
+    "uniformtypeidentifiers",
+    "imageio",
+    "developertoolssupport"
+  ],
+  "apis": [
+    {
+      "name": "glassEffect(_:in:)",
+      "path": "swiftui/view/glasseffect(_:in:)",
+      "claims": {
+        "visionOS": false,
+        "iOS": "26.0"
+      },
+      "table": true
+    },
+    {
+      "name": "GlassEffectContainer",
+      "path": "swiftui/glasseffectcontainer",
+      "claims": {
+        "visionOS": false
+      },
+      "table": true
+    },
+    {
+      "name": "Glass.interactive(_:)",
+      "path": "swiftui/glass/interactive(_:)",
+      "claims": {
+        "visionOS": false,
+        "macOS": true
+      },
+      "table": true
+    },
+    {
+      "name": "GlassButtonStyle",
+      "path": "swiftui/glassbuttonstyle",
+      "claims": {
+        "visionOS": false
+      },
+      "table": true
+    },
+    {
+      "name": "glassProminent",
+      "path": "swiftui/primitivebuttonstyle/glassprominent",
+      "claims": {
+        "visionOS": false
+      },
+      "table": true
+    },
+    {
+      "name": "glassEffectUnion(id:namespace:)",
+      "path": "swiftui/view/glasseffectunion(id:namespace:)",
+      "claims": {
+        "visionOS": false
+      },
+      "table": true
+    },
+    {
+      "name": "glassEffectTransition(_:)",
+      "path": "swiftui/view/glasseffecttransition(_:)",
+      "claims": {
+        "visionOS": false
+      },
+      "table": true
+    },
+    {
+      "name": "glassEffectID(_:in:)",
+      "path": "swiftui/view/glasseffectid(_:in:)",
+      "claims": {
+        "visionOS": false
+      },
+      "table": true
+    },
+    {
+      "name": "scrollEdgeEffectStyle(_:for:)",
+      "path": "swiftui/view/scrolledgeeffectstyle(_:for:)",
+      "claims": {
+        "visionOS": false
+      },
+      "table": true
+    },
+    {
+      "name": "ToolbarSpacer",
+      "path": "swiftui/toolbarspacer",
+      "claims": {
+        "visionOS": false,
+        "watchOS": false,
+        "tvOS": false
+      },
+      "table": true
+    },
+    {
+      "name": "sharedBackgroundVisibility(_:)",
+      "path": "swiftui/toolbarcontent/sharedbackgroundvisibility(_:)",
+      "claims": {
+        "visionOS": false
+      },
+      "table": true
+    },
+    {
+      "name": "tabViewBottomAccessory(content:)",
+      "path": "swiftui/view/tabviewbottomaccessory(content:)",
+      "claims": {
+        "visionOS": false,
+        "macOS": false
+      },
+      "table": true
+    },
+    {
+      "name": "backgroundExtensionEffect()",
+      "path": "swiftui/view/backgroundextensioneffect()",
+      "claims": {
+        "visionOS": true
+      },
+      "table": true
+    },
+    {
+      "name": "tabBarMinimizeBehavior(_:)",
+      "path": "swiftui/view/tabbarminimizebehavior(_:)",
+      "claims": {
+        "visionOS": true
+      },
+      "table": true
+    },
+    {
+      "name": "safeAreaBar(edge:alignment:spacing:content:)",
+      "path": "swiftui/view/safeareabar(edge:alignment:spacing:content:)",
+      "claims": {
+        "visionOS": true
+      },
+      "table": true
+    },
+    {
+      "name": "ConcentricRectangle",
+      "path": "swiftui/concentricrectangle",
+      "table": true
+    },
+    {
+      "name": "rect(corners:isUniform:)",
+      "path": "swiftui/shape/rect(corners:isuniform:)",
+      "table": true
+    }
+  ],
+  "ignore": {
+    "example types in upstream snippets (declared elsewhere or implied)": [
+      "ActionButton",
+      "AddArticleView",
+      "AddItemView",
+      "AdvancedSettingsView",
+      "AppModel",
+      "Article",
+      "Artwork",
+      "BadgeView",
+      "CardContent",
+      "CardView",
+      "CartView",
+      "CategoriesView",
+      "ClearButton",
+      "CodeEditorView",
+      "CollectionID",
+      "CompactBanner",
+      "CompactCard",
+      "CompactCompassControl",
+      "ConnectionDoctor",
+      "ContentView",
+      "CopyButton",
+      "CounterView",
+      "CustomCanvas",
+      "CustomSlider",
+      "DailySteps",
+      "DashboardView",
+      "DataView",
+      "Department",
+      "DetailRow",
+      "DetailView",
+      "DetailsView",
+      "EditArticleView",
+      "EditingSession",
+      "Editor",
+      "Employee",
+      "EmployeeDetails",
+      "ExpandableContent",
+      "ExpandedCard",
+      "ExpensiveRow",
+      "ExpensiveView",
+      "ExportButton",
+      "FileTreeView",
+      "FontSizeSlider",
+      "FooterView",
+      "FullScreenView",
+      "GeneralSettingsView",
+      "GlassChip",
+      "HeaderView",
+      "HomeView",
+      "ImageSnapshot",
+      "Inspector",
+      "InspectorContent",
+      "InspectorView",
+      "ItemCard",
+      "ItemDetailSheet",
+      "ItemDetailView",
+      "ItemListView",
+      "ItemRow",
+      "ItemView",
+      "Landmark",
+      "MailViewer",
+      "MainContent",
+      "MapViewController",
+      "MessageDetail",
+      "MessageRow",
+      "MoreButton",
+      "MovieDetailsViewModel",
+      "MyCustomCard",
+      "MyEditorView",
+      "MyItem",
+      "MyModel",
+      "MySwiftUIView",
+      "MyTapGestureView",
+      "MyViewModel",
+      "NowPlayingBar",
+      "OneView",
+      "OrderDetailView",
+      "OtherView",
+      "PageControl",
+      "PageView",
+      "Photo",
+      "PhotoGallery",
+      "PhotoGrid",
+      "PhotoList",
+      "PhotoSelection",
+      "PlaybackProjection",
+      "PlayerScoreRow",
+      "PlayerView",
+      "PopoverContentView",
+      "PreviewPane",
+      "Product",
+      "ProductDescription",
+      "ProductGallery",
+      "ProductHeader",
+      "ProductReviews",
+      "ProfileButton",
+      "ProfileView",
+      "RedoButton",
+      "RegularRow",
+      "RootView",
+      "ScrollOffsetKey",
+      "SearchResultsView",
+      "SearchView",
+      "SelectOrDoneButton",
+      "SettingsRow",
+      "SettingsView",
+      "ShareButton",
+      "SidebarView",
+      "SomeData",
+      "SomeType",
+      "SomeView",
+      "SomeViewModel",
+      "SpecialRow",
+      "StatusMenu",
+      "StatusView",
+      "TabButton",
+      "TagButton",
+      "Theme",
+      "ThemeSelector",
+      "ToggleView",
+      "UndoButton",
+      "UpNextView",
+      "User",
+      "UserRow",
+      "ViewModel",
+      "ViewModelDataView",
+      "ViewSizeKey",
+      "Viewer",
+      "WeatherSummary"
+    ],
+    "SwiftUI runtime symbols named in Instruments output": [
+      "EnvironmentWriter",
+      "GraphAttribute",
+      "LogForEachSlowPath",
+      "UserDefaultObserver"
+    ],
+    "Info.plist keys": [
+      "CFBundleTypeRole",
+      "LSUIElement",
+      "UISupportsDocumentBrowser"
+    ],
+    "placeholders and prose words inside code spans or unlabelled blocks": [
+      "BINDINGS",
+      "Bash",
+      "CA",
+      "CF",
+      "Callback",
+      "Creation",
+      "Does",
+      "END_MS",
+      "Hitches",
+      "Is",
+      "Legacy",
+      "MODIFY",
+      "NO",
+      "NS",
+      "Profiler",
+      "Reuse",
+      "SKILL",
+      "START",
+      "START_MS",
+      "Target",
+      "Time",
+      "Use",
+      "YES"
+    ],
+    "named on purpose as the wrong spelling": [
+      "textFormattingDefinition"
+    ],
+    "upstream names not in Apple's index (see UPSTREAM.md Findings)": [
+      "AXDateDataAxisDescriptor",
+      "VerticalTabViewStyle",
+      "navigationTransitionDestination",
+      "navigationTransitionSource",
+      "sliderNeutralValue"
+    ]
+  }
+}

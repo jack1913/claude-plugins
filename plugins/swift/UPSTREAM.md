@@ -21,3 +21,15 @@
 | Upstream ref | What we took | Date |
 |---|---|---|
 | `5.1.0` | Initial import | 2026-09-25 |
+
+## Findings
+
+Names upstream uses that Apple's documentation index did not have on 2026-09-25. `check-apis.py` ignores them for this reason; each still needs a decision: fix as a deviation, or wait for Apple's docs.
+
+| Name | Upstream file | Nearest Apple API |
+|---|---|---|
+| `AXDateDataAxisDescriptor` | `references/charts-accessibility.md` | `AXNumericDataAxisDescriptor`, `AXCategoricalDataAxisDescriptor` |
+| `VerticalTabViewStyle` | `references/latest-apis.md` | `VerticalPageTabViewStyle` |
+| `navigationTransitionSource` | `references/latest-apis.md` | `matchedTransitionSource(id:in:)`, `navigationTransition(_:)` |
+| `navigationTransitionDestination` | `references/latest-apis.md` | `matchedTransitionSource(id:in:)`, `navigationTransition(_:)` |
+| `sliderNeutralValue` | `references/latest-apis.md` | `neutralValue` (`UISlider.TrackConfiguration`, `NSSlider`) |
