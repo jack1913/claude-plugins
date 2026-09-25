@@ -436,7 +436,7 @@ In the new design, toolbar icons use **monochrome rendering** by default. The mo
 
 ### Sheet Presentations
 
-Partial-height sheets use a Liquid Glass background by default. If you previously used `presentationBackground(_:)` with a custom background, consider removing it to let the new material shine. Sheets can morph out of the glass controls that present them using `navigationZoomTransition`.
+Partial-height sheets use a Liquid Glass background by default. If you previously used `presentationBackground(_:)` with a custom background, consider removing it to let the new material shine. Sheets can morph out of the glass controls that present them with a zoom navigation transition: `matchedTransitionSource(id:in:)` on the control and `navigationTransition(.zoom(sourceID:in:))` on the sheet's content (see [`latest-apis.md`](latest-apis.md) → Presentations).
 
 ### Scroll Edge Effects
 

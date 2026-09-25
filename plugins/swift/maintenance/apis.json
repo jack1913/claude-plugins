@@ -885,6 +885,24 @@
         "macOS": false,
         "visionOS": false
       }
+    },
+    {
+      "name": "ToolbarContent.matchedTransitionSource(id:in:)",
+      "path": "swiftui/toolbarcontent/matchedtransitionsource(id:in:)",
+      "claims": {
+        "iOS": "26.0",
+        "iPadOS": "26.0",
+        "Mac Catalyst": "26.0",
+        "macOS": false,
+        "visionOS": false
+      }
+    },
+    {
+      "name": "NavigationTransition.zoom(sourceID:in:)",
+      "path": "swiftui/navigationtransition/zoom(sourceid:in:)",
+      "claims": {
+        "macOS": false
+      }
     }
   ],
   "ignore": {
@@ -1068,8 +1086,6 @@
     ],
     "upstream names not in Apple's index (see UPSTREAM.md Findings)": [
       "Inspector",
-      "navigationTransitionDestination",
-      "navigationTransitionSource",
       "sliderNeutralValue"
     ],
     "Apple generic parameter names (not index entries)": [

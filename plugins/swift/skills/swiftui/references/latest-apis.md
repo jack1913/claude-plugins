@@ -370,20 +370,22 @@ struct Wedge: Shape {
 
 ### Presentations
 
-**Use `navigationZoomTransition` to morph sheets out of their source view.** Toolbar items and buttons can serve as the transition source.
+**Use a zoom navigation transition to morph sheets out of their source view.** Mark the source with `matchedTransitionSource(id:in:)` and give the sheet's content `navigationTransition(.zoom(sourceID:in:))` with the same ID and namespace. Toolbar items and buttons can serve as the transition source; for a toolbar item, apply the modifier to the `ToolbarItem` itself.
 
 ```swift
 .toolbar {
     ToolbarItem {
         Button("Add", systemImage: "plus") { showSheet = true }
-            .navigationTransitionSource(id: "addSheet", namespace: namespace)
     }
+    .matchedTransitionSource(id: "addSheet", in: namespace)
 }
 .sheet(isPresented: $showSheet) {
     AddItemView()
-        .navigationTransitionDestination(id: "addSheet", namespace: namespace)
+        .navigationTransition(.zoom(sourceID: "addSheet", in: namespace))
 }
 ```
+
+Apple lists the toolbar-content form of `matchedTransitionSource(id:in:)` for iOS, iPadOS and Mac Catalyst 26 only, and gives `zoom(sourceID:in:)` no macOS release, so this snippet doesn't compile for macOS or visionOS. When the target also builds for either, put it inside `#if os(iOS)`. See [`toolbar-patterns.md`](toolbar-patterns.md) → Transitioning from toolbar controls.
 
 > Source: "Build a SwiftUI app with the new design" (WWDC25, session 323)
 
