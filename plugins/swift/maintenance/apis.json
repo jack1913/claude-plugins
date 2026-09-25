@@ -1056,7 +1056,6 @@
       "textFormattingDefinition"
     ],
     "upstream names not in Apple's index (see UPSTREAM.md Findings)": [
-      "AXDateDataAxisDescriptor",
       "Inspector",
       "VerticalTabViewStyle",
       "navigationTransitionDestination",

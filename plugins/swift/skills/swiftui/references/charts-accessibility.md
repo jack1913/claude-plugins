@@ -41,7 +41,7 @@ LineMark(
 
 ### Custom Audio Graphs
 
-For advanced accessibility, conform your chart view to `AXChartDescriptorRepresentable` and implement `makeChartDescriptor()`. Attach it with `.accessibilityChartDescriptor(self)`.
+For advanced accessibility, conform your chart view to `AXChartDescriptorRepresentable` and implement `makeChartDescriptor()`. Attach it with `.accessibilityChartDescriptor(self)`. The Accessibility framework has no date axis type: its axis descriptors are `AXNumericDataAxisDescriptor` and `AXCategoricalDataAxisDescriptor`, and `AXDataPoint` takes a `Double` or `String` x value. Plot dates as seconds on a numeric axis and let the axis's value description closure turn them back into readable dates. Mark `makeChartDescriptor()` `nonisolated`: the protocol requirement isn't main-actor isolated, and in Swift 6 mode the conformance on a `View` fails without it.
 
 ```swift
 struct StepsChart: View, AXChartDescriptorRepresentable {
@@ -54,21 +54,25 @@ struct StepsChart: View, AXChartDescriptorRepresentable {
         .accessibilityChartDescriptor(self)
     }
 
-    func makeChartDescriptor() -> AXChartDescriptor {
+    nonisolated func makeChartDescriptor() -> AXChartDescriptor {
         guard let first = steps.first, let last = steps.last else {
             return AXChartDescriptor(title: "Daily Step Count", summary: nil,
                 xAxis: AXNumericDataAxisDescriptor(title: "Date", range: 0...1, gridlinePositions: []) { "\($0)" },
                 yAxis: AXNumericDataAxisDescriptor(title: "Steps", range: 0...1, gridlinePositions: []) { "\($0)" },
                 additionalAxes: [], series: [])
         }
-        let xAxis = AXDateDataAxisDescriptor(
-            title: "Date", range: first.date...last.date, gridlinePositions: [])
+        let xAxis = AXNumericDataAxisDescriptor(
+            title: "Date",
+            range: first.date.timeIntervalSince1970...last.date.timeIntervalSince1970,
+            gridlinePositions: []) {
+                Date(timeIntervalSince1970: $0).formatted(date: .abbreviated, time: .omitted)
+            }
         let yAxis = AXNumericDataAxisDescriptor(
             title: "Steps", range: 0...Double(steps.map(\.count).max() ?? 0),
             gridlinePositions: []) { "\(Int($0)) steps" }
         let series = AXDataSeriesDescriptor(
             name: "Daily Steps", isContinuous: true,
-            dataPoints: steps.map { .init(x: $0.date, y: Double($0.count)) })
+            dataPoints: steps.map { .init(x: $0.date.timeIntervalSince1970, y: Double($0.count)) })
         return AXChartDescriptor(title: "Daily Step Count", summary: nil,
             xAxis: xAxis, yAxis: yAxis, additionalAxes: [], series: [series])
     }
