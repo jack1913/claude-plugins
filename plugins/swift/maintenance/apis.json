@@ -875,6 +875,16 @@
         "macOS": false,
         "visionOS": false
       }
+    },
+    {
+      "name": "VerticalPageTabViewStyle",
+      "path": "swiftui/verticalpagetabviewstyle",
+      "claims": {
+        "watchOS": "10.0",
+        "iOS": false,
+        "macOS": false,
+        "visionOS": false
+      }
     }
   ],
   "ignore": {
@@ -1053,11 +1063,11 @@
       "YES"
     ],
     "named on purpose as the wrong spelling": [
+      "VerticalTabViewStyle",
       "textFormattingDefinition"
     ],
     "upstream names not in Apple's index (see UPSTREAM.md Findings)": [
       "Inspector",
-      "VerticalTabViewStyle",
       "navigationTransitionDestination",
       "navigationTransitionSource",
       "sliderNeutralValue"

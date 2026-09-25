@@ -525,7 +525,7 @@ Other lookup entries from the SDK include:
 - `Section.collapsible(_:)` → a standard `Section` initializer (collapsibility is no longer enabled by that modifier)
 - string-type paste/drop APIs (`PasteButton`, `onPasteCommand`, `onInsert`, and `DropInfo.hasItemsConforming`) → UTType-based APIs
 
-Platform-specific entries include `CarouselTabViewStyle` → `VerticalTabViewStyle` and `listRowPlatterColor(_:)` → `listItemTint(_:)` on watchOS, `ControlActiveState` → `appearsActive` on macOS, and `SurroundingsEffect.systemDark` → `.dark` on visionOS.
+Platform-specific entries include `CarouselTabViewStyle` → `VerticalPageTabViewStyle` (`.verticalPage`, watchOS 10+) and `listRowPlatterColor(_:)` → `listItemTint(_:)` on watchOS, `ControlActiveState` → `appearsActive` on macOS, and `SurroundingsEffect.systemDark` → `.dark` on visionOS. The SDK's `renamed:` attribute on `CarouselTabViewStyle` names `VerticalTabViewStyle`, but no type by that name exists; Apple's documentation says to use `VerticalPageTabViewStyle`, which is the type the SDK declares.
 
 Search this file's lookup table when migrating an API that the 27 SDK marks soft-deprecated. Do not introduce unrelated migrations during feature work; follow [`soft-deprecation.md`](soft-deprecation.md).
 
@@ -580,7 +580,7 @@ These APIs are from the beta iOS 27.1 SDK and exist only on iOS and iPadOS. Gate
 | Manual 1:1 `animatableData` synthesis | `@Animatable` macro; keep manual logic for clamping/normalization | iOS 26+ |
 | `presentationBackground(_:)` on sheets | Default Liquid Glass sheet material | iOS 26+ |
 | Custom toolbar background hacks | `scrollEdgeEffectStyle(_:for:)` | iOS 26+ |
-| `CarouselTabViewStyle` (watchOS) | `VerticalTabViewStyle` | SDK 27 soft-deprecated |
+| `CarouselTabViewStyle` (watchOS) | `VerticalPageTabViewStyle` (`.verticalPage`) | SDK 27 soft-deprecated |
 | `ControlActiveState` / `controlActiveState` (macOS) | `appearsActive` | SDK 27 soft-deprecated |
 | `AnimatableModifier` | Conform the modifier to `Animatable` directly | SDK 27 soft-deprecated |
 | `FileDocument`, `ReferenceFileDocument`, and legacy `DocumentGroup` initializers | `Document` (`ReadableDocument` / `WritableDocument`) and closure-based `DocumentGroup` | SDK 27 soft-deprecated; replacement requires aligned 27 releases |
