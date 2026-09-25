@@ -59,7 +59,7 @@ Before coding, understand the context and commit to an Apple-native direction:
 ## Checklist
 
 **Tokens**
-- [ ] No literal spacing, radius, colour, font or animation value: the project's tokens, or system text styles and semantic colours; the `references/tokens.md` set is offered, never added unasked
+- [ ] No literal spacing, radius, colour, font or animation value: the project's tokens; without them, system defaults (default padding and spacing, standard control shapes, `.smooth`), system text styles and semantic colours; the `references/tokens.md` set is offered, never added unasked
 - [ ] No project tokens: the reply says so and offers the `references/tokens.md` starter set
 
 **Structure**

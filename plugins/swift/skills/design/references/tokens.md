@@ -13,7 +13,7 @@ How to work with a project's own tokens, and what to suggest when it has none; t
 
 ## Project Has None
 
-Build with system defaults, not invented numbers, until the user accepts a token set: default padding and spacing (a bare `.padding()`, and a stack with no `spacing:` argument), standard control shapes (`.buttonStyle`, `ButtonBorderShape`, `.clipShape(.capsule)`) rather than a hand-picked corner radius, and `.smooth` for motion. Say in the reply that the project has no design tokens yet.
+Build with system defaults, not invented numbers, until the user accepts a token set: default padding and spacing (a bare `.padding()`, and a stack with no `spacing:` argument), standard control shapes (a system `.buttonStyle(_:)` with `.buttonBorderShape(_:)`, or a `.capsule` clip shape) rather than a hand-picked corner radius, and `.smooth` for motion. Say in the reply that the project has no design tokens yet.
 
 Offer the starter set below as a convention — never add it to the project, and never pull a number from it into today's view, before the user accepts it. The HIG publishes no spacing or radius scale. What HIG Layout does ask for is a consistent layout, related items grouped by the space around them, and content kept inside the safe areas, margins and layout guides the system defines ([HIG: Layout](https://developer.apple.com/design/human-interface-guidelines/layout)). HIG Accessibility does name padding around controls, so that taps land on the intended one: about 12 pt around a control with a bezel, about 24 pt around the visible edges of one without ([HIG: Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility)). Steps of 4 and 8 points are a common habit, not a guideline.
 

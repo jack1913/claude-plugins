@@ -29,7 +29,7 @@ The mechanics (implicit and explicit animation, transitions, completion handlers
 What each preset is comes from [SwiftUI: smooth](https://developer.apple.com/documentation/swiftui/animation/smooth), [SwiftUI: snappy](https://developer.apple.com/documentation/swiftui/animation/snappy) and [SwiftUI: bouncy](https://developer.apple.com/documentation/swiftui/animation/bouncy); when each fits, from [WWDC23 10158](https://developer.apple.com/videos/play/wwdc2023/10158/).
 
 - Tune a preset instead of inventing a curve: set the duration first for pacing, then the bounce for character, for example with `.smooth(duration:extraBounce:)` or `.spring(duration:bounce:)`. A lot of bounce looks exaggerated on interface elements ([WWDC23 10158](https://developer.apple.com/videos/play/wwdc2023/10158/))
-- Choose springs that match the app's character, serious or playful, calm or quick, and reuse them everywhere ([WWDC23 10158](https://developer.apple.com/videos/play/wwdc2023/10158/)); the motion tokens in `tokens.md` name them once
+- Choose springs that match the app's character, serious or playful, calm or quick, and reuse them everywhere ([WWDC23 10158](https://developer.apple.com/videos/play/wwdc2023/10158/)); where the project has motion tokens, they name them once (`tokens.md`)
 
 ## Keep It Short
 
