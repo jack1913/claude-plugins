@@ -9,7 +9,8 @@ Check every API the swift plugin's skills name against Apple's documentation.
 
 options:
   -h, --help            show this help message and exit
-  --strict              also fail on unresolved names and stale ignore entries
+  --strict              also fail on unresolved names, stale ignore entries,
+                        and a stale cache
   --refresh             bypass the cache
   --write-table         rewrite the generated block in platform-
                         availability.md

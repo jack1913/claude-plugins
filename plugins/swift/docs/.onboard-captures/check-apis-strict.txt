@@ -1,1 +1,2 @@
-78 manifest APIs, 0 failures, 0 warnings
+oldest cache entry: 0.1 days old
+80 manifest APIs, 0 failures, 0 warnings
