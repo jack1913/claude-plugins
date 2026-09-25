@@ -16,7 +16,7 @@ visionOS lacks SwiftUI's Liquid Glass modifiers and styles, and some 26-era tool
 
 - `glassEffect(_:in:)`, `glassEffectID(_:in:)`, `glassEffectUnion(id:namespace:)` and `glassEffectTransition(_:)`
 - `GlassEffectContainer` and `Glass.interactive(_:)`
-- `GlassButtonStyle`: `.buttonStyle(.glass)` and `.buttonStyle(.glassProminent)`
+- `GlassButtonStyle` (`.buttonStyle(.glass)`) and `.buttonStyle(.glassProminent)`
 - `scrollEdgeEffectStyle(_:for:)`
 - `ToolbarSpacer`, `sharedBackgroundVisibility(_:)` and `tabViewBottomAccessory(content:)`
 

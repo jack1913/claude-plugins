@@ -304,6 +304,15 @@
       }
     },
     {
+      "name": "overlay(alignment:content:)",
+      "path": "swiftui/view/overlay(alignment:content:)",
+      "claims": {
+        "iOS": "15.0",
+        "macOS": "12.0",
+        "deprecated": false
+      }
+    },
+    {
       "name": "Text + Text",
       "path": "swiftui/text/+(_:_:)",
       "claims": {
@@ -362,7 +371,6 @@
       "HeaderView",
       "HomeView",
       "ImageSnapshot",
-      "InboxView",
       "InspectorContent",
       "InspectorView",
       "ItemCard",
@@ -444,6 +452,7 @@
     ],
     "example views in our own snippets that stand in for app content": [
       "ConcertView",
+      "InboxView",
       "StageView"
     ],
     "SwiftUI runtime symbols named in Instruments output": [
