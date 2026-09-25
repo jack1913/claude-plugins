@@ -9,7 +9,9 @@ from pathlib import Path
 SWIFT_FENCES = frozenset({"", "swift"})
 BUILTIN_IGNORES = frozenset({"Self", "Type", "Protocol", "Any"})
 
-_FENCE = re.compile(r"^(```|~~~)[ \t]*([^\n]*)\n(.*?)^\1[ \t]*$", re.M | re.S)
+_FENCE = re.compile(
+    r"^([ \t]{0,4})(```|~~~)[ \t]*([^\n]*)\n(.*?)^\1\2[ \t]*$", re.M | re.S
+)
 _INLINE = re.compile(r"`([^`\n]+)`")
 _TRIPLE_STRING = re.compile(r'"""(?:.|\n)*?"""')
 _STRING = re.compile(r'"(?:\\.|[^"\\\n])*"')
@@ -51,9 +53,12 @@ def code_fragments(markdown: str) -> list[str]:
     fragments = []
 
     def take_fence(match: re.Match) -> str:
-        info = match.group(2).split()
+        info = match.group(3).split()
         if (info[0].lower() if info else "") in SWIFT_FENCES:
-            fragments.append(strip_code(match.group(3)))
+            indent, body = match.group(1), match.group(4)
+            if indent:
+                body = re.sub(f"^{re.escape(indent)}", "", body, flags=re.M)
+            fragments.append(strip_code(body))
         return "\n"
 
     prose = _FENCE.sub(take_fence, markdown)

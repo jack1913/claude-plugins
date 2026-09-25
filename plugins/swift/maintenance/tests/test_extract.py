@@ -25,6 +25,14 @@ class FragmentTests(unittest.TestCase):
     def test_tilde_fence_and_info_string_extras(self):
         self.assertIn(("Toggle", "type"), names('~~~swift title="x"\nToggle()\n~~~\n'))
 
+    def test_indented_fence_inside_list_item_is_code(self):
+        md = "- item:\n  ```swift\n  GlassEffectContainer {}\n  ```\n- next\n"
+        self.assertIn(("GlassEffectContainer", "type"), names(md))
+
+    def test_indented_non_swift_fence_inside_list_item_is_not_code(self):
+        md = "- item:\n  ```bash\n  PythonThing --x\n  ```\n- next\n"
+        self.assertNotIn(("PythonThing", "type"), names(md))
+
     def test_inline_spans_are_code(self):
         self.assertIn(("glassEffect", "member"), names("Use `.glassEffect()` here."))
 
