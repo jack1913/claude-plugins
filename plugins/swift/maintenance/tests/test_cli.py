@@ -112,22 +112,32 @@ class CliTests(unittest.TestCase):
         code, out = self.run_cli(fetcher=stale)
         self.assertEqual(code, 0)
         self.assertIn("oldest cache entry: 31.0 days old", out)
-        self.assertIn("WARN cache is up to 31 days old", out)
+        self.assertIn("WARN cache is up to 31.0 days old", out)
         self.assertIn("--refresh", out)
         code, out = self.run_cli("--strict", fetcher=stale)
         self.assertEqual(code, 1, out)
 
     def test_stale_cache_message_and_threshold_round_the_same_way(self):
-        # 30.4 rounds to 30, which is not > DEFAULT_MAX_AGE_DAYS (30): the
-        # printed message and the pass/fail decision must agree, so this
-        # must not warn. Before the fix, the raw (unrounded) age was
-        # compared while the message printed the rounded age, so this case
-        # warned "cache is up to 30 days old (> 30)" -- a message that
+        # The printed age and the pass/fail decision must round the same
+        # value the same way. Both are round(oldest_days, 1), so a case that
+        # rounds to exactly the threshold (30.0) must not warn, and a case
+        # that rounds to just past it (30.1) must. Before the fix, the raw
+        # (unrounded) age was compared against a *whole-day* rounded message
+        # (round(oldest_days) with no ndigits), so e.g. 30.4 days printed as
+        # "30 days old" but still warned "> 30" -- a message that
         # contradicts its own threshold.
-        just_under = FakeFetcher(oldest_cache_age_days=30.4)
-        code, out = self.run_cli("--strict", fetcher=just_under)
-        self.assertEqual(code, 0, out)
-        self.assertNotIn("WARN", out)
+        for quiet in (30.0, 30.04):
+            code, out = self.run_cli(
+                "--strict", fetcher=FakeFetcher(oldest_cache_age_days=quiet)
+            )
+            self.assertEqual(code, 0, out)
+            self.assertNotIn("WARN", out)
+        for warns in (30.05, 30.1):
+            code, out = self.run_cli(
+                "--strict", fetcher=FakeFetcher(oldest_cache_age_days=warns)
+            )
+            self.assertEqual(code, 1, out)
+            self.assertIn("WARN", out)
 
     def test_unresolved_name_warns_and_fails_only_under_strict(self):
         (self.skills / "swiftui" / "extra.md").write_text("Use `.glassMagic()`.\n")

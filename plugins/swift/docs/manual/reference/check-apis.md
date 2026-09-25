@@ -47,11 +47,11 @@ From `run` and `main` in `maintenance/apicheck/cli.py`:
 
 ## Cache staleness
 
-`Fetcher` (`maintenance/apicheck/fetch.py`) never expires a cache entry on its own, so a run reports the age of the oldest entry it read or wrote (file mtime), and WARNs once that entry is older than `DEFAULT_MAX_AGE_DAYS` — 30 days:
+`Fetcher` (`maintenance/apicheck/fetch.py`) never expires a cache entry on its own, so a run reports the age of the oldest entry it read or wrote (file mtime), rounded to one decimal place, and WARNs once that rounded age is over `DEFAULT_MAX_AGE_DAYS` — 30 days. The WARN line reprints the same rounded value, so the two always agree:
 
 ```text illustrative
 oldest cache entry: 31.0 days old
-WARN cache is up to 31 days old (> 30); run --refresh
+WARN cache is up to 31.0 days old (> 30); run --refresh
 80 manifest APIs, 0 failures, 1 warnings
 ```
 

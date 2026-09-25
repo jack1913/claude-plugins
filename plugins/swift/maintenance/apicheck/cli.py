@@ -114,11 +114,11 @@ def run(args, fetcher, out=sys.stdout) -> int:
 
     oldest_days = fetcher.oldest_cache_age_days()
     if oldest_days is not None:
-        print(f"oldest cache entry: {oldest_days:.1f} days old", file=out)
-        rounded_days = round(oldest_days)
-        if rounded_days > DEFAULT_MAX_AGE_DAYS:
+        shown = round(oldest_days, 1)
+        print(f"oldest cache entry: {shown:.1f} days old", file=out)
+        if shown > DEFAULT_MAX_AGE_DAYS:
             warnings.append(
-                f"cache is up to {rounded_days} days old (> {DEFAULT_MAX_AGE_DAYS}); run --refresh"
+                f"cache is up to {shown:.1f} days old (> {DEFAULT_MAX_AGE_DAYS}); run --refresh"
             )
 
     if args.write_table:
