@@ -123,11 +123,11 @@ Prerequisite: the `origin` remote points at `jack1913/swift-plugin`.
    claude plugin tag plugins/swift
    ```
 
-For release 0.1.1, the dry run read:
+For release 0.1.2, the dry run read:
 
 ```text capture=tag-dry-run
-Version: 0.1.1 (from plugin.json)
-Tag:     swift--v0.1.1
+Version: 0.1.2 (from plugin.json)
+Tag:     swift--v0.1.2
 ```
 
 4. Push the commit, then the tag:

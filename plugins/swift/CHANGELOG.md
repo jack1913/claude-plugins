@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-09-25
+
+Upstream bugs in `swift:swiftui`'s references are fixed. Availability gates in the other references now compile on every platform a package targets, and the six API names Apple doesn't have are replaced with the real APIs.
+
+### Fixed
+
+- `swift:swiftui` availability gates outside the Liquid Glass reference:
+  - Charts gates name macOS, and visionOS where Apple ships the API later; the advice gives the tvOS and watchOS releases too;
+  - `chart3DCameraProjection` is kept off visionOS, and `Chart3D` off tvOS and watchOS;
+  - SDK 27 toolbar APIs (`topBarPinnedTrailing`, `ToolbarOverflowMenu`) are gated so macOS builds;
+  - iOS 27.1-only APIs (`ArrangementView`, reserved regions, vertical toolbar bars, `onHingeChange`) sit behind a compile-time iOS check, since no `#available` version admits them on macOS, Mac Catalyst or visionOS.
+- API names that don't exist in Apple's SDKs are replaced with the real APIs:
+  - a numeric axis replaces `AXDateDataAxisDescriptor`;
+  - `VerticalPageTabViewStyle` replaces `VerticalTabViewStyle`;
+  - `matchedTransitionSource` and a zoom transition replace `navigationTransitionSource`/`Destination`;
+  - `Slider`'s `neutralValue:` parameter replaces `sliderNeutralValue`;
+  - the `inspector(isPresented:content:)` modifier replaces an `Inspector` type.
+- The zoom navigation transition is no longer claimed on macOS.
+- The view-structure example uses `foregroundStyle` instead of `foregroundColor`.
+
+### Changed
+
+- `UPSTREAM.md` Findings gains a Status column; all six rows are marked fixed.
+- The docs are updated:
+  - spec §9 records the version-bump update as confirmed live;
+  - the `check-apis`, unit-test and plugin-details outputs are re-captured.
+
 ## [0.1.1] - 2026-09-25
 
 Fixes from a full code review. The Liquid Glass fallback examples in `swift:swiftui` now compile below 26, `swift:design` no longer applies its starter tokens unasked, and `check-apis` catches more mistakes.
