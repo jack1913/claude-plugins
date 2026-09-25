@@ -3011,11 +3011,7 @@ A `Δ` near zero with a passing WITH is a finding to report, not a failure.
 
 - [ ] **Step 3: Commit any fixes**
 
-```bash
-git add plugins/swift/skills maintenance/apis.json UPSTREAM.md
-git commit -m "fix: tighten skill wording after eval GREEN run"
-```
-(Skip if nothing changed.)
+One commit per skill: a `swift:swiftui` change goes in its own commit with its `UPSTREAM.md` Deviations row (Global Constraints), for example `fix(swiftui): …`; `swift:design` changes go in a separate `fix(design): …` commit. Skip this step if nothing changed.
 
 ---
 
