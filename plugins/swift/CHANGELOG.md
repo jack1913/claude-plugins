@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-25
+
+Fixes from a full code review. The Liquid Glass fallback examples in `swift:swiftui` now compile below 26, `swift:design` no longer applies its starter tokens unasked, and `check-apis` catches more mistakes.
+
+### Fixed
+
+- `swift:swiftui` Liquid Glass fallbacks:
+  - the `glassEffectWithFallback` helper and the toolbar example compile below 26 again;
+  - availability gates name macOS as well as iOS, so a package that targets macOS 14 builds;
+  - visionOS is kept out of availability gates and uses its `#if os(visionOS)` branch instead;
+  - a fallback for glass button styles is added.
+- The Text interpolation entry gives its real availability (iOS 14, not 26). It also notes that `Text.foregroundStyle` only interpolates from iOS 17, and that `foregroundColor` is the one exception below that.
+- `swift:swiftui`'s checklist names `GlassEffectContainer` for several glass elements shown together.
+- The trace recorder clears a leftover stop-file, so a new recording no longer stops at once.
+- `swift:design` offers the `tokens.md` starter set but never applies it unasked. Until the user accepts it, it builds with system defaults: default padding and spacing, standard control shapes, and `.smooth`.
+- `check-apis`:
+  - scans code blocks indented inside lists;
+  - rejects a malformed `apis.json` with a clear error instead of a traceback;
+  - warns (and fails under `--strict`) when its cached Apple data is more than 30 days old.
+- `upstream-diff.sh` picks upstream's newest plain release tag, and says so when upstream has none.
+
+### Changed
+
+- The eval graders are stricter: every `#Preview` must sit inside `#if DEBUG`, and the glass gate must also name macOS 26.
+- The docs are updated:
+  - `--plugin-dir` is back as the fallback when `marketplace add` fails;
+  - the `check-apis` outputs are re-captured;
+  - spec §9 records what the live install confirmed;
+  - the rules skeleton file is retired.
+
 ## [0.1.0] - 2026-09-25
 
 First release of the private `swift` plugin: `swift:swiftui` (SwiftUI correctness, forked from AvdLee/SwiftUI-Agent-Skill 5.1.0) and a new `swift:design` (Apple-native design). The repo also has tooling that checks every API the skills name against Apple's documentation.
