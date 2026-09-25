@@ -1085,8 +1085,7 @@
       "textFormattingDefinition"
     ],
     "upstream names not in Apple's index (see UPSTREAM.md Findings)": [
-      "Inspector",
-      "sliderNeutralValue"
+      "Inspector"
     ],
     "Apple generic parameter names (not index entries)": [
       "CollectionID"

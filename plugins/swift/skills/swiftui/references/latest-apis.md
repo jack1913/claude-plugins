@@ -406,16 +406,14 @@ Button("Confirm") { }
     .clipShape(.rect(cornerRadius: 12, style: .concentric))
 ```
 
-**Sliders now support tick marks and a neutral value.**
+**Sliders now support tick marks and a neutral value.** Both are `Slider` initializer parameters; there is no neutral-value modifier. With `step:`, the `tick:` closure returns a `SliderTick` for each step value to mark, or `nil`; without `step:`, list the ticks in a `ticks:` builder instead.
 
 ```swift
-Slider(value: $speed, in: 0.5...2.0, step: 0.25) {
+Slider(value: $speed, in: 0.5...2.0, step: 0.25, neutralValue: 1.0) {
     Text("Speed")
-} ticks: {
-    SliderTick(value: 0.6)
-    SliderTick(value: 0.9)
+} tick: { value in
+    SliderTick(value)
 }
-.sliderNeutralValue(1.0)
 ```
 
 > Source: "Build a SwiftUI app with the new design" (WWDC25, session 323)
