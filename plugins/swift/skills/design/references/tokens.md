@@ -13,7 +13,9 @@ How to work with a project's own tokens, and what to suggest when it has none; t
 
 ## Project Has None
 
-Suggest this starter set rather than adding it unasked, and present it as a convention. The HIG publishes no spacing or radius scale. What HIG Layout does ask for is a consistent layout, related items grouped by the space around them, and content kept inside the safe areas, margins and layout guides the system defines ([HIG: Layout](https://developer.apple.com/design/human-interface-guidelines/layout)). HIG Accessibility does name padding around controls, so that taps land on the intended one: about 12 pt around a control with a bezel, about 24 pt around the visible edges of one without ([HIG: Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility)). Steps of 4 and 8 points are a common habit, not a guideline.
+Build with system defaults, not invented numbers, until the user accepts a token set: default padding and spacing (a bare `.padding()`, and a stack with no `spacing:` argument), standard control shapes (`.buttonStyle`, `ButtonBorderShape`, `.clipShape(.capsule)`) rather than a hand-picked corner radius, and `.smooth` for motion. Say in the reply that the project has no design tokens yet.
+
+Offer the starter set below as a convention — never add it to the project, and never pull a number from it into today's view, before the user accepts it. The HIG publishes no spacing or radius scale. What HIG Layout does ask for is a consistent layout, related items grouped by the space around them, and content kept inside the safe areas, margins and layout guides the system defines ([HIG: Layout](https://developer.apple.com/design/human-interface-guidelines/layout)). HIG Accessibility does name padding around controls, so that taps land on the intended one: about 12 pt around a control with a bezel, about 24 pt around the visible edges of one without ([HIG: Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility)). Steps of 4 and 8 points are a common habit, not a guideline.
 
 ```swift
 import SwiftUI
@@ -38,7 +40,7 @@ enum Motion {
 }
 ```
 
-In a view:
+If the user accepts it, a view moves from system defaults to the named set:
 
 ```swift
 // Tokens and text styles
@@ -67,6 +69,8 @@ Notes on the scales:
 - **Motion** tokens name a purpose, not a duration. `.smooth` is a spring without bounce and `.snappy` a spring with a little bounce ([SwiftUI: smooth](https://developer.apple.com/documentation/swiftui/animation/smooth), [SwiftUI: snappy](https://developer.apple.com/documentation/swiftui/animation/snappy)). Animate only with a purpose, such as showing a change of state or giving feedback, and keep feedback animation brief ([HIG: Motion](https://developer.apple.com/design/human-interface-guidelines/motion)). The tokens don't replace a Reduce Motion check: with the setting on, cut automatic and repeating motion and prefer fades to slides and zooms ([HIG: Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility)).
 
 ## How to Introduce It
+
+Once the user accepts the starter set — never before:
 
 1. Put the set in one file, `DesignTokens.swift`, in the app target (or in a shared package when several targets use it).
 2. Replace literals in the files a change already touches; don't sweep the whole project in one go.
