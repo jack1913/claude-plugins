@@ -152,6 +152,8 @@ These are hard rules -- violations are always bugs:
 - [ ] `@FocusState` properties are `private`
 - [ ] No redundant `@FocusState` writes inside tap gesture handlers on `.focusable()` views
 - [ ] Version-specific APIs are gated with `#available` and have sensible fallbacks
+- [ ] When the deployment target is below 26, every 26-only API (see `references/platform-availability.md`) sits behind `if #available(iOS 26, macOS 26, *)` naming the project's platforms, with a fallback such as a material (`references/liquid-glass.md` → Fallback Strategies)
+- [ ] Glass APIs that visionOS lacks sit in the non-visionOS branch of `#if os(visionOS)`; visionOS uses `glassBackgroundEffect` (see `references/visionos.md`)
 - [ ] `import Charts` present in files using chart types
 - [ ] Previews use self-contained mock data; no dependency on live services or network
 - [ ] Every `#Preview` sits inside `#if DEBUG` … `#endif` (see `references/previews.md`)
