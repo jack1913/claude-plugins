@@ -29,9 +29,50 @@ class FragmentTests(unittest.TestCase):
         md = "- item:\n  ```swift\n  GlassEffectContainer {}\n  ```\n- next\n"
         self.assertIn(("GlassEffectContainer", "type"), names(md))
 
+    def test_closing_fence_may_be_dedented_within_three_spaces_commonmark(self):
+        # CommonMark lets the closing fence's indentation differ from the
+        # opening fence's by 0-3 spaces; the old code required an exact
+        # (backreferenced) match and silently dropped the whole block.
+        md = "  ```swift\n  GlassEffectContainer {}\n```\n"
+        self.assertIn(("GlassEffectContainer", "type"), names(md))
+
+    def test_closing_fence_may_be_more_indented_within_three_spaces(self):
+        md = "```swift\nGlassEffectContainer {}\n   ```\n"
+        self.assertIn(("GlassEffectContainer", "type"), names(md))
+
+    def test_fence_nested_in_a_deeper_list_item_is_code(self):
+        # Two levels of list nesting push the fence past the old code's
+        # {0,4}-space cap on the opening indent, so it was never recognised
+        # as a fence at all.
+        md = "- outer\n  - item:\n      ```swift\n      GlassEffectContainer {}\n      ```\n"
+        self.assertIn(("GlassEffectContainer", "type"), names(md))
+
+    def test_deep_fence_closing_may_be_dedented_to_the_outer_list_level(self):
+        md = "- outer\n  - item:\n      ```swift\n      GlassEffectContainer {}\n    ```\n"
+        self.assertIn(("GlassEffectContainer", "type"), names(md))
+
     def test_indented_non_swift_fence_inside_list_item_is_not_code(self):
-        md = "- item:\n  ```bash\n  PythonThing --x\n  ```\n- next\n"
-        self.assertNotIn(("PythonThing", "type"), names(md))
+        # The non-swift fence's closer is dedented (indent 2, opener indent
+        # 4) -- valid CommonMark, in the new tolerance. The old code's exact
+        # (backreferenced) indent match skipped straight past that closer
+        # looking for one indented exactly 4, latched onto the unrelated
+        # bare "    ```" on the last line instead, and swallowed everything
+        # in between -- including the real swift fence and its
+        # GlassEffectContainer -- as (discarded) non-swift body. This test
+        # failed on the old code on the GlassEffectContainer assertion, not
+        # just on PythonThing.
+        md = (
+            "    ```bash\n"
+            "    PythonThing --x\n"
+            "  ```\n"
+            "```swift\n"
+            "GlassEffectContainer {}\n"
+            "```\n"
+            "    ```\n"
+        )
+        found = names(md)
+        self.assertNotIn(("PythonThing", "type"), found)
+        self.assertIn(("GlassEffectContainer", "type"), found)
 
     def test_inline_spans_are_code(self):
         self.assertIn(("glassEffect", "member"), names("Use `.glassEffect()` here."))
