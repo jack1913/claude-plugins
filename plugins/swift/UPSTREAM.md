@@ -14,6 +14,7 @@
 | `SKILL.md` frontmatter | `name: swiftui`; description names iOS, iPadOS, macOS, visionOS and the visionOS topics | Plugin skill command is `/swift:<name>`; visionOS work must trigger the skill |
 | `SKILL.md`, `references/trace-analysis.md`, `references/trace-recording.md` | `${SKILL_DIR}` → `${CLAUDE_SKILL_DIR}` (18 places) | Claude Code substitutes `${CLAUDE_SKILL_DIR}`; `${SKILL_DIR}` would leave commands pointing at `/scripts/…` |
 | `LICENSE-upstream` | New: upstream's MIT license text | Travels with every install (the plugin cache copies only `plugins/swift/`) |
+| (repo) `tests/test_record_trace.py` → `maintenance/tests/` | Path to `record_trace.py` now `plugins/swift/skills/swiftui/scripts/` | Outside the tagged folder; the test keeps covering the shipped script |
 
 ## Ported
 
