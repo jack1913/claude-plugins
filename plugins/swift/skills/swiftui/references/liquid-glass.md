@@ -26,7 +26,7 @@ Liquid Glass is Apple's new design language introduced in iOS 26. It provides tr
 All Liquid Glass APIs require iOS 26 or later. Always provide fallbacks:
 
 ```swift
-if #available(iOS 26, *) {
+if #available(iOS 26, macOS 26, *) {
     // Liquid Glass implementation
 } else {
     // Fallback using materials
@@ -242,7 +242,7 @@ Text("Label")
 ```swift
 struct GlassToolbar: View {
     var body: some View {
-        if #available(iOS 26, *) {
+        if #available(iOS 26, macOS 26, *) {
             GlassEffectContainer(spacing: 16) {
                 HStack(spacing: 16) {
                     ToolbarButton(icon: "pencil", action: { })
@@ -262,6 +262,7 @@ struct GlassToolbar: View {
     }
 }
 
+@available(iOS 26, macOS 26, *)
 struct ToolbarButton: View {
     let icon: String
     let action: () -> Void
@@ -285,7 +286,7 @@ struct GlassCard: View {
     let subtitle: String
 
     var body: some View {
-        if #available(iOS 26, *) {
+        if #available(iOS 26, macOS 26, *) {
             cardContent
                 .glassEffect(.regular, in: .rect(cornerRadius: 20))
         } else {
@@ -317,7 +318,7 @@ struct GlassSegmentedControl: View {
     @Namespace private var animation
 
     var body: some View {
-        if #available(iOS 26, *) {
+        if #available(iOS 26, macOS 26, *) {
             GlassEffectContainer(spacing: 4) {
                 HStack(spacing: 4) {
                     ForEach(options.indices, id: \.self) { index in
@@ -353,10 +354,12 @@ struct GlassSegmentedControl: View {
 
 ## Fallback Strategies
 
+List every platform the project targets in each gate (`#available(iOS 26, macOS 26, *)` for an iOS and macOS project): on a platform the gate leaves out, the `*` treats the branch as reachable at the deployment target, so `#available(iOS 26, *)` fails to compile the glass branch in a package whose macOS target is below 26.
+
 ### Using Materials
 
 ```swift
-if #available(iOS 26, *) {
+if #available(iOS 26, macOS 26, *) {
     content.glassEffect()
 } else {
     content.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
@@ -373,18 +376,53 @@ if #available(iOS 26, *) {
 
 ### Conditional Modifier Extension
 
+The helper exists for targets below 26, so its signature must not name a 26-only type such as `Glass`. Take plain values and build the `Glass` inside the gated branch:
+
 ```swift
 extension View {
     @ViewBuilder
     func glassEffectWithFallback(
-        _ glass: Glass = .regular,
         in shape: some Shape = .rect,
+        tint: Color? = nil,
+        interactive: Bool = false,
         fallbackMaterial: Material = .ultraThinMaterial
     ) -> some View {
-        if #available(iOS 26, *) {
-            self.glassEffect(glass, in: shape)
+        if #available(iOS 26, macOS 26, *) {
+            self.glassEffect(.regular.tint(tint).interactive(interactive), in: shape)
         } else {
             self.background(fallbackMaterial, in: shape)
+        }
+    }
+}
+```
+
+### Glass Button Style Fallback
+
+`.buttonStyle(.glass)` and `.buttonStyle(.glassProminent)` are 26-only. Below 26, keep the capsule: put the padding and `.background(.ultraThinMaterial, in: .capsule)` on the button's label, not on the `Button`, so the whole capsule is the tap target rather than just the text. `.plain` stops macOS from drawing its default bordered bezel around the capsule.
+
+```swift
+struct GlassFallbackButton: View {
+    let title: String
+    var prominent = false
+    let action: () -> Void
+
+    var body: some View {
+        if #available(iOS 26, macOS 26, *) {
+            if prominent {
+                Button(title, action: action)
+                    .buttonStyle(.glassProminent)
+            } else {
+                Button(title, action: action)
+                    .buttonStyle(.glass)
+            }
+        } else {
+            Button(action: action) {
+                Text(title)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial, in: .capsule)
+            }
+            .buttonStyle(.plain)
         }
     }
 }
@@ -431,7 +469,7 @@ An automatic scroll edge effect blurs and fades content under system toolbars to
 
 ## Checklist
 
-- [ ] `#available(iOS 26, *)` with fallback
+- [ ] `#available(iOS 26, macOS 26, *)`, naming every platform the project targets, with fallback
 - [ ] `GlassEffectContainer` wraps grouped elements
 - [ ] `.glassEffect()` applied after layout modifiers
 - [ ] `.interactive()` only on user-interactable elements
