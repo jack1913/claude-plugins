@@ -348,6 +348,7 @@
       "HeaderView",
       "HomeView",
       "ImageSnapshot",
+      "InboxView",
       "InspectorContent",
       "InspectorView",
       "ItemCard",

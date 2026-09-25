@@ -5,6 +5,7 @@
 - [Preview Macro](#preview-macro)
 - [Preview with Mock Data](#preview-with-mock-data)
 - [@Previewable Property Wrappers](#previewable-property-wrappers)
+- [Guard Previews with `#if DEBUG`](#guard-previews-with-if-debug)
 - [Common Diagnostics](#common-diagnostics)
 - [Summary Checklist](#summary-checklist)
 
@@ -290,6 +291,28 @@ private struct SliderPreview: View {
 
 ---
 
+## Guard Previews with `#if DEBUG`
+
+`#Preview` is a macro whose expansion compiles in every build configuration, Release included. A preview that references anything compiled only in Debug (mock services, sample data, helpers behind `#if DEBUG`) breaks the Release build, and that only shows up when you archive. Wrap every preview in `#if DEBUG`, and keep preview-only helpers behind the same condition:
+
+```swift
+#if DEBUG
+#Preview("Three messages") {
+    InboxView(messages: Message.samples)
+}
+
+extension Message {
+    static let samples: [Message] = [
+        Message(sender: "Ana", subject: "Lunch?"),
+        Message(sender: "Ben", subject: "Build is green"),
+        Message(sender: "Chen", subject: "Slides attached"),
+    ]
+}
+#endif
+```
+
+---
+
 ## Common Diagnostics
 
 | Symptom | Cause | Fix |
@@ -311,3 +334,4 @@ private struct SliderPreview: View {
 - [ ] Inject mock services through a protocol when a view depends on async data
 - [ ] Never depend on live network or disk I/O in a preview
 - [ ] Prefer `.defaultFocus` over `.onAppear` writes when seeding `@FocusState` in previews
+- [ ] Every `#Preview`, and every preview-only helper, sits inside `#if DEBUG` … `#endif`

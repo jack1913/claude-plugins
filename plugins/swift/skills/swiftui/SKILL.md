@@ -154,3 +154,4 @@ These are hard rules -- violations are always bugs:
 - [ ] Version-specific APIs are gated with `#available` and have sensible fallbacks
 - [ ] `import Charts` present in files using chart types
 - [ ] Previews use self-contained mock data; no dependency on live services or network
+- [ ] Every `#Preview` sits inside `#if DEBUG` … `#endif` (see `references/previews.md`)
