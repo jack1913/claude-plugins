@@ -121,6 +121,7 @@ Consult the reference file for each topic relevant to the current task:
 | Styled text editing | `references/styled-text-editing.md` |
 | Liquid Glass (iOS 26+) | `references/liquid-glass.md` |
 | Where Liquid Glass and 26-era APIs exist, per platform | `references/platform-availability.md` |
+| visionOS: glass alternatives, ornaments, windows, volumes, immersive spaces | `references/visionos.md` |
 | macOS scenes | `references/macos-scenes.md` |
 | macOS window styling | `references/macos-window-styling.md` |
 | macOS views | `references/macos-views.md` |

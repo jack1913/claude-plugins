@@ -156,6 +156,145 @@
       "name": "rect(corners:isUniform:)",
       "path": "swiftui/shape/rect(corners:isuniform:)",
       "table": true
+    },
+    {
+      "name": "PrimitiveButtonStyle.glass",
+      "path": "swiftui/primitivebuttonstyle/glass",
+      "claims": {
+        "visionOS": false
+      }
+    },
+    {
+      "name": "glassBackgroundEffect(in:displayMode:)",
+      "path": "swiftui/view/glassbackgroundeffect(in:displaymode:)",
+      "claims": {
+        "visionOS": true,
+        "iOS": false,
+        "iPadOS": false,
+        "Mac Catalyst": false,
+        "macOS": false,
+        "watchOS": false,
+        "tvOS": false
+      }
+    },
+    {
+      "name": "glassBackgroundEffect(displayMode:)",
+      "path": "swiftui/view/glassbackgroundeffect(displaymode:)",
+      "claims": {
+        "visionOS": true,
+        "iOS": false,
+        "iPadOS": false,
+        "Mac Catalyst": false,
+        "macOS": false,
+        "watchOS": false,
+        "tvOS": false
+      }
+    },
+    {
+      "name": "ornament(visibility:attachmentAnchor:contentAlignment:ornament:)",
+      "path": "swiftui/view/ornament(visibility:attachmentanchor:contentalignment:ornament:)",
+      "claims": {
+        "visionOS": true,
+        "iOS": false,
+        "iPadOS": false,
+        "Mac Catalyst": false,
+        "macOS": false,
+        "watchOS": false,
+        "tvOS": false
+      }
+    },
+    {
+      "name": "ImmersiveSpace",
+      "path": "swiftui/immersivespace",
+      "claims": {
+        "visionOS": true,
+        "iOS": false,
+        "iPadOS": false,
+        "Mac Catalyst": false,
+        "macOS": false,
+        "watchOS": false,
+        "tvOS": false
+      }
+    },
+    {
+      "name": "windowStyle(_:)",
+      "path": "swiftui/scene/windowstyle(_:)",
+      "claims": {
+        "visionOS": true
+      }
+    },
+    {
+      "name": "volumetric",
+      "path": "swiftui/windowstyle/volumetric",
+      "claims": {
+        "visionOS": true,
+        "iOS": false,
+        "iPadOS": false,
+        "Mac Catalyst": false,
+        "macOS": false,
+        "watchOS": false,
+        "tvOS": false
+      }
+    },
+    {
+      "name": "SpatialEventGesture",
+      "path": "swiftui/spatialeventgesture",
+      "claims": {
+        "visionOS": true
+      }
+    },
+    {
+      "name": "hoverEffect(_:isEnabled:)",
+      "path": "swiftui/view/hovereffect(_:isenabled:)",
+      "claims": {
+        "iOS": true,
+        "iPadOS": true,
+        "Mac Catalyst": true,
+        "tvOS": true,
+        "visionOS": true,
+        "macOS": false,
+        "watchOS": false
+      }
+    },
+    {
+      "name": "openImmersiveSpace",
+      "path": "swiftui/environmentvalues/openimmersivespace",
+      "claims": {
+        "visionOS": true
+      }
+    },
+    {
+      "name": "dismissImmersiveSpace",
+      "path": "swiftui/environmentvalues/dismissimmersivespace",
+      "claims": {
+        "visionOS": true
+      }
+    },
+    {
+      "name": "ContentShapeKinds.hoverEffect",
+      "path": "swiftui/contentshapekinds/hovereffect",
+      "claims": {
+        "iOS": true,
+        "iPadOS": true,
+        "Mac Catalyst": true,
+        "tvOS": true,
+        "visionOS": true,
+        "macOS": false,
+        "watchOS": false
+      }
+    },
+    {
+      "name": "ToolbarItemPlacement.bottomOrnament",
+      "path": "swiftui/toolbaritemplacement/bottomornament",
+      "claims": {
+        "visionOS": true,
+        "iOS": false,
+        "iPadOS": false,
+        "Mac Catalyst": false,
+        "macOS": false,
+        "watchOS": false,
+        "tvOS": false
+      }
     }
   ],
   "ignore": {
@@ -287,6 +426,10 @@
       "ViewSizeKey",
       "Viewer",
       "WeatherSummary"
+    ],
+    "example views in our own snippets that stand in for app content": [
+      "ConcertView",
+      "StageView"
     ],
     "SwiftUI runtime symbols named in Instruments output": [
       "EnvironmentWriter",
