@@ -118,7 +118,7 @@ ToolbarItem {
 
 Use `.horizontalOnly` when related states must stay together and one representation cannot fit a fixed-width vertical bar. Use `.verticalPreferred` only when a custom view has a compact vertical representation. Otherwise keep `.automatic`.
 
-For a custom item's presentation details, an iOS 27.1-only view can read `@Environment(\.toolbarVerticalEdge)`. A non-`nil` value means the environment supports a vertical bar on that directional edge; use it to select a compact representation, not to add safe-area spacing. Keep the property declaration in an `@available(iOS 27.1, *)` type selected behind `#available`.
+For a custom item's presentation details, an iOS 27.1-only view can read `@Environment(\.toolbarVerticalEdge)`. A non-`nil` value means the environment supports a vertical bar on that directional edge; use it to select a compact representation, not to add safe-area spacing. Keep the property declaration in an `@available(iOS 27.1, *)` type selected behind `#available`. `toolbarVerticalEdge` and the other vertical-bar APIs below exist only on iOS and iPadOS, so when the target also builds for macOS, Mac Catalyst or visionOS, put the type and the check inside `#if os(iOS) && !targetEnvironment(macCatalyst)`.
 
 When a view combines a toolbar and tab bar, `.toolbarVerticalCompressionBehavior(.prefersToolbarItems)` keeps toolbar actions visible longer, while `.prefersTabBar` favors destinations. The default `.automatic` compresses toolbar items first. Choose based on the experience's primary task, then use the existing SDK 27 [overflow and visibility](#sdk-27-overflow-and-visibility) APIs to prioritize individual actions rather than duplicating overflow controls.
 
@@ -157,11 +157,12 @@ content
 
 `.topBarPinnedTrailing` keeps a `ToolbarItem` at the trailing edge and prevents it from moving into overflow. It is available on iOS 27+ and visionOS 27+ only.
 
-For deployment targets below SDK 27, prefer one availability check around the toolbar content when using these APIs:
+For deployment targets below SDK 27, prefer one availability check around the toolbar content when using these APIs. Name visionOS in the check too, and keep it inside `#if os(iOS) || os(visionOS)` when the target also builds for macOS: macOS has neither API, so no `#available` version admits them there, and the `#else` branch gives macOS the plain item:
 
 ```swift
 .toolbar {
-    if #available(iOS 27, *) {
+    #if os(iOS) || os(visionOS)
+    if #available(iOS 27, visionOS 27, *) {
         ToolbarItem(placement: .topBarPinnedTrailing) {
             ShareButton()
         }
@@ -173,6 +174,11 @@ For deployment targets below SDK 27, prefer one availability check around the to
             ShareButton()
         }
     }
+    #else
+    ToolbarItem {
+        ShareButton()
+    }
+    #endif
 }
 ```
 

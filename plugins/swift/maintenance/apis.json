@@ -785,6 +785,36 @@
         "macOS": false,
         "visionOS": false
       }
+    },
+    {
+      "name": "topBarPinnedTrailing",
+      "path": "swiftui/toolbaritemplacement/topbarpinnedtrailing",
+      "claims": {
+        "iOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "visionOS": "27.0",
+        "macOS": false
+      }
+    },
+    {
+      "name": "ToolbarOverflowMenu",
+      "path": "swiftui/toolbaroverflowmenu",
+      "claims": {
+        "iOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "visionOS": "27.0",
+        "macOS": false
+      }
+    },
+    {
+      "name": "toolbarVerticalEdge",
+      "path": "swiftui/environmentvalues/toolbarverticaledge",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": false,
+        "macOS": false,
+        "visionOS": false
+      }
     }
   ],
   "ignore": {
