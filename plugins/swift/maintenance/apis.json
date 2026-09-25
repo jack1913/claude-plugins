@@ -318,6 +318,15 @@
       "claims": {
         "deprecated": true
       }
+    },
+    {
+      "name": "sidebarAdaptable",
+      "path": "swiftui/tabviewstyle/sidebaradaptable",
+      "claims": {
+        "iOS": "18.0",
+        "macOS": "15.0",
+        "visionOS": "2.0"
+      }
     }
   ],
   "ignore": {
@@ -451,7 +460,9 @@
       "WeatherSummary"
     ],
     "example views in our own snippets that stand in for app content": [
+      "AppColor",
       "ConcertView",
+      "DesignTokens",
       "InboxView",
       "StageView"
     ],
