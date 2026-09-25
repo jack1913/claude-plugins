@@ -38,7 +38,7 @@ Before coding, understand the context and commit to an Apple-native direction:
 - Custom dark themes or neon accents — the system handles dark mode
 - Web-style card layouts with drop shadows — use `Section` or `.listRowBackground()`
 - Custom tab bars or navigation bars — use the system ones
-- Hardcoded colors, fonts, spacing, or corner radii — use the project's tokens, or the starter set in `references/tokens.md`
+- Hardcoded colors, fonts, spacing, or corner radii — use the project's tokens, or system text styles and semantic colours; with no tokens, offer the starter set in `references/tokens.md` rather than adding it
 - Decorative gradients, noise textures, or background patterns — Apple is clean
 - Custom scroll indicators or pull-to-refresh — use system defaults
 - Reimplementing system controls (toggles, sliders, pickers) — use SwiftUI's
@@ -59,7 +59,7 @@ Before coding, understand the context and commit to an Apple-native direction:
 ## Checklist
 
 **Tokens**
-- [ ] No literal spacing, radius, colour, font or animation value: the project's tokens, or system text styles, semantic colours and the `references/tokens.md` set
+- [ ] No literal spacing, radius, colour, font or animation value: the project's tokens, or system text styles and semantic colours; the `references/tokens.md` set is offered, never added unasked
 - [ ] No project tokens: the reply says so and offers the `references/tokens.md` starter set
 
 **Structure**
