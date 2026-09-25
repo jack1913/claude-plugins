@@ -1,5 +1,4 @@
 """Security-focused tests for the Instruments recording wrapper."""
-
 from __future__ import annotations
 
 import importlib.util
@@ -28,15 +27,10 @@ SPEC.loader.exec_module(record_trace)
 class CommandDisplayTests(unittest.TestCase):
     def test_redacts_every_environment_value(self) -> None:
         cmd = [
-            "xctrace",
-            "record",
-            "--env",
-            "API_TOKEN=super-secret",
-            "--env",
-            "DISPLAY_NAME=Jane Doe",
-            "--launch",
-            "--",
-            "/tmp/Test.app",
+            "xctrace", "record",
+            "--env", "API_TOKEN=super-secret",
+            "--env", "DISPLAY_NAME=Jane Doe",
+            "--launch", "--", "/tmp/Test.app",
         ]
 
         displayed = record_trace._format_command_for_display(cmd)
@@ -50,10 +44,9 @@ class CommandDisplayTests(unittest.TestCase):
 class SystemWideConsentTests(unittest.TestCase):
     def test_all_processes_requires_explicit_acknowledgement(self) -> None:
         stderr = io.StringIO()
-        with (
-            redirect_stderr(stderr),
-            mock.patch.object(record_trace.subprocess, "Popen") as popen,
-        ):
+        with redirect_stderr(stderr), mock.patch.object(
+            record_trace.subprocess, "Popen"
+        ) as popen:
             result = record_trace.main(["--all-processes"])
 
         self.assertEqual(2, result)
