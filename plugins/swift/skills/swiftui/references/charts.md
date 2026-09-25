@@ -37,7 +37,7 @@ if #available(iOS 17, macOS 14, *) {
 }
 ```
 
-Name every platform the project targets in each gate. For a platform the gate leaves out, the `*` treats the branch as reachable at that platform's deployment target, so `#available(iOS 17, *)` fails to compile `SectorMark` in a package that also targets macOS 13. Apple's matching releases are macOS 14 for the iOS 17 APIs, macOS 15 and visionOS 2 for the iOS 18 plot types, and macOS 26 and visionOS 26 for Chart3D.
+Name every platform the project targets in each gate. For a platform the gate leaves out, the `*` treats the branch as reachable at that platform's deployment target, so `#available(iOS 17, *)` fails to compile `SectorMark` in a package that also targets macOS 13. Apple's matching releases are macOS 14, tvOS 17 and watchOS 10 for the iOS 17 APIs; macOS 15, tvOS 18, watchOS 11 and visionOS 2 for the iOS 18 plot types; and macOS 26 and visionOS 26 for Chart3D. Chart3D has no tvOS or watchOS release, so no `#available` version admits it there: when the target also builds for tvOS or watchOS, put it inside `#if !os(tvOS) && !os(watchOS)`.
 
 ## Core APIs
 
