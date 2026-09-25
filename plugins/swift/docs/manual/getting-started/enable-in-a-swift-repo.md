@@ -27,6 +27,8 @@ Always pass `--scope`. Both commands default to user scope, which loads the plug
 
 The plugin loads only where `enabledPlugins` lists it. The marketplace is a private GitHub repo, so `marketplace add` uses your existing git and `gh` credentials.
 
+If `marketplace add` fails — no read access to `jack1913/swift-plugin`, or `gh` isn't authenticated — fall back to loading straight from a checkout: [`claude --plugin-dir`](../work-on-it.md#try-a-change).
+
 ## Pick up a new release
 
 Installs are copies, and a third-party marketplace doesn't auto-update unless you turn that on in `/plugin` → Marketplaces ([Install and manage plugins: keep plugins updated](https://code.claude.com/docs/en/discover-plugins#keep-plugins-updated)). A repo keeps the version it installed until you run:
