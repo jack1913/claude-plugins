@@ -52,7 +52,7 @@ From `run` and `main` in `maintenance/apicheck/cli.py`:
 ```text illustrative
 oldest cache entry: 31.0 days old
 WARN cache is up to 31.0 days old (> 30); run --refresh
-80 manifest APIs, 0 failures, 1 warnings
+102 manifest APIs, 0 failures, 1 warnings
 ```
 
 Like any other warning, it only fails the run under `--strict`. Clear it with `--refresh`, which bypasses the cache and re-fetches everything the run touches:

@@ -1,4 +1,4 @@
-swift 0.0.0
+swift 0.1.1
   Description: Correct, current, Apple-native SwiftUI: swift:swiftui (APIs and correctness, visionOS, previews) and swift:design (Apple-native design).
   Source: swift@inline
 
@@ -14,7 +14,7 @@ Projected token cost
 
 Per-component (rounded)
   component  always-on  on-invoke
-  design          ~230      ~3.8k
+  design          ~230        ~4k
   swiftui         ~340      ~4.5k
 
   On-invoke cost is paid each time a skill or agent fires.
