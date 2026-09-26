@@ -123,7 +123,7 @@ Rectangle()
 |-------|----------|
 | `.spring` | Interactive elements, most UI |
 | `.easeInOut` | Appearance changes |
-| `.bouncy` | Playful feedback (iOS 17+) |
+| `.bouncy` | Playful feedback |
 | `.linear` | Progress indicators only |
 
 ### Modifiers
@@ -251,8 +251,8 @@ Text("Count: \(count)")
 
 // Debug modifier to log values
 struct AnimationDebugModifier: ViewModifier, Animatable {
-    var value: Double
-    var animatableData: Double {
+    nonisolated var value: Double
+    nonisolated var animatableData: Double {
         get { value }
         set {
             value = newValue
