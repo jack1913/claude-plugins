@@ -91,7 +91,7 @@ page.stopLoading()
 `baseURL` resolves relative links and determines the origin for HTML and `Data` loads. Back-forward navigation loads an item from the list:
 
 ```swift
-if let backItem = page.backForwardList.backItem {
+if let backItem = page.backForwardList.backList.last {
     _ = page.load(backItem)
 }
 ```
