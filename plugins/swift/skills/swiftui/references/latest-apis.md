@@ -269,10 +269,10 @@ On iOS 18.4+ / macOS 15.4+, use the typed customization accessors:
 
 ### Previews
 
-**Use `@Previewable` for dynamic properties in previews.**
+**Use `@Previewable` for dynamic properties in previews.** `@Previewable` works from iOS 17 / macOS 14 (Xcode 16), not only iOS 18.
 
 ```swift
-// Modern (iOS 18+)
+// iOS 17+ (Xcode 16+)
 #Preview {
     @Previewable @State var isOn = false
     Toggle("Setting", isOn: $isOn)
@@ -399,11 +399,11 @@ Button("Get Started") { }
     .controlSize(.extraLarge)
 ```
 
-**Use `concentric` corner style for buttons that match their container's corners.**
+**Use concentric corners for buttons that match their container's corners.**
 
 ```swift
 Button("Confirm") { }
-    .clipShape(.rect(cornerRadius: 12, style: .concentric))
+    .clipShape(.rect(corners: .concentric))
 ```
 
 **Sliders now support tick marks and a neutral value.** Both are `Slider` initializer parameters; there is no neutral-value modifier. With `step:`, the `tick:` closure returns a `SliderTick` for each step value to mark, or `nil`; without `step:`, list the ticks in a `ticks:` builder instead.

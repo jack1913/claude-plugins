@@ -974,6 +974,14 @@
         "watchOS": "10.0",
         "visionOS": "1.0"
       }
+    },
+    {
+      "name": "Previewable()",
+      "path": "swiftui/previewable()",
+      "claims": {
+        "iOS": "17.0",
+        "macOS": "14.0"
+      }
     }
   ],
   "ignore": {
