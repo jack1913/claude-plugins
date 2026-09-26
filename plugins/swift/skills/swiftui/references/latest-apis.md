@@ -577,7 +577,7 @@ These APIs are from the beta iOS 27.1 SDK and exist only on iOS and iPadOS. Gate
 | `coordinateSpace(name:)` | `coordinateSpace(.named(...))` | iOS 17+ |
 | `ObservableObject` | `@Observable` | iOS 17+ |
 | `tabItem(_:)` | `Tab` API | iOS 18+ |
-| Manual 1:1 `animatableData` synthesis | `@Animatable` macro; keep manual logic for clamping/normalization | iOS 26+ |
+| Manual 1:1 `animatableData` synthesis | `@Animatable` macro; keep manual logic for clamping/normalization | SDK 26 toolchain (any deployment target) |
 | `presentationBackground(_:)` on sheets | Default Liquid Glass sheet material | iOS 26+ |
 | Custom toolbar background hacks | `scrollEdgeEffectStyle(_:for:)` | iOS 26+ |
 | `CarouselTabViewStyle` (watchOS) | `VerticalPageTabViewStyle` (`.verticalPage`) | SDK 27 soft-deprecated |
