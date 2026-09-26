@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-09-26
+
+A claim-by-claim audit of all ~10,600 lines of `swift:swiftui`'s reference text against Apple's doc JSON, the 27.0 SDK interfaces and `swiftc -typecheck` found 19 confirmed defects; all are fixed. Seven were high severity: snippets that don't compile or name APIs that don't exist.
+
+### Fixed
+
+- Nonexistent or misused APIs in `swift:swiftui` references:
+  - `CopyButton` doesn't exist; `macos-views.md` now points to `.copyable(_:)` and `NSPasteboard.general`, and the stale ignore entry that hid the name from `check-apis --strict` is gone;
+  - `windowIdealPlacement` gets its real two-parameter closure and `visibleRect`;
+  - `DocumentGroupLaunchScene`'s `background:` returns a `View`, and the snippet defines the `.list` source it uses;
+  - WebKit back navigation reads `backForwardList.backList.last`, not the nonexistent `backItem`;
+  - concentric corners use `.rect(corners: .concentric)`, not a `.concentric` corner style that `RoundedCornerStyle` doesn't have.
+- Wrong availability claims:
+  - the `alert`/`confirmationDialog` `item:` overloads require OS 27 on every platform — they do not back-deploy to iOS 15 as Apple's doc page still claims;
+  - `ForEach` over `.enumerated()` directly needs an OS 26 deployment target, not just a Swift 6.1 toolchain;
+  - `@Previewable` is iOS 17+ / macOS 14+, not iOS 18+ (both mentions, in `previews.md` and `latest-apis.md`);
+  - the `@Animatable` macro needs the SDK 26 toolchain but works at any deployment target — only hand-written `AnimatableValues` needs iOS 26+;
+  - `onDeleteCommand` is macOS-only and is now gated in the cross-platform snippet;
+  - the file-dialog modifiers are macOS 14+ and also on iOS 17+ / visionOS 1+, not macOS 13+-only;
+  - `Table`'s availability names Mac Catalyst and macOS and excludes tvOS and watchOS; the `NavigationSplitView` example notes its `ContentUnavailableView` placeholder needs iOS 17.
+- Swift 6 strict concurrency: the four `ViewModifier` + `Animatable` snippets in the animation references mark `animatableData` and their animated stored properties `nonisolated`, so they compile in Swift 6 mode.
+
+### Changed
+
+- `check-apis` grows to 111 pinned APIs; every new platform statement from this release is pinned, and the docs gate captures are refreshed.
+- The toolbar `if #available`-inside-`.toolbar` crash concern from 0.1.2 is resolved as safe: the compiler picks the erasing `buildLimitedAvailability` overload and the pre-17.5 path falls back to `TupleToolbarContent(())` (SILGen and IR verified); no change was needed.
+
 ## [0.1.2] - 2026-09-25
 
 Upstream bugs in `swift:swiftui`'s references are fixed. Availability gates in the other references now compile on every platform a package targets, and the six API names Apple doesn't have are replaced with the real APIs.

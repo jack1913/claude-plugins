@@ -3,7 +3,7 @@
 On a clean tree, the three free checks print this:
 
 ```text capture=check-apis-strict
-102 manifest APIs, 0 failures, 0 warnings
+111 manifest APIs, 0 failures, 0 warnings
 ```
 
 ```text capture=unit-tests
@@ -123,11 +123,11 @@ Prerequisite: the `origin` remote points at `jack1913/swift-plugin`.
    claude plugin tag plugins/swift
    ```
 
-For release 0.1.2, the dry run read:
+For release 0.1.3, the dry run read:
 
 ```text capture=tag-dry-run
-Version: 0.1.2 (from plugin.json)
-Tag:     swift--v0.1.2
+Version: 0.1.3 (from plugin.json)
+Tag:     swift--v0.1.3
 ```
 
 4. Push the commit, then the tag:
