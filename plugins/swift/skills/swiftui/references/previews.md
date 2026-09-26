@@ -216,7 +216,7 @@ struct MockDataFetcher: DataFetching {
 
 ## @Previewable Property Wrappers
 
-`@Previewable` (iOS 18+, Xcode 16+) lets you use `@State`, `@FocusState`, and other property wrappers directly inside a `#Preview` block, removing the need for a wrapper view to host interactive state.
+`@Previewable` (iOS 17+, macOS 14+, tvOS 17+, watchOS 10+, visionOS 1+; Xcode 16+) lets you use `@State`, `@FocusState`, and other property wrappers directly inside a `#Preview` block, removing the need for a wrapper view to host interactive state.
 
 ### Interactive State
 
@@ -272,9 +272,9 @@ When seeding initial focus inside a preview, prefer `.defaultFocus` over writing
 }
 ```
 
-### Fallback for Pre-iOS 18 Targets
+### Fallback for Pre-iOS 17 Targets
 
-If the project's minimum deployment target is below iOS 18, `@Previewable` is unavailable. Fall back to a wrapper view:
+If the project's minimum deployment target is below iOS 17, `@Previewable` is unavailable. Fall back to a wrapper view:
 
 ```swift
 private struct SliderPreview: View {
@@ -318,7 +318,7 @@ extension Message {
 | Symptom | Cause | Fix |
 |---|---|---|
 | `#Preview` body type mismatch | The closure returns a non-`View` type | Make sure the final expression is a `View` |
-| `@Previewable` only available in iOS 18+ | Using `@Previewable` with a lower deployment target | Use a wrapper view, or gate with `#available` |
+| `@Previewable` only available in iOS 17+ | Using `@Previewable` with a lower deployment target | Use a wrapper view, or gate with `#available` |
 | Preview crashes with "missing environment" | An `@Environment(SomeType.self)` value is not injected | Add `.environment(SomeType.preview)` to the preview |
 | Preview hangs or renders blank | View depends on async data that never resolves | Inject a mock that returns immediately with sample data |
 | `@MainActor`-isolated model accessed from non-isolated context | A preview helper touches main-actor-only API off the main actor | Mark the helper or the preview body `@MainActor` |
@@ -329,7 +329,7 @@ extension Message {
 
 - [ ] Prefer `#Preview` for new previews; `PreviewProvider` is still valid for older code
 - [ ] Provide a named preview for each meaningful state (default, empty, error, loading)
-- [ ] Use `@Previewable` for interactive previews when targeting iOS 18+; wrapper views otherwise
+- [ ] Use `@Previewable` for interactive previews when targeting iOS 17+; wrapper views otherwise
 - [ ] Expose static `.sample` / `.preview` data on models so previews don't reconstruct values inline
 - [ ] Inject mock services through a protocol when a view depends on async data
 - [ ] Never depend on live network or disk I/O in a preview
