@@ -76,6 +76,7 @@ Names upstream uses that Apple's documentation index did not have on 2026-09-25.
 | File | Change | Why |
 |---|---|---|
 | `SKILL.md` frontmatter | `name: concurrency` | Plugin skill command is `/swift:<name>`; upstream's description is already trigger-worded house style and stays verbatim |
+| `agents/`, `assets/` | Deleted | Codex agent config and logos; Claude Code uses neither (same deviation as the swiftui fork) |
 
 ### Ported
 
