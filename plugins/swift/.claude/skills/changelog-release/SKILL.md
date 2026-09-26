@@ -147,5 +147,5 @@ subjects; RAG/knowledge-graph anti-hallucination (ground truth is
 - **dash punctuation:** `-` (Keep a Changelog form: `## [0.1.0] - 2026-09-25`).
 - **changeset dir:** `none`.
 - **release announcement:** `none`.
-- **commit convention:** Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `chore:`), with scopes `swiftui`, `design`, `maintenance`, `evals`, `plan`. `0.0.0` in `plugin.json` means unreleased; the first release is `0.1.0` (spec §6).
+- **commit convention:** Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `chore:`), with scopes `swiftui`, `design`, `concurrency`, `testing`, `review`, `maintenance`, `evals`, `plan`. `0.0.0` in `plugin.json` means unreleased; the first release is `0.1.0` (spec §6).
 <!-- END REPO SPECIFICS -->

@@ -106,9 +106,9 @@ no upstream changes: 5.1.0 is the baseline
 
 That is `maintenance/upstream-diff.sh swiftui`. It clones the upstream into a temp dir and diffs its skill folder between the baseline in that upstream's `UPSTREAM.md` section and the ref; it never writes to this repo. Port changes by hand, then update the section's baseline and Ported table.
 
-## Change `swift:swiftui`
+## Change a forked skill
 
-Every change under `plugins/swift/skills/swiftui/` is its own commit, with a row in `UPSTREAM.md` → Deviations in the same commit. `git diff upstream-5.1.0 -- plugins/swift/skills/swiftui` then shows exactly what differs from upstream.
+Every change under a forked skill's folder (`plugins/swift/skills/swiftui/`, `plugins/swift/skills/concurrency/`) is its own commit, with a row in that upstream's `UPSTREAM.md` section → Deviations in the same commit. `git diff <local-import-tag> -- <skill-folder>` then shows exactly what differs from upstream.
 
 ## Release
 
