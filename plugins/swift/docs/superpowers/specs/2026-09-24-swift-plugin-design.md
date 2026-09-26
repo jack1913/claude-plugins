@@ -122,7 +122,7 @@ skills/design/
 - **Sources:** Apple Human Interface Guidelines and WWDC25 sessions 219 (Meet Liquid Glass), 356 (Get to know the new design system), 323 (Build a SwiftUI app with the new design), fetched while writing. Every rule cites its source and is paraphrased, not copied (Apple's text is copyrighted). Seeded with the generic sections of ExampleApp's current `swiftui-design` skill ("Design Thinking", "Apple-Native Aesthetics", "What to AVOID"), which are the user's own text.
 - **No duplication:** accessibility code patterns and Liquid Glass API mechanics stay in `swift:swiftui`; `design` links to them.
 - **Numbers** (hit-target sizes per platform, etc.) are taken from the HIG at write time, with the page cited — not from memory.
-- **Context cost:** in a repo with a project layer, "build a view" loads three SKILL.md files (~370 lines); references load on demand.
+- **Context cost:** in a repo with a project layer, "build a view" loads three SKILL.md files (~370 lines at the time of writing); references load on demand. Re-recorded 2026-09-26 (part-2 spec §8): the plugin's own bodies are now swiftui 161 + design 93 + concurrency 211 = 465 lines, and grow to ≈660 when `swift:testing` and `swift:review` land; always-loaded cost is the skill descriptions only (≈500 tokens for four; `swift:review` is slash-only and costs nothing), and a view task loads only the SKILL.md files it triggers.
 
 ## 6. Maintenance (part 4)
 
