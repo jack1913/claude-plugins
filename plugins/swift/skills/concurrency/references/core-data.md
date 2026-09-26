@@ -52,7 +52,7 @@ public class Article: NSManagedObject {
 extension NSManagedObjectContext {
     func perform<T>(
         schedule: ScheduledTaskType = .immediate,
-        _ block: @escaping () throws -> T
+        _ block: @escaping @Sendable () throws -> T
     ) async rethrows -> T
 }
 ```
@@ -196,14 +196,14 @@ nonisolated struct CoreDataStore {
     
     // View context operations (main thread)
     @MainActor
-    func perform(_ block: (NSManagedObjectContext) throws -> Void) rethrows {
+    func perform<T>(_ block: (NSManagedObjectContext) throws -> T) rethrows -> T {
         try block(viewContext)
     }
     
     // Background operations
     @concurrent
     func performInBackground<T>(
-        _ block: @escaping (NSManagedObjectContext) throws -> T
+        _ block: @escaping @Sendable (NSManagedObjectContext) throws -> T
     ) async rethrows -> T {
         let context = persistentContainer.newBackgroundContext()
         return try await context.perform {
@@ -245,7 +245,7 @@ func deleteAll() async throws {
 
 ## Custom Actor Executor (Advanced)
 
-**Note**: Usually not needed. Consider simple pattern first.
+**Note**: Usually not needed. Consider simple pattern first. This example requires macOS 14 / iOS 17 or later — `ExecutorJob` is unavailable earlier; gate the conformance with `@available` on older targets.
 
 > **Course Deep Dive**: This topic is covered in detail in [Lesson 9.3: Using a custom Actor executor for Core Data (advanced)](https://www.swiftconcurrencycourse.com?utm_source=github&utm_medium=agent-skill&utm_campaign=lesson-reference)
 
