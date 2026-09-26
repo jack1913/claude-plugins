@@ -1,11 +1,12 @@
 # swift-plugin
 
-Private Claude Code marketplace with one plugin, `swift`: skills that make an agent write correct, current, Apple-native SwiftUI.
+Private Claude Code marketplace with one plugin, `swift`: skills that make an agent write correct, current, Apple-native Swift — SwiftUI, design and Swift 6 concurrency.
 
 | Skill | Covers |
 |---|---|
 | `swift:swiftui` | SwiftUI correctness and current APIs. A fork of [AvdLee/SwiftUI-Agent-Skill](https://github.com/AvdLee/SwiftUI-Agent-Skill) with visionOS, preview and platform-availability fixes (`UPSTREAM.md`) |
 | `swift:design` | Apple-native design: hierarchy, typography, color, SF Symbols, Liquid Glass, platform idioms, motion, tokens |
+| `swift:concurrency` | Swift 6 concurrency: Sendable, actors, async/await, data-race diagnosis, 5→6 migration. A fork of [AvdLee/Swift-Concurrency-Agent-Skill](https://github.com/AvdLee/Swift-Concurrency-Agent-Skill) (`UPSTREAM.md`) |
 
 ## Enable it in a Swift repo
 
