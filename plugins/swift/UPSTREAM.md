@@ -78,6 +78,7 @@ Names upstream uses that Apple's documentation index did not have on 2026-09-25.
 | `SKILL.md` frontmatter | `name: concurrency` | Plugin skill command is `/swift:<name>`; upstream's description is already trigger-worded house style and stays verbatim |
 | `agents/`, `assets/` | Deleted | Codex agent config and logos; Claude Code uses neither (same deviation as the swiftui fork) |
 | `LICENSE-upstream` | New: upstream's MIT license text, verbatim | Travels with every install (the plugin cache copies only `plugins/swift/`) |
+| `references/tasks.md` | The Task Timeout Pattern declares `withTimeout<T: Sendable>`; the `notifications(named:)` usage passes a single real name (`UIApplication.didBecomeActiveNotification`), not an array with a nonexistent `.userDidLogin` | **Upstream bug, worth reporting upstream:** `withThrowingTaskGroup(of:)` requires a `Sendable` child result, so upstream's unconstrained `withTimeout<T>` fails `swiftc -typecheck -swift-version 6` at macOS 13 (`type 'T' does not conform to the 'Sendable' protocol`) while the `<T: Sendable>` form typechecks clean; `notifications(named:)` takes one `Notification.Name`, so upstream's array literal fails (`cannot convert value of type '[Any]' to expected argument type 'Notification.Name'`) and no `Notification.Name.userDidLogin` exists in any 27.0 SDK, checked 2026-09-27 |
 
 ### Ported
 

@@ -364,7 +364,7 @@ extension NotificationCenter {
 
 // Usage
 for await _ in NotificationCenter.default.notifications(
-    named: [.userDidLogin, UIApplication.didBecomeActiveNotification]
+    named: UIApplication.didBecomeActiveNotification
 ) {
     refreshData()
 }
@@ -568,7 +568,7 @@ await withTaskGroup(of: Image.self) { group in
 Create timeout wrapper using task groups:
 
 ```swift
-func withTimeout<T>(
+func withTimeout<T: Sendable>(
     _ duration: Duration,
     operation: @Sendable @escaping () async throws -> T
 ) async throws -> T {
