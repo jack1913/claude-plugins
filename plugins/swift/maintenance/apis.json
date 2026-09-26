@@ -982,6 +982,17 @@
         "iOS": "17.0",
         "macOS": "14.0"
       }
+    },
+    {
+      "name": "onDeleteCommand(perform:)",
+      "path": "swiftui/view/ondeletecommand(perform:)",
+      "claims": {
+        "macOS": "10.15",
+        "iOS": false,
+        "tvOS": false,
+        "watchOS": false,
+        "visionOS": false
+      }
     }
   ],
   "ignore": {

@@ -75,7 +75,7 @@ struct HighlightWrapper: View {
 
 ### `.focusable(_:)`
 
-Makes a non-text-input view participate in the focus system. Focused views can respond to keyboard events via `onKeyPress` and menu commands like Edit > Delete via `onDeleteCommand`.
+Makes a non-text-input view participate in the focus system. Focused views can respond to keyboard events via `onKeyPress` and, on macOS, to menu commands like Edit > Delete via `onDeleteCommand` (macOS-only).
 
 ```swift
 struct SelectableCard: View {
@@ -86,7 +86,9 @@ struct SelectableCard: View {
             .focusable()
             .focused($isFocused)
             .border(isFocused ? Color.accentColor : .clear)
+            #if os(macOS)
             .onDeleteCommand { deleteCard() }
+            #endif
     }
 }
 ```
