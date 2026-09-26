@@ -350,7 +350,7 @@ leave it and report.
   - `README.md` "Enable it in a Swift repo" → `.claude-plugin/marketplace.json` (`name`), `plugins/swift/.claude-plugin/plugin.json` (`name`), `plugins/swift/skills/*/SKILL.md` (frontmatter `name`)
   - `README.md` "Work on it" → `maintenance/apicheck/cli.py` (`parse_args`), `maintenance/upstream-diff.sh`, `plugins/swift/evals/`, `maintenance/tests/`
   - `docs/manual/reference/check-apis.md` → `maintenance/apicheck/cli.py` (`parse_args`, `run`)
-  - `UPSTREAM.md` → per section: `git diff upstream-5.1.0 -- plugins/swift/skills/swiftui` (SwiftUI section), `maintenance/upstream-diff.sh <swiftui|concurrency|testing>`
+  - `UPSTREAM.md` → per section: `git diff upstream-5.1.0 -- plugins/swift/skills/swiftui` (SwiftUI section), `git diff upstream-concurrency-2.3.0 -- plugins/swift/skills/concurrency` (Concurrency section), `maintenance/upstream-diff.sh <swiftui|concurrency|testing>`
 - **surface enumerator:** `readme-headings` (the `README.md` H2/H3 walk).
 - **coverage record:** `docs/.onboard-coverage.json`.
 - **route/CLI extractor:** `python3 maintenance/check-apis.py --help` (no build, no side effects). `maintenance/upstream-diff.sh` has no `--help`; its usage is the comment block at the top of the script.

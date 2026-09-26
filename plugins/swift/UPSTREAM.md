@@ -62,3 +62,29 @@ Names upstream uses that Apple's documentation index did not have on 2026-09-25.
 | `navigationTransitionDestination` | `references/latest-apis.md` | `matchedTransitionSource(id:in:)`, `navigationTransition(_:)` | **Fixed** 2026-09-25: no page in Apple's doc JSON (404) and no declaration in the 27.0 SDKs; the snippet uses `matchedTransitionSource(id:in:)` and `navigationTransition(.zoom(sourceID:in:))` (see Deviations) |
 | `sliderNeutralValue` | `references/latest-apis.md` | SwiftUI `Slider.init(value:in:neutralValue:enabledBounds:…)`; also `neutralValue` on `UISlider.TrackConfiguration` and `NSSlider` | **Fixed** 2026-09-25: no page in Apple's doc JSON (404) and no declaration in the 27.0 SDKs; the snippet passes `neutralValue:` to `Slider` (see Deviations) |
 | `Inspector` | `references/macos-window-styling.md`, `references/sheet-navigation-patterns.md` | no `Inspector` type; the API is the `inspector(isPresented:content:)` modifier | **Fixed** 2026-09-25: no page in Apple's doc JSON (404) and no declaration in the 27.0 SDKs; the text names the modifier (see Deviations) |
+
+## Concurrency
+
+- **Upstream:** https://github.com/AvdLee/Swift-Concurrency-Agent-Skill, folder `skills/swift-concurrency/`, MIT
+- **Baseline tag:** `2.3.0` (`45fa49e4e0b2af4d43b1cb458903f8030ac993bd`)
+- **Local import tag:** `upstream-concurrency-2.3.0`, the import commit: the folder byte-for-byte at the baseline
+
+`git diff upstream-concurrency-2.3.0 -- plugins/swift/skills/concurrency` shows every change listed under Deviations.
+
+### Deviations
+
+| File | Change | Why |
+|---|---|---|
+
+### Ported
+
+| Upstream ref | What we took | Date |
+|---|---|---|
+| `2.3.0` | Initial import | 2026-09-26 |
+
+### Findings
+
+Names upstream uses that Apple's documentation index did not have at import time. While a row is open, `check-apis.py` ignores its name in the `apis.json` ignore group "upstream names not in Apple's index (see UPSTREAM.md Findings — Concurrency)", re-created when a row needs it. Status says what was decided: **Fixed** (the text now uses the real API, see Deviations; the ignore entry is gone), **Resolved** (Apple documents it as of the date given; the ignore entry is gone) or **Open** (with the reason it stays).
+
+| Name | Upstream file | Nearest Apple API | Status |
+|---|---|---|---|
