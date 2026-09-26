@@ -1,5 +1,5 @@
 ---
-name: swift-concurrency
+name: concurrency
 description: Diagnose Swift Concurrency issues, refactor callback-based code to async/await, and guide Swift 6 migration when working with tasks, actors, @MainActor, Sendable, data races, thread safety, or concurrency-related compiler and linter warnings.
 ---
 # Swift Concurrency
