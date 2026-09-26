@@ -214,12 +214,16 @@ final class SearchModel {
     func observeQuery() async {
         let stream = AsyncStream<String> { continuation in
             @Sendable func track() {
-                withObservationTracking {
-                    _ = self.query
-                } onChange: {
-                    Task { @MainActor in
-                        continuation.yield(self.query)
-                        track()
+                // withObservationTracking's apply closure is nonisolated, so the
+                // read of the @MainActor property must run in a MainActor task.
+                Task { @MainActor in
+                    withObservationTracking {
+                        _ = self.query
+                    } onChange: {
+                        Task { @MainActor in
+                            continuation.yield(self.query)
+                            track()
+                        }
                     }
                 }
             }
