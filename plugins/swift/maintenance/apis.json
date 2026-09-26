@@ -943,6 +943,14 @@
         "watchOS": false,
         "visionOS": false
       }
+    },
+    {
+      "name": "DocumentCreationSource",
+      "path": "swiftui/documentcreationsource",
+      "claims": {
+        "iOS": "27.0",
+        "visionOS": "27.0"
+      }
     }
   ],
   "ignore": {
