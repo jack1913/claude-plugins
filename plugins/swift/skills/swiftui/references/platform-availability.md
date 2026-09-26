@@ -22,4 +22,5 @@ Where each API exists, generated from Apple's documentation JSON by `maintenance
 | `safeAreaBar(edge:alignment:spacing:content:)` | 26.0 | 26.0 | 26.0 | 26.0 | 26.0 | 26.0 | 26.0 | <https://developer.apple.com/documentation/swiftui/view/safeareabar(edge:alignment:spacing:content:)> |
 | `ConcentricRectangle` | 26.0 | 26.0 | 26.0 | 26.0 | 26.0 | 26.0 | 26.0 | <https://developer.apple.com/documentation/swiftui/concentricrectangle> |
 | `rect(corners:isUniform:)` | 26.0 | 26.0 | 26.0 | 26.0 | 26.0 | 26.0 | 26.0 | <https://developer.apple.com/documentation/swiftui/shape/rect(corners:isuniform:)> |
+| `Table` | 16.0 | 16.0 | 16.0 | 12.0 | 1.0 | — | — | <https://developer.apple.com/documentation/swiftui/table> |
 <!-- END GENERATED -->

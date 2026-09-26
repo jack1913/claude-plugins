@@ -172,12 +172,13 @@ ForEach(items.enumerated(), id: \.offset) { index, item in
 }
 
 // Correct - id comes from the element; index is just data
+// (direct .enumerated() form needs an OS 26+ deployment target; below that, wrap in Array(...))
 ForEach(items.enumerated(), id: \.element.id) { index, item in
     ItemRow(number: index + 1, item: item)
 }
 ```
 
-**No `Array(...)` wrapper is needed on Swift 6.1+.** As of Swift 6.1, the sequence returned by `.enumerated()` conditionally conforms to `RandomAccessCollection` when the base collection does, so `ForEach` accepts it directly. On earlier toolchains, wrap it in `Array(...)`. Favor the direct form in new code — it avoids an eager copy on every body evaluation.
+**No `Array(...)` wrapper is needed when the deployment target is iOS, macOS, tvOS, watchOS or visionOS 26 or later.** There, the sequence returned by `.enumerated()` conditionally conforms to `RandomAccessCollection` when the base collection does, so `ForEach` accepts it directly. Below 26, wrap it in `Array(...)` even on a Swift 6.1+ toolchain: the conformance is availability-gated on the OS, not just the compiler. Favor the direct form when targeting 26+ — it avoids an eager copy on every body evaluation.
 
 ## Reorderable Collections (SDK 27)
 
@@ -306,7 +307,7 @@ Without `.scrollContentBackground(.hidden)`, a custom `.background()` has no vis
 
 ## Table
 
-> **Availability:** iOS 16.0+, iPadOS 16.0+, visionOS 1.0+
+> **Availability:** iOS 16.0+, iPadOS 16.0+, Mac Catalyst 16.0+, macOS 12.0+, visionOS 1.0+ (not tvOS or watchOS)
 
 A multi-column data container that presents rows of `Identifiable` data with sortable, selectable columns. On compact size classes (iPhone, iPad Slide Over), columns after the first are automatically hidden.
 

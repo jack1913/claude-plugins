@@ -951,6 +951,18 @@
         "iOS": "27.0",
         "visionOS": "27.0"
       }
+    },
+    {
+      "name": "Table",
+      "path": "swiftui/table",
+      "claims": {
+        "iOS": "16.0",
+        "macOS": "12.0",
+        "visionOS": "1.0",
+        "tvOS": false,
+        "watchOS": false
+      },
+      "table": true
     }
   ],
   "ignore": {
