@@ -1,12 +1,16 @@
 # Upstream
 
+One section per upstream. Porting is manual: read the diff, port what fits, bump that section's baseline, add a Ported row. `maintenance/upstream-diff.sh <swiftui|concurrency|testing> [ref]` shows what an upstream changed after its baseline.
+
+## SwiftUI
+
 - **Upstream:** https://github.com/AvdLee/SwiftUI-Agent-Skill, folder `skills/swiftui-expert-skill/`, MIT
 - **Baseline tag:** `5.1.0` (`b24e68a965dc4b5bd2cc41dc60c094a26a9379ce`)
 - **Local import tag:** `upstream-5.1.0`, this repo's first commit: the folder byte-for-byte at the baseline
 
-`git diff upstream-5.1.0 -- plugins/swift/skills/swiftui` shows every change listed under Deviations. `maintenance/upstream-diff.sh [ref]` shows what upstream changed after the baseline. Porting is manual: read the diff, port what fits, bump the baseline above, add a Ported row.
+`git diff upstream-5.1.0 -- plugins/swift/skills/swiftui` shows every change listed under Deviations.
 
-## Deviations
+### Deviations
 
 | File | Change | Why |
 |---|---|---|
@@ -40,15 +44,15 @@
 | `scripts/record_trace.py` | `_clear_stop_file` removes `--stop-file` once before the recording starts and again once the stop is handled, noting each removal on stderr; every other line is byte-identical to upstream | **Upstream bug, worth reporting upstream:** a stop-file left on disk from an earlier run made `_wait_with_stop` see it as already present on the very first poll and send SIGINT to `xctrace` at once — stopping the next recording immediately and silently, with no message distinguishing it from a deliberate stop. `SKILL.md` and `references/trace-recording.md`'s worked stop-file examples reuse the same fixed path (`/tmp/stop-trace`) across runs, so this reproduces easily. Found reading the script on 2026-09-25 |
 | (repo) `maintenance/tests/test_record_trace_stopfile.py` | New | Regression coverage for the stop-file cleanup fix above; loads `record_trace.py` the way `test_record_trace.py` does and mocks `xctrace`/`subprocess`, never running it |
 
-## Ported
+### Ported
 
 | Upstream ref | What we took | Date |
 |---|---|---|
 | `5.1.0` | Initial import | 2026-09-25 |
 
-## Findings
+### Findings
 
-Names upstream uses that Apple's documentation index did not have on 2026-09-25. While a row is open, `check-apis.py` ignores its name in the `apis.json` ignore group "upstream names not in Apple's index (see UPSTREAM.md Findings)", which is re-created when a row needs it. Status says what was decided: **Fixed** (the text now uses the real API, see Deviations; the ignore entry is gone), **Resolved** (Apple documents it as of the date given; the ignore entry is gone) or **Open** (with the reason it stays).
+Names upstream uses that Apple's documentation index did not have on 2026-09-25. While a row is open, `check-apis.py` ignores its name in the `apis.json` ignore group "upstream names not in Apple's index (see UPSTREAM.md Findings — SwiftUI)", re-created when a row needs it; each upstream's open rows get their own section-named group. Status says what was decided: **Fixed** (the text now uses the real API, see Deviations; the ignore entry is gone), **Resolved** (Apple documents it as of the date given; the ignore entry is gone) or **Open** (with the reason it stays).
 
 | Name | Upstream file | Nearest Apple API | Status |
 |---|---|---|---|

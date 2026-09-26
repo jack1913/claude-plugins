@@ -93,10 +93,10 @@ Results go to `plugins/swift/evals/results/`, which is gitignored.
 ## Check upstream for changes
 
 ```bash
-maintenance/upstream-diff.sh [ref]
+maintenance/upstream-diff.sh <swiftui|concurrency|testing> [ref]
 ```
 
-With no `ref` it compares against upstream's newest plain `X.Y.Z` tag (a leading `v` is allowed; pre-release tags are skipped):
+The first argument picks the upstream; with no `ref` it compares against that upstream's newest plain `X.Y.Z` tag (a leading `v` is allowed; pre-release tags are skipped):
 
 ```text capture=upstream-diff
 upstream: https://github.com/AvdLee/SwiftUI-Agent-Skill (skills/swiftui-expert-skill)
@@ -104,7 +104,7 @@ baseline: 5.1.0 -> ref: 5.1.0
 no upstream changes: 5.1.0 is the baseline
 ```
 
-It clones upstream into a temp dir and diffs `skills/swiftui-expert-skill/` between the baseline in `UPSTREAM.md` and the ref; it never writes to this repo. Port changes by hand, then update the baseline and the Ported table in `UPSTREAM.md`.
+That is `maintenance/upstream-diff.sh swiftui`. It clones the upstream into a temp dir and diffs its skill folder between the baseline in that upstream's `UPSTREAM.md` section and the ref; it never writes to this repo. Port changes by hand, then update the section's baseline and Ported table.
 
 ## Change `swift:swiftui`
 
