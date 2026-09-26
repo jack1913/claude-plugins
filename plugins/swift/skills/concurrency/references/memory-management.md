@@ -188,7 +188,7 @@ final class AppLifecycleViewModel {
     func startObserving() {
         task = Task {
             for await _ in NotificationCenter.default.notifications(
-                named: .didBecomeActive
+                named: UIApplication.didBecomeActiveNotification
             ) {
                 isActive = true // ⚠️ Strong capture, never ends
             }
@@ -209,7 +209,7 @@ viewModel = nil // ⚠️ Never deallocated - sequence continues
 func startObserving() {
     task = Task {
         for await _ in NotificationCenter.default.notifications(
-            named: .didBecomeActive
+            named: UIApplication.didBecomeActiveNotification
         ) {
             isActive = true
         }
@@ -232,7 +232,7 @@ viewModel = nil
 func startObserving() {
     task = Task { [weak self] in
         for await _ in NotificationCenter.default.notifications(
-            named: .didBecomeActive
+            named: UIApplication.didBecomeActiveNotification
         ) {
             guard let self = self else { return }
             self.isActive = true
@@ -391,14 +391,16 @@ func testViewModelDeallocates() async {
 
 ### SwiftUI view test
 
+SwiftUI views are structs: value types are not reference-counted, so a view can neither be `weak`-referenced (`'weak' may only be applied to class and class-bound protocol types`) nor leak. Test the deallocation of the model object the view holds instead:
+
 ```swift
-func testViewDeallocates() {
-    var view: MyView? = MyView()
-    weak var weakView = view
-    
-    view = nil
-    
-    XCTAssertNil(weakView)
+func testViewModelDeallocates() {
+    var model: ProfileModel? = ProfileModel()   // a class
+    weak var weakModel = model
+
+    model = nil
+
+    XCTAssertNil(weakModel)
 }
 ```
 
@@ -499,25 +501,30 @@ final class NotificationObserver {
 ### Download manager
 
 ```swift
-final class DownloadManager {
+actor DownloadManager {
     private var tasks: [URL: Task<Data, Error>] = [:]
-    
+
     func download(_ url: URL) async throws -> Data {
-        let task = Task { [weak self] in
-            defer { self?.tasks.removeValue(forKey: url) }
-            return try await URLSession.shared.data(from: url).0
-        }
-        
+        let task = Task { try await URLSession.shared.data(from: url).0 }
         tasks[url] = task
-        return try await task.value
+        do {
+            let data = try await task.value
+            tasks.removeValue(forKey: url)
+            return data
+        } catch {
+            tasks.removeValue(forKey: url)
+            throw error
+        }
     }
-    
+
     func cancelAll() {
         tasks.values.forEach { $0.cancel() }
         tasks.removeAll()
     }
 }
 ```
+
+The actor keeps `tasks` isolated: the original class mutated the dictionary both from `download` and from the task's `defer` with no synchronization — a data race the compiler cannot flag.
 
 ### Timer
 
