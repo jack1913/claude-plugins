@@ -156,8 +156,8 @@ WindowGroup {
 For precise programmatic positioning, use a closure with display geometry:
 
 ```swift
-.windowIdealPlacement { context in
-    let screen = context.defaultDisplay.visibleArea
+.windowIdealPlacement { content, context in
+    let screen = context.defaultDisplay.visibleRect
     return WindowPlacement(x: screen.midX, y: screen.midY,
                            width: screen.width / 2, height: screen.height)
 }
