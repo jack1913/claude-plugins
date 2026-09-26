@@ -320,8 +320,8 @@ Swift 6.2+ includes **semi-automatic migration** for upcoming features.
 **Example warning**:
 ```swift
 // ⚠️ Use of protocol 'Error' as a type must be written 'any Error'
-func fetchData() throws -> Data  // Before
-func fetchData() throws -> any Data  // After applying fix
+func fetchData() throws -> Error  // Before
+func fetchData() throws -> any Error  // After applying fix
 ```
 
 ### Package Migration
@@ -450,10 +450,7 @@ actor DataProcessor {
 @preconcurrency import SomeLibrary
 ```
 
-The compiler will warn if `@preconcurrency` is unused:
-```
-'@preconcurrency' attribute on module 'SomeModule' is unused
-```
+No default compiler warning tells you an `@preconcurrency` import became unnecessary (Swift 6.4 has only the opt-in `-sil-diagnose-unnecessary-preconcurrency` check), so track removals manually — the TODO-comment convention above is the practical mechanism.
 
 > **Course Deep Dive**: This topic is covered in detail in [Lesson 12.8: How and when to use @preconcurrency](https://www.swiftconcurrencycourse.com?utm_source=github&utm_medium=agent-skill&utm_campaign=lesson-reference)
 
@@ -463,10 +460,10 @@ The compiler will warn if `@preconcurrency` is unused:
 
 ### Observation Alternative
 
-Swift 6 will include **Transactional Observation** (SE-475):
+**Transactional Observation** (SE-0475) shipped in Swift 6.2: `Observations` requires iOS, macOS, tvOS, watchOS and visionOS 26.
 
 ```swift
-// Future API (not yet implemented)
+// OS 26+
 let names = Observations { person.name }
 
 Task.detached {
@@ -476,7 +473,7 @@ Task.detached {
 }
 ```
 
-**Current alternatives**:
+**Pre-26 alternatives**:
 - Use `@Observable` macro for SwiftUI
 - Use `AsyncStream` for custom observation
 - Consider [AsyncExtensions](https://github.com/sideeffect-io/AsyncExtensions) package
@@ -584,7 +581,7 @@ final class NotificationObserver {
 ```swift
 Task { [weak self] in
     for await _ in NotificationCenter.default.notifications(named: .someNotification) {
-        await self?.handleNotification()  // ✅ Compile-time safe
+        self?.handleNotification()  // ✅ Compile-time safe: the Task inherits @MainActor, so no await is needed
     }
 }
 ```
@@ -651,7 +648,10 @@ final class ArticleSearcher {
                 await MainActor.run {
                     self.results = []
                 }
-                self.results = await APIClient.searchArticles(query)
+                let found = await APIClient.searchArticles(query)
+                await MainActor.run {
+                    self.results = found
+                }
             } catch {
                 // Search was cancelled
             }
@@ -757,9 +757,10 @@ final class NotificationObserver: ObservableObject {
 **After: Standard Library Notifications**
 
 ```swift
+@MainActor
 @Observable
 final class NotificationObserver {
-    @MainActor private(set) var notifications: [AppNotification] = []
+    private(set) var notifications: [AppNotification] = []
 
     func startObserving() {
         Task {
