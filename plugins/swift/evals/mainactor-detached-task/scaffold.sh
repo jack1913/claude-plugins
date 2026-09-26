@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Workspace: a Swift 6 package whose @MainActor model mutates state from a
-# detached task — a real strict-concurrency isolation error.
+# detached task that also runs a heavy synchronous computation.
 set -euo pipefail
 mkdir -p Sources/Demo
 cat > Package.swift <<'SWIFT'
@@ -21,13 +21,18 @@ import Observation
 @Observable
 final class PlayerModel {
     var score = 0
+    var badge = ""
 
     func load() {
         Task.detached {
-            self.score = await Self.fetchScore()
+            let s = Self.computeScore()
+            self.score = s
+            self.badge = String(repeating: "*", count: s % 10)
         }
     }
 
-    static func fetchScore() async -> Int { 42 }
+    nonisolated static func computeScore() -> Int {
+        (0..<1_000_000).reduce(0) { $0 + $1 % 7 }
+    }
 }
 SWIFT
