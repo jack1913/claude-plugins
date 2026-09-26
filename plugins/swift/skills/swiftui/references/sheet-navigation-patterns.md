@@ -139,7 +139,7 @@ var body: some View {
 }
 ```
 
-Prefer the item overload for an action tied to an optional value instead of synchronizing a separate Boolean or pairing `isPresented` with `presenting:`. Do not use the older `Alert`-returning `alert(item:)`. These overloads require the SDK 27 toolchain but back-deploy to iOS 15, macOS 12, tvOS 15, watchOS 8, and visionOS 1; no runtime availability gate is needed at those deployment targets.
+Prefer the item overload for an action tied to an optional value instead of synchronizing a separate Boolean or pairing `isPresented` with `presenting:`. Do not use the older `Alert`-returning `alert(item:)`. These overloads require OS 27 on every platform (iOS, macOS, tvOS, watchOS, and visionOS 27). Apple's doc page lists iOS 15.0+, but no SDK before 27 declares them; below an OS 27 deployment target, gate them with `if #available` or use `isPresented:` with `presenting:` as the fallback.
 
 ## Navigation Patterns
 
@@ -203,7 +203,7 @@ enum DetailRoute: Hashable {
 
 ### Two-Column Layout
 
-Use `NavigationSplitView` for sidebar-driven navigation. Available on iOS 16+, macOS 13+, tvOS 16+, watchOS 9+.
+Use `NavigationSplitView` for sidebar-driven navigation. Available on iOS 16+, macOS 13+, tvOS 16+, watchOS 9+. The example's `ContentUnavailableView` placeholder needs iOS 17, macOS 14, tvOS 17, or watchOS 10; at the iOS 16 floor, use `Text("Select an Item")` instead.
 
 ```swift
 struct ContentView: View {
