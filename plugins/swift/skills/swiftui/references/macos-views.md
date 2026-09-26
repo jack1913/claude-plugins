@@ -7,7 +7,7 @@
 - [Quick Lookup Table](#quick-lookup-table)
 - [HSplitView & VSplitView (macOS-only)](#hsplitview--vsplitview-macos-only)
 - [Table](#table)
-- [PasteButton & CopyButton](#pastebutton--copybutton)
+- [PasteButton](#pastebutton)
 - [File Operations](#file-operations)
 - [Drag, Drop & Pasteboard](#drag-drop--pasteboard)
 - [AppKit Interop](#appkit-interop)
@@ -25,7 +25,6 @@
 | `VSplitView` | macOS 10.15+ | Yes | Vertical resizable split layout with user-draggable dividers |
 | `Table` | macOS 12.0+ | No | Full multi-column layout with sorting; on iOS compact, columns collapse |
 | `PasteButton` | macOS 10.15+ | No | System button that reads clipboard; does NOT auto-validate on macOS |
-| `CopyButton` | macOS 15.0+ | Yes | System button that copies `Transferable` content to clipboard |
 
 ### File Operations
 
@@ -34,9 +33,9 @@
 | `fileImporter()` | macOS 11.0+ | No | Native NSOpenPanel with column/list/gallery view, sidebar, tags, QuickLook |
 | `fileExporter()` | macOS 11.0+ | No | Native NSSavePanel with format dropdown, tags field |
 | `fileMover()` | macOS 11.0+ | No | Native macOS move panel with Finder-like navigation |
-| `fileDialogMessage(_:)` | macOS 13.0+ | Yes | Custom message text in file dialogs |
-| `fileDialogConfirmationLabel(_:)` | macOS 13.0+ | Yes | Custom confirm button text in file dialogs |
-| `fileExporterFilenameLabel(_:)` | macOS 13.0+ | Yes | Custom filename field label in file exporter |
+| `fileDialogMessage(_:)` | macOS 14.0+ | No | Custom message text in file dialogs; also iOS 17+, visionOS 1+ |
+| `fileDialogConfirmationLabel(_:)` | macOS 14.0+ | No | Custom confirm button text in file dialogs; also iOS 17+, visionOS 1+ |
+| `fileExporterFilenameLabel(_:)` | macOS 14.0+ | No | Custom filename field label in file exporter; also iOS 17+, visionOS 1+ |
 
 ### Drag, Drop & Pasteboard
 
@@ -106,7 +105,7 @@ Apply `.alternatingRowBackgrounds()` as a separate modifier instead of passing `
 
 ---
 
-## PasteButton & CopyButton
+## PasteButton
 
 ### PasteButton
 
@@ -129,9 +128,9 @@ struct ClipboardView: View {
 }
 ```
 
-### CopyButton (macOS 15.0+, macOS-only)
+### Copying to the clipboard
 
-System button that copies `Transferable` content to the clipboard.
+SwiftUI has no system copy button. Make content copyable with `.copyable(_:)`, which also wires up Edit > Copy, or write to `NSPasteboard.general` from a plain `Button`. `copyable(_:)` takes a list of `Transferable` items and needs macOS 13+ or iOS 27+; no 27.0 SDK declares the older single-item `copyable(_:options:)` form:
 
 ```swift
 struct CopyableContent: View {
@@ -140,8 +139,8 @@ struct CopyableContent: View {
     var body: some View {
         HStack {
             Text(shareableText)
-            CopyButton(item: shareableText)
         }
+        .copyable([shareableText])
     }
 }
 ```
@@ -185,9 +184,9 @@ On macOS, presents a native `NSSavePanel` with format dropdown and tags.
 }
 ```
 
-### File dialog customization (macOS-only)
+### File dialog customization
 
-Customize text in file dialogs with these macOS-specific modifiers:
+Customize text in file dialogs with these modifiers (macOS 14+, iOS 17+, visionOS 1+):
 
 ```swift
 // Custom message and confirm button on file importer

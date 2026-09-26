@@ -905,6 +905,44 @@
         "macOS": false,
         "visionOS": "2.0"
       }
+    },
+    {
+      "name": "fileDialogMessage(_:)",
+      "path": "swiftui/view/filedialogmessage(_:)",
+      "claims": {
+        "macOS": "14.0",
+        "iOS": "17.0",
+        "visionOS": "1.0"
+      }
+    },
+    {
+      "name": "fileDialogConfirmationLabel(_:)",
+      "path": "swiftui/view/filedialogconfirmationlabel(_:)",
+      "claims": {
+        "macOS": "14.0",
+        "iOS": "17.0",
+        "visionOS": "1.0"
+      }
+    },
+    {
+      "name": "fileExporterFilenameLabel(_:)",
+      "path": "swiftui/view/fileexporterfilenamelabel(_:)",
+      "claims": {
+        "macOS": "14.0",
+        "iOS": "17.0",
+        "visionOS": "1.0"
+      }
+    },
+    {
+      "name": "copyable(_:)",
+      "path": "swiftui/view/copyable(_:)",
+      "claims": {
+        "macOS": "13.0",
+        "iOS": "27.0",
+        "tvOS": false,
+        "watchOS": false,
+        "visionOS": false
+      }
     }
   ],
   "ignore": {
@@ -928,7 +966,6 @@
       "CompactCompassControl",
       "ConnectionDoctor",
       "ContentView",
-      "CopyButton",
       "CounterView",
       "CustomCanvas",
       "CustomSlider",
