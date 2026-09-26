@@ -1,13 +1,13 @@
 # SwiftUI Advanced Animations
 
-Transactions, phase animations (iOS 17+), keyframe animations (iOS 17+), completion handlers (iOS 17+), and `@Animatable` macro (iOS 26+).
+Transactions, phase animations (iOS 17+), keyframe animations (iOS 17+), completion handlers (iOS 17+), and `@Animatable` macro (SDK 26 toolchain).
 
 ## Table of Contents
 - [Transactions](#transactions)
 - [Phase Animations (iOS 17+)](#phase-animations-ios-17)
 - [Keyframe Animations (iOS 17+)](#keyframe-animations-ios-17)
 - [Animation Completion Handlers (iOS 17+)](#animation-completion-handlers-ios-17)
-- [@Animatable Macro (iOS 26+)](#animatable-macro-ios-26)
+- [@Animatable Macro (SDK 26 Toolchain)](#animatable-macro-sdk-26-toolchain)
 
 ---
 
@@ -323,9 +323,9 @@ Circle()
 
 ---
 
-## @Animatable Macro (iOS 26+)
+## @Animatable Macro (SDK 26 Toolchain)
 
-The `@Animatable` macro auto-synthesizes `animatableData` from all animatable stored properties, eliminating verbose manual conformance. Use `@AnimatableIgnored` to exclude properties that should not animate.
+The `@Animatable` macro auto-synthesizes `animatableData` from all animatable stored properties, eliminating verbose manual conformance. It needs the SDK 26 toolchain but is not deployment-gated: its expansion is plain `AnimatablePair`, so it compiles at targets as old as iOS 13 and macOS 10.15. Only the hand-written `AnimatableValues` form below needs iOS 26+. Use `@AnimatableIgnored` to exclude properties that should not animate.
 
 ### Before (Manual)
 
@@ -423,7 +423,7 @@ On earlier deployment targets, the same logic uses `AnimatablePair` with `newVal
 - Use `.transaction(value:)` for handlers that should refire on every value change
 - Without `value:` parameter, completion only fires once
 
-### @Animatable Macro (iOS 26+)
+### @Animatable Macro (SDK 26 Toolchain)
 - Use `@Animatable` to auto-synthesize `animatableData` from stored properties
 - Use `@AnimatableIgnored` to exclude non-animatable properties
 - Replaces verbose manual `animatableData` getters/setters
