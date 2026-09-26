@@ -227,9 +227,9 @@ protocol Animatable {
 ```swift
 // GOOD - explicit animatableData
 struct ShakeModifier: ViewModifier, Animatable {
-    var shakeCount: Double
+    nonisolated var shakeCount: Double
 
-    var animatableData: Double {
+    nonisolated var animatableData: Double {
         get { shakeCount }
         set { shakeCount = newValue }
     }
@@ -262,17 +262,19 @@ struct BadShakeModifier: ViewModifier {
 // Animation jumps to final value instead of interpolating
 ```
 
+In Swift 6 language mode, a `ViewModifier` that conforms to `Animatable` needs `nonisolated` on `animatableData` and on the stored properties it animates; without it the conformance is rejected as crossing into main-actor-isolated code.
+
 ### Multiple Properties with AnimatablePair
 
-For deployment targets below iOS 26, use `AnimatablePair` to combine multiple animated properties. For iOS 26+ targets, prefer `@Animatable` or `AnimatableValues` — see [@Animatable Macro (iOS 26+)](animation-advanced.md#animatable-macro-ios-26) in `animation-advanced.md`.
+Use `@Animatable` (SDK 26 toolchain, any deployment target) to synthesize `animatableData`, or write it by hand with `AnimatablePair` (any target) or `AnimatableValues` (iOS 26+) — see [@Animatable Macro (SDK 26 Toolchain)](animation-advanced.md#animatable-macro-sdk-26-toolchain) in `animation-advanced.md`.
 
 ```swift
-// GOOD (below iOS 26) - AnimatablePair for two properties
+// GOOD - AnimatablePair for two properties (any deployment target)
 struct ComplexModifier: ViewModifier, Animatable {
-    var scale: CGFloat
-    var rotation: Double
+    nonisolated var scale: CGFloat
+    nonisolated var rotation: Double
 
-    var animatableData: AnimatablePair<CGFloat, Double> {
+    nonisolated var animatableData: AnimatablePair<CGFloat, Double> {
         get { AnimatablePair(scale, rotation) }
         set {
             scale = newValue.first
@@ -287,13 +289,13 @@ struct ComplexModifier: ViewModifier, Animatable {
     }
 }
 
-// GOOD (below iOS 26) - nested AnimatablePair for 3+ properties
+// GOOD - nested AnimatablePair for 3+ properties (any deployment target)
 struct ThreePropertyModifier: ViewModifier, Animatable {
-    var x: CGFloat
-    var y: CGFloat
-    var rotation: Double
+    nonisolated var x: CGFloat
+    nonisolated var y: CGFloat
+    nonisolated var rotation: Double
 
-    var animatableData: AnimatablePair<AnimatablePair<CGFloat, CGFloat>, Double> {
+    nonisolated var animatableData: AnimatablePair<AnimatablePair<CGFloat, CGFloat>, Double> {
         get { AnimatablePair(AnimatablePair(x, y), rotation) }
         set {
             x = newValue.first.first
@@ -318,7 +320,7 @@ struct ThreePropertyModifier: ViewModifier, Animatable {
 - Place transitions outside conditional structures
 - Use `withAnimation` or `.animation` outside the `if`
 - Implement `animatableData` explicitly for custom Animatable
-- Use `AnimatablePair` for multiple animated properties on deployment targets below iOS 26; for iOS 26+, use `@Animatable` or `AnimatableValues` (see `animation-advanced.md`)
+- Use `@Animatable` (SDK 26 toolchain, any deployment target) for multiple animated properties, or write `animatableData` by hand with `AnimatablePair` (any target) or `AnimatableValues` (iOS 26+); see `animation-advanced.md`
 - Use asymmetric transitions when insert/remove need different effects
 
 ### Don't
