@@ -450,7 +450,7 @@ actor DataProcessor {
 @preconcurrency import SomeLibrary
 ```
 
-No default compiler warning tells you an `@preconcurrency` import became unnecessary (Swift 6.4 has only the opt-in `-sil-diagnose-unnecessary-preconcurrency` check), so track removals manually — the TODO-comment convention above is the practical mechanism.
+The compiler does not tell you when an `@preconcurrency` import becomes unnecessary (no Swift 6.4 diagnostic or user-facing flag reports it), so track removals manually — the TODO-comment convention above is the practical mechanism.
 
 > **Course Deep Dive**: This topic is covered in detail in [Lesson 12.8: How and when to use @preconcurrency](https://www.swiftconcurrencycourse.com?utm_source=github&utm_medium=agent-skill&utm_campaign=lesson-reference)
 
