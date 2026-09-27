@@ -100,6 +100,10 @@ actor Counter {
     func increment() {
         value += 1
     }
+
+    func getValue() -> Int {
+        value
+    }
 }
 ```
 
@@ -267,14 +271,14 @@ actor ContactsStore {
 let query = "search"
 
 // ✅ Immutable capture
-store.filter { contact in
+await store.removeAll { contact in
     contact.name.contains(query)
 }
 
 var query = "search"
 
 // ❌ Mutable capture
-store.filter { contact in
+await store.removeAll { contact in
     contact.name.contains(query) // Error
 }
 ```
@@ -285,7 +289,7 @@ store.filter { contact in
 var query = "search"
 
 // ✅ Capture immutable snapshot
-store.filter { [query] contact in
+await store.removeAll { [query] contact in
     contact.name.contains(query)
 }
 ```
