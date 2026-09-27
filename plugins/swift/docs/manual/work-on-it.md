@@ -7,7 +7,7 @@ On a clean tree, the three free checks print this:
 ```
 
 ```text capture=unit-tests
-Ran 105 tests in 1.677s
+Ran 105 tests in 1.621s
 
 OK
 ```
