@@ -362,9 +362,10 @@ extension NotificationCenter {
     }
 }
 
-// Usage
+// Usage (`.userDidLogin` is an app-defined name:
+// extension Notification.Name { static let userDidLogin = Notification.Name("userDidLogin") })
 for await _ in NotificationCenter.default.notifications(
-    named: UIApplication.didBecomeActiveNotification
+    named: [.userDidLogin, UIApplication.didBecomeActiveNotification]
 ) {
     refreshData()
 }
