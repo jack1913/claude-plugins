@@ -1203,6 +1203,7 @@
       "UISupportsDocumentBrowser"
     ],
     "placeholders and prose words inside code spans or unlabelled blocks": [
+      "ARGUMENTS",
       "Actors",
       "Add",
       "Applied",
@@ -1233,6 +1234,7 @@
       "END_MS",
       "Ending",
       "Execution",
+      "Findings",
       "Fine",
       "Function",
       "Global",
@@ -1258,6 +1260,7 @@
       "Need",
       "Needs",
       "No",
+      "Not",
       "OK",
       "Objects",
       "Parallel",
