@@ -41,7 +41,7 @@ Adds `swift:concurrency`, the plugin's third skill: an own-copy fork of AvdLee's
 - `maintenance/upstream-diff.sh` takes a required `<swiftui|concurrency|testing>` argument and reads that upstream's baseline from its own `UPSTREAM.md` section. New unit tests cover it offline.
 - `UPSTREAM.md` is split into one section per upstream; the plugin and marketplace descriptions, README, AGENTS.md and the manual name the new skill.
 - The `apis.json` frameworks now include `coredata`, `xctest` and `testing`.
-- Known gap: `sendable-shared-cache` also passes without the plugin on current models, so it guards against regressions rather than showing the skill's value (`mainactor-detached-task` fails without it). The eval harness has no build grader, so call-site consistency in `sendable-shared-cache` is judged from the agent's reply.
+- Known gap: with graders that accept every correct fix, both concurrency eval cases also pass without the plugin on current models, so they guard against regressions rather than show the skill's value. The eval harness has no build grader, so call-site consistency in `sendable-shared-cache` is judged from the agent's reply.
 
 ## [0.1.3] - 2026-09-26
 
