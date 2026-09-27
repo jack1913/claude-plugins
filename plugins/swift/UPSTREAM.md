@@ -105,3 +105,29 @@ Names upstream uses that Apple's documentation index did not have at import time
 
 | Name | Upstream file | Nearest Apple API | Status |
 |---|---|---|---|
+
+## Testing
+
+- **Upstream:** https://github.com/AvdLee/Swift-Testing-Agent-Skill, folder `swift-testing-expert/`, MIT
+- **Baseline tag:** `1.2.0` (`798e9b1a2bcac164d4f0c781908199e754f0bab6`)
+- **Local import tag:** `upstream-testing-1.2.0`, the import commit: the folder byte-for-byte at the baseline
+
+`git diff upstream-testing-1.2.0 -- plugins/swift/skills/testing` shows every change listed under Deviations.
+
+### Deviations
+
+| File | Change | Why |
+|---|---|---|
+
+### Ported
+
+| Upstream ref | What we took | Date |
+|---|---|---|
+| `1.2.0` | Initial import | 2026-09-27 |
+
+### Findings
+
+Names upstream uses that Apple's documentation index did not have at import time. While a row is open, `check-apis.py` ignores its name in the `apis.json` ignore group "upstream names not in Apple's index (see UPSTREAM.md Findings — Testing)", re-created when a row needs it. Status says what was decided: **Fixed** (the text now uses the real API, see Deviations; the ignore entry is gone), **Resolved** (Apple documents it as of the date given; the ignore entry is gone) or **Open** (with the reason it stays).
+
+| Name | Upstream file | Nearest Apple API | Status |
+|---|---|---|---|
