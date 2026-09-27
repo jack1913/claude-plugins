@@ -635,8 +635,9 @@ When migrating from Combine or RxSwift, you have multiple options for handling a
 **Before: Manual Debouncing**
 
 ```swift
+@MainActor
 final class ArticleSearcher {
-    @MainActor private(set) var results: [Article] = []
+    private(set) var results: [Article] = []
     private var currentSearchTask: Task<Void, Never>?
 
     func search(_ query: String) {
@@ -645,13 +646,8 @@ final class ArticleSearcher {
         currentSearchTask = Task {
             do {
                 try await Task.sleep(for: .milliseconds(500))
-                await MainActor.run {
-                    self.results = []
-                }
-                let found = await APIClient.searchArticles(query)
-                await MainActor.run {
-                    self.results = found
-                }
+                results = []
+                results = await APIClient.searchArticles(query)
             } catch {
                 // Search was cancelled
             }
@@ -681,26 +677,21 @@ struct SearchView: View {
 ```swift
 import AsyncAlgorithms
 
+@MainActor
 @Observable
 final class ArticleSearcher {
-    @MainActor private(set) var results: [Article] = []
-    private var searchQueryContinuation: AsyncStream<String>.Continuation?
-
-    private lazy var searchQueryStream: AsyncStream<String> = {
-        AsyncStream { continuation in
-            searchQueryContinuation = continuation
-        }
-    }()
+    private(set) var results: [Article] = []
+    @ObservationIgnored private let searchQuery = AsyncStream<String>.makeStream()
 
     func search(_ query: String) {
-        searchQueryContinuation?.yield(query)
+        searchQuery.continuation.yield(query)
     }
 
     func startDebouncedSearch() {
-        Task { @MainActor in
-            for await query in searchQueryStream.debounce(for: .milliseconds(500)) {
-                self.results = []
-                self.results = await APIClient.searchArticles(query)
+        Task {
+            for await query in searchQuery.stream.debounce(for: .milliseconds(500)) {
+                results = []
+                results = await APIClient.searchArticles(query)
             }
         }
     }
