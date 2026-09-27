@@ -118,6 +118,7 @@ Names upstream uses that Apple's documentation index did not have at import time
 
 | File | Change | Why |
 |---|---|---|
+| `SKILL.md` frontmatter | `name: testing`; the description is rewritten in the house "Use when …" style, keeping upstream's topics, dropping "Apple-platform or Swift server projects", and routing concurrency diagnosis in async test code to `swift:concurrency` | Plugin skill command is `/swift:<name>`. The concurrency fork under-triggered with upstream's style of description (Concurrency → `SKILL.md` frontmatter row) |
 
 ### Ported
 

@@ -1,6 +1,6 @@
 ---
-name: swift-testing-expert
-description: 'Expert guidance for Swift Testing: test structure, #expect/#require macros, traits and tags, parameterized tests, test plans, parallel execution, async waiting patterns, and XCTest migration. Use when writing new Swift tests, modernizing XCTest suites, debugging flaky tests, or improving test quality and maintainability in Apple-platform or Swift server projects.'
+name: testing
+description: 'Use when writing, migrating, or reviewing Swift tests: Swift Testing (@Test, @Suite, #expect, #require, traits, tags, parameterized tests with arguments:, confirmation for events), test plans and parallel execution, and migrating XCTest suites (XCTestCase, XCTAssert, XCTestExpectation) to Swift Testing or deciding what stays on XCTest. Also use for flaky or slow tests and test structure. For diagnosing concurrency errors in async test code, use swift:concurrency.'
 ---
 
 # Swift Testing
