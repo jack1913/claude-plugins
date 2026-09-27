@@ -1,4 +1,4 @@
-swift 0.1.5
+swift 0.1.6
   Description: Correct, current, Apple-native Swift: swift:swiftui (APIs and correctness, visionOS, previews), swift:design (Apple-native design), swift:concurrency (Swift 6 concurrency), swift:testing (Swift Testing and XCTest migration) and swift:review (on-demand HIG review, /swift:review).
   Source: swift@inline
 

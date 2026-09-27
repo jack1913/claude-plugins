@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-09-27
+
+Adds `swift:review`, the plugin's fifth skill. It is our own text, not a fork: an on-demand HIG review of a SwiftUI screen from its code and/or screenshots, run only as `/swift:review`. It judges against `swift:design`'s rules and carries the same project-layer rule. `swift:review` has no eval case: slash-only skills can't be driven by the eval harness, so it ships with a recorded end-to-end verification instead. This release also closes a gap in `swift:testing` that made `callback-confirmation-test` flaky.
+
+### Added
+
+- `swift:review` (`/swift:review <view files or screenshots>`):
+  - it reports findings as violation · location · HIG page · fix, most severe first, then what the inputs couldn't show;
+  - it never fires on its own and adds nothing to the model's always-loaded context;
+  - values sanctioned by a project's design layer aren't findings, and neither is missing Liquid Glass;
+  - a screenshot finding marks sizes measured from pixels as estimates.
+- A recorded verification for it in `docs/internals/review-verification.md`:
+  - planted-violations, project-token and screenshot fixtures in `maintenance/review-fixtures/`;
+  - a scorer with unit tests, and an answer key committed before the first run.
+
+### Fixed
+
+- `swift:testing` now explains that a `confirmation` counts only calls made before its closure returns. It shows how to keep the closure waiting for a callback delivered later on another queue, and says not to reach for sleep windows. `callback-confirmation-test` went from 3 of 6 passing runs to 6 of 6.
+
+### Changed
+
+- ADR-0011 records `swift:review`'s design, and ADR-0007's project-layer rule now also binds `swift:review`.
+- The registry surfaces name the fifth skill: AGENTS.md, the README, the manual and both manifest descriptions.
+- Known gaps:
+  - `claude plugin details` counts about 120 always-on tokens for `swift:review`, but the skill stays out of the model's context until it is invoked;
+  - "report-only" is enforced for Write and Edit only during the turn that runs the review. Beyond that it rests on the skill's own rule;
+  - a headless `claude -p "/swift:review …"` needs `--add-dir <plugin dir>` so the skill can read its reference files.
+
 ## [0.1.5] - 2026-09-27
 
 Adds `swift:testing`, the plugin's fourth skill: an own-copy fork of AvdLee's Swift-Testing-Agent-Skill 1.2.0 covering Swift Testing (`@Test`, `#expect`/`#require`, traits, parameterized tests, parallel execution, `confirmation`) and XCTest migration. Before release its text went through a claim-by-claim audit, with compiler checks under full SIL diagnostics and behaviour claims run with `swift test`; every confirmed defect is fixed.
