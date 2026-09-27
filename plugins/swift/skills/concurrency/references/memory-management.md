@@ -524,7 +524,7 @@ actor DownloadManager {
 }
 ```
 
-The actor keeps `tasks` isolated: the original class mutated the dictionary both from `download` and from the task's `defer` with no synchronization — a data race the compiler cannot flag.
+The actor keeps `tasks` isolated. A plain class that mutates the dictionary from both `download` and the task's `defer` is a data race, and Swift 6 rejects it (`passing closure as a 'sending' parameter risks causing data races`).
 
 ### Timer
 
