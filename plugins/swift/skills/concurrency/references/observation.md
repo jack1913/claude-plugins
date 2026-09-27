@@ -213,26 +213,26 @@ final class SearchModel {
 
     func observeQuery() async {
         let stream = AsyncStream<String> { continuation in
-            @Sendable func track() {
-                // withObservationTracking's apply closure is nonisolated, so the
-                // read of the @MainActor property must run in a MainActor task.
-                Task { @MainActor in
-                    withObservationTracking {
-                        _ = self.query
-                    } onChange: {
-                        Task { @MainActor in
-                            continuation.yield(self.query)
-                            track()
-                        }
-                    }
-                }
-            }
-            track()
+            trackQuery(continuation)
         }
 
         for await text in stream.debounce(for: .milliseconds(300)) {
             guard !Task.isCancelled else { return }
             results = text.isEmpty ? [] : (try? await api.search(text)) ?? []
+        }
+    }
+
+    // A @MainActor method, so reading `query` is allowed and re-registering
+    // happens in the same main-actor job as the yield: a mutation right after
+    // a change is never missed.
+    private func trackQuery(_ continuation: AsyncStream<String>.Continuation) {
+        withObservationTracking {
+            _ = query
+        } onChange: {
+            Task { @MainActor in
+                continuation.yield(self.query)
+                self.trackQuery(continuation)
+            }
         }
     }
 }
