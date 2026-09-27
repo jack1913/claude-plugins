@@ -183,7 +183,7 @@ Open the smallest reference that matches the question:
   - `references/async-sequences.md` — AsyncSequence, AsyncStream, when to use vs regular async methods
   - `references/async-algorithms.md` — Debounce, throttle, merge, combineLatest, channels, timers
 - Applied topics
-  - `references/testing.md` — Swift Testing first, XCTest fallback, leak checks
+  - `references/testing.md` — testing concurrent code: async waiting, confirmations, actor isolation, leak checks (general test authoring: swift:testing)
   - `references/performance.md` — Profiling with Instruments, reducing suspension points, execution strategies
   - `references/memory-management.md` — Retain cycles in tasks, memory safety patterns
   - `references/core-data.md` — NSManagedObject sendability, custom executors, isolation conflicts
