@@ -50,7 +50,7 @@ From `plugins/swift/skills/swiftui/SKILL.md`, `plugins/swift/skills/design/SKILL
 | `swift:design` | Apple-native design: hierarchy, typography, colour, SF Symbols, when Liquid Glass fits, platform idioms, motion, design tokens |
 | `swift:concurrency` | Swift 6 concurrency: async/await, tasks and task groups, actors and `@MainActor`, `Sendable` and data-race diagnostics, Swift 5 → 6 migration, hanging or flaky async tests |
 | `swift:testing` | Swift Testing: `@Test`, `@Suite`, `#expect`/`#require`, traits and tags, parameterized tests, parallel execution, `confirmation`, XCTest migration and what stays on XCTest |
-| `swift:review` | On-demand HIG review of a screen from its view files and/or screenshots: findings as violation · location · HIG page · fix, most severe first, then what the inputs could not show. Runs only as `/swift:review <files or screenshots>`, never on its own, and never edits files |
+| `swift:review` | On-demand HIG review of a screen from its view files and/or screenshots: findings as violation · location · HIG page · fix, most severe first, then what the inputs could not show. Runs only as `/swift:review <files or screenshots>`, never on its own. It reports and doesn't edit: Write and Edit are removed for the turn that runs it, and after that the skill's own rule holds ([ADR-0011](../../adr/ADR-0011-swift-review-skill.md)) |
 
 If the repo has its own design layer (tokens, a project design skill), `swift:swiftui` and `swift:design` translate their example literals into it, and the project layer wins where they disagree (the Operating Rules of both files). `swift:review` carries the same rule, so it doesn't report values the project layer sanctions ([ADR-0011](../../adr/ADR-0011-swift-review-skill.md)).
 

@@ -141,3 +141,11 @@ I couldn't measure pixels directly because the pixel-analysis command needed app
 - **Navigation bar, toolbar, title and window chrome:** they're outside the frame. Send a capture that includes them.
 - **Motion and Reduce Motion:** a still image can't show them. Send a screen recording or the code.
 ~~~
+
+## 2026-09-27 — erratum from the 0.1.6 final review
+
+This adds to the section above without editing it.
+
+- **What "edited nothing" covers.** `git status` was checked in each run's own directory. The runs also passed `--add-dir <plugin dir>`, and `acceptEdits` would have auto-approved writes there too. The final review found the repository, which holds that plugin dir, clean after the runs, and no commit came from them. So nothing was edited.
+- **What stops edits.** `disallowed-tools` removes Write, Edit and NotebookEdit only for the turn that invokes the skill, and Bash stays available: run C tried a Bash command, which the non-interactive session denied. Beyond that, report-only rests on the skill's Operating Rule (ADR-0011). A later section should also record `git status` for every `--add-dir` target.
+- **Run B.** The accepted-on-adjudication N2 hit comes from an unplanted defect in the `tokened/` fixture: `DesignTokens.Palette.surface` is a fixed light colour placed behind Form text that follows the system appearance. So the fixture can't separate "respects tokens" from "reports a real contrast bug". A later section should fix the fixture, commit a new key before running, and re-run B.
