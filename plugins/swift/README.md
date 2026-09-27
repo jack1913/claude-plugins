@@ -1,12 +1,13 @@
 # swift-plugin
 
-Private Claude Code marketplace with one plugin, `swift`: skills that make an agent write correct, current, Apple-native Swift — SwiftUI, design and Swift 6 concurrency.
+Private Claude Code marketplace with one plugin, `swift`: skills that make an agent write correct, current, Apple-native Swift — SwiftUI, design, Swift 6 concurrency and tests.
 
 | Skill | Covers |
 |---|---|
 | `swift:swiftui` | SwiftUI correctness and current APIs. A fork of [AvdLee/SwiftUI-Agent-Skill](https://github.com/AvdLee/SwiftUI-Agent-Skill) with visionOS, preview and platform-availability fixes (`UPSTREAM.md`) |
 | `swift:design` | Apple-native design: hierarchy, typography, color, SF Symbols, Liquid Glass, platform idioms, motion, tokens |
 | `swift:concurrency` | Swift 6 concurrency: Sendable, actors, async/await, data-race diagnosis, 5→6 migration. A fork of [AvdLee/Swift-Concurrency-Agent-Skill](https://github.com/AvdLee/Swift-Concurrency-Agent-Skill) (`UPSTREAM.md`) |
+| `swift:testing` | Swift Testing: `@Test`, `#expect`/`#require`, traits, parameterized tests, parallel execution, XCTest migration. A fork of [AvdLee/Swift-Testing-Agent-Skill](https://github.com/AvdLee/Swift-Testing-Agent-Skill) (`UPSTREAM.md`) |
 
 ## Enable it in a Swift repo
 
@@ -34,4 +35,4 @@ Release flow and design: `docs/superpowers/specs/2026-09-24-swift-plugin-design.
 
 ## Licenses
 
-Third-party text and its MIT notices: `plugins/swift/NOTICE.md`. Upstreams' licenses: `plugins/swift/skills/swiftui/LICENSE-upstream`, `plugins/swift/skills/concurrency/LICENSE-upstream`.
+Third-party text and its MIT notices: `plugins/swift/NOTICE.md`. Upstreams' licenses: `plugins/swift/skills/swiftui/LICENSE-upstream`, `plugins/swift/skills/concurrency/LICENSE-upstream`, `plugins/swift/skills/testing/LICENSE-upstream`.

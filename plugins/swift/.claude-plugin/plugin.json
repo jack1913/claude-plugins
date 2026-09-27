@@ -1,7 +1,7 @@
 {
   "name": "swift",
   "version": "0.1.4",
-  "description": "Correct, current, Apple-native Swift: swift:swiftui (APIs and correctness, visionOS, previews), swift:design (Apple-native design) and swift:concurrency (Swift 6 concurrency).",
+  "description": "Correct, current, Apple-native Swift: swift:swiftui (APIs and correctness, visionOS, previews), swift:design (Apple-native design), swift:concurrency (Swift 6 concurrency) and swift:testing (Swift Testing and XCTest migration).",
   "author": { "name": "jack1913" },
   "repository": "https://github.com/jack1913/swift-plugin"
 }

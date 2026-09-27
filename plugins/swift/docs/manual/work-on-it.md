@@ -108,7 +108,7 @@ That is `maintenance/upstream-diff.sh swiftui`. It clones the upstream into a te
 
 ## Change a forked skill
 
-Every change under a forked skill's folder (`plugins/swift/skills/swiftui/`, `plugins/swift/skills/concurrency/`) is its own commit, with a row in that upstream's `UPSTREAM.md` section → Deviations in the same commit. `git diff <local-import-tag> -- <skill-folder>` then shows exactly what differs from upstream.
+Every change under a forked skill's folder (`plugins/swift/skills/swiftui/`, `plugins/swift/skills/concurrency/`, `plugins/swift/skills/testing/`) is its own commit, with a row in that upstream's `UPSTREAM.md` section → Deviations in the same commit. `git diff <local-import-tag> -- <skill-folder>` then shows exactly what differs from upstream.
 
 ## Release
 
