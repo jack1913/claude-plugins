@@ -2,19 +2,19 @@
 [record]   template: SwiftUI
 [record]   device:   (host)
 [record]   target:   attach TestApp
-[record]   output:   <redacted>/tmpn5lqr3g_/session.trace
-[record] stop via: Ctrl+C, `touch <redacted>/tmpn5lqr3g_/stop-trace`
-[record] cmd: xctrace record --template SwiftUI --output <redacted>/tmpn5lqr3g_/session.trace --attach TestApp
+[record]   output:   /var/folders/77/dnsbl48x1h7gqv8g8t6x8hr80000gn/T/tmp0sf942b8/session.trace
+[record] stop via: Ctrl+C, `touch /var/folders/77/dnsbl48x1h7gqv8g8t6x8hr80000gn/T/tmp0sf942b8/stop-trace`
+[record] cmd: xctrace record --template SwiftUI --output /var/folders/77/dnsbl48x1h7gqv8g8t6x8hr80000gn/T/tmp0sf942b8/session.trace --attach TestApp
 .[record] starting xctrace record
 [record]   template: SwiftUI
 [record]   device:   (host)
 [record]   target:   attach TestApp
-[record]   output:   <redacted>/tmpwt_s7j6s/session.trace
-[record] stop via: Ctrl+C, `touch <redacted>/tmpwt_s7j6s/stop-trace`
-[record] cmd: xctrace record --template SwiftUI --output <redacted>/tmpwt_s7j6s/session.trace --attach TestApp
-[record] stop-file detected (<redacted>/tmpwt_s7j6s/stop-trace); stopping xctrace.
-.....
+[record]   output:   /var/folders/77/dnsbl48x1h7gqv8g8t6x8hr80000gn/T/tmptj9x9zr4/session.trace
+[record] stop via: Ctrl+C, `touch /var/folders/77/dnsbl48x1h7gqv8g8t6x8hr80000gn/T/tmptj9x9zr4/stop-trace`
+[record] cmd: xctrace record --template SwiftUI --output /var/folders/77/dnsbl48x1h7gqv8g8t6x8hr80000gn/T/tmptj9x9zr4/session.trace --attach TestApp
+[record] stop-file detected (/var/folders/77/dnsbl48x1h7gqv8g8t6x8hr80000gn/T/tmptj9x9zr4/stop-trace); stopping xctrace.
+..............
 ----------------------------------------------------------------------
-Ran 96 tests in 0.060s
+Ran 105 tests in 1.677s
 
 OK

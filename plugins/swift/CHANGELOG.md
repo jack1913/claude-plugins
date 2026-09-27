@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-09-27
+
+Adds `swift:concurrency`, the plugin's third skill: an own-copy fork of AvdLee's Swift-Concurrency-Agent-Skill 2.3.0 covering async/await, tasks, actors, `Sendable`, isolation and Swift 6 migration. Before release its text went through a claim-by-claim audit against Apple's doc JSON, the 27.0 SDK interfaces and the Swift 6.4 compiler, and every confirmed defect is fixed. The upstream tooling now tracks one baseline per forked skill.
+
+### Added
+
+- `swift:concurrency` (`/swift:concurrency`), triggered by Swift 6 concurrency work and the compiler's isolation and data-race diagnostics.
+- Two concurrency eval cases: removing `nonisolated(unsafe)` from a shared cache, and fixing a `@MainActor` isolation error without moving heavy work onto the main actor.
+- ADR-0010, extending the own-copy fork model to the concurrency and testing upstreams.
+
+### Fixed
+
+- Concurrency snippets that did not compile in Swift 6 language mode:
+  - an unconstrained `withTimeout<T>`;
+  - `Thread.current` used in async contexts;
+  - a Void-returning Core Data `perform` helper;
+  - `@Observable` classes isolating a single property to `@MainActor`;
+  - `try` inside non-throwing functions and a wrong argument label.
+- Data races in examples that Swift 6 rejects (a class-based download manager, observation tracking reading `@MainActor` state from a nonisolated closure), now actor- or MainActor-isolated.
+- APIs that do not exist, replaced with real ones:
+  - swift-async-algorithms ships throttle only as the underscored `_throttle` in every 1.x release;
+  - `AsyncStream` has no `continuation` property;
+  - `AsyncTimerSequence` needs a clock or `repeating(every:)`;
+  - Combine has no `CombineLatest2`;
+  - Swift 6.4 has no unused-`@preconcurrency` warning.
+- Stale Swift 6.2 claims: `Observations` has shipped (OS 26), `Task` takes a `sending` closure rather than a `@Sendable` one, and default actor isolation is `MainActor` or `nonisolated`.
+- Quoted compiler diagnostics now match the messages Swift 6.4 actually emits, so they can be searched for.
+- The SwiftLint rule table says which rules are opt-in.
+
+### Changed
+
+- `maintenance/upstream-diff.sh` takes a required `<swiftui|concurrency|testing>` argument and reads that upstream's baseline from its own `UPSTREAM.md` section. New unit tests cover it offline.
+- `UPSTREAM.md` is split into one section per upstream; the plugin and marketplace descriptions, README, AGENTS.md and the manual name the new skill.
+- The `apis.json` frameworks now include `coredata`, `xctest` and `testing`.
+- Known gap: `sendable-shared-cache` also passes without the plugin on current models, so it guards against regressions rather than showing the skill's value (`mainactor-detached-task` fails without it). The eval harness has no build grader, so call-site consistency in `sendable-shared-cache` is judged from the agent's reply.
+
 ## [0.1.3] - 2026-09-26
 
 A claim-by-claim audit of all ~10,600 lines of `swift:swiftui`'s reference text against Apple's doc JSON, the 27.0 SDK interfaces and `swiftc -typecheck` found 19 confirmed defects; all are fixed. Seven were high severity: snippets that don't compile or name APIs that don't exist.

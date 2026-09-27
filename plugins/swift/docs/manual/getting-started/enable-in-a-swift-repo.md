@@ -4,7 +4,7 @@ The plugin ships three skills. Loaded straight from this checkout, its inventory
 
 ```text capture=plugin-details
 Component inventory
-  Skills (2)  design, swiftui
+  Skills (3)  concurrency, design, swiftui
 ```
 
 That is `claude --plugin-dir plugins/swift plugin details swift`, run from the repo root.

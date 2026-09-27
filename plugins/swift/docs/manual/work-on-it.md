@@ -7,7 +7,7 @@ On a clean tree, the three free checks print this:
 ```
 
 ```text capture=unit-tests
-Ran 96 tests in 0.060s
+Ran 105 tests in 1.677s
 
 OK
 ```
@@ -123,11 +123,11 @@ Prerequisite: the `origin` remote points at `jack1913/swift-plugin`.
    claude plugin tag plugins/swift
    ```
 
-For release 0.1.3, the dry run read:
+For release 0.1.4, the dry run read:
 
 ```text capture=tag-dry-run
-Version: 0.1.3 (from plugin.json)
-Tag:     swift--v0.1.3
+Version: 0.1.4 (from plugin.json)
+Tag:     swift--v0.1.4
 ```
 
 4. Push the commit, then the tag:
