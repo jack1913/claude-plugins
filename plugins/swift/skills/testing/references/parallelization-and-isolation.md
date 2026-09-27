@@ -16,7 +16,9 @@ Use this file when tests are flaky in CI, have hidden ordering dependencies, or 
 import Testing
 
 enum SharedStore {
- static var counter = 0
+ // nonisolated(unsafe) is part of the hazard: Swift 6 rejects the plain
+ // `static var` as global shared mutable state; this opts out of that check.
+ nonisolated(unsafe) static var counter = 0
 }
 
 @Test func incrementsCounter() {
