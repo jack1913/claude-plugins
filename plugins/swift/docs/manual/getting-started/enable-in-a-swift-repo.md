@@ -1,10 +1,10 @@
 # Enable the plugin in a Swift repo
 
-The plugin ships four skills. Loaded straight from this checkout, its inventory reads:
+The plugin ships five skills. Loaded straight from this checkout, its inventory reads:
 
 ```text capture=plugin-details
 Component inventory
-  Skills (4)  concurrency, design, swiftui, testing
+  Skills (5)  concurrency, design, review, swiftui, testing
 ```
 
 That is `claude --plugin-dir plugins/swift plugin details swift`, run from the repo root.
@@ -42,7 +42,7 @@ Then start a new session or run `/reload-plugins`; the update needs a restart to
 
 ## What each skill covers
 
-From `plugins/swift/skills/swiftui/SKILL.md`, `plugins/swift/skills/design/SKILL.md`, `plugins/swift/skills/concurrency/SKILL.md` and `plugins/swift/skills/testing/SKILL.md`:
+From `plugins/swift/skills/swiftui/SKILL.md`, `plugins/swift/skills/design/SKILL.md`, `plugins/swift/skills/concurrency/SKILL.md`, `plugins/swift/skills/testing/SKILL.md` and `plugins/swift/skills/review/SKILL.md`:
 
 | Skill | Covers |
 | --- | --- |
@@ -50,5 +50,8 @@ From `plugins/swift/skills/swiftui/SKILL.md`, `plugins/swift/skills/design/SKILL
 | `swift:design` | Apple-native design: hierarchy, typography, colour, SF Symbols, when Liquid Glass fits, platform idioms, motion, design tokens |
 | `swift:concurrency` | Swift 6 concurrency: async/await, tasks and task groups, actors and `@MainActor`, `Sendable` and data-race diagnostics, Swift 5 → 6 migration, hanging or flaky async tests |
 | `swift:testing` | Swift Testing: `@Test`, `@Suite`, `#expect`/`#require`, traits and tags, parameterized tests, parallel execution, `confirmation`, XCTest migration and what stays on XCTest |
+| `swift:review` | On-demand HIG review of a screen from its view files and/or screenshots: findings as violation · location · HIG page · fix, most severe first, then what the inputs could not show. Runs only as `/swift:review <files or screenshots>`, never on its own, and never edits files |
 
-If the repo has its own design layer (tokens, a project design skill), `swift:swiftui` and `swift:design` translate their example literals into it, and the project layer wins where they disagree (the Operating Rules of both files).
+If the repo has its own design layer (tokens, a project design skill), `swift:swiftui` and `swift:design` translate their example literals into it, and the project layer wins where they disagree (the Operating Rules of both files). `swift:review` carries the same rule, so it doesn't report values the project layer sanctions ([ADR-0011](../../adr/ADR-0011-swift-review-skill.md)).
+
+`swift:review` reads its reference files and `swift:design`'s from the installed plugin, so Claude Code may ask to read them the first time. A headless `claude -p "/swift:review …"` can't answer that prompt: pass `--add-dir <plugin dir>` ([verification record](../../internals/review-verification.md)).

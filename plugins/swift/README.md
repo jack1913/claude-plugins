@@ -1,6 +1,6 @@
 # swift-plugin
 
-Private Claude Code marketplace with one plugin, `swift`: skills that make an agent write correct, current, Apple-native Swift — SwiftUI, design, Swift 6 concurrency and tests.
+Private Claude Code marketplace with one plugin, `swift`: skills that make an agent write correct, current, Apple-native Swift — SwiftUI, design, Swift 6 concurrency and tests — plus an on-demand design review.
 
 | Skill | Covers |
 |---|---|
@@ -8,6 +8,7 @@ Private Claude Code marketplace with one plugin, `swift`: skills that make an ag
 | `swift:design` | Apple-native design: hierarchy, typography, color, SF Symbols, Liquid Glass, platform idioms, motion, tokens |
 | `swift:concurrency` | Swift 6 concurrency: Sendable, actors, async/await, data-race diagnosis, 5→6 migration. A fork of [AvdLee/Swift-Concurrency-Agent-Skill](https://github.com/AvdLee/Swift-Concurrency-Agent-Skill) (`UPSTREAM.md`) |
 | `swift:testing` | Swift Testing: `@Test`, `#expect`/`#require`, traits, parameterized tests, parallel execution, XCTest migration. A fork of [AvdLee/Swift-Testing-Agent-Skill](https://github.com/AvdLee/Swift-Testing-Agent-Skill) (`UPSTREAM.md`) |
+| `swift:review` | On-demand HIG review of a SwiftUI screen from its code and/or screenshots, reported as findings with the HIG source and a fix. Runs only when you type `/swift:review <view files or screenshots>`, and never edits files |
 
 ## Enable it in a Swift repo
 

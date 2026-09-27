@@ -122,7 +122,7 @@ skills/design/
 - **Sources:** Apple Human Interface Guidelines and WWDC25 sessions 219 (Meet Liquid Glass), 356 (Get to know the new design system), 323 (Build a SwiftUI app with the new design), fetched while writing. Every rule cites its source and is paraphrased, not copied (Apple's text is copyrighted). Seeded with the generic sections of ExampleApp's current `swiftui-design` skill ("Design Thinking", "Apple-Native Aesthetics", "What to AVOID"), which are the user's own text.
 - **No duplication:** accessibility code patterns and Liquid Glass API mechanics stay in `swift:swiftui`; `design` links to them.
 - **Numbers** (hit-target sizes per platform, etc.) are taken from the HIG at write time, with the page cited — not from memory.
-- **Context cost:** in a repo with a project layer, "build a view" loads three SKILL.md files (~370 lines at the time of writing); references load on demand. Re-recorded 2026-09-26 (part-2 spec §8): the plugin's own bodies are now swiftui 161 + design 93 + concurrency 211 = 465 lines, and grow to ≈660 when `swift:testing` and `swift:review` land; always-loaded cost is the skill descriptions only (`plugin details` measured ~767 tokens for the three shipped at 0.1.4; each forked skill adds roughly 200–330, and `swift:review` is slash-only and costs nothing), and a view task loads only the SKILL.md files it triggers.
+- **Context cost:** in a repo with a project layer, "build a view" loads three SKILL.md files (~370 lines at the time of writing); references load on demand. Re-recorded 2026-09-26 (part-2 spec §8): the plugin's own bodies are now swiftui 161 + design 93 + concurrency 211 = 465 lines, and grow to ≈660 when `swift:testing` and `swift:review` land; always-loaded cost is the skill descriptions only (`plugin details` measured ~767 tokens for the three shipped at 0.1.4; each forked skill adds roughly 200–330, and `swift:review` is slash-only and costs nothing), and a view task loads only the SKILL.md files it triggers. Re-recorded 2026-09-27 at 0.1.6: bodies are swiftui 161 + design 93 + concurrency 211 + testing 79 + review 49 = 593 lines; `plugin details` estimates ~1,122 tokens always-on, of which ~120 is `swift:review`'s description, which the estimator counts although `disable-model-invocation` keeps it out of the model's context (ADR-0011's probe), so the real always-loaded cost stays at the four model-invocable descriptions (~1,000 tokens).
 
 ## 6. Maintenance (part 4)
 
@@ -215,8 +215,8 @@ Claude Code (docs and CLI 2.1.282, checked 2026-09-24):
 
 ## 10. Out of scope / later
 
-- `swift:review` — on-demand HIG review of a screen (own text, run by hand).
-- `swift:concurrency`, `swift:testing`.
+- `swift:review` — on-demand HIG review of a screen (own text, run by hand). Done in 0.1.6 (part-2 spec §6, ADR-0011).
+- `swift:concurrency`, `swift:testing`. Done in 0.1.4 and 0.1.5 (part-2 spec §4–§5).
 - An optional claude-configs entry that registers the `swift-plugin` marketplace on a new machine without enabling it anywhere.
 
 ## 11. Working rules

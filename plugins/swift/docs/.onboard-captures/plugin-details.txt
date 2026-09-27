@@ -1,22 +1,23 @@
 swift 0.1.5
-  Description: Correct, current, Apple-native Swift: swift:swiftui (APIs and correctness, visionOS, previews), swift:design (Apple-native design), swift:concurrency (Swift 6 concurrency) and swift:testing (Swift Testing and XCTest migration).
+  Description: Correct, current, Apple-native Swift: swift:swiftui (APIs and correctness, visionOS, previews), swift:design (Apple-native design), swift:concurrency (Swift 6 concurrency), swift:testing (Swift Testing and XCTest migration) and swift:review (on-demand HIG review, /swift:review).
   Source: swift@inline
 
 Component inventory
-  Skills (4)  concurrency, design, swiftui, testing
+  Skills (5)  concurrency, design, review, swiftui, testing
   Agents (0)
   Hooks (0)
   MCP servers (0)
   LSP servers (0)
 
 Projected token cost
-  Always-on:   ~1,001 tok   added to every session
+  Always-on:   ~1,122 tok   added to every session
 
 Per-component (rounded)
   component    always-on  on-invoke
-  design            ~220        ~4k
+  design            ~220      ~3.9k
   testing           ~210      ~1.7k
-  concurrency       ~240      ~4.9k
+  concurrency       ~240      ~4.8k
+  review            ~120      ~1.3k
   swiftui           ~330      ~4.5k
 
   On-invoke cost is paid each time a skill or agent fires.
