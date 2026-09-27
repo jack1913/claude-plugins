@@ -396,9 +396,9 @@ actor BankAccount {
 ### Problem
 
 ```swift
-async let _ = account.deposit(50)
-async let _ = account.deposit(50)
-async let _ = account.deposit(50)
+async let _ = account.deposit(amount: 50)
+async let _ = account.deposit(amount: 50)
+async let _ = account.deposit(amount: 50)
 
 // May print same balance three times:
 // Balance: 150
@@ -456,12 +456,12 @@ Task { @MainActor in
 
 When spawning unstructured `Task` closures that need to work with `non-Sendable` types, you must capture the isolation parameter to inherit the caller's isolation context.
 
-**Problem**: `Task` closures are `@Sendable`, which prevents capturing `non-Sendable` types:
+**Problem**: `Task` takes its closure as a `sending` parameter, so from a nonisolated context it cannot capture a `non-Sendable` value that the caller still owns:
 
 ```swift
 func process(delegate: NonSendableDelegate) {
   Task {
-    delegate.doWork() // ❌ Error: capturing non-Sendable type
+    delegate.doWork() // ❌ Error: passing closure as a 'sending' parameter risks causing data races
   }
 }
 ```
@@ -619,7 +619,7 @@ func decrement() throws {
 final class ContentViewModel: ObservableObject {
     @Published var items: [Item] = []
     
-    func loadItems() async {
+    func loadItems() async throws {
         items = try await api.fetchItems()
     }
 }
