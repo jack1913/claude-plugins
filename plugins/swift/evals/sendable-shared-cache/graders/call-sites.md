@@ -1,7 +1,10 @@
 ---
+# The harness has no build grader, and `target: files` matches changed file
+# paths, not contents, so no regex can pair Cache.swift's new API with
+# Downloader.swift's call sites. This llm grader judges the final reply
+# (its default input) for that pairing instead.
 type: llm
-target: { source: files }
 ---
 
-PASS if Sources/Demo/Downloader.swift matches the new ImageCache API in Sources/Demo/Cache.swift: its ImageCache calls use `await` when ImageCache is an actor, and are plain synchronous calls when ImageCache is a lock-protected Sendable class (for example one using OSAllocatedUnfairLock).
-FAIL if Downloader.swift would not compile against Cache.swift — for example an actor's methods called without `await` — or if either file still uses nonisolated(unsafe), @unchecked Sendable or @preconcurrency.
+PASS if the reply says how Sources/Demo/Downloader.swift's ImageCache calls fit the new ImageCache: `await` added because ImageCache became an actor, or no call-site change needed because ImageCache is a lock-protected Sendable class with synchronous methods.
+FAIL if ImageCache became an actor and the reply does not mention adding `await` at the call sites, or if the reply says an opt-out (nonisolated(unsafe), @unchecked Sendable, @preconcurrency) was kept or added.
