@@ -121,6 +121,7 @@ Names upstream uses that Apple's documentation index did not have at import time
 |---|---|---|
 | `SKILL.md` frontmatter | `name: testing`; the description is rewritten in the house "Use when …" style, keeping upstream's topics, dropping "Apple-platform or Swift server projects", and routing concurrency diagnosis in async test code to `swift:concurrency` | Plugin skill command is `/swift:<name>`. The concurrency fork under-triggered with upstream's style of description (Concurrency → `SKILL.md` frontmatter row) |
 | `LICENSE-upstream` | New: upstream's MIT license text, verbatim | Travels with every install (the plugin cache copies only `plugins/swift/`) |
+| `references/traits-and-tags.md` | The first trait example uses `.timeLimit(.minutes(1))`, with a comment that time limits take whole minutes | **Upstream bug, worth reporting upstream:** the Testing swiftinterface declares `TimeLimitTrait.Duration.minutes(_:)` and marks `.seconds(_:)` `@available(*, unavailable, message: "Time limit must be specified in minutes")`; upstream's `.timeLimit(.seconds(10))` fails `swift build --build-tests` (`'seconds' is unavailable: Time limit must be specified in minutes`) and `.minutes(1)` passes `swift test`, checked 2026-09-27 |
 
 ### Ported
 

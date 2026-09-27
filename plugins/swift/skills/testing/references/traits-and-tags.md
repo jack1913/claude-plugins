@@ -15,7 +15,7 @@ Use this file when controlling test execution behavior, linking bug context, and
 ```swift
 import Testing
 
-@Test("Uploads complete quickly", .timeLimit(.seconds(10)))
+@Test("Uploads complete quickly", .timeLimit(.minutes(1))) // whole minutes only: .seconds is unavailable
 func uploadWithinTimeLimit() async throws {
  #expect(true)
 }
