@@ -93,6 +93,7 @@ struct CheckoutTests {
 ### Zero-argument initializer requirement example
 
 ```swift
+import Foundation
 import Testing
 
 @Suite
@@ -105,7 +106,8 @@ struct SessionTests {
  }
 
  @Test func usesEphemeralByDefault() {
- #expect(config == .ephemeral)
+ // .ephemeral keeps no data on disk; compare a property, not the object.
+ #expect(config.urlCache?.diskCapacity ?? 0 == 0)
  }
 }
 ```
