@@ -1171,11 +1171,9 @@
       "Viewer",
       "WeatherSummary",
       "WebSocketMessage",
-      "chain",
       "fetchItems",
       "fetchLatestArticles",
       "fileChanged",
-      "product",
       "searchArticles",
       "updateLikeStatus"
     ],
@@ -1319,8 +1317,9 @@
       "AsyncRemoveDuplicatesSequence",
       "AsyncThrowingChannel",
       "AsyncTimerSequence",
-      "CombineLatest2",
       "Package",
+      "chain",
+      "product",
       "repeating"
     ],
     "Apple names that are no standalone index entry (@NSManaged attribute, nested notification name)": [

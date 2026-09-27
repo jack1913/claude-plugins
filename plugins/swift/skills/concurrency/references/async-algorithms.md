@@ -770,7 +770,7 @@ final class FormValidator: ObservableObject {
     @Published private(set) var formState: FormState = .incomplete
 
     init() {
-        Publishers.CombineLatest2($username, $email)
+        Publishers.CombineLatest($username, $email)
             .map { username, email in
                 validate(username: username, email: email)
             }
