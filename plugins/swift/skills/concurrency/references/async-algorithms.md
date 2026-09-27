@@ -34,8 +34,8 @@ for await query in searchQueryStream.debounce(for: .milliseconds(500)) {
     await performSearch(query)
 }
 
-// 2. Throttle repeated actions
-for await _ in buttonClicks.throttle(for: .seconds(1)) {
+// 2. Throttle repeated actions (shipped underscored: `_throttle`, not source-stable)
+for await _ in buttonClicks._throttle(for: .seconds(1)) {
     await performAction()
 }
 
@@ -158,9 +158,11 @@ func search(_ query: String) {
 
 ---
 
-### throttle(for:clock:reducing:)
+### _throttle(for:clock:reducing:)
 
 Emit at most one value per interval. Use for repeated actions like button taps.
+
+**Underscored in every release.** swift-async-algorithms made throttle underscored before 1.0 (PR #296, 2023-09-27), so releases through 1.1.6 ship only `_throttle` — the package README and docs still use the planned name `throttle`, which does not compile. `_throttle` is outside the package's source-stability promise; expect a rename.
 
 #### Example: Like Button
 
@@ -168,14 +170,12 @@ Emit at most one value per interval. Use for repeated actions like button taps.
 import AsyncAlgorithms
 
 struct LikeButton: View {
-    @State private var tapStream = AsyncStream<Void> { continuation in
-        // Continuation stored externally
-    }
+    @State private var taps = AsyncStream<Void>.makeStream()
     @State private var isLiked = false
 
     var body: some View {
         Button(action: {
-            tapStream.continuation?.yield()
+            taps.continuation.yield()
         }) {
             Image(systemName: isLiked ? "heart.fill" : "heart")
         }
@@ -185,7 +185,7 @@ struct LikeButton: View {
     }
 
     private func handleThrottledTaps() async {
-        for await _ in tapStream.throttle(for: .seconds(1)) {
+        for await _ in taps.stream._throttle(for: .seconds(1)) {
             await toggleLike()
         }
     }
@@ -197,22 +197,24 @@ struct LikeButton: View {
 }
 ```
 
-#### Understanding reducing Parameter
+#### Choosing which value to emit
 
 ```swift
-// .latest (default): Keep most recent value
-for await value in events.throttle(for: .seconds(1)) {
+// latest: true (default): keep the most recent value in each interval
+for await value in events._throttle(for: .seconds(1)) {
     process(value)
 }
 
-// .oldest: Keep first value
-for await value in events.throttle(for: .seconds(1), reducing: .oldest) {
+// latest: false: keep the first value in each interval
+for await value in events._throttle(for: .seconds(1), latest: false) {
     process(value)
 }
 
-// Custom: Sum all values
-for await value in events.throttle(for: .seconds(1)) { $0 + $1 } {
-    process(value)
+// Custom reduction: sum the values in each interval
+for await sum in events._throttle(for: .seconds(1), reducing: { (partial: Int?, value: Int) in
+    (partial ?? 0) + value
+}) {
+    process(sum)
 }
 ```
 
@@ -234,7 +236,7 @@ final class FeedViewModel {
 
     func startAutoRefresh() {
         refreshTask = Task {
-            for await _ in AsyncTimerSequence(interval: .seconds(30)) {
+            for await _ in AsyncTimerSequence.repeating(every: .seconds(30)) {
                 await refreshFeed()
             }
         }
@@ -463,7 +465,7 @@ import AsyncAlgorithms
 actor ChatHistory {
     private var messageStream = AsyncStream<ChatMessage> { /* ... */ }
 
-    func getUniqueMessages() -> AsyncStream<ChatMessage> {
+    func getUniqueMessages() -> AsyncRemoveDuplicatesSequence<AsyncStream<ChatMessage>> {
         messageStream.removeDuplicates()
     }
 }
@@ -529,7 +531,7 @@ import AsyncAlgorithms
 actor MessageQueue {
     private let channel = AsyncChannel<Message>()
 
-    func getMessages() -> AsyncStream<Message> {
+    func getMessages() -> AsyncChannel<Message> {
         channel
     }
 
@@ -586,7 +588,7 @@ import AsyncAlgorithms
 actor WebSocketConnection {
     private let channel = AsyncThrowingChannel<WebSocketMessage, Error>()
 
-    func getMessages() -> AsyncThrowingStream<WebSocketMessage, Error> {
+    func getMessages() -> AsyncThrowingChannel<WebSocketMessage, Error> {
         channel
     }
 
@@ -618,7 +620,7 @@ do {
 | Combine | AsyncAlgorithms | Status | Alternative |
 |---------|-----------------|---------|-------------|
 | `.debounce()` | `debounce()` | ✅ Stable | - |
-| `.throttle()` | `throttle()` | ✅ Stable | - |
+| `.throttle()` | `_throttle()` | ⚠️ Underscored, not source-stable | - |
 | `.merge()` | `merge()` | ✅ Stable | - |
 | `.combineLatest()` | `combineLatest()` | ✅ Stable | - |
 | `.zip()` | `zip()` | ✅ Stable | - |
@@ -829,7 +831,7 @@ final class FormValidator {
 
 ## Best Practices
 
-1. **Use time-based operators** for rapid inputs: debounce() for search, throttle() for buttons
+1. **Use time-based operators** for rapid inputs: debounce() for search, _throttle() for buttons
 2. **Combine streams** with merge/combineLatest instead of manual state management
 3. **Use AsyncChannel** for multi-consumer scenarios with backpressure
 4. **Ensure Sendable conformance** when using operators across isolation boundaries

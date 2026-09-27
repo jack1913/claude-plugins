@@ -1099,7 +1099,6 @@
       "MyModel",
       "MySwiftUIView",
       "MyTapGestureView",
-      "MyView",
       "MyViewModel",
       "NonSendableDelegate",
       "NowPlayingBar",
@@ -1126,6 +1125,7 @@
       "ProductReviews",
       "Profile",
       "ProfileButton",
+      "ProfileModel",
       "ProfileView",
       "Queue",
       "RawItem",
@@ -1145,7 +1145,6 @@
       "SomeData",
       "SomeError",
       "SomeLibrary",
-      "SomeModule",
       "SomeProtocol",
       "SomeThirdPartyLibrary",
       "SomeType",
@@ -1255,7 +1254,6 @@
       "Need",
       "Needs",
       "No",
-      "None",
       "OK",
       "Objects",
       "Parallel",
@@ -1318,10 +1316,12 @@
     ],
     "package symbols from outside Apple's framework indexes (swift-async-algorithms, SwiftPM)": [
       "AsyncChannel",
+      "AsyncRemoveDuplicatesSequence",
       "AsyncThrowingChannel",
       "AsyncTimerSequence",
       "CombineLatest2",
-      "Package"
+      "Package",
+      "repeating"
     ],
     "Apple names that are no standalone index entry (@NSManaged attribute, nested notification name)": [
       "NSManaged",
