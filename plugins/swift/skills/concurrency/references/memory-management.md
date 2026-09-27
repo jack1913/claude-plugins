@@ -505,16 +505,14 @@ actor DownloadManager {
     private var tasks: [URL: Task<Data, Error>] = [:]
 
     func download(_ url: URL) async throws -> Data {
+        if let inFlight = tasks[url] {
+            return try await inFlight.value // join the running download
+        }
         let task = Task { try await URLSession.shared.data(from: url).0 }
         tasks[url] = task
-        do {
-            let data = try await task.value
-            tasks.removeValue(forKey: url)
-            return data
-        } catch {
-            tasks.removeValue(forKey: url)
-            throw error
-        }
+        // Actors are reentrant at `await`: remove the entry only if it is still ours.
+        defer { if tasks[url] == task { tasks[url] = nil } }
+        return try await task.value
     }
 
     func cancelAll() {
@@ -524,7 +522,7 @@ actor DownloadManager {
 }
 ```
 
-The actor keeps `tasks` isolated. A plain class that mutates the dictionary from both `download` and the task's `defer` is a data race, and Swift 6 rejects it (`passing closure as a 'sending' parameter risks causing data races`).
+The actor keeps `tasks` isolated. A plain class that mutates the dictionary from both `download` and the task's `defer` is a data race, and Swift 6 rejects it (`passing closure as a 'sending' parameter risks causing data races`). The actor is still reentrant across `await task.value`, so a second call for the same URL joins the running task instead of overwriting its entry — otherwise the first call's cleanup would drop the second task and `cancelAll()` could no longer reach it.
 
 ### Timer
 
