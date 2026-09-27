@@ -19,12 +19,14 @@ Jump to:
 
 SwiftLint provides several rules targeting async/await and concurrency patterns. Understanding when to fix vs. suppress is critical.
 
-| Rule | Default | Purpose |
-|------|---------|---------|
-| `async_without_await` | warning | Flags `async` functions that never await |
-| `unowned_variable_capture` | warning | Warns about `unowned` in closures (risky in async) |
-| `class_delegate_protocol` | warning | Ensures delegates are class-bound (AnyObject) |
-| `weak_delegate` | warning | Delegates should be weak to avoid retain cycles |
+| Rule | Opt-in | Default severity | Purpose |
+|------|--------|------------------|---------|
+| `async_without_await` | yes | warning | Flags `async` functions that never await |
+| `unowned_variable_capture` | yes | warning | Warns about `unowned` in closures (risky in async) |
+| `class_delegate_protocol` | no | warning | Ensures delegates are class-bound (AnyObject) |
+| `weak_delegate` | yes | warning | Delegates should be weak to avoid retain cycles |
+
+Opt-in rules report nothing until they are listed under `opt_in_rules` in `.swiftlint.yml`.
 
 ## SwiftLint: `async_without_await`
 
@@ -63,15 +65,16 @@ func makeMock() async { perform() }
 
 ## Compiler Warnings: Sendable & Isolation
 
-The Swift compiler generates concurrency-related warnings based on strict concurrency checking level.
+The Swift compiler generates concurrency-related diagnostics based on the strict concurrency checking level: warnings under Swift 5 with `-strict-concurrency=complete`, errors in Swift 6 language mode. The messages below are the Swift 6.4 wording; region-isolation errors ("sending", "can not be returned") come from SIL passes, so `swiftc -typecheck` alone never shows them.
 
 ### Common Warning Patterns
 
-**"Capture of non-sendable type"**
+**"Sending closure risks data races"**
 ```swift
-// Warning: Capture of 'self' with non-sendable type 'MyClass' in a `@Sendable` closure
+// Error: passing closure as a 'sending' parameter risks causing data races between
+// code in the current task and concurrent execution of the closure
 Task {
-    self.doWork() // 'self' is non-Sendable
+    self.doWork() // 'self' is non-Sendable, called from a nonisolated method
 }
 ```
 
@@ -83,7 +86,8 @@ Task {
 
 **"Non-sendable result returned"**
 ```swift
-// Warning: Non-sendable type 'MyResult' returned by implicitly async call
+// Error: non-Sendable 'MyResult'-typed result can not be returned from
+// actor-isolated instance method 'getData()' to nonisolated context
 let result = await actor.getData() // Returns non-Sendable type
 ```
 
@@ -94,9 +98,9 @@ let result = await actor.getData() // Returns non-Sendable type
 
 ### Actor Isolation Warnings
 
-**"Main actor-isolated property accessed from non-isolated context"**
+**"Main actor-isolated property accessed from nonisolated context"**
 ```swift
-// Warning: Main actor-isolated property 'title' cannot be referenced from a non-isolated context
+// Error: main actor-isolated property 'title' can not be mutated from a nonisolated context
 func updateTitle() {
     viewModel.title = "New" // viewModel is @MainActor
 }
