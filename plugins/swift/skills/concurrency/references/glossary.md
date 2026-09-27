@@ -108,7 +108,7 @@ Wait for a period of inactivity before emitting a value. Used to reduce API call
 
 ## Throttle
 
-Emit at most one value per time interval, discarding intermediate values. Used to prevent excessive calls from repeated actions like button taps. Implemented as the underscored `_throttle(for:clock:reducing:)` in AsyncAlgorithms: every release through 1.1.6 ships only the underscored name, outside the package's source-stability promise.
+Emit at most one value per time interval, discarding intermediate values. Used to prevent excessive calls from repeated actions like button taps. Implemented as the underscored `_throttle(for:clock:reducing:)` in AsyncAlgorithms: every 1.x release (1.0.0 through 1.1.6) ships only the underscored name, outside the package's source-stability promise.
 
 ## Merge (AsyncAlgorithms)
 
