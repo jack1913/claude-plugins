@@ -530,7 +530,7 @@ for await value in stream {
 | Need | Solution |
 |------|----------|
 | Debounce search input | ✅ AsyncAlgorithms.debounce() |
-| Throttle button clicks | ✅ AsyncAlgorithms.throttle() |
+| Throttle button clicks | ⚠️ AsyncAlgorithms._throttle() (underscored, not source-stable) |
 | Merge independent streams | ✅ AsyncAlgorithms.merge() |
 | Combine dependent values | ✅ AsyncAlgorithms.combineLatest() or async let |
 | Pair values from two sources | ✅ AsyncAlgorithms.zip() |
