@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-09-27
+
+Adds `swift:testing`, the plugin's fourth skill: an own-copy fork of AvdLee's Swift-Testing-Agent-Skill 1.2.0 covering Swift Testing (`@Test`, `#expect`/`#require`, traits, parameterized tests, parallel execution, `confirmation`) and XCTest migration. Before release its text went through a claim-by-claim audit, with compiler checks under full SIL diagnostics and behaviour claims run with `swift test`; every confirmed defect is fixed.
+
+### Added
+
+- `swift:testing` (`/swift:testing`), for writing, migrating and reviewing Swift tests.
+- Two testing eval cases: testing a callback delivered later on another queue with `confirmation`, and a parameterized test over two parallel fixture arrays.
+
+### Fixed
+
+- Swift Testing snippets that did not compile or did not pass:
+  - `.timeLimit(.seconds(10))`: time limits take whole minutes only (`.minutes(1)`);
+  - a `URLSessionConfiguration` equality check that fails at runtime, since configurations compare by identity;
+  - the fixed-size `InlineArray` zip helper, which now compiles and is gated on OS 26 on every platform;
+  - four snippets missing `import Foundation` (`Testing` does not re-export it).
+- Two shared-state anti-patterns now compile in Swift 6 mode (`nonisolated(unsafe)`), so they show the flakiness they describe.
+- The skill's resources pointer links Apple's Swift Testing documentation instead of a README the skill does not ship.
+
+### Changed
+
+- The concurrency and testing skills now split the work: writing and migrating tests goes to `swift:testing`, and hanging, flaky or data-racing async tests go to `swift:concurrency`.
+- The `apis.json` frameworks now include `xcuiautomation`, where `XCUIApplication` lives.
+- The registry surfaces now name the fourth skill: AGENTS.md, the README, the manual and both manifest descriptions.
+- Known gap: `parameterized-slug-tests` also passes without the plugin on current models, even in its harder paired-fixtures form, so it guards against regressions rather than showing the skill's value. `callback-confirmation-test` shows the skill's value: without it, agents sleep or skip `confirmation`.
+
 ## [0.1.4] - 2026-09-27
 
 Adds `swift:concurrency`, the plugin's third skill: an own-copy fork of AvdLee's Swift-Concurrency-Agent-Skill 2.3.0 covering async/await, tasks, actors, `Sendable`, isolation and Swift 6 migration. Before release its text went through a claim-by-claim audit against Apple's doc JSON, the 27.0 SDK interfaces and the Swift 6.4 compiler, and every confirmed defect is fixed. The upstream tooling now tracks one baseline per forked skill.
