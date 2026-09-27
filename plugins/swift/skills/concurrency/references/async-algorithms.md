@@ -162,7 +162,7 @@ func search(_ query: String) {
 
 Emit at most one value per interval. Use for repeated actions like button taps.
 
-**Underscored in every release.** swift-async-algorithms made throttle underscored before 1.0 (PR #296, 2023-09-27), so releases through 1.1.6 ship only `_throttle` — the package README and docs still use the planned name `throttle`, which does not compile. `_throttle` is outside the package's source-stability promise; expect a rename.
+**Underscored in every 1.x release.** swift-async-algorithms made throttle underscored before 1.0 (PR #296, 2023-09-27): the 0.x releases had `throttle`, but 1.0.0 through 1.1.6 ship only `_throttle` — the package README and docs still use the name `throttle`, which does not compile against 1.x. `_throttle` is outside the package's source-stability promise; expect a rename.
 
 #### Example: Like Button
 
