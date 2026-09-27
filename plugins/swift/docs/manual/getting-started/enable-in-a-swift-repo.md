@@ -1,6 +1,6 @@
 # Enable the plugin in a Swift repo
 
-The plugin ships two skills. Loaded straight from this checkout, its inventory reads:
+The plugin ships three skills. Loaded straight from this checkout, its inventory reads:
 
 ```text capture=plugin-details
 Component inventory
@@ -42,11 +42,12 @@ Then start a new session or run `/reload-plugins`; the update needs a restart to
 
 ## What each skill covers
 
-From `plugins/swift/skills/swiftui/SKILL.md` and `plugins/swift/skills/design/SKILL.md`:
+From `plugins/swift/skills/swiftui/SKILL.md`, `plugins/swift/skills/design/SKILL.md` and `plugins/swift/skills/concurrency/SKILL.md`:
 
 | Skill | Covers |
 | --- | --- |
 | `swift:swiftui` | SwiftUI correctness and current APIs: state, view structure, deprecations, `#Preview` inside `#if DEBUG`, `#available` gates below 26, the visionOS glass branch, Instruments traces |
 | `swift:design` | Apple-native design: hierarchy, typography, colour, SF Symbols, when Liquid Glass fits, platform idioms, motion, design tokens |
+| `swift:concurrency` | Swift 6 concurrency: async/await, tasks and task groups, actors and `@MainActor`, `Sendable` and data-race diagnostics, Swift 5 → 6 migration, async testing |
 
-If the repo has its own design layer (tokens, a project design skill), both skills translate their example literals into it, and the project layer wins where they disagree (the Operating Rules of both files).
+If the repo has its own design layer (tokens, a project design skill), `swift:swiftui` and `swift:design` translate their example literals into it, and the project layer wins where they disagree (the Operating Rules of both files).

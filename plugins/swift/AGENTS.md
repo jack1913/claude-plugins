@@ -1,7 +1,7 @@
 # AGENTS.md — swift-plugin (single source of truth)
 
 ## 1. Project identity
-A private Claude Code plugin marketplace with one plugin, `swift`, whose skills (`swift:swiftui`, `swift:design`) make an agent write correct, current, Apple-native SwiftUI. Design: `docs/superpowers/specs/2026-09-24-swift-plugin-design.md`.
+A private Claude Code plugin marketplace with one plugin, `swift`, whose skills (`swift:swiftui`, `swift:design`, `swift:concurrency`) make an agent write correct, current, Apple-native Swift: SwiftUI, design and Swift 6 concurrency. Design: `docs/superpowers/specs/2026-09-24-swift-plugin-design.md`; part 2: `docs/superpowers/specs/2026-09-26-swift-skills-part2-design.md`.
 
 ## 2. Repo layout
 | Path | Purpose |
