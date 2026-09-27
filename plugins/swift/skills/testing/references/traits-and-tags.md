@@ -36,6 +36,7 @@ func temporaryDisabledTest() {
 ### Runtime condition example
 
 ```swift
+import Foundation
 import Testing
 
 enum Runtime {
