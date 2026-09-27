@@ -36,13 +36,13 @@ public struct SettingsView: View {
                     }
                 }
                 Section("Storage") {
-                    VStack(alignment: .leading, spacing: DesignTokens.Spacing.xs) {
-                        Text("3.2 GB of 5 GB used")
-                        ProgressView(value: 3.2, total: 5)
-                            .tint(DesignTokens.Palette.brand)
+                    ProgressView(value: 3.2, total: 5) {
+                        Text("Used")
+                    } currentValueLabel: {
+                        Text("3.2 GB of 5 GB")
                     }
-                    .padding(.vertical, DesignTokens.Spacing.s)
-                    .background(DesignTokens.Palette.surface, in: .rect(cornerRadius: DesignTokens.Radius.card))
+                    .tint(DesignTokens.Palette.brand)
+                    .padding(.vertical, DesignTokens.Spacing.xs)
                 }
                 Section {
                     Button("Delete Account", role: .destructive) {}
@@ -53,6 +53,7 @@ public struct SettingsView: View {
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Save") {}
+                        .buttonStyle(.borderedProminent)
                 }
             }
             .animation(DesignTokens.Motion.standard, value: isSynced)
