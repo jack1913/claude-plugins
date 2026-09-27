@@ -165,25 +165,27 @@ func cook(_ ingredient: Ingredient, into dish: Dish) {
 }
 ```
 
-### Fixed-size `zip` with `InlineArray` (Swift 6.2+)
+### Fixed-size `zip` with `InlineArray` (Swift 6.2+, iOS/macOS 26+)
 
-A custom `zip` overload for `InlineArray` enforces equal-length arrays at compile time via a generic length parameter. This is not part of the standard library — you must define the helper yourself.
+A custom `zip` overload for `InlineArray` enforces equal-length arrays at compile time via a generic length parameter. This is not part of the standard library — you must define the helper yourself. `InlineArray` needs an OS 26 deployment target, so gate the helper and the test below that.
 
 ```swift
 import Testing
 
 // Custom helper: `zip` for two `InlineArray` values of the same length.
+@available(macOS 26, iOS 26, *)
 func zip<let N: Int, A, B>(
   _ a: InlineArray<N, A>,
   _ b: InlineArray<N, B>
 ) -> Zip2Sequence<[A], [B]> {
-  zip(Array(a), Array(b))
+  zip(a.indices.map { a[$0] }, b.indices.map { b[$0] })
 }
 
 // ✅ Compile error if lengths differ — enforced at compile time
+@available(macOS 26, iOS 26, *)
 @Test(arguments: zip(
-  InlineArray<2, Ingredient>(.rice, .potato),
-  InlineArray<2, Dish>(.onigiri, .curry)
+  [.rice, .potato] as InlineArray<2, Ingredient>,
+  [.onigiri, .fries] as InlineArray<2, Dish>
 ))
 func cook(_ ingredient: Ingredient, into dish: Dish) {
   #expect(cook(ingredient) == dish)
