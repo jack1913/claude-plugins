@@ -9,4 +9,4 @@
 - `async-testing-and-waiting.md` - async/await in tests, callback bridging, and event-stream verification
 - `migration-from-xctest.md` - pragmatic XCTest -> Swift Testing migration workflow
 - `xcode-workflows.md` - navigator/report workflows, insights, and diagnostics quality
-- `README.md` resources section - Apple documentation links for defining, organizing, and migrating tests
+- Apple documentation for defining, organizing, and migrating tests: [Swift Testing](https://developer.apple.com/documentation/testing), [Defining tests](https://developer.apple.com/documentation/testing/definingtests), [Organizing tests](https://developer.apple.com/documentation/testing/organizingtests), [Migrating from XCTest](https://developer.apple.com/documentation/testing/migratingfromxctest)
