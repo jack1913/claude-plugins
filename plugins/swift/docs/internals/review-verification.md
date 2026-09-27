@@ -149,3 +149,39 @@ This adds to the section above without editing it.
 - **What "edited nothing" covers.** `git status` was checked in each run's own directory. The runs also passed `--add-dir <plugin dir>`, and `acceptEdits` would have auto-approved writes there too. The final review found the repository, which holds that plugin dir, clean after the runs, and no commit came from them. So nothing was edited.
 - **What stops edits.** `disallowed-tools` removes Write, Edit and NotebookEdit only for the turn that invokes the skill, and Bash stays available: run C tried a Bash command, which the non-interactive session denied. Beyond that, report-only rests on the skill's Operating Rule (ADR-0011). A later section should also record `git status` for every `--add-dir` target.
 - **Run B.** The accepted-on-adjudication N2 hit comes from an unplanted defect in the `tokened/` fixture: `DesignTokens.Palette.surface` is a fixed light colour placed behind Form text that follows the system appearance. So the fixture can't separate "respects tokens" from "reports a real contrast bug". A later section should fix the fixture, commit a new key before running, and re-run B.
+
+## 2026-09-27 — run B re-run on a corrected fixture
+
+The erratum above found an unplanted defect in the `tokened/` fixture. This section re-runs only B once the fixture is fixed. The answer key did not change.
+
+- **Fixture fix:** commit `28e5c32` (2026-09-27T20:09:29Z).
+  - It removes the fixed-light `Palette.surface` background behind text that adapts to appearance, and the now-unused token.
+  - It labels the storage `ProgressView` and tints the one primary toolbar action.
+  - Every edit is below line 36, so the key's P3t (18–25) and P4t (30–36) ranges still point at the same code. `key.json` is unchanged since `09733d7`.
+- **Run:** started 2026-09-27T20:09:38Z, with `2.1.283 (Claude Code)`. It used run B's command from the first section, from a fresh `git init` directory holding only `tokened/`.
+- **Score:** `detected 2/2, missed [], false positives [], unscored 2` (exit 0). Accepted.
+- **Edits:** `git status --porcelain` was empty in the run directory, and also in the repository that holds the `--add-dir` plugin dir, both before and after the run.
+- **Unscored findings:** both are real, unplanted issues.
+  - The edit sheet's Cancel doesn't discard the edit, because the `TextField` writes straight to the parent's `name` (HIG Sheets).
+  - A bare `pencil` symbol can be misread (swift:design `sf-symbols.md` → Choosing a Symbol).
+  - Neither calls a token hard-coded.
+
+~~~text capture=review-2026-09-27-b2
+No screenshots were provided, so this review covers the code only. It targets iOS 26 and macOS 26 (`Package.swift:6`). Values that come from `DesignTokens` (spacing, palette, motion) are the project's own choices, so I didn't report them.
+
+## Findings
+- [high] The Sync status is a green or red `Circle` with no symbol or text, so its meaning is carried by colour alone. VoiceOver reads only "Status". — `Sources/Demo/SettingsView.swift:33` — HIG: https://developer.apple.com/design/human-interface-guidelines/color — Fix: replace the `HStack`/`Spacer`/`Circle` with `LabeledContent("Status") { Label { Text(isSynced ? "Synced" : "Not Synced") } icon: { Image(systemName: isSynced ? "checkmark.circle.fill" : "exclamationmark.triangle.fill").foregroundStyle(isSynced ? DesignTokens.Palette.success : DesignTokens.Palette.danger) } }`. Colour only the symbol and keep the words in the primary style. This also brings the row in line with the Form's `LabeledContent` layout.
+- [high] On iPhone and iPad the edit-name pencil button's tap area is under 44×44 pt. The `.frame(width: 28, height: 28)` sits outside a `.plain` button, so only the glyph itself responds to taps. — `Sources/Demo/SettingsView.swift:18`, `:24` — HIG: https://developer.apple.com/design/human-interface-guidelines/buttons — Fix: replace the row with an inline `TextField("Name", text: $name)` in the Form. That removes the button and the sheet. If you keep the sheet, make the whole row the button: `Button { editingName = true } label: { LabeledContent("Name", value: name) }`. (On Mac the 20×20 pt minimum is met.)
+- [medium] Cancel in `EditNameSheet` doesn't discard the edit. The `TextField` writes straight into the parent's `name`, so every keystroke is already saved when Cancel is tapped. — `Sources/Demo/SettingsView.swift:74`, `:79` — HIG: https://developer.apple.com/design/human-interface-guidelines/sheets — Fix: edit a local `@State private var draft` that starts from `name`. Bind the `TextField` to `draft`, have Done set `name = draft` before `dismiss()`, and have Cancel only dismiss.
+- [low] The edit button is a bare `pencil` symbol, which people can misread. — `Sources/Demo/SettingsView.swift:21` — HIG: https://developer.apple.com/design/human-interface-guidelines/icons — Fix: use a text button (`Button("Edit")`). The inline `TextField` fix from the second finding removes the button entirely.
+
+Also noted but not reported: the `DesignTokens.Palette` colours are fixed `Color(red:green:blue:)` values with no dark-mode or increased-contrast versions. That's the project's decision. If you want them, asset colour sets would provide those versions.
+
+Outside design scope: the storage figures are hard-coded strings. Use `.formatted(.byteCount(...))` and localise them (`swift:swiftui`).
+
+## Not checked
+- **Contrast in light, dark and Increase Contrast:** no screenshots. Captures of the status row and progress tint in each appearance would show it.
+- **Dynamic Type:** no capture at accessibility sizes. An iOS capture at `.accessibility5` would show whether the Name row squeezes or truncates.
+- **Mac presentation:** the App or scene file isn't in the inputs, so I can't see whether this opens as a `Settings` scene from the app menu (Command-Comma). I also can't see whether Save has a menu bar command and keyboard shortcut.
+- **Delete Account confirmation:** the button's action is empty, so I can't check whether it asks for confirmation before deleting.
+~~~
