@@ -1,6 +1,6 @@
 ---
 name: concurrency
-description: Use when writing, reviewing, or fixing Swift concurrency code — async/await, Task and task groups, actors, @MainActor and global actors, Sendable, isolation, data races and thread safety — and for Swift 6 migration or strict concurrency checking. Also use for concurrency compiler errors and warnings ("main actor-isolated … from a nonisolated context", "sending … risks causing data races", non-Sendable captures, isolated conformances), SwiftLint concurrency rules, refactoring callbacks or Combine to async/await, and testing async code.
+description: Use when writing, reviewing, or fixing Swift concurrency code — async/await, Task and task groups, actors, @MainActor and global actors, Sendable, isolation, data races and thread safety — and for Swift 6 migration or strict concurrency checking. Also use for concurrency compiler errors and warnings ("main actor-isolated … from a nonisolated context", "sending … risks causing data races", non-Sendable captures, isolated conformances), SwiftLint concurrency rules, refactoring callbacks or Combine to async/await, and diagnosing hanging, flaky or data-racing async tests (for writing or migrating tests, use swift:testing).
 ---
 # Swift Concurrency
 
