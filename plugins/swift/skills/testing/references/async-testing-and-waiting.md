@@ -74,6 +74,29 @@ import Testing
 }
 ```
 
+### Callback delivered later
+
+- A confirmation counts only the calls made before its closure returns. A call that arrives after the closure has returned is not counted, and nothing reports it. So a closure that starts the work and returns straight away sees zero calls, and the test fails.
+- When the callback fires later, for example on another queue, call the confirmation inside the callback and keep the closure waiting for a signal the callback sends: an `AsyncStream`, or `withCheckedContinuation` when the callback fires once. A checked continuation traps if it is resumed twice, so use the stream when a duplicate call is possible.
+- `expectedCount: 1` is the "exactly once" check. A second call that lands before the closure returns fails the test. Don't add a sleep to wait for late duplicates: the confirmation can't see calls made after its closure returns. If a late duplicate matters, the code under test needs a completion point the test can await.
+
+```swift
+import Testing
+
+@Test func saveReportsOnce() async {
+ await confirmation("onSave called", expectedCount: 1) { onSave in
+ let (values, continuation) = AsyncStream.makeStream(of: Int.self)
+ let saver = Saver { value in // onSave runs later on a background queue
+ onSave()
+ continuation.yield(value)
+ }
+ saver.save(3)
+ var iterator = values.makeAsyncIterator()
+ #expect(await iterator.next() == 3) // keeps the closure open until the callback arrives
+ }
+}
+```
+
 ## Event handlers and multi-fire callbacks
 
 - Avoid unsafe mutable shared counters from callback closures in strict concurrency mode.

@@ -1335,6 +1335,9 @@
     "Apple names that are no standalone index entry (@NSManaged attribute, nested notification name)": [
       "NSManaged",
       "NSSystemTimeZoneDidChange"
+    ],
+    "example types in our own snippets (declared elsewhere or implied)": [
+      "Saver"
     ]
   }
 }
