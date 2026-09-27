@@ -1,6 +1,6 @@
 # ADR-0007: A project's own design layer wins over the plugin's example literals
 
-- **Status:** accepted
+- **Status:** accepted; amended by ADR-0011 (the rule also binds swift:review)
 - **Date:** 2026-09-25
 - **Source:** commits `fb7f1d7` (rule added to `swift:swiftui`), `e2b00d9` (same rule in `swift:design`), `f0ad99f` (no-layer definition and the starter-token offer), `64ee756` (template AccentColor exception); `docs/superpowers/specs/2026-09-24-swift-plugin-design.md` §1 goal 2, §4 item 6; `docs/superpowers/plans/2026-09-24-swift-plugin.md` Global Constraints (the rule word for word in both skills); `UPSTREAM.md` Deviations row "`SKILL.md` Operating Rules"
 
