@@ -320,8 +320,8 @@ The delay itself is not UI work. Starting on `@MainActor` can add an avoidable e
 registrationRetryTask = Task { @concurrent [weak self] in
     do {
         try await Task.sleep(for: .milliseconds(100))
-    } catch is CancellationError {
-        return
+    } catch {
+        return // cancelled; Task.sleep throws only CancellationError, but its signature is untyped
     }
     guard let self else { return }
 
