@@ -1,6 +1,6 @@
 ---
 name: testing
-description: 'Use when writing, migrating, or reviewing Swift tests: Swift Testing (@Test, @Suite, #expect, #require, traits, tags, parameterized tests with arguments:, confirmation for events), test plans and parallel execution, and migrating XCTest suites (XCTestCase, XCTAssert, XCTestExpectation) to Swift Testing or deciding what stays on XCTest. Also use for flaky or slow tests and test structure. For diagnosing concurrency errors in async test code, use swift:concurrency.'
+description: 'Use when writing, migrating, or reviewing Swift tests: Swift Testing (@Test, @Suite, #expect, #require, traits, tags, parameterized tests with arguments:, confirmation for events), test plans and parallel execution, and migrating XCTest suites (XCTestCase, XCTAssert, XCTestExpectation) to Swift Testing or deciding what stays on XCTest. Also use for slow tests, flakiness from shared state or test order, and test structure. For hanging, flaky or data-racing async tests and concurrency errors in test code, use swift:concurrency.'
 ---
 
 # Swift Testing
