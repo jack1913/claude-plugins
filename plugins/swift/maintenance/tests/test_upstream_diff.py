@@ -80,11 +80,28 @@ class UpstreamDiffTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("baseline: 1.0.0", r.stdout)
 
+    def test_later_section_baseline_is_read_not_the_first(self):
+        # Real file order: SwiftUI first, Concurrency second. A parse that only
+        # checks the section exists and then takes the file's first Baseline
+        # line would read SwiftUI's 99.99.99 and fail on a missing ref.
+        repo = make_upstream(self.root, "skills/swift-concurrency", ["1.0.0", "1.1.0"])
+        md = self.root / "UPSTREAM.md"
+        md.write_text(
+            "# Upstream\n\n"
+            "## SwiftUI\n\n"
+            "- **Baseline tag:** `99.99.99` (`1111111`)\n\n"
+            "### Deviations\n\n"
+            "## Concurrency\n\n"
+            "- **Baseline tag:** `1.0.0` (`0000000`)\n"
+        )
+        r = run(["concurrency"], UPSTREAM_DIFF_URL=str(repo), UPSTREAM_MD=str(md))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("baseline: 1.0.0 -> ref: 1.1.0", r.stdout)
+
     def test_wrong_section_baseline_is_a_clear_error(self):
         # Two real sections: the swiftui one names a tag the repo lacks, the
         # concurrency one names a tag it has. Asking for swiftui must read the
-        # SwiftUI section (a global or first-match parse would find 1.0.0 and
-        # succeed instead of erroring).
+        # SwiftUI section and error on its missing 99.99.99 ref.
         repo = make_upstream(self.root, "skills/swift-concurrency", ["1.0.0"])
         md = self.root / "UPSTREAM.md"
         md.write_text(
