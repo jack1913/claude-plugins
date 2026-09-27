@@ -64,7 +64,9 @@ Shared mutable state is a major source of flakiness and parallel failures.
 import Testing
 
 enum Globals {
- static var token: String?
+ // nonisolated(unsafe) is part of the hazard: Swift 6 rejects the plain
+ // `static var` as global shared mutable state; this opts out of that check.
+ nonisolated(unsafe) static var token: String?
 }
 
 // Flaky pattern:
