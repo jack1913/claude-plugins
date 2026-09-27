@@ -4,3 +4,4 @@ maintenance/.cache/
 plugins/swift/evals/results/
 .claude/settings.local.json
 .onboard-repo-retired/
+.build/
