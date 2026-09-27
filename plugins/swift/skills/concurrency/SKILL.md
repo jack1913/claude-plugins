@@ -53,7 +53,7 @@ Skip Quick Fix Mode when any of these are true:
 
 | Diagnostic | First check | Smallest safe fix | Escalate to |
 |---|---|---|---|
-| `main actor-isolated ... can not be referenced (or mutated, or called) from a nonisolated context` | Is this truly UI-bound? | Isolate the caller to `@MainActor` or use `await MainActor.run { ... }` only when main-actor ownership is correct. | `references/actors.md`, `references/threading.md` |
+| `main actor-isolated ... can not be referenced (or mutated) from a nonisolated context`, or `call to main actor-isolated ... in a synchronous nonisolated context` | Is this truly UI-bound? | Isolate the caller to `@MainActor` or use `await MainActor.run { ... }` only when main-actor ownership is correct. | `references/actors.md`, `references/threading.md` |
 | `conformance of ... to protocol ... crosses into main actor-isolated code and can cause data races` | Must the requirement run on the actor? | Prefer isolated conformance (e.g., `extension Foo: @MainActor SomeProtocol`); use `nonisolated` only for truly nonisolated requirements. | `references/actors.md` |
 | `Sending value of non-Sendable type ... risks causing data races` | What isolation boundary is being crossed? | Keep access inside one actor, or convert the transferred value to an immutable/value type. | `references/sendable.md`, `references/threading.md` |
 | `SwiftLint async_without_await` | Is `async` actually required by protocol, override, or `@concurrent`? | Remove `async`, or use a narrow suppression with rationale. Never add fake awaits. | `references/linting.md` |
@@ -86,7 +86,7 @@ Prefer changes that preserve behavior while satisfying data-race safety:
 |---|---|---|
 | Single async operation | `async/await` | Default choice for sequential async work |
 | Fixed parallel operations | `async let` | Known count at compile time; auto-cancelled on throw |
-| Dynamic parallel operations | `withTaskGroup` | Unknown count; structured — awaits all children on scope exit, cancelling them only if the body throws or the enclosing task is cancelled |
+| Dynamic parallel operations | `withTaskGroup` | Unknown count; structured — awaits all children on scope exit and cancels them only when the enclosing task is cancelled or `cancelAll()` is called (`withThrowingTaskGroup` also cancels them when the body throws) |
 | Sync → async bridge | `Task { }` | Inherits actor context; use `Task.detached` only with documented reason |
 | Shared mutable state | `actor` | Prefer over locks/queues; keep isolated sections small |
 | UI-bound state | `@MainActor` | Only for truly UI-related code; justify isolation |
