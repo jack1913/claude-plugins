@@ -1,8 +1,8 @@
 ---
-# The mutation must hop back to the main actor explicitly; a plain `Task {}`
-# would inherit MainActor and run the heavy computeScore() on main, which the
-# prompt forbids — so the fix needs MainActor.run / assumeIsolated.
+# The score/badge mutation must hop back to the main actor explicitly.
+# (MainActor.assumeIsolated is not a hop: from the detached task it traps at
+# runtime, so it is rejected by no-assume-or-optout.md.)
 type: regex
-pattern: 'MainActor\.run|assumeIsolated'
+pattern: 'MainActor\.run'
 target: { source: file, path: Sources/Demo/PlayerModel.swift }
 ---
