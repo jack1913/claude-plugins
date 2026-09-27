@@ -37,6 +37,7 @@ import Testing
 ### Example: optional precondition + unwrapped usage
 
 ```swift
+import Foundation
 import Testing
 
 @Test func parsedURLHasHTTPS() throws {
@@ -112,6 +113,7 @@ import Testing
 ### Example: clean diagnostic descriptions
 
 ```swift
+import Foundation
 import Testing
 
 struct Receipt: CustomTestStringConvertible {
