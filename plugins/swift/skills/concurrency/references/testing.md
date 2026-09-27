@@ -1,5 +1,7 @@
 # Testing Concurrent Code
 
+> For writing or migrating tests in general (Swift Testing structure, traits, parameterized tests, XCTest migration), see the swift:testing skill. This file covers testing concurrent code: async waiting, confirmations, actor isolation and leak checks.
+
 Use this when:
 
 - You are writing async tests.
