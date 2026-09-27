@@ -36,7 +36,7 @@ System-level resource that runs instructions. High overhead for creation and swi
 
 > **Course Deep Dive**: This topic is covered in detail in [Lesson 7.1: How Threads relate to Tasks](https://www.swiftconcurrencycourse.com?utm_source=github&utm_medium=agent-skill&utm_campaign=lesson-reference)
 
-**Important (Swift 6+)**: Avoid using `Thread.current` inside async contexts. In Swift 6 language mode, `Thread.current` is unavailable from asynchronous contexts and will fail to compile. Prefer reasoning in terms of isolation domains; use Instruments and the debugger to observe execution when needed.
+**Important (Swift 6+)**: Avoid using `Thread.current` inside async contexts. In Swift 6 language mode, `Thread.current` is unavailable from asynchronous contexts and will fail to compile. Prefer reasoning in terms of isolation domains; use Instruments and the debugger to observe execution when needed. The samples below print `Thread.currentThread`, the helper from [Debugging Thread Execution](#debugging-thread-execution); `Thread.current` itself does not compile there.
 
 ## Cooperative Thread Pool
 
@@ -50,12 +50,12 @@ Swift creates only as many threads as CPU cores. Tasks share these threads effic
 4. **Resumption**: Task resumes on any available thread (not necessarily the same one)
 
 ```swift
-func example() async {
-    print("Started on: \(Thread.current)")
+func example() async throws {
+    print("Started on: \(Thread.currentThread)")
     
     try await Task.sleep(for: .seconds(1))
     
-    print("Resumed on: \(Thread.current)") // Likely different thread
+    print("Resumed on: \(Thread.currentThread)") // Likely different thread
 }
 ```
 
@@ -243,7 +243,7 @@ Tasks run on cooperative thread pool (background threads):
 
 ```swift
 Task {
-    print(Thread.current) // Background thread
+    print(Thread.currentThread) // Background thread
 }
 ```
 
@@ -255,7 +255,7 @@ Use `@MainActor` for main thread:
 @MainActor
 func updateUI() {
     Task {
-        print(Thread.current) // Main thread
+        print(Thread.currentThread) // Main thread
     }
 }
 ```
@@ -264,16 +264,16 @@ func updateUI() {
 
 ```swift
 @MainActor
-func updateUI() {
-    print("Main thread: \(Thread.current)")
+func updateUI() async {
+    print("Main thread: \(Thread.currentThread)")
     
     await backgroundTask() // Switches to background
     
-    print("Back on main: \(Thread.current)") // Returns to main
+    print("Back on main: \(Thread.currentThread)") // Returns to main
 }
 
 func backgroundTask() async {
-    print("Background: \(Thread.current)")
+    print("Background: \(Thread.currentThread)")
 }
 ```
 
@@ -288,7 +288,7 @@ func backgroundTask() async {
 ```swift
 class NotSendable {
     func performAsync() async {
-        print(Thread.current)
+        print(Thread.currentThread)
     }
 }
 
@@ -317,7 +317,7 @@ Force function to switch away from caller's isolation:
 ```swift
 @concurrent
 func performAsync() async {
-    print(Thread.current) // Always background
+    print(Thread.currentThread) // Always background
 }
 ```
 
@@ -340,7 +340,7 @@ nonisolated(nonsending) func storeTouch(...) async {
 ### Configuring default isolation
 
 **Build setting** (Xcode 16+):
-- Default Actor Isolation: `MainActor` or `None`
+- Default Actor Isolation: `MainActor` or `nonisolated` (the default)
 
 **Swift Package**:
 
@@ -442,11 +442,11 @@ Since tasks move between threads unpredictably:
 
 ```swift
 func example() async {
-    print("Thread 1: \(Thread.current)")
+    print("Thread 1: \(Thread.currentThread)")
     
     await someWork()
     
-    print("Thread 2: \(Thread.current)") // Different thread
+    print("Thread 2: \(Thread.currentThread)") // Different thread
 }
 ```
 
