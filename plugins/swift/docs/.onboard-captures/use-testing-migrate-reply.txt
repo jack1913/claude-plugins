@@ -1,0 +1,11 @@
+I've migrated `Tests/DemoTests/CartTests.swift` to Swift Testing, and `swift test` passes: 4 tests in 1 suite, and the combined rejection test runs once for each of its 2 inputs. XCTest now reports 0 tests, as expected.
+
+What changed:
+- **Imports and suite:** `import XCTest` became `import Testing`, and the `XCTestCase` class became a plain `struct CartTests`.
+- **Setup:** I removed `setUp()` and the `var cart: Cart!` property. Since `Cart` is a struct, each test simply creates its own `Cart()`.
+- **Test methods:** each `testXxx()` is now an `@Test func xxx()`, and `XCTAssertEqual` / `XCTAssertTrue` are now `#expect(...)`.
+- **Rejection tests:** `testRejectsZero` and `testRejectsNegative` are now one test, `rejectsNonPositiveQuantity`, which runs with the inputs `[0, -1]` using `#expect(throws: CartError(...))`.
+
+This makes two checks stricter than before:
+- The `-1` case now requires the specific `CartError("quantity must be positive")`, where the old test accepted any error. `Cart.add` throws that same error for any quantity ≤ 0, so it passes.
+- After a rejected add, the test now also checks that the cart is still empty.

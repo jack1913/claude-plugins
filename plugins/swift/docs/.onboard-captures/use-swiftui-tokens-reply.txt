@@ -1,0 +1,20 @@
+I added the settings screen in `Sources/App/SettingsView.swift`, and `swift build` succeeds for macOS. I haven't run the app, built for iOS, or looked at the preview.
+
+**What it shows:** a form with three sections:
+- **Account:** the name and email, each with a label.
+- **Notifications:** an on/off switch with a bell icon.
+- **Sign Out:** a button marked as destructive, so the system shows it in red.
+
+**How you use it:** the screen doesn't own any account data. You pass in the name and email, a binding for the notifications setting, and an `onSignOut` closure:
+
+```swift
+SettingsView(name: user.name, email: user.email,
+             notificationsEnabled: $prefs.notifications,
+             onSignOut: { session.signOut() })
+```
+
+**Styling:** it uses the grouped form style on both iOS and macOS and sets the title to "Settings". The switch uses your brand colour, `DesignTokens.Palette.brand`. The Sign Out button uses the system red rather than `DesignTokens.Palette.danger`, so it matches how iOS and macOS show destructive actions elsewhere. I can switch it to your token if you want. There's also a preview with sample data.
+
+**Two decisions for you:**
+- **On Mac:** Apple's guidelines say settings should open from the app menu (Command-Comma), not a toolbar button. To do that, put this view in a `Settings { … }` scene in your `App`. There's no `App` type in this package yet, so I didn't wire it up.
+- **Sign Out confirmation:** tapping Sign Out calls `onSignOut` straight away. If you want an "Are you sure?" prompt first, I can add one.

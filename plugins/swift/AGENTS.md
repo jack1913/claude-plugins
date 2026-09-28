@@ -39,6 +39,7 @@ A private Claude Code plugin marketplace with one plugin, `swift`, whose skills 
 | Design spec | `docs/superpowers/specs/2026-09-24-swift-plugin-design.md` |
 | Implementation plan | `docs/superpowers/plans/2026-09-24-swift-plugin.md` |
 | Operator manual | `docs/manual/README.md` |
+| Capability matrix: skills, topics, shared rules, eval cases | `docs/manual/reference/capabilities.md` |
 | Changelog | `CHANGELOG.md` |
 | Agent instruction layout, rule-vs-skill decision rule | `docs/internals/agent-instructions.md` |
 

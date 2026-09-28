@@ -1,0 +1,12 @@
+CASE                        WITH  W/OUT Δ      RUNS COST    NOTES
+callback-confirmation-test  1.00  0.73  +0.27  6    $0.72   
+glass-button-ios17          1.00  0.50  +0.50  6    $0.67   
+glass-toolbar-visionos      1.00  0.92  +0.08  6    $1.06   
+mainactor-detached-task     1.00  1.00  0.00   6    $0.67   
+parameterized-slug-tests    1.00  1.00  0.00   6    $0.58   
+preview-debug-guard         1.00  0.50  +0.50  6    $0.64   
+project-rule-over-skill     1.00  0.00  +1.00  6    $0.69   
+sendable-shared-cache       1.00  1.00  0.00   6    $0.73   
+settings-screen-no-tokens   1.00  0.83  +0.17  6    $0.87   
+
+9 case(s) · mean Δ +0.28 · 2333s · $6.63
