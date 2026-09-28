@@ -97,6 +97,13 @@ Names upstream uses that Apple's documentation index did not have on 2026-09-25.
 | `references/async-sequences.md`, `references/core-data.md`, `references/performance.md`, `references/threading.md` | Each "Course Deep Dive" callout that sat inside a `swift` code block now follows the block, unchanged. In `performance.md` two were mid-block: one split the before and after code of the optimization example, one split the "Use when" comment list | **Upstream bug, worth reporting upstream:** each fence closed after its callout, so the callout rendered as code and its words read as Swift; five blocks in four files |
 | `references/actors.md`, `references/core-data.md`, `references/memory-management.md`, `references/migration.md`, `references/performance.md`, `references/sendable.md`, `references/threading.md` | The ten unlabelled code blocks (decision trees, build-setting lists, fix-it and Instruments output) are labelled `text` | None of them is Swift; an unlabelled block reads as Swift to highlighters and to `check-apis`, which filed their words as unresolved names |
 
+### Commit notes
+
+Two Deviations rows landed one commit early, in the commit before the change they describe. The history stays as pushed; this is the map:
+
+- `6f37d29` changed `references/observation.md` (the pre-6.2 fallback runs its tracking on the MainActor); its row landed in `a586ed8`.
+- `6c24b9d` changed `references/memory-management.md` (Swift 6 rejects the class download manager); its row update landed in `3b57fe8`.
+
 ### Ported
 
 | Upstream ref | What we took | Date |
