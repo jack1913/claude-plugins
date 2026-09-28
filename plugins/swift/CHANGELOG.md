@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Eval case `project-rule-over-skill`: a project's AGENTS.md forbids the `async let` that `swift:concurrency` recommends. With the plugin it went from 0/3 to 3/3; without the plugin it scores 0/3.
+- Eval case `project-rule-over-skill`: a project's AGENTS.md forbids the `async let` that `swift:concurrency` recommends. With the plugin it went from 0/3 to 6/6; without the plugin it scores 0/3.
 
 ### Changed
 
