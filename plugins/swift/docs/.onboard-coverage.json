@@ -3,7 +3,7 @@
   {"surface": "Enable it in a Swift repo", "slug": "enable-it-in-a-swift-repo", "tier": "principal", "page": "docs/manual/getting-started/enable-in-a-swift-repo.md", "status": "covered"},
   {"surface": "Usage", "slug": "usage", "tier": "principal", "page": "docs/manual/use/build-a-swiftui-screen.md", "status": "covered"},
   {"surface": "What it covers", "slug": "what-it-covers", "tier": "principal", "page": "docs/manual/reference/capabilities.md", "status": "covered"},
-  {"surface": "Versioning", "slug": "versioning", "tier": "principal", "page": "docs/manual/getting-started/enable-in-a-swift-repo.md", "status": "covered"},
+  {"surface": "Versioning", "slug": "versioning", "tier": "principal", "page": "docs/manual/work-on-it.md", "status": "covered"},
   {"surface": "Work on it", "slug": "work-on-it", "tier": "principal", "page": "docs/manual/work-on-it.md", "status": "covered"},
   {"surface": "Licenses", "slug": "licenses", "tier": "niche", "page": null, "status": "deferred"}
 ]

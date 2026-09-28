@@ -1,0 +1,60 @@
+import SwiftUI
+
+public struct Account: Sendable, Equatable {
+    public var name: String
+    public var email: String
+
+    public init(name: String, email: String) {
+        self.name = name
+        self.email = email
+    }
+}
+
+public struct SettingsView: View {
+    let account: Account
+    @Binding var notificationsEnabled: Bool
+    let onSignOut: () -> Void
+
+    public init(
+        account: Account,
+        notificationsEnabled: Binding<Bool>,
+        onSignOut: @escaping () -> Void
+    ) {
+        self.account = account
+        self._notificationsEnabled = notificationsEnabled
+        self.onSignOut = onSignOut
+    }
+
+    public var body: some View {
+        Form {
+            Section("Account") {
+                LabeledContent("Name", value: account.name)
+                LabeledContent("Email", value: account.email)
+            }
+
+            Section {
+                Toggle("Notifications", isOn: $notificationsEnabled)
+            }
+
+            Section {
+                Button("Sign Out", role: .destructive, action: onSignOut)
+            }
+        }
+        .formStyle(.grouped)
+        .navigationTitle("Settings")
+    }
+}
+
+#if DEBUG
+#Preview {
+    @Previewable @State var notificationsEnabled = true
+
+    NavigationStack {
+        SettingsView(
+            account: Account(name: "Jane Appleseed", email: "jane@example.com"),
+            notificationsEnabled: $notificationsEnabled,
+            onSignOut: {}
+        )
+    }
+}
+#endif

@@ -27,14 +27,14 @@ Nothing in the app opens this screen yet. On iPhone and iPad, it can go inside a
 The project has no design tokens yet, so the screen uses the system's standard spacing and styles. If you'd like, I can add a starter set of named spacing, corner-radius and animation values.
 ```
 
-The view it wrote, shown without its small `Account` type and its `init`:
+The view it wrote. The file's small `Account` type and the `init` are left out where you see `…`:
 
-```swift
+```text capture=use-swiftui-plain-code
 public struct SettingsView: View {
     let account: Account
     @Binding var notificationsEnabled: Bool
     let onSignOut: () -> Void
-
+…
     public var body: some View {
         Form {
             Section("Account") {
@@ -89,7 +89,12 @@ Build complete! (0.33 sec)
 
 ## With your own design tokens
 
-When the repo has its own design layer, the skills use it instead of literals ([ADR-0007](../../adr/ADR-0007-project-design-layer-wins.md)). The same prompt, in a package with a `DesignTokens` enum:
+When the repo has its own design layer, the skills translate any literal into it ([ADR-0007](../../adr/ADR-0007-project-design-layer-wins.md)). The same prompt, in a package with a `DesignTokens` enum:
+
+- the one custom colour, the toggle tint, comes from the project's token;
+- Sign Out keeps the destructive role, whose system red is a semantic style rather than a literal, so there's nothing to translate.
+
+The reply says both, and offers to switch:
 
 ```text capture=use-swiftui-tokens-reply
 **Styling:** it uses the grouped form style on both iOS and macOS and sets the title to "Settings". The switch uses your brand colour, `DesignTokens.Palette.brand`. The Sign Out button uses the system red rather than `DesignTokens.Palette.danger`, so it matches how iOS and macOS show destructive actions elsewhere. I can switch it to your token if you want. There's also a preview with sample data.
@@ -97,8 +102,8 @@ When the repo has its own design layer, the skills use it instead of literals ([
 
 ## Reproduce it headless
 
-The runs above came from this checkout on 2026-09-28 with Claude Code 2.1.283. Replies vary from run to run; the behaviour in the table is what the eval cases pin ([capabilities](../reference/capabilities.md#eval-cases)).
+The runs above came from this checkout on 2026-09-28 with Claude Code 2.1.283. Replies vary from run to run; the behaviour in the table is what the eval cases pin ([capabilities](../reference/capabilities.md#eval-cases)). `<checkout>` is your clone of `jack1913/swift-plugin`. `--setting-sources project,local` leaves out your user settings and hooks, as the recorded runs did; your user CLAUDE.md still applies.
 
 ```bash
-claude -p "Add a settings screen in Sources/App/SettingsView.swift: show the account's name and email, a notifications toggle, and a Sign Out button." --plugin-dir ~/Dev/claude_skills/swift-plugin/plugins/swift --permission-mode acceptEdits --allowedTools "Bash(swift build:*)"
+claude -p "Add a settings screen in Sources/App/SettingsView.swift: show the account's name and email, a notifications toggle, and a Sign Out button." --plugin-dir <checkout>/plugins/swift --setting-sources project,local --permission-mode acceptEdits --allowedTools "Bash(swift build:*)"
 ```

@@ -108,6 +108,8 @@ Every change under a forked skill's folder (`plugins/swift/skills/swiftui/`, `pl
 
 ## Release
 
+Versions follow SemVer, and `version` in `plugins/swift/.claude-plugin/plugin.json` is the only place the version lives ([ADR-0003](../adr/ADR-0003-explicit-semver-one-version-home.md)). Before 1.0, a breaking change bumps the minor version (0.2.0 renamed the marketplace), and a feature or fix bumps the patch. Each release gets the tag `swift--v<version>`, created by `claude plugin tag`.
+
 Prerequisite: the `origin` remote points at `jack1913/swift-plugin`.
 
 1. Run the `changelog-release` skill. It raises `version` in `plugins/swift/.claude-plugin/plugin.json`, writes `CHANGELOG.md` and stages both; it never commits (`.claude/skills/changelog-release/SKILL.md`).

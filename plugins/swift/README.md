@@ -2,7 +2,7 @@
 
 The `swift` plugin gives Claude Code five skills for writing correct, current, Apple-native Swift: SwiftUI, Apple design, Swift 6 concurrency, Swift Testing, and an on-demand Human Interface Guidelines review.
 
-Version 0.2.1 · [Changelog](CHANGELOG.md) · [Manual](docs/manual/README.md) · Marketplace `jack1913-plugins` · Private
+[Changelog](CHANGELOG.md) (current version and every release) · [Manual](docs/manual/README.md) · Marketplace `jack1913-plugins` · Private
 
 - [Requirements](#requirements)
 - [Enable it in a Swift repo](#enable-it-in-a-swift-repo)
@@ -37,23 +37,23 @@ Ask in plain words. The right skills load on their own:
 
 One real run wrote a native settings form, and `swift build` passed:
 
-```swift
-Form {
-    Section("Account") {
-        LabeledContent("Name", value: account.name)
-        LabeledContent("Email", value: account.email)
-    }
+```text capture=use-swiftui-plain-code
+        Form {
+            Section("Account") {
+                LabeledContent("Name", value: account.name)
+                LabeledContent("Email", value: account.email)
+            }
 
-    Section {
-        Toggle("Notifications", isOn: $notificationsEnabled)
-    }
+            Section {
+                Toggle("Notifications", isOn: $notificationsEnabled)
+            }
 
-    Section {
-        Button("Sign Out", role: .destructive, action: onSignOut)
-    }
-}
-.formStyle(.grouped)
-.navigationTitle("Settings")
+            Section {
+                Button("Sign Out", role: .destructive, action: onSignOut)
+            }
+        }
+        .formStyle(.grouped)
+        .navigationTitle("Settings")
 ```
 
 More, each built around a real run:
@@ -75,11 +75,15 @@ More, each built around a real run:
 | `swift:testing` | Automatically | Swift Testing, parameterized tests, `confirmation`, XCTest migration |
 | `swift:review` | Only as `/swift:review` | An HIG review of a screen from its code or a screenshot; reports, never edits |
 
-Every skill that writes code follows your repo's own rules first: its design tokens, and its AGENTS.md or CLAUDE.md. Nine eval cases pin the behaviour. The full matrix of topics, shared rules and eval results is in [What the plugin covers](docs/manual/reference/capabilities.md).
+The skills follow your repo's own rules first:
+- `swiftui`, `design` and `review` use your design tokens ([ADR-0007](docs/adr/ADR-0007-project-design-layer-wins.md));
+- `swiftui`, `concurrency` and `testing` follow your AGENTS.md and CLAUDE.md over their own defaults ([ADR-0013](docs/adr/ADR-0013-project-rules-win-over-skill-defaults.md)).
+
+Nine eval cases check the skills' behaviour, and `project-rule-over-skill` is the one that checks the AGENTS.md rule. The full matrix of topics, shared rules and eval results is in [What the plugin covers](docs/manual/reference/capabilities.md).
 
 ## Versioning
 
-- SemVer. The version lives only in `plugins/swift/.claude-plugin/plugin.json`, and each release is tagged `swift--v<version>`.
+- SemVer. The version lives only in `plugins/swift/.claude-plugin/plugin.json` ([ADR-0003](docs/adr/ADR-0003-explicit-semver-one-version-home.md)), and each release is tagged `swift--v<version>`.
 - Before 1.0, a breaking change bumps the minor version (0.2.0 renamed the marketplace), and anything else bumps the patch.
 - Installs are copies, so a repo picks up a release with `claude plugin marketplace update jack1913-plugins` and `claude plugin update swift@jack1913-plugins`, then a new session.
 - Every release is listed in the [Changelog](CHANGELOG.md).
@@ -91,7 +95,7 @@ Every skill that writes code follows your repo's own rules first: its design tok
 | Try a change | `claude --plugin-dir ~/Dev/claude_skills/swift-plugin/plugins/swift` |
 | Check APIs against Apple | `python3 maintenance/check-apis.py --strict` |
 | Unit tests | `python3 -m unittest discover maintenance/tests` |
-| Evals | `claude plugin eval plugins/swift --scaffold --trust-plugin --max-cost-usd <budget> --allow-tools Write Edit` |
+| Evals | `claude plugin eval plugins/swift --scaffold --trust-plugin --no-publish --max-cost-usd <budget> --allow-tools Write Edit` |
 | Upstream changes | `maintenance/upstream-diff.sh <swiftui\|concurrency\|testing> [ref]` |
 | Validate manifests | `claude plugin validate . && claude plugin validate plugins/swift` |
 

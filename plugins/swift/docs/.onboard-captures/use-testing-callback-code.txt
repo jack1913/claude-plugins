@@ -1,0 +1,24 @@
+import Testing
+@testable import Demo
+
+@Suite struct SaverTests {
+    @Test(.timeLimit(.minutes(1)))
+    func saveCallsOnSaveOnceWithValue() async {
+        let (values, continuation) = AsyncStream.makeStream(of: Int.self)
+
+        await confirmation("onSave is called", expectedCount: 1) { saved in
+            let saver = Saver { n in
+                saved()
+                continuation.yield(n)
+            }
+
+            saver.save(3)
+
+            // onSave fires on a background queue, so wait for it before the
+            // confirmation closure returns.
+            var iterator = values.makeAsyncIterator()
+            let value = await iterator.next()
+            #expect(value == 3)
+        }
+    }
+}

@@ -10,7 +10,7 @@ Ask for a test, or for a migration. `swift:testing` loads on its own, writes Swi
 
 One real run wrote:
 
-```swift
+```text capture=use-testing-callback-code
 @Suite struct SaverTests {
     @Test(.timeLimit(.minutes(1)))
     func saveCallsOnSaveOnceWithValue() async {
@@ -66,15 +66,15 @@ What changed:
 
 The two rejection tests became one parameterized test:
 
-```swift
-@Test(arguments: [0, -1])
-func rejectsNonPositiveQuantity(_ quantity: Int) {
-    var cart = Cart()
-    #expect(throws: CartError(reason: "quantity must be positive")) {
-        try cart.add("apple", quantity: quantity)
+```text capture=use-testing-migrate-code
+    @Test(arguments: [0, -1])
+    func rejectsNonPositiveQuantity(_ quantity: Int) {
+        var cart = Cart()
+        #expect(throws: CartError(reason: "quantity must be positive")) {
+            try cart.add("apple", quantity: quantity)
+        }
+        #expect(cart.items.isEmpty)
     }
-    #expect(cart.items.isEmpty)
-}
 ```
 
 ```text capture=use-testing-migrate-test
@@ -95,8 +95,8 @@ func rejectsNonPositiveQuantity(_ quantity: Int) {
 
 ## Reproduce it headless
 
-Runs from this checkout on 2026-09-28 with Claude Code 2.1.283. The callback scaffold is the eval case `callback-confirmation-test`. Replies vary from run to run; the eval cases pin the behaviour ([capabilities](../reference/capabilities.md#eval-cases)).
+Runs from this checkout on 2026-09-28 with Claude Code 2.1.283. The callback scaffold is the eval case `callback-confirmation-test`. Replies vary from run to run; the eval cases pin the behaviour ([capabilities](../reference/capabilities.md#eval-cases)). `<checkout>` is your clone of `jack1913/swift-plugin`. `--setting-sources project,local` leaves out your user settings and hooks, as the recorded runs did; your user CLAUDE.md still applies.
 
 ```bash
-claude -p "<the prompt above>" --plugin-dir ~/Dev/claude_skills/swift-plugin/plugins/swift --permission-mode acceptEdits --allowedTools "Bash(swift test:*)"
+claude -p "<the prompt above>" --plugin-dir <checkout>/plugins/swift --setting-sources project,local --permission-mode acceptEdits --allowedTools "Bash(swift test:*)"
 ```
