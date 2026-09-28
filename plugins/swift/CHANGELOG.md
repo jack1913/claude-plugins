@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- An MIT license, copyright 2026 Jacek Pytlik: `LICENSE.md` at the repo root, a copy in `plugins/swift/` so it travels with every install, and `"license": "MIT"` in `plugin.json`. The upstream MIT notices in `plugins/swift/NOTICE.md` are unchanged.
+
 ## [0.2.2] - 2026-09-28
 
 Closes a loophole in `swift:testing`'s confirmation rule, and gives the plugin a proper landing page and a usage manual. Each new page is built around a real, recorded run.

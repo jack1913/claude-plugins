@@ -103,4 +103,4 @@ The full workflow, releases included: [Work on the plugin](docs/manual/work-on-i
 
 ## Licenses
 
-Third-party text and its MIT notices: `plugins/swift/NOTICE.md`. Upstreams' licenses: `plugins/swift/skills/swiftui/LICENSE-upstream`, `plugins/swift/skills/concurrency/LICENSE-upstream`, `plugins/swift/skills/testing/LICENSE-upstream`.
+MIT: [`LICENSE.md`](LICENSE.md), copyright 2026 Jacek Pytlik. A copy ships inside the plugin at `plugins/swift/LICENSE.md`. Third-party text and its MIT notices: `plugins/swift/NOTICE.md`. Upstreams' licenses: `plugins/swift/skills/swiftui/LICENSE-upstream`, `plugins/swift/skills/concurrency/LICENSE-upstream`, `plugins/swift/skills/testing/LICENSE-upstream`.

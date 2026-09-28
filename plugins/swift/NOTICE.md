@@ -1,6 +1,6 @@
 # Third-party notices
 
-The `swift` plugin contains text from the projects below, each under the MIT License. Each section says what was taken and carries that project's copyright and permission notice.
+The `swift` plugin is licensed under the MIT License (`LICENSE.md`, copyright 2026 Jacek Pytlik). It also contains text from the projects below, each under the MIT License. Each section says what was taken and carries that project's copyright and permission notice.
 
 ## AvdLee/SwiftUI-Agent-Skill
 

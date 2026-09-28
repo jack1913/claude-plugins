@@ -28,6 +28,7 @@ A private Claude Code plugin marketplace with one plugin, `swift`, whose skills 
 | `swift:review` (ours, slash-only) | `plugins/swift/skills/review/SKILL.md` |
 | Generated platform table | `plugins/swift/skills/swiftui/references/platform-availability.md` |
 | Upstream baselines, Deviations, Ported, Findings (one section per upstream) | `UPSTREAM.md` |
+| License (MIT), one copy at the root and one in the shipped folder | `LICENSE.md`, `plugins/swift/LICENSE.md` |
 | Third-party notices | `plugins/swift/NOTICE.md` |
 | API checker CLI | `maintenance/check-apis.py` → `maintenance/apicheck/cli.py` |
 | API manifest: frameworks, claims, ignore list | `maintenance/apis.json` |
