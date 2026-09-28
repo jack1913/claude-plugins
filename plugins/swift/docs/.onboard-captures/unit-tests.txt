@@ -2,19 +2,19 @@
 [record]   template: SwiftUI
 [record]   device:   (host)
 [record]   target:   attach TestApp
-[record]   output:   <redacted>/tmpaimee96i/session.trace
-[record] stop via: Ctrl+C, `touch <redacted>/tmpaimee96i/stop-trace`
-[record] cmd: xctrace record --template SwiftUI --output <redacted>/tmpaimee96i/session.trace --attach TestApp
+[record]   output:   <redacted>/tmp76j2aw8f/session.trace
+[record] stop via: Ctrl+C, `touch <redacted>/tmp76j2aw8f/stop-trace`
+[record] cmd: xctrace record --template SwiftUI --output <redacted>/tmp76j2aw8f/session.trace --attach TestApp
 .[record] starting xctrace record
 [record]   template: SwiftUI
 [record]   device:   (host)
 [record]   target:   attach TestApp
-[record]   output:   <redacted>/tmpcvpift4v/session.trace
-[record] stop via: Ctrl+C, `touch <redacted>/tmpcvpift4v/stop-trace`
-[record] cmd: xctrace record --template SwiftUI --output <redacted>/tmpcvpift4v/session.trace --attach TestApp
-[record] stop-file detected (<redacted>/tmpcvpift4v/stop-trace); stopping xctrace.
+[record]   output:   <redacted>/tmpk1uh7rmv/session.trace
+[record] stop via: Ctrl+C, `touch <redacted>/tmpk1uh7rmv/stop-trace`
+[record] cmd: xctrace record --template SwiftUI --output <redacted>/tmpk1uh7rmv/session.trace --attach TestApp
+[record] stop-file detected (<redacted>/tmpk1uh7rmv/stop-trace); stopping xctrace.
 .....................................
 ----------------------------------------------------------------------
-Ran 130 tests in 2.499s
+Ran 130 tests in 2.419s
 
 OK

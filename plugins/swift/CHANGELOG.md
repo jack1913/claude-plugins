@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-28
+
+The code skills now follow a project's own rules. `swift:swiftui`, `swift:concurrency` and `swift:testing` look for the project's AGENTS.md and CLAUDE.md before writing code, and follow them where they conflict with the skill's defaults. Two flaky eval graders are fixed, and every eval case now passes at 1.00 with the plugin.
+
 ### Fixed
 
 - `swift:swiftui`, `swift:concurrency` and `swift:testing` now look for the project's own rules (AGENTS.md, CLAUDE.md, project skills) and follow them where they conflict with the skill's defaults, saying which rule they followed. Before, a project that forbids `async let` still got it from `swift:concurrency` whenever its rule wasn't already in context (ADR-0013).
@@ -23,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The manual's move from `swift-plugin` to `jack1913-plugins` has now been run: in a scratch repo, then in a second repo. It now says that `marketplace remove` uninstalls the old plugin in every repo, and that in the repos moved after the first, the old settings entries have to be deleted by hand. This closes the known gap listed for 0.2.0.
+- Known gap: with the fixed grader, `mainactor-detached-task` also scores 1.00 without the plugin. Like `parameterized-slug-tests` and `sendable-shared-cache`, it now guards against regressions rather than showing the plugin's value.
 
 ## [0.2.0] - 2026-09-28
 
