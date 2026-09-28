@@ -2,7 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-09-27
-- **Source:** `docs/superpowers/specs/2026-09-26-swift-skills-part2-design.md` §2 (the `swift:review` rows), §6, §8; `docs/superpowers/plans/2026-09-27-swift-skills-part2-review.md` Task 1 (frontmatter probe, 2026-09-27); ADR-0007 (the rule this extends); ADR-0008 (glass stays opt-in)
+- **Source:** `docs/superpowers/specs/2026-09-26-swift-skills-part2-design.md` §2 (the `swift:review` rows), §6, §8; `docs/superpowers/plans/2026-09-27-swift-skills-part2-review.md` Task 1 (frontmatter probe, 2026-09-27); commits `24d73ae` (the skill), `09733d7` (verification fixtures, answer key, scorer), `bef9aa6` (first verification record), `e26fe0b` (report-only scoped to what `disallowed-tools` enforces), `28e5c32`/`c32d8ec` (run B re-run on a corrected fixture), `1d980d5`/`9903246`/`03e9a90` (Mac hit targets, scorer, re-run); ADR-0007 (the rule this extends); ADR-0008 (glass stays opt-in)
 
 ## Context
 
@@ -33,4 +33,4 @@ Rejected:
 - A change to `swift:review`'s method re-runs the verification, which appends a new dated section to the record; the old sections stay as they are.
 - A `swift:design` Decision Rule edit re-checks the review checklist questions and findings-format severities that name it; update-docs' cross-surface row lists that check, because nothing fails a build when they drift.
 - Three skills now carry the project-layer rule word for word (`swift:swiftui`, `swift:design`, `swift:review`), so changing it is a three-file edit.
-- `claude plugin details` over-reports `swift:review`'s always-on cost. The probe above is the evidence that the real cost is zero.
+- `claude plugin details` over-reports `swift:review`'s always-on cost. The evidence that the real cost is zero is the probe above, plus the 2026-09-28 check against the shipped plugin in `docs/internals/review-verification.md`.
