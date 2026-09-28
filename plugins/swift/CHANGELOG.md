@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-09-28
+
+A maintenance release: no skills were added.
+- `swift:review` now judges Mac controls by Mac sizes.
+- Five course callouts in `swift:concurrency` were stuck inside code blocks, so they rendered as code. They're fixed.
+- `check-apis` stops reading prose as Swift, which shrinks its ignore list from 317 names to 231.
+- `swift:review`'s verification was re-run with a stricter scorer.
+
+### Fixed
+
+- `swift:review`:
+  - it judges a Mac control against the Mac sizes (20×20 pt minimum, 28×28 pt default) instead of the 44×44 pt touch target, so standard Mac controls are no longer reported;
+  - a hit region a screenshot can't show goes under "Not checked" instead of becoming a finding.
+- `swift:concurrency`: five "Course Deep Dive" callouts sat inside `swift` code blocks and rendered as code, two of them splitting an example in half. Each now follows its block.
+- `swift:concurrency` and `swift:swiftui`: twelve decision trees, build-setting lists and tool-output blocks are marked as text, not Swift.
+- `check-apis` no longer reads Markdown headings, shell variables, command-line flags, file paths or name globs inside code spans as Swift names. No real API name dropped out of the check.
+
+### Changed
+
+- The `check-apis` ignore list drops 86 names that no longer need ignoring, and every remaining group's reason now fits its names. 14 names had been filed under the wrong reason.
+- The `swift:review` verification scorer:
+  - matches a finding by its violation, not its fix;
+  - reads `:41–72`-style line continuations;
+  - checks each pixel measurement for its own "estimated" mark.
+- `docs/internals/review-verification.md` gains a re-run on the new key: 8/8, 2/2 and 4/4, with no false positives and no file edits. It also records that `swift:review` stays out of the model's context.
+- The marketplace has a top-level description, so `claude plugin validate .` passes with no warnings.
+- `UPSTREAM.md` maps the two concurrency Deviations rows that landed one commit early.
+- Known gap: the headless `--add-dir` note for `swift:review` is tested with `--plugin-dir`, not yet with an installed copy.
+
 ## [0.1.6] - 2026-09-27
 
 Adds `swift:review`, the plugin's fifth skill. It is our own text, not a fork: an on-demand HIG review of a SwiftUI screen from its code and/or screenshots, run only as `/swift:review`. It judges against `swift:design`'s rules and carries the same project-layer rule. `swift:review` has no eval case: slash-only skills can't be driven by the eval harness, so it ships with a recorded end-to-end verification instead. This release also closes a gap in `swift:testing` that made `callback-confirmation-test` flaky.
