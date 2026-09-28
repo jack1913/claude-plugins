@@ -4,6 +4,10 @@ description: Use when writing, reviewing, or fixing Swift concurrency code — a
 ---
 # Swift Concurrency
 
+## Project Rules
+
+- Before applying this skill's defaults, read the project's own instructions (AGENTS.md, CLAUDE.md, a project skill) if they aren't already in context; when one of their rules conflicts with this skill, follow the project's rule and say which one you followed
+
 ## Fast Path
 
 Before proposing a fix:
