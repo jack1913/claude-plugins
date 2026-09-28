@@ -42,7 +42,9 @@ Then start a new session or run `/reload-plugins`; the update needs a restart to
 
 ## Move an install from swift-plugin
 
-Until 0.2.0 the marketplace was named `swift-plugin`, so older installs are `swift@swift-plugin`. The marketplace name is part of the plugin's ID, and Claude Code's `renames` map covers plugin names only, not marketplace names. So an older install moves by hand. Run inside the Swift repo:
+Until 0.2.0 the marketplace was named `swift-plugin`, so older installs are `swift@swift-plugin`. The marketplace name is part of the plugin's ID, and Claude Code's `renames` map covers plugin names only, not marketplace names. So an older install moves by hand.
+
+In the first repo you move, run:
 
 ```bash
 claude plugin uninstall swift@swift-plugin --scope project
@@ -51,7 +53,14 @@ claude plugin marketplace add jack1913/swift-plugin --scope project
 claude plugin install swift@jack1913-plugins --scope project
 ```
 
-`marketplace remove` without `--scope` drops the old marketplace from every scope you can edit ([Plugin marketplaces: remove](https://code.claude.com/docs/en/plugin-marketplaces)). The repo's committed `.claude/settings.json` then lists `swift@jack1913-plugins` under `enabledPlugins`, and `jack1913-plugins` under `extraKnownMarketplaces`. Commit that change so everyone who clones the repo gets the new ID ([ADR-0012](../../adr/ADR-0012-marketplace-named-jack1913-plugins.md)).
+The repo's `.claude/settings.json` then lists only the new entries: `swift@jack1913-plugins` under `enabledPlugins` and `jack1913-plugins` under `extraKnownMarketplaces`.
+
+`marketplace remove` also uninstalls `swift@swift-plugin` in every other repo on the machine, because it drops the marketplace from your user plugin data ([Plugin marketplaces: remove](https://code.claude.com/docs/en/plugin-marketplaces)). The plugin stops loading there until you move those repos too. In each of them:
+- the first two commands report "not found";
+- `.claude/settings.json` keeps the old `swift@swift-plugin` and `swift-plugin` entries, so delete both by hand;
+- then run the `marketplace add` and `install` lines. `add` reports the marketplace is "already on disk".
+
+Commit each repo's settings change, so everyone who clones it gets the new ID ([ADR-0012](../../adr/ADR-0012-marketplace-named-jack1913-plugins.md)).
 
 ## What each skill covers
 

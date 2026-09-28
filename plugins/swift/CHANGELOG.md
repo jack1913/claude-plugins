@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The manual's move from `swift-plugin` to `jack1913-plugins` has now been run: in a scratch repo, then in a second repo. It now says that `marketplace remove` uninstalls the old plugin in every repo, and that in the repos moved after the first, the old settings entries have to be deleted by hand. This closes the known gap listed for 0.2.0.
+
 ## [0.2.0] - 2026-09-28
 
 **Breaking:** the marketplace is renamed from `swift-plugin` to `jack1913-plugins`, so the install ID changes from `swift@swift-plugin` to `swift@jack1913-plugins`. Claude Code can't migrate a marketplace name, so move each older install by hand:
