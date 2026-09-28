@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `swift:swiftui`, `swift:concurrency` and `swift:testing` now look for the project's own rules (AGENTS.md, CLAUDE.md, project skills) and follow them where they conflict with the skill's defaults, saying which rule they followed. Before, a project that forbids `async let` still got it from `swift:concurrency` whenever its rule wasn't already in context (ADR-0013).
+- Two eval graders that failed correct answers now and then:
+  - `glass-toolbar-visionos` demanded a `GlassEffectContainer` even when the bar had a single glass surface, which needs none;
+  - `mainactor-detached-task` missed a main-actor task that awaits a detached task's `.value` before mutating.
+
+  Both misses showed up in 0.2.0 as well.
 
 ### Added
 
