@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `swift:testing` now rules out a sleep *inside* a confirmation's closure too, not only after it. One of four natural runs had put a 100 ms `Task.sleep` there to catch a second callback, turning the test into a timing test. After the fix, `callback-confirmation-test` passed 6/6 and three natural runs used no sleep.
+
 ## [0.2.1] - 2026-09-28
 
 The code skills now follow a project's own rules. `swift:swiftui`, `swift:concurrency` and `swift:testing` look for the project's AGENTS.md and CLAUDE.md before writing code, and follow them where they conflict with the skill's defaults. Two flaky eval graders are fixed, and every eval case now passes at 1.00 with the plugin.
