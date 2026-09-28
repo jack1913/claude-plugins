@@ -19,7 +19,7 @@ Use this skill to write, review, migrate, and debug Swift tests with modern Swif
 6. Use `@available` on test functions for OS-gated behavior instead of runtime `#available` checks inside test bodies; never annotate suite types with `@available`.
 7. Keep migration advice incremental: convert assertions first, then organize suites, then introduce parameterization/traits.
 8. Only import `Testing` in test targets, never in app/library/binary targets.
-9. Before applying this skill's defaults, read the project's own instructions (AGENTS.md, CLAUDE.md, a project skill) if they aren't already in context; when one of their rules conflicts with this skill, follow the project's rule and say which one you followed.
+9. Before writing or changing code, look for the project's own instructions (AGENTS.md and CLAUDE.md at the repository root, and any project skill) and read the ones not already in context; when one of their rules conflicts with this skill, follow the project's rule and say which one you followed.
 
 ## First 60 seconds (triage template)
 
