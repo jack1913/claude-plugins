@@ -1000,7 +1000,7 @@
     }
   ],
   "ignore": {
-    "example types in upstream snippets (declared elsewhere or implied)": [
+    "example types and functions in upstream snippets (declared elsewhere or implied)": [
       "APIClient",
       "ActionButton",
       "AddArticleView",
@@ -1126,7 +1126,6 @@
       "ProductReviews",
       "Profile",
       "ProfileButton",
-      "ProfileModel",
       "ProfileView",
       "RawItem",
       "RecentBuild",
@@ -1178,41 +1177,51 @@
       "searchArticles",
       "updateLikeStatus"
     ],
-    "example views in our own snippets that stand in for app content": [
+    "example types and views in our own snippets (declared elsewhere or implied)": [
       "AppColor",
       "ConcertView",
       "DesignTokens",
       "ForYouView",
       "InboxView",
       "LibraryView",
+      "ProfileModel",
+      "Saver",
       "StageView"
     ],
     "SwiftUI runtime symbols named in Instruments output": [
       "EnvironmentWriter",
       "GraphAttribute",
+      "Target",
       "UserDefaultObserver"
+    ],
+    "Instruments instrument, track and column names in prose": [
+      "Callback",
+      "Creation",
+      "Hitches",
+      "Profiler",
+      "Reuse",
+      "Time"
+    ],
+    "tool and lint-rule names in prose (the Bash tool, SwiftLint)": [
+      "Bash",
+      "SwiftLint"
+    ],
+    "words from compiler diagnostics quoted verbatim": [
+      "Main",
+      "Sending"
+    ],
+    "example test-plan names": [
+      "Core",
+      "Integration",
+      "ReleaseGate"
+    ],
+    "Info.plist and build-setting values": [
+      "YES"
     ],
     "Info.plist keys": [
       "CFBundleTypeRole",
       "LSUIElement",
       "UISupportsDocumentBrowser"
-    ],
-    "placeholders and prose words inside code spans or unlabelled blocks": [
-      "Bash",
-      "Callback",
-      "Core",
-      "Creation",
-      "Hitches",
-      "Integration",
-      "Main",
-      "Profiler",
-      "ReleaseGate",
-      "Reuse",
-      "Sending",
-      "SwiftLint",
-      "Target",
-      "Time",
-      "YES"
     ],
     "named on purpose as the wrong spelling": [
       "VerticalTabViewStyle",
@@ -1249,9 +1258,6 @@
     "Apple names that are no standalone index entry (@NSManaged attribute, nested notification name)": [
       "NSManaged",
       "NSSystemTimeZoneDidChange"
-    ],
-    "example types in our own snippets (declared elsewhere or implied)": [
-      "Saver"
     ]
   }
 }
