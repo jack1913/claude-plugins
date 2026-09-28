@@ -1,14 +1,22 @@
 # swift-plugin
 
-Private Claude Code marketplace with one plugin, `swift`: skills that make an agent write correct, current, Apple-native Swift — SwiftUI, design, Swift 6 concurrency and tests — plus an on-demand design review.
+The `swift` plugin gives Claude Code five skills for writing correct, current, Apple-native Swift: SwiftUI, Apple design, Swift 6 concurrency, Swift Testing, and an on-demand Human Interface Guidelines review.
 
-| Skill | Covers |
-|---|---|
-| `swift:swiftui` | SwiftUI correctness and current APIs. A fork of [AvdLee/SwiftUI-Agent-Skill](https://github.com/AvdLee/SwiftUI-Agent-Skill) with visionOS, preview and platform-availability fixes (`UPSTREAM.md`) |
-| `swift:design` | Apple-native design: hierarchy, typography, color, SF Symbols, Liquid Glass, platform idioms, motion, tokens |
-| `swift:concurrency` | Swift 6 concurrency: Sendable, actors, async/await, data-race diagnosis, 5→6 migration. A fork of [AvdLee/Swift-Concurrency-Agent-Skill](https://github.com/AvdLee/Swift-Concurrency-Agent-Skill) (`UPSTREAM.md`) |
-| `swift:testing` | Swift Testing: `@Test`, `#expect`/`#require`, traits, parameterized tests, parallel execution, XCTest migration. A fork of [AvdLee/Swift-Testing-Agent-Skill](https://github.com/AvdLee/Swift-Testing-Agent-Skill) (`UPSTREAM.md`) |
-| `swift:review` | On-demand HIG review of a SwiftUI screen from its code and/or screenshots, reported as findings with the HIG source and a fix. Runs only when you type `/swift:review <view files or screenshots>`; it reports and doesn't edit (file-editing tools are removed for that turn) |
+Version 0.2.1 · [Changelog](CHANGELOG.md) · [Manual](docs/manual/README.md) · Marketplace `jack1913-plugins` · Private
+
+- [Requirements](#requirements)
+- [Enable it in a Swift repo](#enable-it-in-a-swift-repo)
+- [Usage](#usage)
+- [What it covers](#what-it-covers)
+- [Versioning](#versioning)
+- [Work on it](#work-on-it)
+- [Licenses](#licenses)
+
+## Requirements
+
+- Claude Code. The runs in the manual used 2.1.283.
+- Read access to the private repo `jack1913/swift-plugin`, through your git or `gh` credentials.
+- A Swift package or Xcode project to use it in.
 
 ## Enable it in a Swift repo
 
@@ -19,7 +27,62 @@ claude plugin marketplace add jack1913/swift-plugin --scope project
 claude plugin install swift@jack1913-plugins --scope project
 ```
 
-A repo without these entries never sees the plugin. Installs are copies: a repo picks up a new release with `claude plugin marketplace update jack1913-plugins` and `claude plugin update swift@jack1913-plugins`. Before 0.2.0 the marketplace was named `swift-plugin`; to move an older install, see [the manual](docs/manual/getting-started/enable-in-a-swift-repo.md#move-an-install-from-swift-plugin).
+A repo without these entries never sees the plugin. Before 0.2.0 the marketplace was named `swift-plugin`. To move an older install, see [the manual](docs/manual/getting-started/enable-in-a-swift-repo.md#move-an-install-from-swift-plugin).
+
+## Usage
+
+Ask in plain words. The right skills load on their own:
+
+> Add a settings screen in Sources/App/SettingsView.swift: show the account's name and email, a notifications toggle, and a Sign Out button.
+
+One real run wrote a native settings form, and `swift build` passed:
+
+```swift
+Form {
+    Section("Account") {
+        LabeledContent("Name", value: account.name)
+        LabeledContent("Email", value: account.email)
+    }
+
+    Section {
+        Toggle("Notifications", isOn: $notificationsEnabled)
+    }
+
+    Section {
+        Button("Sign Out", role: .destructive, action: onSignOut)
+    }
+}
+.formStyle(.grouped)
+.navigationTitle("Settings")
+```
+
+More, each built around a real run:
+
+| Task | Page |
+| --- | --- |
+| Build a SwiftUI screen, with or without your design tokens | [Build a SwiftUI screen](docs/manual/use/build-a-swiftui-screen.md) |
+| Fix a Swift 6 concurrency error, following your repo's own rules | [Fix a concurrency error](docs/manual/use/fix-a-concurrency-error.md) |
+| Test async callbacks, migrate XCTest to Swift Testing | [Write tests](docs/manual/use/write-tests.md) |
+| Review a built screen from its code or a screenshot | [Review a screen](docs/manual/use/review-a-screen.md) |
+
+## What it covers
+
+| Skill | Loads | Covers |
+| --- | --- | --- |
+| `swift:swiftui` | Automatically | SwiftUI APIs and correctness, previews, availability gates below 26, visionOS, Liquid Glass APIs, accessibility code, Instruments traces |
+| `swift:design` | Automatically | Hierarchy, typography, colour, SF Symbols, when Liquid Glass fits, platform idioms, motion, design tokens |
+| `swift:concurrency` | Automatically | async/await, actors, `Sendable`, isolation errors, Swift 6 migration |
+| `swift:testing` | Automatically | Swift Testing, parameterized tests, `confirmation`, XCTest migration |
+| `swift:review` | Only as `/swift:review` | An HIG review of a screen from its code or a screenshot; reports, never edits |
+
+Every skill that writes code follows your repo's own rules first: its design tokens, and its AGENTS.md or CLAUDE.md. Nine eval cases pin the behaviour. The full matrix of topics, shared rules and eval results is in [What the plugin covers](docs/manual/reference/capabilities.md).
+
+## Versioning
+
+- SemVer. The version lives only in `plugins/swift/.claude-plugin/plugin.json`, and each release is tagged `swift--v<version>`.
+- Before 1.0, a breaking change bumps the minor version (0.2.0 renamed the marketplace), and anything else bumps the patch.
+- Installs are copies, so a repo picks up a release with `claude plugin marketplace update jack1913-plugins` and `claude plugin update swift@jack1913-plugins`, then a new session.
+- Every release is listed in the [Changelog](CHANGELOG.md).
 
 ## Work on it
 
@@ -32,7 +95,7 @@ A repo without these entries never sees the plugin. Installs are copies: a repo 
 | Upstream changes | `maintenance/upstream-diff.sh <swiftui\|concurrency\|testing> [ref]` |
 | Validate manifests | `claude plugin validate . && claude plugin validate plugins/swift` |
 
-Release flow and design: `docs/superpowers/specs/2026-09-24-swift-plugin-design.md` §6.
+The full workflow, releases included: [Work on the plugin](docs/manual/work-on-it.md). Decisions: [`docs/adr/`](docs/adr/).
 
 ## Licenses
 

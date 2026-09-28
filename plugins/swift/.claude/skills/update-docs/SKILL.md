@@ -358,6 +358,13 @@ leave it and report.
 - **generated blocks:** `maintenance/check-apis.py --write-table` in `plugins/swift/skills/swiftui/references/platform-availability.md` (marker `<!-- BEGIN GENERATED: maintenance/check-apis.py --write-table -->`). Never hand-edit; regenerate with `python3 maintenance/check-apis.py --write-table`.
 - **K-pointer baseline:** established at onboard (AGENTS.md §3 pointer index written 2026-09-25, every pointer verified against the tree).
 - **docs voice:** commands-first, one-concept-per-page, scannable, operator-voiced; cite ADRs, don't inline rationale.
-- **README style guide:** no voice (deferred; re-prompt on the first styling run).
+- **README style guide:** Reference SDK (chosen 2026-09-28). Signature rules:
+  - an exact capability sentence first, with no adjectives;
+  - a version/changelog/manual line and a linked TOC;
+  - the Requirements → Enable it in a Swift repo → Usage spine, where Usage shows one real prompt and its result;
+  - a skill capability table, with the full matrix in `docs/manual/reference/capabilities.md`;
+  - versioning stated as policy;
+  - hub-and-spoke into `docs/manual/`;
+  - no emoji, no story, and badges only for things that exist.
 - **not docs:** `docs/superpowers/` (specs and plans, agent working dir), `plugins/swift/skills/**` and `plugins/swift/evals/**` (plugin content, checked by `check-apis.py` and `claude plugin eval`, not by this skill), `plugins/swift/NOTICE.md` (license notices).
 <!-- END REPO SPECIFICS -->
