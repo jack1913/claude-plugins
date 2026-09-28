@@ -57,14 +57,10 @@ claude plugin validate .
 claude plugin validate plugins/swift
 ```
 
-The marketplace check passes with one warning, which is expected (the marketplace has no top-level description):
+Both pass with no warnings. The marketplace check reads:
 
 ```text capture=validate-marketplace
-⚠ Found 1 warning:
-
-  ❯ description: No marketplace description provided. Adding a description helps users understand what this marketplace offers
-
-✔ Validation passed with warnings
+✔ Validation passed
 ```
 
 ## Run the evals

@@ -1,6 +1,7 @@
 {
   "name": "swift-plugin",
   "owner": { "name": "jack1913" },
+  "description": "Private marketplace for the swift plugin: skills that make an agent write correct, current, Apple-native Swift.",
   "plugins": [
     {
       "name": "swift",
