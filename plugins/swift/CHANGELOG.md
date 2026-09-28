@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `swift:swiftui`, `swift:concurrency` and `swift:testing` now look for the project's own rules (AGENTS.md, CLAUDE.md, project skills) and follow them where they conflict with the skill's defaults, saying which rule they followed. Before, a project that forbids `async let` still got it from `swift:concurrency` whenever its rule wasn't already in context (ADR-0013).
+
+### Added
+
+- Eval case `project-rule-over-skill`: a project's AGENTS.md forbids the `async let` that `swift:concurrency` recommends. With the plugin it went from 0/3 to 3/3; without the plugin it scores 0/3.
+
 ### Changed
 
 - The manual's move from `swift-plugin` to `jack1913-plugins` has now been run: in a scratch repo, then in a second repo. It now says that `marketplace remove` uninstalls the old plugin in every repo, and that in the repos moved after the first, the old settings entries have to be deleted by hand. This closes the known gap listed for 0.2.0.
