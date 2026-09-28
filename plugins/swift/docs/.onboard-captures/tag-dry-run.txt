@@ -1,8 +1,8 @@
 Plugin:  swift
-Version: 0.1.7 (from plugin.json)
+Version: 0.2.0 (from plugin.json)
 Marketplace entry: plugins[0] in ~/Dev/claude_skills/swift-plugin/.claude-plugin/marketplace.json
-Tag:     swift--v0.1.7
+Tag:     swift--v0.2.0
 
-✔ Dry run — would create tag swift--v0.1.7 at HEAD in ~/Dev/claude_skills/swift-plugin
-  git -C ~/Dev/claude_skills/swift-plugin tag -a swift--v0.1.7 -m "swift 0.1.7"
-  git -C ~/Dev/claude_skills/swift-plugin push origin refs/tags/swift--v0.1.7
+✔ Dry run — would create tag swift--v0.2.0 at HEAD in ~/Dev/claude_skills/swift-plugin
+  git -C ~/Dev/claude_skills/swift-plugin tag -a swift--v0.2.0 -m "swift 0.2.0"
+  git -C ~/Dev/claude_skills/swift-plugin push origin refs/tags/swift--v0.2.0

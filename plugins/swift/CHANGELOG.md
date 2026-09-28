@@ -7,9 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-28
+
+**Breaking:** the marketplace is renamed from `swift-plugin` to `jack1913-plugins`, so the install ID changes from `swift@swift-plugin` to `swift@jack1913-plugins`. Claude Code can't migrate a marketplace name, so move each older install by hand:
+- uninstall `swift@swift-plugin`;
+- `claude plugin marketplace remove swift-plugin`;
+- add `jack1913/swift-plugin` again;
+- install `swift@jack1913-plugins`, all at `--scope project`;
+- commit the repo's changed `.claude/settings.json`.
+
+The manual's "Move an install from swift-plugin" section lists the exact commands. The skills and the GitHub repo are unchanged.
+
 ### Changed
 
+- The marketplace is named `jack1913-plugins`, and the manifests are signed "Jacek Pytlik" with a link to github.com/jack1913 (ADR-0012). The name avoids `claude` and `anthropic`, which Claude Code reserves and re-checks on every load.
 - The manual's headless note for `swift:review` is now tested against an installed copy: it reads its reference files without `--add-dir`, which only a `--plugin-dir` checkout needs. This closes the known gap listed for 0.1.7.
+- Known gap: the move commands follow Claude Code's documentation and haven't yet been run on an older install.
 
 ## [0.1.7] - 2026-09-28
 
