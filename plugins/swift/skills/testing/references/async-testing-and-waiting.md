@@ -78,7 +78,7 @@ import Testing
 
 - A confirmation counts only the calls made before its closure returns. A call that arrives after the closure has returned is not counted, and nothing reports it. So a closure that starts the work and returns straight away sees zero calls, and the test fails.
 - When the callback fires later, for example on another queue, call the confirmation inside the callback and keep the closure waiting for a signal the callback sends: an `AsyncStream`, or `withCheckedContinuation` when the callback fires once. A checked continuation traps if it is resumed twice, so use the stream when a duplicate call is possible.
-- `expectedCount: 1` is the "exactly once" check. A second call that lands before the closure returns fails the test. Don't add a sleep to wait for late duplicates: the confirmation can't see calls made after its closure returns. If a late duplicate matters, the code under test needs a completion point the test can await.
+- `expectedCount: 1` is the "exactly once" check. A second call that lands before the closure returns fails the test. Don't add a sleep, inside the closure or after it, to wait for late duplicates. After the closure returns, the confirmation can't see calls at all. A sleep inside it turns the test into a timing test: slower, and still blind to a duplicate that arrives after the sleep ends. If a late duplicate matters, the code under test needs a completion point the test can await.
 
 ```swift
 import Testing
