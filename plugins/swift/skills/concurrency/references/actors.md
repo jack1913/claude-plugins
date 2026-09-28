@@ -682,7 +682,7 @@ actor Database {
 
 ## Decision Tree
 
-```
+```text
 Need thread-safe mutable state?
 ├─ Async context?
 │  ├─ Single instance? → Actor

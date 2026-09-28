@@ -530,7 +530,7 @@ actor BankAccount {
 
 ## Decision Tree
 
-```
+```text
 Need to share type across isolation domains?
 ├─ Value type (struct/enum)?
 │  ├─ Public? → Add explicit Sendable

@@ -376,9 +376,9 @@ class C {
 struct S {
     func f() {} // Inferred: @MyActor (explicit override)
 }
+```
 
 > **Course Deep Dive**: This topic is covered in detail in [Lesson 7.5: Controlling the default isolation domain (Updated for Swift 6.2)](https://www.swiftconcurrencycourse.com?utm_source=github&utm_medium=agent-skill&utm_campaign=lesson-reference)
-```
 
 ### Per-module setting
 
@@ -482,7 +482,7 @@ Values crossing suspension points may cross threads. **Sendable** ensures safety
 
 ## Decision Tree
 
-```
+```text
 Need to control execution?
 ├─ UI updates? → @MainActor
 ├─ Specific state isolation? → Custom actor

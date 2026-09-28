@@ -342,7 +342,7 @@ Use Leaks instrument to detect retain cycles at runtime.
 
 ## Decision Tree
 
-```
+```text
 Task captures self?
 ├─ Task completes quickly?
 │  └─ Strong capture OK

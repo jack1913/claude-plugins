@@ -201,7 +201,7 @@ func fetchImage(urlRequest: URLRequest) async throws -> UIImage {
 For app projects, set default isolation to `@MainActor`:
 
 **Xcode Build Settings**:
-```
+```text
 Swift Concurrency → Default Actor Isolation = MainActor
 ```
 
@@ -290,7 +290,7 @@ Find feature keys in Swift Evolution proposals (e.g., SE-335 for `ExistentialAny
 ### 9. Change to Swift 6 Language Mode
 
 **Xcode Build Settings**:
-```
+```text
 Swift Language Version = Swift 6
 ```
 
@@ -337,7 +337,7 @@ swift package migrate --target MyTarget --to-feature ExistentialAny
 ```
 
 **Output**:
-```
+```text
 > Applied 24 fix-its in 11 files (0.016s)
 > Updating manifest
 ```

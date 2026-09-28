@@ -29,7 +29,7 @@ Can't improve what you don't measure. Establish baseline before optimizing.
 
 ### Start simple, optimize later
 
-```
+```text
 Synchronous → Asynchronous → Parallel
 ```
 
@@ -67,7 +67,7 @@ Profile with CMD + I → Select "Swift Concurrency" template.
 
 ### Key metrics
 
-```
+```text
 Tasks:
 - Total count
 - Running vs suspended
@@ -395,8 +395,6 @@ Task {
     self.items.append(data) // Suspension 2 (back to main)
 }
 
-> **Course Deep Dive**: This topic is covered in detail in [Lesson 10.3: Using Xcode Instruments to detect and remove suspension points](https://www.swiftconcurrencycourse.com?utm_source=github&utm_medium=agent-skill&utm_campaign=lesson-reference)
-
 // After: One suspension
 Task { @concurrent in
     let data = generate() // No suspension (synchronous)
@@ -405,6 +403,8 @@ Task { @concurrent in
     }
 }
 ```
+
+> **Course Deep Dive**: This topic is covered in detail in [Lesson 10.3: Using Xcode Instruments to detect and remove suspension points](https://www.swiftconcurrencycourse.com?utm_source=github&utm_medium=agent-skill&utm_campaign=lesson-reference)
 
 ## Choosing Execution Style
 
@@ -457,11 +457,11 @@ await withTaskGroup(of: Result.self) { group in
 // Use when:
 // - Multiple independent operations
 // - Time-to-first-result matters
-
-> **Course Deep Dive**: This topic is covered in detail in [Lesson 10.4: How to choose between serialized, asynchronous, and parallel execution](https://www.swiftconcurrencycourse.com?utm_source=github&utm_medium=agent-skill&utm_campaign=lesson-reference)
 // - Work scales with collection size
 // - Proven beneficial by profiling
 ```
+
+> **Course Deep Dive**: This topic is covered in detail in [Lesson 10.4: How to choose between serialized, asynchronous, and parallel execution](https://www.swiftconcurrencycourse.com?utm_source=github&utm_medium=agent-skill&utm_campaign=lesson-reference)
 
 ## Parallelism Costs
 

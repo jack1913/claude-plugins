@@ -553,9 +553,9 @@ func fetchData() async throws -> Data
 
 // Not this
 func fetchData() -> AsyncThrowingStream<Data, Error>
+```
 
 > **Course Deep Dive**: This topic is covered in detail in [Lesson 6.3: Deciding between AsyncSequence, AsyncStream, or regular asynchronous methods](https://www.swiftconcurrencycourse.com?utm_source=github&utm_medium=agent-skill&utm_campaign=lesson-reference)
-```
 
 ## Common Patterns
 
