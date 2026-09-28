@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 FIXTURES = Path(__file__).resolve().parents[1] / "review-fixtures"
+CAPTURES = Path(__file__).resolve().parents[2] / "docs" / ".onboard-captures"
 SCRIPT = FIXTURES / "score.py"
 KEY = FIXTURES / "key.json"
 
@@ -82,6 +83,16 @@ class CodeRunTests(unittest.TestCase):
         r = score(review(*lines, not_checked=[CODE_FINDINGS["P7"]]), "code")
         self.assertIn("missed ['P7']", r.stdout)
 
+    def test_a_violation_named_only_in_another_findings_fix_is_not_credited(self):
+        header = f"- [high] The Account header uses .system(size: 13, weight: .ultraLight) — SettingsView.swift:43 — HIG: {H}/typography — Fix: make it a Section header in a Form"
+        lines = [header if k == "P2" else v for k, v in CODE_FINDINGS.items() if k != "P1"]
+        self.assertIn("missed ['P1']", score(review(*lines), "code").stdout)
+
+    def test_a_line_continuation_after_a_file_location_counts(self):
+        cont = CODE_FINDINGS["P1"].replace("SettingsView.swift:57", "`SettingsView.swift:14`, `:41–72`")
+        lines = [cont if k == "P1" else v for k, v in CODE_FINDINGS.items()]
+        self.assertIn("detected 8/8", score(review(*lines), "code").stdout)
+
     def test_suggesting_glass_is_a_false_positive(self):
         extra = f"- [low] Consider adopting Liquid Glass for the toolbar — SettingsView.swift:18 — HIG: {H}/materials — Fix: add .glassEffect to the toolbar buttons"
         r = score(review(*CODE_FINDINGS.values(), extra), "code")
@@ -126,7 +137,22 @@ class ScreenshotRunTests(unittest.TestCase):
     def test_image_supportable_findings_pass(self):
         r = score(review(*self.FINDINGS), "screenshot")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        self.assertIn("detected 5/5", r.stdout)
+        self.assertIn("detected 4/4", r.stdout)
+
+    def test_the_unseen_hit_region_is_not_required(self):
+        r = score(review(*[f for i, f in enumerate(self.FINDINGS) if i != 2]), "screenshot")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn("detected 4/4", r.stdout)
+
+    def test_each_measurement_needs_its_own_estimated_mark(self):
+        mixed = self.FINDINGS[2].replace("well under the 44x44 pt hit region", "and its bezel is 117x24 pt")
+        r = score(review(*self.FINDINGS[:2], mixed, *self.FINDINGS[3:]), "screenshot")
+        self.assertIn("N3", r.stdout)
+
+    def test_hig_reference_sizes_need_no_estimated_mark(self):
+        ref = f"- [low] The pencil sits in a row whose controls look smaller than the Mac default 28x28 pt and the 20x20 pt minimum — screenshot: Name row — HIG: {H}/accessibility — Fix: check the code"
+        r = score(review(*self.FINDINGS, ref), "screenshot")
+        self.assertEqual(r.returncode, 0, r.stdout)
 
     def test_an_exact_size_without_estimated_is_a_false_positive(self):
         exact = self.FINDINGS[2].replace("about 14x14 pt (estimated, @2x)", "14x14 pt")
@@ -142,6 +168,28 @@ class ScreenshotRunTests(unittest.TestCase):
     def test_dynamic_type_under_not_checked_is_fine(self):
         r = score(review(*self.FINDINGS, not_checked=["- Dynamic Type: needs an accessibility-size capture"]), "screenshot")
         self.assertEqual(r.returncode, 0, r.stdout)
+
+
+class RecordedRunTests(unittest.TestCase):
+    """The frozen outputs in docs/internals/review-verification.md, scored with the current key."""
+
+    def recorded(self, slug, run):
+        return score(CAPTURES.joinpath(f"review-2026-09-27-{slug}.txt").read_text(), run)
+
+    def test_run_a_finds_all_eight(self):
+        r = self.recorded("a", "code")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn("detected 8/8, missed [], false positives []", r.stdout)
+
+    def test_run_b_rerun_is_clean(self):
+        r = self.recorded("b2", "tokened")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn("false positives []", r.stdout)
+
+    def test_run_c_finds_the_four_image_visible_violations(self):
+        r = self.recorded("c", "screenshot")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn("detected 4/4, missed [], false positives []", r.stdout)
 
 
 if __name__ == "__main__":

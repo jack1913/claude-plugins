@@ -4,11 +4,14 @@
 Usage: score.py <key.json> <review.md> --run code|tokened|screenshot
 
 Findings are the report's `- [high|medium|low] ...` lines before `## Not checked`.
-A planted violation is detected when a finding matches its `must_match` pattern
-and, for runs with `match_lines`, cites `<file>:<line>` (or a line range) within
-the key's tolerance of one of its line ranges. A `never` rule matching a finding
-is a false positive. Exit 0 only when detected >= min and there are no false
-positives. Standard library only.
+A planted violation is detected when a finding's violation and location (the
+text before its `— HIG:` part, so never its fix) match the violation's
+`must_match` pattern and, for runs with `match_lines`, cite `<file>:<line>`, a
+line range, or a `:<line>` continuation after it, within the key's tolerance of
+one of its line ranges. A `never` rule matching a finding is a false positive:
+`unless` exempts the whole line, while `unless_before` and `unless_after` exempt
+one match by the text just before or after it. Exit 0 only when detected >= min
+and there are no false positives. Standard library only.
 """
 
 import argparse
@@ -31,9 +34,24 @@ def findings(text):
     return out
 
 
+LOCATION = re.compile(r"([\w./-]+\.swift)?:(\d+)(?:\s*[-–]\s*(\d+))?")
+
+
+def claim(line):
+    """The violation and location: everything before the finding's HIG part, never its fix."""
+    return re.split(r"\s—\s*HIG:", line, maxsplit=1)[0]
+
+
 def cited_ranges(line, file):
-    pattern = re.compile(re.escape(file) + r":(\d+)(?:\s*[-–]\s*(\d+))?")
-    return [(int(a), int(b or a)) for a, b in pattern.findall(line)]
+    """Line ranges cited for file, counting `:<line>` continuations after `<file>:<line>`."""
+    ranges, current = [], False
+    for match in LOCATION.finditer(claim(line)):
+        named, start, end = match.groups()
+        if named:
+            current = named == file or named.endswith("/" + file)
+        if current:
+            ranges.append((int(start), int(end or start)))
+    return ranges
 
 
 def at_location(line, violation, tolerance):
@@ -45,15 +63,23 @@ def at_location(line, violation, tolerance):
 
 
 def detects(line, violation, match_lines, tolerance):
-    if not re.search(violation["must_match"], line):
+    if not re.search(violation["must_match"], claim(line)):
         return False
     return not match_lines or at_location(line, violation, tolerance)
 
 
 def breaks(line, rule):
-    if not re.search(rule["pattern"], line):
+    """True when a match of the rule's pattern survives its exemptions."""
+    if "unless" in rule and re.search(rule["unless"], line):
         return False
-    return not ("unless" in rule and re.search(rule["unless"], line))
+    for match in re.finditer(rule["pattern"], line):
+        before, after = line[max(0, match.start() - 30) : match.start()], line[match.end() :]
+        if "unless_before" in rule and re.search(rule["unless_before"], before):
+            continue
+        if "unless_after" in rule and re.search(rule["unless_after"], after):
+            continue
+        return True
+    return False
 
 
 def score(key, text, run_name):
