@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-09-28
+
 ### Added
 
 - An MIT license, copyright 2026 Jacek Pytlik: `LICENSE.md` at the repo root, a copy in `plugins/swift/` so it travels with every install, and `"license": "MIT"` in `plugin.json`. The upstream MIT notices in `plugins/swift/NOTICE.md` are unchanged.
