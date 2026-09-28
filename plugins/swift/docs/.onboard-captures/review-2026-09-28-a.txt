@@ -1,0 +1,29 @@
+Found 10 issues in `SettingsView.swift`, 4 of them high severity. I reviewed against iOS 26 and macOS 26, the platforms in `Package.swift`. The project has no design tokens, colour sets or design skill of its own, so system defaults are the baseline.
+
+## Findings
+- [high] The Sync status is only a red or green `Circle`, with no symbol or text. The state depends on colour alone, and VoiceOver reads nothing for it — `Sources/Demo/SettingsView.swift:68` — HIG: https://developer.apple.com/design/human-interface-guidelines/color — Fix: put a `Label` inside `LabeledContent("Sync")`. Its text says "Synced" or "Not Synced", and only its icon (`checkmark.circle.fill` or `exclamationmark.triangle.fill`) takes `.green` or `.red`. The text stays primary.
+- [high] The pencil edit button's tap area is under 44×44 pt. The 28×28 frame is already too small, and because it sits outside a `.plain` button it adds no tappable area. Only the pencil glyph (about body-text size) responds, which is likely also under the Mac minimum of 20×20 pt — `Sources/Demo/SettingsView.swift:49` — HIG: https://developer.apple.com/design/human-interface-guidelines/buttons — Fix: make the whole Name row the control (a `Button` or `NavigationLink` row). If the inline button stays, put `.frame(minWidth: 44, minHeight: 44)` and `.contentShape(.rect)` on its label.
+- [high] Delete Account has no `role: .destructive`. It is `.borderedProminent` with a red tint, which makes it the most prominent control in the content — `Sources/Demo/SettingsView.swift:83` — HIG: https://developer.apple.com/design/human-interface-guidelines/buttons — Fix: use `Button("Delete Account", role: .destructive) { … }` with the default style, in its own last `Section`. The role supplies the red.
+- [high] The "Account" heading uses `.system(size: 13, weight: .ultraLight)`. The fixed size ignores Dynamic Type, and the HIG rules out Ultralight — `Sources/Demo/SettingsView.swift:43` — HIG: https://developer.apple.com/design/human-interface-guidelines/typography — Fix: make it a `Section("Account")` header, which the form styles and marks as a heading for VoiceOver. If it stays standalone, give it a text style such as `.headline` at Regular weight or heavier.
+- [medium] Export, Share and Save in the toolbar are all `.borderedProminent`. Counting Delete Account, the screen has four prominent buttons. On Mac, toolbar items shouldn't have bezels either — `Sources/Demo/SettingsView.swift:19` — HIG: https://developer.apple.com/design/human-interface-guidelines/toolbars — Fix: keep the prominent style only on Save, at the trailing end. Give Export the default toolbar style. Make Share a `ShareLink` (`square.and.arrow.up`) in its own `ToolbarItem`, separate from the text buttons.
+- [medium] The settings are a `ScrollView` of `VStack`/`HStack` rows with `Divider`s instead of a `Form`. The sheet's `TextField` also sits bare with padding — `Sources/Demo/SettingsView.swift:14`, `:41`, `:97` — HIG: https://developer.apple.com/design/human-interface-guidelines/lists-and-tables — Fix: use a `Form` with `.formStyle(.grouped)` containing:
+  - `Section("Account")` with `LabeledContent` rows for Name, Email and Sync
+  - `Section("Storage")` with `LabeledContent("Used", value: "3.2 GB of 5 GB")`
+  - a last `Section` for Delete Account
+
+  `LabeledContent` also lines up the values and reads each row as one VoiceOver element. In the sheet, use `Form { TextField(...) }`.
+- [medium] The Storage card has `.glassEffect(.regular, in: .rect(cornerRadius: 16))`, which puts glass on content — `Sources/Demo/SettingsView.swift:82` — HIG: https://developer.apple.com/design/human-interface-guidelines/materials — Fix: remove the glass and the hand-picked radius, and make Storage a `Section` of the Form.
+- [medium] The Edit Name sheet has Done but no Cancel. The field is bound directly to `name`, so edits apply as you type and can't be abandoned — `Sources/Demo/SettingsView.swift:101`, `:97` — HIG: https://developer.apple.com/design/human-interface-guidelines/sheets — Fix: edit a local `@State` draft and add `ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }`. Done writes the draft back to `name`, then dismisses.
+- [medium] The pencil button shows only an icon and has no accessibility label. The HIG also warns that a pencil can be misread, so "Edit" works better as text — `Sources/Demo/SettingsView.swift:52` — HIG: https://developer.apple.com/design/human-interface-guidelines/accessibility — Fix: use `Button("Edit") { … }`, or keep the symbol and add `.accessibilityLabel("Edit Name")`. If the whole row becomes the control, this issue goes away.
+- [medium] The Name, Email and Sync rows keep the label and value side by side at every text size. At accessibility sizes they wrap instead of stacking — `Sources/Demo/SettingsView.swift:44`, `:58`, `:65` — HIG: https://developer.apple.com/design/human-interface-guidelines/typography — Fix: use `AnyLayout` to switch to `VStackLayout(alignment: .leading)` when `dynamicTypeSize.isAccessibilitySize`. If you move to `LabeledContent` rows, check them at `.accessibility5`.
+
+## Not checked
+- **How it looks:** contrast, spacing, Dark Mode and Increase Contrast. There was no screenshot; light and dark captures on iPhone and Mac would show these.
+- **Dynamic Type:** no capture at an accessibility text size. A preview with `.dynamicTypeSize(.accessibility5)` would confirm the row-layout finding.
+- **Mac:**
+  - whether this screen is a `Settings` scene opened with Command-Comma
+  - whether Export, Share and Save have menu bar commands and keyboard shortcuts
+
+  The `App` file with its scenes and `.commands` would show both.
+- **Top-level navigation** (tab bar or sidebar) and how this screen is reached: the root view wasn't provided.
+- **VoiceOver reading order across the whole screen:** this needs an Accessibility Inspector pass.
