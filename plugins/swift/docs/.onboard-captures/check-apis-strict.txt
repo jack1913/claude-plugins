@@ -1,2 +1,2 @@
-oldest cache entry: 1.1 days old
+oldest cache entry: 1.2 days old
 111 manifest APIs, 0 failures, 0 warnings

@@ -7,9 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-09-28
+
+Closes a loophole in `swift:testing`'s confirmation rule, and gives the plugin a proper landing page and a usage manual. Each new page is built around a real, recorded run.
+
 ### Fixed
 
 - `swift:testing` now rules out a sleep *inside* a confirmation's closure too, not only after it. One of four natural runs had put a 100 ms `Task.sleep` there to catch a second callback, turning the test into a timing test. After the fix, `callback-confirmation-test` passed 6/6 and three natural runs used no sleep.
+
+### Added
+
+- Four "Use it" manual pages: build a SwiftUI screen, fix a concurrency error, write tests, review a screen.
+  - Each shows a real prompt, the reply, the generated code and its `swift build` or `swift test` output.
+  - Every code block and output block is checked against a committed capture.
+- `docs/manual/reference/capabilities.md`: the five skills, topics by skill, the rules they share, and the eval cases with their latest results.
+
+### Changed
+
+- The README is now a reference landing page: requirements, install, a real usage example, what each skill covers, and the versioning policy. It no longer states a version itself, and its eval command includes `--no-publish`, so the report stays local.
+- *Work on the plugin → Release* states the versioning policy: SemVer, one version home, and the minor/patch rule before 1.0.
 
 ## [0.2.1] - 2026-09-28
 
