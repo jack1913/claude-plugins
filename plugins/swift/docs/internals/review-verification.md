@@ -314,3 +314,12 @@ I assumed a scale of @2x: the image is 780×594 px, so the screen is about 390×
 - **Navigation and toolbar:** no title, navigation bar or window toolbar is in the frame. A capture that includes them is needed.
 - **Motion and Reduce Motion:** these need a screen recording or the code.
 ~~~
+
+## 2026-09-28 — headless run from an installed copy
+
+This checks the `--add-dir` question, not review quality. swift 0.1.7 was installed at project scope with `claude plugin install swift@swift-plugin --scope project` in a scratch project holding the `planted/` package. Then `claude -p "/swift:review Sources/Demo/SettingsView.swift" --output-format stream-json --verbose --disallowedTools Bash Write Edit NotebookEdit` ran there twice.
+
+- **Without `--add-dir`:** every Read of the installed copy under `~/.claude/plugins/cache/swift-plugin/swift/0.1.7/` succeeded, 10 in all, with 0 `permission_denials`. The files were review's `checklist.md` and `findings-format.md`; swift:design's `SKILL.md` and six of its references; and swift:swiftui's `accessibility-patterns.md`. The report kept the findings format: 10 findings, then `## Not checked`.
+- **With `--add-dir <that directory>`:** the same 10 reads, 0 denials, 9 findings.
+
+So `--add-dir` is needed only when the plugin is loaded from a checkout with `--plugin-dir`, as in the runs above. An installed copy needs no flag.

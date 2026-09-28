@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The manual's headless note for `swift:review` is now tested against an installed copy: it reads its reference files without `--add-dir`, which only a `--plugin-dir` checkout needs. This closes the known gap listed for 0.1.7.
+
 ## [0.1.7] - 2026-09-28
 
 A maintenance release: no skills were added.
