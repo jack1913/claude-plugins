@@ -1,7 +1,7 @@
 {
-  "name": "swift-plugin",
-  "owner": { "name": "jack1913" },
-  "description": "Private marketplace for the swift plugin: skills that make an agent write correct, current, Apple-native Swift.",
+  "name": "jack1913-plugins",
+  "owner": { "name": "Jacek Pytlik", "url": "https://github.com/jack1913" },
+  "description": "Jacek Pytlik's private Claude Code plugins. swift: skills that make an agent write correct, current, Apple-native Swift.",
   "plugins": [
     {
       "name": "swift",

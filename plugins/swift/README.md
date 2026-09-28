@@ -16,10 +16,10 @@ Run inside that repo. `--scope project` writes its committed `.claude/settings.j
 
 ```bash
 claude plugin marketplace add jack1913/swift-plugin --scope project
-claude plugin install swift@swift-plugin --scope project
+claude plugin install swift@jack1913-plugins --scope project
 ```
 
-A repo without these entries never sees the plugin. Installs are copies: a repo picks up a new release with `claude plugin marketplace update swift-plugin` and `claude plugin update swift@swift-plugin`.
+A repo without these entries never sees the plugin. Installs are copies: a repo picks up a new release with `claude plugin marketplace update jack1913-plugins` and `claude plugin update swift@jack1913-plugins`. Before 0.2.0 the marketplace was named `swift-plugin`; to move an older install, see [the manual](docs/manual/getting-started/enable-in-a-swift-repo.md#move-an-install-from-swift-plugin).
 
 ## Work on it
 

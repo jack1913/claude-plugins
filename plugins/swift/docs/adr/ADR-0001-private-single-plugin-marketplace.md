@@ -1,6 +1,6 @@
 # ADR-0001: Ship as a private single-plugin marketplace, enabled per project
 
-- **Status:** accepted
+- **Status:** accepted; amended by ADR-0012 (the marketplace is named `jack1913-plugins` from 0.2.0)
 - **Date:** 2026-09-25
 - **Source:** commit `e23aa05` (scaffold the marketplace and plugin); `docs/superpowers/specs/2026-09-24-swift-plugin-design.md` §1 goal 5, §2 "Packaging" and "Location" rows, §3 install commands, §9 (private GitHub marketplace); `claude plugin install --help` and `claude plugin marketplace add --help` (default scope)
 
