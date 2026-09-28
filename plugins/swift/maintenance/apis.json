@@ -1190,7 +1190,6 @@
     "SwiftUI runtime symbols named in Instruments output": [
       "EnvironmentWriter",
       "GraphAttribute",
-      "LogForEachSlowPath",
       "UserDefaultObserver"
     ],
     "Info.plist keys": [
@@ -1199,26 +1198,16 @@
       "UISupportsDocumentBrowser"
     ],
     "placeholders and prose words inside code spans or unlabelled blocks": [
-      "ARGUMENTS",
       "Bash",
-      "CA",
-      "CF",
       "Callback",
       "Core",
       "Creation",
-      "END_MS",
-      "Findings",
       "Hitches",
       "Integration",
       "Main",
-      "NS",
-      "Not",
       "Profiler",
       "ReleaseGate",
       "Reuse",
-      "SKILL",
-      "START",
-      "START_MS",
       "Sending",
       "SwiftLint",
       "Target",
@@ -1242,7 +1231,6 @@
       "SWIFT_APPROACHABLE_CONCURRENCY",
       "SWIFT_DEFAULT_ACTOR_ISOLATION",
       "SWIFT_STRICT_CONCURRENCY",
-      "SWIFT_UPCOMING_FEATURE_",
       "SWIFT_VERSION",
       "defaultIsolation",
       "enableExperimentalFeature",

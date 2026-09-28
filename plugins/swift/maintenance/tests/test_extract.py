@@ -99,6 +99,24 @@ class FragmentTests(unittest.TestCase):
     def test_inline_spans_are_code(self):
         self.assertIn(("glassEffect", "member"), names("Use `.glassEffect()` here."))
 
+    def test_spans_that_cannot_be_swift_are_skipped(self):
+        for span in (
+            "## Not checked",
+            "$ARGUMENTS",
+            "--window START_MS:END_MS",
+            "-LogForEachSlowPath YES",
+            "../SKILL.md",
+            ".agents/skills/update-swiftui-apis/SKILL.md",
+            "CA*",
+        ):
+            with self.subTest(span=span):
+                self.assertEqual(names(f"Run `{span}` first."), set())
+
+    def test_swift_spans_that_look_close_to_those_are_kept(self):
+        self.assertIn(("Preview", "type"), names("Wrap it in `#Preview`."))
+        self.assertIn(("Binding", "type"), names("Pass `$text` as a `Binding<String>`."))
+        self.assertIn(("Double", "type"), names("Divide with `Double(a) / Double(b)`."))
+
     def test_signature_span_counts_as_member(self):
         self.assertIn(
             ("scrollEdgeEffectStyle", "member"),

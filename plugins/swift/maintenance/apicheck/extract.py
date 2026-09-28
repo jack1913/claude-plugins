@@ -22,6 +22,17 @@ _FENCE_CLOSE = re.compile(r"^([ \t]*)(```|~~~)[ \t]*$")
 # only the +3 tolerance is observable -- which reads as symmetric there.
 _CLOSE_INDENT_TOLERANCE = 3
 _INLINE = re.compile(r"`([^`\n]+)`")
+# Inline spans that cannot be Swift: a Markdown heading (`## Not checked`), a
+# shell variable (`$ARGUMENTS`), a command-line flag (`--window START:END`),
+# a file path (`../SKILL.md`) and a name glob (`CA*`). Swift's own `#if`,
+# `#Preview`, `$binding` and `a / b` do not match.
+_NON_SWIFT_SPAN = re.compile(
+    r"#+\s.*"
+    r"|\$[A-Z][A-Z0-9_]*"
+    r"|--?[A-Za-z].*"
+    r"|\.{0,2}[\w.-]*(?:/[\w.-]+)+/?"
+    r"|[A-Za-z_]\w*\*"
+)
 _TRIPLE_STRING = re.compile(r'"""(?:.|\n)*?"""')
 _STRING = re.compile(r'"(?:\\.|[^"\\\n])*"')
 _BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.S)
@@ -111,7 +122,11 @@ def code_fragments(markdown: str) -> list[str]:
     prose = "\n".join(
         line if not is_fenced else "" for line, is_fenced in zip(lines, fenced)
     )
-    fragments.extend(strip_code(span) for span in _INLINE.findall(prose))
+    fragments.extend(
+        strip_code(span)
+        for span in _INLINE.findall(prose)
+        if not _NON_SWIFT_SPAN.fullmatch(span.strip())
+    )
     return fragments
 
 
