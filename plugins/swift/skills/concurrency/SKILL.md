@@ -6,13 +6,13 @@ description: Use when writing, reviewing, or fixing Swift concurrency code — a
 
 ## Project Rules
 
-- Before applying this skill's defaults, read the project's own instructions (AGENTS.md, CLAUDE.md, a project skill) if they aren't already in context; when one of their rules conflicts with this skill, follow the project's rule and say which one you followed
+- Before writing or changing code, look for the project's own instructions (AGENTS.md and CLAUDE.md at the repository root, and any project skill) and read the ones not already in context; when one of their rules conflicts with this skill, follow the project's rule and say which one you followed
 
 ## Fast Path
 
 Before proposing a fix:
 
-1. Analyze `Package.swift` or `.pbxproj` to determine Swift language mode, strict concurrency level, default isolation, and upcoming features. Do this always, not only for migration work.
+1. Read the project's AGENTS.md and CLAUDE.md (see Project Rules above), then analyze `Package.swift` or `.pbxproj` to determine Swift language mode, strict concurrency level, default isolation, and upcoming features. Do this always, not only for migration work, and also before writing new concurrency code.
 2. Capture the exact diagnostic and offending symbol.
 3. Determine the isolation boundary: `@MainActor`, custom actor, actor instance isolation, or `nonisolated`.
 4. Confirm whether the code is UI-bound or intended to run off the main actor. When spawning unstructured tasks, inspect the synchronous prefix (everything before the first `await`): start on `@MainActor` only when that prefix truly needs main-actor access; otherwise use `Task { @concurrent in ... }` and hop back with `MainActor.run` only after the suspension. A trivial non-main line (for example, `print`) followed by main-actor work in the same prefix is not a reason to use `@concurrent`. For delayed retries, timers, and backoff tasks, separate the waiting from the UI mutation. The sleep often belongs off the main actor even when the final state update belongs on it.
