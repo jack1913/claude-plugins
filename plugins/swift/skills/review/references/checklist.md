@@ -28,7 +28,7 @@ Each check is a question. When the answer is no, it's a finding. After the quest
 
 ## Controls and Hit Targets
 
-- Is every tappable area at least 44×44 pt (60×60 pt on visionOS), counting the whole hit region, not only the glyph? — **Buttons** · `../../design/references/platform-idioms.md` (Hit Targets and Control Size) · buttons
+- On iPhone and iPad, is every tappable area at least 44×44 pt (60×60 pt on visionOS), counting the whole hit region, not only the glyph? On Mac, use the Mac row of the platform table instead (default 28×28 pt, minimum 20×20 pt): a control below the minimum is a finding, and standard system control sizes are not — **Buttons** · `../../design/references/platform-idioms.md` (Hit Targets and Control Size) · buttons, accessibility
 - Are there one or two prominent buttons per view at most, with alternatives differing by style rather than size? — **Buttons** · buttons
 - Does every destructive action take `role: .destructive`, and is it never the default or the prominent button? — **Buttons** · buttons
 

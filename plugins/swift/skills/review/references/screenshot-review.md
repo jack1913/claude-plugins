@@ -28,7 +28,7 @@ Check these against `checklist.md`, limited to what is visible in the frame:
 ## Estimating Sizes from Pixels
 
 - Points = pixels ÷ scale. State the scale you assume: @2x for most Mac and iPad captures, @3x for most recent iPhones. If the image doesn't pin the scale, say so.
-- Measure a control's whole hit region, not only its glyph. A glyph can be small inside a larger tappable area, and an image can't show where the tappable area ends. When the region can't be seen, report the glyph size and say that the hit region is unknown.
+- Measure a control's whole hit region, not only its glyph. A glyph can be small inside a larger tappable area, and an image can't show where the tappable area ends. When the region can't be seen, it isn't a finding: list it under `## Not checked` with the glyph size and the code or capture that would settle it.
 - Every size taken from pixels carries `(estimated)` in the finding, for example "the close button is about 28×28 pt (estimated, @2x)". Never state an exact point size from an image.
 
 ## Combining with Code

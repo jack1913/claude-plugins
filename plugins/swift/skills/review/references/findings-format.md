@@ -21,7 +21,7 @@ Examples:
 
 ## Severity
 
-- **high:** breaks a HIG requirement a person runs into. Examples: a hit region under 44×44 pt (60×60 pt on visionOS); meaning carried by colour alone; a destructive action that is the default or unmarked; text that can't scale with Dynamic Type.
+- **high:** breaks a HIG requirement a person runs into. Examples: a hit region under 44×44 pt on iPhone or iPad (60×60 pt on visionOS), or a Mac control under the 20×20 pt minimum; meaning carried by colour alone; a destructive action that is the default or unmarked; text that can't scale with Dynamic Type.
 - **medium:** goes against HIG guidance and has a clear fix. Examples: stacks with dividers instead of a `Form`; more than one tinted primary action; Done without Cancel; glass on content.
 - **low:** polish. Examples: symbol weight not matching its label; a toolbar group that could merge.
 
