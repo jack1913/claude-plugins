@@ -26,7 +26,7 @@ Text(verbatim: "pencil")
 
 ### Decision Flow
 
-```
+```text
 Is the input a String variable or dynamic value?
 └─ YES → Text(variable)          // bypasses localization automatically
 

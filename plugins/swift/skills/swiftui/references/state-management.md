@@ -412,7 +412,7 @@ For custom environment values, `@Entry`, focused values, stable defaults, and in
 
 ## Decision Flowchart
 
-```
+```text
 Is this value owned by this view?
 ├─ YES: Is it a simple value type?
 │       ├─ YES → @State private var
