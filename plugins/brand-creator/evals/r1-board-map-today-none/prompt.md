@@ -6,7 +6,7 @@ max_turns: 80
 timeout_seconds: 2400
 runs: 2
 allowed_tools: [Read, Glob, Grep, Skill, AskUserQuestion, TodoWrite, Bash, Write, Edit, Agent]
-expected_outcome: 'rounds/r1/board.html exists, passes the plugin''s lint, has the three sections; no agent was started.'
+expected_outcome: 'rounds/r1/board.html exists, passes the plugin''s lint, has the three sections; no agent was started (shots are not graded: a run has no set-up data folder, so shot is not verified).'
 ---
 
 G0 is done (see BRAND-STATE.md and brief/BRIEF.md). Build the round 1 pick board for Acme in rounds/r1/board.html: the directions and the page. Lint it, then stop for my pick.

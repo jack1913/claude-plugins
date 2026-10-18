@@ -24,7 +24,7 @@ round answers; infer both from BRAND-STATE.md when empty).
    Delete optional blocks that do not apply; fill every `[[fill: ...]]`.
 5. Lint until exit 0: `... board-lint rounds/r<N>/board.html --project <dir>`.
 6. Shoot: `... shot rounds/r<N>/board.html --project <dir>`; Read every slice listed in `assets/_checks/shot.json`
-   and fix what you see. Iterate at least twice.
+   and fix what you see. Iterate at least twice. Exit 3 (no Chromium yet): carry on, and say the shots are not verified.
 7. Regenerate `review/index.html` from `${CLAUDE_PLUGIN_ROOT}/templates/review/index.html` with this round's
    sections, lint it (`board-lint review/index.html --round <N>`), and publish it on the review surface (same
    Artifact URL as `review_url`, or open the local file). Record `review_url` with `state --set`.

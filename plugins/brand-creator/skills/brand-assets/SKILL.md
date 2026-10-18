@@ -1,7 +1,7 @@
 ---
 name: brand-assets
 description: Turns an approved logo or mark into the platform files a product ships, with a manifest and size checks at real pixels. Covers favicons and PWA icons, Open Graph and social images, Apple app icons, Windows .ico and installer art, Linux icon themes, tray icons, Tauri, Wallet passes, developer surfaces, Android adaptive icons, Chrome extension icons and MSIX assets. Works from a mark file and a target list, or from a brand project's surface inventory. Files from an existing, approved mark only; not for designing or redrawing a logo, fixing how a page shows a logo, resizing one image or building UI.
-when_to_use: Use when someone has a finished mark and needs it as platform files ("favicons from my logo.svg", "app icon set for iOS and macOS from this SVG", "make the .ico and tray icons", "OG image from our logo"), or when a brand-creator project reaches P8 asset packs. Polish triggers include "favicony z logo", "ikony aplikacji z logo", "wygeneruj ikony", "zestaw ikon dla iOS", "plik .ico z logo".
+when_to_use: Use this skill whenever someone wants icons, favicons, social images, store art or tray icons made from a logo they already have, even a single file, because it draws each size at real pixels and records what it made. Use when someone has a finished mark and needs it as platform files ("favicons from my logo.svg", "app icon set for iOS and macOS from this SVG", "make the .ico and tray icons", "OG image from our logo"), or when a brand-creator project reaches P8 asset packs. Polish triggers include "favicony z logo", "ikony aplikacji z logo", "wygeneruj ikony", "zestaw ikon dla iOS", "plik .ico z logo".
 compatibility: Claude Code only (calls the plugin's bin/ entry point). Apple packs need macOS with Xcode and have no fallback. Off macOS the small-size check needs an explicit --renderer opt-in and the Tauri .icns needs --renderer pillow. Social images and store frames need the Chromium installed by /brand-creator:setup.
 allowed-tools: Bash(brand-creator *)
 ---
@@ -44,6 +44,9 @@ Call the entry point by its bare name, always in this form:
 ```
 brand-creator --data "${CLAUDE_PLUGIN_DATA}" <subcommand> --project <project-dir> ...
 ```
+
+If the shell answers `brand-creator: command not found` (a host that does not put a plugin's `bin/` on PATH), call
+`"${CLAUDE_PLUGIN_ROOT}/bin/brand-creator"` with the same arguments for the rest of the session.
 
 Exit codes: 0 pass, 1 a gate failed, 2 usage error, 3 cannot run (a missing tool, the wrong platform or a missing
 opt-in). On 3, stop that target, tell the person the fix the message names, and carry on with the targets that can run.

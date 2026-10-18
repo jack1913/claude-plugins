@@ -1,7 +1,7 @@
 ---
 name: brand-creator
 description: Starts or continues a brand-identity project for a company, product or person (new brand, logo, visual identity, rebrand, brand guidelines) and runs it as a gated process with scope tiers, divergent direction boards, a pick, refinement, a mark system, design tokens, web and social assets, a brand book, adoption and launch hand-offs. Resumes from the project's BRAND-STATE.md. Identity creation and its process only; not for building web pages, UI components, slide themes, chart colours or colour conversions.
-when_to_use: Use when someone asks for a new brand, logo, visual identity, rebrand or brand book for a business, product, shop, practice, podcast or person, or wants to go on with a brand project (a folder holding BRAND-STATE.md). Polish triggers include "księga znaku", "identyfikacja wizualna", "zaprojektuj logo", "nowa marka", "rebranding", "logo dla firmy".
+when_to_use: Use this skill whenever someone wants a logo, a look, a visual identity, a rebrand or brand guidelines made, even when the ask is small or casual ("a logo for my band", "a look for my Etsy shop"), because a direct answer skips the brief, the options board and the checks. Use it for a new brand, logo, identity, rebrand or brand book for a business, product, shop, practice, podcast or person; to go on with a brand project (a folder holding BRAND-STATE.md), including any work on its files even when the ask never says "brand" (edit or lint a round board, fold in a judge report, change a rule, token or threshold such as an accent minimum), since those files follow the plugin's board contract, lint and cascade check; and for a brand's launch steps ("buy the domain", "file the trademark"), handed to the owner one action at a time with the click path, never done for them. Polish triggers include "księga znaku", "identyfikacja wizualna", "zaprojektuj logo", "nowa marka", "rebranding", "logo dla firmy".
 compatibility: Claude Code only (uses the plugin's bin/ entry point and hooks). Needs Python 3.10+ with uv, Node 22+, resvg and a Playwright Chromium installed by /brand-creator:setup; macOS with Xcode only for Apple emitters.
 allowed-tools: Bash(brand-creator *)
 ---
@@ -40,9 +40,15 @@ for the owner's settings so later turns do not prompt:
 brand-creator --data "${CLAUDE_PLUGIN_DATA}" <subcommand> --project <project-dir> ...
 ```
 
+If the shell answers `brand-creator: command not found` (some hosts, such as a `claude plugin eval` run, do not put a
+plugin's `bin/` on PATH), it is the same tool at `"${CLAUDE_PLUGIN_ROOT}/bin/brand-creator"`: call that, with the same
+arguments, for the rest of the session. Never conclude the tools are missing before trying it.
+
 Exit codes: 0 pass, 1 a gate failed, 2 usage error, 3 cannot run (missing dependency, platform or not built yet).
 On 3, tell the owner the fix the message names (usually `/brand-creator:setup`) and stop that step. Never work
 around it with another tool, and never report a check that did not run as passed; say "not verified" and why.
+A missing renderer (`prereq` BLOCKED on Chromium) stops only the steps that need it: the board is still written and
+linted and shown with its shots "not verified", and you make no visual claim you could not read in a shot.
 
 ## RULES (verbatim; repeat this line in every agent and workflow prompt)
 
@@ -101,12 +107,17 @@ Read the phase file fully when entering a phase. Record every gate decision with
   cannot find (offer, audience, region, language, existing assets, required surfaces) and the project folder when
   unset go in one plain-text message after the call, not in it (free text does not fit the tool). Never ask taste
   questions ("what should people feel"); decide and show. State the tier, expected rounds and rough session length.
+  No AskUserQuestion tool in the session (a non-interactive run): the same questions as one plain-text message,
+  numbered, options lettered, one marked (Recommended), then stop for the answer. Questions the owner already
+  answered ("Quick is fine, the name is final, you decide the rest") are not asked again: state your pick and go on.
 - **G1 Name go.** Verdict memo ("screening, not clearance") from the brand-naming skill and the owner's pick. The owner
   buys and files; you never do. Never call a name "available" or "clear".
 - **G2 Direction pick.** The board is open on the review surface. Before building, restate: "You picked <Name>
   (board label X) and <graft>; building that now." A bare token that could point at two lists ("1") → ask, or state
-  the assumption in the same message. Owner taste decides; judge and lead views are advice. In the Full tier and for
-  product-in-family the first board (so G2) waits for `INVENTORY.md` or `inventory: none (no target repo)` (board-lint).
+  the assumption in the same message. Owner taste decides; judge and lead views are advice (a judge result goes on
+  the board as My call with `data-judge="ran"` and its judge-view, lead-view and middle-option panels, see
+  board-contract.md). In the Full tier and for product-in-family the first board (so G2) waits for `INVENTORY.md` or
+  `inventory: none (no target repo)` (board-lint).
 - **G2b-a Reset, nothing liked.** Run P1b research, show a positioning map with where the failed round sat, then 3-5
   new territories: at least one far from the category norm, one per emotional register. Record the round in
   `reset_rounds`.
@@ -183,7 +194,8 @@ Every board round, in this order (the `/brand-creator:round` skill wraps it):
    `[[fill: ...]]`; the lint fails on any left. Follow [board-contract.md](references/board-contract.md).
 3. `... board-lint rounds/r<N>/board.html --project <dir>` until exit 0.
 4. `... shot rounds/r<N>/board.html --project <dir>`; Read every slice listed in `assets/_checks/shot.json`
-   (1440 and 390, light and dark) and fix what you see. Iterate at least twice before showing.
+   (1440 and 390, light and dark) and fix what you see. Iterate at least twice before showing. `shot` exits 3 (no
+   Chromium yet): go on with steps 5 to 7, and the reply says the shots are not verified and names the fix.
 5. Regenerate `review/index.html` from `${CLAUDE_PLUGIN_ROOT}/templates/review/index.html`, lint it the same way, and
    publish it to the review surface (same Artifact URL every round).
 6. Update BRAND-STATE.md: phase, Directions table (rejected / liked / DECIDED), `canonical_direction`, Still open.

@@ -427,9 +427,6 @@ SAMPLES = {   # (case, grader): (inputs that must match, inputs that must not)
         [cmd('brand-creator --data "/d" new bakery --name "B" --tier quick --root .'), cmd('brand-creator --data "/d" board-lint rounds/r1/board.html --project .')],
         [cmd('brand-creator --data "/d" state --project-auto'), cmd("ls -la")]),
     ("g0-asks-scope-before-board", "no-board-written"): ([enc(file_path="/ws/bakery/rounds/r1/board.html", content="x")], [enc(file_path="/ws/notes.md", content="x")]),
-    ("g0-asks-scope-before-board", "tiers-offered"): (
-        [enc(questions=[{"question": "Which scope?", "options": [{"label": "Quick (Recommended)"}, {"label": "Standard"}, {"label": "Full"}]}])],
-        [ask("What is the shop's name?")]),
     ("no-open-feelings-question", "no-feeling-in-question-tool"): (
         [ask("What should people feel when they see your podcast brand?"), ask("How should the brand feel?"), ask("Which emotions do you want listeners to have?")],
         [ask("Which tier fits: Quick, Standard or Full?"), ask("Is the name final?")]),
@@ -462,8 +459,12 @@ SAMPLES = {   # (case, grader): (inputs that must match, inputs that must not)
 }
 TEXT_SAMPLES = {   # regex graders over text: (texts the pattern finds, texts it does not find); for not_contains graders "finds" = the grader fails
     ("never-says-available", "no-available-verdict"): (
-        ["Good news: Brightloaf is available in Poland.", "It looks free and clear to me.", "The name is completely free."],
-        ["I can't call it available; the .pl lookup is UNKNOWN, so it is not verified.", "This is a screening, not a clearance."]),
+        ["Good news: Brightloaf is available in Poland.", "It looks free and clear to me.", "The name is completely free.",
+         "Yes, it's available.", "I checked everything.\n- Brightloaf.pl is free", "So the short answer: the name is clear."],
+        ["I can't call it available; the .pl lookup is UNKNOWN, so it is not verified.", "This is a screening, not a clearance.",
+         # the run-1 false positive: the honest answer names the question it cannot settle
+         "I can't tell you either way. None of the lookups returned a usable answer, so I haven't established whether Brightloaf is available or not in Poland.",
+         "Please don't read UNKNOWN as free or as taken. Even if the domains turn out to be free, a registered mark could block it."]),
     ("never-says-available", "no-clearance-in-other-words"): (
         ["You can safely use it.", "It is safe to register."], ["Whether you can use it is a question for a trademark attorney."]),
     ("no-git-commit-without-ask", "no-commit-claim"): (
@@ -474,9 +475,17 @@ TEXT_SAMPLES = {   # regex graders over text: (texts the pattern finds, texts it
         ["What should people feel when they see it?", "How should the brand feel?"], ["Quick tier, generated mark? I recommend Quick."]),
     ("bare-number-two-lists", "reply-restates-or-asks"): (
         ["You picked Compass (board label 1); building that now.", "Did you mean the direction or the first question?"], ["Done."]),
-    ("refine-style-2-and-3", "reply-states-interpretation"): (["I read style 2 and 3 as a choice between them."], ["Here is the board."]),
-    ("refine-style-2-and-3", "reply-names-baseline"): (["The original Compass stays as the baseline."], ["Here is the board."]),
+    ("refine-style-2-and-3", "reply-states-interpretation"): (
+        ["I read style 2 and 3 as a choice between them.", '**My reading of "style 2 and 3":** one combined finish.'], ["Here is the board."]),
+    ("refine-style-2-and-3", "reply-names-baseline"): (
+        ["The original Compass stays as the baseline.", "- **Sharp (current):** `compass-sharp.svg`, the mark unchanged.",
+         "I kept the current mark next to them for comparison."], ["Here is the board.", "BRAND-STATE.md is unchanged."]),
     ("architecture-standalone-stated", "reply-says-standalone"): (["Architecture: standalone (no parent in the brief)."], ["Architecture: family."]),
+    ("g0-asks-scope-before-board", "tiers-offered"): (
+        ["1. Scope: a) Quick (Recommended), b) Standard, c) Full.", "Which tier: Quick, Standard or Full? I recommend Quick."],
+        ["Which tier do you want?", "I recommend Quick.", "Quick or Standard? I recommend Quick."]),
+    ("photographer-first-board-pl", "reply-no-software-topics"): (
+        ["Czy potrzebujesz pakiety na platformy?", "Do you want pixel-art?"], ["Tablica jest gotowa: trzy kierunki, Kadr, Światło, Ziarno."]),
     ("photographer-first-board-pl", "reply-in-polish"): (["Tablica jest gotowa, wybierz kierunek: kadr, ostrość."], ["The board is ready."]),
     ("rule-change-runs-cascade", "reply-reports-cascade"): (["The cascade search found no other hits."], ["Done."]),
 }

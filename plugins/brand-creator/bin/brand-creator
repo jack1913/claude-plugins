@@ -143,11 +143,17 @@ need() { # need <tool> <what for> <install hint>
   command -v "$1" >/dev/null 2>&1 || { echo "brand-creator: cannot run: $1 not found ($2). $3 Run: brand-creator prereq --for quick" >&2; exit 3; }
 }
 py_boot() { # standard-library scripts that must work before (or without) uv: setup, prereq, state
-  local f="$1"; shift
+  local f="$1" c tried=""; shift
   need python3 "bootstrap scripts" "Install Python 3.10 or newer."
-  python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' \
-    || { echo "brand-creator: cannot run: python3 is older than 3.10 ($(python3 -V 2>&1)). Install Python 3.10 or newer. Run: brand-creator prereq --for quick" >&2; exit 3; }
-  exec python3 "$S/$f" "$@"
+  # The first python3 on PATH that starts and is 3.10 or newer (as uv picks one): an older or broken python3 earlier on
+  # PATH (a version manager's shim whose library a sandbox cannot read, the system 3.9) must not hide a working one.
+  # (each probe runs in its own subshell, so a crashing interpreter's "Abort trap" notice goes to /dev/null too)
+  while IFS= read -r c; do
+    if ("$c" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)'; exit $?) >/dev/null 2>&1; then exec "$c" "$S/$f" "$@"; fi
+    tried="$tried $c"
+  done < <(type -ap python3 python3.14 python3.13 python3.12 python3.11 python3.10 2>/dev/null)
+  echo "brand-creator: cannot run: no python3 on PATH starts and is 3.10 or newer (tried:$tried). Install Python 3.10 or newer. Run: brand-creator prereq --for quick" >&2
+  exit 3
 }
 py()      { local f="$1"; shift; need uv "locked Python scripts" "Install uv (https://docs.astral.sh/uv/)."; exec uv run --script --locked --quiet "$S/$f" "$@"; }
 js()      { local f="$1"; shift; need node "render and token scripts" "Install Node 22 or newer."; exec node "$S/$f" "$@"; }

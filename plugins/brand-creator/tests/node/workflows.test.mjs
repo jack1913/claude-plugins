@@ -100,6 +100,31 @@ test("a designer that writes outside its folder or changes the project is report
   assert.ok(r.result.violations.some((v) => /Lantern: snapshot verify exit 1/.test(v)));
 });
 
+test("designers that stopped before writing are not boards: nothing built fails loudly with the reasons, a partial round skips them", async () => {
+  const unbuilt = (c) => ({ key: c.label.toLowerCase(), name: c.label, idea: `Not built: the project path does not exist (${c.label}).`, board: "", files: [], screenshots: ["not produced"], test_line: "not run", snapshot_verify_exit: -1, weak_points: [] });
+  const none = await run("directions", fixture("directions"), { respond: (c) => (c.agentType === "brand-creator:brand-designer" ? unbuilt(c) : undefined) });
+  assert.match(none.error, /^directions: no designer built a board \(Compass: Not built: the project path does not exist/);
+  assert.match(none.error, /relaunch to resume/);
+  assert.equal(none.calls.length, 3, "the judge must not be paid to rank nothing");
+  const one = await run("directions", fixture("directions"), { respond: (c) => (c.label === "Compass" ? undefined : c.agentType === "brand-creator:brand-designer" ? unbuilt(c) : undefined) });
+  assert.equal(one.error, null);
+  assert.equal(one.calls.length, 3, "one board is nothing to compare: no judge");
+  assert.deepEqual(one.result.missing, ["Lantern", "Harbor"]);
+  assert.equal(one.result.not_built.length, 2);
+  const two = await run("directions", fixture("directions"), { respond: (c) => (c.label === "Harbor" ? unbuilt(c) : c.agentType === "brand-creator:brand-designer" ? { key: c.label.toLowerCase(), name: c.label, idea: "x", board: `rounds/r1/${c.label.toLowerCase()}/board.html`, files: [`rounds/r1/${c.label.toLowerCase()}/board.html`], screenshots: ["s.png"], test_line: "ok", snapshot_verify_exit: 0, weak_points: [] } : undefined) });
+  assert.equal(two.error, null);
+  assert.equal(two.calls.length, 4, "two real boards are judged");
+  assert.deepEqual(two.result.missing, ["Harbor"]);
+  assert.deepEqual(two.result.violations, [], "a board that was never built is not a violation");
+  assert.ok(!two.calls[3].prompt.includes("Harbor ["), "the judge is not pointed at a board that does not exist");
+});
+
+test("adopt tells the implementer the row-list syntax of adoption status (one comma-separated argument)", async () => {
+  const r = await run("adopt", fixture("adopt"));
+  assert.equal(r.error, null);
+  assert.match(r.calls[0].prompt, /adoption status --set <rows>=doing .* \(one argument: rows as N, N-M or N,M,\.\.\., for example --set 1,6,11-12=doing\)/);
+});
+
 test("inventory: true adds one read-only stage first and needs the owner's approval for 5 agents", async () => {
   const a = { ...fixture("directions"), inventory: { repos: [{ label: "shop", path: "/REPOS/shop" }] } };
   const refused = await run("directions", a);

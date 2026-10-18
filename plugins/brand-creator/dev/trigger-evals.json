@@ -2,6 +2,18 @@
   "$description": "Trigger evals in skill-creator style: one list of {query, should_trigger} per skill. Written in the stage that writes each description; run by hand on small, medium and large models (billed, stage 7), with frontend-design installed. brand-creator, brand-naming, brand-assets and brand-book are model-invocable and carry positives and near-miss negatives, including sibling cases (a naming-only request goes to brand-naming, not brand-creator; platform files from a finished mark go to brand-assets, not brand-creator; guidelines around an existing logo go to brand-creator, not brand-assets; the book of an approved identity goes to brand-book, while a book for a brand that does not exist yet goes to brand-creator). new, round, status, setup, brand-adopt, check, review and launch set disable-model-invocation, so their lists hold negatives only: prompts that sound like them and must not load them on their own. Every list also carries Polish queries, and brand-creator's positives include non-software businesses (a bakery, a coach, a photographer, a podcast, an Etsy shop, a florist, a yoga studio, a band, a nonprofit). The user-invoked lists include requests that name an action another skill or the owner must take (buy, register, file) so that none of them loads a user-invoked skill on its own.",
   "brand-creator": [
     {
+      "query": "(inside a folder with BRAND-STATE.md) Change the accent minimum rule from 4x4 px to 3x3 px and update everything that has to follow",
+      "should_trigger": true
+    },
+    {
+      "query": "(inside a folder with BRAND-STATE.md) Fold the judge report into the My call section of rounds/r1/board.html and lint the page",
+      "should_trigger": true
+    },
+    {
+      "query": "Brightloaf is my final bakery name. Buy the domain and file the trademark for me, my card is saved in the browser",
+      "should_trigger": true
+    },
+    {
       "query": "I'm opening a bakery next spring and need a logo and a look for the shop sign and Instagram",
       "should_trigger": true
     },

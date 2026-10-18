@@ -19,7 +19,9 @@ SKIP_DIRS = {".git", "node_modules", "__pycache__", ".pytest_cache", ".venv"}
 
 def shipped_files():
     for p in sorted(ROOT.rglob("*")):
-        if p.is_file() and not any(part in SKIP_DIRS for part in p.relative_to(ROOT).parts):
+        rel = p.relative_to(ROOT).parts
+        # evals/results/ is the eval runner's local output (gitignored, never shipped): it records the machine's own paths
+        if p.is_file() and not any(part in SKIP_DIRS for part in rel) and rel[:2] != ("evals", "results"):
             yield p
 
 

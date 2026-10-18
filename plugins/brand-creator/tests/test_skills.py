@@ -53,6 +53,43 @@ def test_every_skill_has_valid_frontmatter():
     assert {"brand-creator", "brand-naming", "brand-assets", "brand-book", "brand-adopt", *WRAPPERS} <= names
 
 
+def yaml_plain_scalar_problem(v):
+    """Why an unquoted YAML value would not load as one string (Claude Code parses frontmatter as YAML), or None."""
+    if not v or (len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'"):
+        return None
+    if v[0] in "[]{}>|*&!%@`#,?-\"'" and not re.match(r"-[^\s-]", v):
+        return f"starts with {v[0]!r}"
+    if ": " in v or v.endswith(":"):
+        return "holds ': ' (a mapping inside the value)"
+    if " #" in v:
+        return "holds ' #' (the rest is a comment)"
+    return None
+
+
+def test_every_frontmatter_value_is_valid_yaml():
+    """The line parser above is lenient; a value with ': ' in it fails a real YAML loader (it did, for launch and four
+    descriptions), and the skill or agent then loads without its description."""
+    bad = []
+    for p in [*all_skills(), *sorted((ROOT / "agents").glob("*.md"))]:
+        text = p.read_text(encoding="utf-8")
+        end = text.index("\n---\n", 4)
+        for line in text[4:end].splitlines():
+            m = re.match(r"^([A-Za-z][A-Za-z_-]*):\s*(.*)$", line)
+            if m and (why := yaml_plain_scalar_problem(m.group(2).strip())):
+                bad.append(f"{p.relative_to(ROOT)}: {m.group(1)} {why}")
+    assert not bad, "\n".join(bad)
+
+
+def test_the_yaml_value_check_catches_what_a_loader_rejects():
+    assert yaml_plain_scalar_problem("Writes the list (LAUNCH.md: trademark first)")
+    assert yaml_plain_scalar_problem("ends here: ")
+    assert yaml_plain_scalar_problem("a value # and a comment")
+    assert yaml_plain_scalar_problem("[--name <x>]")
+    assert yaml_plain_scalar_problem('"[--name <x>]"') is None
+    assert yaml_plain_scalar_problem("Bash(brand-creator *)") is None
+    assert yaml_plain_scalar_problem("plain text, with commas (and brackets)") is None
+
+
 def test_orchestrator_frontmatter():
     fm, _ = frontmatter(ORCH)
     assert "disable-model-invocation" not in fm  # the one model-invocable skill in this stage
@@ -280,9 +317,16 @@ def test_the_readme_permission_rule_matches_every_call_the_skills_make():
     for c in calls:
         concrete = c.replace("${CLAUDE_PLUGIN_DATA}", "<data-dir>")
         assert fnmatch.fnmatchcase(concrete, prefix), (c, prefix)
-    # the old absolute form must be gone, or the rule would silently stop matching it
+    # the old absolute form must be gone, or the rule would silently stop matching it. The one exception is the fallback for a
+    # host that does not put bin/ on PATH (a `claude plugin eval` run): named only right after "command not found".
+    fallbacks = 0
     for p in sorted(SKILLS.rglob("*.md")):
-        assert "bin/brand-creator" not in p.read_text(encoding="utf-8"), p
+        text = p.read_text(encoding="utf-8")
+        for m in re.finditer(r"bin/brand-creator", text):
+            assert text[m.start() - 23:m.end() + 1] == '"${CLAUDE_PLUGIN_ROOT}/bin/brand-creator"', (p, text[m.start() - 60:m.end()])
+            assert "command not found" in text[max(0, m.start() - 300):m.start()], (p, "absolute form outside the PATH fallback")
+            fallbacks += 1
+    assert fallbacks >= 4, fallbacks   # the orchestrator, brand-assets, brand-book and brand-naming
 
 
 def test_ai_defaults_is_a_generic_reflex_list():

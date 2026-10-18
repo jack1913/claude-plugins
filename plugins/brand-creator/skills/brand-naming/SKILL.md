@@ -1,7 +1,7 @@
 ---
 name: brand-naming
 description: Finds a name for a business, product, shop, practice or person, or screens a name someone already has in mind. Generates candidates by style from metaphor territories, filters them, kills names with prior art, checks meaning in each audience language, screens domains and registries with the plugin's name checker after the owner's privacy OK, and writes a go / go-with-conditions / no memo that is screening, not clearance. Naming only; not for logos, visual identity or filing trademarks.
-when_to_use: Use when someone needs a name or must check one ("name ideas for my bakery", "is the name X taken", "can I use this name for my app"), or when a brand-creator project reaches P2 with the name open or at risk. Polish triggers include "wymyśl nazwę", "czy nazwa jest wolna", "sprawdź nazwę", "nazwa dla firmy", "jak nazwać".
+when_to_use: Use this skill whenever someone asks for name ideas or asks whether a name is taken or can be used, even for a quick list, because a plain list skips the meaning check in each audience language, the prior-art kill and the honest screening this skill does. Use when someone needs a name or must check one ("name ideas for my bakery", "is the name X taken", "can I use this name for my app"), or when a brand-creator project reaches P2 with the name open or at risk. Polish triggers include "wymyśl nazwę", "czy nazwa jest wolna", "sprawdź nazwę", "nazwa dla firmy", "jak nazwać".
 compatibility: Claude Code only (calls the plugin's bin/ entry point). The screening step needs network access; everything before it runs offline.
 allowed-tools: Bash(brand-creator *)
 ---
@@ -35,6 +35,10 @@ RULES: work under the round/project dir only; never edit adoption targets before
 - [Fleet option: the naming workflow](#fleet-option-the-naming-workflow)
 
 ## Step 0: project and path
+
+Every `brand-creator` call below uses the bare entry point; if the shell answers `brand-creator: command not found` (a
+host that does not put a plugin's `bin/` on PATH), call `"${CLAUDE_PLUGIN_ROOT}/bin/brand-creator"` with the same
+arguments for the rest of the session.
 
 1. Run `brand-creator --data "${CLAUDE_PLUGIN_DATA}" state --project-auto`. Inside a brand project this is phase P2:
    read BRAND-STATE.md, `brief/BRIEF.md`, the strategy core draft and `research/cliches.md`, then

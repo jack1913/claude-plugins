@@ -1154,3 +1154,59 @@ Known gaps (stage 6b):
     prompt's instruction plus the workflow's WARNING on the screener's own `lookups_used` report.
 629. **Review R6-5: the eval loader check cannot bill.** It relied on the runner rejecting the injected `type: zzz` grader. It now also passes
     `--max-cost-usd 0.01 -j 1` and asserts the summary line shows `$0.00` (pytest and smoke).
+
+## Stage 7: behaviour evals, first billed runs (diagnosis and fixes)
+
+The first full run (sonnet, one run per case, no baseline) scored 0.76 with 8 of 17 cases passing. Each failing case was
+re-run alone with its trace kept, and one environment probe case (a scratch copy of the plugin, never shipped) printed what a
+run's shell sees. Findings and decisions:
+
+801. **A run does not put the plugin's `bin/` on PATH** (probe: `brand-creator: command not found`, exit 127; the plugin loads
+    as `brand-creator@inline`). This is the runner's behaviour, not ours, but the skills answered it by concluding "the tool isn't
+    available" (refine case) or by hand-running scripts with the wrong Python (judge case). The orchestrator, brand-assets,
+    brand-book and brand-naming now say: on "command not found", call `"${CLAUDE_PLUGIN_ROOT}/bin/brand-creator"` with the same
+    arguments for the rest of the session. The bare name stays the first form, so the README permission rule still matches it;
+    the test that banned `bin/brand-creator` in the skills now allows it only right after "command not found".
+802. **A version manager's `python3` under the home folder aborts inside the sandbox** (its library is unreadable: dyld
+    "blocked by sandbox"). uv already skips such an interpreter (simulated with a crashing `python3` first on PATH: uv found the
+    next one); `state`, `setup` and `prereq` ran `python3` directly and died. `py_boot` now takes the first `python3` (then
+    `python3.14` ... `python3.10`) on PATH that starts and is 3.10 or newer, and with none exits 3 naming every interpreter it
+    tried. That is interpreter discovery, not a fallback of behaviour: the same script runs either way, or nothing runs and the
+    message says why.
+803. **A data folder the shell may not write crashed `shot` with a Node stack trace** (EPERM on the scratch folder:
+    `${CLAUDE_PLUGIN_DATA}` in a run is inside the run's own configuration, which the sandbox denies). `scratchDir` (JS) and
+    `scratch_dir` (Python) now exit 3 with the fix, like any other missing prerequisite.
+804. **The skill did not fire for work on a brand project's files when the ask never says "brand"** (rule change: edited with
+    sed and Edit, no cascade check; judge fold-in: no `data-field` contract, no lint; buy-the-domain: no click path because no
+    model-invocable skill owned outward asks). The orchestrator's `when_to_use` now names work on a project's files (edit or lint
+    a round board, fold in a judge report, change a rule, token or threshold) and a brand's launch steps ("buy the domain",
+    "file the trademark"), handed to the owner. All three cases then passed with the skill fired. Three positives were added to
+    `dev/trigger-evals.json`. A SessionStart hint hook that names the project would be the deterministic fix, but plan-v2 and
+    `test_hooks_json_is_exec_form_and_scoped` rule out SessionStart hooks; left to the owner.
+805. **G0 without a question tool.** A run is non-interactive: the tool list has no AskUserQuestion even when `allowed_tools`
+    names it, so `tiers-offered` (AskUserQuestion with Quick, Standard and Full, min 1) could never pass. It is now a reply regex
+    (all three tiers and a recommendation); the plan bullet ("G0 asks scope before any board") never required the tool. The skill
+    and 00-intake say what to do without the tool (one plain-text message, numbered, lettered, one Recommended, then stop) and
+    that a question the owner already answered or handed over ("you decide the rest") is not asked again.
+806. **A missing renderer stopped a whole round** (photographer case: `prereq` BLOCKED on Chromium, so no board; the bakery run
+    with the same state built one). The orchestrator and the round skill now say a missing renderer stops only the steps that
+    need it: the board is still written, linted and shown with its shots "not verified" and no visual claim.
+807. **`no-available-verdict` matched the honest answer** ("I haven't established whether Brightloaf is available or not"). The
+    pattern now needs a verdict at the start of a sentence, a list item or after "yes" (at most six words before the verb, none of
+    them a negation or "whether"/"if"); the run-1 sentence is a test sample that must not match, and new samples ("Yes, it's
+    available", "- Brightloaf.pl is free") must.
+808. **The question-tool graders that forbid a call** (bakery, photographer, standalone architecture, feelings) pass trivially
+    while runs have no AskUserQuestion. They stay (they bite if a runner offers the tool); the photographer case gained the
+    reply regex the bakery case already had, and the README lists every sandbox limit the runs showed. The board cases grade the
+    board file and its lint, never the shots, and say so in `expected_outcome`.
+809. **`evals/results/` is the runner's local output** (gitignored) and records the machine's own paths, which failed the
+    shipped-files scan after the first run; `shipped_files()` now skips it.
+810. **The judge fold-in passed its lint as a plain paragraph** (final sweep: rubric PASS, but no `data-judge="ran"` and none of
+    the three panels; the lint checks the panels only when the attribute is set, so it could not see the omission). The G2
+    bullet and board-contract.md now say a judge result goes into My call with `data-judge="ran"` and the template's judge-view,
+    lead-view and middle-option panels, never as a paragraph. A lint rule keyed on a judge-report file was not added: the
+    report has no fixed path (a workflow returns the ranking in its result). One re-run then passed every grader.
+811. **The refine case's reply regexes were narrower than the behaviour** (final sweep: rubric PASS; the reply said "My reading
+    of 'style 2 and 3'" and kept "Sharp (current): the mark unchanged" for comparison, and both regexes missed). They now also
+    take "my/the reading" and "(current)", "current mark" or "for comparison"; "unchanged" alone is not enough (it would match
+    "BRAND-STATE.md is unchanged"). The sweep's reply, re-graded offline, matches both; no billed re-run.

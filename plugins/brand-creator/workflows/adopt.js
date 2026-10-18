@@ -106,7 +106,7 @@ function implement(r) {
     head(r),
     changes,
     'Before your first change run brand-creator --data "' + A.data + '" snapshot take "' + A.project + '/assets" --name adopt-' + (MODE === 'fix' ? 'fix-' : '') + r.label + ' --project "' + A.project + '"; at the end run snapshot verify on that file and report the exit code (the pack must not change).',
-    'Copy pack files byte for byte, cmp each one. Mark rows with brand-creator --data "' + A.data + '" adoption status --set <rows>=doing --project "' + A.project + '". Never pass --no-verify. Do not commit, merge, push or stash: leave the changes in the working tree.',
+    'Copy pack files byte for byte, cmp each one. Mark rows with brand-creator --data "' + A.data + '" adoption status --set <rows>=doing --project "' + A.project + '" (one argument: rows as N, N-M or N,M,..., for example --set 1,6,11-12=doing). Never pass --no-verify. Do not commit, merge, push or stash: leave the changes in the working tree.',
     RULES,
     RESUME,
     'OUTPUT: the schema. Aim to finish within 40 minutes; keep turns short; tail-limit command output.',

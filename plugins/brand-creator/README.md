@@ -248,7 +248,7 @@ agent's description says "Only for brand-creator workflows or an approved fleet;
 | naming | `/brand-creator:naming` | 2 name hunters + 1 screener (no lookups without your privacy OK) + 1 judge | your name pick (G1) |
 | adopt | `/brand-creator:adopt` | per repository: 1 implementer on your branch + 1 independent reviewer | every commit (never commits) |
 
-Agents: `brand-designer`, `brand-judge` (read only), `brand-reviewer` (checks only, never edits), `brand-researcher`,
+Agents: `brand-designer`, `brand-judge` (read only), `brand-reviewer` (checks only, never edits a source file; its check commands write their reports under `assets/_checks/`), `brand-researcher`,
 `brand-inventory` (read only), `brand-implementer`, `brand-namer` (no web tools; the naming workflow's hunters and its screener until you OK lookups). None of them can start other agents. Refinement stays a
 main-thread loop with at most one reviewer call per round.
 
@@ -299,6 +299,22 @@ needed because the plugin's own tools run through `Bash`, and `WebFetch` only so
 page is driven. A run cannot see the case files, loads none of your own settings or `CLAUDE.md`, and its Bash runs in the
 runner's sandbox with network limited to what you grant, so name lookups report UNKNOWN there; the naming case grades exactly that
 honesty. Read only plugins and case files you trust: `--scaffold` runs the scripts under `evals/` as you.
+
+What a run's sandbox cannot do, measured on the first runs (Claude Code 2.1.302), and how the cases live with it:
+
+- **The plugin's `bin/` is not on PATH** in a run (the plugin is loaded inline). The skills say so: on `brand-creator: command
+  not found` they call `"${CLAUDE_PLUGIN_ROOT}/bin/brand-creator"`, the same file, and the graders match either form.
+- **No set-up data folder.** `${CLAUDE_PLUGIN_DATA}` is an empty folder inside the run's own configuration, which the sandboxed
+  shell may not write, and `setup` cannot download anything there. The standard-library tools (`state`, `new`, `board-lint`,
+  `check`, `names`) run; the render steps (`shot`, `card`, `logo-sheet`, `book-pdf`) exit 3 and are reported "not verified". The
+  board cases therefore grade the board file and its lint, never the shots.
+- **Your home directory is unreadable.** A `python3` from a version manager under your home may not start (its library is
+  blocked); the entry point and uv both skip it for the next `python3` on PATH that runs and is 3.10 or newer. With none
+  outside your home, the Python tools cannot run there (`state` and `setup` exit 3 naming each interpreter tried).
+- **No question tool.** A run is non-interactive and its tool list has no AskUserQuestion even when a case allows it, so G0
+  and every other question arrive as text. The graders that forbid a question-tool call stay (they bite if a future runner
+  offers the tool) but pass trivially today; a reply regex or the rubric carries each of those checks.
+- **No network**: the name lookups are UNKNOWN, which is what the naming case grades.
 
 What the cases pin down: stops at a gate; no write to an adoption target before G6; a name is never called "available"; no git
 commit without an ask; G0 asks the scope before any board; no open feelings question; the round 1 board has the map, Today and

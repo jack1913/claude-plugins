@@ -193,3 +193,15 @@ All notable changes are listed here. The plugin version in `.claude-plugin/plugi
   `tray/tray.json`, `qa/rules.json`) once, and the staleness globs cover FACTS.md, INVENTORY.md and `tray/*.json`. Rows and files of slots
   an emitter no longer writes are moved to `removed-<date>/` and reported. A run that stops through an error rewrites its report as failed.
   `emit developer` gains `--content-fraction`.
+
+### Stage 7
+
+- Behaviour evals, first billed runs (decisions 801-811). The skills call `"${CLAUDE_PLUGIN_ROOT}/bin/brand-creator"` when the
+  bare name is not on PATH (an eval run does not add a plugin's `bin/`); `state`, `setup` and `prereq` run on the first `python3`
+  on PATH that starts and is 3.10 or newer (a broken or older one is skipped, none → exit 3 naming each); an unwritable data
+  folder is exit 3 with the fix instead of a stack trace. The orchestrator now triggers on work on a brand project's files and
+  on a brand's launch steps, asks G0 as plain text when there is no question tool, does not re-ask what the owner answered, and
+  builds and lints a board without Chromium (shots "not verified"), and puts a judge result into My call with `data-judge="ran"` and its
+  three panels. Evals: `tiers-offered` grades the reply (runs have no
+  AskUserQuestion), `no-available-verdict` no longer matches "whether X is available", the refine case's reply regexes take "my reading" and "(current)", the photographer case grades its reply
+  for software topics, the README lists what a run's sandbox cannot do, and the shipped-files scan skips `evals/results/`.

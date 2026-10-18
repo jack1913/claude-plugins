@@ -105,7 +105,10 @@ list plus an optional NICE list.
 Score `unique` from a lineup, not from memory: each candidate icon beside the five competitors' icons on a home-screen or
 dock mock at real size, light and dark.
 
-When a judge ran, My call shows the judge view, your view and a middle option side by side.
+When a judge ran, My call shows the judge view, your view and a middle option side by side: set `data-judge="ran"` on the
+`my-call` section and fill the template's three panels (`data-field="judge-view"`, `"lead-view"`, `"middle-option"`). The lint
+checks the panels only when `data-judge="ran"` is set, so a judge result folded in as a plain paragraph passes it unseen;
+never do that.
 
 ## First icon round checklist
 

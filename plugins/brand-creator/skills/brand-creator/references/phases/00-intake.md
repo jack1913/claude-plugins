@@ -89,6 +89,10 @@ a second call with choice options only). When the projects folder is unset, that
 will live: "I'll create ./<slug>/ in the current folder unless you name another place." Then state the tier, the
 expected number of rounds and a rough session length, and record G0.
 
+When the session has no AskUserQuestion tool (a non-interactive run), the same questions go into one plain-text message:
+numbered, options lettered, one marked (Recommended); then stop for the answer. A question the owner already answered in
+the request, or handed to you ("you decide the rest"), is not asked: state the pick in one line and carry on.
+
 Never ask: what people should feel, which colours the owner likes, which style they prefer. Those are answered by the
 boards.
 

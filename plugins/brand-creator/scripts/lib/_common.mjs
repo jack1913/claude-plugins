@@ -133,7 +133,12 @@ export function scratchDir(project, name) {
   const slug = path.basename(project).toLowerCase().replace(/[^a-z0-9._-]+/g, "-");
   const h = crypto.createHash("sha256").update(project).digest("hex").slice(0, 8);
   const d = path.join(dataDir(), "scratch", `${slug}-${h}`, name);
-  fs.mkdirSync(d, { recursive: true });
+  try {
+    fs.mkdirSync(d, { recursive: true });
+  } catch (e) {
+    // a read-only data folder (a sandbox that may not write it, as in a `claude plugin eval` run) is a missing prerequisite
+    die(EXIT.CANNOT, `cannot write scratch output under the data directory (${d}): ${e.code || e.message}. Pass --data <a writable folder that setup prepared>; ${SETUP_HINT}`);
+  }
   return d;
 }
 

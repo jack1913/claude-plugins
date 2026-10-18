@@ -30,7 +30,10 @@ once; a script that does not use them is wrong, not special.
 
 ## Entry point and data directory
 
-Skills call `brand-creator [--data <dir>] <subcommand> ...` (Claude Code puts the plugin's `bin/` on the Bash PATH).
+Skills call `brand-creator [--data <dir>] <subcommand> ...` (Claude Code puts the plugin's `bin/` on the Bash PATH; a host
+that does not, such as a `claude plugin eval` run, gets `"${CLAUDE_PLUGIN_ROOT}/bin/brand-creator"`, the same file, and the
+skills say so). `setup`, `prereq` and `state` run on the first `python3` on PATH that starts and is 3.10 or newer (a broken
+or older one earlier on PATH is skipped, as uv skips it for the other scripts); none → exit 3 naming each one tried.
 Skills pass `--data "${CLAUDE_PLUGIN_DATA}"`, always quoted (a data path may hold a space; a test fails on any
 unquoted form in the skills). `BRAND_CREATOR_DATA` is the environment equivalent. Every subcommand
 except `help`, `version` and `prereq` needs one of them and exits 2 with a clear message otherwise. The data directory

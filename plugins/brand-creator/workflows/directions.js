@@ -113,7 +113,7 @@ const BOARD_SCHEMA = {
     mark: { type: 'string' },
     board: { type: 'string', description: 'project-relative path of board.html' },
     files: { type: 'array', items: { type: 'string' }, description: 'every project-relative path written' },
-    screenshots: { type: 'array', minItems: 1, items: { type: 'string' }, description: 'every slice path the shot report lists, copied before the shared report is overwritten' },
+    screenshots: { type: 'array', minItems: 1, items: { type: 'string' }, description: 'every slice path the shot report lists, as an absolute path, copied before the shared report is overwritten' },
     test_line: { type: 'string' },
     snapshot_verify_exit: { type: 'integer' },
     weak_points: { type: 'array', items: { type: 'string' } },
@@ -172,18 +172,23 @@ function designerPrompt(d) {
   ].join('\n')
 }
 const raw = await parallel(DIRS.map(d => () => agent(designerPrompt(d), opts('brand-designer', { label: d.name, phase: 'Design', schema: BOARD_SCHEMA }))))
-const missing = DIRS.filter((d, i) => !raw[i]).map(d => d.name)
-const boards = raw.filter(Boolean)
+// A designer that stopped before writing anything (a wrong project path, a failed snapshot) still answers the schema,
+// with no files: that is no board, not a board to judge.
+const isBuilt = b => Boolean(b) && list(b.files).length > 0
+const missing = DIRS.filter((d, i) => !isBuilt(raw[i])).map(d => d.name)
+const notBuilt = DIRS.map((d, i) => (raw[i] && !isBuilt(raw[i])) ? d.name + ': ' + String(raw[i].idea || '(no reason given)').slice(0, 200) : null).filter(Boolean)
+const boards = raw.filter(Boolean).filter(isBuilt)
+if (!boards.length) fail('no designer built a board' + (notBuilt.length ? ' (' + notBuilt.join(' | ') + ')' : '') + ': nothing to judge; fix the cause (often the project path or the data folder) and relaunch to resume')
 const violations = []
 DIRS.forEach((d, i) => {
   const b = raw[i]
-  if (!b) return
+  if (!isBuilt(b)) return
   const folder = ROUND_DIR + '/' + d.key + '/'
   if (b.key !== d.key) violations.push(d.name + ': returned key ' + b.key)
   for (const f of list(b.files).concat([b.board])) if (!String(f).startsWith(folder)) violations.push(d.name + ': wrote outside its folder: ' + f)
   if (b.snapshot_verify_exit !== 0) violations.push(d.name + ': snapshot verify exit ' + b.snapshot_verify_exit + ' (something outside ' + ROUND_DIR + '/ changed)')
 })
-if (missing.length) log('no board from: ' + missing.join(', ') + ' (stopped or failed); relaunch to resume, or carry on without them')
+if (missing.length) log('no board from: ' + missing.join(', ') + ' (stopped, failed or nothing built' + (notBuilt.length ? ': ' + notBuilt.join(' | ') : '') + '); relaunch to resume, or carry on without them')
 if (violations.length) log('VIOLATIONS: ' + violations.join(' | '))
 
 // ---------------------------------------------------------------- stage 3: judge (advisory)
@@ -208,6 +213,7 @@ return {
   round: A.round,
   boards,
   missing,
+  not_built: notBuilt,
   violations,
   inventory,
   judge,

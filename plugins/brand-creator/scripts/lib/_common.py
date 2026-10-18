@@ -204,7 +204,11 @@ def rel(project: Path, path: Path) -> str:
 def scratch_dir(project: Path, name: str) -> Path:
     d = data_dir() / "scratch" / (re.sub(r"[^a-z0-9._-]+", "-", project.name.lower()) + "-" +
                                   hashlib.sha256(str(project).encode()).hexdigest()[:8]) / name
-    d.mkdir(parents=True, exist_ok=True)
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+    except OSError as e:   # a read-only data folder (a sandbox that may not write it, as in a `claude plugin eval` run)
+        fail(EXIT_CANNOT, f"cannot write scratch output under the data directory ({d}): {e.strerror or e}. Pass --data <a writable "
+                          "folder that setup prepared>; run /brand-creator:setup (or: brand-creator --data <dir> setup --yes)")
     return d
 
 

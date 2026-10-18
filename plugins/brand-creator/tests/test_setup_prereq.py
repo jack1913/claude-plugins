@@ -147,6 +147,47 @@ def test_bin_requires_a_data_dir_for_everything_but_help_version_prereq(tmp_path
     assert r.returncode == 2 and "required: candidates" in r.stderr  # names now exists; it needs a candidate
 
 
+def test_bootstrap_scripts_skip_a_broken_or_old_python3_earlier_on_path(tmp_path):
+    """A `claude plugin eval` sandbox cannot read a version manager's library under the home folder, so the first python3 on
+    PATH aborts there; `state` (stdlib, no uv) must use the next one that starts and is 3.10+, and say which it tried when none."""
+    fake = tmp_path / "fake"
+    fake.mkdir()
+    (fake / "python3").write_text("#!/bin/sh\necho 'dyld: Library not loaded (simulated)' >&2\nkill -ABRT $$\n")
+    old = tmp_path / "old"
+    old.mkdir()
+    (old / "python3").write_text("#!/bin/sh\nexit 1\n")   # what a 3.9 answers to the version probe
+    for f in (fake / "python3", old / "python3"):
+        f.chmod(0o755)
+    good = Path(sys.executable).resolve().parent
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    for t in ("bash", "dirname", "readlink", "mkdir"):
+        (tools / t).symlink_to(shutil.which(t))
+    exe = str(ROOT / "bin" / "brand-creator")
+    base = {"HOME": str(tmp_path), "BRAND_CREATOR_DATA": str(tmp_path / "d")}
+    r = subprocess.run([exe, "state", "--project-auto"], capture_output=True, text=True, cwd=tmp_path,
+                       env={**base, "PATH": f"{fake}:{old}:{good}:{tools}"})
+    assert r.returncode == 0 and "no brand project found" in r.stdout + r.stderr, (r.returncode, r.stdout, r.stderr)
+    assert "Abort" not in r.stderr, r.stderr
+    r = subprocess.run([exe, "state", "--project-auto"], capture_output=True, text=True, cwd=tmp_path,
+                       env={**base, "PATH": f"{fake}:{old}:{tools}"})
+    assert r.returncode == 3 and str(fake / "python3") in r.stderr and str(old / "python3") in r.stderr, (r.returncode, r.stderr)
+
+
+def test_a_read_only_data_dir_is_a_cannot_run_not_a_crash(tmp_path):
+    """The eval sandbox gives a data folder it may not write: scratch output must exit 3 with the fix, not a stack trace."""
+    d = tmp_path / "d"
+    d.mkdir()
+    proj = tmp_path / "acme"
+    shutil.copytree(ROOT / "skills" / "brand-creator" / "references" / "examples" / "acme", proj)
+    d.chmod(0o555)
+    try:
+        r = bc("shot", str(proj / "rounds" / "r1" / "board.html"), project=proj, data=d)
+    finally:
+        d.chmod(0o755)
+    assert r.returncode == 3 and "cannot write scratch output under the data directory" in r.stderr and "at Object" not in r.stderr, (r.returncode, r.stderr)
+
+
 def test_bin_resolves_the_plugin_root_through_a_symlink(tmp_path):
     link = tmp_path / "brand-creator"
     link.symlink_to(ROOT / "bin" / "brand-creator")
