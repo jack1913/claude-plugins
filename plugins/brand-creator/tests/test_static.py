@@ -186,7 +186,7 @@ def test_node_dependencies_are_pinned_exactly_and_locked():
 def test_every_uv_script_has_a_committed_lock_and_pep723_metadata():
     bootstrap = {"setup.py", "prereq.py", "guard.py"}
     for p in sorted((ROOT / "scripts").rglob("*.py")):
-        if {"lib", "vendor", "booklib", "printlib", "adaptlib"} & set(p.relative_to(ROOT / "scripts").parts) or p.name in ("specs.py", "manifest.py", "_emit.py"):
+        if {"lib", "vendor", "booklib", "printlib", "adaptlib"} & set(p.relative_to(ROOT / "scripts").parts) or p.name in ("specs.py", "manifest.py", "_emit.py", "tierb.py"):
             continue
         text = p.read_text()
         assert "# /// script" in text and "requires-python" in text, p

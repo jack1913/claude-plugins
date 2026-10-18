@@ -4,16 +4,21 @@
 #
 #   1 the project's own generators (tools/*.py built with scripts/lib/px_lib.py)
 #   2 tokens, contrast
-#   3 the emitters for the targets this brand has (apple needs macOS with Xcode)
+#   3 the emitters for the targets this brand has (apple needs macOS with Xcode; android, chrome-ext and msix need the Full tier; profiles, print and
+#     the social posts need Standard or Full), then print-check when print was emitted
 #   4 the gates (downscale on every master a manifest row names, states-check)
 #   5 verify-idempotent: the whole emit chain run twice must give byte-identical files
-#   6 staleness --write (records the inputs, the plugin version and the emitter code the pack was built from), then check
+#   6 the brand book when book/chapters/ exists (book, book-pdf: they read the reports of steps 4 and 5), then the press kit (Standard and Full): the kit holds book.pdf
+#   7 staleness --write (records the inputs, the plugin version and the emitter code the pack was built from), then check
 #
 # The chain sets BRAND_CREATOR_CHAIN=1. A generator that clears or rewrites a whole output folder calls
 # `require_chain()` (scripts/lib/_common.py) and refuses to run without it: run alone it would wipe files that later steps refill.
 # Needs the plugin's bin/ on PATH (Claude Code does that) and BRAND_CREATOR_DATA or CLAUDE_PLUGIN_DATA set.
 # Option values live in the variables of block 2 (an environment variable of the same name overrides them), and reach each emitter
 # as separate, quoted arguments: a tagline or an exemption with spaces in it is one argument, here and in the idempotence run.
+# The stage-4 steps follow the CLI's own tiers: `emit print` (and the e-mail signature), `emit presskit` and `emit social --posts` are Standard and Full tier;
+# print is also opt-in (owner question 7): it runs only when PRINT_REGION is set. A value set for a step the tier does not allow stops the chain (exit 2)
+# instead of being ignored. The chain never writes or fills book/chapters/: no folder, no book step, and the log says so.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 export BRAND_CREATOR_CHAIN=1
@@ -32,6 +37,19 @@ GENERATORS=(
 # ---- block 2: the targets this brand ships to, and the options of each emitter
 TARGETS=(web social windows linux tray tauri wallet developer)
 [ "$(uname)" = Darwin ] && TARGETS+=(apple)     # apple is macOS only; on other systems list it in the release notes as "built on a Mac"
+[ "$("${BC[@]}" state --get tier)" = full ] && TARGETS+=(android chrome-ext msix)   # Tier B packs are Full tier only; delete the ones this brand does not ship to
+TIER="$("${BC[@]}" state --get tier)"
+case "$TIER" in standard|full) TARGETS+=(profiles) ;; esac   # the profile pack (avatar, banners, Instagram) is Standard and Full tier
+PRINT_REGION="${PRINT_REGION:-}"  # EU, US or JP: print stationery is opt-in with the owner (question 7); empty = not opted in, nothing is printed
+PRINT_ICC="${PRINT_ICC:-}"        # YOUR printer's CMYK profile (.icc): with it the PDFs are "PDF/X-4 candidate", without it "RGB proof, not print-ready"
+PRINT_BLEED="${PRINT_BLEED:-}"    # bleed in mm; empty = the region's default (printer-specific: ask your printer)
+IMAGE_BASE_URL="${IMAGE_BASE_URL:-}"   # https URL where the e-mail signature's PNGs will be hosted (print); empty = a placeholder, warned
+POST_FACTS="${POST_FACTS:-}"      # labels of FACTS.md rows, one per post line, separated by semicolons, for example "spare parts;repair guide"; empty = no social posts
+POST_LABELS=(); [ -z "$POST_FACTS" ] || IFS=';' read -r -a POST_LABELS <<< "$POST_FACTS"
+case "$TIER" in
+  standard|full) [ -z "$PRINT_REGION" ] || TARGETS+=(print) ;;
+  *) [ -z "$PRINT_REGION" ] && [ -z "$POST_FACTS" ] || { echo "finish.sh: print and social posts are Standard and Full tier; this project's tier is '$TIER'. Raise it with the owner's agreement: brand-creator state --set tier=standard" >&2; exit 2; } ;;
+esac
 TAGLINE="${TAGLINE:-}"          # one line of copy: it must be a value in FACTS.md (social, developer, apple); empty = no line
 APP_ID="${APP_ID:-}"            # reverse-DNS app id for emit linux (AppStream); empty = the metainfo stays a stub
 MASTER_BAND="${MASTER_BAND:-}"  # band of the master a system shrinks (apple, developer), for example small; empty = the rule's pick
@@ -42,7 +60,14 @@ EMIT_ARGS=()
 emit_args() {                   # sets EMIT_ARGS (an array, so every value stays one argument) for target $1
   EMIT_ARGS=()
   case "$1" in
-    social)    [ -z "$TAGLINE" ] || EMIT_ARGS+=(--tagline "$TAGLINE") ;;
+    social)    [ -z "$TAGLINE" ] || EMIT_ARGS+=(--tagline "$TAGLINE")
+               if [ ${#POST_LABELS[@]} -gt 0 ]; then EMIT_ARGS+=(--posts); for f in "${POST_LABELS[@]}"; do EMIT_ARGS+=(--post-fact "$f"); done; fi ;;
+    profiles)  [ -z "$TAGLINE" ] || EMIT_ARGS+=(--tagline "$TAGLINE") ;;
+    print)     EMIT_ARGS+=(--region "$PRINT_REGION")
+               [ -z "$TAGLINE" ] || EMIT_ARGS+=(--tagline "$TAGLINE")
+               [ -z "$PRINT_BLEED" ] || EMIT_ARGS+=(--bleed "$PRINT_BLEED")
+               [ -z "$PRINT_ICC" ] || EMIT_ARGS+=(--icc "$PRINT_ICC")
+               [ -z "$IMAGE_BASE_URL" ] || EMIT_ARGS+=(--image-base-url "$IMAGE_BASE_URL") ;;
     linux)     [ -z "$APP_ID" ] || EMIT_ARGS+=(--app-id "$APP_ID") ;;
     apple|developer)
       [ -z "$TAGLINE" ] || EMIT_ARGS+=(--tagline "$TAGLINE")
@@ -64,14 +89,17 @@ step "tokens";   "${BC[@]}" tokens
 step "contrast"; "${BC[@]}" contrast
 
 cmds=()
-for t in "${TARGETS[@]}"; do
+emit_one() {   # emit_one <target>: run it, and add it to the idempotence run
+  local t="$1"
   step "emit $t"
   emit_args "$t"
   "${BC[@]}" emit "$t" ${EMIT_ARGS[@]+"${EMIT_ARGS[@]}"}
   # the idempotence run takes each command as one shell-quoted string: printf %q keeps every argument whole
-  q=""; for w in "$t" --project '{project}' ${EMIT_ARGS[@]+"${EMIT_ARGS[@]}"}; do q+="$(printf '%q ' "$w")"; done
+  local q="" w; for w in "$t" --project '{project}' ${EMIT_ARGS[@]+"${EMIT_ARGS[@]}"}; do q+="$(printf '%q ' "$w")"; done
   cmds+=(--cmd "{bc} emit $q")
-done
+}
+for t in "${TARGETS[@]}"; do emit_one "$t"; done
+case " ${TARGETS[*]} " in *" print "*) step "print-check"; "${BC[@]}" print-check ${PRINT_ICC:+--icc "$PRINT_ICC"} ;; esac
 
 # ---- block 3: the gates. Every master a manifest row asks to be downscale-checked (`downscale_source`) needs its own passing
 # report; `check` ties each row to the report of its own master, so one passing file cannot vouch for another.
@@ -86,5 +114,22 @@ while IFS= read -r src; do
 done <<< "$SOURCES"
 [ -f qa/states.json ] && "${BC[@]}" states-check
 "${BC[@]}" verify-idempotent "${cmds[@]}"
+# ---- block 4: the brand book and the press kit. They come after the gates because the book reads the downscale and idempotence reports (a book built before
+# them is stale the moment they are rewritten), and the kit holds book.pdf, so it follows the book (the book's file list leaves the kit out: stage 4b).
+# The kit is deterministic (tested with `emit presskit` run twice); it is not in the idempotence run, which has to finish before the book is built.
+HAVE_BOOK=no
+if [ -d book/chapters ]; then
+  step "book";     "${BC[@]}" book
+  step "book-pdf"; "${BC[@]}" book-pdf
+  HAVE_BOOK=yes
+else
+  step "book: skipped (no book/chapters/: start one with brand-creator book --init and fill it)"
+fi
+case "$TIER" in
+  standard|full)
+    EMIT_ARGS=(); [ "$HAVE_BOOK" = yes ] || EMIT_ARGS+=(--no-book)
+    step "emit presskit"
+    "${BC[@]}" emit presskit ${EMIT_ARGS[@]+"${EMIT_ARGS[@]}"} ;;
+esac
 "${BC[@]}" staleness --write
 "${BC[@]}" check

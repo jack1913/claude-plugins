@@ -18,6 +18,9 @@ The sizes every emitter reads, with where each one comes from. Status: **V** re-
 - [apple-marketing-icon](#apple-marketing-icon)
 - [apple-macos-iconset](#apple-macos-iconset)
 - [apple-visionos-stack](#apple-visionos-stack)
+- [apple-tvos-stack](#apple-tvos-stack)
+- [apple-watch-tv-safe](#apple-watch-tv-safe)
+- [apple-watchos-appiconset](#apple-watchos-appiconset)
 - [apple-menubar-template](#apple-menubar-template)
 - [apple-dmg-background](#apple-dmg-background)
 - [apple-store-frames](#apple-store-frames)
@@ -30,6 +33,15 @@ The sizes every emitter reads, with where each one comes from. Status: **V** re-
 - [linux-appstream](#linux-appstream)
 - [apple-wallet](#apple-wallet)
 - [google-wallet](#google-wallet)
+- [android-adaptive](#android-adaptive)
+- [android-densities](#android-densities)
+- [android-legacy-launcher](#android-legacy-launcher)
+- [android-play-icon](#android-play-icon)
+- [android-feature-graphic](#android-feature-graphic)
+- [chrome-ext-icons](#chrome-ext-icons)
+- [chrome-ext-promo](#chrome-ext-promo)
+- [msix-assets](#msix-assets)
+- [msix-applist](#msix-applist)
 - [email-logo](#email-logo)
 - [nuget-icon](#nuget-icon)
 - [github-org-avatar](#github-org-avatar)
@@ -37,6 +49,13 @@ The sizes every emitter reads, with where each one comes from. Status: **V** re-
 - [email-signature](#email-signature)
 - [social-post-4x5](#social-post-4x5)
 - [social-post-1x1](#social-post-1x1)
+- [profile-avatar](#profile-avatar)
+- [profile-linkedin-banner](#profile-linkedin-banner)
+- [profile-x-banner](#profile-x-banner)
+- [profile-youtube-banner](#profile-youtube-banner)
+- [profile-facebook-cover](#profile-facebook-cover)
+- [profile-instagram-feed](#profile-instagram-feed)
+- [profile-instagram-story](#profile-instagram-story)
 - [print-EU](#print-EU)
 - [print-US](#print-US)
 - [print-JP](#print-JP)
@@ -57,6 +76,9 @@ The sizes every emitter reads, with where each one comes from. Status: **V** re-
 | apple-marketing-icon | App Store marketing icon | U | 2026-10-17 | https://developer.apple.com/help/app-store-connect/reference/app-information/app-icon-specifications |
 | apple-macos-iconset | macOS legacy icon set (AppIcon.appiconset and .icns) | U | 2026-10-17 | https://developer.apple.com/design/human-interface-guidelines/app-icons |
 | apple-visionos-stack | visionOS app icon (solid image stack) | R | 2026-10-17 | https://developer.apple.com/design/human-interface-guidelines/app-icons |
+| apple-tvos-stack | tvOS app icon (layered image stack) | V | 2026-10-17 | https://developer.apple.com/design/human-interface-guidelines/app-icons |
+| apple-watch-tv-safe | Margins for the watchOS circle and the tvOS parallax stack (design choices) | U | 2026-10-17 | https://developer.apple.com/design/human-interface-guidelines/app-icons |
+| apple-watchos-appiconset | watchOS single-size appiconset (watchOS below 26; a proposal, not read at a page) | U | 2026-10-17 | https://developer.apple.com/design/human-interface-guidelines/app-icons |
 | apple-menubar-template | macOS menu bar template image | U | 2026-10-17 | https://developer.apple.com/design/human-interface-guidelines/the-menu-bar |
 | apple-dmg-background | macOS DMG window background | U | 2026-10-17 | https://github.com/create-dmg/create-dmg |
 | apple-store-frames | App Store screenshot frames | U | 2026-10-17 | https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications |
@@ -69,6 +91,15 @@ The sizes every emitter reads, with where each one comes from. Status: **V** re-
 | linux-appstream | AppStream metainfo | U | 2026-10-17 | https://www.freedesktop.org/software/appstream/docs/chap-Metadata.html |
 | apple-wallet | Apple Wallet pass images | V | 2026-10-17 | https://developer.apple.com/design/human-interface-guidelines/wallet |
 | google-wallet | Google Wallet logos | V | 2026-10-17 | https://developers.google.com/wallet/retail/loyalty-cards/resources/brand-guidelines |
+| android-adaptive | Android adaptive icon layers | V | 2026-10-17 | https://developer.android.com/develop/ui/views/launch/icon_design_adaptive |
+| android-densities | Android density buckets (launcher icon pixels) | U | 2026-10-17 | https://developer.android.com/training/multiscreen/screendensities |
+| android-legacy-launcher | Android legacy launcher icon (before API 26) and round variant | U | 2026-10-17 | https://developer.android.com/training/multiscreen/screendensities |
+| android-play-icon | Google Play store icon | V | 2026-10-17 | https://developer.android.com/distribute/google-play/resources/icon-design-specifications |
+| android-feature-graphic | Google Play feature graphic | R | 2026-10-17 | https://support.google.com/googleplay/android-developer/answer/9866151 |
+| chrome-ext-icons | Chrome extension manifest and Web Store icons | V | 2026-10-17 | https://developer.chrome.com/docs/extensions/reference/manifest/icons |
+| chrome-ext-promo | Chrome Web Store promotional images and screenshots | V | 2026-10-17 | https://developer.chrome.com/docs/webstore/images |
+| msix-assets | MSIX package images (tiles and store logo) | V | 2026-10-17 | https://learn.microsoft.com/en-us/windows/apps/design/style/iconography/app-icon-construction |
+| msix-applist | MSIX app list target sizes (taskbar, Start list, title bar) | R | 2026-10-17 | https://learn.microsoft.com/en-us/windows/apps/design/style/iconography/app-icon-construction |
 | email-logo | E-mail header logo | U | 2026-10-17 | https://www.caniemail.com/features/html-img/ |
 | nuget-icon | NuGet package icon | U | 2026-10-17 | https://learn.microsoft.com/en-us/nuget/reference/nuspec#icon |
 | github-org-avatar | GitHub organisation avatar | U | 2026-10-17 | https://docs.github.com/en/organizations/managing-organization-settings/customizing-your-organizations-profile |
@@ -76,6 +107,13 @@ The sizes every emitter reads, with where each one comes from. Status: **V** re-
 | email-signature | HTML e-mail signature | U | 2026-10-17 | https://www.w3.org/TR/WCAG22/#contrast-minimum |
 | social-post-4x5 | Social feed post and carousel slide, portrait 4:5 | U | 2026-10-17 | https://help.instagram.com/1631821640426723 |
 | social-post-1x1 | Social feed post, square 1:1 | U | 2026-10-17 | https://help.instagram.com/1631821640426723 |
+| profile-avatar | Profile photo, shown cropped to a circle | U | 2026-10-17 | https://www.linkedin.com/help/linkedin/answer/a549049 |
+| profile-linkedin-banner | LinkedIn profile banner | U | 2026-10-17 | https://www.linkedin.com/help/linkedin/answer/a549049 |
+| profile-x-banner | X (Twitter) profile header | U | 2026-10-17 | https://help.x.com/en/managing-your-account/how-to-customize-your-profile |
+| profile-youtube-banner | YouTube channel banner | U | 2026-10-17 | https://support.google.com/youtube/answer/2972003 |
+| profile-facebook-cover | Facebook page cover photo | U | 2026-10-17 | https://www.facebook.com/business/help/125355957607680 |
+| profile-instagram-feed | Instagram feed image, portrait 4:5 | U | 2026-10-17 | https://help.instagram.com/1631821640426723 |
+| profile-instagram-story | Instagram story and reel cover, 9:16 | U | 2026-10-17 | https://help.instagram.com/1631821640426723 |
 | print-EU | Print stationery, EU | U | 2026-10-17 | https://www.iso.org/standard/36631.html |
 | print-US | Print stationery, US | U | 2026-10-17 | https://www.usps.com/business/prices.htm |
 | print-JP | Print stationery, JP | U | 2026-10-17 | https://www.jisc.go.jp/eng/ |
@@ -190,6 +228,33 @@ Ten PNGs (16, 32, 128, 256, 512 pt at 1x and 2x) for targets below macOS 26 and 
 
 A back layer and one or two front layers in a solidimagestack, 1024 px each, masked to a circle by the system. The 0.9 safe circle is a rule from an earlier pack, not an Apple number: artwork stays inside 90 percent of the circle.
 
+## apple-tvos-stack
+
+- Surface: tvOS app icon (layered image stack)
+- Status: V, checked 2026-10-17
+- Source: https://developer.apple.com/design/human-interface-guidelines/app-icons
+- Sizes: `{"width": 800, "height": 480, "scale": 2, "layers_min": 2, "layers_max": 5, "actool_platform": "appletvos", "actool_device": "tv", "brandassets_suffix": "TV", "stack": "Small"}`
+
+Two to five layers that the system moves against each other (parallax), each 800 x 480 px at 2x (400 x 240 pt). The catalogue layout (a .brandassets folder holding one .imagestack of .imagestacklayer folders) and the actool flags (--platform appletvos --target-device tv) were tried with the local Xcode: actool exits 0 and still writes an Assets.car when a layer does not fill the stack, and reports it under com.apple.actool.document.errors, so the emitter reads that key too. The App Store icon (a larger stack) and the Top Shelf images are not written: this project has no verified size for them.
+
+## apple-watch-tv-safe
+
+- Surface: Margins for the watchOS circle and the tvOS parallax stack (design choices)
+- Status: U, checked 2026-10-17
+- Source: https://developer.apple.com/design/human-interface-guidelines/app-icons
+- Sizes: `{"watchos_safe_circle": 0.9, "tvos_safe_share": 0.85}`
+
+Not Apple numbers. The watchOS mask is a circle, so the mark stays inside 90 percent of its radius (the visionOS rule of an earlier pack); a tvOS layer is cropped and scaled while it moves, so the mark stays inside the central 85 percent of the layer in both directions. Nobody read a page that states a margin. UNVERIFIED, recheck.
+
+## apple-watchos-appiconset
+
+- Surface: watchOS single-size appiconset (watchOS below 26; a proposal, not read at a page)
+- Status: U, checked 2026-10-17
+- Source: https://developer.apple.com/design/human-interface-guidelines/app-icons
+- Sizes: `{"appiconset_px": 1024}`
+
+The size of the one square PNG in watchos/Assets.xcassets/<AppIcon>.appiconset. 1024 is the size the local actool compiled the .icon to for watchOS, and the single-size form compiles with it; nobody read a page that names the size Xcode or App Store Connect accept for a watchOS appiconset. It is NOT apple-app-icon.watchos_px (1088): that is the Icon Composer layout canvas and only an export size for ictool. A person must check the size in Xcode before the file is relied on. UNVERIFIED, recheck.
+
 ## apple-menubar-template
 
 - Surface: macOS menu bar template image
@@ -298,6 +363,88 @@ Sizes are in points; supply PNG at @2x and @3x. The order-tracking merchant logo
 
 Logo at least 660x660 px, 1:1, a circular mask is applied (keep a 15 percent margin inside the circle); the wide logo is 1280x400 px (minimum height 400), transparent PNG.
 
+## android-adaptive
+
+- Surface: Android adaptive icon layers
+- Status: V, checked 2026-10-17
+- Source: https://developer.android.com/develop/ui/views/launch/icon_design_adaptive
+- Sizes: `{"layer_dp": 108, "reserved_dp": 18, "safe_dp": 66, "logo_min_dp": 48, "logo_max_dp": 66, "layers": ["foreground", "background", "monochrome"]}`
+
+Every layer is 108 x 108 dp; the outer 18 dp on each side is reserved for the launcher's mask and effects; the safe zone is 66 dp and the logo is 48 to 66 dp. Foreground, background and an explicit monochrome layer (themed icons since Android 13; from Android 16 QPR2 a missing monochrome layer is derived by the system). The safe-zone gate tests the 66 dp circle, the stricter of the circle and the square: ink inside the circle is inside the square.
+
+## android-densities
+
+- Surface: Android density buckets (launcher icon pixels)
+- Status: U, checked 2026-10-17
+- Source: https://developer.android.com/training/multiscreen/screendensities
+- Sizes: `{"baseline_dpi": 160, "dpi": {"mdpi": 160, "hdpi": 240, "xhdpi": 320, "xxhdpi": 480, "xxxhdpi": 640}}`
+
+Pixels = dp x dpi / baseline dpi (mdpi 1x, hdpi 1.5x, xhdpi 2x, xxhdpi 3x, xxxhdpi 4x). Written from general knowledge, not read at the platform's page in this project. UNVERIFIED, recheck.
+
+## android-legacy-launcher
+
+- Surface: Android legacy launcher icon (before API 26) and round variant
+- Status: U, checked 2026-10-17
+- Source: https://developer.android.com/training/multiscreen/screendensities
+- Sizes: `{"launcher_dp": 48, "shapes": ["square", "round"]}`
+
+A 48 dp launcher icon at each density, as ic_launcher (square) and ic_launcher_round (circle). Written from general knowledge, not read at the platform's page in this project; the square icon is written without rounded corners because no source for a corner radius was read. UNVERIFIED, recheck.
+
+## android-play-icon
+
+- Surface: Google Play store icon
+- Status: V, checked 2026-10-17
+- Source: https://developer.android.com/distribute/google-play/resources/icon-design-specifications
+- Sizes: `{"px": 512, "max_kb": 1024, "bits": 32, "colour_space": "sRGB", "corner_radius_share": 0.3}`
+
+512 x 512 px, 32-bit PNG, sRGB, at most 1024 KB, a full square: Play applies the 30 percent corner radius and the shadow itself. The emitter writes a 32-bit PNG that is fully opaque, with an sRGB chunk.
+
+## android-feature-graphic
+
+- Surface: Google Play feature graphic
+- Status: R, checked 2026-10-17
+- Source: https://support.google.com/googleplay/android-developer/answer/9866151
+- Sizes: `{"width": 1024, "height": 500, "alpha": false}`
+
+1024 x 500 px, JPEG or 24-bit PNG, no alpha. Read from a researcher's account of the Play Console help page, not re-read here (status R). The emitter writes a 24-bit PNG (colour type 2).
+
+## chrome-ext-icons
+
+- Surface: Chrome extension manifest and Web Store icons
+- Status: V, checked 2026-10-17
+- Source: https://developer.chrome.com/docs/extensions/reference/manifest/icons
+- Also: https://developer.chrome.com/docs/webstore/images
+- Sizes: `{"manifest": [16, 32, 48, 128], "store_icon": 128, "store_art": 96, "formats": ["png"]}`
+
+Manifest icons are PNG at 16, 32, 48 and 128 (WebP and SVG are not supported). The Web Store icon is 128 px with 96 px of artwork and (128 - 96) / 2 px of transparent padding per side; the 128 file of the manifest is the one the store shows, so it follows the same rule.
+
+## chrome-ext-promo
+
+- Surface: Chrome Web Store promotional images and screenshots
+- Status: V, checked 2026-10-17
+- Source: https://developer.chrome.com/docs/webstore/images
+- Sizes: `{"small": {"width": 440, "height": 280, "required": true}, "marquee": {"width": 1400, "height": 560}, "screenshots": [{"width": 1280, "height": 800}, {"width": 640, "height": 400}]}`
+
+The small promo tile (440 x 280) is required, the marquee (1400 x 560) is optional, screenshots are 1280 x 800 or 640 x 400 (they show the real product and are not written). The page was not read for an alpha rule, so the tiles are written opaque.
+
+## msix-assets
+
+- Surface: MSIX package images (tiles and store logo)
+- Status: V, checked 2026-10-17
+- Source: https://learn.microsoft.com/en-us/windows/apps/design/style/iconography/app-icon-construction
+- Sizes: `{"scales": [1, 2, 4], "percent_per_x": 100, "assets": {"Square44x44Logo": {"width": 44, "height": 44}, "Square150x150Logo": {"width": 150, "height": 150}, "Wide310x150Logo": {"width": 310, "height": 150}, "Square310x310Logo": {"width": 310, "height": 310}, "Square71x71Logo": {"width": 71, "height": 71}, "StoreLogo": {"width": 50, "height": 50}}}`
+
+Base sizes are at scale 100 (1x); the file for scale N percent is the base size times N / 100. Scale 100, 200 and 400 (1x, 2x, 4x) are the minimum set; the file name carries the percent (scale-200).
+
+## msix-applist
+
+- Surface: MSIX app list target sizes (taskbar, Start list, title bar)
+- Status: R, checked 2026-10-17
+- Source: https://learn.microsoft.com/en-us/windows/apps/design/style/iconography/app-icon-construction
+- Sizes: `{"asset": "Square44x44Logo", "targetsizes": [16, 20, 24, 30, 32, 36, 40, 48, 60, 64, 72, 80, 96, 256], "altforms": ["unplated", "lightunplated"]}`
+
+Each target size is written as the plain file, as _altform-unplated (dark theme) and as _altform-lightunplated (light theme); both altforms are required, otherwise Windows adds a backplate. The range 16 to 256 and both altforms were confirmed at the page; the list of fourteen sizes comes from a researcher's reading of it (status R).
+
 ## email-logo
 
 - Surface: E-mail header logo
@@ -360,6 +507,69 @@ A table layout with inline styles and its own ground, so a client that darkens o
 - Sizes: `{"width": 1080, "height": 1080, "ratio": "1:1"}`
 
 1080 x 1080 px is the usual square feed size. Written from general knowledge, not read at the platform's page. UNVERIFIED, recheck.
+
+## profile-avatar
+
+- Surface: Profile photo, shown cropped to a circle
+- Status: U, checked 2026-10-17
+- Source: https://www.linkedin.com/help/linkedin/answer/a549049
+- Sizes: `{"px": [400, 800], "safe_circle": 0.72}`
+
+A square image, shown in a circle on most networks; 400 px is the usual minimum and 800 px a crisp size. The 0.72 safe circle is a design margin (the mark stays inside 72 percent of the circle's radius), not a platform number. Written from general knowledge, not read at the platform's page. UNVERIFIED, recheck.
+
+## profile-linkedin-banner
+
+- Surface: LinkedIn profile banner
+- Status: U, checked 2026-10-17
+- Source: https://www.linkedin.com/help/linkedin/answer/a549049
+- Sizes: `{"width": 1584, "height": 396, "safe": {"x": 440, "y": 40, "width": 1100, "height": 316}}`
+
+1584 x 396 px (4:1). The profile photo covers the lower left on desktop and the edges are cropped on small screens, so the safe rectangle keeps to the right of the photo and away from the edges: a proposal, not a platform number. Written from a search summary, not read at the platform's page. UNVERIFIED, recheck.
+
+## profile-x-banner
+
+- Surface: X (Twitter) profile header
+- Status: U, checked 2026-10-17
+- Source: https://help.x.com/en/managing-your-account/how-to-customize-your-profile
+- Sizes: `{"width": 1500, "height": 500, "safe": {"x": 420, "y": 60, "width": 1020, "height": 330}}`
+
+1500 x 500 px (3:1). The profile photo overlaps the lower left and the edges are cropped on some screens: the safe rectangle is a proposal, not a platform number. Written from general knowledge, third-party sources only. UNVERIFIED, recheck.
+
+## profile-youtube-banner
+
+- Surface: YouTube channel banner
+- Status: U, checked 2026-10-17
+- Source: https://support.google.com/youtube/answer/2972003
+- Sizes: `{"width": 2560, "height": 1440, "safe": {"x": 507, "y": 508.5, "width": 1546, "height": 423}}`
+
+2560 x 1440 px; text and logos belong in the central 1546 x 423 px area that every device shows (televisions show the whole image, phones only the strip). Written from general knowledge, not read at the platform's page. UNVERIFIED, recheck.
+
+## profile-facebook-cover
+
+- Surface: Facebook page cover photo
+- Status: U, checked 2026-10-17
+- Source: https://www.facebook.com/business/help/125355957607680
+- Sizes: `{"width": 820, "height": 312, "safe": {"x": 90, "y": 24, "width": 640, "height": 264}}`
+
+820 x 312 px on desktop; phones crop the sides to about the central 640 px. The safe rectangle is a proposal, not a platform number. Written from general knowledge, not read at the platform's page. UNVERIFIED, recheck.
+
+## profile-instagram-feed
+
+- Surface: Instagram feed image, portrait 4:5
+- Status: U, checked 2026-10-17
+- Source: https://help.instagram.com/1631821640426723
+- Sizes: `{"width": 1080, "height": 1350, "safe": {"x": 34, "y": 0, "width": 1012, "height": 1350}}`
+
+1080 x 1350 px (the size of the social-post-4x5 row). The profile grid shows a 3:4 crop, so the safe rectangle is the central 3:4 strip (1012 px wide): a proposal, not a platform number. Written from general knowledge, not read at the platform's page. UNVERIFIED, recheck.
+
+## profile-instagram-story
+
+- Surface: Instagram story and reel cover, 9:16
+- Status: U, checked 2026-10-17
+- Source: https://help.instagram.com/1631821640426723
+- Sizes: `{"width": 1080, "height": 1920, "safe": {"x": 60, "y": 260, "width": 960, "height": 1400}}`
+
+1080 x 1920 px (9:16). The app draws its own controls over the top and bottom of a story, so the safe rectangle leaves 260 px at the top and the bottom: a proposal, not a platform number. Written from general knowledge, not read at the platform's page. UNVERIFIED, recheck.
 
 ## print-EU
 

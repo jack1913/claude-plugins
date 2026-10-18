@@ -5,6 +5,26 @@ All notable changes are listed here. The plugin version in `.claude-plugin/plugi
 
 ## 0.1.0 (unreleased)
 
+### Stage 5
+
+- Stage 5 review S5R-1: the watchOS appiconset is no longer drawn at the Icon Composer canvas (1088). It has its own spec row `apple-watchos-appiconset` (status U, 1024 px), so the pack stays labelled UNVERIFIED until a person checks the size in Xcode.
+- Stage 5a: Tier B emitters. `brand-creator emit android` writes an adaptive launcher icon (foreground, background and an explicit monochrome layer; `mipmap-anydpi-v26`
+  XML and density PNGs mdpi to xxxhdpi), legacy round and square icons, the Google Play icon (512, opaque 32-bit, sRGB chunk) and the feature graphic (1024 x 500,
+  no alpha, from `templates/card.html`); a safe-zone gate refuses a mark whose ink leaves the 66 dp circle (nothing is written) and the monochrome layer is never
+  skipped. `emit chrome-ext` writes the manifest icons 16, 32, 48 and 128 (PNG only, the 128 icon with the Web Store 96-in-128 rule), the store icon and the small
+  and marquee promo tiles. `emit msix` writes the tile and store logos at scale 100, 200 and 400, the app-list target sizes each as the plain, unplated and
+  lightunplated file, and an AppxManifest snippet. Full tier only; every size is a row of `platform-specs.json` (nine new rows: V, R and U); a file built from a
+  U row carries the label "UNVERIFIED, recheck" and `check` fails one that lost it; `check` also gates the adaptive layers and the MSIX unplated trio
+  (`tierb:` rows); the targets are in `finish.sh.tpl` for Full-tier projects.
+- Stage 5b: `emit apple` writes a watchOS icon (one opaque square at the layout size, the mark inside the circle) and a tvOS icon (a two-layer image stack, 800 x 480 at 2x) for
+  the targets `INVENTORY.md` or `--target` lists, each compiled by actool as a hard gate (watchOS has its own appiconset compile; tvOS uses `--platform appletvos --target-device tv`); the margins gate runs
+  before any file is written. The actool gate now also reads `com.apple.actool.document.errors`: a tvOS stack layer that does not fill the stack makes actool exit 0 and write an `Assets.car`, which used
+  to pass. `brand-creator emit profiles` (Standard and Full tier) writes a circle-safe avatar (400 and 800), the LinkedIn, X, YouTube and Facebook banners and the Instagram feed and story images from
+  `templates/profile/banner.html`, each inside its safe area (a gate: a mark or name outside exits 1 and ships nothing), with `_proof/` images that draw the safe areas (never shipped); all new rows are status U and
+  labelled, and `check` gates the labels and re-measures the ink (`tierb:profiles`). `templates/finish.sh.tpl` now runs `emit profiles`, `emit print` with `print-check` (opt-in with `PRINT_REGION`),
+  the social posts (`POST_FACTS`), `book` and `book-pdf` (when `book/chapters/` exists) and `emit presskit`, each gated by the tier like the CLI; a value set for a step the tier does not allow
+  stops the chain with exit 2. The Acme smoke now runs every Tier B emitter that applies and the whole Full-tier chain.
+
 - Stage 4 review fixes. The brand book's cover and colophon keep the 16 px side gutter (and `shot` now records `gutter_left` and `gutter_right` per view); the
   cover's Adoption row says "approved <date>" for G6 and counts rows done from `adoption.json` instead of claiming "applied"; `check --cascade` searches `_build/`
   HTML (the text layer of OG cards, social posts and store frames); the adoption `accounting` row recounts name and colour lines with a second ripgrep run; a

@@ -1,6 +1,6 @@
 ---
 name: brand-assets
-description: Turns an approved logo or mark into the platform files a product ships, with a manifest and size checks at real pixels. Covers favicons and PWA icons, Open Graph and social images, Apple app icons, Windows .ico and installer art, Linux icon themes, tray icons, Tauri, Wallet passes and developer surfaces. Works from a mark file and a target list, or from a brand project's surface inventory. Files from an existing, approved mark only; not for designing or redrawing a logo, fixing how a page shows a logo, resizing one image or building UI.
+description: Turns an approved logo or mark into the platform files a product ships, with a manifest and size checks at real pixels. Covers favicons and PWA icons, Open Graph and social images, Apple app icons, Windows .ico and installer art, Linux icon themes, tray icons, Tauri, Wallet passes, developer surfaces, Android adaptive icons, Chrome extension icons and MSIX assets. Works from a mark file and a target list, or from a brand project's surface inventory. Files from an existing, approved mark only; not for designing or redrawing a logo, fixing how a page shows a logo, resizing one image or building UI.
 when_to_use: Use when someone has a finished mark and needs it as platform files ("favicons from my logo.svg", "app icon set for iOS and macOS from this SVG", "make the .ico and tray icons", "OG image from our logo"), or when a brand-creator project reaches P8 asset packs. Polish triggers include "favicony z logo", "ikony aplikacji z logo", "wygeneruj ikony", "zestaw ikon dla iOS", "plik .ico z logo".
 compatibility: Claude Code only (calls the plugin's bin/ entry point). Apple packs need macOS with Xcode and have no fallback. Off macOS the small-size check needs an explicit --renderer opt-in and the Tauri .icns needs --renderer pillow. Social images and store frames need the Chromium installed by /brand-creator:setup.
 allowed-tools: Bash(brand-creator *)
@@ -24,6 +24,8 @@ RULES: work under the round/project dir only; never edit adoption targets before
 - [Rules every pack follows](#rules-every-pack-follows)
 - [Apple](#apple)
 - [Tray](#tray)
+- [Android, Chrome extension and MSIX](#android-chrome-extension-and-msix)
+- [watchOS, tvOS and profile images](#watchos-tvos-and-profile-images)
 - [Pitfalls](#pitfalls)
 - [References](#references)
 
@@ -52,6 +54,9 @@ Never produce the file another way and never call a check that did not run "pass
 | Target | macOS | Linux and Windows |
 |---|---|---|
 | `emit web`, `emit social`, `emit windows`, `emit linux`, `emit tray`, `emit wallet`, `emit developer` | yes | yes; Windows runs are untested in this version |
+| `emit android`, `emit chrome-ext`, `emit msix` (Full tier) | yes | yes; untested on Windows and Linux in this version |
+| `emit profiles` (Standard and Full tier) | yes | yes; untested on Windows and Linux in this version |
+| `emit apple` watchOS and tvOS packs | yes, with Xcode, for the targets INVENTORY.md lists | no: exit 3, like the rest of `emit apple` |
 | `emit apple` (`.icon`, actool compile, `.icns`, visionOS stack) | yes, with Xcode | no: exit 3, no fallback. Say so plainly: the Apple files must be built on a Mac |
 | `emit tauri` `.icns` | iconutil (default) | only with `--renderer pillow`, which has no 16 px entry (the report says so); otherwise exit 3 |
 | `downscale` (the small-size proof) | `sips -z`, the real system downscale | exit 3 until the owner opts in to `--renderer=resvg` (SVG) or `--renderer=pillow` (PNG). Record the opt-in once with `--record-renderer`; every report then prints the method |
@@ -180,6 +185,41 @@ required surfaces in `brief/BRIEF.md`.
 State names and artwork are the project's (`tray/tray.json`). A master is used at its own size and enlarged only by a
 whole factor. A size with no fitting master is an error, never a blurry resample. The dark set is an exact recolour
 through the token roles. Colour alone never tells two states apart.
+
+## Android, Chrome extension and MSIX
+
+These are the Tier B packs: Full tier only (in any other tier the command exits 2 and says how to raise the tier with the owner's agreement), gate G3, Chromium
+for the promo images and the feature graphic. Rows of the spec table that nobody has read at the platform's page are status U and every file they serve carries
+`UNVERIFIED, recheck` in its manifest note and its report row: say so when you hand the pack over, and never remove the label by hand (`check` fails a file that
+lost it). `brand-creator --data "${CLAUDE_PLUGIN_DATA}" emit android|chrome-ext|msix --project <dir>`.
+
+- **Android** (`emit android`): an adaptive icon with a foreground, a background and an explicit monochrome layer (108 dp layers at mdpi to xxxhdpi, `mipmap-anydpi-v26`
+  XML), legacy round and square icons, the Play icon (512, full square, opaque, 32-bit) and the feature graphic (1024 x 500, no alpha). The mark must stay inside the
+  66 dp safe zone, which is a circle: by default the largest size in the 48 to 66 dp logo range that fits is chosen, `--content-dp` sets it by hand, and a mark that
+  does not fit fails the emit with nothing written. Do not lower the number to make a gate pass: a mark that fills its square at the corners needs a rounder drawing
+  (design work, back in P6). A monochrome layer is always written; art with gradients or masks needs `--svg-mono` (an authored one-colour silhouette). Densities and
+  the legacy 48 dp are status U in this version, so those files carry the label.
+- **Chrome extension** (`emit chrome-ext`): manifest icons 16, 32, 48 and 128 (PNG only), the 128 icon with the Web Store rule (96 px of artwork, transparent padding),
+  the store icon, the small promo tile (required by the store) and the marquee. Screenshots show the real product and are the owner's.
+- **MSIX** (`emit msix`): the tile and store logos at scale 100, 200 and 400, the app-list target sizes each as the plain file, `_altform-unplated` (dark theme) and
+  `_altform-lightunplated` (light theme), and an AppxManifest snippet. Without both altforms Windows paints a backplate behind the icon; `check` fails a size that
+  lacks one, and an unplated file that paints its own ground. The snippet's Description is a FACTS.md value or it is left out and reported.
+
+## watchOS, tvOS and profile images
+
+More Tier B outputs, with the same label rule: a file built from a spec row of status U carries `UNVERIFIED, recheck` in its manifest note and its report row, and `check` fails a file that lost it.
+
+- **watchOS and tvOS** (`emit apple`, macOS with Xcode only): written only when the repository lists the target (`- watchOS: 10.0`, `- tvOS: 17.0` under "Deployment targets" in
+  INVENTORY.md, or `--target watchOS=10.0`). Without a line the report says "no watchOS pack" and writes nothing: do not guess a target. The watchOS icon is one opaque square at
+  an unverified size of its own (1024; a person must check it in Xcode, the files say so) with the mark inside the circle (the system applies the mask); the tvOS icon is a two-layer image stack (back and front, 2x) with the mark inside the central
+  share of the layer. Both are compiled by actool as a hard gate. The mark's size is chosen to fit; a size you set with `--watchos-content-fraction` or `--tvos-content-fraction`
+  is held to the same gate, and a mark that does not fit fails the emit with nothing written (a rounder drawing is the fix, not a lower threshold). The tvOS App Store icon and the
+  Top Shelf images are not written and ictool has no tvOS preview: say so when you hand the pack over.
+- **Profile images** (`emit profiles`, Standard and Full tier, Chromium for the banners): a circle-safe avatar at 400 and 800 px, and one image each for the LinkedIn, X, YouTube and Facebook
+  banners and the Instagram feed and story, from `templates/profile/banner.html` (or `--template`). Everything drawn lies inside the platform's safe area (the circle for the avatar,
+  a rectangle for a banner); a name that is too long fails the emit instead of being cut off by the platform. `assets/profiles/_proof/` holds the same images with the safe areas drawn:
+  show the person a proof image next to the real one, and say that the proof is never uploaded. Every size is status U in this version: read each platform's own page before the images go online
+  (`brand-creator specs-due` lists the rows). One line of copy on a banner is a FACTS.md value (`--tagline`), never invented.
 
 ## Pitfalls
 

@@ -462,3 +462,145 @@ def test_check_gates_the_apple_pack_and_asks_for_the_downscale_report(pack):
     out = bc("check", project=pack).stdout
     assert "[PASS] report:emit-apple" in out and "[PASS] mark_lint:assets/apple/AppIcon.icon/Assets/mark.svg" in out
     assert re.search(r"\[(SKIP|PASS|FAIL)\] report:downscale", out)   # the rows marked qa: downscale ask for it; it is not assumed
+
+
+# ================================================================ watchOS and tvOS (Tier B: only for targets the repo lists)
+
+WATCH = "assets/apple/watchos"
+TV = "assets/apple/tvos"
+BRAND = "AppIconTV.brandassets/Small.imagestack"
+
+
+@pytest.fixture(scope="module")
+def wt_pack(tmp_path_factory, golden):
+    """An emit for a repo that lists watchOS and tvOS (no cards: they are not what these tests read)."""
+    p = tmp_path_factory.mktemp("appleWT") / "acme"
+    shutil.copytree(golden, p)
+    (p / "INVENTORY.md").write_text("# Acme: surface inventory\n\n## Deployment targets\n\n- watchOS: 10.0\n- tvOS: 17.0\n")
+    r = apple(p, "--no-cards")
+    assert r.returncode == 0, r.stdout + r.stderr
+    return p
+
+
+def test_no_watchos_or_tvos_files_without_a_target_and_the_report_says_so(acme):
+    assert apple(acme, "--no-cards").returncode == 0
+    assert not (acme / WATCH).exists() and not (acme / TV).exists()
+    ids = {x["id"]: x for x in report(acme, "emit-apple")["results"]}
+    assert ids["watchos"]["status"] == "info" and "no watchOS deployment target" in ids["watchos"]["detail"]
+    assert ids["tvos"]["status"] == "info" and "no tvOS deployment target" in ids["tvos"]["detail"]
+    assert not any(a["path"].startswith((WATCH, TV)) for a in manifest(acme)["artefacts"])
+
+
+def test_watchos_icon_is_an_opaque_square_at_its_own_unverified_size_with_the_mark_inside_the_circle(wt_pack):
+    px = specs.sizes("apple-watchos-appiconset")["appiconset_px"]
+    assert specs.row("apple-watchos-appiconset")["status"] == "U" and px != specs.sizes("apple-app-icon")["watchos_px"]   # not the Icon Composer canvas, and not shipped as verified
+    f = wt_pack / WATCH / "Assets.xcassets/AppIcon.appiconset" / f"AppIcon-watchOS-{px}.png"
+    assert files(wt_pack / WATCH) == ["Assets.xcassets/AppIcon.appiconset/" + f.name, "Assets.xcassets/AppIcon.appiconset/Contents.json", "Assets.xcassets/Contents.json"]
+    data = f.read_bytes()
+    assert png_size(data) == (px, px) == (1024, 1024) and png_color_type(data) == 2     # the proposed appiconset size (row U), RGB with no alpha
+    cj = json.loads((f.parent / "Contents.json").read_text())
+    assert cj["images"] == [{"filename": f.name, "idiom": "universal", "platform": "watchos", "size": f"{px}x{px}"}]
+    # the mark's ink (pixels unlike the ground) sits inside the circle margin, measured here on the pixels
+    w, h, p = read_png(data)
+    ground = tuple(p[:3])
+    far = max(((i % w + 0.5 - w / 2) ** 2 + (i // w + 0.5 - h / 2) ** 2) ** 0.5 for i in range(w * h) if max(abs(p[i * 4 + c] - ground[c]) for c in range(3)) > 8)
+    limit = specs.sizes("apple-watch-tv-safe")["watchos_safe_circle"] * px / 2
+    assert 0.5 * limit < far <= limit + 1.5, (far, limit)     # inside, and not a mark that is tiny by accident
+    # actool compiled it for watchos: an icon image at that size
+    rends = json.loads((wt_pack / "assets/apple/compiled/watchos-appiconset.renditions.json").read_text())
+    assert [r for r in rends if r["AssetType"] == "Icon Image" and r["Idiom"] == "watch"][0]["PixelWidth"] == px
+
+
+def test_tvos_stack_has_two_layers_at_the_spec_size_inside_the_central_share_and_compiles(wt_pack):
+    tv = specs.sizes("apple-tvos-stack")
+    s = wt_pack / TV / "Assets.xcassets"
+    assert files(s) == [f"{BRAND.rsplit('/', 1)[0]}/Contents.json", f"{BRAND}/Back.imagestacklayer/Content.imageset/Contents.json", f"{BRAND}/Back.imagestacklayer/Content.imageset/back.png",
+                        f"{BRAND}/Back.imagestacklayer/Contents.json", f"{BRAND}/Contents.json", f"{BRAND}/Front.imagestacklayer/Content.imageset/Contents.json",
+                        f"{BRAND}/Front.imagestacklayer/Content.imageset/front.png", f"{BRAND}/Front.imagestacklayer/Contents.json", "Contents.json"]
+    back = (s / BRAND / "Back.imagestacklayer/Content.imageset/back.png").read_bytes()
+    front = (s / BRAND / "Front.imagestacklayer/Content.imageset/front.png").read_bytes()
+    assert png_size(back) == png_size(front) == (800, 480) == (tv["width"], tv["height"]) and png_color_type(back) == 2 and png_color_type(front) == 6
+    stack = json.loads((s / BRAND / "Contents.json").read_text())
+    assert [x["filename"] for x in stack["layers"]] == ["Front.imagestacklayer", "Back.imagestacklayer"] and tv["layers_min"] <= len(stack["layers"]) <= tv["layers_max"]
+    assert json.loads((s / BRAND / "Front.imagestacklayer/Content.imageset/Contents.json").read_text())["images"] == [{"filename": "front.png", "idiom": "tv", "scale": "2x"}]
+    assert json.loads((s / BRAND.rsplit("/", 1)[0] / "Contents.json").read_text())["assets"] == [
+        {"filename": "Small.imagestack", "idiom": "tv", "role": "primary-app-icon", "size": "400x240"}]   # points: the 2x layer size halved
+    w, h, p = read_png(front)
+    xs = [i % w for i in range(w * h) if p[i * 4 + 3] >= 32]
+    ys = [i // w for i in range(w * h) if p[i * 4 + 3] >= 32]
+    share = specs.sizes("apple-watch-tv-safe")["tvos_safe_share"]
+    assert p[3] == 0 and 0 < min(xs) and max(xs) < w and abs(min(xs) - w / 2) <= share * w / 2 + 1.5 and abs(max(xs) + 1 - w / 2) <= share * w / 2 + 1.5
+    assert abs(min(ys) - h / 2) <= share * h / 2 + 1.5 and abs(max(ys) + 1 - h / 2) <= share * h / 2 + 1.5
+    rends = json.loads((wt_pack / "assets/apple/compiled/tvos.renditions.json").read_text())
+    assert any(r["AssetType"] == "ImageStack" for r in rends)
+    assert len([r for r in rends if r["AssetType"] == "Image" and (r["PixelWidth"], r["PixelHeight"]) == (800, 480) and "/" in r["Name"]]) == 2
+
+
+def test_the_watchos_and_tvos_files_say_unverified_and_check_holds_the_label(wt_pack, tmp_path):
+    mf = manifest(wt_pack)["artefacts"]
+    mine = [a for a in mf if a["path"].startswith((WATCH, TV)) or a["path"].endswith(("watchos-appiconset.renditions.json", "tvos.renditions.json"))]
+    assert len(mine) == 3 + 1 + 9 + 1 and all(a.get("labelled") is True and a["note"].startswith("UNVERIFIED, recheck (apple-watch-tv-safe, apple-watchos-appiconset): " if a["path"].startswith(WATCH) or "watchos" in a["path"] else "UNVERIFIED, recheck (apple-watch-tv-safe): ") for a in mine)
+    others = [a for a in mf if a not in mine and a["emitter"] == "apple"]
+    assert others and not any(a.get("labelled") or "UNVERIFIED, recheck (apple-watch" in a.get("note", "") for a in others)    # the Tier A files keep their notes
+    rows = {x["id"]: x for x in report(wt_pack, "emit-apple")["results"]}
+    assert "UNVERIFIED, recheck: apple-watch-tv-safe, apple-watchos-appiconset" in rows[f"file:watchos/Assets.xcassets/AppIcon.appiconset/AppIcon-watchOS-1024.png"]["label"]
+    c = tmp_path / "chk"
+    shutil.copytree(wt_pack, c)
+    out = bc("check", project=c).stdout
+    assert "[PASS] tierb:labels" in out
+    # mutation: the label is stripped from one note -> check fails that row, and names the file
+    path = f"{WATCH}/Assets.xcassets/AppIcon.appiconset/Contents.json"
+    mutate_json(c / "assets/manifest.json", lambda d: next(a for a in d["artefacts"] if a["path"] == path).update(note="single-size appiconset for watchOS"))
+    r = bc("check", project=c)
+    assert r.returncode == 1 and "[FAIL] tierb:labels" in r.stdout and path in r.stdout, r.stdout
+
+
+def test_a_watchos_mark_outside_the_circle_fails_before_anything_is_written(acme):
+    (acme / "INVENTORY.md").write_text("# Inventory\n\n## Deployment targets\n\n- watchOS: 10.0\n")
+    r = apple(acme, "--no-cards", "--watchos-content-fraction", "1.4")
+    assert r.returncode == 1 and "outside the watchOS circle margin" in r.stderr, r.stdout + r.stderr
+    gate = next(x for x in report(acme, "emit-apple")["results"] if x["id"] == "check:watchOS circle")
+    assert gate["status"] == "fail" and "lower --watchos-content-fraction" in gate["detail"]
+    assert not (acme / "assets/apple").exists() or not any((acme / "assets/apple").rglob("*.png"))    # no file of any pack
+    assert apple(acme, "--no-cards").returncode == 0        # without the target the same project emits normally (the flag is only read for a listed target)
+
+
+def test_a_tvos_mark_outside_the_central_share_fails_before_anything_is_written(acme):
+    r = apple(acme, "--no-cards", "--target", "tvOS=17.0", "--tvos-content-fraction", "1.4")
+    assert r.returncode == 1 and "outside the tvOS margin" in r.stderr, r.stdout + r.stderr
+    gate = next(x for x in report(acme, "emit-apple")["results"] if x["id"] == "check:tvOS safe area")
+    assert gate["status"] == "fail" and "lower --tvos-content-fraction" in gate["detail"]
+    assert not (acme / "assets/apple").exists() or not any((acme / "assets/apple").rglob("*.png"))
+
+
+def test_a_target_flag_alone_writes_both_packs_and_a_second_run_writes_nothing(acme):
+    args = ("--no-cards", "--target", "watchOS=11.0", "--target", "tvOS=18.0")
+    r = apple(acme, *args)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (acme / WATCH).is_dir() and (acme / TV).is_dir()
+    again = apple(acme, *args)
+    assert again.returncode == 0 and " 0 written" in again.stdout, again.stdout
+    # dropping the targets retires the files (moved, never deleted) and drops their rows
+    r = apple(acme, "--no-cards")
+    assert r.returncode == 0
+    assert not [f for d in (WATCH, TV) for f in (acme / d).rglob("*") if f.is_file()]      # every file moved out (empty folders may stay)
+    assert (acme / "removed-2026-10-17" / WATCH / "Assets.xcassets/Contents.json").is_file()
+    assert not [a for a in manifest(acme)["artefacts"] if a["path"].startswith((WATCH, TV))]
+
+
+def test_actool_document_errors_are_a_hard_gate_too(acme, plugin_copy):
+    """actool exits 0 and still writes an Assets.car when a stack layer does not fill the stack: the error is under com.apple.actool.document.errors."""
+    f = plugin_copy / "scripts/emitters/apple.py"
+    mutate(f, "tv_back = Img(tw, th, light_bg).png_rgb()", "tv_back = Img(tw - 100, th, light_bg).png_rgb()")
+    r = apple(acme, "--no-cards", "--target", "tvOS=17.0", plugin=plugin_copy)
+    assert r.returncode == 1 and "actool failed compiling tvos/Assets.xcassets" in r.stderr and "must exactly fill the image stack" in r.stderr, r.stdout + r.stderr
+
+
+def test_the_apple_emitter_names_the_tvos_and_watchos_platforms_it_hands_to_actool(wt_pack):
+    rep = {x["id"]: x for x in report(wt_pack, "emit-apple")["results"]}
+    assert rep["actool:tvos"]["status"] == "pass" and rep["actool:watchos-appiconset"]["status"] == "pass"
+    assert rep["tvos:other"]["status"] == "info" and "Top Shelf" in rep["tvos:other"]["detail"]
+    assert "emit-apple" and report(wt_pack, "emit-apple")["status"] == "pass"
+    used = report(wt_pack, "emit-apple")["specs"]
+    assert used["apple-tvos-stack"]["status"] == "V" and used["apple-watch-tv-safe"]["status"] == "U"
+    assert used["apple-watchos-appiconset"]["status"] == "U" and used["apple-app-icon"]["status"] == "V"   # the pack is not V-backed

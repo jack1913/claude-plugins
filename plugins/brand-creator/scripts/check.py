@@ -16,6 +16,9 @@
   * size bands: a slot off the band rule (qa/rules.json) needs an exemption recorded in the manifest
   * staleness: when tools/inputs.json exists, upstream inputs, the plugin version and the emitter code must match it
   * platform-spec rows the pack was built from that are stale or unverified are warned about (specs-due lists them)
+  * Tier B packs (android, chrome-ext, msix, profiles, and the watchOS and tvOS files of apple): a file built from an unverified (U) spec row carries the label
+    "UNVERIFIED, recheck"; the adaptive icon has its background, foreground and monochrome layers at every density; every MSIX app-list size has its plain,
+    unplated and lightunplated files; every avatar and banner of the profile pack is written and its ink still lies inside its safe area
   * the brand book: when book.html exists, a current passing book-lint report made with --self-consistency whose edition, approval and
     facts still match BRAND-STATE.md and FACTS.md; for a generated book also a current `book` report and a book.html that is still the
     bytes `book` wrote (a hand edit fails); a book.pdf report that exists is gated like any other
@@ -35,6 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "adaptlib"))
 from _common import (Parser, Report, add_project_arg, downscale_report_tool, find_project, latest_round, main_guard, read_state, rel,  # noqa: E402
                      sha256_file, verify_history)
 from manifest import band_problems, load_artefacts, verify as verify_manifest  # noqa: E402
+import tierb  # noqa: E402
 from stale import INPUTS_FILE, check_project as check_staleness  # noqa: E402
 from mark_lint import lint_svg_file, svg_files_under_assets  # noqa: E402
 import bookdata  # noqa: E402
@@ -42,7 +46,7 @@ import cascade as cascade_mod  # noqa: E402
 import gates as adapt_gates  # noqa: E402
 from _common import EXIT_USAGE, CliError, fail  # noqa: E402
 
-EMITTERS = ("web", "social", "apple", "windows", "linux", "tray", "tauri", "wallet", "developer", "print", "presskit")   # each writes assets/_checks/emit-<name>.json
+EMITTERS = ("web", "social", "apple", "windows", "linux", "tray", "tauri", "wallet", "developer", "android", "chrome-ext", "msix", "profiles", "print", "presskit")   # each writes assets/_checks/emit-<name>.json
 # manifest `qa` value -> (report tool, the command that writes it)
 QA_GATES = {
     "downscale": ("downscale", "brand-creator downscale --source <master>"),   # per-source reports: see main()
@@ -211,6 +215,8 @@ def main() -> int:
     if any("band" in a_ or "layer_bands" in a_ for a_ in arts):
         rep.add("manifest:bands", "fail" if bprobs else "pass", "slots follow the size-band rule (or carry an exemption)",
                 detail="; ".join(bprobs[:6]) if bprobs else "every slot's band is the one the picker names, or has a stated exemption")
+    for rid_, st_, label_, detail_ in tierb.rows(project):   # Tier B packs: the unverified-row label, the adaptive layers, the MSIX unplated trio
+        rep.add(rid_, st_, label_, detail=detail_)
     if (project / INPUTS_FILE).is_file():
         try:
             check_staleness(project, rep)

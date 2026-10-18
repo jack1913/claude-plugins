@@ -291,7 +291,7 @@ def _spec_numbers():
 
 
 EMITTER_FILES = ["web.py", "social.py", "_emit.py", "manifest.py", "specs.py", "apple.py", "windows.py", "linux.py", "tray.py", "tauri.py", "wallet.py",
-                 "developer.py", "print.py", "presskit.py"]
+                 "developer.py", "print.py", "presskit.py", "android.py", "chrome_ext.py", "msix.py", "tierb.py", "profiles.py"]
 
 
 @pytest.mark.parametrize("name", EMITTER_FILES)

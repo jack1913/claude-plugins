@@ -12,6 +12,13 @@ Writes under assets/apple/ (override with --out-dir) and records every file in a
                                        (ios) and the .icns (macos) ship, with the platform's partial Info.plist and the rendition list of the
                                        compiled Assets.car (compared by `assetutil --info`, never by bytes; the .car itself is not shipped)
   Assets.xcassets/AppIconVision.solidimagestack/   visionOS: a back and a front layer, 1024 px, inside the safe circle, compiled with actool (xros)
+  watchos/Assets.xcassets/AppIcon.appiconset/   only when INVENTORY.md or --target lists watchOS: one opaque square at its own spec size, row apple-watchos-appiconset, status U (the system
+                                       applies the circular mask), the mark inside the circle (a gate, before anything is written), compiled with actool
+                                       for watchos; the size is passed explicitly: ictool exports at the size it is given, never at a default
+  tvos/Assets.xcassets/AppIconTV.brandassets/   only when INVENTORY.md or --target lists tvOS: a layered image stack (a back and a front layer at the
+                                       tvOS size, 2x), the mark inside the central share of the layer (a gate), compiled with actool for appletvos as a
+                                       hard gate. ictool has no tvOS platform, so there is no preview. The App Store icon and the Top Shelf images are not written.
+                                       Both packs read a spec row with status U (the margins): their files carry "UNVERIFIED, recheck" in the manifest note
   Assets.xcassets/AppIcon.appiconset/, legacy/AppIcon.icns   only when INVENTORY.md (Deployment targets) or --target shows iOS or macOS below 26:
                                        iOS 1024 light, dark, tinted and the ten macOS sizes; the .icns by iconutil; compiled with actool too
   Assets.xcassets/AccentColor.colorset, Colors.xcassets   the colour sets build_tokens wrote (byte copies)
@@ -28,6 +35,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import math
 import plistlib
 import re
 import shutil
@@ -43,6 +51,7 @@ import svgtools  # noqa: E402
 from _color import parse_hex  # noqa: E402
 from _common import EXIT_CANNOT, EXIT_FAIL, EXIT_USAGE, confine, fail, main_guard, plugin_root, run  # noqa: E402
 from _emit import Emit, fill_template, render_card, version_below  # noqa: E402
+from tierb import FIT_MARGIN, FIT_STEP, INK_TOLERANCE_PX, fit_share, ink_bbox, ink_far, label_note, label_report_row, unverified_rows  # noqa: E402
 from determinism import car_renditions  # noqa: E402
 from px_lib import Img, from_png  # noqa: E402
 from pxio import png_color_type, png_size  # noqa: E402
@@ -93,13 +102,17 @@ class Compiled:
         self.files, self.plist, self.renditions, self.warnings = files, plist, renditions, warnings
 
 
-def actool(inputs: list[Path], platform: str, target: str, app_icon: str, what: str) -> Compiled:
-    """Compile with the real toolchain. Any failure is exit 1 with actool's own words: this is a hard gate, never a warning."""
+def actool(inputs: list[Path], platform: str, target: str, app_icon: str, what: str, device: str | None = None) -> Compiled:
+    """Compile with the real toolchain. Any failure is exit 1 with actool's own words: this is a hard gate, never a warning.
+    actool reports a catalogue problem (an image stack layer that does not fill the stack) under com.apple.actool.document.errors, with exit 0 and an
+    Assets.car written anyway: both keys count as errors."""
     with tempfile.TemporaryDirectory(prefix="bc-actool-") as td:
         out = Path(td) / "out"
         out.mkdir()
         cmd = ["xcrun", "actool", *map(str, inputs), "--compile", str(out), "--platform", platform, "--minimum-deployment-target", target,
                "--app-icon", app_icon, "--output-partial-info-plist", str(out / "partial.plist"), "--output-format", "xml1"]
+        if device:
+            cmd += ["--target-device", device]
         try:
             cp = subprocess.run(cmd, capture_output=True, timeout=ACTOOL_TIMEOUT_S)
         except subprocess.TimeoutExpired:
@@ -110,7 +123,11 @@ def actool(inputs: list[Path], platform: str, target: str, app_icon: str, what: 
         except Exception:  # noqa: BLE001 - actool prints plain text before the plist on some failures
             pass
         errors = [e.get("description", "") for e in doc.get("com.apple.actool.errors", [])]
+        errors += [e.get("message") or e.get("description", "") for e in doc.get("com.apple.actool.document.errors", [])]
+        errors = list(dict.fromkeys(errors))
         warns = [e.get("description", "") for e in doc.get("com.apple.actool.warnings", [])]
+        warns += [e.get("message") or e.get("description", "") for e in doc.get("com.apple.actool.document.warnings", [])]
+        warns = list(dict.fromkeys(warns))
         if cp.returncode != 0 or errors:
             said = (errors[0] if errors else (cp.stderr.decode("utf-8", "replace").strip() or cp.stdout.decode("utf-8", "replace").strip()))
             fail(EXIT_FAIL, f"actool failed compiling {what} for {platform} (exit {cp.returncode}): {said.splitlines()[0][:MSG_MAX] if said else 'no message'}")
@@ -132,6 +149,10 @@ def main() -> int:
         ap.add_argument("--content-fraction", type=float, default=CONTENT, help=f"share of the icon the mark fills (default {CONTENT})")
         ap.add_argument("--visionos-content-fraction", type=float, help="share of the visionOS layer the mark fills (default: --content-fraction; the circular mask "
                                                                         "is smaller than the square, so a mark that fills the square may need a lower value)")
+        ap.add_argument("--watchos-content-fraction", type=float, help="share of the watchOS layout size the mark's box fills (default: the largest, up to --content-fraction, "
+                                                                       "that keeps the mark inside the circle margin; the gate holds a value you set)")
+        ap.add_argument("--tvos-content-fraction", type=float, help="share of the tvOS layer height the mark's box fills (default: the largest, up to --content-fraction, "
+                                                                    "that keeps the mark inside the central share of the layer; the gate holds a value you set)")
         ap.add_argument("--master-band", help="band of the drawing used for the app icon (default: the band the layout size picks)")
         ap.add_argument("--exemption", help="one line: why --master-band differs from the picker (recorded in the manifest)")
         ap.add_argument("--app-icon-name", default="AppIcon", help="name of the icon in the compiled catalogue (default AppIcon)")
@@ -158,6 +179,60 @@ def main() -> int:
     master = e.drawing(layout, band=e.a.master_band)
     dark_art = e.dark_svg(master)
     e.rep.add("master:drawing", "info", "drawing used for the app icon", detail=f"{master.rel or 'the mark'} (band {master.band or 'none'})")
+
+    # ---- 0. watchOS and tvOS, only for targets the repo lists: the rasters and their gates come first, so a mark outside the margin writes nothing
+    all_targets = e.targets()
+    watch_t, tv_t = all_targets.get("watchOS"), all_targets.get("tvOS")
+    if watch_t or tv_t:
+        wt_safe = e.sizes("apple-watch-tv-safe")
+    if watch_t:
+        wpx = e.sizes("apple-watchos-appiconset")["appiconset_px"]   # the pre-26 appiconset: its own U row, not the .icon layout canvas (watchos_px)
+        w_limit = wt_safe["watchos_safe_circle"] * wpx / 2
+        art_w = e.drawing(wpx)
+        far_full = ink_far(e.png(svgtools.tile(art_w.svg, wpx, wpx, content=1.0), wpx, wpx))
+        if not far_full:
+            fail(EXIT_FAIL, f"the drawing {art_w.rel or 'of the mark'} has no ink: nothing to put in the watchOS icon")
+        w_auto = e.a.watchos_content_fraction is None
+        wc = fit_share(w_limit, far_full, content) if w_auto else e.a.watchos_content_fraction
+        if wc <= 0:
+            fail(EXIT_FAIL, f"the mark does not fit the watchOS circle margin even at the smallest size (its ink reaches {far_full:.0f} px from the centre at a box of 1.0, "
+                            f"the limit is {w_limit:.0f} px). Nothing is written. Redraw the mark with a rounder silhouette")
+        d_w, w_raw = e.tile_png(wpx, content=wc, ground=light_bg, flat=True)
+        watch_png = from_png(w_raw).png_rgb()
+        w_far = ink_far(watch_png, ground=parse_hex(light_bg))
+        w_ok = w_far <= w_limit + INK_TOLERANCE_PX
+        e.rep.add("check:watchOS circle", "pass" if w_ok else "fail", f"the mark stays inside {wt_safe['watchos_safe_circle']:g} of the watchOS circle",
+                  detail=f"farthest ink pixel {w_far:.0f} px from the centre, limit {w_limit:.0f} px, box {wc:g} of the canvas ({'automatic' if w_auto else '--watchos-content-fraction'})"
+                         + ("" if w_ok else "; lower --watchos-content-fraction"))
+        if not w_ok:
+            fail(EXIT_FAIL, f"the mark is outside the watchOS circle margin (ink {w_far:.0f} px from the centre, limit {w_limit:.0f}). Nothing is written. "
+                            "Lower --watchos-content-fraction, or leave it out and the largest size that fits is chosen")
+    else:
+        e.rep.add("watchos", "info", "no watchOS pack", detail="INVENTORY.md lists no watchOS deployment target and no --target watchOS=<version> was given")
+    if tv_t:
+        tv = e.sizes("apple-tvos-stack")
+        tw, th = tv["width"], tv["height"]
+        t_half = (wt_safe["tvos_safe_share"] * tw / 2, wt_safe["tvos_safe_share"] * th / 2)
+        art_t = e.drawing(max(tw, th))
+        bb_full = ink_bbox(e.png(svgtools.tile(art_t.svg, tw, th, content=1.0), tw, th))
+        if bb_full is None:
+            fail(EXIT_FAIL, f"the drawing {art_t.rel or 'of the mark'} has no ink: nothing to put in the tvOS icon")
+        hx, hy = max(tw / 2 - bb_full[0], bb_full[2] - tw / 2), max(th / 2 - bb_full[1], bb_full[3] - th / 2)
+        t_auto = e.a.tvos_content_fraction is None
+        tc = round(math.floor(min(content, t_half[0] / hx * FIT_MARGIN, t_half[1] / hy * FIT_MARGIN) / FIT_STEP) * FIT_STEP, 2) if t_auto else e.a.tvos_content_fraction
+        if tc <= 0:
+            fail(EXIT_FAIL, "the mark does not fit the tvOS layer margin even at the smallest size. Nothing is written")
+        tv_front = e.png(svgtools.tile(art_t.svg, tw, th, content=tc), tw, th)
+        tv_back = Img(tw, th, light_bg).png_rgb()
+        bb = ink_bbox(tv_front)
+        t_ok = bb is not None and all(abs(v - c0) <= lim + INK_TOLERANCE_PX for v, c0, lim in
+                                      ((bb[0], tw / 2, t_half[0]), (bb[2], tw / 2, t_half[0]), (bb[1], th / 2, t_half[1]), (bb[3], th / 2, t_half[1])))
+        e.rep.add("check:tvOS safe area", "pass" if t_ok else "fail", f"the mark stays inside the central {wt_safe['tvos_safe_share']:g} of the layer in both directions",
+                  detail=f"ink box {bb}, box {tc:g} of the layer height ({'automatic' if t_auto else '--tvos-content-fraction'})" + ("" if t_ok else "; lower --tvos-content-fraction"))
+        if not t_ok:
+            fail(EXIT_FAIL, f"the mark is outside the tvOS margin (ink box {bb}). Nothing is written. Lower --tvos-content-fraction, or leave it out and the largest size that fits is chosen")
+    else:
+        e.rep.add("tvos", "info", "no tvOS pack", detail="INVENTORY.md lists no tvOS deployment target and no --target tvOS=<version> was given")
 
     def slot(rel, data, rows, **kw):
         """A file that is a drawing at a size: slot, size, band and who made the pixels go into the manifest."""
@@ -321,7 +396,10 @@ def main() -> int:
     if not targets:
         e.rep.add("legacy", "info", "no legacy assets", detail="INVENTORY.md lists no deployment targets and no --target was given, so no appiconset or legacy .icns is written")
     elif not (legacy_ios or legacy_mac):
-        e.rep.add("legacy", "info", "no legacy assets", detail=f"every target is {ic['min_target']} or later ({', '.join(f'{k} {v}' for k, v in targets.items())})")
+        legacy_scope = {k: v for k, v in targets.items() if k in ("iOS", "macOS")}   # watchOS and tvOS have their own packs (section 8b)
+        who = "every target" if len(legacy_scope) == len(targets) else "every iOS and macOS target"
+        e.rep.add("legacy", "info", "no legacy assets", detail=(f"{who} is {ic['min_target']} or later ({', '.join(f'{k} {v}' for k, v in legacy_scope.items())})"
+                                                              if legacy_scope else "INVENTORY.md lists no iOS or macOS target; watchOS and tvOS have their own packs"))
     app_set = "Assets.xcassets/AppIcon.appiconset"
     if legacy_ios or legacy_mac:
         images = []
@@ -392,6 +470,68 @@ def main() -> int:
               detail=f"{len(stacks)} stack, {len(imgs)} layer images at {vpx} px")
     plain("compiled/visionos.renditions.json", dump_json(vc.renditions), ["apple-visionos-stack"], slot="apple-compiled-visionos",
           resampled_by="SYS", note="assetutil --info rendition list of the visionOS Assets.car")
+
+    # ---- 8b. watchOS and tvOS packs (Tier B: labelled while the margin row is unverified)
+    def wt_put(rel, data, rows, *, slot_name, note, size_px=None, drawing=None, **kw):
+        """A file of the watchOS or tvOS pack: labelled when a spec row it serves is U, and held by `check` (labelled: true in the manifest)."""
+        u = unverified_rows(rows)
+        kw.update(note=label_note(rows, note), labelled=True)
+        if size_px is None:
+            e.put(f"{base}/{rel}", data, rows, slot=slot_name, **kw)
+        else:
+            e.slot(f"{base}/{rel}", data, rows, slot=slot_name, size_px=size_px, drawing=drawing, exemption=None, **kw)
+        label_report_row(e.rep, u)
+
+    if watch_t:
+        wrows = ["apple-watch-tv-safe", "apple-watchos-appiconset"]
+        wset = f"watchos/Assets.xcassets/{name}.appiconset"
+        wfile = f"{name}-watchOS-{wpx}.png"
+        wt_put(f"{wset}/{wfile}", watch_png, wrows, slot_name="apple-watchos-icon", size_px=wpx, drawing=d_w, resampled_by="OURS",
+               note=f"watchOS icon at {wpx} px (its own spec row, unverified; not the .icon layout size {app['watchos_px']}): an opaque square, the system applies the circular mask; the mark is {wc:g} of the canvas")
+        wt_put(f"{wset}/Contents.json", dump_json({"images": [{"filename": wfile, "idiom": "universal", "platform": "watchos", "size": f"{wpx}x{wpx}"}], "info": INFO}), wrows,
+               slot_name="apple-watchos-appiconset", note="single-size appiconset for watchOS")
+        wt_put("watchos/Assets.xcassets/Contents.json", dump_json({"info": INFO}), wrows, slot_name="apple-catalog", note="watchOS catalogue root")
+        wc_out = actool([e.project / base / "watchos/Assets.xcassets"], ic["actool_platforms"]["watchos"], watch_t, name, f"watchos/Assets.xcassets ({name}.appiconset)")
+        for w_ in wc_out.warnings:
+            e.rep.add("actool:watchos-appiconset:warning", "warn", "actool warning", detail=w_[:MSG_MAX])
+        w_imgs = [r for r in icon_images(wc_out.renditions) if r.get("Idiom") == "watch" and r.get("PixelWidth") == wpx]
+        e.rep.add("actool:watchos-appiconset", "pass" if w_imgs else "fail", f"the watchOS appiconset compiles for watchOS {watch_t} with an icon image at the appiconset size",
+                  detail=f"{len(wc_out.renditions)} renditions; {len(w_imgs)} icon image(s) at {wpx} px")
+        wt_put("compiled/watchos-appiconset.renditions.json", dump_json(wc_out.renditions), wrows, slot_name="apple-compiled-watchos-appiconset", resampled_by="SYS",
+               note="assetutil --info rendition list of the watchOS appiconset's Assets.car")
+        e.rep.add("watchos:icon", "info", "the .icon serves watchOS 26 and later too" if not version_below(watch_t, ic["min_target"]) else "watchOS below 26 uses this appiconset",
+                  detail=f"the .icon above lists watchOS as a circle platform; ictool exports it only at the size it is given ({app['watchos_px']} px, passed with --previews)")
+    if tv_t:
+        trows = ["apple-tvos-stack", "apple-watch-tv-safe"]
+        brand = f"tvos/Assets.xcassets/{name}{tv['brandassets_suffix']}.brandassets"
+        stk = f"{brand}/{tv['stack']}.imagestack"
+        for layer, png in (("Back", tv_back), ("Front", tv_front)):
+            wt_put(f"{stk}/{layer}.imagestacklayer/Content.imageset/{layer.lower()}.png", png, trows, slot_name=f"tvos-{layer.lower()}", size_px=(tw, th), drawing=(art_t if layer == "Front" else None),
+                   resampled_by="OURS", note=f"{layer} layer, {tw} x {th} px at {tv['scale']}x, " + ("opaque ground" if layer == "Back" else f"the mark with alpha, {tc:g} of the layer height"))
+            wt_put(f"{stk}/{layer}.imagestacklayer/Content.imageset/Contents.json",
+                   dump_json({"images": [{"filename": f"{layer.lower()}.png", "idiom": "tv", "scale": f"{tv['scale']}x"}], "info": INFO}), trows, slot_name=f"tvos-{layer.lower()}",
+                   note="imageset Contents.json: idiom tv")
+            wt_put(f"{stk}/{layer}.imagestacklayer/Contents.json", dump_json({"info": INFO}), trows, slot_name=f"tvos-{layer.lower()}", note="layer Contents.json")
+        wt_put(f"{stk}/Contents.json", dump_json({"info": INFO, "layers": [{"filename": "Front.imagestacklayer"}, {"filename": "Back.imagestacklayer"}]}), trows,
+               slot_name="tvos-stack", note="front first, then back")
+        wt_put(f"{brand}/Contents.json", dump_json({"info": INFO, "assets": [{"filename": f"{tv['stack']}.imagestack", "idiom": "tv", "role": "primary-app-icon",
+                                                                                "size": f"{tw // tv['scale']}x{th // tv['scale']}"}]}), trows,
+               slot_name="tvos-brandassets", note="the app icon asset: one primary stack, no Top Shelf image")
+        wt_put("tvos/Assets.xcassets/Contents.json", dump_json({"info": INFO}), trows, slot_name="apple-catalog", note="tvOS catalogue root")
+        tv_name = f"{name}{tv['brandassets_suffix']}"
+        tc_out = actool([e.project / base / "tvos/Assets.xcassets"], tv["actool_platform"], tv_t, tv_name, f"tvos/Assets.xcassets ({tv_name}.brandassets)", device=tv["actool_device"])
+        for w_ in tc_out.warnings:
+            e.rep.add("actool:tvos:warning", "warn", "actool warning", detail=w_[:MSG_MAX])
+        t_stacks = [r for r in tc_out.renditions if r.get("AssetType") == "ImageStack"]
+        t_imgs = [r for r in tc_out.renditions if r.get("AssetType") == "Image" and r.get("PixelWidth") == tw and r.get("PixelHeight") == th and "/" in str(r.get("Name", ""))]
+        n_layers = len(t_imgs)
+        e.rep.add("actool:tvos", "pass" if t_stacks and tv["layers_min"] <= n_layers <= tv["layers_max"] else "fail",
+                  f"the image stack compiles for tvOS {tv_t} with {tv['layers_min']} to {tv['layers_max']} layers at the layer size",
+                  detail=f"{len(t_stacks)} stack, {n_layers} layer image(s) at {tw} x {th} px")
+        wt_put("compiled/tvos.renditions.json", dump_json(tc_out.renditions), trows, slot_name="apple-compiled-tvos", resampled_by="SYS",
+               note="assetutil --info rendition list of the tvOS Assets.car")
+        e.rep.add("tvos:other", "info", "not written for tvOS", detail="the App Store icon (a larger stack) and the Top Shelf images: this project has no verified size for them; "
+                                                                      "ictool has no tvOS platform, so there is no preview either (open the stack in Xcode)")
 
     # ---- 9. cards: DMG background and store frames (Chromium)
     if e.a.no_cards:

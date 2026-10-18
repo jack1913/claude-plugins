@@ -75,6 +75,12 @@ build
   emit tray               shape-coded state icons (Windows light/dark, Linux, macOS template) with the states-check gate
   emit tauri              the Tauri icons folder (.icns by iconutil, or Pillow behind --renderer pillow)
   emit wallet|developer   Apple and Google Wallet images; e-mail logo, package-registry icon, org avatar, CLI identity text
+  emit android            adaptive launcher icon (foreground, background, monochrome; mipmap XML and density PNGs), legacy icons, Play icon 512,
+                          feature graphic; the mark must stay inside the 66 dp safe zone (Full tier)
+  emit chrome-ext|msix    Chrome extension icons 16/32/48/128, store icon and promo tiles; MSIX tile and app-list assets with the unplated and
+                          lightunplated variants plus an AppxManifest snippet (Full tier)
+  emit profiles           circle-safe avatar 400 and 800, LinkedIn, X, YouTube and Facebook banners, Instagram feed and story images, each inside its safe area
+                          (a gate), with proof images that draw the safe areas; every size is unverified and labelled (Standard tier)
   emit print              business card (front, back), letterhead, envelope as print PDFs (trim + 2 x bleed, crop marks, outlined text, boxes set) and
                           an HTML e-mail signature; "RGB proof, not print-ready", or with --icc <your CMYK profile> a "PDF/X-4 candidate"
   emit presskit           deterministic zip of logos, lockups, tokens and book.pdf
@@ -175,13 +181,14 @@ case "$sub" in
   specs-due)  py specs_due.py "$@" ;;
   tokens)     js build_tokens.mjs "$@" ;;
   emit)
-    [ $# -ge 1 ] || die "emit needs a target: web | social | apple | windows | linux | tray | tauri | wallet | developer | print | presskit"
+    [ $# -ge 1 ] || die "emit needs a target: web | social | apple | windows | linux | tray | tauri | wallet | developer | android | chrome-ext | msix | print | presskit | profiles"
     target="$1"; shift
     case "$target" in
       web)    py emitters/web.py "$@" ;;
       social) py emitters/social.py "$@" ;;
-      apple|windows|linux|tray|tauri|wallet|developer|print|presskit) py "emitters/$target.py" "$@" ;;
-      *)      die "unknown emit target: $target (this version has: web, social, apple, windows, linux, tray, tauri, wallet, developer, print, presskit)" ;;
+      apple|windows|linux|tray|tauri|wallet|developer|android|msix|print|presskit|profiles) py "emitters/$target.py" "$@" ;;
+      chrome-ext) py emitters/chrome_ext.py "$@" ;;
+      *)      die "unknown emit target: $target (this version has: web, social, apple, windows, linux, tray, tauri, wallet, developer, android, chrome-ext, msix, print, presskit, profiles)" ;;
     esac ;;
   names)      py check_names.py "$@" ;;
   smoke)      need bash "smoke test" ""; exec bash "$ROOT/tests/smoke/acme.sh" "$@" ;;

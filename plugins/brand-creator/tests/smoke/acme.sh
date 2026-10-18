@@ -7,7 +7,8 @@
 # new -> r1 round page -> tokens -> mark SVG -> contrast -> logo sheet -> emit web -> emit social -> 4-view shots
 # -> board-lint -> QA and mark tooling (px_lib marks, outlined wordmark, downscale, states, colour-vision, guides, fonts, motion)
 # -> platform packs (windows, linux, tray, tauri, wallet, developer; on macOS also apple: .icon, actool per platform, legacy sets, visionOS,
-# DMG, store frames; elsewhere `emit apple` must exit 3) -> snapshot, idempotence over the whole emit chain, staleness, specs -> check -> freeze -> check again -> guard hook on the frozen history.
+# DMG, store frames, watchOS and tvOS packs for the targets INVENTORY.md lists; elsewhere `emit apple` must exit 3) -> Tier B packs (tier raised to full: android, chrome-ext, msix,
+# profiles; the safe-zone gates on mutated marks and an overflowing name) -> snapshot, idempotence over the whole emit chain, staleness, specs -> check -> freeze -> check again -> guard hook on the frozen history.
 # -> brand book (generated: skeletons, build, lint, byte-identical rebuild, check, labelled RGB PDF; six mutations; patch and collapse on a hand-authored copy)
 # -> print and press (print PDFs trim + 2 x bleed, boxes, outlined text, RGB proof label, print-check with four mutations, a PDF/X-4 candidate only with --icc, press kit, social posts)
 # -> adoption (a synthetic target repository surveyed read only, pins, progress), check --cascade, BRAND.md and DESIGN.md (linted), the applied skill, LAUNCH.md
@@ -247,11 +248,11 @@ ok "downscale passes on each master the host shrinks (each manifest row is tied 
 grep -q $'\x1b\[36mAcme' "$P/assets/developer/cli/identity.txt" || die "the CLI identity did not fall back to ANSI 36 (the accent fails 4.5:1 on a black ground)"
 ok "windows, linux, tray, tauri, wallet and developer packs written at the spec sizes"
 
-step "emit apple: the .icon, actool per platform (hard gate), legacy sets, visionOS stack, DMG and store frames (macOS); exit 3 elsewhere"
+step "emit apple: the .icon, actool per platform (hard gate), legacy sets, visionOS stack, watchOS and tvOS packs for the listed targets, DMG and store frames (macOS); exit 3 elsewhere"
 APPLE_ARGS=(--tagline "a repair guide is in every box" --master-band small --content-fraction 0.8 --visionos-content-fraction 0.6
             --exemption "the system shrinks this one master to 16 px; the coarse-grid drawing keeps the accent")
 if [ "$(uname)" = Darwin ]; then
-  printf '# Acme: surface inventory\n\n## Deployment targets\n\n- iOS: 17.0\n- macOS: 14.0\n' > "$P/INVENTORY.md"
+  printf '# Acme: surface inventory\n\n## Deployment targets\n\n- iOS: 17.0\n- macOS: 14.0\n- watchOS: 10.0\n- tvOS: 17.0\n' > "$P/INVENTORY.md"
   "${BC[@]}" emit apple --project "$P" "${APPLE_ARGS[@]}" || die "emit apple failed"
   python3 - "$P/assets/apple" <<'PY' || die "the Apple pack is wrong"
 import json, struct, sys
@@ -273,7 +274,15 @@ assert size(a / "Assets.xcassets/AppIconVision.solidimagestack/Front.solidimages
 assert size(a / "dmg/background@2x.png")[0] == (1320, 800) and size(a / "store/frame-iphone.png")[0] == (1206, 2622)
 assert size(a / "Assets.xcassets/AppIcon.appiconset/AppIcon-iOS-light-1024.png") == ((1024, 1024), 2)
 assert (a / "legacy/AppIcon.icns").read_bytes()[:4] == b"icns"
-print("   ok: .icon valid, compiled for ios, macos, watchos and visionos; fallbacks, .icns, marketing icon (no alpha), legacy sets, DMG, frames")
+# watchOS (listed in INVENTORY.md): one opaque square at its own (U) spec size, compiled by actool for watchos; tvOS: a two-layer stack at 800 x 480, compiled for appletvos
+assert size(a / "watchos/Assets.xcassets/AppIcon.appiconset/AppIcon-watchOS-1024.png") == ((1024, 1024), 2)
+tv = a / "tvos/Assets.xcassets/AppIconTV.brandassets/Small.imagestack"
+assert size(tv / "Back.imagestacklayer/Content.imageset/back.png") == ((800, 480), 2) and size(tv / "Front.imagestacklayer/Content.imageset/front.png") == ((800, 480), 6)
+for f, want in (("watchos-appiconset", "Icon Image"), ("tvos", "ImageStack")):
+    assert want in {r["AssetType"] for r in json.load(open(a / f"compiled/{f}.renditions.json"))}, f
+mf = {x["path"]: x for x in json.load(open(a.parent / "manifest.json"))["artefacts"]}
+assert mf["assets/apple/watchos/Assets.xcassets/AppIcon.appiconset/AppIcon-watchOS-1024.png"]["note"].startswith("UNVERIFIED, recheck (")
+print("   ok: .icon valid, compiled for ios, macos, watchos and visionos; fallbacks, .icns, marketing icon (no alpha), legacy sets, watchOS appiconset and tvOS stack (labelled), DMG, frames")
 PY
   "${BC[@]}" downscale --source assets/apple/marketing/AppStore-1024.png --project "$P" >/dev/null || die "the Apple master fails the accent rule at a size the system shows"
   ok "downscale (sips) passes on the Apple master: the accent keeps a solid 4 x 4 square down to 16 px"
@@ -286,6 +295,110 @@ else
   ok "emit apple exits 3 with a clear message (Apple emitters are macOS only)"
 fi
 
+step "Tier B packs (Full tier): emit android, chrome-ext and msix; the safe-zone gate, the monochrome layer and the unverified label"
+set +e; "${BC[@]}" emit android --project "$P" >/dev/null 2>"$SMOKE/tierb.err"; rc_tb=$?; set -e
+[ "$rc_tb" = 2 ] && grep -q "state --set tier=full" "$SMOKE/tierb.err" || die "emit android in the Quick tier must exit 2 and name the way up (exit $rc_tb)"
+ok "emit android exits 2 below the Full tier and says how to raise it"
+"${BC[@]}" state --project "$P" --set tier=full >/dev/null
+for t in android chrome-ext msix; do "${BC[@]}" emit "$t" --project "$P" >/dev/null || die "emit $t failed"; done
+python3 - "$P" <<'PY' || die "the Tier B packs are wrong"
+import json, struct, sys, xml.etree.ElementTree as ET
+from pathlib import Path
+p = Path(sys.argv[1])
+def size(f):
+    d = Path(f).read_bytes()
+    assert d[:8] == b"\x89PNG\r\n\x1a\n", f
+    return struct.unpack(">II", d[16:24]), d[25]
+a = p / "assets/android"
+for dn, px in (("mdpi", 108), ("hdpi", 162), ("xhdpi", 216), ("xxhdpi", 324), ("xxxhdpi", 432)):
+    assert size(a / f"res/mipmap-{dn}/ic_launcher_foreground.png")[0] == (px, px) and size(a / f"res/mipmap-{dn}/ic_launcher_monochrome.png")[0] == (px, px), dn
+assert size(a / "res/mipmap-xxxhdpi/ic_launcher_round.png")[0] == (192, 192)
+root = ET.parse(a / "res/mipmap-anydpi-v26/ic_launcher.xml").getroot()
+assert [c.tag for c in root] == ["background", "foreground", "monochrome"], [c.tag for c in root]
+assert size(a / "play/ic_launcher-playstore.png") == ((512, 512), 6) and size(a / "play/feature-graphic.png") == ((1024, 500), 2)
+mf = {x["path"]: x for x in json.load(open(p / "assets/manifest.json"))["artefacts"]}
+assert "UNVERIFIED, recheck" in mf["assets/android/res/mipmap-hdpi/ic_launcher_foreground.png"]["note"]
+assert "UNVERIFIED" not in mf["assets/android/play/ic_launcher-playstore.png"]["note"]
+c = p / "assets/chrome-ext"
+assert [size(c / f"icons/icon-{s}.png")[0] for s in (16, 32, 48, 128)] == [(16, 16), (32, 32), (48, 48), (128, 128)]
+assert size(c / "store/promo-small-440x280.png") == ((440, 280), 2) and size(c / "store/promo-marquee-1400x560.png") == ((1400, 560), 2)
+m = p / "assets/msix/Assets"
+for name, (w, h) in (("Square44x44Logo", (44, 44)), ("Square150x150Logo", (150, 150)), ("Wide310x150Logo", (310, 150)), ("Square310x310Logo", (310, 310)), ("Square71x71Logo", (71, 71)), ("StoreLogo", (50, 50))):
+    for sc in (1, 2, 4):
+        assert size(m / f"{name}.scale-{sc * 100}.png")[0] == (w * sc, h * sc), (name, sc)
+for s in (16, 20, 24, 30, 32, 36, 40, 48, 60, 64, 72, 80, 96, 256):
+    for alt in ("", "_altform-unplated", "_altform-lightunplated"):
+        assert size(m / f"Square44x44Logo.targetsize-{s}{alt}.png")[0] == (s, s), (s, alt)
+print("   ok: adaptive layers at 5 densities with a monochrome layer, Play icon 512 RGBA, feature graphic 1024x500 RGB, Chrome icons and promo tiles, MSIX scales and 14 app-list sizes x 3 files")
+PY
+"${BC[@]}" emit android --project "$P" | grep -q " 0 written" || die "a second emit android wrote files"
+"${BC[@]}" emit msix --project "$P" | grep -q " 0 written" || die "a second emit msix wrote files"
+ok "second emit android and msix write nothing"
+TB="$SMOKE/guard-tierb"; cp -R "$P" "$TB"
+python3 - "$TB/assets/logo/mark.svg" <<'PY'
+import sys
+f = sys.argv[1]
+s = open(f).read()
+old = '<path d="M32 6 58 54H6Z" fill="#0d1b2d"/>'
+assert old in s, "mutation did not apply"
+open(f, "w").write(s.replace(old, '<rect width="64" height="64" fill="#0d1b2d"/>'))
+PY
+grep -q '<rect width="64" height="64"' "$TB/assets/logo/mark.svg" || die "the safe-zone mutation did not apply"
+set +e; "${BC[@]}" emit android --project "$TB" --content-dp 66 --out-dir assets/android-square >/dev/null 2>"$SMOKE/tierb.err"; rc_tb=$?; set -e
+[ "$rc_tb" = 1 ] && grep -q "outside the 66 dp safe zone" "$SMOKE/tierb.err" || die "a square mark at 66 dp must fail the safe-zone gate (exit $rc_tb)"
+[ ! -e "$TB/assets/android-square/res" ] || die "the failed safe-zone gate wrote files"
+ok "a full-bleed square mark at 66 dp fails the Android safe-zone gate (exit 1) and nothing is written"
+
+step "profiles (Standard and Full tier): circle-safe avatar, six platform images inside their safe areas, proof images; the gate on an overflowing name; the Quick tier is refused"
+"${BC[@]}" emit profiles --project "$P" --tagline "a repair guide is in every box" >/dev/null || die "emit profiles failed"
+expect_size "$P/assets/profiles/avatar-400.png" 400 400; expect_size "$P/assets/profiles/avatar-800.png" 800 800
+expect_size "$P/assets/profiles/linkedin-banner-1584x396.png" 1584 396; expect_size "$P/assets/profiles/x-header-1500x500.png" 1500 500
+expect_size "$P/assets/profiles/youtube-banner-2560x1440.png" 2560 1440; expect_size "$P/assets/profiles/facebook-cover-820x312.png" 820 312
+expect_size "$P/assets/profiles/instagram-feed-1080x1350.png" 1080 1350; expect_size "$P/assets/profiles/instagram-story-1080x1920.png" 1080 1920
+python3 - "$P" "$ROOT" <<'PY' || die "the profile pack is wrong"
+import json, sys
+from pathlib import Path
+p, root = Path(sys.argv[1]), Path(sys.argv[2])
+sys.path.insert(0, str(root / "scripts/lib"))
+from pxio import png_color_type, read_png
+rows = json.load(open(root / "scripts/emitters/platform-specs.json"))["rows"]
+def ink(f):
+    """(farthest ink from the centre, bounding box) of the pixels unlike the corner pixel."""
+    d = Path(f).read_bytes()
+    assert png_color_type(d) == 2, (f, "an avatar and a banner are RGB with no alpha channel")
+    w, h, px = read_png(d)
+    g = px[:3]
+    far, xs, ys = 0.0, [], []
+    for y in range(h):
+        for x in range(w):
+            i = (y * w + x) * 4
+            if max(abs(px[i + k] - g[k]) for k in range(3)) > 8:
+                far = max(far, ((x + .5 - w / 2) ** 2 + (y + .5 - h / 2) ** 2) ** .5); xs.append(x); ys.append(y)
+    return far, (min(xs), min(ys), max(xs) + 1, max(ys) + 1)
+circle = rows["profile-avatar"]["sizes"]["safe_circle"]
+for n in (400, 800):
+    far, _bb = ink(p / f"assets/profiles/avatar-{n}.png")
+    assert 0 < far <= circle * n / 2 + 1.5, (n, far)           # the mark stays inside the safe circle of the profile-avatar row
+s = rows["profile-youtube-banner"]["sizes"]["safe"]
+far, bb = ink(p / "assets/profiles/youtube-banner-2560x1440.png")
+assert bb[0] >= s["x"] - 1 and bb[2] <= s["x"] + s["width"] + 1 and bb[1] >= s["y"] - 1 and bb[3] <= s["y"] + s["height"] + 1, bb      # inside the central 1546 x 423 area
+assert all((p / f"assets/profiles/_proof/{n}.png").is_file() for n in ("avatar-400", "linkedin-banner", "instagram-story"))
+mf = json.load(open(p / "assets/manifest.json"))["artefacts"]
+mine = [a for a in mf if a["emitter"] == "profiles"]
+assert len(mine) == 8 and all(a["note"].startswith("UNVERIFIED, recheck (") for a in mine) and not [a for a in mf if "_proof" in a["path"]]
+print("   ok: avatars inside the safe circle, YouTube ink inside its central area, proofs written and not in the manifest, 8 files all labelled UNVERIFIED")
+PY
+"${BC[@]}" emit profiles --project "$P" --tagline "a repair guide is in every box" | grep -q " 0 written" || die "a second emit profiles wrote files"
+PG="$SMOKE/guard-profiles"; cp -R "$P" "$PG"
+set +e; "${BC[@]}" emit profiles --project "$PG" --name "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW" --out-dir assets/profiles-long >/dev/null 2>"$SMOKE/profiles.err"; rc_pf=$?; set -e
+[ "$rc_pf" = 1 ] && grep -q "does not fit its safe area" "$SMOKE/profiles.err" || die "a name wider than the LinkedIn safe rectangle must fail the gate (exit $rc_pf)"
+[ -z "$(ls "$PG"/assets/profiles-long/*.png 2>/dev/null)" ] && [ -s "$PG/assets/profiles-long/_proof/linkedin-banner.png" ] || die "the failed gate shipped an image, or left no proof image"
+ok "an overflowing name fails the safe-area gate (exit 1), nothing ships, the proof image shows where the ink went"
+"${BC[@]}" state --project "$PG" --set tier=quick >/dev/null
+set +e; "${BC[@]}" emit profiles --project "$PG" >/dev/null 2>"$SMOKE/profiles.err"; rc_pf=$?; set -e
+[ "$rc_pf" = 2 ] && grep -q "state --set tier=standard" "$SMOKE/profiles.err" || die "emit profiles in the Quick tier must exit 2 and name the way up (exit $rc_pf)"
+ok "emit profiles exits 2 in the Quick tier and says how to raise it"
+
 step "snapshot, verify-idempotent (emit chain twice), staleness record, specs-due"
 # qa/rules.json (the size bands) arrived after the first emit web: re-emit once so the favicon follows the band rule, then it must be stable
 "${BC[@]}" emit web --project "$P" >/dev/null
@@ -295,7 +408,7 @@ step "snapshot, verify-idempotent (emit chain twice), staleness record, specs-du
 "${BC[@]}" snapshot diff snaps/before.json snaps/after.json --ignore "assets/_checks/*" --project "$P" >/dev/null || die "emit web changed files that were already current"
 CHAIN=(--cmd "{bc} emit web --project {project}" --cmd "{bc} emit social --tagline Dependable --project {project}" --cmd "{bc} emit windows --project {project}"
        --cmd "{bc} emit linux --app-id org.example.Acme --project {project}" --cmd "{bc} emit tray --project {project}" --cmd "{bc} emit tauri --project {project}"
-       --cmd "{bc} emit wallet --project {project}" --cmd "{bc} emit developer --tagline 'a repair guide is in every box' --master-band small --content-fraction 0.8 --exemption '$DEV_EXEMPTION' --project {project}")
+       --cmd "{bc} emit wallet --project {project}" --cmd "{bc} emit android --project {project}" --cmd "{bc} emit chrome-ext --project {project}" --cmd "{bc} emit msix --project {project}" --cmd "{bc} emit profiles --tagline 'a repair guide is in every box' --project {project}" --cmd "{bc} emit developer --tagline 'a repair guide is in every box' --master-band small --content-fraction 0.8 --exemption '$DEV_EXEMPTION' --project {project}")
 [ "$(uname)" = Darwin ] && CHAIN+=(--cmd "{bc} emit apple --tagline 'a repair guide is in every box' --master-band small --content-fraction 0.8 --visionos-content-fraction 0.6 --exemption 'the system shrinks this one master to 16 px; the coarse-grid drawing keeps the accent' --project {project}")
 "${BC[@]}" verify-idempotent "${CHAIN[@]}" --project "$P" >/dev/null \
   || die "the emit chain is not byte-identical when run twice"
@@ -388,7 +501,7 @@ PY
   ok "a passing downscale report on the grid master does not vouch for the Apple master that fails at 16 px"
 fi
 
-step "tools/finish.sh from the template: the whole chain with multi-word options, a generator and every gate, then check"
+step "tools/finish.sh from the template: the whole chain (every emitter that applies at the Full tier, print, posts, book, press kit) with multi-word options, a generator and every gate, then check"
 G4="$SMOKE/guard-finish"; cp -R "$P" "$G4"
 python3 - "$ROOT/templates/finish.sh.tpl" "$G4/tools/finish.sh" <<'PY'
 import sys
@@ -399,11 +512,56 @@ for g in ("grid_mark.py", "state_icons.py"):
 open(sys.argv[2], "w").write(t)
 PY
 chmod +x "$G4/tools/finish.sh"
+# the book's chapters are the owner's text: the chain never writes them, so the smoke starts and fills them here (the way the book step does below)
+"${BC[@]}" state --project "$G4" --set content_languages=en --set book_chapters=tone >/dev/null
+"${BC[@]}" book --init --project "$G4" >/dev/null || die "book --init failed in the finish copy"
+python3 - "$G4" <<'PY' || die "the finish copy's chapters could not be filled"
+import glob, re, sys
+n = 0
+for f in glob.glob(sys.argv[1] + "/book/chapters/*.md"):
+    t = open(f).read()
+    t, k = re.subn(r"\[\[fill:.*?\]\](?!\])", "Acme sample text for this slot.", t, flags=re.S)
+    n += k
+    open(f, "w").write(t)
+assert n > 10, n
+f = sys.argv[1] + "/BRAND-STATE.md"
+t = open(f).read()
+assert "- (rule) (...)" in t
+open(f, "w").write(t.replace("- (rule) (...)", "- (rule) the accent is a fill, never text (proposal)", 1))
+PY
+# a set PRINT_REGION in the Quick tier stops the chain at once (exit 2), before any step runs: a value is never silently ignored
+QF="$SMOKE/guard-finish-quick"; cp -R "$G4" "$QF"; "${BC[@]}" state --project "$QF" --set tier=quick >/dev/null
+set +e; ( cd "$QF" && env -u BRAND_CREATOR_ROOT PATH="$ROOT/bin:$PATH" PRINT_REGION=EU bash tools/finish.sh > "$SMOKE/finish-quick.log" 2>&1 ); rc_q=$?; set -e
+[ "$rc_q" = 2 ] && grep -q "Standard and Full tier" "$SMOKE/finish-quick.log" && ! grep -q "^== tokens" "$SMOKE/finish-quick.log" || die "PRINT_REGION in the Quick tier must stop the chain with exit 2 before any step (exit $rc_q)"
+ok "finish.sh: PRINT_REGION in the Quick tier stops the chain (exit 2) before any step runs"
 ( cd "$G4" && env -u BRAND_CREATOR_ROOT PATH="$ROOT/bin:$PATH" TAGLINE="a repair guide is in every box" APP_ID=org.example.Acme MASTER_BAND=small \
     EXEMPTION="the system shrinks this one master to 16 px; the coarse-grid drawing keeps the accent" ICON_CONTENT=0.8 VISIONOS_CONTENT=0.6 \
+    PRINT_REGION=EU IMAGE_BASE_URL=https://img.example.com/brand POST_FACTS="spare parts;repair guide;batch size" \
     bash tools/finish.sh > "$SMOKE/finish.log" 2>&1 ) || { tail -30 "$SMOKE/finish.log" >&2; die "tools/finish.sh did not run through (log: $SMOKE/finish.log)"; }
 grep -q "^check: PASS" "$SMOKE/finish.log" || die "finish.sh ended without a passing check"
-ok "finish.sh: generators, tokens, emitters, downscale gates, idempotence, staleness and check all ran from the template"
+python3 - "$SMOKE/finish.log" "$G4" <<'PY' || die "the finish chain did not run every step that applies at the Full tier, in order"
+import re, sys
+from pathlib import Path
+log = Path(sys.argv[1]).read_text()
+steps = re.findall(r"^== (.+)$", log, re.M)
+def at(name):
+    i = [k for k, s in enumerate(steps) if s == name or s.startswith(name + " ")]
+    assert i, (name, steps)
+    return i[0]
+want = ["emit web", "emit social", "emit android", "emit chrome-ext", "emit msix", "emit profiles", "emit print", "print-check", "gates", "book", "book-pdf", "emit presskit"]
+if sys.platform == "darwin":
+    want.insert(want.index("emit android"), "emit apple")
+order = [at(n) for n in want]
+assert order == sorted(order), dict(zip(want, order))
+p = Path(sys.argv[2])
+for f in ("book.html", "book.pdf", "assets/presskit/acme-press-kit.zip", "assets/social/posts/carousel-4x5-01.png", "assets/print/letterhead.rgb-proof.pdf",
+          "assets/profiles/avatar-400.png", "assets/android/res/mipmap-hdpi/ic_launcher_foreground.png", "assets/chrome-ext/icons/icon-128.png", "assets/msix/Assets/StoreLogo.scale-100.png"):
+    assert (p / f).is_file(), f
+if sys.platform == "darwin":
+    assert (p / "assets/apple/watchos/Assets.xcassets/AppIcon.appiconset/AppIcon-watchOS-1024.png").is_file() and (p / "assets/apple/tvos/Assets.xcassets/Contents.json").is_file()
+print("   ok:", ", ".join(want))
+PY
+ok "finish.sh: generators, tokens, every emitter that applies (Tier B, profiles, print, posts), book, book-pdf, press kit, downscale gates, idempotence, staleness and check all ran from the template"
 
 step "guard hook: frozen history is protected, unrelated paths are not"
 payload() { python3 -c "import json,sys;print(json.dumps({'tool_name':sys.argv[1],'tool_input':{sys.argv[2]:sys.argv[3]},'cwd':sys.argv[4]}))" "$@"; }

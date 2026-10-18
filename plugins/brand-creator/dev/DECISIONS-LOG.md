@@ -885,3 +885,132 @@ option was chosen and is recorded here. Newest stage last. Stage 1a = infrastruc
   file ships for them yet (stage 6: `review-panel.js`, `adopt.js`, the agents). ADR and DECISIONS.md append-only is a convention with a template, not a
   check. The book's adoption and launch chapters are still authored text (guided by the skeletons now), not computed from adoption.json or LAUNCH.md.
   S6-readme (a README lint target) is still not done. An ADOPTION.md written before stage 4d must be rendered once (`adoption render`) to carry the frame.
+
+## Stage 5a (Tier B emitters: Android, Chrome extension, MSIX)
+
+501. **The Android safe zone is a circle of `safe_dp` diameter, and the gate runs before anything is written.** The verified row says "66 dp safe zone"; the launcher
+    masks are circles, squircles and rounded squares, so the gate tests the circle (ink inside the circle is inside the 66 x 66 square: the stricter reading) on the
+    foreground and monochrome layers at all five densities, with one pixel of anti-aliasing. All layers are rasterised in memory first; a failure adds a `fail` row,
+    exits 1 and leaves no file (a half-written icon pack that `check` later fails is worse than none). Without `--content-dp` the mark's box is the largest size in the
+    logo range (48 to 66 dp) that fits: the ink is measured once on the xxxhdpi raster at 66 dp and scaled linearly (a uniform scale about the canvas centre), rounded
+    down to half a dp with a 1 percent margin; if even 48 dp does not fit the emit fails and says what the ink reaches. `--content-dp` is the owner's decision and the gate
+    holds it (above 66 is a usage error, below 48 a warning). The Play icon keeps the same share of the square (`content_dp / layer_dp`) and is gated on the same ratio.
+502. **Layers are PNG, the background is a colour resource.** The research recommended vector drawables from SVG; converting arbitrary SVG to Android vector XML is a
+    converter of its own, and the task asked for density PNGs. A flat `color.bg` is better as `@color/ic_launcher_background` than as five identical bitmaps. The monochrome
+    layer is a black silhouette (alpha is what the system themes) from `svgtools.mono` or `--svg-mono`; artwork with gradients, masks or filters exits 1 instead of
+    shipping a silhouette nobody looked at, because without the layer the system derives one on its own (Android 16 QPR2). The same XML serves `ic_launcher` and
+    `ic_launcher_round`. Legacy icons: a full-bleed square (no rounded corners: no source for a radius was read) and a circle, mark at 60 percent. No Android night or
+    values-night variant is written (an adaptive icon does not switch with the theme; a themed icon is the monochrome layer).
+503. **Unverified rows are labelled where the files are, and `check` holds the label.** `TierBEmit` (in `emitters/tierb.py`) overrides `put()` and `slot()`: a file whose `specs`
+    include a row of status U gets `UNVERIFIED, recheck (<rows>): ` at the start of its manifest note and the same words in the label of its `file:` report row. `check`
+    (`tierb:labels`) re-reads the manifest: a Tier B file whose `specs` include a row stamped U and whose note lacks the label fails. The existing warnings (the `spec` rows
+    of the emit report, `specs:<row>` in `check`) stay. R rows are not labelled (they are warned about, as before). The gate applies to the three Tier B emitters only: the
+    Tier A packs predate it and their U rows are warned about, not labelled; widening it would relabel eight shipped packs and is a stage 7 call.
+504. **Status of the nine new rows.** V (confirmed in the verdict, rows 42, 43, 46, 47): `android-adaptive`, `android-play-icon`, `chrome-ext-icons`, `chrome-ext-promo`,
+    `msix-assets`. R: `android-feature-graphic` (the verdict says it was not re-read) and `msix-applist` (the range 16 to 256 and both altforms are confirmed, the list of
+    fourteen sizes is a researcher's reading). U: `android-densities` (160, 240, 320, 480, 640 dpi) and `android-legacy-launcher` (48 dp): nobody read a page in this
+    project, so the density sizes, and with them every adaptive layer file, carry the label. All carry `checked: 2026-10-17` like the rest; a person must still read the
+    U and R pages (`specs-due`).
+505. **Tier gate in the constructor.** `TierBEmit.__init__` calls `require_tier(project, ("full",), ...)` before the marks and tokens are read (exit 2 with `state --set tier=full`),
+    after G3 (exit 1 first, as for every emitter). The Tier A platform packs have no tier gate in code (the table says Full); the Tier B ones do, as the task asked.
+506. **Chrome: the 128 manifest icon is the Web Store icon.** The row says 128 px with 96 px of artwork and (128 - 96) / 2 px of transparent padding; the developer docs say the 128
+    file is the one used for install and the store, so the manifest `icons/icon-128.png` follows the padding rule and `store/store-icon-128.png` is the same bytes (the
+    listing asks for a file). 16, 32 and 48 use the whole canvas, each drawn by the band rule for its size. The padding is checked on the pixels (ink box inside the art box).
+    The promo tiles are cards from `templates/card.html` (or `--template`), the mark and the name, optionally one FACTS.md line, written as 24-bit PNG: the page was not read for an
+    alpha rule on promo images, so they are opaque and the report says so. No dark toolbar variant is written.
+507. **MSIX layout and the unplated rule.** Files are `Assets/<Name>.scale-<N>.png` and `Assets/Square44x44Logo.targetsize-<S>[_altform-unplated|_altform-lightunplated].png`. The
+    plain target-size file is the light artwork on the manifest's `BackgroundColor` plate (the light `color.bg`), `_altform-lightunplated` is the same pixels, and
+    `_altform-unplated` (the dark-theme file) is the artwork meant for dark grounds, from `emit.dark_svg()` (the `-dark.svg` sibling, else a token-role recolour with a warning).
+    Unplated files must have a transparent corner (an unplated file that paints a ground is a backplate of our own); `check` reads the spec row's altform list, so a size
+    that lacks one fails with the backplate warning. The wide tile uses the logo art (lockup, wordmark, else the mark); tile content shares (0.7, 0.8) are design choices, not spec
+    numbers, and the app-list sizes use the whole canvas. The snippet's `Description` is a FACTS.md value (`description` or `summary`) or is left out and warned; DisplayName is the
+    brand name. The Microsoft Store listing art and the games-only sizes are not written.
+508. **Scales are stored as multipliers.** The static test forbids any number of the spec table (8 or more) as a literal in an emitter, and an earlier `[100, 200, 400]` made the literal
+    200 in `apple.py` fail the test. `msix-assets` therefore stores `scales: [1, 2, 4]` and `percent_per_x: 100`; the file names carry 100, 200, 400. The same test is why `tierb.py`
+    builds the PNG signature offsets with `struct.calcsize` and why the alpha threshold is 14: a hand-picked constant that equals a spec number fails the test. `tierb.py` has no uv
+    lock (it is a library like `manifest.py`) and is on the exclusion list of `test_every_uv_script_has_a_committed_lock_and_pep723_metadata`.
+509. **`check` and the chain.** `check.py` lists the three emit reports (`emit-android`, `emit-chrome-ext`, `emit-msix`) and runs `tierb.rows()` (`tierb:labels`, `tierb:android`,
+    `tierb:msix`, only when a Tier B file is in the manifest). `finish.sh.tpl` adds the three targets when `brand-creator state --get tier` is `full` (the apple line's pattern); a
+    Quick or Standard project's chain is unchanged. `bin/brand-creator` dispatches `chrome-ext` to `emitters/chrome_ext.py` (the file name cannot hold a hyphen as a module name).
+    The Acme smoke raises the tier to full for the Tier B step, which also puts the three packs into the whole-chain idempotence run and the `finish.sh` run.
+
+Known gaps (stage 5a):
+- The nine rows were not read at the platform's pages in this stage (no outward actions): the U rows (densities, legacy 48 dp) and R rows (feature graphic, the fourteen app-list sizes) need a
+  person, and every Android density file stays labelled until then. The legacy square icon has no rounded corners and the legacy artwork share (0.6) is a design choice.
+- No Android vector drawables, no `values-night` colours, no themed-icon preview in the QA sheet (the research suggested one). No Play screenshots, Chrome Web Store screenshots or Microsoft Store listing art.
+- The adaptive foreground is not checked against a real launcher mask or a real device; the gate is geometric (ink inside the circle). The MSIX snippet and the Chrome manifest object were checked as
+  XML and JSON, not merged into a real package or loaded as an unpacked extension (a manual check).
+- The label gate covers the three Tier B emitters only (503). The feature graphic and promo tiles are Chromium renders: byte-stable on one machine only, like the other cards. Windows and Linux runs are untested.
+- The platform-specs and README tables are updated by generation or by new sections; the other stage-5 branch edits the same files, so the lead merges `platform-specs.json`, `bin/brand-creator`,
+  `check.py` (`EMITTERS`), `finish.sh.tpl`, `CONTRACT.md`, the 09-qa table, CHANGELOG and README by hand and regenerates `references/platform-specs.md`.
+
+## Stage 5b (watchOS and tvOS, profiles, the finish chain)
+
+(Numbering continues after stage 5a in this worktree: the brief said to number from 501, and 501 to 509 were already taken here; the lead renumbers when the two stage-5 branches merge.)
+
+510. **watchOS and tvOS are written only for a target the repository lists.** The task said "INVENTORY/BRAND-STATE"; BRAND-STATE.md has no deployment-target key (only `inventory:`, the path to INVENTORY.md), so the
+    one source is the `Deployment targets` list of INVENTORY.md (`- watchOS: 10.0`) or `--target watchOS=10.0`, the same mechanism as the legacy iOS and macOS sets (`deployment_targets()` already parsed both names).
+    With no line the report has an info row (`watchos`, `tvos`) and no file is written. The `legacy` info row no longer says "every target is 26 or later" when watchOS or tvOS are in the list (it names iOS and macOS
+    only; the old wording stays when every listed target is iOS or macOS, which an existing test pins).
+511. **watchOS: one 1088 appiconset, compiled by actool, the circle gate before any write.** The `.icon` already lists watchOS as a circle platform and is compiled for `watchos` (stage 3b), so a watchOS 26 target
+    needs nothing new; what a repository still needs is the pre-26 set and a PNG at the layout size. `watchos/Assets.xcassets/<AppIcon>.appiconset/` holds one opaque RGB square at `watchos_px` (1088; the system applies
+    the circular mask) and a `Contents.json` (`idiom: universal`, `platform: watchos`, `size: <px>x<px>`); the single-size form was tried with the local actool (it compiles, and a PNG of another size than the
+    declared one is an actool error). The catalogue is compiled alone (it holds only the watch set) for `watchos` at the listed deployment target, as a hard gate. ictool still exports only at the size it is
+    given (`--previews` passes 1088 explicitly, unchanged). The mark's box is automatic: one measurement of the ink radius at a box of 1.0 (ink scales linearly about the centre), then the largest whole percent, at
+    most `--content-fraction`, with a 3 percent margin, that keeps the ink inside `watchos_safe_circle` of the radius; `--watchos-content-fraction` is the owner's and the gate holds it. The rasters and the gate run at the
+    start of `main()`, so a mark that does not fit exits 1 with no file of any pack written (not even the earlier sections' files: the visionOS gate, by contrast, still writes and fails).
+512. **tvOS: `appletvos --target-device tv`, one Small stack, a document-error gate.** Found by trying the local actool: without `--target-device tv` a tvOS catalogue compiles with exit 0 and no Assets.car at all;
+    with it, a `.brandassets` holding one primary `.imagestack` of two `.imagestacklayer` folders (front first, `idiom: tv`, `scale: 2x`) compiles to an ImageStack and its layer images. A layer that does not fill the stack
+    (a 700 px layer in an 800 px stack) makes actool exit 0, write an Assets.car and report the problem under `com.apple.actool.document.errors` with a `message`, not a `description`: the old gate (`com.apple.actool.errors`
+    and the exit code) would have passed it. `actool()` now reads both keys (and the document warnings) for every platform, dedupes the repeats, and a test breaks a layer to prove it. The stack is the 800 x 480 layer at 2x (400 x 240 pt)
+    with two layers (back: the light ground, opaque; front: the mark with alpha); the row allows 2 to 5 layers and the emitter writes two (a mark has nothing to put in a middle layer) and counts the layer images in
+    the compiled renditions. The catalogue is named `<AppIcon>TV.brandassets` and its stack `Small`, not Xcode's default `App Icon & Top Shelf Image` / `App Icon - Small`: any name compiles (tried), and a name with an
+    ampersand and spaces would sit in every manifest path, HTML attribute and shell command. A project that wants Xcode's names renames the folders. The App Store icon (a larger stack, 1280 x 768 in the files tried) and the
+    Top Shelf images are not written: no verified size, and the HIG row only confirms 800 x 480 (an info row `tvos:other` says so). ictool has no tvOS platform (verdict row 38), so there is no preview.
+513. **The two margins are a U row, and apple labels its new files itself.** `apple-watch-tv-safe` holds `watchos_safe_circle` (0.9, the rule the visionOS row already uses) and `tvos_safe_share` (0.85): design margins,
+    not Apple numbers, status U. `Emit` for apple is not `TierBEmit` (that would relabel every Tier A Apple file, which decision 503 left for stage 7), so the watchOS and tvOS files go through `wt_put()`:
+    `tierb.label_note()` prefixes the note, `tierb.label_report_row()` labels the report row, and the manifest row carries `labelled: true`, which `tierb._rows_of()` now also holds in `check` (`tierb:labels`).
+    The sizes themselves (1088, 800 x 480, 2 to 5 layers) are V rows (`apple-app-icon`, the new `apple-tvos-stack`); the label is there because a margin nobody read is part of every file.
+514. **The automatic mark size is shared.** `tierb.fit_share(room, extent_at_full, cap)` (whole percent, 3 percent margin) serves watchOS, tvOS (per axis, the smaller) and the avatar; Android keeps its own
+    half-dp rule (stage 5a). The tolerance for the rasterised edge is the one 5a defined (`INK_TOLERANCE_PX`, one pixel).
+515. **`emit profiles`: every size U, one template, the gate on the pixels, proofs that are not shipped.** `profile-avatar` (400 and 800 px, the usual minimum and a crisp size; safe circle 0.72 of the radius, a design margin)
+    and six image rows, each with a `safe` rectangle in px: LinkedIn 1584 x 396, X 1500 x 500, YouTube 2560 x 1440 (safe 1546 x 423, centred: the one safe area that is widely published), Facebook 820 x 312, Instagram feed
+    1080 x 1350 (safe: the central 3:4 strip the profile grid shows) and story 1080 x 1920 (260 px kept clear at top and bottom for the app's controls). Nothing was read at a platform page (no outward actions): all rows are
+    status U with notes that say so, the safe rectangles of LinkedIn, X, Facebook and the story are proposals, and every file carries the label. One template (`templates/profile/banner.html`, a row layout for a wide
+    safe rectangle and a column for a tall one) serves all six; the mark and the name (and a FACTS.md tagline) are laid out inside the safe rectangle. The gate is on the rendered PNG: the avatar's ink (pixels unlike the
+    ground) inside the circle, a banner's ink bounding box inside the rectangle, so it also catches a name that overflows (an unbreakable 50-letter name) and a template that draws outside (a mutation test moves it). The
+    proof images (`_proof/<name>.png`, the same page with the safe areas drawn; for the avatar the platform's circle crop and the safe circle in SVG) are written before the gate and even when it fails (they show why),
+    are not in the manifest and sit under a `_` folder, which the idempotence tree skips. Colours of the overlay are CSS names, not hex values.
+516. **Instagram feed has its own row.** Its size equals `social-post-4x5`, but the profile image needs a safe rectangle that the post row has no place for; the two rows share a source URL and neither reads the other.
+517. **Tier gate by class.** `TierBEmit` takes its tier from `tierb.TIERS` (profiles: Standard and Full; the rest: Full), so the "way up" message names `state --set tier=standard` for profiles. `check` runs `tierb:profiles`
+    (every size written; each file's ink re-measured against the safe area recorded in the manifest row: `safe_radius_px` or `safe`; a file edited later fails). `profiles` is in `check.EMITTERS`.
+518. **Spec numbers and literals.** The static test forbids a spec-table number as a literal in any emitter. Three of the new numbers collided with literals already in other emitters (0.8, 0.75, 250), so the rows use 0.72
+    and 260 instead; the proof overlay's font sizes avoid 12 and 30. No design reason for 0.72 over 0.75 beyond that.
+519. **The finish chain gained the stage-4 steps.** In block 2 the chain reads `TIER` and adds `profiles` (Standard and Full), `print` (Standard and Full, and only when `PRINT_REGION` is set: print is opt-in with the owner and
+    there is no state key for it, so the opt-in is the variable, like `TAGLINE`; `PRINT_ICC`, `PRINT_BLEED`, `IMAGE_BASE_URL` are optional), and `--posts --post-fact` on `social` when `POST_FACTS` (semicolon separated, so an
+    environment variable can set it) is not empty. After the emit loop: `print-check` when print ran; the gates and `verify-idempotent`; then `book` and `book-pdf` when `book/chapters/` exists (the chain never writes chapters; without the folder it prints
+    `book: skipped (...)`, which is visible, not silent), then `emit presskit` (Standard and Full; `--no-book` when there was no book), because the kit holds book.pdf (the book's file list leaves the kit out, stage 4b).
+    The first full run found the order: with the book before the gates, `check` said "not verified" (the book report is stale: the downscale and idempotence reports it reads had been rewritten), so the book steps
+    follow `verify-idempotent`, and a test runs the filled chain twice. The press kit is therefore not in the idempotence run (it must run after the book it contains); its determinism is `test_print.py`'s. A value set for a step the tier does not allow (`PRINT_REGION` or `POST_FACTS` in Quick) exits 2 before any step runs, never ignored. The loop became
+    `emit_one()`; the existing static test that reads the template still finds the same order.
+520. **Tests.** `tests/test_emit_profiles.py` (24 tests, mutations for the template and the manifest), additions to `tests/test_emit_apple.py` (9), `tests/test_finish_chain.py` (6 tests: the filled Standard-tier chain with print, posts, book,
+    profiles and press kit through to `check`, run twice; the book-skipped branch; the Quick-tier refusal; the Quick chain unchanged; the template's order). The smoke: `emit apple` with watchOS and tvOS in INVENTORY.md, the profile step
+    (sizes, circle, YouTube area, proofs, overflow gate, Quick refusal), profiles in the whole-chain idempotence run, and the `tools/finish.sh` step now fills a book, opts in to print and posts, and asserts every step that
+    applies at the Full tier ran in order and `check` passed.
+
+Known gaps (stage 5b):
+- Every profile row is status U and was not read at a platform page; the safe rectangles of LinkedIn, X, Facebook and the story are proposals, and the avatar and tvOS/watchOS margins are design choices. A person must read
+  the pages (`specs-due`) before the images go online; the labels stay until then.
+- tvOS: no App Store icon, no Top Shelf images, no Xcode-default catalogue names, no layered artwork beyond back and front, no preview (ictool has none). watchOS: no dark or tinted variant; the `.icon` path (watchOS 26 and later)
+  is unchanged. Neither pack was tried in a real Xcode project or on a device; the gate is the actool compile and a geometric margin.
+- Profile images have no dark variant, no platform-specific text safe areas beyond the rectangles, no avatar for a square-cropping network, and the banner template is one layout (mark and name). Banners are Chromium
+  renders: byte-stable on one machine only, like the other cards. No cover for LinkedIn company pages, Twitch, GitHub (the org avatar is `emit developer`), TikTok or Mastodon.
+- The finish chain's print step needs `PRINT_REGION` in the script (there is no state key for the print opt-in); `POST_FACTS` labels must exist in FACTS.md. The chain does not run `book --init`, `adoption`, `adapters`, `applied-skill`
+  or `launch-todo` (owner decisions at later gates). The Quick chain is unchanged.
+- Merge points with the other stage-5 branch: `platform-specs.json` (rows appended after `apple-visionos-stack` and at the end), `bin/brand-creator` (`profiles` in the dispatch list and a usage line), `check.py` `EMITTERS`,
+  `finish.sh.tpl` (block 2 and a new block 2b), `tierb.py`, CONTRACT.md and its table of contents, the 09-qa table, CHANGELOG, README, the `test_emitters` file list. Regenerate `references/platform-specs.md` after merging.
+521. **S5R-1: the watchOS appiconset has its own U row, 1024 px, not the 1088 canvas.** Decision 511 declared and drew the pre-26 appiconset at `apple-app-icon.watchos_px` (1088), the Icon Composer layout canvas;
+    nothing read shows Xcode or App Store Connect accept a 1088 single-size watch appiconset, and the emitter's own actool row for the `.icon` says the compiled watch icon is 1024. A new row `apple-watchos-appiconset`
+    (`appiconset_px`: 1024, status U) now holds the size; the pack's rows are `apple-watch-tv-safe` and that row, so every file carries the UNVERIFIED label naming both and the pack is not V-backed. 1088 remains
+    only the ictool `--previews` export size. 1024 is a proposal (the local actool compiles the single-size form at 1024); a person must check it in Xcode. The file is now `<AppIcon>-watchOS-1024.png`.
+    Decision 511's 1088 is superseded; its other points stand. Known gap: the size is unverified.

@@ -196,6 +196,32 @@ handles with the date each was checked, e-mail, the repository and package renam
 files: nothing outward is ever executed, you buy, file and register. Details: `scripts/CONTRACT.md` ("Adoption, cascade, adapters, applied skill and launch"),
 `skills/brand-creator/references/phases/11-adoption.md` and `13-launch.md`. The survey needs ripgrep (`brand-creator prereq --for adoption`).
 
+## Android, Chrome extension and MSIX packs
+
+Full tier, gate G3, sizes from `references/platform-specs.md`. Run them with `brand-creator emit android`, `emit chrome-ext` and `emit msix`.
+
+| Command | What it writes | What it refuses |
+|---|---|---|
+| `emit android` | an adaptive launcher icon (foreground, background and an explicit monochrome layer, `mipmap-anydpi-v26` XML, density PNGs mdpi to xxxhdpi), legacy round and square icons, the Google Play icon (512, full square) and the feature graphic (1024 x 500, no alpha) | a mark whose ink leaves the 66 dp safe zone (nothing is written); a mark that cannot be reduced to a silhouette unless you give `--svg-mono` |
+| `emit chrome-ext` | manifest icons 16, 32, 48 and 128 (PNG only; the 128 icon follows the Web Store rule of 96 px of artwork in 128), the store icon, the small promo tile and the marquee | a spec row that allows another format |
+| `emit msix` | the tile and store logos at scale 100, 200 and 400, the app-list target sizes each as the plain, `_altform-unplated` and `_altform-lightunplated` file, and an AppxManifest snippet | (`check`) a size without both altforms, or an unplated file with a ground of its own |
+
+Some rows of the spec table (the Android density buckets, the legacy 48 dp icon) have not been read at the platform's page in this project: they are status U, and
+every file built from one is labelled `UNVERIFIED, recheck` in `assets/manifest.json` and in the report; `check` fails a file that lost the label. Recheck them with
+`brand-creator specs-due` before relying on the pack. Screenshots, the Microsoft Store listing art and the Play screenshots show real product and are not generated.
+
+## watchOS, tvOS, profile images and the finish chain
+
+`emit apple` also writes a watchOS icon (one opaque square at an unverified size of its own, the mark inside the circle) and a tvOS icon (a two-layer image stack, 2x), both compiled by actool as a hard
+gate, but only for a target the repository lists (`- watchOS: 10.0` / `- tvOS: 17.0` in `INVENTORY.md`, or `--target`); macOS with Xcode only, like every Apple output. `brand-creator emit profiles`
+(Standard and Full tier) writes a circle-safe avatar (400 and 800 px) and one image each for the LinkedIn, X, YouTube and Facebook banners and the Instagram feed and story. Everything drawn must lie
+inside the platform's safe area: the emit fails (exit 1, nothing shipped) when a mark or a name does not fit, and `assets/profiles/_proof/` holds the same images with the safe areas drawn on them (never
+shipped). Every size here is unverified (status U): the files say `UNVERIFIED, recheck` and `check` fails a file that lost the label. Read each platform's page before the images go online.
+
+`templates/finish.sh.tpl` now runs the stage-4 steps and the Tier B packs in one chain, each step gated by the tier like the command itself: the profile pack (Standard and Full), `emit print` and
+`print-check` (Standard and Full, and only when you set `PRINT_REGION`: print is opt-in), the social posts (when you set `POST_FACTS`, FACTS.md labels separated by semicolons), `book` and `book-pdf` (when
+`book/chapters/` exists; the chain never writes your chapters) and the press kit, which come after the gates because the book reads their reports and the kit holds `book.pdf`. A value set for a step your tier does not allow stops the chain with exit 2 before any step runs.
+
 ## Skills you can call
 
 | Skill | Called by | What it does |
@@ -264,5 +290,7 @@ The version in `.claude-plugin/plugin.json` is bumped on every release and liste
   retired slots moved to `removed-<date>/`, and a failed run recorded as a failed report.
 - Stage 4a (done): the brand book (`book`, `book-lint`, `book-pdf`, `patch`, `collapse`). Stage 4b (done): print stationery with `print-check`, the press kit, social posts. Stage 4c (done): the adoption survey (`adoption`), `check --cascade` over every artefact, the BRAND.md and DESIGN.md adapters, the applied skill, `launch-todo`. Stage 4d (done): the skills `brand-book`, `brand-adopt`, `check`, `review`, `launch`; phases 10 to 13 in full; the cascade checklist; `CONNECTORS.md`; book chapter guidance, `ADOPTION.md` and `ADR.md` templates.
 - Stage 5: Tier B emitters.
+- Stage 5a (done): the Android, Chrome extension and MSIX emitters (`emit android|chrome-ext|msix`, Full tier, U rows labelled, safe-zone gate).
+- Stage 5b (done): watchOS and tvOS packs in `emit apple`, `emit profiles` (avatar, banners, Instagram, safe-area gate and proof images), and the stage-4 steps and Tier B packs in the finish chain.
 - Stage 6: agents, workflows, behaviour evals.
 - Stage 7: validation on macOS and Linux, release.
