@@ -1,0 +1,11 @@
+{
+  "$description": "Accepted misses of the touching-pair check (brand-creator contrast). One entry per pair and mode, each with the reason it is accepted. An entry that matches nothing is reported as stale.",
+  "exceptions": [
+    {
+      "a": "color.mark",
+      "b": "color.accent",
+      "mode": "dark",
+      "reason": "The glowing cut is a detail inside the loaf and the shape, not the colour, carries it: the logo sheet proves it stays visible at 16 px. The brighter crust colour cannot go darker without losing its contrast against the dark ground."
+    }
+  ]
+}

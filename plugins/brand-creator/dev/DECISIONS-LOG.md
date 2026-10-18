@@ -1210,3 +1210,50 @@ run's shell sees. Findings and decisions:
     of 'style 2 and 3'" and kept "Sharp (current): the mark unchanged" for comparison, and both regexes missed). They now also
     take "my/the reading" and "(current)", "current mark" or "for comparison"; "unchanged" alone is not enough (it would match
     "BRAND-STATE.md is unchanged"). The sweep's reply, re-graded offline, matches both; no billed re-run.
+
+## Stage 7: Quick-tier smoke (check 7q)
+
+701. **The Quick smoke is its own script, run after the Acme smoke.** `tests/smoke/quick.sh` (wired into `tests/run-all.sh --smoke`) has its own
+    project folder (`QUICK_SMOKE_DIR`, default `$TMPDIR/brand-creator-quick-smoke`; a previous run is moved aside, never deleted) and its fixtures
+    in `tests/smoke/quick-bakery/` (the owner's brief in their words, FACTS.md, a round 1 page filled from `templates/round-page.html`, token sources
+    and a mark generator built on `px_lib`). The business is a made-up neighbourhood bakery so that nothing in the path can lean on a software
+    assumption (GitHub, a package registry, a desktop app).
+702. **The shim PATH is an allowlist of symlinks, and the Apple tools are proved absent twice.** The shim holds the tools the path needs (bash, env,
+    uv, node, python3, resvg and the coreutils the scripts call) and nothing else; sips, iconutil, actool, xcrun, ictool and git are checked with
+    `command -v` under `env PATH=<shim>` and with the shim python's `shutil.which`, and the message says whether this machine has them (so the proof
+    is not vacuous on a machine that lacks them anyway). `npm` and `npx` are two-line wrappers that run the CLI file with the shim's node (they find
+    their files relative to themselves, so a plain symlink breaks them). Not `env -i`: uv needs HOME for its cache.
+703. **No git anywhere is two checks and a ceiling.** A failing `git` shim is first on PATH, logs every call (time, arguments, cwd) and exits 127;
+    the log must be empty at the end. The project folder is outside any repository (a walk up the path finds no `.git`) and
+    `GIT_CEILING_DIRECTORIES` is the parent folder. `new` must not create a `.git`.
+704. **"The renderer question appears once" means: exactly one output line in the whole run asks the owner to choose between resvg and pillow, and
+    it is `prereq`'s.** Before this stage `prereq` asked it twice off macOS (the sips row note and a closing note) and not at all on a Mac whose PATH
+    has no sips (the closing note was `OS != macos`; the row was OK-or-nothing). Now the sips row is the one place (`sips is not on this PATH` or
+    `sips exists on macOS only`, then the choice), and the closing note stays only for `--for apple`. The smoke counts the marker
+    `--renderer=resvg|pillow choice` over every log of the main project: exactly one, in `prereq.log`. The owner's answer in the main project is
+    Pillow, recorded with `downscale --renderer=pillow --record-renderer` on the PNG master the mark generator writes; a later plain `downscale` and
+    `check` use the recorded choice and ask nothing. The downscale refusal text (exit 3, "no renderer opt-in is recorded") is a different message for
+    a different situation (nobody answered); it is exercised only in a control project, with resvg then chosen there on the SVG master, so the main
+    project's transcript still holds one question. Pillow asked to rasterise an SVG exits 3 and says so.
+705. **A tier refusal happens before the report exists.** `emit print` and `emit presskit` built their `Emit` (which creates the report) and then
+    called `require_tier`, so a refused run left a failing `assets/_checks/emit-print.json` or `emit-presskit.json` for a run that never started, and
+    on a project without a mark the refusal was beaten by `mark SVG not found`. `Emit.begin` takes `tiers` and `tier_what` and checks after the G3 gate
+    and before the constructor, like `TierBEmit` and `emit social --posts`. The contract line "a failure before the report exists writes nothing"
+    now holds for every tier refusal. `check` never read those reports (an emitter's report is gated only when it wrote artefacts), so this was
+    untidy rather than wrong; the smoke asserts that no report is left and that `check` still exits 0.
+706. **A failing `npm --version` is MISSING, not OK.** `prereq` ignored the exit code and printed the error text as the version (found when a
+    wrapper script was put where npm was). The row is MISSING with the first line of the output; the scope is blocked, as for a missing npm.
+707. **"Full-only emitters refuse" is tested for the packs that have a tier gate.** Android, Chrome extension and MSIX (Full) and profiles, print, press
+    kit and social posts (Standard and Full) exit 2 with `state --set tier=full` or `tier=standard` and write nothing. The Tier A platform packs
+    (windows, linux, tray, tauri, wallet, developer, apple) have no tier gate in code, as decision 505 recorded, and the standalone brand-assets entry
+    builds the Windows pack in a Quick project, so they are not asserted to refuse; `emit apple` asked for by name with the Apple tools hidden exits 3
+    and writes nothing (control project). Recorded as an open point for the owner: the plan's tier table lists the Tier A packs under Full.
+708. **What the output scan forbids, and what it exempts.** Over every run of the Quick path: Apple tool names and Xcode, platform-pack or deployment-target
+    questions and `INVENTORY.md`, package-registry hosts and phrases, and error traces (`Traceback`, `command not found`, `No such file or directory`,
+    `not a git repository`); `sips` is named only by prereq's question. The runs that are meant to refuse (the tier refusals, Pillow on an SVG, `--require
+    G3` before G3) are exempt from the word scan but still counted for the question. Fed a mutated log (an xcrun error, a registry URL, a second
+    question, a platform question, a bare `sips`, a traceback) the scan fails each time. `names --plan --profile consumer` is part of the path: it lists
+    domain services only.
+709. **Known gap, not changed: `emit social` writes a GitHub social preview and README headers for every business.** A bakery receives
+    `github-social-1280x640.png` and `readme-header-*.png`, and the run warns about the unverified `readme-header` row with a docs.github.com URL. They
+    are harmless and in the spec, but developer artefacts for a shop; an `--only og` option or a profile switch is a product decision, left to the owner.

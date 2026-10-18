@@ -856,3 +856,21 @@ commands. Conventions:
 - **Network** is never touched by the default suite: HTTP, whois and DNS answers are replayed from `tests/fixtures/names/`.
 - **Not automatable here** (a person or a real session must look) goes to `dev/MANUAL-CHECKS.md`; a manual check is never
   reported as passed by the suite.
+
+## Quick-tier smoke (stage 7)
+
+`tests/smoke/quick.sh` runs a Quick-tier project of a non-software business (fixtures in `tests/smoke/quick-bakery/`) through `new`, G0 (tier `quick`,
+`review_surface: local`), the first board (`board-lint`, `shot`), `tokens`, a mark generated with `px_lib`, `contrast`, `logo-sheet`, `emit web`,
+`emit social`, `downscale` and `check`, with every `brand-creator` call under `env PATH=<failing git shim>:<shim>`.
+
+- **The shim** is a folder of symlinks to the tools the path needs and to nothing else (`npm` and `npx` are two-line wrappers); `command -v` and the shim
+  python's `shutil.which` find none of sips, iconutil, actool, xcrun, ictool and git there. The git shim logs every call to `git-calls.log` and exits 127;
+  the log must be empty. The project folder has no `.git` above it and `GIT_CEILING_DIRECTORIES` is set.
+- **The renderer question** is asked by `prereq` and by nothing else: its output holds the marker `--renderer=resvg|pillow choice` once (the `sips` row; off
+  macOS or when sips is not on PATH), and no other run of the main project holds it. The owner's answer is recorded with `downscale --renderer=<name>
+  --record-renderer`; later `downscale` and `check` runs use it silently. A control project without an answer shows the exit-3 refusal and that nothing is measured.
+- **Output rules** for the Quick path: no Apple tool name or Xcode, no platform-pack or deployment-target question, no package-registry host, no traceback
+  or `command not found`; `sips` is named only in the prereq question. Runs that are meant to refuse are exempt from the word scan.
+- **Refusals**: `emit android|chrome-ext|msix` exit 2 naming `state --set tier=full`; `emit profiles|presskit|print` and `emit social --posts` exit 2 naming
+  `state --set tier=standard`; none of them writes a file or a report (the tier gate runs after G3 and before the report exists: `Emit.begin(tiers=...)`).
+  The Tier A packs have no tier gate (see decision 707); `emit apple` with the Apple tools hidden exits 3 and writes nothing.

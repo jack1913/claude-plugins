@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Marlow Lane Bakery: round 1</title>
+<!-- Synthetic Quick-tier smoke fixture (a made-up bakery), filled from templates/round-page.html. Not a real brand. -->
+<style>
+:root{
+  --bg:#f5f6f8;--surface:#ffffff;--sunk:#eceef1;--text:#16191d;--muted:#565d66;--line:#d9dce1;
+  --accent:#3b5b8c;--accent-ink:#ffffff;--good:#2f6b4f;--warn:#8a5a14;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans","Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --r:6px;color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#111316;--surface:#191c20;--sunk:#0c0e10;--text:#e7e9ec;--muted:#9aa1ab;--line:#2d3137;
+  --accent:#8fb0e3;--accent-ink:#0c1320;--good:#7fc4a2;--warn:#e0b26a;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111316;--surface:#191c20;--sunk:#0c0e10;--text:#e7e9ec;--muted:#9aa1ab;--line:#2d3137;
+  --accent:#8fb0e3;--accent-ink:#0c1320;--good:#7fc4a2;--warn:#e0b26a;color-scheme:dark}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.55 var(--sans)}
+main{max-width:1120px;margin:0 auto;padding:32px 16px 80px}
+h1,h2,h3{line-height:1.2;margin:0}
+h1{font-size:clamp(28px,5vw,40px);letter-spacing:-.01em}
+h2{font-size:22px;margin-bottom:12px}
+h3{font-size:18px}
+p,li,dd{overflow-wrap:anywhere}
+p{margin:0 0 10px}
+a{color:var(--accent)}
+.eyebrow,.num{font:600 12px/1.4 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
+.num{display:block}
+.lede{color:var(--muted);max-width:68ch;margin-top:10px}
+.muted{color:var(--muted)}
+.toc{display:flex;flex-wrap:wrap;gap:6px;margin:20px 0 8px;padding:0;list-style:none}
+.toc a{display:inline-block;padding:4px 10px;border:1px solid var(--line);border-radius:999px;font-size:13px;color:var(--text);text-decoration:none;background:var(--surface)}
+.block{margin-top:40px;padding-top:20px;border-top:1px solid var(--line)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))}
+.core{display:grid;gap:0;grid-template-columns:minmax(0,180px) minmax(0,1fr);margin:0}
+.core dt{font-weight:600;padding:8px 12px 8px 0;border-top:1px solid var(--line)}
+.core dd{margin:0;padding:8px 0;border-top:1px solid var(--line)}
+@media (max-width:600px){.core{grid-template-columns:minmax(0,1fr)}.core dd{border-top:0;padding-top:0}}
+.map{position:relative;aspect-ratio:16/10;width:100%;max-width:760px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+@media (max-width:600px){.map{aspect-ratio:1/1}}
+.map::before,.map::after{content:"";position:absolute;background:var(--line)}
+.map::before{left:50%;top:8%;bottom:8%;width:1px}
+.map::after{top:50%;left:6%;right:6%;height:1px}
+.axis{position:absolute;font:600 11px/1.2 var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.04em;max-width:40%}
+.axis.x0{left:8px;top:50%;transform:translateY(-130%)}.axis.x1{right:8px;top:50%;transform:translateY(-130%);text-align:right}
+.axis.y0{left:50%;bottom:6px;transform:translateX(8px)}.axis.y1{left:50%;top:6px;transform:translateX(8px)}
+.norm{position:absolute;border:1.5px dashed var(--muted);border-radius:50%;display:grid;place-items:center;font-size:12px;color:var(--muted);text-align:center;padding:4px}
+.dot{position:absolute;transform:translate(-50%,-50%);padding:3px 10px;border-radius:999px;background:var(--accent);color:var(--accent-ink);font:600 13px/1.3 var(--sans);white-space:nowrap}
+.dot.failed{background:transparent;color:var(--muted);border:1.5px dashed var(--muted)}
+.direction{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.dhead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.letter{font:700 13px/1 var(--mono);border:1px solid var(--line);border-radius:4px;padding:4px 6px}
+.register{margin-left:auto;font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 8px}
+.far{font-size:12px;color:var(--warn)}
+.idea{font-size:17px;margin:0}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tile{border-radius:4px;padding:12px;display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;min-height:120px;border:1px solid var(--line)}
+.tile.light{background:var(--d-paper);color:var(--d-ink);--m-accent:var(--d-accent)}
+.tile.dark{background:var(--d-paper-dark);color:var(--d-ink-dark);--m-accent:var(--d-accent-dark)}
+.tile svg{display:block;flex:none}
+.tile .big{width:72px;height:72px;margin-right:auto}
+.lockup{border-radius:4px;padding:14px 12px;background:var(--d-paper);color:var(--d-ink);display:flex;align-items:center;gap:10px;border:1px solid var(--line);--m-accent:var(--d-accent)}
+.lockup .word{font-weight:700;font-size:22px;letter-spacing:-.01em}
+.swatches{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:6px;margin:0;padding:0;list-style:none}
+.swatches li{border:1px solid var(--line);border-radius:4px;overflow:hidden;font-size:12px}
+.swatches i{display:block;height:36px}
+.swatches span{display:block;padding:4px 6px}
+.specimen{border:1px solid var(--line);border-radius:4px;padding:10px 12px}
+.specimen .aa{font-size:36px;line-height:1.1}
+.voice{margin:0;padding-left:18px}
+.fit{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;margin:0}
+.fit dt{font-weight:600}.fit dd{margin:0}
+.reflex{font-size:14px;background:var(--sunk);border-radius:4px;padding:8px 10px;margin:0}
+.vote{border:0;padding:0;margin:0;display:flex;gap:6px;flex-wrap:wrap}
+.vote legend{font-size:13px;color:var(--muted);margin-bottom:4px}
+.vote label,.options label{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:14px;cursor:pointer}
+.surface-row{margin-bottom:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px}
+.tab{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px 8px 0 0;font-size:13px;border:1px solid var(--line);border-bottom:0}
+.tab.light{background:#f1f2f4;color:#202327}.tab.dark{background:#26292e;color:#e4e6e9}
+.tab svg{width:16px;height:16px;flex:none}
+.callout{border-left:4px solid var(--accent);background:var(--surface);padding:14px 16px;border-radius:0 var(--r) var(--r) 0}
+.views{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));margin-top:12px}
+.questions{margin:0;padding-left:22px}
+.questions>li{margin-bottom:16px}
+.questions .q{font-weight:600;margin-bottom:6px}
+.options{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.options .rec{font-size:12px;color:var(--good);font-weight:600;white-space:nowrap;overflow-wrap:normal}
+.options label{border-radius:14px}
+.reply-out{font:15px/1.4 var(--mono);background:var(--sunk);border-radius:4px;padding:10px 12px;margin:8px 0;min-height:42px}
+button{font:inherit;font-size:14px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:6px 14px;cursor:pointer}
+.sprite{position:absolute;width:0;height:0;overflow:hidden}
+footer{margin-top:56px;font-size:13px;color:var(--muted)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body data-round="1" data-board="pick">
+
+<svg class="sprite" aria-hidden="true" focusable="false"><defs>
+  <symbol id="mark-hearth" viewBox="0 0 64 64"><path d="M8 52C8 28 20 12 32 12S56 28 56 52Z" fill="currentColor"/><rect x="24" y="26" width="16" height="16" fill="var(--m-accent)"/></symbol>
+  <symbol id="mark-queue" viewBox="0 0 64 64"><circle cx="12" cy="40" r="9" fill="currentColor"/><circle cx="32" cy="40" r="9" fill="currentColor"/><circle cx="52" cy="40" r="9" fill="var(--m-accent)"/></symbol>
+  <symbol id="mark-rye" viewBox="0 0 64 64"><path d="M32 6 52 20 32 34 12 20Z" fill="currentColor"/><path d="M32 30 52 44 32 58 12 44Z" fill="var(--m-accent)"/></symbol>
+</defs></svg>
+
+<main>
+  <header>
+    <p class="eyebrow">Round 1 · pick board · 2026-10-17</p>
+    <h1>Marlow Lane Bakery: round 1</h1>
+    <p class="lede">Three strategically different directions for a neighbourhood bakery. Pick one to take forward, or say none of these.</p>
+    <ul class="toc">
+      <li><a href="#core">Strategy core</a></li><li><a href="#map">Map</a></li><li><a href="#directions">Directions</a></li>
+      <li><a href="#hardest">Hardest surface</a></li><li><a href="#weak">Weak points</a></li><li><a href="#none">None of these</a></li>
+      <li><a href="#call">My call</a></li><li><a href="#questions">Questions</a></li>
+    </ul>
+  </header>
+
+  <section class="block" id="core" data-section="strategy-core">
+    <h2><span class="num">1</span>Strategy core</h2>
+    <p class="muted">Drafted from the brief. React to any line; nothing here is final.</p>
+    <dl class="core">
+      <dt>Category and alternatives</dt><dd>A neighbourhood bakery. Instead people buy supermarket bread, or go to the chain café.</dd>
+      <dt>One target</dt><dd>Neighbours within a ten-minute walk who buy bread for the week on Saturday morning.</dd>
+      <dt>Positioning</dt><dd>For neighbours who want real bread close to home, Marlow Lane Bakery is a small bakery that sells what it baked that morning. Unlike the supermarket, it sells out and says so.</dd>
+      <dt>Only we</dt><dd>Marlow Lane Bakery is the only bakery on the lane that bakes sourdough every morning in the shop.</dd>
+      <dt>Proof points</dt><dd>Sourdough baked every morning; a queue on Saturdays; open six days (FACTS.md rows 1-3).</dd>
+      <dt>Not this / This</dt><dd>Not this: "Artisan excellence since forever." This: "Baked before you were up."</dd>
+      <dt>Guardrails</dt><dd>No health claims; no "best in town"; opening hours and prices only from FACTS.md.</dd>
+    </dl>
+  </section>
+
+  <section class="block" id="map" data-section="positioning-map">
+    <h2><span class="num">2</span>Where the directions sit</h2>
+    <div class="map" role="img" aria-label="Positioning map: bakeries cluster at rustic and sentimental; Hearth sits near them, Rye is quiet and exacting, Queue is far away at playful and urban.">
+      <span class="axis x0">rustic</span><span class="axis x1">modern</span>
+      <span class="axis y0">austere</span><span class="axis y1">playful</span>
+      <span class="norm" style="left:6%;top:9%;width:32%;height:30%">category norm</span>
+      <span class="dot" data-direction="Hearth" style="left:30%;top:38%">Hearth</span>
+      <span class="dot" data-direction="Rye" style="left:60%;top:78%">Rye</span>
+      <span class="dot" data-direction="Queue" style="left:82%;top:22%">Queue</span>
+    </div>
+    <p class="muted">Bakeries cluster at rustic and sentimental: wheat ears, chef hats, script wordmarks, kraft paper. The axes come from that cliché list. Queue is the one far from the norm.</p>
+  </section>
+
+  <section class="block" id="directions">
+    <h2><span class="num">3</span>Directions</h2>
+    <div class="grid">
+      <article class="direction" data-section="direction" data-name="Hearth" data-letter="A" data-register="warm"
+        style="--d-paper:#f8f0e3;--d-ink:#2e1f16;--d-accent:#b4521e;--d-paper-dark:#1d1511;--d-ink-dark:#f4e8d4;--d-accent-dark:#f0a15a">
+        <div class="dhead"><span class="letter">A</span><h3>Hearth</h3><span class="register">warm</span></div>
+        <p class="idea" data-field="idea">A round loaf with a glowing cut: the shop is the warm room on the corner, lit before the street wakes up.</p>
+        <p class="muted"><b>Visual philosophy:</b> <span data-field="philosophy">Honest heat: one solid loaf shape, one square of oven glow.</span></p>
+        <div class="tiles">
+          <div class="tile light"><svg class="big" viewBox="0 0 64 64" aria-label="Hearth mark on light"><use href="#mark-hearth"/></svg>
+            <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true"><use href="#mark-hearth"/></svg><svg width="32" height="32" viewBox="0 0 64 64" aria-hidden="true"><use href="#mark-hearth"/></svg><svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true"><use href="#mark-hearth"/></svg></div>
+          <div class="tile dark"><svg class="big" viewBox="0 0 64 64" aria-label="Hearth mark on dark"><use href="#mark-hearth"/></svg>
+            <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true"><use href="#mark-hearth"/></svg><svg width="32" height="32" viewBox="0 0 64 64" aria-hidden="true"><use href="#mark-hearth"/></svg><svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true"><use href="#mark-hearth"/></svg></div>
+        </div>
+        <div class="lockup"><svg width="40" height="40" viewBox="0 0 64 64" aria-hidden="true"><use href="#mark-hearth"/></svg><span class="word">Marlow Lane Bakery</span></div>
+        <ul class="swatches">
+          <li><i style="background:var(--d-paper)"></i><span>paper · 15.7:1 against ink</span></li>
+          <li><i style="background:var(--d-ink)"></i><span>ink</span></li>
+          <li><i style="background:var(--d-accent)"></i><span>crust accent · 4.6:1 against paper</span></li>
+        </ul>
+        <div class="specimen"><div class="aa">Aa</div><p>Sourdough, rye and morning buns, sold until they run out.</p><p class="muted">System serif for now; a licensed serif is chosen after the pick.</p></div>
+        <ul class="voice"><li>Baked before you were up.</li><li>Sourdough on the rack by seven. When it is gone, it is gone.</li><li>Page not found. The oven is on, the page is not.</li></ul>
+        <dl class="fit"><dt>Best for</dt><dd>Shop sign, paper bags, the Saturday window.</dd><dt>Risk</dt><dd>A loaf and a warm colour is what a bakery would draw first; it must earn its place by the glowing cut.</dd></dl>
+        <p class="reflex" data-field="reflex">no hits (no wheat ear, no chef hat, no script wordmark)</p>
+        <fieldset class="vote" data-vote="Hearth"><legend>Your vote</legend>
+          <label><input type="radio" name="vote-hearth" value="keep">keep</label><label><input type="radio" name="vote-hearth" value="drop">drop</label><label><input type="radio" name="vote-hearth" value="unsure">unsure</label></fieldset>
+      </article>
+      <article class="direction" data-section="direction" data-name="Queue" data-letter="B" data-register="playful" data-far="true"
+        style="--d-paper:#fbf6ea;--d-ink:#1f2a44;--d-accent:#d9412b;--d-paper-dark:#14182a;--d-ink-dark:#f3eee0;--d-accent-dark:#ff8a73">
+        <div class="dhead"><span class="letter">B</span><h3>Queue</h3><span class="register">playful</span><span class="far">far from the category norm</span></div>
+        <p class="idea" data-field="idea">Three dots in a row, the last one lit: the Saturday queue, and the neighbour at the front who gets the last loaf.</p>
+        <p class="muted"><b>Visual philosophy:</b> <span data-field="philosophy">Counted, not drawn: repetition with one exception.</span></p>
+        <div class="tiles">
+          <div class="tile light"><svg class="big" viewBox="0 0 64 64" aria-label="Queue mark on light"><use href="#mark-queue"/></svg>
+            <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true"><use href="#mark-queue"/></svg><svg width="32" height="32" viewBox="0 0 64 64" aria-hidden="true"><use href="#mark-queue"/></svg><svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true"><use href="#mark-queue"/></svg></div>
+          <div class="tile dark"><svg class="big" viewBox="0 0 64 64" aria-label="Queue mark on dark"><use href="#mark-queue"/></svg>
+            <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true"><use href="#mark-queue"/></svg><svg width="32" height="32" viewBox="0 0 64 64" aria-hidden="true"><use href="#mark-queue"/></svg><svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true"><use href="#mark-queue"/></svg></div>
+        </div>
+        <div class="lockup"><svg width="40" height="40" viewBox="0 0 64 64" aria-hidden="true"><use href="#mark-queue"/></svg><span class="word">Marlow Lane Bakery</span></div>
+        <ul class="swatches">
+          <li><i style="background:var(--d-paper)"></i><span>paper · 14.2:1 against ink</span></li>
+          <li><i style="background:var(--d-ink)"></i><span>ink</span></li>
+          <li><i style="background:var(--d-accent)"></i><span>tomato accent · 4.1:1 against paper</span></li>
+        </ul>
+        <div class="specimen"><div class="aa">Aa</div><p>Saturday: the queue starts before the door opens.</p><p class="muted">Rounded sans for now; a licensed face is chosen after the pick.</p></div>
+        <ul class="voice"><li>Join the queue.</li><li>Third in line gets the warm one.</li><li>Page not found. Nobody is waiting here.</li></ul>
+        <dl class="fit"><dt>Best for</dt><dd>Window decal, tote bags, a social grid.</dd><dt>Risk</dt><dd>Dots can read as a loading indicator or a chat bubble at 16 px.</dd></dl>
+        <p class="reflex" data-field="reflex">no hits (no wheat ear, no chef hat, no script wordmark)</p>
+        <fieldset class="vote" data-vote="Queue"><legend>Your vote</legend>
+          <label><input type="radio" name="vote-queue" value="keep">keep</label><label><input type="radio" name="vote-queue" value="drop">drop</label><label><input type="radio" name="vote-queue" value="unsure">unsure</label></fieldset>
+      </article>
+      <article class="direction" data-section="direction" data-name="Rye" data-letter="C" data-register="austere"
+        style="--d-paper:#eef0e6;--d-ink:#23301f;--d-accent:#8a6a1f;--d-paper-dark:#151a12;--d-ink-dark:#e9ecde;--d-accent-dark:#d3ad52">
+        <div class="dhead"><span class="letter">C</span><h3>Rye</h3><span class="register">austere</span></div>
+        <p class="idea" data-field="idea">Two stacked chevrons cut from one grain: a quiet, mill-and-oven brand for people who read the ingredients.</p>
+        <p class="muted"><b>Visual philosophy:</b> <span data-field="philosophy">Grain geometry: two cuts, no decoration.</span></p>
+        <div class="tiles">
+          <div class="tile light"><svg class="big" viewBox="0 0 64 64" aria-label="Rye mark on light"><use href="#mark-rye"/></svg>
+            <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true"><use href="#mark-rye"/></svg><svg width="32" height="32" viewBox="0 0 64 64" aria-hidden="true"><use href="#mark-rye"/></svg><svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true"><use href="#mark-rye"/></svg></div>
+          <div class="tile dark"><svg class="big" viewBox="0 0 64 64" aria-label="Rye mark on dark"><use href="#mark-rye"/></svg>
+            <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true"><use href="#mark-rye"/></svg><svg width="32" height="32" viewBox="0 0 64 64" aria-hidden="true"><use href="#mark-rye"/></svg><svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true"><use href="#mark-rye"/></svg></div>
+        </div>
+        <div class="lockup"><svg width="40" height="40" viewBox="0 0 64 64" aria-hidden="true"><use href="#mark-rye"/></svg><span class="word">Marlow Lane Bakery</span></div>
+        <ul class="swatches">
+          <li><i style="background:var(--d-paper)"></i><span>paper · 13.1:1 against ink</span></li>
+          <li><i style="background:var(--d-ink)"></i><span>ink</span></li>
+          <li><i style="background:var(--d-accent)"></i><span>grain accent · 4.6:1 against paper</span></li>
+        </ul>
+        <div class="specimen"><div class="aa">Aa</div><p>Flour, water, salt, time.</p><p class="muted">Grotesque for now; a licensed face is chosen after the pick.</p></div>
+        <ul class="voice"><li>Flour, water, salt, time.</li><li>Rye, forty hours. Ask us how.</li><li>Page not found. Try the bread.</li></ul>
+        <dl class="fit"><dt>Best for</dt><dd>Labels, the ingredient list, a wholesale line.</dd><dt>Risk</dt><dd>The cold, serious tone may keep away the neighbours who queue for buns.</dd></dl>
+        <p class="reflex" data-field="reflex">hit: wheat-adjacent shape (chevrons read as grain); argument: it is a diamond cut, not an ear, and no stalk is drawn</p>
+        <fieldset class="vote" data-vote="Rye"><legend>Your vote</legend>
+          <label><input type="radio" name="vote-rye" value="keep">keep</label><label><input type="radio" name="vote-rye" value="drop">drop</label><label><input type="radio" name="vote-rye" value="unsure">unsure</label></fieldset>
+      </article>
+    </div>
+  </section>
+
+  <section class="block" id="hardest" data-section="hardest-surface">
+    <h2><span class="num">4</span>Hardest surface: the 16 px browser tab</h2>
+    <div class="surface-row">
+      <div style="--m-accent:#b4521e"><div class="tab light"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#mark-hearth"/></svg>Marlow Lane Bakery · Hearth</div><div class="tab dark" style="--m-accent:#f0a15a"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#mark-hearth"/></svg>Marlow Lane Bakery · Hearth</div></div>
+      <div style="--m-accent:#d9412b"><div class="tab light"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#mark-queue"/></svg>Marlow Lane Bakery · Queue</div><div class="tab dark" style="--m-accent:#ff8a73"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#mark-queue"/></svg>Marlow Lane Bakery · Queue</div></div>
+      <div style="--m-accent:#8a6a1f"><div class="tab light"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#mark-rye"/></svg>Marlow Lane Bakery · Rye</div><div class="tab dark" style="--m-accent:#d3ad52"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#mark-rye"/></svg>Marlow Lane Bakery · Rye</div></div>
+    </div>
+    <p>Hearth and Rye keep one solid shape and one accent block, so they hold at 16 px. Queue's three dots are the weakest here: at 16 px the dots are 4 px wide with 1 px gaps.</p>
+  </section>
+
+  <section class="block" id="weak" data-section="weak-points">
+    <h2><span class="num">5</span>Weak points</h2>
+    <ul>
+      <li>Hearth is the closest to what a bakery would draw first; the glowing cut is its only argument.</li>
+      <li>Type is not chosen yet: every specimen uses a system face, so the voice differences rest on copy and colour.</li>
+      <li>None of the three has been seen on a paper bag or a shop sign at distance; that is the next check.</li>
+    </ul>
+  </section>
+
+  <section class="block" id="none" data-section="none-of-these">
+    <h2><span class="num">7</span>None of these</h2>
+    <div class="callout"><p>If none of these is right, say so and what was missing. The next round starts from new territories and shows where this one sat on the map.</p></div>
+  </section>
+
+  <section class="block" id="call" data-section="my-call">
+    <h2><span class="num">8</span>My call</h2>
+    <p data-field="recommendation"><b>Recommendation:</b> Hearth: it is the only direction that reads as warm at 16 px and on a paper bag, and its glowing cut is a shape nobody else on the lane has.</p>
+    <p data-field="critique"><b>Honest critique:</b> a loaf is the obvious bakery symbol; if the glow does not show on a printed bag, Queue is the braver choice.</p>
+  </section>
+
+  <section class="block" id="questions" data-section="questions">
+    <h2><span class="num">9</span>Questions</h2>
+    <ol class="questions">
+      <li data-section="question" data-n="1"><p class="q">Which direction goes forward?</p>
+        <ol class="options">
+          <li data-option="a" data-recommended="true"><label><input type="radio" name="q1" value="a">a. Hearth <span class="rec">Recommended</span></label></li>
+          <li data-option="b"><label><input type="radio" name="q1" value="b">b. Queue</label></li>
+          <li data-option="c"><label><input type="radio" name="q1" value="c">c. Rye</label></li>
+          <li data-option="d"><label><input type="radio" name="q1" value="d">d. None of these</label></li>
+        </ol></li>
+    </ol>
+  </section>
+
+  <section class="block" id="reply" data-section="reply">
+    <h2>Reply</h2>
+    <p>Answer with a name (or letter) and one sentence, for example "Hearth, but warmer". Batched answers work: "1a, Queue drop".</p>
+    <div class="reply-out" id="reply-out" aria-live="polite">Pick options above to compose a reply, or type your own.</div>
+    <button type="button" id="copy-reply">Copy reply</button>
+  </section>
+
+  <footer>Made with brand-creator · round 1 · checked with board-lint and four-view shots</footer>
+</main>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var t = q.get("t");
+  if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+  var v = q.get("v");
+  if (v) document.querySelectorAll("[data-variant]").forEach(function (el) { el.hidden = el.getAttribute("data-variant") !== v; });
+  var out = document.getElementById("reply-out");
+  function compose() {
+    var parts = [];
+    document.querySelectorAll("[data-section=question]").forEach(function (qq) {
+      var c = qq.querySelector("input:checked");
+      if (c) parts.push(qq.getAttribute("data-n") + c.value);
+    });
+    document.querySelectorAll("fieldset[data-vote]").forEach(function (f) {
+      var c = f.querySelector("input:checked");
+      if (c) parts.push(f.getAttribute("data-vote") + " " + c.value);
+    });
+    if (out && parts.length) out.textContent = parts.join(", ");
+  }
+  document.addEventListener("change", compose);
+  var btn = document.getElementById("copy-reply");
+  if (btn) btn.addEventListener("click", function () {
+    var text = out ? out.textContent : "";
+    var done = function () { btn.textContent = "Copied"; };
+    var fallback = function () { var r = document.createRange(); r.selectNodeContents(out); var s = getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = "Selected: copy it"; };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+  });
+})();
+</script>
+</body>
+</html>

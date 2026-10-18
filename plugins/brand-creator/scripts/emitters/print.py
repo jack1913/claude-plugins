@@ -38,7 +38,7 @@ import printpdf as pp  # noqa: E402
 import svgtools  # noqa: E402
 from _color import parse_hex, wcag_ratio  # noqa: E402
 from _common import EXIT_CANNOT, EXIT_FAIL, EXIT_USAGE, confine, data_dir, fail, main_guard, plugin_root, rel, scratch_dir, sha256_bytes  # noqa: E402
-from _emit import Drawing, Emit, add_logo_arg, fill_template, require_tier  # noqa: E402
+from _emit import Drawing, Emit, add_logo_arg, fill_template  # noqa: E402
 
 RENDER_TIMEOUT_S = 150
 PIECES = ("business-card-front", "business-card-back", "letterhead", "envelope")
@@ -106,9 +106,8 @@ def main() -> int:
         ap.add_argument("--tagline", default="", help="a line under the card logo; must be a value in FACTS.md")
         ap.add_argument("--image-base-url", help="absolute https URL where you will host the signature's PNGs (default: a placeholder, warned)")
 
-    e = Emit.begin("print", __doc__, add_args=args)
+    e = Emit.begin("print", __doc__, add_args=args, tiers=("standard", "full"), tier_what="print stationery")
     a, project = e.a, e.project
-    require_tier(project, ("standard", "full"), what="print stationery")
     if a.icc and not Path(a.icc).expanduser().is_file():
         fail(EXIT_USAGE, f"--icc not found: {a.icc}")
     only = [x.strip() for x in a.only.split(",")] if a.only else list(PIECES) + [SIGNATURE]

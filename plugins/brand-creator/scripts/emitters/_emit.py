@@ -206,7 +206,8 @@ class Emit:
 
     # -- construction
     @classmethod
-    def begin(cls, name: str, doc: str, add_args=None, argv: list[str] | None = None, preflight=None) -> "Emit":
+    def begin(cls, name: str, doc: str, add_args=None, argv: list[str] | None = None, preflight=None,
+              tiers: tuple[str, ...] | None = None, tier_what: str = "") -> "Emit":
         ap = Parser(prog=f"brand-creator emit {name}", description=doc, formatter_class=argparse.RawDescriptionHelpFormatter)
         add_common_args(ap)
         ap.add_argument("--name", help="brand name (default: name in BRAND-STATE.md)")
@@ -218,6 +219,8 @@ class Emit:
             preflight(a)   # e.g. a platform check: exit 3 before anything else when this machine cannot run the emitter
         project = find_project(a.project)
         require_gate(project, "G3", for_what=f"emit {name}")
+        if tiers:
+            require_tier(project, tiers, what=tier_what or f"the {name} pack")   # before the report exists: a refusal leaves no failing report behind
         return cls(name, a, project)
 
     def keep(self, *folders: str) -> None:

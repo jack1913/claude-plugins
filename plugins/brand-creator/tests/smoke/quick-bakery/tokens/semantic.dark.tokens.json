@@ -1,0 +1,26 @@
+{
+  "color": {
+    "$type": "color",
+    "bg": {
+      "$value": "{color.night}"
+    },
+    "text": {
+      "$value": "{color.flour}"
+    },
+    "muted": {
+      "$value": "{color.dust}"
+    },
+    "line": {
+      "$value": "{color.bark}"
+    },
+    "accent": {
+      "$value": "{color.crust-bright}"
+    },
+    "mark": {
+      "$value": "{color.flour}"
+    },
+    "border": {
+      "$value": "{color.dust}"
+    }
+  }
+}

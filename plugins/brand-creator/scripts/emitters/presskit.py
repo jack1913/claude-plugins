@@ -25,7 +25,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "lib"))
 import determinism  # noqa: E402
 from _common import EXIT_FAIL, EXIT_USAGE, confine, fail, main_guard, rel  # noqa: E402
-from _emit import Emit, require_tier  # noqa: E402
+from _emit import Emit  # noqa: E402
 
 BOOK_LABEL = b"RGB, not print-ready"
 LOGO_SUFFIXES = (".svg", ".png")
@@ -37,9 +37,8 @@ def main() -> int:
         ap.add_argument("--no-book", action="store_true", help="build the kit without the book PDF (said in the report)")
         ap.add_argument("--include", action="append", default=[], metavar="PATH", help="another project file to add under extra/ (repeatable)")
 
-    e = Emit.begin("presskit", __doc__, add_args=args)
+    e = Emit.begin("presskit", __doc__, add_args=args, tiers=("standard", "full"), tier_what="the press kit")
     a, project = e.a, e.project
-    require_tier(project, ("standard", "full"), what="the press kit")
     root = f"{e.slug}-press-kit"
     entries: dict[str, bytes] = {}
     listing: list[tuple[str, bytes]] = []
