@@ -1,0 +1,218 @@
+{
+  "$description": "brand-creator starter primitives. Neutral placeholders: replace every value with the approved direction's palette, then run `brand-creator tokens --fix-hex` to compute the hex fallbacks. Colours are oklch; family members swap primitives only.",
+  "color": {
+    "$type": "color",
+    "paper": {
+      "$value": {
+        "colorSpace": "oklch",
+        "components": [
+          0.97,
+          0.004,
+          260
+        ],
+        "alpha": 1,
+        "hex": "#f3f5f8"
+      }
+    },
+    "ink": {
+      "$value": {
+        "colorSpace": "oklch",
+        "components": [
+          0.21,
+          0.01,
+          260
+        ],
+        "alpha": 1,
+        "hex": "#16181d"
+      }
+    },
+    "stone": {
+      "$value": {
+        "colorSpace": "oklch",
+        "components": [
+          0.47,
+          0.015,
+          260
+        ],
+        "alpha": 1,
+        "hex": "#565b63"
+      }
+    },
+    "rule": {
+      "$value": {
+        "colorSpace": "oklch",
+        "components": [
+          0.89,
+          0.006,
+          260
+        ],
+        "alpha": 1,
+        "hex": "#d8dbdf"
+      }
+    },
+    "signal": {
+      "$value": {
+        "colorSpace": "oklch",
+        "components": [
+          0.45,
+          0.09,
+          260
+        ],
+        "alpha": 1,
+        "hex": "#375587"
+      }
+    },
+    "night": {
+      "$value": {
+        "colorSpace": "oklch",
+        "components": [
+          0.17,
+          0.006,
+          260
+        ],
+        "alpha": 1,
+        "hex": "#0e0f12"
+      }
+    },
+    "chalk": {
+      "$value": {
+        "colorSpace": "oklch",
+        "components": [
+          0.93,
+          0.004,
+          260
+        ],
+        "alpha": 1,
+        "hex": "#e6e8ea"
+      }
+    },
+    "haze": {
+      "$value": {
+        "colorSpace": "oklch",
+        "components": [
+          0.71,
+          0.015,
+          260
+        ],
+        "alpha": 1,
+        "hex": "#9ca2ab"
+      }
+    },
+    "signal-bright": {
+      "$value": {
+        "colorSpace": "oklch",
+        "components": [
+          0.75,
+          0.08,
+          260
+        ],
+        "alpha": 1,
+        "hex": "#90afe1"
+      }
+    }
+  },
+  "size": {
+    "$type": "dimension",
+    "hairline": {
+      "$value": {
+        "value": 1,
+        "unit": "px"
+      }
+    },
+    "frame": {
+      "$value": {
+        "value": 8,
+        "unit": "px"
+      }
+    },
+    "focus-ring": {
+      "$value": {
+        "value": 2,
+        "unit": "px"
+      }
+    },
+    "text-sm": {
+      "$value": {
+        "value": 14,
+        "unit": "px"
+      }
+    },
+    "text-md": {
+      "$value": {
+        "value": 16,
+        "unit": "px"
+      }
+    },
+    "text-lg": {
+      "$value": {
+        "value": 20,
+        "unit": "px"
+      }
+    },
+    "text-xl": {
+      "$value": {
+        "value": 28,
+        "unit": "px"
+      }
+    },
+    "text-2xl": {
+      "$value": {
+        "value": 40,
+        "unit": "px"
+      }
+    }
+  },
+  "font": {
+    "$type": "fontFamily",
+    "sans": {
+      "$value": [
+        "ui-sans-serif",
+        "system-ui",
+        "sans-serif"
+      ]
+    },
+    "mono": {
+      "$value": [
+        "ui-monospace",
+        "monospace"
+      ]
+    }
+  },
+  "weight": {
+    "$type": "fontWeight",
+    "regular": {
+      "$value": 400
+    },
+    "bold": {
+      "$value": 700
+    }
+  },
+  "motion": {
+    "$type": "duration",
+    "$description": "Named durations; reduced motion means none of them run. Curves are named in the book until the emitter supports cubicBezier.",
+    "quick": {
+      "$value": {
+        "value": 160,
+        "unit": "ms"
+      }
+    },
+    "base": {
+      "$value": {
+        "value": 320,
+        "unit": "ms"
+      }
+    },
+    "slow": {
+      "$value": {
+        "value": 640,
+        "unit": "ms"
+      }
+    },
+    "stagger": {
+      "$value": {
+        "value": 120,
+        "unit": "ms"
+      }
+    }
+  }
+}

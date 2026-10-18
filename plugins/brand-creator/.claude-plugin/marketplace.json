@@ -1,0 +1,14 @@
+{
+  "name": "brand-creator",
+  "description": "A gated, phased brand-identity plugin for Claude Code: boards, mark system, tokens and platform assets checked by real renderers.",
+  "owner": {
+    "name": "brand-creator contributors"
+  },
+  "plugins": [
+    {
+      "name": "brand-creator",
+      "source": "./",
+      "description": "Gated, phased brand-identity process with boards, mark system, tokens and platform assets checked by real renderers."
+    }
+  ]
+}

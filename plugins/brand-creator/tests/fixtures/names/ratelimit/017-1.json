@@ -1,0 +1,10 @@
+{
+  "body": "{}",
+  "error": "",
+  "fetched": "2026-10-17",
+  "headers": {},
+  "key": "GET https://formulae.brew.sh/api/cask/granite.json",
+  "seq": 1,
+  "status": 200,
+  "via": "https"
+}

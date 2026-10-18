@@ -1,0 +1,34 @@
+{
+  "name": "brand-creator",
+  "displayName": "Brand Creator",
+  "description": "Gated, phased brand-identity process for a company, product or person: boards, mark system, tokens, web and social assets, checked with real renderers and contrast math.",
+  "version": "0.1.0",
+  "author": {
+    "name": "brand-creator contributors"
+  },
+  "license": "MIT",
+  "keywords": [
+    "brand",
+    "branding",
+    "logo",
+    "identity",
+    "design-tokens",
+    "favicon",
+    "brand-guidelines"
+  ],
+  "userConfig": {
+    "projects_root": {
+      "type": "directory",
+      "title": "Brand projects folder",
+      "description": "Folder that holds your brand projects. Leave empty to be asked each time; ./<slug>/ in the current folder is offered first.",
+      "required": false
+    },
+    "review_surface": {
+      "type": "string",
+      "title": "Where boards are reviewed",
+      "description": "auto uses an Artifact page (uploaded to claude.ai, private by default) when the tool exists in the session, otherwise a local file. artifact always uses an Artifact. local always opens a local file.",
+      "options": ["auto", "artifact", "local"],
+      "default": "auto"
+    }
+  }
+}

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{name}} store frame</title>
+<!-- brand-creator template: an App Store screenshot frame. Rendered to PNG by `emit apple` once per frame size of the apple-store-frames spec row.
+     A frame is the mark, the name, ONE line of real copy (a FACTS.md value, optional) and an empty area where the owner's real screenshot
+     goes. It never draws an interface, a rating, a price or a feature.
+     Placeholders, all filled by scripts/emitters/apple.py (values are HTML-escaped; {{mark}} is the raw SVG):
+       {{width}} {{height}}   frame size in px, from platform-specs.json
+       {{bg}} {{fg}} {{muted}} {{accent}}   colours from the built tokens
+       {{name}} {{tagline}} {{mark}}
+       {{slot_x}} {{slot_y}} {{slot_w}} {{slot_h}}   the screenshot area in px (also written to frames.json)
+       {{head_x}} {{head_y}} {{head_h}}   the header block in px; {{unit}} one design unit in px
+     Self-contained: no network, no web fonts. -->
+<style>
+html,body{margin:0;width:{{width}}px;height:{{height}}px;overflow:hidden;background:{{bg}};color:{{fg}};
+  font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.head{position:absolute;left:{{head_x}}px;top:{{head_y}}px;height:{{head_h}}px;display:flex;align-items:center;gap:{{unit}}px}
+.head .mark{height:100%;aspect-ratio:1;flex:none}
+.head .mark svg{width:100%;height:100%;display:block}
+.head h1{margin:0;font-size:calc({{unit}}px * 2.6);line-height:1.1;letter-spacing:-0.01em}
+.head p{margin:calc({{unit}}px * 0.4) 0 0;font-size:calc({{unit}}px * 1.5);color:{{muted}}}
+.head p:empty{display:none}
+.slot{position:absolute;left:{{slot_x}}px;top:{{slot_y}}px;width:{{slot_w}}px;height:{{slot_h}}px;box-sizing:border-box;
+  border:calc({{unit}}px * 0.18) solid {{muted}};border-radius:calc({{unit}}px * 1.2)}
+</style>
+</head>
+<body>
+<div class="head"><div class="mark">{{mark}}</div><div><h1>{{name}}</h1><p>{{tagline}}</p></div></div>
+<div class="slot"></div>
+</body>
+</html>

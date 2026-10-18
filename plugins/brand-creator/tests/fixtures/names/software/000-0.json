@@ -1,0 +1,10 @@
+{
+  "body": "{\"authority\": [6], \"ns\": [], \"rcode\": \"NXDOMAIN\", \"truncated\": false}",
+  "error": "",
+  "fetched": "2026-10-17",
+  "headers": {},
+  "key": "DNS NS bc-zz-control-x7q4k9v2m.com",
+  "seq": 0,
+  "status": 200,
+  "via": "dns"
+}

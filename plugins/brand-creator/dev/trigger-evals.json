@@ -1,0 +1,507 @@
+{
+  "$description": "Trigger evals in skill-creator style: one list of {query, should_trigger} per skill. Written in the stage that writes each description; run by hand on small, medium and large models (billed, stage 7), with frontend-design installed. brand-creator, brand-naming, brand-assets and brand-book are model-invocable and carry positives and near-miss negatives, including sibling cases (a naming-only request goes to brand-naming, not brand-creator; platform files from a finished mark go to brand-assets, not brand-creator; guidelines around an existing logo go to brand-creator, not brand-assets; the book of an approved identity goes to brand-book, while a book for a brand that does not exist yet goes to brand-creator). new, round, status, setup, brand-adopt, check, review and launch set disable-model-invocation, so their lists hold negatives only: prompts that sound like them and must not load them on their own.",
+  "brand-creator": [
+    {
+      "query": "I'm opening a bakery next spring and need a logo and a look for the shop sign and Instagram",
+      "should_trigger": true
+    },
+    {
+      "query": "Can you design a brand identity for my photography business?",
+      "should_trigger": true
+    },
+    {
+      "query": "We're rebranding our accounting firm; the current logo is from 2009. Where do we start?",
+      "should_trigger": true
+    },
+    {
+      "query": "Make a visual identity for my podcast about urban gardening",
+      "should_trigger": true
+    },
+    {
+      "query": "I sell handmade candles on Etsy and want a proper brand: logo, colours, fonts",
+      "should_trigger": true
+    },
+    {
+      "query": "I have a logo already but no guidelines. Can you build the brand rules around it?",
+      "should_trigger": true
+    },
+    {
+      "query": "Let's continue the brand project in this folder",
+      "should_trigger": true
+    },
+    {
+      "query": "New product in our company needs its own mark that still fits the parent brand",
+      "should_trigger": true
+    },
+    {
+      "query": "Personal brand for a career coach: logo, colours, a one-page guide",
+      "should_trigger": true
+    },
+    {
+      "query": "zaprojektuj logo i identyfikację wizualną dla mojej kancelarii",
+      "should_trigger": true
+    },
+    {
+      "query": "Potrzebuję księgi znaku dla nowej marki kawiarni",
+      "should_trigger": true
+    },
+    {
+      "query": "rebranding firmy budowlanej: nowe logo, kolory, czcionki",
+      "should_trigger": true
+    },
+    {
+      "query": "nowa marka dla aplikacji do nauki języków, zacznij od kierunków",
+      "should_trigger": true
+    },
+    {
+      "query": "Create a brand book for our software startup from scratch",
+      "should_trigger": true
+    },
+    {
+      "query": "The logo looks blurry on retina screens, can you fix the CSS?",
+      "should_trigger": false
+    },
+    {
+      "query": "Add our logo to the navbar component",
+      "should_trigger": false
+    },
+    {
+      "query": "Pick colours for this bar chart",
+      "should_trigger": false
+    },
+    {
+      "query": "Build a landing page for the product launch",
+      "should_trigger": false
+    },
+    {
+      "query": "Set up a Tailwind design system and component library for the app",
+      "should_trigger": false
+    },
+    {
+      "query": "Make a slide deck theme for the quarterly review",
+      "should_trigger": false
+    },
+    {
+      "query": "Convert #3366aa to rgb",
+      "should_trigger": false
+    },
+    {
+      "query": "Write a tagline for this blog post",
+      "should_trigger": false
+    },
+    {
+      "query": "Resize this PNG to 512 pixels",
+      "should_trigger": false
+    },
+    {
+      "query": "Fix the dark mode toggle in our React app",
+      "should_trigger": false
+    },
+    {
+      "query": "Is the name Northlight already taken for a candle shop?",
+      "should_trigger": false
+    },
+    {
+      "query": "czy nazwa Brightloaf jest wolna dla piekarni?",
+      "should_trigger": false
+    },
+    {
+      "query": "Generate favicons from my logo.svg",
+      "should_trigger": false
+    }
+  ],
+  "brand-naming": [
+    {
+      "query": "I'm opening a bakery and can't decide on a name. Can you suggest some and check them?",
+      "should_trigger": true
+    },
+    {
+      "query": "Is the name Northlight taken? I want to use it for my photography studio",
+      "should_trigger": true
+    },
+    {
+      "query": "Need a name for my career coaching practice, something people can spell after hearing it once",
+      "should_trigger": true
+    },
+    {
+      "query": "Name ideas for a podcast about slow travel, and check if the domains are registered",
+      "should_trigger": true
+    },
+    {
+      "query": "My Etsy shop sells hand-dyed yarn; help me find a shop name that is not already used",
+      "should_trigger": true
+    },
+    {
+      "query": "Can I call my CLI tool kestrel or is that name already a known project?",
+      "should_trigger": true
+    },
+    {
+      "query": "We need a name for our new product before the designers start on the logo",
+      "should_trigger": true
+    },
+    {
+      "query": "wymyśl nazwę dla mojej kawiarni w Gdańsku",
+      "should_trigger": true
+    },
+    {
+      "query": "czy nazwa Brightloaf jest wolna dla piekarni?",
+      "should_trigger": true
+    },
+    {
+      "query": "sprawdź, czy nazwa dla mojego gabinetu fizjoterapii nie jest już zajęta",
+      "should_trigger": true
+    },
+    {
+      "query": "jak nazwać aplikację do planowania posiłków? potrzebuję kilku propozycji",
+      "should_trigger": true
+    },
+    {
+      "query": "Design a logo and colours for my bakery called Brightloaf",
+      "should_trigger": false
+    },
+    {
+      "query": "Rename the variable userName to accountName across the codebase",
+      "should_trigger": false
+    },
+    {
+      "query": "Register the domain northlight.studio for me",
+      "should_trigger": false
+    },
+    {
+      "query": "File a trademark application for our brand name",
+      "should_trigger": false
+    },
+    {
+      "query": "What does the name Kestrel mean in this Python file's docstring?",
+      "should_trigger": false
+    },
+    {
+      "query": "Generate favicons from my logo.svg",
+      "should_trigger": false
+    },
+    {
+      "query": "Write a tagline for this blog post",
+      "should_trigger": false
+    },
+    {
+      "query": "Pick a name for this git branch",
+      "should_trigger": false
+    },
+    {
+      "query": "Add our logo to the navbar component",
+      "should_trigger": false
+    }
+  ],
+  "brand-assets": [
+    {
+      "query": "Generate favicons from my logo.svg",
+      "should_trigger": true
+    },
+    {
+      "query": "I have our final logo as an SVG; make the full favicon set and the PWA icons",
+      "should_trigger": true
+    },
+    {
+      "query": "Turn this approved mark into an iOS and macOS app icon",
+      "should_trigger": true
+    },
+    {
+      "query": "Need a Windows .ico and the installer bitmaps from our logo",
+      "should_trigger": true
+    },
+    {
+      "query": "Make tray icons for idle, syncing and error from the mark we approved",
+      "should_trigger": true
+    },
+    {
+      "query": "Create the Open Graph image and the GitHub social preview from our logo",
+      "should_trigger": true
+    },
+    {
+      "query": "Our brand is approved; build the platform asset packs from the inventory",
+      "should_trigger": true
+    },
+    {
+      "query": "Linux hicolor icons and a scalable SVG for our app, from logo.svg",
+      "should_trigger": true
+    },
+    {
+      "query": "Apple Wallet and Google Wallet pass images from our logo, please",
+      "should_trigger": true
+    },
+    {
+      "query": "I only have the logo as a PNG. Can you make favicons from it?",
+      "should_trigger": true
+    },
+    {
+      "query": "Generate the Tauri icons folder from our mark",
+      "should_trigger": true
+    },
+    {
+      "query": "wygeneruj ikony aplikacji z logo, które już mamy",
+      "should_trigger": true
+    },
+    {
+      "query": "potrzebuję pliku .ico i ikon do zasobnika systemowego z naszego logo",
+      "should_trigger": true
+    },
+    {
+      "query": "zrób favicony i obrazek do udostępniania linków z gotowego logo",
+      "should_trigger": true
+    },
+    {
+      "query": "The logo looks blurry on retina screens, can you fix the CSS?",
+      "should_trigger": false
+    },
+    {
+      "query": "Add our logo to the navbar component",
+      "should_trigger": false
+    },
+    {
+      "query": "Design a new logo for my bakery",
+      "should_trigger": false
+    },
+    {
+      "query": "Resize this PNG to 512 pixels",
+      "should_trigger": false
+    },
+    {
+      "query": "I have a logo already but no guidelines. Can you build the brand rules around it?",
+      "should_trigger": false
+    },
+    {
+      "query": "Convert this SVG icon into a React component",
+      "should_trigger": false
+    },
+    {
+      "query": "Why does my favicon not show up in Safari?",
+      "should_trigger": false
+    },
+    {
+      "query": "Make the logo bigger on the landing page",
+      "should_trigger": false
+    },
+    {
+      "query": "popraw nasze logo, bo jest nieczytelne w małych rozmiarach",
+      "should_trigger": false
+    },
+    {
+      "query": "Write alt text for the logo image",
+      "should_trigger": false
+    }
+  ],
+  "brand-book": [
+    {
+      "query": "Generate the brand book for our approved identity",
+      "should_trigger": true
+    },
+    {
+      "query": "Update the brand guidelines after we changed the accent colour",
+      "should_trigger": true
+    },
+    {
+      "query": "The book.html colour chapter is out of date, rebuild the brand book",
+      "should_trigger": true
+    },
+    {
+      "query": "We need one page of brand rules for the team: logo sizes, colours and the don'ts",
+      "should_trigger": true
+    },
+    {
+      "query": "Export the brand book as a PDF so I can send it to the board",
+      "should_trigger": true
+    },
+    {
+      "query": "Our logo is hand-drawn; fix the typo in the type chapter of the brand book",
+      "should_trigger": true
+    },
+    {
+      "query": "Write the tone of voice chapter for our brand guidelines",
+      "should_trigger": true
+    },
+    {
+      "query": "Add a photography chapter to the brand book",
+      "should_trigger": true
+    },
+    {
+      "query": "The guidelines still show both lockup options; we chose the stacked one, clean it up",
+      "should_trigger": true
+    },
+    {
+      "query": "Self-review the brand book before I approve this edition",
+      "should_trigger": true
+    },
+    {
+      "query": "Can you also give coding agents a BRAND.md and DESIGN.md from our brand book?",
+      "should_trigger": true
+    },
+    {
+      "query": "zaktualizuj księgę znaku po zmianie koloru akcentu",
+      "should_trigger": true
+    },
+    {
+      "query": "wygeneruj księgę znaku dla zatwierdzonego logo",
+      "should_trigger": true
+    },
+    {
+      "query": "przygotuj zasady marki dla zespołu: logo, kolory, czego nie robić",
+      "should_trigger": true
+    },
+    {
+      "query": "dodaj rozdział o fotografii do wytycznych marki",
+      "should_trigger": true
+    },
+    {
+      "query": "Make a slide deck for our quarterly review",
+      "should_trigger": false
+    },
+    {
+      "query": "Write a style guide for my code",
+      "should_trigger": false
+    },
+    {
+      "query": "Potrzebuję księgi znaku dla nowej marki kawiarni",
+      "should_trigger": false
+    },
+    {
+      "query": "Design a logo for my new bakery",
+      "should_trigger": false
+    },
+    {
+      "query": "Generate favicons from my logo.svg",
+      "should_trigger": false
+    },
+    {
+      "query": "Write the README for this repository",
+      "should_trigger": false
+    },
+    {
+      "query": "Set up Storybook documentation for our React components",
+      "should_trigger": false
+    },
+    {
+      "query": "Convert this brochure PDF to CMYK for the printer",
+      "should_trigger": false
+    },
+    {
+      "query": "Write an employee handbook for our startup",
+      "should_trigger": false
+    },
+    {
+      "query": "przygotuj prezentację dla inwestorów",
+      "should_trigger": false
+    }
+  ],
+  "new": [
+    {
+      "query": "Start a new React project called storefront",
+      "should_trigger": false
+    },
+    {
+      "query": "I need a logo for my bakery",
+      "should_trigger": false
+    }
+  ],
+  "round": [
+    {
+      "query": "Round these prices to two decimals",
+      "should_trigger": false
+    },
+    {
+      "query": "Show me the next set of logo directions",
+      "should_trigger": false
+    }
+  ],
+  "status": [
+    {
+      "query": "What's the git status of this repo?",
+      "should_trigger": false
+    },
+    {
+      "query": "Where does my brand project stand?",
+      "should_trigger": false
+    }
+  ],
+  "setup": [
+    {
+      "query": "Set up ESLint and Prettier for this project",
+      "should_trigger": false
+    },
+    {
+      "query": "Install whatever the brand tools need",
+      "should_trigger": false
+    }
+  ],
+  "brand-adopt": [
+    {
+      "query": "Apply the new icons to the app repository",
+      "should_trigger": false
+    },
+    {
+      "query": "Replace the old logo in our product repos",
+      "should_trigger": false
+    },
+    {
+      "query": "Rename the old brand everywhere in the codebase",
+      "should_trigger": false
+    },
+    {
+      "query": "wdróż nowe logo w repozytoriach produktu",
+      "should_trigger": false
+    }
+  ],
+  "check": [
+    {
+      "query": "Check my spelling in this email",
+      "should_trigger": false
+    },
+    {
+      "query": "Run the tests for this repo",
+      "should_trigger": false
+    },
+    {
+      "query": "Is the brand project ready? Check everything",
+      "should_trigger": false
+    },
+    {
+      "query": "sprawdź, czy w projekcie nie została stara nazwa",
+      "should_trigger": false
+    }
+  ],
+  "review": [
+    {
+      "query": "Review this pull request",
+      "should_trigger": false
+    },
+    {
+      "query": "Give me feedback on the brand book before I approve it",
+      "should_trigger": false
+    },
+    {
+      "query": "Ask a panel of reviewers to critique the boards",
+      "should_trigger": false
+    },
+    {
+      "query": "zrób przegląd tablic z kierunkami",
+      "should_trigger": false
+    }
+  ],
+  "launch": [
+    {
+      "query": "Launch the website",
+      "should_trigger": false
+    },
+    {
+      "query": "Buy the domain for me",
+      "should_trigger": false
+    },
+    {
+      "query": "What do I need to do before the brand goes public?",
+      "should_trigger": false
+    },
+    {
+      "query": "zarejestruj znak towarowy za mnie",
+      "should_trigger": false
+    }
+  ]
+}

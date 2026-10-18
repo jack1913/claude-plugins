@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="{{lang}}">
+<head>
+<meta charset="utf-8">
+<title>{{name}} envelope</title>
+<!-- brand-creator print template (envelope). Filled by scripts/emitters/print.py: every value is HTML-escaped except the blocks the emitter builds
+     itself (logo art, crop marks, font-face rule, contact and legal blocks). A placeholder left unfilled is an error.
+     The page is exactly trim + 2 x bleed. Rules the print check holds this page to: art that runs off the page carries data-print-bleed and
+     reaches the page edge; text, logos and lines stay the safe distance inside the trim; no opacity, shadows, blends or gradients
+     (transparency is refused); the crop marks are drawn in the bleed by the marks block (data-print-mark); an element with
+     data-print-id="logo" is checked against the minimum logo height. Copy the folder and pass it with --template-dir to change a template. -->
+<style>
+{{font_face}}
+@page{size:{{page_w}}mm {{page_h}}mm;margin:0}
+html,body{margin:0;padding:0}
+body{position:relative;width:{{page_w}}mm;height:{{page_h}}mm;overflow:hidden;background:#ffffff;color:{{ink}};
+  font-family:{{font_family}};-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.ground{position:absolute;left:0;top:0;width:{{page_w}}mm;height:{{page_h}}mm}
+.trim{position:absolute;left:{{bleed}}mm;top:{{bleed}}mm;width:{{trim_w}}mm;height:{{trim_h}}mm;box-sizing:border-box}
+.logo svg{display:block;width:100%;height:auto}
+p{margin:0}
+.ground{background:{{paper}}}
+.bar{position:absolute;left:0;bottom:0;width:{{page_w}}mm;height:{{bar_h}}mm;background:{{accent}}}
+.trim{padding:{{margin}}mm}
+.logo{width:36mm}
+.sender{margin-top:3mm;font-size:7.5pt;line-height:1.4;color:{{muted}}}
+</style>
+</head>
+<body>
+<div class="ground" data-print-bleed>
+  <div class="trim">
+    <div class="logo" data-print-id="logo">{{logo}}</div>
+    <div class="sender">{{contact_block}}</div>
+  </div>
+</div>
+<div class="bar" data-print-bleed></div>
+{{marks}}
+</body>
+</html>

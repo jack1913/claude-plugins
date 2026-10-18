@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "code": "de",
+  "name": "German",
+  "letters": "ÄÖÜäöüß",
+  "symbols": "",
+  "extras": "„“‚‘»«–—…ẞ",
+  "basic_latin": true,
+  "rules": [
+    {
+      "id": "low-opening-quote",
+      "text": "Primary quotation marks open low („ and “) or use guillemets in the reverse direction (» and «)."
+    }
+  ]
+}

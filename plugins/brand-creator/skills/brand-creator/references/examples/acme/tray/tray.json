@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "states": {
+    "idle": {"16": "assets/tray-src/idle-16.png", "20": "assets/tray-src/idle-20.png", "22": "assets/tray-src/idle-22.png", "24": "assets/tray-src/idle-24.png"},
+    "active": {"16": "assets/tray-src/active-16.png", "20": "assets/tray-src/active-20.png", "22": "assets/tray-src/active-22.png", "24": "assets/tray-src/active-24.png"},
+    "error": {"16": "assets/tray-src/error-16.png", "20": "assets/tray-src/error-20.png", "22": "assets/tray-src/error-22.png", "24": "assets/tray-src/error-24.png"}
+  }
+}

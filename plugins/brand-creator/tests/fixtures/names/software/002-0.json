@@ -1,0 +1,10 @@
+{
+  "body": "{\"authority\": [], \"ns\": [\"ns1.example.net\"], \"rcode\": \"NOERROR\", \"truncated\": false}",
+  "error": "",
+  "fetched": "2026-10-17",
+  "headers": {},
+  "key": "DNS NS granite.com",
+  "seq": 0,
+  "status": 200,
+  "via": "dns"
+}

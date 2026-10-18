@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "code": "fr",
+  "name": "French",
+  "letters": "ÀÂÆÇÈÉÊËÎÏÔŒÙÛÜŸàâæçèéêëîïôœùûüÿ",
+  "symbols": "",
+  "extras": "«»’‘“”–—…",
+  "basic_latin": true,
+  "rules": [
+    {
+      "id": "nbsp-before-high-punctuation",
+      "text": "A (narrow) no-break space goes before ; : ! ? and inside « » guillemets."
+    }
+  ]
+}

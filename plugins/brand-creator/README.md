@@ -1,0 +1,268 @@
+# brand-creator
+
+A Claude Code plugin that runs a gated, phased brand-identity process for a company, product or person: intake,
+research, divergent boards, a refined mark, design tokens, web and social assets, and checks that use real renderers
+and contrast math instead of opinion.
+
+> Status: version 0.1.0. Stages 1 to 4 are done: the walking skeleton (skills `brand-creator`, `new`, `round`, `status`,
+> `setup`, the scripts and tests), the name checker (`brand-creator names`), the research phase and the `brand-naming`
+> skill, the QA and mark tooling, the platform emitters and the `brand-assets` skill, the brand book (`brand-book` skill),
+> print, press kit, social posts, adoption (`/brand-creator:brand-adopt`), cascade, adapters, the applied skill and the launch
+> checklist (`/brand-creator:launch`), with `/brand-creator:check` and `/brand-creator:review`. Sections marked
+> **TODO (stage N)** are placeholders that later stages fill in.
+
+## Install
+
+```bash
+claude plugin marketplace add <path-or-git-url-of-this-folder>   # TODO (stage 7): published location
+claude plugin install brand-creator@brand-creator
+```
+
+Restart Claude Code, then describe your brand ("I need an identity for ...") or run `/brand-creator:new`.
+The plugin is Claude Code only (its `bin/` entry point does not exist on claude.ai or Cowork).
+
+Minimum Claude Code version: **2.1.271** (see the table below).
+
+## Setup (one time, asks first)
+
+```text
+/brand-creator:setup
+```
+
+`setup` shows what it will download and roughly how big it is, then asks. It installs three things, all into the
+plugin's data directory (nothing under the plugin folder, no automatic install at session start):
+
+1. Node packages (playwright-core, style-dictionary, culori, colorjs.io, and @google/design.md for the optional DESIGN.md lint), about 100 MB, pinned by `package-lock.json`.
+2. A Chrome Headless Shell build. An existing matching Playwright build is reused; otherwise about 110 MB are downloaded.
+3. Warm-up of the locked Python scripts with `uv`.
+
+Command line equivalent: `brand-creator --data <dir> setup --yes`. Check what is missing for a scope with
+`brand-creator prereq --for quick|standard|full|apple|print|names|adoption`.
+
+## The Quick tier: your first 10 minutes
+
+1. Run `/brand-creator:setup` once (it shows what it downloads and asks first).
+2. Describe your brand in plain words ("a logo and a look for my bakery"), or run `/brand-creator:new [slug]`.
+   You get at most three concrete questions (tier, mark source, name), each with a recommended answer, and a
+   project folder (`./<slug>/` by default) with `BRAND-STATE.md`, `FACTS.md`, `DECISIONS.md` and `brief/BRIEF.md`.
+3. Round 1: one page with three strategically different directions, a strategy core, a positioning map, the hardest
+   surface, "None of these" and numbered questions with lettered options. It opens on your review surface (a private
+   Artifact page, or the local file). Answer by name, letter or number ("1a 2a").
+4. You pick; one refine round (`/brand-creator:round`) follows; the approved board is frozen into `history/`.
+5. Mark at real sizes, tokens, contrast report, favicon set and social card, then `brand-creator check`.
+   `/brand-creator:status` tells you where the project stands at any time.
+
+Under the hood every step is a `brand-creator` command:
+
+1. `brand-creator new acme` scaffolds `acme/` (`BRAND-STATE.md`, `FACTS.md`, `DECISIONS.md`, `brief/BRIEF.md`).
+2. One board with three directions in `rounds/r1/board.html` (from `templates/round-page.html`), checked with
+   `brand-creator board-lint` and `brand-creator shot`.
+3. You pick a direction; the refined round is approved and frozen with `brand-creator freeze`.
+4. Tokens (`brand-creator tokens`), contrast (`brand-creator contrast`), the logo sheet (`brand-creator logo-sheet`).
+5. Web and social assets (`brand-creator emit web`, `brand-creator emit social`) and `brand-creator check`. Full tier adds the platform
+   packs: `emit apple` (macOS with Xcode only), `windows`, `linux`, `tray`, `tauri`, `wallet`, `developer`.
+
+A worked example lives in `skills/brand-creator/references/examples/acme/`. `brand-creator smoke` runs exactly this end to end on a synthetic brand called Acme.
+
+## What runs where (OS matrix per tier)
+
+| Tier | What you get | Needs | macOS | Linux | Windows |
+|---|---|---|---|---|---|
+| Quick | one board, a mark, favicon set, OG card, tokens, short guide | uv, Node 22+, resvg, Chromium (via setup) | yes | yes | TODO (stage 7): untested |
+| Standard | + research, naming when the name is open, the full book (`book.html`, an RGB proof `book.pdf`), print stationery and e-mail signature (opt-in), press kit, social posts | + Ghostscript and poppler for print and the PDF checks | yes | yes | TODO (stage 7): untested |
+| Full | + surface inventory, platform packs (Apple, Windows, Linux, tray, Tauri, Wallet, developer), `ADOPTION.md` from a read-only survey of your repositories, `LAUNCH.md` | + macOS with Xcode for the Apple emitters (no fallback), ripgrep for the survey | yes | everything except the Apple emitters | everything except the Apple emitters (untested) |
+
+Off macOS the downscale check has no `sips`; it needs the explicit opt-in `--renderer=resvg`, which is recorded in
+`BRAND-STATE.md` and printed on every report. Nothing falls back silently.
+
+## Feature and minimum Claude Code version
+
+The stated minimum is the highest row of the runtime rows.
+
+| Feature | Needs Claude Code | Why |
+|---|---|---|
+| `userConfig` with `options` (the `review_surface` picker) | 2.1.271 | older versions cannot load a plugin that declares `options` |
+| `/config` rows for plugin options | 2.1.269 | |
+| `claude plugin eval` (maintainers only) | 2.1.269 | behaviour evals |
+| `claude plugin validate` of marketplace and plugin together (maintainers only) | 2.1.289 | release check |
+
+TODO (stages 2 to 6): rows for agents (`autoCompactWindow` needs 2.1.296) and workflows when they land.
+
+## Settings (userConfig)
+
+| Setting | Meaning |
+|---|---|
+| `projects_root` | Folder that holds your brand projects. Empty: you are asked, with `./<slug>/` in the current folder offered first. |
+| `review_surface` | `auto` (Artifact when the tool exists, else a local file), `artifact`, or `local`. |
+
+## Optional: skip approval prompts for the entry point
+
+Every skill runs the plugin through its bare command name, `brand-creator` (the plugin's `bin/` folder is on the Bash
+PATH while the plugin is enabled). A skill pre-approves that command only for the turn that invokes it, so add this
+permission rule to your own settings if you do not want a prompt on every later turn. It matches the exact form the
+skills use, `brand-creator --data <dir> <subcommand> ...`:
+
+```json
+{ "permissions": { "allow": ["Bash(brand-creator *)"] } }
+```
+
+This is your choice; the plugin never edits your settings.
+
+## Name screening
+
+`brand-creator names <name>... [--profile software|consumer|personal] [--region PL]` screens candidate names against domain
+registries (RDAP, whois, DNS), npm, GitHub, Docker Hub, PyPI, crates.io and Homebrew (the last six for the `software`
+profile only) and writes a memo to `research/names/<date>-check.md`. It reports REGISTERED, NOT-FOUND or UNKNOWN, never
+"available": it is screening, not clearance, and the owner buys and files. It sends the names to third-party services, so it
+lists them first and needs `--yes`; `--plan` only lists, `--offline <dir>` replays recorded responses. Trademark offices are
+never queried: the memo carries owner-run search links. Details: `scripts/CONTRACT.md`, "Name screening".
+
+The `brand-naming` skill wraps it: it asks the name language, profile and region, grows candidates from metaphor
+territories, filters them, kills names with prior art (web and GitHub) before any registry lookup, checks meaning in
+each audience language, asks before sending names anywhere, runs `brand-creator names`, and writes a verdict memo
+(go / go-with-conditions / no, "screening, not clearance") with a Launch TODO seed. Ask "is the name X taken?" or
+"find a name for my shop"; it also runs as phase P2 of a brand project.
+
+## QA gates and mark tooling
+
+Quality gates that run as scripts and write a report to `assets/_checks/` (`brand-creator check` gates every report that exists,
+and every QA gate a manifest row asks for; a gate that cannot run is "not verified", never a pass):
+
+| Command | What it proves |
+|---|---|
+| `downscale` | what survives when one master is shrunk to the sizes systems show: accent pixels, box and solid square (default rule: 4 x 4 px at 32 px and below), before and after against the last run on the same file. One report per master; `check` ties each manifest row to its own master's report. `sips` on macOS; elsewhere only an explicit `--renderer=resvg\|pillow` opt-in |
+| `states-check` | state sets (idle, active, error) differ in greyscale and in silhouette |
+| `family-check` | family modes: shared glyphs are cell-equal to the family's sources, tile shares agree across products (`FAMILY.md`) |
+| `contrast --cvd` | colours stay distinguishable under protan, deutan and tritan simulation (ColorAide, CIEDE2000) |
+| `fontcheck`, `fonts` | glyph coverage for the brand's language set (`content_languages`; Polish is one set among seven), a licence hint, and which font Chromium really used |
+| `outline-glyphs`, `logo-sheet --guides` | type-based marks as paths with no live text, and the baseline, cap line and x-height measured on the ink |
+| `shot --motion` | named animation states equal the static SVG at 1x and 2x (a control pair must differ); reduced motion shows the still; no layout shift |
+| `snapshot`, `verify-idempotent`, `staleness`, `specs-due` | byte-identity proofs, two-run idempotence with an explained allowlist, stale packs, platform-spec rows due for a recheck |
+
+The thresholds are the owner's (`qa/rules.json`); the plugin's numbers are proposals and say so. `scripts/lib/px_lib.py` is a
+standard-library raster toolkit (RGBA buffer, PNG, ICO, run-length SVG) for marks generated by code. Python dependencies of these
+scripts (fontTools, skia-pathops, Pillow, ColorAide) are pinned and fetched by `uv` on first use; see `THIRD_PARTY_NOTICES.md`.
+Details: `scripts/CONTRACT.md`, "QA gates and mark tooling". Every gate, what it blocks and the test that proves it with a
+deliberate break: `skills/brand-creator/references/phases/09-qa.md`.
+
+## Platform files from a mark you already have
+
+The `brand-assets` skill turns an approved mark into platform files. Say "favicons from my logo.svg" (or "ikony aplikacji
+z logo"). Without a brand project it writes everything into `./brand-assets/` with a manifest. A PNG is warned about, and
+tracing it (potrace) is an explicit step you approve. Inside a brand project it works from `INVENTORY.md` with size
+bands and a downscale proof. Apple files need a Mac with Xcode; elsewhere the small-size check needs your explicit
+`--renderer` opt-in.
+
+## Print, press kit and social posts
+
+`brand-creator emit print` writes a business card (front and back), a letterhead and an envelope as print PDFs, plus an HTML e-mail signature, from your
+tokens, your outlined logo and the contact rows of `FACTS.md`. Sizes come from the print region (EU, US or JP, from `--region` or your brief): card,
+A4 or Letter, DL or #10, and a default bleed of 3 mm or 0.125 in that is **the printer's to confirm**. The page is exactly trim plus two bleeds, with
+crop marks in the bleed; Chromium prints it, Ghostscript turns the text into outlines, and the trim and bleed boxes are set in the file. Without
+`--icc` the file is an **RGB proof, not print-ready**; with `--icc <your printer's CMYK profile>` it is a **PDF/X-4 candidate (preflight with your
+printer)**. brand-creator bundles no profile and cannot check PDF/X conformance, so it never says a file conforms. `brand-creator print-check` reads the
+files back and checks bleed, safe zone, line weight, reversed text, transparency and the label in mm and pt. `emit presskit` zips logos, tokens and the
+book PDF deterministically; `emit social --posts` makes a 4:5 carousel, a 1:1 post and an educational post from `FACTS.md` values (and carries the
+pre-publication checklist when the brief names a regulated profession). Print, press kit and posts are Standard-tier packs. Details:
+`scripts/CONTRACT.md` ("Print, press kit and social posts"). Print needs Ghostscript and poppler (`brand-creator prereq --for print`).
+
+## The brand book
+
+`brand-creator book` builds one self-contained `book.html` (no script, no network, light and dark) from your tokens, the files the emitters wrote,
+`BRAND-STATE.md`, `FACTS.md`, the contrast and small-size reports and your chapter text in `book/chapters/`. Counts, colour ratios and the files
+list are computed, so they cannot drift. `brand-creator book-lint` fails a book with a network reference, a status word that `FACTS.md` does not
+back, round or version wording outside the history chapter, text in a mark, a motion duration outside your tokens, and more; `check` gates it.
+`brand-creator book-pdf` exports an RGB proof PDF labelled "RGB, not print-ready" (print production is a separate, explicit step).
+A brand whose mark is drawn by hand has a hand-authored book: `brand-creator patch` is its only edit path and counts every replacement.
+The `brand-book` skill runs it in order and ends with a self-review list (font-free marks, naming, the book obeying its
+own rules, dated legal statements, no drift into a rejected direction, chapters, focus states, label size, 390 px).
+Details: `scripts/CONTRACT.md` ("Brand book") and `skills/brand-creator/references/phases/10-book.md`. `book-pdf` needs Chromium (via setup)
+and poppler (`pdfinfo`, `pdftotext`) for its checks.
+
+## Adoption, cascade, adapters and launch
+
+`brand-creator adoption survey --repo <dir> --old-name "<Old>" --old-colour "#rrggbb"` reads your product repositories **read only** (ripgrep) for the places
+that show the old brand: old names and colours, icon and logo files, package and platform metadata (package.json, plists, Tauri, AppStream, web manifests),
+README badges. It writes `adoption.json` and `ADOPTION.md`: numbered rows (group, file, lines, a content excerpt to find the place by because line numbers drift,
+the change, a status), a "Kept, not counted" list with the reason for every match that is not a row (lock files, change history, licence text), and sentences whose
+counts are computed. Rows are append-only (pins stop an inserted or moved row from moving the statuses); `adoption status --set 1-5=doing` records progress and needs
+gate G6. `brand-creator check --cascade "<old value>"` searches every project artefact (book sources, README, tokens, text assets, templates, ADOPTION, BRAND.md,
+DESIGN.md, PDFs as text) and the parent brand's documents you name, and fails listing the leftovers.
+
+At gate G5, if you want them: `brand-creator adapters --brand-md --design-md` writes `BRAND.md` and `DESIGN.md` from the tokens, `BRAND-STATE.md` and `FACTS.md`
+(DESIGN.md is linted by the pinned `@google/design.md` when `setup` installed it, otherwise it reports "not verified"), and `brand-creator applied-skill --yes`
+writes a small `<slug>-brand` skill into the project's own `.claude/skills/`. `brand-creator launch-todo` writes `LAUNCH.md`: trademark first, domains and
+handles with the date each was checked, e-mail, the repository and package renames from the survey, the print hand-off and your decisions. It only reads local
+files: nothing outward is ever executed, you buy, file and register. Details: `scripts/CONTRACT.md` ("Adoption, cascade, adapters, applied skill and launch"),
+`skills/brand-creator/references/phases/11-adoption.md` and `13-launch.md`. The survey needs ripgrep (`brand-creator prereq --for adoption`).
+
+## Skills you can call
+
+| Skill | Called by | What it does |
+|---|---|---|
+| `brand-creator` | you, or Claude when you ask for a brand | the whole process, gate by gate |
+| `brand-naming`, `brand-assets`, `brand-book` | you, or Claude when the request fits | naming and screening; platform files from a finished mark; the brand book |
+| `/brand-creator:new`, `round`, `status`, `setup` | you only | start a project, next board round, where it stands, install |
+| `/brand-creator:check` | you only | every gate, plus `--cascade` for old values you name |
+| `/brand-creator:review` | you only | the self-review as one approvable list; an optional lens panel, only after you agree to its size and cost |
+| `/brand-creator:brand-adopt` | you only | the survey of your repositories, and the apply only when you ask |
+| `/brand-creator:launch` | you only | the launch checklist, handed over one action at a time |
+
+## Optional connectors
+
+brand-creator needs no connector and ships no MCP configuration. If your session has a design tool connected, the skills
+read from it only when you point at a file and write to it only when you ask; your token files stay the source of truth.
+See [CONNECTORS.md](CONNECTORS.md).
+
+## Safety
+
+A hook protects finished work inside a brand project and does nothing anywhere else: frozen rounds in `history/`
+cannot be edited or deleted, earlier rounds under `rounds/` are read-only (the latest round stays writable), and a
+project folder that holds rounds, or a folder of such projects, cannot be deleted or moved from a session. It is
+best effort; `brand-creator check` verifies `history/MANIFEST.sha256`, which is the real gate. See `scripts/CONTRACT.md`.
+
+**Print is honest.** A print PDF without your printer's profile is an "RGB proof, not print-ready"; with it, only a "PDF/X-4
+candidate (preflight with your printer)". No profile and no ink library are bundled, a spot colour is recorded as the ink's name
+and a Lab target (never "this hex is that ink"), and the printer's own proof is your step before any run. `book.pdf` is always
+an RGB proof for reading.
+
+**Adoption is yours to start.** The survey only reads your repositories (and proves it wrote nothing). Changes happen only
+when you ask, on a branch you name, one repository at a time, with an independent review (byte comparison with the pack,
+the repository's own build and tests) before anything is committed. Hooks are never skipped. Commit, merge and push are
+three separate asks, and before a push you are told what it triggers. A step that touches a live service (a rename, an
+upload, a store listing) needs its own OK. Outward steps (buying a domain, filing a trademark, registering a handle) are
+never done for you: `LAUNCH.md` hands each one over with its reason and click path.
+
+## Versioning
+
+The version in `.claude-plugin/plugin.json` is bumped on every release and listed in `CHANGELOG.md`.
+
+## Development
+
+- Tests: `tests/run-all.sh` (pytest and `node --test`). Mutation tests prove each gate by breaking a scratch copy. Tests that
+  talk to real services (`requires_network`) are deselected unless `BRAND_CREATOR_LIVE=1`.
+- Checks a suite cannot do are listed in `dev/MANUAL-CHECKS.md`.
+- `brand-creator smoke` runs the Acme end-to-end path.
+- Validate the manifest: `claude plugin validate . --strict`.
+- Third-party notices: `THIRD_PARTY_NOTICES.md`. Licence: MIT.
+
+## TODO by stage
+
+- Stage 1b (done): skills (`brand-creator`, `new`, `round`, `status`, `setup`), phase references, templates, review page.
+- Stage 2a (done): `brand-creator names` (`check_names.py`) with recorded-fixture tests. Stage 2b (done): phase 01 research
+  (templates `research.md`, `cliches.md`, `INVENTORY.md`), the `brand-naming` skill (phase 02 points at it), the names verdict
+  template, strategy core Guardrails block, regulated-industries method, trigger evals for both model-invocable skills.
+- Stage 3a (done): QA and mark tooling (px_lib, outline-glyphs, fontcheck, downscale, states-check, family-check, contrast --cvd,
+  logo-sheet --guides, shot --motion, snapshot, verify-idempotent, staleness, specs-due, size bands in the manifest).
+- Stage 3b (emitters done): Apple, Windows, Linux, tray, Tauri, wallet and developer packs (`brand-creator emit <target>`, sizes from
+  `references/platform-specs.md`, chain in `templates/finish.sh.tpl`).
+- Stage 3c (done): the `brand-assets` skill (standalone and project entries) and its trigger evals, phases 06-mark, 07-tokens and
+  09-qa in full (gate / warning / judgement, evidence tags, every check command with the test that proves it), 08-assets as a
+  pointer, `templates/MOTION-SPEC.md`. (`render.mjs pdf` followed in stage 4a.)
+- Stage 3d (done): review fixes: one downscale report per master tied to its manifest rows, `emit web` by the band rule, a `finish.sh`
+  that runs (quoted options, `brand-creator root`), emit inputs and staleness globs that cover FACTS.md, INVENTORY.md and `tray/tray.json`,
+  retired slots moved to `removed-<date>/`, and a failed run recorded as a failed report.
+- Stage 4a (done): the brand book (`book`, `book-lint`, `book-pdf`, `patch`, `collapse`). Stage 4b (done): print stationery with `print-check`, the press kit, social posts. Stage 4c (done): the adoption survey (`adoption`), `check --cascade` over every artefact, the BRAND.md and DESIGN.md adapters, the applied skill, `launch-todo`. Stage 4d (done): the skills `brand-book`, `brand-adopt`, `check`, `review`, `launch`; phases 10 to 13 in full; the cascade checklist; `CONNECTORS.md`; book chapter guidance, `ADOPTION.md` and `ADR.md` templates.
+- Stage 5: Tier B emitters.
+- Stage 6: agents, workflows, behaviour evals.
+- Stage 7: validation on macOS and Linux, release.

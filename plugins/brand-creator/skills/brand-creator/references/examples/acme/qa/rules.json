@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "downscale": {"accent_min_px": 4, "accent_rule_max_size": 32},
+  "bands": [
+    {"name": "small", "max_px": 32, "drawing": "assets/logo/grid-mark.svg", "note": "coarse-grid master: favicon tab, 16 to 32 px"},
+    {"name": "large", "drawing": "assets/logo/mark.svg", "note": "the fine vector above 32 px"}
+  ]
+}

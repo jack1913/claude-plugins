@@ -1,0 +1,10 @@
+# generated or machine-local, never committed
+evals/results/
+__pycache__/
+*.pyc
+node_modules/
+.venv/
+.pytest_cache/
+.DS_Store
+# dev scratch
+dev/scratch/

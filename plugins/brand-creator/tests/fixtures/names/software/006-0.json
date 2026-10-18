@@ -1,0 +1,10 @@
+{
+  "body": "{\"error\":\"not found\"}",
+  "error": "",
+  "fetched": "2026-10-17",
+  "headers": {},
+  "key": "GET https://api.github.com/users/bc-zz-control-x7q4k9v2m",
+  "seq": 0,
+  "status": 404,
+  "via": "https"
+}

@@ -1,0 +1,35 @@
+{
+  "$description": "Generic reflex list for the P3 reflex test. Every direction is checked against these patterns; a hit is allowed only with an argument written on the board (data-field=\"reflex\"). Patterns are described in words, never as exact colour values.",
+  "version": 1,
+  "how_to_use": [
+    "For each direction, list the ids it hits, or write 'no hits'.",
+    "For each hit, write one line on why this brand earns it (a fact from FACTS.md, a place, a craft, a regulator rule). 'It looks good' is not an argument.",
+    "Two or more hits in one direction: replace a part before showing it.",
+    "If every direction hits the same id, the round is not divergent."
+  ],
+  "items": [
+    {"id": "palette-cream-serif-terracotta", "kind": "palette", "pattern": "warm cream background, a classic serif display face and a terracotta or burnt-orange accent", "why_reflex": "the default 'tasteful' look generated models reach for", "argue_with": "a material or place the brand actually comes from"},
+    {"id": "palette-purple-blue-gradient", "kind": "palette", "pattern": "violet-to-blue or pink-to-violet gradient as the main brand colour", "why_reflex": "generic tech and AI product look", "argue_with": "a reason the brand's job involves a transition or spectrum"},
+    {"id": "palette-neon-on-black", "kind": "palette", "pattern": "neon green, cyan or magenta on near-black, 'terminal' or 'cyber' styling", "why_reflex": "default for developer and security products", "argue_with": "a real command-line product whose users live in that context"},
+    {"id": "palette-navy-gold-trust", "kind": "palette", "pattern": "navy with gold or brass for trust, finance or law", "why_reflex": "category cliché for institutions", "argue_with": "a heritage the brand can prove"},
+    {"id": "palette-teal-coral-startup", "kind": "palette", "pattern": "teal or mint with a coral accent on white", "why_reflex": "generic friendly-startup palette", "argue_with": "a role split the system actually needs"},
+    {"id": "palette-green-leaf-eco", "kind": "palette", "pattern": "mid green with leaves for anything sustainable or natural", "why_reflex": "category cliché", "argue_with": "a specific plant, place or material"},
+    {"id": "type-default-grotesk-everywhere", "kind": "type", "pattern": "one default UI grotesk for display, body and wordmark with no customisation", "why_reflex": "no decision was made", "argue_with": "a measured reason (glyph coverage, small sizes) and a customised wordmark"},
+    {"id": "type-geometric-rounded-friendly", "kind": "type", "pattern": "rounded geometric sans in lowercase to signal 'friendly'", "why_reflex": "default friendliness signal", "argue_with": "the audience and the voice lines"},
+    {"id": "type-serif-display-sans-body", "kind": "type", "pattern": "high-contrast serif headlines over a neutral sans body, 'editorial' by default", "why_reflex": "default premium signal", "argue_with": "a publishing or craft heritage"},
+    {"id": "device-lightbulb-idea", "kind": "device", "pattern": "a lightbulb, spark or brain for ideas or intelligence", "why_reflex": "literal metaphor", "argue_with": "rarely arguable"},
+    {"id": "device-globe-swoosh", "kind": "device", "pattern": "a globe, orbit or swoosh for reach or movement", "why_reflex": "literal metaphor", "argue_with": "rarely arguable"},
+    {"id": "device-network-nodes", "kind": "device", "pattern": "connected dots, hexagons or a node graph for technology or community", "why_reflex": "generic tech metaphor", "argue_with": "the product literally is a network and the mark says something specific about it"},
+    {"id": "device-letter-in-rounded-square", "kind": "device", "pattern": "the initial letter centred in a rounded square or circle as the whole mark", "why_reflex": "placeholder-level mark", "argue_with": "a distinctive letter construction that survives at 16 px"},
+    {"id": "device-shield-security", "kind": "device", "pattern": "a shield or padlock for safety, security or insurance", "why_reflex": "category cliché", "argue_with": "rarely arguable"},
+    {"id": "device-scales-columns-law", "kind": "device", "pattern": "scales, columns, gavels or laurels for legal and public services", "why_reflex": "category cliché", "argue_with": "a regulator requirement or a specific local building"},
+    {"id": "device-product-silhouette", "kind": "device", "pattern": "a literal outline of the product (a tooth, a cup, a camera, a house)", "why_reflex": "says the category, not the brand", "argue_with": "a twist that makes it ownable"},
+    {"id": "device-abstract-blob", "kind": "device", "pattern": "a soft gradient blob or organic shape with no construction", "why_reflex": "cannot be redrawn or defended", "argue_with": "a construction rule that can be measured"},
+    {"id": "layout-gradient-hero", "kind": "layout", "pattern": "centred headline over a gradient or mesh background with two buttons", "why_reflex": "default landing page", "argue_with": "the real content needs nothing else"},
+    {"id": "layout-glass-cards", "kind": "layout", "pattern": "frosted glass cards, heavy blur and soft glow", "why_reflex": "trend default", "argue_with": "rarely arguable for an identity"},
+    {"id": "layout-bento-grid", "kind": "layout", "pattern": "a bento grid of rounded tiles as the main layout idea", "why_reflex": "trend default", "argue_with": "the content really is a set of equal features"},
+    {"id": "copy-hype-verbs", "kind": "copy", "pattern": "empower, elevate, unlock, seamless, revolutionary, cutting-edge, next-generation", "why_reflex": "says nothing checkable", "argue_with": "replace with a fact from FACTS.md"},
+    {"id": "copy-partner-in", "kind": "copy", "pattern": "'your trusted partner in ...' or 'we are passionate about ...'", "why_reflex": "interchangeable with any competitor", "argue_with": "the onliness line from the strategy core"},
+    {"id": "archetype-only", "kind": "strategy", "pattern": "a direction defined only by a brand archetype name", "why_reflex": "a label, not a strategy", "argue_with": "an idea and a visual philosophy of its own"}
+  ]
+}

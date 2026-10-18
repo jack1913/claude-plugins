@@ -1,0 +1,10 @@
+{
+  "body": "{}",
+  "error": "",
+  "fetched": "2026-10-17",
+  "headers": {},
+  "key": "GET https://api.github.com/users/octocat",
+  "seq": 0,
+  "status": 200,
+  "via": "https"
+}

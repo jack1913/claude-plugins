@@ -1,0 +1,10 @@
+{
+  "body": "{\"description\": \"minimised copy of the IANA RDAP bootstrap shape\", \"publication\": \"2026-09-30T23:00:03Z\", \"services\": [[[\"com\", \"net\"], [\"https://rdap.verisign.com/com/v1/\"]], [[\"dev\", \"app\"], [\"https://pubapi.registry.google/rdap/\"]]], \"version\": \"1.0\"}",
+  "error": "",
+  "fetched": "2026-10-17",
+  "headers": {},
+  "key": "GET https://data.iana.org/rdap/dns.json",
+  "seq": 0,
+  "status": 200,
+  "via": "https"
+}

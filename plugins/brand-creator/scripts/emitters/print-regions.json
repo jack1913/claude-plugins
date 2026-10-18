@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "note": "The print_region table: stationery sizes by region, read by emitters/print.py through specs.py (rows appear there as print-<REGION>). Sizes are the usual national or ISO/ANSI sizes written from general knowledge, NOT read at a printer or standards page: every row is status U until a person reads the source. The bleed is a default, stated as printer-specific: the printer's own template wins.",
+  "rows": {
+    "print-EU": {
+      "surface": "Print stationery, EU",
+      "region": "EU",
+      "aliases": ["eu", "europe", "european union", "poland", "polska", "germany", "deutschland", "france", "spain", "italy", "netherlands", "austria", "czechia", "czech republic", "ireland", "united kingdom", "uk", "great britain", "switzerland"],
+      "sizes": {
+        "business_card_mm": [85, 55],
+        "paper": "A4",
+        "paper_mm": [210, 297],
+        "envelope": "DL",
+        "envelope_mm": [220, 110],
+        "bleed_mm": 3
+      },
+      "source_url": "https://www.iso.org/standard/36631.html",
+      "checked": "2026-10-17",
+      "status": "U",
+      "notes": "UNVERIFIED. A4 and DL follow ISO 216 and ISO 269; 85 x 55 mm is the common European business card. The 3 mm bleed is a typical default, not a rule: ask the printer."
+    },
+    "print-US": {
+      "surface": "Print stationery, US",
+      "region": "US",
+      "aliases": ["us", "usa", "u.s.", "u.s.a.", "united states", "united states of america", "america", "canada", "mexico"],
+      "sizes": {
+        "business_card_mm": [88.9, 50.8],
+        "business_card_in": [3.5, 2],
+        "paper": "Letter",
+        "paper_mm": [215.9, 279.4],
+        "paper_in": [8.5, 11],
+        "envelope": "#10",
+        "envelope_mm": [241.3, 104.775],
+        "envelope_in": [9.5, 4.125],
+        "bleed_mm": 3.175,
+        "bleed_in": 0.125
+      },
+      "source_url": "https://www.usps.com/business/prices.htm",
+      "checked": "2026-10-17",
+      "status": "U",
+      "notes": "UNVERIFIED. 3.5 x 2 in card, 8.5 x 11 in letter paper and the 9.5 x 4.125 in #10 envelope are the usual US sizes; the 0.125 in bleed is a typical default, not a rule: ask the printer."
+    },
+    "print-JP": {
+      "surface": "Print stationery, JP",
+      "region": "JP",
+      "aliases": ["jp", "japan", "japanese", "nippon", "tokyo"],
+      "sizes": {
+        "business_card_mm": [91, 55],
+        "paper": "A4",
+        "paper_mm": [210, 297],
+        "envelope": "DL",
+        "envelope_mm": [220, 110],
+        "bleed_mm": 3
+      },
+      "source_url": "https://www.jisc.go.jp/eng/",
+      "checked": "2026-10-17",
+      "status": "U",
+      "notes": "UNVERIFIED. 91 x 55 mm is the usual Japanese business card, A4 is the office paper. Japanese post also uses the long-format envelopes (for example nagagata 3, 120 x 235 mm); DL is used here because the plan names DL and #10 only, so pass --envelope-mm for a local format. The 3 mm bleed is a typical default: ask the printer."
+    }
+  }
+}

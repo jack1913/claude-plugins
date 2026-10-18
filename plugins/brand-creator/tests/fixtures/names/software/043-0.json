@@ -1,0 +1,10 @@
+{
+  "body": "domain:       IO\nwhois:        whois.nic.io\nstatus:       ACTIVE\nsource:       IANA\n",
+  "error": "",
+  "fetched": "2026-10-17",
+  "headers": {},
+  "key": "WHOIS whois.iana.org io",
+  "seq": 0,
+  "status": 200,
+  "via": "whois"
+}

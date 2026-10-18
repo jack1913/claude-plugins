@@ -1,0 +1,10 @@
+{
+  "body": "",
+  "error": "TimeoutError: timed out",
+  "fetched": "2026-10-17",
+  "headers": {},
+  "key": "WHOIS whois.nic.io granite.io",
+  "seq": 0,
+  "status": 0,
+  "via": "whois"
+}

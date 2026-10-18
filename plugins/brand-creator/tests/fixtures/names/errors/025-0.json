@@ -1,0 +1,10 @@
+{
+  "body": "<html>error</html>",
+  "error": "",
+  "fetched": "2026-10-17",
+  "headers": {},
+  "key": "GET https://hub.docker.com/v2/orgs/granite/",
+  "seq": 0,
+  "status": 500,
+  "via": "https"
+}

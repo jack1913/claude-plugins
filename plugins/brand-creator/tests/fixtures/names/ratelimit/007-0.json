@@ -1,0 +1,12 @@
+{
+  "body": "{\"message\":\"API rate limit exceeded\"}",
+  "error": "",
+  "fetched": "2026-10-17",
+  "headers": {
+    "x-ratelimit-remaining": "0"
+  },
+  "key": "GET https://api.github.com/users/granite",
+  "seq": 0,
+  "status": 403,
+  "via": "https"
+}

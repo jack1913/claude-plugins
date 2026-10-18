@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{name}} disk image background</title>
+<!-- brand-creator template: the window background of a macOS disk image. Rendered to PNG by `emit apple` at the window size and at 2x.
+     Placeholders, all filled by scripts/emitters/apple.py (values are HTML-escaped; {{mark}} is the raw SVG):
+       {{width}} {{height}}   pixel size of this render (the window size, or twice it)
+       {{bg}} {{fg}} {{muted}} {{accent}}   colours from the built tokens
+       {{name}} {{mark}}
+       {{app_fx}} {{app_fy}} {{link_fx}} {{link_fy}}   centres of the app icon and of the Applications alias, as fractions of the window
+     Only the name, the mark and an arrow: no instruction text is invented here. Every size is a share of the window (vh), so the
+     one template serves 1x and 2x. Self-contained: no network, no web fonts. -->
+<style>
+html,body{margin:0;width:{{width}}px;height:{{height}}px;overflow:hidden;background:{{bg}};color:{{fg}};
+  font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.head{position:absolute;left:0;right:0;top:5vh;display:flex;align-items:center;justify-content:center;gap:2vh}
+.head .mark{height:7vh;aspect-ratio:1}
+.head .mark svg{width:100%;height:100%;display:block}
+.head b{font-size:5vh;letter-spacing:-0.01em}
+.arrow{position:absolute;left:calc({{app_fx}} * 100% + 14vh);right:calc((1 - {{link_fx}}) * 100% + 14vh);top:calc({{app_fy}} * 100%);
+  height:0;border-top:0.7vh solid {{muted}};transform:translateY(-50%)}
+.arrow::after{content:"";position:absolute;right:-0.4vh;top:-2.4vh;width:3.6vh;height:3.6vh;border-top:0.7vh solid {{muted}};border-right:0.7vh solid {{muted}};
+  transform:rotate(45deg) translate(-1vh,1vh);transform-origin:center}
+</style>
+</head>
+<body>
+<div class="head"><div class="mark">{{mark}}</div><b>{{name}}</b></div>
+<div class="arrow"></div>
+</body>
+</html>

@@ -1,0 +1,10 @@
+{
+  "body": "Domain Name: granite.io\nRegistry Domain ID: D1-EXAMPLE\nCreation Date: 2002-01-01T00:00:00Z\nName Server: NS1.EXAMPLE.NET\n\n>>> Last update of WHOIS database: 2026-10-17T20:54:21Z <<<\n\nTerms of Use: Access to WHOIS information is provided to assist persons in determining the contents of a domain name registration record. You agree that you will not enable high volume, automated, electronic processes that send queries or data to the systems of the Registry Operator, and that your use is subject to quota and rate limit policies.\n",
+  "error": "",
+  "fetched": "2026-10-17",
+  "headers": {},
+  "key": "WHOIS whois.nic.io granite.io",
+  "seq": 0,
+  "status": 200,
+  "via": "whois"
+}

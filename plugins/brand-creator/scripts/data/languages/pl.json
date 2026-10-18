@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "code": "pl",
+  "name": "Polish",
+  "letters": "ĄĆĘŁŃÓŚŹŻąćęłńóśźż",
+  "symbols": "",
+  "extras": "„”«»–—…",
+  "basic_latin": true,
+  "rules": [
+    {
+      "id": "nbsp-single-letter",
+      "text": "Keep a single-letter word (a, i, o, u, w, z) with the word after it: use a no-break space."
+    },
+    {
+      "id": "low-opening-quote",
+      "text": "Primary quotation marks open low and close high („ and ”)."
+    }
+  ]
+}

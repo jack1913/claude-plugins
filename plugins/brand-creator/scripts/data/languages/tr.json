@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "code": "tr",
+  "name": "Turkish",
+  "letters": "ÇĞİÖŞÜçğıöşü",
+  "symbols": "",
+  "extras": "“”‘’«»–—…",
+  "basic_latin": true,
+  "rules": [
+    {
+      "id": "dotted-dotless-i",
+      "text": "Turkish has a dotted and a dotless i (İ i and I ı): upper- and lower-casing must use the Turkish rules, so check the font has both İ and ı."
+    }
+  ]
+}
