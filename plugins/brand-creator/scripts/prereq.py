@@ -106,6 +106,9 @@ def chk_npm():
     if not p:
         return item("npm", "MISSING", "", "setup (npm ci of the Node dependencies)", hint("node"))
     rc, out = run_out([p, "--version"])
+    if rc != 0 or not vparse(out):   # a broken npm must not read as OK with its error text as the version
+        return item("npm", "MISSING", "", "setup (npm ci of the Node dependencies)", hint("node"),
+                    f"{p} did not report a version (exit {rc}): {out.splitlines()[0][:100] if out else 'no output'}")
     return item("npm", "OK", out)
 
 
@@ -157,11 +160,14 @@ def chk_tool(name: str, blocks: str, version_args=("--version",), key: str | Non
 
 
 def chk_downscale():
-    """The system downscaler the downscale check uses by default. Off macOS there is none: an explicit opt-in is needed."""
-    if OS == "macos":
+    """The system downscaler the downscale check uses by default. Where there is none (off macOS, or sips is not on PATH) an explicit opt-in is
+    needed; this row is the one place prereq asks for it, so the owner is asked once, not once per line."""
+    if OS == "macos" and shutil.which("sips"):
         return chk_tool("sips", "downscale check (the real system downscale; --renderer=resvg|pillow is the explicit alternative)", None, optional=True)
+    why = "sips exists on macOS only" if OS != "macos" else "sips is not on this PATH"
     return item("sips", "WARN", "", "downscale check without an opt-in", "",
-                "sips exists on macOS only: here the downscale check needs the explicit --renderer=resvg|pillow, recorded in BRAND-STATE.md")
+                f"{why}: the downscale check needs your explicit --renderer=resvg|pillow choice (resvg for an SVG source, pillow for a PNG source), "
+                "recorded in BRAND-STATE.md (renderer: <name> (opted in <date>)) and printed on every report. Nothing falls back silently.")
 
 
 def chk_apple():
@@ -251,7 +257,7 @@ def main() -> int:
                 print(f"           install: {i['install']}")
             if i["note"]:
                 print(f"           note:    {i['note']}")
-    if OS != "macos" and a.group in ("quick", "standard", "full", "apple"):
+    if OS != "macos" and a.group == "apple":   # the quick, standard and full scopes carry the renderer question in their sips row (asked once)
         print("note: off macOS the downscale check has no sips; it needs the explicit opt-in --renderer=resvg, which is then "
               "recorded in BRAND-STATE.md (renderer: resvg (opted in <date>)) and printed on every report.")
     if blockers:

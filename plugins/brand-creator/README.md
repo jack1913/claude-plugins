@@ -349,6 +349,15 @@ The version in `.claude-plugin/plugin.json` is bumped on every release and liste
 - Validate the manifest: `claude plugin validate . --strict`.
 - Third-party notices: `THIRD_PARTY_NOTICES.md`. Licence: MIT.
 
+## The Quick-tier smoke test (no Apple tools, no git)
+
+`tests/smoke/quick.sh` (run by `tests/run-all.sh --smoke` after the Acme smoke) takes a made-up neighbourhood bakery from `brand-creator new`
+to `brand-creator check` on a PATH that holds no `sips`, `iconutil`, `actool`, `xcrun`, `ictool` or `git`, with the review surface set to
+`local` and the project outside any repository. It checks that the renderer question (resvg or Pillow) is asked once and its answer is
+recorded, that no Apple error, platform-pack question or package-registry check shows up, that nothing calls git (a failing git shim logs
+every call), and that the Android, Chrome extension, MSIX, profiles, print, press-kit and post packs refuse with the way up. It needs the same
+set-up data folder as the Acme smoke: `BRAND_CREATOR_DATA=<dir> tests/smoke/quick.sh`; `QUICK_SMOKE_DIR` moves its project folder.
+
 ## TODO by stage
 
 - Stage 1b (done): skills (`brand-creator`, `new`, `round`, `status`, `setup`), phase references, templates, review page.

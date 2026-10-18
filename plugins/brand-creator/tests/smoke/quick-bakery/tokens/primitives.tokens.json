@@ -1,0 +1,155 @@
+{
+  "$description": "Marlow Lane Bakery smoke fixture primitives (synthetic). Colours are oklch with a 6-digit sRGB hex fallback computed by brand-creator tokens --fix-hex.",
+  "color": {
+    "$type": "color",
+    "paper": {
+      "$value": {
+        "colorSpace": "oklch",
+        "components": [
+          0.9579,
+          0.0193,
+          80.12
+        ],
+        "alpha": 1,
+        "hex": "#f8f0e3"
+      }
+    },
+    "ink": {
+      "$value": {
+        "colorSpace": "oklch",
+        "components": [
+          0.2552,
+          0.0285,
+          52.01
+        ],
+        "alpha": 1,
+        "hex": "#2e1f16"
+      }
+    },
+    "bark": {
+      "$value": {
+        "colorSpace": "oklch",
+        "components": [
+          0.4699,
+          0.0373,
+          59.0
+        ],
+        "alpha": 1,
+        "hex": "#6b5646"
+      }
+    },
+    "crumb": {
+      "$value": {
+        "colorSpace": "oklch",
+        "components": [
+          0.8804,
+          0.03,
+          80.65
+        ],
+        "alpha": 1,
+        "hex": "#e2d6c2"
+      }
+    },
+    "crust": {
+      "$value": {
+        "colorSpace": "oklch",
+        "components": [
+          0.5548,
+          0.1419,
+          44.87
+        ],
+        "alpha": 1,
+        "hex": "#b4521e"
+      }
+    },
+    "crust-bright": {
+      "$value": {
+        "colorSpace": "oklch",
+        "components": [
+          0.7733,
+          0.1282,
+          61.0
+        ],
+        "alpha": 1,
+        "hex": "#f0a15a"
+      }
+    },
+    "night": {
+      "$value": {
+        "colorSpace": "oklch",
+        "components": [
+          0.2044,
+          0.0153,
+          47.95
+        ],
+        "alpha": 1,
+        "hex": "#1d1511"
+      }
+    },
+    "flour": {
+      "$value": {
+        "colorSpace": "oklch",
+        "components": [
+          0.9352,
+          0.0296,
+          80.66
+        ],
+        "alpha": 1,
+        "hex": "#f4e8d4"
+      }
+    },
+    "dust": {
+      "$value": {
+        "colorSpace": "oklch",
+        "components": [
+          0.7334,
+          0.0386,
+          69.83
+        ],
+        "alpha": 1,
+        "hex": "#b9a58f"
+      }
+    }
+  },
+  "dimension": {
+    "$type": "dimension",
+    "space-1": {
+      "$value": {
+        "value": 4,
+        "unit": "px"
+      }
+    },
+    "space-2": {
+      "$value": {
+        "value": 8,
+        "unit": "px"
+      }
+    }
+  },
+  "duration": {
+    "$type": "duration",
+    "fast": {
+      "$value": {
+        "value": 150,
+        "unit": "ms"
+      }
+    }
+  },
+  "font": {
+    "$type": "fontFamily",
+    "serif": {
+      "$value": [
+        "ui-serif",
+        "Georgia",
+        "serif"
+      ]
+    },
+    "sans": {
+      "$value": [
+        "ui-sans-serif",
+        "system-ui",
+        "sans-serif"
+      ]
+    }
+  }
+}
