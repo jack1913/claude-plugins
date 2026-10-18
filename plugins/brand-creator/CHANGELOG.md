@@ -73,6 +73,24 @@ All notable changes are listed here. The plugin version in `.claude-plugin/plugi
   and not at all on a Mac whose PATH has no sips (the question now lives in the one sips row); `prereq` reported a failing `npm --version` as OK; `emit print` and
   `emit presskit` wrote a failing report for a run that the tier gate had refused (the gate now runs before the report exists). `tests/test_quick_tier.py` holds the regressions.
 
+- Behaviour evals, first billed runs (decisions 801-811). The skills call `"${CLAUDE_PLUGIN_ROOT}/bin/brand-creator"` when the
+  bare name is not on PATH (an eval run does not add a plugin's `bin/`); `state`, `setup` and `prereq` run on the first `python3`
+  on PATH that starts and is 3.10 or newer (a broken or older one is skipped, none → exit 3 naming each); an unwritable data
+  folder is exit 3 with the fix instead of a stack trace. The orchestrator now triggers on work on a brand project's files and
+  on a brand's launch steps, asks G0 as plain text when there is no question tool, does not re-ask what the owner answered, and
+  builds and lints a board without Chromium (shots "not verified"), and puts a judge result into My call with `data-judge="ran"` and its
+  three panels. Evals: `tiers-offered` grades the reply (runs have no
+  AskUserQuestion), `no-available-verdict` no longer matches "whether X is available", the refine case's reply regexes take "my reading" and "(current)", the photographer case grades its reply
+  for software topics, the README lists what a run's sandbox cannot do, and the shipped-files scan skips `evals/results/`.
+
+- Stage 7 (Linux run): `tests/docker/` (Dockerfile on Debian 13, `run.sh`, `in-container.sh`, `verify_log.py`) runs setup, pytest, node:test and the Acme
+  smoke on Linux and accepts only the macOS-only NOT VERIFIED skips; `.github/workflows/ci.yml` (Linux, `claude plugin validate --strict`, macOS Apple-tool
+  tests; runs once pushed). Bugs the Linux run found and fixed: the fonts control used one CJK character, so `fontcheck` was never verified on a box with no CJK
+  font (it now tries eight candidates); `downscale` reported "no system downscaler" (exit 3) before bad arguments (exit 2); `finish.sh` had no way to name the
+  off-macOS opt-ins (`ICNS_RENDERER`, `DOWNSCALE_RENDERER`); four install hints named only `brew`; a Chromium that could not start for missing system
+  libraries said "re-run setup" (it now names the libraries). Tests and the smoke no longer assume sips, iconutil, `/usr/bin` without ripgrep or poppler,
+  Homebrew's Ghostscript layout or resvg 0.48 anti-aliasing.
+
 - Stage 4 review fixes. The brand book's cover and colophon keep the 16 px side gutter (and `shot` now records `gutter_left` and `gutter_right` per view); the
   cover's Adoption row says "approved <date>" for G6 and counts rows done from `adoption.json` instead of claiming "applied"; `check --cascade` searches `_build/`
   HTML (the text layer of OG cards, social posts and store frames); the adoption `accounting` row recounts name and colour lines with a second ripgrep run; a
@@ -205,15 +223,3 @@ All notable changes are listed here. The plugin version in `.claude-plugin/plugi
   `tray/tray.json`, `qa/rules.json`) once, and the staleness globs cover FACTS.md, INVENTORY.md and `tray/*.json`. Rows and files of slots
   an emitter no longer writes are moved to `removed-<date>/` and reported. A run that stops through an error rewrites its report as failed.
   `emit developer` gains `--content-fraction`.
-
-### Stage 7
-
-- Behaviour evals, first billed runs (decisions 801-811). The skills call `"${CLAUDE_PLUGIN_ROOT}/bin/brand-creator"` when the
-  bare name is not on PATH (an eval run does not add a plugin's `bin/`); `state`, `setup` and `prereq` run on the first `python3`
-  on PATH that starts and is 3.10 or newer (a broken or older one is skipped, none → exit 3 naming each); an unwritable data
-  folder is exit 3 with the fix instead of a stack trace. The orchestrator now triggers on work on a brand project's files and
-  on a brand's launch steps, asks G0 as plain text when there is no question tool, does not re-ask what the owner answered, and
-  builds and lints a board without Chromium (shots "not verified"), and puts a judge result into My call with `data-judge="ran"` and its
-  three panels. Evals: `tiers-offered` grades the reply (runs have no
-  AskUserQuestion), `no-available-verdict` no longer matches "whether X is available", the refine case's reply regexes take "my reading" and "(current)", the photographer case grades its reply
-  for software topics, the README lists what a run's sandbox cannot do, and the shipped-files scan skips `evals/results/`.

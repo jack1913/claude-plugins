@@ -17,7 +17,7 @@ import http from "node:http";
 import { parseArgs } from "node:util";
 import {
   EXIT, die, mainGuard, dataDir, readSetup, loadDep, findProject, confine, outsideProject, scratchDir, rel,
-  Report, forbiddenTerms, writeIfChanged, sha256, readStateTop,
+  Report, forbiddenTerms, writeIfChanged, sha256, readStateTop, missingSharedLibs, findHeadlessShell,
 } from "./lib/_common.mjs";
 
 const USAGE = `usage:
@@ -55,7 +55,14 @@ async function launch() {
   try {
     return await pw.chromium.launch({ headless: true });
   } catch (e) {
-    die(EXIT.CANNOT, `Chromium could not start (${String(e.message).split("\n")[0]}). Re-run /brand-creator:setup. `
+    const why = String(e.message).split("\n")[0];
+    const missing = missingSharedLibs(findHeadlessShell(setup.browsers_path, setup.chromium_revision));
+    if (missing.length) {   // not a setup problem: the system lacks libraries, and re-running setup would fail the same way
+      die(EXIT.CANNOT, `Chromium could not start (${why}): this system lacks shared libraries it needs: ${missing.join(", ")}. `
+        + `Install Chromium's system dependencies, then re-run: on Debian or Ubuntu, as root, \`node ${path.join(dataDir(), "node_modules", "playwright-core", "cli.js")} `
+        + `install-deps chromium-headless-shell\` (Playwright's own list), or install the packages that provide them with your package manager.`);
+    }
+    die(EXIT.CANNOT, `Chromium could not start (${why}). Re-run /brand-creator:setup. `
       + `Expected the Playwright build ${setup.chromium_revision} in ${setup.browsers_path}.`);
   }
 }
@@ -572,7 +579,9 @@ async function cmdMotion(values, positionals) {
 
 // ---------------------------------------------------------------- fonts (which font does Chromium really use?)
 const FONT_MIME = { ".ttf": "font/ttf", ".otf": "font/otf", ".woff": "font/woff", ".woff2": "font/woff2" };
-const CONTROL_CHARS = ["あ", "中", "ก", "א", "अ"]; // hiragana, han, thai, hebrew, devanagari: absent from Latin fonts
+// Candidates for the control, tried in this order: hiragana, han, thai, hebrew, devanagari (a Mac has fonts for all of them), then Greek,
+// Cyrillic and Arabic, which a bare Linux box (no CJK font installed) still has a system font for. All are absent from a Latin-only font.
+const CONTROL_CHARS = ["あ", "中", "ก", "א", "अ", "α", "ж", "ع"];
 
 async function cmdFonts(argv) {
   const { values } = parse(argv, {
@@ -591,30 +600,36 @@ async function cmdFonts(argv) {
     requested = "bc-font-under-test";
     faceCss = `@font-face{font-family:"${requested}";src:url(data:${mime};base64,${fs.readFileSync(f).toString("base64")});font-synthesis:none}`;
   } else requested = values.family;
-  const control = CONTROL_CHARS.find((c) => !chars.includes(c)) ?? "あ";
+  // Chromium picks a fallback font only when some installed font holds the character. A system with no font for the first candidate (a
+  // Linux container without CJK fonts) would show the requested font's .notdef instead, and the control would fail for no good reason:
+  // every candidate the text does not use is rendered, and the first one that really fell back to another font is the control.
+  const candidates = CONTROL_CHARS.filter((c) => !chars.includes(c));
+  if (!candidates.length) die(EXIT.USAGE, "--text uses every control character; use a shorter text");
   const browser = await launch();
   try {
     const ctx = await browser.newContext();
     const page = await ctx.newPage();
     // a fallback family that cannot exist, so a missing glyph shows up as the browser's own choice
     const stack = `"${requested}", "bc-no-such-family-9f3a"`;
-    const spans = [...chars, control].map((c, i) => `<span id="c${i}">${c.replace("&", "&amp;").replace("<", "&lt;")}</span>`).join(" ");
+    const spans = [...chars, ...candidates].map((c, i) => `<span id="c${i}">${c.replace("&", "&amp;").replace("<", "&lt;")}</span>`).join(" ");
     await page.setContent(`<!doctype html><meta charset=utf-8><style>${faceCss}body{font:32px ${stack};font-synthesis:none}</style><body>${spans}</body>`);
-    if (values["font-file"]) await withTimeout(page.evaluate(([r, t]) => document.fonts.load(`32px "${r}"`, t).then(() => document.fonts.ready), [requested, chars.join("") + control]), 30000, "font load");
+    if (values["font-file"]) await withTimeout(page.evaluate(([r, t]) => document.fonts.load(`32px "${r}"`, t).then(() => document.fonts.ready), [requested, chars.join("") + candidates.join("")]), 30000, "font load");
     const cdp = await ctx.newCDPSession(page);
     await cdp.send("DOM.enable"); await cdp.send("CSS.enable");
     const { root } = await cdp.send("DOM.getDocument");
     const results = [];
-    for (let i = 0; i <= chars.length; i++) {
+    const all = [...chars, ...candidates];
+    for (let i = 0; i < all.length; i++) {
       const { nodeId } = await cdp.send("DOM.querySelector", { nodeId: root.nodeId, selector: `#c${i}` });
       const { fonts } = await cdp.send("CSS.getPlatformFontsForNode", { nodeId });
-      results.push({ char: i < chars.length ? chars[i] : control, codepoint: "U+" + (i < chars.length ? chars[i] : control).codePointAt(0).toString(16).toUpperCase().padStart(4, "0"),
+      results.push({ char: all[i], codepoint: "U+" + all[i].codePointAt(0).toString(16).toUpperCase().padStart(4, "0"),
         fonts: fonts.map((f) => ({ family: f.familyName, postscript: f.postScriptName, custom: !!f.isCustomFont, glyphs: f.glyphCount })) });
     }
     const ua = await page.evaluate(() => navigator.userAgent);
     const usesRequested = (r) => r.fonts.length > 0 && r.fonts.every((f) => (values["font-file"] ? f.custom : f.family === requested));
-    const ctrl = results[results.length - 1];
-    const charRes = results.slice(0, -1);
+    const charRes = results.slice(0, chars.length);
+    const candRes = results.slice(chars.length);
+    const ctrl = candRes.find((r) => !usesRequested(r)) ?? candRes[0];   // none fell back: the first candidate, reported as a failed control
     const out = {
       requested: values["font-file"] ? path.basename(values["font-file"]) : requested, mode: values["font-file"] ? "font-file" : "installed-family",
       chromium: (/(Headless)?Chrome\/[\d.]+/.exec(ua) || [ua])[0],

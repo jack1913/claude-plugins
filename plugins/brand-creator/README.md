@@ -374,6 +374,24 @@ recorded, that no Apple error, platform-pack question or package-registry check 
 every call), and that the Android, Chrome extension, MSIX, profiles, print, press-kit and post packs refuse with the way up. It needs the same
 set-up data folder as the Acme smoke: `BRAND_CREATOR_DATA=<dir> tests/smoke/quick.sh`; `QUICK_SMOKE_DIR` moves its project folder.
 
+## Linux
+
+Everything except the Apple emitters runs on Linux; `emit apple` exits 3 there with "needs macOS with Xcode" (no fallback). The
+validated setup is Debian 13 with Python 3.13, Node 24, uv, resvg, ImageMagick, Ghostscript, poppler, ripgrep, potrace and a font set
+(`tests/docker/Dockerfile`); `apt install resvg` exists on Debian 13, other distributions may need `cargo install resvg`.
+
+- No `sips` and no `iconutil`: the downscale check needs the explicit `--renderer=pillow` (PNG master) or `--renderer=resvg` (SVG master)
+  and `emit tauri` needs `--renderer pillow` for its `.icns` (no 16 px entry). In `tools/finish.sh` set `DOWNSCALE_RENDERER=pillow` and
+  `ICNS_RENDERER=pillow`; without them those two steps exit 3 and name the option. Nothing falls back silently.
+- Chromium needs system libraries a minimal server may lack. When `setup` or a render stops with "this system lacks shared libraries ...",
+  install them (on Debian or Ubuntu, as root: `node <data>/node_modules/playwright-core/cli.js install-deps chromium-headless-shell`).
+- `fontcheck`'s Chromium platform report needs one installed font with Greek, Cyrillic or Arabic (any desktop or container font set has
+  one); with none it says "not verified".
+- Run the whole suite and the Acme smoke on Linux from any machine with Docker: `tests/docker/run.sh` (builds the image, copies the plugin
+  in, runs `setup`, pytest, node:test and the smoke). The macOS-only tests are NOT VERIFIED there by design and the run prints the banner;
+  any other skip or failure fails it. `.github/workflows/ci.yml` runs the same on Linux, `claude plugin validate --strict`, and the
+  Apple-tool tests on macOS once the repository is pushed.
+
 ## TODO by stage
 
 - Stage 1b (done): skills (`brand-creator`, `new`, `round`, `status`, `setup`), phase references, templates, review page.

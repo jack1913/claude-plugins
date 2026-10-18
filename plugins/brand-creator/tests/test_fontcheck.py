@@ -183,24 +183,42 @@ def test_fonts_command_prints_json_with_a_control(tmp_path):
     assert bc("fonts", "--font-file", str(TEST_FONT), "--family", "X", "--text", "A").returncode == 2
 
 
-@pytest.mark.requires_setup
-def test_a_control_that_cannot_fail_makes_the_report_not_verified(proj, tmp_path):
-    """A 'font' that holds the control characters too (a stand-in for a catch-all font) must not pass as a verified report."""
-    out = tmp_path / "ctl.ttf"
-    from helpers import fonttools
-    code = """
+CATCH_ALL = """
 import sys
 from fontTools.ttLib import TTFont
 f = TTFont(sys.argv[2]); cmap = f.getBestCmap()
 for t in f["cmap"].tables:
     if t.isUnicode():
-        for ch in "あ中กאअ":
+        for ch in sys.argv[3]:
             t.cmap[ord(ch)] = cmap[ord("A")]
 f.save(sys.argv[1])
 """
-    r = fonttools(code, str(out), str(TEST_FONT))
+
+
+@pytest.mark.requires_setup
+def test_a_control_that_cannot_fail_makes_the_report_not_verified(proj, tmp_path):
+    """A 'font' that holds every control character (a stand-in for a catch-all font) must not pass as a verified report."""
+    out = tmp_path / "ctl.ttf"
+    from helpers import fonttools
+    r = fonttools(CATCH_ALL, str(out), str(TEST_FONT), "あ中กאअαжع")   # all eight candidates of render.mjs
     assert r.returncode == 0, r.stderr
     rc = fc(proj, "--lang", "pl", font=out, platform=True)
     p = results(proj)[f"platform:ctl.ttf"]
     assert p["status"] == "skipped" and "control failed" in p["detail"]
     assert rc.returncode == 3  # not verified, never a pass
+
+
+@pytest.mark.requires_setup
+def test_the_control_moves_on_when_no_system_font_holds_the_first_candidates(proj, tmp_path):
+    """A machine with no CJK, Thai, Hebrew or Devanagari font (a bare Linux container) cannot make Chromium fall back for the first five
+    candidates: it paints the requested font's .notdef. Simulated here by a font that holds those five, so the requested font is used for
+    them; the control must then be Greek, Cyrillic or Arabic (which any desktop or container font set covers) and the report is verified.
+    Before, the control was the first candidate only and fontcheck was 'not verified' on such a machine forever."""
+    out = tmp_path / "nocjk.ttf"
+    from helpers import fonttools
+    r = fonttools(CATCH_ALL, str(out), str(TEST_FONT), "あ中กאअ")
+    assert r.returncode == 0, r.stderr
+    rc = fc(proj, "--lang", "pl", font=out, platform=True)
+    p = results(proj)[f"platform:nocjk.ttf"]
+    assert p["status"] == "pass" and p["control"]["ok"] is True and p["control"]["char"] in "αжع", p
+    assert rc.returncode == 0, rc.stdout

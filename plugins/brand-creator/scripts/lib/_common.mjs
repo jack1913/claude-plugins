@@ -5,6 +5,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -79,6 +80,33 @@ export async function loadDep(name) {
   const file = resolveFromData(name);
   const m = await import(pathToFileURL(file).href);
   return m.default && typeof m.default === "object" ? { ...m.default, ...m } : m;
+}
+
+/**
+ * Linux: the shared libraries a program needs and the system lacks (`ldd` prints "libnss3.so => not found"). Chromium's headless shell
+ * links against a dozen of them (nss, gbm, atk, cups, drm ...) that a minimal image or server does not have; Playwright then only says
+ * the browser "has been closed", and re-running setup cannot help. -> sorted list of names; [] when none is missing, on other systems,
+ * or when ldd is not there. `run` and `platform` are injectable for the test.
+ */
+export function missingSharedLibs(exe, { run = spawnSync, platform = process.platform } = {}) {
+  if (platform !== "linux" || !exe) return [];
+  const r = run("ldd", [exe], { encoding: "utf8", timeout: 20000 });
+  if (!r || r.error || typeof r.stdout !== "string") return [];
+  return [...new Set([...r.stdout.matchAll(/^\s*(\S+)\s+=>\s+not found\s*$/gm)].map((m) => m[1]))].sort();
+}
+
+/** The headless shell binary setup installed under <browsersPath>/chromium_headless_shell-<revision>/ (null when it is not there): `chrome-linux/headless_shell`
+ *  on Linux, `chrome-headless-shell-<platform>/chrome-headless-shell` elsewhere. */
+export function findHeadlessShell(browsersPath, revision) {
+  const root = path.join(browsersPath || "", `chromium_headless_shell-${revision}`);
+  const walk = (dir, depth) => {
+    let entries = [];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return null; }
+    for (const e of entries) if (e.isFile() && (e.name === "headless_shell" || e.name === "chrome-headless-shell")) return path.join(dir, e.name);
+    if (depth > 0) for (const e of entries) if (e.isDirectory()) { const f = walk(path.join(dir, e.name), depth - 1); if (f) return f; }
+    return null;
+  };
+  return walk(root, 2);
 }
 
 export function readSetup() {

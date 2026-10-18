@@ -11,7 +11,7 @@ import shutil
 from pathlib import Path
 
 import pytest
-from helpers import ROOT, bc, make_project, mutate, mutate_json
+from helpers import ROOT, bc, make_project, mutate, mutate_json, path_without
 
 import adoptdata as ad
 
@@ -378,14 +378,7 @@ def test_without_terms_only_the_structural_slots_are_surveyed_and_the_warning_sa
 
 
 def test_a_missing_ripgrep_is_exit_3_with_the_fix_and_writes_nothing(proj, repo, tmp_path):
-    bin_ = tmp_path / "pathbin"
-    bin_.mkdir()
-    for tool in ("uv", "python3", "bash"):
-        p = shutil.which(tool)
-        assert p, tool
-        (bin_ / tool).symlink_to(p)
-    path = os.pathsep.join([str(bin_), "/usr/bin", "/bin"])
-    assert shutil.which("rg", path=path) is None, "precondition: rg must be hidden, or this test proves nothing"
+    path = path_without(tmp_path, "rg")   # not "/usr/bin": on Linux that is where ripgrep lives
     r = bc("adoption", "survey", "--repo", str(repo), *NAMES, project=proj, env={"PATH": path})
     assert r.returncode == 3 and "ripgrep" in r.stderr and "Install" in r.stderr
     assert not (proj / "adoption.json").exists() and not (proj / "ADOPTION.md").exists()

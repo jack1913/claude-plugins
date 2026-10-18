@@ -25,7 +25,7 @@ from _emit import Emit  # noqa: E402
 from determinism import magick_png_args  # noqa: E402
 from pxio import read_ico_sizes, write_ico  # noqa: E402
 
-MAGICK_HINT = "Install ImageMagick (macOS: brew install imagemagick; Linux: your package manager; Windows: winget install ImageMagick.ImageMagick)."
+MAGICK_HINT = "Install ImageMagick (macOS: brew install imagemagick; Linux: apt install imagemagick or your package manager; Windows: winget install ImageMagick.ImageMagick)."
 BMP_HEADER = 14      # bytes of BITMAPFILEHEADER; the BITMAPINFOHEADER follows
 BMP_CONTENT = 0.7    # share of the image the mark may fill
 

@@ -29,8 +29,10 @@ def test_the_outlined_wordmarks_own_metrics_sit_on_the_ink_edges(word):
     assert g["guides-image"]["status"] == "info"
     w, h, px = read_png((word / "assets/_checks/logo-guides.png").read_bytes())
     assert (w, h) == (512, 512)
-    # the overlay draws the baseline in its own colour (#e0218a): the proof image must contain that colour
-    assert any(tuple(px[i:i + 3]) == (0xe0, 0x21, 0x8a) for i in range(0, len(px), 4))
+    # the overlay draws the baseline in its own colour (#e0218a): the proof image must contain that colour. A 1 px line at a fractional height is
+    # anti-aliased across two rows by some resvg versions (0.45 on Debian) and lands on whole pixels in others (0.48), so the test looks for the
+    # colour or its blend with the ground: magenta-ish, red well above green, blue above green. No other guide (blue, green, grey) or the ink fits.
+    assert any(r - g > 60 and b - g > 30 and b < r for r, g, b in (tuple(px[i:i + 3]) for i in range(0, len(px), 4)))
     assert report(word, "logo-sheet")["guides"]["tolerance_px"] == 1.5
 
 

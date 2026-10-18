@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from helpers import FIXTURES, ROOT, bc, make_project, mutate, mutate_json
+from helpers import FIXTURES, ROOT, bc, make_project, mutate, mutate_json, path_without
 
 sys.path.insert(0, str(ROOT / "tests" / "fixtures" / "names"))
 import build as fxbuild  # noqa: E402
@@ -314,11 +314,6 @@ def test_a_pdf_is_searched_as_text_and_print_pdfs_are_said_to_hold_outlines(proj
 
 def test_a_pdf_that_cannot_be_read_as_text_is_not_verified_never_a_pass(proj, tmp_path):
     (proj / "book.pdf").write_bytes(_pdf("anything"))
-    bin_ = tmp_path / "pathbin"
-    bin_.mkdir()
-    for tool in ("uv", "python3", "bash"):
-        (bin_ / tool).symlink_to(shutil.which(tool))
-    path = os.pathsep.join([str(bin_), "/usr/bin", "/bin"])
-    assert shutil.which("pdftotext", path=path) is None, "precondition: pdftotext must be hidden, or this test proves nothing"
+    path = path_without(tmp_path, "pdftotext")   # not "/usr/bin": on Linux that is where poppler lives
     r = bc("check", "--cascade", "STALEWORD", project=proj, env={"PATH": path})
     assert r.returncode == 3 and row(proj, "cascade:pdf")["status"] == "skipped" and "pdftotext" in row(proj, "cascade:pdf")["detail"]

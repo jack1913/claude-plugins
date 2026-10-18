@@ -69,7 +69,9 @@ def printed_files(p: Path) -> dict[str, Path]:
 def gs_cmyk_profile() -> Path:
     """A CMYK profile for the PDF/X-4 path. Ghostscript ships one; brand-creator bundles none, and the test says so if there is none to use."""
     gs = shutil.which("gs")
-    for root in (Path(gs).resolve().parents[1] / "share" / "ghostscript", Path(gs).resolve().parents[2] / "share" / "ghostscript"):
+    # Homebrew: <prefix>/share/ghostscript/<version>/iccprofiles; Debian and Ubuntu: /usr/share/color/icc/ghostscript (iccprofiles links to it)
+    for root in (Path(gs).resolve().parents[1] / "share" / "ghostscript", Path(gs).resolve().parents[2] / "share" / "ghostscript",
+                 Path(gs).resolve().parents[1] / "share" / "color" / "icc" / "ghostscript"):
         found = sorted(root.rglob("default_cmyk.icc")) if root.is_dir() else []
         if found:
             return found[0]

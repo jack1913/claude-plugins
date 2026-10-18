@@ -148,7 +148,9 @@ set -e
 # file): move it aside, never delete it.
 mkdir -p "$SMOKE/removed"
 mv "$P"/assets/_checks/downscale/mark-*.json "$SMOKE/removed/fine-vector-downscale-$$.json"
-DS=(); [ "$(uname)" = Darwin ] || DS=(--renderer=pillow)
+DS=(); [ "$(uname)" = Darwin ] || DS=(--renderer=pillow)       # off macOS there is no sips: Pillow is the explicit opt-in for a PNG master
+ICNS=(); [ "$(uname)" = Darwin ] || ICNS=(--renderer pillow)   # ... and no iconutil: Pillow writes the Tauri .icns, said in the report
+FIN_OPT=(); [ "$(uname)" = Darwin ] || FIN_OPT=(ICNS_RENDERER=pillow DOWNSCALE_RENDERER=pillow)   # the same two opt-ins for tools/finish.sh
 "${BC[@]}" downscale --source assets/logo/grid-mark-master.png ${DS[@]+"${DS[@]}"} --project "$P" >/dev/null || die "the grid master failed the downscale check"
 python3 - "$P/assets/_checks/downscale" <<'PY' || die "downscale report is wrong"
 import glob, json, sys
@@ -231,7 +233,7 @@ rep = json.load(open(p / "assets/_checks/states.json"))
 assert rep["status"] == "pass" and rep["states_files"] == ["qa/states.json", "qa/states.tray.json"], rep["states_files"]
 print(f"   ok: {len(pngs)} tray PNGs, {len({r['set'] for r in rep['results'] if r['id'].startswith('states:')})} state sets pass greyscale and silhouette")
 PY
-"${BC[@]}" emit tauri --project "$P" >/dev/null || die "emit tauri failed"
+"${BC[@]}" emit tauri ${ICNS[@]+"${ICNS[@]}"} --project "$P" >/dev/null || die "emit tauri failed"
 for f in 32x32.png 128x128.png 128x128@2x.png icon.png icon.ico icon.icns; do expect_file "$P/assets/tauri/src-tauri/icons/$f"; done
 expect_size "$P/assets/tauri/src-tauri/icons/128x128@2x.png" 256 256
 "${BC[@]}" emit wallet --project "$P" >/dev/null || die "emit wallet failed"
@@ -243,7 +245,7 @@ DEV_EXEMPTION="the host shrinks the registry icon and the avatar to 16 px; the c
 expect_size "$P/assets/developer/email/acme-email-logo@2x.png" 174 48; expect_size "$P/assets/developer/avatar/acme-avatar-1024.png" 1024 1024
 expect_size "$P/assets/developer/nuget/acme-nuget-128.png" 128 128
 for f in assets/developer/avatar/acme-avatar-1024.png assets/developer/nuget/acme-nuget-128.png; do
-  "${BC[@]}" downscale --source "$f" --project "$P" >/dev/null || die "$f fails the accent rule at a size the host shows"
+  "${BC[@]}" downscale --source "$f" ${DS[@]+"${DS[@]}"} --project "$P" >/dev/null || die "$f fails the accent rule at a size the host shows"
 done
 ok "downscale passes on each master the host shrinks (each manifest row is tied to the report of its own master)"
 grep -q $'\x1b\[36mAcme' "$P/assets/developer/cli/identity.txt" || die "the CLI identity did not fall back to ANSI 36 (the accent fails 4.5:1 on a black ground)"
@@ -408,7 +410,7 @@ step "snapshot, verify-idempotent (emit chain twice), staleness record, specs-du
 "${BC[@]}" snapshot take assets --name after-emit --out snaps/after.json --project "$P" >/dev/null
 "${BC[@]}" snapshot diff snaps/before.json snaps/after.json --ignore "assets/_checks/*" --project "$P" >/dev/null || die "emit web changed files that were already current"
 CHAIN=(--cmd "{bc} emit web --project {project}" --cmd "{bc} emit social --tagline Dependable --project {project}" --cmd "{bc} emit windows --project {project}"
-       --cmd "{bc} emit linux --app-id org.example.Acme --project {project}" --cmd "{bc} emit tray --project {project}" --cmd "{bc} emit tauri --project {project}"
+       --cmd "{bc} emit linux --app-id org.example.Acme --project {project}" --cmd "{bc} emit tray --project {project}" --cmd "{bc} emit tauri ${ICNS[*]:-} --project {project}"
        --cmd "{bc} emit wallet --project {project}" --cmd "{bc} emit android --project {project}" --cmd "{bc} emit chrome-ext --project {project}" --cmd "{bc} emit msix --project {project}" --cmd "{bc} emit profiles --tagline 'a repair guide is in every box' --project {project}" --cmd "{bc} emit developer --tagline 'a repair guide is in every box' --master-band small --content-fraction 0.8 --exemption '$DEV_EXEMPTION' --project {project}")
 [ "$(uname)" = Darwin ] && CHAIN+=(--cmd "{bc} emit apple --tagline 'a repair guide is in every box' --master-band small --content-fraction 0.8 --visionos-content-fraction 0.6 --exemption 'the system shrinks this one master to 16 px; the coarse-grid drawing keeps the accent' --project {project}")
 "${BC[@]}" verify-idempotent "${CHAIN[@]}" --project "$P" >/dev/null \
@@ -535,7 +537,7 @@ QF="$SMOKE/guard-finish-quick"; cp -R "$G4" "$QF"; "${BC[@]}" state --project "$
 set +e; ( cd "$QF" && env -u BRAND_CREATOR_ROOT PATH="$ROOT/bin:$PATH" PRINT_REGION=EU bash tools/finish.sh > "$SMOKE/finish-quick.log" 2>&1 ); rc_q=$?; set -e
 [ "$rc_q" = 2 ] && grep -q "Standard and Full tier" "$SMOKE/finish-quick.log" && ! grep -q "^== tokens" "$SMOKE/finish-quick.log" || die "PRINT_REGION in the Quick tier must stop the chain with exit 2 before any step (exit $rc_q)"
 ok "finish.sh: PRINT_REGION in the Quick tier stops the chain (exit 2) before any step runs"
-( cd "$G4" && env -u BRAND_CREATOR_ROOT PATH="$ROOT/bin:$PATH" TAGLINE="a repair guide is in every box" APP_ID=org.example.Acme MASTER_BAND=small \
+( cd "$G4" && env -u BRAND_CREATOR_ROOT ${FIN_OPT[@]+"${FIN_OPT[@]}"} PATH="$ROOT/bin:$PATH" TAGLINE="a repair guide is in every box" APP_ID=org.example.Acme MASTER_BAND=small \
     EXEMPTION="the system shrinks this one master to 16 px; the coarse-grid drawing keeps the accent" ICON_CONTENT=0.8 VISIONOS_CONTENT=0.6 \
     PRINT_REGION=EU IMAGE_BASE_URL=https://img.example.com/brand POST_FACTS="spare parts;repair guide;batch size" \
     bash tools/finish.sh > "$SMOKE/finish.log" 2>&1 ) || { tail -30 "$SMOKE/finish.log" >&2; die "tools/finish.sh did not run through (log: $SMOKE/finish.log)"; }
@@ -813,7 +815,8 @@ ICC="$(python3 - <<'PY'
 import shutil, sys
 from pathlib import Path
 gs = Path(shutil.which("gs")).resolve()
-for root in (gs.parents[1] / "share" / "ghostscript", gs.parents[2] / "share" / "ghostscript"):
+# Homebrew: <prefix>/share/ghostscript/<version>/iccprofiles; Debian and Ubuntu: /usr/share/color/icc/ghostscript
+for root in (gs.parents[1] / "share" / "ghostscript", gs.parents[2] / "share" / "ghostscript", gs.parents[1] / "share" / "color" / "icc" / "ghostscript"):
     hits = sorted(root.rglob("default_cmyk.icc")) if root.is_dir() else []
     if hits:
         print(hits[0]); break

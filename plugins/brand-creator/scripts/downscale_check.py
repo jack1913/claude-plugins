@@ -173,25 +173,25 @@ def main() -> int:
     project = find_project(a.project)
     rules, rules_src = qa_rules.load(project)
     rule = rules["downscale"]
+    # Usage errors (exit 2) come before "this system cannot measure" (exit 3), so the same bad call gives the same answer on macOS and on
+    # Linux: a recorded opt-in needs a named renderer, the sizes must parse, the source must be inside the project and exist.
+    if a.record_renderer and not a.renderer:
+        fail(EXIT_USAGE, "--record-renderer needs an explicit --renderer=resvg|pillow (it records an opt-in to a non-system renderer; "
+                         "sips is the default on macOS and needs none)")
+    sizes, rows = (parse_sizes(a.sizes), []) if a.sizes else default_sizes()
+    src = confine(project, a.source or "assets/logo/mark.svg", what="--source")
+    if not src.is_file():
+        fail(EXIT_USAGE, f"source not found: {rel(project, src)} (pass --source <master.png|mark.svg>)")
     method, why = resolve_method(a, project)
     label = {"sips": "sips -z", "resvg": "resvg", "pillow": "pillow (Lanczos)"}[method]
     renderer_str = f"{label} ({why})"
     if a.record_renderer:
-        if method == "sips":
-            fail(EXIT_USAGE, "--record-renderer records an opt-in to a non-system renderer; sips is the default on macOS and needs none")
-        if not a.renderer:
-            fail(EXIT_USAGE, "--record-renderer needs an explicit --renderer=resvg|pillow")
         st = read_state(project)
         st.set("renderer", f"{a.renderer} (opted in {today()})")
         st.save()
         print(f"recorded in BRAND-STATE.md: renderer: {a.renderer} (opted in {today()})")
     if sys.platform != "darwin" and method == "sips":
         fail(EXIT_CANNOT, "sips is not available on this system")
-
-    sizes, rows = (parse_sizes(a.sizes), []) if a.sizes else default_sizes()
-    src = confine(project, a.source or "assets/logo/mark.svg", what="--source")
-    if not src.is_file():
-        fail(EXIT_USAGE, f"source not found: {rel(project, src)} (pass --source <master.png|mark.svg>)")
     if method == "resvg" and src.suffix.lower() != ".svg":
         fail(EXIT_CANNOT, "--renderer=resvg rasterises SVG; a PNG master needs sips (macOS) or --renderer=pillow")
     if method == "pillow" and src.suffix.lower() != ".png":

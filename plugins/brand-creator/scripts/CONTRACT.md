@@ -27,6 +27,7 @@ once; a script that does not use them is wrong, not special.
 
 - [Agents and workflows](#agents-and-workflows)
 - [Testing](#testing)
+- [Linux validation and CI](#linux-validation-and-ci)
 
 ## Entry point and data directory
 
@@ -874,3 +875,22 @@ commands. Conventions:
 - **Refusals**: `emit android|chrome-ext|msix` exit 2 naming `state --set tier=full`; `emit profiles|presskit|print` and `emit social --posts` exit 2 naming
   `state --set tier=standard`; none of them writes a file or a report (the tier gate runs after G3 and before the report exists: `Emit.begin(tiers=...)`).
   The Tier A packs have no tier gate (see decision 707); `emit apple` with the Apple tools hidden exits 3 and writes nothing.
+
+## Linux validation and CI
+
+- **Image.** `tests/docker/Dockerfile` is Debian 13 (pinned by version tag) with the distribution's Python 3.13, the official Node 24
+  tarball (SHA-256 checked), uv from its official image, resvg, ImageMagick, Ghostscript, poppler, ripgrep, potrace, fonts and the shared
+  libraries of Chromium's headless shell, and a non-root user. The plugin and its data directory are not in the image.
+- **Run.** `tests/docker/run.sh` builds it and runs `tests/docker/in-container.sh` on a read-only mount of the checkout: copy to a
+  scratch folder, `prereq --for full` (only `xcode` may be MISSING once setup ran), `setup --yes` into a data directory inside the
+  container, `tests/run-all.sh --smoke` without `BRAND_CREATOR_REQUIRE_ALL`, then `tests/docker/verify_log.py`.
+- **What counts as passing off macOS.** pytest and node:test have no failure, the smoke printed `SMOKE PASSED` (`emit apple` exit 3 with its
+  message), and every skip is a NOT VERIFIED skip with an expected reason: `not macOS`, `actool is not available`, `the claude CLI is not on
+  PATH`, and the missing denylist when `BRAND_CREATOR_DENYLIST` was not mounted. Any other skip is a bug. The exact counts and the banner
+  are printed.
+- **Off-macOS opt-ins.** `downscale` needs `--renderer=pillow|resvg` (or a recorded opt-in), `emit tauri` needs `--renderer pillow`; tests, the
+  smoke and `finish.sh` (`DOWNSCALE_RENDERER`, `ICNS_RENDERER`) name them. Usage errors (exit 2) are reported before "cannot measure here"
+  (exit 3), so a bad call gives the same answer on every OS.
+- **CI.** `.github/workflows/ci.yml`: `linux` (the Docker run), `validate` (`claude plugin validate --strict` and the manifest-mutation test;
+  a documented skip when the CLI cannot be installed), `macos` (`requires_macos` and `requires_actool` tests with REQUIRE_ALL=1, and the
+  Acme smoke). It never runs `claude plugin eval`.

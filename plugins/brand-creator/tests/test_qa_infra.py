@@ -16,7 +16,7 @@ import zlib
 from pathlib import Path
 
 import pytest
-from helpers import ROOT, bc, failing, make_project, mutate, mutate_json, report
+from helpers import OFF_MAC_DOWNSCALE, ROOT, bc, failing, make_project, mutate, mutate_json, report
 
 import determinism
 import qa_rules
@@ -521,7 +521,7 @@ def test_a_manifest_row_that_asks_for_a_qa_gate_cannot_skip_it(acme):
     row = ds_row(report(acme, "check"), master)
     assert r.returncode == 3 and row["status"] == "skipped"
     assert f"run `brand-creator downscale --source {master}`" in row["detail"]
-    assert bc("downscale", "--source", master, project=acme).returncode == 0
+    assert bc("downscale", "--source", master, *OFF_MAC_DOWNSCALE, project=acme).returncode == 0
     bc("check", project=acme)
     assert ds_row(report(acme, "check"), master)["status"] == "pass"
     # the report goes stale when its input changes
@@ -537,7 +537,7 @@ def test_a_passing_downscale_report_on_another_file_does_not_satisfy_a_row(acme)
     m = Manifest(acme)
     m.put("assets/s/icon.png", Img(16, 16, "#007d71").png(), emitter="t", specs=[], qa=["downscale"], downscale_source=fine)
     m.save()
-    assert bc("downscale", "--source", grid, project=acme).returncode == 0          # a passing proof, but of the grid master
+    assert bc("downscale", "--source", grid, *OFF_MAC_DOWNSCALE, project=acme).returncode == 0   # a passing proof, but of the grid master
     assert bc("downscale", "--source", fine, "--renderer", "resvg", project=acme).returncode == 1   # the row's own master fails the rule
     r = bc("check", project=acme)
     res = report(acme, "check")

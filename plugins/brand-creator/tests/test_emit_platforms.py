@@ -9,11 +9,12 @@ import os
 import shutil
 import struct
 import subprocess
+import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
-from helpers import FIXTURES, ROOT, bc, downscale_report, failing, make_project, mutate, mutate_json, report
+from helpers import FIXTURES, OFF_MAC_TAURI, ROOT, bc, downscale_report, failing, make_project, mutate, mutate_json, report
 
 import specs
 from px_lib import from_png
@@ -352,7 +353,7 @@ def test_tray_second_run_writes_nothing(acme):
 # ================================================================ tauri
 
 def test_tauri_icons_folder_follows_the_spec(acme):
-    r = emit(acme, "tauri")
+    r = emit(acme, "tauri", *OFF_MAC_TAURI)   # off macOS there is no iconutil: the Pillow .icns writer is the explicit opt-in
     assert r.returncode == 0, r.stdout + r.stderr
     spec = specs.sizes("tauri-icons")
     base = acme / "assets/tauri/src-tauri/icons"
@@ -536,7 +537,7 @@ def test_developer_second_run_writes_nothing(acme):
 
 def test_check_reads_the_new_emit_reports_and_every_pack_survives_it(acme):
     with_facts(acme)
-    for target, extra in (("windows", ()), ("linux", ("--app-id", "org.example.Acme")), ("tray", ()), ("tauri", ()), ("wallet", ()), ("developer", ())):
+    for target, extra in (("windows", ()), ("linux", ("--app-id", "org.example.Acme")), ("tray", ()), ("tauri", tuple(OFF_MAC_TAURI)), ("wallet", ()), ("developer", ())):
         assert emit(acme, target, *extra).returncode == 0, target
     assert bc("logo-sheet", project=acme).returncode == 0
     r = bc("check", project=acme)
@@ -828,6 +829,8 @@ def test_the_filled_finish_chain_runs_through_to_check(acme, tmp_path):
     env = {**os.environ, "PATH": f"{ROOT / 'bin'}:{os.environ['PATH']}", "BRAND_CREATOR_TODAY": "2026-10-17", "BRAND_CREATOR_DATA": os.environ.get("BRAND_CREATOR_DATA", ""),
            "TAGLINE": "a repair guide is in every box", "APP_ID": "org.example.Acme", "MASTER_BAND": "small", "EXEMPTION": exemption,
            "ICON_CONTENT": "0.8", "VISIONOS_CONTENT": "0.6"}
+    if sys.platform != "darwin":   # no iconutil, no sips: the chain names its two explicit opt-ins (README, "Linux")
+        env.update({"ICNS_RENDERER": "pillow", "DOWNSCALE_RENDERER": "pillow"})
     env.pop("BRAND_CREATOR_ROOT", None)   # the script must derive it, not inherit it
     r = subprocess.run(["bash", str(fin)], capture_output=True, text=True, env=env, cwd=tmp_path, timeout=900)
     out = r.stdout + r.stderr

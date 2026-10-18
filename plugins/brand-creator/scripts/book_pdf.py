@@ -94,7 +94,7 @@ def main() -> int:
              + " (run `brand-creator book-lint --self-consistency`)")
     for tool in ("pdfinfo",):
         if not shutil.which(tool):
-            fail(EXIT_CANNOT, f"{tool} not found (poppler); install it (macOS: brew install poppler), then re-run. Run: brand-creator prereq --for print")
+            fail(EXIT_CANNOT, f"{tool} not found (poppler); install it (macOS: brew install poppler; Linux: apt install poppler-utils; Windows: scoop install poppler), then re-run. Run: brand-creator prereq --for print")
     rep = Report("book-pdf", project, booklint.lint_inputs(project, book))
     raw = scratch_dir(project, "book-pdf") / "book.raw.pdf"
     render_raw(project, book_rel, raw, a.format, a.scheme, float(cfg["min_label_px"]))

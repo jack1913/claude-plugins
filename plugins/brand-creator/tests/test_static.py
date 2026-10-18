@@ -312,3 +312,17 @@ def test_every_subcommand_in_bin_is_in_the_help_and_the_contract_names_every_rep
     for key in ("qa/rules.json", "qa/states.json", "qa/idempotence.json", "tools/inputs.json", "distinct", "content_languages", "family-check",
                 "Motion proof", "px_lib"):
         assert key in contract, f"CONTRACT.md does not document {key}"
+
+
+def test_every_install_hint_that_names_brew_also_names_linux():
+    """Found by the Linux run: four 'cannot run' messages (book-pdf, print, print-check) told a Linux user only `brew install poppler` or
+    `brew install ghostscript`. A message that names the macOS install must name the Linux one in the same sentence (`prereq` has the table)."""
+    offenders = []
+    for p in sorted((ROOT / "scripts").rglob("*.py")):
+        if p.name == "prereq.py" or "vendor" in p.parts:
+            continue
+        text = p.read_text(encoding="utf-8")
+        for m in re.finditer(r"brew install", text):
+            if "Linux" not in text[max(0, m.start() - 120):m.end() + 160]:
+                offenders.append(f"{p.relative_to(ROOT)}:{text.count(chr(10), 0, m.start()) + 1}")
+    assert offenders == [], "macOS-only install hints: " + ", ".join(offenders)
