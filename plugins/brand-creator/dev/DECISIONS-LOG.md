@@ -1014,3 +1014,143 @@ Known gaps (stage 5b):
     (`appiconset_px`: 1024, status U) now holds the size; the pack's rows are `apple-watch-tv-safe` and that row, so every file carries the UNVERIFIED label naming both and the pack is not V-backed. 1088 remains
     only the ictool `--previews` export size. 1024 is a proposal (the local actool compiles the single-size form at 1024); a person must check it in Xcode. The file is now `<AppIcon>-watchOS-1024.png`.
     Decision 511's 1088 is superseded; its other points stand. Known gap: the size is unverified.
+
+## Stage 6a (agents and workflows)
+
+601. **Six agents, tiers and tools as the plan's agents/ row.** Designer, judge and reviewer are `opus`; researcher, inventory and implementer
+    `sonnet`. Tools are allowlists: the judge and the inventory have Read, Grep and Glob only (they return rows; the lead writes `INVENTORY.md`
+    and the round page), the reviewer adds Bash for check commands and never gets Write or Edit, nobody gets `Agent` (no recursive fan-out).
+    `maxTurns` 25 to 60. `omitClaudeMd: true` for the designer, judge, researcher and inventory, which take everything from the prompt; the
+    reviewer and the implementer keep the CLAUDE.md files because they work in the owner's product repositories, whose own CLAUDE.md names
+    the build and test commands. No `permissionMode`, `hooks`, `mcpServers`, `initialPrompt` (ignored for plugin agents) and no `isolation`.
+    Frontmatter format checked against the saved docs (`verify/sub-agents.md` "Frontmatter reference", `verify/plugins_components.md`
+    "Frontmatter fields in plugin agents"), not re-fetched.
+602. **The researcher has Bash and no Write.** It needs the entry point for `brand-creator names` (the naming screener); everything it finds
+    is returned, and the name checker writes its own memo and raw folder inside the project. Its body forbids typing a candidate into any
+    website before the owner's privacy OK and allows `--yes` only when the prompt says so.
+603. **Workflows cannot read files, so the RULES line and the agent tiers are constants in each script.** `const RULES` and
+    `const AGENT_TIER` are kept equal to SKILL.md and the agent files by `fleet-plan --check` and the tests, so a drift fails the suite
+    instead of shipping. The workflows take every path (`project`, `plugin_root`, `data`, `context_paths`) and the date through `args`.
+604. **The session model is a ceiling, enforced in the scripts.** `args.ceiling` (the session's family) is required; an agent whose tier is
+    above it gets a per-call `model` equal to the ceiling (the per-call model wins over the agent file). Without this an `opus` agent in a
+    Sonnet session runs on Opus. `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` overrides everything; `fleet-plan` reads it from the shell and says so.
+605. **The approval is part of the arguments.** Every workflow requires `approved_agents` and refuses to start (throws before the first
+    agent) when it plans more. The number comes from the owner's yes at the fleet gate, so a run cannot quietly grow (a fourth direction,
+    an extra lens, inventory on).
+606. **How the agent count is established: `brand-creator fleet-plan`.** It runs the real script in a `node:vm` sandbox with stub hooks
+    (the stub agent answers with the smallest value its schema allows; the clock and randomness throw as in the runtime) and records every
+    `agent()` call with its agent type and per-call model. That is the count stated at the fleet gate, and the node tests assert the
+    default path of each workflow (fixtures in `tests/fixtures/fleet/`) starts fewer than 5 agents: directions 4, review-panel 4, naming 4,
+    adopt 2 per repository. No new dependency (`node:vm`, `node:util`).
+607. **directions: the designers' barrier is justified; disjointness is promised, checked and reported.** The judge needs every board, so
+    the designers run in `parallel()`. Each writes only `rounds/<round>/<key>/`; the script checks every returned path starts with that
+    folder and reports violations. Each designer snapshots the project with `--ignore '*rounds/<round>/*'` before its first write and
+    verifies after its last: siblings write inside the same round at the same time, so the snapshot can prove only that nothing outside
+    the round changed; inside the round the returned paths are the check. A violation is returned and logged, never hidden.
+608. **adopt runs one repository at a time by default.** That is what the brand-adopt skill and phase 11 say; `parallel_repos: true`
+    switches to `pipeline()` (each review starts when its own apply ends) only for distinct working trees (the script refuses nested or
+    equal paths). The fix pass is a second run (`mode: "fix"`, the reviewer's no-decision findings as the change list), so no run spans a
+    decision of the owner. The implementer switches to (or creates) the branch the owner named; the RULES line forbids commits, merges,
+    pushes, stashes and worktrees, not a branch the owner asked for.
+609. **naming keeps the names private by default.** `lookups_ok` is false unless the lead sets it after brand-naming step 7; then the
+    screener runs the name checker with `--plan` only and does no web search with a candidate, and the judge cannot rate a name better
+    than go-with-conditions. Hunters never search the web with candidates.
+610. **review-panel lenses run as `brand-reviewer`** (checks with Bash, never edits) and the panel judge as `brand-judge`. Lens results
+    are matched to their lens by position, not by the lens name the agent echoes.
+611. **Refinement and research fan-out are not workflows.** The refine loop is documented in `phases/05-refinement.md` and `fleet.md` as a
+    main-thread loop with at most one `brand-reviewer` call per round; the research fan-out (up to 3 researchers, then a refuting
+    reviewer) uses the Agent tool with the same agent types, as plan-v2 S7-P1 says ("no dedicated workflow file in v1").
+612. **meta is the first statement and the header comment follows it.** The docs require `export const meta` first; the resume notes and
+    the agent count sit in a comment right after it. meta carries `name`, `description`, `whenToUse` (only after the fleet gate) and
+    `phases` matching every `phase()` title and `phase:` option the body uses (`fleet-plan --check` compares both ways).
+613. **Cost is stated as agent passes, not tokens.** No measured token figure exists for these workflows yet; the plan prints "N agent
+    passes, each about what that step costs single-thread" and the sum of `maxTurns`, and points at `/workflows` for live token use. The
+    first supervised run on Acme (owner-approved, billed) is where a real number comes from.
+
+Known gaps (stage 6a):
+- No workflow has been run (billed; the owner approves those runs). The dry runs prove argument checks, counts, prompts and null guards, not
+  agent behaviour. Whether a plugin agent's Bash sees the plugin's `bin/` on PATH inside a workflow is assumed from the docs, not observed.
+- `agentType` with a plugin-scoped name (`brand-creator:brand-designer`) inside a workflow is taken from the authoring reference ("resolved
+  from the same registry as the Agent tool"); not observed in a run.
+- Behaviour evals (`evals/`) are not part of stage 6a.
+- Copy panel and rule hardening (plan "Deferred") are not shipped.
+
+## Stage 6b (behaviour evals and trigger evals)
+
+614. **The eval format is the one `claude plugin eval` documents, in the layout `eval init` writes.** `prompt.md` (run fields in the frontmatter, the
+    prompt as the body), a `case.yaml` with only `schema_version`, `name` and `context.scaffold_script` (omitted when the case needs an empty
+    workspace) and `graders/*.md`. Read from the saved docs (`verify/plugin-evals.md`) and from the runner's own error texts; no eval was run.
+    The cap of `max_turns` is 200; the cases use 50 and 80 (plan: at least 40), with a longer timeout for the three cases that build a board.
+615. **17 cases, one per plan bullet and per GAP resolution.** The plan's list, plus the positive architecture case (S2-P0-p2: a brief that shows a
+    parent brand and sister products must get the family question before any board; a one-person brief must get "standalone" stated, not asked)
+    and the outward-action case (S2-P13-t2, S2-P2-g1, S7-F13: "buy the domain and file the trademark for me" ends in a hand-off with a click path).
+    The bakery and photographer cases are two cases, the second in Polish (it also pins "chat in the owner's language").
+616. **Every case has a grader on the steps and one on the result; the judge is used at most once per case.** Steps: `tool_used` (a tool called, or
+    none with `min: 0` and `max: 0`). Result: a regex over the last message or over a file, a `file_exists`, or one `llm` rubric with PASS and
+    FAIL conditions. Cheap deterministic graders carry the weight; the rubric is the tiebreak for judgement calls (did it restate the pick). The
+    `tool_used: Skill` graders are plugin-fired indicators (the runner does not score them against the no-plugin baseline).
+617. **Scaffolds build fixtures from the Acme worked brand, with no network and no dependency.** `evals/_shared/fixture.sh` copies it (without its README,
+    which narrates round 1 and would leak the answer), writes `BRAND-STATE.md` from variables and adds what a case needs: an incumbent wordmark,
+    a judge report, a rule written in three places, a product repository as the adoption target, a git repository with uncommitted work, a brief.
+    The workspace is the project root, so step 0 finds the state at once. The scaffold script is addressed by its own path (`../_shared/`); that the runner
+    runs it in place is taken from the docs ("a Bash script in the case directory"), not observed.
+618. **Byte-equality as the plan says, for the two "nothing was written" cases.** The prompt ends with a harness note asking the run to execute
+    `bash .eval-verify/verify.sh > verify-result.txt`; a regex grader reads the file (`cmp` of every file against a pristine copy and the target's git
+    state; commit, stash, worktree and branch counts). Tool-call graders are the first line, the file is the proof, and a sentinel line in each target
+    file is a third, free check. Both scripts are tested against real mutations in `tests/test_evals.py`.
+619. **A bug the tests now catch: `min` defaults to 1.** "Never called" written as `max: 0` alone can never pass; the generator writes `min: 0`
+    too and the static test fails any `min > max`. A second one: `input_match` runs over the JSON-encoded input, so `[^"]*` stops at the first
+    escaped quote of a shell command; the graders use `.*` or `[^;&|]*`, and sample inputs in JSON form prove each key regex.
+620. **The loader is exercised without running a case.** The runner validates a case's graders only when it loads that case for a run, and silently
+    ignores an unknown grader key. `tests/test_evals.py` (and the smoke step) therefore copies the suite, injects one invalid grader into every case
+    and runs `claude plugin eval`: every case fails to load, nothing runs, and the load error must name only the injected grader. The static tests
+    check the grader key sets themselves.
+621. **Graders reference real things, checked.** Skill names against `skills/`, `brand-creator` subcommands against the entry point's usage text, flags
+    against the scripts, board attributes against `templates/round-page.html` and the board contract, file paths against the scaffold or the
+    documented project layout, and a regex over a fixture file must not already match the untouched file (a vacuous grader would pass with no
+    work), except the sentinel graders, which must.
+622. **Graders read what the agent said, not the whole trace.** A regex over `trace` also sees the skill text and every tool result, so a pattern for
+    "the agent asked about families" would match the skill's own words. The graders use `last_message`, a question tool's input, or a file; the one
+    `llm` grader per case that looks at the trace is told what to look for. A static test also checks that no prompt contains the words its own
+    `not_contains` graders forbid.
+623. **The README's command grants `Bash Write Edit WebFetch` and requires `--scaffold`.** The plugin's own tools run through Bash, and WebFetch is there only
+    so the outward case can show that no order page is driven (without the grant the tool would simply be absent and the grader vacuous). The README says
+    the evals are opt-in and billed, gives no price (none is measured), and starts with `--runs 1 --ablation none --max-cost-usd <usd>`; `tests/run-all.sh`,
+    the smoke test and CI never run a case.
+624. **Trigger evals filled to the plan's shape.** Non-software positives added (yoga studio, nonprofit, florist, band, online course, resuming a
+    project, going back to the liked direction; Polish for a bakery, a ceramics studio, resuming), Polish near misses for brand-creator, and the user-invoked
+    skills (`new`, `round`, `status`, `setup`, `brand-adopt`, `check`, `review`, `launch`) have 6 to 9 negatives each including Polish and the outward
+    requests (buy, register, pay) that must not load a user-invoked skill. Shape tests in `tests/test_skills.py` and `tests/test_evals.py`.
+
+Known gaps (stage 6b):
+- No case has run (billed; the owner approves it). How the headless runner treats `AskUserQuestion` (the docs list it among the grantable
+  tools, but what the tool returns with nobody to answer is not observed), whether `CLAUDE_PLUGIN_DATA` is set so `brand-creator` runs inside a case,
+  whether the scaffold runs in place so `../_shared/fixture.sh` resolves, and whether the baseline arm is meaningful for the plugin-specific cases are
+  assumptions until the first run. The three board-building cases need Chromium for `shot`; in a run's fresh data folder it is absent, so they grade the
+  board file the agent writes and the lint, not the shots.
+- The "stops at gate" case covers G2 only; the other gates (G1, G3, G4, G5) are covered by prose and `state --require`, not by a behaviour case.
+- Regex graders over free text are brittle by nature (a different phrasing fails them); the rubric graders cover the same ground and the report
+  shows both. Expect to tune the patterns after the first run.
+- `trigger-evals.json` is not run (billed; by hand on small, medium and large models, with frontend-design installed).
+
+625. **Review R6-1: the designer's snapshot ignores its own shot report.** `shot` writes `<project>/assets/_checks/shot.json` (a fixed path shared
+    by parallel designers), so the prompt's own TEST step made `snapshot verify` exit 1 for every compliant designer. The prompt now passes two
+    `--ignore` options (the round and `assets/_checks/`) to take and to verify. The report is overwritten by whoever shoots last, so the designer
+    copies the slice paths into `screenshots` (required, at least one) and the judge prompt has no fallback to the shared report. Slice images
+    themselves are per page (the shot name includes the page path) and live outside the project. The smoke guard step now runs `shot` on a board
+    inside the guard copy and also proves, by dropping the `_checks` ignore, that the report would have tripped the verify.
+626. **Review R6-2: fix mode and resume start on a dirty tree.** The implementer's "git status must be clean" contradicted the fix run (a second run
+    after an apply that never commits) and the resume path. The prompt now carries `MODE: apply|fix`. Apply: clean tree, or a resume where every
+    changed file is named by a row. Fix: the tree holds the apply run's uncommitted changes; record status and diff, verify, build on them. In fix
+    mode the head line says the branch exists (the apply run created it), `create_branch` is ignored, and the snapshot is `adopt-fix-<label>`.
+627. **Review R6-3: the refuting verifier is `brand-researcher`.** `brand-reviewer` has Read, Grep, Glob and Bash only, so it cannot re-fetch a
+    source. fleet.md, 01-research.md and the researcher body now name a second `brand-researcher` call as the verifier, and the reviewer body says
+    it checks claims only against sources saved in the project and writes "not verified: no web access" otherwise. Rows S2-P1-a2, S7-F1 and S7-P1
+    stay done on that basis.
+628. **Review R6-4: an offline agent type for names.** `agent()` has no per-call tools option, so keeping candidate names private through tools needs
+    its own agent file: `brand-namer` (sonnet, Read, Grep, Glob, Bash, no WebSearch or WebFetch). The hunters always use it; the screener uses it
+    while `lookups_ok` is false and `brand-researcher` only after the owner's privacy OK. Agent counts and models do not change (7 agent files now).
+    Not enforced by tools and said so in fleet.md and the README: Bash could still run a network client; that is the agent file's and the
+    prompt's instruction plus the workflow's WARNING on the screener's own `lookups_used` report.
+629. **Review R6-5: the eval loader check cannot bill.** It relied on the runner rejecting the injected `type: zzz` grader. It now also passes
+    `--max-cost-usd 0.01 -j 1` and asserts the summary line shows `$0.00` (pytest and smoke).

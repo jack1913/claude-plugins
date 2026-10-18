@@ -84,3 +84,13 @@ you", each with a recommendation.
 
 Reply with the [response template](../brand-creator/SKILL.md#response-template-every-reply-at-a-gate-or-after-a-round).
 After the work, `check --cascade "<old name>"` says what is left.
+
+## The adopt workflow (opt-in, after G6)
+
+With the fleet's yes, the apply and the independent review can run as the `adopt` workflow: per repository one
+`brand-creator:brand-implementer` on the owner's branch, then one `brand-creator:brand-reviewer` (`cmp` against the
+pack, the repository's own build and tests). Repositories go one at a time unless `parallel_repos: true` and each is
+its own working tree; 2 agents per repository. It needs the G6 record in its arguments, never commits, and returns the
+rows with evidence; a second run with `mode: "fix"` takes only the no-decision findings. State the numbers from
+`brand-creator --data "${CLAUDE_PLUGIN_DATA}" fleet-plan adopt --args @<file> --session-model <your model>` first.
+Details: [fleet.md](../brand-creator/references/fleet.md).

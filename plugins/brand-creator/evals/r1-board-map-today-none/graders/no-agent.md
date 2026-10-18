@@ -1,0 +1,8 @@
+---
+type: tool_used
+tool: Agent
+min: 0
+max: 0
+weight: 1
+---
+Single-thread by default: no agent without the fleet gate.

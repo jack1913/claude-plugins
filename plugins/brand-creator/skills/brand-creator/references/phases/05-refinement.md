@@ -9,6 +9,7 @@
 - [Gate G3](#gate-g3)
 - [Pitfalls](#pitfalls)
 - [Enforcement](#enforcement)
+- [Refine loop with one reviewer call](#refine-loop-with-one-reviewer-call)
 
 ## Goal
 
@@ -78,3 +79,17 @@ also require G3.
 - `board-lint` (round 2+): What changed, Weak points, losers with one-line reasons, My call, questions, reply.
 - Hook: Edit and overwriting Write on any round that is not the latest are blocked; `history/` only via `freeze`.
 - `check`: history manifest intact; contrast and logo-sheet reports current.
+
+## Refine loop with one reviewer call
+
+Refinement is never a workflow. It runs in the main thread; the only optional subagent is **one**
+`brand-creator:brand-reviewer` call per round, after the fleet gate (1 agent, the model that will run, a small cost)
+and the owner's yes:
+
+1. The owner's numbered change list is confirmed; you build the round (`rounds/r<N>/`, copied first).
+2. The reviewer gets the same numbered change list, the round folder, BRAND-STATE.md, FACTS.md and the data folder in
+   the prompt skeleton of [prompt-fragments.md](../prompt-fragments.md). It runs the checks (`contrast` on at least six
+   pairs, `logo-sheet`, `fontcheck`, `shot`) and reports done / partly / not done per item, no-decision fixes and
+   "Decisions for you". It edits nothing.
+3. You apply the no-decision fixes (or argue in one line), re-run the checks, and show the board at G3 with the
+   decisions. Without the yes, you do step 2 yourself, honestly. Details: [fleet.md](../fleet.md).

@@ -195,6 +195,29 @@ All phases run in this thread: research with WebSearch/WebFetch, one designer pa
 own comparative read as the judge. Subagents and workflows are optional speed-ups for Standard and Full projects,
 only after the fleet gate. When `disableWorkflows` is set, nothing changes except speed.
 
+## Fleets and workflows (opt-in, after the fleet gate)
+
+Single-thread stays the default. When a fleet would help (Standard or Full; a round of 3 or 4 directions, a lens panel,
+a naming fan-out, an adoption across repositories), propose it and wait:
+
+1. Fill the workflow's arguments and run `brand-creator --data "${CLAUDE_PLUGIN_DATA}" fleet-plan <workflow> --args @<file>
+   --session-model <your model>` (nothing is launched; exit 1 = refused or above your model).
+2. State the agent count, the models that will actually run (your session model is the ceiling; `args.ceiling` caps
+   every agent to it; `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` overrides the agent files), the size guideline and a rough
+   cost (about one single-thread pass per agent), and that you will do it here if they prefer.
+3. Only after an explicit yes, run the workflow `/brand-creator:<workflow>` with those arguments as its `args` and
+   `approved_agents` set to the approved number. Read the result, then carry on at the gate the workflow stops before.
+
+| Workflow | When | Default agents |
+|---|---|---|
+| `directions` | round 1 or a reset round (`inventory: true` adds the P1c survey) | 3 designers + judge = 4 |
+| `review-panel` | `/brand-creator:review panel` | 3 lenses + judge = 4 |
+| `naming` | P2 with an open name | 2 hunters + screener + judge = 4 |
+| `adopt` | P11 after G6 | implementer + reviewer per repository |
+
+Refinement is a main-thread loop with at most one `brand-creator:brand-reviewer` call per round. Agents, models,
+arguments, resume and the refine loop: [fleet.md](references/fleet.md).
+
 ## Recording state
 
 - `... state --project <dir>`: summary. `--json`: everything. `--get tier`.
@@ -267,6 +290,7 @@ Full file contract: `${CLAUDE_PLUGIN_ROOT}/scripts/CONTRACT.md`. Templates: `${C
 - [cascade.md](references/cascade.md): what to update when a rule, token or lockup changes.
 - [regulated-industries.md](references/regulated-industries.md): professions with promotion or naming rules.
 - [prompt-fragments.md](references/prompt-fragments.md): the prompt skeleton for designer, judge and reviewer passes.
+- [fleet.md](references/fleet.md): the opt-in workflows and agents, the fleet gate in full, model ceiling, the refine loop, resume.
 - [ai-defaults.json](references/ai-defaults.json): the reflex list every direction is tested against.
 - [platform-specs.md](references/platform-specs.md): every platform size the emitters use, with source, date and status V, R or U (generated from `scripts/emitters/platform-specs.json`; never edited by hand).
 - [examples/acme/README.md](references/examples/acme/README.md): a synthetic worked brand (state, decisions, round 1 page, map).

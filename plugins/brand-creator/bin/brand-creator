@@ -90,6 +90,11 @@ names
   names <candidate>...    screen names: domains (RDAP, whois, DNS), npm, GitHub, Docker Hub, PyPI, crates.io, Homebrew; trademark links
                           (screening, not clearance; needs --yes after the owner agrees to send the names to the listed services)
 
+fleets (opt-in, stage 6)
+  fleet-plan <workflow>   dry-run an opt-in workflow (directions, review-panel, naming, adopt) with stub agents: the agent count,
+                          the models that will actually run (session model as the ceiling, FORCE env), the size guideline and
+                          a rough cost, before anything is launched; --check lints every workflow and agent file
+
 environment
   setup [--yes]           show what will be downloaded, then install dependencies into the data dir
   prereq --for <tier>     report MISSING / what it blocks / install command (quick|standard|full|apple|print|names|adoption)
@@ -191,6 +196,7 @@ case "$sub" in
       *)      die "unknown emit target: $target (this version has: web, social, apple, windows, linux, tray, tauri, wallet, developer, android, chrome-ext, msix, print, presskit, profiles)" ;;
     esac ;;
   names)      py check_names.py "$@" ;;
+  fleet-plan) js fleet_plan.mjs "$@" ;;
   smoke)      need bash "smoke test" ""; exec bash "$ROOT/tests/smoke/acme.sh" "$@" ;;
   *)          usage >&2; die "unknown subcommand: $sub" ;;
 esac

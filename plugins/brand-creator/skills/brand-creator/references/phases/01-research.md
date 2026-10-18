@@ -9,6 +9,7 @@
 - [Gate](#gate)
 - [Pitfalls](#pitfalls)
 - [Enforcement](#enforcement)
+- [Fleet option: research fan-out](#fleet-option-research-fan-out)
 
 ## Goal
 
@@ -63,7 +64,7 @@ Copy a template into the project, then fill it; never edit the plugin's copy. Se
 3. **Re-fetch and try to refute the load-bearing claims.** A claim is load-bearing when it changes a board, a gate,
    copy or a size. Open its primary source again, look for the version, date or exception that would make it wrong,
    and keep it only if it survives; correct or drop it otherwise, and say which. In a single thread do this as a
-   separate pass after drafting, not while you write the claim. With an approved fleet a separate verifier does it.
+   separate pass after drafting, not while you write the claim. With an approved fleet a separate `brand-researcher` call does it as the verifier.
 4. **Turn findings into brief lines.** A surviving constraint becomes a Gating goal or Constraints line in BRIEF.md
    (for example: a bare placeholder page is risky for a store review, so the legal footer is mandatory from day one).
    Every board is checked against those lines.
@@ -157,3 +158,12 @@ board otherwise.
   for product-in-family (`project:inventory`), and requires the positioning map with one far direction in round 1.
 - Script: `brand-creator shot` counts every "Forbidden" bullet of BRIEF.md and `research/cliches.md` in four views.
 - Prose: claim tiers, the re-fetch pass, the search plan and the lineup reuse are judgement and are not scripted.
+
+## Fleet option: research fan-out
+
+With the owner's yes at the fleet gate, P1a can fan out: up to three `brand-creator:brand-researcher` agents (one angle
+each, the CLAIMS schema with source tiers), then one more `brand-creator:brand-researcher` call as the refuting verifier: it re-fetches the load-bearing
+claims and tries to refute them (it is the agent with WebFetch; `brand-reviewer` has no web tools and would only be able to
+check against sources already saved in the project). No workflow file ships for this; use the Agent tool with those agent types
+([fleet.md](../fleet.md), "A fleet without a workflow"). P1c can run as the read-only `brand-creator:brand-inventory`
+agent, or as the first stage of the `directions` workflow (`inventory: true`); you write `INVENTORY.md` from its rows.
