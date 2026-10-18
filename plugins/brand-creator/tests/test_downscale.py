@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from helpers import ROOT, bc, downscale_report, failing, make_project, mutate_json, report
+from helpers import OFF_MAC_DOWNSCALE, ROOT, bc, downscale_report, failing, make_project, mutate_json, report
 
 from px_lib import Img
 
@@ -35,8 +35,11 @@ def results(proj):
     return {r["id"]: r for r in downscale_report(proj)["results"]}
 
 
+# Off macOS there is no sips, so a call that is not about the method must name one (pillow: every master here is a PNG). The tests of the
+# default method itself (`macos`-marked) and of the opt-in rules call bc() or pass --renderer / --record-renderer themselves.
 def run(proj, *extra):
-    return bc("downscale", *extra, project=proj)
+    method = [] if {"--renderer", "--record-renderer"} & set(extra) or any(e.startswith("--renderer=") for e in extra) else OFF_MAC_DOWNSCALE
+    return bc("downscale", *method, *extra, project=proj)
 
 
 @pytest.fixture
@@ -262,3 +265,16 @@ def test_off_macos_a_png_master_works_with_explicit_pillow(proj, tmp_path):
     r = off_macos(proj, "--renderer", "pillow", "--source", "assets/logo/grid-mark-master.png", "--sizes", "16", data=tmp_path)
     assert r.returncode == 0, r.stdout + r.stderr
     assert "pillow (Lanczos) (explicit --renderer)" in downscale_report(proj)["renderer"]
+
+
+def test_off_macos_a_usage_error_is_exit_2_not_exit_3(proj, tmp_path):
+    """Found by the Linux run: with no renderer named, 'this system cannot measure' (exit 3) was reported before a missing source, bad sizes,
+    a path outside the project or `--record-renderer` without a renderer (all exit 2 on a Mac). Usage errors now come first, everywhere."""
+    state_before = (proj / "BRAND-STATE.md").read_text()
+    for args, what in ((["--source", "assets/logo/missing.png"], "source not found"),
+                       (["--sizes", "16,zero", "--source", "assets/logo/grid-mark-master.png"], "size"),
+                       (["--record-renderer", "--source", "assets/logo/grid-mark-master.png"], "needs an explicit --renderer"),
+                       (["--source", str(tmp_path / "o.png")], "outside the project")):
+        r = off_macos(proj, *args, data=tmp_path)
+        assert r.returncode == 2 and what in r.stderr, (args, r.returncode, r.stderr)
+    assert (proj / "BRAND-STATE.md").read_text() == state_before   # nothing was recorded

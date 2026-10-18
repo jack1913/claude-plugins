@@ -1,0 +1,102 @@
+# Continuous integration for the brand-creator plugin. Nothing here runs until the repository is pushed to a host that runs it.
+#
+#   linux     builds tests/docker/Dockerfile (Debian 13, Python 3.13, Node 24, resvg, ImageMagick, Ghostscript, poppler, ripgrep,
+#             potrace, fonts) and runs tests/docker/run.sh: `brand-creator setup` (npm ci + Chromium), pytest, node:test and the Acme
+#             smoke on the paths that apply off macOS. The macOS-only tests are NOT VERIFIED there by design; tests/docker/verify_log.py
+#             accepts exactly those and fails on any other skip.
+#   validate  `claude plugin validate --strict` (the manifest, skills, agents, hooks), through the Claude Code CLI installed from npm,
+#             plus the test that mutates a manifest and expects the validator to catch it. If the CLI cannot be installed or started
+#             (no registry access), the job says so and SKIPS: a skip is printed, never a pass.
+#   macos     the Apple-tool tests (requires_macos, requires_actool: sips, iconutil, actool, assetutil, the .icon pipeline) and the Acme
+#             smoke with `emit apple`, with BRAND_CREATOR_REQUIRE_ALL=1 so a missing tool fails instead of skipping.
+#
+# `claude plugin eval` is never run here (it is billed); the evals are run by hand, see dev/MANUAL-CHECKS.md.
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The Claude Code version the plugin was validated with; the stated minimum is MIN_CLAUDE in scripts/prereq.py.
+  CLAUDE_CODE_VERSION: "2.1.302"
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build the Linux image and run the suite and the Acme smoke inside it
+        run: tests/docker/run.sh
+        env:
+          BRAND_CREATOR_TEST_WORKERS: "4"
+
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+      - uses: astral-sh/setup-uv@v6
+      - name: Install the Claude Code CLI
+        id: claude
+        run: |
+          if npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" && claude --version; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=claude plugin validate SKIPPED::the claude CLI could not be installed here; the manifest was NOT validated"
+          fi
+      - name: claude plugin validate --strict
+        if: steps.claude.outputs.available == 'true'
+        run: claude plugin validate "$GITHUB_WORKSPACE" --strict
+      - name: The validator catches a broken manifest (mutation test)
+        if: steps.claude.outputs.available == 'true'
+        run: uv run --no-project --with pytest python -m pytest tests/test_static.py -q -k claude_plugin_validate
+        env:
+          BRAND_CREATOR_REQUIRE_ALL: "1"
+
+  macos:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+      - name: Install the tools the plugin documents
+        run: brew install uv resvg imagemagick ghostscript poppler ripgrep potrace
+      - name: Select the newest Xcode (the Icon Composer .icon pipeline needs Xcode 26 or later)
+        run: |
+          newest="$(ls -d /Applications/Xcode*.app | sort -V | tail -n 1)"
+          echo "using $newest"
+          sudo xcode-select -s "$newest"
+          xcodebuild -version
+          xcrun --find actool
+      - name: brand-creator setup (npm ci, Chromium)
+        run: bin/brand-creator --data "$RUNNER_TEMP/bc-data" setup --yes
+      - name: Apple-tool tests (a missing Apple tool is a failure here, not a skip)
+        run: uv run --no-project --with pytest --with pytest-xdist python -m pytest tests -q -n 3 -m "requires_macos or requires_actool"
+        env:
+          BRAND_CREATOR_DATA: ${{ runner.temp }}/bc-data
+          BRAND_CREATOR_REQUIRE_ALL: "1"
+      - name: Acme smoke (the macOS path: emit apple, actool per platform, sips)
+        run: |
+          set -o pipefail
+          tests/smoke/acme.sh | tee "$RUNNER_TEMP/smoke.log"
+          # the only thing that may be NOT VERIFIED is the eval loader check (the claude CLI is not installed in this job)
+          if grep 'NOT VERIFIED' "$RUNNER_TEMP/smoke.log" | grep -v 'the claude CLI is not on PATH'; then echo "unexpected NOT VERIFIED in the smoke" >&2; exit 1; fi
+        env:
+          BRAND_CREATOR_DATA: ${{ runner.temp }}/bc-data
+          ACME_SMOKE_DIR: ${{ runner.temp }}/acme-smoke

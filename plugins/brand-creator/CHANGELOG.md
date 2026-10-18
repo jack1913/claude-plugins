@@ -193,3 +193,13 @@ All notable changes are listed here. The plugin version in `.claude-plugin/plugi
   `tray/tray.json`, `qa/rules.json`) once, and the staleness globs cover FACTS.md, INVENTORY.md and `tray/*.json`. Rows and files of slots
   an emitter no longer writes are moved to `removed-<date>/` and reported. A run that stops through an error rewrites its report as failed.
   `emit developer` gains `--content-fraction`.
+
+### Stage 7
+
+- Stage 7 (Linux run): `tests/docker/` (Dockerfile on Debian 13, `run.sh`, `in-container.sh`, `verify_log.py`) runs setup, pytest, node:test and the Acme
+  smoke on Linux and accepts only the macOS-only NOT VERIFIED skips; `.github/workflows/ci.yml` (Linux, `claude plugin validate --strict`, macOS Apple-tool
+  tests; runs once pushed). Bugs the Linux run found and fixed: the fonts control used one CJK character, so `fontcheck` was never verified on a box with no CJK
+  font (it now tries eight candidates); `downscale` reported "no system downscaler" (exit 3) before bad arguments (exit 2); `finish.sh` had no way to name the
+  off-macOS opt-ins (`ICNS_RENDERER`, `DOWNSCALE_RENDERER`); four install hints named only `brew`; a Chromium that could not start for missing system
+  libraries said "re-run setup" (it now names the libraries). Tests and the smoke no longer assume sips, iconutil, `/usr/bin` without ripgrep or poppler,
+  Homebrew's Ghostscript layout or resvg 0.48 anti-aliasing.

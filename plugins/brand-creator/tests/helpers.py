@@ -19,7 +19,27 @@ sys.path.insert(0, str(ROOT / "scripts" / "printlib"))
 sys.path.insert(0, str(ROOT / "scripts" / "adaptlib"))
 
 
+# Off macOS there is no sips: a downscale of a PNG master names the explicit Pillow opt-in, an `emit tauri` its .icns writer.
+OFF_MAC_DOWNSCALE = [] if sys.platform == "darwin" else ["--renderer=pillow"]
+OFF_MAC_TAURI = [] if sys.platform == "darwin" else ["--renderer", "pillow"]
+
 _FALLBACK = Path(tempfile.mkdtemp(prefix="bc-test-data-"))  # for commands that need a --data value but no dependencies
+
+
+def path_without(tmp_path: Path, *hidden: str, keep: tuple[str, ...] = ()) -> str:
+    """A PATH string that cannot find the tools named in `hidden`: a folder of symlinks to what the brand-creator entry point needs (uv, python3,
+    bash and the coreutils it calls) plus `keep`. System folders are NOT put on it: on Linux ripgrep and poppler live in /usr/bin, so a PATH
+    made of 'our folder + /usr/bin' would not hide them (only Homebrew's folder keeps them out on a Mac)."""
+    d = tmp_path / "pathbin"
+    d.mkdir(exist_ok=True)
+    for tool in ("uv", "python3", "bash", "sh", "env", "dirname", "readlink", "mkdir", "cat", "uname", "git", *keep):
+        found = shutil.which(tool)
+        if found and tool not in hidden and not (d / tool).exists():
+            (d / tool).symlink_to(found)
+    path = str(d)
+    for tool in hidden:
+        assert shutil.which(tool, path=path) is None, f"precondition: {tool} must be hidden, or the test proves nothing"
+    return path
 
 
 def data_dir() -> Path | None:

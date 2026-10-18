@@ -6,7 +6,8 @@
 #   2 tokens, contrast
 #   3 the emitters for the targets this brand has (apple needs macOS with Xcode; android, chrome-ext and msix need the Full tier; profiles, print and
 #     the social posts need Standard or Full), then print-check when print was emitted
-#   4 the gates (downscale on every master a manifest row names, states-check)
+#   4 the gates (downscale on every master a manifest row names, states-check). Off macOS there is no sips and no iconutil: set ICNS_RENDERER=pillow
+#     (emit tauri) and DOWNSCALE_RENDERER=pillow or resvg (the downscale gates) in block 2, the explicit opt-ins; without them those two steps exit 3
 #   5 verify-idempotent: the whole emit chain run twice must give byte-identical files
 #   6 the brand book when book/chapters/ exists (book, book-pdf: they read the reports of steps 4 and 5), then the press kit (Standard and Full): the kit holds book.pdf
 #   7 staleness --write (records the inputs, the plugin version and the emitter code the pack was built from), then check
@@ -50,6 +51,8 @@ case "$TIER" in
   standard|full) [ -z "$PRINT_REGION" ] || TARGETS+=(print) ;;
   *) [ -z "$PRINT_REGION" ] && [ -z "$POST_FACTS" ] || { echo "finish.sh: print and social posts are Standard and Full tier; this project's tier is '$TIER'. Raise it with the owner's agreement: brand-creator state --set tier=standard" >&2; exit 2; } ;;
 esac
+ICNS_RENDERER="${ICNS_RENDERER:-}"           # off macOS: pillow, the explicit opt-in for the Tauri .icns (no iconutil there; no 16 px entry). Empty on macOS.
+DOWNSCALE_RENDERER="${DOWNSCALE_RENDERER:-}" # off macOS: pillow (PNG masters) or resvg (SVG masters), the explicit opt-in for the downscale gates (no sips there). Empty on macOS.
 TAGLINE="${TAGLINE:-}"          # one line of copy: it must be a value in FACTS.md (social, developer, apple); empty = no line
 APP_ID="${APP_ID:-}"            # reverse-DNS app id for emit linux (AppStream); empty = the metainfo stays a stub
 MASTER_BAND="${MASTER_BAND:-}"  # band of the master a system shrinks (apple, developer), for example small; empty = the rule's pick
@@ -69,6 +72,7 @@ emit_args() {                   # sets EMIT_ARGS (an array, so every value stays
                [ -z "$PRINT_ICC" ] || EMIT_ARGS+=(--icc "$PRINT_ICC")
                [ -z "$IMAGE_BASE_URL" ] || EMIT_ARGS+=(--image-base-url "$IMAGE_BASE_URL") ;;
     linux)     [ -z "$APP_ID" ] || EMIT_ARGS+=(--app-id "$APP_ID") ;;
+    tauri)     [ -z "$ICNS_RENDERER" ] || EMIT_ARGS+=(--renderer "$ICNS_RENDERER") ;;
     apple|developer)
       [ -z "$TAGLINE" ] || EMIT_ARGS+=(--tagline "$TAGLINE")
       [ -z "$MASTER_BAND" ] || EMIT_ARGS+=(--master-band "$MASTER_BAND")
@@ -110,7 +114,7 @@ doc = json.load(open("assets/manifest.json"))
 print("\n".join(sorted({a.get("downscale_source") or a["path"] for a in doc.get("artefacts", []) if "downscale" in a.get("qa", [])})))
 ')"
 while IFS= read -r src; do
-  [ -z "$src" ] || { step "downscale $src"; "${BC[@]}" downscale --source "$src"; }
+  [ -z "$src" ] || { step "downscale $src"; "${BC[@]}" downscale --source "$src" ${DOWNSCALE_RENDERER:+--renderer "$DOWNSCALE_RENDERER"}; }
 done <<< "$SOURCES"
 [ -f qa/states.json ] && "${BC[@]}" states-check
 "${BC[@]}" verify-idempotent "${cmds[@]}"

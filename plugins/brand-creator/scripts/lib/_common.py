@@ -633,7 +633,7 @@ class Parser(__import__("argparse").ArgumentParser):
 
 # ---------------------------------------------------------------- rasterising
 
-RESVG_HINT = ("Install resvg (macOS: brew install resvg; Linux: cargo install resvg or your package manager; "
+RESVG_HINT = ("Install resvg (macOS: brew install resvg; Linux: apt install resvg (Debian 13) or cargo install resvg, or your package manager; "
               "Windows: winget install resvg or cargo install resvg), then re-run.")
 
 

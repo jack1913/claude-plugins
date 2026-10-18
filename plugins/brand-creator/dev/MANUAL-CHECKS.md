@@ -85,3 +85,18 @@ as intended, and what the client's dark mode does to it, cannot be run from here
    (`templates/print/email-signature.html`) and a new `emit print`, not a note.
 
 **Last run:** not yet.
+
+## A real Linux desktop session
+
+**Why manual.** The Docker run has no display, no `xdg-open` and no desktop font set. It proves the scripts, not what a person sees.
+
+**Steps** (a Linux machine with a desktop, the plugin installed, a throwaway brand project):
+
+1. Run a round so a board is written; the skill opens it with `xdg-open` (or prints the absolute path when that fails). Check both outcomes
+   (with `xdg-open` present, and with it removed from PATH: the path must be printed, nothing may fail).
+2. `brand-creator fontcheck --font <a font file> --lang pl` on a machine with the usual desktop fonts: the platform row must be verified
+   (control passed), not "not verified".
+3. Open `assets/_checks/logo-sheet.png` and a `shot` slice and look at them: the rendering is Chromium's on Linux, not the Mac's.
+
+Record the distribution, the date and the result here.
+

@@ -1154,3 +1154,33 @@ Known gaps (stage 6b):
     prompt's instruction plus the workflow's WARNING on the screener's own `lookups_used` report.
 629. **Review R6-5: the eval loader check cannot bill.** It relied on the runner rejecting the injected `type: zzz` grader. It now also passes
     `--max-cost-usd 0.01 -j 1` and asserts the summary line shows `$0.00` (pytest and smoke).
+
+## Stage 7: Linux run (Docker and CI)
+
+751. **The Linux image is Debian 13.** Debian 13 has resvg (0.45.1), ImageMagick 7 (`magick`, as on a Mac) and Python 3.13 in apt; Ubuntu 24.04 has no
+    resvg package and ImageMagick 6. Node 24 comes from the official tarball with its SHA-256 checked (Debian has 20), uv from its official image, everything
+    pinned by version. The image holds no plugin code and no data directory: `run.sh` copies the checkout in read-only and runs `setup` from scratch inside
+    the container, so the user's own setup path is what is tested. A non-root user runs it, so permission-dependent behaviour is real.
+752. **The container run does not set REQUIRE_ALL.** Off macOS the `requires_macos` and `requires_actool` tests are NOT VERIFIED by design; REQUIRE_ALL would
+    fail them. `tests/docker/verify_log.py` replaces it with an allow-list of skip reasons (not macOS, actool, the claude CLI, the denylist when none was
+    mounted) and fails on any other skip, any failure, a node skip or a smoke that did not print SMOKE PASSED. The banner and counts are printed verbatim.
+753. **No claude CLI in the image.** The smoke and `test_evals` call `claude plugin eval` (the free loader check) when the CLI exists; the container run must
+    not start it. Those two tests and the loader step are NOT VERIFIED on Linux, listed as such. CI's `validate` job installs the CLI from npm for
+    `claude plugin validate --strict` and the manifest-mutation test only, and skips with a printed warning when it cannot be installed.
+754. **Fonts control: first candidate that falls back.** Chromium falls back only when some installed font holds the character; on a system with no CJK
+    font the old single control (hiragana) made `fontcheck`'s platform report "not verified" for ever. `render.mjs fonts` now renders eight candidates (the
+    five of before, then Greek, Cyrillic, Arabic) and the control is the first that Chromium really replaced. A font that holds all eight still fails the
+    control (tested). The control proves the system has some fallback, as before; it never proved more.
+755. **Usage errors first.** `downscale` resolved the method (exit 3 off macOS without an opt-in) before it checked `--record-renderer`, the sizes and the
+    source, so the same bad call was exit 2 on a Mac and exit 3 on Linux. Validation now comes first. The method flags and their meaning are unchanged.
+756. **`finish.sh` names the off-macOS opt-ins as variables.** `ICNS_RENDERER` (emit tauri) and `DOWNSCALE_RENDERER` (the gates), both empty on macOS, passed as
+    `--renderer`. Unset off macOS the two steps exit 3 with the emitter's own message: the chain does not choose a renderer for the owner.
+757. **Chromium libraries.** When the headless shell cannot start, `render.mjs` runs `ldd` on it (Linux only) and names the missing libraries and Playwright's
+    `install-deps` command, instead of "re-run setup", which cannot help. Found by purging libnss3 and libgbm in the container.
+758. **Tests that hid a tool with "/usr/bin".** The ripgrep and pdftotext "missing tool" tests put `/usr/bin:/bin` on PATH, which is where Linux keeps both.
+    `helpers.path_without()` builds a PATH of symlinks to what the entry point needs and leaves the hidden tool out. The ICC lookup (tests and smoke) also
+    looks in Debian's `/usr/share/color/icc/ghostscript`. The guide-colour test accepts the colour or its anti-aliased blend (resvg 0.45 blends, 0.48 does not).
+759. **CI is written, not run.** Action versions are pinned by major tag (`@v5`, `@v6`) and were not checked online from here; the macOS job selects the newest
+    Xcode on the runner and runs only the Apple-tool tests and the smoke (the whole suite already runs in the Linux job and on the owner's Mac). The Xcode
+    build the Apple emitters were tested against (`prereq.TESTED_XCODE_BUILD`) may not be on a hosted runner: `prereq` warns, the tests decide.
+

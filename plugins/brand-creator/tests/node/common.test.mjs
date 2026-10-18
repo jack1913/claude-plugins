@@ -133,3 +133,42 @@ test("dataDir requires BRAND_CREATOR_DATA", () => {
     process.env.BRAND_CREATOR_DATA = saved;
   }
 });
+
+test("missingSharedLibs names the libraries ldd cannot find, and only on Linux", () => {
+  const lddOut = [
+    "\tlinux-vdso.so.1 (0x0000ffff8a1b0000)",
+    "\tlibnss3.so => not found",
+    "\tlibgbm.so.1 => not found",
+    "\tlibnss3.so => not found",   // listed twice: reported once
+    "\tlibc.so.6 => /lib/aarch64-linux-gnu/libc.so.6 (0x0000ffff89e00000)",
+  ].join("\n");
+  const calls = [];
+  const fake = (cmd, args) => { calls.push([cmd, ...args]); return { status: 0, stdout: lddOut, stderr: "" }; };
+  assert.deepEqual(C.missingSharedLibs("/x/chrome-headless-shell", { run: fake, platform: "linux" }), ["libgbm.so.1", "libnss3.so"]);
+  assert.deepEqual(calls, [["ldd", "/x/chrome-headless-shell"]]);
+  // a complete system, a failing ldd, no ldd at all, another OS and no binary: nothing is invented
+  assert.deepEqual(C.missingSharedLibs("/x/y", { run: () => ({ status: 0, stdout: "\tlibc.so.6 => /lib/libc.so.6 (0x1)\n" }), platform: "linux" }), []);
+  assert.deepEqual(C.missingSharedLibs("/x/y", { run: () => ({ error: new Error("ENOENT"), stdout: null }), platform: "linux" }), []);
+  assert.deepEqual(C.missingSharedLibs("/x/y", { run: fake, platform: "darwin" }), []);
+  assert.deepEqual(C.missingSharedLibs(null, { run: fake, platform: "linux" }), []);
+});
+
+test("findHeadlessShell finds the binary setup installed and says null when it is not there", () => {
+  const base = tmpdir("bc-node-browsers-");
+  assert.equal(C.findHeadlessShell(base, "1228"), null);
+  const linux = path.join(base, "chromium_headless_shell-1228", "chrome-linux");   // the layout Playwright 1.61 unpacks on Linux (seen in the Docker run)
+  fs.mkdirSync(linux, { recursive: true });
+  fs.writeFileSync(path.join(linux, "headless_shell"), "#!/bin/sh\n");
+  assert.equal(C.findHeadlessShell(base, "1228"), path.join(linux, "headless_shell"));
+  const mac = path.join(base, "chromium_headless_shell-1300", "chrome-headless-shell-mac-arm64");
+  fs.mkdirSync(mac, { recursive: true });
+  fs.writeFileSync(path.join(mac, "chrome-headless-shell"), "#!/bin/sh\n");
+  assert.equal(C.findHeadlessShell(base, "1300"), path.join(mac, "chrome-headless-shell"));
+  assert.equal(C.findHeadlessShell(base, "9999"), null);
+});
+
+test("render.mjs reports missing system libraries instead of telling the user to re-run setup", () => {
+  const src = fs.readFileSync(path.join(ROOT, "scripts/render.mjs"), "utf8");
+  assert.match(src, /missingSharedLibs\(findHeadlessShell\(setup\.browsers_path, setup\.chromium_revision\)\)/);
+  assert.match(src, /this system lacks shared libraries it needs/);
+});

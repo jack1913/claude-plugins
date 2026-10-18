@@ -185,7 +185,7 @@ def icc_info(path: Path) -> dict:
 def need_gs() -> str:
     gs = shutil.which("gs")
     if not gs:
-        fail(EXIT_CANNOT, "gs (Ghostscript) not found: it outlines the text of a print PDF. Install it (macOS: brew install ghostscript), "
+        fail(EXIT_CANNOT, "gs (Ghostscript) not found: it outlines the text of a print PDF. Install it (macOS: brew install ghostscript; Linux: apt install ghostscript; Windows: winget install ArtifexSoftware.GhostScript), "
                           "then re-run. Run: brand-creator prereq --for print")
     return gs
 
@@ -376,7 +376,7 @@ def inspect_pdf(path: Path) -> dict:
 def pdfinfo_boxes(path: Path) -> dict:
     """The boxes as poppler's pdfinfo reads them (pt, two decimals): an oracle independent of the pikepdf that wrote them."""
     if not shutil.which("pdfinfo"):
-        fail(EXIT_CANNOT, "pdfinfo (poppler) not found: print-check reads the boxes back with it. Install poppler (macOS: brew install poppler). "
+        fail(EXIT_CANNOT, "pdfinfo (poppler) not found: print-check reads the boxes back with it. Install poppler (macOS: brew install poppler; Linux: apt install poppler-utils; Windows: scoop install poppler). "
                           "Run: brand-creator prereq --for print")
     cp = subprocess.run(["pdfinfo", "-box", str(path)], capture_output=True, text=True, timeout=60)
     if cp.returncode != 0:
@@ -406,7 +406,7 @@ def ring_stats(path: Path, bleed_mm: float, trim_mm: tuple[float, float], scratc
     and any content in the strip do not move the answer."""
     if not shutil.which("pdftoppm"):
         fail(EXIT_CANNOT, "pdftoppm (poppler) not found: print-check rasterises the page to look at the bleed. Install poppler "
-                          "(macOS: brew install poppler). Run: brand-creator prereq --for print")
+                          "(macOS: brew install poppler; Linux: apt install poppler-utils; Windows: scoop install poppler). Run: brand-creator prereq --for print")
     scratch.mkdir(parents=True, exist_ok=True)
     base = scratch / "ring"
     cp = subprocess.run(["pdftoppm", "-r", str(RING_DPI), "-singlefile", "-f", "1", "-l", "1", str(path), str(base)],
