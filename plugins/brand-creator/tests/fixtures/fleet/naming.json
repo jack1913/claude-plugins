@@ -1,0 +1,6 @@
+{
+  "project": "/PROJECT", "plugin_root": "/PLUGIN", "data": "/DATA", "today": "2026-10-17", "ceiling": "opus", "approved_agents": 4,
+  "profile": "software", "region": "PL",
+  "context_paths": ["/PROJECT/BRAND-STATE.md", "/PROJECT/brief/BRIEF.md"],
+  "territories": ["tides and currents", "weaving", "embers"]
+}

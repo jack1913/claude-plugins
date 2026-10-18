@@ -22,6 +22,7 @@ once; a script that does not use them is wrong, not special.
 - [Brand book](#brand-book)
 - [Print, press kit and social posts](#print-press-kit-and-social-posts)
 - [Adoption, cascade, adapters, applied skill and launch](#adoption-cascade-adapters-applied-skill-and-launch)
+- [Agents and workflows](#agents-and-workflows)
 - [Testing](#testing)
 
 ## Entry point and data directory
@@ -694,6 +695,67 @@ REGISTERED, NOT-FOUND or UNKNOWN with "Checked <date>, recheck before buying"; t
 the printer's swatch gives, never "hex equals spot". With several screened candidates `--name` is required (or the project slug must be one of them). Each box carries an
 id (`<!-- id:... -->`) and the ticks of an earlier file are kept by id; a ticked box that no longer exists is reported (`launch:ticks`). The module imports no network or
 process library: nothing outward is executed, and a test compares the project tree before and after.
+
+## Agents and workflows
+
+- `agents/*.md`: plugin agents, named `brand-creator:<file name>`. Frontmatter: `name`, `description` (starts with "Only for
+  brand-creator workflows or an approved fleet; do not auto-delegate." and names the tier), `model` (`opus` or `sonnet`),
+  `tools` (an allowlist, never `Agent`), `maxTurns`, optionally `omitClaudeMd`. Never `permissionMode`, `hooks`, `mcpServers`,
+  `initialPrompt` (ignored for plugin agents) or `isolation`. The body carries the RULES line verbatim and takes every path from
+  the prompt (no plugin variables).
+- `workflows/*.js`: the first statement is `export const meta = {...}`, a pure literal whose `name` equals the file name and whose
+  `phases` match the `phase()` titles used. The body uses only `agent()`, `parallel()`, `pipeline()`, `phase()`, `log()` and
+  `args`; no clock, randomness, `import()` or `require()`. Each script checks its arguments before the first agent (exit by
+  throwing `<workflow>: <message>`), refuses a run that plans more agents than `args.approved_agents`, caps every agent above
+  `args.ceiling` with a per-call model, filters fan-out results with `.filter(Boolean)` and guards every awaited `null`.
+  `const RULES` holds the RULES line verbatim and `const AGENT_TIER` the tiers of the agent files.
+- `brand-creator fleet-plan <workflow> --args <json | @file> [--session-model <m>] [--json]` (`scripts/fleet_plan.mjs`, no
+  dependencies, no project needed): runs the script in a `node:vm` sandbox with stub hooks (the stub agent answers with the
+  smallest value its schema allows; `Date.now()`, `Math.random()` and `new Date()` throw as in the runtime) and prints every
+  agent it would start, the model each will run on (per-call model > agent file > `CLAUDE_CODE_SUBAGENT_MODEL` > the session
+  model; `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1` makes it `CLAUDE_CODE_SUBAGENT_MODEL` or the session model), the size guideline
+  (small under 5, medium under 10, large under 50) and the sum of `maxTurns`. Exit 0 = a valid plan, 1 = the script refuses
+  the arguments, an agent would run above the session model or an agent type is unknown, 2 = usage. `fleet-plan --check`
+  runs the static checks over every workflow and agent file (exit 1 on any problem). It writes no report: it is a plan, not a
+  gate over project artefacts.
+
+## Agents and workflows: review fixes (stage 6)
+
+- Designer snapshot: `snapshot take` and `snapshot verify` both get `--ignore '*rounds/<round>/*' --ignore '*assets/_checks/*'`; the designer's
+  answer lists its `screenshots` (required, at least one), the judge reads those and never the shared `shot.json`.
+- `adopt`: the prompt names `MODE: apply|fix`; a fix run says the branch exists and snapshots as `adopt-fix-<label>`; the implementer may start on a
+  dirty tree only for a fix run or a resume of its own step.
+- Agent tools are the only enforced privacy boundary: `brand-namer` (Read, Grep, Glob, Bash) runs the naming hunters, and the screener while
+  `lookups_ok` is false. Bash stays an instruction, not a tool limit. The refuting research verifier is `brand-researcher`; `brand-reviewer` has no web
+  tools.
+
+## Behaviour evals
+
+`evals/<case>/` follows the `claude plugin eval` format (docs: "Test plugins with evals"): `prompt.md` (frontmatter `name`, `description`,
+`tags`, `max_turns`, `timeout_seconds`, `runs`, `allowed_tools`, `expected_outcome`; the body is the prompt), `case.yaml` (only
+`schema_version: "1.1"`, `name` and `context.scaffold_script`) and `graders/<name>.md`. Cases that need an empty workspace have no
+`case.yaml`. They are opt-in, billed and never run by `tests/run-all.sh` or the smoke test; the README ("Running the evals") has the
+commands. Conventions:
+
+- **Fixtures.** `evals/_shared/fixture.sh` holds the builders (`fx_r1_shown`, `fx_before_r1`, `fx_refine`, `fx_judge`, `fx_cascade`,
+  `fx_adoption`, `fx_commit`, `fx_brief_family`, `fx_brief_solo`); each `scaffold.sh` sources it by its own path and calls one. They copy
+  the synthetic Acme worked brand (without its README, which narrates round 1), write `BRAND-STATE.md` from variables and use no
+  network. A run's workspace is the project root, so step 0 finds `BRAND-STATE.md` at once.
+- **Harness note.** The two cases that must prove "nothing was written" (adoption target, git state) end their prompt with a note asking
+  the run to execute `bash .eval-verify/verify.sh > verify-result.txt`; a regex grader reads the file (`cmp` of every file against
+  the pristine copy; commit, stash, worktree and branch counts). The tool-call graders are the first line, the file is the proof.
+- **Graders.** `tool_used` matches `input_match` against the call's JSON-encoded input, so a quote inside a shell command is
+  `\"`: use `.*` or `[^;&|]*`, never `[^"]*`. "Never called" needs `min: 0` and `max: 0` (`min` defaults to 1, so `max: 0` alone can
+  never pass). Case-insensitivity in a `tool_used` pattern is written with character classes (`[Qq]uick`); `regex` graders take
+  `flags: i`. A regex over `trace` also sees the skill text and tool results, so graders on what the agent said use
+  `last_message` or a question tool's input. At most one `llm` grader per case, with PASS and FAIL conditions.
+- **Static tests (`tests/test_evals.py`).** Layout and limits (`max_turns` >= 40), grader keys (the runner silently ignores a
+  misspelt grader key, so the key sets are checked), `min <= max`, skills, subcommands, flags and board attributes the graders name
+  exist, file graders point at files the scaffold or the documented layout makes, a grader over a fixture file is not already
+  satisfied by the untouched fixture, sample inputs for every key regex in the runner's JSON-encoded form, the verify scripts
+  against real mutations (each asserted to have applied), and, when `claude` is on PATH, the real loader: a copy of the suite gets one
+  invalid grader per case so that every case is loaded and nothing runs (the load error must name only the injected grader).
+- Not covered by any of this: whether the agent behaves as graded. That is what a billed run measures.
 
 ## Testing
 

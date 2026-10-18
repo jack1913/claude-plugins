@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: single-thread-no-agent-before-fleet-approval
+context:
+  scaffold_script: scaffold.sh

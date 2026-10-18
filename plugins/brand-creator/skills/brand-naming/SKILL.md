@@ -32,6 +32,7 @@ RULES: work under the round/project dir only; never edit adoption targets before
 - [Step 11: verdict memo and Launch TODO seed](#step-11-verdict-memo-and-launch-todo-seed)
 - [Step 12: G1, the owner picks](#step-12-g1-the-owner-picks)
 - [Pitfalls](#pitfalls)
+- [Fleet option: the naming workflow](#fleet-option-the-naming-workflow)
 
 ## Step 0: project and path
 
@@ -219,3 +220,13 @@ never do them yourself.
 - **UNKNOWN reported as fine.** A cell the checker could not establish is not verified, and the memo says so.
 - **Descriptive names because the domain is unused.** They are the weakest to protect; flag them.
 - **Too many runs.** Re-running the checker for every idea hits rate limits; filter and kill first, screen once.
+
+## Fleet option: the naming workflow
+
+With the owner's yes at the fleet gate, steps 3 to 11 can run as the `naming` workflow: two
+`brand-creator:brand-namer` hunters (style groups; the offline agent, no web tools), one screener (also `brand-namer`
+until the privacy OK, `brand-creator:brand-researcher` after it), one `brand-creator:brand-judge` for the verdicts; 4
+agents. Without the owner's privacy OK (step 7) `lookups_ok` stays false: nobody types a candidate
+into a website and the name checker runs with `--plan` only; set it to true only after that OK. You write the memo and
+stop at G1. State the numbers from `brand-creator --data "${CLAUDE_PLUGIN_DATA}" fleet-plan naming --args @<file>
+--session-model <your model>` first. Details: [fleet.md](../brand-creator/references/fleet.md).

@@ -12,7 +12,8 @@
 # -> print and press (print PDFs trim + 2 x bleed, boxes, outlined text, RGB proof label, print-check with four mutations, a PDF/X-4 candidate only with --icc, press kit, social posts)
 # -> adoption (a synthetic target repository surveyed read only, pins, progress), check --cascade, BRAND.md and DESIGN.md (linted), the applied skill, LAUNCH.md
 # -> names (offline replay) -> brand-assets standalone entry (existing mark into ./brand-assets/: srgb tokens, audit, owner decisions, web +
-# windows packs, check).
+# windows packs, check) -> fleets (fleet-plan dry runs of the opt-in workflows, the designers' snapshot guard; no model is called)
+# -> evals (every behaviour case's scaffold builds a valid fixture project; the real `claude plugin eval` loader accepts every case; nothing is run or billed).
 # The r1 page is the worked example filled from templates/round-page.html (three directions). A previous smoke folder
 # is moved aside (to <parent>/removed/), never deleted.
 set -euo pipefail
@@ -917,6 +918,100 @@ assert not re.search(r"(?i)\b(available|free|clear|cleared)\b", t) and "granite"
 assert len([ln for ln in t.splitlines() if ln.startswith("| shop | `")]) == 5 and "`oldco-app`" in t     # the rename list is the survey's identifiers
 PY
 ok "LAUNCH.md: trademark first, dated domains and handles, the survey's renames; never 'available'; byte-identical on a second run; nothing outward executed"
+
+step "fleets (opt-in): agent and workflow lint, the fleet plan of every workflow (dry run, no model is called), the designers' snapshot guard"
+"${BC[@]}" fleet-plan --check >/dev/null || { "${BC[@]}" fleet-plan --check | tail -n 8; die "fleet-plan --check failed"; }
+FL="$SMOKE/fleet"; mkdir -p "$FL/repos/shop"
+for w in directions review-panel naming adopt; do
+  python3 - "$ROOT/tests/fixtures/fleet/$w.json" "$FL/$w.json" "$P" "$ROOT" "$BRAND_CREATOR_DATA" "$FL/repos" <<'PY'
+import sys
+src, out, project, plugin, data, repos = sys.argv[1:]
+t = open(src).read().replace("/PROJECT", project).replace("/PLUGIN", plugin).replace("/DATA", data).replace("/REPOS", repos)
+open(out, "w").write(t)
+PY
+  "${BC[@]}" fleet-plan "$w" --args "@$FL/$w.json" --json > "$FL/$w.plan.json" || die "fleet-plan $w refused the fixture arguments"
+done
+python3 - "$FL" <<'PY' || die "a fleet plan is wrong"
+import json, sys
+want = {"directions": 4, "review-panel": 4, "naming": 4, "adopt": 2}
+for w, n in want.items():
+    p = json.load(open(f"{sys.argv[1]}/{w}.plan.json"))
+    assert p["agents"] == n and p["guideline"] == "small (under 5)" and not p["refused"] and not p["above_session"], (w, p)
+    assert all(c["agent"].startswith("brand-creator:brand-") for c in p["calls"]), w
+PY
+ok "fleet-plan: directions 4, review-panel 4, naming 4, adopt 2 agents (size guideline small); every agent type exists"
+set +e; "${BC[@]}" fleet-plan directions --args "@$FL/directions.json" --session-model sonnet >/dev/null 2>&1; rc=$?; set -e
+[ "$rc" = 1 ] || die "opus designers in a sonnet session must fail the plan unless args.ceiling caps them (exit $rc)"
+python3 -c "import json,sys;a=json.load(open(sys.argv[1]));a['inventory']={'repos':[{'label':'shop','path':sys.argv[2]}]};json.dump(a,open(sys.argv[3],'w'))" "$FL/directions.json" "$FL/repos/shop" "$FL/directions-inv.json"
+set +e; out="$("${BC[@]}" fleet-plan directions --args "@$FL/directions-inv.json" 2>&1)"; rc=$?; set -e
+[ "$rc" = 1 ] && grep -q "plans 5 agents but args.approved_agents is 4" <<<"$out" || die "inventory on with 4 approved agents must be refused before any agent starts (exit $rc)"
+ok "the session model is a ceiling (sonnet session: plan fails until capped); a 5-agent run with 4 approved is refused"
+G="$SMOKE/fleet-guard"; cp -R "$P" "$G"
+node --input-type=module - "$ROOT/scripts/fleet_plan.mjs" "$ROOT/workflows/directions.js" "$FL/directions.json" "$G" "$P" > "$FL/guard.cmds" <<'JS' || die "cannot read the designer prompt"
+import { pathToFileURL } from "node:url";
+import fs from "node:fs";
+const [mod, wf, argsFile, guard, project] = process.argv.slice(2);
+const F = await import(pathToFileURL(mod).href);
+const r = await F.dryRun(wf, JSON.parse(fs.readFileSync(argsFile, "utf8")));
+const p = r.calls.find((c) => c.label === "Compass").prompt;
+const take = /first run (brand-creator .+?--project "[^"]+")/.exec(p)[1].split(project).join(guard);
+console.log(take);
+JS
+take="$(head -n 1 "$FL/guard.cmds")"
+grep -q -- "--ignore '\*rounds/r1/\*'" <<<"$take" || die "the designer's snapshot command has no round ignore: $take"
+grep -q -- "--ignore '\*assets/_checks/\*'" <<<"$take" || die "the designer's snapshot command does not ignore the shot report (assets/_checks/): $take"
+IGN=(--ignore '*rounds/r1/*' --ignore '*assets/_checks/*')   # the verify takes the same two options the prompt tells the designer to repeat
+snap="$(PATH="$ROOT/bin:$PATH" bash -c "$take" | sed -n 's/.* -> //p')"; [ -s "$snap" ] || die "the designer's snapshot command wrote nothing ($take)"
+mkdir -p "$G/rounds/r1/compass"; cp "$P/rounds/r1/board.html" "$G/rounds/r1/compass/board.html"
+# the prompt's own TEST step: shot rewrites assets/_checks/shot.json, which must not trip the verify
+"${BC[@]}" shot rounds/r1/compass/board.html --project "$G" --out "$SMOKE/fleet-guard-shots" --dsf 1 >/dev/null || die "the designer's own shot step failed on its board"
+[ -s "$G/assets/_checks/shot.json" ] || die "shot wrote no report, so the guard step proves nothing"
+"${BC[@]}" snapshot verify "$snap" "${IGN[@]}" --project "$G" >/dev/null || die "a board inside the designer's round plus the shot report must pass the snapshot verify"
+set +e; "${BC[@]}" snapshot verify "$snap" --ignore '*rounds/r1/*' --project "$G" >/dev/null 2>&1; rc=$?; set -e
+[ "$rc" = 1 ] || die "mutation check: without the _checks ignore the shot report must show as a change (exit $rc)"
+printf '\n- added by a stray agent\n' >> "$G/FACTS.md"
+set +e; "${BC[@]}" snapshot verify "$snap" "${IGN[@]}" --project "$G" >/dev/null 2>&1; rc=$?; set -e
+[ "$rc" = 1 ] || die "a write outside the round (FACTS.md) must fail the designer's snapshot verify (exit $rc)"
+ok "the designer prompt's own snapshot command: a board plus its shot report pass, an edited FACTS.md fails (and the shot report alone trips the verify without the _checks ignore)"
+
+step "evals (opt-in behaviour cases): every scaffold builds its fixture, the verify scripts see the untouched state, the real loader reads every case; no case is run"
+EV="$SMOKE/evals"; mkdir -p "$EV"; n_cases=0
+for c in "$ROOT"/evals/*/; do
+  name="$(basename "$c")"; case "$name" in _*|results) continue;; esac
+  n_cases=$((n_cases+1)); [ -s "$c/prompt.md" ] && [ -d "$c/graders" ] || die "evals/$name: prompt.md or graders/ missing"
+  if [ -f "$c/case.yaml" ]; then
+    w="$EV/$name"; mkdir -p "$w"; (cd "$w" && bash "$c/scaffold.sh") || die "evals/$name: the scaffold failed"
+    if [ -f "$w/BRAND-STATE.md" ]; then "${BC[@]}" state --project "$w" >/dev/null || die "evals/$name: the fixture is not a brand project"; fi
+    if [ -f "$w/.eval-verify/verify.sh" ]; then
+      out="$(bash "$w/.eval-verify/verify.sh")"; grep -Eq '^(ADOPTION-TARGET=UNCHANGED|GIT-STATE: COMMITS=1 STASHES=0 WORKTREES=1 BRANCHES=1)$' <<<"$out" || die "evals/$name: the verify script says '$out' on the untouched fixture"
+    fi
+  fi
+done
+[ "$n_cases" = 17 ] || die "expected 17 eval cases, found $n_cases"
+ok "$n_cases cases: scaffolds ran, fixtures are brand projects, verify scripts pass on the untouched fixtures"
+if command -v claude >/dev/null; then
+  python3 - "$ROOT" "$EV" <<'PY' || die "the real eval loader rejected a case"
+import pathlib, re, shutil, subprocess, sys
+root, ev = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+plug = ev / "loader"
+if plug.exists(): sys.exit("loader scratch folder exists; move it aside: " + str(plug))
+(plug / ".claude-plugin").mkdir(parents=True); shutil.copy(root / ".claude-plugin/plugin.json", plug / ".claude-plugin/plugin.json")
+shutil.copytree(root / "evals", plug / "evals", ignore=shutil.ignore_patterns("results"))
+cases = [c for c in (plug / "evals").iterdir() if c.is_dir() and not c.name.startswith("_")]
+for c in cases:   # one invalid grader per case: every case is loaded, none can run
+    (c / "graders" / "zz-injected.md").write_text("---\ntype: zzz\n---\n")
+r = subprocess.run(["claude", "plugin", "eval", ".", "--trust-plugin", "--ablation", "none", "--runs", "1", "--no-publish", "--max-cost-usd", "0.01", "-j", "1", "--output-dir", str(ev / "loader-out")],
+                   cwd=plug, capture_output=True, text=True, timeout=180)
+errs = [l for l in (r.stdout + r.stderr).splitlines() if l.startswith("\u2717")]
+assert len(errs) == len(cases) and all(l.count("Invalid") == 1 for l in errs), (r.stdout + r.stderr)[-1500:]
+assert "0 case(s)" in r.stdout, r.stdout[-500:]
+assert re.search(r"0 case\(s\) .*\$0\.00\b", r.stdout), "the loader check must bill nothing: " + r.stdout[-300:]
+PY
+  ok "claude plugin eval loads every case (checked with one injected invalid grader per case, so nothing ran)"
+else
+  printf '   NOT VERIFIED: the claude CLI is not on PATH; the real eval loader was not run\n'
+  [ "${BRAND_CREATOR_REQUIRE_ALL:-}" = 1 ] && die "claude is missing and BRAND_CREATOR_REQUIRE_ALL=1"
+fi
 
 step "state"
 "${BC[@]}" state --project "$P" --require G3 >/dev/null

@@ -9,6 +9,7 @@
 - [Gate](#gate)
 - [Pitfalls](#pitfalls)
 - [Enforcement](#enforcement)
+- [Fleet option: the directions workflow](#fleet-option-the-directions-workflow)
 
 ## Goal
 
@@ -80,3 +81,11 @@ instruction to reply with a name (or letter) and one sentence. Combinable picks 
 - `shot`: four views with no overflow, console errors or network requests; forbidden-string counts from BRIEF and
   `research/cliches.md`.
 - Behaviour evals (stage 6): r1 board has map, Today (when an incumbent exists) and None of these.
+
+## Fleet option: the directions workflow
+
+With the owner's yes at the fleet gate, round 1 (or a reset round) can run as the `directions` workflow: one
+`brand-creator:brand-designer` per direction writing only `rounds/r<N>/<direction>/`, then one advisory
+`brand-creator:brand-judge`; `inventory: true` runs the P1c survey first with `brand-creator:brand-inventory`. Default
+3 designers and the judge, 4 agents. You still write the strategy core, the territories and the round page, and stop at
+G2. Arguments, models and the gate: [fleet.md](../fleet.md).

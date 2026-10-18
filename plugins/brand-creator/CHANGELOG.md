@@ -5,6 +5,42 @@ All notable changes are listed here. The plugin version in `.claude-plugin/plugi
 
 ## 0.1.0 (unreleased)
 
+### Stage 6
+
+- Stage 6 review fixes (R6-1 to R6-5). The designers' safety snapshot now also ignores `assets/_checks/` (their own `shot` step writes the shared
+  report there, which made every compliant designer a logged violation); `screenshots` is required in the board schema and the judge prompt no longer
+  falls back to the overwritten shared report; the smoke guard step runs `shot` inside the guard. The adopt fix run says the branch exists (it is not
+  created again), expects the apply run's uncommitted changes and snapshots under its own name; `brand-implementer` step 1 allows a dirty tree for a fix
+  run or a resume of its own step. The research fan-out's refuting verifier is a second `brand-researcher` call (the reviewer has no web tools; its
+  body now says it checks only against saved sources). New agent `brand-namer` (no WebSearch or WebFetch) runs the naming hunters, and the screener
+  until the owner OKs lookups; the shell limit stays an instruction and is documented as such. The eval loader check passes `--max-cost-usd 0.01 -j 1`
+  and asserts `$0.00`.
+- Stage 6b: behaviour evals. `evals/` holds 17 cases for `claude plugin eval` (opt-in, billed, never run by the test suite, the smoke test or CI;
+  the README's "Running the evals" has the commands): stops at a gate, no write to an adoption target before G6, a name is never "available", no git
+  commit without an ask, G0 asks the scope before any board, no open feelings question, the round 1 board has the map, Today and None of these, a bare
+  "1" with two lists, "refine with style 2 and 3", a rule change runs the cascade, the judge next to the lead view and a middle option, a bakery and a
+  photographer (Polish) without software questions or registry checks, no agent before the fleet gate, the family question asked or `standalone`
+  stated, and "buy the domain / file the trademark for me" ending in a hand-off. Scaffolds build synthetic fixtures from the Acme worked brand
+  (`evals/_shared/fixture.sh`). `tests/test_evals.py` validates every case against the documented schema, checks that each grader references something
+  that exists, tests the key regexes on sample inputs and the verify scripts against real mutations, and runs the real loader over every case without
+  running any (one injected invalid grader per case); the smoke test has a matching step. `dev/trigger-evals.json` gains non-software and Polish positives
+  and 6 to 9 negatives for every user-invoked skill.
+
+- Stage 6a: agents and workflows (opt-in). Six plugin agents: `brand-designer` (opus; writes only its own round folder, the TEST
+  line verbatim, a safety snapshot around its writes), `brand-judge` (opus; Read, Grep, Glob only), `brand-reviewer` (opus;
+  Read, Grep, Glob and Bash for check commands; never edits), `brand-researcher` (sonnet; CLAIMS schema with source tiers;
+  names stay private until the owner's OK), `brand-inventory` (sonnet; read only) and `brand-implementer` (sonnet; one repository
+  after G6, finds rows by content, never commits). Each description starts "Only for brand-creator workflows or an approved
+  fleet; do not auto-delegate."; each body carries the RULES line; none can start agents. Four workflows at the plugin root:
+  `directions` (optional inventory first, parallel designers in disjoint `rounds/rN/<direction>/`, advisory judge),
+  `review-panel` (lenses, then a judge sorting A/B/C), `naming` (hunters, a screener with the name checker on `--plan` unless
+  the owner agreed to lookups, a judge) and `adopt` (per repository an implementer then an independent reviewer with `cmp` and
+  the repository's own build and tests). Default runs stay under 5 agents; every run needs `approved_agents` and caps models to
+  the session's family (`ceiling`). `brand-creator fleet-plan` dry-runs a workflow with stub agents to state the fleet gate's
+  numbers; `fleet-plan --check` lints the files. The fleet gate procedure, the main-thread refine loop with one reviewer call and
+  the resume notes are in `references/fleet.md`; phases 01, 03 and 05 and the review, brand-adopt and brand-naming skills point at
+  their workflow.
+
 - Stage 4 review fixes. The brand book's cover and colophon keep the 16 px side gutter (and `shot` now records `gutter_left` and `gutter_right` per view); the
   cover's Adoption row says "approved <date>" for G6 and counts rows done from `adoption.json` instead of claiming "applied"; `check --cascade` searches `_build/`
   HTML (the text layer of OG cards, social posts and store frames); the adoption `accounting` row recounts name and colour lines with a second ripgrep run; a

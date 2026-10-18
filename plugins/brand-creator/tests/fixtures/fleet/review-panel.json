@@ -1,0 +1,6 @@
+{
+  "project": "/PROJECT", "plugin_root": "/PLUGIN", "data": "/DATA", "today": "2026-10-17", "ceiling": "opus", "approved_agents": 4,
+  "target": "board", "target_paths": ["/PROJECT/rounds/r1/board.html"],
+  "context_paths": ["/PROJECT/BRAND-STATE.md", "/PROJECT/FACTS.md"],
+  "decisions": ["Compass is the direction"]
+}

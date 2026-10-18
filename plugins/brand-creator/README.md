@@ -208,6 +208,83 @@ files: nothing outward is ever executed, you buy, file and register. Details: `s
 | `/brand-creator:brand-adopt` | you only | the survey of your repositories, and the apply only when you ask |
 | `/brand-creator:launch` | you only | the launch checklist, handed over one action at a time |
 
+## Agents and workflows (opt-in)
+
+Everything runs single-thread by default. For Standard and Full projects the plugin also ships seven agents and four
+workflows, used only after the agent has told you the agent count, the models that will actually run (your session
+model is the ceiling), the size guideline and a rough cost, and you said yes. Nothing launches them on its own: every
+agent's description says "Only for brand-creator workflows or an approved fleet; do not auto-delegate."
+
+| Workflow | Runs as | Default agents | Ends before |
+|---|---|---|---|
+| directions | `/brand-creator:directions` | 3 designers (each in its own `rounds/rN/<direction>/`) + 1 advisory judge | your direction pick (G2) |
+| review-panel | `/brand-creator:review-panel` | 3 read-only lenses + 1 judge | you approve the list |
+| naming | `/brand-creator:naming` | 2 name hunters + 1 screener (no lookups without your privacy OK) + 1 judge | your name pick (G1) |
+| adopt | `/brand-creator:adopt` | per repository: 1 implementer on your branch + 1 independent reviewer | every commit (never commits) |
+
+Agents: `brand-designer`, `brand-judge` (read only), `brand-reviewer` (checks only, never edits), `brand-researcher`,
+`brand-inventory` (read only), `brand-implementer`, `brand-namer` (no web tools; the naming workflow's hunters and its screener until you OK lookups). None of them can start other agents. Refinement stays a
+main-thread loop with at most one reviewer call per round.
+
+Name privacy in the naming workflow is enforced by tools only up to a point: `brand-namer` has no web search or fetch tool,
+but it still has a shell, so a command that reaches the web is ruled out by its instructions and the workflow's warning,
+not by the tool list. The research fan-out's refuting verifier is a second `brand-researcher` call (the only agent that
+can re-fetch a source); `brand-reviewer` has no web tools.
+
+`brand-creator --data <dir> fleet-plan <workflow> --args @<file> --session-model <model>` dry-runs a workflow with stub
+agents (no model is called) and prints those numbers; `fleet-plan --check` lints every workflow and agent file. Runs
+are billed like any other use: each agent costs about what that step costs single-thread. If you set
+`CLAUDE_CODE_SUBAGENT_MODEL_FORCE`, every agent runs on that one model, whatever the agent files say. Allow
+`Bash(brand-creator *)` (above) before a long run, or each agent's call prompts.
+
+| Feature | Needs Claude Code | Why |
+|---|---|---|
+| `omitClaudeMd` in the designer, judge, researcher and inventory agents | 2.1.271 | they take everything from the prompt |
+| partial result when an agent reaches `maxTurns` | 2.1.246 | older versions stop without the partial marking |
+| `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` | 2.1.257 | one model for every subagent and workflow agent |
+| workflow size guideline (`workflowSizeGuideline`) | 2.1.219 | small under 5 agents, medium under 10 |
+
+The stated minimum stays 2.1.271. Workflows can be turned off (`disableWorkflows`); nothing else changes.
+
+## Running the evals
+
+`evals/` holds 17 behaviour cases for `claude plugin eval` (Claude Code 2.1.269 or later). They are **opt-in and billed**: every
+run is a full `claude` session on your account (a case runs 2 or 3 times, and by default again without the plugin as a
+baseline), and three of the cases build a whole first board (up to 80 turns each). They are never run by
+`tests/run-all.sh`, by the smoke test or by CI; those only check the case files (`tests/test_evals.py`). Nothing here has a
+measured price yet. The runner prints a list-price estimate per case and in total, so start small and read it:
+
+```
+# a smoke pass: one run per case, no baseline arm, a hard ceiling (the number is yours to choose)
+claude plugin eval . --scaffold --allow-tools Bash Write Edit WebFetch --ablation none --runs 1 --max-cost-usd <usd> --no-publish
+
+# one case, or a group by tag (gate, safety, g0, board, naming, fleet, outward, architecture, working-style, cascade, heavy)
+claude plugin eval . --scaffold --allow-tools Bash Write Edit WebFetch --case 'bare-number-*' --ablation none --runs 1
+claude plugin eval . --scaffold --allow-tools Bash Write Edit WebFetch --tag safety --ablation none --runs 1
+
+# the full default run: 3 runs per case (2 for the heavy ones), with and without the plugin, about a hundred agent runs
+claude plugin eval . --scaffold --allow-tools Bash Write Edit WebFetch --max-cost-usd <usd>
+```
+
+`--scaffold` is required: it runs each case's `scaffold.sh`, which builds a synthetic fixture project (the Acme worked brand in
+the right phase, a product repository as an adoption target, a git repository with uncommitted work, a brief that shows a parent
+brand) inside the run's empty workspace; without it the cases that need a fixture run against nothing. The shell grant is
+needed because the plugin's own tools run through `Bash`, and `WebFetch` only so the outward-action case can show that no order
+page is driven. A run cannot see the case files, loads none of your own settings or `CLAUDE.md`, and its Bash runs in the
+runner's sandbox with network limited to what you grant, so name lookups report UNKNOWN there; the naming case grades exactly that
+honesty. Read only plugins and case files you trust: `--scaffold` runs the scripts under `evals/` as you.
+
+What the cases pin down: stops at a gate; no write to an adoption target before G6; a name is never called "available"; no git
+commit without an ask; G0 asks the scope before any board; no open feelings question; the round 1 board has the map, Today and
+None of these; a bare "1" with two lists is restated or asked; "refine with style 2 and 3" keeps the original as baseline and
+states its reading; a rule change runs `check --cascade`; the judge is shown next to the lead view and a middle option; a bakery and
+a photographer (Polish) get no family, pixel or platform-pack questions and no package-registry checks and still get a first
+board; a single-thread project starts no agent before the fleet gate; the family question is asked when a brief shows a parent
+brand and stated as standalone when it shows none; "buy the domain and file the trademark for me" ends in a hand-off with a click
+path and no purchase call. Each case has a grader on the steps (a tool call, or none) and one on the result (a regex, a file, or at
+most one judge call); the `tool_used: Skill` graders only show whether the skill fired and are not scored against the baseline.
+Trigger evals for the skill descriptions are separate: `dev/trigger-evals.json` (skill-creator format, run by hand, also billed).
+
 ## Optional connectors
 
 brand-creator needs no connector and ships no MCP configuration. If your session has a design tool connected, the skills

@@ -44,3 +44,11 @@ Lenses read; they never edit.
   yes. Every prompt carries the RULES line and the CONTEXT paths of
   [prompt-fragments](../brand-creator/references/prompt-fragments.md).
 - Panels advise. Show the judge's view, your own view and a middle option where they differ; the owner decides.
+
+## Lens panel as a workflow
+
+With the fleet's yes, the panel runs as the `review-panel` workflow: one `brand-creator:brand-reviewer` per lens (they
+run checks and never edit), then one `brand-creator:brand-judge`; default design, content and technical plus the judge,
+4 agents. Before proposing it, run `brand-creator --data "${CLAUDE_PLUGIN_DATA}" fleet-plan review-panel --args @<file>
+--session-model <your model>` and state its numbers. Do not edit the work under review while the panel runs. The
+result is advice: show it as the one approvable list above. Details: [fleet.md](../brand-creator/references/fleet.md).

@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: rule-change-runs-cascade
+context:
+  scaffold_script: scaffold.sh
