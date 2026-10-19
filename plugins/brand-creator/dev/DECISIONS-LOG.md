@@ -1386,3 +1386,15 @@ run's shell sees. Findings and decisions:
     the shell form differs between Git Bash and PowerShell. The price: a bug that crashes guard.py blocks every Write, Edit and Bash call
     until fixed, which is the loud failure asked for; unparseable input still exits 0 with a warning. Older versions ignore the field. Only the
     file's content and its README row could be tested on macOS (a missing interpreter cannot be simulated through the harness).
+
+957. **The guard fails closed where it cannot see (security review of 955).** An archive extracted into the `rounds/` folder, a project
+    root with `rounds/` or `history/`, or a folder above such a project is now blocked: the member paths (`history/...`) are invisible
+    to the guard, so it cannot tell a harmless extract from an overwrite; the message says to extract into a scratch folder and move.
+    The parsers now read what the tools read: GNU tar's unique long-option prefixes (`--ext`, `--dir=`), values attached to `-C`/`-f`
+    (`-Chistory`), a `d` inside an unzip option cluster (`-od history`), and 7z's command letter after leading switches. `git stash
+    push/save` with `-u`/`-a` (or a unique prefix, or `--pathspec-from-file`) takes every non-option word after `push` as a pathspec
+    (the `-m` value is not one; `save` takes a message); with no pathspec, or with pathspec magic (`:/`, `:(top)...`) or a glob git expands itself, the scope is the whole working tree (`git stash` is
+    repo-wide whatever the cwd), found by walking up to `.git`. The old guard also blocked the harmless `git stash push -u tools`;
+    that is allowed now. The guard is a safety net against an agent's mistakes, not a sandbox: an interpreter one-liner can still
+    write anywhere, which is why the RULES line stays in every prompt. Tests: 28 new cases in tests/test_guard.py, 17 of which fail on
+    the previous guard.

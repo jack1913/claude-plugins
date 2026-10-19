@@ -332,6 +332,67 @@ def test_s3_harmless_commands_stay_allowed(brands, cmd, sub):
     assert r.returncode == 0, (cmd, r.stderr)
 
 
+# ---- security review of the S3 guard: parser differentials and extracts the guard cannot see into (fail closed)
+
+SECREV_BLOCKED = [
+    ("tar -xf /tmp/a.tar", "p1"),                        # extract into a project root: members could be history/...
+    ("tar -xf /tmp/a.tar -C p1", ""),
+    ("tar -xf /tmp/a.tar", ""),                          # into an ancestor of projects
+    ("unzip -o /tmp/a.zip", "p1"),
+    ("unzip -o /tmp/a.zip -d rounds", "p1"),             # the rounds/ folder itself
+    ("7z x /tmp/a.7z", "p1"),
+    ("ditto /tmp/src .", "p1"),
+    ("tar --ext --file=/tmp/a.tar --dir=history", "p1"),  # GNU abbreviations
+    ("tar --extr -f /tmp/a.tar --direct history", "p1"),
+    ("tar -xf /tmp/a.tar -Chistory", "p1"),              # attached -C value
+    ("tar -xfC /tmp/a.tar history", "p1/history"),       # a value-taking letter ends the cluster: still into the cwd
+    ("unzip -od history /tmp/a.zip", "p1"),              # d bundled in a cluster
+    ("7z -y x /tmp/a.7z -ohistory", "p1"),               # switches before the command letter
+    ("git stash push -u history", "p1"),                 # a pathspec without --
+    ("git stash push --include-u", "p1"),                # a unique prefix of --include-untracked
+    ("git stash push --al", "p1"),
+    ("git stash push -u --pathspec-from-file=list.txt", "p1"),
+    ("git stash push -m wip -u history", "p1"),
+]
+
+
+@pytest.mark.parametrize("cmd,sub", SECREV_BLOCKED)
+def test_security_review_bypasses_are_blocked(brands, cmd, sub):
+    r = run_guard(tool("Bash", command=cmd, cwd=brands / sub))
+    assert blocked(r), (cmd, r.returncode, r.stderr)
+
+
+SECREV_ALLOWED = [
+    ("tar -xf /tmp/a.tar -C tools", "p1"),
+    ("tar --ext --file=/tmp/a.tar --dir=tools", "p1"),
+    ("tar -xf /tmp/a.tar", "p3"),                        # a fresh scaffold has no rounds/ or history/ yet
+    ("unzip -l /tmp/a.zip", "p1"),                       # listing writes nothing
+    ("unzip -lv /tmp/a.zip", "p1"),
+    ("unzip -od tools /tmp/a.zip", "p1"),
+    ("7z l /tmp/a.7z", "p1"),
+    ("git stash push -m 'history notes' -u tools", "p1"),  # the message is not a path
+    ("git stash push -u tools", "p1"),
+    ("git stash save -u", "p1/tools"),                   # no repository here: the cwd is the scope
+]
+
+
+@pytest.mark.parametrize("cmd,sub", SECREV_ALLOWED)
+def test_security_review_harmless_forms_stay_allowed(brands, cmd, sub):
+    r = run_guard(tool("Bash", command=cmd, cwd=brands / sub))
+    assert r.returncode == 0, (cmd, r.stderr)
+
+
+def test_git_stash_untracked_covers_the_whole_repository_from_any_folder(brands):
+    """git stash -u removes untracked files repo-wide, not only under the cwd."""
+    (brands / ".git").mkdir()
+    r = run_guard(tool("Bash", command="git stash -u", cwd=brands / "p1" / "tools"))
+    assert blocked(r), r.stderr
+    assert run_guard(tool("Bash", command="git stash -u tools", cwd=brands / "p1")).returncode == 0
+    for magic in ("git stash push -u :/", "git stash push -u ':(top)p1/history'", "git stash push -u 'hist*'",
+                  "git stash push -u ':!tools'"):
+        assert blocked(run_guard(tool("Bash", command=magic, cwd=brands / "p1" / "tools"))), magic
+
+
 def test_s3_unrelated_folders_are_untouched(unrelated):
     for cmd in ("rm -rf .", "bash -c 'rm -rf history'", "git clean -fdx", f"ls | {XA} rm", "git stash -u",
                 "git mv history x", "tar -xf /tmp/a.tar -C history", "unzip -o /tmp/a.zip -d history"):

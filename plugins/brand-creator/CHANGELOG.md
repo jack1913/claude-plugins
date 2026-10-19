@@ -74,7 +74,8 @@ The first release.
   owner has been told the agent count, models, size and rough cost and said yes; `fleet-plan` dry-runs one with stub agents.
 
 **Safety.**
-- A hook keeps `history/` and earlier rounds read-only and stops a brand project folder from being deleted or moved; the RULES
+- A hook keeps `history/` and earlier rounds read-only and stops a brand project folder from being deleted or moved (shell writes,
+  deleters, destructive git, and archive extracts it cannot see into are blocked, failing closed when unsure); the RULES
   line in every skill, agent and workflow forbids commits, pushes, deletes and outward actions unless asked.
 
 **Platforms and tests.**

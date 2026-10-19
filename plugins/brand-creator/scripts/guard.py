@@ -342,6 +342,28 @@ def shell_string(w: list[str]) -> str | None:
     return None
 
 
+def repo_top(p: Path) -> Path:
+    """The top of the git working tree that holds p (a `.git` folder or file), else p itself."""
+    q = lenient_real(p)
+    for d in (q, *q.parents):
+        if (d / ".git").exists():
+            return d
+    return q
+
+
+def holds_protected(d: Path) -> bool:
+    """d is the rounds/ folder itself, a project root with rounds/ or history/, or an ancestor of such a project: an archive
+    extracted there can overwrite protected files through member paths the guard cannot see."""
+    root = project_root(d)
+    if root is not None and lenient_real(d) == lenient_real(root / "rounds"):
+        return True
+    if not d.is_dir():
+        return False
+    if root is not None and lenient_real(d) == lenient_real(root) and ((d / "rounds").exists() or (d / "history").exists()):
+        return True
+    return bool(contained_projects(d))
+
+
 def git_targets(w: list[str], cwd: Path) -> tuple[list[tuple[Path, str]], str | None]:
     """(path, op) pairs a destructive git command can delete, move or overwrite, and the subcommand name (None when
     harmless). op is the check_target op: delete | move-from | write."""
@@ -389,13 +411,40 @@ def git_targets(w: list[str], cwd: Path) -> tuple[list[tuple[Path, str]], str | 
         out += [(p, "write") for p in expand(paths[-1], base)]
         return out, sub
     elif sub == "stash":
-        # `git stash push -u` removes untracked (and with -a ignored) files from the working tree, like `git clean`.
-        word = next((a for a in args if not a.startswith("-")), "push")
+        # `git stash push -u` removes untracked (and with -a ignored) files from the working tree, like `git clean`, and
+        # does so for the whole repository whatever the cwd. Every non-option word after `push` is a pathspec (the -m value
+        # is not); `save` takes a message, not paths. git accepts unique prefixes of long options, so those count too.
+        word, opts = ("push", args) if not args or args[0].startswith("-") else (args[0], args[1:])
         if word not in ("push", "save"):
             return [], None
-        if not any(a in ("--include-untracked", "--all") or re.match(r"^-[A-Za-z]*[ua]", a) for a in flags):
+        untracked, pathspec, k, after = False, [], 0, False
+        while k < len(opts):
+            a = opts[k]
+            k += 1
+            if after:
+                pathspec.append(a)
+            elif a == "--":
+                after = True
+            elif a in ("-m", "--message"):
+                k += 1
+            elif a.startswith("--"):
+                name = a.split("=", 1)[0]
+                if (len(name) >= 3 and ("--include-untracked".startswith(name) or "--all".startswith(name))) \
+                        or name.startswith("--pathspec"):  # paths the guard cannot read: treat as the whole tree
+                    untracked = True
+            elif a.startswith("-"):
+                untracked = untracked or bool(re.match(r"^-[A-Za-z]*[ua]", a))
+                if re.match(r"^-[A-Za-z]*m$", a):
+                    k += 1
+            elif word == "push":
+                pathspec.append(a)
+        if not untracked:
             return [], None
-        paths = args[args.index("--") + 1:] if "--" in args else []
+        # pathspec magic (`:/`, `:(top)history`, `:!x`) and globs git expands itself reach beyond the words the guard can
+        # resolve: treat them, like no pathspec at all, as the whole working tree
+        paths = [] if any(p.startswith(":") or any(c in p for c in "*?[") for p in pathspec) else pathspec
+        if not paths:
+            base = repo_top(base)
     else:
         return [], None
     paths = [x for x in paths if x != "--"]
@@ -419,52 +468,74 @@ def archive_writes(cmdname: str, w: list[str], cwd: Path) -> list[Path]:
             a = rest[k]
             k += 1
             if a.startswith("--"):
-                name, _, val = a.partition("=")
-                if name in ("--extract", "--get"):
+                # GNU tar takes unique abbreviations (--ext, --dir=...): match by prefix, at a length no other option shares
+                name, eq, val = a.partition("=")
+                if (len(name) >= 5 and "--extract".startswith(name)) or (len(name) >= 4 and "--get".startswith(name)):
                     extract = True
-                elif name == "--create":
+                elif len(name) >= 4 and "--create".startswith(name):
                     create = True
-                elif name == "--directory":
-                    if val:
+                elif len(name) >= 5 and "--directory".startswith(name):
+                    if eq:
                         dirs.append(val)
                     elif k < len(rest):
                         dirs.append(rest[k]); k += 1
                 elif name == "--file":
-                    if val:
+                    if eq:
                         archive = val
                     elif k < len(rest):
                         archive = rest[k]; k += 1
             elif a.startswith("-") and len(a) > 1 or (first and re.match(r"^[A-Za-z]+$", a)):
+                dashed = a.startswith("-")
                 cluster = a.lstrip("-")
-                for ch in cluster:
+                for i, ch in enumerate(cluster):
                     if ch == "x":
                         extract = True
                     elif ch == "c":
                         create = True
-                    elif ch in "fC" and k < len(rest):
-                        if ch == "f":
-                            archive = rest[k]
+                    elif ch in "fC":
+                        # a dashed cluster's value may be attached (-Chistory, -xfa.tar); otherwise it is the next word
+                        if dashed and i + 1 < len(cluster):
+                            val = cluster[i + 1:]
+                        elif k < len(rest):
+                            val = rest[k]; k += 1
                         else:
-                            dirs.append(rest[k])
-                        k += 1
+                            break
+                        if ch == "C":
+                            dirs.append(val)
+                        else:
+                            archive = val
+                        if dashed:
+                            break
             first = False
         if extract:
             out = dirs or ["."]
         elif create and archive and archive != "-":
             out = [archive]
     elif cmdname == "unzip":
-        if any(re.match(r"^-[A-Za-z]*[lztp]", a) for a in rest if a.startswith("-") and not a.startswith("-d")):
-            return []
+        # option clusters: a `d` takes the rest of the cluster or the next word as the destination; l, t, z, p, v and Z
+        # before it only list, test or print (nothing is written)
         out = ["."]
-        for k, a in enumerate(rest):
-            if a == "-d" and k + 1 < len(rest):
-                out = [rest[k + 1]]
-            elif a.startswith("-d") and len(a) > 2:
-                out = [a[2:]]
+        k = 0
+        while k < len(rest):
+            a = rest[k]
+            k += 1
+            if not a.startswith("-") or a == "-":
+                continue
+            cluster = a[1:]
+            head, d, tail = cluster.partition("d")
+            if re.search(r"[ltzpvZ]", head):
+                return []
+            if d:
+                if tail:
+                    out = [tail]
+                elif k < len(rest):
+                    out = [rest[k]]; k += 1
     elif cmdname.startswith("7z"):
-        if rest and rest[0] in ("x", "e"):
+        # the command letter is the first word that is not a switch (7z -y x a.7z is the same as 7z x -y a.7z)
+        words = [a for a in rest if not a.startswith("-")]
+        if words and words[0] in ("x", "e"):
             out = ["."]
-            for a in rest[1:]:
+            for a in rest:
                 if a.startswith("-o") and len(a) > 2:
                     out = [a[2:]]
     elif cmdname == "ditto":
@@ -544,6 +615,11 @@ def check_bash(command: str, cwd: Path, depth: int = 0) -> list[str]:
                 r = check_target(d, "write")
                 if r:
                     reasons.append(r.replace("shell write blocked", f"{cmdname} extract blocked (it would overwrite files)", 1))
+                elif holds_protected(d):
+                    reasons.append(f"brand-creator guard: {cmdname} extract blocked: {d} holds rounds/ or history/ (or a brand "
+                                   f"project that does), and the archive's member paths are not visible here, so they could "
+                                   f"overwrite frozen files. Extract into a scratch folder (tools/ or a temp dir) and move "
+                                   f"what you need.")
             continue
         if cmdname in DELETERS:
             for a in args:
