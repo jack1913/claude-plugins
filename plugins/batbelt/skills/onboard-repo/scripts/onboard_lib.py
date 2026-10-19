@@ -762,56 +762,58 @@ def pair_shell_rules(rules, drop_builtin_bash=False):
 
 
 # Commands each ecosystem needs in order to build and test without prompting.
+#
+# Every entry is an EXACT command, never a wildcard tail. A tail lets an agent append any flag, and these runners take
+# flags that name a program to run or code to load: `npm --script-shell=<prog>`, `cargo --config
+# target.<triple>.runner=[...]`, `dotnet -p:PreBuildEvent=<cmd>`, `mypy --python-executable <prog>`, `pip --python <exe>`,
+# `uv sync -p <exe>`, `pytest -p <module>`, `phpunit --bootstrap <file>`, `psalm --plugin=<path>`, `swift --toolchain
+# <dir>` (security review of the root onboarding; same class as `git fetch --upload-pack`). A run with extra flags
+# prompts. Running repo-controlled code is still accepted -- pytest imports conftest.py, `npm ci` runs lifecycle scripts,
+# `cargo build` runs build.rs -- the line drawn is source-REWRITING, so formatters appear only in their check form.
 _ECOSYSTEM_ALLOW = {
     "dotnet": (
-        "dotnet build:*",
-        "dotnet test:*",
-        "dotnet restore:*",
-        "dotnet clean:*",
+        "dotnet build",
+        "dotnet test",
+        "dotnet restore",
+        "dotnet clean",
     ),
     # `npm ci` installs exactly what the lockfile pins; `npm install <pkg>` / `npm i` / `npm add` change the dependency
-    # set and rewrite package-lock.json, so they sit in ask with `uv add` and `composer require`.
-    "js": ("npm run:*", "npm test:*", "npm ci:*"),
+    # set and rewrite package-lock.json, so they sit in ask with `uv add` and `composer require`. `npm run <script>` is
+    # absent: script names are per repo, and a tail would admit `--script-shell`.
+    "js": ("npm test", "npm ci"),
     # `vendor/bin/pint` is the FORMATTER: allowed only in its check form, because the
     # bare command REWRITES source. That is the same read-only rule the update-deps
     # template states for every ecosystem ("use `pint --test`, never `pint`") -- granting
     # the rewriting form unprompted would let a verify gate destroy baseline purity.
-    # `cargo fmt:*` predates this list and is left as-is rather than changed here.
     "php": (
-        "composer install:*",
-        "composer dump-autoload:*",
-        "composer validate:*",
-        "php artisan test:*",
-        "vendor/bin/pest:*",
-        "vendor/bin/phpunit:*",
-        "vendor/bin/pint --test:*",
-        "vendor/bin/phpstan:*",
-        "vendor/bin/psalm:*",
+        "composer install",
+        "composer dump-autoload",
+        "composer validate",
+        "php artisan test",
+        "vendor/bin/pest",
+        "vendor/bin/phpunit",
+        "vendor/bin/pint --test",
+        "vendor/bin/phpstan analyse",
+        "vendor/bin/psalm",
     ),
-    # Bare `uv run:*` is deliberately absent: unlike `npm run <script>`, which is bounded
-    # by package.json, `uv run <anything>` executes an arbitrary command and would be a
-    # blanket shell grant. The bounded forms are listed instead, so the common test and
-    # lint loops never prompt while `uv run rm -rf …` still does.
-    #
-    # `ruff format` appears only as `--check`, for the same reason as `pint --test` above.
-    # The rest run repo-controlled code (pytest imports conftest.py, `uv sync` runs the
-    # build backend) -- that is the model every ecosystem here already assumes, since
-    # `npm install` runs postinstall and `cargo build` runs build.rs. The line drawn is
-    # source-REWRITING, not code execution.
+    # Bare `uv run:*` is deliberately absent: `uv run <anything>` executes an arbitrary command. `uv sync` is `--locked`
+    # so it cannot rewrite uv.lock behind the `uv lock` ask. `ruff format` appears only as `--check`, and `ruff check`
+    # without `--fix`, for the same reason as `pint --test` above.
     "python": (
-        "uv sync:*",
-        "uv run pytest:*",
-        "uv run ruff:*",
-        "uv run mypy:*",
-        "pytest:*",
-        "ruff check:*",
-        "ruff format --check:*",
-        "mypy:*",
-        "pip list:*",
-        "pip show:*",
+        "uv sync --locked",
+        "uv run pytest",
+        "uv run ruff check",
+        "uv run ruff format --check",
+        "uv run mypy",
+        "pytest",
+        "pytest -q",
+        "ruff check",
+        "ruff format --check",
+        "mypy",
+        "pip list",
     ),
-    "rust": ("cargo build:*", "cargo test:*", "cargo check:*", "cargo fmt:*"),
-    "swift": ("swift build:*", "swift test:*"),
+    "rust": ("cargo build", "cargo test", "cargo check", "cargo fmt --check"),
+    "swift": ("swift build", "swift test"),
 }
 
 # Ecosystem commands that mutate a lockfile, a schema or the dependency tree.
@@ -893,12 +895,15 @@ _BASELINE_DENY = ("git reset:*", "git restore:*")
 _BASELINE_ASK = ("git rm:*",)  # extended below
 # Only the forms that cannot lose work or redirect a push: `git stash drop|clear|pop`, `git worktree remove`,
 # `git remote set-url|remove` and `git switch --discard-changes|-f` fall through to the normal prompt (or ask, below).
+# `git fetch` is allowed in its exact forms only: with a wildcard tail, `git fetch --upload-pack=<cmd>` runs <cmd>.
+# `git stash list|show` likewise: both take `--output=<file>`, which overwrites <file>.
 _BASELINE_ALLOW = (
-    "git fetch:*",
+    "git fetch",
+    "git fetch origin",
     "git switch:*",
     "git stash push:*",
-    "git stash list:*",
-    "git stash show:*",
+    "git stash list",
+    "git stash show",
     "git worktree add:*",
     "git worktree list:*",
     "git remote -v",
@@ -1061,6 +1066,14 @@ _HOME_DIR_GLOBS = ("**/.ssh/**", "**/.aws/**", "**/.gnupg/**", "**/.kube/**")
 # grant, a wildcarded interpreter, a command wrapper, an argument-pinned fetcher.
 _WRAPPERS = ("xargs", "env", "nice", "nohup", "time", "timeout", "sudo", "watch")
 _FETCHERS = ("curl", "wget", "iwr", "irm", "Invoke-WebRequest", "Invoke-RestMethod")
+# Commands whose flags can name a program to run, code to load or a file to overwrite (`git fetch --upload-pack`,
+# `npm --script-shell`, `cargo --config`, `dotnet -p:PreBuildEvent`, `git stash show --output`, ...): any wildcard tail
+# on them is a shell grant. `_ECOSYSTEM_ALLOW` emits these in exact forms only.
+_FLAG_ESCAPE_HEADS = (
+    "git fetch", "git pull", "git clone", "git ls-remote", "git push", "git archive", "git stash list", "git stash show",
+    "npm", "dotnet", "cargo", "uv", "pytest", "mypy", "pip", "swift", "composer", "php artisan",
+    "vendor/bin/phpunit", "vendor/bin/pest", "vendor/bin/phpstan", "vendor/bin/psalm", "ruff check", "ruff format",
+)
 _WILDCARD_INTERPRETER = re.compile(
     r"^(python[0-9.]*|node|npx|sh|bash|zsh|pwsh|powershell|perl|ruby|php)\*$"
 )
@@ -1096,6 +1109,8 @@ def _is_broad_allow(rule):
     if first in _WRAPPERS:
         return True
     if first in _FETCHERS and head != first:
+        return True
+    if "*" in body and any(head == h or head.startswith(h + " ") for h in _FLAG_ESCAPE_HEADS):
         return True
     return False
 

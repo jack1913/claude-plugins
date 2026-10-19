@@ -8,7 +8,7 @@ brand-creator, swift), each one self-contained and versioned on its own.
 | Path | Purpose |
 | --- | --- |
 | `.claude-plugin/marketplace.json` | The marketplace `jack1913`; every `source` is `./plugins/<name>` |
-| `plugins/<name>/` | One plugin: its own `.claude-plugin/plugin.json`, docs and version, and its own tests and changelog (batbelt: tests in the root `tests/`, no changelog yet) |
+| `plugins/<name>/` | One plugin: its own `.claude-plugin/plugin.json`, docs and version, and its own tests and changelog (batbelt: tests in the root `tests/`) |
 | `.github/workflows/` | One workflow per plugin, plus `marketplace.yml` |
 | `.github/scripts/` | Helpers the workflows call |
 | `tests/` | batbelt's tests (the other plugins keep theirs in their own folder) |

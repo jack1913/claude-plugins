@@ -463,13 +463,13 @@ def test_a_formatter_is_allowed_only_in_its_non_rewriting_form():
     # never `pint`"), but the plan allowed the bare, source-REWRITING command -- which a
     # verify gate could then run unprompted and destroy baseline purity with.
     php = lib.plan_project_permissions(["php"])["permissions"]["allow"]
-    assert "Bash(vendor/bin/pint --test:*)" in php
+    assert "Bash(vendor/bin/pint --test)" in php
     assert "Bash(vendor/bin/pint:*)" not in php
     py = lib.plan_project_permissions(["python"])["permissions"]["allow"]
-    assert "Bash(ruff format --check:*)" in py
+    assert "Bash(ruff format --check)" in py
     assert "Bash(ruff format:*)" not in py
     # the READ-ONLY linters are untouched -- this is about rewriting, not execution
-    for rule in ("Bash(ruff check:*)", "Bash(mypy:*)", "Bash(pytest:*)"):
+    for rule in ("Bash(ruff check)", "Bash(mypy)", "Bash(pytest)"):
         assert rule in py, rule
 
 

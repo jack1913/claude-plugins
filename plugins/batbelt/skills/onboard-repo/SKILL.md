@@ -264,8 +264,14 @@ stays available as an **opt-in**: pass `--ask-npx` only when the operator says y
 and say plainly that it will prompt on every `npx` invocation. Non-interactive runs
 leave it out.
 
-Four invariants the planner enforces — do not hand-edit them back out:
+Invariants the planner enforces — do not hand-edit them back out:
 
+- **Build, test and lint allows are exact commands, never a wildcard tail.** A tail
+  lets an agent append any flag, and these runners take flags that run a program or
+  load code (`npm --script-shell`, `cargo --config target.<triple>.runner`,
+  `dotnet -p:PreBuildEvent`, `mypy --python-executable`, `git fetch --upload-pack`),
+  which turns the rule into an unprompted shell grant. A run with extra flags prompts.
+  `settings-audit` reports a wildcard on these commands under `broad_allows`.
 - **No `Bash(<read-only git>)` allow entries.** Claude Code already runs `git log`,
   `git show`, `git status` and friends unprompted via a built-in read-only set, so
   such an entry allows something that never prompts.

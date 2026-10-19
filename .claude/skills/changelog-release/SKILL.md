@@ -245,7 +245,7 @@ subjects; RAG/knowledge-graph anti-hallucination (ground truth is
 - **changelog per plugin:**
   - swift — `plugins/swift/CHANGELOG.md`, headings `## [x.y.z] - YYYY-MM-DD` under `## [Unreleased]`.
   - brand-creator — `plugins/brand-creator/CHANGELOG.md`, headings `## x.y.z - YYYY-MM-DD` with **no brackets** and no `[Unreleased]` heading; treat that form as the release heading for §1 step 1 and mirror it when cutting a version.
-  - batbelt — none yet (the root `README.md` says so). The first run creates `plugins/batbelt/CHANGELOG.md` from the Keep a Changelog skeleton, floors the baseline at the commit that added the plugin (`git log --diff-filter=A --format=%h -- plugins/batbelt/.claude-plugin/plugin.json`), and drops the "batbelt has no changelog yet" note from `README.md` in the same change.
+  - batbelt — `plugins/batbelt/CHANGELOG.md` (started at 0.1.2, with 0.1.0 and 0.1.1 backfilled), headings `## [x.y.z] - YYYY-MM-DD` under `## [Unreleased]`.
   - No root `CHANGELOG.md`: there is no repo-wide version.
 - **release-script delegation:** `none` (no release script, no version-sync test). After the operator commits, the tag comes from `claude plugin tag plugins/<name>` run from the repo root (it checks `plugin.json` against the marketplace entry, then creates `<name>--v<version>`; print `--dry-run` first), not `git tag`. Then `git push origin main <name>--v<version>`.
 - **dash punctuation:** `-`.

@@ -116,8 +116,8 @@ clearly different directions to pick from ([its first ten minutes](plugins/brand
 - `/plugin marketplace update jack1913` on its own only refreshes which versions are available; your installed plugins
   stay on their current version until you update them as above.
 
-What changed: [brand-creator](plugins/brand-creator/CHANGELOG.md) and [swift](plugins/swift/CHANGELOG.md) keep
-release notes; batbelt has none yet.
+What changed: each plugin's changelog, for [brand-creator](plugins/brand-creator/CHANGELOG.md),
+[swift](plugins/swift/CHANGELOG.md) and [batbelt](plugins/batbelt/CHANGELOG.md).
 
 ## 🚦 Ground rules
 
@@ -132,7 +132,7 @@ Each plugin draws hard lines around what it does on its own:
 ## 🔧 Maintain the marketplace
 
 Each folder under `plugins/` is a plugin with its own manifest, docs and version, and its own tests and changelog
-(batbelt: tests in the root `tests/`, no changelog yet). Releases are tagged per plugin as `<plugin>--vX.Y.Z`.
+(batbelt: tests in the root `tests/`). Releases are tagged per plugin as `<plugin>--vX.Y.Z`.
 
 <details>
 <summary><b>Layout</b></summary>

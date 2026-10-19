@@ -19,7 +19,7 @@ def test_allow_holds_no_dependency_database_or_work_losing_form():
     allow = bodies(perms["allow"])
     for body in ("npm install:*", "npm i:*", "npm add:*", "dotnet ef:*", "git stash:*", "git worktree:*", "git remote:*"):
         assert body not in allow, body
-    assert {"npm ci:*", "git stash push:*", "git worktree add:*", "git remote -v"} <= allow
+    assert {"npm ci", "git stash push:*", "git worktree add:*", "git remote -v"} <= allow
 
 
 def test_dependency_and_database_changes_and_forced_switches_ask():
@@ -32,3 +32,26 @@ def test_every_ask_and_deny_rule_has_a_reason():
     perms = onboard_lib.plan_project_permissions(ALL, ask_npx=True)["permissions"]
     for body in bodies(perms["ask"]) | bodies(perms["deny"]):
         assert body in onboard_lib._RULE_REASONS, body
+
+
+
+# Runners whose flags can name a program to run or code to load (`git fetch --upload-pack`, `npm --script-shell`,
+# `cargo --config target.<triple>.runner`, `dotnet -p:PreBuildEvent`, `mypy --python-executable`, `pytest -p`): a
+# wildcard tail turns the allow rule into an unprompted shell grant, so the planner emits exact forms only (security
+# review of the root onboarding).
+def test_no_ecosystem_allow_entry_has_a_wildcard_tail():
+    baseline = bodies(onboard_lib.plan_project_permissions([])["permissions"]["allow"])
+    for name in ALL:
+        allow = bodies(onboard_lib.plan_project_permissions([name])["permissions"]["allow"])
+        wild = sorted(b for b in allow - baseline if "*" in b)
+        assert not wild, (name, wild)
+
+
+def test_baseline_wildcards_are_only_the_audited_git_forms():
+    allow = bodies(onboard_lib.plan_project_permissions([])["permissions"]["allow"])
+    assert {b for b in allow if "*" in b} == {
+        "git switch:*", "git stash push:*", "git worktree add:*", "git worktree list:*",
+        "git remote show:*", "git remote get-url:*", "mkdir:*",
+    }
+    # `git fetch --upload-pack=<cmd>` runs <cmd>; `git stash list|show --output=<file>` overwrites <file>
+    assert {"git fetch", "git fetch origin", "git stash list", "git stash show"} <= allow

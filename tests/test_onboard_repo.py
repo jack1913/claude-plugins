@@ -2364,7 +2364,7 @@ def test_plan_degrades_to_baseline_on_unknown_or_empty_ecosystem():
     # detected ecosystem still deserves the git and credential guards.
     for names in ([], None, ["haskell"]):
         p = lib.plan_project_permissions(names)["permissions"]
-        assert "Bash(git fetch:*)" in p["allow"]
+        assert "Bash(git fetch)" in p["allow"]
         assert "Bash(git reset:*)" in p["deny"]
         assert not any("dotnet" in r for r in p["allow"])
 
@@ -2395,7 +2395,7 @@ def test_cli_settings_plan_and_gitignore_ensure(tmp_path, capsys):
     cli = _load_cli()
     assert cli.main(["settings-plan", str(tmp_path), "--ecosystem", "dotnet"]) == 0
     plan = json.loads(capsys.readouterr().out)
-    assert "Bash(dotnet build:*)" in plan["permissions"]["allow"]
+    assert "Bash(dotnet build)" in plan["permissions"]["allow"]
 
     gi = tmp_path / ".gitignore"
     gi.write_text("node_modules\n", encoding="utf-8")
@@ -2480,9 +2480,24 @@ def test_audit_flags_home_directory_denies_as_dead_in_project_scope():
 
 def test_audit_flags_broad_allows_with_the_payload_rules():
     # The same three shapes test_payload.py refuses in the shipped payload: a
-    # wildcarded interpreter, an argument-pinned fetcher, a command wrapper.
+    # wildcarded interpreter, an argument-pinned fetcher, a command wrapper --
+    # plus a wildcard tail on a runner whose flags can run a program (npm --script-shell).
     a = lib.audit_project_permissions(_LEGACY_PLAN)
-    assert a["broad_allows"] == ["Bash(npx*)", "Bash(curl * http://localhost:*)", "Bash(xargs:*)"]
+    assert a["broad_allows"] == ["Bash(npm test:*)", "Bash(npx*)", "Bash(curl * http://localhost:*)", "Bash(xargs:*)"]
+
+
+def test_audit_flags_a_wildcard_tail_on_a_runner_whose_flags_run_a_program():
+    # `git fetch --upload-pack=<cmd>`, `npm run x --script-shell=<prog>`, `cargo test --config target.<t>.runner=...`,
+    # `dotnet build -p:PreBuildEvent=<cmd>`: an exact form is safe, a prefix rule is not.
+    a = lib.audit_project_permissions({"permissions": {"allow": [
+        "Bash(git fetch:*)", "PowerShell(git fetch:*)", "Bash(git pull origin:*)", "Bash(git stash show:*)",
+        "Bash(npm run:*)", "Bash(cargo test:*)", "Bash(dotnet build:*)", "Bash(uv run pytest:*)",
+        "Bash(git fetch)", "Bash(npm test)", "Bash(git switch:*)", "Bash(git stash push:*)",
+        "Bash(vendor/bin/pint --test)"]}})
+    assert a["broad_allows"] == [
+        "Bash(git fetch:*)", "PowerShell(git fetch:*)", "Bash(git pull origin:*)", "Bash(git stash show:*)",
+        "Bash(npm run:*)", "Bash(cargo test:*)", "Bash(dotnet build:*)", "Bash(uv run pytest:*)",
+    ]
 
 
 def test_audit_tolerates_a_file_with_no_permissions():
@@ -3119,8 +3134,8 @@ def test_secret_globs_are_one_wildcard_in_ask_not_an_enumeration_in_deny():
 
 def test_settings_plan_supports_php_and_keeps_npx_out_of_a_php_repo():
     plan = lib.plan_project_permissions(["php"])["permissions"]
-    assert "Bash(composer install:*)" in plan["allow"]
-    assert "Bash(vendor/bin/phpstan:*)" in plan["allow"]
+    assert "Bash(composer install)" in plan["allow"]
+    assert "Bash(vendor/bin/phpstan analyse)" in plan["allow"]
     # lockfile- and schema-mutating commands are ask, not allow
     assert "Bash(composer update:*)" in plan["ask"]
     assert "Bash(php artisan migrate:*)" in plan["ask"]
@@ -3346,7 +3361,7 @@ def test_settings_plan_explain_and_ask_npx_flags(tmp_path, capsys):
     # collapsed to one line per body: no PowerShell twin printed separately
     assert "PowerShell(" not in out
     # allow rules are never explained
-    assert "npm run:*" not in out
+    assert "npm test" not in out
 
     rc = cli.main(["settings-plan", str(tmp_path), "--ecosystem", "js", "--ask-npx", "--explain"])
     out = capsys.readouterr().out
@@ -3426,11 +3441,11 @@ def test_deps_detect_python_falls_back_to_pip_and_flags_django(tmp_path, capsys)
 def test_settings_plan_python_separates_running_tests_from_mutating_the_lock():
     plan = lib.plan_project_permissions(["python"])["permissions"]
     for rule in (
-        "Bash(uv sync:*)",
-        "Bash(uv run pytest:*)",
-        "Bash(pytest:*)",
-        "Bash(ruff check:*)",
-        "Bash(mypy:*)",
+        "Bash(uv sync --locked)",
+        "Bash(uv run pytest)",
+        "Bash(pytest)",
+        "Bash(ruff check)",
+        "Bash(mypy)",
     ):
         assert rule in plan["allow"], rule
     for rule in (

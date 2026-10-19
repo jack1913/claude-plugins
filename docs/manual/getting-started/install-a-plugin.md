@@ -51,8 +51,8 @@ claude plugin update batbelt@jack1913
 
 Or update everything from here at once: `/plugin` → **Marketplaces** → `jack1913` → **Update marketplace**.
 
-Curious what changed? See the changelogs for [brand-creator](../../../plugins/brand-creator/CHANGELOG.md) and
-[swift](../../../plugins/swift/CHANGELOG.md).
+Curious what changed? See the changelogs for [brand-creator](../../../plugins/brand-creator/CHANGELOG.md),
+[swift](../../../plugins/swift/CHANGELOG.md) and [batbelt](../../../plugins/batbelt/CHANGELOG.md).
 
 ## Remove it
 

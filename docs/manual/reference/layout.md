@@ -38,7 +38,7 @@ The rest of the tree (the root [`README.md`](../../../README.md), "Layout";
 | `.github/workflows/<plugin>.yml` | That plugin's CI, run when its folder or its workflow file changes (batbelt: also `tests/**` and `.claude-plugin/**`) or by hand |
 | `.github/workflows/marketplace.yml` | Checks `marketplace.json` |
 | `.github/scripts/check-marketplace.py` | The `marketplace.json` check that `marketplace.yml` runs |
-| `plugins/<name>/` | One plugin: `.claude-plugin/plugin.json`, docs, tests, `CHANGELOG.md`, version (batbelt: no `CHANGELOG.md` yet, and its tests are in the root `tests/`) |
+| `plugins/<name>/` | One plugin: `.claude-plugin/plugin.json`, docs, tests, `CHANGELOG.md`, version (batbelt: its tests are in the root `tests/`) |
 | `tests/` | batbelt's tests (brand-creator and swift keep theirs in their own folder) |
 | `docs/` | This manual, internals, and the marketplace's decision records |
 
