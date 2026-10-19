@@ -1,0 +1,31 @@
+{
+  "name": "jack1913",
+  "owner": {
+    "name": "Jacek Pytlik",
+    "url": "https://github.com/jack1913"
+  },
+  "description": "Jacek Pytlik's Claude Code plugins in one catalogue: domain plugins with descriptive names, kits with DC names.",
+  "plugins": [
+    {
+      "name": "brand-creator",
+      "source": {
+        "source": "url",
+        "url": "https://github.com/jack1913/brand-creator.git"
+      },
+      "description": "Gated, phased brand-identity process: direction boards, mark system, design tokens, platform assets checked by real renderers, brand book, adoption and launch hand-offs.",
+      "homepage": "https://github.com/jack1913/brand-creator",
+      "repository": "https://github.com/jack1913/brand-creator"
+    },
+    {
+      "name": "swift",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/jack1913/swift-plugin.git",
+        "path": "plugins/swift"
+      },
+      "description": "Correct, current, Apple-native Swift: swift:swiftui, swift:design, swift:concurrency, swift:testing and swift:review.",
+      "homepage": "https://github.com/jack1913/swift-plugin",
+      "repository": "https://github.com/jack1913/swift-plugin"
+    }
+  ]
+}
