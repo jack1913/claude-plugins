@@ -1,82 +1,82 @@
 # brand-creator
 
-A Claude Code plugin that makes a brand identity with you: a logo or mark, colours, type, the files every surface needs
-and a guide that says how to use them. It works for any kind of business or person, not only software: a bakery, a
-photographer, a law practice, a podcast, a band, a shop, a nonprofit, or an app. Claude runs the work as short phases that
-each end at a decision of yours. It reads what already exists, shows you three different directions on one page, builds
-the one you pick, and checks the result with real renderers and contrast arithmetic, not with opinions. You decide on
-taste. Claude researches, proposes a pick, builds, and tells you plainly what works and what does not.
+Your brand, made with you: a logo, colours, type, every file your website, shop or app needs, and a short guide to using
+them. It works for any business or person, not just software: a bakery, a photographer, a band, a law practice, an app.
 
-Version 0.1.0. macOS is fully supported, Linux has been verified in a container, and Windows is untested (see
-[Platform support](#platform-support)).
+You describe what you need. Claude shows you three different directions on one page, you pick one, and Claude builds it
+and checks it: it renders the logo at real sizes and measures colour contrast. You decide on taste; Claude does the
+legwork.
+
+Version 0.1.0 · macOS: full support · Linux: tested in a container · Windows: untested ([details](#platform-support))
 
 ## Install
-
-Inside Claude Code:
 
 ```text
 /plugin marketplace add jack1913/claude-plugins
 /plugin install brand-creator@jack1913
 ```
 
-Or from a shell: `claude plugin marketplace add jack1913/claude-plugins`, then `claude plugin install brand-creator@jack1913`.
-The plugin lives in `plugins/brand-creator/` of [jack1913/claude-plugins](https://github.com/jack1913/claude-plugins), which is also the `jack1913` marketplace.
-Restart Claude Code (or run `/reload-plugins`) afterwards.
+Then restart Claude Code, or run `/reload-plugins`.
 
-To work on the plugin itself, load a local checkout for one session instead: `claude --plugin-dir /path/to/claude-plugins/plugins/brand-creator`.
-
-The plugin works in Claude Code only. Its `bin/` entry point and its hook do not exist on claude.ai or in Cowork.
-Minimum Claude Code version: **2.1.271** (see [Claude Code versions](#claude-code-versions)).
+- From a shell: `claude plugin marketplace add jack1913/claude-plugins`, then `claude plugin install brand-creator@jack1913`.
+- Needs Claude Code **2.1.271** or newer ([why](#claude-code-versions)). Claude Code only: not claude.ai or Cowork.
+- Source: `plugins/brand-creator/` in [jack1913/claude-plugins](https://github.com/jack1913/claude-plugins).
 
 ## First run: your first 10 minutes
 
-1. **Install the tools once:** `/brand-creator:setup`. It first shows what it will download, where from, roughly how big it
-   is and where it goes, and it installs nothing until you say yes. It installs Node packages (about 90 MB, pinned by a lock
-   file) and a Chrome Headless Shell build (about 110 MB to download; an existing matching Playwright build is reused) into
-   the plugin's own data folder, and warms up the pinned Python scripts with `uv`. It writes nothing into the plugin folder
-   and nothing runs automatically at session start.
-2. **Start a brand:** say what you need in plain words ("a logo and a look for my bakery") or run `/brand-creator:new [slug]`.
-   You get at most three short questions, each with a recommended answer: the tier, how this brand relates to others you
-   run (only when your brief shows a parent brand or siblings), and the name (only when it is still open). Claude decides
-   how the mark is made (drawn by code, drawn as vector, or your existing mark) and tells you, so you can say otherwise. If
-   boards could be shown as a private page on claude.ai, it also asks once whether you want that or a local file; until you
-   answer, boards stay local. The project folder is `./<slug>/` unless you name another place.
-3. **Round 1:** one page with three clearly different directions, a strategy core, a positioning map, the hardest surface
-   (for example the 16 px browser tab), "None of these", and numbered questions with lettered options. Reply by direction
-   name, or by question and option ("1a 2b"); "ok" accepts every recommendation.
-4. **Pick and refine:** one refine round (`/brand-creator:round`), then the approved board is frozen into `history/`.
-5. **Build and check:** the mark at real sizes, design tokens, a contrast report, the favicon set and social card, a short
-   guide, then `/brand-creator:check`. `/brand-creator:status` tells you where the project stands at any time.
+1. **Install the tools, once:** `/brand-creator:setup`. It shows what it will download and where it goes (about 200 MB of
+   Node packages and a headless Chrome, into the plugin's own data folder; a matching Playwright Chrome you already
+   have is reused) and waits for your yes.
+2. **Say what you want:** "a logo and a look for my bakery", or `/brand-creator:new my-bakery`. You get up to three
+   quick questions, each with a suggested answer: how far to go, how this brand relates to others you run (only if you
+   mention a parent or sister brand), and the name (only if it's still open). It may also ask once whether boards can be
+   shown as a private claude.ai page. Claude also tells you how it will make the logo (drawn by code from simple
+   shapes, drawn as vector shapes, or your existing logo); say if you want it another way.
+3. **Pick a direction:** one page (the board) shows three clearly different directions, plus "None of these". Answer by name, or by
+   question and option, like `1a 2b`. `ok` accepts every suggestion.
+4. **Refine:** one more round with `/brand-creator:round`. Your pick is then locked (saved in `history/`).
+5. **Build and check:** your logo at real sizes, colours, a contrast report, favicons, a social card and a short guide.
+   `/brand-creator:check` runs every check; `/brand-creator:status` shows where you are.
+
+Your project gets its own folder, like `./my-bakery/`, unless you pick another one.
+
+## What you can ask for
+
+| Say or type | You get |
+|---|---|
+| "a logo and a look for my bakery" | the whole process, start to finish |
+| "favicons from my logo.svg" | icons and social images from a logo you already have, no project needed |
+| "name ideas for my bakery", "is the name X taken" | name ideas, or a check on a name you have |
+| "generate the brand book" | a brand book page built from your project |
+| `/brand-creator:launch` | your launch checklist, one step at a time |
 
 ## Tiers
 
-You choose the tier at the start. Moving up later is one question.
+Pick how far to go. You can move up later with one question.
 
 | Tier | What you get | Extra tools needed |
 |---|---|---|
-| Quick | one board of 3 directions, one refine round, the mark and lockup (SVG and PNG), favicon set, social card, design tokens, a short guide | uv, Node 22+, Python 3.10+, resvg, Chromium (installed by setup) |
-| Standard | + research, naming when the name is open, the full brand book (`book.html` and an RGB proof PDF), profile images, print stationery and an e-mail signature (opt-in), a press kit, social posts | + Ghostscript and poppler for print and the PDF checks |
-| Full | + an inventory of your product's icon slots, platform packs (Apple, Windows, Linux, Android, Chrome extension, MSIX, tray, Tauri, Wallet, developer), a read-only survey of your repositories (`ADOPTION.md`), a launch checklist (`LAUNCH.md`) | + macOS with Xcode for the Apple packs (no fallback), ripgrep for the survey |
+| Quick | one board of 3 directions, one refine round, the logo on its own and with your name (SVG and PNG), favicons, a social card, your colours and fonts as ready-to-use code values (design tokens), a short guide | uv, Node 22+, Python 3.10+, resvg, Chromium (installed by setup) |
+| Standard | + research, naming when the name is open, the full brand book (a web page, plus a PDF for checking on screen, not for print), profile images, print stationery and an e-mail signature (opt-in), a press kit, social posts | + Ghostscript and poppler for print and the PDF checks |
+| Full | + a list of every place your product shows an icon, icon packs for each platform (Apple, Windows, Linux, Android, Chrome extension, MSIX, tray, Tauri, Wallet, developer), a read-only look at your repositories (`ADOPTION.md`), a launch checklist (`LAUNCH.md`) | + macOS with Xcode for the Apple packs (no fallback), ripgrep for the repository look |
 
-Rough length: Quick is 2 to 3 board rounds in one sitting, Standard 4 to 6 rounds over a day or two, Full several sessions.
+How long: Quick is 2 to 3 rounds in one sitting, Standard 4 to 6 rounds over a day or two, Full several sessions.
 
 ## What it never does
 
-- **No outward actions.** It never buys a domain, files a trademark, registers a handle, uploads to a store or contacts
-  anyone. `/brand-creator:launch` hands each of those steps to you, one at a time, with the reason and the click path.
+- **Nothing outward.** It never buys a domain, files a trademark, registers a handle, uploads to a store or contacts
+  anyone. `/brand-creator:launch` hands you each of those steps, with the reason and where to click.
 - **No git unless you ask.** It never commits, merges, pushes or stashes on its own; each is a separate ask, and before a
-  push you are told what it triggers. Repository hooks are never skipped. Changes to your product repositories happen
-  only after an explicit go, on a branch you name, one repository at a time, with an independent review first.
-- **No deletes.** Files it replaces are moved to a dated `removed-<date>/` folder, never deleted. A hook keeps frozen rounds
-  in `history/` and earlier rounds under `rounds/` read-only.
-- **No name claims.** Name screening reports REGISTERED, NOT-FOUND or UNKNOWN, never "available" or "clear". It is
-  screening, not clearance: you search the trademark registers and buy the domain yourself. Names are sent to outside
-  services only after you agree.
-- **No print claims.** Without your printer's colour profile a print file is an "RGB proof, not print-ready"; with it,
-  only a "PDF/X-4 candidate (preflight with your printer)". It never says a file conforms. Your printer's proof is your step.
-- **No invented facts.** Copy on boards and in the book comes from the facts you confirmed (`FACTS.md`): no made-up
-  clients, numbers, dates or status words.
-- **No silent fallbacks.** A check that cannot run is reported as "not verified" with the reason, never as a pass.
+  push you're told what it will trigger. Repository hooks are never skipped. Your product repositories change only
+  after you say go, on a branch you name, one at a time, with a review first.
+- **No deletes.** Replaced files move to a dated `removed-<date>/` folder. Earlier rounds are locked.
+- **No "it's available".** A name check says REGISTERED, NOT-FOUND or UNKNOWN, never "available" or "clear". Names go to
+  outside services only after you agree. Trademark searches and domain purchases are yours to do.
+- **No "print-ready".** Print files stay proofs until your printer checks them: an "RGB proof, not print-ready" without
+  your printer's colour profile, a "PDF/X-4 candidate (preflight with your printer)" with it. Getting your printer's
+  proof is your step.
+- **No made-up facts.** Text on boards and in the book uses only facts you confirmed (kept in `FACTS.md`).
+- **No quiet skips.** A check that can't run says "not verified" and why. It never counts as a pass.
 
 ## Platform support
 
@@ -86,83 +86,87 @@ Rough length: Quick is 2 to 3 board rounds in one sitting, Standard 4 to 6 round
 | Quick and Standard | yes | yes | untested |
 | Full | yes (Apple packs need Xcode) | everything except the Apple packs | untested; no Apple packs |
 
-- **Off macOS** the small-size check has no `sips`. It needs your explicit choice of renderer (`--renderer=resvg` or
-  `--renderer=pillow`); `prereq` asks once, the choice is recorded in `BRAND-STATE.md` and printed on every report.
-  `emit apple` exits with "needs macOS with Xcode". Nothing falls back silently.
-- **Linux:** the verified setup is Debian 13 with Python 3.13, Node 24, uv, resvg, ImageMagick, Ghostscript, poppler,
-  ripgrep and potrace (`tests/docker/Dockerfile`). `apt install resvg` exists on Debian 13; other distributions may need
-  `cargo install resvg`. A minimal server may lack Chromium's system libraries; the error names them and the
-  `install-deps` command. In `tools/finish.sh` set `DOWNSCALE_RENDERER` and `ICNS_RENDERER` (for example to `pillow`).
-- **Windows:** nothing has been run on Windows. The safety hook runs `python3`; if that is missing (or is the Microsoft
-  Store alias), the hook does nothing, and only the history check in `/brand-creator:check` protects frozen rounds.
+- **Off macOS:** the small-size check asks you once which renderer to use (`--renderer=resvg` or `--renderer=pillow`)
+  and remembers it in `BRAND-STATE.md`. Your project's asset script, `tools/finish.sh`, needs two settings too, or its
+  size checks and the Tauri icon stop with "cannot run": `DOWNSCALE_RENDERER` (resvg for an SVG logo, pillow for a PNG)
+  and `ICNS_RENDERER=pillow`. `emit apple` stops with "needs macOS with Xcode".
+- **Linux:** the tested setup is Debian 13 with Python 3.13, Node 24, uv, resvg, ImageMagick, Ghostscript, poppler,
+  ripgrep and potrace (`tests/docker/Dockerfile`). Other distributions may need `cargo install resvg`. On a minimal
+  server, Chromium may need system libraries; the error names them.
+- **Windows:** never run. The safety hook needs `python3`. Without it, Claude Code 2.1.295 and later block the call with
+  a notice; on older versions (or with the Microsoft Store alias) the hook does nothing, and only the history check in
+  `/brand-creator:check` protects locked rounds.
 
 ## Costs
 
-- **Single-thread by default.** Everything runs in your own session, one step after another, on your session's model.
-  The cost is about what any long Claude Code session of that length costs.
-- **Fleets are opt-in.** For Standard and Full projects the plugin ships seven agents and four workflows
-  (see [Agents and workflows](#agents-and-workflows-opt-in)). Nothing starts them on its own: before any of them runs you
-  are told the agent count, the models that will actually run (your session model is the ceiling), the size and a rough
-  cost, and you say yes or no. Each agent costs about what that step costs single-thread.
-- **Evals are billed.** `claude plugin eval` runs full sessions on your account. Users never need it; it is for
-  maintainers (see [Running the evals](#running-the-evals)).
+- **One thread by default.** Everything runs in your own session, step by step, on your session's model. It costs about
+  what any Claude Code session of that length costs.
+- **Extra agents only with your yes.** Standard and Full projects can use seven agents and four workflows
+  ([details](#agents-and-workflows-opt-in)). Before any of them run you see how many agents, which models (never above
+  your session's), the size and a rough cost, and you say yes or no. Each agent costs about what that step would cost in
+  one thread.
+- **Evals are for maintainers.** `claude plugin eval` runs full, billed sessions on your account. You never need it
+  ([details](#running-the-evals)).
 
 ## Permissions
 
-Every skill calls the plugin's tool by its bare name, `brand-creator` (Claude Code puts the plugin's `bin/` folder on the
-Bash PATH while the plugin is enabled). A skill pre-approves that command only for the turn that invokes it. To skip the
-approval prompt on later turns, add this rule to your own settings. It matches the exact form the skills use,
-`brand-creator --data <dir> <subcommand> ...`:
+The skills call the plugin's tool as `brand-creator`, and each call can ask for your OK. To stop the prompts, add this
+rule to your own settings:
 
 ```json
 { "permissions": { "allow": ["Bash(brand-creator *)"] } }
 ```
 
-**The fallback form.** When a host does not put the plugin's `bin/` on PATH (`brand-creator: command not found`, seen in
-`claude plugin eval` runs), the skills call the same file by its full path, `"${CLAUDE_PLUGIN_ROOT}/bin/brand-creator" ...`,
-for the rest of the session. The rule above does not match that form, so each call prompts. Answer the first prompt with
-"Yes, and don't ask again", or add a rule with your install's real path, which for a marketplace install is
-`~/.claude/plugins/cache/jack1913/brand-creator/<version>/bin/brand-creator` and changes with every version, for example
-`Bash(<your home>/.claude/plugins/cache/jack1913/brand-creator/0.1.0/bin/brand-creator *)` with your home folder written out. Whether a hand-written rule
-matches the quoted path has not been checked in a real session; the prompt's own "don't ask again" answer always writes the
-form that matches. Avoid a rule that starts with a wildcard (such as `*/bin/brand-creator *`): it approves any program of that
-name anywhere.
+It matches exactly what the skills run: `brand-creator --data <dir> <subcommand> ...`. The plugin never edits your
+settings for you.
 
-These rules are your choice; the plugin never edits your settings.
+**Still prompted every time?** Then Claude Code didn't put the plugin's `bin/` on PATH (`brand-creator: command not
+found`), and the skills call it by its full path, which the rule above doesn't match.
+
+- **Easiest:** answer the first prompt with "Yes, and don't ask again". That always saves a rule that matches.
+- **By hand:** write a rule with your install's real path and your home folder written out, for example
+  `Bash(<your home>/.claude/plugins/cache/jack1913/brand-creator/0.1.0/bin/brand-creator *)`. The version in the path
+  changes with every release, and whether a hand-written rule matches has not been checked in a real session.
+- **Never** start the rule with a wildcard (like `*/bin/brand-creator *`): it would approve any program with that name.
 
 ## Settings
 
-Set in `/plugin` (Installed, Configure) or `/config`.
+Change them in `/plugin` (Installed → brand-creator → **Configure options**) or in `/config`.
 
-| Setting | Meaning |
+| Setting | What it does |
 |---|---|
-| `projects_root` | Folder that holds your brand projects. Empty: you are asked, with `./<slug>/` in the current folder offered first. |
-| `review_surface` | Where boards are shown. `auto` (default): asks once per project, at the start, whether boards may be uploaded to claude.ai as a private Artifact page when the session has the Artifact tool, and uses a local file until you answer. `artifact`: always an Artifact page (your setting is your yes). `local`: always a local file. |
+| `projects_root` | The folder for your brand projects. Empty: you're asked, with a folder named after the project (like `./my-bakery/`) offered first. |
+| `review_surface` | Where boards show up. `auto` (default): asks once per project whether boards may go to claude.ai as a private page, and uses a local file until you answer. `artifact`: always a private claude.ai page. `local`: always a local file. |
 
 ## Troubleshooting
 
-| You see | What to do |
+| You see | Do this |
 |---|---|
-| a tool exits with code 3 ("cannot run") | run `/brand-creator:setup`, or the install command the message names; `brand-creator prereq --for quick` (or `standard`, `full`, `apple`, `print`, `names`, `adoption`) lists what is missing and what it blocks |
-| `brand-creator: command not found` | the host did not put the plugin's `bin/` on PATH; the skills switch to the full path by themselves. Check that the plugin is enabled (`/plugin`) and restart Claude Code |
+| a tool stops with code 3 ("cannot run") | run `/brand-creator:setup`, or the install command the message names. `brand-creator prereq --for quick` (or `standard`, `full`, `apple`, `print`, `names`, `adoption`) lists what's missing |
+| `brand-creator: command not found` | check the plugin is enabled (`/plugin`) and restart Claude Code. The skills switch to the full path meanwhile |
 | a permission prompt on every call | add the rule in [Permissions](#permissions) |
-| shots "not verified" | Chromium is not installed or cannot start. The board is still written and linted; run `/brand-creator:setup`. On Linux, install the system libraries the message names |
-| "no renderer opt-in is recorded" (Linux, Windows) | answer the renderer question `prereq` asks (resvg for an SVG master, Pillow for a PNG master) |
-| `emit apple` says it needs macOS with Xcode | the Apple packs are built on a Mac with Xcode only; everything else works elsewhere |
-| a write to an earlier round or `history/` is blocked | that is the safety hook: earlier rounds are frozen; work in the latest round or start a new one |
-| a Python tool will not start | the tools need a `python3` 3.10 or newer on PATH; the message names every interpreter it tried |
+| shots "not verified" | Chromium is missing or can't start. Run `/brand-creator:setup`; on Linux, install the libraries the message names. The board is still written |
+| "no renderer opt-in is recorded" (Linux, Windows) | answer the renderer question: resvg for an SVG logo, Pillow for a PNG |
+| `emit apple` needs macOS with Xcode | Apple packs are built on a Mac with Xcode; everything else works on Linux too (Windows is untested) |
+| a write to an earlier round or `history/` is blocked | that's the safety lock on finished rounds. Work in the latest round, or start a new one |
+| a Python tool won't start | put a `python3` 3.10 or newer on PATH; the message lists every interpreter it tried |
 
 ## Skills you can call
 
-| Skill | Called by | What it does |
+| Skill | Who starts it | What it does |
 |---|---|---|
-| `brand-creator` | you, or Claude when you ask for a brand | the whole process, gate by gate |
-| `brand-naming`, `brand-assets`, `brand-book` | you, or Claude when the request fits | naming and screening; platform files from a finished mark (also without a project: "favicons from my logo.svg"); the brand book |
-| `/brand-creator:new`, `round`, `status`, `setup` | you only | start a project, the next board round, where it stands, install the tools |
-| `/brand-creator:check` | you only | every gate, plus `--cascade` for old values you name |
-| `/brand-creator:review` | you only | the self-review as one approvable list; an optional lens panel, only after you agree to its size and cost |
-| `/brand-creator:brand-adopt` | you only | the read-only survey of your repositories, and the apply only when you ask |
-| `/brand-creator:launch` | you only | the launch checklist, handed over one action at a time |
+| `brand-creator` | you, or Claude when you ask for a brand | the whole process, one decision at a time |
+| `brand-naming`, `brand-assets`, `brand-book` | you, or Claude when the request fits | name ideas and checks; icons and images from a finished logo (no project needed: "favicons from my logo.svg"); the brand book |
+| `/brand-creator:new`, `round`, `status`, `setup` | you only | start a project, the next round, where you are, install the tools |
+| `/brand-creator:check` | you only | every check, plus `--cascade` to find leftovers of old values you name |
+| `/brand-creator:review` | you only | a self-review as one list you approve; an extra review panel only after you agree to its size and cost |
+| `/brand-creator:brand-adopt` | you only | a read-only look at where your brand belongs in your product repositories; it changes them only when you ask |
+| `/brand-creator:launch` | you only | the launch checklist, one step at a time |
+
+---
+
+The rest of this page is reference: what each step makes, the opt-in agents, version notes, and how to work on the
+plugin.
 
 ## What it makes, in more detail
 
@@ -272,6 +276,8 @@ One hardening is not a runtime row: the guard hook sets `onFailure: "block"`, wh
 
 ## Development
 
+- **Load a local checkout** for one session instead of the installed copy:
+  `claude --plugin-dir /path/to/claude-plugins/plugins/brand-creator`.
 - **Tests** (run from `plugins/brand-creator/`): `BRAND_CREATOR_DATA=<set-up data dir> tests/run-all.sh` runs pytest and `node --test`; `--smoke` adds the Acme
   end-to-end smoke (`tests/smoke/acme.sh`, a synthetic brand through every pack) and the Quick-tier smoke (`tests/smoke/quick.sh`,
   a made-up bakery on a PATH with no Apple tools and no git, ending with the short guide). Mutation tests prove each gate by

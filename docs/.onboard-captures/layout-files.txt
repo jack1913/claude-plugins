@@ -1,0 +1,6 @@
+.claude-plugin/marketplace.json
+.github/scripts/check-marketplace.py
+.github/workflows/batbelt.yml
+.github/workflows/brand-creator.yml
+.github/workflows/marketplace.yml
+.github/workflows/swift.yml

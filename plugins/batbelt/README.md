@@ -1,116 +1,110 @@
 # batbelt
 
-Plan interviews, claim verification against primary sources, and repository onboarding.
+Tools for thinking before you build: get a plan grilled, get a claim proven, and get a repository set up for Claude.
 
-```
+## Install
+
+```text
+/plugin marketplace add jack1913/claude-plugins
 /plugin install batbelt@jack1913
 ```
 
-| Command | What it does |
+Type `/batbelt:` and you'll see its four commands.
+
+| Command | What it's for |
 |---|---|
-| `/batbelt:grilling` | Interview about a plan or design until it holds up |
-| `/batbelt:grill-me` | Shortcut that starts a `grilling` session |
-| `/batbelt:prove-it` | Check business, legal, regulatory or market claims against citable primary sources |
-| `/batbelt:onboard-repo` | Stamp the changelog-release, update-docs and update-rules skills (and optionally update-deps) into a repository |
+| `/batbelt:grilling` | Stress-test a plan or design before you build it |
+| `/batbelt:grill-me` | The same, but it only starts when you type it |
+| `/batbelt:prove-it` | Check a number, a legal rule or a market claim against real sources |
+| `/batbelt:onboard-repo` | Set up a repository so Claude works well in it |
 
-ADR numbers below refer to the design records of the configuration repository these skills came from.
-Tests: `tests/` at the repository root.
+## Grill a plan
 
-## onboard-repo
+About to build something? Run `/batbelt:grilling` and describe the plan. Claude interviews you about it, one question at
+a time, until every decision holds up.
 
-An intent-only scaffolder that copies the canonical `changelog-release`, `update-docs` and `update-rules` skills — plus `update-deps`, which it **always asks about** — into the **current repo's** `.claude/skills/`, so a collaborator without `claude-configs` still gets them from the checkout. It also provisions the repo's own agent configuration, grounds the instruction files the repo already has, offers to port a repo migrating off GitHub Copilot, scaffolds or adopts the four-tier docs IA (`docs/{manual,internals,adr,archive}/` + an `AGENTS.md` index), and authors a grounded consumer manual under `docs/manual/`.
+- Every question comes with a suggested answer. If it's right, just say yes.
+- If the code can answer a question, Claude looks it up instead of asking you.
+- No command needed: saying "grill me on this plan" starts it too. `/batbelt:grill-me` is the same interview, but it
+  only starts when you type it.
 
-- **Fact:** `disable-model-invocation: true` — never auto-invoked; run it deliberately with `/batbelt:onboard-repo`.
-- **Fact:** `update-rules` is the fourth stamped skill and owns the repo's **agent instructions** (`.claude/rules/`, `.claude/skills/`) — a separate surface from docs, with a separate owner, the same way `changelog-release` owns `CHANGELOG.md`. It runs `check-instructions` from its own stamped `scripts/` sibling and **auto-fixes only what is derivable**: quoting an unparsed `description` (`INVALID_FRONTMATTER`) and re-deriving a drifted count (`UNGROUNDED_COUNT`). `DEAD_GLOB`, `UNRESOLVED_CITATION`, `UNDEFINED_SCRIPT` and `MISSING_PATHS` are reported — choosing what a broken citation *meant* is a guess, and a rule pointing confidently at the wrong file is worse than one that visibly dangles.
-- **Fact:** `update-rules` inherits ADR-0002's ban and **never authors a rule**. A convention that looks load-bearing but is unenforced is a report-only finding handed to a human, and the skill is expected to *reject* most candidates: anything a linter, the compiler or a test already catches must not become a rule, since a rule costs context on every matching read. `INVALID_FRONTMATTER` is fixed first because an unparsed rule is an **absent** rule — every other check passes it clean, so its other findings only appear once it parses.
-- **Fact:** carries `changelog-release`, `update-docs`, `update-rules`, and `update-deps` under `onboard-repo/templates/`. Those are **not** globally discoverable — Claude Code scans skills only one level deep, so a nested `templates/<name>/SKILL.md` is invisible until stamped out.
-- **Fact:** `/batbelt:onboard-repo` stamps self-contained `changelog-release`, `update-docs` and `update-rules` copies into the target repo's `.claude/skills/`, plus a Keep a Changelog `CHANGELOG.md` (only if absent) and a `CLAUDE.md` pointer bootstrap. The set is pinned to `onboard_lib.py:CANONICAL`, which `find_predecessors` uses to skip already-stamped skills — a name missing there makes onboarding report a canonical skill as a predecessor to retire, which is exactly what happened to `update-rules` until `test_dogfood.py` started comparing it against `templates/` on disk.
-- **Fact:** `update-docs` and `update-rules` are each stamped with a **`scripts/check.py` sibling** — a plain copy of `onboard-repo/scripts/check.py` — so their gates (`check-docs`, `check-instructions`) run in the **onboarded repo**, not only in claude-configs. It is a third category of stamped file: wholly template-owned with **no REPO SPECIFICS**, so `--sync` `diff`s and replaces it outright (never `preserve`, which would fail closed on the absent markers) and `--check` reports drift as a plain `diff`. `check.py` is stdlib-only and imports **no sibling at all**, which is what makes a single-file `cp` sound; two tests pin that and the one-way dependency behind it. Cost: ~1.9k lines duplicated per consuming skill — the same standalone-repo trade the stamped `SKILL.md` already makes.
-- **Fact:** the `onboard.py` / `onboard_lib.py` pair is **never** stamped — it holds the one-shot onboarding verbs (`preserve`, `check-markers`, `settings-plan`, `settings-audit`, `settings-migrate`, `gitignore-ensure`, `deps-detect`, `convert-copilot`, `run-*`), which a skill that runs for years must not ship. `onboard.py` still answers all three moved verbs by delegating, so an older `onboard.py check-docs` invocation keeps working — but the skill's own recipes now call `check.py` directly. `--sync` migrates a pre-split stamp: it writes `check.py` and removes the two orphans, shown in the plan. See ADR-0008.
-- **Fact:** `update-docs` **maintains the onboarding contract** rather than only auditing drift. It reads `docs/.onboard-coverage.json` (§7.6) and reports a `principal` surface with no page, a row whose page was deleted, and — critically — restates every **parked** (`deferred`) surface each run. Before this, a park was visible only to `onboard-repo --check`, the command nobody runs again after onboarding, so a deliberate deferral quietly became permanent. Flipping a `status` to silence a finding is called out as the same dishonesty as hand-editing a capture. §7.9 extends the same posture to the ADR tier: the index and status pointers are maintained (the mechanical `ADR_INDEX_DRIFT`/`ADR_DANGLING_SUPERSEDE` pair), bodies stay frozen, and the still-in-force sweep — one verifier per accepted ADR, the §3.7b brief — is **offered, report-only**: a "no longer binds" finding proposes a superseding ADR, never an edit to the accepted one.
-- **Fact:** a **missing surface is a report-only finding, never auto-authored** (§7.7). Drift-auditing existing pages cannot see a page that was never written, so `update-docs` diffs the repo's real consumer surfaces against the coverage record and hands the gap to `/batbelt:onboard-repo` (whose §3.7 authoring is incremental and create-only-missing). Authoring here is refused deliberately: a grounded page needs a captured command this skill has no grant to run, and an ungrounded page asserting an unverified capability is worse than a missing one.
-- **Fact:** `update-deps` is **always offered, never silent**. Every default run asks once — defaulting to **no**, since it is the one stamped skill that mutates manifests and lockfiles. The question is skipped only when `deps-detect` finds no supported ecosystem (js/ts, php, python, rust, swift, .NET), which is reported rather than stamped as a no-op, or when the operator pre-answers with `--with update-deps` / `--without update-deps`. A non-interactive run with neither flag declines.
-- **Fact:** provisions the repo's own agent configuration — proposes a `.claude/settings.json` permissions block from the detected ecosystems (`settings-plan`, which writes nothing, so it is safe to run before confirmation; an existing file is diffed and merged additively, never overwritten; `--explain` renders the cost of an `ask` rule — a human-only prompt the auto-mode classifier cannot clear — and one reason per proposed `ask`/`deny` rule from `_RULE_REASONS`, which a test requires to cover every rule the planner can emit; `npx:*` is **opt-in** via `--ask-npx`, never proposed by default, because it fires on every Node lint and test run — ADR-0004's 2026-09-21 update), ensures `.gitignore` covers `.claude/settings.local.json` and `.onboard-repo-retired/` (`gitignore-ensure`), and scaffolds `.claude/rules/EXAMPLE.md` from `templates/docs-ia/rules-EXAMPLE.md`. Per ADR-0002 it deliberately **does not author repo-specific rules blind** — only a reader of the codebase can supply the measured counts and verified symbols a real rule needs; the one authoring path is the validated §3.4c mining pipeline (ADR-0013, below). Credential paths in that block are a single `**/.env*` in **`ask`**, never an enumeration in `deny`: environment names are an open set a list cannot stay ahead of, and gitignore patterns carry no negation, so a `deny` wildcard would permanently wall off `.env.example` (ADR-0009). An **already-onboarded** file is not left to rot: `settings-audit` (read-only, exit `1` on a defect) names deny `Read()` rules anchored inside the repo — on Claude Code 2.1.259 every path-less `rg` there is a human-only prompt — plus home-directory globs that cover nothing in project scope and the allow shapes `test_payload.py` refuses; `settings-migrate --apply --stamp S` re-anchors those deny rules at `//**/<path>` (a strict superset, tier kept, backup under `.onboard-repo-retired/<stamp>/`). `--check` runs the audit and `--sync` offers the migration; the pre-ADR-0009 repos are the usual case (ADR-0017).
-- **Fact:** grounds the repo's own `.claude/rules` and `.claude/skills` (`check-instructions`, read-only) — once during onboarding, before the docs work, and again under `--check`; skipped when both directories are empty or absent — against six finding codes: four errors (`INVALID_FRONTMATTER`, `DEAD_GLOB`, `UNDEFINED_SCRIPT`, `UNRESOLVED_CITATION`) and two warnings (`MISSING_PATHS`, `UNGROUNDED_COUNT`). `--repo-root` is repeatable, so a file citing against both a repo root and a source root resolves under either. `UNDEFINED_SCRIPT` covers `composer run` as well as `npm run`, each against its own manifest; a runner whose manifest is absent is skipped. See ADR-0003.
-- **Fact:** the `check-docs` gate adds `CAPTURES_NOT_CHECKED` (**error** — `--captures` was omitted, so a `capture=` block went unverified; fix the invocation, not the page) and **warnings** for what grounding cannot see: `NO_SHOWCASE` (a `docs/manual/` page with commands and no output), `LEAKED_PATH` (an absolute home path in a committed doc — placeholder segments and `illustrative` blocks exempt), `ADR_NAMING`/`ADR_SHAPE` (a `docs/adr/` page that is a decision record only by filename), and the ADR lifecycle pair `ADR_INDEX_DRIFT`/`ADR_DANGLING_SUPERSEDE` (a record with no row in the tier index README — present-based, only when an index exists; a "superseded/amended by ADR-NNNN" pointer resolving to no file — the index and the status pointers are the only maintained parts of a frozen record, so they are exactly where drift lands). Grounding, showcase and the ADR shape checks all stop at the frozen `docs/archive/**` tier, since each asks for an edit the IA forbids there; link checks still apply. Tier membership is tested relative to the scanned root, so a checkout under a directory named `archive` or `adr` is not misread. See ADR-0004.
-- **Fact:** a run is **durable and resumable**, because a brownfield pass is a multi-hour, possibly multi-session operation. `run-init` / `run-status` / `run-next` / `run-set` persist the phase, the operator's confirmations and one item per work unit to `.onboard-repo-retired/<stamp>/run.json` (gitignored — it holds confirmed plans), and `--resume` continues from it. `run-set --add` is idempotent, so re-running detection after a context compaction cannot reset a surface already `done`; a malformed record fails closed (`RUN STATE ERROR`, exit 2) and is never replaced, since minting over it would discard the confirmations it exists to protect. Like every other verb, the run verbs write to stdout only — capture, then `mv`. See ADR-0005.
-- **Fact:** the §3.7 authoring loop is bounded **per surface**, not tree-wide, and a surface that will not converge is **parked** (with its reason, recorded `deferred`) while the run continues — one page needing infrastructure the operator lacks no longer discards every page that already converged. `run-status` names every parked item, and `--check` re-flags it via `EMPTY_TIER`.
-- **Fact:** `check-docs --only PATH` restricts which files **report** findings while still walking the full roots, and `--no-tier-check` drops the tree-wide `EMPTY_TIER` sweep during authoring. The per-page loop passes full roots **plus** `--only` — never a single-file root, which would silently downgrade a real `BROKEN_LINK` to a warning (severity keys on whether the target is in-roots) and exit 0 on a broken page. The run ends with one unscoped pass so the tree-wide checks finally speak.
-- **Fact:** the read-heavy passes **fan out** — §3.6 rubric classification, §3.4 instruction grounding, §3.4c rule mining and its per-candidate verification, §3.7 capture reading / draft research, and §3.7b ADR mining are delegated (workers return verdicts or candidates, never file bodies), preferably as a `Workflow` with `pipeline()`, else at most 8 `Agent` calls with non-overlapping briefs. Detection, the plan, every confirmation and every write stay in the main thread, since §3.6's link-fixing order is load-bearing. The reviewer remains exactly one agent. `allowed-tools` carries `Agent` and `Workflow` (`Task` is kept — still a live alias).
-- **Fact:** an empty rules layer gets a **mining offer** (§3.4c) — when `.claude/rules/` holds only `EXAMPLE.md`, the skill offers (never runs unasked) to mine the codebase for rule candidates, amending ADR-0002 §4's authoring ban for exactly this one validated path (ADR-0013). Workers shard by subsystem and return candidates only; each survivor then takes **three mandatory validation passes** — mechanical (every count re-run via its stated command, every symbol resolved, the `paths:` glob matched against real files), a **truth verifier** briefed to refute by sampling real sites (the pass that catches a 55-vs-5 grep artifact), and a **worth verifier** (redundant with a linter/test, procedural, over-broad, or not worth its per-read cost). Both verifiers must pass, the loop is bounded at two rounds, and a non-converger drops to the report — never to disk. The operator confirms the evidence-and-verdicts list before any write; `check-instructions` must come back clean on the authored files; `--no-review` disables the pass entirely (validation is inseparable, so there is no unreviewed variant). `update-rules`' own ban (ADR-0007) is unchanged — it repairs what mining wrote, it never mints.
-- **Fact:** an empty ADR tier gets a **mining offer** (§3.7b) — when, after adoption and authoring, `docs/adr/` still holds no real decision record, the skill offers (never runs unasked) to mine the repo's own git history and design docs for decision candidates. Workers shard by subsystem and return candidates only — title, decision, context, consequences, status, evidence commits — under cite-or-defer: a hash the worker did not read from `git log` never enters a candidate. Dedupe, the still-in-force judgment, and all authoring stay in the main thread behind one operator confirmation of the candidate list. The bar: a durable design choice with rejected alternatives, product/architecture only — an onboarding run's own IA conventions are run-record material, never ADR-0001. Confirmed candidates run inside the `author` phase as `--kind adr` run items (no new phase — `run_set_phase` enforces the enum), and each authored `ADR-NNNN-<slug>.md` follows `templates/docs-ia/ADR-TEMPLATE.md` and is gated by `check-docs`'s `ADR_NAMING`/`ADR_SHAPE`. Shape is not truth, so each authored ADR is then **revalidated** by an independent verifier — one per ADR, handed the page and the repo but never the miner's candidate notes — checking that the cited evidence supports the decision, the rejected alternatives are real, and the choice still binds the code (else `Status: superseded`). A flag is fixed or parked like a §3.7 reviewer flag, and `--no-review` skips this verifier too.
-- **Fact:** offers to port a repo migrating off GitHub Copilot (`convert-copilot`) — `.github/instructions/*.instructions.md` → `.claude/rules/` (`applyTo:` becomes `paths:`), `.github/prompts/*.prompt.md` → `.claude/skills/<name>/SKILL.md` (`${input:Name}` becomes `$Name`) — offered and operator-confirmed, never run unasked. Converted text goes to stdout and notes to stderr, and a placeholder glued to an identifier character (`${input:Name}Props`) is left alone and reported rather than silently renamed.
+## Prove a claim
 
-Modes are report-first and idempotent — nothing is written before the plan is shown and confirmed:
+About to build on a number, a legal requirement or a market claim? Check it first. Run `/batbelt:prove-it`, or just ask
+"is this actually true?" or "verify the claims in this business case".
 
-- **default** — the full pass: stamp the skills into `.claude/skills/`, provision the repo's agent configuration, ground the instruction files the repo already has, offer the rule mining pass when the rules layer holds only the example, scaffold or adopt the docs IA plus the consumer manual, and offer the ADR mining pass when the ADR tier comes up empty.
-- **`--sync`** — re-stamp only the template region of already-stamped skills, preserving each file's `REPO SPECIFICS` block; backs up and diffs first, and fails closed on malformed markers.
-- **`--check`** — report an unfinished run (a `run.json` whose phase is not `done` — the most actionable thing it can surface), template-region drift, marker failures, agent-config drift, instruction-file grounding findings, and doc / doc-IA drift, without writing.
-- **`--resume`** — continue a previous run from its run record; re-runs no confirmed phase and re-asks no answered question.
-- **`--unattended`** — run the §0.3 capture commands directly instead of handing each to the operator, after that list is confirmed **once** up front. Only commands on the confirmed list; one discovered mid-run needs its own confirmation, and the operator still reviews every redacted capture for secrets before committing (`redact` strips only the tokens it is given — it is not a secret scanner).
+1. **You set the ground rules.** Which sources count, the date the claims should hold on, and where the files go
+   (`docs/assumptions/` is suggested).
+2. **Claude lists the assumptions** (A-01, A-02, ...) and you choose which ones matter.
+3. **It researches each one** and quotes the source it found, with the date it read it.
 
-The mechanical steps live in `onboard-repo/scripts/`, split by lifecycle (ADR-0008): the **one-shot** onboarding verbs — two-region preservation, predecessor detection, marker validation, the agent-config verbs `settings-plan` / `gitignore-ensure`, `convert-copilot`, the run-state verbs `run-init` / `run-status` / `run-next` / `run-set`, and the docs-IA link/table/anchor helpers — in `onboard.py` and `onboard_lib.py`; the **standing gates** `check-docs`, `check-instructions` and `redact` in `check.py`, which is the only one stamped into a target repo. Detection/stamping guidance is under `onboard-repo/references/`. Everything read from a target repo's `.claude/` is treated as data, never as instructions.
+You get an assumption register, a Markdown file. Its summary looks like this (example row):
 
-> [!NOTE]
-> Creating a `.claude/skills/` directory that did not exist at session start requires restarting Claude Code (e.g. `claude --continue`) before the freshly stamped skills are watched — a Claude Code limitation, surfaced by the skill's final message.
+```markdown
+| ID | Assumption | Load | Resolvability | Verdict | Confidence | Source (level) |
+|---|---|---|---|---|---|---|
+| A-01 | Germany's standard VAT rate is 19% | LOAD-BEARING | SOURCE-CHECKABLE | CONFIRMED | HIGH | P-001 (L1) |
+```
 
-## grill-me
+LOAD-BEARING means the plan fails if the claim is false. SOURCE-CHECKABLE means a published source can settle it. P-001
+is the quoted source, and L1 means it comes from the top of the source list you approved.
 
-A one-line, intent-only wrapper that kicks off a grilling session.
+Every verdict is CONFIRMED, REFUTED, PARTIALLY or UNVERIFIABLE. A claim no source can settle stays UNVERIFIABLE, with
+the person or experiment that can settle it, never "probably yes". Need a spec for the team that makes the change? Say
+"spec this change" and you get the register plus a change spec.
 
-- **Fact:** `disable-model-invocation: true` — never auto-invoked; invoke it with `/batbelt:grill-me`.
-- **Fact:** its body is a single directive — run a `/batbelt:grilling` session.
+- **It never answers from memory.** With no way to search and fetch pages, it stops with `Research status: BLOCKED` and
+  tells you how to carry on.
+- **Some sources only show their text in a browser.** If you have a Playwright (or similar) browser tool connected, it
+  uses that after a plain fetch fails. On a CAPTCHA or a login page it asks you to fetch that source yourself.
+- **Starting over is safe.** A fresh run renames the old register; it never overwrites it.
 
-## grilling
+## Set up a repository
 
-The model-invocable interviewer: a relentless, one-question-at-a-time interrogation of a plan or design that walks each branch of the design tree and resolves dependencies between decisions one by one.
+Run `/batbelt:onboard-repo` inside a repository. It sets the repo up so Claude, and anyone who clones it, works well
+there:
 
-- **Fact:** no `disable-model-invocation` flag — Claude may auto-invoke it on a "grill" trigger phrase or a stress-test-my-plan request.
-- **Fact:** asks **one** question at a time and waits for feedback before continuing (multiple questions at once is bewildering), and **recommends an answer** for each question.
-- **Fact:** when a question is answerable from the codebase, it explores the codebase instead of asking.
+- **Three upkeep skills** in `.claude/skills/`: `changelog-release` writes release notes and bumps the version,
+  `update-docs` keeps the docs in line with the code, and `update-rules` checks your `.claude/rules` and skills.
+- **A permission list** in `.claude/settings.json`, so routine commands don't prompt and risky ones do. If you already
+  have one, it merges into it instead of overwriting it.
+- **An `AGENTS.md` index and a `docs/` manual** for the repo.
+- **Housekeeping:** a `CHANGELOG.md` if you have none, a pointer in `CLAUDE.md`, a sample `.claude/rules/EXAMPLE.md`,
+  and two `.gitignore` lines. Its backups and saved progress go in `.onboard-repo-retired/`, which stays out of git.
+- **Extras it asks about first:**
+  - `update-deps` for dependency updates. It changes manifests and lockfiles, so the suggested answer is no. It's only
+    offered for JS/TS, PHP, Python, Rust, Swift and .NET.
+  - Rules mined from your code, and decision records from your git history.
+  - If the repo has GitHub Copilot instructions or prompts, a port of them to Claude rules and skills.
 
-## prove-it
+It shows you the plan first and changes nothing in your repository until you say yes. The only thing it writes before
+then is its own progress record in `.onboard-repo-retired/`.
 
-A model-invocable evidence workflow for assumptions that can be true or false:
-business numbers, legal or regulatory requirements, market claims, and product or
-customer behavior. VALIDATE mode writes an assumption register; SPEC mode adds a
-change spec whose calculation steps refer back to the register's provenance IDs.
+| You want to | Type |
+|---|---|
+| Set up a repo | `/batbelt:onboard-repo` |
+| See what has drifted, without changing anything | `/batbelt:onboard-repo --check` |
+| Refresh the skills after a batbelt update | `/batbelt:onboard-repo --sync` |
+| Carry on after a break | `/batbelt:onboard-repo --resume` |
+| Answer the `update-deps` question up front | `/batbelt:onboard-repo --with update-deps` or `--without update-deps` |
+| Let it run the doc example commands itself | `/batbelt:onboard-repo --unattended` |
+| Skip the review of the pages it writes (rule mining is then off too) | `/batbelt:onboard-repo --no-review` |
 
-- **Fact:** source files are [`skills/prove-it/`](skills/prove-it/):
-  `SKILL.md` plus `references/{evidence-standards,source-profiles,templates}.md`.
-- **Fact:** Intake uses one `AskUserQuestion` call for three questions — source
-  hierarchy, reference date, and artifact location — and creates a missing chosen
-  directory only after the operator accepts the recommended "create or use" option.
-- **Fact:** local Markdown is durable state. A register is created once with `Write`;
-  every later mutation completely `Read`s the current file and applies targeted
-  `Edit`s to the affected section, table row, or Research-status field. Resume starts
-  at the first approved assumption without a persisted section; a fresh run renames
-  the old register instead of overwriting it.
-- **Fact:** research cannot fall back to model memory. A usable path is search plus
-  fetch, or user-supplied URLs plus fetch. Missing tooling or a tool error writes
-  `Research status: BLOCKED` with the first unfinished assumption and resume
-  instruction, preserves completed evidence, writes no verdict for the blocked item,
-  and stops at the checkpoint. A fetch failure caps a verdict at PARTIALLY only when
-  the URL was identified in the run, another accessible source independently
-  corroborated the claim, and the actual fetch of that URL failed.
-- **Fact:** the status lifecycle is explicit: `NOT STARTED` at register creation,
-  `IN PROGRESS` before the first researched item, `COMPLETE` after the final persisted
-  item, or `BLOCKED` at the first unavailable path. A triage with no source-checkable
-  assumptions moves directly from `NOT STARTED` to `COMPLETE` without requiring a web
-  tool.
-- **Fact:** the research ladder has a **last rung**: when a level-1 source is only
-  reachable through a rendered page (text arrives via JS, a viewer serves no direct
-  file URL, a search form is the only index) and a Playwright or equivalent browser
-  MCP is connected, the skill drives it — but only after a plain fetch and any API
-  front door have been tried, since a session costs minutes where an API call costs
-  seconds. Two limits are non-negotiable: it **does not lower the evidence bar** (text
-  read in a browser still needs a quoted `verbatim`, a direct `source_url` and a
-  `fetched` date), and a **human-verification wall is a hand-off, not an obstacle** —
-  a CAPTCHA, login, or anti-bot interstitial means stopping and naming the source for
-  the user to fetch, never routing around it. `WebFetch` on a `.pdf` is the cheap rung
-  below: its sub-model often refuses the binary, but the tool still saves the file and
-  prints the path, which the file-reading tool opens by page range.
-- **Fact:** a source **fetched but not read corroborates nothing**. The failure is quiet
-  because the record looks complete — right URL, successful fetch, real `fetched` date —
-  so the mandatory `verbatim` field is what exposes it; an unread fetch caps the verdict
-  at UNVERIFIABLE until the passage is actually quoted.
+With `--unattended` you approve the list of commands once, up front, and anything not on it still asks. Before you
+commit, read every captured output it saved: it removes your home path and user name, but it is not a secret scanner.
+
+When it's done, restart Claude Code (`claude --continue`) so the new skills load.
+
+## Troubleshooting
+
+| You see | Do this |
+|---|---|
+| `/batbelt:onboard-repo` or `/batbelt:grill-me` doesn't start when you ask in words | Type the command. These two only run when typed |
+| `prove-it` stops with `Research status: BLOCKED` | It needs a way to fetch pages, plus search or URLs from you. Add the tool or paste the URLs, then run it again: it picks up where it stopped |
+| New skills don't show up after onboarding | Restart Claude Code: `claude --continue` |
+| `RUN STATE ERROR` from `onboard-repo` | Its progress file (the newest `.onboard-repo-retired/*/run.json`) is damaged, so it stops rather than overwrite it. Fix the file or move it aside, then run `/batbelt:onboard-repo` again. Don't delete the folder: it also holds your backups |
+
+## For maintainers
+
+How each skill works inside, with the design notes: [docs/how-it-works.md](docs/how-it-works.md). The tests are in
+`tests/` at the root of the [claude-plugins](https://github.com/jack1913/claude-plugins) repository.

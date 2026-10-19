@@ -1,0 +1,3 @@
+Validating marketplace manifest: ~/Dev/claude_skills/claude-plugins/.claude-plugin/marketplace.json
+
+✔ Validation passed
