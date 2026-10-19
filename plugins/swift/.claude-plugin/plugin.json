@@ -1,6 +1,6 @@
 {
   "name": "swift",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "Correct, current, Apple-native Swift: swift:swiftui (APIs and correctness, visionOS, previews), swift:design (Apple-native design), swift:concurrency (Swift 6 concurrency), swift:testing (Swift Testing and XCTest migration) and swift:review (on-demand HIG review, /swift:review).",
   "author": { "name": "Jacek Pytlik", "url": "https://github.com/jack1913" },
   "license": "MIT",

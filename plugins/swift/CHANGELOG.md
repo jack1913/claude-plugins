@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-19
+
+**Breaking:** the plugin is now listed in the marketplace `jack1913`, the repo `jack1913/claude-plugins`, and this repo is no longer a marketplace. The install ID changes from `swift@jack1913-plugins` to `swift@jack1913`. Claude Code can't migrate a marketplace name, so move each older install by hand:
+- uninstall `swift@jack1913-plugins`;
+- `claude plugin marketplace remove jack1913-plugins`;
+- `claude plugin marketplace add jack1913/claude-plugins --scope project`;
+- `claude plugin install swift@jack1913 --scope project`;
+- commit the repo's changed `.claude/settings.json`.
+
+The manual's "Move an install to the jack1913 marketplace" section lists the exact commands, for installs from `swift-plugin` too. The skills, the plugin name and the GitHub repo are unchanged.
+
+### Changed
+
+- The catalogue is `jack1913/claude-plugins`, with `swift` as a `git-subdir` source pointing at `plugins/swift` here (ADR-0014, which supersedes ADR-0001 and ADR-0012).
+- The README, the manual, AGENTS.md and the release skills give the new install and update lines, and say that installing needs read access to both private repos.
+
+### Removed
+
+- `.claude-plugin/marketplace.json`. The manual no longer has a marketplace validation step; the manifest is validated in `jack1913/claude-plugins`.
+
 ## [0.2.3] - 2026-09-28
 
 ### Added
