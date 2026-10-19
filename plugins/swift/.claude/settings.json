@@ -1,8 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git fetch:*)",
-      "PowerShell(git fetch:*)",
+      "Bash(git fetch)",
+      "PowerShell(git fetch)",
+      "Bash(git fetch origin)",
+      "PowerShell(git fetch origin)",
       "Bash(git switch:*)",
       "PowerShell(git switch:*)",
       "Bash(git stash:*)",
