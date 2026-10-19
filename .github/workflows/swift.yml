@@ -12,6 +12,7 @@ on:
     paths:
       - "plugins/swift/**"
       - ".github/workflows/swift.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
