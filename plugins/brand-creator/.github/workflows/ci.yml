@@ -94,7 +94,7 @@ jobs:
         env:
           BRAND_CREATOR_DATA: ${{ runner.temp }}/bc-data
           BRAND_CREATOR_REQUIRE_ALL: "1"
-      - name: Acme smoke (the macOS path: emit apple, actool per platform, sips)
+      - name: "Acme smoke (the macOS path: emit apple, actool per platform, sips)"
         run: |
           set -o pipefail
           tests/smoke/acme.sh | tee "$RUNNER_TEMP/smoke.log"

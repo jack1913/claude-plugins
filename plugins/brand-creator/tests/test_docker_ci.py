@@ -134,3 +134,17 @@ def test_ci_workflow_runs_linux_validate_and_macos_and_never_the_billed_eval():
     assert "permissions:\n  contents: read" in text
     for needle in PERSONAL:
         assert needle not in text
+
+
+def test_ci_workflow_values_are_valid_yaml():
+    """GitHub rejected the first push of ci.yml outright ("workflow file issue"): a step name held ': ' unquoted. Every
+    single-line `key: value` in the workflow must load as one YAML string, like the skill frontmatter."""
+    from test_skills import yaml_plain_scalar_problem
+    bad = []
+    for n, line in enumerate((ROOT / ".github" / "workflows" / "ci.yml").read_text().splitlines(), 1):
+        m = re.match(r"^\s*(?:- )?([A-Za-z_][\w-]*):\s+(.+)$", line)
+        if m and not line.lstrip().startswith("#") and m.group(2).strip() not in ("|", ">"):
+            why = yaml_plain_scalar_problem(m.group(2).strip())
+            if why and not m.group(2).strip().startswith("${{"):
+                bad.append(f"ci.yml:{n}: {m.group(1)} {why}")
+    assert not bad, "\n".join(bad)
