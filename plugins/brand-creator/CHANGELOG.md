@@ -4,6 +4,33 @@ All notable changes are listed here. The plugin version in `.claude-plugin/plugi
 (this keeps `claude plugin validate --strict` and update detection predictable). How 0.1.0 was built, stage by stage, is in
 `dev/BUILD-LOG.md`; the reasons behind its choices are in `dev/DECISIONS-LOG.md`.
 
+## 0.2.0 - 2026-10-19
+
+**Breaking:** brand-creator is now listed in the `jack1913` marketplace, in `plugins/brand-creator/` of
+[jack1913/claude-plugins](https://github.com/jack1913/claude-plugins). The install ID changes from
+`brand-creator@brand-creator` to `brand-creator@jack1913`. Claude Code can't move an install between marketplaces, so
+move it by hand:
+
+- `claude plugin uninstall brand-creator@brand-creator`;
+- `claude plugin marketplace remove brand-creator`;
+- `claude plugin marketplace add jack1913/claude-plugins`;
+- `claude plugin install brand-creator@jack1913`.
+
+If you wrote a permission rule with the plugin's full path, its folder changed from `cache/brand-creator/brand-creator/`
+to `cache/jack1913/brand-creator/`. The `Bash(brand-creator *)` rule needs no change.
+
+### Fixed
+
+- The safety hook is stricter about archives: it blocks an extract into a round, a project folder or a folder above one,
+  refuses an extract it can't see into, and reads tar, unzip and 7z options the way those tools do.
+- The safety hook treats `git stash push -u` or `-a` without a precise path as covering the whole working tree, so it
+  can't sweep up locked rounds.
+
+### Changed
+
+- The README is rewritten for users: what to say, what you get, and a troubleshooting table near the top. The reference
+  half is unchanged.
+
 ## 0.1.0 - 2026-10-18
 
 The first release.

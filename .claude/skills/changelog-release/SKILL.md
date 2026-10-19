@@ -233,7 +233,7 @@ subjects; RAG/knowledge-graph anti-hallucination (ground truth is
 <!-- stamped by onboard-repo v3 from claude-configs on 2026-10-19. The template region is regenerated on /batbelt:onboard-repo --sync (backup + diff shown first); the REPO SPECIFICS block is preserved. -->
 
 <!-- BEGIN REPO SPECIFICS (preserved on --sync) -->
-- **scope (monorepo of independent plugins):** every run is for ONE plugin `<name>` under `plugins/<name>/` — ask which if the request does not say. Read `CHANGELOG.md` as `plugins/<name>/CHANGELOG.md`, limit the range to that folder (`git log BASELINE..HEAD -- plugins/<name>`), and bump only that plugin's version home. **swift** has its own stamped skill: for a swift release, apply the REPO SPECIFICS of `plugins/swift/.claude/skills/changelog-release/SKILL.md` (its paths are relative to `plugins/swift/`) instead of the per-plugin rows below.
+- **scope (monorepo of independent plugins):** each release is for ONE plugin `<name>` under `plugins/<name>/`. When the request names no plugin, do not ask: check every plugin yourself — its changes since its last release (§1, per plugin) — and release each one with user-facing changes, one block and one version per plugin. Skip a plugin with nothing new, or only contributor-facing changes (tests, CI, its own `.claude/` config, dev notes), and say which you skipped and why. For each plugin you release, read `CHANGELOG.md` as `plugins/<name>/CHANGELOG.md`, limit the range to that folder (`git log BASELINE..HEAD -- plugins/<name>`), and bump only that plugin's version home. **swift** has its own stamped skill: for a swift release, apply the REPO SPECIFICS of `plugins/swift/.claude/skills/changelog-release/SKILL.md` (its paths are relative to `plugins/swift/`) instead of the per-plugin rows below.
 - **versioning scheme:** `semver`.
 - **version homes:** one per plugin, never kept in sync with each other:
   - `plugins/batbelt/.claude-plugin/plugin.json` (`version`)
@@ -241,12 +241,13 @@ subjects; RAG/knowledge-graph anti-hallucination (ground truth is
   - `plugins/swift/.claude-plugin/plugin.json` (`version`)
   The plugin entries in `.claude-plugin/marketplace.json` carry no `version` on purpose (`rg -c '"version"' .claude-plugin/marketplace.json` prints nothing) — never add one.
 - **monorepo mode:** `independent`.
-- **release tags (§1 step 2):** `<name>--v<version>`, not `v<version>` — list with `git tag -l '<name>--v*' --sort=-v:refname`. Only swift has tags so far; batbelt and brand-creator have none.
+- **release tags (§1 step 2):** `<name>--v<version>`, not `v<version>` — list with `git tag -l '<name>--v*' --sort=-v:refname`. Tags exist for swift and batbelt (from `batbelt--v0.1.2`); brand-creator has none yet, so its baseline comes from its top CHANGELOG heading.
 - **changelog per plugin:**
   - swift — `plugins/swift/CHANGELOG.md`, headings `## [x.y.z] - YYYY-MM-DD` under `## [Unreleased]`.
   - brand-creator — `plugins/brand-creator/CHANGELOG.md`, headings `## x.y.z - YYYY-MM-DD` with **no brackets** and no `[Unreleased]` heading; treat that form as the release heading for §1 step 1 and mirror it when cutting a version.
   - batbelt — `plugins/batbelt/CHANGELOG.md` (started at 0.1.2, with 0.1.0 and 0.1.1 backfilled), headings `## [x.y.z] - YYYY-MM-DD` under `## [Unreleased]`.
   - No root `CHANGELOG.md`: there is no repo-wide version.
+- **other version pins (brand-creator):** a bump also edits `tests/test_static.py` (`assert d["version"] == ...`), `scripts/lib/_common.py` (`USER_AGENT`, pinned to plugin.json by a test), the README's `Version x.y.z` line and its cache-path example, and `evals/_shared/fixture.sh` (`plugin_version`). Find any new one with `rg -n '<old version>' plugins/brand-creator --glob '!dev/**' --glob '!CHANGELOG.md'`.
 - **release-script delegation:** `none` (no release script, no version-sync test). After the operator commits, the tag comes from `claude plugin tag plugins/<name>` run from the repo root (it checks `plugin.json` against the marketplace entry, then creates `<name>--v<version>`; print `--dry-run` first), not `git tag`. Then `git push origin main <name>--v<version>`.
 - **dash punctuation:** `-`.
 - **changeset dir:** `none`.
