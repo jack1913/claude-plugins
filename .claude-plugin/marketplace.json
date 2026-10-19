@@ -26,6 +26,11 @@
       "description": "Correct, current, Apple-native Swift: swift:swiftui, swift:design, swift:concurrency, swift:testing and swift:review.",
       "homepage": "https://github.com/jack1913/swift-plugin",
       "repository": "https://github.com/jack1913/swift-plugin"
+    },
+    {
+      "name": "batbelt",
+      "source": "./plugins/batbelt",
+      "description": "Plan interviews, claim verification against primary sources, and repository onboarding."
     }
   ]
 }

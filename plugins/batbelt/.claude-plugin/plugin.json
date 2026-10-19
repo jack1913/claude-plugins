@@ -1,0 +1,10 @@
+{
+  "name": "batbelt",
+  "version": "0.1.0",
+  "description": "Plan interviews, claim verification against primary sources, and repository onboarding.",
+  "author": {
+    "name": "Jacek Pytlik"
+  },
+  "homepage": "https://github.com/jack1913/claude-plugins",
+  "repository": "https://github.com/jack1913/claude-plugins"
+}
