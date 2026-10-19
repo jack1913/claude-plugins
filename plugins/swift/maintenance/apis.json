@@ -765,9 +765,11 @@
       "path": "swiftui/arrangementview",
       "claims": {
         "iOS": "27.1",
-        "Mac Catalyst": false,
-        "macOS": false,
-        "visionOS": false
+        "Mac Catalyst": "27.1",
+        "macOS": "27.1",
+        "visionOS": "27.1",
+        "tvOS": "27.1",
+        "watchOS": "27.1"
       }
     },
     {
@@ -775,9 +777,11 @@
       "path": "swiftui/view/arrangementviewstyle(_:)",
       "claims": {
         "iOS": "27.1",
-        "Mac Catalyst": false,
-        "macOS": false,
-        "visionOS": false
+        "Mac Catalyst": "27.1",
+        "macOS": "27.1",
+        "visionOS": "27.1",
+        "tvOS": "27.1",
+        "watchOS": "27.1"
       }
     },
     {
@@ -785,9 +789,11 @@
       "path": "swiftui/geometryproxy/reservedregions(kind:options:layoutdirectionbehavior:)",
       "claims": {
         "iOS": "27.1",
-        "Mac Catalyst": false,
-        "macOS": false,
-        "visionOS": false
+        "Mac Catalyst": "27.1",
+        "macOS": "27.1",
+        "visionOS": "27.1",
+        "tvOS": "27.1",
+        "watchOS": "27.1"
       }
     },
     {
@@ -815,9 +821,11 @@
       "path": "swiftui/environmentvalues/toolbarverticaledge",
       "claims": {
         "iOS": "27.1",
-        "Mac Catalyst": false,
-        "macOS": false,
-        "visionOS": false
+        "Mac Catalyst": "27.1",
+        "macOS": "27.1",
+        "visionOS": "27.1",
+        "tvOS": "27.1",
+        "watchOS": "27.1"
       }
     },
     {
@@ -825,9 +833,11 @@
       "path": "swiftui/view/onhingechange(isenabled:_:)",
       "claims": {
         "iOS": "27.1",
-        "Mac Catalyst": false,
-        "macOS": false,
-        "visionOS": false
+        "Mac Catalyst": "27.1",
+        "macOS": "27.1",
+        "visionOS": "27.1",
+        "tvOS": "27.1",
+        "watchOS": "27.1"
       }
     },
     {
@@ -835,9 +845,11 @@
       "path": "swiftui/reservedregion",
       "claims": {
         "iOS": "27.1",
-        "Mac Catalyst": false,
-        "macOS": false,
-        "visionOS": false
+        "Mac Catalyst": "27.1",
+        "macOS": "27.1",
+        "visionOS": "27.1",
+        "tvOS": "27.1",
+        "watchOS": "27.1"
       }
     },
     {
@@ -845,9 +857,11 @@
       "path": "swiftui/toolbarcontent/axisbehavior(_:)",
       "claims": {
         "iOS": "27.1",
-        "Mac Catalyst": false,
-        "macOS": false,
-        "visionOS": false
+        "Mac Catalyst": "27.1",
+        "macOS": "27.1",
+        "visionOS": "27.1",
+        "tvOS": "27.1",
+        "watchOS": "27.1"
       }
     },
     {
@@ -855,9 +869,11 @@
       "path": "swiftui/view/toolbarverticalcompressionbehavior(_:)",
       "claims": {
         "iOS": "27.1",
-        "Mac Catalyst": false,
-        "macOS": false,
-        "visionOS": false
+        "Mac Catalyst": "27.1",
+        "macOS": "27.1",
+        "visionOS": "27.1",
+        "tvOS": "27.1",
+        "watchOS": "27.1"
       }
     },
     {
@@ -865,9 +881,11 @@
       "path": "swiftui/view/toolbarverticalbehavior(_:)",
       "claims": {
         "iOS": "27.1",
-        "Mac Catalyst": false,
-        "macOS": false,
-        "visionOS": false
+        "Mac Catalyst": "27.1",
+        "macOS": "27.1",
+        "visionOS": "27.1",
+        "tvOS": "27.1",
+        "watchOS": "27.1"
       }
     },
     {
@@ -875,9 +893,11 @@
       "path": "swiftui/devicehingecontext",
       "claims": {
         "iOS": "27.1",
-        "Mac Catalyst": false,
-        "macOS": false,
-        "visionOS": false
+        "Mac Catalyst": "27.1",
+        "macOS": "27.1",
+        "visionOS": "27.1",
+        "tvOS": "27.1",
+        "watchOS": "27.1"
       }
     },
     {

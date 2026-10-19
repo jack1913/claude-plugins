@@ -6,8 +6,8 @@
 - [Context-Agnostic Views](#context-agnostic-views)
 - [Adaptive and Resizable Interfaces](#adaptive-and-resizable-interfaces)
 - [Adaptive Safe Areas](#adaptive-safe-areas)
-- [Two-Region Arrangements (iOS 27.1+)](#two-region-arrangements-ios-271)
-- [Reserved Regions (iOS 27.1+)](#reserved-regions-ios-271)
+- [Two-Region Arrangements (27.1+)](#two-region-arrangements-271)
+- [Reserved Regions (27.1+)](#reserved-regions-271)
 - [Own Your Container](#own-your-container)
 - [Layout Performance](#layout-performance)
 - [View Logic and Testability](#view-logic-and-testability)
@@ -118,7 +118,7 @@ Avoid `GeometryReader` whose only purpose is to read and reapply safe-area inset
 
 Vertical toolbar behavior, including `toolbarVerticalEdge`, belongs in [toolbar-patterns.md](toolbar-patterns.md).
 
-## Two-Region Arrangements (iOS 27.1+)
+## Two-Region Arrangements (27.1+)
 
 `ArrangementView` is a layout container for a primary and secondary view. Prefer the system's adaptive navigation and presentation containers when they already express the interface. Use an arrangement for an existing custom two-region layout that would otherwise be an `HStack`/`VStack` or `ZStack`:
 
@@ -128,8 +128,7 @@ Vertical toolbar behavior, including `toolbarVerticalEdge`, belongs in [toolbar-
 ```swift
 struct AdaptivePlayer: View {
     var body: some View {
-        #if os(iOS) && !targetEnvironment(macCatalyst)
-        if #available(iOS 27.1, *) {
+        if #available(iOS 27.1, macOS 27.1, macCatalyst 27.1, tvOS 27.1, visionOS 27.1, watchOS 27.1, *) {
             ArrangementView {
                 PlayerView()
             } secondary: {
@@ -139,9 +138,6 @@ struct AdaptivePlayer: View {
         } else {
             fallback
         }
-        #else
-        fallback
-        #endif
     }
 
     private var fallback: some View {
@@ -159,18 +155,18 @@ struct AdaptivePlayer: View {
 }
 ```
 
-`ArrangementView` exists only on iOS and iPadOS: Apple lists no macOS, Mac Catalyst or visionOS release, so no `#available` version admits it there. Keep the gate inside `#if os(iOS) && !targetEnvironment(macCatalyst)` as above whenever the target also builds for one of those platforms.
+Apple lists `ArrangementView` as introduced in 27.1 on every platform (iOS, iPadOS, Mac Catalyst, macOS, tvOS, visionOS and watchOS). Name 27.1 for each platform your target builds for in the check, as above: the `*` admits unnamed platforms at their deployment target, so a bare `#available(iOS 27.1, *)` fails to compile on macOS or visionOS below 27.1. With each platform named, no `#if os(...)` guard is needed.
 
 Both split and overlay styles accept `axes(_:)`. Leave the axes unconstrained when either orientation is valid. Restrict the set only when the content relationship requires it; if a split cannot use the permitted axis in the current proposal, the arrangement may show a single region instead of forcing an unsuitable split. Keep the earlier-OS fallback equivalent in hierarchy and functionality.
 
-Treat these nesting combinations conservatively in the Xcode 27.1 beta:
+Treat these nesting combinations conservatively and test them on the 27.1 SDK:
 
 - Do not put `NavigationSplitView` inside `ArrangementView`, or `ArrangementView` inside `NavigationSplitView`.
 - Do not put `ArrangementView` inside `List` or `ScrollView`.
 
 An arrangement supplies layout, not navigation infrastructure. Keep it inside a `NavigationStack` when the arranged content needs stack navigation.
 
-## Reserved Regions (iOS 27.1+)
+## Reserved Regions (27.1+)
 
 Start with system containers and presentations: they already adapt around relevant system UI and hardware regions. Query `GeometryProxy.reservedRegions(kind:options:layoutDirectionBehavior:)` only for custom edge-to-edge UI or manually laid-out controls that cannot be expressed with those containers.
 
@@ -201,7 +197,7 @@ Do not treat an inactive region as a current obstruction; inspect `isActive` bef
 
 The query's `layoutDirectionBehavior` defaults to `.mirrors`, so directional geometry follows right-to-left layout. Preserve that default for interface content. Override it only when coordinates intentionally represent physical hardware placement rather than leading/trailing UI, and keep the reason explicit.
 
-These APIs require the Xcode 27.1 SDK and iOS 27.1 at runtime, and exist only on iOS and iPadOS. Put declarations that name the new types in an `@available(iOS 27.1, *)` scope, select them with `#available`, and keep a safe-area or ordinary adaptive-layout fallback for earlier systems. When the target also builds for macOS, Mac Catalyst or visionOS, put both the declarations and the `#available` check inside `#if os(iOS) && !targetEnvironment(macCatalyst)`, with the fallback in the `#else` branch.
+These APIs require the Xcode 27.1 SDK and 27.1 at runtime on every platform Apple lists (iOS, iPadOS, Mac Catalyst, macOS, tvOS, visionOS and watchOS). Put declarations that name the new types in an `@available(iOS 27.1, macOS 27.1, macCatalyst 27.1, tvOS 27.1, visionOS 27.1, watchOS 27.1, *)` scope, select them with `#available` listing the same platforms (drop the ones the target does not build for), and keep a safe-area or ordinary adaptive-layout fallback for earlier systems. No `#if os(...)` guard is needed.
 
 ## Own Your Container
 

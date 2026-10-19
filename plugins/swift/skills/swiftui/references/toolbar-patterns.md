@@ -80,9 +80,9 @@ Attach `matchedTransitionSource(id:in:)` to toolbar content that presents anothe
 
 The view `matchedTransitionSource(id:in:)` is available on iOS 18+, macOS 15+, tvOS 18+, watchOS 11+, and visionOS 2+. Its toolbar-content form is available on iOS 26+ and is unavailable on macOS, tvOS, watchOS, and visionOS. The zoom transition, `zoom(sourceID:in:)`, is available on iOS, iPadOS, and Mac Catalyst 18+, tvOS 18+, watchOS 11+, and visionOS 2+, and is unavailable on macOS; `navigationTransition(_:)` itself is available on macOS 15+.
 
-## Adaptive vertical bars (iOS 27.1+)
+## Adaptive vertical bars (27.1+)
 
-Build with the iOS 27.1 SDK and attach `.toolbar` content to a system `NavigationStack`, `NavigationSplitView`, or `TabView`. Those containers can move eligible controls between horizontal and vertical bars as available space and context change; a hand-built bar does not gain this behavior.
+Build with the 27.1 SDK and attach `.toolbar` content to a system `NavigationStack`, `NavigationSplitView`, or `TabView`. Those containers can move eligible controls between horizontal and vertical bars as available space and context change; a hand-built bar does not gain this behavior.
 
 Describe every action with both a title and icon, even when the visible representation is symbol-only. The system needs the title for accessibility, expanded representations, and overflow:
 
@@ -118,11 +118,11 @@ ToolbarItem {
 
 Use `.horizontalOnly` when related states must stay together and one representation cannot fit a fixed-width vertical bar. Use `.verticalPreferred` only when a custom view has a compact vertical representation. Otherwise keep `.automatic`.
 
-For a custom item's presentation details, an iOS 27.1-only view can read `@Environment(\.toolbarVerticalEdge)`. A non-`nil` value means the environment supports a vertical bar on that directional edge; use it to select a compact representation, not to add safe-area spacing. Keep the property declaration in an `@available(iOS 27.1, *)` type selected behind `#available`. `toolbarVerticalEdge` and the other vertical-bar APIs in this section (`axisBehavior(_:)`, `toolbarVerticalCompressionBehavior(_:)`, `toolbarVerticalBehavior(_:)`) exist only on iOS and iPadOS, so when the target also builds for macOS, Mac Catalyst or visionOS, put the type and the check inside `#if os(iOS) && !targetEnvironment(macCatalyst)`.
+For a custom item's presentation details, a view built for the 27.1 SDK can read `@Environment(\.toolbarVerticalEdge)`. A non-`nil` value means the environment supports a vertical bar on that directional edge; use it to select a compact representation, not to add safe-area spacing. Keep the property declaration in a type marked `@available(iOS 27.1, macOS 27.1, macCatalyst 27.1, tvOS 27.1, visionOS 27.1, watchOS 27.1, *)` and selected behind `#available` with the same platforms. Name 27.1 for each platform the target builds for: the `*` admits unnamed platforms at their deployment target. `toolbarVerticalEdge` and the other vertical-bar APIs in this section (`axisBehavior(_:)`, `toolbarVerticalCompressionBehavior(_:)`, `toolbarVerticalBehavior(_:)`) are introduced in 27.1 on every platform, Mac Catalyst included, so no `#if os(...)` guard is needed; only the availability check is.
 
 When a view combines a toolbar and tab bar, `.toolbarVerticalCompressionBehavior(.prefersToolbarItems)` keeps toolbar actions visible longer, while `.prefersTabBar` favors destinations. The default `.automatic` compresses toolbar items first. Choose based on the experience's primary task, then use the existing SDK 27 [overflow and visibility](#sdk-27-overflow-and-visibility) APIs to prioritize individual actions rather than duplicating overflow controls.
 
-Most interfaces should keep automatic vertical behavior. Use `.toolbarVerticalBehavior(.disabled)` only for a narrow exception, such as a bottom-heavy single-page interface or a sheet whose lone toolbar item would cost more space than it saves. All of these vertical-bar APIs require iOS 27.1, and the first example's `.topBarPinnedTrailing` requires iOS 27 or visionOS 27 and has no macOS release; gate it as in [SDK 27 overflow and visibility](#sdk-27-overflow-and-visibility), and preserve the ordinary system toolbar as the earlier-OS fallback.
+Most interfaces should keep automatic vertical behavior. Use `.toolbarVerticalBehavior(.disabled)` only for a narrow exception, such as a bottom-heavy single-page interface or a sheet whose lone toolbar item would cost more space than it saves. All of these vertical-bar APIs require 27.1 on every platform (iOS, iPadOS, Mac Catalyst, macOS, tvOS, visionOS and watchOS), and the first example's `.topBarPinnedTrailing` requires iOS 27 or visionOS 27 and has no macOS release; gate it as in [SDK 27 overflow and visibility](#sdk-27-overflow-and-visibility), and preserve the ordinary system toolbar as the earlier-OS fallback.
 
 ## SDK 27 overflow and visibility
 

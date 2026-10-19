@@ -538,7 +538,7 @@ Search this file's lookup table when migrating an API that the 27 SDK marks soft
 - `ToolbarContent.axisBehavior(_:)`, `toolbarVerticalEdge`, `toolbarVerticalCompressionBehavior(_:)`, and `toolbarVerticalBehavior(_:)` support adaptive vertical bars. See [`toolbar-patterns.md`](toolbar-patterns.md).
 - `onHingeChange` and the optional `DeviceHingeContext.hinge` support live effects and interactions, not layout decisions. For iPhone Duo-specific use, see [`iphone-duo.md`](iphone-duo.md).
 
-These APIs are from the beta iOS 27.1 SDK and exist only on iOS and iPadOS. Gate runtime use with `#available(iOS 27.1, *)`, provide an earlier-system fallback, and recheck semantics against the shipping SDK. Apple lists no macOS, Mac Catalyst or visionOS release for them, so no `#available` version admits them there: when the target also builds for one of those platforms, put the declarations and the `#available` check inside `#if os(iOS) && !targetEnvironment(macCatalyst)`, with the fallback in `#else`.
+Apple lists 27.1 as the introduction release of these APIs on every platform: iOS, iPadOS, Mac Catalyst, macOS, tvOS, visionOS and watchOS. Gate runtime use with `#available(iOS 27.1, macOS 27.1, macCatalyst 27.1, tvOS 27.1, visionOS 27.1, watchOS 27.1, *)` and mark declarations `@available` the same way, provide an earlier-system fallback, and recheck semantics against the 27.1 SDK. Name 27.1 for each platform the target builds for: the `*` admits every platform the check does not name at its deployment target, so `#available(iOS 27.1, *)` alone does not compile these APIs for a macOS or visionOS target below 27.1. With each platform named, no `#if os(...)` guard is needed.
 
 ---
 

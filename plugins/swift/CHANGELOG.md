@@ -7,8 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-19
+
 ### Changed
 
+- The 27.1 SwiftUI APIs (`ArrangementView`, `arrangementViewStyle(_:)`, reserved regions, the vertical toolbar APIs, `onHingeChange`, `DeviceHingeContext`) are now documented as introduced in 27.1 on every platform, as Apple's docs list them; earlier text said iOS and iPadOS only. The `#if os(iOS) && !targetEnvironment(macCatalyst)` guards are gone: the snippets and `latest-apis.md` name 27.1 for each platform in `@available` and `#available`, because the bare `*` admits other platforms at their deployment target. The "beta" wording is dropped, a broken `iphone-duo.md` anchor is fixed, and the compile checks behind these snippets are not yet rerun against a 27.1 SDK.
 - The plugin moved from its own repo, `jack1913/swift-plugin`, into `plugins/swift/` of `jack1913/claude-plugins`, which is public. The marketplace is the same (`jack1913`), so the install ID `swift@jack1913` and the tag form `swift--v<version>` don't change; the skills are unchanged. The manifest `repository` now points at the monorepo, and the maintenance scripts, tests and docs use paths relative to the plugin folder (ADR-0015).
 
 ## [0.3.0] - 2026-10-19

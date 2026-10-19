@@ -1,6 +1,6 @@
 # iPhone Duo SwiftUI Guidance
 
-> iPhone Duo support in Xcode 27.1 and the iOS 27.1 SDK is beta. Confirm behavior against the shipping SDK.
+> iPhone Duo support arrives with Xcode 27.1 and the 27.1 SDK. Confirm behavior against the 27.1 SDK.
 
 ## Displays and Continuity
 
@@ -14,7 +14,7 @@ Hardware placement is asymmetric. The outer and inner cameras occupy different p
 
 The outer camera always shapes the outer-display area; standard safe areas and bars account for it. On the inner display, an active fold is represented as a `.division` reserved region because it separates the available area. The active FaceTime camera is an `.occlusion` region because it covers a smaller frame. Inner regions can change activity as the device pose and camera use change.
 
-Start with `NavigationStack`, `NavigationSplitView`, `TabView`, sheets, alerts, menus, `List`, and `ScrollView`; these system components already adapt around the fold and system UI. Use the generic [`ArrangementView` and reserved-region techniques](layout-best-practices.md#two-region-arrangements-ios-271) only when Duo exposes a real problem in custom UI:
+Start with `NavigationStack`, `NavigationSplitView`, `TabView`, sheets, alerts, menus, `List`, and `ScrollView`; these system components already adapt around the fold and system UI. Use the generic [`ArrangementView` and reserved-region techniques](layout-best-practices.md#two-region-arrangements-271) only when Duo exposes a real problem in custom UI:
 
 - Replace an existing custom two-region split or overlay with `ArrangementView` when its content relationship fits those generic styles.
 - Query division or occlusion regions for a high-priority manually laid-out control or edge-to-edge custom interface that system containers cannot place.
@@ -31,8 +31,7 @@ When a partially folded book-like pose requires displacement, a trailing region 
 `onHingeChange` provides live hinge state and angle for optional interactions or effects. Do not use it to drive layout; use size classes, `ArrangementView`, and reserved regions instead. `DeviceHingeContext.hinge` is optional, so reset effect state when there is no hinge or when the relevant hinge status ends.
 
 ```swift
-#if os(iOS) && !targetEnvironment(macCatalyst)
-@available(iOS 27.1, *)
+@available(iOS 27.1, macOS 27.1, macCatalyst 27.1, tvOS 27.1, visionOS 27.1, watchOS 27.1, *)
 struct HingeReactiveArtwork: View {
     @State private var foldEffect = 0.0
 
@@ -49,10 +48,9 @@ struct HingeReactiveArtwork: View {
             }
     }
 }
-#endif
 ```
 
-Select this view behind `#available(iOS 27.1, *)`; the fallback omits the optional effect. `onHingeChange` exists only on iOS and iPadOS (Apple lists no macOS, Mac Catalyst or visionOS release), so no `#available` version admits it elsewhere: when the target also builds for another platform, keep the view and the `#available` check inside `#if os(iOS) && !targetEnvironment(macCatalyst)` and use the fallback in the `#else` branch.
+Select this view behind `#available(iOS 27.1, macOS 27.1, macCatalyst 27.1, tvOS 27.1, visionOS 27.1, watchOS 27.1, *)`; the fallback omits the optional effect. Apple lists `onHingeChange` and `DeviceHingeContext` as introduced in 27.1 on every platform, so the check needs the version for each platform your target builds for.
 
 ## Scene Accessories
 
