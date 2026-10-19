@@ -1,4 +1,6 @@
-# Continuous integration for the brand-creator plugin. Nothing here runs until the repository is pushed to a host that runs it.
+# Continuous integration for the brand-creator plugin, in the monorepo jack1913/claude-plugins (GitHub reads only the root .github/).
+# Every job runs in plugins/brand-creator; the workflow starts only on changes under that folder or to this file, so the macOS job
+# (the expensive one) runs only when this plugin changes.
 #
 #   linux     builds tests/docker/Dockerfile (Debian 13, Python 3.13, Node 24, resvg, ImageMagick, Ghostscript, poppler, ripgrep,
 #             potrace, fonts) and runs tests/docker/run.sh: `brand-creator setup` (npm ci + Chromium), pytest, node:test and the Acme
@@ -14,19 +16,29 @@
 #             smoke with `emit apple`, with BRAND_CREATOR_REQUIRE_ALL=1 so a missing tool fails instead of skipping.
 #
 # `claude plugin eval` is never run here (it is billed); the evals are run by hand, see dev/MANUAL-CHECKS.md.
-name: ci
+name: brand-creator
 
 on:
   push:
+    paths:
+      - "plugins/brand-creator/**"
+      - ".github/workflows/brand-creator.yml"
   pull_request:
+    paths:
+      - "plugins/brand-creator/**"
+      - ".github/workflows/brand-creator.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: brand-creator-${{ github.ref }}
   cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: plugins/brand-creator
 
 env:
   # The Claude Code version the plugin was validated with; the stated minimum is MIN_CLAUDE in scripts/prereq.py.
@@ -63,7 +75,7 @@ jobs:
           fi
       - name: claude plugin validate --strict
         if: steps.claude.outputs.available == 'true'
-        run: claude plugin validate "$GITHUB_WORKSPACE" --strict
+        run: claude plugin validate "$GITHUB_WORKSPACE/plugins/brand-creator" --strict
       - name: The validator catches a broken manifest (mutation test)
         if: steps.claude.outputs.available == 'true'
         run: uv run --no-project --with pytest python -m pytest tests/test_static.py -q -k claude_plugin_validate
@@ -82,6 +94,7 @@ jobs:
         run: brew install uv resvg imagemagick ghostscript poppler ripgrep potrace
       - name: Select the newest Xcode (the Icon Composer .icon pipeline needs Xcode 26 or later)
         run: |
+          # shellcheck disable=SC2012
           newest="$(ls -d /Applications/Xcode*.app | sort -V | tail -n 1)"
           echo "using $newest"
           sudo xcode-select -s "$newest"

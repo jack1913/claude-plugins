@@ -1,0 +1,24 @@
+name: marketplace
+
+on:
+  push:
+    paths:
+      - ".claude-plugin/**"
+      - ".github/scripts/check-marketplace.py"
+      - ".github/workflows/marketplace.yml"
+  pull_request:
+    paths:
+      - ".claude-plugin/**"
+      - ".github/scripts/check-marketplace.py"
+      - ".github/workflows/marketplace.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Every marketplace entry has its plugin folder, and every folder is listed
+        run: python3 .github/scripts/check-marketplace.py

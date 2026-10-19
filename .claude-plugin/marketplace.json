@@ -8,24 +8,17 @@
   "plugins": [
     {
       "name": "brand-creator",
-      "source": {
-        "source": "url",
-        "url": "https://github.com/jack1913/brand-creator.git"
-      },
+      "source": "./plugins/brand-creator",
       "description": "Gated, phased brand-identity process: direction boards, mark system, design tokens, platform assets checked by real renderers, brand book, adoption and launch hand-offs.",
-      "homepage": "https://github.com/jack1913/brand-creator",
-      "repository": "https://github.com/jack1913/brand-creator"
+      "homepage": "https://github.com/jack1913/claude-plugins/tree/main/plugins/brand-creator",
+      "repository": "https://github.com/jack1913/claude-plugins"
     },
     {
       "name": "swift",
-      "source": {
-        "source": "git-subdir",
-        "url": "https://github.com/jack1913/swift-plugin.git",
-        "path": "plugins/swift"
-      },
+      "source": "./plugins/swift",
       "description": "Correct, current, Apple-native Swift: swift:swiftui, swift:design, swift:concurrency, swift:testing and swift:review.",
-      "homepage": "https://github.com/jack1913/swift-plugin",
-      "repository": "https://github.com/jack1913/swift-plugin"
+      "homepage": "https://github.com/jack1913/claude-plugins/tree/main/plugins/swift",
+      "repository": "https://github.com/jack1913/claude-plugins"
     },
     {
       "name": "batbelt",

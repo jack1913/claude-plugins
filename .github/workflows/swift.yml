@@ -1,0 +1,33 @@
+# The swift plugin's checks that need no network, no Xcode and no model calls.
+# Not run here, on purpose: `maintenance/check-apis.py --strict` fetches Apple's documentation indexes and fails whenever Apple's data
+# moves away from the skills' recorded claims (a manual gate), and `claude plugin eval` is billed.
+name: swift
+
+on:
+  push:
+    paths:
+      - "plugins/swift/**"
+      - ".github/workflows/swift.yml"
+  pull_request:
+    paths:
+      - "plugins/swift/**"
+      - ".github/workflows/swift.yml"
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: plugins/swift
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Unit tests (the apicheck package, the upstream-diff script, the recorder, the review scorer)
+        run: python3 -m unittest discover maintenance/tests
+      - name: Docs gate (check-docs)
+        run: python3 .claude/skills/update-docs/scripts/check.py check-docs docs README.md AGENTS.md --captures docs/.onboard-captures --coverage docs/.onboard-coverage.json
+      - name: Instruction gate (check-instructions)
+        run: python3 .claude/skills/update-rules/scripts/check.py check-instructions .claude/rules .claude/skills --repo-root .
