@@ -4,7 +4,7 @@
 #   tests/docker/run.sh [--no-build]
 #
 # The plugin and the repository workflow are mounted read-only and copied inside the container, into the monorepo layout
-# (/work/repo/plugins/brand-creator, /work/repo/.github/workflows); nothing the run writes touches this checkout.
+# (/work/repo/plugins/brand-creator, /work/repo/.github/workflows, /work/repo/.claude-plugin/marketplace.json); nothing the run writes touches this checkout.
 # Environment (all optional):
 #   BRAND_CREATOR_DOCKER_DATA=<host dir>   keep the data directory (npm packages, Chromium) on the host between runs
 #                                          (default: inside the container, so every run tests `brand-creator setup` from scratch)
@@ -18,6 +18,8 @@ set -euo pipefail
 HERE="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd -P "$HERE/../.." && pwd)"                 # plugins/brand-creator
 WORKFLOW="$ROOT/../../.github/workflows/brand-creator.yml"   # tests/test_docker_ci.py reads it from the monorepo root
+MARKET="$ROOT/../../.claude-plugin/marketplace.json"         # tests/test_static.py checks the plugin is listed there
+[ -f "$MARKET" ] || { echo "run.sh: $MARKET not found (run from the claude-plugins monorepo)" >&2; exit 2; }
 [ -f "$WORKFLOW" ] || { echo "run.sh: $WORKFLOW not found: run this from the claude-plugins monorepo (plugins/brand-creator)" >&2; exit 2; }
 WORKFLOW="$(cd -P "$(dirname "$WORKFLOW")" && pwd)/brand-creator.yml"
 IMAGE="${BRAND_CREATOR_DOCKER_IMAGE:-brand-creator-linux-test:debian13}"
@@ -32,7 +34,7 @@ if [ "${1:-}" != "--no-build" ]; then
   docker build ${platform[@]+"${platform[@]}"} -t "$IMAGE" "$HERE"
 fi
 
-args=(--rm ${platform[@]+"${platform[@]}"} -v "$ROOT":/src:ro -v "$WORKFLOW":/src-ci/brand-creator.yml:ro -e BRAND_CREATOR_TEST_WORKERS="${BRAND_CREATOR_TEST_WORKERS:-4}")
+args=(--rm ${platform[@]+"${platform[@]}"} -v "$ROOT":/src:ro -v "$WORKFLOW":/src-ci/brand-creator.yml:ro -v "$MARKET":/src-ci/marketplace.json:ro -e BRAND_CREATOR_TEST_WORKERS="${BRAND_CREATOR_TEST_WORKERS:-4}")
 if [ -n "${BRAND_CREATOR_DOCKER_DATA:-}" ]; then
   mkdir -p "$BRAND_CREATOR_DOCKER_DATA"
   args+=(-v "$(cd -P "$BRAND_CREATOR_DOCKER_DATA" && pwd)":/work/data)
