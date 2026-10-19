@@ -892,6 +892,6 @@ commands. Conventions:
 - **Off-macOS opt-ins.** `downscale` needs `--renderer=pillow|resvg` (or a recorded opt-in), `emit tauri` needs `--renderer pillow`; tests, the
   smoke and `finish.sh` (`DOWNSCALE_RENDERER`, `ICNS_RENDERER`) name them. Usage errors (exit 2) are reported before "cannot measure here"
   (exit 3), so a bad call gives the same answer on every OS.
-- **CI.** `.github/workflows/ci.yml`: `linux` (the Docker run), `validate` (`claude plugin validate --strict` and the manifest-mutation test;
+- **CI.** `.github/workflows/brand-creator.yml` (at the monorepo root, working directory `plugins/brand-creator`, started only by changes to that folder or the file): `linux` (the Docker run), `validate` (`claude plugin validate --strict` and the manifest-mutation test;
   a documented skip when the CLI cannot be installed), `macos` (`requires_macos` and `requires_actool` tests with REQUIRE_ALL=1, and the
   Acme smoke). It never runs `claude plugin eval`.

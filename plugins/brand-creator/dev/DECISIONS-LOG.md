@@ -1403,3 +1403,21 @@ run's shell sees. Findings and decisions:
     is assumed only for plain letter clusters; `git stash push` consumes the next word for an abbreviated `--message` (`--mes`), and any
     long option the guard does not know makes the scope the whole working tree (an unknown option may take a value); 7z command letters and
     `-o` are matched case-insensitively (`X`, `-O`). Six more cases in tests/test_guard.py, all failing on the previous guard.
+
+## Move into the claude-plugins monorepo
+
+959. **The plugin moved from its own repo (`jack1913/brand-creator`) into `plugins/brand-creator/` of `jack1913/claude-plugins`, with its full
+    history.** One repo is now the source of truth for `batbelt`, `brand-creator` and `swift`, and it is public, so the marketplace entry
+    is a relative source (`./plugins/brand-creator`) instead of a `url` source. The marketplace was already `jack1913` (see 913), so the install
+    ID `brand-creator@jack1913` does not change. Release tags use the form `brand-creator--vX.Y.Z`.
+960. **`homepage` is `https://github.com/jack1913/claude-plugins/tree/main/plugins/brand-creator`, `repository` is
+    `https://github.com/jack1913/claude-plugins`** (supersedes 913). `tests/test_static.py` pins both, and checks that the marketplace at
+    the monorepo root lists the plugin with the source `./plugins/brand-creator`.
+961. **The workflow moved to `.github/workflows/brand-creator.yml` at the monorepo root** (GitHub reads only the root `.github/`). It keeps
+    the `linux`, `validate` and `macos` jobs, runs them in `plugins/brand-creator` (`defaults.run.working-directory`), and starts only on changes to
+    `plugins/brand-creator/**` or the workflow file, so the macOS job runs only when this plugin changes. `claude plugin validate` is pointed at
+    the plugin folder, not the workspace root.
+962. **`tests/docker/run.sh` still mounts the plugin folder read-only, plus the workflow file, and the container copies both into a monorepo
+    layout** (`/work/repo/plugins/brand-creator`, `/work/repo/.github/workflows`). `tests/test_docker_ci.py` reads the workflow from the monorepo
+    root and fails, not skips, when it is missing (a skip would be an unexpected one for `verify_log.py`). The tests are run from
+    `plugins/brand-creator/`; nothing else in the plugin depended on the repository root.

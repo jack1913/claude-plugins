@@ -142,7 +142,8 @@ def test_plugin_json_matches_the_plan():
     assert d["name"] == "brand-creator" and d["displayName"] and d["description"]
     assert d["version"] == "0.1.0" and re.fullmatch(r"\d+\.\d+\.\d+", d["version"])
     assert d["author"] == {"name": "brand-creator contributors"} and d["license"] == "MIT" and d["keywords"]
-    assert d["homepage"] == d["repository"] == "https://github.com/jack1913/brand-creator"  # a homepage must parse as a URL
+    assert d["homepage"] == "https://github.com/jack1913/claude-plugins/tree/main/plugins/brand-creator"  # a homepage must parse as a URL
+    assert d["repository"] == "https://github.com/jack1913/claude-plugins"
     uc = d["userConfig"]
     assert set(uc) == {"projects_root", "review_surface"}
     assert uc["projects_root"]["type"] == "directory" and uc["projects_root"].get("required") in (None, False)
@@ -154,10 +155,14 @@ def test_plugin_json_matches_the_plan():
 
 
 def test_the_plugin_is_listed_in_the_jack1913_marketplace_not_its_own():
-    """The repository holds the plugin only; it is listed in jack1913/claude-plugins (one catalogue for every plugin)."""
+    """The plugin folder holds the plugin only; it is listed in the marketplace at the root of jack1913/claude-plugins (one catalogue for every plugin)."""
     assert not (ROOT / ".claude-plugin/marketplace.json").exists()
     d = json.loads((ROOT / ".claude-plugin/plugin.json").read_text())
-    assert d["homepage"] == d["repository"] == "https://github.com/jack1913/brand-creator"
+    assert d["repository"] == "https://github.com/jack1913/claude-plugins" and d["homepage"].startswith(d["repository"] + "/tree/main/plugins/")
+    market = ROOT.parents[1] / ".claude-plugin" / "marketplace.json"
+    assert market.is_file(), f"{market} not found: this plugin is developed inside the claude-plugins monorepo"
+    entry = next(p for p in json.loads(market.read_text())["plugins"] if p["name"] == "brand-creator")
+    assert entry["source"] == "./plugins/brand-creator"
 
 
 def test_license_and_notices():

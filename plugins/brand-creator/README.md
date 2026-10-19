@@ -20,10 +20,10 @@ Inside Claude Code:
 ```
 
 Or from a shell: `claude plugin marketplace add jack1913/claude-plugins`, then `claude plugin install brand-creator@jack1913`.
-The plugin is listed in the [jack1913 marketplace](https://github.com/jack1913/claude-plugins); this repository holds the plugin only.
+The plugin lives in `plugins/brand-creator/` of [jack1913/claude-plugins](https://github.com/jack1913/claude-plugins), which is also the `jack1913` marketplace.
 Restart Claude Code (or run `/reload-plugins`) afterwards.
 
-To work on the plugin itself, load a local checkout for one session instead: `claude --plugin-dir /path/to/brand-creator`.
+To work on the plugin itself, load a local checkout for one session instead: `claude --plugin-dir /path/to/claude-plugins/plugins/brand-creator`.
 
 The plugin works in Claude Code only. Its `bin/` entry point and its hook do not exist on claude.ai or in Cowork.
 Minimum Claude Code version: **2.1.271** (see [Claude Code versions](#claude-code-versions)).
@@ -272,7 +272,7 @@ One hardening is not a runtime row: the guard hook sets `onFailure: "block"`, wh
 
 ## Development
 
-- **Tests:** `BRAND_CREATOR_DATA=<set-up data dir> tests/run-all.sh` runs pytest and `node --test`; `--smoke` adds the Acme
+- **Tests** (run from `plugins/brand-creator/`): `BRAND_CREATOR_DATA=<set-up data dir> tests/run-all.sh` runs pytest and `node --test`; `--smoke` adds the Acme
   end-to-end smoke (`tests/smoke/acme.sh`, a synthetic brand through every pack) and the Quick-tier smoke (`tests/smoke/quick.sh`,
   a made-up bakery on a PATH with no Apple tools and no git, ending with the short guide). Mutation tests prove each gate by
   breaking a scratch copy. A test that cannot run prints "NOT VERIFIED"; `BRAND_CREATOR_REQUIRE_ALL=1` turns every such skip into a
@@ -280,8 +280,9 @@ One hardening is not a runtime row: the guard hook sets `onFailure: "block"`, wh
   a private denylist (`BRAND_CREATOR_DENYLIST`) and skips without it.
 - **Linux in Docker:** `tests/docker/run.sh` builds the Debian 13 image, copies the plugin in read-only, runs `setup`, pytest,
   node:test and the Acme smoke, and accepts only the macOS-only NOT VERIFIED skips.
-- **CI:** `.github/workflows/ci.yml` runs the Docker suite on Linux, `claude plugin validate --strict` (the plugin and marketplace
-  manifests), and the Apple-tool tests and smoke on macOS. It has not run yet: it starts once the repository is pushed.
+- **CI:** `.github/workflows/brand-creator.yml` at the root of the monorepo runs the Docker suite on Linux, `claude plugin validate --strict`
+  (the plugin manifest), and the Apple-tool tests and smoke on macOS. It starts only on changes under `plugins/brand-creator/` or to the workflow
+  file, and every job runs in `plugins/brand-creator/`.
 - **Validate:** `claude plugin validate . --strict`.
 - **Manual checks** a suite cannot do, and which of them have been run: `dev/MANUAL-CHECKS.md`.
 - **History:** `CHANGELOG.md` for releases; `dev/BUILD-LOG.md` and `dev/DECISIONS-LOG.md` for how 0.1.0 was built and why.

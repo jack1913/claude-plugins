@@ -6,8 +6,8 @@
   "author": {
     "name": "brand-creator contributors"
   },
-  "homepage": "https://github.com/jack1913/brand-creator",
-  "repository": "https://github.com/jack1913/brand-creator",
+  "homepage": "https://github.com/jack1913/claude-plugins/tree/main/plugins/brand-creator",
+  "repository": "https://github.com/jack1913/claude-plugins",
   "license": "MIT",
   "keywords": [
     "brand",

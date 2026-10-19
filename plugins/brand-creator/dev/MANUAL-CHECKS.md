@@ -228,7 +228,7 @@ what fails; until then the README says "untested".
 
 ## CI first run
 
-**Why manual.** `.github/workflows/ci.yml` runs only once the repository is pushed, and its action versions were not checked
+**Why manual.** `.github/workflows/brand-creator.yml` (at the root of the claude-plugins monorepo) runs only once the repository is pushed, and its action versions were not checked
 online.
 
 **Steps.** After the first push, read each job's log: the Linux job must end with the Docker run's PASSED line, the validate

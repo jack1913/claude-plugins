@@ -1,4 +1,4 @@
-"""The Linux validation (tests/docker) and the CI workflow (.github/workflows/ci.yml): static checks of the files, and the log verifier on
+"""The Linux validation (tests/docker) and the CI workflow (.github/workflows/brand-creator.yml at the monorepo root): static checks of the files, and the log verifier on
 logs written by hand in the shape pytest, node:test and the smoke print. Nothing here starts Docker."""
 import re
 import subprocess
@@ -9,7 +9,12 @@ import pytest
 from helpers import ROOT
 
 DOCKER = ROOT / "tests" / "docker"
-CI = ROOT / ".github" / "workflows" / "ci.yml"
+CI = ROOT.parents[1] / ".github" / "workflows" / "brand-creator.yml"   # the monorepo root: GitHub reads only the root .github/
+
+
+def ci_text() -> str:
+    assert CI.is_file(), f"{CI} not found: this plugin's workflow lives at the root of the claude-plugins monorepo (tests/docker/run.sh mirrors that layout in the container)"
+    return CI.read_text()
 VERIFY = DOCKER / "verify_log.py"
 PERSONAL = ("/" + "Users/", "/" + "home/", "/" + "private/")   # written in pieces: test_static scans every shipped file for these
 
@@ -118,7 +123,7 @@ def test_the_denylist_skip_is_expected_only_when_no_denylist_was_mounted(tmp_pat
 # ---------------------------------------------------------------- the workflow
 
 def test_ci_workflow_runs_linux_validate_and_macos_and_never_the_billed_eval():
-    text = CI.read_text()
+    text = ci_text()
     for job in ("linux:", "validate:", "macos:"):
         assert re.search(rf"^  {job}$", text, re.M), job
     assert "tests/docker/run.sh" in text                                             # the same entry point a developer uses
@@ -132,19 +137,21 @@ def test_ci_workflow_runs_linux_validate_and_macos_and_never_the_billed_eval():
     for uses in re.findall(r"uses:\s*(\S+)", text):
         assert re.fullmatch(r"[\w.-]+/[\w.-]+@v\d+", uses), f"{uses}: pin actions by a version tag"
     assert "permissions:\n  contents: read" in text
+    assert "working-directory: plugins/brand-creator" in text                         # every job runs in the plugin folder
+    assert text.count('"plugins/brand-creator/**"') == 2 and text.count(".github/workflows/brand-creator.yml") >= 3   # push and pull_request are path-filtered
     for needle in PERSONAL:
         assert needle not in text
 
 
 def test_ci_workflow_values_are_valid_yaml():
-    """GitHub rejected the first push of ci.yml outright ("workflow file issue"): a step name held ': ' unquoted. Every
+    """GitHub rejected the first push of the workflow outright ("workflow file issue"): a step name held ': ' unquoted. Every
     single-line `key: value` in the workflow must load as one YAML string, like the skill frontmatter."""
     from test_skills import yaml_plain_scalar_problem
     bad = []
-    for n, line in enumerate((ROOT / ".github" / "workflows" / "ci.yml").read_text().splitlines(), 1):
+    for n, line in enumerate(ci_text().splitlines(), 1):
         m = re.match(r"^\s*(?:- )?([A-Za-z_][\w-]*):\s+(.+)$", line)
         if m and not line.lstrip().startswith("#") and m.group(2).strip() not in ("|", ">"):
             why = yaml_plain_scalar_problem(m.group(2).strip())
             if why and not m.group(2).strip().startswith("${{"):
-                bad.append(f"ci.yml:{n}: {m.group(1)} {why}")
+                bad.append(f"brand-creator.yml:{n}: {m.group(1)} {why}")
     assert not bad, "\n".join(bad)

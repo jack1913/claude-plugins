@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 # Runs INSIDE the Linux image (tests/docker/Dockerfile), started by tests/docker/run.sh. Not meant to be run on a developer machine.
 #
-# 1. copies the plugin from the read-only mount /src to /work/plugin (no .git, no caches: the copy is what a user would install)
+# 1. copies the plugin from the read-only mount /src to /work/repo/plugins/brand-creator (no .git, no caches: the copy is what a user would install)
+#    and the CI workflow from /src-ci to /work/repo/.github/workflows (the monorepo layout the tests expect)
 # 2. brand-creator prereq --for full, then `brand-creator setup --yes` into a data directory inside the container (npm ci, Chromium)
 # 3. tests/run-all.sh --smoke WITHOUT BRAND_CREATOR_REQUIRE_ALL (pytest, node:test, the Acme smoke on the paths that apply off macOS)
 # 4. tests/docker/verify_log.py reads the log: every skip must be an expected one (macOS-only tests), anything else is a failure
 set -euo pipefail
 
 SRC=/src
-PLUGIN=/work/plugin
+REPO=/work/repo
+PLUGIN=$REPO/plugins/brand-creator
 DATA="${BRAND_CREATOR_DATA:-/work/data}"
 LOG=/work/run-all.log
 
@@ -27,8 +29,9 @@ done
 printf 'fonts      %s families\n' "$(fc-list : family | sort -u | wc -l | tr -d ' ')"
 
 step "copy the plugin"
-rm -rf "$PLUGIN"
-mkdir -p "$PLUGIN"
+rm -rf "$REPO"
+mkdir -p "$PLUGIN" "$REPO/.github/workflows"
+cp /src-ci/brand-creator.yml "$REPO/.github/workflows/brand-creator.yml"
 tar -C "$SRC" --exclude=./.git --exclude=node_modules --exclude=__pycache__ --exclude=.pytest_cache --exclude=./evals/results -cf - . | tar -C "$PLUGIN" -xf -
 cd "$PLUGIN"
 
