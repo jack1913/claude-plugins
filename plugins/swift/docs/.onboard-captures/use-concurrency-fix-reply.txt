@@ -1,0 +1,29 @@
+I fixed the error in `Sources/Demo/PlayerModel.swift`, and `swift build` now finishes with no diagnostics. The package uses Swift 6 language mode (tools-version 6.0), so full strict concurrency checking applies. There's no AGENTS.md or CLAUDE.md, and no default-isolation or upcoming-feature settings.
+
+**The problem:** the `Task.detached` closure isn't isolated to any actor, but it was writing directly to `score` and `badge`, which belong to the main actor.
+
+**The fix:**
+```swift
+func load() {
+    Task.detached {
+        let s = Self.computeScore()     // runs off the main actor
+        await self.apply(score: s)      // hops to the main actor
+    }
+}
+
+private func apply(score s: Int) {      // main-actor-isolated (inherits the class's @MainActor)
+    score = s
+    badge = String(repeating: "*", count: s % 10)
+}
+```
+
+How this meets your constraints:
+- **`computeScore()` stays off the main actor.** It's `nonisolated` and runs inside a detached task.
+- **The mutations stay on the main actor.** They're in `apply(score:)`, which inherits the class's `@MainActor`, and the `await` is the only hop back. Both values are set together in one step, so nothing can see a new `score` with an old `badge`.
+- **`load()` is still synchronous**, and I used no `nonisolated(unsafe)`, `@preconcurrency` or `@unchecked`. Capturing `self` in the task is fine because a `@MainActor` class is automatically `Sendable`.
+
+I kept `Task.detached` because running the work off the main actor is the whole point here. On a Swift 6.2+ compiler, `Task { @concurrent in ... }` does the same thing and is the more modern spelling. I left it out because the package targets tools-version 6.0.
+
+I didn't commit anything.
+
+Separately: the Gmail, Google Calendar and Google Drive connectors need to be authorized in your claude.ai connector settings before they can be used.

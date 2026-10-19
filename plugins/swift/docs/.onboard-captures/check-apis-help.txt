@@ -1,0 +1,18 @@
+usage: check-apis.py [-h] [--strict] [--refresh] [--write-table] [--find NAME]
+                     [--manifest MANIFEST] [--cache CACHE] [--skills SKILLS]
+                     [--table-file TABLE_FILE]
+
+Check every API the swift plugin's skills name against Apple's documentation.
+
+options:
+  -h, --help            show this help message and exit
+  --strict              also fail on unresolved names, stale ignore entries,
+                        and a stale cache
+  --refresh             bypass the cache
+  --write-table         rewrite the generated block in platform-
+                        availability.md
+  --find NAME           print the index entries for NAME and exit
+  --manifest MANIFEST
+  --cache CACHE
+  --skills SKILLS
+  --table-file TABLE_FILE

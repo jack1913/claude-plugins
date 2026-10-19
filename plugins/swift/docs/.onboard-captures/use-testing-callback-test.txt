@@ -1,0 +1,15 @@
+Building for debugging...
+[Starting]
+[1 / 5]
+Build complete! (0.57 sec)
+Test Suite 'All tests' started at 2026-09-28 18:53:37.612.
+Test Suite 'All tests' passed at 2026-09-28 18:53:37.615.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.003) seconds
+◇ Test run started.
+↳ Testing Library Version: 2067.1
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite SaverTests started.
+◇ Test saveCallsOnSaveOnceWithValue() started.
+✔ Test saveCallsOnSaveOnceWithValue() passed after 0.001 seconds.
+✔ Suite SaverTests passed after 0.001 seconds.
+✔ Test run with 1 test in 1 suite passed after 0.001 seconds.

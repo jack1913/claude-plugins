@@ -1,0 +1,12 @@
+I added the settings screen in `Sources/App/SettingsView.swift`, and the package builds with `swift build`. I haven't run the app or looked at the preview.
+
+It's a standard grouped settings form with three sections:
+- **Account:** the account's name and email.
+- **Notifications:** an on/off toggle.
+- **Sign Out:** a red button marked as destructive. It signs out straight away, with no "are you sure?" prompt.
+
+The repo had no account model yet, so I added a small `Account` type with just a name and email. The screen doesn't store anything itself. The code that shows it passes in the account, the notifications setting, and what to do on sign-out. That lets you connect it to your own storage and sign-out logic. There's also a preview with sample data.
+
+Nothing in the app opens this screen yet. On iPhone and iPad, it can go inside a navigation stack or tab. On Mac, Apple's convention is to open settings from the app menu with Command-Comma. I can set that up when the app entry point exists.
+
+The project has no design tokens yet, so the screen uses the system's standard spacing and styles. If you'd like, I can add a starter set of named spacing, corner-radius and animation values.

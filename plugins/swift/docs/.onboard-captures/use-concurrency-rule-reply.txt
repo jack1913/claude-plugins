@@ -1,0 +1,7 @@
+I implemented `DashboardLoader.load()` in `Sources/Demo/DashboardLoader.swift`. It fetches the profile and the settings at the same time and returns both. The package builds; there are no tests, so I haven't run it.
+
+AGENTS.md bans `async let`, so it uses `withThrowingTaskGroup` instead:
+
+- Each fetch runs as its own task in the group, and a small private enum `Part` tags each result as either the profile or the settings.
+- When both results are in, it returns `(profile, settings)`.
+- If either request throws, the error comes out of `load()` and the other request is cancelled.

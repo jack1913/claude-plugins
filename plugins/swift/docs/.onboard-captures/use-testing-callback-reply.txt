@@ -1,0 +1,9 @@
+I added the test in `Tests/DemoTests/SaverTests.swift` and it passes under `swift test`.
+
+`Saver.save` calls `onSave` later on a background queue, not before it returns. So the test can't just wrap the call in `confirmation` and check right away, because the confirmation would finish before `onSave` ran.
+
+- **Once:** a `confirmation` with `expectedCount: 1` counts the calls to `onSave`.
+- **With 3:** `onSave` passes its value into an `AsyncStream`. The test waits for that first value inside the confirmation and checks that it equals 3.
+- **No hang:** a one-minute `.timeLimit` makes the test fail if `onSave` never runs, instead of waiting forever.
+
+**Limitation:** the count only covers calls made before the confirmation finishes. A second `onSave` call arriving after the test has received the first value wouldn't be caught. The only way to catch that is to wait an arbitrary amount of time, which slows the test and can make it flaky, so I didn't add it.

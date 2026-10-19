@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git fetch:*)",
+      "PowerShell(git fetch:*)",
+      "Bash(git switch:*)",
+      "PowerShell(git switch:*)",
+      "Bash(git stash:*)",
+      "PowerShell(git stash:*)",
+      "Bash(git remote:*)",
+      "PowerShell(git remote:*)",
+      "Bash(mkdir:*)",
+      "PowerShell(mkdir:*)"
+    ],
+    "ask": [
+      "Bash(git rm:*)",
+      "PowerShell(git rm:*)",
+      "Read(**/.env*)",
+      "Edit(**/.env*)"
+    ],
+    "deny": [
+      "Bash(git reset:*)",
+      "PowerShell(git reset:*)",
+      "Bash(git restore:*)",
+      "PowerShell(git restore:*)"
+    ]
+  }
+}

@@ -1,0 +1,32 @@
+import Testing
+@testable import Demo
+
+struct CartTests {
+    @Test func startsEmpty() {
+        let cart = Cart()
+        #expect(cart.count == 0)
+        #expect(cart.items.isEmpty)
+    }
+
+    @Test func addOne() throws {
+        var cart = Cart()
+        try cart.add("apple")
+        #expect(cart.count == 1)
+    }
+
+    @Test func addSeveral() throws {
+        var cart = Cart()
+        try cart.add("apple", quantity: 2)
+        try cart.add("pear", quantity: 3)
+        #expect(cart.count == 5)
+    }
+
+    @Test(arguments: [0, -1])
+    func rejectsNonPositiveQuantity(_ quantity: Int) {
+        var cart = Cart()
+        #expect(throws: CartError(reason: "quantity must be positive")) {
+            try cart.add("apple", quantity: quantity)
+        }
+        #expect(cart.items.isEmpty)
+    }
+}

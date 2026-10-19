@@ -1,0 +1,3 @@
+Validating plugin manifest: ~/Dev/claude_skills/swift-plugin/plugins/swift/.claude-plugin/plugin.json
+
+✔ Validation passed

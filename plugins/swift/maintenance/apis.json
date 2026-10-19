@@ -1,0 +1,1263 @@
+{
+  "frameworks": [
+    "swiftui",
+    "swift",
+    "foundation",
+    "uikit",
+    "appkit",
+    "charts",
+    "webkit",
+    "swiftdata",
+    "coregraphics",
+    "corefoundation",
+    "combine",
+    "accessibility",
+    "os",
+    "dispatch",
+    "objectivec",
+    "mapkit",
+    "corelocation",
+    "uniformtypeidentifiers",
+    "imageio",
+    "developertoolssupport",
+    "coredata",
+    "xctest",
+    "testing",
+    "xcuiautomation"
+  ],
+  "apis": [
+    {
+      "name": "glassEffect(_:in:)",
+      "path": "swiftui/view/glasseffect(_:in:)",
+      "claims": {
+        "visionOS": false,
+        "iOS": "26.0"
+      },
+      "table": true
+    },
+    {
+      "name": "GlassEffectContainer",
+      "path": "swiftui/glasseffectcontainer",
+      "claims": {
+        "visionOS": false
+      },
+      "table": true
+    },
+    {
+      "name": "Glass.interactive(_:)",
+      "path": "swiftui/glass/interactive(_:)",
+      "claims": {
+        "visionOS": false,
+        "macOS": true
+      },
+      "table": true
+    },
+    {
+      "name": "GlassButtonStyle",
+      "path": "swiftui/glassbuttonstyle",
+      "claims": {
+        "visionOS": false
+      },
+      "table": true
+    },
+    {
+      "name": "glassProminent",
+      "path": "swiftui/primitivebuttonstyle/glassprominent",
+      "claims": {
+        "visionOS": false
+      },
+      "table": true
+    },
+    {
+      "name": "glassEffectUnion(id:namespace:)",
+      "path": "swiftui/view/glasseffectunion(id:namespace:)",
+      "claims": {
+        "visionOS": false
+      },
+      "table": true
+    },
+    {
+      "name": "glassEffectTransition(_:)",
+      "path": "swiftui/view/glasseffecttransition(_:)",
+      "claims": {
+        "visionOS": false
+      },
+      "table": true
+    },
+    {
+      "name": "glassEffectID(_:in:)",
+      "path": "swiftui/view/glasseffectid(_:in:)",
+      "claims": {
+        "visionOS": false
+      },
+      "table": true
+    },
+    {
+      "name": "scrollEdgeEffectStyle(_:for:)",
+      "path": "swiftui/view/scrolledgeeffectstyle(_:for:)",
+      "claims": {
+        "visionOS": false
+      },
+      "table": true
+    },
+    {
+      "name": "ToolbarSpacer",
+      "path": "swiftui/toolbarspacer",
+      "claims": {
+        "visionOS": false,
+        "watchOS": false,
+        "tvOS": false
+      },
+      "table": true
+    },
+    {
+      "name": "sharedBackgroundVisibility(_:)",
+      "path": "swiftui/toolbarcontent/sharedbackgroundvisibility(_:)",
+      "claims": {
+        "visionOS": false
+      },
+      "table": true
+    },
+    {
+      "name": "tabViewBottomAccessory(content:)",
+      "path": "swiftui/view/tabviewbottomaccessory(content:)",
+      "claims": {
+        "visionOS": false,
+        "macOS": false
+      },
+      "table": true
+    },
+    {
+      "name": "backgroundExtensionEffect()",
+      "path": "swiftui/view/backgroundextensioneffect()",
+      "claims": {
+        "visionOS": true
+      },
+      "table": true
+    },
+    {
+      "name": "tabBarMinimizeBehavior(_:)",
+      "path": "swiftui/view/tabbarminimizebehavior(_:)",
+      "claims": {
+        "visionOS": true
+      },
+      "table": true
+    },
+    {
+      "name": "safeAreaBar(edge:alignment:spacing:content:)",
+      "path": "swiftui/view/safeareabar(edge:alignment:spacing:content:)",
+      "claims": {
+        "visionOS": true
+      },
+      "table": true
+    },
+    {
+      "name": "ConcentricRectangle",
+      "path": "swiftui/concentricrectangle",
+      "table": true
+    },
+    {
+      "name": "rect(corners:isUniform:)",
+      "path": "swiftui/shape/rect(corners:isuniform:)",
+      "table": true
+    },
+    {
+      "name": "PrimitiveButtonStyle.glass",
+      "path": "swiftui/primitivebuttonstyle/glass",
+      "claims": {
+        "visionOS": false
+      }
+    },
+    {
+      "name": "glassBackgroundEffect(in:displayMode:)",
+      "path": "swiftui/view/glassbackgroundeffect(in:displaymode:)",
+      "claims": {
+        "visionOS": true,
+        "iOS": false,
+        "iPadOS": false,
+        "Mac Catalyst": false,
+        "macOS": false,
+        "watchOS": false,
+        "tvOS": false
+      }
+    },
+    {
+      "name": "glassBackgroundEffect(displayMode:)",
+      "path": "swiftui/view/glassbackgroundeffect(displaymode:)",
+      "claims": {
+        "visionOS": true,
+        "iOS": false,
+        "iPadOS": false,
+        "Mac Catalyst": false,
+        "macOS": false,
+        "watchOS": false,
+        "tvOS": false
+      }
+    },
+    {
+      "name": "ornament(visibility:attachmentAnchor:contentAlignment:ornament:)",
+      "path": "swiftui/view/ornament(visibility:attachmentanchor:contentalignment:ornament:)",
+      "claims": {
+        "visionOS": true,
+        "iOS": false,
+        "iPadOS": false,
+        "Mac Catalyst": false,
+        "macOS": false,
+        "watchOS": false,
+        "tvOS": false
+      }
+    },
+    {
+      "name": "ImmersiveSpace",
+      "path": "swiftui/immersivespace",
+      "claims": {
+        "visionOS": true,
+        "iOS": false,
+        "iPadOS": false,
+        "Mac Catalyst": false,
+        "macOS": false,
+        "watchOS": false,
+        "tvOS": false
+      }
+    },
+    {
+      "name": "windowStyle(_:)",
+      "path": "swiftui/scene/windowstyle(_:)",
+      "claims": {
+        "visionOS": true
+      }
+    },
+    {
+      "name": "volumetric",
+      "path": "swiftui/windowstyle/volumetric",
+      "claims": {
+        "visionOS": true,
+        "iOS": false,
+        "iPadOS": false,
+        "Mac Catalyst": false,
+        "macOS": false,
+        "watchOS": false,
+        "tvOS": false
+      }
+    },
+    {
+      "name": "SpatialEventGesture",
+      "path": "swiftui/spatialeventgesture",
+      "claims": {
+        "visionOS": true
+      }
+    },
+    {
+      "name": "hoverEffect(_:isEnabled:)",
+      "path": "swiftui/view/hovereffect(_:isenabled:)",
+      "claims": {
+        "iOS": true,
+        "iPadOS": true,
+        "Mac Catalyst": true,
+        "tvOS": true,
+        "visionOS": true,
+        "macOS": false,
+        "watchOS": false
+      }
+    },
+    {
+      "name": "openImmersiveSpace",
+      "path": "swiftui/environmentvalues/openimmersivespace",
+      "claims": {
+        "visionOS": true
+      }
+    },
+    {
+      "name": "dismissImmersiveSpace",
+      "path": "swiftui/environmentvalues/dismissimmersivespace",
+      "claims": {
+        "visionOS": true
+      }
+    },
+    {
+      "name": "ContentShapeKinds.hoverEffect",
+      "path": "swiftui/contentshapekinds/hovereffect",
+      "claims": {
+        "iOS": true,
+        "iPadOS": true,
+        "Mac Catalyst": true,
+        "tvOS": true,
+        "visionOS": true,
+        "macOS": false,
+        "watchOS": false
+      }
+    },
+    {
+      "name": "ToolbarItemPlacement.bottomOrnament",
+      "path": "swiftui/toolbaritemplacement/bottomornament",
+      "claims": {
+        "visionOS": true,
+        "iOS": false,
+        "iPadOS": false,
+        "Mac Catalyst": false,
+        "macOS": false,
+        "watchOS": false,
+        "tvOS": false
+      }
+    },
+    {
+      "name": "overlay(_:alignment:)",
+      "path": "swiftui/view/overlay(_:alignment:)",
+      "claims": {
+        "deprecated": true
+      }
+    },
+    {
+      "name": "overlay(alignment:content:)",
+      "path": "swiftui/view/overlay(alignment:content:)",
+      "claims": {
+        "iOS": "15.0",
+        "macOS": "12.0",
+        "deprecated": false
+      }
+    },
+    {
+      "name": "Text + Text",
+      "path": "swiftui/text/+(_:_:)",
+      "claims": {
+        "deprecated": true
+      }
+    },
+    {
+      "name": "Text interpolation of a Text",
+      "path": "swiftui/localizedstringkey/stringinterpolation/appendinterpolation(_:)-4qyfo",
+      "claims": {
+        "iOS": "14.0",
+        "macOS": "11.0",
+        "deprecated": false
+      }
+    },
+    {
+      "name": "Text.foregroundStyle(_:)",
+      "path": "swiftui/text/foregroundstyle(_:)",
+      "claims": {
+        "iOS": "17.0",
+        "macOS": "14.0"
+      }
+    },
+    {
+      "name": "sidebarAdaptable",
+      "path": "swiftui/tabviewstyle/sidebaradaptable",
+      "claims": {
+        "iOS": "18.0",
+        "macOS": "15.0",
+        "visionOS": "2.0"
+      }
+    },
+    {
+      "name": "GroupBox",
+      "path": "swiftui/groupbox",
+      "claims": {
+        "tvOS": false,
+        "watchOS": false
+      }
+    },
+    {
+      "name": "extraLargeTitle",
+      "path": "swiftui/font/extralargetitle",
+      "claims": {
+        "visionOS": "1.0",
+        "iOS": false,
+        "iPadOS": false,
+        "Mac Catalyst": false,
+        "macOS": false,
+        "watchOS": false,
+        "tvOS": false
+      }
+    },
+    {
+      "name": "extraLargeTitle2",
+      "path": "swiftui/font/extralargetitle2",
+      "claims": {
+        "visionOS": "1.0",
+        "iOS": false,
+        "iPadOS": false,
+        "Mac Catalyst": false,
+        "macOS": false,
+        "watchOS": false,
+        "tvOS": false
+      }
+    },
+    {
+      "name": "monospacedDigit()",
+      "path": "swiftui/view/monospaceddigit()",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "monospaced(_:)",
+      "path": "swiftui/view/monospaced(_:)",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "symbolRenderingMode(_:)",
+      "path": "swiftui/view/symbolrenderingmode(_:)",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "symbolVariant(_:)",
+      "path": "swiftui/view/symbolvariant(_:)",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "imageScale(_:)",
+      "path": "swiftui/view/imagescale(_:)",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "Image(systemName:variableValue:)",
+      "path": "swiftui/image/init(systemname:variablevalue:)",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "symbolEffect(_:options:value:)",
+      "path": "swiftui/view/symboleffect(_:options:value:)",
+      "claims": {
+        "iOS": "17.0",
+        "macOS": "14.0",
+        "visionOS": "1.0"
+      }
+    },
+    {
+      "name": "symbolEffect(_:options:isActive:)",
+      "path": "swiftui/view/symboleffect(_:options:isactive:)",
+      "claims": {
+        "iOS": "17.0",
+        "macOS": "14.0",
+        "visionOS": "1.0"
+      }
+    },
+    {
+      "name": "BounceSymbolEffect",
+      "path": "symbols/bouncesymboleffect",
+      "claims": {
+        "iOS": "17.0",
+        "macOS": "14.0",
+        "visionOS": "1.0"
+      }
+    },
+    {
+      "name": "PulseSymbolEffect",
+      "path": "symbols/pulsesymboleffect",
+      "claims": {
+        "iOS": "17.0",
+        "macOS": "14.0",
+        "visionOS": "1.0"
+      }
+    },
+    {
+      "name": "ScaleSymbolEffect",
+      "path": "symbols/scalesymboleffect",
+      "claims": {
+        "iOS": "17.0",
+        "macOS": "14.0",
+        "visionOS": "1.0"
+      }
+    },
+    {
+      "name": "VariableColorSymbolEffect",
+      "path": "symbols/variablecolorsymboleffect",
+      "claims": {
+        "iOS": "17.0",
+        "macOS": "14.0",
+        "visionOS": "1.0"
+      }
+    },
+    {
+      "name": "ReplaceSymbolEffect",
+      "path": "symbols/replacesymboleffect",
+      "claims": {
+        "iOS": "17.0",
+        "macOS": "14.0",
+        "visionOS": "1.0"
+      }
+    },
+    {
+      "name": "AppearSymbolEffect",
+      "path": "symbols/appearsymboleffect",
+      "claims": {
+        "iOS": "17.0",
+        "macOS": "14.0",
+        "visionOS": "1.0"
+      }
+    },
+    {
+      "name": "DisappearSymbolEffect",
+      "path": "symbols/disappearsymboleffect",
+      "claims": {
+        "iOS": "17.0",
+        "macOS": "14.0",
+        "visionOS": "1.0"
+      }
+    },
+    {
+      "name": "WiggleSymbolEffect",
+      "path": "symbols/wigglesymboleffect",
+      "claims": {
+        "iOS": "18.0",
+        "macOS": "15.0",
+        "visionOS": "2.0"
+      }
+    },
+    {
+      "name": "BreatheSymbolEffect",
+      "path": "symbols/breathesymboleffect",
+      "claims": {
+        "iOS": "18.0",
+        "macOS": "15.0",
+        "visionOS": "2.0"
+      }
+    },
+    {
+      "name": "RotateSymbolEffect",
+      "path": "symbols/rotatesymboleffect",
+      "claims": {
+        "iOS": "18.0",
+        "macOS": "15.0",
+        "visionOS": "2.0"
+      }
+    },
+    {
+      "name": "DrawOnSymbolEffect",
+      "path": "symbols/drawonsymboleffect",
+      "claims": {
+        "iOS": "26.0",
+        "macOS": "26.0",
+        "visionOS": "26.0"
+      }
+    },
+    {
+      "name": "DrawOffSymbolEffect",
+      "path": "symbols/drawoffsymboleffect",
+      "claims": {
+        "iOS": "26.0",
+        "macOS": "26.0",
+        "visionOS": "26.0"
+      }
+    },
+    {
+      "name": "Glass.regular",
+      "path": "swiftui/glass/regular",
+      "claims": {
+        "visionOS": false
+      }
+    },
+    {
+      "name": "Glass.clear",
+      "path": "swiftui/glass/clear",
+      "claims": {
+        "visionOS": false
+      }
+    },
+    {
+      "name": "Glass.tint(_:)",
+      "path": "swiftui/glass/tint(_:)",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "presentationBackground(_:)",
+      "path": "swiftui/view/presentationbackground(_:)",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "concentric(minimum:)",
+      "path": "swiftui/edge/corner/style/concentric(minimum:)",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "containerShape(_:)",
+      "path": "swiftui/view/containershape(_:)",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "TabRole.search",
+      "path": "swiftui/tabrole/search",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "inspector(isPresented:content:)",
+      "path": "swiftui/view/inspector(ispresented:content:)",
+      "claims": {
+        "iOS": "17.0",
+        "macOS": "14.0",
+        "visionOS": false
+      }
+    },
+    {
+      "name": "InspectorCommands",
+      "path": "swiftui/inspectorcommands",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "fullScreenCover(isPresented:onDismiss:content:)",
+      "path": "swiftui/view/fullscreencover(ispresented:ondismiss:content:)",
+      "claims": {
+        "macOS": false
+      }
+    },
+    {
+      "name": "commands(content:)",
+      "path": "swiftui/scene/commands(content:)",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "keyboardShortcut(_:modifiers:)",
+      "path": "swiftui/view/keyboardshortcut(_:modifiers:)",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "controlSize(_:)",
+      "path": "swiftui/view/controlsize(_:)",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "openWindow",
+      "path": "swiftui/environmentvalues/openwindow",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "Animation.smooth",
+      "path": "swiftui/animation/smooth",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "Animation.snappy",
+      "path": "swiftui/animation/snappy",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "Animation.bouncy",
+      "path": "swiftui/animation/bouncy",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "Animation.default",
+      "path": "swiftui/animation/default",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "smooth(duration:extraBounce:)",
+      "path": "swiftui/animation/smooth(duration:extrabounce:)",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "spring(duration:bounce:blendDuration:)",
+      "path": "swiftui/animation/spring(duration:bounce:blendduration:)",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "accessibilityReduceMotion",
+      "path": "swiftui/environmentvalues/accessibilityreducemotion",
+      "claims": {
+        "deprecated": false
+      }
+    },
+    {
+      "name": "SectorMark",
+      "path": "charts/sectormark",
+      "claims": {
+        "iOS": "17.0",
+        "macOS": "14.0"
+      }
+    },
+    {
+      "name": "chartXSelection(value:)",
+      "path": "swiftui/view/chartxselection(value:)",
+      "claims": {
+        "iOS": "17.0",
+        "macOS": "14.0"
+      }
+    },
+    {
+      "name": "chartScrollableAxes(_:)",
+      "path": "swiftui/view/chartscrollableaxes(_:)",
+      "claims": {
+        "iOS": "17.0",
+        "macOS": "14.0"
+      }
+    },
+    {
+      "name": "LinePlot",
+      "path": "charts/lineplot",
+      "claims": {
+        "iOS": "18.0",
+        "macOS": "15.0",
+        "visionOS": "2.0"
+      }
+    },
+    {
+      "name": "Chart3D",
+      "path": "charts/chart3d",
+      "claims": {
+        "iOS": "26.0",
+        "macOS": "26.0",
+        "visionOS": "26.0"
+      }
+    },
+    {
+      "name": "SurfacePlot",
+      "path": "charts/surfaceplot",
+      "claims": {
+        "iOS": "26.0",
+        "macOS": "26.0",
+        "visionOS": "26.0"
+      }
+    },
+    {
+      "name": "chart3DCameraProjection(_:)",
+      "path": "swiftui/view/chart3dcameraprojection(_:)",
+      "claims": {
+        "iOS": "26.0",
+        "macOS": "26.0",
+        "visionOS": false
+      }
+    },
+    {
+      "name": "ArrangementView",
+      "path": "swiftui/arrangementview",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": false,
+        "macOS": false,
+        "visionOS": false
+      }
+    },
+    {
+      "name": "arrangementViewStyle(_:)",
+      "path": "swiftui/view/arrangementviewstyle(_:)",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": false,
+        "macOS": false,
+        "visionOS": false
+      }
+    },
+    {
+      "name": "GeometryProxy.reservedRegions(kind:options:layoutDirectionBehavior:)",
+      "path": "swiftui/geometryproxy/reservedregions(kind:options:layoutdirectionbehavior:)",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": false,
+        "macOS": false,
+        "visionOS": false
+      }
+    },
+    {
+      "name": "topBarPinnedTrailing",
+      "path": "swiftui/toolbaritemplacement/topbarpinnedtrailing",
+      "claims": {
+        "iOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "visionOS": "27.0",
+        "macOS": false
+      }
+    },
+    {
+      "name": "ToolbarOverflowMenu",
+      "path": "swiftui/toolbaroverflowmenu",
+      "claims": {
+        "iOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "visionOS": "27.0",
+        "macOS": false
+      }
+    },
+    {
+      "name": "toolbarVerticalEdge",
+      "path": "swiftui/environmentvalues/toolbarverticaledge",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": false,
+        "macOS": false,
+        "visionOS": false
+      }
+    },
+    {
+      "name": "onHingeChange(isEnabled:_:)",
+      "path": "swiftui/view/onhingechange(isenabled:_:)",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": false,
+        "macOS": false,
+        "visionOS": false
+      }
+    },
+    {
+      "name": "ReservedRegion",
+      "path": "swiftui/reservedregion",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": false,
+        "macOS": false,
+        "visionOS": false
+      }
+    },
+    {
+      "name": "ToolbarContent.axisBehavior(_:)",
+      "path": "swiftui/toolbarcontent/axisbehavior(_:)",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": false,
+        "macOS": false,
+        "visionOS": false
+      }
+    },
+    {
+      "name": "toolbarVerticalCompressionBehavior(_:)",
+      "path": "swiftui/view/toolbarverticalcompressionbehavior(_:)",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": false,
+        "macOS": false,
+        "visionOS": false
+      }
+    },
+    {
+      "name": "toolbarVerticalBehavior(_:)",
+      "path": "swiftui/view/toolbarverticalbehavior(_:)",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": false,
+        "macOS": false,
+        "visionOS": false
+      }
+    },
+    {
+      "name": "DeviceHingeContext",
+      "path": "swiftui/devicehingecontext",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": false,
+        "macOS": false,
+        "visionOS": false
+      }
+    },
+    {
+      "name": "VerticalPageTabViewStyle",
+      "path": "swiftui/verticalpagetabviewstyle",
+      "claims": {
+        "watchOS": "10.0",
+        "iOS": false,
+        "macOS": false,
+        "visionOS": false
+      }
+    },
+    {
+      "name": "ToolbarContent.matchedTransitionSource(id:in:)",
+      "path": "swiftui/toolbarcontent/matchedtransitionsource(id:in:)",
+      "claims": {
+        "iOS": "26.0",
+        "iPadOS": "26.0",
+        "Mac Catalyst": "26.0",
+        "macOS": false,
+        "visionOS": false
+      }
+    },
+    {
+      "name": "NavigationTransition.zoom(sourceID:in:)",
+      "path": "swiftui/navigationtransition/zoom(sourceid:in:)",
+      "claims": {
+        "iOS": "18.0",
+        "macOS": false,
+        "visionOS": "2.0"
+      }
+    },
+    {
+      "name": "fileDialogMessage(_:)",
+      "path": "swiftui/view/filedialogmessage(_:)",
+      "claims": {
+        "macOS": "14.0",
+        "iOS": "17.0",
+        "visionOS": "1.0"
+      }
+    },
+    {
+      "name": "fileDialogConfirmationLabel(_:)",
+      "path": "swiftui/view/filedialogconfirmationlabel(_:)",
+      "claims": {
+        "macOS": "14.0",
+        "iOS": "17.0",
+        "visionOS": "1.0"
+      }
+    },
+    {
+      "name": "fileExporterFilenameLabel(_:)",
+      "path": "swiftui/view/fileexporterfilenamelabel(_:)",
+      "claims": {
+        "macOS": "14.0",
+        "iOS": "17.0",
+        "visionOS": "1.0"
+      }
+    },
+    {
+      "name": "copyable(_:)",
+      "path": "swiftui/view/copyable(_:)",
+      "claims": {
+        "macOS": "13.0",
+        "iOS": "27.0",
+        "tvOS": false,
+        "watchOS": false,
+        "visionOS": false
+      }
+    },
+    {
+      "name": "DocumentCreationSource",
+      "path": "swiftui/documentcreationsource",
+      "claims": {
+        "iOS": "27.0",
+        "visionOS": "27.0"
+      }
+    },
+    {
+      "name": "Table",
+      "path": "swiftui/table",
+      "claims": {
+        "iOS": "16.0",
+        "macOS": "12.0",
+        "visionOS": "1.0",
+        "tvOS": false,
+        "watchOS": false
+      },
+      "table": true
+    },
+    {
+      "name": "ContentUnavailableView",
+      "path": "swiftui/contentunavailableview",
+      "claims": {
+        "iOS": "17.0",
+        "macOS": "14.0",
+        "tvOS": "17.0",
+        "watchOS": "10.0",
+        "visionOS": "1.0"
+      }
+    },
+    {
+      "name": "Previewable()",
+      "path": "swiftui/previewable()",
+      "claims": {
+        "iOS": "17.0",
+        "macOS": "14.0"
+      }
+    },
+    {
+      "name": "onDeleteCommand(perform:)",
+      "path": "swiftui/view/ondeletecommand(perform:)",
+      "claims": {
+        "macOS": "10.15",
+        "iOS": false,
+        "tvOS": false,
+        "watchOS": false,
+        "visionOS": false
+      }
+    }
+  ],
+  "ignore": {
+    "example types and functions in upstream snippets (declared elsewhere or implied)": [
+      "APIClient",
+      "ActionButton",
+      "AddArticleView",
+      "AddItemView",
+      "AdvancedSettingsView",
+      "AppModel",
+      "AppNotification",
+      "Article",
+      "ArticleSearcher",
+      "Artwork",
+      "BadgeView",
+      "BatchProcessor",
+      "CardContent",
+      "CardView",
+      "CartView",
+      "CategoriesView",
+      "ChatMessage",
+      "Checkout",
+      "ClearButton",
+      "CodeEditorView",
+      "CompactBanner",
+      "CompactCard",
+      "CompactCompassControl",
+      "ConcurrencyDebug",
+      "ConnectionDoctor",
+      "Contact",
+      "ContentView",
+      "CounterView",
+      "CustomCanvas",
+      "CustomSlider",
+      "DailySteps",
+      "DashboardView",
+      "DataItem",
+      "DataProcessor",
+      "DataView",
+      "Database",
+      "DebouncedSearcher",
+      "Department",
+      "DetailRow",
+      "DetailView",
+      "DetailsView",
+      "DirectoryCleaner",
+      "DownloadEvent",
+      "EditArticleView",
+      "EditingSession",
+      "Editor",
+      "Employee",
+      "EmployeeDetails",
+      "ExpandableContent",
+      "ExpandedCard",
+      "ExpensiveRow",
+      "ExpensiveView",
+      "ExportButton",
+      "FileEvent",
+      "FileTreeView",
+      "FontSizeSlider",
+      "Foo",
+      "FoodTruck",
+      "FooterView",
+      "FormState",
+      "FullScreenView",
+      "GeneralSettingsView",
+      "GlassChip",
+      "HeaderView",
+      "HeavyImageFilter",
+      "HomeView",
+      "ImageError",
+      "ImageFetcher",
+      "ImageMetadata",
+      "ImageSnapshot",
+      "InspectorContent",
+      "InspectorView",
+      "ItemCard",
+      "ItemDetailSheet",
+      "ItemDetailView",
+      "ItemListView",
+      "ItemRow",
+      "ItemView",
+      "Landmark",
+      "LegacyFramework",
+      "LibraryType",
+      "LoadedImage",
+      "MailViewer",
+      "MainContent",
+      "Manager",
+      "MapViewController",
+      "MessageDetail",
+      "MessageRow",
+      "MoreButton",
+      "MovieDetailsViewModel",
+      "MyActor",
+      "MyClass",
+      "MyCustomCard",
+      "MyEditorView",
+      "MyItem",
+      "MyModel",
+      "MySwiftUIView",
+      "MyTapGestureView",
+      "MyViewModel",
+      "NonSendableDelegate",
+      "NowPlayingBar",
+      "OneView",
+      "OrderDetailView",
+      "OtherView",
+      "PageControl",
+      "PageView",
+      "Photo",
+      "PhotoGallery",
+      "PhotoGrid",
+      "PhotoList",
+      "PhotoSelection",
+      "PlaybackProjection",
+      "PlayerScoreRow",
+      "PlayerView",
+      "PopoverContentView",
+      "PreviewPane",
+      "Price",
+      "ProcessedItem",
+      "Product",
+      "ProductDescription",
+      "ProductGallery",
+      "ProductHeader",
+      "ProductReviews",
+      "Profile",
+      "ProfileButton",
+      "ProfileView",
+      "RawItem",
+      "RecentBuild",
+      "RedoButton",
+      "RegularRow",
+      "RootView",
+      "ScrollOffsetKey",
+      "SearchResultsView",
+      "SearchView",
+      "SelectOrDoneButton",
+      "Session",
+      "SettingsRow",
+      "SettingsView",
+      "ShareButton",
+      "SidebarView",
+      "SomeActor",
+      "SomeData",
+      "SomeError",
+      "SomeLibrary",
+      "SomeProtocol",
+      "SomeThirdPartyLibrary",
+      "SomeType",
+      "SomeView",
+      "SomeViewModel",
+      "SpecialRow",
+      "Stats",
+      "StatusMenu",
+      "StatusView",
+      "TabButton",
+      "TagButton",
+      "Theme",
+      "ThemeSelector",
+      "TimeoutError",
+      "ToggleView",
+      "UndoButton",
+      "UpNextView",
+      "User",
+      "UserModel",
+      "UserRow",
+      "ViewModel",
+      "ViewModelDataView",
+      "ViewSizeKey",
+      "Viewer",
+      "WeatherSummary",
+      "WebSocketMessage",
+      "fetchItems",
+      "fetchLatestArticles",
+      "fileChanged",
+      "searchArticles",
+      "updateLikeStatus"
+    ],
+    "example types and views in our own snippets (declared elsewhere or implied)": [
+      "AppColor",
+      "ConcertView",
+      "DesignTokens",
+      "ForYouView",
+      "InboxView",
+      "LibraryView",
+      "ProfileModel",
+      "Saver",
+      "StageView"
+    ],
+    "SwiftUI runtime symbols named in Instruments output": [
+      "EnvironmentWriter",
+      "GraphAttribute",
+      "Target",
+      "UserDefaultObserver"
+    ],
+    "Instruments instrument, track and column names in prose": [
+      "Callback",
+      "Creation",
+      "Hitches",
+      "Profiler",
+      "Reuse",
+      "Time"
+    ],
+    "tool and lint-rule names in prose (the Bash tool, SwiftLint)": [
+      "Bash",
+      "SwiftLint"
+    ],
+    "words from compiler diagnostics quoted verbatim": [
+      "Main",
+      "Sending"
+    ],
+    "example test-plan names": [
+      "Core",
+      "Integration",
+      "ReleaseGate"
+    ],
+    "Info.plist and build-setting values": [
+      "YES"
+    ],
+    "Info.plist keys": [
+      "CFBundleTypeRole",
+      "LSUIElement",
+      "UISupportsDocumentBrowser"
+    ],
+    "named on purpose as the wrong spelling": [
+      "VerticalTabViewStyle",
+      "textFormattingDefinition"
+    ],
+    "Apple generic parameter names (not index entries)": [
+      "CollectionID"
+    ],
+    "Swift compiler feature flags and build settings (not doc index entries)": [
+      "DisableOutwardActorInference",
+      "ExistentialAny",
+      "GlobalActorIsolatedTypesUsability",
+      "InferIsolatedConformances",
+      "InferSendableFromCaptures",
+      "NonisolatedNonsendingByDefault",
+      "SWIFT_APPROACHABLE_CONCURRENCY",
+      "SWIFT_DEFAULT_ACTOR_ISOLATION",
+      "SWIFT_STRICT_CONCURRENCY",
+      "SWIFT_VERSION",
+      "defaultIsolation",
+      "enableExperimentalFeature",
+      "enableUpcomingFeature"
+    ],
+    "package symbols from outside Apple's framework indexes (swift-async-algorithms, SwiftPM)": [
+      "AsyncChannel",
+      "AsyncRemoveDuplicatesSequence",
+      "AsyncThrowingChannel",
+      "AsyncTimerSequence",
+      "Package",
+      "chain",
+      "product",
+      "repeating"
+    ],
+    "Apple names that are no standalone index entry (@NSManaged attribute, nested notification name)": [
+      "NSManaged",
+      "NSSystemTimeZoneDidChange"
+    ]
+  }
+}

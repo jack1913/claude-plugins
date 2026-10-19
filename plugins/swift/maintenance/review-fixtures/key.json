@@ -1,0 +1,68 @@
+{
+  "about": "Answer key for the swift:review end-to-end verification (docs/internals/review-verification.md). Each dated section freezes the key: a change lands in its own commit before that section's first run, never after it. When a run misses, fix the skill, not the key.",
+  "tolerance": 3,
+  "runs": {
+    "code": {
+      "planted": ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8"],
+      "min": 7,
+      "match_lines": true,
+      "never": ["N1"]
+    },
+    "tokened": {
+      "planted": ["P3t", "P4t"],
+      "min": 2,
+      "match_lines": true,
+      "never": ["N1", "N2"]
+    },
+    "screenshot": {
+      "planted": ["P1", "P2", "P4", "P6"],
+      "min": 3,
+      "match_lines": false,
+      "never": ["N1", "N3"],
+      "excluded": {
+        "P3": "hit region: the image can't show where the pencil button's tappable area ends, so screenshot-review.md sends it to Not checked",
+        "P5": "toolbar: ImageRenderer draws view content only, not window toolbars",
+        "P7": "sheet: a presented sheet is not in the rendered content",
+        "P8": "glass card: ImageRenderer renders the glassEffect card blank, so the image shows an empty band"
+      }
+    }
+  },
+  "violations": {
+    "P1": {"what": "labelled values in a VStack with Dividers, not Form/Section/LabeledContent", "file": "SettingsView.swift", "lines": [[41, 72]], "must_match": "(?i)\\bForm\\b|LabeledContent|Divider|grouped"},
+    "P2": {"what": ".system(size: 13, weight: .ultraLight)", "file": "SettingsView.swift", "lines": [[42, 43]], "must_match": "(?i)ultra ?light|thin|text style|\\.system\\(size|point size|fixed (font )?size"},
+    "P3": {"what": "28x28 pt icon button", "file": "SettingsView.swift", "lines": [[49, 55]], "must_match": "(?i)\\b44\\b|hit (target|region|area)|tap(pable)? (target|area|region)|touch target"},
+    "P4": {"what": "sync status by colour alone", "file": "SettingsView.swift", "lines": [[66, 70]], "must_match": "(?i)colou?r alone|only (by|with|through) colou?r|colou?r[- ]only|(relies|rely|relying) (only |solely )?on colou?r|solely (by|on) colou?r|colou?r carries|meaning alone|\\bdot\\b.{0,60}(symbol|label|text)"},
+    "P5": {"what": "three prominent toolbar actions", "file": "SettingsView.swift", "lines": [[18, 26]], "must_match": "(?i)prominent|primary action|tinted|toolbar"},
+    "P6": {"what": "Delete Account without role: .destructive, styled prominent", "file": "SettingsView.swift", "lines": [[83, 85]], "must_match": "(?i)destructive"},
+    "P7": {"what": "edit sheet with Done and no Cancel", "file": "SettingsView.swift", "lines": [[28, 30], [93, 106]], "must_match": "(?i)cancel"},
+    "P8": {"what": "glassEffect on a content card", "file": "SettingsView.swift", "lines": [[73, 82]], "must_match": "(?i)glass"},
+    "P3t": {"what": "28x28 pt icon button (tokened)", "file": "SettingsView.swift", "lines": [[18, 25]], "must_match": "(?i)\\b44\\b|hit (target|region|area)|tap(pable)? (target|area|region)|touch target"},
+    "P4t": {"what": "sync status by colour alone (tokened)", "file": "SettingsView.swift", "lines": [[30, 36]], "must_match": "(?i)colou?r alone|only (by|with|through) colou?r|colou?r[- ]only|(relies|rely|relying) (only |solely )?on colou?r|solely (by|on) colou?r|colou?r carries|meaning alone|\\bdot\\b.{0,60}(symbol|label|text)"}
+  },
+  "never": {
+    "N1": {
+      "why": "ADR-0008: missing Liquid Glass is never a finding",
+      "rules": [
+        {
+          "pattern": "(?i)\\b(missing|lacks?|lacking|without)\\s+(liquid\\s+)?glass\\b|\\b(add|adopt|apply|use|wrap)\\w*\\b[^.;—]{0,25}\\b(liquid glass|glass)",
+          "unless": "(?i)\\b(remove|drop|delete|take off|instead of|rather than|not|never|don.t|avoid)\\b[^.;—]{0,40}glass|glass[^.;—]{0,30}\\b(on|from) (a |the )?(content|card|list|row|background)"
+        }
+      ]
+    },
+    "N2": {
+      "why": "ADR-0007/ADR-0011: values the project's design layer sanctions are not findings",
+      "rules": [
+        {
+          "pattern": "(?i)(DesignTokens|Spacing\\.|Palette\\.|Radius\\.)[^—]*\\b(hard-?coded|literal|magic|asset|colou?r sets?|dark|variant)|\\b(hard-?coded|literal|magic|asset|colou?r sets?)\\b[^—]*(DesignTokens|Spacing\\.|Palette\\.|Radius\\.)"
+        }
+      ]
+    },
+    "N3": {
+      "why": "screenshot-review.md: every size read from pixels is marked estimated (HIG reference sizes need no mark), and one light-mode image shows no Dynamic Type, dark mode, VoiceOver or motion",
+      "rules": [
+        {"pattern": "(?<![\\d.])(?!44\\b|60\\b)\\d+(\\.\\d+)?\\s?(pt|points)\\b", "unless_after": "(?i)^[^;\u2014]{0,40}estimated", "unless_before": "(?i)(minimum|at least|under|below|than|default|target|requires?|asks for)[^;\u2014]{0,25}$"},
+        {"pattern": "(?i)dynamic type|dark mode|voiceover|reduce motion|increased contrast"}
+      ]
+    }
+  }
+}

@@ -1,0 +1,23 @@
+I found 5 issues in `screenshot.png`: 1 high, 3 medium and 1 low. The repo has no view code, so this review comes from the image alone. It also has no design tokens, colour sets or project design skill, so no values were excused as project choices.
+
+I assumed a scale of @2x: the image is 780×594 px, so the screen is about 390×297 pt. The image doesn't show which platform this is: there's no status bar, bar or window frame. 390 pt is the width of an iPhone.
+
+## Findings
+- [high] The Sync state is shown only by a red dot, with no symbol or words, so colour alone carries the meaning — screenshot: Sync row, trailing edge — HIG: https://developer.apple.com/design/human-interface-guidelines/color — Fix: say the state in words and put the colour on a symbol, e.g. `LabeledContent("Sync") { Label { Text("Sync Failed") } icon: { Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red) } }`, keeping the text in the primary style. If Sync is an on/off setting rather than a status, use `Toggle("Sync", isOn: $isSyncOn)` instead.
+- [medium] "Delete Account" is the only filled button on the screen, so the destructive action looks like the main action — screenshot: bottom-left button — HIG: https://developer.apple.com/design/human-interface-guidelines/buttons — Fix: drop the prominent style and use `Button("Delete Account", role: .destructive) { … }` in its own last `Section` of the form. iOS draws it as a red text row.
+- [medium] The "Account" group header uses a Light or thinner weight: its strokes are visibly thinner than the Regular row labels (estimated) — screenshot: top-left header — HIG: https://developer.apple.com/design/human-interface-guidelines/typography — Fix: let `Section("Account")` supply the header style. If it stays custom, use a text style at Regular weight or heavier, and make it quieter with `.foregroundStyle(.secondary)` rather than a lighter weight.
+- [medium] The labelled values are rows split by full-width lines on a plain background under a custom header. That doesn't match any platform's `Form` or `List` (iOS shows inset groups on the grouped background; the Mac's `.grouped` style shows a rounded group box), so it looks like stacks with dividers — screenshot: Name, Email and Sync rows — HIG: https://developer.apple.com/design/human-interface-guidelines/lists-and-tables — Fix: `Form { Section("Account") { LabeledContent("Name", value: name); LabeledContent("Email", value: email); … } }` with `.formStyle(.grouped)`, so the platform supplies the separators, header, margins and alignment.
+- [low] Name editing is an icon-only pencil, and HIG notes a pencil can be misread as Edit — screenshot: Name row, trailing edge — HIG: https://developer.apple.com/design/human-interface-guidelines/icons — Fix: make the name editable in the row with `TextField("Name", text: $name)` inside the Section, or use an "Edit" text button. If the symbol stays, give it `.accessibilityLabel("Edit Name")`.
+
+## Not checked
+- **Target platform:** the image can't pin it. Send the Xcode project or `Package.swift`, or name the platform.
+- **Hit targets:**
+  - The Delete Account button is about 117×24 pt (estimated, @2x). On iPhone or iPad that is below the 44 pt minimum, which would be a high finding. On Mac it is above the 20 pt minimum.
+  - The pencil glyph is about 10×10 pt (estimated, @2x), but the image can't show how large its tappable area is. The code (its frame or `contentShape`) would settle it.
+- **Email colour:** the image doesn't show whether the blue email can be tapped. If it's static text, blue marks interactive elements and shouldn't be used on it, which is a colour finding. The name value is grey, so the two values are styled differently.
+- **Contrast and appearance:** the white "Delete Account" label on the red fill looks below 4.5:1 for regular text. The code would settle whether that red is the system `.red`, which has an increased-contrast version, and the text's size. Send captures in dark mode and with Increase Contrast on.
+- **Dynamic Type:** point sizes and text styles can't be measured from the image. A capture at an accessibility text size would show whether "Email … jordan@example.com" stacks or truncates.
+- **VoiceOver:** labels for the pencil and the dot, and the reading order, need the code or an Accessibility Inspector pass.
+- **Delete flow:** whether deleting asks for confirmation (`confirmationDialog`) needs the code or a screen recording.
+- **Navigation and toolbar:** no title, navigation bar or window toolbar is in the frame. A capture that includes them is needed.
+- **Motion and Reduce Motion:** these need a screen recording or the code.
