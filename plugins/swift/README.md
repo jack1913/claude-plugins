@@ -2,7 +2,7 @@
 
 The `swift` plugin gives Claude Code five skills for writing correct, current, Apple-native Swift: SwiftUI, Apple design, Swift 6 concurrency, Swift Testing, and an on-demand Human Interface Guidelines review.
 
-[Changelog](CHANGELOG.md) (current version and every release) · [Manual](docs/manual/README.md) · Marketplace `jack1913-plugins` · Private
+[Changelog](CHANGELOG.md) (current version and every release) · [Manual](docs/manual/README.md) · Marketplace `jack1913` ([jack1913/claude-plugins](https://github.com/jack1913/claude-plugins)) · Private
 
 - [Requirements](#requirements)
 - [Enable it in a Swift repo](#enable-it-in-a-swift-repo)
@@ -15,7 +15,7 @@ The `swift` plugin gives Claude Code five skills for writing correct, current, A
 ## Requirements
 
 - Claude Code. The runs in the manual used 2.1.283.
-- Read access to the private repo `jack1913/swift-plugin`, through your git or `gh` credentials.
+- Read access to the private repos `jack1913/claude-plugins` (the marketplace) and `jack1913/swift-plugin` (the plugin), through your git or `gh` credentials.
 - A Swift package or Xcode project to use it in.
 
 ## Enable it in a Swift repo
@@ -23,11 +23,11 @@ The `swift` plugin gives Claude Code five skills for writing correct, current, A
 Run inside that repo. `--scope project` writes its committed `.claude/settings.json`; `--scope local` writes the gitignored `.claude/settings.local.json`.
 
 ```bash
-claude plugin marketplace add jack1913/swift-plugin --scope project
-claude plugin install swift@jack1913-plugins --scope project
+claude plugin marketplace add jack1913/claude-plugins --scope project
+claude plugin install swift@jack1913 --scope project
 ```
 
-A repo without these entries never sees the plugin. Before 0.2.0 the marketplace was named `swift-plugin`. To move an older install, see [the manual](docs/manual/getting-started/enable-in-a-swift-repo.md#move-an-install-from-swift-plugin).
+A repo without these entries never sees the plugin. Before 0.3.0 the marketplace was `jack1913-plugins` (and before 0.2.0 `swift-plugin`), hosted in this repo. To move an older install, see [the manual](docs/manual/getting-started/enable-in-a-swift-repo.md#move-an-install-to-the-jack1913-marketplace).
 
 ## Usage
 
@@ -84,8 +84,8 @@ Nine eval cases check the skills' behaviour, and `project-rule-over-skill` is th
 ## Versioning
 
 - SemVer. The version lives only in `plugins/swift/.claude-plugin/plugin.json` ([ADR-0003](docs/adr/ADR-0003-explicit-semver-one-version-home.md)), and each release is tagged `swift--v<version>`.
-- Before 1.0, a breaking change bumps the minor version (0.2.0 renamed the marketplace), and anything else bumps the patch.
-- Installs are copies, so a repo picks up a release with `claude plugin marketplace update jack1913-plugins` and `claude plugin update swift@jack1913-plugins`, then a new session.
+- Before 1.0, a breaking change bumps the minor version (0.2.0 and 0.3.0 changed the marketplace and so the install ID), and anything else bumps the patch.
+- Installs are copies, so a repo picks up a release with `claude plugin marketplace update jack1913` and `claude plugin update swift@jack1913`, then a new session.
 - Every release is listed in the [Changelog](CHANGELOG.md).
 
 ## Work on it
@@ -97,7 +97,7 @@ Nine eval cases check the skills' behaviour, and `project-rule-over-skill` is th
 | Unit tests | `python3 -m unittest discover maintenance/tests` |
 | Evals | `claude plugin eval plugins/swift --scaffold --trust-plugin --no-publish --max-cost-usd <budget> --allow-tools Write Edit` |
 | Upstream changes | `maintenance/upstream-diff.sh <swiftui\|concurrency\|testing> [ref]` |
-| Validate manifests | `claude plugin validate . && claude plugin validate plugins/swift` |
+| Validate the manifest | `claude plugin validate plugins/swift` |
 
 The full workflow, releases included: [Work on the plugin](docs/manual/work-on-it.md). Decisions: [`docs/adr/`](docs/adr/).
 

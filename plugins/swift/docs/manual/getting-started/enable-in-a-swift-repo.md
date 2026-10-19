@@ -14,53 +14,53 @@ That is `claude --plugin-dir plugins/swift plugin details swift`, run from the r
 Run inside the Swift repo:
 
 ```bash
-claude plugin marketplace add jack1913/swift-plugin --scope project
-claude plugin install swift@jack1913-plugins --scope project
+claude plugin marketplace add jack1913/claude-plugins --scope project
+claude plugin install swift@jack1913 --scope project
 ```
 
 Always pass `--scope`. Both commands default to user scope, which loads the plugin in every repo (`claude plugin install --help`).
 
 | Scope | Writes | Who gets the plugin |
 | --- | --- | --- |
-| `--scope project` | the repo's committed `.claude/settings.json` | everyone who clones the repo and can read `jack1913/swift-plugin` |
+| `--scope project` | the repo's committed `.claude/settings.json` | everyone who clones the repo and can read `jack1913/claude-plugins` and `jack1913/swift-plugin` |
 | `--scope local` | the gitignored `.claude/settings.local.json` | only you, only this checkout |
 
-The plugin loads only where `enabledPlugins` lists it. The marketplace is a private GitHub repo, so `marketplace add` uses your existing git and `gh` credentials.
+The plugin loads only where `enabledPlugins` lists it. The marketplace (`jack1913/claude-plugins`) and the plugin repo (`jack1913/swift-plugin`) are private GitHub repos, so `marketplace add` and the install use your existing git and `gh` credentials.
 
-If `marketplace add` fails — no read access to `jack1913/swift-plugin`, or `gh` isn't authenticated — fall back to loading straight from a checkout: [`claude --plugin-dir`](../work-on-it.md#try-a-change).
+If `marketplace add` fails — no read access to `jack1913/claude-plugins` or `jack1913/swift-plugin`, or `gh` isn't authenticated — fall back to loading straight from a checkout: [`claude --plugin-dir`](../work-on-it.md#try-a-change).
 
 ## Pick up a new release
 
 Installs are copies, and a third-party marketplace doesn't auto-update unless you turn that on in `/plugin` → Marketplaces ([Install and manage plugins: keep plugins updated](https://code.claude.com/docs/en/discover-plugins#keep-plugins-updated)). A repo keeps the version it installed until you run:
 
 ```bash
-claude plugin marketplace update jack1913-plugins
-claude plugin update swift@jack1913-plugins
+claude plugin marketplace update jack1913
+claude plugin update swift@jack1913
 ```
 
 Then start a new session or run `/reload-plugins`; the update needs a restart to apply (`claude plugin update --help`). An update only arrives when a release raised `version` in `plugins/swift/.claude-plugin/plugin.json`, because Claude Code keys updates on the version ([Plugins reference: version management](https://code.claude.com/docs/en/plugins-reference)). See [Release](../work-on-it.md#release).
 
-## Move an install from swift-plugin
+## Move an install to the jack1913 marketplace
 
-Until 0.2.0 the marketplace was named `swift-plugin`, so older installs are `swift@swift-plugin`. The marketplace name is part of the plugin's ID, and Claude Code's `renames` map covers plugin names only, not marketplace names. So an older install moves by hand.
+The plugin used to be listed in a marketplace hosted in this repo: `swift-plugin` until 0.2.0, then `jack1913-plugins`. Both are gone. The plugin is now listed in `jack1913`, the marketplace in the repo `jack1913/claude-plugins` ([ADR-0014](../../adr/ADR-0014-catalogue-moves-to-claude-plugins.md)). The marketplace name is part of the plugin's ID, and Claude Code's `renames` map covers plugin names only, not marketplace names. So an older install, `swift@swift-plugin` or `swift@jack1913-plugins`, moves by hand.
 
-In the first repo you move, run:
+In the first repo you move, run, with the old marketplace's name in place of `<old>` (`swift-plugin` or `jack1913-plugins`):
 
 ```bash
-claude plugin uninstall swift@swift-plugin --scope project
-claude plugin marketplace remove swift-plugin
-claude plugin marketplace add jack1913/swift-plugin --scope project
-claude plugin install swift@jack1913-plugins --scope project
+claude plugin uninstall swift@<old> --scope project
+claude plugin marketplace remove <old>
+claude plugin marketplace add jack1913/claude-plugins --scope project
+claude plugin install swift@jack1913 --scope project
 ```
 
-The repo's `.claude/settings.json` then lists only the new entries: `swift@jack1913-plugins` under `enabledPlugins` and `jack1913-plugins` under `extraKnownMarketplaces`.
+The repo's `.claude/settings.json` then lists only the new entries: `swift@jack1913` under `enabledPlugins` and `jack1913` under `extraKnownMarketplaces`.
 
-`marketplace remove` also uninstalls `swift@swift-plugin` in every other repo on the machine, because it drops the marketplace from your user plugin data ([Plugin marketplaces: remove](https://code.claude.com/docs/en/plugin-marketplaces)). The plugin stops loading there until you move those repos too. In each of them:
+`marketplace remove` also uninstalls `swift@<old>` in every other repo on the machine, because it drops the marketplace from your user plugin data ([Plugin marketplaces: remove](https://code.claude.com/docs/en/plugin-marketplaces)). The plugin stops loading there until you move those repos too. In each of them:
 - the first two commands report "not found";
-- `.claude/settings.json` keeps the old `swift@swift-plugin` and `swift-plugin` entries, so delete both by hand;
+- `.claude/settings.json` keeps the old `swift@<old>` and `<old>` entries, so delete both by hand;
 - then run the `marketplace add` and `install` lines. `add` reports the marketplace is "already on disk".
 
-Commit each repo's settings change, so everyone who clones it gets the new ID ([ADR-0012](../../adr/ADR-0012-marketplace-named-jack1913-plugins.md)).
+Commit each repo's settings change, so everyone who clones it gets the new ID.
 
 ## What each skill covers
 

@@ -1,7 +1,7 @@
 # AGENTS.md — swift-plugin (single source of truth)
 
 ## 1. Project identity
-A private Claude Code plugin marketplace with one plugin, `swift`, whose skills (`swift:swiftui`, `swift:design`, `swift:concurrency`, `swift:testing`) make an agent write correct, current, Apple-native Swift: SwiftUI, design, Swift 6 concurrency and tests; `swift:review` (slash-only) reviews a built screen against the HIG. Design: `docs/superpowers/specs/2026-09-24-swift-plugin-design.md`; part 2: `docs/superpowers/specs/2026-09-26-swift-skills-part2-design.md`.
+A private Claude Code plugin, `swift`, listed in the marketplace `jack1913` (repo `jack1913/claude-plugins`; ADR-0014), whose skills (`swift:swiftui`, `swift:design`, `swift:concurrency`, `swift:testing`) make an agent write correct, current, Apple-native Swift: SwiftUI, design, Swift 6 concurrency and tests; `swift:review` (slash-only) reviews a built screen against the HIG. Design: `docs/superpowers/specs/2026-09-24-swift-plugin-design.md`; part 2: `docs/superpowers/specs/2026-09-26-swift-skills-part2-design.md`.
 
 ## 2. Repo layout
 | Path | Purpose |
@@ -19,7 +19,7 @@ A private Claude Code plugin marketplace with one plugin, `swift`, whose skills 
 ## 3. Pointer index (source-of-truth → path)
 | Topic | Path |
 | --- | --- |
-| Marketplace manifest | `.claude-plugin/marketplace.json` |
+| Marketplace manifest: not in this repo, it lives in `jack1913/claude-plugins` (ADR-0014) | `docs/adr/ADR-0014-catalogue-moves-to-claude-plugins.md` |
 | Plugin manifest, the only version home | `plugins/swift/.claude-plugin/plugin.json` |
 | `swift:swiftui` (upstream fork) | `plugins/swift/skills/swiftui/SKILL.md` |
 | `swift:design` | `plugins/swift/skills/design/SKILL.md` |
@@ -70,7 +70,7 @@ The plugin's own skills live in `plugins/swift/skills/`, not in `.claude/skills/
 - A stale pointer is worse than no pointer: moving or renaming a **doc, rule or
   skill** means fixing its row above in the same change. Nothing fails a build when
   these tables drift.
-- Names are fixed: marketplace `jack1913-plugins` (named `swift-plugin` before 0.2.0; ADR-0012), plugin `swift`, skills `swift:swiftui`, `swift:design`, `swift:concurrency`, `swift:testing` and `swift:review`; the example-app layer depends on the first two (spec §1 goal 2; ExampleApp companion spec named in the spec header; part-2 spec §2).
+- Names are fixed: marketplace `jack1913` (repo `jack1913/claude-plugins`; named `jack1913-plugins` in 0.2.x and `swift-plugin` before 0.2.0; ADR-0012, ADR-0014), plugin `swift`, skills `swift:swiftui`, `swift:design`, `swift:concurrency`, `swift:testing` and `swift:review`; the example-app layer depends on the first two (spec §1 goal 2; ExampleApp companion spec named in the spec header; part-2 spec §2).
 - A change under a forked skill (`plugins/swift/skills/swiftui/`, `plugins/swift/skills/concurrency/`, `plugins/swift/skills/testing/`) is its own commit, with its `UPSTREAM.md` → Deviations row — in that upstream's section — in that commit (spec §4; part-2 spec §3). This applies while writing, when no `paths:` rule has loaded.
 - Never hand-edit the block between the `BEGIN GENERATED` / `END GENERATED` markers in `platform-availability.md`; run `python3 maintenance/check-apis.py --write-table`.
 - New code in `maintenance/apicheck/` or `maintenance/check-apis.py` stays standard-library-only, including while a file is being created (`.claude/rules/apicheck-stdlib-only.md` only loads on read); see `docs/internals/agent-instructions.md`.

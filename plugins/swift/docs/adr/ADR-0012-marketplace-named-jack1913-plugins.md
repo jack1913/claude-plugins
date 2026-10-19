@@ -1,6 +1,6 @@
 # ADR-0012: The marketplace is named `jack1913-plugins` and signed by Jacek Pytlik
 
-- **Status:** accepted
+- **Status:** superseded by ADR-0014 (the marketplace is named `jack1913` and lives in `jack1913/claude-plugins`)
 - **Date:** 2026-09-28
 - **Source:** the owner's request (2026-09-28) for a professional marketplace name and a signed author; [Plugin marketplaces](https://code.claude.com/docs/en/plugin-marketplaces) (name rules, reserved names, owner fields, `renames`, `marketplace remove`); ADR-0001 (the marketplace this renames)
 

@@ -347,7 +347,7 @@ leave it and report.
 <!-- BEGIN REPO SPECIFICS (preserved on --sync) -->
 - **index doc:** `AGENTS.md` (`CLAUDE.md` is an `@AGENTS.md` import).
 - **section→source map:**
-  - `README.md` "Enable it in a Swift repo" → `.claude-plugin/marketplace.json` (`name`), `plugins/swift/.claude-plugin/plugin.json` (`name`), `plugins/swift/skills/*/SKILL.md` (frontmatter `name`)
+  - `README.md` "Enable it in a Swift repo" → `plugins/swift/.claude-plugin/plugin.json` (`name`), `docs/adr/ADR-0014-catalogue-moves-to-claude-plugins.md` (marketplace `jack1913`, repo `jack1913/claude-plugins`), `plugins/swift/skills/*/SKILL.md` (frontmatter `name`)
   - `README.md` "Work on it" → `maintenance/apicheck/cli.py` (`parse_args`), `maintenance/upstream-diff.sh`, `plugins/swift/evals/`, `maintenance/tests/`
   - `docs/manual/reference/check-apis.md` → `maintenance/apicheck/cli.py` (`parse_args`, `run`)
   - `UPSTREAM.md` → per section: `git diff upstream-5.1.0 -- plugins/swift/skills/swiftui` (SwiftUI section), `git diff upstream-concurrency-2.3.0 -- plugins/swift/skills/concurrency` (Concurrency section), `git diff upstream-testing-1.2.0 -- plugins/swift/skills/testing` (Testing section), `maintenance/upstream-diff.sh <swiftui|concurrency|testing>`

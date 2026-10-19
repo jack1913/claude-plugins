@@ -4,7 +4,7 @@ The operator's manual: how to use swift-plugin day to day. Read the daily-use pa
 
 ## Getting started
 
-- [Enable the plugin in a Swift repo](getting-started/enable-in-a-swift-repo.md): install, scopes, updates, moving from `swift-plugin`, what each skill covers
+- [Enable the plugin in a Swift repo](getting-started/enable-in-a-swift-repo.md): install, scopes, updates, moving from an older marketplace, what each skill covers
 
 ## Use it
 

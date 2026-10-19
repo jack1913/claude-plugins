@@ -50,18 +50,13 @@ It refuses to write while any manifest check fails (`run` in `maintenance/apiche
 python3 -m unittest discover maintenance/tests
 ```
 
-## Validate the manifests
+## Validate the manifest
 
 ```bash
-claude plugin validate .
 claude plugin validate plugins/swift
 ```
 
-Both pass with no warnings. The marketplace check reads:
-
-```text capture=validate-marketplace
-✔ Validation passed
-```
+It passes with no warnings. The marketplace manifest isn't in this repo; it is validated in `jack1913/claude-plugins` with `claude plugin validate . --strict`.
 
 ## Run the evals
 
@@ -108,9 +103,9 @@ Every change under a forked skill's folder (`plugins/swift/skills/swiftui/`, `pl
 
 ## Release
 
-Versions follow SemVer, and `version` in `plugins/swift/.claude-plugin/plugin.json` is the only place the version lives ([ADR-0003](../adr/ADR-0003-explicit-semver-one-version-home.md)). Before 1.0, a breaking change bumps the minor version (0.2.0 renamed the marketplace), and a feature or fix bumps the patch. Each release gets the tag `swift--v<version>`, created by `claude plugin tag`.
+Versions follow SemVer, and `version` in `plugins/swift/.claude-plugin/plugin.json` is the only place the version lives ([ADR-0003](../adr/ADR-0003-explicit-semver-one-version-home.md)). Before 1.0, a breaking change bumps the minor version (0.2.0 and 0.3.0 changed the marketplace and so the install ID), and a feature or fix bumps the patch. Each release gets the tag `swift--v<version>`, created by `claude plugin tag`.
 
-Prerequisite: the `origin` remote points at `jack1913/swift-plugin`.
+Prerequisite: the `origin` remote points at `jack1913/swift-plugin`. This repo holds only the plugin; the marketplace `jack1913` is the separate repo `jack1913/claude-plugins` ([ADR-0014](../adr/ADR-0014-catalogue-moves-to-claude-plugins.md)), and its entry for `swift` carries no `version`, so a release needs no change there.
 
 1. Run the `changelog-release` skill. It raises `version` in `plugins/swift/.claude-plugin/plugin.json`, writes `CHANGELOG.md` and stages both; it never commits (`.claude/skills/changelog-release/SKILL.md`).
 2. Commit.
