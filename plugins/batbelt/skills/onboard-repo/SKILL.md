@@ -508,8 +508,8 @@ targets — `CLAUDE.md`→`CLAUDE.md`, `AGENTS.md`→`AGENTS.md`, `README.md`→
 `docs-archive-README.md`→`docs/archive/README.md`,
 `internals-agent-instructions.md`→`docs/internals/agent-instructions.md` — filling each `<placeholder>`
 from confirmed detection. These are the **repo's own files**: never mark them with
-the claude-configs ownership/deletion marker (that marker licenses removal by the
-claude-configs uninstaller and would target a repo's real docs). Populate the
+an installer's ownership/deletion marker (such a marker licenses removal by that
+installer's uninstall and would target a repo's real docs). Populate the
 `AGENTS.md` pointer index **cite-or-defer**.
 
 Two placeholder syntaxes: `<angle>` tokens (e.g. `<repo>`, a one-line description)

@@ -1814,8 +1814,8 @@ def cmd_check_instructions(rest, prog="check.py"):
         # (`templates/update-docs/SKILL.md:207`) -- and a reader resolves
         # them from context, so the checker accepts any file whose path ENDS
         # with the cited one. Validated on two corpora: strict-only matching
-        # reported 50 errors across claude-configs/docs and 1 in
-        # inewi-backend, and every one was a correct citation in shorthand.
+        # reported 50 errors in one documentation tree and 1 in a backend
+        # repository, and every one was a correct citation in shorthand.
         # What survives the fallback is the finding worth having -- a path
         # naming no file at all, or a line past the end of the file it names.
         if not _basename_index:

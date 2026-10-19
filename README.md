@@ -7,15 +7,15 @@ Claude Code plugin marketplace.
 /plugin install <plugin>@jack1913
 ```
 
-The repositories are private: installing needs read access with your git credentials, and background auto-updates need
-`GITHUB_TOKEN` set.
+`batbelt` lives in this repository and installs for anyone. `brand-creator` and `swift` live in private repositories:
+installing them needs read access to those repositories.
 
 ## Plugins
 
 | Plugin | Description | Source |
 |---|---|---|
-| `brand-creator` | Brand identity from brief to platform assets, brand book and launch | [jack1913/brand-creator](https://github.com/jack1913/brand-creator) |
-| `swift` | Current, Apple-native Swift: SwiftUI, design, concurrency, testing, review | [jack1913/swift-plugin](https://github.com/jack1913/swift-plugin) (`plugins/swift`) |
+| `brand-creator` | Brand identity from brief to platform assets, brand book and launch (private) | [jack1913/brand-creator](https://github.com/jack1913/brand-creator) |
+| `swift` | Current, Apple-native Swift: SwiftUI, design, concurrency, testing, review (private) | [jack1913/swift-plugin](https://github.com/jack1913/swift-plugin) (`plugins/swift`) |
 | `batbelt` | Plan interviews, claim verification against primary sources, and repository onboarding | this repository (`plugins/batbelt`) |
 
 ## Tests
@@ -37,3 +37,7 @@ command on Linux; `claude plugin validate` needs the CLI and is run locally.
    - folder in another repository: `"source": {"source": "git-subdir", "url": "...", "path": "plugins/<name>"}`
    - folder here: `"source": "./plugins/<name>"`
 3. Run `claude plugin validate . --strict`, commit and push. Installed copies pick it up with `/plugin marketplace update jack1913`.
+
+## License
+
+MIT, see [LICENSE](LICENSE). Plugins in other repositories carry their own licences.

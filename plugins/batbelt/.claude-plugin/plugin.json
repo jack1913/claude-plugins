@@ -6,5 +6,6 @@
     "name": "Jacek Pytlik"
   },
   "homepage": "https://github.com/jack1913/claude-plugins",
-  "repository": "https://github.com/jack1913/claude-plugins"
+  "repository": "https://github.com/jack1913/claude-plugins",
+  "license": "MIT"
 }
