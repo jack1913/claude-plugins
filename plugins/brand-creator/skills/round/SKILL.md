@@ -27,6 +27,8 @@ round answers; infer both from BRAND-STATE.md when empty).
    and fix what you see. Iterate at least twice. Exit 3 (no Chromium yet): carry on, and say the shots are not verified.
 7. Regenerate `review/index.html` from `${CLAUDE_PLUGIN_ROOT}/templates/review/index.html` with this round's
    sections, lint it (`board-lint review/index.html --round <N>`), and publish it on the review surface (same
-   Artifact URL as `review_url`, or open the local file). Record `review_url` with `state --set`.
+   Artifact URL as `review_url`, or open the local file). Upload only after the owner's yes: with `review_surface`
+   still `auto`, ask the one upload question first and use the local file until it is answered (the orchestrator's
+   Review surface). Record `review_url` with `state --set`.
 8. Update BRAND-STATE.md (phase, Directions table, Still open), then reply with the response template and stop at the
    gate. Do not start the next round in the same turn.

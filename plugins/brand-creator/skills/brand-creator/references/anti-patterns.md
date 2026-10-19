@@ -55,7 +55,8 @@ brand or person is named. Format: situation → wrong move → owner signal → 
 - **Cost:** a whole identity round.
 - **Rule:** check the brief and repos for a parent or siblings before round 1; ask then, and ask for FAMILY.md only
   after family-member is picked. When the owner rejects a question, ask what they want clarified.
-- **Check:** architecture line in BRIEF and BRAND-STATE; behaviour eval (stage 6).
+- **Check:** architecture line in BRIEF and BRAND-STATE; behaviour evals `evals/architecture-asked-when-parent-shown` and
+  `evals/architecture-standalone-stated`.
 
 ## 4. Three versions of one safe idea
 
@@ -74,7 +75,7 @@ brand or person is named. Format: situation → wrong move → owner signal → 
 - **Owner signal:** irritation; "you are the designer, you decide".
 - **Cost:** trust, twice.
 - **Rule:** no interview; infer from research and existing material, show artefacts with a stated pick.
-- **Check:** G0 limits in [phases/00-intake.md](phases/00-intake.md); behaviour eval (stage 6).
+- **Check:** G0 limits in [phases/00-intake.md](phases/00-intake.md); behaviour eval `evals/no-open-feelings-question`.
 
 ## 6. Hybridising the liked direction
 
@@ -103,7 +104,7 @@ brand or person is named. Format: situation → wrong move → owner signal → 
 - **Cost:** a full round built on the wrong direction.
 - **Rule:** stable word names identical on board and in chat; restate the choice before any expensive run; ask or
   state the assumption when a token fits two lists.
-- **Check:** `board-lint` word names; behaviour eval (stage 6).
+- **Check:** `board-lint` word names; behaviour eval `evals/bare-number-two-lists`.
 
 ## 9. Judge as verdict
 
@@ -169,7 +170,8 @@ brand or person is named. Format: situation → wrong move → owner signal → 
 - **Owner signal:** numbered owner decisions to separate them.
 - **Cost:** re-colouring after files existed.
 - **Rule:** an inventory "Surprises and conflicts" list; role-separation rules ("the brand red never means danger").
-- **Check:** INVENTORY template (stage 2); family check (stage 3).
+- **Check:** the "Surprises and conflicts" list of `templates/INVENTORY.md`; `brand-creator family-check`; the `distinct` pairs of
+  `contrast --cvd`.
 
 ## 16. Stale favicon and screenshot OG
 
@@ -200,7 +202,7 @@ brand or person is named. Format: situation → wrong move → owner signal → 
 - **Owner signal:** found in self-review.
 - **Cost:** a book revision and a mark rebuild.
 - **Rule:** outline glyphs; one naming rule (from the regulator where one applies); a self-consistency lint.
-- **Check:** `check` mark_lint (no `<text>` in assets); book lint (stage 4).
+- **Check:** `check` mark_lint (no `<text>` in assets); `brand-creator book-lint --self-consistency`.
 
 ## 19. Print defects found late
 
@@ -211,7 +213,7 @@ brand or person is named. Format: situation → wrong move → owner signal → 
 - **Cost:** a print round.
 - **Rule:** physical-spec review in mm and pt (bleed, safe zone, minimum line weight, minimum reversed text, no
   opacity).
-- **Check:** print check (stage 4).
+- **Check:** `brand-creator print-check`.
 
 ## 20. Scaffolding left in the book
 
@@ -220,7 +222,7 @@ brand or person is named. Format: situation → wrong move → owner signal → 
 - **Owner signal:** asks to clean that up.
 - **Cost:** a confusing book.
 - **Rule:** a collapse step after each decision, with a dated copy kept.
-- **Check:** G5 collapse step; book lint round words (stage 4).
+- **Check:** G5 collapse step (`brand-creator collapse`); `brand-creator book-lint` (round and version words outside the history chapter).
 
 ## 21. Work living in scratch
 

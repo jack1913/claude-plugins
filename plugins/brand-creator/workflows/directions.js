@@ -160,6 +160,7 @@ function designerPrompt(d) {
     'CRITIQUE ITEMS (fix these): ' + numbered(B.critique, 'a'),
     'FAMILY LAYER (keep) / COMPANY LAYER (own) / FORBIDDEN: ' + (list(B.layers).join(' ') || 'standalone brand') + ' FORBIDDEN: ' + (list(B.forbidden).join('; ') || 'see research/cliches.md and the BRIEF Forbidden section'),
     'VERIFIED FACTS YOU MAY USE: ' + (list(B.facts).join('; ') || 'only rows of FACTS.md') + ' (nothing else may be claimed).',
+    'LANGUAGE RULES: run brand-creator --data "' + A.data + '" fontcheck --print-rules --project "' + A.project + '" and keep every rule it prints in all text you set (book-lint warns where text breaks one).',
     'HARD CONSTRAINTS: static first; reduced motion = nothing moves; nothing loops forever; light and dark via tokens; at most 2 self-hostable fonts with a licence that allows embedding; the audience\'s glyph set verified (say how); real content only. ' + (B.constraints || ''),
     'HARDEST SURFACE (show the mark there): ' + HARDEST,
     'YOUR DIRECTION: ' + d.name + ' (key ' + d.key + '). ' + d.paragraph,

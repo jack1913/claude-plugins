@@ -187,6 +187,24 @@ def test_other_tools_and_empty_inputs_are_ignored(proj):
     assert run_guard({"tool_name": "Write", "tool_input": {}}).returncode == 0
 
 
+def test_hooks_json_blocks_when_the_guard_cannot_start():
+    """N4: a missing python3 (Windows without Python, the Microsoft Store alias) must not make the guard silently do
+    nothing: onFailure=block turns a hook that cannot start, crashes or times out into a blocked call with a notice."""
+    h = json.loads((ROOT / "hooks" / "hooks.json").read_text())["hooks"]["PreToolUse"][0]["hooks"][0]
+    assert h["onFailure"] == "block"
+    assert h["command"] == "python3" and h["args"], "exec form: the harness spawns python3 itself, so a missing one is a start failure"
+    # The guard never converts its own crash into exit 0: only unparseable input is fail-open (see the test above).
+    assert "except Exception" not in (ROOT / "scripts" / "guard.py").read_text()
+
+
+def test_archives_into_an_old_round_are_blocked_the_latest_stays_open(proj):
+    for cmd, cwd in (("tar -xf /tmp/a.tar -C rounds/r1", proj), ("unzip -o /tmp/a.zip -d rounds/r1", proj),
+                     ("tar -xf /tmp/a.tar", proj / "rounds" / "r1"), ("git mv rounds/r1/board.html x.html", proj)):
+        assert blocked(run_guard(tool("Bash", command=cmd, cwd=cwd))), cmd
+    for cmd in ("tar -xf /tmp/a.tar -C rounds/r2", "unzip -o /tmp/a.zip -d rounds/r2", "tar -xf /tmp/a.tar -C ../x"):
+        assert run_guard(tool("Bash", command=cmd, cwd=proj)).returncode == 0, cmd
+
+
 def test_hooks_json_is_exec_form_and_scoped():
     doc = json.loads((ROOT / "hooks" / "hooks.json").read_text())
     entries = doc["hooks"]["PreToolUse"]
@@ -239,6 +257,32 @@ S3_BLOCKED = [
     ("git restore .", "p1"),
     ("git rm -r history", "p1"),
     ("git -C p1 clean -fd", ""),        # from the ancestor, through -C
+    ("git mv history/2026-a elsewhere", "p1"),
+    ("git mv notes.md history/notes.md", "p1"),
+    ("git mv rounds/r1 old-r1", "p1"),
+    ("git stash -u", "p1"),
+    ("git stash push --include-untracked", "p1"),
+    ("git stash -a", "p1"),
+    ("git stash save -u wip", "p1"),
+    ("git stash push -u -- history", "p1"),
+    ("git clean -fd history", "p1"),
+    ("git clean -fdx -- rounds", "p1"),
+    ("git checkout -- history/2026-a", "p1"),
+    ("git checkout HEAD -- rounds/r1", "p1"),
+    ("git checkout -f", "p1"),
+    ("git restore history", "p1"),
+    ("git restore --worktree --staged rounds/r1", "p1"),
+    ("git restore --source=HEAD~1 history", "p1"),
+    ("tar -xzf /tmp/a.tgz -C history", "p1"),
+    ("tar xf /tmp/a.tar -C history/2026-a", "p1"),
+    ("tar --extract --file=/tmp/a.tar --directory=history", "p1"),
+    ("tar -xf /tmp/a.tar", "p1/history"),     # extracts into the cwd
+    ("tar -czf history/backup.tgz tools", "p1"),   # the archive file itself lands in history/
+    ("unzip -o /tmp/a.zip -d history", "p1"),
+    ("unzip -o /tmp/a.zip", "p1/history"),
+    ("7z x /tmp/a.7z -ohistory", "p1"),
+    ("ditto /tmp/src history", "p1"),
+    ("bash -c 'tar -xf /tmp/a.tar -C history'", "p1"),
     ("git clean -fdx", ""),             # from the ancestor itself
 ]
 
@@ -260,6 +304,25 @@ S3_ALLOWED = [
     ("git restore --staged .", "p1"),
     ("git reset --soft HEAD~1", "p1"),
     (f"ls | {XA} echo", "p1"),
+    ("git mv tools/a.txt tools/b.txt", "p1"),
+    ("git mv rounds/r1/a.html removed-2026-10-18/a.html", "p1"),
+    ("git stash", "p1"),                # tracked files only
+    ("git stash list", "p1"),
+    ("git stash pop", "p1"),
+    ("git stash -u", "p1/tools"),       # only touches tools/
+    ("git checkout -- tools", "p1"),
+    ("git restore tools/a.txt", "p1"),
+    ("git clean -fd tools", "p1"),
+    ("tar -xzf /tmp/a.tgz -C tools", "p1"),
+    ("tar -xf /tmp/a.tar", "p1/tools"),
+    ("tar -tf /tmp/a.tar", "p1/history"),     # list only
+    ("tar -czf /tmp/out.tgz history", "p1"),  # reads history/, writes elsewhere
+    ("tar -cf out.tar history rounds", "p1"),
+    ("unzip -l /tmp/a.zip", "p1/history"),
+    ("unzip -o /tmp/a.zip -d tools", "p1"),
+    ("7z l /tmp/a.7z", "p1/history"),
+    ("tar -xf /tmp/a.tar -C rounds/r1", "p1"),   # r1 is the only round here, so it is the latest
+    ("ditto history /tmp/copy", "p1"),
 ]
 
 
@@ -270,7 +333,8 @@ def test_s3_harmless_commands_stay_allowed(brands, cmd, sub):
 
 
 def test_s3_unrelated_folders_are_untouched(unrelated):
-    for cmd in ("rm -rf .", "bash -c 'rm -rf history'", "git clean -fdx", f"ls | {XA} rm"):
+    for cmd in ("rm -rf .", "bash -c 'rm -rf history'", "git clean -fdx", f"ls | {XA} rm", "git stash -u",
+                "git mv history x", "tar -xf /tmp/a.tar -C history", "unzip -o /tmp/a.zip -d history"):
         assert run_guard(tool("Bash", command=cmd, cwd=unrelated)).returncode == 0, cmd
 
 

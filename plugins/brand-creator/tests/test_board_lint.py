@@ -256,3 +256,57 @@ def test_templates_carry_the_contract_and_fail_until_filled(proj, template):
     dest.write_text(src)
     r = lint(proj)
     assert r.returncode == 1 and "page:unfilled" in failing(report(proj, "board-lint")), r.stdout
+
+
+# ---------------------------------------------------------------- PF-8 recommended option, PF-2 direction letters
+
+def test_a_question_needs_exactly_one_recommended_option(proj):
+    board = proj / "rounds" / "r1" / "board.html"
+    before = mutate(board, '<li data-option="a" data-recommended="true"><label><input type="radio" name="q1"',
+                    '<li data-option="a"><label><input type="radio" name="q1"')
+    r = lint(proj)
+    assert r.returncode == 1 and "question:1:options" in failing(report(proj, "board-lint")), r.stdout
+    assert "no option is marked" in r.stdout
+    board.write_text(before)
+    assert lint(proj).returncode == 0
+
+
+def _with_letters(board):
+    text = board.read_text()
+    assert "data-letter" not in text  # the shipped example follows the default: word names only
+    out = re.sub(r'(<article class="direction" data-section="direction" data-name="[^"]+")', r'\1 data-letter="@@"', text)
+    letters = iter("ABCDE")
+    while "@@" in out:
+        out = out.replace("@@", next(letters), 1)
+    assert out != text
+    board.write_text(out)
+    return text
+
+
+def test_direction_letter_equal_to_an_option_letter_warns(proj):
+    board = proj / "rounds" / "r1" / "board.html"
+    _with_letters(board)
+    r = lint(proj)
+    rows = [x for x in report(proj, "board-lint")["results"] if x["status"] == "warn" and x["id"].endswith(":letters")]
+    assert r.returncode == 0 and rows, r.stdout  # a warning, not a failure
+    # mutation: a question whose options name the directions is not ambiguous, so the warning goes away for it
+    names = re.findall(r'data-section="direction" data-name="([^"]+)"', board.read_text())
+    ids_before = {x["id"] for x in rows}
+    mutate(board, 'value="a">a. Yes, as written', 'value="a">a. ' + names[0] + ', as written')
+    lint(proj)
+    after = {x["id"] for x in report(proj, "board-lint")["results"] if x["status"] == "warn" and x["id"].endswith(":letters")}
+    assert "question:2:letters" in ids_before and "question:2:letters" not in after
+
+
+def test_no_letters_no_warning(proj):
+    lint(proj)
+    assert not [x for x in report(proj, "board-lint")["results"] if x["id"].endswith(":letters")]
+
+
+def test_round_page_template_leaves_direction_letters_off():
+    from helpers import ROOT
+    t = (ROOT / "templates" / "round-page.html").read_text(encoding="utf-8")
+    live = re.sub(r"<!--.*?-->", "", t, flags=re.S)
+    assert 'data-letter="' not in live and 'class="letter">' not in live
+    assert "Answer with a direction name, or question number plus option (1a)" in live
+    assert not re.search(r'name="q1" value="[a-d]">[a-d]\. ', live)

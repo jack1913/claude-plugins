@@ -8,8 +8,8 @@
 Every image is a designed card: an HTML page (templates/card.html, or --template) filled from the built tokens and the
 mark, rendered to PNG by the single Chromium driver (render.mjs card). Sizes come from platform-specs.json only.
   assets/social/og-<w>x<h>-<hash>.png   a new URL whenever the bytes change (platforms cache by URL)
-  assets/social/github-social-<w>x<h>.png
-  assets/social/readme-header-light.png, readme-header-dark.png
+  assets/social/github-social-<w>x<h>.png                only when INVENTORY.md or brief/BRIEF.md lists a code repository (or --repo-images yes)
+  assets/social/readme-header-light.png, readme-header-dark.png   the same condition; otherwise an info row says why they were skipped
   assets/social/og-meta.html            only with --site-url (og:image must be an absolute URL)
   assets/social/posts/                  only with --posts (Standard tier): a 4:5 carousel (cover, one slide per fact, closing), a 1:1 post and an
                                         educational 4:5 post of numbered points, from templates/social/ (or --post-template-dir). Every word on
@@ -30,11 +30,10 @@ sys.path.insert(0, str(HERE.parent / "lib"))
 import specs  # noqa: E402
 from _common import EXIT_FAIL, EXIT_USAGE, Parser, Report, confine, fail, find_project, main_guard, plugin_root, read_state, today  # noqa: E402
 from _emit import (add_common_args, facts as facts_of, fill_template, load_mark, load_tokens, need_colors, regulated_profession, render_card,  # noqa: E402
-                   require_gate, require_tier)
+                   lists_repository, require_gate, require_tier)
 from manifest import Manifest  # noqa: E402
 from pxio import png_size  # noqa: E402
 
-ROWS = ["open-graph", "github-social", "readme-header"]
 NOTE_MAX = 110   # characters of a post's text kept in its manifest note
 EDU_MAX_POINTS = 4   # numbered points an educational post can hold and stay readable
 
@@ -50,6 +49,8 @@ def main() -> int:
     ap.add_argument("--tagline", default="", help="one line under the name (must be a fact from FACTS.md)")
     ap.add_argument("--site-url", help="absolute site URL; writes og-meta.html with absolute og:image")
     ap.add_argument("--out-dir", default="assets/social", help="folder inside the project (default assets/social)")
+    ap.add_argument("--repo-images", choices=("auto", "yes", "no"), default="auto",
+                    help="the GitHub social preview and the README headers: auto (default) writes them only when INVENTORY.md or the brief lists a code repository; yes or no forces it")
     ap.add_argument("--posts", action="store_true", help="also write the post templates (Standard tier): carousel, square and educational posts")
     ap.add_argument("--post-fact", action="append", default=[], metavar="LABEL", help="a FACTS.md label whose value is a post's text (repeatable; needed with --posts)")
     ap.add_argument("--post-template-dir", help="folder with your copies of the post templates (default: templates/social in the plugin)")
@@ -106,22 +107,30 @@ def main() -> int:
     if stale_og:
         rep.add("note:old og images", "warn", "superseded Open Graph files", detail=f"{', '.join(stale_og)} are no longer referenced; move them to removed-<date>/")
 
-    # GitHub social preview
-    d = card("github-social", "light", gh["width"], gh["height"], light)
-    gh_rel = f"github-social-{gh['width']}x{gh['height']}.png"
-    changed = mf.put(f"{out}/{gh_rel}", d, emitter="social", specs=["github-social"], width=gh["width"], height=gh["height"])
-    rep.add(f"file:{gh_rel}", "pass", "written" if changed else "unchanged", bytes=len(d))
+    repo_reason = lists_repository(project) if a.repo_images == "auto" else ("--repo-images yes" if a.repo_images == "yes" else None)
+    repo_images = repo_reason is not None
+    rep.inputs += [q for q in (project / "INVENTORY.md", project / "brief" / "BRIEF.md") if q.is_file() and q not in rep.inputs]
+    if not repo_images:
+        rep.add("note:repo-images", "info", "no GitHub social preview or README headers",
+                detail="no code repository is listed in the brief or the inventory, so the 1280 x 640 GitHub preview and the README headers are skipped; "
+                       "add the repository to the brief, or pass --repo-images yes")
+    else:
+        # GitHub social preview
+        d = card("github-social", "light", gh["width"], gh["height"], light)
+        gh_rel = f"github-social-{gh['width']}x{gh['height']}.png"
+        changed = mf.put(f"{out}/{gh_rel}", d, emitter="social", specs=["github-social"], width=gh["width"], height=gh["height"])
+        rep.add(f"file:{gh_rel}", "pass", "written" if changed else "unchanged", bytes=len(d))
 
-    # README header, light and dark
-    for mode, art in (("light", light), ("dark", dark or light)):
-        d = card(f"readme-header-{mode}", mode, rh["width"], rh["height"], art)
-        rel_name = f"readme-header-{mode}.png"
-        changed = mf.put(f"{out}/{rel_name}", d, emitter="social", specs=["readme-header"], width=rh["width"], height=rh["height"])
-        rep.add(f"file:{rel_name}", "pass", "written" if changed else "unchanged", bytes=len(d))
-    if dark is None:
-        rep.add("note:readme-header-dark", "warn", "no dark artwork", detail="the dark README header reuses the light mark artwork")
+        # README header, light and dark
+        for mode, art in (("light", light), ("dark", dark or light)):
+            d = card(f"readme-header-{mode}", mode, rh["width"], rh["height"], art)
+            rel_name = f"readme-header-{mode}.png"
+            changed = mf.put(f"{out}/{rel_name}", d, emitter="social", specs=["readme-header"], width=rh["width"], height=rh["height"])
+            rep.add(f"file:{rel_name}", "pass", "written" if changed else "unchanged", bytes=len(d))
+        if dark is None:
+            rep.add("note:readme-header-dark", "warn", "no dark artwork", detail="the dark README header reuses the light mark artwork")
 
-    used_rows = list(ROWS)
+    used_rows = ["open-graph"] + (["github-social", "readme-header"] if repo_images else [])
     if a.posts:
         used_rows += ["social-post-4x5", "social-post-1x1"]
         rep.inputs.append(project / "FACTS.md")

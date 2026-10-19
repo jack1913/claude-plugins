@@ -1,7 +1,7 @@
 ---
 name: brand-creator
 description: Starts or continues a brand-identity project for a company, product or person (new brand, logo, visual identity, rebrand, brand guidelines) and runs it as a gated process with scope tiers, divergent direction boards, a pick, refinement, a mark system, design tokens, web and social assets, a brand book, adoption and launch hand-offs. Resumes from the project's BRAND-STATE.md. Identity creation and its process only; not for building web pages, UI components, slide themes, chart colours or colour conversions.
-when_to_use: Use this skill whenever someone wants a logo, a look, a visual identity, a rebrand or brand guidelines made, even when the ask is small or casual ("a logo for my band", "a look for my Etsy shop"), because a direct answer skips the brief, the options board and the checks. Use it for a new brand, logo, identity, rebrand or brand book for a business, product, shop, practice, podcast or person; to go on with a brand project (a folder holding BRAND-STATE.md), including any work on its files even when the ask never says "brand" (edit or lint a round board, fold in a judge report, change a rule, token or threshold such as an accent minimum), since those files follow the plugin's board contract, lint and cascade check; and for a brand's launch steps ("buy the domain", "file the trademark"), handed to the owner one action at a time with the click path, never done for them. Polish triggers include "księga znaku", "identyfikacja wizualna", "zaprojektuj logo", "nowa marka", "rebranding", "logo dla firmy".
+when_to_use: Use whenever someone wants a logo, a look, a visual identity, a rebrand or brand guidelines or a brand book made, even when the ask is small or casual ("a logo for my band", "a look for my Etsy shop"), for a business, product, shop, practice, podcast or person, because a direct answer skips the brief, the options board and the checks. Also to go on with a brand project (a folder holding BRAND-STATE.md), including any work on its files even when the ask never says "brand" (edit or lint a round board, fold in a judge report, change a rule, token or threshold such as an accent minimum), and for a brand's launch steps ("buy the domain", "file the trademark"), handed to the owner one action at a time, never done for them. Polish triggers include "księga znaku", "identyfikacja wizualna", "zaprojektuj logo", "nowa marka", "rebranding", "logo dla firmy".
 compatibility: Claude Code only (uses the plugin's bin/ entry point and hooks). Needs Python 3.10+ with uv, Node 22+, resvg and a Playwright Chromium installed by /brand-creator:setup; macOS with Xcode only for Apple emitters.
 allowed-tools: Bash(brand-creator *)
 ---
@@ -23,8 +23,8 @@ show options with a stated pick. **Re-invoke this skill after compaction** (only
    ask which.
 3. Nothing → run G0 (below), then scaffold with
    `brand-creator --data "${CLAUDE_PLUGIN_DATA}" new <slug> --name "<Name>" --tier <tier> --root <folder>`.
-   When the projects folder is unset, the folder is not an AskUserQuestion item (that call has at most 4 questions):
-   the plain-text facts message after G0 says "I'll create ./<slug>/ in the current folder unless you name another
+   When the projects folder is unset, the folder is not an AskUserQuestion item (the G0 call holds only choice
+   questions): the plain-text facts message after G0 says "I'll create ./<slug>/ in the current folder unless you name another
    place". An open name gets the working slug `brand-<yyyymmdd>`, renamed after G1 and recorded under Renames.
 
 Work inside the brand project from the first minute. Only page shots go to scratch (the tools put them under the data
@@ -61,7 +61,7 @@ These rules ship with the plugin and hold whatever the user's own configuration 
 
 | Tier | Phases | Outputs | `check` covers |
 |---|---|---|---|
-| Quick | P0 → one board (3 directions) → pick → one refine → mark → tokens → web + social | mark and lockup SVG/PNG, favicon set, OG card, tokens.css/json, 1-2 page guide | contrast, logo sheet, board lint, shots |
+| Quick | P0 → one board (3 directions) → pick → one refine → mark → tokens → web + social → short guide (`book`, Quick chapters) → G5 | mark and lockup SVG/PNG, favicon set, OG card, circle-safe avatar (400, 800), tokens.css/json, short guide (`book.html`); GitHub preview and README headers only when the brief or inventory lists a repository | contrast, logo sheet, board lint, shots, book lint |
 | Standard | + P1 research, P2 naming if the name is open, full book, web/social/profile/print packs | + book.html, names memo, print PDFs | + book lint, print check, font check |
 | Full | + P1c inventory, platform emitters, adoption, launch | + Apple/Windows/Linux/Wallet/developer packs, ADOPTION, LAUNCH | + emitter compiles, idempotence, staleness |
 
@@ -72,8 +72,11 @@ Quick with an open or at-risk name runs the brand-naming skill (P2) before the b
 
 ## Two axes, recorded in BRAND-STATE.md
 
-- **Mark source** (asked at G0): `generated` (drawn by code: grids, voxels, geometry; byte-exact regeneration) |
-  `authored-vector` (type-based or drawn vector, glyphs outlined, no live text) | `existing` (the owner's mark, audited).
+- **Mark source** (inferred at G0 and stated, not asked): `generated` (drawn by code: grids, voxels, geometry; byte-exact
+  regeneration) | `authored-vector` (type-based or drawn vector, glyphs outlined, no live text) | `existing` (the owner's
+  mark, audited). A mark in use → `existing`. Otherwise G0 records your provisional pick, and at G2 you settle it from the
+  chosen direction and state it as a default ("Compass is drawn by code, so generated, unless you say otherwise").
+  Ask only when the owner has shown a preference (a hand-drawn sketch, "keep my logo, just tidy it").
 - **Architecture** (inferred, default `standalone`): `standalone` | `family-member` | `product-in-family`. Ask only
   when the brief or the repo shows a parent brand or siblings; ask for `FAMILY.md` only after family-member is picked.
 
@@ -101,19 +104,22 @@ Read the phase file fully when entering a phase. Record every gate decision with
 
 ## Gates
 
-- **G0 Scope.** One AskUserQuestion call of at most 4 questions (the tool's limit), each with 2 to 4 choice options
-  and one "(Recommended)": tier, mark source, architecture (only when a parent brand or siblings show; otherwise it is
-  inferred as standalone and stated), name language and status or one irreversible choice (only when open). Facts you
-  cannot find (offer, audience, region, language, existing assets, required surfaces) and the project folder when
-  unset go in one plain-text message after the call, not in it (free text does not fit the tool). Never ask taste
-  questions ("what should people feel"); decide and show. State the tier, expected rounds and rough session length.
+- **G0 Scope.** One AskUserQuestion call of at most 3 scope questions, each with 2 to 4 choice options and one
+  "(Recommended)": tier; architecture (only when a parent brand or siblings show; otherwise it is inferred as
+  standalone and stated); name language and status or one irreversible choice (only when open). The mark source is
+  inferred and stated, not asked (Two axes, above). The one upload question of Review surface (below), when it applies,
+  is the only other item the call may hold. Facts you cannot find (offer, audience, region, language, existing assets,
+  required surfaces) and the project folder when unset go in one plain-text message after the call, not in it (free
+  text does not fit the tool). Never ask taste or production-method questions ("what should people feel", "generated or
+  drawn?"); decide and show. State the tier, the mark source (provisional until G2), expected rounds and rough session length.
   No AskUserQuestion tool in the session (a non-interactive run): the same questions as one plain-text message,
   numbered, options lettered, one marked (Recommended), then stop for the answer. Questions the owner already
   answered ("Quick is fine, the name is final, you decide the rest") are not asked again: state your pick and go on.
 - **G1 Name go.** Verdict memo ("screening, not clearance") from the brand-naming skill and the owner's pick. The owner
   buys and files; you never do. Never call a name "available" or "clear".
 - **G2 Direction pick.** The board is open on the review surface. Before building, restate: "You picked <Name>
-  (board label X) and <graft>; building that now." A bare token that could point at two lists ("1") → ask, or state
+  (board label X) and <graft>; building that now." Settle the mark source from that direction in the same message
+  (a default "unless you say otherwise"; `state --set mark_source=...`). A bare token that could point at two lists ("1") → ask, or state
   the assumption in the same message. Owner taste decides; judge and lead views are advice (a judge result goes on
   the board as My call with `data-judge="ran"` and its judge-view, lead-view and middle-option panels, see
   board-contract.md). In the Full tier and for product-in-family the first board (so G2) waits for `INVENTORY.md` or
@@ -128,7 +134,8 @@ Read the phase file fully when entering a phase. Record every gate decision with
 - **G3 Refined approval.** A board with "What changed" and "Weak points" is approved; record G3, then
   `... freeze r<N> --name approved-board`.
 - **G4 System rules.** Thresholds, size bands, endorsement, motion, theme behaviour: each a one-line revertable
-  "(rule)" item. Your numbers are proposals. A written plan, then an explicit GO.
+  "(rule)" item. Your numbers are proposals. A written plan, then an explicit GO. In Quick or for a business without a
+  product UI, show them as plain-language defaults and leave out motion and script rules unless something moves (07-tokens).
 - **G-sys tripwire.** A third incremental fix in the same area (`... state --bump fixes_per_area.<area>` on each) →
   stop. Write a numbered-rules system spec, review it adversarially, get the owner's GO before more edits.
 - **G5 Pack and book.** Edition approved; collapse step (remove losing variants and switchers, keep a dated copy).
@@ -174,11 +181,15 @@ Read the phase file fully when entering a phase. Record every gate decision with
 ## Review surface
 
 The board is reviewed where the owner is. Order: what the owner says this turn ("I'm on my phone") > `review_surface`
-in BRAND-STATE.md > the plugin setting (`${user_config.review_surface}`) > `auto`.
-`auto` = an Artifact when the Artifact tool exists in this session, else the local file opened with
-`open` / `xdg-open` / `start` (print the absolute path if that fails). `artifact` uploads the page to claude.ai,
-private by default; say so the first time for a client project. If Artifact is asked for but the tool is missing, say
-so before falling back. Each round regenerates one stable page, `review/index.html`, published to the same Artifact
+in BRAND-STATE.md (`auto` there counts as unset) > the plugin setting (`${user_config.review_surface}`) > `auto`.
+Uploading a board to claude.ai is the owner's choice. A resolved `auto` means not answered yet: when the Artifact tool
+exists in this session, ask once at G0, or before the first upload of a project that never answered (in the
+AskUserQuestion call, or in the plain-text message without the tool): "Show boards as a private Artifact page on claude.ai (uploaded), or as a local file on this
+machine?", with local marked (Recommended). Record the answer with `state --set review_surface=artifact` or
+`review_surface=local`, and never ask again. Until it is answered, and whenever the tool is missing, use the local file,
+opened with `open` / `xdg-open` / `start` (print the absolute path if that fails). The plugin setting `artifact` is the
+owner's yes already; `local` means never upload. If Artifact is asked for but the tool is missing, say so before
+falling back to the local file. Each round regenerates one stable page, `review/index.html`, published to the same Artifact
 URL, recorded as `review_url`. Round folders stay as frozen copies.
 
 ---
@@ -265,7 +276,7 @@ Full file contract: `${CLAUDE_PLUGIN_ROOT}/scripts/CONTRACT.md`. Templates: `${C
 | web and social files | `emit web --project <dir>`; `emit social --project <dir> --tagline "<FACTS line>"` |
 | platform packs (Full tier, from INVENTORY.md) | `emit apple` (macOS with Xcode only), `emit windows`, `emit linux --app-id <id>`, `emit tray` (needs `tray/tray.json`), `emit tauri`, `emit wallet`, `emit developer`; sizes come from [platform-specs](references/platform-specs.md); the chain is `templates/finish.sh.tpl`; method: [the brand-assets skill](../brand-assets/SKILL.md) |
 | Android, Chrome extension and MSIX packs (Full tier; Tier B) | `emit android` (adaptive icon with monochrome layer, Play icon, feature graphic; the mark must fit the 66 dp safe zone), `emit chrome-ext`, `emit msix` (app-list sizes with unplated and lightunplated files); files built from a status U spec row carry the label "UNVERIFIED, recheck" (see [brand-assets](../brand-assets/SKILL.md)) |
-| watchOS and tvOS icons, profile images (Tier B) | `emit apple --target watchOS=10.0 --target tvOS=17.0` (or the lines in INVENTORY.md; macOS with Xcode; the mark must fit the watch circle and the tvOS margin); `emit profiles` (Standard and Full tier: circle-safe avatar 400 and 800, LinkedIn, X, YouTube, Facebook, Instagram feed and story images inside their safe areas, plus `_proof/` images that draw the safe areas). Every size is unverified and the files carry "UNVERIFIED, recheck" (see [brand-assets](../brand-assets/SKILL.md)) |
+| watchOS and tvOS icons, profile images (Tier B) | `emit apple --target watchOS=10.0 --target tvOS=17.0` (or the lines in INVENTORY.md; macOS with Xcode; the mark must fit the watch circle and the tvOS margin); `emit profiles` (every tier; Quick writes the circle-safe avatar 400 and 800 only, Standard and Full add LinkedIn, X, YouTube, Facebook, Instagram feed and story images inside their safe areas, plus `_proof/` images that draw the safe areas). Every size is unverified and the files carry "UNVERIFIED, recheck" (see [brand-assets](../brand-assets/SKILL.md)) |
 | print stationery, press kit, social posts (Standard and Full tier; print is opt-in with the owner) | `emit print --region EU|US|JP [--bleed MM] [--icc <the printer's CMYK profile>]`, then `print-check`; `emit presskit` (needs `book-pdf` first, or `--no-book`); `emit social --posts --post-fact "<FACTS label>" ...`. Without `--icc` a print PDF is an "RGB proof, not print-ready"; with it only a "PDF/X-4 candidate (preflight with your printer)". Never call a print file print-ready or conforming: preflight and the printer's proof are the owner's step ([print](references/print.md)) |
 | brand book (P10; method in [10-book](references/phases/10-book.md)) | generated: `book --init`, `book`, `book-lint --self-consistency`, `book-pdf` (RGB proof); authored-vector: `patch book.html --old .. --new .. --count N`, then `book-lint`; after a decision: `collapse --group <g> --keep <name>` (plan first, then `--apply`) |
 | adoption survey of product repositories (P11, Full tier; read only; method in [11-adoption](references/phases/11-adoption.md)) | `adoption survey --repo <dir>=<label> --old-name "<Old>" --old-colour "#rrggbb"`, `adoption add --repo <label> --file <path> --find "<text>" --change "<sentence>"`, `adoption status [--set 1-5=doing]` (doing and done need G6), `adoption verify` |

@@ -9,11 +9,29 @@
   "rules": [
     {
       "id": "nbsp-single-letter",
-      "text": "Keep a single-letter word (a, i, o, u, w, z) with the word after it: use a no-break space."
+      "text": "Keep a single-letter word (a, i, o, u, w, z) with the word after it: use a no-break space.",
+      "check": {
+        "kind": "single-letter-nbsp",
+        "words": [
+          "a",
+          "i",
+          "o",
+          "u",
+          "w",
+          "z"
+        ]
+      }
     },
     {
       "id": "low-opening-quote",
-      "text": "Primary quotation marks open low and close high („ and ”)."
+      "text": "Primary quotation marks open low and close high („ and ”).",
+      "check": {
+        "kind": "low-opening-quote",
+        "flag": [
+          "\"",
+          "“"
+        ]
+      }
     }
   ]
 }

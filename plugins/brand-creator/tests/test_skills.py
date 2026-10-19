@@ -95,8 +95,13 @@ def test_orchestrator_frontmatter():
     assert "disable-model-invocation" not in fm  # the one model-invocable skill in this stage
     assert fm["description"].startswith("Starts or continues a brand-identity project")
     assert "not for building web pages" in fm["description"]
-    for trig in ("księga znaku", "identyfikacja wizualna", "zaprojektuj logo", "nowa marka", "rebranding"):
+    for trig in ("księga znaku", "identyfikacja wizualna", "zaprojektuj logo", "nowa marka", "rebranding", "logo dla firmy",
+                 "BRAND-STATE.md", "buy the domain", "file the trademark", "fold in a judge report", "accent minimum", "Etsy",
+                 "shop", "podcast", "brand guidelines", "brand book"):
         assert trig in fm["when_to_use"], trig
+    # headroom: the skill listing cuts the text at 1536 characters; keep at least 150 spare so a later addition does not cut the
+    # Polish triggers at the end
+    assert len(fm["description"]) + len(fm["when_to_use"]) <= 1536 - 150, len(fm["description"]) + len(fm["when_to_use"])
     assert fm["compatibility"] and len(fm["compatibility"]) <= 500 and "Claude Code" in fm["compatibility"]
     assert fm["allowed-tools"] == RULE
 
@@ -415,15 +420,29 @@ def test_trigger_evals_cover_english_polish_and_near_misses():
 
 
 def test_g0_fits_the_ask_user_question_tool_in_every_place_it_is_described():
-    """S1: the tool takes at most 4 questions with 2 to 4 options each; free text and the folder do not go in the call."""
+    """G0 holds at most 3 concrete scope questions (tier, architecture when siblings show, name when open), each with 2 to 4
+    options; the mark source is inferred and stated, never asked; free text and the folder do not go in the call. The one
+    upload consent (review surface) is the only other item, and only when boards could be uploaded."""
     texts = {p: p.read_text(encoding="utf-8") for p in (ORCH, SKILLS / "new" / "SKILL.md", REFS / "phases" / "00-intake.md")}
     for p, t in texts.items():
         flat = " ".join(t.split())
-        assert re.search(r"at most 4 (?:choice )?questions", flat), p
-        assert "at most 3" not in flat and "same call" not in flat and "same AskUserQuestion call" not in flat, p
+        assert "at most 3 scope questions" in flat, p
+        assert not re.search(r"at most 4 (?:choice )?questions", flat), p
+        assert "same AskUserQuestion call" not in flat, p
         assert "plain-text message" in flat or "plain text message" in flat, p
+        assert re.search(r"mark source (?:is )?(?:inferred and stated, not asked|is not a question)", flat, re.I), p
+        assert "upload question" in flat, p
     intake = " ".join(texts[REFS / "phases" / "00-intake.md"].split())
     assert "2 to 4 choice options" in intake and "(Recommended)" in intake and "Architecture" in intake
+    raw = texts[REFS / "phases" / "00-intake.md"]
+    g0 = raw[raw.index("## Gate G0"):raw.index("## Pitfalls")]
+    numbered = re.findall(r"^(\d)\. \*\*(\w+)", g0, re.M)
+    assert [n for n, _ in numbered] == ["1", "2", "3"] and [w for _, w in numbered] == ["Tier", "Architecture", "Name"], numbered
+    orch = " ".join(texts[ORCH].split())
+    g0_orch = orch[orch.index("**G0 Scope.**"):orch.index("**G1 Name go.**")]
+    assert "mark source" in g0_orch and "not asked" in g0_orch and "tier; architecture" in g0_orch
+    rubric = (ROOT / "evals" / "g0-asks-scope-before-board" / "graders" / "rubric.md").read_text(encoding="utf-8")
+    assert "at most\nthree concrete scope questions" in rubric or "at most three concrete scope questions" in " ".join(rubric.split())
 
 
 def test_quoting_of_the_data_dir_is_the_same_in_skills_and_in_the_contract():
@@ -561,3 +580,29 @@ def test_brand_book_trigger_evals_have_the_plan_negatives_and_the_sibling_case()
         assert word in pos, word
     # a book for a brand that does not exist yet is brand-creator's, not brand-book's
     assert {c["query"] for c in bb if not c["should_trigger"]} & {c["query"] for c in d["brand-creator"] if c["should_trigger"]}
+
+
+BUILD_LABEL = re.compile(r"(?i)\(stage \d|\bstages? \d+[a-z]?\b|\bstage-\d|later version")
+
+
+def test_shipped_prose_carries_no_build_stage_labels():
+    """Build-stage labels ("(stage 6)", "stage 4a", "in a later version") are history, not behaviour: in shipped prose they tell
+    the model and the owner that something is not enforced yet when it is. Name the real command or eval instead."""
+    assert BUILD_LABEL.search("behaviour eval (stage 6)") and BUILD_LABEL.search("checked in a later version")
+    assert BUILD_LABEL.search("the stage-4 steps") and BUILD_LABEL.search("brand book (stage 4a)")
+    assert not BUILD_LABEL.search("| name | stage | reason |") and not BUILD_LABEL.search("the first stage of the workflow")
+    hits = []
+    for base in (ROOT / "skills", ROOT / "templates"):
+        for f in sorted(base.rglob("*")):
+            if not f.is_file():
+                continue
+            try:
+                text = f.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                continue
+            for n, line in enumerate(text.splitlines(), 1):
+                if BUILD_LABEL.search(line):
+                    hits.append(f"{f.relative_to(ROOT)}:{n}: {line.strip()[:100]}")
+    usage = (ROOT / "bin" / "brand-creator").read_text(encoding="utf-8")
+    hits += [f"bin/brand-creator help: {ln.strip()}" for ln in usage.splitlines() if BUILD_LABEL.search(ln)]
+    assert not hits, "build-stage labels in shipped prose:\n" + "\n".join(hits)

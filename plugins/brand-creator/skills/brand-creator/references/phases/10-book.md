@@ -17,7 +17,8 @@
 ## Goal
 
 One self-contained document that says what the brand is, shows it at the sizes it will be used at, and proves what was measured. Quick: a short
-guide (idea, mark, colour, files, changing). Standard and Full: the whole book. The book is a view of the project's data, not a second copy
+guide (the Quick chapters: idea, mark, colour, files, changing, plus wordmark when there is one), built by `book` like any book, and the Quick
+path ends with it and G5. Standard and Full: the whole book. The book is a view of the project's data, not a second copy
 of it: tokens, the manifest, BRAND-STATE.md, FACTS.md and the check reports are read, never retyped.
 The order of work, and the self-review as a checklist, are in [the brand-book skill](../../../brand-book/SKILL.md); `/brand-creator:review`
 runs the same self-review.
@@ -108,7 +109,8 @@ Ask once, at G5, whether the owner wants either. Nothing below is written withou
 
 ## Gate
 
-**G5**: the edition is approved, the collapse step is done, `check` exits 0 with the book's reports current. BRAND.md and DESIGN.md adapters
+**G5** (every tier; in Quick it closes the project after the short guide): the edition is approved, the collapse step is done, `check`
+exits 0 with the book's reports current. BRAND.md and DESIGN.md adapters
 and an applied brand skill are written only on the owner's explicit yes at this gate.
 
 ## Pitfalls

@@ -5,11 +5,14 @@ shows a parent or siblings. Full family profiles (`FAMILY.md`) are read from the
 
 ## Modes
 
-| mode (`architecture`) | type | relation | what is shared |
-|---|---|---|---|
-| `standalone` | master | independent | nothing; the brand owns every layer |
-| `family-member` | master, one of several brands the owner runs | family layer + own company layer | the family grammar from `FAMILY.md` |
-| `product-in-family` | product or sub-brand | branded-house, endorsed, sub-brand or independent | tile construction, letters, UI rules from the parent |
+| mode (`architecture`) | type | relation | what is shared | BRAND.md `type` / `architecture` |
+|---|---|---|---|---|
+| `standalone` | master | independent | nothing; the brand owns every layer | `master` / `independent` |
+| `family-member` | master, one of several brands the owner runs | family layer + own company layer | the family grammar from `FAMILY.md` | `master` / `endorsed` |
+| `product-in-family` | product or sub-brand | branded-house, endorsed, sub-brand or independent | tile construction, letters, UI rules from the parent | `product` / `endorsed` |
+
+The last column is what `brand-creator adapters --brand-md` writes by default (`--bm-type` and `--bm-architecture` override it). A
+family-member stays a master brand there; `endorsed` stands for the visible family link that each member keeps while it owns its name.
 
 A standalone brand can still have **two registers** (for example warm for consumers, strict for company boards):
 that is one brand with two voices, not an architecture question.
@@ -49,4 +52,4 @@ token primitives only; semantic roles stay the same so code and books stay compa
 
 - Each brand owns one signature move and one colour role no sibling uses (compare tiles side by side).
 - Family fit is checked before polish; boards in family modes say what each direction keeps and owns.
-- Cross-product tile ratios and shared glyphs are checked by script in a later version (family check, stage 3).
+- Cross-product tile ratios and shared glyphs are checked by `brand-creator family-check` (reads the `FAMILY.md` block).

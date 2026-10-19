@@ -9,7 +9,14 @@
   "rules": [
     {
       "id": "low-opening-quote",
-      "text": "Primary quotation marks open low („ and “) or use guillemets in the reverse direction (» and «)."
+      "text": "Primary quotation marks open low („ and “) or use guillemets in the reverse direction (» and «).",
+      "check": {
+        "kind": "low-opening-quote",
+        "flag": [
+          "\"",
+          "”"
+        ]
+      }
     }
   ]
 }

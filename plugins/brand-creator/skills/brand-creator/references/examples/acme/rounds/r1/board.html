@@ -152,9 +152,9 @@ footer{margin-top:56px;font-size:13px;color:var(--muted)}
   <section class="block" id="directions">
     <h2><span class="num">3</span>Directions</h2>
     <div class="grid">
-      <article class="direction" data-section="direction" data-name="Compass" data-letter="A" data-register="calm"
+      <article class="direction" data-section="direction" data-name="Compass" data-register="calm"
         style="--d-paper:#f9f7ee;--d-ink:#0d1b2d;--d-accent:#007d71;--d-paper-dark:#0e141d;--d-ink-dark:#f0eee7;--d-accent-dark:#4cd7c8">
-        <div class="dhead"><span class="letter">A</span><h3>Compass</h3><span class="register">calm</span></div>
+        <div class="dhead"><h3>Compass</h3><span class="register">calm</span></div>
         <p class="idea" data-field="idea">A steady triangle with one fixed point: a tool you can rely on to point the same way every time.</p>
         <p class="muted"><b>Visual philosophy:</b> <span data-field="philosophy">Surveyor's instruments: one solid form, one exact mark, nothing decorative.</span></p>
         <div class="tiles">
@@ -177,9 +177,9 @@ footer{margin-top:56px;font-size:13px;color:var(--muted)}
           <label><input type="radio" name="vote-compass" value="keep">keep</label><label><input type="radio" name="vote-compass" value="drop">drop</label><label><input type="radio" name="vote-compass" value="unsure">unsure</label></fieldset>
       </article>
 
-      <article class="direction" data-section="direction" data-name="Lantern" data-letter="B" data-register="warm" data-far="true"
+      <article class="direction" data-section="direction" data-name="Lantern" data-register="warm" data-far="true"
         style="--d-paper:#f7f1ec;--d-ink:#2b2118;--d-accent:#c27a12;--d-paper-dark:#1d1712;--d-ink-dark:#f3ece4;--d-accent-dark:#f0b04e">
-        <div class="dhead"><span class="letter">B</span><h3>Lantern</h3><span class="register">warm</span><span class="far">far from the norm</span></div>
+        <div class="dhead"><h3>Lantern</h3><span class="register">warm</span><span class="far">far from the norm</span></div>
         <p class="idea" data-field="idea">A rounded lamp you gather around: the workshop as a place people share, not a hazard zone.</p>
         <p class="muted"><b>Visual philosophy:</b> <span data-field="philosophy">Workbench at night: soft shapes, one warm light, hand-set rhythm.</span></p>
         <div class="tiles">
@@ -202,9 +202,9 @@ footer{margin-top:56px;font-size:13px;color:var(--muted)}
           <label><input type="radio" name="vote-lantern" value="keep">keep</label><label><input type="radio" name="vote-lantern" value="drop">drop</label><label><input type="radio" name="vote-lantern" value="unsure">unsure</label></fieldset>
       </article>
 
-      <article class="direction" data-section="direction" data-name="Keystone" data-letter="C" data-register="bold"
+      <article class="direction" data-section="direction" data-name="Keystone" data-register="bold"
         style="--d-paper:#ffffff;--d-ink:#121212;--d-accent:#2747c9;--d-paper-dark:#0b0d12;--d-ink-dark:#f4f5f7;--d-accent-dark:#8095ff">
-        <div class="dhead"><span class="letter">C</span><h3>Keystone</h3><span class="register">bold</span></div>
+        <div class="dhead"><h3>Keystone</h3><span class="register">bold</span></div>
         <p class="idea" data-field="idea">The wedge that holds the arch together: strength from one exact, load-bearing move.</p>
         <p class="muted"><b>Visual philosophy:</b> <span data-field="philosophy">Masonry: heavy blocks, tight joints, one cobalt keystone.</span></p>
         <div class="tiles">
@@ -262,12 +262,12 @@ footer{margin-top:56px;font-size:13px;color:var(--muted)}
   <section class="block" id="questions" data-section="questions">
     <h2><span class="num">8</span>Questions</h2>
     <ol class="questions">
-      <li data-section="question" data-n="1"><p class="q">Which direction goes forward?</p>
+      <li data-section="question" data-n="1" data-lists="directions"><p class="q">Which direction goes forward?</p>
         <ol class="options">
-          <li data-option="a" data-recommended="true"><label><input type="radio" name="q1" value="a">a. Compass <span class="rec">Recommended</span></label></li>
-          <li data-option="b"><label><input type="radio" name="q1" value="b">b. Lantern</label></li>
-          <li data-option="c"><label><input type="radio" name="q1" value="c">c. Keystone</label></li>
-          <li data-option="d"><label><input type="radio" name="q1" value="d">d. None of these</label></li>
+          <li data-option="a" data-recommended="true"><label><input type="radio" name="q1" value="a">Compass <span class="rec">Recommended</span></label></li>
+          <li data-option="b"><label><input type="radio" name="q1" value="b">Lantern</label></li>
+          <li data-option="c"><label><input type="radio" name="q1" value="c">Keystone</label></li>
+          <li data-option="d"><label><input type="radio" name="q1" value="d">None of these</label></li>
         </ol></li>
       <li data-section="question" data-n="2"><p class="q">Is the strategy core right?</p>
         <ol class="options">
@@ -286,7 +286,7 @@ footer{margin-top:56px;font-size:13px;color:var(--muted)}
 
   <section class="block" id="reply" data-section="reply">
     <h2>Reply</h2>
-    <p>Answer with a name (or letter) and one sentence, for example "Lantern, but with Compass's steadiness". Batched answers work: "1a 2a 3b, Keystone drop".</p>
+    <p>Answer with a direction name, or question number plus option (1a), and one sentence, for example "Lantern, but with Compass's steadiness". Batched answers work: "1a 2a 3b, Keystone drop".</p>
     <div class="reply-out" id="reply-out" aria-live="polite">Pick options above to compose a reply, or type your own.</div>
     <button type="button" id="copy-reply">Copy reply</button>
   </section>
@@ -305,7 +305,7 @@ footer{margin-top:56px;font-size:13px;color:var(--muted)}
     var parts = [];
     document.querySelectorAll("[data-section=question]").forEach(function (qq) {
       var c = qq.querySelector("input:checked");
-      if (c) parts.push(qq.getAttribute("data-n") + c.value);
+      if (c) parts.push(qq.hasAttribute("data-lists") ? c.parentNode.textContent.replace("Recommended", "").trim() : qq.getAttribute("data-n") + c.value);
     });
     document.querySelectorAll("fieldset[data-vote]").forEach(function (f) {
       var c = f.querySelector("input:checked");

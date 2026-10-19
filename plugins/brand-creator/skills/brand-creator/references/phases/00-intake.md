@@ -36,7 +36,8 @@ then set what G0 decided:
 ```
 ... state --project <dir> --set mark_source=authored-vector --set architecture=standalone --set language=pl
 ... state --project <dir> --set "incumbent=wordmark in a sans serif on the current site"
-... state --project <dir> --record G0 "standard tier, authored-vector mark, name decided"
+... state --project <dir> --set review_surface=local      # only when the upload question was asked and answered
+... state --project <dir> --record G0 "standard tier, authored-vector mark (provisional), name decided"
 ```
 
 ## Techniques
@@ -71,30 +72,42 @@ then set what G0 decided:
 
 ## Gate G0
 
-One AskUserQuestion call of **at most 4 questions**, each with 2 to 4 choice options and one labelled "(Recommended)"
-inferred from the brief (the tool takes no more, and no free-text question). In this order, dropping the ones that do
-not apply:
+One AskUserQuestion call of **at most 3 scope questions**, each with 2 to 4 choice options and one labelled
+"(Recommended)" inferred from the brief (the tool takes choice questions only, no free text). In this order, dropping the
+ones that do not apply:
 
 1. **Tier**: Quick / Standard / Full (see the SKILL.md table). Say what each one produces in one line.
-2. **Mark source**: generated / authored-vector / existing (existing is offered only when a mark exists).
-3. **Architecture** (only when the brief or a repo shows a parent brand or siblings): standalone / family-member /
+2. **Architecture** (only when the brief or a repo shows a parent brand or siblings): standalone / family-member /
    product-in-family. A plain brief skips it: standalone is inferred and stated. Ask for the `FAMILY.md` path as plain
    text after family-member is picked.
-4. **Name** (only when not decided): its language and status (keep / screen it / find one), or an irreversible choice
+3. **Name** (only when not decided): its language and status (keep / screen it / find one), or an irreversible choice
    that blocks round 1.
 
-That is the whole call: 4 questions at most, so nothing else is added to it. Facts you could not find (offer, audience,
-region and language, existing assets, required surfaces) go into **one plain-text message** sent after the answers (or
-a second call with choice options only). When the projects folder is unset, that message also says where the project
-will live: "I'll create ./<slug>/ in the current folder unless you name another place." Then state the tier, the
+**The mark source is not a question.** A mark in use means `existing`. Otherwise record your provisional pick
+(`generated` for a geometric or pixel idea, `authored-vector` for a type-based or drawn one) and settle it from the
+chosen direction at G2, stated as a default: "Compass is drawn by code, so generated, unless you say otherwise." A baker
+or a photographer cannot judge a production method, and does not need to. Ask only when the owner has already shown a
+preference (a sketch they want kept, "just tidy my logo").
+
+**The upload question, only when it applies.** When the review surface resolves to `auto` (BRAND-STATE and the plugin
+setting) and the session has the Artifact tool, the same call carries one more item: "Show boards as a private Artifact
+page on claude.ai (uploaded), or as a local file on this machine?", with local marked (Recommended). It is a consent,
+not a scope question, and it is asked once per project: record the answer with `state --set review_surface=artifact` or
+`review_surface=local`. Until it is answered, boards stay local (SKILL.md, Review surface).
+
+Nothing else goes into the call. Facts you could not find (offer, audience, region and language, existing assets,
+required surfaces) go into **one plain-text message** sent after the answers (or a second call with choice options only).
+When the projects folder is unset, that message also says where the project will live: "I'll create ./<slug>/ in the
+current folder unless you name another place." Then state the tier, the mark source (provisional until G2), the
 expected number of rounds and a rough session length, and record G0.
 
-When the session has no AskUserQuestion tool (a non-interactive run), the same questions go into one plain-text message:
+When the session has no AskUserQuestion tool (a non-interactive run), the same questions (and the upload question when it
+applies) go into one plain-text message:
 numbered, options lettered, one marked (Recommended); then stop for the answer. A question the owner already answered in
 the request, or handed to you ("you decide the rest"), is not asked: state the pick in one line and carry on.
 
-Never ask: what people should feel, which colours the owner likes, which style they prefer. Those are answered by the
-boards.
+Never ask: what people should feel, which colours the owner likes, which style they prefer, or how the mark should be
+produced. The boards answer the first three; you decide the last and state it.
 
 ## Pitfalls
 
@@ -112,5 +125,6 @@ boards.
   (tier, architecture, mark_source, incumbent, inventory, gates.G0).
 - Lint: `board-lint` requires "Today" when `incumbent` is set, and an inventory before round 1 in the Full tier or
   product-in-family.
-- Behaviour evals (stage 6): G0 asks scope before any board; no open feeling question; a parent brand in the brief
-  leads to the architecture question, a plain brief to a stated standalone.
+- Behaviour evals: `evals/g0-asks-scope-before-board` (G0 asks scope before any board, at most 3 scope questions),
+  `evals/no-open-feelings-question`, `evals/architecture-asked-when-parent-shown` (a parent brand in the brief leads to the
+  architecture question) and `evals/architecture-standalone-stated` (a plain brief to a stated standalone).

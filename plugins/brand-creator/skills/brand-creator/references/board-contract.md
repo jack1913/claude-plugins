@@ -35,14 +35,14 @@ ignored). Delete optional blocks you do not use rather than leaving them empty.
 | `today` | an incumbent exists | "0 Today": the current mark or site as variant 0, judged by the same criteria |
 | `strategy-core` | round 1 | the 7 fields of [strategy-core.md](strategy-core.md), drafted by you, for reaction |
 | `positioning-map` | round 1 and `reset_rounds` | two named axes, the category norm, every direction placed (`data-direction`), at least one far (`data-far="true"` on the direction); in resets also where the failed round sat (`data-field="failed-round"`) |
-| `direction` (repeat) | always; 3-5 on pick boards | word name (`data-name`, 3+ letters, identical in chat), optional letter, one emotional register per direction (`data-register`), the idea, the reflex result |
+| `direction` (repeat) | always; 3-5 on pick boards | word name (`data-name`, 3+ letters, identical in chat), no letter by default (an optional `data-letter` only when the owner asks; `board-lint` warns when it equals an option letter of a question that does not list the directions), one emotional register per direction (`data-register`), the idea, the reflex result |
 | `hardest-surface` | always | every direction on the one surface most likely to break it (from BRIEF or INVENTORY.md) |
 | `weak-points` | round 2+ | honest weak points, measured where possible |
 | `losers` | round 2+ | each losing candidate (`data-section="loser"`) with a one-line reason |
 | `none-of-these` | pick boards | the explicit way out: say so and what was missing; the next round resets |
 | `my-call` | always | your recommendation and an honest critique (of the owner's earlier pick, or of your own pick in round 1); with `data-judge="ran"` also judge view, lead view and a middle option |
-| `questions` | always | numbered questions (`data-n`), each with lettered options (`data-option="a"`...), one marked recommended |
-| `reply` | always | how to answer: a name or letter and one sentence; batched answers welcome ("1a 2c") |
+| `questions` | always | numbered questions (`data-n`), each with lettered options (`data-option="a"`...), exactly one marked recommended (zero or two fail `board-lint`); the question that lists the directions shows their names |
+| `reply` | always | how to answer: "Answer with a direction name, or question number plus option (1a)" and one sentence; batched answers welcome ("1a 2c") |
 
 Also carry, where they apply (not linted): a keep / drop / unsure vote per territory, "Decisions for you" from the
 review pass (as questions), and "why this is not <sibling>" in family modes. If today's mark still wins, say so on
@@ -58,7 +58,8 @@ On the round page, every direction shows at least:
 - wordmark or lockup;
 - palette with role names (not just swatches) and computed contrast for the main pairs;
 - type specimen with the audience's diacritics (the glyph set from G0), a pangram;
-- two or three sample lines in the brand voice, one of them an error-page line;
+- two or three sample lines in the brand voice, one of them for a moment when something goes wrong, in the brand's own world:
+  an error page for software, "sold out today" or "closed for a holiday" for a shop, "running late" for a practice;
 - the reflex test result against [ai-defaults.json](ai-defaults.json): "no hits", or each hit with its argument;
 - in family modes: what it keeps from the family layer, what it owns, why it is not a sibling.
 

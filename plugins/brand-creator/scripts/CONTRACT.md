@@ -212,14 +212,14 @@ page that was not updated). Round 1 and every round listed in `reset_rounds` mus
 | `today` | `incumbent` in BRAND-STATE is not `none` | the incumbent as variant 0 |
 | `positioning-map` | round 1 and rounds in `reset_rounds` | must contain an element `data-direction="<name>"` for every direction; at least one direction has `data-far="true"`; in reset rounds also a non-empty `data-field="failed-round"` showing where the failed round sat |
 | `strategy-core` | round 1 | shown for reaction |
-| `direction` (repeat) | always; at least 3 on pick boards, 1 otherwise | `data-name` (a word of 3+ letters, unique, identical on the board and in chat), optional `data-letter` (one unique capital), `data-register` (required on pick boards, unique per direction: one per emotional register), optional `data-far="true"`, a non-empty child `data-field="idea"`, and on pick boards a non-empty `data-field="reflex"` (the reflex test against `references/ai-defaults.json`: "no hits" or each hit with its argument) |
+| `direction` (repeat) | always; at least 3 on pick boards, 1 otherwise | `data-name` (a word of 3+ letters, unique, identical on the board and in chat), optional `data-letter` (one unique capital; off by default, and `question:N:letters` warns when a letter equals an option letter of a question that does not list the directions), `data-register` (required on pick boards, unique per direction: one per emotional register), optional `data-far="true"`, a non-empty child `data-field="idea"`, and on pick boards a non-empty `data-field="reflex"` (the reflex test against `references/ai-defaults.json`: "no hits" or each hit with its argument) |
 | `hardest-surface` | always | the one surface where the mark is most likely to fail |
 | `weak-points` | round 2 and later | |
 | `losers` | round 2 and later | contains `data-section="loser"` items, each with a one-line (max 200 characters) `data-field="reason"` |
 | `none-of-these` | pick boards | |
 | `my-call` | always | children `data-field="recommendation"` and `data-field="critique"`; with `data-judge="ran"` also `judge-view`, `lead-view`, `middle-option` |
-| `questions` | always | contains `data-section="question"` items with `data-n` = 1, 2, 3 ... in order; each holds at least two options `data-option="a"`, `"b"` ... in order, at most one with `data-recommended="true"` |
-| `reply` | always | how to answer: a name or letter and one sentence |
+| `questions` | always | contains `data-section="question"` items with `data-n` = 1, 2, 3 ... in order; each holds at least two options `data-option="a"`, `"b"` ... in order, exactly one with `data-recommended="true"` (none or several fail `question:N:options`); a question that lists the directions carries `data-lists="directions"` in the template and shows their names |
+| `reply` | always | how to answer: "Answer with a direction name, or question number plus option (1a)" and one sentence |
 
 Project level: in round 1, when the tier is `full` or the architecture is `product-in-family`, `INVENTORY.md` must exist or
 `inventory:` must start with `none` (for example `none (no target repo)`).
@@ -231,10 +231,10 @@ the target has an ancestor folder containing `BRAND-STATE.md`. In a brand projec
 Edit, overwriting Write and new files in `history/`; deletes, moves, `sed -i`, redirects, `tee`, `truncate`, `dd of=`,
 `cp`/`install`/`ln`/`rsync` into `history/`; Edit, Write and Bash writes on any `rounds/rN/` that is not the latest round;
 deletes anywhere under `rounds/` and moves out of `rounds/` except from the latest round into a `removed-*` folder.
-`brand-creator freeze` is always allowed. `BRAND_CREATOR_GUARD_STRICT=1` also blocks Bash writes into the latest round.
+`brand-creator freeze` is always allowed. The same zones are protected from `git mv`, `git stash -u|-a|--include-untracked|--all`, `git clean`, `git checkout -- <path>`, `git restore`, and from `tar -x`, `unzip`, `7z x` and `ditto` extracting into them (listing and testing archives stay allowed). `BRAND_CREATOR_GUARD_STRICT=1` also blocks Bash writes into the latest round.
 It is best effort (an interpreter one-liner can still write); the real gate is `history/MANIFEST.sha256`, verified by
 `check`. Fail-open applies only to input it cannot parse (it prints a warning): a broken guard must not brick unrelated
-sessions.
+sessions. `hooks/hooks.json` sets `onFailure: "block"` on the guard (Claude Code 2.1.295 or later): a missing `python3` (Windows without Python, or the Microsoft Store alias), a crash or a timeout blocks the call with a visible `failed; blocking because onFailure is "block"` notice instead of silently doing nothing; older versions ignore the field.
 
 ## Platform specs and emitters
 
@@ -289,6 +289,7 @@ because each master has its own report (`assets/_checks/downscale/<slug>.json`).
 **Slots that no longer exist.** Every emitter run ends by retiring the rows it owns (same `emitter`, under its `--out-dir`) that it did not
 write this time: the file is moved to `removed-<date>/<path>` in the project (never deleted), the manifest row is dropped and the report gets a
 `retired:<path>` warning and a `retired` list. A removed tray state, a dropped deployment target or a feature option that is gone no longer ships.
+`emit social` writes the GitHub social preview and the README headers only when `INVENTORY.md` lists a repository row or `brief/BRIEF.md` names a repository URL, a Repository line or a README/GitHub required surface (`--repo-images yes|no` forces it); otherwise an `note:repo-images` info row says why they were skipped.
 A folder the run skipped on purpose (`emit apple --no-cards`) is spared (`Emit.keep()`), and `emit social` spares superseded fingerprinted
 Open Graph files (cached link previews may still use their URL; it warns instead).
 
@@ -523,7 +524,7 @@ FACTS.md value that contains it), `variants:open`, `chapters:required`, `edition
 `counts:typed` (a digit followed by `files`, `slots`, `colours`, `pairs`, `roles`, `sizes` or `chapters` in prose must equal the data; write it
 as `{{count:NAME}}`), `facts:data`, `files:accounting` (every manifest row and artwork file has a `data-path` row with the right `data-sha`),
 `legal:<label>` (FACTS.md rows whose label starts `legal` must appear verbatim), `lang:parity` (every `lang=` + `data-key=` block exists in
-each content language with the same block structure; text in a language that is not in `content_languages` fails). `--self-consistency` adds
+each content language with the same block structure; text in a language that is not in `content_languages` fails), `lang:<code>:<rule>` (warnings with line and offset: the `check` of each rule in `scripts/data/languages/<code>.json` run on the book text in that language, the whole text with one content language, the `lang=` elements with several; kinds `single-letter-nbsp` and `low-opening-quote`; `fontcheck --print-rules` prints every rule for a prompt). `--self-consistency` adds
 `self:durations` (CSS durations and delays are 0 or a `duration.*` token), `self:font-size` (no declared size under the minimum label size;
 rem and em are taken at 16 px, `var()` cannot be read and fails) and `self:colours` (hex, rgb() or named colours in CSS and SVG paint
 attributes must be token colours; other colour functions fail).
@@ -671,7 +672,7 @@ of those files, including the text of an adoption row's `change`, is searched li
 
 `adapters --brand-md --design-md [--primary ROLE] [--bm-type T] [--bm-architecture A] [--replace]` writes `BRAND.md` and `DESIGN.md` at the project root from the built
 tokens (`assets/tokens/tokens.json`), BRAND-STATE.md and FACTS.md. BRAND.md: frontmatter `type` and `architecture` (standalone: master, independent; family-member:
-sub-brand, endorsed; product-in-family: product, endorsed; these pairings are brand-creator's reading, not something the format defines, so they can be overridden),
+master, endorsed; product-in-family: product, endorsed; these pairings are brand-creator's reading, not something the format defines, so they can be overridden),
 then Strategy (the facts, the canonical direction), Voice (only `voice` and `tone` facts and the FORBIDDEN list; "no voice facts are recorded" otherwise), Visual
 (colour roles in light and dark, type families, the mark files, the G4 rules, motion durations) and Governance (naming and renames, claims and verbatim legal facts,
 the accessibility commitments with the computed ratios, approval). Contact and postal-address facts are left out. DESIGN.md: frontmatter `version: alpha`, `name`,
@@ -759,11 +760,11 @@ every platform, so such a catalogue is exit 1 with actool's own words.
 manifest `note` and the same words in its `file:` report label, and `labelled: true` in its manifest row; `check` holds the label for those files (`tierb:labels`). The Tier A Apple files keep
 their notes.
 
-**watchOS appiconset size (stage 5 review S5R-1).** The size of the pre-26 single-size appiconset is the U row `apple-watchos-appiconset` (`appiconset_px`, 1024), not `apple-app-icon.watchos_px` (1088), which
+**watchOS appiconset size.** The size of the pre-26 single-size appiconset is the U row `apple-watchos-appiconset` (`appiconset_px`, 1024), not `apple-app-icon.watchos_px` (1088), which
 is the Icon Composer layout canvas and stays the ictool export size for `--previews`. No page that states the size Xcode or App Store Connect accept for a watchOS appiconset was read, so every file of the pack
 carries `UNVERIFIED, recheck (apple-watch-tv-safe, apple-watchos-appiconset): ` and a person must check the size in Xcode before the pack is relied on.
 
-**`emit profiles`** (`emitters/profiles.py`, template `templates/profile/banner.html`, report `emit-profiles`; Standard and Full tier, exit 2 with the way up in Quick; gate G3). It writes under
+**`emit profiles`** (`emitters/profiles.py`, template `templates/profile/banner.html`, report `emit-profiles`; every tier: the Quick tier writes the two avatars only and an info row says the banners are Standard; gate G3). It writes under
 `assets/profiles/`: `avatar-<px>.png` for each size of the `profile-avatar` row (400 and 800; opaque RGB, the mark centred) and one image per platform at its row's size
 (`linkedin-banner`, `x-header`, `youtube-banner`, `facebook-cover`, `instagram-feed`, `instagram-story`, named `<name>-<w>x<h>.png`; the mark and the name, plus one FACTS.md line with `--tagline`,
 laid out inside the row's `safe` rectangle, 24-bit PNG). Every size and safe area is read from `platform-specs.json`. The rows are all status U, so every file is labelled like the other Tier B files.
@@ -775,7 +776,7 @@ laid out inside the row's `safe` rectangle, 24-bit PNG). Every size and safe are
 - `check` runs `tierb:profiles`: every avatar size and banner of the rows is written, and the ink of each file, read back from its pixels, is still inside the safe area recorded in the manifest row
   (`safe_radius_px`, `safe`), so a file edited afterwards is caught.
 
-**The finish chain.** `templates/finish.sh.tpl` now runs the stage-4 steps and the Tier B packs, each gated by the tier like the CLI: `emit profiles` (Standard and Full); `emit print` (Standard and Full, and only
+**The finish chain.** `templates/finish.sh.tpl` runs the book, print, press-kit and post steps and the Tier B packs, each gated by the tier like the CLI: `emit profiles` (every tier; avatar only in Quick); `emit print` (Standard and Full, and only
 when `PRINT_REGION` is set: print is opt-in with the owner; `PRINT_ICC`, `PRINT_BLEED`, `IMAGE_BASE_URL` are optional) followed by `print-check`; `emit social` gets `--posts` and a `--post-fact` per
 label of `POST_FACTS` (semicolon separated) when that is set; `book` and `book-pdf` when `book/chapters/` exists (the chain never writes or fills chapters; without the folder the log says `book: skipped`);
 `emit presskit` (Standard and Full; `--no-book` when there was no book). `book`, `book-pdf` and the press kit come after the gates and `verify-idempotent`, because the book reads the downscale and
@@ -805,7 +806,7 @@ not allow (`PRINT_REGION` or `POST_FACTS` in Quick) stops the chain with exit 2 
   runs the static checks over every workflow and agent file (exit 1 on any problem). It writes no report: it is a plan, not a
   gate over project artefacts.
 
-## Agents and workflows: review fixes (stage 6)
+## Agents and workflows: snapshots, fix runs and the verifier
 
 - Designer snapshot: `snapshot take` and `snapshot verify` both get `--ignore '*rounds/<round>/*' --ignore '*assets/_checks/*'`; the designer's
   answer lists its `screenshots` (required, at least one), the judge reads those and never the shared `shot.json`.
@@ -858,11 +859,11 @@ commands. Conventions:
 - **Not automatable here** (a person or a real session must look) goes to `dev/MANUAL-CHECKS.md`; a manual check is never
   reported as passed by the suite.
 
-## Quick-tier smoke (stage 7)
+## Quick-tier smoke
 
 `tests/smoke/quick.sh` runs a Quick-tier project of a non-software business (fixtures in `tests/smoke/quick-bakery/`) through `new`, G0 (tier `quick`,
 `review_surface: local`), the first board (`board-lint`, `shot`), `tokens`, a mark generated with `px_lib`, `contrast`, `logo-sheet`, `emit web`,
-`emit social`, `downscale` and `check`, with every `brand-creator` call under `env PATH=<failing git shim>:<shim>`.
+`emit social` (the Open Graph card only: a bakery lists no code repository, so no GitHub preview and no README headers), `emit profiles` (the avatar only), `downscale`, `book --init`, `book` (the short guide, filled with plain text), `book --verify`, `book-lint --self-consistency` and `check`, with every `brand-creator` call under `env PATH=<failing git shim>:<shim>`.
 
 - **The shim** is a folder of symlinks to the tools the path needs and to nothing else (`npm` and `npx` are two-line wrappers); `command -v` and the shim
   python's `shutil.which` find none of sips, iconutil, actool, xcrun, ictool and git there. The git shim logs every call to `git-calls.log` and exits 127;
@@ -872,7 +873,7 @@ commands. Conventions:
   --record-renderer`; later `downscale` and `check` runs use it silently. A control project without an answer shows the exit-3 refusal and that nothing is measured.
 - **Output rules** for the Quick path: no Apple tool name or Xcode, no platform-pack or deployment-target question, no package-registry host, no traceback
   or `command not found`; `sips` is named only in the prereq question. Runs that are meant to refuse are exempt from the word scan.
-- **Refusals**: `emit android|chrome-ext|msix` exit 2 naming `state --set tier=full`; `emit profiles|presskit|print` and `emit social --posts` exit 2 naming
+- **Refusals**: `emit android|chrome-ext|msix` exit 2 naming `state --set tier=full`; `emit presskit|print` and `emit social --posts` exit 2 naming
   `state --set tier=standard`; none of them writes a file or a report (the tier gate runs after G3 and before the report exists: `Emit.begin(tiers=...)`).
   The Tier A packs have no tier gate (see decision 707); `emit apple` with the Apple tools hidden exits 3 and writes nothing.
 

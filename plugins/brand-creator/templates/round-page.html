@@ -178,10 +178,11 @@ footer{margin-top:56px;font-size:13px;color:var(--muted)}
     <h2><span class="num">3</span>Directions</h2>
     <div class="grid">
       <!-- Repeat this article for every direction (3-5 on a pick board). data-name: a word, identical in chat.
-           data-letter optional. data-register: one emotional register per direction. data-far="true" on at least one. -->
-      <article class="direction" data-section="direction" data-name="[[fill: Name one]]" data-letter="A" data-register="[[fill: register]]"
+           Direction letters are off by default (word names first); add data-letter="A" and <span class="letter">A</span>
+           only when the owner asks for letters. data-register: one emotional register per direction. data-far="true" on at least one. -->
+      <article class="direction" data-section="direction" data-name="[[fill: Name one]]" data-register="[[fill: register]]"
         style="--d-paper:[[fill: #hex]];--d-ink:[[fill: #hex]];--d-accent:[[fill: #hex]];--d-paper-dark:[[fill: #hex]];--d-ink-dark:[[fill: #hex]];--d-accent-dark:[[fill: #hex]]">
-        <div class="dhead"><span class="letter">A</span><h3>[[fill: Name one]]</h3><span class="register">[[fill: register]]</span></div>
+        <div class="dhead"><h3>[[fill: Name one]]</h3><span class="register">[[fill: register]]</span></div>
         <p class="idea" data-field="idea">[[fill: the idea in one sentence]]</p>
         <p class="muted"><b>Visual philosophy:</b> <span data-field="philosophy">[[fill: one line, named before drawing]]</span></p>
         <div class="tiles">
@@ -197,13 +198,13 @@ footer{margin-top:56px;font-size:13px;color:var(--muted)}
           <li><i style="background:var(--d-accent)"></i><span>[[fill: role]] · [[fill: ratio]]</span></li>
         </ul>
         <div class="specimen"><div class="aa">Aa</div><p>[[fill: pangram in the audience's language, with its diacritics]]</p><p class="muted">[[fill: typeface names and licence]]</p></div>
-        <ul class="voice"><li>[[fill: sample headline]]</li><li>[[fill: sample line]]</li><li>[[fill: error-page line]]</li></ul>
+        <ul class="voice"><li>[[fill: sample headline]]</li><li>[[fill: sample line]]</li><li>[[fill: a line for when something goes wrong, in this business's world: an error page for software; sold out, closed today or running late for a shop or practice]]</li></ul>
         <dl class="fit"><dt>Best for</dt><dd>[[fill: ...]]</dd><dt>Risk</dt><dd>[[fill: ...]]</dd></dl>
         <p class="reflex" data-field="reflex">[[fill: reflex test against ai-defaults.json: "no hits", or each hit id with its argument]]</p>
         <fieldset class="vote" data-vote="[[fill: Name one]]"><legend>Your vote</legend>
           <label><input type="radio" name="vote-one" value="keep">keep</label><label><input type="radio" name="vote-one" value="drop">drop</label><label><input type="radio" name="vote-one" value="unsure">unsure</label></fieldset>
       </article>
-      <!-- [[fill: articles for directions two and three, same structure, data-letter B and C, mark-two / mark-three]] -->
+      <!-- [[fill: articles for directions two and three, same structure, mark-two / mark-three]] -->
     </div>
   </section>
 
@@ -251,20 +252,20 @@ footer{margin-top:56px;font-size:13px;color:var(--muted)}
   <section class="block" id="questions" data-section="questions">
     <h2><span class="num">9</span>Questions</h2>
     <ol class="questions">
-      <li data-section="question" data-n="1"><p class="q">Which direction goes forward?</p>
+      <li data-section="question" data-n="1" data-lists="directions"><p class="q">Which direction goes forward?</p>
         <ol class="options">
-          <li data-option="a" data-recommended="true"><label><input type="radio" name="q1" value="a">a. [[fill: Name one]] <span class="rec">Recommended</span></label></li>
-          <li data-option="b"><label><input type="radio" name="q1" value="b">b. [[fill: Name two]]</label></li>
-          <li data-option="c"><label><input type="radio" name="q1" value="c">c. [[fill: Name three]]</label></li>
-          <li data-option="d"><label><input type="radio" name="q1" value="d">d. None of these</label></li>
+          <li data-option="a" data-recommended="true"><label><input type="radio" name="q1" value="a">[[fill: Name one]] <span class="rec">Recommended</span></label></li>
+          <li data-option="b"><label><input type="radio" name="q1" value="b">[[fill: Name two]]</label></li>
+          <li data-option="c"><label><input type="radio" name="q1" value="c">[[fill: Name three]]</label></li>
+          <li data-option="d"><label><input type="radio" name="q1" value="d">None of these</label></li>
         </ol></li>
-      <!-- More questions: data-n="2", "3" ...; options lettered a, b, c ... in order; at most one data-recommended. -->
+      <!-- More questions: data-n="2", "3" ...; options lettered a, b, c ... in order (data-option); exactly one data-recommended. Question 1 (data-lists="directions") shows the direction names as its option labels and the composed reply names the direction; every other question keeps visible "a." prefixes so "2b" works. -->
     </ol>
   </section>
 
   <section class="block" id="reply" data-section="reply">
     <h2>Reply</h2>
-    <p>Answer with a name (or letter) and one sentence, for example "[[fill: Name one], but [[fill: a change]]". Batched answers work: "1a, [[fill: Name two]] drop".</p>
+    <p>Answer with a direction name, or question number plus option (1a). Add one sentence on anything you want changed, for example "[[fill: Name one]], but [[fill: a change]]". Batched answers work: "1a, 2b".</p>
     <div class="reply-out" id="reply-out" aria-live="polite">Pick options above to compose a reply, or type your own.</div>
     <button type="button" id="copy-reply">Copy reply</button>
   </section>
@@ -283,7 +284,7 @@ footer{margin-top:56px;font-size:13px;color:var(--muted)}
     var parts = [];
     document.querySelectorAll("[data-section=question]").forEach(function (qq) {
       var c = qq.querySelector("input:checked");
-      if (c) parts.push(qq.getAttribute("data-n") + c.value);
+      if (c) parts.push(qq.hasAttribute("data-lists") ? c.parentNode.textContent.replace("Recommended", "").trim() : qq.getAttribute("data-n") + c.value);
     });
     document.querySelectorAll("fieldset[data-vote]").forEach(function (f) {
       var c = f.querySelector("input:checked");

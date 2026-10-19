@@ -61,7 +61,7 @@ can react to in a minute. The owner reacts to boards, not to questions.
 ## Gate
 
 None by itself: the round ends at G2 (see [04-selection.md](04-selection.md)). The page ends with My call and an
-instruction to reply with a name (or letter) and one sentence. Combinable picks are allowed
+instruction to reply with a direction name, or question number plus option (1a), and one sentence. Direction letters stay off unless the owner asks. Combinable picks are allowed
 ("Compass with Lantern's dot"); whatever the owner picks is developed to equal depth.
 
 ## Pitfalls
@@ -80,7 +80,7 @@ instruction to reply with a name (or letter) and one sentence. Combinable picks 
   surface, None of these, My call with recommendation and critique, numbered questions with lettered options, reply.
 - `shot`: four views with no overflow, console errors or network requests; forbidden-string counts from BRIEF and
   `research/cliches.md`.
-- Behaviour evals (stage 6): r1 board has map, Today (when an incumbent exists) and None of these.
+- Behaviour eval `evals/r1-board-map-today-none`: the r1 board has the map, Today (when an incumbent exists) and None of these.
 
 ## Fleet option: the directions workflow
 

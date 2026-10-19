@@ -84,7 +84,7 @@ def test_brand_md_has_the_four_layers_and_the_frontmatter_of_the_architecture(pa
     assert heads == ["Strategy", "Voice", "Visual", "Governance"]
     assert "every tool has a published spare-parts list" in t and "| light | dark |" in t and "#007d71 | #4cd7c8" in t
     assert "Accessibility commitments" in t and "16.15:1" in t       # ink on paper: (0.0102 + .05) over (.9335 + .05) by hand is 16.15
-    for arch, want in (("family-member", ("sub-brand", "endorsed")), ("product-in-family", ("product", "endorsed"))):
+    for arch, want in (("family-member", ("master", "endorsed")), ("product-in-family", ("product", "endorsed"))):
         assert bc("state", "--set", f"architecture={arch}", project=pack).returncode == 0
         assert bc("adapters", "--brand-md", project=pack).returncode == 0
         fm = front((pack / "BRAND.md").read_text())
@@ -284,3 +284,19 @@ def test_the_applied_skill_is_searched_by_the_cascade(pack):
     bc("check", "--cascade", "#4cd7c8", project=pack)
     cas = row(pack, "cascade:#4cd7c8")
     assert cas["status"] == "fail" and any(h.startswith(".claude/skills/acme-brand/SKILL.md:") for h in cas["hits"])
+
+
+def test_brand_md_mapping_agrees_with_the_architecture_reference():
+    """One classification: the adapter's default BRAND.md `type` and `architecture` per mode are the last column of the modes table
+    in references/architecture.md, and a family-member is a master brand there and in the intake phase."""
+    import ast
+    src = (ROOT / "scripts" / "adaptlib" / "adapt.py").read_text(encoding="utf-8")
+    bm_map = ast.literal_eval(re.search(r"^BM_MAP = (\{.*\})$", src, re.M).group(1))
+    ref = (ROOT / "skills" / "brand-creator" / "references" / "architecture.md").read_text(encoding="utf-8")
+    table = {}
+    for m in re.finditer(r"^\| `([a-z-]+)` \| ([^|]+) \|.*\| `([a-z-]+)` / `([a-z-]+)` \|$", ref, re.M):
+        table[m.group(1)] = (m.group(3), m.group(4))
+        assert m.group(3) in m.group(2), f"{m.group(1)}: BRAND.md type {m.group(3)!r} is not the type the table gives ({m.group(2).strip()})"
+    assert table == bm_map, (table, bm_map)
+    intake = (ROOT / "skills" / "brand-creator" / "references" / "phases" / "00-intake.md").read_text(encoding="utf-8")
+    assert re.search(r"^\s*\| family-member \| master\b", intake, re.M)

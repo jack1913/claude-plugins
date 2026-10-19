@@ -209,11 +209,14 @@ def main() -> int:
                 rep.add(f"{qid}:options", "fail", "lettered options", detail=f"{len(opts)} option(s); a question needs at least 2 (data-option=\"a\", \"b\" ...)")
             elif opts != want:
                 rep.add(f"{qid}:options", "fail", "lettered options", detail=f"options are {opts}, expected {want}")
-            elif len(recommended) > 1:
-                rep.add(f"{qid}:options", "fail", "lettered options", detail="more than one option is marked data-recommended")
+            elif len(recommended) != 1:
+                rep.add(f"{qid}:options", "fail", "one recommended option",
+                        detail=("no option is marked data-recommended (mark the one you would pick)" if not recommended
+                                else f"{len(recommended)} options are marked data-recommended; exactly one"))
             else:
                 rep.add(f"{qid}:options", "pass", "lettered options", detail=", ".join(opts))
     need("reply", True, "how to answer: a name or letter and one sentence")
+    q_items = list(qs.find_all(data_section="question")) if qs is not None else []
 
     # ---- directions
     dirs = sections(root, "direction")
@@ -248,6 +251,21 @@ def main() -> int:
         field(d, "idea", True, f"direction:{label}")
         if kind == "pick":
             field(d, "reflex", True, f"direction:{label}")  # reflex test against references/ai-defaults.json
+    if letters and q_items:
+        # A direction letter that is also an option letter of a question that does not list the directions makes
+        # "B" ambiguous in a phone reply ("B" the direction, or option b of question 2).
+        lowered = {x.lower() for x in letters}
+        for i, q in enumerate(q_items, 1):
+            opts = [o for o in q.find_all() if "data-option" in o.attrs]
+            text = " ".join(o.text() for o in opts).lower()
+            if any(n and n.lower() in text for n in names):
+                continue
+            clash = sorted(lowered & {o.attrs.get("data-option", "").strip().lower() for o in opts})
+            if clash:
+                rep.add(f"question:{q.attrs.get('data-n', '').strip() or i}:letters", "warn", "direction letters do not clash with option letters",
+                        detail=f"direction letter(s) {', '.join(c.upper() for c in clash)} are also option letters of this question, "
+                               f"which does not list the directions: a reply of \"{clash[0]}\" is ambiguous. Drop the direction "
+                               f"letters (word names are enough) or name the directions in the options")
     if map_round and pmap is not None:
         far = [d for d in dirs if d.attrs.get("data-far") == "true"]
         rep.add("map:far-from-norm", "pass" if far else "fail", "at least one direction far from the norm",

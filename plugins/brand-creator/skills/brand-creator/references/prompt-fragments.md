@@ -16,6 +16,7 @@ DECISIONS ALREADY MADE BY THE OWNER: (1) ... (2) ...        ← numbered, the ow
 CRITIQUE ITEMS (fix these): (a) ... (b) ...                 ← lettered, from the last review
 FAMILY LAYER (keep) / COMPANY LAYER (own) / FORBIDDEN: ...  ← FORBIDDEN = research/cliches.md + BRIEF Forbidden + never-borrow
 VERIFIED FACTS YOU MAY USE: <FACTS.md rows>                 ← nothing else may be claimed
+LANGUAGE RULES: <paste the output of `brand-creator fontcheck --print-rules --project <dir>`>  ← the typography rules of every content language
 HARD CONSTRAINTS: static first; reduced motion = nothing moves; nothing loops forever; light and dark via tokens;
   at most 2 self-hostable fonts with a licence that allows embedding; the audience's glyph set verified (say how);
   real content only; the gating goal from BRIEF.
@@ -48,6 +49,8 @@ Generalised from prompts that worked; use them as written or close to it.
   sizes the platform uses.
 - Avoid patchwork: if two visual languages appear together, say exactly what role each plays and why they read as
   one system.
+- Follow the LANGUAGE RULES of every content language in all text you set (for example Polish: a no-break space after
+  a one-letter word, quotation marks that open low); `book-lint` warns when text breaks them.
 - Include "0 Today" and say honestly whether today's mark is still better; include a "None of these" option.
 
 **Judge**
@@ -78,6 +81,8 @@ Generalised from prompts that worked; use them as written or close to it.
 
 **Copy**
 
+- Write in the brand's content languages and keep their LANGUAGE RULES (`brand-creator fontcheck --print-rules --project <dir>`
+  prints them); `book-lint` warns, with line and offset, where text breaks one.
 - Offer 2-4 concrete text options with a Recommended one; never ask an open question about wording.
 - Only facts from VERIFIED FACTS; never invent clients, team size, years of experience, awards, numbers, dates,
   release dates or features.

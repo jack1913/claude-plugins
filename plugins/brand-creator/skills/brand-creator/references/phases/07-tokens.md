@@ -92,15 +92,19 @@ one-line "(rule)" items that the owner approves at G4.
 ## Gate
 
 **G4 System rules.** A written plan, then an explicit GO. Every threshold is your proposal, written as one revertable
-"(rule)" line in BRAND-STATE.md Notes, for example:
+"(rule)" line in BRAND-STATE.md Notes. Pitch the list at the owner. In Quick, and for any brand without a product UI (a
+bakery, a practice, a photographer), show the rules as plain-language defaults "unless you say otherwise" ("text is
+easy to read on every colour we use, in light and dark"; "the logo stands out from whatever it sits on"; "the colours
+stay tellable apart for people with colour-blindness") and keep the numbers in the Notes line, not in the message.
+Offer the motion and script-budget rules only when something in the brand moves or ships code. For example:
 
 - (rule) UI text at least 4.5:1, large text and UI components at least 3:1, light and dark (WCAG 2.2 AA; cannot be lowered)
 - (rule) mark on its ground at least 3:1 (brand rule; logos are WCAG-exempt)
 - (rule) colours that touch in the mark at least 3:1, except the pairs listed in tokens/exceptions.json with a reason
 - (rule) colour-vision distance ΔE2000 at least 10 between role pairs, for protan, deutan and tritan (proposal)
-- (rule) theme follows the system; `data-theme` pins light or dark
-- (rule) reduced motion: nothing moves; durations 160 / 320 / 640 ms, stagger 120 ms
-- (rule) interactive brand pieces stay within 6 kB of script, gzipped (proposal)
+- (rule) theme follows the system; `data-theme` pins light or dark (when the brand has a site or an app)
+- (rule) reduced motion: nothing moves; durations 160 / 320 / 640 ms, stagger 120 ms (only when something moves)
+- (rule) interactive brand pieces stay within 6 kB of script, gzipped (proposal; only when the brand ships code)
 - (rule) accent and danger stay distinct (a `distinct` pair)
 
 Record it with `... state --project <dir> --record G4 "<plan> GO"`. Any later change to a rule or token follows the

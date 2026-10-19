@@ -104,11 +104,21 @@ def test_gate_g3_comes_first(tmp_path):
     assert r.returncode == 1 and "G3" in r.stderr
 
 
-def test_the_quick_tier_is_refused_with_the_way_up_and_writes_nothing(acme):
+def test_the_quick_tier_writes_the_avatar_only_and_says_why(acme):
+    """PF-1: every business on a network needs the circle-safe picture; the banners stay Standard."""
     assert (acme / "BRAND-STATE.md").read_text().count("tier: quick") == 1
     r = profiles(acme)
-    assert r.returncode == 2 and "standard" in r.stderr and "state --set tier=standard" in r.stderr, r.stderr
-    assert not (acme / OUT).exists()
+    assert r.returncode == 0, r.stdout + r.stderr
+    files = sorted(f.name for f in (acme / OUT).glob("*.png"))
+    assert files == ["avatar-400.png", "avatar-800.png"], files
+    rows = {x["id"]: x for x in report(acme, "emit-profiles")["results"]}
+    assert rows["note:banners"]["status"] == "info" and "state --set tier=standard" in rows["note:banners"]["detail"]
+    out = bc("check", project=acme).stdout
+    assert "[FAIL] tierb:profiles" not in out, out
+    assert bc("state", "--set", "tier=standard", project=acme).returncode == 0
+    out = bc("check", project=acme).stdout
+    assert "[FAIL] tierb:profiles" in out and "linkedin-banner" in out, out   # the full set is expected again once the tier is raised
+    assert profiles(acme).returncode == 0 and (acme / OUT / "linkedin-banner-1584x396.png").is_file()
 
 
 def test_the_full_tier_is_accepted_too(acme):

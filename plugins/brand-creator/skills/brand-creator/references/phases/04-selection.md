@@ -77,5 +77,6 @@ Converge on one direction the owner chose, with the choice understood exactly as
 - `board-lint`: None of these on every pick board; Today when an incumbent exists; word names; the map again in
   `reset_rounds`; My call with judge view, lead view and middle option when `data-judge="ran"`.
 - `state --require G2` before refinement work is recorded.
-- Behaviour evals (stage 6): bare "1" with two lists → restate or ask; "refine with style 2 and 3" → original shown as
-  baseline and interpretation stated; judge shown with lead view and middle option.
+- Behaviour evals: `evals/bare-number-two-lists` (bare "1" with two lists → restate or ask), `evals/refine-style-2-and-3`
+  ("refine with style 2 and 3" → original shown as baseline and interpretation stated) and
+  `evals/judge-view-lead-view-middle-option` (judge shown with lead view and middle option).

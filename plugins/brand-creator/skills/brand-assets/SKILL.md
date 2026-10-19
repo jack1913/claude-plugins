@@ -58,7 +58,7 @@ Never produce the file another way and never call a check that did not run "pass
 |---|---|---|
 | `emit web`, `emit social`, `emit windows`, `emit linux`, `emit tray`, `emit wallet`, `emit developer` | yes | yes; Windows runs are untested in this version |
 | `emit android`, `emit chrome-ext`, `emit msix` (Full tier) | yes | yes; untested on Windows and Linux in this version |
-| `emit profiles` (Standard and Full tier) | yes | yes; untested on Windows and Linux in this version |
+| `emit profiles` (every tier; the banners from Standard) | yes | yes; untested on Windows and Linux in this version |
 | `emit apple` watchOS and tvOS packs | yes, with Xcode, for the targets INVENTORY.md lists | no: exit 3, like the rest of `emit apple` |
 | `emit apple` (`.icon`, actool compile, `.icns`, visionOS stack) | yes, with Xcode | no: exit 3, no fallback. Say so plainly: the Apple files must be built on a Mac |
 | `emit tauri` `.icns` | iconutil (default) | only with `--renderer pillow`, which has no 16 px entry (the report says so); otherwise exit 3 |
@@ -218,7 +218,7 @@ More Tier B outputs, with the same label rule: a file built from a spec row of s
   share of the layer. Both are compiled by actool as a hard gate. The mark's size is chosen to fit; a size you set with `--watchos-content-fraction` or `--tvos-content-fraction`
   is held to the same gate, and a mark that does not fit fails the emit with nothing written (a rounder drawing is the fix, not a lower threshold). The tvOS App Store icon and the
   Top Shelf images are not written and ictool has no tvOS preview: say so when you hand the pack over.
-- **Profile images** (`emit profiles`, Standard and Full tier, Chromium for the banners): a circle-safe avatar at 400 and 800 px, and one image each for the LinkedIn, X, YouTube and Facebook
+- **Profile images** (`emit profiles`, every tier, Chromium for the banners): a circle-safe avatar at 400 and 800 px (all the Quick tier writes), and, from the Standard tier, one image each for the LinkedIn, X, YouTube and Facebook
   banners and the Instagram feed and story, from `templates/profile/banner.html` (or `--template`). Everything drawn lies inside the platform's safe area (the circle for the avatar,
   a rectangle for a banner); a name that is too long fails the emit instead of being cut off by the platform. `assets/profiles/_proof/` holds the same images with the safe areas drawn:
   show the person a proof image next to the real one, and say that the proof is never uploaded. Every size is status U in this version: read each platform's own page before the images go online

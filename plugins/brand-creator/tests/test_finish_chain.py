@@ -114,14 +114,16 @@ def test_a_value_for_a_step_the_tier_does_not_allow_stops_the_chain_before_any_s
     assert steps(out) == [] and not (acme / "assets/web").exists()          # not one step ran
 
 
-def test_the_quick_chain_keeps_its_shape_no_profiles_no_press_kit_no_print(acme, tmp_path):
+def test_the_quick_chain_keeps_its_shape_avatar_only_no_press_kit_no_print(acme, tmp_path):
     fin = prepare(acme, "quick", "web")
     r = run(fin, tmp_path)
     out = r.stdout + r.stderr
     assert r.returncode == 0, out[-3000:]
     ss = steps(out)
-    assert not any(s.startswith(("emit profiles", "emit print", "emit presskit", "emit android")) for s in ss), ss
-    assert "check: PASS" in out and not (acme / "assets/profiles").exists() and not (acme / "assets/presskit").exists()
+    assert not any(s.startswith(("emit print", "emit presskit", "emit android")) for s in ss), ss
+    assert any(s.startswith("emit profiles") for s in ss), ss     # the Quick tier writes the avatar only
+    assert sorted(f.name for f in (acme / "assets/profiles").glob("*.png")) == ["avatar-400.png", "avatar-800.png"]
+    assert "check: PASS" in out and not (acme / "assets/presskit").exists()
 
 
 def test_the_template_names_every_step_the_cli_gates_by_tier():

@@ -1287,3 +1287,102 @@ run's shell sees. Findings and decisions:
     Xcode on the runner and runs only the Apple-tool tests and the smoke (the whole suite already runs in the Linux job and on the owner's Mac). The Xcode
     build the Apple emitters were tested against (`prereq.TESTED_XCODE_BUILD`) may not be on a hosted runner: `prereq` warns, the tests decide.
 
+
+## Release docs and final-review fixes (0.1.0)
+
+901. **The README is written for a stranger who installs the plugin.** Order: what it does (non-software businesses named first),
+    install from the published marketplace (`jack1913/brand-creator`, marketplace name `brand-creator` from
+    `.claude-plugin/marketplace.json`) and `--plugin-dir` for development, first run, tiers, what it never does, platform
+    support, costs, permissions, settings, troubleshooting, then the reference and the maintainer sections (development,
+    evals). The build-stage status block and the "TODO by stage" list moved verbatim to `dev/BUILD-LOG.md`, with the old
+    stage-by-stage CHANGELOG; nothing was dropped. `test_static` no longer requires the word "TODO" in the README (it pinned a
+    placeholder) and now fails on a TODO or a stage label there, and checks that the install line names the marketplace.
+902. **CHANGELOG 0.1.0 is one entry grouped by capability**, dated 2026-10-18 (the release date the owner pushes on may differ;
+    change the heading then). No internal review ids; seven agents. Known limits are listed, including PF-1 (Quick still
+    writes GitHub and README header images; profile images need Standard), which this pass does not change.
+903. **MANUAL-CHECKS starts with a status table** and says "never run" plainly. Dates come from the owner: behaviour evals,
+    trigger evals, workflow trials and the Linux Docker run on 2026-10-18. The denylist check is described as private to the
+    author. Added: behaviour evals, trigger evals, workflow trials, the Docker run, the denylist, the guard in a real
+    main-thread session, the live names smoke, the fallback permission rule, Windows and the first CI run. "Last run: not yet"
+    became "never".
+904. **The CI comment says what `claude plugin validate --strict` really checks on 2.1.302**: the plugin and marketplace
+    manifests. Skill and agent frontmatter and `hooks.json` are covered by the repository's own tests, named in the comment.
+905. **G0 is back to at most 3 scope questions** (tier; architecture when a parent or siblings show; the name when open). The
+    mark source is no longer asked: `existing` when a mark is in use, otherwise the lead records a provisional pick at G0 and
+    settles it from the chosen direction at G2, stated as a default "unless you say otherwise". It is asked only when the owner
+    has shown a preference. Reason: a production method is not a choice a baker or a photographer can judge (PF-3). The G0
+    eval rubric fails a reply that asks it. `mark_source` keeps its BRAND-STATE default (`generated`) as the provisional value,
+    so no script changed.
+906. **Uploading boards is the owner's choice (N2), asked once, and it does not count against the 3.** `review_surface: auto`
+    (BRAND-STATE's default, and `auto` in BRAND-STATE counts as unset) means not answered: when the Artifact tool exists, G0
+    carries one consent item (local marked Recommended; plain text without the question tool), the answer is recorded with
+    `state --set review_surface=artifact|local`, and boards stay local until then. It is a consent, not a scope question, so
+    PF-3's limit of three concrete scope questions holds; the call can still hold four items (the tool's limit) only when this
+    applies. The plugin setting `artifact` counts as the owner's yes. Prose only: no script decides an upload.
+907. **The Quick path ends with `book` (the short guide, Quick chapters) and G5** (owner decision on PF-4). SKILL.md's tier
+    table and 10-book.md say so; the Quick smoke still asserts that no `book.html` exists, so the exact smoke expectation is
+    handed to the code agent (scratch hand-off). Requiring the guide in `check` was not decided and is left to the lead.
+908. **No build-stage labels in shipped prose (PF-5, N3).** Every "(stage N)" and "later version" in skills/ and templates/ now
+    names the real check: the command (`family-check`, `print-check`, `book-lint`, `collapse`) or the eval folder. The help
+    headings of `bin/brand-creator` and four CONTRACT.md headings lost theirs too. `test_shipped_prose_carries_no_build_stage_labels`
+    scans skills/, templates/ and the help text; a column named "stage" and a workflow's "first stage" do not match. The
+    workflow files' "stage 1/2/3" comments are pipeline stages, not build labels, and are not scanned.
+909. **A family-member is a master brand in BRAND.md too (PF-7).** architecture.md and 00-intake.md were right: the owner runs
+    several master brands that share a family layer. The adapter mapped it to `sub-brand`, which describes a brand under a
+    parent. Now `master` / `endorsed`: `endorsed` stays because it is the closest BRAND.md value for the visible family link each
+    member keeps while it owns its name (`independent` would say nothing is shared). architecture.md gained the BRAND.md column,
+    and a test ties it to `BM_MAP`. Supersedes the family-member pairing of the adapter decision in stage 4c.
+910. **Board voice line and G4 examples fit the business (PF-10).** The third sample line is "a line for when something goes
+    wrong, in this business's world" (an error page for software; sold out, closed today or running late for a shop or
+    practice), in board-contract.md and both board templates. G4 rules for Quick or a business without a product UI are shown
+    as plain-language defaults with the numbers kept in the Notes line, and the motion and script-budget rules only when
+    something moves or ships code. `board-lint` never enforced the error-page line, so no code changed.
+911. **The README covers the fallback command form (N1) without promising a rule that was not tested.** It explains that
+    `Bash(brand-creator *)` does not match `"${CLAUDE_PLUGIN_ROOT}/bin/brand-creator"`, recommends answering the first prompt
+    with "Yes, and don't ask again", gives the cache path of a marketplace install, and says a hand-written rule for the quoted
+    path is unverified. A leading-wildcard rule is advised against (it would approve any program of that name). The skills'
+    `allowed-tools` were not changed: whether `${CLAUDE_PLUGIN_ROOT}` substitutes there needs a real session (a manual check).
+912. **The orchestrator's listing text has 167 characters spare (N6).** `when_to_use` went from 1008 to 858 characters by
+    merging the two "use it for" sentences and dropping the rationale clause about the board contract; every trigger the tests
+    and `dev/trigger-evals.json` lean on stays (the Polish phrases, BRAND-STATE.md, launch steps, the casual asks, the business
+    kinds). The test now pins at least 150 spare. The trigger evals were not re-run after the trim (billed).
+913. **`homepage` and `repository` point at https://github.com/jack1913/brand-creator** in `plugin.json` and in the marketplace
+    entry (both fields are allowed there; `homepage` must parse as a URL). The test that asserted no homepage now asserts these.
+914. **The scratch coverage matrix was refreshed** from the stage 5, 6 and 6b files and the final review: eval-backed rows say
+    the eval was written and run once (2026-10-18), S2-P6-t3 and S2-P6-t4 are done, and S2-P0-g1 is done again after 905.
+915. **The scratch hand-off and coverage matrix of 914 did not survive.** The session's scratch directory was emptied between
+    the interrupted docs pass and its resume (final-review.json, the coverage files and the denylist with it). The PF-4 smoke
+    expectation was rewritten into a new hand-off for the code agent; the coverage refresh of 914 must be redone by the lead
+    from the originals. No shipped file depended on either.
+951. **Quick social (PF-1).** `emit profiles` runs in every tier and the Quick tier writes the two circle-safe avatars (400, 800) only: every
+    business on a network needs that picture, and the banners need the Standard tier's copy and platform reading. An info row says so and
+    names `state --set tier=standard`; `check` expects the banners again once the tier is raised. `emit social` writes the GitHub social
+    preview and README headers only when the project lists a code repository (an INVENTORY.md repository row, a repository URL or
+    Repository line in the brief, or a README or GitHub entry among the brief's required surfaces); otherwise it skips them with an info row
+    that says why (`--repo-images yes|no` forces it). There is no "software profile" field in BRAND-STATE.md, so the brief and inventory are
+    the signal. The Acme example lists a README header, so it keeps both; the bakery does not. Quick smoke, Acme smoke, tests, the tier
+    table, CONTRACT and the finish template follow.
+952. **Direction letters are off by default (PF-2).** `round-page.html` has no `data-letter` and no letter chip; the question that lists the
+    directions (`data-lists="directions"`) shows their names and the composed reply names the direction, while every other question keeps
+    visible "a." prefixes so "2b" works. The reply text is "Answer with a direction name, or question number plus option (1a)".
+    `board-lint` warns (not fails) when a direction letter equals an option letter of a question that does not list the directions; the
+    shipped Acme example and the bakery board lost their letters. `board.html` and `review/index.html` keep an optional letter slot.
+953. **Language rules do work (PF-6).** Rules in `scripts/data/languages/*.json` gain an optional machine `check` (`single-letter-nbsp` for pl
+    and cs, `low-opening-quote` for pl and de). `book-lint` runs them as warnings with line and offset on the book text in that language
+    (the whole book for one content language, the `lang=` elements for several); text nodes are scanned at their file offsets, with
+    tags, style, svg, code and pre blanked out. Rules without a check (en, es, fr, tr) are listed in prompts only. `fontcheck
+    --print-rules` prints the rules of the content languages; the prompt skeleton, the Design and Copy fragments, the designer agent and
+    `workflows/directions.js` name them. A warning, never a failure: typography is advice and a quoted foreign phrase is legitimate.
+954. **Exactly one Recommended option (PF-8).** `board-lint` fails a question with none or with several `data-recommended` options; before,
+    only several failed.
+955. **Guard coverage (S3).** `git mv` (sources move-from, destination write), `git stash` push or save with `-u`, `-a`, `--include-untracked`
+    or `--all` (like `git clean`: the folder it runs in, or the pathspec after `--`), and `tar -x`, `unzip` (any form that extracts, `-l -t -p`
+    stay allowed), `7z x` and `ditto` into history/ or an earlier round are blocked; creating a tar into history/ is blocked by its `-f`
+    file. A plain `git stash` (tracked files only) stays allowed. `git clean`, `git checkout -- <path>`, `git restore` were already covered
+    and now have regression tests. Unrelated repositories stay untouched.
+956. **A guard that cannot start must not be silent (N4).** `hooks/hooks.json` sets `onFailure: "block"` (Claude Code 2.1.295, read from the hooks
+    reference): a missing `python3`, the Windows Store alias (a non-zero exit), a crash or a timeout then blocks the call with a visible notice
+    instead of letting it through. I chose this over a shell wrapper with fallbacks (`py -3`, `python`) because exec form has no shell and
+    the shell form differs between Git Bash and PowerShell. The price: a bug that crashes guard.py blocks every Write, Edit and Bash call
+    until fixed, which is the loud failure asked for; unparseable input still exits 0 with a warning. Older versions ignore the field. Only the
+    file's content and its README row could be tested on macOS (a missing interpreter cannot be simulated through the harness).

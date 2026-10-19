@@ -4,9 +4,12 @@
 #             potrace, fonts) and runs tests/docker/run.sh: `brand-creator setup` (npm ci + Chromium), pytest, node:test and the Acme
 #             smoke on the paths that apply off macOS. The macOS-only tests are NOT VERIFIED there by design; tests/docker/verify_log.py
 #             accepts exactly those and fails on any other skip.
-#   validate  `claude plugin validate --strict` (the manifest, skills, agents, hooks), through the Claude Code CLI installed from npm,
-#             plus the test that mutates a manifest and expects the validator to catch it. If the CLI cannot be installed or started
-#             (no registry access), the job says so and SKIPS: a skip is printed, never a pass.
+#   validate  `claude plugin validate --strict` through the Claude Code CLI installed from npm. On the pinned CLI (2.1.302) it checks the
+#             plugin and marketplace manifests only: a skill with broken YAML frontmatter or an unknown key in hooks.json still passes it.
+#             The skill and agent frontmatter and hooks.json are checked by the repository's own tests (tests/test_skills.py,
+#             tests/test_agents_workflows.py, tests/test_guard.py), which run in the linux job. This job also runs the test that mutates
+#             plugin.json and expects the validator to catch it. If the CLI cannot be installed or started (no registry access), the job
+#             says so and SKIPS: a skip is printed, never a pass.
 #   macos     the Apple-tool tests (requires_macos, requires_actool: sips, iconutil, actool, assetutil, the .icon pipeline) and the Acme
 #             smoke with `emit apple`, with BRAND_CREATOR_REQUIRE_ALL=1 so a missing tool fails instead of skipping.
 #

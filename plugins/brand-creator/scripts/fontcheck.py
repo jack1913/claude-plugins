@@ -121,11 +121,18 @@ def main() -> int:
     ap.add_argument("--font", action="append", default=[], metavar="FILE", help="font file (repeatable); default: every font under assets/fonts/")
     ap.add_argument("--lang", help="language set code(s), comma separated (default: `content_languages:` in BRAND-STATE.md)")
     ap.add_argument("--text", default="", help="extra characters that must be covered (a brand name, a tagline)")
+    ap.add_argument("--print-rules", action="store_true",
+                    help="print the typographic rules of each content language (scripts/data/languages/<code>.json) for a designer or copy prompt, then exit")
     ap.add_argument("--no-platform", action="store_true", help="leave the Chromium platform-font report out on purpose (printed in the report)")
     a = ap.parse_args()
     project = find_project(a.project)
     known = languages()
     codes = wanted_languages(a, project, known)
+    if a.print_rules:
+        for code in codes:
+            for r in known[code].get("rules", []):
+                print(f"{code}: {r['id']}: {r['text']}")
+        return 0
     paths = [Path(p).expanduser().resolve() for p in a.font]
     if not paths:
         fdir = project / "assets" / "fonts"

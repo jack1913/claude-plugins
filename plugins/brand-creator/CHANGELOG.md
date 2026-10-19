@@ -1,225 +1,91 @@
 # Changelog
 
 All notable changes are listed here. The plugin version in `.claude-plugin/plugin.json` is bumped on every release
-(this keeps `claude plugin validate --strict` and update detection predictable).
+(this keeps `claude plugin validate --strict` and update detection predictable). How 0.1.0 was built, stage by stage, is in
+`dev/BUILD-LOG.md`; the reasons behind its choices are in `dev/DECISIONS-LOG.md`.
 
-## 0.1.0 (unreleased)
+## 0.1.0 - 2026-10-18
 
-### Stage 5
+The first release.
 
-- Stage 5 review S5R-1: the watchOS appiconset is no longer drawn at the Icon Composer canvas (1088). It has its own spec row `apple-watchos-appiconset` (status U, 1024 px), so the pack stays labelled UNVERIFIED until a person checks the size in Xcode.
-- Stage 5a: Tier B emitters. `brand-creator emit android` writes an adaptive launcher icon (foreground, background and an explicit monochrome layer; `mipmap-anydpi-v26`
-  XML and density PNGs mdpi to xxxhdpi), legacy round and square icons, the Google Play icon (512, opaque 32-bit, sRGB chunk) and the feature graphic (1024 x 500,
-  no alpha, from `templates/card.html`); a safe-zone gate refuses a mark whose ink leaves the 66 dp circle (nothing is written) and the monochrome layer is never
-  skipped. `emit chrome-ext` writes the manifest icons 16, 32, 48 and 128 (PNG only, the 128 icon with the Web Store 96-in-128 rule), the store icon and the small
-  and marquee promo tiles. `emit msix` writes the tile and store logos at scale 100, 200 and 400, the app-list target sizes each as the plain, unplated and
-  lightunplated file, and an AppxManifest snippet. Full tier only; every size is a row of `platform-specs.json` (nine new rows: V, R and U); a file built from a
-  U row carries the label "UNVERIFIED, recheck" and `check` fails one that lost it; `check` also gates the adaptive layers and the MSIX unplated trio
-  (`tierb:` rows); the targets are in `finish.sh.tpl` for Full-tier projects.
-- Stage 5b: `emit apple` writes a watchOS icon (one opaque square at the layout size, the mark inside the circle) and a tvOS icon (a two-layer image stack, 800 x 480 at 2x) for
-  the targets `INVENTORY.md` or `--target` lists, each compiled by actool as a hard gate (watchOS has its own appiconset compile; tvOS uses `--platform appletvos --target-device tv`); the margins gate runs
-  before any file is written. The actool gate now also reads `com.apple.actool.document.errors`: a tvOS stack layer that does not fill the stack makes actool exit 0 and write an `Assets.car`, which used
-  to pass. `brand-creator emit profiles` (Standard and Full tier) writes a circle-safe avatar (400 and 800), the LinkedIn, X, YouTube and Facebook banners and the Instagram feed and story images from
-  `templates/profile/banner.html`, each inside its safe area (a gate: a mark or name outside exits 1 and ships nothing), with `_proof/` images that draw the safe areas (never shipped); all new rows are status U and
-  labelled, and `check` gates the labels and re-measures the ink (`tierb:profiles`). `templates/finish.sh.tpl` now runs `emit profiles`, `emit print` with `print-check` (opt-in with `PRINT_REGION`),
-  the social posts (`POST_FACTS`), `book` and `book-pdf` (when `book/chapters/` exists) and `emit presskit`, each gated by the tier like the CLI; a value set for a step the tier does not allow
-  stops the chain with exit 2. The Acme smoke now runs every Tier B emitter that applies and the whole Full-tier chain.
+### Added
 
-### Stage 6
+**The process.**
+- The `brand-creator` skill runs a brand-identity project as phases with owner gates (G0 scope to G7 outward hand-offs, plus
+  the G-sys tripwire after a third patch in one area), in three tiers: Quick, Standard and Full. It resumes from the
+  project's `BRAND-STATE.md`, works for any kind of business or person, and also fires for work on a brand project's files
+  and for a brand's launch steps (handed to the owner, never done for them).
+- G0 asks at most three concrete scope questions (tier; architecture only when a parent brand or siblings show; the name only
+  when it is open), each with a recommended answer, and states the rest as defaults. It asks once before boards are uploaded
+  to claude.ai. Without a question tool, the same questions come as one plain-text message.
+- Round 1 shows three divergent directions with a strategy core, a positioning map, the hardest surface, "Today" when a mark
+  exists, "None of these" and numbered questions with lettered options. Directions keep stable word names; a choice is
+  restated before an expensive build; the liked direction is deepened, never hybridised after the pick.
+- User skills: `/brand-creator:new`, `round`, `status`, `setup` (a consented install into the plugin's data folder),
+  `check` (every gate, plus `--cascade` for old values), `review` (the self-review as one approvable list), `brand-adopt`
+  and `launch`. Model-invocable skills: `brand-naming`, `brand-assets` and `brand-book`.
+- Phase references 00 to 13, a board contract, working-style defaults, anti-pattern case cards, a strategy core,
+  architecture modes (standalone, family-member, product-in-family), a cascade checklist, regulated-industries rules and
+  a synthetic worked brand (Acme).
 
-- Stage 6 review fixes (R6-1 to R6-5). The designers' safety snapshot now also ignores `assets/_checks/` (their own `shot` step writes the shared
-  report there, which made every compliant designer a logged violation); `screenshots` is required in the board schema and the judge prompt no longer
-  falls back to the overwritten shared report; the smoke guard step runs `shot` inside the guard. The adopt fix run says the branch exists (it is not
-  created again), expects the apply run's uncommitted changes and snapshots under its own name; `brand-implementer` step 1 allows a dirty tree for a fix
-  run or a resume of its own step. The research fan-out's refuting verifier is a second `brand-researcher` call (the reviewer has no web tools; its
-  body now says it checks only against saved sources). New agent `brand-namer` (no WebSearch or WebFetch) runs the naming hunters, and the screener
-  until the owner OKs lookups; the shell limit stays an instruction and is documented as such. The eval loader check passes `--max-cost-usd 0.01 -j 1`
-  and asserts `$0.00`.
-- Stage 6b: behaviour evals. `evals/` holds 17 cases for `claude plugin eval` (opt-in, billed, never run by the test suite, the smoke test or CI;
-  the README's "Running the evals" has the commands): stops at a gate, no write to an adoption target before G6, a name is never "available", no git
-  commit without an ask, G0 asks the scope before any board, no open feelings question, the round 1 board has the map, Today and None of these, a bare
-  "1" with two lists, "refine with style 2 and 3", a rule change runs the cascade, the judge next to the lead view and a middle option, a bakery and a
-  photographer (Polish) without software questions or registry checks, no agent before the fleet gate, the family question asked or `standalone`
-  stated, and "buy the domain / file the trademark for me" ending in a hand-off. Scaffolds build synthetic fixtures from the Acme worked brand
-  (`evals/_shared/fixture.sh`). `tests/test_evals.py` validates every case against the documented schema, checks that each grader references something
-  that exists, tests the key regexes on sample inputs and the verify scripts against real mutations, and runs the real loader over every case without
-  running any (one injected invalid grader per case); the smoke test has a matching step. `dev/trigger-evals.json` gains non-software and Polish positives
-  and 6 to 9 negatives for every user-invoked skill.
+**Checks** (each writes a report; a check that cannot run is "not verified", never a pass).
+- `board-lint`, `shot` (1440 and 390 px, light and dark), `contrast` (text, UI and the colours that touch in the mark) and
+  `contrast --cvd`, `logo-sheet` and `logo-sheet --guides`, `downscale` (one report per master), `states-check`,
+  `family-check`, `fontcheck` with the platform-font report, `outline-glyphs`, `shot --motion`, `snapshot`,
+  `verify-idempotent`, `staleness`, `specs-due`, `book-lint`, `print-check`, and `check`, which gates them all and verifies
+  the frozen history's checksum manifest.
+- Owner thresholds in `qa/rules.json` and size bands; the plugin's numbers are proposals.
 
-- Stage 6a: agents and workflows (opt-in). Six plugin agents: `brand-designer` (opus; writes only its own round folder, the TEST
-  line verbatim, a safety snapshot around its writes), `brand-judge` (opus; Read, Grep, Glob only), `brand-reviewer` (opus;
-  Read, Grep, Glob and Bash for check commands; never edits), `brand-researcher` (sonnet; CLAIMS schema with source tiers;
-  names stay private until the owner's OK), `brand-inventory` (sonnet; read only) and `brand-implementer` (sonnet; one repository
-  after G6, finds rows by content, never commits). Each description starts "Only for brand-creator workflows or an approved
-  fleet; do not auto-delegate."; each body carries the RULES line; none can start agents. Four workflows at the plugin root:
-  `directions` (optional inventory first, parallel designers in disjoint `rounds/rN/<direction>/`, advisory judge),
-  `review-panel` (lenses, then a judge sorting A/B/C), `naming` (hunters, a screener with the name checker on `--plan` unless
-  the owner agreed to lookups, a judge) and `adopt` (per repository an implementer then an independent reviewer with `cmp` and
-  the repository's own build and tests). Default runs stay under 5 agents; every run needs `approved_agents` and caps models to
-  the session's family (`ceiling`). `brand-creator fleet-plan` dry-runs a workflow with stub agents to state the fleet gate's
-  numbers; `fleet-plan --check` lints the files. The fleet gate procedure, the main-thread refine loop with one reviewer call and
-  the resume notes are in `references/fleet.md`; phases 01, 03 and 05 and the review, brand-adopt and brand-naming skills point at
-  their workflow.
+**Tokens and assets.**
+- Design tokens from DTCG 2025.10 sources to CSS, JSON, Swift, Android XML and colour sets.
+- `emit web` (favicons drawn per size band, PWA icons, head snippet), `emit social` (social card, GitHub and README header
+  images; `--posts` for carousel, square and educational posts), `emit profiles` (circle-safe avatar and banner images inside
+  each platform's safe area).
+- Platform packs for the Full tier, every size read from `scripts/emitters/platform-specs.json` with its source, date and
+  status: Apple (an Icon Composer `.icon` compiled by actool per platform, legacy sets, visionOS, watchOS and tvOS; macOS with
+  Xcode only), Windows, Linux, tray, Tauri, Wallet, developer, Android (adaptive icon with a monochrome layer and a 66 dp
+  safe-zone gate), Chrome extension and MSIX. Files built from a size not yet read at the platform's own page are labelled
+  `UNVERIFIED, recheck`, and `check` fails a file that lost the label.
+- `templates/finish.sh.tpl`: the whole build chain in order, each step gated by the tier.
 
-### Stage 7
+**Brand book, print and press.**
+- `book` builds one self-contained `book.html` (a short guide in Quick, the whole book in Standard and Full), byte-identical
+  on rebuild, with computed counts and ratios; `book-pdf` exports an RGB proof; `patch` edits a hand-authored book with counted
+  replacements; `collapse` removes losing variants with a dated copy.
+- `emit print`: business card, letterhead and envelope (EU, US or JP sizes, bleed, crop marks, outlined text, boxes set) and an
+  HTML e-mail signature. Without the printer's profile a file is an "RGB proof, not print-ready", with it only a "PDF/X-4
+  candidate". `emit presskit` writes a deterministic zip.
 
-- Stage 7 (Quick-tier smoke): `tests/smoke/quick.sh`, run by `tests/run-all.sh --smoke` after the Acme smoke. A synthetic neighbourhood bakery (brief in the owner's
-  words, fixtures in `tests/smoke/quick-bakery/`) goes from `new` through G0 (tier quick, `review_surface=local`), the first board (board-lint, four-view shots), tokens,
-  a mark generated by code, contrast, logo sheet, `emit web`, `emit social`, `downscale` and `check`, with a PATH of symlinks that holds no sips, iconutil, actool, xcrun,
-  ictool or git (proved with `command -v` and `shutil.which`), a failing git shim in front that logs every call (the log must stay empty) and the project outside any
-  repository. It asserts that the renderer question is asked exactly once (by `prereq`), that the Pillow choice is recorded and measures a PNG master, that a control project
-  without an answer exits 3 and measures nothing, that no Apple error, platform-pack question or package-registry check appears in the Quick output, and that the Android,
-  Chrome extension, MSIX, profiles, print, press-kit and post packs refuse with exit 2 and the way up. Bugs it found: `prereq` asked the renderer question twice off macOS
-  and not at all on a Mac whose PATH has no sips (the question now lives in the one sips row); `prereq` reported a failing `npm --version` as OK; `emit print` and
-  `emit presskit` wrote a failing report for a run that the tier gate had refused (the gate now runs before the report exists). `tests/test_quick_tier.py` holds the regressions.
+**Naming.**
+- `brand-creator names` screens names against domain registries and, for software brands, package registries, and reports
+  REGISTERED, NOT-FOUND or UNKNOWN, never "available". It asks before sending names anywhere, saves raw responses for
+  replay and links trademark searches for the owner to run. The `brand-naming` skill writes a go / go-with-conditions / no
+  verdict memo.
 
-- Behaviour evals, first billed runs (decisions 801-811). The skills call `"${CLAUDE_PLUGIN_ROOT}/bin/brand-creator"` when the
-  bare name is not on PATH (an eval run does not add a plugin's `bin/`); `state`, `setup` and `prereq` run on the first `python3`
-  on PATH that starts and is 3.10 or newer (a broken or older one is skipped, none → exit 3 naming each); an unwritable data
-  folder is exit 3 with the fix instead of a stack trace. The orchestrator now triggers on work on a brand project's files and
-  on a brand's launch steps, asks G0 as plain text when there is no question tool, does not re-ask what the owner answered, and
-  builds and lints a board without Chromium (shots "not verified"), and puts a judge result into My call with `data-judge="ran"` and its
-  three panels. Evals: `tiers-offered` grades the reply (runs have no
-  AskUserQuestion), `no-available-verdict` no longer matches "whether X is available", the refine case's reply regexes take "my reading" and "(current)", the photographer case grades its reply
-  for software topics, the README lists what a run's sandbox cannot do, and the shipped-files scan skips `evals/results/`.
+**Adoption and launch.**
+- `adoption survey` reads product repositories read-only and writes `ADOPTION.md` as numbered, append-only rows;
+  `check --cascade` finds leftovers of an old value across every project file; opt-in `BRAND.md` and `DESIGN.md` adapters and
+  a per-brand applied skill; `launch-todo` writes `LAUNCH.md` from local files only.
 
-- Stage 7 (Linux run): `tests/docker/` (Dockerfile on Debian 13, `run.sh`, `in-container.sh`, `verify_log.py`) runs setup, pytest, node:test and the Acme
-  smoke on Linux and accepts only the macOS-only NOT VERIFIED skips; `.github/workflows/ci.yml` (Linux, `claude plugin validate --strict`, macOS Apple-tool
-  tests; runs once pushed). Bugs the Linux run found and fixed: the fonts control used one CJK character, so `fontcheck` was never verified on a box with no CJK
-  font (it now tries eight candidates); `downscale` reported "no system downscaler" (exit 3) before bad arguments (exit 2); `finish.sh` had no way to name the
-  off-macOS opt-ins (`ICNS_RENDERER`, `DOWNSCALE_RENDERER`); four install hints named only `brew`; a Chromium that could not start for missing system
-  libraries said "re-run setup" (it now names the libraries). Tests and the smoke no longer assume sips, iconutil, `/usr/bin` without ripgrep or poppler,
-  Homebrew's Ghostscript layout or resvg 0.48 anti-aliasing.
+**Agents and workflows (opt-in).**
+- Seven agents (`brand-designer`, `brand-judge`, `brand-reviewer`, `brand-researcher`, `brand-inventory`,
+  `brand-implementer`, `brand-namer`), none of which can start other agents or is delegated to automatically, and four
+  workflows (`directions`, `review-panel`, `naming`, `adopt`), each ending before an owner gate. A fleet runs only after the
+  owner has been told the agent count, models, size and rough cost and said yes; `fleet-plan` dry-runs one with stub agents.
 
-- Stage 4 review fixes. The brand book's cover and colophon keep the 16 px side gutter (and `shot` now records `gutter_left` and `gutter_right` per view); the
-  cover's Adoption row says "approved <date>" for G6 and counts rows done from `adoption.json` instead of claiming "applied"; `check --cascade` searches `_build/`
-  HTML (the text layer of OG cards, social posts and store frames); the adoption `accounting` row recounts name and colour lines with a second ripgrep run; a
-  manual check for the e-mail signature in real mail clients.
-- Stage 4d: the skills. `brand-book` (model-invocable, narrow: build, update, self-review, collapse, approve and export the book of an approved
-  identity; generated books rebuilt byte for byte and never hand-edited, hand-authored books edited only by counted `patch` with an edition bump;
-  a ten-item self-review table; BRAND.md, DESIGN.md and the applied skill only on the owner's yes at G5; `book.pdf` called an RGB proof).
-  User-invoked wrappers: `/brand-creator:brand-adopt` (read-only survey; apply only on an explicit ask, on a branch the owner names, one repository at a
-  time, an independent review with `cmp` and the repository's own build and tests, then fixes, then decisions; hooks never skipped; commit, merge and
-  push separate asks, what a push triggers said first; live-service rows need their own OK; parent-site lockups byte-copied and previewed in a scratch
-  copy), `/brand-creator:check` (gates plus `--cascade`), `/brand-creator:review` (self-review as one approvable list, optional lens panel behind the
-  fleet gate) and `/brand-creator:launch` (one owner action at a time, with the reason and the click path). Phase 12 (history, ADR, governance, the
-  project's memory) is written in full; phases 10, 11 and 13 gain the governance section, the apply and parent-site method, the trademark screening
-  steps with dates and the print hand-off (spot colour as a name and a Lab target, no bundled profile, the printer's proof). `references/cascade.md` is
-  a nine-step checklist with the surfaces that embed the old look. `CONNECTORS.md` documents optional `~~design tool` connectors (no MCP
-  configuration ships). New templates `ADR.md` and `ADOPTION.md` (the frame `adoption` now renders through, adding the apply rules); the book chapter
-  skeletons carry guidance in their fill markers and a Governance section. Trigger evals for `brand-book` and negatives for the new wrappers.
-- Stage 4c: adoption, cascade, adapters, applied skill, launch. `brand-creator adoption survey` reads product repositories read only (ripgrep, `.gitignore`
-  honoured) for old names and colours, icon and logo files, package and platform metadata and README badges, and writes `adoption.json` and `ADOPTION.md`:
-  numbered rows with a content excerpt (line numbers drift), progress and pins stored apart so rows are append-only, a "Kept, not counted" list with a reason for
-  every match that is not a row, identifiers for the rename list, counts built into the sentences; the survey proves it wrote nothing in a repository. `adoption add`
-  appends a hand-written code-change row, `adoption status --set` records progress (doing and done need G6), `adoption verify` checks pins and rendering. `check
-  --cascade` now searches every project artefact (book sources, README, tokens, text assets, templates, ADOPTION, LAUNCH, BRAND.md, DESIGN.md, the applied skill, PDFs
-  as text) and the documents named by `tools/cascade.json`, `--also` or FAMILY.md `parent_docs`; adoption records of the old value in a product repository warn instead
-  of failing. `brand-creator adapters --brand-md --design-md` (opt-in at G5) generates BRAND.md (Strategy, Voice, Visual, Governance; `type` and `architecture`
-  frontmatter) and DESIGN.md from the tokens, BRAND-STATE.md and FACTS.md, both read by `staleness` and `check --cascade`; DESIGN.md is linted by `@google/design.md`
-  0.4.0 (pinned in `scripts/package.json`, installed by `setup`), "not verified" when it is not installed. `brand-creator applied-skill --yes` writes a small
-  `<slug>-brand` skill into the project's `.claude/skills/`. `brand-creator launch-todo` writes LAUNCH.md (trademark first, domains and handles with their check date,
-  e-mail, renames, print hand-off, decisions; nothing outward is executed). Phases 11 and 13 are written in full. `prereq --for adoption` names ripgrep.
-- Stage 4b: honest print, press kit and social posts. `emit print` writes a business card (front, back), letterhead and envelope as print PDFs and an
-  HTML e-mail signature from the tokens, the outlined logo set and FACTS.md contact rows (`templates/print/`): the page is exactly trim + 2 x bleed with
-  crop marks drawn in the template, Chromium prints it (`render.mjs pdf --size-mm`, which also measures every text, logo and line), Ghostscript outlines the
-  text (`-dNoOutputFonts`), pikepdf sets MediaBox, TrimBox and BleedBox, the metadata and a fixed date and ID. Sizes come from the print_region table
-  (`scripts/emitters/print-regions.json`: EU, US, JP; card, A4 or Letter, DL or #10, default bleed stated as printer-specific), chosen by `--region` or the
-  brief. Without `--icc` the PDFs are labelled "RGB proof, not print-ready" (metadata and file name); `-dPDFX=4` is used only with `--icc` (a CMYK profile
-  the owner supplies; none is bundled) and the file is then only a "PDF/X-4 candidate (preflight with your printer)". Nothing claims conformance.
-  `print-check` (wired into `check` when print PDFs are in the manifest) reads the boxes back with poppler and checks page size, bleed, safe zone, line
-  weight, reversed text, logo size, transparency, fonts, colour and the label against `--icc`, with owner thresholds in `qa/print.json`. `emit presskit`
-  writes a deterministic press-kit zip; `emit social --posts` adds 4:5 carousel, 1:1 and educational post templates (`templates/social/`) filled from
-  FACTS.md values, with the pre-publication checklist for a regulated profession. Print, press kit and posts are Standard-tier packs.
-- Stage 4a: the brand book. `brand-creator book` generates a self-contained `book.html` (fonts and images inline, no script, no network, light and
-  dark) from tokens, the manifest, BRAND-STATE.md, FACTS.md, the contrast and downscale reports and `book/chapters/*.md` (skeletons in
-  `templates/book/`, a documented Markdown subset, computed blocks and counts), byte-identical on rebuild; `book-lint` (ids, anchors, network and
-  script references, scratch, round and forbidden words, status words backed by FACTS.md, per-language key parity, mark_lint on every mark, required
-  chapters, edition and APPROVED stamp, counts, manifest accounting, legal disclosures, leftover variants; `--self-consistency`: CSS durations
-  within the motion tokens, font sizes at or above the minimum label size, colours within the tokens) is wired into `check`; `patch` is the assert-
-  counted edit path of a hand-authored book and logs the edition; `collapse` removes losing variants and switchers from book sources and tokens
-  with a dated copy; `book-pdf` (Chromium, pikepdf) exports an RGB proof labelled "RGB, not print-ready" in the metadata and on the cover
-  (`render.mjs pdf`). BRAND-STATE.md gains `edition`, `approved_edition` (written by `state --record G5`) and `book_chapters`. Phase 10 is
-  written in full; the Acme smoke builds, lints, exports and mutates the book.
-- Walking skeleton, stage 1a: plugin manifest, `bin/brand-creator` entry point, script contract, setup and prereq,
-  history/rounds guard hook, project scaffold, state and freeze, Chromium driver (shots, cards), logo sheet,
-  contrast, board lint, mark lint, design-token build (DTCG 2025.10 to CSS, JSON, Swift, Android XML, colorsets),
-  web and social emitters, tests and the Acme smoke.
-- Stage 1b: orchestrator skill `brand-creator` (tiers, phase map, gates, RULES, response template, working style,
-  review surface), user skills `new`, `round`, `status`, `setup`; references (phases 00/03/04/05/06 in full, stubs for
-  the rest, board contract, working style, anti-pattern case cards, strategy core, prompt fragments, ai-defaults,
-  architecture, cascade); templates `round-page.html`, `board.html`, `review/index.html`, `DECISIONS.md`,
-  `tokens/*.tokens.json`; board-lint checks numbered questions with lettered options, the reflex test and unfilled
-  `[[fill: ...]]` markers; the Acme worked example replaces the test fixture.
-- Stage 1 review fixes: `contrast` now finds the colours that touch in the logo raster (resvg) and holds them to token
-  targets with an exceptions register (`tokens/exceptions.json`, a reason per entry); G0 fits the AskUserQuestion tool
-  (at most 4 choice questions, facts as plain text); skills call the bare `brand-creator` so the README permission rule
-  matches; the guard also protects project roots and their parent folders, sees `bash -c`, `eval`, the bulk-argument
-  runner and destructive `git` commands; `state --set` validates enum keys and the phase; `state` runs without uv.
-- Stage 2a: `brand-creator names` (`scripts/check_names.py`): domain screening through RDAP (IANA bootstrap cached 24 h), whois
-  and a DNS cross-check, plus npm, GitHub, Docker Hub, PyPI, crates.io and Homebrew for the software profile; known-taken and
-  known-unregistered controls per source, REGISTERED / NOT-FOUND / UNKNOWN only, rate-limit handling, raw responses saved and
-  replayable with `--offline`, a privacy gate (`--yes`), owner-run trademark links and a "screening, not clearance" memo.
-  Recorded-response fixtures and tests; the live smoke is manual (`requires_network`). Skills always quote
-  `--data "${CLAUDE_PLUGIN_DATA}"`; CONTRACT gains name-screening and testing sections; `dev/MANUAL-CHECKS.md` added.
-- Stage 2b: phase 01 research in full (P1a constraints with tagged claims and a refute pass, P1b alternatives with the status
-  quo first, five-competitor lineup, clichés and a map from them, P1c read-only surface inventory before round 1, optional
-  site audit) with templates `research.md`, `cliches.md`, `INVENTORY.md`; the `brand-naming` skill (name language and profile
-  asked first, metaphor territories, six styles, distinctiveness class, internal filter, meaning check per language, privacy
-  OK, prior-art kill before screening, `brand-creator names`, owner-run trademark links, verdict memo from
-  `templates/names-verdict.md` with a Launch TODO seed, G1); phase 02 points at it; strategy core drafting table and
-  Guardrails block; regulated-industries 7-step method with a dated rules table; trigger evals for brand-naming and the
-  user-invoked skills, with a shape test.
-- Stage 2 review fixes: `names` writes raw responses to `raw/<date>/run-<n>/` (a second run the same day no longer rewrites the
-  first run's evidence; a folder with several runs is refused for replay); `--offline` reports the date the recordings carry and
-  says when it was replayed; raw files drop third-party personal data (allow-lists for GitHub, Docker Hub, npm, PyPI, crates.io
-  and Homebrew bodies, RDAP vcards cut to their version line, whois contact blocks removed); a Quick project with an open name
-  runs P2 before the board, stated at G0.
-- Stage 3a: QA and mark tooling. `scripts/lib/px_lib.py` (RGBA buffer, deterministic PNG, ICO and run-length SVG writers, PNG
-  reader) and a generated grid mark in the Acme example; `outline-glyphs` (fontTools instancer, skia-pathops overlap removal, one path
-  per glyph, no live text) and `fontcheck` (cmap coverage per language set from data files en/pl/de/cs/fr/es/tr, licence hint, Chromium
-  platform-font report with a control; `render.mjs fonts`); `downscale` (real `sips` downscale on macOS, explicit `--renderer` opt-in
-  elsewhere, accent pixels, box and solid square, 4x4 px at 32 px and below as an owner-adjustable default, before/after);
-  `logo-sheet --guides` (baseline, cap line, x-height and grid guides with measured offsets); `states-check`, `family-check` (family
-  modes, `FAMILY.md` block), `contrast --cvd` (ColorAide Brettel and Viénot simulation, CIEDE2000, shared pair list with `distinct`
-  role pairs); `shot --motion` (named states at 1x and 2x against the static SVG with a control pair, emulated reduced motion, layout
-  shift 0); `snapshot`, `verify-idempotent` (explained allowlist with substitute checks, determinism rules for PNG, zip and PDF),
-  `staleness` (`tools/inputs.json`), `specs-due`; size bands (`qa/rules.json`, one picker, slots record their band, exemptions) and
-  `qa` gates on manifest rows, all wired into `check`; `content_languages` in BRAND-STATE; Acme smoke extended; the Inter test font
-  and the Python dependencies are credited in THIRD_PARTY_NOTICES.
-- Stage 3b: Tier A platform emitters, all reading sizes only from `scripts/emitters/platform-specs.json` (21 new rows with source,
-  checked date and status V, R or U; `references/platform-specs.md` is generated from it and a test compares the two) and all
-  writing as target-repo paths under `assets/<target>/` with manifest rows (slot, size, band, resampled-by, qa) on byte change only.
-  `emit apple` (macOS with Xcode; exit 3 elsewhere): an Icon Composer `.icon` (default, dark, tinted) validated against the
-  vendored giginet schema and validator, compiled with actool per platform (iOS, macOS, watchOS) as a hard gate with the fallback PNGs and
-  `.icns` shipped and the Assets.car compared by its `assetutil --info` rendition list; the appiconset and an iconutil `.icns` only
-  when INVENTORY.md or `--target` shows a target below 26; a visionOS solid image stack inside the safe circle (compiled for xros);
-  colour sets from build_tokens; the menu-bar template, a flattened 1024 marketing icon with no alpha channel, a DMG background at 1x and
-  2x and App Store screenshot frames (frames only); ictool previews on request. `emit windows` (.ico, 24-bit NSIS BMPs with the bit depth
-  read back), `emit linux` (hicolor, scalable SVG, AppStream stub whose text fields come from FACTS.md only), `emit tray` (shape-coded state
-  sets from `tray/tray.json`, light and dark taskbars, Linux, macOS template, then the states-check gate; `states-check` now reads
-  `qa/states.*.json` too), `emit tauri` (icons folder; `.icns` by iconutil, or Pillow only behind `--renderer pillow`), `emit wallet`
-  (Apple pass images at @2x and @3x, Google logo and wide logo), `emit developer` (e-mail logo at 1x to 3x, registry icon, org avatar, CLI
-  identity text with 24-bit colour only where it reaches 4.5:1 on a white and a black ground). `templates/finish.sh.tpl` (the ordered
-  chain with the `BRAND_CREATOR_CHAIN` guard; `require_chain()`), INVENTORY.md gains a Deployment targets section, `check` reads every
-  `emit-<target>` report, `verify-idempotent`'s assetutil compare now strips the UUID, digest and timestamp that made two compiles of one
-  catalogue differ (found on the first real Assets.car), the Acme smoke emits every pack.
-- Stage 3c: the `brand-assets` skill (model-invocable; standalone entry from a mark file into `./brand-assets/` with srgb tokens
-  from the mark's own colours, an audit and owner decisions; raster input warned, tracing with potrace only as an approved step;
-  project entry from INVENTORY.md slots through size bands, emitters and the downscale proof to `check`; what runs where for
-  non-mac users). Phases 07-tokens and 09-qa written in full, 06-mark extended (existing-mark audit, outlined-glyph order, size
-  bands, accent rule), 08-assets reduced to a pointer. 09-qa lists every check command, what it blocks and the test that
-  proves it (a test fails on a cited test that does not exist, a wrong mutation label, or a check command missing from the
-  table). `templates/MOTION-SPEC.md`. Trigger evals for brand-assets with sibling cases; the Acme smoke runs the standalone entry.
-- Stage 3 re-check fixes: a crash (any unexpected exception) now records `fail` in the open reports and exits 1; retirement warnings name
-  the real `removed-<date>[-n]/` folder.
-- Stage 3d (review fixes): `downscale` writes one report per master (`assets/_checks/downscale/<slug>.json`) and a manifest row with
-  `qa: ["downscale"]` records `downscale_source`; `check` needs the passing, current report of that very file, so a pass on another
-  master no longer vouches for a failing one. Before/after compares only the earlier report of the same source, method, master size,
-  accent and ground. `emit web` follows the size bands (every favicon layer and PNG icon is drawn for its own size, recorded in the
-  manifest, and `check` re-reads every `.ico` layer's band). `templates/finish.sh.tpl` passes options as quoted arrays (multi-word
-  taglines and exemptions work), gets `BRAND_CREATOR_ROOT` from the new `brand-creator root`, runs the downscale gate for every master a
-  row names, and is run end to end by a test and the smoke. Emit reports list every file the emitter read (FACTS.md, INVENTORY.md,
-  `tray/tray.json`, `qa/rules.json`) once, and the staleness globs cover FACTS.md, INVENTORY.md and `tray/*.json`. Rows and files of slots
-  an emitter no longer writes are moved to `removed-<date>/` and reported. A run that stops through an error rewrites its report as failed.
-  `emit developer` gains `--content-fraction`.
+**Safety.**
+- A hook keeps `history/` and earlier rounds read-only and stops a brand project folder from being deleted or moved; the RULES
+  line in every skill, agent and workflow forbids commits, pushes, deletes and outward actions unless asked.
+
+**Platforms and tests.**
+- Tested on macOS; the suite and the end-to-end smoke also run on Linux in a container (`tests/docker/`). Windows is untested.
+- pytest and node:test suites with mutation tests for each gate, the Acme end-to-end smoke, a Quick-tier smoke on a PATH with no
+  Apple tools and no git, 17 behaviour evals (`evals/`, billed, run by hand) and trigger evals (`dev/trigger-evals.json`),
+  and a CI workflow (Linux, `claude plugin validate --strict`, macOS) that runs once the repository is pushed.
+
+### Known limits
+
+- Windows has never been run. On Windows the safety hook needs `python3` on PATH.
+- The behaviour evals were run once (2026-10-18); see the README's "Running the evals" for the results.
+- Some platform sizes are unverified and labelled so; recheck them with `brand-creator specs-due`.
+- In Quick, `emit social` also writes GitHub and README header images, and profile images need Standard.

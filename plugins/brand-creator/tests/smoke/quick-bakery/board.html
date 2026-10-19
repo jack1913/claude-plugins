@@ -152,9 +152,9 @@ footer{margin-top:56px;font-size:13px;color:var(--muted)}
   <section class="block" id="directions">
     <h2><span class="num">3</span>Directions</h2>
     <div class="grid">
-      <article class="direction" data-section="direction" data-name="Hearth" data-letter="A" data-register="warm"
+      <article class="direction" data-section="direction" data-name="Hearth" data-register="warm"
         style="--d-paper:#f8f0e3;--d-ink:#2e1f16;--d-accent:#b4521e;--d-paper-dark:#1d1511;--d-ink-dark:#f4e8d4;--d-accent-dark:#f0a15a">
-        <div class="dhead"><span class="letter">A</span><h3>Hearth</h3><span class="register">warm</span></div>
+        <div class="dhead"><h3>Hearth</h3><span class="register">warm</span></div>
         <p class="idea" data-field="idea">A round loaf with a glowing cut: the shop is the warm room on the corner, lit before the street wakes up.</p>
         <p class="muted"><b>Visual philosophy:</b> <span data-field="philosophy">Honest heat: one solid loaf shape, one square of oven glow.</span></p>
         <div class="tiles">
@@ -176,9 +176,9 @@ footer{margin-top:56px;font-size:13px;color:var(--muted)}
         <fieldset class="vote" data-vote="Hearth"><legend>Your vote</legend>
           <label><input type="radio" name="vote-hearth" value="keep">keep</label><label><input type="radio" name="vote-hearth" value="drop">drop</label><label><input type="radio" name="vote-hearth" value="unsure">unsure</label></fieldset>
       </article>
-      <article class="direction" data-section="direction" data-name="Queue" data-letter="B" data-register="playful" data-far="true"
+      <article class="direction" data-section="direction" data-name="Queue" data-register="playful" data-far="true"
         style="--d-paper:#fbf6ea;--d-ink:#1f2a44;--d-accent:#d9412b;--d-paper-dark:#14182a;--d-ink-dark:#f3eee0;--d-accent-dark:#ff8a73">
-        <div class="dhead"><span class="letter">B</span><h3>Queue</h3><span class="register">playful</span><span class="far">far from the category norm</span></div>
+        <div class="dhead"><h3>Queue</h3><span class="register">playful</span><span class="far">far from the category norm</span></div>
         <p class="idea" data-field="idea">Three dots in a row, the last one lit: the Saturday queue, and the neighbour at the front who gets the last loaf.</p>
         <p class="muted"><b>Visual philosophy:</b> <span data-field="philosophy">Counted, not drawn: repetition with one exception.</span></p>
         <div class="tiles">
@@ -200,9 +200,9 @@ footer{margin-top:56px;font-size:13px;color:var(--muted)}
         <fieldset class="vote" data-vote="Queue"><legend>Your vote</legend>
           <label><input type="radio" name="vote-queue" value="keep">keep</label><label><input type="radio" name="vote-queue" value="drop">drop</label><label><input type="radio" name="vote-queue" value="unsure">unsure</label></fieldset>
       </article>
-      <article class="direction" data-section="direction" data-name="Rye" data-letter="C" data-register="austere"
+      <article class="direction" data-section="direction" data-name="Rye" data-register="austere"
         style="--d-paper:#eef0e6;--d-ink:#23301f;--d-accent:#8a6a1f;--d-paper-dark:#151a12;--d-ink-dark:#e9ecde;--d-accent-dark:#d3ad52">
-        <div class="dhead"><span class="letter">C</span><h3>Rye</h3><span class="register">austere</span></div>
+        <div class="dhead"><h3>Rye</h3><span class="register">austere</span></div>
         <p class="idea" data-field="idea">Two stacked chevrons cut from one grain: a quiet, mill-and-oven brand for people who read the ingredients.</p>
         <p class="muted"><b>Visual philosophy:</b> <span data-field="philosophy">Grain geometry: two cuts, no decoration.</span></p>
         <div class="tiles">
@@ -260,19 +260,19 @@ footer{margin-top:56px;font-size:13px;color:var(--muted)}
   <section class="block" id="questions" data-section="questions">
     <h2><span class="num">9</span>Questions</h2>
     <ol class="questions">
-      <li data-section="question" data-n="1"><p class="q">Which direction goes forward?</p>
+      <li data-section="question" data-n="1" data-lists="directions"><p class="q">Which direction goes forward?</p>
         <ol class="options">
-          <li data-option="a" data-recommended="true"><label><input type="radio" name="q1" value="a">a. Hearth <span class="rec">Recommended</span></label></li>
-          <li data-option="b"><label><input type="radio" name="q1" value="b">b. Queue</label></li>
-          <li data-option="c"><label><input type="radio" name="q1" value="c">c. Rye</label></li>
-          <li data-option="d"><label><input type="radio" name="q1" value="d">d. None of these</label></li>
+          <li data-option="a" data-recommended="true"><label><input type="radio" name="q1" value="a">Hearth <span class="rec">Recommended</span></label></li>
+          <li data-option="b"><label><input type="radio" name="q1" value="b">Queue</label></li>
+          <li data-option="c"><label><input type="radio" name="q1" value="c">Rye</label></li>
+          <li data-option="d"><label><input type="radio" name="q1" value="d">None of these</label></li>
         </ol></li>
     </ol>
   </section>
 
   <section class="block" id="reply" data-section="reply">
     <h2>Reply</h2>
-    <p>Answer with a name (or letter) and one sentence, for example "Hearth, but warmer". Batched answers work: "1a, Queue drop".</p>
+    <p>Answer with a direction name, or question number plus option (1a), and one sentence, for example "Hearth, but warmer". Batched answers work: "1a, Queue drop".</p>
     <div class="reply-out" id="reply-out" aria-live="polite">Pick options above to compose a reply, or type your own.</div>
     <button type="button" id="copy-reply">Copy reply</button>
   </section>
@@ -291,7 +291,7 @@ footer{margin-top:56px;font-size:13px;color:var(--muted)}
     var parts = [];
     document.querySelectorAll("[data-section=question]").forEach(function (qq) {
       var c = qq.querySelector("input:checked");
-      if (c) parts.push(qq.getAttribute("data-n") + c.value);
+      if (c) parts.push(qq.hasAttribute("data-lists") ? c.parentNode.textContent.replace("Recommended", "").trim() : qq.getAttribute("data-n") + c.value);
     });
     document.querySelectorAll("fieldset[data-vote]").forEach(function (f) {
       var c = f.querySelector("input:checked");

@@ -6,6 +6,8 @@
   "author": {
     "name": "brand-creator contributors"
   },
+  "homepage": "https://github.com/jack1913/brand-creator",
+  "repository": "https://github.com/jack1913/brand-creator",
   "license": "MIT",
   "keywords": [
     "brand",
@@ -26,7 +28,7 @@
     "review_surface": {
       "type": "string",
       "title": "Where boards are reviewed",
-      "description": "auto uses an Artifact page (uploaded to claude.ai, private by default) when the tool exists in the session, otherwise a local file. artifact always uses an Artifact. local always opens a local file.",
+      "description": "auto asks once per project whether boards may be uploaded to claude.ai as a private Artifact page (only when the session has the Artifact tool) and uses a local file until you answer. artifact always uses an Artifact page. local always opens a local file.",
       "options": ["auto", "artifact", "local"],
       "default": "auto"
     }

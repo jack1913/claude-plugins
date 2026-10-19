@@ -8,7 +8,9 @@
     {
       "name": "brand-creator",
       "source": "./",
-      "description": "Gated, phased brand-identity process with boards, mark system, tokens and platform assets checked by real renderers."
+      "description": "Gated, phased brand-identity process with boards, mark system, tokens and platform assets checked by real renderers.",
+      "homepage": "https://github.com/jack1913/brand-creator",
+      "repository": "https://github.com/jack1913/brand-creator"
     }
   ]
 }

@@ -194,8 +194,44 @@ def test_platform_specs_rows_are_complete():
 
 # ---------------------------------------------------------------- social
 
-def test_social_images_have_the_spec_sizes_and_the_og_url_follows_the_bytes(acme):
+def _repo_files(p):
+    return sorted(f.name for f in (p / "assets/social").glob("*.png") if f.name.startswith(("github-social", "readme-header")))
+
+
+def test_social_skips_the_github_preview_and_readme_headers_when_no_repository_is_listed(acme):
+    """PF-1: a bakery has no GitHub page. The Open Graph card is written; the preview and README headers are skipped with an info row."""
     r = social(acme)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert list((acme / "assets/social").glob("og-*.png")) and _repo_files(acme) == []
+    rows = {x["id"]: x for x in report(acme, "emit-social")["results"]}
+    assert rows["note:repo-images"]["status"] == "info" and "no code repository is listed" in rows["note:repo-images"]["detail"]
+    assert not any(k.startswith("file:github") or k.startswith("file:readme") for k in rows)
+    assert "github-social" not in json.dumps(manifest(acme))
+
+
+@pytest.mark.parametrize("where,text", [
+    ("brief/BRIEF.md", "# Brief\n\n- Offer: a tool\n- Repository: https://github.com/example-org/example-tool\n"),
+    ("brief/BRIEF.md", "# Brief\n\n- Required surfaces: website, favicon set, README header.\n"),
+    ("INVENTORY.md", "# inventory\n\n## Targets read\n\n| repo | path | branch |\n|---|---|---|\n| tool-cli | ../tool-cli | main |\n"),
+])
+def test_social_writes_the_github_preview_and_readme_headers_when_a_repository_is_listed(acme, where, text):
+    f = acme / where
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(text)
+    assert social(acme).returncode == 0
+    assert _repo_files(acme) == ["github-social-1280x640.png", "readme-header-dark.png", "readme-header-light.png"]
+
+
+def test_social_ignores_the_template_placeholders_of_the_inventory_and_forced_no_wins(acme):
+    (acme / "INVENTORY.md").write_text("## Targets read\n\n| repo | path | branch or commit read | read on |\n|---|---|---|---|\n| (...) | (...) | (...) | YYYY-MM-DD |\n")
+    assert social(acme).returncode == 0 and _repo_files(acme) == []
+    (acme / "brief").mkdir(exist_ok=True)
+    (acme / "brief" / "BRIEF.md").write_text("- Repository: https://github.com/example-org/example-tool\n")
+    assert social(acme, "--repo-images", "no").returncode == 0 and _repo_files(acme) == []
+    assert social(acme).returncode == 0 and len(_repo_files(acme)) == 3
+
+def test_social_images_have_the_spec_sizes_and_the_og_url_follows_the_bytes(acme):
+    r = social(acme, "--repo-images", "yes")
     assert r.returncode == 0, r.stdout + r.stderr
     out = acme / "assets/social"
     og = specs.sizes("open-graph")

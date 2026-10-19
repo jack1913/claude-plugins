@@ -20,8 +20,9 @@ SKIP_DIRS = {".git", "node_modules", "__pycache__", ".pytest_cache", ".venv"}
 def shipped_files():
     for p in sorted(ROOT.rglob("*")):
         rel = p.relative_to(ROOT).parts
-        # evals/results/ is the eval runner's local output (gitignored, never shipped): it records the machine's own paths
-        if p.is_file() and not any(part in SKIP_DIRS for part in rel) and rel[:2] != ("evals", "results"):
+        # evals/results/ (the eval runner's local output) and dev/scratch/ (the author's working notes) are gitignored and
+        # never shipped; both hold the machine's own paths and private working material
+        if p.is_file() and not any(part in SKIP_DIRS for part in rel) and rel[:2] not in (("evals", "results"), ("dev", "scratch")):
             yield p
 
 
@@ -141,7 +142,7 @@ def test_plugin_json_matches_the_plan():
     assert d["name"] == "brand-creator" and d["displayName"] and d["description"]
     assert d["version"] == "0.1.0" and re.fullmatch(r"\d+\.\d+\.\d+", d["version"])
     assert d["author"] == {"name": "brand-creator contributors"} and d["license"] == "MIT" and d["keywords"]
-    assert "homepage" not in d  # a homepage must be a valid URL; none is published yet
+    assert d["homepage"] == d["repository"] == "https://github.com/jack1913/brand-creator"  # a homepage must parse as a URL
     uc = d["userConfig"]
     assert set(uc) == {"projects_root", "review_surface"}
     assert uc["projects_root"]["type"] == "directory" and uc["projects_root"].get("required") in (None, False)
@@ -156,6 +157,7 @@ def test_marketplace_json_has_one_entry_with_a_root_source():
     d = json.loads((ROOT / ".claude-plugin/marketplace.json").read_text())
     assert len(d["plugins"]) == 1 and d["plugins"][0]["source"] == "./" and d["plugins"][0]["name"] == "brand-creator"
     assert d["owner"]["name"] and d["name"]
+    assert d["plugins"][0]["homepage"] == d["plugins"][0]["repository"] == "https://github.com/jack1913/brand-creator"
 
 
 def test_license_and_notices():
@@ -222,8 +224,14 @@ def test_readme_states_the_minimum_claude_code_version_used_by_prereq():
     runtime_versions = [m.group(1) for r in runtime if "maintainers only" not in r and (m := re.search(r"\| (\d+\.\d+\.\d+) \|", r))]
     assert prereq.MIN_CLAUDE == max(runtime_versions, key=lambda v: tuple(map(int, v.split("."))))
     assert rows
-    for section in ("OS matrix", "first 10 minutes", "/brand-creator:setup", "marketplace add", "Bash(brand-creator *)", "TODO"):
+    for section in ("## Install", "## Platform support", "first 10 minutes", "/brand-creator:setup", "/brand-creator:new", "marketplace add",
+                    "/plugin install brand-creator@", "--plugin-dir", "Bash(brand-creator *)", "## Permissions", "## Troubleshooting", "## Costs",
+                    "## What it never does", "## Development"):
         assert section in readme, section
+    # a stranger reads the README: no build placeholders and no build-stage labels (the history is in dev/BUILD-LOG.md)
+    assert not re.search(r"TODO|\(stage \d|\bstages? \d", readme), "README carries a build placeholder or stage label"
+    market = json.loads((ROOT / ".claude-plugin/marketplace.json").read_text())["name"]
+    assert f"/plugin install brand-creator@{market}" in readme, "the install line names the marketplace of marketplace.json"
 
 
 def test_wording_never_calls_dtcg_a_w3c_standard():

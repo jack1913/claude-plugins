@@ -67,6 +67,41 @@ def require_tier(project: Path, tiers: tuple[str, ...], *, what: str) -> None:
                          f"With the owner's agreement raise it: brand-creator state --set tier={tiers[0]}")
 
 
+_REPO_URL = re.compile(r"https?://(?:www\.)?(?:github\.com|gitlab\.com|codeberg\.org|bitbucket\.org)/[\w.-]+/[\w.-]+", re.I)
+_REPO_SURFACE = re.compile(r"\b(readme|github|gitlab|repo|repository|repositories|social preview)\b", re.I)
+
+
+def lists_repository(project: Path) -> str | None:
+    """Why this project has a code repository (a reason, in words), or None. The GitHub social preview and the README headers
+    are for software projects: INVENTORY.md lists a repository row, or brief/BRIEF.md names a repository URL, a Repository
+    bullet with a value, or a README/GitHub surface among its required surfaces."""
+    inv = project / "INVENTORY.md"
+    if inv.is_file():
+        in_targets = False
+        for ln in inv.read_text(encoding="utf-8").splitlines():
+            if ln.startswith("## "):
+                in_targets = ln.lower().startswith("## targets")
+            elif in_targets and ln.startswith("|") and not re.match(r"^\|\s*(repo\b|-)", ln, re.I):
+                cell = ln.strip("|").split("|")[0].strip()
+                if cell and not cell.startswith("("):
+                    return f"INVENTORY.md lists the repository {cell!r}"
+    brief = project / "brief" / "BRIEF.md"
+    if brief.is_file():
+        text = brief.read_text(encoding="utf-8")
+        m = _REPO_URL.search(text)
+        if m:
+            return f"brief/BRIEF.md names the repository {m.group(0)}"
+        for ln in text.splitlines():
+            m = re.match(r"^\s*[-*]\s*(Repository|Repo|Required surfaces)\s*:\s*(.*)$", ln, re.I)
+            if not m or m.group(2).strip().startswith("("):
+                continue
+            if m.group(1).lower() != "required surfaces" and m.group(2).strip().lower().rstrip(".") not in ("none", "no", "n/a"):
+                return f"brief/BRIEF.md has a {m.group(1)} line"
+            if m.group(1).lower() == "required surfaces" and _REPO_SURFACE.search(m.group(2)):
+                return "brief/BRIEF.md lists a README or GitHub surface"
+    return None
+
+
 _NO_REGULATION = {"", "none", "no", "n/a", "na", "not regulated", "not applicable"}
 
 

@@ -17,8 +17,8 @@
 # Needs the plugin's bin/ on PATH (Claude Code does that) and BRAND_CREATOR_DATA or CLAUDE_PLUGIN_DATA set.
 # Option values live in the variables of block 2 (an environment variable of the same name overrides them), and reach each emitter
 # as separate, quoted arguments: a tagline or an exemption with spaces in it is one argument, here and in the idempotence run.
-# The stage-4 steps follow the CLI's own tiers: `emit print` (and the e-mail signature), `emit presskit` and `emit social --posts` are Standard and Full tier;
-# print is also opt-in (owner question 7): it runs only when PRINT_REGION is set. A value set for a step the tier does not allow stops the chain (exit 2)
+# The print, press-kit and post steps follow the CLI's own tiers: `emit print` (and the e-mail signature), `emit presskit` and `emit social --posts` are Standard and Full tier;
+# print is also opt-in (the owner decides): it runs only when PRINT_REGION is set. A value set for a step the tier does not allow stops the chain (exit 2)
 # instead of being ignored. The chain never writes or fills book/chapters/: no folder, no book step, and the log says so.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -40,7 +40,7 @@ TARGETS=(web social windows linux tray tauri wallet developer)
 [ "$(uname)" = Darwin ] && TARGETS+=(apple)     # apple is macOS only; on other systems list it in the release notes as "built on a Mac"
 [ "$("${BC[@]}" state --get tier)" = full ] && TARGETS+=(android chrome-ext msix)   # Tier B packs are Full tier only; delete the ones this brand does not ship to
 TIER="$("${BC[@]}" state --get tier)"
-case "$TIER" in standard|full) TARGETS+=(profiles) ;; esac   # the profile pack (avatar, banners, Instagram) is Standard and Full tier
+TARGETS+=(profiles)   # every tier: Quick writes the avatar only; Standard and Full add the banners and the Instagram images
 PRINT_REGION="${PRINT_REGION:-}"  # EU, US or JP: print stationery is opt-in with the owner (question 7); empty = not opted in, nothing is printed
 PRINT_ICC="${PRINT_ICC:-}"        # YOUR printer's CMYK profile (.icc): with it the PDFs are "PDF/X-4 candidate", without it "RGB proof, not print-ready"
 PRINT_BLEED="${PRINT_BLEED:-}"    # bleed in mm; empty = the region's default (printer-specific: ask your printer)
@@ -119,7 +119,7 @@ done <<< "$SOURCES"
 [ -f qa/states.json ] && "${BC[@]}" states-check
 "${BC[@]}" verify-idempotent "${cmds[@]}"
 # ---- block 4: the brand book and the press kit. They come after the gates because the book reads the downscale and idempotence reports (a book built before
-# them is stale the moment they are rewritten), and the kit holds book.pdf, so it follows the book (the book's file list leaves the kit out: stage 4b).
+# them is stale the moment they are rewritten), and the kit holds book.pdf, so it follows the book (the book's file list leaves the kit out).
 # The kit is deterministic (tested with `emit presskit` run twice); it is not in the idempotence run, which has to finish before the book is built.
 HAVE_BOOK=no
 if [ -d book/chapters ]; then

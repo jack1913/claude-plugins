@@ -48,6 +48,13 @@ mkdir -p "$SMOKE"
 "${BC[@]}" new acme --name Acme --tier quick --root "$SMOKE" >/dev/null
 P="$SMOKE/acme"
 expect_file "$P/BRAND-STATE.md"; expect_file "$P/FACTS.md"; expect_file "$P/brief/BRIEF.md"
+python3 - "$P/brief/BRIEF.md" <<'PY' || die "the brief of the Acme project could not name its README header"
+import re, sys
+t = open(sys.argv[1]).read()
+n = re.sub(r"^- Required surfaces:.*$", "- Required surfaces: website, favicon set, social card, README header.", t, count=1, flags=re.M)
+assert n != t, "no Required surfaces line to replace"
+open(sys.argv[1], "w").write(n)
+PY
 "${BC[@]}" state --project "$P" --record G0 "quick tier, generated mark" >/dev/null
 
 step "r1 round page (from templates/round-page.html), token sources and the mark"
@@ -352,7 +359,7 @@ set +e; "${BC[@]}" emit android --project "$TB" --content-dp 66 --out-dir assets
 [ ! -e "$TB/assets/android-square/res" ] || die "the failed safe-zone gate wrote files"
 ok "a full-bleed square mark at 66 dp fails the Android safe-zone gate (exit 1) and nothing is written"
 
-step "profiles (Standard and Full tier): circle-safe avatar, six platform images inside their safe areas, proof images; the gate on an overflowing name; the Quick tier is refused"
+step "profiles (Standard and Full tier): circle-safe avatar, six platform images inside their safe areas, proof images; the gate on an overflowing name; the Quick tier writes the avatar only"
 "${BC[@]}" emit profiles --project "$P" --tagline "a repair guide is in every box" >/dev/null || die "emit profiles failed"
 expect_size "$P/assets/profiles/avatar-400.png" 400 400; expect_size "$P/assets/profiles/avatar-800.png" 800 800
 expect_size "$P/assets/profiles/linkedin-banner-1584x396.png" 1584 396; expect_size "$P/assets/profiles/x-header-1500x500.png" 1500 500
@@ -398,9 +405,9 @@ set +e; "${BC[@]}" emit profiles --project "$PG" --name "WWWWWWWWWWWWWWWWWWWWWWW
 [ -z "$(ls "$PG"/assets/profiles-long/*.png 2>/dev/null)" ] && [ -s "$PG/assets/profiles-long/_proof/linkedin-banner.png" ] || die "the failed gate shipped an image, or left no proof image"
 ok "an overflowing name fails the safe-area gate (exit 1), nothing ships, the proof image shows where the ink went"
 "${BC[@]}" state --project "$PG" --set tier=quick >/dev/null
-set +e; "${BC[@]}" emit profiles --project "$PG" >/dev/null 2>"$SMOKE/profiles.err"; rc_pf=$?; set -e
-[ "$rc_pf" = 2 ] && grep -q "state --set tier=standard" "$SMOKE/profiles.err" || die "emit profiles in the Quick tier must exit 2 and name the way up (exit $rc_pf)"
-ok "emit profiles exits 2 in the Quick tier and says how to raise it"
+"${BC[@]}" emit profiles --project "$PG" --out-dir assets/profiles-quick >/dev/null || die "emit profiles in the Quick tier must write the avatar (exit 0)"
+[ "$(ls "$PG"/assets/profiles-quick/*.png | xargs -n1 basename | tr '\n' ' ')" = "avatar-400.png avatar-800.png " ] || die "emit profiles in the Quick tier must write the two avatars and no banner"
+ok "emit profiles in the Quick tier writes the circle-safe avatar (400, 800) and no banner"
 
 step "snapshot, verify-idempotent (emit chain twice), staleness record, specs-due"
 # qa/rules.json (the size bands) arrived after the first emit web: re-emit once so the favicon follows the band rule, then it must be stable

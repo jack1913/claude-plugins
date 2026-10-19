@@ -16,14 +16,15 @@ Thin wrapper: the process lives in the orchestrator skill and the intake phase f
    `brand-creator --data "${CLAUDE_PLUGIN_DATA}" state --project-auto`.
    If one is found, say so and ask whether to resume it or start a separate one next to it.
 3. Read what already exists (site, repo, logo files) before asking anything. Then run G0: one AskUserQuestion call
-   of at most 4 choice questions (tier, mark source, architecture only when a parent or siblings show, name only when
-   open), each with a "(Recommended)" option. The facts you could not find go in one plain-text message afterwards,
-   which also names the project folder (`./<slug>/` here) when the projects folder setting
-   (`${user_config.projects_root}`) is unset.
+   of at most 3 scope questions (tier, architecture only when a parent or siblings show, name only when open), each
+   with a "(Recommended)" option, plus the upload question only when boards could go to claude.ai (the orchestrator's
+   Review surface). The mark source is inferred and stated, not asked. The facts you could not find go in one
+   plain-text message afterwards, which also names the project folder (`./<slug>/` here) when the projects folder
+   setting (`${user_config.projects_root}`) is unset.
 4. Scaffold, using the slug given here (`$ARGUMENTS`) or, when it is empty or the name is still open, `brand-<yyyymmdd>`:
    `brand-creator --data "${CLAUDE_PLUGIN_DATA}" new <slug> --name "<Name>" --tier <tier> --root <folder>`
-5. Fill `brief/BRIEF.md` and `FACTS.md` from what you read and what the owner answered; set `mark_source`,
-   `architecture`, `language` and `incumbent` with `state --set`; record G0 with `state --record G0 "<decision>"`.
+5. Fill `brief/BRIEF.md` and `FACTS.md` from what you read and what the owner answered; set `mark_source`
+   (provisional until G2), `architecture`, `language`, `incumbent` and, when asked, `review_surface` with `state --set`; record G0 with `state --record G0 "<decision>"`.
 6. Reply with the response template: what was created (paths), the tier with expected rounds and session length,
    what comes next (research or round 1), still open.
 

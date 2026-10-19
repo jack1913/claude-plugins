@@ -48,7 +48,7 @@ quality gates (assets, motion, fonts)
   staleness               inputs.json: upstream sha256, plugin version and emitter code hashes; flags stale packs
   specs-due               platform-spec rows due for a recheck
 
-brand book (stage 4a)
+brand book
   book                    build book.html from tokens, manifest, BRAND-STATE, FACTS, reports and book/chapters/*.md (--init writes the
                           chapter skeletons, --verify compares a rebuild with the file); generated and existing marks only
   book-lint [book.html]   gate a book, generated or hand-authored: ids, anchors, network, words, status words, language parity, marks,
@@ -57,7 +57,7 @@ brand book (stage 4a)
   patch FILE              assert-counted replace in a hand-authored book (--old, --new, --count N); logs the edition in BRAND-STATE.md
   collapse                after a decision, move the losing variants and switchers out of the book sources and tokens into removed-<date>/
 
-adoption, adapters, launch (stage 4c)
+adoption, adapters, launch
   adoption survey|status  read product repositories (read only) for brand slots (old names and colours, icon files, metadata, README badges) into
                           adoption.json and ADOPTION.md: numbered rows, progress and pins kept apart, a "Kept, not counted" list, counts in sentences
   adapters                opt-in at G5: BRAND.md (Strategy, Voice, Visual, Governance) and DESIGN.md generated from the tokens, BRAND-STATE and FACTS;
@@ -90,7 +90,7 @@ names
   names <candidate>...    screen names: domains (RDAP, whois, DNS), npm, GitHub, Docker Hub, PyPI, crates.io, Homebrew; trademark links
                           (screening, not clearance; needs --yes after the owner agrees to send the names to the listed services)
 
-fleets (opt-in, stage 6)
+fleets (opt-in)
   fleet-plan <workflow>   dry-run an opt-in workflow (directions, review-panel, naming, adopt) with stub agents: the agent count,
                           the models that will actually run (session model as the ceiling, FORCE env), the size guideline and
                           a rough cost, before anything is launched; --check lints every workflow and agent file

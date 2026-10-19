@@ -16,7 +16,8 @@ Writes under assets/profiles/ (override with --out-dir) and records every file i
                                    A proof for you to look at: never shipped, not in the manifest, and written even when a gate fails so you can see why
 Gate: before anything is shipped, the ink of every image must lie inside its safe area (the circle for the avatar, the rectangle for a banner). A mark or a name
 that does not fit exits 1 and writes no image. Every size and safe area comes from platform-specs.json; every row here is status U, so each file carries the label
-"UNVERIFIED, recheck" until a person has read the platform's page and the row says so. Standard and Full tier. Needs gate G3 and `brand-creator setup` (Chromium
+"UNVERIFIED, recheck" until a person has read the platform's page and the row says so. Standard and Full tier write everything; the Quick tier
+writes the circle-safe avatars only (400 and 800), because every business that is on a network needs that one picture, and skips the banners (an info row says so). Needs gate G3 and `brand-creator setup` (Chromium
 renders the banners). Idempotent: a second run writes nothing.
 """
 import sys
@@ -27,7 +28,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "lib"))
 import svgtools  # noqa: E402
 from _color import parse_hex  # noqa: E402
-from _common import EXIT_FAIL, EXIT_USAGE, confine, fail, main_guard, plugin_root, write_bytes_if_changed  # noqa: E402
+from _common import EXIT_FAIL, EXIT_USAGE, confine, fail, main_guard, plugin_root, read_state, write_bytes_if_changed  # noqa: E402
 from _emit import fill_template, render_card  # noqa: E402
 from px_lib import from_png  # noqa: E402
 from pxio import png_color_type, png_size  # noqa: E402
@@ -126,7 +127,11 @@ def main() -> int:
     e.add_input(tpl_path)
     fg = e.colour("light", "color.text")
     muted, accent = e.modes["light"].get("color.muted", fg), e.modes["light"].get("color.accent", fg)
-    for fname, row_id in PROFILE_BANNERS.items():
+    quick = str(read_state(e.project).get("tier") or "") == "quick"
+    if quick:
+        rep.add("note:banners", "info", "no banners in the Quick tier", detail="the Quick tier writes the circle-safe avatar only; raise the tier with the owner's agreement "
+                                                                           "(brand-creator state --set tier=standard) for the LinkedIn, X, YouTube, Facebook and Instagram images")
+    for fname, row_id in ({} if quick else PROFILE_BANNERS).items():
         sz = e.sizes(row_id)
         w, h, s = sz["width"], sz["height"], sz["safe"]
         sw, sh = s["width"], s["height"]

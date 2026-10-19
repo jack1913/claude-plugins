@@ -20,6 +20,8 @@ Protects finished work inside a brand project, and nothing else:
   * A project folder that holds rounds/ or history/ cannot be deleted or moved, and neither can a folder that
     contains one (checked with a shallow glob: */BRAND-STATE.md and */*/BRAND-STATE.md), so `rm -rf <project>` and
     `rm -rf ~/brands` are caught, not only deletes inside history/.
+  * `git mv`, `git stash -u|-a|--include-untracked|--all`, `tar -x`, `unzip`, `7z x` and `ditto` into or out of those zones are
+    blocked like deletes and writes (the latest round stays writable).
   * `bash -c`, `sh -c`, `zsh -c` and `eval` strings are tokenised again and checked like any command. `xargs` with a
     deleter or `mv`, and `git clean`, `git restore`, `git reset --hard`, `git checkout -- <path>|.`, `git rm` are
     checked against the folder they run in (or their path arguments) as deletes, because rounds are not committed.
@@ -47,6 +49,7 @@ FILE_TOOLS = {"Write": "file_path", "Edit": "file_path", "MultiEdit": "file_path
 DELETERS = {"rm", "rmdir", "unlink", "shred", "srm", "trash", "trash-put"}
 COPIERS = {"cp", "install", "ln", "rsync", "scp"}
 WRAPPERS = {"sudo", "command", "builtin", "exec", "nohup", "time", "nice", "env", "stdbuf", "doas"}
+ARCHIVERS = {"tar", "gtar", "bsdtar", "unzip", "7z", "7za", "7zr", "ditto"}
 SHELLS = {"bash", "sh", "zsh", "dash", "ksh"}
 MAX_NESTING = 3
 ROUND_RE = re.compile(r"^r(\d+)$")
@@ -339,8 +342,9 @@ def shell_string(w: list[str]) -> str | None:
     return None
 
 
-def git_targets(w: list[str], cwd: Path) -> tuple[list[Path], str | None]:
-    """Paths a destructive git command can delete or overwrite, and the subcommand name (None when harmless)."""
+def git_targets(w: list[str], cwd: Path) -> tuple[list[tuple[Path, str]], str | None]:
+    """(path, op) pairs a destructive git command can delete, move or overwrite, and the subcommand name (None when
+    harmless). op is the check_target op: delete | move-from | write."""
     rest = list(w[1:])
     base = cwd
     while rest and rest[0].startswith("-"):
@@ -377,13 +381,100 @@ def git_targets(w: list[str], cwd: Path) -> tuple[list[Path], str | None]:
     elif sub == "rm":
         if "--cached" in flags:
             return [], None
+    elif sub == "mv":
+        paths = [x for x in paths if x != "--"]
+        if len(paths) < 2:
+            return [], None
+        out = [(p, "move-from") for x in paths[:-1] for p in expand(x, base)]
+        out += [(p, "write") for p in expand(paths[-1], base)]
+        return out, sub
+    elif sub == "stash":
+        # `git stash push -u` removes untracked (and with -a ignored) files from the working tree, like `git clean`.
+        word = next((a for a in args if not a.startswith("-")), "push")
+        if word not in ("push", "save"):
+            return [], None
+        if not any(a in ("--include-untracked", "--all") or re.match(r"^-[A-Za-z]*[ua]", a) for a in flags):
+            return [], None
+        paths = args[args.index("--") + 1:] if "--" in args else []
     else:
         return [], None
     paths = [x for x in paths if x != "--"]
-    out: list[Path] = []
+    out_p: list[Path] = []
     for x in paths:
-        out += expand(x, base)
-    return (out or [lenient_real(base)]), sub
+        out_p += expand(x, base)
+    return [(p, "delete") for p in (out_p or [lenient_real(base)])], sub
+
+
+def archive_writes(cmdname: str, w: list[str], cwd: Path) -> list[Path]:
+    """Directories (or archive files) that tar, unzip, 7z or ditto would write into. Listing and testing write nothing."""
+    rest = w[1:]
+    out: list[str] = []
+    if cmdname in ("tar", "gtar", "bsdtar"):
+        extract = create = False
+        dirs: list[str] = []
+        archive = None
+        k = 0
+        first = True
+        while k < len(rest):
+            a = rest[k]
+            k += 1
+            if a.startswith("--"):
+                name, _, val = a.partition("=")
+                if name in ("--extract", "--get"):
+                    extract = True
+                elif name == "--create":
+                    create = True
+                elif name == "--directory":
+                    if val:
+                        dirs.append(val)
+                    elif k < len(rest):
+                        dirs.append(rest[k]); k += 1
+                elif name == "--file":
+                    if val:
+                        archive = val
+                    elif k < len(rest):
+                        archive = rest[k]; k += 1
+            elif a.startswith("-") and len(a) > 1 or (first and re.match(r"^[A-Za-z]+$", a)):
+                cluster = a.lstrip("-")
+                for ch in cluster:
+                    if ch == "x":
+                        extract = True
+                    elif ch == "c":
+                        create = True
+                    elif ch in "fC" and k < len(rest):
+                        if ch == "f":
+                            archive = rest[k]
+                        else:
+                            dirs.append(rest[k])
+                        k += 1
+            first = False
+        if extract:
+            out = dirs or ["."]
+        elif create and archive and archive != "-":
+            out = [archive]
+    elif cmdname == "unzip":
+        if any(re.match(r"^-[A-Za-z]*[lztp]", a) for a in rest if a.startswith("-") and not a.startswith("-d")):
+            return []
+        out = ["."]
+        for k, a in enumerate(rest):
+            if a == "-d" and k + 1 < len(rest):
+                out = [rest[k + 1]]
+            elif a.startswith("-d") and len(a) > 2:
+                out = [a[2:]]
+    elif cmdname.startswith("7z"):
+        if rest and rest[0] in ("x", "e"):
+            out = ["."]
+            for a in rest[1:]:
+                if a.startswith("-o") and len(a) > 2:
+                    out = [a[2:]]
+    elif cmdname == "ditto":
+        pos = [a for a in rest if not a.startswith("-")]
+        if len(pos) >= 2:
+            out = [pos[-1]]
+    paths: list[Path] = []
+    for x in out:
+        paths += expand(x, cwd)
+    return paths
 
 
 def check_bash(command: str, cwd: Path, depth: int = 0) -> list[str]:
@@ -440,10 +531,19 @@ def check_bash(command: str, cwd: Path, depth: int = 0) -> list[str]:
             continue
         if cmdname == "git":
             targets, sub = git_targets(w, cwd)
-            for t in targets:
-                r = check_target(t, "delete")
+            to_removed = sub == "mv" and bool(targets) and is_removed_dest(targets[-1][0])
+            for t, op in targets:
+                r = check_target(t, op, to_removed=to_removed)
                 if r:
-                    reasons.append(r.replace("delete blocked", f"git {sub} blocked (it would delete or overwrite files)", 1))
+                    for old in ("delete blocked", "move blocked", "shell write blocked"):
+                        r = r.replace(old, f"git {sub} blocked (it would delete, move or overwrite files)", 1)
+                    reasons.append(r)
+            continue
+        if cmdname in ARCHIVERS:
+            for d in archive_writes(cmdname, w, cwd):
+                r = check_target(d, "write")
+                if r:
+                    reasons.append(r.replace("shell write blocked", f"{cmdname} extract blocked (it would overwrite files)", 1))
             continue
         if cmdname in DELETERS:
             for a in args:

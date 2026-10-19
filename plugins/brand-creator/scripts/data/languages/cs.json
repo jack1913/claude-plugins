@@ -9,7 +9,20 @@
   "rules": [
     {
       "id": "nbsp-single-letter",
-      "text": "Keep a single-letter preposition or conjunction (k, s, v, z, a, i, o, u) with the word after it: use a no-break space."
+      "text": "Keep a single-letter preposition or conjunction (k, s, v, z, a, i, o, u) with the word after it: use a no-break space.",
+      "check": {
+        "kind": "single-letter-nbsp",
+        "words": [
+          "k",
+          "s",
+          "v",
+          "z",
+          "a",
+          "i",
+          "o",
+          "u"
+        ]
+      }
     }
   ]
 }

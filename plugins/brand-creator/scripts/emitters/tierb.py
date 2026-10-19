@@ -2,7 +2,7 @@
 `check` runs over what they wrote.
 
 Not a command. `TierBEmit` is `Emit` plus two rules:
-  * a tier gate (exit 2 with the way up in any other tier): Full for the platform packs, Standard and Full for `profiles`;
+  * a tier gate (exit 2 with the way up in any other tier): Full for the platform packs, any tier for `profiles` (Quick writes the avatar only);
   * a file that serves a spec row of status U is labelled "UNVERIFIED, recheck" in its manifest note and in its report row: a size that
     nobody read at the platform's page never ships looking verified.
 `label_note()` is the same rule for the files of `emit apple` that belong to Tier B (they carry `labelled: true` in the manifest, so `check` holds them).
@@ -22,6 +22,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "lib"))
 import specs  # noqa: E402
+from _common import read_state  # noqa: E402
 from _emit import Emit, require_tier  # noqa: E402
 from manifest import load_artefacts  # noqa: E402
 from pxio import read_png  # noqa: E402
@@ -31,7 +32,7 @@ TIER_B = ("android", "chrome-ext", "msix", "profiles")
 PACKS = {"android": "the Android pack", "chrome-ext": "the Chrome extension pack", "msix": "the MSIX pack", "profiles": "the profile pack"}
 PROFILE_BANNERS = {"linkedin-banner": "profile-linkedin-banner", "x-header": "profile-x-banner", "youtube-banner": "profile-youtube-banner",
                    "facebook-cover": "profile-facebook-cover", "instagram-feed": "profile-instagram-feed", "instagram-story": "profile-instagram-story"}
-TIERS = {"profiles": ("standard", "full")}   # every other Tier B pack is Full tier only
+TIERS = {"profiles": ("quick", "standard", "full")}   # Quick writes the avatar only; every other Tier B pack is Full tier only
 DEFAULT_TIERS = ("full",)
 INK_ALPHA = 0x0E      # alpha at or above this counts as ink (below it is anti-aliasing noise)
 INK_TOLERANCE_PX = 1.0  # a rasterised edge may sit this far past a geometric limit
@@ -280,7 +281,8 @@ def profile_problems(project: Path, artefacts: list[dict]) -> list[str]:
     out = []
     by_path = {a["path"]: a for a in mine}
     want = [(f"avatar-{n}.png", f"avatar-{n}") for n in specs.sizes("profile-avatar")["px"]]
-    for fname, rid in PROFILE_BANNERS.items():
+    quick = str(read_state(project).get("tier") or "") == "quick"
+    for fname, rid in ({} if quick else PROFILE_BANNERS).items():
         sz = specs.sizes(rid)
         want.append((f"{fname}-{sz['width']}x{sz['height']}.png", fname))
     for name, label in want:

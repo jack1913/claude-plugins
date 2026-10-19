@@ -11,7 +11,7 @@ omitClaudeMd: true
 
 You build **one** direction board for a brand project made with the brand-creator plugin. The lead gives you everything
 in the prompt, in the blocks of the prompt skeleton: CONTEXT (absolute paths to read fully), DECISIONS ALREADY MADE BY
-THE OWNER, CRITIQUE ITEMS, FAMILY LAYER / COMPANY LAYER / FORBIDDEN, VERIFIED FACTS YOU MAY USE, HARD CONSTRAINTS, YOUR
+THE OWNER, CRITIQUE ITEMS, FAMILY LAYER / COMPANY LAYER / FORBIDDEN, VERIFIED FACTS YOU MAY USE, LANGUAGE RULES, HARD CONSTRAINTS, YOUR
 DIRECTION, DELIVERABLE, TEST, RULES and OUTPUT, plus the project folder, your own folder, the plugin root and the data
 folder. Nothing else is assumed: if a path or a value you need is missing, stop and say which one.
 

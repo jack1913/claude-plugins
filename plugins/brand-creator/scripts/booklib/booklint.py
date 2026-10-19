@@ -203,6 +203,7 @@ def lint(project: Path, text: str, *, path: str, view: dict, cfg: dict, tokens_d
         res += _file_rules(project, text, L)
         res += _legal_rules(visible, facts_rows)
         res += _parity_rules(text, view)
+        res += _language_rules(text, view)
         if self_consistency:
             res += _self_rules(text, cfg, tokens_doc)
     return res
@@ -519,6 +520,75 @@ def _legal_rules(visible: str, facts_rows: list[dict]) -> list[dict]:
         ok = bool(v) and v.casefold() in flat
         out.append(row(f"legal:{r['fact']}", "pass" if ok else "fail", "a required legal disclosure from FACTS.md appears verbatim",
                        f"{r['fact']}: " + ("shown" if ok else f"{v!r} is not in the book")))
+    return out
+
+
+LANG_DIR = Path(__file__).resolve().parent.parent / "data" / "languages"
+_NBSP_CHARS = "\u00a0\u202f"
+
+
+def _language_rule_files(codes: list[str]) -> dict[str, list[dict]]:
+    import json
+    out = {}
+    for c in codes:
+        f = LANG_DIR / f"{c}.json"
+        if f.is_file():
+            out[c] = [r for r in json.loads(f.read_text(encoding="utf-8")).get("rules", []) if isinstance(r.get("check"), dict)]
+    return out
+
+
+def _masked(text: str, keep: list[tuple[int, int]] | None) -> str:
+    """The text nodes of the book at their original offsets: tags, scripts, styles, svg, code and pre blocks, and (when `keep` is given)
+    everything outside the kept ranges become spaces, so a match offset is an offset in the file and the line number is real."""
+    blank = lambda m: re.sub(r"[^\n]", " ", m.group(0))  # noqa: E731
+    t = PROSE_DROP.sub(blank, text)
+    t = re.sub(r"<!--.*?-->", blank, t, flags=re.S)
+    t = re.sub(r"<[^>]*>", blank, t)
+    if keep is not None:
+        chars = list(re.sub(r"[^\n]", " ", t))
+        src = list(t)
+        for a, b in keep:
+            chars[a:b] = src[a:b]
+        t = "".join(chars)
+    return t
+
+
+def _lang_ranges(text: str, code: str) -> list[tuple[int, int]]:
+    out = []
+    for t in htmlscan.tags(text):
+        if t.closing or t.void or t.name in ("html", "body", "head") or t.attrs.get("lang", "").lower().split("-")[0] != code:
+            continue
+        out.append((t.start, htmlscan.element_end(text, t)))
+    return out
+
+
+def _language_rules(text: str, view: dict) -> list[dict]:
+    """The `check` of each rule in scripts/data/languages/<code>.json, run on the book text written in that language (a warning with line and
+    offset, never a failure: typography is advice). One content language: the whole book text. Several: the elements marked lang=<code>."""
+    langs = view.get("content_languages") or []
+    out = []
+    for code, rules in _language_rule_files(langs).items():
+        keep = None if len(langs) == 1 else _lang_ranges(text, code)
+        if keep is not None and not keep:
+            continue
+        body = _masked(text, keep)
+        for r in rules:
+            c = r["check"]
+            if c.get("kind") == "single-letter-nbsp":
+                words = "".join(re.escape(w) for w in c["words"])
+                pat = re.compile(rf"(?<![\w\u2019'-])([{words}{words.upper()}])[ \t]+(?=[^\W_])")
+                what = "a one-letter word is followed by an ordinary space (use a no-break space)"
+            elif c.get("kind") == "low-opening-quote":
+                pat = re.compile("[" + "".join(re.escape(x) for x in c["flag"]) + "]")
+                what = "a quotation mark that is not the language's own (open low, close high)"
+            else:
+                continue
+            hits = []
+            for m in pat.finditer(body):
+                line = body.count("\n", 0, m.start()) + 1
+                hits.append(f"line {line}, offset {m.start()}: {what}: \"{' '.join(_ctx(body, m, 24).split())}\"")
+            out.append(row(f"lang:{code}:{r['id']}", "warn" if hits else "pass", r["text"],
+                           "; ".join(hits[:4]) + (f"; {len(hits) - 4} more" if len(hits) > 4 else "") if hits else "no instance found"))
     return out
 
 

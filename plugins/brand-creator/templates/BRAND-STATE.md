@@ -6,11 +6,11 @@ plugin_version: {{plugin_version}}
 tier: {{tier}}                 # quick | standard | full (chosen at G0)
 phase: P0                      # P0 .. P13
 architecture: standalone       # standalone | family-member | product-in-family (inferred; ask only when the brief shows a parent or siblings)
-mark_source: generated         # generated | authored-vector | existing
+mark_source: generated         # generated | authored-vector | existing (inferred and stated at G0, not asked; settled from the picked direction at G2)
 language: en                   # language of the chat with the owner (brand content follows the audience's language)
 content_languages: ""          # language set code(s) the brand's own text is written in, e.g. pl or pl,en (read by fontcheck; set at G0)
 renderer: resvg                # off macOS, after the owner agrees: resvg (opted in YYYY-MM-DD)
-review_surface: auto           # auto | artifact | local
+review_surface: auto           # auto (not answered yet: boards stay local until the owner answers the one upload question) | artifact | local
 review_url: ""                 # the one stable review page (Artifact URL or local path)
 incumbent: none                # none, or one line about today's mark or site; a set value makes the "today" board section required
 inventory: ""                  # path to INVENTORY.md, or: none (no target repo). Required before the first board in the Full tier or product-in-family.
@@ -21,7 +21,7 @@ canonical_direction: ""        # the direction that is the visible baseline afte
 reset_rounds: []               # round numbers that follow a full rejection, e.g. [4] (the positioning map is required again)
 fixes_per_area: {}             # area: count. A third incremental fix in one area trips the G-sys stop.
 gates:                         # date + decision, written by: brand-creator state --record G3 "<decision>"
-  G0: ""                       # scope: tier, mark source, name language and status
+  G0: ""                       # scope: tier, name language and status; the mark source as stated
   G1: ""                       # name go
   G2: ""                       # direction pick
   G2b: ""                      # reset or recover decision (only when used)
