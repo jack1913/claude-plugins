@@ -1,12 +1,11 @@
 """The permissions block onboard-repo proposes: allow only forms that cannot lose work, change dependencies or alter a
 database; those go to ask (security review of the plugin's first commit)."""
-import importlib.util
+import sys
 from pathlib import Path
 
-LIB = Path(__file__).resolve().parents[1] / "plugins/batbelt/skills/onboard-repo/scripts/onboard_lib.py"
-spec = importlib.util.spec_from_file_location("onboard_lib", LIB)
-onboard_lib = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(onboard_lib)
+SCRIPTS = Path(__file__).resolve().parents[1] / "plugins/batbelt/skills/onboard-repo/scripts"
+sys.path.insert(0, str(SCRIPTS))   # onboard_lib imports its sibling check.py
+import onboard_lib  # noqa: E402
 
 ALL = ["js", "dotnet", "php", "python", "rust", "swift"]
 
