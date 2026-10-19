@@ -1479,6 +1479,29 @@ def test_check_docs_ungrounded_output_when_line_not_in_capture(tmp_path, capsys)
     assert rc == 1 and "UNGROUNDED_OUTPUT" in codes
 
 
+def test_check_docs_console_capture_with_output_only_is_verified(tmp_path, capsys):
+    # The documented convention puts the COMMAND in a bash fence and its OUTPUT alone in a
+    # `console capture=<slug>` fence. console is a shell language, and a shell fence with no `$`
+    # prompt reads as a bare command list -- so the capture tag was never read and a tampered
+    # capture passed (found in brainiac-pipeline, 2026-10-12). An explicit capture= tag is always
+    # verified, whatever the fence's language or shape.
+    cli = _load_cli()
+    _cap(tmp_path, "plan", "workspace: created x\n")
+    _seed(tmp_path, "docs/a.md", "# A\n\n```console capture=plan\nNOT WHAT THE TOOL SAID\n```\n")
+    caps = str(tmp_path / "docs" / ".onboard-captures")
+    rc, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--captures", caps])
+    assert rc == 1 and "UNGROUNDED_OUTPUT" in codes
+
+
+def test_check_docs_console_capture_grounded_passes(tmp_path, capsys):
+    cli = _load_cli()
+    _cap(tmp_path, "plan", "workspace: created x\nworkspace: shallow history\n")
+    _seed(tmp_path, "docs/a.md", "# A\n\n```console capture=plan\nworkspace: created x\n```\n")
+    caps = str(tmp_path / "docs" / ".onboard-captures")
+    rc, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--captures", caps])
+    assert rc == 0 and codes == []
+
+
 def test_check_docs_code_fence_exempt(tmp_path, capsys):
     cli = _load_cli()
     _seed(tmp_path, "docs/a.md", "# A\n\n```python\nprint('hi')\n```\n")

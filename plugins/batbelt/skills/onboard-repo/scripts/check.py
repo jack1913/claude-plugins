@@ -1163,12 +1163,18 @@ def _is_frozen_tier(relparts):
 def _check_grounding(f, text, captures_dir):
     findings = []
     for info, body, lineno in iter_fenced_blocks(text):
-        lang = _first_token_lang(info)
-        if lang in _CODE_LANGS:
-            continue
-        if not _is_output_shaped(body, shell_fenced=lang in _SHELL_LANGS):
-            continue
         tags, illustrative = _tags_of(info)
+        # An explicit capture= tag is verified whatever the fence's language or shape. The
+        # convention puts the command in a bash fence and the output ALONE in a `console
+        # capture=<slug>` fence; console is a shell language, and a prompt-less shell fence
+        # reads as a bare command list below -- so the tag was never read and a tampered
+        # capture passed the gate (found in brainiac-pipeline, 2026-10-12).
+        if "capture" not in tags:
+            lang = _first_token_lang(info)
+            if lang in _CODE_LANGS:
+                continue
+            if not _is_output_shaped(body, shell_fenced=lang in _SHELL_LANGS):
+                continue
         if "capture" in tags:
             slug = tags["capture"]
             if captures_dir is None:
