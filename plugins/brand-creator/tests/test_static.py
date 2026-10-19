@@ -153,11 +153,11 @@ def test_plugin_json_matches_the_plan():
         assert set(k) <= {"type", "title", "description", "required", "default", "options"}
 
 
-def test_marketplace_json_has_one_entry_with_a_root_source():
-    d = json.loads((ROOT / ".claude-plugin/marketplace.json").read_text())
-    assert len(d["plugins"]) == 1 and d["plugins"][0]["source"] == "./" and d["plugins"][0]["name"] == "brand-creator"
-    assert d["owner"]["name"] and d["name"]
-    assert d["plugins"][0]["homepage"] == d["plugins"][0]["repository"] == "https://github.com/jack1913/brand-creator"
+def test_the_plugin_is_listed_in_the_jack1913_marketplace_not_its_own():
+    """The repository holds the plugin only; it is listed in jack1913/claude-plugins (one catalogue for every plugin)."""
+    assert not (ROOT / ".claude-plugin/marketplace.json").exists()
+    d = json.loads((ROOT / ".claude-plugin/plugin.json").read_text())
+    assert d["homepage"] == d["repository"] == "https://github.com/jack1913/brand-creator"
 
 
 def test_license_and_notices():
@@ -230,8 +230,7 @@ def test_readme_states_the_minimum_claude_code_version_used_by_prereq():
         assert section in readme, section
     # a stranger reads the README: no build placeholders and no build-stage labels (the history is in dev/BUILD-LOG.md)
     assert not re.search(r"TODO|\(stage \d|\bstages? \d", readme), "README carries a build placeholder or stage label"
-    market = json.loads((ROOT / ".claude-plugin/marketplace.json").read_text())["name"]
-    assert f"/plugin install brand-creator@{market}" in readme, "the install line names the marketplace of marketplace.json"
+    assert "/plugin marketplace add jack1913/claude-plugins" in readme and "/plugin install brand-creator@jack1913" in readme
 
 
 def test_wording_never_calls_dtcg_a_w3c_standard():

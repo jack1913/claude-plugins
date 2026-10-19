@@ -15,11 +15,12 @@ Version 0.1.0. macOS is fully supported, Linux has been verified in a container,
 Inside Claude Code:
 
 ```text
-/plugin marketplace add jack1913/brand-creator
-/plugin install brand-creator@brand-creator
+/plugin marketplace add jack1913/claude-plugins
+/plugin install brand-creator@jack1913
 ```
 
-Or from a shell: `claude plugin marketplace add jack1913/brand-creator`, then `claude plugin install brand-creator@brand-creator`.
+Or from a shell: `claude plugin marketplace add jack1913/claude-plugins`, then `claude plugin install brand-creator@jack1913`.
+The plugin is listed in the [jack1913 marketplace](https://github.com/jack1913/claude-plugins); this repository holds the plugin only.
 Restart Claude Code (or run `/reload-plugins`) afterwards.
 
 To work on the plugin itself, load a local checkout for one session instead: `claude --plugin-dir /path/to/brand-creator`.
@@ -121,8 +122,8 @@ approval prompt on later turns, add this rule to your own settings. It matches t
 `claude plugin eval` runs), the skills call the same file by its full path, `"${CLAUDE_PLUGIN_ROOT}/bin/brand-creator" ...`,
 for the rest of the session. The rule above does not match that form, so each call prompts. Answer the first prompt with
 "Yes, and don't ask again", or add a rule with your install's real path, which for a marketplace install is
-`~/.claude/plugins/cache/brand-creator/brand-creator/<version>/bin/brand-creator` and changes with every version, for example
-`Bash(<your home>/.claude/plugins/cache/brand-creator/brand-creator/0.1.0/bin/brand-creator *)` with your home folder written out. Whether a hand-written rule
+`~/.claude/plugins/cache/jack1913/brand-creator/<version>/bin/brand-creator` and changes with every version, for example
+`Bash(<your home>/.claude/plugins/cache/jack1913/brand-creator/0.1.0/bin/brand-creator *)` with your home folder written out. Whether a hand-written rule
 matches the quoted path has not been checked in a real session; the prompt's own "don't ask again" answer always writes the
 form that matches. Avoid a rule that starts with a wildcard (such as `*/bin/brand-creator *`): it approves any program of that
 name anywhere.

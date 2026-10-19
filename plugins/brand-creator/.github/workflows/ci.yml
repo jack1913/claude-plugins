@@ -5,7 +5,7 @@
 #             smoke on the paths that apply off macOS. The macOS-only tests are NOT VERIFIED there by design; tests/docker/verify_log.py
 #             accepts exactly those and fails on any other skip.
 #   validate  `claude plugin validate --strict` through the Claude Code CLI installed from npm. On the pinned CLI (2.1.302) it checks the
-#             plugin and marketplace manifests only: a skill with broken YAML frontmatter or an unknown key in hooks.json still passes it.
+#             plugin manifest only: a skill with broken YAML frontmatter or an unknown key in hooks.json still passes it.
 #             The skill and agent frontmatter and hooks.json are checked by the repository's own tests (tests/test_skills.py,
 #             tests/test_agents_workflows.py, tests/test_guard.py), which run in the linux job. This job also runs the test that mutates
 #             plugin.json and expects the validator to catch it. If the CLI cannot be installed or started (no registry access), the job

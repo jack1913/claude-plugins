@@ -3,7 +3,6 @@
 Regressions found by the Quick-tier smoke: prereq asked the renderer question twice off macOS and never on a Mac whose PATH lacks sips; prereq
 called a broken npm OK; and a refused `emit print` / `emit presskit` left a failing report for a run that never started."""
 import os
-import platform
 import shutil
 import stat
 import subprocess
@@ -55,9 +54,8 @@ def test_prereq_without_sips_asks_the_renderer_question_exactly_once(tmp_path):
         assert out.count(QUESTION) <= 1, out
 
 
+@pytest.mark.requires_macos   # sips ships with macOS; the conftest marker gives the skip the reason the Linux verifier expects
 def test_prereq_with_a_system_downscaler_does_not_ask(tmp_path):
-    if platform.system() != "Darwin" or not shutil.which("sips"):
-        pytest.skip("needs sips on this machine")
     env = shim_path(tmp_path, BASE + ["sips"], {"claude": "echo '2.1.302 (Claude Code)'", "npm": FAKE_NPM})
     out = prereq(["--for", "quick"], env).stdout
     assert "OK       sips" in out and QUESTION not in out, out
