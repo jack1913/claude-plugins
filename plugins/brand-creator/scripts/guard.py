@@ -417,7 +417,8 @@ def git_targets(w: list[str], cwd: Path) -> tuple[list[tuple[Path, str]], str | 
         word, opts = ("push", args) if not args or args[0].startswith("-") else (args[0], args[1:])
         if word not in ("push", "save"):
             return [], None
-        untracked, pathspec, k, after = False, [], 0, False
+        untracked, pathspec, k, after, whole = False, [], 0, False, False
+        known = ("--keep-index", "--no-keep-index", "--patch", "--staged", "--quiet")
         while k < len(opts):
             a = opts[k]
             k += 1
@@ -425,13 +426,18 @@ def git_targets(w: list[str], cwd: Path) -> tuple[list[tuple[Path, str]], str | 
                 pathspec.append(a)
             elif a == "--":
                 after = True
-            elif a in ("-m", "--message"):
+            elif a == "-m":
                 k += 1
             elif a.startswith("--"):
-                name = a.split("=", 1)[0]
-                if (len(name) >= 3 and ("--include-untracked".startswith(name) or "--all".startswith(name))) \
-                        or name.startswith("--pathspec"):  # paths the guard cannot read: treat as the whole tree
+                name, eq, _ = a.partition("=")
+                if len(name) >= 4 and "--message".startswith(name):
+                    k += 0 if eq else 1  # --mes wip: the next word is the message, not a path
+                elif len(name) >= 3 and ("--include-untracked".startswith(name) or "--all".startswith(name)):
                     untracked = True
+                elif name.startswith("--pathspec"):  # paths the guard cannot read
+                    untracked = whole = True
+                elif not any(len(name) >= 4 and o.startswith(name) for o in known):
+                    whole = True  # an option the guard does not know may take the next word: fail closed
             elif a.startswith("-"):
                 untracked = untracked or bool(re.match(r"^-[A-Za-z]*[ua]", a))
                 if re.match(r"^-[A-Za-z]*m$", a):
@@ -442,7 +448,7 @@ def git_targets(w: list[str], cwd: Path) -> tuple[list[tuple[Path, str]], str | 
             return [], None
         # pathspec magic (`:/`, `:(top)history`, `:!x`) and globs git expands itself reach beyond the words the guard can
         # resolve: treat them, like no pathspec at all, as the whole working tree
-        paths = [] if any(p.startswith(":") or any(c in p for c in "*?[") for p in pathspec) else pathspec
+        paths = [] if whole or any(p.startswith(":") or any(c in p for c in "*?[") for p in pathspec) else pathspec
         if not paths:
             base = repo_top(base)
     else:
@@ -523,7 +529,9 @@ def archive_writes(cmdname: str, w: list[str], cwd: Path) -> list[Path]:
                 continue
             cluster = a[1:]
             head, d, tail = cluster.partition("d")
-            if re.search(r"[ltzpvZ]", head):
+            # list/test/print only when the letters are plain: unzip reads a '-' inside a cluster as negation (-l-), and a
+            # long option is not one of these letters, so either keeps the destination check (fail closed)
+            if re.search(r"[ltzpvZ]", head) and "-" not in cluster:
                 return []
             if d:
                 if tail:
@@ -532,11 +540,12 @@ def archive_writes(cmdname: str, w: list[str], cwd: Path) -> list[Path]:
                     out = [rest[k]]; k += 1
     elif cmdname.startswith("7z"):
         # the command letter is the first word that is not a switch (7z -y x a.7z is the same as 7z x -y a.7z)
+        # 7z commands and switches are case-insensitive (X, -O)
         words = [a for a in rest if not a.startswith("-")]
-        if words and words[0] in ("x", "e"):
+        if words and words[0].lower() in ("x", "e"):
             out = ["."]
             for a in rest:
-                if a.startswith("-o") and len(a) > 2:
+                if a.lower().startswith("-o") and len(a) > 2:
                     out = [a[2:]]
     elif cmdname == "ditto":
         pos = [a for a in rest if not a.startswith("-")]

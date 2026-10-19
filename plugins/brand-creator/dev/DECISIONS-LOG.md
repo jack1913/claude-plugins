@@ -1398,3 +1398,8 @@ run's shell sees. Findings and decisions:
     that is allowed now. The guard is a safety net against an agent's mistakes, not a sandbox: an interpreter one-liner can still
     write anywhere, which is why the RULES line stays in every prompt. Tests: 28 new cases in tests/test_guard.py, 17 of which fail on
     the previous guard.
+
+958. **Second security-review pass on the guard (957).** unzip reads a `-` inside an option cluster as negation (`-l-`), so list-only mode
+    is assumed only for plain letter clusters; `git stash push` consumes the next word for an abbreviated `--message` (`--mes`), and any
+    long option the guard does not know makes the scope the whole working tree (an unknown option may take a value); 7z command letters and
+    `-o` are matched case-insensitively (`X`, `-O`). Six more cases in tests/test_guard.py, all failing on the previous guard.

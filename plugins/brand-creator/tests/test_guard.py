@@ -353,6 +353,12 @@ SECREV_BLOCKED = [
     ("git stash push --al", "p1"),
     ("git stash push -u --pathspec-from-file=list.txt", "p1"),
     ("git stash push -m wip -u history", "p1"),
+    ("unzip -l- -o /tmp/a.zip", "p1"),                   # '-' inside a cluster negates: not list mode
+    ("unzip -o /tmp/a.zip -d history -l-", "p1"),
+    ("git stash push --mes tools -u", "p1"),             # --mes takes 'tools' as the message: no pathspec, whole tree
+    ("git stash push -u --frobnicate tools", "p1"),      # an unknown option: fail closed to the whole tree
+    ("7z X /tmp/a.7z -Ohistory", "p1"),                  # case-insensitive command and switch
+    ("7z E /tmp/a.7z", "p1/history"),
 ]
 
 
