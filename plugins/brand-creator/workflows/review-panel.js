@@ -1,7 +1,7 @@
 export const meta = {
   name: 'review-panel',
-  description: 'brand-creator lens panel: one read-only reviewer per lens (design, content, technical; legal, platform, accessibility when they apply), then one judge that challenges and sorts the findings',
-  whenToUse: 'Only from /brand-creator:review panel after the fleet gate was stated and the owner said yes. Read only; ends with one approvable list.',
+  description: 'brand-creator review panel: one read-only reviewer per lens (design, content, technical, plus legal, platform and accessibility when they apply), then one judge that challenges and sorts the findings',
+  whenToUse: 'Only from /brand-creator:review panel, after the agent count, models, size and cost were shown and the owner said yes. Read only; ends with one list to approve.',
   phases: [
     { title: 'Lenses', detail: 'one reviewer per lens; they run check commands and never edit' },
     { title: 'Judge', detail: 'challenges every finding; A before launch, B soon, C optional, owner-only decisions' },

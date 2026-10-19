@@ -1,7 +1,7 @@
 export const meta = {
   name: 'adopt',
-  description: 'brand-creator adoption after G6: per repository one implementer on the owner-named branch, then an independent reviewer (cmp against the pack, the repository\'s own build and tests); never commits',
-  whenToUse: 'Only from /brand-creator:brand-adopt after the owner asked for the apply (G6 recorded) and said yes to the fleet. Ends before any commit.',
+  description: 'brand-creator adoption: applies an approved brand to the owner\'s product repositories, only after the owner explicitly asks. One implementer per repository on a branch the owner names, then an independent review (pack files compared byte for byte, the repository\'s own build and tests); never commits',
+  whenToUse: 'Only from /brand-creator:brand-adopt, after the owner explicitly asked to apply the brand (the ask recorded in BRAND-STATE.md) and said yes to the agent count, models, size and cost. Ends before any commit.',
   phases: [
     { title: 'Apply', detail: 'one implementer per repository, on the branch the owner named' },
     { title: 'Review', detail: 'one independent reviewer per repository; reports, never edits' },

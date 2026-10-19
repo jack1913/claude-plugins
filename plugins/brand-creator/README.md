@@ -7,7 +7,7 @@ You describe what you need. Claude shows you three different directions on one p
 and checks it: it renders the logo at real sizes and measures colour contrast. You decide on taste; Claude does the
 legwork.
 
-Version 0.2.0 · macOS: full support · Linux: tested in a container · Windows: untested ([details](#platform-support))
+Version 0.2.1 · macOS: full support · Linux: tested in a container · Windows: untested ([details](#platform-support))
 
 ## Install
 
@@ -125,7 +125,7 @@ found`), and the skills call it by its full path, which the rule above doesn't m
 
 - **Easiest:** answer the first prompt with "Yes, and don't ask again". That always saves a rule that matches.
 - **By hand:** write a rule with your install's real path and your home folder written out, for example
-  `Bash(<your home>/.claude/plugins/cache/jack1913/brand-creator/0.2.0/bin/brand-creator *)`. The version in the path
+  `Bash(<your home>/.claude/plugins/cache/jack1913/brand-creator/0.2.1/bin/brand-creator *)`. The version in the path
   changes with every release, and whether a hand-written rule matches has not been checked in a real session.
 - **Never** start the rule with a wildcard (like `*/bin/brand-creator *`): it would approve any program with that name.
 

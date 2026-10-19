@@ -4,6 +4,14 @@ All notable changes are listed here. The plugin version in `.claude-plugin/plugi
 (this keeps `claude plugin validate --strict` and update detection predictable). How 0.1.0 was built, stage by stage, is in
 `dev/BUILD-LOG.md`; the reasons behind its choices are in `dev/DECISIONS-LOG.md`.
 
+## 0.2.1 - 2026-10-19
+
+### Changed
+
+- The descriptions in Claude Code's `/` menu, skill list and agent list now say in plain words what each command, workflow
+  and agent does and when it may run, instead of internal gate codes such as "G0" or "after G6". What each one does, and
+  when it is allowed to run, is unchanged.
+
 ## 0.2.0 - 2026-10-19
 
 **Breaking:** brand-creator is now listed in the `jack1913` marketplace, in `plugins/brand-creator/` of

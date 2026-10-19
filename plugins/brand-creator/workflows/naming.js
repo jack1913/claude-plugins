@@ -1,7 +1,7 @@
 export const meta = {
   name: 'naming',
-  description: 'brand-creator naming fan-out: name hunters by style, one screener (internal filter, then the name checker offline with --plan unless the owner agreed to lookups), one judge drafting the go / go-with-conditions / no verdicts',
-  whenToUse: 'Only from the brand-naming skill after the fleet gate was stated and the owner said yes. Screening, not clearance; ends before G1.',
+  description: 'brand-creator naming: name hunters by style, one screener (offline unless the owner agreed to online lookups), and one judge drafting a go / go-with-conditions / no verdict per shortlisted name',
+  whenToUse: 'Only from the brand-naming skill, after the agent count, models, size and cost were shown and the owner said yes. Screening, not clearance; ends before the name is chosen.',
   phases: [
     { title: 'Generate', detail: 'name hunters, each with its own styles, from the same territories' },
     { title: 'Screen', detail: 'internal filter and the name checker (--plan unless lookups were OK\'d)' },

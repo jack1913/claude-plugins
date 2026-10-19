@@ -1,6 +1,6 @@
 ---
 name: new
-description: Starts a new brand project. Runs the brand-creator intake (G0 scope questions) and scaffolds BRAND-STATE.md, FACTS.md, DECISIONS.md and brief/BRIEF.md.
+description: Starts a new brand project. Asks up to three quick scope questions (how far to go, whether it belongs to a brand family, the name if it is open) and creates the project files BRAND-STATE.md, FACTS.md, DECISIONS.md and brief/BRIEF.md.
 argument-hint: "[slug]"
 disable-model-invocation: true
 allowed-tools: Bash(brand-creator *)

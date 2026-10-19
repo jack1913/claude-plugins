@@ -1,6 +1,6 @@
 ---
 name: review
-description: Runs the self-review of the current brand project's latest work (the round board, the book or the packs) against its own rules and checks, and presents the findings as one approvable list. Offers an optional lens panel (design, content, technical and, when they apply, legal, platform and accessibility) behind the fleet gate.
+description: Runs the self-review of the current brand project's latest work (the round board, the book or the packs) against its own rules and checks, and presents the findings as one approvable list. Offers an optional review panel (design, content, technical and, when they apply, legal, platform and accessibility), run in this session by default, or by subagents only after the owner is shown the agent count, models, size and cost and says yes.
 argument-hint: "[board|book|pack|all] [panel]"
 disable-model-invocation: true
 allowed-tools: Bash(brand-creator *)

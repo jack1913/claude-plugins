@@ -1,11 +1,11 @@
 export const meta = {
   name: 'directions',
-  description: 'brand-creator round of divergent direction boards: optional read-only inventory, one designer per direction in its own folder, one advisory judge',
-  whenToUse: 'Only from the brand-creator skill after the fleet gate (agent count, models, size, cost) was stated and the owner said yes. Ends before G2.',
+  description: 'brand-creator direction boards: an optional read-only look at the owner\'s product repositories first, then one designer per direction, each in its own folder, and one judge that advises',
+  whenToUse: 'Only from the brand-creator skill, after the agent count, models, size and cost were shown and the owner said yes. Ends before a direction is picked.',
   phases: [
     { title: 'Inventory', detail: 'optional: one read-only surveyor of the target repositories (inventory: true)' },
     { title: 'Design', detail: 'one designer per direction, each writing only rounds/rN/<direction>/' },
-    { title: 'Judge', detail: 'one read-only comparative judge; advisory, the owner decides at G2' },
+    { title: 'Judge', detail: 'one read-only comparative judge; advisory, the owner picks the direction' },
   ],
 }
 
