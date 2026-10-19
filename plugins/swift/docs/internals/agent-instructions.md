@@ -6,7 +6,7 @@ How this repo organizes instructions for coding agents, and why.
 
 | File | Loads | Contains |
 | --- | --- | --- |
-| `CLAUDE.md` | every session | Thin bridge: `@AGENTS.md` import, plus anything Claude-specific |
+| `.claude/CLAUDE.md` | every session | Thin bridge: `@../AGENTS.md` import, plus anything Claude-specific. It lives in `.claude/` because a `CLAUDE.md` at the plugin root makes `claude plugin validate --strict` fail |
 | `AGENTS.md` | every session (via the import) | Single source of truth; pointer index to every doc, rule and skill |
 | `.claude/rules/*.md` | only when a matching file is **read** | Path-scoped constraints |
 | `.claude/skills/*/SKILL.md` | description every request; body only when invoked | Procedures and reference packs |

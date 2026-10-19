@@ -7,7 +7,7 @@ Component inventory
   Skills (5)  concurrency, design, review, swiftui, testing
 ```
 
-That is `claude --plugin-dir plugins/swift plugin details swift`, run from the repo root.
+That is `claude --plugin-dir . plugin details swift`, run from the plugin folder (`plugins/swift/` in the monorepo checkout).
 
 ## Install it into one repo
 
@@ -22,12 +22,12 @@ Always pass `--scope`. Both commands default to user scope, which loads the plug
 
 | Scope | Writes | Who gets the plugin |
 | --- | --- | --- |
-| `--scope project` | the repo's committed `.claude/settings.json` | everyone who clones the repo and can read `jack1913/claude-plugins` and `jack1913/swift-plugin` |
+| `--scope project` | the repo's committed `.claude/settings.json` | everyone who clones the repo |
 | `--scope local` | the gitignored `.claude/settings.local.json` | only you, only this checkout |
 
-The plugin loads only where `enabledPlugins` lists it. The marketplace (`jack1913/claude-plugins`) and the plugin repo (`jack1913/swift-plugin`) are private GitHub repos, so `marketplace add` and the install use your existing git and `gh` credentials.
+The plugin loads only where `enabledPlugins` lists it. The marketplace and the plugin are both in the public GitHub repo `jack1913/claude-plugins`.
 
-If `marketplace add` fails — no read access to `jack1913/claude-plugins` or `jack1913/swift-plugin`, or `gh` isn't authenticated — fall back to loading straight from a checkout: [`claude --plugin-dir`](../work-on-it.md#try-a-change).
+If `marketplace add` fails — for example `git` can't reach GitHub — fall back to loading straight from a checkout: [`claude --plugin-dir`](../work-on-it.md#try-a-change).
 
 ## Pick up a new release
 
@@ -38,11 +38,11 @@ claude plugin marketplace update jack1913
 claude plugin update swift@jack1913
 ```
 
-Then start a new session or run `/reload-plugins`; the update needs a restart to apply (`claude plugin update --help`). An update only arrives when a release raised `version` in `plugins/swift/.claude-plugin/plugin.json`, because Claude Code keys updates on the version ([Plugins reference: version management](https://code.claude.com/docs/en/plugins-reference)). See [Release](../work-on-it.md#release).
+Then start a new session or run `/reload-plugins`; the update needs a restart to apply (`claude plugin update --help`). An update only arrives when a release raised `version` in `.claude-plugin/plugin.json`, because Claude Code keys updates on the version ([Plugins reference: version management](https://code.claude.com/docs/en/plugins-reference)). See [Release](../work-on-it.md#release).
 
 ## Move an install to the jack1913 marketplace
 
-The plugin used to be listed in a marketplace hosted in this repo: `swift-plugin` until 0.2.0, then `jack1913-plugins`. Both are gone. The plugin is now listed in `jack1913`, the marketplace in the repo `jack1913/claude-plugins` ([ADR-0014](../../adr/ADR-0014-catalogue-moves-to-claude-plugins.md)). The marketplace name is part of the plugin's ID, and Claude Code's `renames` map covers plugin names only, not marketplace names. So an older install, `swift@swift-plugin` or `swift@jack1913-plugins`, moves by hand.
+The plugin used to be listed in a marketplace hosted in its own repo, `jack1913/swift-plugin`: `swift-plugin` until 0.2.0, then `jack1913-plugins`. Both are gone. The plugin is now listed in `jack1913`, the marketplace in the repo `jack1913/claude-plugins`, which now also holds the plugin ([ADR-0014](../../adr/ADR-0014-catalogue-moves-to-claude-plugins.md), [ADR-0015](../../adr/ADR-0015-plugin-moves-into-the-claude-plugins-monorepo.md)). The marketplace name is part of the plugin's ID, and Claude Code's `renames` map covers plugin names only, not marketplace names. So an older install, `swift@swift-plugin` or `swift@jack1913-plugins`, moves by hand.
 
 In the first repo you move, run, with the old marketplace's name in place of `<old>` (`swift-plugin` or `jack1913-plugins`):
 
@@ -64,7 +64,7 @@ Commit each repo's settings change, so everyone who clones it gets the new ID.
 
 ## What each skill covers
 
-From `plugins/swift/skills/swiftui/SKILL.md`, `plugins/swift/skills/design/SKILL.md`, `plugins/swift/skills/concurrency/SKILL.md`, `plugins/swift/skills/testing/SKILL.md` and `plugins/swift/skills/review/SKILL.md`:
+From `skills/swiftui/SKILL.md`, `skills/design/SKILL.md`, `skills/concurrency/SKILL.md`, `skills/testing/SKILL.md` and `skills/review/SKILL.md`:
 
 | Skill | Covers |
 | --- | --- |

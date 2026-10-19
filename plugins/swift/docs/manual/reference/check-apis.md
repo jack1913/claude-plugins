@@ -21,7 +21,7 @@ options:
   --table-file TABLE_FILE
 ```
 
-The defaults are `maintenance/apis.json`, `maintenance/.cache/` (gitignored), `plugins/swift/skills/` and `plugins/swift/skills/swiftui/references/platform-availability.md` (`parse_args` in `maintenance/apicheck/cli.py`).
+The defaults are `maintenance/apis.json`, `maintenance/.cache/` (gitignored), `skills/` and `skills/swiftui/references/platform-availability.md` (`parse_args` in `maintenance/apicheck/cli.py`).
 
 ## Find the doc path for a name
 

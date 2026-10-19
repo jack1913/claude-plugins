@@ -1,8 +1,8 @@
-# swift-plugin
+# swift plugin
 
 The `swift` plugin gives Claude Code five skills for writing correct, current, Apple-native Swift: SwiftUI, Apple design, Swift 6 concurrency, Swift Testing, and an on-demand Human Interface Guidelines review.
 
-[Changelog](CHANGELOG.md) (current version and every release) · [Manual](docs/manual/README.md) · Marketplace `jack1913` ([jack1913/claude-plugins](https://github.com/jack1913/claude-plugins)) · Private
+[Changelog](CHANGELOG.md) (current version and every release) · [Manual](docs/manual/README.md) · Marketplace `jack1913` ([jack1913/claude-plugins](https://github.com/jack1913/claude-plugins), folder `plugins/swift`)
 
 - [Requirements](#requirements)
 - [Enable it in a Swift repo](#enable-it-in-a-swift-repo)
@@ -15,7 +15,6 @@ The `swift` plugin gives Claude Code five skills for writing correct, current, A
 ## Requirements
 
 - Claude Code. The runs in the manual used 2.1.283.
-- Read access to the private repos `jack1913/claude-plugins` (the marketplace) and `jack1913/swift-plugin` (the plugin), through your git or `gh` credentials.
 - A Swift package or Xcode project to use it in.
 
 ## Enable it in a Swift repo
@@ -27,7 +26,7 @@ claude plugin marketplace add jack1913/claude-plugins --scope project
 claude plugin install swift@jack1913 --scope project
 ```
 
-A repo without these entries never sees the plugin. Before 0.3.0 the marketplace was `jack1913-plugins` (and before 0.2.0 `swift-plugin`), hosted in this repo. To move an older install, see [the manual](docs/manual/getting-started/enable-in-a-swift-repo.md#move-an-install-to-the-jack1913-marketplace).
+A repo without these entries never sees the plugin. Before 0.3.0 the marketplace was `jack1913-plugins` (and before 0.2.0 `swift-plugin`), hosted in the former repo `jack1913/swift-plugin`. To move an older install, see [the manual](docs/manual/getting-started/enable-in-a-swift-repo.md#move-an-install-to-the-jack1913-marketplace).
 
 ## Usage
 
@@ -83,7 +82,7 @@ Nine eval cases check the skills' behaviour, and `project-rule-over-skill` is th
 
 ## Versioning
 
-- SemVer. The version lives only in `plugins/swift/.claude-plugin/plugin.json` ([ADR-0003](docs/adr/ADR-0003-explicit-semver-one-version-home.md)), and each release is tagged `swift--v<version>`.
+- SemVer. The version lives only in `.claude-plugin/plugin.json` ([ADR-0003](docs/adr/ADR-0003-explicit-semver-one-version-home.md)), and each release is tagged `swift--v<version>`.
 - Before 1.0, a breaking change bumps the minor version (0.2.0 and 0.3.0 changed the marketplace and so the install ID), and anything else bumps the patch.
 - Installs are copies, so a repo picks up a release with `claude plugin marketplace update jack1913` and `claude plugin update swift@jack1913`, then a new session.
 - Every release is listed in the [Changelog](CHANGELOG.md).
@@ -92,15 +91,15 @@ Nine eval cases check the skills' behaviour, and `project-rule-over-skill` is th
 
 | Task | Command |
 |---|---|
-| Try a change | `claude --plugin-dir ~/Dev/claude_skills/swift-plugin/plugins/swift` |
+| Try a change | `claude --plugin-dir ~/Dev/claude_skills/claude-plugins/plugins/swift` |
 | Check APIs against Apple | `python3 maintenance/check-apis.py --strict` |
 | Unit tests | `python3 -m unittest discover maintenance/tests` |
-| Evals | `claude plugin eval plugins/swift --scaffold --trust-plugin --no-publish --max-cost-usd <budget> --allow-tools Write Edit` |
+| Evals | `claude plugin eval . --scaffold --trust-plugin --no-publish --max-cost-usd <budget> --allow-tools Write Edit` |
 | Upstream changes | `maintenance/upstream-diff.sh <swiftui\|concurrency\|testing> [ref]` |
-| Validate the manifest | `claude plugin validate plugins/swift` |
+| Validate the manifest | `claude plugin validate .` |
 
 The full workflow, releases included: [Work on the plugin](docs/manual/work-on-it.md). Decisions: [`docs/adr/`](docs/adr/).
 
 ## Licenses
 
-MIT: [`LICENSE.md`](LICENSE.md), copyright 2026 Jacek Pytlik. A copy ships inside the plugin at `plugins/swift/LICENSE.md`. Third-party text and its MIT notices: `plugins/swift/NOTICE.md`. Upstreams' licenses: `plugins/swift/skills/swiftui/LICENSE-upstream`, `plugins/swift/skills/concurrency/LICENSE-upstream`, `plugins/swift/skills/testing/LICENSE-upstream`.
+MIT: [`LICENSE.md`](LICENSE.md), copyright 2026 Jacek Pytlik. It ships with the plugin. Third-party text and its MIT notices: `NOTICE.md`. Upstreams' licenses: `skills/swiftui/LICENSE-upstream`, `skills/concurrency/LICENSE-upstream`, `skills/testing/LICENSE-upstream`.

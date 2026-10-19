@@ -141,9 +141,9 @@ subjects; RAG/knowledge-graph anti-hallucination (ground truth is
 
 <!-- BEGIN REPO SPECIFICS (preserved on --sync) -->
 - **version homes:**
-  - `plugins/swift/.claude-plugin/plugin.json` (`version`, SemVer). The only version home: the marketplace entry for `swift` (in `jack1913/claude-plugins`, not in this repo; ADR-0014) carries no `version` on purpose (spec §6), so never add one.
+  - `.claude-plugin/plugin.json` (`version`, SemVer). The only version home: the marketplace entry for `swift` (the monorepo's `.claude-plugin/marketplace.json`; ADR-0014, ADR-0015) carries no `version` on purpose (spec §6), so never add one.
 - **monorepo mode:** `fixed` (one plugin, one version).
-- **release-script delegation:** `none`. There is no release script or version-sync test. After the operator commits the release, the tag comes from `claude plugin tag plugins/swift` (creates `swift--v<version>` after checking `plugin.json`; this repo has no marketplace file to compare against; run `--dry-run` first), not `git tag v<version>`. Print that command instead of a bare `git tag`, then `git push origin main swift--v<version>`.
+- **release-script delegation:** `none`. There is no release script or version-sync test. After the operator commits the release, the tag comes from `claude plugin tag plugins/swift`, run from the monorepo root, not from this folder (creates `swift--v<version>` after checking `plugin.json` against the monorepo's marketplace entry; run `--dry-run` first), not `git tag v<version>`. Print that command instead of a bare `git tag`, then `git push origin main swift--v<version>`.
 - **dash punctuation:** `-` (Keep a Changelog form: `## [0.1.0] - 2026-09-25`).
 - **changeset dir:** `none`.
 - **release announcement:** `none`.

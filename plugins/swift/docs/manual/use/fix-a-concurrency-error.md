@@ -78,7 +78,7 @@ AGENTS.md bans `async let`, so it uses `withThrowingTaskGroup` instead:
 
 ## Reproduce it headless
 
-Runs from this checkout on 2026-09-28 with Claude Code 2.1.283. The scaffolds are the eval cases `mainactor-detached-task` and `project-rule-over-skill` in `plugins/swift/evals/`. Replies vary from run to run; the eval cases pin the behaviour ([capabilities](../reference/capabilities.md#eval-cases)). `<checkout>` is your clone of `jack1913/swift-plugin`. `--setting-sources project,local` leaves out your user settings and hooks, as the recorded runs did; your user CLAUDE.md still applies.
+Runs from this checkout on 2026-09-28 with Claude Code 2.1.283. The scaffolds are the eval cases `mainactor-detached-task` and `project-rule-over-skill` in `evals/`. Replies vary from run to run; the eval cases pin the behaviour ([capabilities](../reference/capabilities.md#eval-cases)). `<checkout>` is your clone of `jack1913/swift-plugin`. `--setting-sources project,local` leaves out your user settings and hooks, as the recorded runs did; your user CLAUDE.md still applies.
 
 ```bash
 claude -p "<the prompt above>" --plugin-dir <checkout>/plugins/swift --setting-sources project,local --permission-mode acceptEdits --allowedTools "Bash(swift build:*)"

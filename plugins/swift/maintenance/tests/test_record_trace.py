@@ -11,8 +11,6 @@ from unittest import mock
 
 SCRIPT = (
     Path(__file__).resolve().parents[2]
-    / "plugins"
-    / "swift"
     / "skills"
     / "swiftui"
     / "scripts"

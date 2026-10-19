@@ -34,7 +34,7 @@ SOFTWARE.
 ## AvdLee/Swift-Concurrency-Agent-Skill
 
 - Source: https://github.com/AvdLee/Swift-Concurrency-Agent-Skill at `2.3.0` (`45fa49e4e0b2af4d43b1cb458903f8030ac993bd`)
-- Taken: `plugins/swift/skills/concurrency/`, which is upstream's `skills/swift-concurrency/` with the changes the repository's `UPSTREAM.md` lists. Files marked "New" there are this project's own.
+- Taken: `skills/concurrency/`, which is upstream's `skills/swift-concurrency/` with the changes the repository's `UPSTREAM.md` lists. Files marked "New" there are this project's own.
 
 ```text
 MIT License
@@ -63,7 +63,7 @@ SOFTWARE.
 ## AvdLee/Swift-Testing-Agent-Skill
 
 - Source: https://github.com/AvdLee/Swift-Testing-Agent-Skill at `1.2.0` (`798e9b1a2bcac164d4f0c781908199e754f0bab6`)
-- Taken: `plugins/swift/skills/testing/`, which is upstream's `swift-testing-expert/` with the changes the repository's `UPSTREAM.md` lists. Files marked "New" there are this project's own.
+- Taken: `skills/testing/`, which is upstream's `swift-testing-expert/` with the changes the repository's `UPSTREAM.md` lists. Files marked "New" there are this project's own.
 
 ```text
 MIT License

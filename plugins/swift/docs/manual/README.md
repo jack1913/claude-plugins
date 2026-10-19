@@ -1,6 +1,6 @@
-# swift-plugin manual
+# swift plugin manual
 
-The operator's manual: how to use swift-plugin day to day. Read the daily-use pages in order.
+The operator's manual: how to use the swift plugin day to day. Read the daily-use pages in order.
 
 ## Getting started
 

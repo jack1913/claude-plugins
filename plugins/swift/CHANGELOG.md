@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The plugin moved from its own repo, `jack1913/swift-plugin`, into `plugins/swift/` of `jack1913/claude-plugins`, which is public. The marketplace is the same (`jack1913`), so the install ID `swift@jack1913` and the tag form `swift--v<version>` don't change; the skills are unchanged. The manifest `repository` now points at the monorepo, and the maintenance scripts, tests and docs use paths relative to the plugin folder (ADR-0015).
+
 ## [0.3.0] - 2026-10-19
 
 **Breaking:** the plugin is now listed in the marketplace `jack1913`, the repo `jack1913/claude-plugins`, and this repo is no longer a marketplace. The install ID changes from `swift@jack1913-plugins` to `swift@jack1913`. Claude Code can't migrate a marketplace name, so move each older install by hand:

@@ -11,7 +11,7 @@ from .fetch import DEFAULT_MAX_AGE_DAYS, Fetcher, FetchError, NotFound
 from .manifest import ManifestError, load_manifest
 
 REPO = Path(__file__).resolve().parents[2]
-SKILLS = REPO / "plugins" / "swift" / "skills"
+SKILLS = REPO / "skills"
 
 
 def parse_args(argv):

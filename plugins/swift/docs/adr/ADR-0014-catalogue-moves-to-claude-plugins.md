@@ -1,6 +1,6 @@
 # ADR-0014: The catalogue is `jack1913/claude-plugins`, marketplace `jack1913`; this repo holds only the plugin
 
-- **Status:** accepted; supersedes ADR-0001 and ADR-0012
+- **Status:** accepted; supersedes ADR-0001 and ADR-0012; the `git-subdir` source and the separate plugin repo are superseded by ADR-0015
 - **Date:** 2026-10-19
 - **Source:** the owner's decision (2026-10-19) to publish all of Jacek Pytlik's plugins from one marketplace; the catalogue repo's `.claude-plugin/marketplace.json` and `README.md` (https://github.com/jack1913/claude-plugins); [Plugin marketplaces](https://code.claude.com/docs/en/plugin-marketplaces) (`git-subdir` sources, `marketplace remove`); ADR-0001 and ADR-0012 (the decisions this replaces)
 
