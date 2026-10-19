@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="[[fill: language code of the owner, e.g. en]]">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>[[fill: Brand]]: [[fill: Name]], round [[fill: N]]</title>
+<!--
+  brand-creator direction board template (one direction in depth). Copy to <project>/rounds/rN/<direction>/board.html and fill every [[fill: ...]] marker;
+  `brand-creator board-lint` fails while any marker is left in text or attributes (HTML comments are ignored).
+  The data-section / data-field vocabulary is defined in scripts/CONTRACT.md ("Board contract") and explained in
+  skills/brand-creator/references/board-contract.md.
+  Blocks marked OPTIONAL: delete them when they do not apply (never leave them empty).
+  Self-contained: no network, no web fonts unless inlined as data: URIs, system font stack for the page chrome.
+  Query parameters: ?t=light|dark forces a theme; ?v=N shows only elements with data-variant="N".
+-->
+<style>
+:root{
+  --bg:#f5f6f8;--surface:#ffffff;--sunk:#eceef1;--text:#16191d;--muted:#565d66;--line:#d9dce1;
+  --accent:#3b5b8c;--accent-ink:#ffffff;--good:#2f6b4f;--warn:#8a5a14;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans","Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --r:6px;color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#111316;--surface:#191c20;--sunk:#0c0e10;--text:#e7e9ec;--muted:#9aa1ab;--line:#2d3137;
+  --accent:#8fb0e3;--accent-ink:#0c1320;--good:#7fc4a2;--warn:#e0b26a;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111316;--surface:#191c20;--sunk:#0c0e10;--text:#e7e9ec;--muted:#9aa1ab;--line:#2d3137;
+  --accent:#8fb0e3;--accent-ink:#0c1320;--good:#7fc4a2;--warn:#e0b26a;color-scheme:dark}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.55 var(--sans)}
+main{max-width:1120px;margin:0 auto;padding:32px 16px 80px}
+h1,h2,h3{line-height:1.2;margin:0}
+h1{font-size:clamp(28px,5vw,40px);letter-spacing:-.01em}
+h2{font-size:22px;margin-bottom:12px}
+h3{font-size:18px}
+p,li,dd{overflow-wrap:anywhere}
+p{margin:0 0 10px}
+a{color:var(--accent)}
+.eyebrow,.num{font:600 12px/1.4 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
+.num{display:block}
+.lede{color:var(--muted);max-width:68ch;margin-top:10px}
+.muted{color:var(--muted)}
+.toc{display:flex;flex-wrap:wrap;gap:6px;margin:20px 0 8px;padding:0;list-style:none}
+.toc a{display:inline-block;padding:4px 10px;border:1px solid var(--line);border-radius:999px;font-size:13px;color:var(--text);text-decoration:none;background:var(--surface)}
+.block{margin-top:40px;padding-top:20px;border-top:1px solid var(--line)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))}
+.core{display:grid;gap:0;grid-template-columns:minmax(0,180px) minmax(0,1fr);margin:0}
+.core dt{font-weight:600;padding:8px 12px 8px 0;border-top:1px solid var(--line)}
+.core dd{margin:0;padding:8px 0;border-top:1px solid var(--line)}
+@media (max-width:600px){.core{grid-template-columns:minmax(0,1fr)}.core dd{border-top:0;padding-top:0}}
+.map{position:relative;aspect-ratio:16/10;width:100%;max-width:760px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+@media (max-width:600px){.map{aspect-ratio:1/1}}
+.map::before,.map::after{content:"";position:absolute;background:var(--line)}
+.map::before{left:50%;top:8%;bottom:8%;width:1px}
+.map::after{top:50%;left:6%;right:6%;height:1px}
+.axis{position:absolute;font:600 11px/1.2 var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.04em;max-width:40%}
+.axis.x0{left:8px;top:50%;transform:translateY(-130%)}.axis.x1{right:8px;top:50%;transform:translateY(-130%);text-align:right}
+.axis.y0{left:50%;bottom:6px;transform:translateX(8px)}.axis.y1{left:50%;top:6px;transform:translateX(8px)}
+.norm{position:absolute;border:1.5px dashed var(--muted);border-radius:50%;display:grid;place-items:center;font-size:12px;color:var(--muted);text-align:center;padding:4px}
+.dot{position:absolute;transform:translate(-50%,-50%);padding:3px 10px;border-radius:999px;background:var(--accent);color:var(--accent-ink);font:600 13px/1.3 var(--sans);white-space:nowrap}
+.dot.failed{background:transparent;color:var(--muted);border:1.5px dashed var(--muted)}
+.direction{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.dhead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.letter{font:700 13px/1 var(--mono);border:1px solid var(--line);border-radius:4px;padding:4px 6px}
+.register{margin-left:auto;font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 8px}
+.far{font-size:12px;color:var(--warn)}
+.idea{font-size:17px;margin:0}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tile{border-radius:4px;padding:12px;display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;min-height:120px;border:1px solid var(--line)}
+.tile.light{background:var(--d-paper);color:var(--d-ink);--m-accent:var(--d-accent)}
+.tile.dark{background:var(--d-paper-dark);color:var(--d-ink-dark);--m-accent:var(--d-accent-dark)}
+.tile svg{display:block;flex:none}
+.tile .big{width:72px;height:72px;margin-right:auto}
+.lockup{border-radius:4px;padding:14px 12px;background:var(--d-paper);color:var(--d-ink);display:flex;align-items:center;gap:10px;border:1px solid var(--line);--m-accent:var(--d-accent)}
+.lockup .word{font-weight:700;font-size:22px;letter-spacing:-.01em}
+.swatches{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:6px;margin:0;padding:0;list-style:none}
+.swatches li{border:1px solid var(--line);border-radius:4px;overflow:hidden;font-size:12px}
+.swatches i{display:block;height:36px}
+.swatches span{display:block;padding:4px 6px}
+.specimen{border:1px solid var(--line);border-radius:4px;padding:10px 12px}
+.specimen .aa{font-size:36px;line-height:1.1}
+.voice{margin:0;padding-left:18px}
+.fit{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;margin:0}
+.fit dt{font-weight:600}.fit dd{margin:0}
+.reflex{font-size:14px;background:var(--sunk);border-radius:4px;padding:8px 10px;margin:0}
+.vote{border:0;padding:0;margin:0;display:flex;gap:6px;flex-wrap:wrap}
+.vote legend{font-size:13px;color:var(--muted);margin-bottom:4px}
+.vote label,.options label{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:14px;cursor:pointer}
+.surface-row{margin-bottom:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px}
+.tab{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px 8px 0 0;font-size:13px;border:1px solid var(--line);border-bottom:0}
+.tab.light{background:#f1f2f4;color:#202327}.tab.dark{background:#26292e;color:#e4e6e9}
+.tab svg{width:16px;height:16px;flex:none}
+.callout{border-left:4px solid var(--accent);background:var(--surface);padding:14px 16px;border-radius:0 var(--r) var(--r) 0}
+.views{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));margin-top:12px}
+.questions{margin:0;padding-left:22px}
+.questions>li{margin-bottom:16px}
+.questions .q{font-weight:600;margin-bottom:6px}
+.options{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.options .rec{font-size:12px;color:var(--good);font-weight:600;white-space:nowrap;overflow-wrap:normal}
+.options label{border-radius:14px}
+.reply-out{font:15px/1.4 var(--mono);background:var(--sunk);border-radius:4px;padding:10px 12px;margin:8px 0;min-height:42px}
+button{font:inherit;font-size:14px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:6px 14px;cursor:pointer}
+.sprite{position:absolute;width:0;height:0;overflow:hidden}
+footer{margin-top:56px;font-size:13px;color:var(--muted)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.tiles.wide{grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))}
+@media (max-width:700px){.hide-sm{display:none}}
+.lockup.reverse{background:var(--d-ink);color:var(--d-paper);--m-accent:var(--d-accent-dark)}
+.hero{background:var(--d-paper);color:var(--d-ink);--m-accent:var(--d-accent);border-radius:var(--r);padding:32px 20px;border:1px solid var(--line)}
+.hero-title{font-size:clamp(26px,5vw,44px);font-weight:700;line-height:1.1;margin:12px 0}
+.hero-title.sm{font-size:22px}
+.variants{font-size:14px;padding-left:18px}
+.ghost{background:transparent;color:var(--accent)}
+.frames{display:grid;gap:16px;grid-template-columns:minmax(0,3fr) minmax(0,1fr)}
+@media (max-width:700px){.frames{grid-template-columns:minmax(0,1fr)}}
+.frame{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--d-paper);color:var(--d-ink);--m-accent:var(--d-accent)}
+.frame .bar{height:18px;background:var(--sunk);border-bottom:1px solid var(--line)}
+.frame .page{padding:16px}
+.frame.phone{max-width:240px}
+.nav{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.components{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0 16px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:2px 10px;font-size:13px}
+.footer-reg{font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:8px}
+.card-mock{aspect-ratio:85/55;max-width:340px;background:var(--d-paper);color:var(--d-ink);--m-accent:var(--d-accent);border:1px solid var(--line);border-radius:4px;padding:16px;display:flex;align-items:flex-end;gap:12px}
+.post-mock{aspect-ratio:4/5;max-width:280px;background:var(--d-ink);color:var(--d-paper);--m-accent:var(--d-accent-dark);border-radius:4px;padding:20px;display:flex;flex-direction:column;justify-content:space-between}
+.post-mock p{font-size:22px;font-weight:700;line-height:1.15}
+@keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.hero.play svg{animation:rise .32s cubic-bezier(.2,.7,.2,1) both}
+</style>
+</head>
+<body data-round="[[fill: N]]" data-board="refine">
+<!-- One direction in depth. Lives at rounds/rN/<direction>/board.html, or serves as the round page of a one-direction
+     refine round (then copy it to rounds/rN/board.html). Variants: mark elements with data-variant="1", "2" ... and
+     open with ?v=N; ?t=light|dark forces a theme. -->
+
+<svg class="sprite" aria-hidden="true" focusable="false"><defs>
+  <symbol id="mark" viewBox="0 0 64 64">[[fill: mark artwork, paths only; fill="currentColor" and fill="var(--m-accent)"]]</symbol>
+</defs></svg>
+
+<main style="--d-paper:[[fill: #hex]];--d-ink:[[fill: #hex]];--d-accent:[[fill: #hex]];--d-paper-dark:[[fill: #hex]];--d-ink-dark:[[fill: #hex]];--d-accent-dark:[[fill: #hex]]">
+  <header>
+    <p class="eyebrow">Round [[fill: N]] · [[fill: Name]] in depth · [[fill: YYYY-MM-DD]]</p>
+    <h1>[[fill: Brand]]: [[fill: Name]]</h1>
+    <p class="lede">[[fill: one sentence: what this board shows and what it asks]]</p>
+    <ul class="toc">
+      <li><a href="#changed">What changed</a></li><li><a href="#system">System</a></li><li><a href="#hero">Hero</a></li>
+      <li><a href="#pages">Pages</a></li><li><a href="#applied">Applied</a></li><li><a href="#hardest">Hardest surface</a></li>
+      <li><a href="#weak">Weak points</a></li><li><a href="#call">My call</a></li><li><a href="#questions">Questions</a></li>
+    </ul>
+  </header>
+
+  <!-- OPTIONAL (required from round 2; delete in round 1) -->
+  <section class="block" id="changed" data-section="what-changed">
+    <h2><span class="num">00</span>What changed since the review</h2>
+    <ol><li>[[fill: owner's numbered item → what changed, measured where possible]]</li></ol>
+  </section>
+
+  <section class="block" id="system">
+    <h2><span class="num">1</span>The system</h2>
+    <article class="direction" data-section="direction" data-name="[[fill: Name]]" data-letter="[[fill: letter or delete the attribute]]" data-register="[[fill: register]]">
+      <div class="dhead"><h3>[[fill: Name]]</h3><span class="register">[[fill: register]]</span></div>
+      <p class="idea" data-field="idea">[[fill: the idea in one sentence]]</p>
+      <p class="muted"><b>Visual philosophy:</b> <span data-field="philosophy">[[fill: one line]]</span></p>
+      <div class="tiles wide">
+        <div class="tile light"><svg class="big" viewBox="0 0 64 64" aria-label="Mark on light"><use href="#mark"/></svg>
+          <svg width="180" height="180" class="hide-sm" aria-hidden="true"><use href="#mark"/></svg><svg width="64" height="64" aria-hidden="true"><use href="#mark"/></svg><svg width="32" height="32" aria-hidden="true"><use href="#mark"/></svg><svg width="20" height="20" aria-hidden="true"><use href="#mark"/></svg><svg width="16" height="16" aria-hidden="true"><use href="#mark"/></svg></div>
+        <div class="tile dark"><svg class="big" viewBox="0 0 64 64" aria-label="Mark on dark"><use href="#mark"/></svg>
+          <svg width="180" height="180" class="hide-sm" aria-hidden="true"><use href="#mark"/></svg><svg width="64" height="64" aria-hidden="true"><use href="#mark"/></svg><svg width="32" height="32" aria-hidden="true"><use href="#mark"/></svg><svg width="20" height="20" aria-hidden="true"><use href="#mark"/></svg><svg width="16" height="16" aria-hidden="true"><use href="#mark"/></svg></div>
+      </div>
+      <div class="grid">
+        <div class="lockup"><svg width="48" height="48" aria-hidden="true"><use href="#mark"/></svg><span class="word">[[fill: Brand]]</span></div>
+        <div class="lockup reverse"><svg width="48" height="48" aria-hidden="true"><use href="#mark"/></svg><span class="word">[[fill: Brand]]</span></div>
+      </div>
+      <ul class="swatches">
+        <li><i style="background:var(--d-paper)"></i><span>[[fill: role · ratio]]</span></li>
+        <li><i style="background:var(--d-ink)"></i><span>[[fill: role · ratio]]</span></li>
+        <li><i style="background:var(--d-accent)"></i><span>[[fill: role · ratio]]</span></li>
+        <!-- one item per colour role; ratios from assets/_checks/contrast.json -->
+      </ul>
+      <div class="specimen"><div class="aa">Aa</div><p>[[fill: pangram in the audience's language]]</p><p>[[fill: the audience's diacritics, e.g. the glyph set chosen at G0]]</p><p class="muted">[[fill: typefaces, weights, licence; how the glyph set was verified]]</p></div>
+      <ul class="voice"><li>[[fill: headline]]</li><li>[[fill: line]]</li><li>[[fill: a line for when something goes wrong, in this business's world: an error page for software; sold out, closed today or running late for a shop or practice]]</li></ul>
+      <dl class="fit"><dt>Best for</dt><dd>[[fill: ...]]</dd><dt>Risk</dt><dd>[[fill: ...]]</dd></dl>
+    </article>
+  </section>
+
+  <section class="block" id="hero">
+    <h2><span class="num">2</span>Hero with real copy</h2>
+    <div class="hero" data-variant="1">
+      <svg width="56" height="56" aria-hidden="true"><use href="#mark"/></svg>
+      <p class="hero-title">[[fill: real headline from FACTS.md]]</p>
+      <p>[[fill: real lede]]</p>
+    </div>
+    <!-- More variants: copy the .hero block with data-variant="2" ... and describe each below. -->
+    <ul class="variants">
+      <li><b>Variant 1:</b> [[fill: what it is]] · <b>Cost:</b> [[fill: JS / effort]] · <b>Degrades to:</b> [[fill: no JS, reduced motion]]</li>
+    </ul>
+    <button type="button" id="replay" class="ghost">Replay motion</button>
+  </section>
+
+  <section class="block" id="pages">
+    <h2><span class="num">3</span>Homepage, desktop and mobile</h2>
+    <div class="frames">
+      <div class="frame wide"><div class="bar"></div><div class="page"><div class="nav"><svg width="20" height="20" aria-hidden="true"><use href="#mark"/></svg><b>[[fill: Brand]]</b></div><p class="hero-title sm">[[fill: headline]]</p><p>[[fill: first lines of real content]]</p></div></div>
+      <div class="frame phone"><div class="bar"></div><div class="page"><div class="nav"><svg width="20" height="20" aria-hidden="true"><use href="#mark"/></svg><b>[[fill: Brand]]</b></div><p class="hero-title sm">[[fill: headline]]</p></div></div>
+    </div>
+    <h3>Components</h3>
+    <div class="components"><button type="button">[[fill: primary action]]</button><button type="button" class="ghost">[[fill: secondary]]</button><span class="chip">[[fill: tag]]</span></div>
+    <h3>Footer register</h3>
+    <p class="footer-reg">[[fill: legal name, address and required disclosures, exactly as FACTS.md has them]]</p>
+  </section>
+
+  <section class="block" id="applied">
+    <h2><span class="num">4</span>Applied</h2>
+    <div class="grid">
+      <div><p class="muted">Business card, 85 × 55 mm (or the region's size)</p><div class="card-mock"><svg width="40" height="40" aria-hidden="true"><use href="#mark"/></svg><div><b>[[fill: name]]</b><br>[[fill: role]]</div></div></div>
+      <div><p class="muted">Social post, 4:5</p><div class="post-mock"><svg width="48" height="48" aria-hidden="true"><use href="#mark"/></svg><p>[[fill: post line]]</p></div></div>
+    </div>
+    <!-- OPTIONAL family modes: product block, what is kept from the family layer, "why this is not <sibling>". -->
+  </section>
+
+  <section class="block" id="hardest" data-section="hardest-surface">
+    <h2><span class="num">5</span>Hardest surface: [[fill: the surface]]</h2>
+    <div class="surface-row"><div><div class="tab light"><svg aria-hidden="true"><use href="#mark"/></svg>[[fill: title]]</div><div class="tab dark"><svg aria-hidden="true"><use href="#mark"/></svg>[[fill: title]]</div></div></div>
+    <p>[[fill: what survives and what does not, measured]]</p>
+  </section>
+
+  <section class="block" id="weak" data-section="weak-points">
+    <h2><span class="num">6</span>Weak points</h2>
+    <ul><li>[[fill: honest weak point, with a number where possible]]</li></ul>
+  </section>
+
+  <!-- OPTIONAL (required from round 2; delete in round 1) -->
+  <section class="block" id="losers" data-section="losers">
+    <h2><span class="num">7</span>Kept, not chosen</h2>
+    <ul><li data-section="loser" data-name="[[fill: Name]]"><b>[[fill: Name]]</b>: <span data-field="reason">[[fill: one-line reason]]</span></li></ul>
+  </section>
+
+  <!-- With a judge: add data-judge="ran" to this section and uncomment the views block. -->
+  <section class="block" id="call" data-section="my-call">
+    <h2><span class="num">8</span>My call</h2>
+    <p data-field="recommendation"><b>Recommendation:</b> [[fill: ...]]</p>
+    <p data-field="critique"><b>Honest critique:</b> [[fill: ...]]</p>
+    <!--
+    <div class="views">
+      <div class="panel" data-field="judge-view"><b>Judge</b><p>[[fill: ...]]</p></div>
+      <div class="panel" data-field="lead-view"><b>Lead</b><p>[[fill: ...]]</p></div>
+      <div class="panel" data-field="middle-option"><b>Middle option</b><p>[[fill: ...]]</p></div>
+    </div>
+    -->
+  </section>
+
+  <section class="block" id="questions" data-section="questions">
+    <h2><span class="num">9</span>Decisions for you</h2>
+    <ol class="questions">
+      <li data-section="question" data-n="1"><p class="q">[[fill: decision]]</p>
+        <ol class="options">
+          <li data-option="a" data-recommended="true"><label><input type="radio" name="q1" value="a">a. [[fill: option]] <span class="rec">Recommended</span></label></li>
+          <li data-option="b"><label><input type="radio" name="q1" value="b">b. [[fill: option]]</label></li>
+        </ol></li>
+    </ol>
+  </section>
+
+  <section class="block" id="reply" data-section="reply">
+    <h2>Reply</h2>
+    <p>Answer by number and letter ("1a 2b") and one sentence on anything you want changed.</p>
+    <div class="reply-out" id="reply-out" aria-live="polite">Pick options above to compose a reply, or type your own.</div>
+    <button type="button" id="copy-reply">Copy reply</button>
+  </section>
+
+  <footer>Made with brand-creator · round [[fill: N]] · [[fill: Name]]</footer>
+</main>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var t = q.get("t");
+  if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+  var v = q.get("v");
+  if (v) document.querySelectorAll("[data-variant]").forEach(function (el) { el.hidden = el.getAttribute("data-variant") !== v; });
+  var out = document.getElementById("reply-out");
+  function compose() {
+    var parts = [];
+    document.querySelectorAll("[data-section=question]").forEach(function (qq) {
+      var c = qq.querySelector("input:checked");
+      if (c) parts.push(qq.getAttribute("data-n") + c.value);
+    });
+    document.querySelectorAll("fieldset[data-vote]").forEach(function (f) {
+      var c = f.querySelector("input:checked");
+      if (c) parts.push(f.getAttribute("data-vote") + " " + c.value);
+    });
+    if (out && parts.length) out.textContent = parts.join(", ");
+  }
+  document.addEventListener("change", compose);
+  var replay = document.getElementById("replay");
+  if (replay) replay.addEventListener("click", function () {
+    document.querySelectorAll(".hero").forEach(function (h) { h.classList.remove("play"); void h.offsetWidth; h.classList.add("play"); });
+  });
+  var btn = document.getElementById("copy-reply");
+  if (btn) btn.addEventListener("click", function () {
+    var text = out ? out.textContent : "";
+    var done = function () { btn.textContent = "Copied"; };
+    var fallback = function () { var r = document.createRange(); r.selectNodeContents(out); var s = getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = "Selected: copy it"; };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+  });
+})();
+</script>
+</body>
+</html>

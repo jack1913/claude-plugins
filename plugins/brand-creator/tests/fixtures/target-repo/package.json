@@ -1,0 +1,8 @@
+{
+  "name": "oldco-app",
+  "version": "1.0.0",
+  "description": "Oldco App, a synthetic sample",
+  "author": "Sample Person",
+  "homepage": "https://example.com/oldco",
+  "scripts": {"build": "echo build"}
+}

@@ -1,0 +1,10 @@
+{
+  "body": "{\"errorCode\":404,\"title\":\"Not Found\"}",
+  "error": "",
+  "fetched": "2026-10-17",
+  "headers": {},
+  "key": "GET https://rdap.verisign.com/com/v1/domain/bc-zz-control-x7q4k9v2m.com",
+  "seq": 0,
+  "status": 404,
+  "via": "https"
+}

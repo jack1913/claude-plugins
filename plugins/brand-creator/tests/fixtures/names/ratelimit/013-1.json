@@ -1,0 +1,12 @@
+{
+  "body": "slow down",
+  "error": "",
+  "fetched": "2026-10-17",
+  "headers": {
+    "retry-after": "2"
+  },
+  "key": "GET https://crates.io/api/v1/crates/zqxvkrmpl",
+  "seq": 1,
+  "status": 429,
+  "via": "https"
+}

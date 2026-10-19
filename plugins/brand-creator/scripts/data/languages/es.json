@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "code": "es",
+  "name": "Spanish",
+  "letters": "ÁÉÍÑÓÚÜáéíñóúü",
+  "symbols": "¿¡",
+  "extras": "«»“”‘’–—…",
+  "basic_latin": true,
+  "rules": [
+    {
+      "id": "inverted-marks",
+      "text": "Questions and exclamations open with an inverted mark (¿ and ¡): the font must have them."
+    }
+  ]
+}

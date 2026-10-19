@@ -1,0 +1,18 @@
+{
+  "name": "brand-creator-scripts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Node dependencies of brand-creator's render and token scripts. Installed by `brand-creator setup` into the plugin data directory with npm ci; never into the plugin root.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@google/design.md": "0.4.0",
+    "colorjs.io": "0.7.1",
+    "culori": "4.0.2",
+    "playwright-core": "1.61.1",
+    "style-dictionary": "5.7.0"
+  }
+}

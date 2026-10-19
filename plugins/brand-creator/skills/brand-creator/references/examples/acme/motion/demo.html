@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Acme dot, motion demo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; background: #f9f7ee; }
+  main { padding: 8px; }
+  #mark { display: block; width: 64px; height: 64px; }
+  /* the dot presses two pixels and comes back to rest: whole pixels, one run, no loop */
+  #dot { animation: press 320ms steps(2, end) 1 both; }
+  @keyframes press { 0% { transform: translateY(0); } 50% { transform: translateY(2px); } 100% { transform: translateY(0); } }
+  @media (prefers-reduced-motion: reduce) { #dot { animation: none; } }
+</style>
+</head>
+<body>
+<main>
+  <svg id="mark" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Acme mark">
+    <path d="M32 6 58 54H6Z" fill="#0d1b2d"/>
+    <circle id="dot" cx="32" cy="41" r="9" fill="#007d71"/>
+  </svg>
+</main>
+</body>
+</html>

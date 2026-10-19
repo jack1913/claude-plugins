@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="[[fill: language code of the owner, e.g. en]]">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>[[fill: Brand]]: round [[fill: N]]</title>
+<!--
+  brand-creator round page template. Copy to <project>/rounds/rN/board.html and fill every [[fill: ...]] marker;
+  `brand-creator board-lint` fails while any marker is left in text or attributes (HTML comments are ignored).
+  The data-section / data-field vocabulary is defined in scripts/CONTRACT.md ("Board contract") and explained in
+  skills/brand-creator/references/board-contract.md.
+  Blocks marked OPTIONAL: delete them when they do not apply (never leave them empty).
+  Self-contained: no network, no web fonts unless inlined as data: URIs, system font stack for the page chrome.
+  Query parameters: ?t=light|dark forces a theme; ?v=N shows only elements with data-variant="N".
+-->
+<style>
+:root{
+  --bg:#f5f6f8;--surface:#ffffff;--sunk:#eceef1;--text:#16191d;--muted:#565d66;--line:#d9dce1;
+  --accent:#3b5b8c;--accent-ink:#ffffff;--good:#2f6b4f;--warn:#8a5a14;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans","Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --r:6px;color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#111316;--surface:#191c20;--sunk:#0c0e10;--text:#e7e9ec;--muted:#9aa1ab;--line:#2d3137;
+  --accent:#8fb0e3;--accent-ink:#0c1320;--good:#7fc4a2;--warn:#e0b26a;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111316;--surface:#191c20;--sunk:#0c0e10;--text:#e7e9ec;--muted:#9aa1ab;--line:#2d3137;
+  --accent:#8fb0e3;--accent-ink:#0c1320;--good:#7fc4a2;--warn:#e0b26a;color-scheme:dark}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.55 var(--sans)}
+main{max-width:1120px;margin:0 auto;padding:32px 16px 80px}
+h1,h2,h3{line-height:1.2;margin:0}
+h1{font-size:clamp(28px,5vw,40px);letter-spacing:-.01em}
+h2{font-size:22px;margin-bottom:12px}
+h3{font-size:18px}
+p,li,dd{overflow-wrap:anywhere}
+p{margin:0 0 10px}
+a{color:var(--accent)}
+.eyebrow,.num{font:600 12px/1.4 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
+.num{display:block}
+.lede{color:var(--muted);max-width:68ch;margin-top:10px}
+.muted{color:var(--muted)}
+.toc{display:flex;flex-wrap:wrap;gap:6px;margin:20px 0 8px;padding:0;list-style:none}
+.toc a{display:inline-block;padding:4px 10px;border:1px solid var(--line);border-radius:999px;font-size:13px;color:var(--text);text-decoration:none;background:var(--surface)}
+.block{margin-top:40px;padding-top:20px;border-top:1px solid var(--line)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))}
+.core{display:grid;gap:0;grid-template-columns:minmax(0,180px) minmax(0,1fr);margin:0}
+.core dt{font-weight:600;padding:8px 12px 8px 0;border-top:1px solid var(--line)}
+.core dd{margin:0;padding:8px 0;border-top:1px solid var(--line)}
+@media (max-width:600px){.core{grid-template-columns:minmax(0,1fr)}.core dd{border-top:0;padding-top:0}}
+.map{position:relative;aspect-ratio:16/10;width:100%;max-width:760px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+@media (max-width:600px){.map{aspect-ratio:1/1}}
+.map::before,.map::after{content:"";position:absolute;background:var(--line)}
+.map::before{left:50%;top:8%;bottom:8%;width:1px}
+.map::after{top:50%;left:6%;right:6%;height:1px}
+.axis{position:absolute;font:600 11px/1.2 var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.04em;max-width:40%}
+.axis.x0{left:8px;top:50%;transform:translateY(-130%)}.axis.x1{right:8px;top:50%;transform:translateY(-130%);text-align:right}
+.axis.y0{left:50%;bottom:6px;transform:translateX(8px)}.axis.y1{left:50%;top:6px;transform:translateX(8px)}
+.norm{position:absolute;border:1.5px dashed var(--muted);border-radius:50%;display:grid;place-items:center;font-size:12px;color:var(--muted);text-align:center;padding:4px}
+.dot{position:absolute;transform:translate(-50%,-50%);padding:3px 10px;border-radius:999px;background:var(--accent);color:var(--accent-ink);font:600 13px/1.3 var(--sans);white-space:nowrap}
+.dot.failed{background:transparent;color:var(--muted);border:1.5px dashed var(--muted)}
+.direction{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.dhead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.letter{font:700 13px/1 var(--mono);border:1px solid var(--line);border-radius:4px;padding:4px 6px}
+.register{margin-left:auto;font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 8px}
+.far{font-size:12px;color:var(--warn)}
+.idea{font-size:17px;margin:0}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tile{border-radius:4px;padding:12px;display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;min-height:120px;border:1px solid var(--line)}
+.tile.light{background:var(--d-paper);color:var(--d-ink);--m-accent:var(--d-accent)}
+.tile.dark{background:var(--d-paper-dark);color:var(--d-ink-dark);--m-accent:var(--d-accent-dark)}
+.tile svg{display:block;flex:none}
+.tile .big{width:72px;height:72px;margin-right:auto}
+.lockup{border-radius:4px;padding:14px 12px;background:var(--d-paper);color:var(--d-ink);display:flex;align-items:center;gap:10px;border:1px solid var(--line);--m-accent:var(--d-accent)}
+.lockup .word{font-weight:700;font-size:22px;letter-spacing:-.01em}
+.swatches{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:6px;margin:0;padding:0;list-style:none}
+.swatches li{border:1px solid var(--line);border-radius:4px;overflow:hidden;font-size:12px}
+.swatches i{display:block;height:36px}
+.swatches span{display:block;padding:4px 6px}
+.specimen{border:1px solid var(--line);border-radius:4px;padding:10px 12px}
+.specimen .aa{font-size:36px;line-height:1.1}
+.voice{margin:0;padding-left:18px}
+.fit{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;margin:0}
+.fit dt{font-weight:600}.fit dd{margin:0}
+.reflex{font-size:14px;background:var(--sunk);border-radius:4px;padding:8px 10px;margin:0}
+.vote{border:0;padding:0;margin:0;display:flex;gap:6px;flex-wrap:wrap}
+.vote legend{font-size:13px;color:var(--muted);margin-bottom:4px}
+.vote label,.options label{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:14px;cursor:pointer}
+.surface-row{margin-bottom:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px}
+.tab{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px 8px 0 0;font-size:13px;border:1px solid var(--line);border-bottom:0}
+.tab.light{background:#f1f2f4;color:#202327}.tab.dark{background:#26292e;color:#e4e6e9}
+.tab svg{width:16px;height:16px;flex:none}
+.callout{border-left:4px solid var(--accent);background:var(--surface);padding:14px 16px;border-radius:0 var(--r) var(--r) 0}
+.views{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));margin-top:12px}
+.questions{margin:0;padding-left:22px}
+.questions>li{margin-bottom:16px}
+.questions .q{font-weight:600;margin-bottom:6px}
+.options{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.options .rec{font-size:12px;color:var(--good);font-weight:600;white-space:nowrap;overflow-wrap:normal}
+.options label{border-radius:14px}
+.reply-out{font:15px/1.4 var(--mono);background:var(--sunk);border-radius:4px;padding:10px 12px;margin:8px 0;min-height:42px}
+button{font:inherit;font-size:14px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:6px 14px;cursor:pointer}
+.sprite{position:absolute;width:0;height:0;overflow:hidden}
+footer{margin-top:56px;font-size:13px;color:var(--muted)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body data-round="[[fill: N]]" data-board="pick">
+<!-- data-board: "pick" in round 1 and after a full rejection (reset rounds), else "refine". -->
+
+<!-- One <symbol> per direction; tiles below reference them with <use href="#mark-NAME">. Pure vector, no <text>. -->
+<svg class="sprite" aria-hidden="true" focusable="false"><defs>
+  <symbol id="mark-one" viewBox="0 0 64 64">[[fill: mark artwork of direction one, paths only; use fill="currentColor" and fill="var(--m-accent)"]]</symbol>
+  <symbol id="mark-two" viewBox="0 0 64 64">[[fill: mark artwork of direction two]]</symbol>
+  <symbol id="mark-three" viewBox="0 0 64 64">[[fill: mark artwork of direction three]]</symbol>
+</defs></svg>
+
+<main>
+  <header>
+    <p class="eyebrow">Round [[fill: N]] · pick board · [[fill: YYYY-MM-DD]]</p>
+    <h1>[[fill: Brand]]: round [[fill: N]]</h1>
+    <p class="lede">[[fill: one sentence: what this page asks the owner to decide]]</p>
+    <ul class="toc">
+      <li><a href="#core">Strategy core</a></li><li><a href="#map">Map</a></li><li><a href="#directions">Directions</a></li>
+      <li><a href="#hardest">Hardest surface</a></li><li><a href="#weak">Weak points</a></li><li><a href="#none">None of these</a></li>
+      <li><a href="#call">My call</a></li><li><a href="#questions">Questions</a></li>
+    </ul>
+  </header>
+
+  <!-- OPTIONAL (required from round 2; delete in round 1) -->
+  <section class="block" id="changed" data-section="what-changed">
+    <h2><span class="num">00</span>What changed since the review</h2>
+    <ol><li>[[fill: owner's numbered item → what changed, measured where possible]]</li></ol>
+  </section>
+
+  <!-- OPTIONAL (required when BRAND-STATE incumbent is not none; delete otherwise) -->
+  <section class="block" id="today" data-section="today">
+    <h2><span class="num">0</span>Today</h2>
+    <p>[[fill: the current mark or site as variant 0, judged by the same criteria; say honestly if it still wins]]</p>
+  </section>
+
+  <!-- Round 1 only -->
+  <section class="block" id="core" data-section="strategy-core">
+    <h2><span class="num">1</span>Strategy core</h2>
+    <p class="muted">Drafted from research and the brief. React to any line; nothing here is final.</p>
+    <dl class="core">
+      <dt>Category and alternatives</dt><dd>[[fill: category as buyers name it; what they use instead, status quo included]]</dd>
+      <dt>One target</dt><dd>[[fill: one audience in their own terms]]</dd>
+      <dt>Positioning</dt><dd>[[fill: For ... who ..., Brand is a ... that .... Unlike ..., it ....]]</dd>
+      <dt>Only we</dt><dd>[[fill: Brand is the only ... that ...]]</dd>
+      <dt>Proof points</dt><dd>[[fill: up to 3 facts from FACTS.md]]</dd>
+      <dt>Not this / This</dt><dd>[[fill: Not this: "..." This: "..."]]</dd>
+      <dt>Guardrails</dt><dd>[[fill: what the brand never says or shows]]</dd>
+    </dl>
+  </section>
+
+  <!-- Round 1 and reset rounds -->
+  <section class="block" id="map" data-section="positioning-map">
+    <h2><span class="num">2</span>Where the directions sit</h2>
+    <div class="map" role="img" aria-label="[[fill: one-sentence description of the map for screen readers]]">
+      <span class="axis x0">[[fill: left pole]]</span><span class="axis x1">[[fill: right pole]]</span>
+      <span class="axis y0">[[fill: bottom pole]]</span><span class="axis y1">[[fill: top pole]]</span>
+      <span class="norm" style="left:[[fill: x]]%;top:[[fill: y]]%;width:30%;height:34%">category norm</span>
+      <span class="dot" data-direction="[[fill: Name one]]" style="left:[[fill: x]]%;top:[[fill: y]]%">[[fill: Name one]]</span>
+      <span class="dot" data-direction="[[fill: Name two]]" style="left:[[fill: x]]%;top:[[fill: y]]%">[[fill: Name two]]</span>
+      <span class="dot" data-direction="[[fill: Name three]]" style="left:[[fill: x]]%;top:[[fill: y]]%">[[fill: Name three]]</span>
+      <!-- Reset rounds only: <span class="dot failed" data-field="failed-round" style="left:..%;top:..%">round N</span> -->
+    </div>
+    <p class="muted">[[fill: where the category clusters and which direction is far from it; axes taken from the category's clichés]]</p>
+  </section>
+
+  <section class="block" id="directions">
+    <h2><span class="num">3</span>Directions</h2>
+    <div class="grid">
+      <!-- Repeat this article for every direction (3-5 on a pick board). data-name: a word, identical in chat.
+           Direction letters are off by default (word names first); add data-letter="A" and <span class="letter">A</span>
+           only when the owner asks for letters. data-register: one emotional register per direction. data-far="true" on at least one. -->
+      <article class="direction" data-section="direction" data-name="[[fill: Name one]]" data-register="[[fill: register]]"
+        style="--d-paper:[[fill: #hex]];--d-ink:[[fill: #hex]];--d-accent:[[fill: #hex]];--d-paper-dark:[[fill: #hex]];--d-ink-dark:[[fill: #hex]];--d-accent-dark:[[fill: #hex]]">
+        <div class="dhead"><h3>[[fill: Name one]]</h3><span class="register">[[fill: register]]</span></div>
+        <p class="idea" data-field="idea">[[fill: the idea in one sentence]]</p>
+        <p class="muted"><b>Visual philosophy:</b> <span data-field="philosophy">[[fill: one line, named before drawing]]</span></p>
+        <div class="tiles">
+          <div class="tile light"><svg class="big" viewBox="0 0 64 64" aria-label="[[fill: Name one]] mark on light"><use href="#mark-one"/></svg>
+            <svg width="64" height="64" aria-hidden="true"><use href="#mark-one"/></svg><svg width="32" height="32" aria-hidden="true"><use href="#mark-one"/></svg><svg width="16" height="16" aria-hidden="true"><use href="#mark-one"/></svg></div>
+          <div class="tile dark"><svg class="big" viewBox="0 0 64 64" aria-label="[[fill: Name one]] mark on dark"><use href="#mark-one"/></svg>
+            <svg width="64" height="64" aria-hidden="true"><use href="#mark-one"/></svg><svg width="32" height="32" aria-hidden="true"><use href="#mark-one"/></svg><svg width="16" height="16" aria-hidden="true"><use href="#mark-one"/></svg></div>
+        </div>
+        <div class="lockup"><svg width="40" height="40" aria-hidden="true"><use href="#mark-one"/></svg><span class="word">[[fill: Brand]]</span></div>
+        <ul class="swatches">
+          <li><i style="background:var(--d-paper)"></i><span>[[fill: role]] · [[fill: ratio]]</span></li>
+          <li><i style="background:var(--d-ink)"></i><span>[[fill: role]]</span></li>
+          <li><i style="background:var(--d-accent)"></i><span>[[fill: role]] · [[fill: ratio]]</span></li>
+        </ul>
+        <div class="specimen"><div class="aa">Aa</div><p>[[fill: pangram in the audience's language, with its diacritics]]</p><p class="muted">[[fill: typeface names and licence]]</p></div>
+        <ul class="voice"><li>[[fill: sample headline]]</li><li>[[fill: sample line]]</li><li>[[fill: a line for when something goes wrong, in this business's world: an error page for software; sold out, closed today or running late for a shop or practice]]</li></ul>
+        <dl class="fit"><dt>Best for</dt><dd>[[fill: ...]]</dd><dt>Risk</dt><dd>[[fill: ...]]</dd></dl>
+        <p class="reflex" data-field="reflex">[[fill: reflex test against ai-defaults.json: "no hits", or each hit id with its argument]]</p>
+        <fieldset class="vote" data-vote="[[fill: Name one]]"><legend>Your vote</legend>
+          <label><input type="radio" name="vote-one" value="keep">keep</label><label><input type="radio" name="vote-one" value="drop">drop</label><label><input type="radio" name="vote-one" value="unsure">unsure</label></fieldset>
+      </article>
+      <!-- [[fill: articles for directions two and three, same structure, mark-two / mark-three]] -->
+    </div>
+  </section>
+
+  <section class="block" id="hardest" data-section="hardest-surface">
+    <h2><span class="num">4</span>Hardest surface: [[fill: the surface, e.g. the 16 px browser tab]]</h2>
+    <div class="surface-row">
+      <div><div class="tab light"><svg aria-hidden="true"><use href="#mark-one"/></svg>[[fill: page title]]</div><div class="tab dark"><svg aria-hidden="true"><use href="#mark-one"/></svg>[[fill: page title]]</div></div>
+      <!-- one column per direction -->
+    </div>
+    <p>[[fill: what survives and what does not, measured]]</p>
+  </section>
+
+  <section class="block" id="weak" data-section="weak-points">
+    <h2><span class="num">5</span>Weak points</h2>
+    <ul><li>[[fill: honest weak point, with a number where possible]]</li></ul>
+  </section>
+
+  <!-- OPTIONAL (required from round 2; delete in round 1) -->
+  <section class="block" id="losers" data-section="losers">
+    <h2><span class="num">6</span>Kept, not chosen</h2>
+    <ul>
+      <li data-section="loser" data-name="[[fill: Name]]"><b>[[fill: Name]]</b>: <span data-field="reason">[[fill: one-line reason]]</span></li>
+    </ul>
+  </section>
+
+  <section class="block" id="none" data-section="none-of-these">
+    <h2><span class="num">7</span>None of these</h2>
+    <div class="callout"><p>If none of these is right, say so and what was missing. The next round starts from new territories and shows where this one sat on the map.</p></div>
+  </section>
+
+  <!-- With a judge: add data-judge="ran" to this section and uncomment the views block. -->
+  <section class="block" id="call" data-section="my-call">
+    <h2><span class="num">8</span>My call</h2>
+    <p data-field="recommendation"><b>Recommendation:</b> [[fill: the direction you would take forward, and why in one sentence]]</p>
+    <p data-field="critique"><b>Honest critique:</b> [[fill: the weakest part of your own pick, or of the owner's earlier pick]]</p>
+    <!--
+    <div class="views">
+      <div class="panel" data-field="judge-view"><b>Judge</b><p>[[fill: ...]]</p></div>
+      <div class="panel" data-field="lead-view"><b>Lead</b><p>[[fill: ...]]</p></div>
+      <div class="panel" data-field="middle-option"><b>Middle option</b><p>[[fill: ...]]</p></div>
+    </div>
+    -->
+  </section>
+
+  <section class="block" id="questions" data-section="questions">
+    <h2><span class="num">9</span>Questions</h2>
+    <ol class="questions">
+      <li data-section="question" data-n="1" data-lists="directions"><p class="q">Which direction goes forward?</p>
+        <ol class="options">
+          <li data-option="a" data-recommended="true"><label><input type="radio" name="q1" value="a">[[fill: Name one]] <span class="rec">Recommended</span></label></li>
+          <li data-option="b"><label><input type="radio" name="q1" value="b">[[fill: Name two]]</label></li>
+          <li data-option="c"><label><input type="radio" name="q1" value="c">[[fill: Name three]]</label></li>
+          <li data-option="d"><label><input type="radio" name="q1" value="d">None of these</label></li>
+        </ol></li>
+      <!-- More questions: data-n="2", "3" ...; options lettered a, b, c ... in order (data-option); exactly one data-recommended. Question 1 (data-lists="directions") shows the direction names as its option labels and the composed reply names the direction; every other question keeps visible "a." prefixes so "2b" works. -->
+    </ol>
+  </section>
+
+  <section class="block" id="reply" data-section="reply">
+    <h2>Reply</h2>
+    <p>Answer with a direction name, or question number plus option (1a). Add one sentence on anything you want changed, for example "[[fill: Name one]], but [[fill: a change]]". Batched answers work: "1a, 2b".</p>
+    <div class="reply-out" id="reply-out" aria-live="polite">Pick options above to compose a reply, or type your own.</div>
+    <button type="button" id="copy-reply">Copy reply</button>
+  </section>
+
+  <footer>Made with brand-creator · round [[fill: N]] · checked with board-lint and four-view shots</footer>
+</main>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var t = q.get("t");
+  if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+  var v = q.get("v");
+  if (v) document.querySelectorAll("[data-variant]").forEach(function (el) { el.hidden = el.getAttribute("data-variant") !== v; });
+  var out = document.getElementById("reply-out");
+  function compose() {
+    var parts = [];
+    document.querySelectorAll("[data-section=question]").forEach(function (qq) {
+      var c = qq.querySelector("input:checked");
+      if (c) parts.push(qq.hasAttribute("data-lists") ? c.parentNode.textContent.replace("Recommended", "").trim() : qq.getAttribute("data-n") + c.value);
+    });
+    document.querySelectorAll("fieldset[data-vote]").forEach(function (f) {
+      var c = f.querySelector("input:checked");
+      if (c) parts.push(f.getAttribute("data-vote") + " " + c.value);
+    });
+    if (out && parts.length) out.textContent = parts.join(", ");
+  }
+  document.addEventListener("change", compose);
+  var btn = document.getElementById("copy-reply");
+  if (btn) btn.addEventListener("click", function () {
+    var text = out ? out.textContent : "";
+    var done = function () { btn.textContent = "Copied"; };
+    var fallback = function () { var r = document.createRange(); r.selectNodeContents(out); var s = getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = "Selected: copy it"; };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+  });
+})();
+</script>
+</body>
+</html>

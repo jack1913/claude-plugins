@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Acme mark">
+  <path d="M32 6 58 54H6Z" fill="#0d1b2d"/>
+  <g data-motion="dot">
+    <g data-state="rest"><circle cx="32" cy="41" r="9" fill="#007d71"/></g>
+    <g data-state="pressed" display="none"><circle cx="32" cy="43" r="9" fill="#007d71"/></g>
+  </g>
+</svg>

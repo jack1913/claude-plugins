@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.oldco.app</id>
+  <name>Oldco App</name>
+  <summary>A synthetic sample</summary>
+</component>

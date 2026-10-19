@@ -1,0 +1,7 @@
+{
+  "name": "Oldco App",
+  "short_name": "Oldco",
+  "theme_color": "#123456",
+  "background_color": "#ffffff",
+  "icons": [{"src": "/favicon.ico", "sizes": "16x16"}]
+}

@@ -1,0 +1,81 @@
+{
+  "color": {
+    "$type": "color",
+    "bg": {
+      "$value": "{color.paper}"
+    },
+    "text": {
+      "$value": "{color.ink}"
+    },
+    "muted": {
+      "$value": "{color.slate}"
+    },
+    "line": {
+      "$value": "{color.mist}"
+    },
+    "accent": {
+      "$value": "{color.teal}"
+    },
+    "mark": {
+      "$value": "{color.ink}"
+    },
+    "border": {
+      "$value": "{color.slate}"
+    }
+  },
+  "$extensions": {
+    "brand-creator": {
+      "pairs": [
+        {
+          "fg": "color.text",
+          "bg": "color.bg",
+          "kind": "ui-text",
+          "min": 4.5
+        },
+        {
+          "fg": "color.muted",
+          "bg": "color.bg",
+          "kind": "ui-text",
+          "min": 4.5
+        },
+        {
+          "fg": "color.accent",
+          "bg": "color.bg",
+          "kind": "ui-text-large",
+          "min": 3.0
+        },
+        {
+          "fg": "color.border",
+          "bg": "color.bg",
+          "kind": "ui-component",
+          "min": 3.0
+        },
+        {
+          "fg": "color.mark",
+          "bg": "color.bg",
+          "kind": "brand-rule",
+          "min": 3.0
+        },
+        {
+          "fg": "color.accent",
+          "bg": "color.bg",
+          "kind": "brand-rule",
+          "min": 2.0,
+          "label": "accent pixels against the ground"
+        }
+      ],
+      "touching": {
+        "default": 3.0,
+        "ground": 3.0,
+        "pairs": [
+          {
+            "a": "color.mark",
+            "b": "color.accent",
+            "min": 2.0,
+            "label": "accent dot against the mark body"
+          }
+        ]
+      }
+    }
+  }
+}

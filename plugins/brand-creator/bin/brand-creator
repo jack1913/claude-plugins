@@ -1,0 +1,208 @@
+#!/usr/bin/env bash
+# brand-creator: the single entry point (Claude Code puts a plugin's bin/ on the Bash PATH).
+#
+#   brand-creator [--data <dir>] <subcommand> [args...]
+#
+# --data <dir>   writable per-user folder for dependencies (npm packages, Chromium, scratch). Skills pass
+#                ${CLAUDE_PLUGIN_DATA}; BRAND_CREATOR_DATA is the environment equivalent. Required by every
+#                subcommand except help, version, root and prereq.
+# The plugin root is resolved from this file's own path. Nothing is ever written under the plugin root.
+# Exit codes: 0 pass, 1 gate failed, 2 usage error, 3 cannot run (missing dependency or platform).
+set -euo pipefail
+
+src="${BASH_SOURCE[0]}"
+while [ -L "$src" ]; do
+  dir="$(cd -P "$(dirname "$src")" && pwd)"
+  src="$(readlink "$src")"
+  [[ "$src" != /* ]] && src="$dir/$src"
+done
+ROOT="$(cd -P "$(dirname "$src")/.." && pwd)"
+S="$ROOT/scripts"
+
+usage() {
+  cat <<'EOF'
+usage: brand-creator [--data <dir>] <subcommand> [args...]
+
+project
+  new <slug>              scaffold a brand project (BRAND-STATE.md, FACTS.md, DECISIONS.md, brief/BRIEF.md)
+  state                   print or query BRAND-STATE.md (--require G3, --record G3 "<decision>", --json)
+  freeze <round> --name N copy an approved round to history/ with a banner and update history/MANIFEST.sha256
+
+checks and renders
+  shot <page.html>        four-view page shots (1440/390 x light/dark) with an overflow/console/network report
+  card <card.html>        render an HTML card to a PNG (OG, repo social, README header)
+  logo-sheet              real-size logo sheet (16/20/32/64/128/180, light and dark, x4 favicon, header mock)
+  contrast                WCAG 2.2 AA UI pairs, brand-rule pairs, colours that touch in the logo SVGs, APCA advisory
+  board-lint <page.html>  required board sections (data-section attributes) for a round page
+  check                   all gates for the artefacts that exist; --cascade "<old value>" greps for leftovers
+
+quality gates (assets, motion, fonts)
+  downscale               what survives when one master is shrunk to the sizes systems show (sips on macOS; accent px, bbox, 4x4 rule)
+  states-check            state sets must differ in greyscale and in silhouette (owner thresholds in qa/rules.json)
+  family-check            family modes: shared glyphs equal their FAMILY.md sources, tile shares match across products
+  fontcheck               glyph coverage per language set, licence hint and the platform-font report (render.mjs fonts)
+  fonts                   Chromium platform-font report for a font and a text (the engine behind fontcheck)
+  outline-glyphs          variable-font instance -> overlap removal -> SVG paths (no live text in marks)
+  snapshot take|diff      sha256 lists of a folder, for byte-identity and safety proofs
+  verify-idempotent       run a build chain twice and compare the output trees (explicit allowlist, a substitute check per entry)
+  staleness               inputs.json: upstream sha256, plugin version and emitter code hashes; flags stale packs
+  specs-due               platform-spec rows due for a recheck
+
+brand book
+  book                    build book.html from tokens, manifest, BRAND-STATE, FACTS, reports and book/chapters/*.md (--init writes the
+                          chapter skeletons, --verify compares a rebuild with the file); generated and existing marks only
+  book-lint [book.html]   gate a book, generated or hand-authored: ids, anchors, network, words, status words, language parity, marks,
+                          edition stamp, counts, manifest accounting; --self-consistency checks the book against its own rules
+  book-pdf                book.pdf from book.html (Chromium; RGB, labelled "RGB, not print-ready" in the metadata and on the cover)
+  patch FILE              assert-counted replace in a hand-authored book (--old, --new, --count N); logs the edition in BRAND-STATE.md
+  collapse                after a decision, move the losing variants and switchers out of the book sources and tokens into removed-<date>/
+
+adoption, adapters, launch
+  adoption survey|status  read product repositories (read only) for brand slots (old names and colours, icon files, metadata, README badges) into
+                          adoption.json and ADOPTION.md: numbered rows, progress and pins kept apart, a "Kept, not counted" list, counts in sentences
+  adapters                opt-in at G5: BRAND.md (Strategy, Voice, Visual, Governance) and DESIGN.md generated from the tokens, BRAND-STATE and FACTS;
+                          DESIGN.md is linted with the pinned @google/design.md when setup installed it, else "not verified"
+  applied-skill           opt-in at G5, needs --yes: writes .claude/skills/<slug>-brand/SKILL.md into the project (colours, type, mark rules, claims)
+  launch-todo             LAUNCH.md for the owner: trademark first, domains with their check date, handles, e-mail, renames, print hand-off, decisions
+                          (reads local files only; nothing outward is ever executed). check --cascade "<old value>" greps every project artefact
+
+build
+  tokens                  DTCG tokens -> tokens.css, tokens.json, Swift, Android XML, colorsets
+  emit web|social         favicon/PWA/head snippet, or OG/GitHub/README header images (social --posts: 4:5, 1:1 and educational posts)
+  emit apple              Icon Composer .icon (validated), actool-compiled per platform, legacy sets, visionOS stack, marketing icon,
+                          menu-bar template, DMG background, App Store frames (macOS with Xcode only; exit 3 elsewhere)
+  emit windows|linux      .ico and NSIS images; hicolor icons, scalable SVG and an AppStream stub
+  emit tray               shape-coded state icons (Windows light/dark, Linux, macOS template) with the states-check gate
+  emit tauri              the Tauri icons folder (.icns by iconutil, or Pillow behind --renderer pillow)
+  emit wallet|developer   Apple and Google Wallet images; e-mail logo, package-registry icon, org avatar, CLI identity text
+  emit android            adaptive launcher icon (foreground, background, monochrome; mipmap XML and density PNGs), legacy icons, Play icon 512,
+                          feature graphic; the mark must stay inside the 66 dp safe zone (Full tier)
+  emit chrome-ext|msix    Chrome extension icons 16/32/48/128, store icon and promo tiles; MSIX tile and app-list assets with the unplated and
+                          lightunplated variants plus an AppxManifest snippet (Full tier)
+  emit profiles           circle-safe avatar 400 and 800, LinkedIn, X, YouTube and Facebook banners, Instagram feed and story images, each inside its safe area
+                          (a gate), with proof images that draw the safe areas; every size is unverified and labelled (Standard tier)
+  emit print              business card (front, back), letterhead, envelope as print PDFs (trim + 2 x bleed, crop marks, outlined text, boxes set) and
+                          an HTML e-mail signature; "RGB proof, not print-ready", or with --icc <your CMYK profile> a "PDF/X-4 candidate"
+  emit presskit           deterministic zip of logos, lockups, tokens and book.pdf
+  print-check             read the print PDFs back and check bleed, safe zone, line weight, reversed text, transparency, label (mm and pt)
+
+names
+  names <candidate>...    screen names: domains (RDAP, whois, DNS), npm, GitHub, Docker Hub, PyPI, crates.io, Homebrew; trademark links
+                          (screening, not clearance; needs --yes after the owner agrees to send the names to the listed services)
+
+fleets (opt-in)
+  fleet-plan <workflow>   dry-run an opt-in workflow (directions, review-panel, naming, adopt) with stub agents: the agent count,
+                          the models that will actually run (session model as the ceiling, FORCE env), the size guideline and
+                          a rough cost, before anything is launched; --check lints every workflow and agent file
+
+environment
+  setup [--yes]           show what will be downloaded, then install dependencies into the data dir
+  prereq --for <tier>     report MISSING / what it blocks / install command (quick|standard|full|apple|print|names|adoption)
+  smoke                   dev helper: run the Acme end-to-end smoke test
+  root                    print the plugin root (the folder a project's own generators import scripts/lib from)
+  version | help
+
+Run `brand-creator <subcommand> --help` for the options of each.
+EOF
+}
+
+die() { echo "brand-creator: error: $*" >&2; exit 2; }
+
+# ---- pull --data out of the argument list (anywhere before a literal --)
+data="${BRAND_CREATOR_DATA:-}"
+args=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --data)   [ $# -ge 2 ] || die "--data needs a directory"; data="$2"; shift 2 ;;
+    --data=*) data="${1#--data=}"; shift ;;
+    *)        args+=("$1"); shift ;;
+  esac
+done
+set -- ${args[@]+"${args[@]}"}
+
+[ $# -ge 1 ] || { usage >&2; exit 2; }
+sub="$1"; shift
+
+case "$sub" in
+  help|-h|--help) usage; exit 0 ;;
+  version|--version) python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['version'])" "$ROOT/.claude-plugin/plugin.json"; exit 0 ;;
+  root)           printf '%s\n' "$ROOT"; exit 0 ;;   # the plugin root: tools/finish.sh hands it to a project's own generators as BRAND_CREATOR_ROOT
+esac
+
+if [ -n "$data" ]; then
+  mkdir -p "$data" 2>/dev/null || die "cannot create the data directory: $data"
+  data="$(cd -P "$data" && pwd)"
+  export BRAND_CREATOR_DATA="$data"
+elif [ "$sub" != "prereq" ]; then
+  die "no data directory. Pass --data <dir> (skills pass \${CLAUDE_PLUGIN_DATA}) or set BRAND_CREATOR_DATA."
+fi
+export BRAND_CREATOR_ROOT="$ROOT"
+export PYTHONDONTWRITEBYTECODE=1 PYTHONUTF8=1 PYTHONIOENCODING=utf-8
+
+need() { # need <tool> <what for> <install hint>
+  command -v "$1" >/dev/null 2>&1 || { echo "brand-creator: cannot run: $1 not found ($2). $3 Run: brand-creator prereq --for quick" >&2; exit 3; }
+}
+py_boot() { # standard-library scripts that must work before (or without) uv: setup, prereq, state
+  local f="$1" c tried=""; shift
+  need python3 "bootstrap scripts" "Install Python 3.10 or newer."
+  # The first python3 on PATH that starts and is 3.10 or newer (as uv picks one): an older or broken python3 earlier on
+  # PATH (a version manager's shim whose library a sandbox cannot read, the system 3.9) must not hide a working one.
+  # (each probe runs in its own subshell, so a crashing interpreter's "Abort trap" notice goes to /dev/null too)
+  while IFS= read -r c; do
+    if ("$c" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)'; exit $?) >/dev/null 2>&1; then exec "$c" "$S/$f" "$@"; fi
+    tried="$tried $c"
+  done < <(type -ap python3 python3.14 python3.13 python3.12 python3.11 python3.10 2>/dev/null)
+  echo "brand-creator: cannot run: no python3 on PATH starts and is 3.10 or newer (tried:$tried). Install Python 3.10 or newer. Run: brand-creator prereq --for quick" >&2
+  exit 3
+}
+py()      { local f="$1"; shift; need uv "locked Python scripts" "Install uv (https://docs.astral.sh/uv/)."; exec uv run --script --locked --quiet "$S/$f" "$@"; }
+js()      { local f="$1"; shift; need node "render and token scripts" "Install Node 22 or newer."; exec node "$S/$f" "$@"; }
+
+case "$sub" in
+  setup)      py_boot setup.py "$@" ;;
+  prereq)     py_boot prereq.py "$@" ;;
+  new)        py new.py "$@" ;;
+  state)      py_boot state.py "$@" ;;   # stdlib only: must work without uv (the status skill injects it)
+  freeze)     py freeze.py "$@" ;;
+  shot)       js render.mjs shot "$@" ;;
+  card)       js render.mjs card "$@" ;;
+  logo-sheet) py logo_sheet.py "$@" ;;
+  contrast)   py contrast.py "$@" ;;
+  board-lint) py board_lint.py "$@" ;;
+  check)      py check.py "$@" ;;
+  book)       py book.py "$@" ;;
+  book-lint)  py book_lint.py "$@" ;;
+  book-pdf)   py book_pdf.py "$@" ;;
+  patch)      py patch.py "$@" ;;
+  collapse)   py collapse.py "$@" ;;
+  print-check) py print_check.py "$@" ;;
+  adoption)   py adoption.py "$@" ;;
+  adapters)   py adapters.py "$@" ;;
+  applied-skill) py applied_skill.py "$@" ;;
+  launch-todo) py launch.py "$@" ;;
+  downscale)  py downscale_check.py "$@" ;;
+  states-check) py states_check.py "$@" ;;
+  family-check) py family_check.py "$@" ;;
+  fontcheck)  py fontcheck.py "$@" ;;
+  fonts)      js render.mjs fonts "$@" ;;
+  outline-glyphs) py outline_glyphs.py "$@" ;;
+  snapshot)   py snapshot.py "$@" ;;
+  verify-idempotent) py verify_idempotent.py "$@" ;;
+  staleness)  py staleness.py "$@" ;;
+  specs-due)  py specs_due.py "$@" ;;
+  tokens)     js build_tokens.mjs "$@" ;;
+  emit)
+    [ $# -ge 1 ] || die "emit needs a target: web | social | apple | windows | linux | tray | tauri | wallet | developer | android | chrome-ext | msix | print | presskit | profiles"
+    target="$1"; shift
+    case "$target" in
+      web)    py emitters/web.py "$@" ;;
+      social) py emitters/social.py "$@" ;;
+      apple|windows|linux|tray|tauri|wallet|developer|android|msix|print|presskit|profiles) py "emitters/$target.py" "$@" ;;
+      chrome-ext) py emitters/chrome_ext.py "$@" ;;
+      *)      die "unknown emit target: $target (this version has: web, social, apple, windows, linux, tray, tauri, wallet, developer, android, chrome-ext, msix, print, presskit, profiles)" ;;
+    esac ;;
+  names)      py check_names.py "$@" ;;
+  fleet-plan) js fleet_plan.mjs "$@" ;;
+  smoke)      need bash "smoke test" ""; exec bash "$ROOT/tests/smoke/acme.sh" "$@" ;;
+  *)          usage >&2; die "unknown subcommand: $sub" ;;
+esac

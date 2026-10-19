@@ -1,0 +1,6 @@
+{
+  "schema": 1,
+  "sets": [
+    {"name": "status-16", "states": {"idle": "assets/states/idle.png", "active": "assets/states/active.png", "error": "assets/states/error.png"}}
+  ]
+}

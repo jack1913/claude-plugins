@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key>
+  <string>Oldco</string>
+  <key>CFBundleIdentifier</key>
+  <string>com.oldco.app</string>
+  <key>CFBundleIconFile</key>
+  <string>AppIcon</string>
+</dict>
+</plist>

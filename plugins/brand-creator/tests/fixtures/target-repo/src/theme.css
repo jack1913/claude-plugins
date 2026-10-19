@@ -1,0 +1,6 @@
+:root {
+  --accent: #123456;
+  --accent-rgb: rgb(18, 52, 86);
+  --dark: #0A0A0A;
+}
+.logo { background: url(../docs/img/logo.png); }

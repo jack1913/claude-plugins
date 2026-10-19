@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="{{lang}}">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>{{name}} e-mail signature</title>
+<!-- brand-creator e-mail signature (templates/print/email-signature.html), filled by scripts/emitters/print.py.
+     Copy the table below into your mail client's signature box; do not copy this page's head.
+     Built for mail clients, not browsers: a table layout, inline styles only, no web fonts, no script, no CSS variables.
+     Dark-mode safe: the table carries its own ground (bgcolor and background-color) and a text colour that passes WCAG 2.2 AA on it, so a
+     client that darkens or inverts the message cannot put our text on a ground we did not choose. The logo is an opaque PNG for the same reason.
+     Images need an absolute URL on a host you control: the emitter writes the URL base it was given (--image-base-url); until then it is
+     a placeholder and the emit report warns. Mail clients block remote images by default, so keep the name and role as text. -->
+</head>
+<body style="margin:0;padding:12px;background-color:#ffffff">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" bgcolor="{{paper}}" style="border-collapse:collapse;background-color:{{paper}}">
+  <tr>
+    <td style="padding:12px 14px 12px 12px;vertical-align:top" bgcolor="{{paper}}">
+      <img src="{{logo_url}}" srcset="{{logo_url}} 1x, {{logo_url_2x}} 2x" width="{{logo_w}}" height="{{logo_h}}" alt="{{name}}" style="display:block;border:0;outline:none;text-decoration:none;width:{{logo_w}}px;height:{{logo_h}}px">
+    </td>
+    <td style="padding:12px 12px 12px 14px;border-left:2px solid {{accent}};vertical-align:top;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:19px;color:{{ink}}" bgcolor="{{paper}}">
+      {{person_block}}
+      {{lines_block}}
+    </td>
+  </tr>
+</table>
+</body>
+</html>

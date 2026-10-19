@@ -1,0 +1,10 @@
+{
+  "body": "{\"objectClassName\":\"domain\",\"ldhName\":\"GRANITE.COM\"}",
+  "error": "",
+  "fetched": "2026-10-17",
+  "headers": {},
+  "key": "GET https://rdap.verisign.com/com/v1/domain/granite.com",
+  "seq": 0,
+  "status": 200,
+  "via": "https"
+}

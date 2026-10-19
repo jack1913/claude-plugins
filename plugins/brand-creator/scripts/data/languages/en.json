@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "code": "en",
+  "name": "English",
+  "letters": "",
+  "symbols": "",
+  "extras": "’‘“”–—…",
+  "basic_latin": true,
+  "rules": [
+    {
+      "id": "typographic-quotes",
+      "text": "Use typographic quotes and apostrophes in running text, never the straight ASCII ones."
+    }
+  ]
+}

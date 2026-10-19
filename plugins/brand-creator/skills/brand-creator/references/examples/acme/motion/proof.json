@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "cases": [
+    {"name": "dot-press", "type": "states", "file": "assets/logo/mark-animated.svg", "static": "assets/logo/mark.svg",
+     "rest": "rest", "controls": [["rest", "pressed"]]},
+    {"name": "demo-page", "type": "page", "page": "motion/demo.html", "selector": "#mark", "static": "assets/logo/mark.svg",
+     "settle_ms": 700}
+  ]
+}

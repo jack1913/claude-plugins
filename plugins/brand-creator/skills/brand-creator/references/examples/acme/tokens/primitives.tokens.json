@@ -1,0 +1,148 @@
+{
+  "$description": "Acme example primitives (synthetic). Colours are oklch with a 6-digit sRGB hex fallback computed by brand-creator tokens --fix-hex.",
+  "color": {
+    "$type": "color",
+    "paper": {
+      "$value": {
+        "colorSpace": "oklch",
+        "components": [
+          0.975,
+          0.012,
+          95
+        ],
+        "alpha": 1,
+        "hex": "#f9f7ee"
+      }
+    },
+    "ink": {
+      "$value": {
+        "colorSpace": "oklch",
+        "components": [
+          0.22,
+          0.04,
+          255
+        ],
+        "alpha": 1,
+        "hex": "#0d1b2d"
+      }
+    },
+    "slate": {
+      "$value": {
+        "colorSpace": "oklch",
+        "components": [
+          0.46,
+          0.035,
+          255
+        ],
+        "alpha": 1,
+        "hex": "#4b596c"
+      }
+    },
+    "mist": {
+      "$value": {
+        "colorSpace": "oklch",
+        "components": [
+          0.9,
+          0.01,
+          95
+        ],
+        "alpha": 1,
+        "hex": "#e0ded7"
+      }
+    },
+    "teal": {
+      "$value": {
+        "colorSpace": "oklch",
+        "components": [
+          0.52,
+          0.12,
+          185
+        ],
+        "alpha": 1,
+        "hex": "#007d71"
+      }
+    },
+    "teal-bright": {
+      "$value": {
+        "colorSpace": "oklch",
+        "components": [
+          0.8,
+          0.12,
+          185
+        ],
+        "alpha": 1,
+        "hex": "#4cd7c8"
+      }
+    },
+    "night": {
+      "$value": {
+        "colorSpace": "oklch",
+        "components": [
+          0.19,
+          0.02,
+          255
+        ],
+        "alpha": 1,
+        "hex": "#0e141d"
+      }
+    },
+    "chalk": {
+      "$value": {
+        "colorSpace": "oklch",
+        "components": [
+          0.95,
+          0.01,
+          95
+        ],
+        "alpha": 1,
+        "hex": "#f0eee7"
+      }
+    },
+    "fog": {
+      "$value": {
+        "colorSpace": "oklch",
+        "components": [
+          0.76,
+          0.025,
+          255
+        ],
+        "alpha": 1,
+        "hex": "#a7b2c1"
+      }
+    }
+  },
+  "dimension": {
+    "$type": "dimension",
+    "space-1": {
+      "$value": {
+        "value": 4,
+        "unit": "px"
+      }
+    },
+    "space-2": {
+      "$value": {
+        "value": 8,
+        "unit": "px"
+      }
+    }
+  },
+  "duration": {
+    "$type": "duration",
+    "fast": {
+      "$value": {
+        "value": 150,
+        "unit": "ms"
+      }
+    }
+  },
+  "font": {
+    "$type": "fontFamily",
+    "sans": {
+      "$value": [
+        "ui-sans-serif",
+        "system-ui",
+        "sans-serif"
+      ]
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "body": "{\"rcode\": \"SERVFAIL\", \"ns\": [], \"authority\": [], \"truncated\": false}",
+  "error": "",
+  "fetched": "2026-10-17",
+  "headers": {},
+  "key": "DNS NS granite.io",
+  "seq": 0,
+  "status": 200,
+  "via": "dns"
+}

@@ -1,0 +1,5 @@
+{
+  "project": "/PROJECT", "plugin_root": "/PLUGIN", "data": "/DATA", "today": "2026-10-17", "ceiling": "opus", "approved_agents": 2,
+  "g6": "2026-10-17 apply the shop repository on brand/acme",
+  "repos": [{"label": "shop", "path": "/REPOS/shop", "branch": "brand/acme", "create_branch": true, "rows": ["1 favicon.ico (Find: <link rel=\"icon\")", "2 header logo (Find: logo.svg)"]}]
+}

@@ -1,0 +1,27 @@
+{
+  "$description": "Semantic roles, dark scheme: the same token set as the light file.",
+  "color": {
+    "$type": "color",
+    "bg": {
+      "$value": "{color.night}"
+    },
+    "text": {
+      "$value": "{color.chalk}"
+    },
+    "muted": {
+      "$value": "{color.haze}"
+    },
+    "line": {
+      "$value": "{color.stone}"
+    },
+    "accent": {
+      "$value": "{color.signal-bright}"
+    },
+    "mark": {
+      "$value": "{color.chalk}"
+    },
+    "border": {
+      "$value": "{color.haze}"
+    }
+  }
+}

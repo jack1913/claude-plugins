@@ -1,0 +1,10 @@
+{
+  "body": "{}",
+  "error": "",
+  "fetched": "2026-10-17",
+  "headers": {},
+  "key": "GET https://crates.io/api/v1/crates/granite",
+  "seq": 0,
+  "status": 200,
+  "via": "https"
+}

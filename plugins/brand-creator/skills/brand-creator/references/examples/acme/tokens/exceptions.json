@@ -1,0 +1,11 @@
+{
+  "$description": "Accepted misses of the touching-pair check (brand-creator contrast). One entry per pair and mode, each with the reason it is accepted. An entry that matches nothing is reported as stale.",
+  "exceptions": [
+    {
+      "a": "color.mark",
+      "b": "color.accent",
+      "mode": "dark",
+      "reason": "The dot is a detail inside the body and the shape, not the colour, carries it: the logo sheet proves it stays visible at 16 px. The brighter accent cannot go darker without losing its contrast against the dark ground."
+    }
+  ]
+}

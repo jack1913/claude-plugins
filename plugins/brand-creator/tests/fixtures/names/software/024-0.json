@@ -1,0 +1,10 @@
+{
+  "body": "{}",
+  "error": "",
+  "fetched": "2026-10-17",
+  "headers": {},
+  "key": "GET https://hub.docker.com/v2/orgs/grafana/",
+  "seq": 0,
+  "status": 200,
+  "via": "https"
+}

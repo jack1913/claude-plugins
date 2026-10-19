@@ -1,0 +1,36 @@
+{
+  "name": "brand-creator",
+  "displayName": "Brand Creator",
+  "description": "Gated, phased brand-identity process for a company, product or person: boards, mark system, tokens, web and social assets, checked with real renderers and contrast math.",
+  "version": "0.1.0",
+  "author": {
+    "name": "brand-creator contributors"
+  },
+  "homepage": "https://github.com/jack1913/brand-creator",
+  "repository": "https://github.com/jack1913/brand-creator",
+  "license": "MIT",
+  "keywords": [
+    "brand",
+    "branding",
+    "logo",
+    "identity",
+    "design-tokens",
+    "favicon",
+    "brand-guidelines"
+  ],
+  "userConfig": {
+    "projects_root": {
+      "type": "directory",
+      "title": "Brand projects folder",
+      "description": "Folder that holds your brand projects. Leave empty to be asked each time; ./<slug>/ in the current folder is offered first.",
+      "required": false
+    },
+    "review_surface": {
+      "type": "string",
+      "title": "Where boards are reviewed",
+      "description": "auto asks once per project whether boards may be uploaded to claude.ai as a private Artifact page (only when the session has the Artifact tool) and uses a local file until you answer. artifact always uses an Artifact page. local always opens a local file.",
+      "options": ["auto", "artifact", "local"],
+      "default": "auto"
+    }
+  }
+}

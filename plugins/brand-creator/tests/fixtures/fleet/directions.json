@@ -1,0 +1,11 @@
+{
+  "project": "/PROJECT", "plugin_root": "/PLUGIN", "data": "/DATA", "today": "2026-10-17", "ceiling": "opus", "approved_agents": 4,
+  "round": "r1",
+  "context_paths": ["/PROJECT/BRAND-STATE.md", "/PROJECT/brief/BRIEF.md", "/PROJECT/FACTS.md"],
+  "brief": {"decisions": ["standalone brand", "generated mark"], "critique": [], "forbidden": ["the category's usual swoosh"], "facts": ["founded in the brief's year"]},
+  "directions": [
+    {"key": "compass", "name": "Compass", "paragraph": "Orientation as a grid; register: calm; visual philosophy: measured geometry."},
+    {"key": "lantern", "name": "Lantern", "paragraph": "Warm light in a frame; register: warm; visual philosophy: soft volume."},
+    {"key": "harbor", "name": "Harbor", "paragraph": "Shelter and edges; register: sturdy; visual philosophy: heavy outline, far from the norm."}
+  ]
+}

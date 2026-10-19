@@ -1,0 +1,12 @@
+{
+  "body": "slow down",
+  "error": "",
+  "fetched": "2026-10-17",
+  "headers": {
+    "retry-after": "2"
+  },
+  "key": "GET https://rdap.verisign.com/com/v1/domain/zqxvkrmpl.com",
+  "seq": 0,
+  "status": 429,
+  "via": "https"
+}

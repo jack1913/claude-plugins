@@ -1,0 +1,4 @@
+{
+  "$description": "Accepted misses of the touching-pair check (brand-creator contrast). Add one entry per pair and mode, always with the reason it is accepted: {\"a\": \"color.mark\", \"b\": \"color.accent\", \"mode\": \"light|dark|*\", \"reason\": \"...\"}. An entry that matches nothing is reported as stale.",
+  "exceptions": []
+}
