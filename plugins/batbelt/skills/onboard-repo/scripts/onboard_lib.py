@@ -768,9 +768,10 @@ _ECOSYSTEM_ALLOW = {
         "dotnet test:*",
         "dotnet restore:*",
         "dotnet clean:*",
-        "dotnet ef:*",
     ),
-    "js": ("npm run:*", "npm test:*", "npm ci:*", "npm install:*"),
+    # `npm ci` installs exactly what the lockfile pins; `npm install <pkg>` / `npm i` / `npm add` change the dependency
+    # set and rewrite package-lock.json, so they sit in ask with `uv add` and `composer require`.
+    "js": ("npm run:*", "npm test:*", "npm ci:*"),
     # `vendor/bin/pint` is the FORMATTER: allowed only in its check form, because the
     # bare command REWRITES source. That is the same read-only rule the update-deps
     # template states for every ecosystem ("use `pint --test`, never `pint`") -- granting
@@ -829,8 +830,9 @@ _ECOSYSTEM_ALLOW = {
 # is exactly when a prompt is cheap and a mistake is expensive.
 _NPX_ASK = "npx:*"
 _ECOSYSTEM_ASK = {
-    "dotnet": ("dotnet add:*", "dotnet remove:*"),
-    "js": (),
+    # `dotnet ef` covers `database update` / `database drop` / `migrations remove`, the same tier as `php artisan migrate`.
+    "dotnet": ("dotnet add:*", "dotnet remove:*", "dotnet ef:*"),
+    "js": ("npm install:*", "npm i:*", "npm add:*", "npm uninstall:*"),
     "php": (
         "composer update:*",
         "composer require:*",
@@ -888,15 +890,25 @@ _ECOSYSTEM_SECRET_GLOBS = {
 
 # Mutating git that should never run unprompted, regardless of ecosystem.
 _BASELINE_DENY = ("git reset:*", "git restore:*")
-_BASELINE_ASK = ("git rm:*",)
+_BASELINE_ASK = ("git rm:*",)  # extended below
+# Only the forms that cannot lose work or redirect a push: `git stash drop|clear|pop`, `git worktree remove`,
+# `git remote set-url|remove` and `git switch --discard-changes|-f` fall through to the normal prompt (or ask, below).
 _BASELINE_ALLOW = (
     "git fetch:*",
     "git switch:*",
-    "git stash:*",
-    "git worktree:*",
-    "git remote:*",
+    "git stash push:*",
+    "git stash list:*",
+    "git stash show:*",
+    "git worktree add:*",
+    "git worktree list:*",
+    "git remote -v",
+    "git remote show:*",
+    "git remote get-url:*",
     "mkdir:*",
 )
+# `git switch` refuses to drop uncommitted changes unless forced; the forced forms ask. A prefix rule only sees the flag
+# when it comes first (`git switch -f main`), which is how the forms are written in practice.
+_BASELINE_ASK_EXTRA = ("git switch --discard-changes:*", "git switch -f:*", "git switch --force:*")
 
 
 # One line per ask/deny rule body: why it is in that tier. `explain_permissions`
@@ -909,6 +921,14 @@ _RULE_REASONS = {
     "git rm:*": "stages a deletion; a wrong path removes a tracked file from the next commit",
     "dotnet add:*": "changes the project's dependency set and lockfile",
     "dotnet remove:*": "changes the project's dependency set and lockfile",
+    "dotnet ef:*": "can update or drop the database and remove migrations",
+    "npm install:*": "adds or changes dependencies and rewrites package-lock.json (npm ci installs the lockfile as is)",
+    "npm i:*": "short for npm install: adds or changes dependencies and rewrites package-lock.json",
+    "npm add:*": "adds a dependency and rewrites package-lock.json",
+    "npm uninstall:*": "drops a dependency and rewrites package-lock.json",
+    "git switch --discard-changes:*": "switches branch by throwing away uncommitted changes",
+    "git switch -f:*": "switches branch by throwing away uncommitted changes",
+    "git switch --force:*": "switches branch by throwing away uncommitted changes",
     "composer update:*": "rewrites composer.lock across the dependency tree",
     "composer require:*": "adds a dependency and rewrites composer.lock",
     "composer remove:*": "drops a dependency and rewrites composer.lock",
@@ -958,7 +978,7 @@ def plan_project_permissions(ecosystems, ask_npx=False):
     for name in names:
         allow.extend(_ECOSYSTEM_ALLOW[name])
 
-    ask = list(_BASELINE_ASK)
+    ask = list(_BASELINE_ASK) + list(_BASELINE_ASK_EXTRA)
     for name in names:
         ask.extend(_ECOSYSTEM_ASK.get(name, ()))
     if ask_npx and "js" in names:
