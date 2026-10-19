@@ -138,7 +138,7 @@ def test_ci_workflow_runs_linux_validate_and_macos_and_never_the_billed_eval():
         assert re.fullmatch(r"[\w.-]+/[\w.-]+@v\d+", uses), f"{uses}: pin actions by a version tag"
     assert "permissions:\n  contents: read" in text
     assert "working-directory: plugins/brand-creator" in text                         # every job runs in the plugin folder
-    assert text.count('"plugins/brand-creator/**"') == 2 and text.count(".github/workflows/brand-creator.yml") >= 3   # push and pull_request are path-filtered
+    assert text.count('"plugins/brand-creator/**"') == 2 and text.count(".github/workflows/brand-creator.yml") == 2   # push and pull_request are path-filtered
     for needle in PERSONAL:
         assert needle not in text
 
