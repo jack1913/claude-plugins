@@ -11,6 +11,7 @@ on:
       - ".claude-plugin/**"
       - ".github/scripts/check-marketplace.py"
       - ".github/workflows/marketplace.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read

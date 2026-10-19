@@ -1,7 +1,6 @@
 name: batbelt
 on:
   push:
-    branches: [main]
     paths:
       - "plugins/batbelt/**"
       - "tests/**"
@@ -13,6 +12,11 @@ on:
       - "tests/**"
       - ".claude-plugin/**"
       - ".github/workflows/batbelt.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
