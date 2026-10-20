@@ -1,6 +1,13 @@
 ---
 name: testing
-description: 'Use when writing, migrating, or reviewing Swift tests: Swift Testing (@Test, @Suite, #expect, #require, traits, tags, parameterized tests with arguments:, confirmation for events), test plans and parallel execution, and migrating XCTest suites (XCTestCase, XCTAssert, XCTestExpectation) to Swift Testing or deciding what stays on XCTest. Also use for slow tests, flakiness from shared state or test order, and test structure. For hanging, flaky or data-racing async tests and concurrency errors in test code, use swift:concurrency.'
+description: >-
+  Writes, migrates and reviews Swift tests with Swift Testing, and migrates XCTest suites. Use when writing
+  or reviewing tests, or deciding what stays on XCTest. For hanging, flaky or data-racing async tests and
+  concurrency errors in test code, use swift:concurrency.
+when_to_use: >-
+  `@Test`, `@Suite`, `#expect`, `#require`, traits, tags, parameterized tests with `arguments:`,
+  `confirmation` for events, test plans and parallel execution, migrating XCTestCase, XCTAssert and
+  XCTestExpectation suites. Slow tests, flakiness from shared state or test order, test structure.
 ---
 
 # Swift Testing
@@ -65,16 +72,3 @@ Use this skill to write, review, migrate, and debug Swift tests with modern Swif
 - Confirm tests are parallel-safe or intentionally serialized with rationale.
 - Confirm async code is awaited and callback APIs are bridged safely.
 - Confirm migration keeps unsupported XCTest-only scenarios on XCTest.
-
-## References
-
-- `references/_index.md`
-- `references/fundamentals.md`
-- `references/expectations.md`
-- `references/traits-and-tags.md`
-- `references/parameterized-testing.md`
-- `references/parallelization-and-isolation.md`
-- `references/performance-and-best-practices.md`
-- `references/async-testing-and-waiting.md`
-- `references/migration-from-xctest.md`
-- `references/xcode-workflows.md`
