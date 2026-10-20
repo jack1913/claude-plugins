@@ -346,29 +346,33 @@ leave it and report.
 
 <!-- BEGIN REPO SPECIFICS (preserved on --sync) -->
 - **index doc:** `AGENTS.md` (`CLAUDE.md` is an `@AGENTS.md` import).
-- **scope:** the repo root only — `README.md`, `AGENTS.md`, `CLAUDE.md`, `docs/**`. Each plugin under `plugins/` owns its docs; `plugins/swift/` has its own stamped `update-docs`.
+- **scope:** the repo root only — `README.md`, `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `SECURITY.md`, `docs/**`. Each plugin under `plugins/` owns its docs; `plugins/swift/` has its own stamped `update-docs`.
 - **section→source map:**
   - `README.md` "The plugins", "See it work", "Ground rules" → `.claude-plugin/marketplace.json` (`plugins[].name`), each `plugins/<name>/README.md` (pitch, commands, "what it never does"), `plugins/swift/README.md` "Usage" (the captured settings-form example)
-  - `README.md` "Install", "Updates" → [Claude Code docs, "Install and manage plugins"](https://code.claude.com/docs/en/discover-plugins), `plugins/swift/README.md` "Enable it in a Swift repo" (project scope)
-  - `README.md` "Maintain the marketplace" (its Layout block) → `.claude-plugin/marketplace.json`, `.github/workflows/*.yml`, `.github/scripts/check-marketplace.py`, `tests/`
-  - `README.md` "Tests" → the `run:` lines of `.github/workflows/batbelt.yml`, `brand-creator.yml`, `swift.yml`, `marketplace.yml`
-  - `README.md` "Add a plugin" → `.github/scripts/check-marketplace.py`, the `paths:` filters in `.github/workflows/*.yml`, `.claude/rules/ci-workflow-per-plugin.md`
+  - `README.md` "Install" and `docs/manual/getting-started/install-a-plugin.md` → [Claude Code docs, "Install and manage plugins"](https://code.claude.com/docs/en/discover-plugins), `plugins/swift/README.md` "Enable it in a Swift repo" (project scope)
+  - `CONTRIBUTING.md` → `docs/internals/layout.md`, `docs/internals/add-a-plugin.md`, `docs/internals/tests.md`, `docs/internals/release.md`, `docs/internals/docs-standard.md` (§8)
+  - `docs/internals/layout.md` → `.claude-plugin/marketplace.json`, `.github/workflows/*.yml`, `.github/scripts/`, `tests/`
+  - `docs/internals/tests.md` → the `run:` lines of `.github/workflows/batbelt.yml`, `brand-creator.yml`, `swift.yml`, `marketplace.yml`
+  - `docs/internals/add-a-plugin.md` → `.github/scripts/check-marketplace.py`, the `paths:` filters in `.github/workflows/*.yml`, `.claude/rules/ci-workflow-per-plugin.md`
+  - `docs/internals/release.md` → `.claude/skills/changelog-release/SKILL.md`, `docs/adr/ADR-0002-per-plugin-versions-and-tags.md`
+  - `docs/manual/use/<plugin>.md` (cards) → `.claude-plugin/marketplace.json`, the plugin's own README and manual
+  - `docs/manual/reference/troubleshooting.md` → `docs/manual/getting-started/install-a-plugin.md`, [Claude Code docs, "Install and manage plugins"](https://code.claude.com/docs/en/discover-plugins)
   - `docs/manual/**` → the same sources as the README section each page expands (`docs/.onboard-coverage.json` maps section → page)
 - **surface enumerator:** `readme-headings` (the `README.md` H2/H3 walk).
 - **coverage record:** `docs/.onboard-coverage.json`.
 - **route/CLI extractor:** `none` — the repo has no CLI of its own (`.github/scripts/check-marketplace.py` takes no flags).
-- **cross-surface reference integrity:** every plugin row in `README.md` "The plugins" names a `plugins[].name` in `.claude-plugin/marketplace.json` and an existing `plugins/<name>/`; every command in the "Tests" table matches the `run:` line of that plugin's workflow; every `/plugin install <name>@jack1913` names a listed plugin.
+- **cross-surface reference integrity:** every plugin row in `README.md` "The plugins" names a `plugins[].name` in `.claude-plugin/marketplace.json` and an existing `plugins/<name>/`; every command on `docs/internals/tests.md` matches the `run:` line of that plugin's workflow; every `/plugin install <name>@jack1913` names a listed plugin.
 - **generated blocks:** none.
 - **K-pointer baseline:** established at onboard (`AGENTS.md` §3 pointer index written 2026-10-19, every pointer verified against the tree).
 - **capture fence convention:** the COMMAND in a ```` ```bash ```` fence with each line marked `$ `, the OUTPUT in a separate ```` ```console capture=<slug> ```` fence whose lines are a verbatim, in-order subsequence of `docs/.onboard-captures/<slug>.txt`. markdownlint MD014 is disabled per grounded page. (`plugins/swift/docs` uses the older single `text capture=<slug>` fence; leave it as it is.)
-- **docs voice:** user-facing and friendly, short and to the point (chosen 2026-10-19): second person, task-first — what you can do → the exact command or what to say → what you'll see → the fix if it goes wrong. Short sentences, plain words; explain any jargon in passing or drop it. No inline source citations after sentences and no "Needs:/Never:" label dumps: facts are verified in the work, and a page links out to deeper docs once per section. Real outputs only where they help the reader (no maintainer captures such as `jq`/`git ls-files` on user pages). Maintainer pages (`docs/manual/reference/`, add-a-plugin) may be more technical but stay plain. ADRs and `docs/internals/` stay plain technical.
+- **docs standard and voice:** `docs/internals/docs-standard.md` owns layout, voice (§4), skill-description and changelog rules. Apply it; do not restate it here.
 - **README style guide:** Showcase (chosen 2026-10-19). Signature rules:
-  - a centred hero block: the title, a one-line tagline, and badges only for things that exist (MIT licence, the CI workflows `batbelt.yml`, `brand-creator.yml`, `swift.yml`, `marketplace.yml`);
+  - a centred hero block: the title, a one-line tagline, and badges only for things that exist (MIT licence, the CI workflows `batbelt.yml`, `brand-creator.yml`, `swift.yml`, `marketplace.yml`, `docs.yml`);
   - one emoji per H2 as its visual anchor (no variation-selector emoji such as 🛠️, whose anchors differ between renderers), plus one icon per plugin card row, and none anywhere else;
-  - a compact plugin card table (icon, plugin, "use it to", docs) that fits without sideways scrolling, linking each plugin's guide and README;
-  - `<details>` blocks for the install matrix (in a session, from a shell, for a whole project);
+  - a compact plugin card table (icon, plugin, "use it to", docs) that fits without sideways scrolling, linking each plugin's card and README;
+  - one quick install block, then a link to `docs/manual/getting-started/install-a-plugin.md`, the only home for scopes and shell installs;
   - GitHub `[!TIP]` / `[!NOTE]` / `[!IMPORTANT]` callouts for highlights and warnings, at most one per section;
-  - the repo has no screenshots: show a real example prompt or result quoted from a plugin's own docs (cited), never an invented one;
-  - the README stays a landing page; depth lives in `docs/manual/`, which keeps the commands-first docs voice.
+  - the repo has no screenshots: show a real example prompt or result taken from a plugin's own docs, never an invented one;
+  - the README stays a landing page; depth lives in `docs/manual/`, which follows the standard's task-first voice.
 - **not docs:** `plugins/**` (each plugin's own docs), `.onboard-repo-retired/`.
 <!-- END REPO SPECIFICS -->

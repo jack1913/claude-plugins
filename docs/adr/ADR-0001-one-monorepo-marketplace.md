@@ -29,6 +29,7 @@ different repos: a change touching both was two commits and two CI runs.
 - This repo is the source of truth: the plugin repos were merged in with their full history, not mirrored.
 
 Rejected:
+
 - One repo and one marketplace per plugin: several marketplaces to add and trust.
 - `url` and `git-subdir` sources pointing at separate plugin repos (b343cbb listed brand-creator by `url` and swift by
   `git-subdir`; swift's ADR-0014, superseded by its ADR-0015): plugin and catalogue in different repos.
@@ -45,3 +46,9 @@ Rejected:
   session at the repo root uses the root `AGENTS.md` and `.claude/`, gets swift's nested skills and rules only after
   Claude reads or edits a file under `plugins/swift/`
   ([Claude Code docs, "Load skills in monorepos and subdirectories"](https://code.claude.com/docs/en/skills)).
+
+## Update 2026-10-19
+
+batbelt now has its own `CHANGELOG.md` (`plugins/batbelt/CHANGELOG.md`, from batbelt 0.1.2); its tests
+still sit in the root `tests/`. The README section cited above is gone: the steps for adding a plugin now live in
+[docs/internals/add-a-plugin.md](../internals/add-a-plugin.md), and the layout in [docs/internals/layout.md](../internals/layout.md).

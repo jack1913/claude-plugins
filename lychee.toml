@@ -1,0 +1,14 @@
+# lychee settings for docs.yml (docs/internals/docs-standard.md §8): relative links and anchors only.
+offline = true
+include_fragments = "full"
+exclude_path = [
+  "docs/archive",
+  "plugins/.*/docs/archive",
+  "\\.onboard-repo-retired",
+  "plugins/.*/evals",
+  "plugins/.*/tests",
+  "plugins/brand-creator/templates",
+  "plugins/batbelt/skills/onboard-repo/templates",
+  "plugins/.*/dev/scratch",
+  "node_modules",
+]

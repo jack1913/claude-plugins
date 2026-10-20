@@ -22,6 +22,7 @@ release on their own schedules.
 - There is no repo-wide version, tag or changelog; each plugin keeps its own `CHANGELOG.md` (batbelt has none yet).
 
 Rejected:
+
 - A second `version` on each marketplace entry: two homes that drift.
 - No version at all: every push would count as an update.
 - One repo-wide version or tag (not recorded as weighed; implied by the per-plugin tags since 9f6a1b7): the plugins
@@ -36,3 +37,8 @@ Rejected:
 - Untagged releases exist: batbelt and brand-creator have no tags, and swift 0.3.0 (88f4acb) and 0.3.1 (99095cb) are
   untagged (the newest tag is `swift--v0.2.3`). `claude plugin tag` tags `HEAD`, so the current version can be tagged
   with the same command; an older release only from a checkout of its release commit.
+
+## Update 2026-10-19
+
+batbelt now keeps its own `CHANGELOG.md`, and batbelt and brand-creator are tagged too
+(`git tag -l '<name>--v*'` lists each plugin's tags).

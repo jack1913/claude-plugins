@@ -1,0 +1,29 @@
+# markdownlint-cli2 settings for docs.yml (docs/internals/docs-standard.md §8).
+config:
+  default: true
+  MD013: false            # line length: prose wraps freely
+  MD033: false            # inline HTML: README hero blocks, <details>, and <placeholders> in templates
+  MD024:
+    siblings_only: true   # repeated headings are fine under different parents (changelogs)
+  MD014: false            # `$ ` prompts on commands that show no output (capture convention)
+  MD060: false            # table column style
+  MD038: false            # spaces inside code spans are sometimes the point (`## `)
+
+ignores:
+  - "**/docs/archive/**"
+  - "**/node_modules/**"
+  - "**/.onboard-repo-retired/**"
+  - "plugins/*/evals/**"            # eval prompts and graders, not docs
+  - "plugins/*/tests/**"            # fixtures
+  - "plugins/brand-creator/templates/**"   # files copied into brand projects
+  - "plugins/batbelt/skills/onboard-repo/templates/**"   # files stamped into other repos
+  - "plugins/*/dev/scratch/**"
+  # Agent-facing packs: SKILL.md bodies, references and agent prompts (several are forked upstream).
+  # Their frontmatter is checked by check-docs-standard.py and their links by lychee.
+  - "**/skills/**"
+  - "plugins/*/agents/**"
+  - "**/CLAUDE.md"                  # @AGENTS.md import bridges
+  # Verbatim legal text.
+  - "**/LICENSE*.md"
+  - "**/NOTICE.md"
+  - "**/THIRD_PARTY_NOTICES.md"

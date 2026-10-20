@@ -1,7 +1,7 @@
 ---
 paths:
   - ".github/workflows/*.yml"
-description: "CI workflows: one per plugin, push + pull_request + workflow_dispatch, identical paths filters, read-only token"
+description: "CI workflows: one per plugin plus marketplace.yml and docs.yml; push + pull_request + workflow_dispatch, identical paths filters, read-only token"
 ---
 
 # CI workflows
@@ -13,14 +13,17 @@ description: "CI workflows: one per plugin, push + pull_request + workflow_dispa
   `.claude-plugin/**`, because its tests live in the root `tests/` and
   `tests/test_plugin.py` reads `.claude-plugin/marketplace.json`.
 - Every workflow declares `permissions: contents: read`.
+- `docs.yml` checks every Markdown file and `.claude-plugin/*.json` against
+  `docs/internals/docs-standard.md`; its filter also lists its configs
+  (`.markdownlint-cli2.yaml`, `lychee.toml`) and `.github/scripts/check-docs-standard.py`.
 
 Only `brand-creator.yml` is checked, and only partly:
 `plugins/brand-creator/tests/test_docker_ci.py:139` (read-only token) and `:141` (both
 filters name the plugin folder and the workflow file). `.github/scripts/check-marketplace.py`
-reads only `marketplace.json` and `plugins/`, so `batbelt.yml`, `swift.yml` and
-`marketplace.yml` are unchecked. A wrong filter makes a plugin's CI silently skip its own
+reads only `marketplace.json` and `plugins/`, so `batbelt.yml`, `swift.yml`,
+`marketplace.yml` and `docs.yml` are unchecked. A wrong filter makes a plugin's CI silently skip its own
 changes, or runs the expensive macOS job in `brand-creator.yml` on unrelated pushes.
 
 Re-derive:
-`rg -c 'workflow_dispatch:' .github/workflows` (1 per file, 4 files);
-`rg -n -A1 '^permissions:' .github/workflows | rg -c 'contents: read'` (4).
+`rg -c 'workflow_dispatch:' .github/workflows` (1 per file, 5 files);
+`rg -n -A1 '^permissions:' .github/workflows | rg -c 'contents: read'` (5).

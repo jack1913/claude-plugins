@@ -79,4 +79,6 @@ predict which teammate has it.
 
 ## See also
 
-- `docs/internals/README.md` — internals index
+- [`docs-standard.md`](docs-standard.md) — how docs, skill descriptions and changelogs are written
+- [`templates/`](templates/README.md) — page templates
+- [`add-a-plugin.md`](add-a-plugin.md), [`layout.md`](layout.md), [`tests.md`](tests.md), [`release.md`](release.md) — the maintainer pages

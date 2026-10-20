@@ -1,0 +1,43 @@
+name: docs
+
+# docs/internals/docs-standard.md §8. Every check fails the build.
+
+on:
+  push:
+    paths:
+      - "**/*.md"
+      - "**/.claude-plugin/*.json"
+      - ".markdownlint-cli2.yaml"
+      - "lychee.toml"
+      - ".github/scripts/check-docs-standard.py"
+      - ".github/workflows/docs.yml"
+  pull_request:
+    paths:
+      - "**/*.md"
+      - "**/.claude-plugin/*.json"
+      - ".markdownlint-cli2.yaml"
+      - "lychee.toml"
+      - ".github/scripts/check-docs-standard.py"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Skills, agents, plugin.json, marketplace entries, changelogs, ADRs and AGENTS.md pointers
+        run: python3 .github/scripts/check-docs-standard.py --strict
+      - name: Markdown lint
+        uses: DavidAnson/markdownlint-cli2-action@v24
+        with:
+          globs: "**/*.md"
+      - name: Relative links and anchors
+        uses: lycheeverse/lychee-action@v2
+        with:
+          lycheeVersion: v0.24.2
+          args: --config lychee.toml --root-dir ${{ github.workspace }} --no-progress './**/*.md'
+          fail: true
