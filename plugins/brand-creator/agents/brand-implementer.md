@@ -1,6 +1,6 @@
 ---
 name: brand-implementer
-description: Only for brand-creator workflows or an approved fleet; do not auto-delegate. Sonnet-tier. Applies the rows of a brand project's ADOPTION.md to one product repository, only after the owner explicitly asks to apply the brand and that ask is recorded in BRAND-STATE.md, on the branch the owner named, finding each spot by its content and copying pack files byte for byte; never commits, merges or pushes.
+description: Only for brand-creator workflows or an approved fleet; do not auto-delegate. Applies the rows of a brand project's ADOPTION.md to one product repository, only after the owner explicitly asks to apply the brand and that ask is recorded in BRAND-STATE.md, on the branch the owner named, finding each spot by its content and copying pack files byte for byte; never commits, merges or pushes.
 model: sonnet
 tools: Read, Write, Edit, Glob, Grep, Bash
 maxTurns: 60

@@ -1,6 +1,6 @@
 ---
 name: brand-judge
-description: Only for brand-creator workflows or an approved fleet; do not auto-delegate. Opus-tier. Ranks direction boards, review findings or name candidates on the plugin's rubric, without changing anything, and returns advice the owner decides on.
+description: Only for brand-creator workflows or an approved fleet; do not auto-delegate. Ranks direction boards, review findings or name candidates on the plugin's rubric, without changing anything, and returns advice the owner decides on.
 model: opus
 tools: Read, Grep, Glob
 maxTurns: 25

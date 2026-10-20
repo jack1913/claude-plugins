@@ -6,6 +6,12 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-10-20
+
+### Changed
+
+- Agent descriptions no longer name the model tier ("Opus-tier", "Sonnet-tier"): each agent's `model` field holds it, and `brand-creator fleet-plan --check` no longer asks for it in the prose.
+
 ## [0.2.2] - 2026-10-20
 
 ### Added

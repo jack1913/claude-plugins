@@ -1,6 +1,6 @@
 ---
 name: brand-researcher
-description: Only for brand-creator workflows or an approved fleet; do not auto-delegate. Sonnet-tier. Gathers market, category, platform or naming evidence from public sources and returns each claim tagged primary, secondary or UNVERIFIED, or generates and screens name candidates; it reports back and the lead writes the project files.
+description: Only for brand-creator workflows or an approved fleet; do not auto-delegate. Gathers market, category, platform or naming evidence from public sources and returns each claim tagged primary, secondary or UNVERIFIED, or generates and screens name candidates; it reports back and the lead writes the project files.
 model: sonnet
 tools: Read, Grep, Glob, WebSearch, WebFetch, Bash
 maxTurns: 30

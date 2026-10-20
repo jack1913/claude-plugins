@@ -1,6 +1,6 @@
 ---
 name: brand-namer
-description: Only for brand-creator workflows or an approved fleet; do not auto-delegate. Sonnet-tier. Generates and filters name candidates offline from its own knowledge and local files, and runs the name checker in plan mode only, which sends no names out.
+description: Only for brand-creator workflows or an approved fleet; do not auto-delegate. Generates and filters name candidates offline from its own knowledge and local files, and runs the name checker in plan mode only, which sends no names out.
 model: sonnet
 tools: Read, Grep, Glob, Bash
 maxTurns: 30

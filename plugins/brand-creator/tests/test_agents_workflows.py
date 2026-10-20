@@ -59,7 +59,7 @@ def test_every_planned_agent_exists_with_its_tier_tools_and_turn_limit():
         assert "Agent" not in got and "Task" not in got, f"{name}: no recursive fan-out"
         assert re.fullmatch(r"[1-9][0-9]", fm["maxTurns"]), name
         assert fm["description"].startswith(PREFIX), name
-        assert f"{tier.capitalize()}-tier" in fm["description"], f"{name}: the description names its tier"
+        assert "-tier" not in fm["description"], f"{name}: the tier lives in the model field, not the description"
         assert len(fm["description"]) <= 1024
         assert "${CLAUDE_PLUGIN_ROOT}" not in body and "${CLAUDE_PLUGIN_DATA}" not in body, f"{name}: paths come in the prompt"
     # the read-only agents really cannot write

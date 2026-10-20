@@ -1,6 +1,6 @@
 ---
 name: brand-inventory
-description: Only for brand-creator workflows or an approved fleet; do not auto-delegate. Sonnet-tier. Lists, without changing anything, every place a brand appears in the target product repositories (icons, favicons, store and package metadata, colours, names) as rows for INVENTORY.md, with the platform rule and its citation.
+description: Only for brand-creator workflows or an approved fleet; do not auto-delegate. Lists, without changing anything, every place a brand appears in the target product repositories (icons, favicons, store and package metadata, colours, names) as rows for INVENTORY.md, with the platform rule and its citation.
 model: sonnet
 tools: Read, Grep, Glob
 maxTurns: 30

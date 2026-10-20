@@ -32,7 +32,7 @@ fx_write_state() {
 slug: $slug
 name: "$name"
 created: $FX_DATE
-plugin_version: 0.2.2
+plugin_version: 0.2.3
 tier: $tier
 phase: $phase
 architecture: standalone

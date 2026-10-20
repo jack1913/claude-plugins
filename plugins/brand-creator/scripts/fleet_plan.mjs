@@ -271,7 +271,6 @@ export function agentProblems(agents) {
     if (!Number.isInteger(a.maxTurns) || a.maxTurns < 5) problems.push(`${a.file}: maxTurns missing`);
     if (!FAMILIES.includes(a.model)) problems.push(`${a.file}: model must be opus, sonnet or haiku`);
     if (/\$\{CLAUDE_PLUGIN_(ROOT|DATA)\}/.test(a.body)) problems.push(`${a.file}: paths come in the prompt, not from plugin variables`);
-    if (!a.description.toLowerCase().includes(`${a.model}-tier`)) problems.push(`${a.file}: the description must name its tier (${a.model}-tier)`);
     if (n !== path.basename(a.file, ".md")) problems.push(`${a.file}: name must equal the file name`);
   }
   return problems;
