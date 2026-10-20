@@ -1,6 +1,18 @@
 ---
 name: swiftui
-description: Use when writing, reviewing, or refactoring SwiftUI code for iOS, iPadOS, macOS or visionOS, including state and `@Observable` data flow, view composition, resizable layouts, safe areas, display scale, performance, lists, environment, localization, animation, Liquid Glass, and API migration. Also use for iPhone Duo or foldable layouts, `ArrangementView`, `ReservedRegion`, hinge effects, vertical bars, `@State` initialization or synthesized-property diagnostics, `@ContentBuilder` ambiguity, `reorderable` drag/drop, custom `AsyncImage` `URLSession`, swipe actions outside List, item-bound `alert`/`confirmationDialog`, `ToolbarOverflowMenu`, `AnimatableValues`, Document APIs (`Document`/`DocumentReader`), Instruments `.trace` capture or analysis, and visionOS glass alternatives (`glassBackgroundEffect`, ornaments), windows, volumes and immersive spaces.
+description: >-
+  Writes, reviews and refactors SwiftUI with current APIs for iOS, iPadOS, macOS and visionOS. Use when
+  building or changing SwiftUI views, state and data flow, layout, animation or Liquid Glass, or migrating
+  off deprecated APIs.
+when_to_use: >-
+  State and `@Observable` data flow, view composition, resizable layouts, safe areas, display scale,
+  performance, lists, environment, localization. iPhone Duo or foldable layouts, `ArrangementView`,
+  `ReservedRegion`, hinge effects, vertical bars. `@State` initialization or synthesized-property
+  diagnostics, `@ContentBuilder` ambiguity, `reorderable` drag/drop, custom `AsyncImage` `URLSession`,
+  swipe actions outside List, item-bound `alert`/`confirmationDialog`, `ToolbarOverflowMenu`,
+  `AnimatableValues`, Document APIs (`Document`/`DocumentReader`), Instruments `.trace` capture or
+  analysis. visionOS glass alternatives (`glassBackgroundEffect`, ornaments), windows, volumes and
+  immersive spaces.
 ---
 
 # SwiftUI Expert Skill
@@ -134,6 +146,7 @@ Consult the reference file for each topic relevant to the current task:
 | Previews | `references/previews.md` |
 | Instruments trace analysis | `references/trace-analysis.md` |
 | Instruments trace recording | `references/trace-recording.md` |
+| Every reference file, with what to open it for | `references/_index.md` |
 
 ## Correctness Checklist
 
