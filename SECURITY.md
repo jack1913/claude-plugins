@@ -5,13 +5,11 @@ matter more than a bug in a normal library, so reports about those are welcome.
 
 ## Report a problem
 
-Private vulnerability reporting is not turned on for this repository. So:
+Report it privately on GitHub: open the repository's
+[Security tab](https://github.com/jack1913/claude-plugins/security) and choose **Report a vulnerability**. Only you
+and the maintainer see the report.
 
-1. Open an [issue](https://github.com/jack1913/claude-plugins/issues) that says you have a security problem. Leave out
-   the details and any way to exploit it.
-2. Ask for a private channel to send the rest.
-
-I'll answer in the issue and move the details there.
+Please don't open a public issue for a security problem.
 
 ## What counts
 
