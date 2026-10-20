@@ -6,6 +6,8 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-20
+
 ### Added
 
 - A commands reference page in the manual lists every command, workflow and agent, who can start each one, and its
