@@ -7,6 +7,7 @@ the REPO SPECIFICS bakes described in `stamping.md`.
 ## Version homes (for `changelog-release`)
 
 Find the authoritative files that carry a real `version`:
+
 - Common homes: `package.json`, `.claude-plugin/plugin.json`, `pyproject.toml`,
   `Cargo.toml`, `VERSION`, `*.gemspec`.
 - **Exclude** `node_modules/`, `vendor/`, `dist/`, `build/`, and workspace
@@ -16,6 +17,7 @@ Find the authoritative files that carry a real `version`:
 - Confirm the final list with the operator.
 
 **Monorepo mode:** decide how versions move together and bake it:
+
 - `independent` — each package versions on its own;
 - `linked` — packages share a version but are released together;
 - `fixed` — one version across the repo.
@@ -112,7 +114,7 @@ must eventually cover.
 
 Run the helper and treat its JSON as candidates:
 
-```
+```bash
 python3 "$SKILL_DIR/scripts/onboard.py" find-predecessors .claude
 ```
 
@@ -130,7 +132,7 @@ output serves two purposes: it tells the operator what was detected when
 supplies the facts the model-in-the-loop needs to author that skill's REPO
 SPECIFICS block:
 
-```
+```bash
 python3 "$SKILL_DIR/scripts/onboard.py" deps-detect .
 ```
 

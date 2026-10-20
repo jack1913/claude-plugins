@@ -1,11 +1,20 @@
 {
   "name": "batbelt",
+  "displayName": "batbelt",
   "version": "0.1.2",
-  "description": "Plan interviews, claim verification against primary sources, and repository onboarding.",
+  "description": "Grill a plan, prove a claim against real sources, and set up a repository for Claude.",
   "author": {
     "name": "Jacek Pytlik"
   },
-  "homepage": "https://github.com/jack1913/claude-plugins",
+  "homepage": "https://github.com/jack1913/claude-plugins/tree/main/plugins/batbelt",
   "repository": "https://github.com/jack1913/claude-plugins",
-  "license": "MIT"
+  "license": "MIT",
+  "keywords": [
+    "planning",
+    "grill-me",
+    "fact-checking",
+    "assumptions",
+    "onboarding",
+    "repository-setup"
+  ]
 }

@@ -10,17 +10,18 @@ In order, top to bottom:
 
 1. **Frontmatter** (`---` … `---`) — from the template. Part of the template
    region (regenerated on `--sync`).
-2. **Provenance header** — a single HTML comment, verbatim:
+2. **Provenance header** — a single HTML comment, verbatim (repos stamped before version 4
+   say `from claude-configs`; both forms are accepted, and `--sync` takes the header from the current template):
 
-   ```
-   <!-- stamped by onboard-repo v<X> from claude-configs on <date>. The template region is regenerated on /batbelt:onboard-repo --sync (backup + diff shown first); the REPO SPECIFICS block is preserved. -->
+   ```text
+   <!-- stamped by onboard-repo v<X> from batbelt on <date>. The template region is regenerated on /batbelt:onboard-repo --sync (backup + diff shown first); the REPO SPECIFICS block is preserved. -->
    ```
 
 3. **Template region** — the canonical skill body from
    `templates/<name>/SKILL.md`. Owned by the template; **overwritten on `--sync`**.
 4. **REPO SPECIFICS block** — the per-repo bakes, between:
 
-   ```
+   ```text
    <!-- BEGIN REPO SPECIFICS (preserved on --sync) -->
    ... per-repo facts ...
    <!-- END REPO SPECIFICS -->
@@ -39,7 +40,7 @@ gates would exist only in the plugin.
 
 **Never copy `onboard.py`/`onboard_lib.py`.** They hold the one-shot onboarding verbs
 (`preserve`, `settings-plan`, `run-*`, `deps-detect`, `convert-copilot`), which a skill
-that runs for years must not ship — ADR-0008 records the split. `check.py` is
+that runs for years must not ship. `check.py` is
 stdlib-only and imports no sibling, so a single-file copy is sound; a test pins both
 properties, because the copy silently depends on them.
 
@@ -131,17 +132,17 @@ with `check.py` and removes the two orphans, shown in the plan like any other ch
   runtime anyway, so a false claim only misleads the operator).
 - **capture fence convention:** how a grounded `docs/manual/` page shows a command
   and its output. Recommended: the COMMAND in a ```` ```bash ```` fence with each line
-  marked `$ `, the OUTPUT in a separate ```` ```console capture=<slug> ```` fence whose
+  marked `$`, the OUTPUT in a separate ```` ```console capture=<slug> ```` fence whose
   lines are a verbatim, in-order subsequence of `docs/.onboard-captures/<slug>.txt`.
   Separate fences copy-paste cleanly; note that markdownlint's MD014 cannot model the
   split and is disabled per grounded page. Record the convention the repo actually
   uses — a single `text capture=<slug>` fence holding both is the older shape — so a
   later run converts pages consistently rather than mixing the two.
 - **docs voice:** the tone `update-docs` enforces on `docs/manual/` pages —
-  default "commands-first, one-concept-per-page, scannable, operator-voiced; cite
+  default "task-first, one-concept-per-page, scannable, operator-voiced; cite
   ADRs, don't inline rationale", or aligned to the README voice when that voice is
   docs-natural (Field Notes / Lab Notebook / Workshop / The Index). On defer, the
-  commands-first default is baked. (The README voice, by contrast, has no default —
+  task-first default is baked. (The README voice, by contrast, has no default —
   a deferred README voice records "no voice" and re-prompts on the first styling run.)
 
 ## REPO SPECIFICS schema — `update-rules`
@@ -205,7 +206,7 @@ rendered example instead of the SemVer clause — no calver.org link, whose `MM`
 means an unpadded month — e.g. "…, and versions are calendar-based: `YYYYMM.D.N`
 (e.g. `202609.29.0`)."
 
-```
+```text
 # Changelog
 
 All notable changes to this project are documented here.
@@ -272,6 +273,6 @@ file and is that file's to maintain.
 
 ## Restart notice (print after stamping)
 
-```
+```text
 Skills stamped into .claude/skills/. Restart Claude Code (e.g. `claude --continue`) to load them.
 ```

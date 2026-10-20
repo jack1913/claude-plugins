@@ -22,6 +22,26 @@ BEGIN = "<!-- BEGIN REPO SPECIFICS (preserved on --sync) -->"
 END = "<!-- END REPO SPECIFICS -->"
 
 
+class _SkillText:
+    """The whole onboard-repo procedure as one text, in its original order.
+
+    SKILL.md keeps the top-level procedure and points to references/ for the long sections.
+    read_text() puts each pointer's target back where the pointer stands, so a test that asserts
+    something about the skill reads the same document it read before the sections moved.
+    """
+
+    _POINTER = re.compile(
+        r"^Read \[references/([\w-]+\.md)\]\(references/[\w-]+\.md\) and follow it as written\.$", re.M
+    )
+
+    def read_text(self, encoding="utf-8"):
+        text = (ONBOARD / "SKILL.md").read_text(encoding=encoding)
+        return self._POINTER.sub(lambda m: (ONBOARD / "references" / m.group(1)).read_text(encoding=encoding), text)
+
+
+SKILL = _SkillText()
+
+
 def _stamped(inner):
     return "# skill\n\ntemplate body\n\n" + BEGIN + inner + END + "\n"
 
@@ -430,7 +450,7 @@ def test_cli_rewrite_links_malformed_manifest_exits_2(tmp_path, capsys):
 
 
 def test_skill_orchestrates_helpers_and_prints_restart_notice():
-    body = (ONBOARD / "SKILL.md").read_text(encoding="utf-8")
+    body = SKILL.read_text(encoding="utf-8")
     assert "scripts/onboard.py" in body  # invokes the CLI seam
     assert "Restart Claude Code" in body  # restart notice (spec 4.2)
     assert "--sync" in body and "--check" in body  # modes documented
@@ -442,7 +462,7 @@ def test_skill_orchestrates_helpers_and_prints_restart_notice():
 def test_skill_always_asks_about_update_deps():
     # update-deps mutates manifests/lockfiles, so it is never stamped silently
     # and never skipped silently: every default run asks once, defaulting to no.
-    body = (ONBOARD / "SKILL.md").read_text(encoding="utf-8")
+    body = SKILL.read_text(encoding="utf-8")
     assert "always asked" in body.lower()
     assert "--without update-deps" in body  # explicit decline is available
     assert "--with update-deps" in body  # explicit accept is available
@@ -530,7 +550,6 @@ def test_predecessor_retire_scenario(tmp_path):
 
 CLR = ONBOARD / "templates" / "changelog-release" / "SKILL.md"
 UPD = ONBOARD / "templates" / "update-docs" / "SKILL.md"
-SKILL = ONBOARD / "SKILL.md"
 RUBRIC = ONBOARD / "references" / "rubric.md"
 DETECT = ONBOARD / "references" / "detection.md"
 STAMPING = ONBOARD / "references" / "stamping.md"
@@ -688,6 +707,7 @@ def test_docs_ia_seeds_exist_with_content():
         "docs-README.md",
         "docs-manual-README.md",
         "internals-README.md",
+        "internals-docs-standard.md",
         "ADR-TEMPLATE.md",
         "docs-archive-README.md",
     ]
@@ -700,9 +720,9 @@ def test_docs_ia_seeds_exist_with_content():
     docs_readme = (DOCSIA / "docs-README.md").read_text(encoding="utf-8")
     assert "internals/" in docs_readme
     assert "@AGENTS.md" in (DOCSIA / "CLAUDE.md").read_text(encoding="utf-8")
-    assert "markdownlint-disable-file MD029" in (DOCSIA / "docs-manual-README.md").read_text(
-        encoding="utf-8"
-    )
+    # the manual index is three consumer headings with no numbered reading order (no MD029 waiver)
+    manual = (DOCSIA / "docs-manual-README.md").read_text(encoding="utf-8")
+    assert "markdownlint-disable" not in manual
 
 
 def test_update_docs_template_is_ia_present_based():
@@ -928,20 +948,25 @@ def test_renumber_toc_unclosed_fence_to_eof():
     assert "5. do this" in out and "6. do that" in out
 
 
-def test_seed_manual_readme_total_heals_to_real_count():
-    # Integration (review C1): the shipped seed ships DIGIT totals (1 → 0), so once
-    # real page links are added, renumber_toc maintains every total to the count —
-    # it must NOT stay frozen at a literal N.
-    seed = (DOCSIA / "docs-manual-README.md").read_text(encoding="utf-8")
-    assert "→ N" not in seed and "→ 0" in seed  # seed uses a digit, not the letter N
+def test_renumber_toc_heals_totals_to_real_count():
+    # Integration (review C1): a manual index that ships a numbered reading order with
+    # DIGIT totals (1 -> 0) has every total maintained by renumber_toc once real page
+    # links are added. The shipped seed no longer has a reading order (it is grouped by
+    # task), but adopted repos may, so the helper keeps its contract on its own fixture.
+    seed = (
+        "<!-- markdownlint-disable-file MD029 -- the 1\u21920 reading order is continuous -->\n"
+        "# m\n\nRead the daily-use pages **1 \u2192 0** in order.\n\n"
+        "## The daily-use manual (read 1 \u2192 0)\n\n{{TODO: numbered 1..N page links, grouped}}\n"
+    )
+    assert "\u2192 N" not in seed and "\u2192 0" in seed  # digit, not the letter N
     filled = seed.replace(
         "{{TODO: numbered 1..N page links, grouped}}",
         "3. [a](a.md)\n1. [b](b.md)\n5. [c](c.md)",
     )
     out = lib.renumber_toc(filled)
-    assert "**1 → 3**" in out  # intro bold total heals to 3
-    assert "(read 1 → 3)" in out  # section-heading paren total heals to 3
-    assert "1→3 reading order" in out  # MD029 comment heals to 3
+    assert "**1 \u2192 3**" in out  # intro bold total heals to 3
+    assert "(read 1 \u2192 3)" in out  # section-heading paren total heals to 3
+    assert "1\u21923 reading order" in out  # MD029 comment heals to 3
     assert "1. [a](a.md)" in out and "2. [b](b.md)" in out and "3. [c](c.md)" in out
 
 
@@ -1009,8 +1034,8 @@ def test_move_manifest_roundtrips():
     assert got_dirs == dirs
 
 
-def test_template_version_is_three():
-    assert lib.TEMPLATE_VERSION == 3
+def test_template_version_is_four():
+    assert lib.TEMPLATE_VERSION == 4
 
 
 # ---- Phase 1: heading_slugs -------------------------------------------------
@@ -1755,7 +1780,7 @@ def test_check_docs_capture_missing_slug_file_is_ungrounded(tmp_path, capsys):
 
 
 def test_skill_frontmatter_grants_task_for_reviewer():
-    body = (ONBOARD / "SKILL.md").read_text(encoding="utf-8")
+    body = SKILL.read_text(encoding="utf-8")
     fm = body.split("---", 2)[1]
     assert "Task" in fm  # reviewer grant (spec 2.2 / 6)
 
@@ -1790,7 +1815,7 @@ def test_docs_ia_seeds_pass_check_docs_as_scaffold(tmp_path, capsys):
 
 
 def test_skill_documents_authoring_loop_and_reviewer():
-    t = (ONBOARD / "SKILL.md").read_text(encoding="utf-8").lower()
+    t = SKILL.read_text(encoding="utf-8").lower()
     assert "check-docs" in t  # mechanical gate invoked
     assert "capture=" in t and "illustrative" in t  # provenance tags
     assert ".onboard-captures" in t and ".onboard-coverage.json" in t
@@ -1810,7 +1835,7 @@ def test_detection_defines_surface_enumerator_and_tiers():
 
 
 def test_skill_documents_claude_to_agents_and_link_order():
-    t = (ONBOARD / "SKILL.md").read_text(encoding="utf-8").lower()
+    t = SKILL.read_text(encoding="utf-8").lower()
     assert "@agents.md" in t  # wholesale CLAUDE stub
     assert "cat agents.md" in t  # additive append via the real `cat AGENTS.md addition` mechanic
     assert "no-op" in t or "already on the convention" in t
@@ -2701,10 +2726,10 @@ def test_rules_example_template_is_inert_until_filled_in():
     assert "read, never on write" in low or "fires on read" in low
 
 
-def test_skill_scaffolds_the_example_rule_and_cites_the_adr():
+def test_skill_scaffolds_the_example_rule_and_refuses_to_author_rules():
     t = SKILL.read_text(encoding="utf-8")
     assert "rules-EXAMPLE.md" in t
-    assert "ADR-0002" in t
+    assert "Do not author repo-specific rules here" in t
 
 
 # ---- Task 9: grounding the claims in rules and skills ---------------------
@@ -2845,7 +2870,7 @@ def test_skill_grounds_existing_instruction_files_on_the_default_path():
 
 def test_skill_rule_mining_is_validated_or_unavailable():
     t = SKILL.read_text(encoding="utf-8")
-    assert "3.4c" in t and "ADR-0013" in t
+    assert "3.4c" in t and "the **one** authoring path" in t
     low = " ".join(t.lower().split())
     # three passes: mechanical + two independent, differently-briefed verifiers
     assert "truth verifier" in low and "worth verifier" in low
@@ -3845,7 +3870,7 @@ def test_onboard_repo_stamps_the_helper_scripts_beside_update_docs():
     # onboard-repo's OWN SKILL.md carries no REPO SPECIFICS markers (it is the
     # stamper, not a stamped file), so _norm's parse_regions would fail on it.
     def flat(path):
-        body = pathlib.Path(path).read_text(encoding="utf-8").lower()
+        body = (path if isinstance(path, _SkillText) else pathlib.Path(path)).read_text(encoding="utf-8").lower()
         for ch in ("*", "_", "`"):
             body = body.replace(ch, "")
         return " ".join(body.split())
@@ -3916,3 +3941,108 @@ def test_the_dependency_between_the_scripts_points_one_way():
     assert "check" in _toplevel_imports("onboard_lib.py")
     assert _toplevel_imports("onboard.py") <= STDLIB | {"check", "onboard_lib"}
     assert _toplevel_imports("onboard_lib.py") <= STDLIB | {"check"}
+
+
+# ---- docs standard stamped into other repos ---------------------------------
+
+
+def test_docs_standard_template_is_generic_and_complete():
+    t = (DOCSIA / "internals-docs-standard.md").read_text(encoding="utf-8")
+    for heading in (
+        "## 1. Four kinds of page",
+        "## 2. Who reads what",
+        "## 3. Where things live",
+        "## 4. Voice",
+        "## 6. Changelogs",
+        "## 7. Decision records",
+        "## 8. Checks",
+    ):
+        assert heading in t, heading
+    assert "<repo>" in t
+    assert "Supersedes: ADR-NNNN" in t and "## Update YYYY-MM-DD" in t
+    assert "docs/manual/use/" in t
+    # the optional skills section is the only place skills are discussed
+    assert "If this repo ships Claude Code skills" in t
+    # nothing marketplace- or plugin-specific leaks into a generic standard
+    for leak in ("plugin.json", "marketplace", "jack1913", "claude-plugins", "batbelt"):
+        assert leak not in t, leak
+
+
+def test_skill_stamps_docs_standard_create_only_missing():
+    t = SKILL.read_text(encoding="utf-8")
+    assert "`internals-docs-standard.md`→`docs/internals/docs-standard.md`" in t
+    assert "{getting-started,use,reference}/" not in t
+    assert "each is created with its first page" in " ".join(t.split())
+    assert "never overwrites an existing `docs-standard.md`" in " ".join(t.split())
+
+
+def test_docs_standard_is_listed_in_internals_readme_and_agents_index():
+    readme = (DOCSIA / "internals-README.md").read_text(encoding="utf-8")
+    assert "(docs-standard.md)" in readme
+    agents = (DOCSIA / "AGENTS.md").read_text(encoding="utf-8")
+    assert "`docs/internals/docs-standard.md`" in agents
+    assert "commands-first" not in agents
+
+
+def test_manual_readme_seed_has_the_three_task_headings():
+    seed = (DOCSIA / "docs-manual-README.md").read_text(encoding="utf-8")
+    heads = [ln for ln in seed.splitlines() if ln.startswith("## ")]
+    assert heads == ["## Get started", "## Do a task", "## Look it up"]
+    assert "markdownlint" not in seed
+    assert "../internals/" in seed  # contributors get one line, not a section
+
+
+def test_adr_template_matches_the_status_grammar():
+    t = (DOCSIA / "ADR-TEMPLATE.md").read_text(encoding="utf-8")
+    assert "proposed | accepted | deprecated | superseded by ADR-NNNN" in t
+    assert "**Supersedes:**" in t
+    assert "## Update YYYY-MM-DD" in t
+
+
+def test_manual_page_templates_exist_and_author_manual_points_at_them():
+    refs = ONBOARD / "references"
+    how = (refs / "manual-page-how-to.md").read_text(encoding="utf-8")
+    ref = (refs / "manual-page-reference.md").read_text(encoding="utf-8")
+    assert "## Before you start" in how and "## If something goes wrong" in how
+    assert "| Argument | What it does | Default |" in ref
+    author = (refs / "author-manual.md").read_text(encoding="utf-8")
+    assert "manual-page-how-to.md" in author and "manual-page-reference.md" in author
+    index = (refs / "_index.md").read_text(encoding="utf-8")
+    assert "manual-page-how-to.md" in index and "manual-page-reference.md" in index
+
+
+def test_update_docs_template_is_task_first_and_defers_to_the_standard():
+    t = _norm(UPD)
+    assert "commands-first" not in t
+    assert "task-first" in t
+    assert "docs/internals/docs-standard.md" in t and "the standard wins" in t
+
+
+def test_provenance_accepts_the_old_and_the_new_source():
+    tail = "The template region is regenerated on /batbelt:onboard-repo --sync. -->"
+    for source in ("claude-configs", "batbelt"):
+        prov = f"<!-- stamped by onboard-repo v1 from {source} on <date>. {tail}"
+        out = lib.restamp_provenance(prov, lib.TEMPLATE_VERSION, "2026-10-20")
+        assert f"onboard-repo v{lib.TEMPLATE_VERSION} from {source} on 2026-10-20." in out
+        assert "<date>" not in out
+    # an unrelated source is left alone
+    other = "<!-- stamped by onboard-repo v1 from elsewhere on <date>. x -->"
+    assert lib.restamp_provenance(other, 4, "2026-10-20") == other
+
+
+def test_new_stamps_say_batbelt_not_claude_configs():
+    for name in _stampable_templates():
+        raw = (ONBOARD / "templates" / name / "SKILL.md").read_text(encoding="utf-8")
+        assert " from batbelt on " in raw and "from claude-configs" not in raw, name
+    stamping = (ONBOARD / "references" / "stamping.md").read_text(encoding="utf-8")
+    assert "from batbelt on <date>" in stamping
+
+
+def test_sync_of_an_old_stamp_takes_the_new_header(tmp_path):
+    # A repo stamped before v4 (claude-configs, v3) syncs against the batbelt template.
+    old = "# OLD\n\n<!-- stamped by onboard-repo v3 from claude-configs on 2026-01-01. x. -->\n\n"
+    old += BEGIN + "\nKEEP\n" + END + "\n"
+    new = "# NEW\n\n<!-- stamped by onboard-repo v4 from batbelt on <date>. x. -->\n\n"
+    new += BEGIN + "\nP\n" + END + "\n"
+    merged = lib.restamp_provenance(lib.preserve_repo_specifics(old, new), 4, "2026-10-20")
+    assert "v4 from batbelt on 2026-10-20." in merged and "KEEP" in merged

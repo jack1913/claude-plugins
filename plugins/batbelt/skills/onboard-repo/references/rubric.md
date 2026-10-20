@@ -13,12 +13,13 @@ audience and flag it for a possible split.
 | **historical** | `docs/archive/` | "what did we used to do?" | dated/superseded records, old plans/specs/reviews — frozen, never edited (so `check-docs` skips its grounding checks here; link checks still apply) |
 
 Per-repo-type examples:
+
 - **CLI tool** — usage/flags page → consumer; the parser/dispatch design → technical; "why one binary not plugins" → decision.
 - **Library** — API how-to/quickstart → consumer; internal module layout → technical; "why we vendored X" → decision.
 - **Full-stack app** — feature walkthroughs → consumer; data model / deploy pipeline → technical; superseded RFCs → historical.
 
-Getting-started (per target) and pure reference tables are consumer subpages
-(`docs/manual/getting-started/`, `docs/manual/reference/`).
+Getting-started (per target), task how-tos and pure reference tables are consumer subpages
+(`docs/manual/getting-started/`, `docs/manual/use/`, `docs/manual/reference/`).
 
 **Not documentation at all — an agent working directory.** A markdown tree written by
 a *tool* rather than authored for a reader has no tier and is skipped by the docs walk

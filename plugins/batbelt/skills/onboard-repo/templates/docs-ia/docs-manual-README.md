@@ -1,16 +1,17 @@
-<!-- markdownlint-disable-file MD029 -- the 1→0 reading order is continuous across subsections by design -->
 # <repo> manual
 
-The operator's manual — how to use <repo> day to day. Read the daily-use pages **1 → 0** in order.
+How to use <repo>. Pick the kind of page you need.
 
-## Getting started
+## Get started
 
-{{TODO: per-target links}}
+{{TODO: links to the pages in getting-started/ — install, first run}}
 
-## The daily-use manual (read 1 → 0)
+## Do a task
 
-{{TODO: numbered 1..N page links, grouped}}
+{{TODO: one link per how-to in use/, each named for the task: "Review a screen"}}
 
-## Reference (tables)
+## Look it up
 
-{{TODO: reference page links}}
+{{TODO: links to the pages in reference/ — commands, settings, troubleshooting}}
+
+Working on <repo> itself? See [`../internals/`](../internals/).

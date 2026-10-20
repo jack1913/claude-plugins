@@ -6,7 +6,7 @@
 ## 2. Repo layout
 | Path | Purpose |
 | --- | --- |
-| `docs/manual/` | Consumer documentation — commands-first, one concept per page |
+| `docs/manual/` | Consumer documentation — task-first, one task per page |
 | `docs/internals/` | Technical mechanics — contributors only |
 | `docs/adr/` | Architecture Decision Records |
 | `docs/archive/` | Frozen point-in-time records |
@@ -14,7 +14,11 @@
 | `.claude/skills/` | Invoked procedures and reference packs |
 
 ## 3. Pointer index (source-of-truth → path)
-{{TODO: cite-or-defer real file/symbol pointers}}
+| What | Where |
+| --- | --- |
+| {{TODO: cite-or-defer real file/symbol pointers}} | |
+| How docs are written and where they live (page kinds, voice, changelog, ADR rules) | `docs/internals/docs-standard.md` |
+| Agent instruction layout, rule-vs-skill decision rule | `docs/internals/agent-instructions.md` |
 
 ### Auto-loaded rules
 Each loads only when Claude reads a file matching its `paths:` frontmatter, so an
@@ -31,8 +35,6 @@ invoked, so reference material belongs here rather than in a rule.
 | Skill | When to use |
 | --- | --- |
 | {{TODO: one row per skill in `.claude/skills/`}} | |
-
-| Agent instruction layout, rule-vs-skill decision rule | `docs/internals/agent-instructions.md` |
 
 ## 4. Project constraints
 - Docs describe implemented state.

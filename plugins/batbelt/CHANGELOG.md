@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+While batbelt is `0.y.z`, a minor release may break things. This one removes a command.
+
+### Added
+
+- A docs standard page for repositories you set up with `/batbelt:onboard-repo`: `docs/internals/docs-standard.md` covers page kinds, voice, changelog and decision-record rules. It is listed in the internals README and the `AGENTS.md` index. Already set up? Run `/batbelt:onboard-repo --sync` to add it.
+- A `docs/manual/use/` folder for task pages, and page shapes for how-to and reference pages that the manual-writing step follows.
+- A `LICENSE` file in the plugin folder, so the MIT licence travels with the install.
+- A commands page and a troubleshooting page in the manual, plus one how-to page each for grilling a plan, proving a claim and setting up a repository.
+- A short description, display name and keywords for the plugin, so it reads well in the plugin list.
+
+### Changed
+
+- The manual index of a new repository is now grouped as Get started, Do a task and Look it up, instead of a numbered reading order. The stamped `update-docs` skill writes manual pages task-first and follows the docs standard page when the repository has one.
+- The decision-record template now has a `Supersedes` line, the full status list and a note on how to add updates after acceptance.
+- Stamped skills now say `from batbelt` in their header. Repositories stamped earlier, which say `from claude-configs`, still sync. Run `--check` to see which stamped files are behind.
+- `/batbelt:grill-me` now also starts on its own when you say "grill me" or ask to stress-test a plan.
+- The `/batbelt:onboard-repo` description says plainly what it sets up and that it runs only when typed. Its argument hint now lists every flag, including `--with update-deps` and `--without update-deps`.
+- The docs moved into `docs/manual` (for using batbelt) and `docs/internals` (for contributors). The README is shorter and links to them.
+- The `onboard-repo` instructions are split: the long sections moved into files under `skills/onboard-repo/references/`. Their rules did not change; references to design records from another repository were dropped.
+
+### Removed
+
+- `/batbelt:grilling`. Type `/batbelt:grill-me`, or just say "grill me".
+
 ## [0.1.2] - 2026-10-19
 
 ### Security

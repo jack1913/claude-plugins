@@ -39,6 +39,7 @@ Cite the article and act (`Art. X ust. Y` of the named statute); a package
 name is a media label, not an identifier a verdict can rest on.
 
 Known traps:
+
 - A bill (projekt ustawy, RCL or Sejm print number) is not law. A claim
   resting on a projekt is at best PARTIALLY with the legislative stage named.
 - Aggregator tables (gofin, infor) lag official announcements at year
@@ -59,6 +60,7 @@ Known traps:
 
 Cross-check formulas for Polish payroll parameters (arithmetic per
 `evidence-standards.md`; inputs must still be sourced each run):
+
 - Annual ZUS contribution base cap = forecast average monthly wage x 30
   (Art. 19 ust. 1 ustawy o systemie ubezpieczen spolecznych; the amount is
   announced by obwieszczenie in Monitor Polski)
@@ -87,6 +89,7 @@ reporting duties.
 4. Tax advisory newsletters, gofin/infor tax tables, webinars. Leads only.
 
 Known traps:
+
 - An individual interpretation binds only its addressee; it is evidence of
   the authority's reading, not of the law's general effect. Say which in the
   record's note.
@@ -111,6 +114,7 @@ digital-regulatory duties.
 4. Law firm alerts and compliance blogs. Leads only.
 
 Known traps:
+
 - EU regulations apply directly; directives reach companies only through
   national transposition, on the national date. State which instrument type
   the claim rests on.

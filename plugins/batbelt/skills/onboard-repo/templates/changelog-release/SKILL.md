@@ -230,7 +230,7 @@ When this run cut a version block:
 subjects; RAG/knowledge-graph anti-hallucination (ground truth is
 `git log` / `gh pr view`).
 
-<!-- stamped by onboard-repo v3 from claude-configs on <date>. The template region is regenerated on /batbelt:onboard-repo --sync (backup + diff shown first); the REPO SPECIFICS block is preserved. -->
+<!-- stamped by onboard-repo v4 from batbelt on <date>. The template region is regenerated on /batbelt:onboard-repo --sync (backup + diff shown first); the REPO SPECIFICS block is preserved. -->
 
 <!-- BEGIN REPO SPECIFICS (preserved on --sync) -->
 <!-- onboard-repo fills this in per repo; see references/stamping.md -->

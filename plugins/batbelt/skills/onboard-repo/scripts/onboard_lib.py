@@ -41,7 +41,7 @@ from check import (  # noqa: F401  (re-exported for callers of this module)
 )
 
 # Bump when the stamped template layout changes; recorded in the provenance header.
-TEMPLATE_VERSION = 3
+TEMPLATE_VERSION = 4
 
 BEGIN = "<!-- BEGIN REPO SPECIFICS (preserved on --sync) -->"
 END = "<!-- END REPO SPECIFICS -->"
@@ -439,7 +439,8 @@ def classify_artifact(text):
     return max(("deps", dp), ("docs", dc), ("changelog", cl), key=lambda kv: kv[1])[0]
 
 
-_PROVENANCE_RE = re.compile(r"(stamped by onboard-repo v)\d+( from claude-configs on )[^.]*(\.)")
+# Accepts both sources: repos stamped before v4 say "from claude-configs", new stamps say "from batbelt".
+_PROVENANCE_RE = re.compile(r"(stamped by onboard-repo v)\d+( from (?:claude-configs|batbelt) on )[^.]*(\.)")
 
 
 def restamp_provenance(text, version, date):

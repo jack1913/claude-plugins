@@ -11,7 +11,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 MARKETPLACE = ROOT / ".claude-plugin" / "marketplace.json"
 BATBELT = ROOT / "plugins" / "batbelt"
 SKILLS = BATBELT / "skills"
-EXPECTED_SKILLS = {"grilling", "grill-me", "prove-it", "onboard-repo"}
+EXPECTED_SKILLS = {"grill-me", "prove-it", "onboard-repo"}
 
 
 def _frontmatter(path):
@@ -26,10 +26,27 @@ def _skill_files():
     return sorted(SKILLS.rglob("SKILL.md"))
 
 
-def test_the_four_skills_are_present():
+def test_the_three_skills_are_present():
     assert {p.name for p in SKILLS.iterdir() if p.is_dir()} == EXPECTED_SKILLS
     for name in EXPECTED_SKILLS:
         assert (SKILLS / name / "SKILL.md").is_file()
+
+
+def test_only_onboard_repo_is_typed_only():
+    # grill-me starts when the user says "grill me"; onboard-repo writes into a repository, so it
+    # runs only when typed.
+    typed_only = {
+        name for name in EXPECTED_SKILLS if _frontmatter(SKILLS / name / "SKILL.md").get("disable-model-invocation")
+    }
+    assert typed_only == {"onboard-repo"}
+
+
+def test_grilling_was_merged_into_grill_me():
+    assert not (SKILLS / "grilling").exists()
+    body = (SKILLS / "grill-me" / "SKILL.md").read_text(encoding="utf-8")
+    assert "one question at a time" in body.lower()
+    assert "recommended answer" in body
+    assert "grilling" not in body
 
 
 @pytest.mark.parametrize("path", _skill_files(), ids=lambda p: str(p.relative_to(SKILLS)))
@@ -88,7 +105,7 @@ def test_skills_do_not_assume_a_user_level_install():
 
 
 def test_commands_users_type_carry_the_plugin_namespace():
-    bare = re.compile(r"(?<![\w:/.-])/(onboard-repo|grilling|grill-me|prove-it)\b")
+    bare = re.compile(r"(?<![\w:/.-])/(onboard-repo|grill-me|prove-it)\b")
     hits = [
         f"{p.relative_to(ROOT)}:{i}"
         for p in SKILLS.rglob("*.md")
