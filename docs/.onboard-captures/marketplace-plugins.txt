@@ -1,3 +1,0 @@
-brand-creator  ./plugins/brand-creator
-swift  ./plugins/swift
-batbelt  ./plugins/batbelt

@@ -17,7 +17,7 @@ Then [install it](install-a-plugin.md). You can install more than one.
 
 ## What they won't do behind your back
 
-- **brand-creator** never buys a domain, files a trademark, contacts anyone, or commits to git on its own. It hands you
-  those steps.
-- **swift**'s review only reports. It never edits your code.
-- **batbelt** never touches your files before you approve its plan, and never answers a claim from memory.
+- **brand-creator**: [what it never does](../../../plugins/brand-creator/docs/manual/reference/what-it-never-does.md)
+- **swift**: [what it never does](../../../plugins/swift/README.md#what-it-never-does)
+- **batbelt**: [prove a claim](../../../plugins/batbelt/docs/manual/use/prove-a-claim.md) and
+  [set up a repository](../../../plugins/batbelt/docs/manual/use/set-up-a-repository.md)

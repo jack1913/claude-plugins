@@ -2,10 +2,7 @@
   {"surface": "🧰 The plugins", "slug": "-the-plugins", "tier": "principal", "page": "docs/manual/getting-started/choose-a-plugin.md", "status": "covered"},
   {"surface": "🚀 Install", "slug": "-install", "tier": "principal", "page": "docs/manual/getting-started/install-a-plugin.md", "status": "covered"},
   {"surface": "👀 See it work", "slug": "-see-it-work", "tier": "principal", "page": "docs/manual/use/swift.md", "status": "covered"},
-  {"surface": "🔄 Updates", "slug": "-updates", "tier": "principal", "page": "docs/manual/getting-started/install-a-plugin.md", "status": "covered"},
   {"surface": "🚦 Ground rules", "slug": "-ground-rules", "tier": "principal", "page": "docs/manual/getting-started/choose-a-plugin.md", "status": "covered"},
-  {"surface": "🔧 Maintain the marketplace", "slug": "-maintain-the-marketplace", "tier": "principal", "page": "docs/manual/reference/layout.md", "status": "covered"},
-  {"surface": "Tests", "slug": "tests", "tier": "principal", "page": "docs/manual/reference/tests.md", "status": "covered"},
-  {"surface": "Add a plugin", "slug": "add-a-plugin", "tier": "principal", "page": "docs/manual/getting-started/add-a-plugin.md", "status": "covered"},
+  {"surface": "🔧 Contributing", "slug": "-contributing", "tier": "niche", "page": null, "status": "deferred"},
   {"surface": "📜 License", "slug": "-license", "tier": "niche", "page": null, "status": "deferred"}
 ]

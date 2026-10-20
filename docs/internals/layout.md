@@ -1,0 +1,22 @@
+# Repository layout
+
+`.claude-plugin/` and `.github/` are the marketplace itself: one `marketplace.json`, helper scripts, and one workflow per
+plugin plus `marketplace.yml` and `docs.yml`. Why one repository:
+[ADR-0001](../adr/ADR-0001-one-monorepo-marketplace.md).
+
+| Path | What it holds |
+| --- | --- |
+| `.claude-plugin/marketplace.json` | The marketplace `jack1913`; every `source` is `./plugins/<name>` |
+| `.github/workflows/<plugin>.yml` | That plugin's CI, run when its folder or its workflow file changes (batbelt: also `tests/**` and `.claude-plugin/**`) or by hand |
+| `.github/workflows/marketplace.yml` | Checks `marketplace.json` |
+| `.github/workflows/docs.yml` | Checks the docs against the [docs standard](docs-standard.md) |
+| `.github/scripts/` | The checks those two workflows run: `check-marketplace.py`, `check-docs-standard.py` |
+| `plugins/<name>/` | One plugin: `.claude-plugin/plugin.json`, docs, tests, `CHANGELOG.md`, version (batbelt: its tests are in the root `tests/`) |
+| `tests/` | batbelt's tests (brand-creator and swift keep theirs in their own folder) |
+| `docs/` | The marketplace's manual, internals and decision records |
+
+Each folder under `plugins/` is self-contained (except batbelt's tests), versioned on its own, and tagged per release
+as `<plugin>--vX.Y.Z` ([ADR-0002](../adr/ADR-0002-per-plugin-versions-and-tags.md); `git tag -l '<plugin>--v*'` lists
+a plugin's tags). A plugin's own `AGENTS.md`, `CLAUDE.md` or `README.md` has the rules for working on it.
+
+To see which plugins the marketplace lists: `jq -r '.plugins[].name' .claude-plugin/marketplace.json`.

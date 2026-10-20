@@ -5,7 +5,7 @@ Plugins for Claude Code: make a brand, write better Swift, and think a plan thro
 ## Start here
 
 1. [Choose a plugin](getting-started/choose-a-plugin.md): find the one for what you want to do
-2. [Install it](getting-started/install-a-plugin.md): two commands
+2. [Install it](getting-started/install-a-plugin.md): two commands, plus update and remove
 
 ## Use them
 
@@ -13,11 +13,9 @@ Plugins for Claude Code: make a brand, write better Swift, and think a plan thro
 - [swift](use/swift.md): SwiftUI, concurrency and tests the Apple-native way, plus screen reviews
 - [batbelt](use/batbelt.md): grill a plan, prove a claim, set up a repository
 
-## Run the marketplace
+## Look it up
 
-For whoever maintains this repository:
+- [Troubleshooting](reference/troubleshooting.md): a plugin that won't show up, update or go away
+- [Glossary](reference/glossary.md): plugin, skill, command, scope and the other words
 
-- [Add a plugin](getting-started/add-a-plugin.md)
-- [Repository layout](reference/layout.md)
-- [Tests](reference/tests.md)
-- [Why it's built this way](../adr/README.md)
+Want to change this repository? See [CONTRIBUTING.md](../../CONTRIBUTING.md).

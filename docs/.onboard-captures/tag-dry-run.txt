@@ -1,8 +1,0 @@
-Plugin:  batbelt
-Version: 0.1.1 (from plugin.json)
-Marketplace entry: plugins[2] in ~/Dev/claude_skills/claude-plugins/.claude-plugin/marketplace.json
-Tag:     batbelt--v0.1.1
-
-✔ Dry run — would create tag batbelt--v0.1.1 at HEAD in ~/Dev/claude_skills/claude-plugins
-  git -C ~/Dev/claude_skills/claude-plugins tag -a batbelt--v0.1.1 -m "batbelt 0.1.1"
-  git -C ~/Dev/claude_skills/claude-plugins push origin refs/tags/batbelt--v0.1.1

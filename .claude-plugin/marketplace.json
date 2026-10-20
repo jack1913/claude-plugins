@@ -4,26 +4,40 @@
     "name": "Jacek Pytlik",
     "url": "https://github.com/jack1913"
   },
-  "description": "Claude Code plugins by Jacek Pytlik.",
+  "description": "Claude Code plugins for building a brand, writing current Swift, and testing a plan before you build it.",
   "plugins": [
     {
       "name": "brand-creator",
       "source": "./plugins/brand-creator",
-      "description": "Gated, phased brand-identity process: direction boards, mark system, design tokens, platform assets checked by real renderers, brand book, adoption and launch hand-offs.",
-      "homepage": "https://github.com/jack1913/claude-plugins/tree/main/plugins/brand-creator",
-      "repository": "https://github.com/jack1913/claude-plugins"
+      "category": "design",
+      "tags": [
+        "brand",
+        "logo",
+        "identity",
+        "design-tokens"
+      ]
     },
     {
       "name": "swift",
       "source": "./plugins/swift",
-      "description": "Correct, current, Apple-native Swift: swift:swiftui, swift:design, swift:concurrency, swift:testing and swift:review.",
-      "homepage": "https://github.com/jack1913/claude-plugins/tree/main/plugins/swift",
-      "repository": "https://github.com/jack1913/claude-plugins"
+      "category": "development",
+      "tags": [
+        "swift",
+        "swiftui",
+        "concurrency",
+        "testing",
+        "apple"
+      ]
     },
     {
       "name": "batbelt",
       "source": "./plugins/batbelt",
-      "description": "Plan interviews, claim verification against primary sources, and repository onboarding."
+      "category": "productivity",
+      "tags": [
+        "planning",
+        "verification",
+        "onboarding"
+      ]
     }
   ]
 }
