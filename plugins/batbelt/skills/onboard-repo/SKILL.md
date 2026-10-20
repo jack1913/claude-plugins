@@ -12,9 +12,9 @@ argument-hint: "[--sync] [--check] [--no-review] [--resume] [--unattended] [--wi
 
 # onboard-repo
 
-Stamp self-contained copies of the canonical `changelog-release` and
-`update-docs` skills (carried under `templates/`) into the **current repo's**
-`.claude/skills/`, so the repo works standalone — a collaborator without
+Stamp self-contained copies of the canonical `changelog-release`, `update-docs`
+and `update-rules` skills, and `update-deps` when the operator agrees (all carried
+under `templates/`), into the **current repo's** `.claude/skills/`, so the repo works standalone — a collaborator without
 `batbelt` still gets the skills from the checkout. Intent-only; run it
 deliberately.
 

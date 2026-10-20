@@ -36,6 +36,10 @@ Report, without writing:
   instead, from a stamp older than the split) — the gate still *runs*, so this is a
   migration to offer, not a broken gate to alarm about;
 - any files that fail `check-markers`;
+- **a missing docs standard** — a repo with the docs IA (`docs/internals/` exists) but no
+  `docs/internals/docs-standard.md` was stamped before version 4: report
+  `docs-standard.md: ABSENT (offer --sync, which creates it)`. An existing one is never
+  reported as drift, because it is the repo's own file;
 - **agent-config drift** — diff `settings-plan`'s current proposal against
   `.claude/settings.json` (report only; an operator-added entry is not drift), and
   re-run `gitignore-ensure` to confirm it is a no-op;

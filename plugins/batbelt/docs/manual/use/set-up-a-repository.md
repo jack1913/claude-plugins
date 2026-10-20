@@ -46,6 +46,20 @@ Every other flag: [Commands](../reference/commands.md#onboard-repo).
 
 Before you commit, read every captured output it saved. It removes your home path and user name, but it is not a secret scanner.
 
+## Keep it up to date
+
+After a batbelt update, type `/batbelt:onboard-repo --sync`. It shows each change as a diff, backs up every file it replaces, and keeps the part of each skill that is specific to your repository. A real sync of this marketplace on 2026-10-20 showed this for `update-docs`:
+
+```text illustrative
+< Structure = the docs IA when present: `docs/manual/` (consumer, commands-first —
+> Structure = the docs IA when present: `docs/manual/` (consumer, task-first —
+> **The standard wins.** When `docs/internals/docs-standard.md` exists, it owns page kinds,
+< <!-- stamped by onboard-repo v3 from claude-configs on 2026-10-19. …
+> <!-- stamped by onboard-repo v4 from batbelt on 2026-10-20. …
+```
+
+Nothing changes until you say yes.
+
 ## Check it worked
 
 - `.claude/skills/` holds the new skills.

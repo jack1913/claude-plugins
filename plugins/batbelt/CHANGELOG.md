@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-20
+
+### Added
+
+- `/batbelt:onboard-repo --check` reports a repository that has the docs folders but no `docs/internals/docs-standard.md`, and says `--sync` creates it.
+- The "Set up a repository" page shows what a real `--sync` looks like, and how to keep a repository up to date after a batbelt update.
+
+### Fixed
+
+- The opening of the `onboard-repo` instructions now names every skill it stamps: `changelog-release`, `update-docs`, `update-rules`, and `update-deps` when you agree.
+
 ## [0.2.0] - 2026-10-20
 
 While batbelt is `0.y.z`, a minor release may break things. This one removes a command.

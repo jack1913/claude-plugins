@@ -4046,3 +4046,9 @@ def test_sync_of_an_old_stamp_takes_the_new_header(tmp_path):
     new += BEGIN + "\nP\n" + END + "\n"
     merged = lib.restamp_provenance(lib.preserve_repo_specifics(old, new), 4, "2026-10-20")
     assert "v4 from batbelt on 2026-10-20." in merged and "KEEP" in merged
+
+
+def test_check_mode_reports_a_missing_docs_standard():
+    text = (ONBOARD / "references" / "check-mode.md").read_text(encoding="utf-8")
+    assert "docs-standard.md: ABSENT" in text
+    assert "never\n  reported as drift" in text
