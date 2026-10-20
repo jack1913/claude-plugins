@@ -2,7 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-09-25
-- **Source:** commits `e2b00d9` (`swift:design` added), `f0ad99f` (`swift:design` tells the agent to load `swift:swiftui`); `docs/superpowers/specs/2026-09-24-swift-plugin-design.md` §2 "Improvements" and "Design guidance" rows, §5
+- **Source:** commits `e2b00d9` (`swift:design` added), `f0ad99f` (`swift:design` tells the agent to load `swift:swiftui`); `docs/archive/specs/2026-09-24-swift-plugin-design.md` §2 "Improvements" and "Design guidance" rows, §5
 
 ## Context
 

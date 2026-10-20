@@ -2,7 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-09-25
-- **Source:** commits `eb43096` (byte-for-byte import at 5.1.0), `199bb75` (first deviation), `69b90a4` (`upstream-diff.sh`); `docs/superpowers/specs/2026-09-24-swift-plugin-design.md` §1 goal 4, §2 "Relationship to upstream" row, §3, §6; `UPSTREAM.md`
+- **Source:** commits `eb43096` (byte-for-byte import at 5.1.0), `199bb75` (first deviation), `69b90a4` (`upstream-diff.sh`); `docs/archive/specs/2026-09-24-swift-plugin-design.md` §1 goal 4, §2 "Relationship to upstream" row, §3, §6; `UPSTREAM.md`
 
 ## Context
 
@@ -11,6 +11,7 @@
 ## Decision
 
 Import upstream's `skills/swiftui-expert-skill/` byte-for-byte at tag `5.1.0` (`b24e68a965dc4b5bd2cc41dc60c094a26a9379ce`) as this repo's first commit, and tag it `upstream-5.1.0`. After that:
+
 - Every change is its own commit with a row in `UPSTREAM.md` → Deviations, so `git diff upstream-5.1.0 -- plugins/swift/skills/swiftui` shows every change inside the skill folder. The one repo-level deviation, the carried record_trace test in `maintenance/tests/`, is recorded only in `UPSTREAM.md` (spec §4 item 8).
 - New upstream work arrives only by hand. `maintenance/upstream-diff.sh [ref]` clones upstream into a temp dir and prints the diff between the baseline recorded in `UPSTREAM.md` and `ref` (default: upstream's newest tag); it never writes to this repo. Someone ports what fits, bumps that baseline and adds a row to `UPSTREAM.md` → Ported.
 

@@ -1,9 +1,9 @@
 [
-  {"surface": "Requirements", "slug": "requirements", "tier": "niche", "page": null, "status": "deferred"},
-  {"surface": "Enable it in a Swift repo", "slug": "enable-it-in-a-swift-repo", "tier": "principal", "page": "docs/manual/getting-started/enable-in-a-swift-repo.md", "status": "covered"},
-  {"surface": "Usage", "slug": "usage", "tier": "principal", "page": "docs/manual/use/build-a-swiftui-screen.md", "status": "covered"},
-  {"surface": "What it covers", "slug": "what-it-covers", "tier": "principal", "page": "docs/manual/reference/capabilities.md", "status": "covered"},
-  {"surface": "Versioning", "slug": "versioning", "tier": "principal", "page": "docs/manual/work-on-it.md", "status": "covered"},
-  {"surface": "Work on it", "slug": "work-on-it", "tier": "principal", "page": "docs/manual/work-on-it.md", "status": "covered"},
-  {"surface": "Licenses", "slug": "licenses", "tier": "niche", "page": null, "status": "deferred"}
+  {"surface": "Install", "slug": "install", "tier": "principal", "page": "docs/manual/getting-started/enable-in-a-swift-repo.md", "status": "covered"},
+  {"surface": "Try it", "slug": "try-it", "tier": "principal", "page": "docs/manual/use/build-a-swiftui-screen.md", "status": "covered"},
+  {"surface": "What you can do", "slug": "what-you-can-do", "tier": "principal", "page": "docs/manual/reference/commands.md", "status": "covered"},
+  {"surface": "What it adds to your sessions", "slug": "what-it-adds-to-your-sessions", "tier": "niche", "page": null, "status": "deferred"},
+  {"surface": "What it never does", "slug": "what-it-never-does", "tier": "niche", "page": null, "status": "deferred"},
+  {"surface": "Something off?", "slug": "something-off", "tier": "niche", "page": null, "status": "deferred"},
+  {"surface": "Learn more", "slug": "learn-more", "tier": "niche", "page": null, "status": "deferred"}
 ]

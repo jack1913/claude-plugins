@@ -1,6 +1,6 @@
 # Review a screen
 
-`/swift:review` checks a SwiftUI screen against Apple's Human Interface Guidelines, from its code, a screenshot, or both. It runs only when you type it, and it reports without editing anything ([ADR-0011](../../adr/ADR-0011-swift-review-skill.md)).
+`/swift:review` checks a SwiftUI screen against Apple's Human Interface Guidelines, from its code, a screenshot, or both. It runs only when you type it, and it reports without editing anything.
 
 ## Review the code
 
@@ -54,14 +54,21 @@ Pass the view file and the screenshot together to get both: the code settles wha
 ## What it won't report
 
 - A value your project's design layer sanctions: its tokens, colour sets or design skill.
-- Missing Liquid Glass. Glass stays opt-in ([ADR-0008](../../adr/ADR-0008-liquid-glass-stays-opt-in.md)); glass on content is reported.
+- Missing Liquid Glass. Glass stays opt-in; glass on content is reported.
 - A rule for a platform your project doesn't target.
 - Taste with no HIG basis.
 
-## Run it headless
+Why: [ADR-0011](../../adr/ADR-0011-swift-review-skill.md) and [ADR-0008](../../adr/ADR-0008-liquid-glass-stays-opt-in.md).
 
-An installed copy reads its reference files without extra flags. A checkout loaded with `--plugin-dir` also needs `--add-dir` with the same directory ([enable the plugin](../getting-started/enable-in-a-swift-repo.md#what-each-skill-covers)). `<checkout>` is your clone of `jack1913/swift-plugin`.
+<details>
+<summary>Behind the scenes</summary>
+
+### Run it headless
+
+An installed copy reads its reference files without extra flags. A checkout loaded with `--plugin-dir` also needs `--add-dir` with the same directory ([details](../../internals/review-verification.md)). `<checkout>` is your clone of `jack1913/claude-plugins`.
 
 ```bash
 claude -p "/swift:review Sources/Demo/SettingsView.swift" --plugin-dir <checkout>/plugins/swift --add-dir <checkout>/plugins/swift
 ```
+
+</details>

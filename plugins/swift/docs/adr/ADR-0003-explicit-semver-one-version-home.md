@@ -2,7 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-09-25
-- **Source:** commit `e23aa05` (`plugin.json` with `version`, marketplace entry without one); `docs/superpowers/specs/2026-09-24-swift-plugin-design.md` §2 "Versioning" row, §6 "Versioning" and release flow, §8 "Version"; `docs/superpowers/plans/2026-09-24-swift-plugin.md` Global Constraints ("`0.0.0` until the first release, which is `0.1.0`")
+- **Source:** commit `e23aa05` (`plugin.json` with `version`, marketplace entry without one); `docs/archive/specs/2026-09-24-swift-plugin-design.md` §2 "Versioning" row, §6 "Versioning" and release flow, §8 "Version"; `docs/archive/plans/2026-09-24-swift-plugin.md` Global Constraints ("`0.0.0` until the first release, which is `0.1.0`")
 
 ## Context
 
@@ -18,6 +18,7 @@ Keep one SemVer `version`, in `plugins/swift/.claude-plugin/plugin.json`. The ma
 4. The commit and tag are pushed.
 
 Rejected:
+
 - a second `version` on the marketplace entry, because two homes drift apart (spec §6);
 - no `version` at all. Claude Code would fall back to the git commit SHA, so every pushed commit would be an update (spec §2, §8).
 

@@ -1,6 +1,14 @@
 ---
 name: design
-description: Use when building a new SwiftUI screen or view (a settings screen, form, list, detail or onboarding view), or designing or restyling screens and components, for iOS, iPadOS, macOS or visionOS, including information hierarchy and layout, typography and Dynamic Type, color and dark mode, SF Symbols, when and how to use Liquid Glass, platform idioms (tab bar vs sidebar vs ornaments, toolbars, inspectors, sheets vs windows), motion, and design tokens. Also use when a view looks like a web page, when choosing between native primitives, or when a project has no design tokens yet.
+description: >-
+  Designs and restyles SwiftUI screens the Apple-native way for iOS, iPadOS, macOS and visionOS. Use when
+  building a new screen or view (a settings screen, form, list, detail or onboarding view), or restyling
+  screens and components.
+when_to_use: >-
+  Information hierarchy and layout, typography and Dynamic Type, color and dark mode, SF Symbols, when and
+  how to use Liquid Glass, platform idioms (tab bar vs sidebar vs ornaments, toolbars, inspectors, sheets
+  vs windows), motion, design tokens. A view that looks like a web page, choosing between native
+  primitives, a project with no design tokens yet.
 ---
 
 # Apple-Native Design
@@ -91,3 +99,4 @@ Before coding, understand the context and commit to an Apple-native direction:
 | When Liquid Glass fits, regular vs clear, tinting, concentric corners | `references/liquid-glass-design.md` |
 | iPhone, iPad, Mac, Vision Pro idioms and hit targets | `references/platform-idioms.md` |
 | Springs, meaningful motion, Reduce Motion | `references/motion.md` |
+| Every reference file, with what to open it for | `references/_index.md` |

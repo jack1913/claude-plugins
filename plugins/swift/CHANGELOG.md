@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A [Commands](docs/manual/reference/commands.md) page lists every skill, who starts it, and its arguments.
+- `/swift:review` now shows its argument hint, `<view files or screenshot paths>`, when you type it.
+- `swiftui` and `design` have a `references/_index.md` table that says what each reference file is for. `testing`'s index uses the same table format.
+- A decisions index, [`docs/adr/README.md`](docs/adr/README.md), and an index of the contributor pages, [`docs/internals/README.md`](docs/internals/README.md).
+- The manual says once, on its front page, that the examples are recorded runs and when they ran.
+
+### Changed
+
+- The README is shorter: install, a first try, the five commands, what the plugin adds to your sessions, and what it never does. The full table of what each skill covers is only in [What the plugin covers](docs/manual/reference/capabilities.md).
+- The plugin's one-line description now reads "Have Claude write current SwiftUI, Swift 6 concurrency and Swift Testing, and review screens against Apple's guidelines." It also has a display name and keywords, and the marketplace entry no longer repeats it.
+- Skill descriptions are in plain third-person words. The long lists of API names and error messages that start `swiftui`, `concurrency`, `testing` and `design` moved to `when_to_use`; none were dropped.
+- The how-to pages put the rule tables and the headless commands under "Behind the scenes" at the end of each page, and their `<checkout>` is now your clone of `jack1913/claude-plugins`.
+- Upgrading from an older install (`swift@swift-plugin` or `swift@jack1913-plugins`) is a short note on the [enable page](docs/manual/getting-started/enable-in-a-swift-repo.md#upgrading-from-an-older-install). The full history stays in the 0.3.0 entry below.
+- The contributor pages moved out of the manual into [`docs/internals/`](docs/internals/README.md): [Work on the plugin](docs/internals/work-on-it.md) and the [check-apis reference](docs/internals/check-apis.md). The shipped specs and plans moved from `docs/superpowers/` to `docs/archive/`.
+- The decision records use the one-status format: a record is `proposed`, `accepted`, `deprecated` or `superseded by ADR-NNNN`. ADR-0001, 0007, 0012, 0014 and 0015 keep their earlier status wording in a dated update section at the end.
+- `swift:review`'s description now says it runs only when typed as `/swift:review`.
+
 ## [0.3.1] - 2026-10-19
 
 ### Changed
@@ -17,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.3.0] - 2026-10-19
 
 **Breaking:** the plugin is now listed in the marketplace `jack1913`, the repo `jack1913/claude-plugins`, and this repo is no longer a marketplace. The install ID changes from `swift@jack1913-plugins` to `swift@jack1913`. Claude Code can't migrate a marketplace name, so move each older install by hand:
+
 - uninstall `swift@jack1913-plugins`;
 - `claude plugin marketplace remove jack1913-plugins`;
 - `claude plugin marketplace add jack1913/claude-plugins --scope project`;
@@ -85,6 +105,7 @@ The code skills now follow a project's own rules. `swift:swiftui`, `swift:concur
 ## [0.2.0] - 2026-09-28
 
 **Breaking:** the marketplace is renamed from `swift-plugin` to `jack1913-plugins`, so the install ID changes from `swift@swift-plugin` to `swift@jack1913-plugins`. Claude Code can't migrate a marketplace name, so move each older install by hand:
+
 - uninstall `swift@swift-plugin`;
 - `claude plugin marketplace remove swift-plugin`;
 - add `jack1913/swift-plugin` again;
@@ -102,6 +123,7 @@ The manual's "Move an install from swift-plugin" section lists the exact command
 ## [0.1.7] - 2026-09-28
 
 A maintenance release: no skills were added.
+
 - `swift:review` now judges Mac controls by Mac sizes.
 - Five course callouts in `swift:concurrency` were stuck inside code blocks, so they rendered as code. They're fixed.
 - `check-apis` stops reading prose as Swift, which shrinks its ignore list from 317 names to 231.

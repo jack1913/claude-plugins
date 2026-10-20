@@ -83,7 +83,10 @@ The two rejection tests became one parameterized test:
 ✔ Test run with 4 tests in 1 suite passed after 0.001 seconds.
 ```
 
-## What the skill did
+<details>
+<summary>Behind the scenes</summary>
+
+### What the skill did
 
 | In the result | Rule it follows |
 | --- | --- |
@@ -93,10 +96,12 @@ The two rejection tests became one parameterized test:
 | Near-duplicate tests merged into one `@Test(arguments:)` | `swift:testing`: parameterized tests |
 | `setUp()` replaced by per-test values in a `struct` suite | `swift:testing`: XCTest migration |
 
-## Reproduce it headless
+### Reproduce it headless
 
-Runs from this checkout on 2026-09-28 with Claude Code 2.1.283. The callback scaffold is the eval case `callback-confirmation-test`. Replies vary from run to run; the eval cases pin the behaviour ([capabilities](../reference/capabilities.md#eval-cases)). `<checkout>` is your clone of `jack1913/swift-plugin`. `--setting-sources project,local` leaves out your user settings and hooks, as the recorded runs did; your user CLAUDE.md still applies.
+The callback scaffold is the eval case `callback-confirmation-test`. Replies vary from run to run; the eval cases pin the behaviour ([capabilities](../reference/capabilities.md#eval-cases)). `<checkout>` is your clone of `jack1913/claude-plugins`. `--setting-sources project,local` leaves out your user settings and hooks, as the recorded runs did; your user CLAUDE.md still applies.
 
 ```bash
 claude -p "<the prompt above>" --plugin-dir <checkout>/plugins/swift --setting-sources project,local --permission-mode acceptEdits --allowedTools "Bash(swift test:*)"
 ```
+
+</details>

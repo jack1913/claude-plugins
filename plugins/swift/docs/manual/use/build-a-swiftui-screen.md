@@ -77,19 +77,9 @@ Building for debugging...
 Build complete! (0.33 sec)
 ```
 
-## What the skills did
-
-| In the result | Rule it follows |
-| --- | --- |
-| `Form` with one `Section` per group and `LabeledContent` rows, not stacks with dividers | `swift:design`: Grouped input |
-| Sign Out uses `role: .destructive` and isn't the prominent button | `swift:design`: Buttons |
-| System styles only, with an offer of starter tokens | `swift:design`: no project layer means system defaults (`references/tokens.md`) |
-| The Mac Settings scene (Command-Comma), mentioned but not forced | `swift:design`: Settings |
-| `#Preview` inside `#if DEBUG` | `swift:swiftui`: previews |
-
 ## With your own design tokens
 
-When the repo has its own design layer, the skills translate any literal into it ([ADR-0007](../../adr/ADR-0007-project-design-layer-wins.md)). The same prompt, in a package with a `DesignTokens` enum:
+When the repo has its own design layer, the skills translate any literal into it. The same prompt, in a package with a `DesignTokens` enum:
 
 - the one custom colour, the toggle tint, comes from the project's token;
 - Sign Out keeps the destructive role, whose system red is a semantic style rather than a literal, so there's nothing to translate.
@@ -100,10 +90,27 @@ The reply says both, and offers to switch:
 **Styling:** it uses the grouped form style on both iOS and macOS and sets the title to "Settings". The switch uses your brand colour, `DesignTokens.Palette.brand`. The Sign Out button uses the system red rather than `DesignTokens.Palette.danger`, so it matches how iOS and macOS show destructive actions elsewhere. I can switch it to your token if you want. There's also a preview with sample data.
 ```
 
-## Reproduce it headless
+Why your design layer wins: [ADR-0007](../../adr/ADR-0007-project-design-layer-wins.md).
 
-The runs above came from this checkout on 2026-09-28 with Claude Code 2.1.283. Replies vary from run to run; the behaviour in the table is what the eval cases pin ([capabilities](../reference/capabilities.md#eval-cases)). `<checkout>` is your clone of `jack1913/swift-plugin`. `--setting-sources project,local` leaves out your user settings and hooks, as the recorded runs did; your user CLAUDE.md still applies.
+<details>
+<summary>Behind the scenes</summary>
+
+### What the skills did
+
+| In the result | Rule it follows |
+| --- | --- |
+| `Form` with one `Section` per group and `LabeledContent` rows, not stacks with dividers | `swift:design`: Grouped input |
+| Sign Out uses `role: .destructive` and isn't the prominent button | `swift:design`: Buttons |
+| System styles only, with an offer of starter tokens | `swift:design`: no project layer means system defaults (`references/tokens.md`) |
+| The Mac Settings scene (Command-Comma), mentioned but not forced | `swift:design`: Settings |
+| `#Preview` inside `#if DEBUG` | `swift:swiftui`: previews |
+
+### Reproduce it headless
+
+Replies vary from run to run. The behaviour in the table is what the eval cases pin ([capabilities](../reference/capabilities.md#eval-cases)). `<checkout>` is your clone of `jack1913/claude-plugins`. `--setting-sources project,local` leaves out your user settings and hooks, as the recorded runs did; your user CLAUDE.md still applies.
 
 ```bash
 claude -p "Add a settings screen in Sources/App/SettingsView.swift: show the account's name and email, a notifications toggle, and a Sign Out button." --plugin-dir <checkout>/plugins/swift --setting-sources project,local --permission-mode acceptEdits --allowedTools "Bash(swift build:*)"
 ```
+
+</details>

@@ -19,6 +19,7 @@ The skills never looked for such a rule. When it wasn't already in context, they
 `swift:concurrency`'s Fast Path step 1 also starts by reading them, and applies to new code as well as fixes.
 
 The rule is generic; the plugin holds nothing specific to one project.
+
 - `swift:design` and `swift:review` already defer to a project design skill through ADR-0007's rule.
 - `swift:review`'s findings keep their HIG basis.
 

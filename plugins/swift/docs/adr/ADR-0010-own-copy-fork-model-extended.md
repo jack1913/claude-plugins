@@ -2,7 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-09-26
-- **Source:** `docs/superpowers/specs/2026-09-26-swift-skills-part2-design.md` §2–§5; commits `145e4ad` (`upstream-diff.sh` skill argument), `d09e1e4` (per-upstream UPSTREAM.md sections), `a6a6a7f` (concurrency import at `2.3.0`, tag `upstream-concurrency-2.3.0`), `94a2f8c`/`51eccf8`/`754e64e` (day-one deviations), `6cd347e` (name resolution); ADR-0004 (the model this extends)
+- **Source:** `docs/archive/specs/2026-09-26-swift-skills-part2-design.md` §2–§5; commits `145e4ad` (`upstream-diff.sh` skill argument), `d09e1e4` (per-upstream UPSTREAM.md sections), `a6a6a7f` (concurrency import at `2.3.0`, tag `upstream-concurrency-2.3.0`), `94a2f8c`/`51eccf8`/`754e64e` (day-one deviations), `6cd347e` (name resolution); ADR-0004 (the model this extends)
 
 ## Context
 

@@ -1,11 +1,20 @@
-# Internals
+# How swift works
 
-Technical mechanics for contributors — how the swift plugin actually works. Never user
-workflows (those live in [`../manual/`](../manual/)); mechanics only.
+Notes for people who change the swift plugin. For using it, read the [manual](../manual/README.md).
 
-Add one page per subsystem as the repo grows.
-
-| Page | Subsystem |
+| Page | What it explains |
 | --- | --- |
-| [`agent-instructions.md`](agent-instructions.md) | Agent instruction layout: AGENTS.md, rules, skills, and the rule-vs-skill decision |
-| [`review-verification.md`](review-verification.md) | `swift:review`'s recorded end-to-end verification runs, one dated section per run |
+| [Work on the plugin](work-on-it.md) | Try a change, check APIs, run the tests and evals, check upstream, release |
+| [check-apis.py reference](check-apis.md) | The API checker's flags, exit codes and the `apis.json` format |
+| [Agent instructions](agent-instructions.md) | How AGENTS.md, rules and skills are laid out, and when to use a rule or a skill |
+| [Review verification](review-verification.md) | The recorded end-to-end runs that check `swift:review`, one dated section per run |
+
+## Where things are
+
+| What | Where |
+| --- | --- |
+| The skills | [`skills/`](../../skills/) |
+| API checker, upstream diff, unit tests | [`maintenance/`](../../maintenance/) |
+| Where each forked skill differs from its upstream | [`UPSTREAM.md`](../../UPSTREAM.md) |
+| Decisions | [`adr/`](../adr/README.md) |
+| Shipped specs and plans | [`archive/`](../archive/README.md) |

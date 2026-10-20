@@ -1,10 +1,10 @@
-# Docs
+# swift docs
 
-| Layer | Path | For |
+| Folder | For | What is in it |
 | --- | --- | --- |
-| Consumer manual | [`manual/`](manual/) | Users — setup, workflows, reference. Start at [`manual/README.md`](manual/README.md). |
-| Technical internals | [`internals/`](internals/) | Contributors — how it works. |
-| Decisions (ADR) | [`adr/`](adr/) | Why a choice was made. |
-| Archive | [`archive/`](archive/) | Frozen history — never edited. |
+| [manual/](manual/README.md) | People who use swift | How-to pages, the commands reference, what the plugin covers |
+| [internals/](internals/README.md) | Contributors | Work on the plugin, the API checker, agent instructions, review verification |
+| [adr/](adr/README.md) | Contributors | Why each decision was made |
+| [archive/](archive/README.md) | Nobody day to day | Frozen: shipped specs and plans |
 
-> Agent knowledge lives in [`../AGENTS.md`](../AGENTS.md).
+The rules for every page are in the [docs standard](../../../docs/internals/docs-standard.md). Agent knowledge lives in [`../AGENTS.md`](../AGENTS.md).

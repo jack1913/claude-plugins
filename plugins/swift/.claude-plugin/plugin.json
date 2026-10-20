@@ -1,9 +1,18 @@
 {
   "name": "swift",
+  "displayName": "Swift",
   "version": "0.3.1",
-  "description": "Correct, current, Apple-native Swift: swift:swiftui (APIs and correctness, visionOS, previews), swift:design (Apple-native design), swift:concurrency (Swift 6 concurrency), swift:testing (Swift Testing and XCTest migration) and swift:review (on-demand HIG review, /swift:review).",
+  "description": "Have Claude write current SwiftUI, Swift 6 concurrency and Swift Testing, and review screens against Apple's guidelines.",
   "author": { "name": "Jacek Pytlik", "url": "https://github.com/jack1913" },
   "license": "MIT",
   "homepage": "https://github.com/jack1913/claude-plugins/tree/main/plugins/swift",
-  "repository": "https://github.com/jack1913/claude-plugins"
+  "repository": "https://github.com/jack1913/claude-plugins",
+  "keywords": [
+    "swift",
+    "swiftui",
+    "swift-concurrency",
+    "swift-testing",
+    "apple",
+    "hig"
+  ]
 }

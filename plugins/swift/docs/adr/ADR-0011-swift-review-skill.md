@@ -2,13 +2,14 @@
 
 - **Status:** accepted
 - **Date:** 2026-09-27
-- **Source:** `docs/superpowers/specs/2026-09-26-swift-skills-part2-design.md` §2 (the `swift:review` rows), §6, §8; `docs/superpowers/plans/2026-09-27-swift-skills-part2-review.md` Task 1 (frontmatter probe, 2026-09-27); commits `24d73ae` (the skill), `09733d7` (verification fixtures, answer key, scorer), `bef9aa6` (first verification record), `e26fe0b` (report-only scoped to what `disallowed-tools` enforces), `28e5c32`/`c32d8ec` (run B re-run on a corrected fixture), `1d980d5`/`9903246`/`03e9a90` (Mac hit targets, scorer, re-run); ADR-0007 (the rule this extends); ADR-0008 (glass stays opt-in)
+- **Source:** `docs/archive/specs/2026-09-26-swift-skills-part2-design.md` §2 (the `swift:review` rows), §6, §8; `docs/archive/plans/2026-09-27-swift-skills-part2-review.md` Task 1 (frontmatter probe, 2026-09-27); commits `24d73ae` (the skill), `09733d7` (verification fixtures, answer key, scorer), `bef9aa6` (first verification record), `e26fe0b` (report-only scoped to what `disallowed-tools` enforces), `28e5c32`/`c32d8ec` (run B re-run on a corrected fixture), `1d980d5`/`9903246`/`03e9a90` (Mac hit targets, scorer, re-run); ADR-0007 (the rule this extends); ADR-0008 (glass stays opt-in)
 
 ## Context
 
 The parent spec (§10) deferred an on-demand HIG review of a screen, "own text, run by hand". `swift:design` already holds the decision rules and area references a review would judge against, and `swift:swiftui` holds the accessibility code patterns. A review that auto-fired mid-build would interrupt the work it reviews, and every model-invocable skill adds its description to every session.
 
 A probe on two scratch plugins, identical except for the frontmatter, settled the mechanics:
+
 - With `disable-model-invocation: true`, the skill ran only as `/<plugin>:<skill>`. A matching plain prompt fired the control twin but not this one, and the model's own skill list did not contain it. `claude plugin details` still estimates ~30 tokens for it; the estimator ignores the key.
 - `disallowed-tools: Write, Edit, NotebookEdit` blocked the Write tool while the skill ran, even under `--permission-mode acceptEdits`, where the control wrote the file.
 - `$ARGUMENTS` expanded under `claude -p`.
@@ -25,6 +26,7 @@ A probe on two scratch plugins, identical except for the frontmatter, settled th
 - **Quality gate.** No automated eval: the eval harness fires skills through the Skill tool, which slash-only skills block. Instead, a recorded end-to-end run reviews a planted-violations screen, a project-token variant and a rendered screenshot through `claude -p "/swift:review …"`. The runs are scored against an answer key committed before the first run, and kept in `docs/internals/review-verification.md`.
 
 Rejected:
+
 - **A model-invocable skill with a narrow description:** it can still fire mid-build, and it pays an always-loaded description in every session.
 - **Restating `swift:design`'s rules in the review checklist:** two copies drift.
 

@@ -1,6 +1,11 @@
 ---
 name: review
-description: 'On-demand HIG review of a SwiftUI screen from its code and/or screenshots: hierarchy, typography, colour, SF Symbols, controls and hit targets, platform idioms, Liquid Glass placement, motion and accessibility, reported as findings with the HIG source and a fix. Run as /swift:review <view files or screenshot paths>.'
+description: >-
+  Reviews a SwiftUI screen against Apple's Human Interface Guidelines, from its code and/or screenshots, and
+  reports findings with the HIG source and a fix. Checks hierarchy, typography, colour, SF Symbols, controls
+  and hit targets, platform idioms, Liquid Glass placement, motion and accessibility. Runs only when typed
+  as /swift:review.
+argument-hint: "<view files or screenshot paths>"
 disable-model-invocation: true
 disallowed-tools: Write, Edit, NotebookEdit
 ---

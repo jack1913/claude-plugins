@@ -347,9 +347,10 @@ leave it and report.
 <!-- BEGIN REPO SPECIFICS (preserved on --sync) -->
 - **index doc:** `AGENTS.md` (`CLAUDE.md` is an `@AGENTS.md` import).
 - **section→source map:**
-  - `README.md` "Enable it in a Swift repo" → `.claude-plugin/plugin.json` (`name`), `docs/adr/ADR-0014-catalogue-moves-to-claude-plugins.md` (marketplace `jack1913`, repo `jack1913/claude-plugins`), `skills/*/SKILL.md` (frontmatter `name`)
-  - `README.md` "Work on it" → `maintenance/apicheck/cli.py` (`parse_args`), `maintenance/upstream-diff.sh`, `evals/`, `maintenance/tests/`
-  - `docs/manual/reference/check-apis.md` → `maintenance/apicheck/cli.py` (`parse_args`, `run`)
+  - `README.md` "Install" → `.claude-plugin/plugin.json` (`name`), `docs/adr/ADR-0014-catalogue-moves-to-claude-plugins.md` (marketplace `jack1913`, repo `jack1913/claude-plugins`), `skills/*/SKILL.md` (frontmatter `name`)
+  - `README.md` "What you can do" and `docs/manual/reference/commands.md` → `skills/*/SKILL.md` (frontmatter `description`, `argument-hint`, `disable-model-invocation`)
+  - `docs/internals/work-on-it.md` → `maintenance/apicheck/cli.py` (`parse_args`), `maintenance/upstream-diff.sh`, `evals/`, `maintenance/tests/`
+  - `docs/internals/check-apis.md` → `maintenance/apicheck/cli.py` (`parse_args`, `run`)
   - `UPSTREAM.md` → per section: `git diff upstream-5.1.0 -- skills/swiftui` (SwiftUI section), `git diff upstream-concurrency-2.3.0 -- skills/concurrency` (Concurrency section), `git diff upstream-testing-1.2.0 -- skills/testing` (Testing section), `maintenance/upstream-diff.sh <swiftui|concurrency|testing>`
 - **surface enumerator:** `readme-headings` (the `README.md` H2/H3 walk).
 - **coverage record:** `docs/.onboard-coverage.json`.
@@ -357,14 +358,7 @@ leave it and report.
 - **cross-surface reference integrity:** every `references/<file>.md` a `skills/*/SKILL.md` router row names must exist in that skill's `references/`; every `../swiftui/references/<file>.md` link in `skills/design/` must resolve; every `../`-relative `.md` link in `skills/review/` must resolve against the directory of the file that contains it (``rg -o --with-filename -N '\.\./[^ )`]*\.md' skills/review | while IFS=: read -r f l; do test -f "$(dirname "$f")/$l" || echo "BROKEN $f -> $l"; done`` prints nothing); a changed `swift:design` Decision Rule means re-checking the `skills/review/references/checklist.md` checklist questions and `findings-format.md` severities that name its label, since they carry some of its values (hit-target sizes, toolbar limits, sheet button order); the project-layer sentence ("If the project has its own design layer …") must be identical in the `swiftui`, `design` and `review` SKILL.md files, and the project-rules sentence ("Before writing or changing code, look for the project's own instructions …") in the `swiftui`, `concurrency` and `testing` SKILL.md files. Compare the sentence text without its list marker (`- ` or `9. `) and trailing period, because `testing`'s numbered list ends each item with one; every `swift:<skill>` a skill or doc names must exist as `skills/<skill>/`; every `check-apis.py` flag a doc names must appear in `--help`.
 - **generated blocks:** `maintenance/check-apis.py --write-table` in `skills/swiftui/references/platform-availability.md` (marker `<!-- BEGIN GENERATED: maintenance/check-apis.py --write-table -->`). Never hand-edit; regenerate with `python3 maintenance/check-apis.py --write-table`.
 - **K-pointer baseline:** established at onboard (AGENTS.md §3 pointer index written 2026-09-25, every pointer verified against the tree).
-- **docs voice:** commands-first, one-concept-per-page, scannable, operator-voiced; cite ADRs, don't inline rationale.
-- **README style guide:** Reference SDK (chosen 2026-09-28). Signature rules:
-  - an exact capability sentence first, with no adjectives;
-  - a version/changelog/manual line and a linked TOC;
-  - the Requirements → Enable it in a Swift repo → Usage spine, where Usage shows one real prompt and its result;
-  - a skill capability table, with the full matrix in `docs/manual/reference/capabilities.md`;
-  - versioning stated as policy;
-  - hub-and-spoke into `docs/manual/`;
-  - no emoji, no story, and badges only for things that exist.
-- **not docs:** `docs/superpowers/` (specs and plans, agent working dir), `skills/**` and `evals/**` (plugin content, checked by `check-apis.py` and `claude plugin eval`, not by this skill), `NOTICE.md` (license notices).
+- **docs voice:** the marketplace docs standard (`../../docs/internals/docs-standard.md` §4): friendly, short, task-first on `docs/manual/` and the README; an ADR link goes once at the end of a section, not mid-sentence.
+- **README style guide:** the marketplace plugin-readme template (`../../docs/internals/templates/plugin-readme.md`): one-liner equal to `plugin.json` `description`, Install, Try it, What you can do, What it adds to your sessions, What it never does, Something off?, Learn more, licence; under about 150 lines; the full skill table lives only in `docs/manual/reference/capabilities.md`.
+- **not docs:** `docs/archive/` (frozen specs and plans), `skills/**` and `evals/**` (plugin content, checked by `check-apis.py` and `claude plugin eval`, not by this skill), `NOTICE.md` (license notices).
 <!-- END REPO SPECIFICS -->

@@ -1,34 +1,21 @@
-# swift plugin
+# swift
 
-The `swift` plugin gives Claude Code five skills for writing correct, current, Apple-native Swift: SwiftUI, Apple design, Swift 6 concurrency, Swift Testing, and an on-demand Human Interface Guidelines review.
+Have Claude write current SwiftUI, Swift 6 concurrency and Swift Testing, and review screens against Apple's guidelines.
 
-[Changelog](CHANGELOG.md) (current version and every release) · [Manual](docs/manual/README.md) · Marketplace `jack1913` ([jack1913/claude-plugins](https://github.com/jack1913/claude-plugins), folder `plugins/swift`)
+## Install
 
-- [Requirements](#requirements)
-- [Enable it in a Swift repo](#enable-it-in-a-swift-repo)
-- [Usage](#usage)
-- [What it covers](#what-it-covers)
-- [Versioning](#versioning)
-- [Work on it](#work-on-it)
-- [Licenses](#licenses)
+Install it once per Swift project. Run this inside the project:
 
-## Requirements
-
-- Claude Code. The runs in the manual used 2.1.283.
-- A Swift package or Xcode project to use it in.
-
-## Enable it in a Swift repo
-
-Run inside that repo. `--scope project` writes its committed `.claude/settings.json`; `--scope local` writes the gitignored `.claude/settings.local.json`.
-
-```bash
+```text illustrative
 claude plugin marketplace add jack1913/claude-plugins --scope project
 claude plugin install swift@jack1913 --scope project
 ```
 
-A repo without these entries never sees the plugin. Before 0.3.0 the marketplace was `jack1913-plugins` (and before 0.2.0 `swift-plugin`), hosted in the former repo `jack1913/swift-plugin`. To move an older install, see [the manual](docs/manual/getting-started/enable-in-a-swift-repo.md#move-an-install-to-the-jack1913-marketplace).
+On Claude Code older than 2.1.281, add `--scope project` to `claude plugin update` as well.
+`--scope project` writes the project's committed `.claude/settings.json`, so everyone who clones the project gets the plugin. Use `--scope local` to keep it to yourself.
+More ways to install, and updating: [Enable the plugin in a Swift repo](docs/manual/getting-started/enable-in-a-swift-repo.md) and [Install a plugin](../../docs/manual/getting-started/install-a-plugin.md).
 
-## Usage
+## Try it
 
 Ask in plain words. The right skills load on their own:
 
@@ -55,51 +42,53 @@ One real run wrote a native settings form, and `swift build` passed:
         .navigationTitle("Settings")
 ```
 
-More, each built around a real run:
+The whole run: [Build a SwiftUI screen](docs/manual/use/build-a-swiftui-screen.md).
 
-| Task | Page |
-| --- | --- |
-| Build a SwiftUI screen, with or without your design tokens | [Build a SwiftUI screen](docs/manual/use/build-a-swiftui-screen.md) |
-| Fix a Swift 6 concurrency error, following your repo's own rules | [Fix a concurrency error](docs/manual/use/fix-a-concurrency-error.md) |
-| Test async callbacks, migrate XCTest to Swift Testing | [Write tests](docs/manual/use/write-tests.md) |
-| Review a built screen from its code or a screenshot | [Review a screen](docs/manual/use/review-a-screen.md) |
+## What you can do
 
-## What it covers
-
-| Skill | Loads | Covers |
+| Command | Starts | What it's for |
 | --- | --- | --- |
-| `swift:swiftui` | Automatically | SwiftUI APIs and correctness, previews, availability gates below 26, visionOS, Liquid Glass APIs, accessibility code, Instruments traces |
-| `swift:design` | Automatically | Hierarchy, typography, colour, SF Symbols, when Liquid Glass fits, platform idioms, motion, design tokens |
-| `swift:concurrency` | Automatically | async/await, actors, `Sendable`, isolation errors, Swift 6 migration |
-| `swift:testing` | Automatically | Swift Testing, parameterized tests, `confirmation`, XCTest migration |
-| `swift:review` | Only as `/swift:review` | An HIG review of a screen from its code or a screenshot; reports, never edits |
+| `/swift:swiftui` | you or Claude | Write and refactor SwiftUI with current APIs |
+| `/swift:design` | you or Claude | Build and restyle screens the Apple-native way |
+| `/swift:concurrency` | you or Claude | Fix Swift 6 concurrency errors and migrate to Swift 6 |
+| `/swift:testing` | you or Claude | Write Swift Testing tests and migrate XCTest |
+| `/swift:review` | you only | Review a screen against Apple's guidelines, from code or a screenshot |
 
-The skills follow your repo's own rules first:
-- `swiftui`, `design` and `review` use your design tokens ([ADR-0007](docs/adr/ADR-0007-project-design-layer-wins.md));
-- `swiftui`, `concurrency` and `testing` follow your AGENTS.md and CLAUDE.md over their own defaults ([ADR-0013](docs/adr/ADR-0013-project-rules-win-over-skill-defaults.md)).
+Every command, with its arguments: [Commands](docs/manual/reference/commands.md). What each skill covers: [What the plugin covers](docs/manual/reference/capabilities.md).
 
-Nine eval cases check the skills' behaviour, and `project-rule-over-skill` is the one that checks the AGENTS.md rule. The full matrix of topics, shared rules and eval results is in [What the plugin covers](docs/manual/reference/capabilities.md).
+How-to pages:
 
-## Versioning
+- [Build a SwiftUI screen](docs/manual/use/build-a-swiftui-screen.md)
+- [Fix a concurrency error](docs/manual/use/fix-a-concurrency-error.md)
+- [Write tests](docs/manual/use/write-tests.md)
+- [Review a screen](docs/manual/use/review-a-screen.md)
 
-- SemVer. The version lives only in `.claude-plugin/plugin.json` ([ADR-0003](docs/adr/ADR-0003-explicit-semver-one-version-home.md)), and each release is tagged `swift--v<version>`.
-- Before 1.0, a breaking change bumps the minor version (0.2.0 and 0.3.0 changed the marketplace and so the install ID), and anything else bumps the patch.
-- Installs are copies, so a repo picks up a release with `claude plugin marketplace update jack1913` and `claude plugin update swift@jack1913`, then a new session.
-- Every release is listed in the [Changelog](CHANGELOG.md).
+## What it adds to your sessions
 
-## Work on it
+swift adds five skills. It adds no hooks, agents or servers.
 
-| Task | Command |
-|---|---|
-| Try a change | `claude --plugin-dir ~/Dev/claude_skills/claude-plugins/plugins/swift` |
-| Check APIs against Apple | `python3 maintenance/check-apis.py --strict` |
-| Unit tests | `python3 -m unittest discover maintenance/tests` |
-| Evals | `claude plugin eval . --scaffold --trust-plugin --no-publish --max-cost-usd <budget> --allow-tools Write Edit` |
-| Upstream changes | `maintenance/upstream-diff.sh <swiftui\|concurrency\|testing> [ref]` |
-| Validate the manifest | `claude plugin validate .` |
+- **`swiftui`, `design`, `concurrency` and `testing`** are skills Claude can start itself. Their short descriptions load into every session, so Claude can tell when your request matches.
+- **`review`** runs only when you type `/swift:review`. It reads the files and screenshots you name, and nothing else.
+- **Your own rules come first.** The skills follow your design tokens, and your `AGENTS.md` and `CLAUDE.md`, over their own defaults.
 
-The full workflow, releases included: [Work on the plugin](docs/manual/work-on-it.md). Decisions: [`docs/adr/`](docs/adr/).
+## What it never does
 
-## Licenses
+- `/swift:review` never edits a file. It reports, and the fix is described in the finding.
+- It never adds Liquid Glass unless you ask for it.
+- It never loads in a project that did not enable it, when you install with `--scope project`.
 
-MIT: [`LICENSE.md`](LICENSE.md), copyright 2026 Jacek Pytlik. It ships with the plugin. Third-party text and its MIT notices: `NOTICE.md`. Upstreams' licenses: `skills/swiftui/LICENSE-upstream`, `skills/concurrency/LICENSE-upstream`, `skills/testing/LICENSE-upstream`.
+## Something off?
+
+| You see | Do this |
+| --- | --- |
+| `/swift:review` doesn't start when you ask in words | Type the command. It only runs when typed |
+| Still the old version after an update | Run `claude plugin marketplace update jack1913` and `claude plugin update swift@jack1913`, then start a new session |
+| An older install (`swift@swift-plugin` or `swift@jack1913-plugins`) | Move it: [Upgrading from an older install](docs/manual/getting-started/enable-in-a-swift-repo.md#upgrading-from-an-older-install) |
+
+## Learn more
+
+- [Manual](docs/manual/README.md)
+- [Changelog](CHANGELOG.md)
+- [How it works](docs/internals/README.md) (for contributors)
+
+swift is released under the MIT licence: [LICENSE.md](LICENSE.md). The `swiftui`, `concurrency` and `testing` skills are forks of upstream skills that are also MIT; their notices are in [NOTICE.md](NOTICE.md).

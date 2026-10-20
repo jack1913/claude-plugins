@@ -16,7 +16,7 @@ OK
 ✔ Validation passed
 ```
 
-Those come from `python3 maintenance/check-apis.py --strict`, `python3 -m unittest discover maintenance/tests` and `claude plugin validate .`. Run every command on this page from the plugin folder (`plugins/swift/` in the `jack1913/claude-plugins` checkout), except `claude plugin tag`, which runs from the monorepo root.
+They come from `python3 maintenance/check-apis.py --strict`, `python3 -m unittest discover maintenance/tests` and `claude plugin validate .`. Run every command on this page from the plugin folder (`plugins/swift/` in the `jack1913/claude-plugins` checkout), except `claude plugin tag`, which runs from the monorepo root.
 
 ## Try a change
 
@@ -34,7 +34,7 @@ Edits show up in the next session started this way. Installed copies don't chang
 python3 maintenance/check-apis.py --strict
 ```
 
-It resolves every API-shaped name in `skills/**/*.md` against Apple's documentation indexes, and checks each recorded claim in `maintenance/apis.json` (for example "not on visionOS") against Apple's platform data. Without `--strict`, unresolved names are warnings; with it, they fail. Flags, exit codes and the manifest format: [check-apis reference](reference/check-apis.md).
+It resolves every API-shaped name in `skills/**/*.md` against Apple's documentation indexes, and checks each recorded claim in `maintenance/apis.json` (for example "not on visionOS") against Apple's platform data. Without `--strict`, unresolved names are warnings; with it, they fail. Flags, exit codes and the manifest format: [check-apis reference](check-apis.md).
 
 The platform table in `skills/swiftui/references/platform-availability.md` is generated. Its rows are the `apis.json` entries with `"table": true`, and its cells come from Apple's data for each entry's `path`; claims never reach it. Regenerate it after adding or removing a `"table": true` entry, changing one's `name` or `path`, or refreshing Apple's data with `--refresh`:
 
@@ -116,12 +116,7 @@ Prerequisite: the `origin` remote of the monorepo checkout points at `jack1913/c
    claude plugin tag plugins/swift
    ```
 
-For release 0.1.5, the dry run read:
-
-```text capture=tag-dry-run
-Version: 0.2.3 (from plugin.json)
-Tag:     swift--v0.2.3
-```
+   The dry run prints the plugin name, the version it read from `plugin.json`, and the tag it would create (`swift--v<version>`), then the `git tag` and `git push` commands it would run. It creates nothing.
 
 4. Push the commit, then the tag:
 

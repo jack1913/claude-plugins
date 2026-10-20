@@ -1,6 +1,6 @@
 # What the plugin covers
 
-Five skills, the rules they share, and the eval cases behind them.
+Five skills, the rules they share, and the eval cases behind them. The commands, and who starts each, are in [Commands](commands.md).
 
 ## Skills
 
@@ -81,4 +81,4 @@ settings-screen-no-tokens   1.00  0.83  +0.17  6    $0.87
 9 case(s) · mean Δ +0.28 · 2333s · $6.63
 ```
 
-A Δ of 0.00 means today's models pass that case without the plugin too, so it guards against regressions rather than showing the plugin's value. How to run the suite: [Work on the plugin](../work-on-it.md#run-the-evals).
+A Δ of 0.00 means today's models pass that case without the plugin too, so it guards against regressions rather than showing the plugin's value. How to run the suite: [Work on the plugin](../../internals/work-on-it.md#run-the-evals).

@@ -53,18 +53,9 @@ Building for debugging...
 Build complete! (0.30 sec)
 ```
 
-## What the skill did
-
-| In the result | Rule it follows |
-| --- | --- |
-| Read `Package.swift` (language mode, isolation settings) and looked for AGENTS.md and CLAUDE.md first | `swift:concurrency`: Project Rules, Fast Path step 1 |
-| The heavy work stays off the main actor; the mutations hop back through an awaited main-actor method | `swift:concurrency`: task entry isolation |
-| No `nonisolated(unsafe)`, `@preconcurrency` or `@unchecked` | `swift:concurrency`: smallest safe fix, no opt-outs |
-| `@concurrent` offered only where the toolchain supports it | `swift:concurrency`: project settings decide the spelling |
-
 ## When your repo has its own rule
 
-The skills follow your repo's AGENTS.md and CLAUDE.md over their own defaults, and say so ([ADR-0013](../../adr/ADR-0013-project-rules-win-over-skill-defaults.md)). Here the repo's AGENTS.md says "Never use `async let` in this codebase", and the task asks for two fixed parallel calls, which is exactly where `swift:concurrency` would suggest `async let`:
+The skills follow your repo's AGENTS.md and CLAUDE.md over their own defaults, and say so. Here the repo's AGENTS.md says "Never use `async let` in this codebase", and the task asks for two fixed parallel calls, which is exactly where `swift:concurrency` would suggest `async let`:
 
 > Implement DashboardLoader.load() in Sources/Demo/DashboardLoader.swift so it fetches the profile and the settings in parallel through the client and returns both.
 
@@ -76,10 +67,26 @@ AGENTS.md bans `async let`, so it uses `withThrowingTaskGroup` instead:
 - If either request throws, the error comes out of `load()` and the other request is cancelled.
 ```
 
-## Reproduce it headless
+Why your repo's rules win: [ADR-0013](../../adr/ADR-0013-project-rules-win-over-skill-defaults.md).
 
-Runs from this checkout on 2026-09-28 with Claude Code 2.1.283. The scaffolds are the eval cases `mainactor-detached-task` and `project-rule-over-skill` in `evals/`. Replies vary from run to run; the eval cases pin the behaviour ([capabilities](../reference/capabilities.md#eval-cases)). `<checkout>` is your clone of `jack1913/swift-plugin`. `--setting-sources project,local` leaves out your user settings and hooks, as the recorded runs did; your user CLAUDE.md still applies.
+<details>
+<summary>Behind the scenes</summary>
+
+### What the skill did
+
+| In the result | Rule it follows |
+| --- | --- |
+| Read `Package.swift` (language mode, isolation settings) and looked for AGENTS.md and CLAUDE.md first | `swift:concurrency`: Project Rules, Fast Path step 1 |
+| The heavy work stays off the main actor; the mutations hop back through an awaited main-actor method | `swift:concurrency`: task entry isolation |
+| No `nonisolated(unsafe)`, `@preconcurrency` or `@unchecked` | `swift:concurrency`: smallest safe fix, no opt-outs |
+| `@concurrent` offered only where the toolchain supports it | `swift:concurrency`: project settings decide the spelling |
+
+### Reproduce it headless
+
+The scaffolds are the eval cases `mainactor-detached-task` and `project-rule-over-skill` in `evals/`. Replies vary from run to run; the eval cases pin the behaviour ([capabilities](../reference/capabilities.md#eval-cases)). `<checkout>` is your clone of `jack1913/claude-plugins`. `--setting-sources project,local` leaves out your user settings and hooks, as the recorded runs did; your user CLAUDE.md still applies.
 
 ```bash
 claude -p "<the prompt above>" --plugin-dir <checkout>/plugins/swift --setting-sources project,local --permission-mode acceptEdits --allowedTools "Bash(swift build:*)"
 ```
+
+</details>

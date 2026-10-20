@@ -2,7 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-09-25
-- **Source:** commits `eb43096` (upstream rule imported), `e2b00d9` and `3c33ce5` (`swift:design` and its Liquid Glass reference), `92f124c` (`swift:design`'s glass rule limited to glass in scope); `docs/superpowers/specs/2026-09-24-swift-plugin-design.md` §4, final paragraph; ExampleApp companion spec `~/Dev/projects/example-app/docs/superpowers/specs/2026-09-24-example-app-design-layer-design.md` (translation table)
+- **Source:** commits `eb43096` (upstream rule imported), `e2b00d9` and `3c33ce5` (`swift:design` and its Liquid Glass reference), `92f124c` (`swift:design`'s glass rule limited to glass in scope); `docs/archive/specs/2026-09-24-swift-plugin-design.md` §4, final paragraph; ExampleApp companion spec `~/Dev/projects/example-app/docs/superpowers/specs/2026-09-24-example-app-design-layer-design.md` (translation table)
 
 ## Context
 

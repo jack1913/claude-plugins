@@ -1,6 +1,6 @@
 # ADR-0015: The plugin moves into `jack1913/claude-plugins` as `plugins/swift/`
 
-- **Status:** accepted; supersedes the `git-subdir` source and the separate plugin repo of ADR-0014
+- **Status:** accepted
 - **Date:** 2026-10-19
 - **Source:** the owner's decision (2026-10-19) to make `jack1913/claude-plugins` the single source of truth for all three plugins (`batbelt`, `brand-creator`, `swift`) and to publish it; ADR-0014 (the catalogue); [Plugin marketplaces](https://code.claude.com/docs/en/plugin-marketplaces) (relative-path sources)
 
@@ -21,6 +21,7 @@ ADR-0014 kept this plugin in its own repo, `jack1913/swift-plugin`, and listed i
 - The history was scrubbed on import: a private app name became `ExampleApp` / `example-app`, and a home path became `<home>`. Keep it that way.
 
 Rejected:
+
 - Keeping `swift-plugin` as the source of truth and mirroring it: two copies, and a mirror drifts.
 - Moving the contributor files to the monorepo root: the plugin would not be self-contained, and `UPSTREAM.md`, `maintenance/` and the ADRs belong to this plugin only.
 
@@ -30,3 +31,9 @@ Rejected:
 - `jack1913/swift-plugin` is archived; its README points here.
 - Records written before the move keep their old paths and repo names (the changelog's past entries, ADRs 0001 to 0014, `docs/superpowers/`, `docs/archive/`, `docs/.onboard-captures/`), because they describe what was run then.
 - `maintenance/check-apis.py --strict` needs the network and compares the skills with Apple's current data, which drifts, so it is a manual gate and is not in CI. The unit tests are.
+
+## Update 2026-10-19
+
+The Status line used to read: "accepted; supersedes the `git-subdir` source and the separate plugin repo of ADR-0014". It replaces only those two parts of ADR-0014, not the whole record, so it carries no Supersedes line.
+
+The shipped specs and plans that the Consequences call `docs/superpowers/` moved to `docs/archive/specs/` and `docs/archive/plans/`.

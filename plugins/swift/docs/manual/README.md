@@ -1,25 +1,27 @@
-# swift plugin manual
+# swift manual
 
-The operator's manual: how to use the swift plugin day to day. Read the daily-use pages in order.
+How to use swift. New here? Start with the [plugin README](../../README.md).
 
-## Getting started
+## Get started
 
-- [Enable the plugin in a Swift repo](getting-started/enable-in-a-swift-repo.md): install, scopes, updates, moving from an older marketplace, what each skill covers
+- [Enable the plugin in a Swift repo](getting-started/enable-in-a-swift-repo.md): install it for one project, update it, upgrade an older install
 
-## Use it
+## Do a task
 
-Each page is built around a real run: the prompt, the reply, and the build or test output.
+Each page shows a real run: the prompt, the reply, and the build or test output.
 
-1. [Build a SwiftUI screen](use/build-a-swiftui-screen.md): `swift:design` and `swift:swiftui`, with and without your design tokens
-2. [Fix a concurrency error](use/fix-a-concurrency-error.md): `swift:concurrency`, including your repo's own rules
-3. [Write tests](use/write-tests.md): `swift:testing` for async callbacks and XCTest migration
-4. [Review a screen](use/review-a-screen.md): `/swift:review` from code or a screenshot
+- [Build a SwiftUI screen](use/build-a-swiftui-screen.md): with or without your own design tokens
+- [Fix a concurrency error](use/fix-a-concurrency-error.md): the fix follows your repo's own rules
+- [Write tests](use/write-tests.md): test async callbacks, migrate XCTest to Swift Testing
+- [Review a screen](use/review-a-screen.md): `/swift:review` from code or a screenshot
 
-## The daily-use manual
+## Look it up
 
-1. [Work on the plugin](work-on-it.md): try a change, check APIs, run the tests and evals, check upstream, release
+- [Commands](reference/commands.md): every skill, who starts it, and its arguments
+- [What the plugin covers](reference/capabilities.md): topics by skill, shared rules, eval cases and results
 
-## Reference (tables)
+## How these pages were made
 
-- [What the plugin covers](reference/capabilities.md): skills, topics by skill, shared rules, eval cases and results
-- [check-apis.py reference](reference/check-apis.md): flags, exit codes, the `apis.json` format
+The examples are recorded runs, not mock-ups. They ran on 2026-09-27 and 2026-09-28 with Claude Code 2.1.283. Replies vary from run to run, so yours will read differently. Each page ends with a "Behind the scenes" section for the exact command.
+
+Working on the plugin itself? See [How swift works](../internals/README.md).

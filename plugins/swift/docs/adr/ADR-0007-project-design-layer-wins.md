@@ -1,8 +1,8 @@
 # ADR-0007: A project's own design layer wins over the plugin's example literals
 
-- **Status:** accepted; amended by ADR-0011 (the rule also binds swift:review)
+- **Status:** accepted
 - **Date:** 2026-09-25
-- **Source:** commits `fb7f1d7` (rule added to `swift:swiftui`), `e2b00d9` (same rule in `swift:design`), `f0ad99f` (no-layer definition and the starter-token offer), `64ee756` (template AccentColor exception); `docs/superpowers/specs/2026-09-24-swift-plugin-design.md` §1 goal 2, §4 item 6; `docs/superpowers/plans/2026-09-24-swift-plugin.md` Global Constraints (the rule word for word in both skills); `UPSTREAM.md` Deviations row "`SKILL.md` Operating Rules"
+- **Source:** commits `fb7f1d7` (rule added to `swift:swiftui`), `e2b00d9` (same rule in `swift:design`), `f0ad99f` (no-layer definition and the starter-token offer), `64ee756` (template AccentColor exception); `docs/archive/specs/2026-09-24-swift-plugin-design.md` §1 goal 2, §4 item 6; `docs/archive/plans/2026-09-24-swift-plugin.md` Global Constraints (the rule word for word in both skills); `UPSTREAM.md` Deviations row "`SKILL.md` Operating Rules"
 
 ## Context
 
@@ -20,3 +20,7 @@ The sources record no alternative to this rule. It follows from the goal that a 
 
 - A repo's own layer overrides both skills' literals, and a layer such as `example-app-design` can sit on top of them.
 - The rule's wording is kept identical in both skills (plan, Global Constraints). An edit to one copy needs the same edit in the other, and on the `swift:swiftui` side a Deviations row.
+
+## Update 2026-10-19
+
+The Status line used to read: "accepted; amended by ADR-0011 (the rule also binds swift:review)". The decision text above is unchanged: ADR-0011 extends the rule to `swift:review`.

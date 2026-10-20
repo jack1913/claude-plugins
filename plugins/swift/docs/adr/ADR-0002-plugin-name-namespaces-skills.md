@@ -2,7 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-09-25
-- **Source:** commits `e23aa05` (plugin named `swift`), `ac47417` (skill renamed to `swiftui`), `e2b00d9` (`swift:design` added); `docs/superpowers/specs/2026-09-24-swift-plugin-design.md` §2 "Names" row, §3 "Frontmatter" bullet, §10; `UPSTREAM.md` Deviations row "`SKILL.md` frontmatter"; spec §1 goal 2 and the ExampleApp companion spec `~/Dev/projects/example-app/docs/superpowers/specs/2026-09-24-example-app-design-layer-design.md` (depends on the skill names); `AGENTS.md` §4 "Names are fixed"
+- **Source:** commits `e23aa05` (plugin named `swift`), `ac47417` (skill renamed to `swiftui`), `e2b00d9` (`swift:design` added); `docs/archive/specs/2026-09-24-swift-plugin-design.md` §2 "Names" row, §3 "Frontmatter" bullet, §10; `UPSTREAM.md` Deviations row "`SKILL.md` frontmatter"; spec §1 goal 2 and the ExampleApp companion spec `~/Dev/projects/example-app/docs/superpowers/specs/2026-09-24-example-app-design-layer-design.md` (depends on the skill names); `AGENTS.md` §4 "Names are fixed"
 
 ## Context
 
