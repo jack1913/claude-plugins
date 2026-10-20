@@ -16,7 +16,7 @@ This folder is the plugin root and one plugin of the monorepo `jack1913/claude-p
 | --- | --- |
 | `.claude-plugin/`, `skills/`, `evals/`, `LICENSE.md`, `NOTICE.md` | What Claude Code loads, plus licences and evals. The whole folder is the plugin root and ships (ADR-0015); contributor files (docs, maintenance, `.claude/`, `AGENTS.md`) ship too but are not loaded |
 | `maintenance/` | Contributor tooling (ships, not loaded): API checker, upstream diff, unit tests, `swift:review` verification fixtures |
-| `docs/manual/` | Manual: consumer documentation, commands-first, one concept per page |
+| `docs/manual/` | Manual: consumer documentation, task-first, one task per page |
 | `docs/internals/` | Internals: technical mechanics, contributors only |
 | `docs/adr/` | ADRs: Architecture Decision Records, with an index |
 | `docs/archive/` | Archive: frozen point-in-time records, including the shipped specs and plans (`docs/archive/specs/`, `docs/archive/plans/`) |

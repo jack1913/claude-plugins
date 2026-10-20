@@ -71,7 +71,7 @@ construction" benefit is only real once the markers exist.
 
 ## 7. Structure
 
-Structure = the docs IA when present: `docs/manual/` (consumer, commands-first —
+Structure = the docs IA when present: `docs/manual/` (consumer, task-first —
 Diátaxis how-to/reference), `docs/internals/` (technical — Diátaxis explanation),
 `docs/adr/` (decisions), `docs/archive/` (frozen). `AGENTS.md` is the index (thin
 `CLAUDE.md` = `@AGENTS.md`); keep it within a ~200–300 line budget, overflow to
@@ -87,6 +87,11 @@ docs/{manual,internals,adr,archive}/ to enable IA-aware maintenance." On a
 **partial** IA, run the checks whose prerequisites are met **and additionally note
 which IA tiers/markers are absent** (e.g. "docs/manual present; docs/adr and
 docs/archive missing") so the operator can complete the scaffold.
+
+**The standard wins.** When `docs/internals/docs-standard.md` exists, it owns page kinds,
+manual layout (`getting-started/`, `use/`, `reference/`), voice, changelog shape and ADR rules.
+Where it and a built-in default or a baked `docs voice` in this file differ, follow the
+standard and report the difference; this skill's procedure and its `check.py` gate do not change.
 
 ## 7.5 Show-don't-tell (docs/manual/ maintenance)
 
@@ -105,7 +110,7 @@ stdout to a scratch path, exactly as `onboard-repo` §3.7 does. Then normalize i
 with the `redact` verb (capture to a temp file, then `mv` — never redirect onto the
 destination) and write the result to `docs/.onboard-captures/<slug>.txt`:
 
-```
+```bash
 python3 .claude/skills/update-docs/scripts/check.py redact <raw> \
   --home "$HOME" --user "$USER" --stamp <stamp> > <tmp> && mv <tmp> docs/.onboard-captures/<slug>.txt
 ```
@@ -251,7 +256,7 @@ a real captured output block (§7.5), which needs a command run and reviewed —
 is `onboard-repo` §3.7's job, and it is deliberately intent-only. This tier
 **detects the gap and hands it off**: report it, and print the handoff —
 
-> `N` consumer surface(s) have no manual page. Run `/onboard-repo` (its §3.7
+> `N` consumer surface(s) have no manual page. Run `/batbelt:onboard-repo` (its §3.7
 > authoring step is incremental and create-only-missing, so it writes only the
 > missing pages) — or add a row to `docs/.onboard-coverage.json` marking the surface
 > `niche`/`deferred` if it genuinely does not need one.
@@ -264,10 +269,10 @@ missing one.
 
 `onboard-repo` stamps the gate script alongside this skill at
 `.claude/skills/update-docs/scripts/check.py`, so the grounding gate runs **in this
-repo** rather than only in `claude-configs`. When it is present, run it as a
+repo** rather than only in the plugin. When it is present, run it as a
 close-out check beside §8's link gate:
 
-```
+```bash
 python3 .claude/skills/update-docs/scripts/check.py check-docs \
   docs README.md <index> --captures docs/.onboard-captures --coverage docs/.onboard-coverage.json
 ```
@@ -288,7 +293,7 @@ fine, but keep the **full roots** and add `--only`: passing a single page as the
 on a broken page.
 
 If the script is **absent** (an older stamp), say so once and fall back to §8's
-link check — never silently skip a gate the skill claims to run. `/onboard-repo --sync`
+link check — never silently skip a gate the skill claims to run. `/batbelt:onboard-repo --sync`
 installs it. A stamp predating the split carries `onboard.py`/`onboard_lib.py` here
 instead; that pair still works, so **run it and report the drift** rather than
 declaring the gate unavailable.
@@ -342,7 +347,7 @@ captured command this skill cannot run. **Running a capture** — §7.5 proposes
 operator runs it. **Editing a `.txt` under `docs/.onboard-captures/`** — re-capture or
 leave it and report.
 
-<!-- stamped by onboard-repo v3 from claude-configs on 2026-09-25. The template region is regenerated on /onboard-repo --sync (backup + diff shown first); the REPO SPECIFICS block is preserved. -->
+<!-- stamped by onboard-repo v4 from batbelt on 2026-10-20. The template region is regenerated on /batbelt:onboard-repo --sync (backup + diff shown first); the REPO SPECIFICS block is preserved. -->
 
 <!-- BEGIN REPO SPECIFICS (preserved on --sync) -->
 - **index doc:** `AGENTS.md` (`CLAUDE.md` is an `@AGENTS.md` import).

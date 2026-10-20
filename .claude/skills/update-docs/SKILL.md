@@ -71,7 +71,7 @@ construction" benefit is only real once the markers exist.
 
 ## 7. Structure
 
-Structure = the docs IA when present: `docs/manual/` (consumer, commands-first —
+Structure = the docs IA when present: `docs/manual/` (consumer, task-first —
 Diátaxis how-to/reference), `docs/internals/` (technical — Diátaxis explanation),
 `docs/adr/` (decisions), `docs/archive/` (frozen). `AGENTS.md` is the index (thin
 `CLAUDE.md` = `@AGENTS.md`); keep it within a ~200–300 line budget, overflow to
@@ -87,6 +87,11 @@ docs/{manual,internals,adr,archive}/ to enable IA-aware maintenance." On a
 **partial** IA, run the checks whose prerequisites are met **and additionally note
 which IA tiers/markers are absent** (e.g. "docs/manual present; docs/adr and
 docs/archive missing") so the operator can complete the scaffold.
+
+**The standard wins.** When `docs/internals/docs-standard.md` exists, it owns page kinds,
+manual layout (`getting-started/`, `use/`, `reference/`), voice, changelog shape and ADR rules.
+Where it and a built-in default or a baked `docs voice` in this file differ, follow the
+standard and report the difference; this skill's procedure and its `check.py` gate do not change.
 
 ## 7.5 Show-don't-tell (docs/manual/ maintenance)
 
@@ -342,7 +347,7 @@ captured command this skill cannot run. **Running a capture** — §7.5 proposes
 operator runs it. **Editing a `.txt` under `docs/.onboard-captures/`** — re-capture or
 leave it and report.
 
-<!-- stamped by onboard-repo v3 from claude-configs on 2026-10-19. The template region is regenerated on /batbelt:onboard-repo --sync (backup + diff shown first); the REPO SPECIFICS block is preserved. -->
+<!-- stamped by onboard-repo v4 from batbelt on 2026-10-20. The template region is regenerated on /batbelt:onboard-repo --sync (backup + diff shown first); the REPO SPECIFICS block is preserved. -->
 
 <!-- BEGIN REPO SPECIFICS (preserved on --sync) -->
 - **index doc:** `AGENTS.md` (`CLAUDE.md` is an `@AGENTS.md` import).

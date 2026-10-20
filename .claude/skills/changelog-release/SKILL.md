@@ -230,7 +230,7 @@ When this run cut a version block:
 subjects; RAG/knowledge-graph anti-hallucination (ground truth is
 `git log` / `gh pr view`).
 
-<!-- stamped by onboard-repo v3 from claude-configs on 2026-10-19. The template region is regenerated on /batbelt:onboard-repo --sync (backup + diff shown first); the REPO SPECIFICS block is preserved. -->
+<!-- stamped by onboard-repo v4 from batbelt on 2026-10-20. The template region is regenerated on /batbelt:onboard-repo --sync (backup + diff shown first); the REPO SPECIFICS block is preserved. -->
 
 <!-- BEGIN REPO SPECIFICS (preserved on --sync) -->
 - **scope (monorepo of independent plugins):** each release is for ONE plugin `<name>` under `plugins/<name>/`. When the request names no plugin, do not ask: check every plugin yourself — its changes since its last release (§1, per plugin) — and release each one with user-facing changes, one block and one version per plugin. Skip a plugin with nothing new, or only contributor-facing changes (tests, CI, its own `.claude/` config, dev notes), and say which you skipped and why. For each plugin you release, read `CHANGELOG.md` as `plugins/<name>/CHANGELOG.md`, limit the range to that folder (`git log BASELINE..HEAD -- plugins/<name>`), and bump only that plugin's version home. **swift** has its own stamped skill: for a swift release, apply the REPO SPECIFICS of `plugins/swift/.claude/skills/changelog-release/SKILL.md` (its paths are relative to `plugins/swift/`) instead of the per-plugin rows below.
