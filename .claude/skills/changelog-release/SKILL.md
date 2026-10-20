@@ -241,13 +241,13 @@ subjects; RAG/knowledge-graph anti-hallucination (ground truth is
   - `plugins/swift/.claude-plugin/plugin.json` (`version`)
   The plugin entries in `.claude-plugin/marketplace.json` carry no `version` on purpose (`rg -c '"version"' .claude-plugin/marketplace.json` prints nothing) — never add one.
 - **monorepo mode:** `independent`.
-- **release tags (§1 step 2):** `<name>--v<version>`, not `v<version>` — list with `git tag -l '<name>--v*' --sort=-v:refname`. Tags exist for swift and batbelt (from `batbelt--v0.1.2`); brand-creator has none yet, so its baseline comes from its top CHANGELOG heading.
+- **release tags (§1 step 2):** `<name>--v<version>`, not `v<version>` — list with `git tag -l '<name>--v*' --sort=-v:refname`. Every plugin has tags (list them with the command above); swift 0.3.0 and 0.3.1 are untagged, so its baseline comes from its top CHANGELOG heading.
 - **changelog per plugin:**
   - swift — `plugins/swift/CHANGELOG.md`, headings `## [x.y.z] - YYYY-MM-DD` under `## [Unreleased]`.
-  - brand-creator — `plugins/brand-creator/CHANGELOG.md`, headings `## x.y.z - YYYY-MM-DD` with **no brackets** and no `[Unreleased]` heading; treat that form as the release heading for §1 step 1 and mirror it when cutting a version.
+  - brand-creator — `plugins/brand-creator/CHANGELOG.md`, headings `## [x.y.z] - YYYY-MM-DD` under `## [Unreleased]` (Keep a Changelog since 0.2.2; entries up to 0.2.1 were converted).
   - batbelt — `plugins/batbelt/CHANGELOG.md` (started at 0.1.2, with 0.1.0 and 0.1.1 backfilled), headings `## [x.y.z] - YYYY-MM-DD` under `## [Unreleased]`.
   - No root `CHANGELOG.md`: there is no repo-wide version.
-- **other version pins (brand-creator):** a bump also edits `tests/test_static.py` (`assert d["version"] == ...`), `scripts/lib/_common.py` (`USER_AGENT`, pinned to plugin.json by a test), the README's `Version x.y.z` line and its cache-path example, and `evals/_shared/fixture.sh` (`plugin_version`). Find any new one with `rg -n '<old version>' plugins/brand-creator --glob '!dev/**' --glob '!CHANGELOG.md'`.
+- **other version pins (brand-creator):** a bump also edits `tests/test_static.py` (`assert d["version"] == ...`), `scripts/lib/_common.py` (`USER_AGENT`, pinned to plugin.json by a test), and `evals/_shared/fixture.sh` (`plugin_version`). The README no longer states a version. Find any new pin with `rg -n '<old version>' plugins/brand-creator --glob '!docs/archive/**' --glob '!CHANGELOG.md'`.
 - **release-script delegation:** `none` (no release script, no version-sync test). After the operator commits, the tag comes from `claude plugin tag plugins/<name>` run from the repo root (it checks `plugin.json` against the marketplace entry, then creates `<name>--v<version>`; print `--dry-run` first), not `git tag`. Then `git push origin main <name>--v<version>`.
 - **dash punctuation:** `-`.
 - **changeset dir:** `none`.
