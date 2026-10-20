@@ -1,4 +1,4 @@
-# Decisions log (stages 1 to 3b)
+# Decisions log (stages 1a to 7, release fixes and the monorepo move)
 
 Where plan-v2 and the coverage matrix are specific, the code follows them. Where they are silent, the simplest robust
 option was chosen and is recorded here. Newest stage last. Stage 1a = infrastructure and scripts.

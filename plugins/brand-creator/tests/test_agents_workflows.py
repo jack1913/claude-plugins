@@ -157,6 +157,6 @@ def test_the_fleet_gate_and_refine_loop_are_documented_where_they_are_used():
     for skill, wf in (("review", "review-panel"), ("brand-adopt", "adopt"), ("brand-naming", "naming")):
         t = (ROOT / "skills" / skill / "SKILL.md").read_text(encoding="utf-8")
         assert f"fleet-plan {wf}" in t and "fleet.md" in t, skill
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    assert "## Agents and workflows (opt-in)" in readme and "fleet-plan" in readme
+    page = (ROOT / "docs/manual/reference/agents-and-workflows.md").read_text(encoding="utf-8")
+    assert "## The four workflows" in page and "fleet" in (ROOT / "docs/manual/reference/costs.md").read_text(encoding="utf-8")
     assert "## Agents and workflows" in (ROOT / "scripts/CONTRACT.md").read_text(encoding="utf-8")

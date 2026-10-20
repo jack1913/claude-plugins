@@ -4,12 +4,12 @@ Checks the automated suite cannot do from here. The suite never reports these as
 write the date and result beside it. "Never run" means exactly that: nobody has done the check yet, so nothing it covers is
 proven.
 
-## Status at 0.1.0 (2026-10-18)
+## Status as last recorded (version 0.1.0, 2026-10-18; no later run is recorded)
 
 | Check | Last run | Result |
 |---|---|---|
 | [Behaviour evals](#behaviour-evals-claude-plugin-eval) | 2026-10-18, sonnet, one run per case, no baseline | first pass 8 of 17 (0.76); final sweep 15 of 17; the two failures fixed, one re-run alone and passed, one re-graded offline; full suite not re-run since |
-| [Trigger evals](#trigger-evals-for-the-skill-descriptions) | 2026-10-18, haiku and sonnet, minimal environment | run; positives added afterwards (decision 804) are not re-run |
+| [Trigger evals](#trigger-evals-for-the-skill-descriptions) | 2026-10-18, haiku and sonnet, minimal environment | run; positives added afterwards (decision 804 in the [decisions log](../archive/decisions-log.md)) are not re-run |
 | [Workflow trials](#workflow-trials) | 2026-10-18, all four workflows on sonnet | run; the fixes they found are in the 0.1.0 code (directions judge on unbuilt boards, adopt row-list syntax) |
 | [Linux run in Docker](#linux-run-in-docker) | 2026-10-18, Debian 13 image | suite and Acme smoke passed with only the macOS-only skips |
 | [Anonymisation denylist](#anonymisation-denylist) | author's own suite runs, last 2026-10-18 | private to the author; cannot run for anyone else, CI skips it |
@@ -30,20 +30,20 @@ proven.
 ## Behaviour evals (`claude plugin eval`)
 
 **Why manual.** Every run is billed on the runner's account; the suite and CI only check the case files
-(`tests/test_evals.py`). Commands: README, "Running the evals".
+(`tests/test_evals.py`). Commands: [Running the evals](evals.md).
 
 **Steps.** Start with one run per case and no baseline (`--ablation none --runs 1 --max-cost-usd <usd>`), read the
 per-case report, then a default run (with the baseline arm) before a claim about what the plugin adds. Record the Claude
 Code version, the model, the score, the cases that failed and the cost.
 
 **Last run:** 2026-10-18, Claude Code 2.1.302, sonnet, one run per case, no baseline. First pass 8 of 17 cases (score 0.76);
-each failure was diagnosed and fixed (`dev/DECISIONS-LOG.md` 801 to 811). Final sweep 15 of 17. The judge fold-in case was then
+each failure was diagnosed and fixed ([decisions log](../archive/decisions-log.md) 801 to 811). Final sweep 15 of 17. The judge fold-in case was then
 fixed and re-run alone (passed); the refine case's regexes were widened and its reply re-graded offline (matches). The full suite
 has not been re-run since those two fixes, and the baseline arm has never run.
 
 ## Trigger evals for the skill descriptions
 
-**Why manual.** `dev/trigger-evals.json` (skill-creator format) runs model sessions and is billed.
+**Why manual.** `evals/trigger-evals.json` (skill-creator format) runs model sessions and is billed.
 
 **Steps.** Run the skill-creator trigger eval for each model-invocable skill (`brand-creator`, `brand-naming`, `brand-assets`,
 `brand-book`) with the smallest and a mid model, in an environment with no other plugins, and record the precision and recall per
@@ -51,7 +51,7 @@ skill. A change to a skill's `description` or `when_to_use` needs a re-run.
 
 **Last run:** 2026-10-18, haiku and sonnet, in a minimal environment. The three positives added after the behaviour evals
 (work on a project's files, launch steps; decision 804) and the shortened `brand-creator` listing text (decision 912) have not
-been re-run.
+been re-run. The listing text of `brand-creator`, `brand-assets`, `brand-book` and `brand-naming` was shortened again after that run (see the changelog); the trigger evals have not been re-run for it.
 
 ## Workflow trials
 
@@ -100,7 +100,7 @@ calls made inside a subagent needs a real session with a real subagent, and a te
 3. Expected: both calls are blocked with the guard's reason (exit 2, message on stderr), the file is unchanged, and the
    subagent reports the block. Then ask it to write `rounds/r2/board.html` (the latest round): that must be allowed.
 4. If a call goes through, the hook does not fire inside subagents. Record the Claude Code version, tell the owner, and
-   note in README "Safety" that the history manifest checked by `brand-creator check` is the only gate for subagent writes.
+   note on the [what it never does](../manual/reference/what-it-never-does.md) page that the history manifest checked by `brand-creator check` is the only gate for subagent writes.
 
 **Last run:** never.
 
@@ -207,12 +207,12 @@ answer REGISTERED, NOT-FOUND or UNKNOWN with its control, and the memo must say 
 
 ## Permission rule for the fallback form
 
-**Why manual.** The README's allow rule `Bash(brand-creator *)` is tested against the command form the skills use. The
+**Why manual.** The allow rule `Bash(brand-creator *)` on the [permissions](../manual/reference/permissions.md) page is tested against the command form the skills use. The
 fallback form (`"${CLAUDE_PLUGIN_ROOT}/bin/brand-creator" ...`, used when the plugin's `bin/` is not on PATH) is not, and whether
 a hand-written rule matches the quoted absolute path needs a real session.
 
 **Steps.** In a session with `bin/` taken off PATH, let a skill fall back, answer the prompt with "Yes, and don't ask again",
-note the rule Claude Code wrote, and confirm a hand-written rule of the README's form matches the next call.
+note the rule Claude Code wrote, and confirm a hand-written rule of that form matches the next call.
 
 **Last run:** never.
 
@@ -222,7 +222,7 @@ note the rule Claude Code wrote, and confirm a hand-written rule of the README's
 
 **Steps.** On Windows with Python 3.10+ (`python3` on PATH, not the Store alias), Node 22+, uv and resvg: `/brand-creator:setup`,
 a Quick project to `check`, the renderer question answered, and the guard hook seen blocking a write to an earlier round. Record
-what fails; until then the README says "untested".
+what fails; until then the [platform support](../manual/reference/platform-support.md) page says "untested".
 
 **Last run:** never.
 

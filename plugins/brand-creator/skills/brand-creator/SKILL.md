@@ -1,7 +1,7 @@
 ---
 name: brand-creator
-description: Starts or continues a brand-identity project for a company, product or person (new brand, logo, visual identity, rebrand, brand guidelines) and runs it as a gated process with scope tiers, divergent direction boards, a pick, refinement, a mark system, design tokens, web and social assets, a brand book, adoption and launch hand-offs. Resumes from the project's BRAND-STATE.md. Identity creation and its process only; not for building web pages, UI components, slide themes, chart colours or colour conversions.
-when_to_use: Use whenever someone wants a logo, a look, a visual identity, a rebrand or brand guidelines or a brand book made, even when the ask is small or casual ("a logo for my band", "a look for my Etsy shop"), for a business, product, shop, practice, podcast or person, because a direct answer skips the brief, the options board and the checks. Also to go on with a brand project (a folder holding BRAND-STATE.md), including any work on its files even when the ask never says "brand" (edit or lint a round board, fold in a judge report, change a rule, token or threshold such as an accent minimum), and for a brand's launch steps ("buy the domain", "file the trademark"), handed to the owner one action at a time, never done for them. Polish triggers include "księga znaku", "identyfikacja wizualna", "zaprojektuj logo", "nowa marka", "rebranding", "logo dla firmy".
+description: Starts or continues a brand-identity project for a company, product or person (new brand, logo, visual identity, rebrand, brand guidelines) and runs it step by step, with the owner deciding at each step. Identity creation only; not for building web pages, UI components, slide themes, chart colours or colour conversions.
+when_to_use: Use whenever someone wants a logo, a look, a visual identity, a rebrand, brand guidelines or a brand book, even when the ask is small or casual ("a logo for my band", "a look for my Etsy shop"), for a business, product, shop, podcast or person. Also to go on with a brand project (a folder holding BRAND-STATE.md) and any work on its files (edit or lint a round board, fold in a judge report, change a rule, token or threshold such as an accent minimum), and for launch steps ("buy the domain", "file the trademark"), which are handed to the owner, never done for them. Polish triggers include "księga znaku", "identyfikacja wizualna", "zaprojektuj logo", "nowa marka", "rebranding", "logo dla firmy".
 compatibility: Claude Code only (uses the plugin's bin/ entry point and hooks). Needs Python 3.10+ with uv, Node 22+, resvg and a Playwright Chromium installed by /brand-creator:setup; macOS with Xcode only for Apple emitters.
 allowed-tools: Bash(brand-creator *)
 ---
@@ -289,6 +289,7 @@ Full file contract: `${CLAUDE_PLUGIN_ROOT}/scripts/CONTRACT.md`. Templates: `${C
 
 ## References (load when the phase needs them)
 
+- [references/_index.md](references/_index.md): every reference file in one table, with what to use it for.
 - Phases: [00-intake](references/phases/00-intake.md), [01-research](references/phases/01-research.md),
   [02-naming](references/phases/02-naming.md), [03-strategy-directions](references/phases/03-strategy-directions.md),
   [04-selection](references/phases/04-selection.md), [05-refinement](references/phases/05-refinement.md),

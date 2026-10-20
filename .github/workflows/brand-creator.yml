@@ -15,7 +15,7 @@
 #   macos     the Apple-tool tests (requires_macos, requires_actool: sips, iconutil, actool, assetutil, the .icon pipeline) and the Acme
 #             smoke with `emit apple`, with BRAND_CREATOR_REQUIRE_ALL=1 so a missing tool fails instead of skipping.
 #
-# `claude plugin eval` is never run here (it is billed); the evals are run by hand, see dev/MANUAL-CHECKS.md.
+# `claude plugin eval` is never run here (it is billed); the evals are run by hand, see docs/internals/manual-checks.md.
 name: brand-creator
 
 on:

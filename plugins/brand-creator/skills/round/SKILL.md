@@ -1,6 +1,6 @@
 ---
 name: round
-description: Builds the next board round of the current brand project. Copies the previous round, fills the round page, lints it, shoots it in four views, publishes the stable review page and stops at the gate.
+description: Builds the next round of boards for the current brand project. It copies the previous round, fills the round page, checks it, takes screenshots in four views, publishes the review page and stops for the owner's decision. Runs only when typed as /brand-creator:round.
 argument-hint: "[pick|refine] [what this round should answer]"
 disable-model-invocation: true
 allowed-tools: Bash(brand-creator *)

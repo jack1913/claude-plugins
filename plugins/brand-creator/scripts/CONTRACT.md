@@ -24,7 +24,6 @@ once; a script that does not use them is wrong, not special.
 - [Adoption, cascade, adapters, applied skill and launch](#adoption-cascade-adapters-applied-skill-and-launch)
 - [Tier B emitters: Android, Chrome extension, MSIX](#tier-b-emitters-android-chrome-extension-msix)
 - [Tier B: watchOS and tvOS, profiles, and the finish chain](#tier-b-watchos-and-tvos-profiles-and-the-finish-chain)
-
 - [Agents and workflows](#agents-and-workflows)
 - [Testing](#testing)
 - [Linux validation and CI](#linux-validation-and-ci)
@@ -111,7 +110,7 @@ fontTools, Brotli and skia-pathops (`outline_glyphs.py`, `fontcheck.py`), Pillow
 
 ## Project file conventions
 
-```
+```text
 <project>/
   BRAND-STATE.md  FACTS.md  brief/BRIEF.md
   research/research.md  research/YYYY-MM-DD-<topic>.md  research/positioning-map.md   P1 output (templates/research.md)
@@ -270,7 +269,7 @@ recoloured through the token roles light to dark (a warning; a colour the tokens
 | `apple` | `AppIcon.icon/` (icon.json + layer SVGs), `compiled/<platform>.renditions.json` and the actool fallbacks (`compiled/ios/*.png`, `compiled/ios/Info-icons.plist`, `compiled/macos/AppIcon.icns`), `Assets.xcassets/` (visionOS stack, accent colour set, menu-bar template, and the appiconset only for a target below 26), `Colors.xcassets`, `legacy/AppIcon.icns`, `marketing/AppStore-1024.png` (RGB, no alpha), `dmg/` (background, @2x, layout.json), `store/` (frames, frames.json), `_preview/` with `--previews` | vendored schema + validator on the `.icon`; actool compile per platform (iphoneos, macosx, watchos, xros) is exit 1 on any error; rendition checks per platform; icns round trip with iconutil; visionOS safe circle; no-alpha check |
 | `windows` | `app.ico`, `nsis/header.bmp`, `nsis/sidebar.bmp` | ico layers equal the spec row; BMP header read back (24 bits, uncompressed, spec size) |
 | `linux` | `usr/share/icons/hicolor/<s>x<s>/apps/<icon>.png`, `scalable/apps/<icon>.svg`, `usr/share/metainfo/<id>.metainfo.xml` | metainfo text from FACTS.md only, gaps reported |
-| `tray` | `windows/<light|dark>/<state>-<px>.png`, `linux/<state>-<px>.png`, `macos/<state>Template@2x.png` | `qa/states.tray.json` written, then `states-check` (a failing pair is exit 1) |
+| `tray` | `windows/<light\|dark>/<state>-<px>.png`, `linux/<state>-<px>.png`, `macos/<state>Template@2x.png` | `qa/states.tray.json` written, then `states-check` (a failing pair is exit 1) |
 | `tauri` | `src-tauri/icons/` PNGs, `icon.ico` (32 first), `icon.icns` | sizes and order; `.icns` by iconutil, or Pillow only with `--renderer pillow`; exit 3 otherwise off macOS |
 | `wallet` | `apple/` (icon, logo, primaryLogo, secondaryLogo at @2x and @3x; order-logo.png), `google/` (logo-660.png, wide-logo-1280x400.png) | point size times scale; order logo opaque; circle-safe logo; wide logo transparent |
 | `developer` | `email/` (1x, @2x, @3x), `nuget/`, `avatar/`, `cli/identity.txt` and `identity.plain.txt` | registry icon size limit; CLI colour chosen by contrast on a white and a black ground |
@@ -278,7 +277,7 @@ recoloured through the token roles light to dark (a warning; a colour the tokens
 | `presskit` | `<slug>-press-kit.zip` | deterministic zip; Standard and Full tier |
 
 `emit web` draws every favicon.ico layer, the apple-touch icon and each PWA icon through `Emit.drawing(size)` (the band rule for the file's own
-size) and records the band (`layer_bands` for the .ico). `icon.svg` is one scalable file and stays the default mark. 
+size) and records the band (`layer_bands` for the .ico). `icon.svg` is one scalable file and stays the default mark.
 
 `emit apple` exits 3 off macOS (and on a Mac without Xcode) before it reads the project. `emit tray` reads `tray/tray.json` (a state's source is a
 path, or a map of master size to path, or `{"light": ..., "dark": ...}` of those; a master serves only the sizes it divides, a size with no master
@@ -768,6 +767,7 @@ carries `UNVERIFIED, recheck (apple-watch-tv-safe, apple-watchos-appiconset): ` 
 `assets/profiles/`: `avatar-<px>.png` for each size of the `profile-avatar` row (400 and 800; opaque RGB, the mark centred) and one image per platform at its row's size
 (`linkedin-banner`, `x-header`, `youtube-banner`, `facebook-cover`, `instagram-feed`, `instagram-story`, named `<name>-<w>x<h>.png`; the mark and the name, plus one FACTS.md line with `--tagline`,
 laid out inside the row's `safe` rectangle, 24-bit PNG). Every size and safe area is read from `platform-specs.json`. The rows are all status U, so every file is labelled like the other Tier B files.
+
 - **The gate comes before the files.** The avatar's ink must lie inside the `safe_circle` share of the circle (default box: the largest, up to 0.7 of the canvas, that fits; `--content-fraction` sets it
   and is held to the same gate); the ink of a banner (pixels unlike the ground, read from the rendered PNG) must lie inside its safe rectangle, so a name that is too long or a template that draws outside
   fails. Any failure exits 1 and no image is shipped.
@@ -856,7 +856,7 @@ commands. Conventions:
   `BRAND_CREATOR_REQUIRE_ALL=1` turns every such skip into a failure. Tests marked `requires_network` hit real services, are
   not part of the default run (they are deselected, not skipped) and run only with `BRAND_CREATOR_LIVE=1`.
 - **Network** is never touched by the default suite: HTTP, whois and DNS answers are replayed from `tests/fixtures/names/`.
-- **Not automatable here** (a person or a real session must look) goes to `dev/MANUAL-CHECKS.md`; a manual check is never
+- **Not automatable here** (a person or a real session must look) goes to `docs/internals/manual-checks.md`; a manual check is never
   reported as passed by the suite.
 
 ## Quick-tier smoke

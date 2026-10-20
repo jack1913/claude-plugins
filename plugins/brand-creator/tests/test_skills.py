@@ -193,7 +193,7 @@ def test_brand_assets_skill_is_narrow_model_invocable_and_states_the_platform_li
     d = fm["description"]
     assert d.startswith("Turns an approved logo or mark into the platform files")
     assert "not for designing or redrawing a logo" in d and "fixing how a page shows a logo" in d
-    assert "favicons from my logo.svg" in fm["when_to_use"] and "P8" in fm["when_to_use"]
+    assert "favicons from my logo.svg" in fm["when_to_use"] and "icons and images step" in fm["when_to_use"]
     for trig in ("favicony z logo", "ikony aplikacji z logo", "plik .ico z logo"):
         assert trig in fm["when_to_use"], trig
     assert "macOS with Xcode" in fm["compatibility"] and "--renderer" in fm["compatibility"]
@@ -307,8 +307,8 @@ def test_status_injection_works_on_a_machine_without_uv(tmp_path):
 
 
 def test_the_readme_permission_rule_matches_every_call_the_skills_make():
-    """S2: the optional rule in the README must match the command form the skills really run."""
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    """S2: the optional rule in the permissions page must match the command form the skills really run."""
+    readme = (ROOT / "docs/manual/reference/permissions.md").read_text(encoding="utf-8")
     rules = re.findall(r'"(Bash\([^"]+\))"', readme)
     assert rules == [RULE], rules
     prefix = rules[0][len("Bash("):-1]
@@ -373,8 +373,8 @@ def test_token_templates_carry_both_schemes_and_computed_hex():
 
 
 def test_trigger_evals_cover_english_polish_and_near_misses():
-    """dev/trigger-evals.json in skill-creator shape: {skill: [{query, should_trigger}]} for every skill that exists."""
-    d = json.loads((ROOT / "dev" / "trigger-evals.json").read_text(encoding="utf-8"))
+    """evals/trigger-evals.json in skill-creator shape: {skill: [{query, should_trigger}]} for every skill that exists."""
+    d = json.loads((ROOT / "evals" / "trigger-evals.json").read_text(encoding="utf-8"))
     assert isinstance(d.pop("$description"), str)
     skills = {p.parent.name: frontmatter(p)[0] for p in all_skills()}
     assert set(d) == set(skills), (set(d) ^ set(skills))
@@ -485,7 +485,7 @@ def test_brand_book_skill_is_narrow_model_invocable_and_carries_the_method_per_m
     d = fm["description"]
     assert d.startswith("Builds, updates, reviews and exports the brand book")
     assert "not for slide decks, code style guides" in d and "designing a new brand" in d
-    for trig in ("księga znaku", "zasady marki", "P10", "brand guidelines", "brand rules page"):
+    for trig in ("księga znaku", "zasady marki", "brand book step", "brand guidelines", "brand rules page"):
         assert trig in fm["when_to_use"], trig
     assert rules_line(body) == rules_line(ORCH.read_text(encoding="utf-8"))
     flat = " ".join(body.split())
@@ -570,7 +570,7 @@ def test_connectors_are_optional_placeholders_and_the_plugin_ships_no_mcp_config
 
 
 def test_brand_book_trigger_evals_have_the_plan_negatives_and_the_sibling_case():
-    d = json.loads((ROOT / "dev" / "trigger-evals.json").read_text(encoding="utf-8"))
+    d = json.loads((ROOT / "evals" / "trigger-evals.json").read_text(encoding="utf-8"))
     bb = d["brand-book"]
     neg = " ".join(c["query"] for c in bb if not c["should_trigger"]).lower()
     for word in ("make a slide deck", "write a style guide for my code", "favicons", "design a logo"):

@@ -1,6 +1,6 @@
 ---
 name: brand-designer
-description: Only for brand-creator workflows or an approved fleet; do not auto-delegate. Opus-tier designer that builds one direction board of a brand-creator round inside the one folder it is given (rounds/rN/<direction>/), reading its own screenshots before any visual claim.
+description: Only for brand-creator workflows or an approved fleet; do not auto-delegate. Opus-tier. Builds one direction board of a brand round inside the one folder it is given (rounds/rN/<direction>/) and reads its own screenshots before any visual claim.
 model: opus
 tools: Read, Write, Edit, Glob, Grep, Bash
 maxTurns: 60

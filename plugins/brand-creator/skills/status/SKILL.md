@@ -1,6 +1,6 @@
 ---
 name: status
-description: Shows where the current brand project stands (tier, phase, recorded gates, directions, review page) and the next gate.
+description: Shows where the current brand project stands (tier, phase, recorded decisions, directions, review page) and what comes next. Runs only when typed as /brand-creator:status.
 disable-model-invocation: true
 allowed-tools: Bash(brand-creator *)
 ---

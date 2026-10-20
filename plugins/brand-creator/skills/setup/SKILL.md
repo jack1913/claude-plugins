@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Installs what brand-creator's render and token tools need (Node packages and a Chromium build) into the plugin's data folder, after showing what will be downloaded and getting the user's OK.
+description: Installs what brand-creator's render and token tools need (Node packages and a Chromium build) into the plugin's data folder, after showing what will be downloaded and getting the user's OK. Runs only when typed as /brand-creator:setup.
 argument-hint: "[--force]"
 disable-model-invocation: true
 allowed-tools: Bash(brand-creator *)

@@ -1,6 +1,6 @@
 ---
 name: check
-description: Runs every gate that applies to the current brand project (boards, contrast, logo sheet, packs, book, print, adoption, the history manifest) and, given old values, the cascade search for leftovers. Reports each failing row with its fix.
+description: Runs every check that applies to the current brand project (boards, contrast, logo sheet, files, book, print, adoption and the history record) and, given old names or colours, searches the whole project for leftovers. Reports each failing row with its fix. Runs only when typed as /brand-creator:check.
 argument-hint: "[<old value or phrase> ...]"
 disable-model-invocation: true
 allowed-tools: Bash(brand-creator *)

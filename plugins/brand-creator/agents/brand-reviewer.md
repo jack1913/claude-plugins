@@ -1,6 +1,6 @@
 ---
 name: brand-reviewer
-description: Only for brand-creator workflows or an approved fleet; do not auto-delegate. Opus-tier independent reviewer that checks a refine round, a lens of the review panel or an applied repository against a numbered change list, running check commands (brand-creator checks, cmp, the repository's own build and tests) but never editing a file or starting subagents.
+description: Only for brand-creator workflows or an approved fleet; do not auto-delegate. Opus-tier. Checks a refine round, a review-panel angle or an applied repository against a numbered change list by running the check commands (brand-creator checks, cmp, the repository's own build and tests), and never edits a file or starts other agents.
 model: opus
 tools: Read, Grep, Glob, Bash
 maxTurns: 40

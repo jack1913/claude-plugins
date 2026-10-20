@@ -141,7 +141,7 @@ def test_plugin_json_matches_the_plan():
     d = json.loads((ROOT / ".claude-plugin/plugin.json").read_text())
     assert d["name"] == "brand-creator" and d["displayName"] and d["description"]
     assert d["version"] == "0.2.1" and re.fullmatch(r"\d+\.\d+\.\d+", d["version"])
-    assert d["author"] == {"name": "brand-creator contributors"} and d["license"] == "MIT" and d["keywords"]
+    assert d["author"] == {"name": "Jacek Pytlik"} and d["license"] == "MIT" and d["keywords"]
     assert d["homepage"] == "https://github.com/jack1913/claude-plugins/tree/main/plugins/brand-creator"  # a homepage must parse as a URL
     assert d["repository"] == "https://github.com/jack1913/claude-plugins"
     uc = d["userConfig"]
@@ -224,16 +224,21 @@ def test_executables_and_shebangs():
 def test_readme_states_the_minimum_claude_code_version_used_by_prereq():
     readme = (ROOT / "README.md").read_text()
     assert f"**{prereq.MIN_CLAUDE}**" in readme
-    rows = re.findall(r"^\| .*? \| (\d+\.\d+\.\d+) \|", readme, re.M)
-    runtime = re.search(r"\| Feature \|.*?\n((?:\|.*\n)+)", readme).group(1).splitlines()
+    versions_page = (ROOT / "docs/manual/reference/claude-code-versions.md").read_text()
+    rows = re.findall(r"^\| .*? \| (\d+\.\d+\.\d+) \|", versions_page, re.M)
+    runtime = re.search(r"\| Feature \|.*?\n((?:\|.*\n)+)", versions_page).group(1).splitlines()
     runtime_versions = [m.group(1) for r in runtime if "maintainers only" not in r and (m := re.search(r"\| (\d+\.\d+\.\d+) \|", r))]
     assert prereq.MIN_CLAUDE == max(runtime_versions, key=lambda v: tuple(map(int, v.split("."))))
     assert rows
-    for section in ("## Install", "## Platform support", "first 10 minutes", "/brand-creator:setup", "/brand-creator:new", "marketplace add",
-                    "/plugin install brand-creator@", "--plugin-dir", "Bash(brand-creator *)", "## Permissions", "## Troubleshooting", "## Costs",
-                    "## What it never does", "## Development"):
-        assert section in readme, section
-    # a stranger reads the README: no build placeholders and no build-stage labels (the history is in dev/BUILD-LOG.md)
+    # the README is a storefront: install, first run and the one-time setup; the rest is in the manual
+    for section in ("## Install", "## Try it", "/brand-creator:setup", "/brand-creator:new", "marketplace add",
+                    "/plugin install brand-creator@", "## What it never does", "## Something off?"):
+        assert section in readme or section in (ROOT / "docs/manual/getting-started/make-your-first-brand.md").read_text(), section
+    for page, needle in (("platform-support", "## Linux"), ("permissions", "Bash(brand-creator *)"), ("troubleshooting", "# Troubleshooting"),
+                         ("costs", "# Costs"), ("what-it-never-does", "# What it never does")):
+        assert needle in (ROOT / "docs/manual/reference" / f"{page}.md").read_text(), page
+    assert "--plugin-dir" in (ROOT / "docs/internals/development.md").read_text()
+    # a stranger reads the README: no build placeholders and no build-stage labels (the history is in docs/archive/build-log.md)
     assert not re.search(r"TODO|\(stage \d|\bstages? \d", readme), "README carries a build placeholder or stage label"
     assert "/plugin marketplace add jack1913/claude-plugins" in readme and "/plugin install brand-creator@jack1913" in readme
 

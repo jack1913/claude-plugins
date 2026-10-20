@@ -22,7 +22,7 @@ from helpers import ROOT, bc, mutate
 
 EVALS = ROOT / "evals"
 SKILLS = ROOT / "skills"
-README = ROOT / "README.md"
+README = ROOT / "docs" / "internals" / "evals.md"   # the page that documents how to run the evals
 CONTRACT = ROOT / "scripts" / "CONTRACT.md"
 
 PROMPT_KEYS = {"schema_version", "name", "description", "tags", "plugins", "runs", "expected_outcome", "model", "max_turns",
@@ -138,10 +138,10 @@ def subcommands() -> set[str]:
 
 
 def granted_tools() -> set[str]:
-    """The tools the README's documented eval command grants (the run itself strips every tool that is not granted)."""
+    """The tools the evals page's documented eval command grants (the run itself strips every tool that is not granted)."""
     t = README.read_text(encoding="utf-8")
     m = re.search(r"--allow-tools ((?:[A-Za-z]+ ?)+)", t[t.index("## Running the evals"):])
-    assert m, "README: the eval command must show --allow-tools"
+    assert m, "evals.md: the eval command must show --allow-tools"
     return set(m.group(1).split())
 
 
@@ -539,9 +539,9 @@ def test_readme_states_that_evals_are_opt_in_billed_and_how_to_run_them():
     sec = sec[:sec.index("\n## ", 5)] if "\n## " in sec[5:] else sec
     flat = " ".join(sec.split())
     for needle in ("opt-in", "billed", "--scaffold", "--allow-tools", "--max-cost-usd", "--ablation none", "--runs 1", "never run by `tests/run-all.sh`",
-                   "claude plugin eval", "dev/trigger-evals.json"):
+                   "claude plugin eval", "evals/trigger-evals.json"):
         assert needle in flat, needle
-    assert f"{len(case_dirs())} behaviour cases" in flat, "the README states how many cases there are"
+    assert f"{len(case_dirs())} behaviour cases" in flat, "the evals page states how many cases there are"
     assert "evals/results/" in (ROOT / ".gitignore").read_text()
 
 
@@ -577,9 +577,9 @@ def test_the_real_loader_accepts_every_case(tmp_path):
     assert re.search(r"0 case\(s\) .*\$0\.00\b", out), "nothing may be billed by the loader check: " + out[-300:]
 
 
-# ---- dev/trigger-evals.json (skill-creator format; run by hand, billed) -----------------------------------------------------------
+# ---- evals/trigger-evals.json (skill-creator format; run by hand, billed) -----------------------------------------------------------
 def test_every_trigger_list_has_polish_queries_and_the_plan_cases():
-    d = json.loads((ROOT / "dev" / "trigger-evals.json").read_text(encoding="utf-8"))
+    d = json.loads((ROOT / "evals" / "trigger-evals.json").read_text(encoding="utf-8"))
     d.pop("$description")
     pl = re.compile(r"[ąćęłńóśźż]|\b(?:sprawdź|zrób|zacznij|zainstaluj|jaki|pokaż|wdróż|zarejestruj|czy|chcę|kontynuujmy|nowa|nazwij|kup|przerób)\b", re.I)
     for name, cases in d.items():

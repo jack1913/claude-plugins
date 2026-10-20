@@ -1,6 +1,6 @@
 ---
 name: brand-adopt
-description: Puts an approved brand into the owner's product repositories. Surveys every repository read only into numbered ADOPTION rows, and applies them only on the owner's explicit ask, on a branch the owner names, one repository at a time, with an independent review (byte comparison with the pack, the repository's own build and tests) before any commit.
+description: Finds every place an approved brand belongs in the owner's product repositories (read only) and, only when the owner asks, applies it on a branch the owner names, one repository at a time, with an independent review before any commit. Typing it surveys and applies in this session; the adopt workflow does only the apply step, with one agent per repository, after the owner approves the agent count and cost. Runs only when typed as /brand-creator:brand-adopt.
 argument-hint: "[survey|apply|review|status] [repository label]"
 disable-model-invocation: true
 allowed-tools: Bash(brand-creator *)

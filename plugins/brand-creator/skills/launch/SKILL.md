@@ -1,6 +1,6 @@
 ---
 name: launch
-description: Writes the owner's launch checklist (LAUNCH.md, trademark first, then domains, handles, e-mail, deploy, renames and the print hand-off) from local files and hands it over one action at a time, with the reason and the click path. The owner acts; nothing outward is ever done for them.
+description: Writes the owner's launch checklist (LAUNCH.md, with the trademark first, then domains, handles, e-mail, deploy, renames and the print hand-off) from local files and hands it over one action at a time, with the reason and the click path. The owner acts; nothing outward is ever done for them. Runs only when typed as /brand-creator:launch.
 argument-hint: "[--name <candidate>]"
 disable-model-invocation: true
 allowed-tools: Bash(brand-creator *)
