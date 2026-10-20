@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-20
+
 While batbelt is `0.y.z`, a minor release may break things. This one removes a command.
 
 ### Added
