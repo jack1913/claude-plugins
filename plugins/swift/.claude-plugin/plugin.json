@@ -1,7 +1,7 @@
 {
   "name": "swift",
   "displayName": "Swift",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Have Claude write current SwiftUI, Swift 6 concurrency and Swift Testing, and review screens against Apple's guidelines.",
   "author": { "name": "Jacek Pytlik", "url": "https://github.com/jack1913" },
   "license": "MIT",
