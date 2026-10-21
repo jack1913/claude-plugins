@@ -19,6 +19,7 @@ from collections import Counter
 EXPECTED = {
     "not macOS": "tests marked requires_macos: Apple tools exist on macOS only",
     "actool is not available": "tests marked requires_actool: Xcode's actool exists on macOS only",
+    "the Android SDK (aapt2 and a platform android.jar) is not installed": "tests marked requires_aapt2: the image carries no Android SDK",
     "the claude CLI is not on PATH": "the claude CLI is not installed in the image: it runs `claude plugin validate` (test_static, CI job `validate`) and the free "
                                      "eval-loader check (test_evals and the smoke), which a bare Linux image cannot do",
 }

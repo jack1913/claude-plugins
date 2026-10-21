@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from helpers import FIXTURES, ROOT, bc, data_dir, install_fixture, make_project  # noqa: E402
+from helpers import FIXTURES, ROOT, android_sdk, bc, data_dir, install_fixture, make_project  # noqa: E402
 
 NOT_VERIFIED: list[tuple[str, str]] = []
 REQUIRE_ALL = os.environ.get("BRAND_CREATOR_REQUIRE_ALL") == "1"
@@ -22,6 +22,7 @@ def pytest_configure(config):
                  ("requires_gs", "needs Ghostscript (gs) and poppler's pdfinfo on PATH"),
                  ("requires_macos", "needs macOS"),
                  ("requires_actool", "needs Xcode's actool"),
+                 ("requires_aapt2", "needs the Android SDK: aapt2 from build-tools and a platform's android.jar (ANDROID_HOME or ANDROID_SDK_ROOT)"),
                  ("requires_node", "needs Node 22+"),
                  ("requires_claude", "needs the claude CLI on PATH"),
                  ("requires_rg", "needs ripgrep (rg) on PATH"),
@@ -73,6 +74,8 @@ def _missing(item) -> str | None:
         return "not macOS"
     if item.get_closest_marker("requires_actool") and not (sys.platform == "darwin" and shutil.which("xcrun")):
         return "actool is not available"
+    if item.get_closest_marker("requires_aapt2") and android_sdk() is None:
+        return "the Android SDK (aapt2 and a platform android.jar) is not installed"
     return None
 
 

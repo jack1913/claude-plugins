@@ -368,8 +368,24 @@ def test_token_templates_carry_both_schemes_and_computed_hex():
     droles = {k for k in dark["color"] if not k.startswith("$")}
     assert lroles == droles and {"bg", "text", "muted", "accent"} <= lroles
     assert light["$extensions"]["brand-creator"]["pairs"]
-    for group in ("size", "font", "weight", "motion"):
+    for group in ("size", "font", "weight", "motion", "easing"):
         assert group in prim, group
+    # curves are tokens now: three proposals until G4, and the motion group no longer says they are only named in the book
+    easing = prim["easing"]
+    assert easing["$type"] == "cubicBezier" and {k: v["$value"] for k, v in easing.items() if not k.startswith("$")} == {
+        "standard": [0.2, 0, 0, 1], "enter": [0, 0, 0, 1], "exit": [0.3, 0, 1, 1]}
+    assert "proposals until G4" in easing["$description"]
+    assert prim["motion"]["$type"] == "duration" and "cubicBezier" not in prim["motion"]["$description"] and "emitter" not in prim["motion"]["$description"]
+
+
+def test_the_tokens_phase_says_curves_are_tokens_and_the_motion_template_points_at_the_motion_json():
+    phase = " ".join((REFS / "phases" / "07-tokens.md").read_text(encoding="utf-8").split())
+    assert "until the emitter supports" not in phase and "Name the curves in the book" not in phase
+    g4 = next(ln for ln in (REFS / "phases" / "07-tokens.md").read_text(encoding="utf-8").splitlines() if ln.startswith("- (rule) reduced motion"))
+    assert "easing.standard" in g4 and "`enter`" in g4 and "`exit`" in g4 and "`motion.quick`" in g4       # the G4 motion item names the duration and the easing tokens
+    assert "facts as data in `motion/motion.json`" in phase and "scripts/CONTRACT.md" in phase and "| Motion spec as data | `motion/motion.json`" in phase
+    spec = (ROOT / "templates" / "MOTION-SPEC.md").read_text(encoding="utf-8")
+    assert "machine-readable twin" in spec and "`motion/motion.json`" in spec and "`easing.standard`" in spec
 
 
 def test_trigger_evals_cover_english_polish_and_near_misses():

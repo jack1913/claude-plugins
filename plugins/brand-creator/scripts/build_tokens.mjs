@@ -4,17 +4,20 @@
 //   build_tokens.mjs [--project DIR] [--check] [--fix-hex]
 //
 // Sources (DTCG 2025.10, a Final Community Group Report, not a W3C Standard) in <project>/tokens/:
-//   primitives.tokens.json      colours as {colorSpace, components, alpha, hex}; hex is the 6-digit sRGB fallback
+//   primitives.tokens.json      colours as {colorSpace, components, alpha, hex}; hex is the 6-digit sRGB fallback;
+//                               durations as {value, unit: ms|s}; curves as $type cubicBezier, [x1, y1, x2, y2]
 //   semantic.light.tokens.json  aliases ("{color.paper}") or literal colours; same token set as dark
 //   semantic.dark.tokens.json
 // Pairs for contrast checks live in semantic.light.tokens.json under $extensions["brand-creator"].pairs.
 // Targets for the colours that touch in the logo artwork live next to them, under $extensions["brand-creator"].touching
 // (passed through to tokens.json; `brand-creator contrast` reads them).
 // Outputs in <project>/assets/tokens/: tokens.css, tokens.json, swift/BrandColors.swift,
-//   android/values/colors.xml, android/values-night/colors.xml, Colors.xcassets/**/Contents.json
+//   android/values/colors.xml, android/values-night/colors.xml, Colors.xcassets/**/Contents.json; and, only when the sources
+//   have a duration or a curve: swift/BrandMotion.swift, android/values/motion.xml (durations), android/interpolator/brand_*.xml (curves)
 // Style Dictionary 5.7.0 parses the sources, resolves references and applies the custom transforms below.
-// Gates (exit 1): stored hex must equal the gamut-mapped oklch value; light/dark must define the same tokens;
-// every emitted artefact is parsed back and must equal the source hex (round trip per transform).
+// Gates (exit 1): stored hex must equal the gamut-mapped oklch value; light/dark must define the same tokens; a curve is four finite
+// numbers with x1 and x2 in [0, 1] and a duration is whole milliseconds, each named by its token path when it is not;
+// every emitted artefact is parsed back and must equal the source value (round trip per transform).
 // --fix-hex rewrites the sources with the computed hex (explicit opt-in). --check writes nothing and fails when the
 // outputs on disk differ from what the sources produce.
 import fs from "node:fs";
@@ -22,7 +25,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import {
-  EXIT, die, mainGuard, findProject, confine, rel, Report, writeIfChanged, loadDep,
+  EXIT, die, mainGuard, findProject, confine, rel, Report, writeIfChanged, loadDep, today,
 } from "./lib/_common.mjs";
 
 const USAGE = "usage: build_tokens.mjs [--project DIR] [--check] [--fix-hex]";
@@ -127,9 +130,50 @@ function fixHexInFile(file, issues) {
 }
 
 const kebabToCamel = (s) => s.replace(/-([a-z0-9])/g, (_, c) => c.toUpperCase());
-const SWIFT_RESERVED = new Set(["default", "class", "struct", "enum", "func", "let", "var", "init", "self", "super", "in", "is", "as", "if", "else", "for", "while", "return", "switch", "case", "true", "false", "nil", "static", "public", "private", "internal", "protocol", "extension", "import", "operator", "subscript", "typealias", "where", "do", "try", "throw", "catch"]);
+// Swift keywords a member may still be named with backticks (swiftc 6: each one checked as a static let and a static func)
+const SWIFT_RESERVED = new Set(["associatedtype", "class", "deinit", "enum", "extension", "fileprivate", "func", "import", "init", "inout", "internal", "let",
+  "operator", "private", "precedencegroup", "protocol", "public", "rethrows", "static", "struct", "subscript", "typealias", "var", "break", "case", "catch",
+  "continue", "default", "defer", "do", "else", "fallthrough", "for", "guard", "if", "in", "repeat", "return", "throw", "switch", "where", "while", "Any", "as",
+  "false", "is", "nil", "self", "Self", "super", "throws", "true", "try", "_"]);
+// names no member can usefully have: BrandColor.Type and BrandMotion.Duration.Protocol mean the metatype, with or without backticks
+const SWIFT_UNUSABLE = new Set(["Type", "Protocol"]);
 const swiftId = (name) => { let id = kebabToCamel(name); if (/^[0-9]/.test(id)) id = "c" + id[0].toUpperCase() + id.slice(1); return SWIFT_RESERVED.has(id) ? "`" + id + "`" : id; };
 const dropGroup = (p) => (p[0] === "color" ? p.slice(1) : p);
+
+// ---------------------------------------------------------------- motion values: durations and cubic-bezier curves
+/** A number as a plain decimal, never 1e-7: CSS, Swift and Android spell a curve the same way, so the round trip compares numbers, not spellings.
+ *  The exponent form is expanded digit for digit (String() gives the shortest digits that read back as the same number), never rounded. */
+export const plain = (n) => {
+  const s = String(n), m = /^(-?)(\d)(?:\.(\d+))?e([+-]\d+)$/.exec(s);
+  if (!m) return s;
+  const digits = m[2] + (m[3] ?? ""), point = 1 + Number(m[4]);   // where the decimal point goes in `digits`
+  if (point <= 0) return `${m[1]}0.${"0".repeat(-point)}${digits}`;
+  return m[1] + (point >= digits.length ? digits + "0".repeat(point - digits.length) : `${digits.slice(0, point)}.${digits.slice(point)}`);
+};
+
+const INT_MAX = 2147483647;   // an Android <integer> is 32-bit
+
+/** A DTCG duration ({value, unit: "ms" | "s"}, or the older "320ms" string) in whole milliseconds; throws naming `where` for anything else. */
+export function durationMs(v, where = "duration") {
+  const m = typeof v === "string" ? /^(\d+(?:\.\d+)?)(ms|s)$/.exec(v) : null;
+  const { value, unit } = m ? { value: Number(m[1]), unit: m[2] } : (v && typeof v === "object" && !Array.isArray(v) ? v : {});
+  if (!Number.isFinite(value) || value < 0 || (unit !== "ms" && unit !== "s")) {   // Number.isFinite is false for anything that is not a finite number, a numeric string too
+    throw new Error(`${where}: not a DTCG duration {"value": 320, "unit": "ms"} (a number of 0 or more, unit ms or s), got ${JSON.stringify(v)}`);
+  }
+  const ms = Math.round(value * (unit === "s" ? 1000 : 1) * 1e6) / 1e6;
+  if (!Number.isInteger(ms)) throw new Error(`${where}: ${value}${unit} is not a whole number of milliseconds (Android keeps a duration as an integer of ms)`);
+  if (ms > INT_MAX) throw new Error(`${where}: ${value}${unit} is longer than ${INT_MAX} ms, the largest integer Android keeps`);
+  return ms;
+}
+
+/** A DTCG cubicBezier [x1, y1, x2, y2]: four finite numbers, x1 and x2 within [0, 1] (y is unrestricted, a curve may overshoot); throws naming `where`. */
+export function checkCurve(v, where = "cubicBezier") {
+  if (!Array.isArray(v) || v.length !== 4 || !v.every((n) => Number.isFinite(n))) {
+    throw new Error(`${where}: not a DTCG cubicBezier [x1, y1, x2, y2] (four finite numbers), got ${JSON.stringify(v)}`);
+  }
+  if (v[0] < 0 || v[0] > 1 || v[2] < 0 || v[2] > 1) throw new Error(`${where}: x1 and x2 must be within 0 and 1, got x1 ${v[0]} and x2 ${v[2]}`);
+  return [...v];
+}
 
 // ---------------------------------------------------------------- formatters
 function fmtOther(t) {
@@ -139,6 +183,7 @@ function fmtOther(t) {
   switch (t.$type) {
     case "dimension": case "duration":
       return typeof resolved === "object" ? `${resolved.value}${resolved.unit}` : String(resolved);
+    case "cubicBezier": return `cubic-bezier(${resolved.map(plain).join(", ")})`;
     case "fontFamily": return (Array.isArray(resolved) ? resolved : [resolved]).map((f) => (/^[a-z-]+$/i.test(f) ? f : JSON.stringify(f))).join(", ");
     case "number": case "fontWeight": return String(resolved);
     default: return typeof resolved === "string" ? resolved : JSON.stringify(resolved);
@@ -189,6 +234,59 @@ function formatAndroid(entries, withPrims) {
   return o.join("\n") + "\n";
 }
 
+// A motion token's Swift name is its path without the group (motion.base -> Duration.base, easing.standard -> Curve.standard): a duration and a curve sit in their own namespaces.
+const motionName = (k) => { const p = k.split("."); return (p.length > 1 ? p.slice(1) : p).join("-"); };
+const motionSwiftId = (k) => swiftId(motionName(k));
+const GENERATED = "Generated by brand-creator build_tokens from tokens/*.tokens.json. Do not edit.";
+
+function formatSwiftMotion({ durations, curves }) {
+  const o = [`// ${GENERATED}`, "import SwiftUI", "", "/// Durations in seconds and cubic-bezier curves. Nothing here reads Reduce Motion: the app does, and plays none of it when it is on.", "public enum BrandMotion {"];
+  if (durations.length) {
+    o.push("    public enum Duration {");
+    for (const [k, ms] of durations) o.push(`        public static let ${motionSwiftId(k)}: Double = ${plain(ms / 1000)}`);
+    o.push("    }");
+  }
+  if (curves.length) {
+    o.push("    public enum Curve {");
+    for (const [k, c] of curves) o.push(`        public static func ${motionSwiftId(k)}(duration: Double) -> Animation { Animation.timingCurve(${c.map(plain).join(", ")}, duration: duration) }`);
+    o.push("    }");
+  }
+  o.push("}");
+  return o.join("\n") + "\n";
+}
+
+function formatAndroidMotion(durations) {
+  const o = ['<?xml version="1.0" encoding="utf-8"?>', `<!-- ${GENERATED} -->`, "<resources>"];
+  for (const [k, ms] of durations) o.push(`    <integer name="${androidName(k)}">${ms}</integer>`);
+  o.push("</resources>");
+  return o.join("\n") + "\n";
+}
+
+function formatInterpolator(c) {
+  const [x1, y1, x2, y2] = c.map(plain);
+  return ['<?xml version="1.0" encoding="utf-8"?>', `<!-- ${GENERATED} -->`, '<pathInterpolator xmlns:android="http://schemas.android.com/apk/res/android"',
+    `    android:controlX1="${x1}"`, `    android:controlY1="${y1}"`, `    android:controlX2="${x2}"`, `    android:controlY2="${y2}"/>`].join("\n") + "\n";
+}
+
+/** Names the motion outputs give the tokens: unique inside each namespace (Swift Duration and Curve, Android integers and interpolators) and valid where written. */
+function motionNameProblems(durations, curves) {
+  const bad = [], dKeys = durations.map(([k]) => k), cKeys = curves.map(([k]) => k);
+  const unique = (where, keys, name) => {
+    const seen = new Map();
+    for (const k of keys) { const n = name(k); if (seen.has(n)) bad.push(`${where}: ${seen.get(n)} and ${k} both become ${n}`); else seen.set(n, k); }
+  };
+  unique("BrandMotion.Duration", dKeys, motionSwiftId); unique("BrandMotion.Curve", cKeys, motionSwiftId);
+  unique("android integer", dKeys, androidName); unique("android interpolator", cKeys, androidName);
+  for (const k of [...dKeys, ...cKeys]) {
+    const id = motionSwiftId(k).replace(/`/g, "");
+    if (!/^[A-Za-z_]\w*$/.test(id)) bad.push(`${k}: ${motionSwiftId(k)} is not a Swift identifier`);
+    else if (SWIFT_UNUSABLE.has(id)) bad.push(`${k}: a Swift member cannot be named ${id} (BrandMotion.Duration.${id} means the type itself; rename the token)`);
+  }
+  for (const k of dKeys) if (!/^\w+$/.test(androidName(k))) bad.push(`${k}: ${androidName(k)} is not an Android resource name (letters, digits, underscores)`);
+  for (const k of cKeys) if (!/^[a-z0-9_]+$/.test(androidName(k))) bad.push(`${k}: ${androidName(k)}.xml is not an Android file resource name (lower case letters, digits and underscores only: rename the token, for example fast-in)`);
+  return bad;
+}
+
 function colorsetJson(l, d) {
   const mk = (c) => ({ "color-space": "srgb", components: { alpha: c.alpha, blue: c.blue, green: c.green, red: c.red } });
   return JSON.stringify({
@@ -218,7 +316,86 @@ function parseCssBack(css) {
   };
 }
 
-export function roundTrip({ prims, light, dark }, files) {
+/** The motion outputs read back and compared with the source numbers: CSS, Swift, Android and tokens.json. A value that cannot be read, or is missing, is a problem, never skipped. */
+function roundTripMotion({ durations, curves }, files, cssDecls) {
+  const problems = [], any = durations.length > 0 || curves.length > 0;
+  const N = "(-?\\d+(?:\\.\\d+)?)";
+  const cssName = (k) => k.split(".").join("-");
+  const near = (a, b) => Math.abs(a - b) < 1e-6;
+  const same = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+  const show = (c) => (c === undefined ? "nothing" : Array.isArray(c) ? c.map(String).join(", ") : String(c));   // raw numbers: a spelling problem must show as two different values
+  // CSS: a duration is 320ms or 0.32s, a curve cubic-bezier(x1, y1, x2, y2); an alias is var(--other), followed to its end
+  const cssValue = (k) => { let v = cssDecls[cssName(k)]; for (let i = 0; i < 10 && /^var\(/.test(v ?? ""); i++) v = cssDecls[(/^var\(--([\w-]+)\)$/.exec(v) || [])[1]]; return v; };
+  for (const [k, ms] of durations) {
+    const v = cssValue(k), m = /^(\d+(?:\.\d+)?)(ms|s)$/.exec(v ?? "");
+    if (v === undefined) problems.push(`css ${cssName(k)}: missing, expected ${ms}ms`);
+    else if (!m) problems.push(`css ${cssName(k)}: cannot read ${v}`);
+    else if (!near(Number(m[1]) * (m[2] === "s" ? 1000 : 1), ms)) problems.push(`css ${cssName(k)}: got ${m[1]}${m[2]}, expected ${ms}ms`);
+  }
+  for (const [k, c] of curves) {
+    const v = cssValue(k), m = new RegExp(`^cubic-bezier\\(\\s*${N}\\s*,\\s*${N}\\s*,\\s*${N}\\s*,\\s*${N}\\s*\\)$`).exec(v ?? "");
+    if (v === undefined) problems.push(`css ${cssName(k)}: missing, expected cubic-bezier(${show(c)})`);
+    else if (!m) problems.push(`css ${cssName(k)}: cannot read ${v}`);
+    else if (!same(m.slice(1).map(Number), c)) problems.push(`css ${cssName(k)}: got cubic-bezier(${m.slice(1).join(", ")}), expected cubic-bezier(${show(c)})`);
+  }
+  // Swift: BrandMotion.Duration (seconds) and BrandMotion.Curve (timingCurve), each namespace read line by line
+  const sw = files["swift/BrandMotion.swift"];
+  if (sw === undefined) { if (any) problems.push("swift BrandMotion.swift: missing"); }
+  else if (!any) problems.push("swift BrandMotion.swift: written, but the tokens have no duration or curve");
+  else {
+    const readNs = (ns, rx, want, conv, unit) => {
+      const body = new RegExp(`public enum ${ns} \\{\\n([\\s\\S]*?)\\n    \\}`).exec(sw), got = new Map();
+      if (!body && want.size) problems.push(`swift ${ns}: missing`);
+      if (body && !want.size) problems.push(`swift ${ns}: written, but the tokens have none`);
+      for (const ln of body ? body[1].split("\n") : []) { const m = rx.exec(ln); if (m) got.set(m[1], conv(m.slice(2).map(Number))); else problems.push(`swift ${ns}: cannot read ${ln.trim()}`); }
+      for (const [id, w] of want) { const g = got.get(id); if (!g) problems.push(`swift ${ns}.${id}: not found`); else if (!same(g, w)) problems.push(`swift ${ns}.${id}: got ${show(g)}${unit}, expected ${show(w)}${unit}`); }
+      for (const id of got.keys()) if (!want.has(id)) problems.push(`swift ${ns}.${id}: not in the tokens`);
+    };
+    const id = (k) => motionSwiftId(k).replace(/`/g, "");
+    // seconds read back as milliseconds, rounded at a millionth of one so 0.15 s is 150 ms and not 150.00000000000003
+    readNs("Duration", new RegExp(`^\\s*public static let \`?(\\w+)\`?: Double = ${N}$`), new Map(durations.map(([k, ms]) => [id(k), [ms]])), (a) => [Math.round(a[0] * 1e9) / 1e6], " ms");
+    readNs("Curve", new RegExp(`^\\s*public static func \`?(\\w+)\`?\\(duration: Double\\) -> Animation \\{ Animation\\.timingCurve\\(${N}, ${N}, ${N}, ${N}, duration: duration\\) \\}$`),
+      new Map(curves.map(([k, c]) => [id(k), c])), (a) => a, "");
+  }
+  // Android: <integer> milliseconds in values/motion.xml and one pathInterpolator file per curve
+  const mxml = files["android/values/motion.xml"];
+  if (mxml === undefined) { if (durations.length) problems.push("android values/motion.xml: missing"); }
+  else if (!durations.length) problems.push("android values/motion.xml: written, but the tokens have no duration");
+  else {
+    const got = new Map();
+    for (const m of mxml.matchAll(/<integer\b([^>]*)>([^<]*)<\/integer>/g)) {
+      const nm = /^\s*name="([^"]*)"\s*$/.exec(m[1]);
+      if (nm && /^\d+$/.test(m[2])) got.set(nm[1], Number(m[2])); else problems.push(`android values/motion.xml: cannot read ${m[0]}`);
+    }
+    for (const [k, ms] of durations) { const g = got.get(androidName(k)); if (g === undefined) problems.push(`android ${androidName(k)}: not found`); else if (g !== ms) problems.push(`android ${androidName(k)}: got ${g} ms, expected ${ms} ms`); }
+    for (const nm of got.keys()) if (!durations.some(([k]) => androidName(k) === nm)) problems.push(`android ${nm}: not in the tokens`);
+  }
+  const want = new Set(curves.map(([k]) => `android/interpolator/${androidName(k)}.xml`));
+  for (const [k, c] of curves) {
+    const f = `android/interpolator/${androidName(k)}.xml`, xml = files[f];
+    if (xml === undefined) { problems.push(`android ${f}: missing`); continue; }
+    const got = ["controlX1", "controlY1", "controlX2", "controlY2"].map((a) => { const m = new RegExp(`android:${a}="${N}"`).exec(xml); return m ? Number(m[1]) : null; });
+    if (!/<pathInterpolator\b/.test(xml) || got.includes(null)) problems.push(`android ${f}: cannot read the pathInterpolator and its four controls`);
+    else if (!same(got, c)) problems.push(`android ${f}: got ${show(got)}, expected ${show(c)}`);
+  }
+  for (const f of Object.keys(files)) if (f.startsWith("android/interpolator/") && !want.has(f)) problems.push(`android ${f}: not in the tokens`);
+  // tokens.json: the numbers under `motion`, and the strings under `other` the same as tokens.css writes them
+  const tj = JSON.parse(files["tokens.json"]), mo = tj.motion;
+  if (mo !== undefined && !any) problems.push("json motion: written, but the tokens have no duration or curve");
+  for (const [k, ms] of durations) {
+    if (mo?.durations_ms?.[k] !== ms) problems.push(`json motion duration ${k}: got ${show(mo?.durations_ms?.[k])}, expected ${ms}`);
+    if (tj.other?.[k] !== cssDecls[cssName(k)]) problems.push(`json other ${k}: got ${show(tj.other?.[k])}, expected ${cssDecls[cssName(k)]}`);
+  }
+  for (const [k, c] of curves) {
+    if (JSON.stringify(mo?.curves?.[k]) !== JSON.stringify(c)) problems.push(`json motion curve ${k}: got ${show(mo?.curves?.[k])}, expected ${show(c)}`);
+    if (tj.other?.[k] !== cssDecls[cssName(k)]) problems.push(`json other ${k}: got ${show(tj.other?.[k])}, expected ${cssDecls[cssName(k)]}`);
+  }
+  for (const k of Object.keys(mo?.durations_ms ?? {})) if (!durations.some(([d]) => d === k)) problems.push(`json motion duration ${k}: not in the tokens`);
+  for (const k of Object.keys(mo?.curves ?? {})) if (!curves.some(([c]) => c === k)) problems.push(`json motion curve ${k}: not in the tokens`);
+  return problems;
+}
+
+export function roundTrip({ prims, light, dark, durations = [], curves = [] }, files) {
   const problems = [];
   // every colour is compared with its alpha: a see-through token that comes back opaque is a different colour
   const expectPrim = Object.fromEntries(prims.map(([k, c]) => [k.split(".").join("-"), cssHex(c)]));
@@ -284,6 +461,7 @@ export function roundTrip({ prims, light, dark }, files) {
   for (const [k, c] of prims) eq(`json primitive ${k}`, cssHex(tj.primitives[k] ?? {}), cssHex(c));
   for (const [k, s] of light) eq(`json light ${k}`, cssHex(tj.modes.light[k] ?? {}), cssHex(s));
   for (const [k, s] of dark) eq(`json dark ${k}`, cssHex(tj.modes.dark[k] ?? {}), cssHex(s));
+  problems.push(...roundTripMotion({ durations, curves }, files, css.prims));
   return problems;
 }
 
@@ -346,6 +524,21 @@ async function build(project, { fixHex }) {
 
   const isSem = (t, semFile) => path.resolve(t.filePath) === path.resolve(semFile);
   const key = (t) => t.path.join(".");
+  // motion tokens are checked before anything is formatted: a bad duration or curve fails here, named by its token path
+  const durations = [], curves = [], motionBad = [];
+  for (const t of sdLight.css) {
+    if (isSem(t, files.light)) continue;
+    try {
+      if (t.$type === "duration") durations.push([key(t), durationMs(t.$value, key(t))]);
+      else if (t.$type === "cubicBezier") curves.push([key(t), checkCurve(t.$value, key(t))]);
+    } catch (e) { motionBad.push(e.message); }
+  }
+  if (motionBad.length) {
+    report.add("motion-tokens", "fail", "durations and curves are valid", { detail: motionBad.join("; ") });
+    return { report, outputs: null };
+  }
+  for (const list of [durations, curves]) list.sort((a, b) => (a[0] < b[0] ? -1 : 1));
+  if (durations.length || curves.length) report.add("motion-tokens", "pass", "durations and curves are valid", { detail: `${durations.length} duration(s) in whole milliseconds, ${curves.length} curve(s) with x1 and x2 within 0 and 1` });
   const prims = [], others = [], light = new Map(), dark = new Map();
   for (const t of sdLight.css) {
     if (isSem(t, files.light)) {
@@ -368,7 +561,11 @@ async function build(project, { fixHex }) {
   report.add("modes-parity", missing.length ? "fail" : "pass", "light and dark define the same tokens", { detail: missing.length ? missing.join("; ") : `${L.size} semantic token(s) in both modes` });
   const collide = [...L.keys()].filter((k) => prims.some(([p]) => androidName(p) === androidName(k)));
   if (collide.length) report.add("name-collision", "fail", "semantic and primitive names collide in Android/Swift", { detail: collide.join(", ") });
-  if (missing.length || collide.length) return { report, outputs: null };
+  const unusable = [...prims.map(([k]) => k), ...L.keys()].filter((k) => SWIFT_UNUSABLE.has(swiftId(dropGroup(k.split(".")).join("-"))));
+  if (unusable.length) report.add("swift-names", "fail", "colour names a Swift member can have", { detail: `${unusable.join(", ")}: a Swift member cannot be named Type or Protocol (it means the type itself); rename the token` });
+  const motionNames = motionNameProblems(durations, curves);
+  if (motionNames.length) report.add("motion-names", "fail", "motion token names are unique and valid in Swift and Android", { detail: motionNames.join("; ") });
+  if (missing.length || collide.length || unusable.length || motionNames.length) return { report, outputs: null };
 
   // 3. APCA advisory (colorjs.io) and pair table
   const pairsDef = (docs.light.$extensions?.[EXT]?.pairs) || [];
@@ -407,6 +604,7 @@ async function build(project, { fixHex }) {
     $format: "DTCG 2025.10 sources (a Final Community Group Report, not a W3C Standard); resolved values",
     primitives: Object.fromEntries(prims.map(([k, c]) => [k, { hex: c.hex, alpha: c.alpha }])),
     other: Object.fromEntries(others),
+    ...(durations.length || curves.length ? { motion: { durations_ms: Object.fromEntries(durations), curves: Object.fromEntries(curves) } } : {}),
     modes: {
       light: Object.fromEntries([...L].map(([k, s]) => [k, { hex: s.hex, alpha: s.alpha, ref: s.ref }])),
       dark: Object.fromEntries([...D].map(([k, s]) => [k, { hex: s.hex, alpha: s.alpha, ref: s.ref }])),
@@ -416,21 +614,50 @@ async function build(project, { fixHex }) {
     ...(distinct.length ? { distinct } : {}),
   }, null, 2) + "\n";
   out["swift/BrandColors.swift"] = formatSwift({ prims, light: L });
+  if (durations.length || curves.length) out["swift/BrandMotion.swift"] = formatSwiftMotion({ durations, curves });
   const A = (list) => list.map(([k, c]) => [k, c]);
   const androidVal = (k, mode) => { const t = (mode === "dark" ? sdDark : sdLight).android.find((x) => key(x) === k); return t.$value; };
   const aPrim = prims.map(([k]) => [k, androidVal(k, "light")]);
   out["android/values/colors.xml"] = formatAndroid([...aPrim, ...[...L.keys()].map((k) => [k, androidVal(k, "light")])]);
   out["android/values-night/colors.xml"] = formatAndroid([...D.keys()].map((k) => [k, androidVal(k, "dark")]));
+  if (durations.length) out["android/values/motion.xml"] = formatAndroidMotion(durations);
+  for (const [k, c] of curves) out[`android/interpolator/${androidName(k)}.xml`] = formatInterpolator(c);
   out["Colors.xcassets/Contents.json"] = JSON.stringify({ info: { author: "xcode", version: 1 } }, null, 2) + "\n";
   const cs = (mode, k) => (mode === "dark" ? sdDark : sdLight).colorset.find((x) => key(x) === k).$value;
   for (const k of L.keys()) out[`Colors.xcassets/${dropGroup(k.split(".")).join("-")}.colorset/Contents.json`] = colorsetJson(cs("light", k), cs("dark", k));
 
   // 5. round trip
-  const rt = roundTrip({ prims: prims.map(([k, c]) => [k, c]), light: L, dark: D }, out);
-  report.add("round-trip", rt.length ? "fail" : "pass", "every emitted artefact parsed back equals the source colour, alpha included",
-    { detail: rt.length ? rt.slice(0, 6).join("; ") : `css, swift, android, colorset, json: ${prims.length} primitive(s), ${L.size} semantic token(s) x 2 modes`, problems: rt });
+  const rt = roundTrip({ prims: prims.map(([k, c]) => [k, c]), light: L, dark: D, durations, curves }, out);
+  const motionNote = durations.length || curves.length ? `; ${durations.length} duration(s), ${curves.length} curve(s)` : "";
+  report.add("round-trip", rt.length ? "fail" : "pass", "every emitted artefact parsed back equals the source (colours with their alpha, durations, curves)",
+    { detail: rt.length ? rt.slice(0, 6).join("; ") : `css, swift, android, colorset, json: ${prims.length} primitive(s), ${L.size} semantic token(s) x 2 modes${motionNote}`, problems: rt });
   void A;
   return { report, outputs: out };
+}
+
+/** Files the build owns under assets/tokens that the sources no longer produce: the colorset of a removed colour role (its whole folder), the motion
+ *  files once the last duration or curve is gone, the interpolator of a removed or renamed curve. Paths relative to assets/tokens, sorted. */
+export function orphans(base, outputs) {
+  const found = [];
+  const names = (d) => { try { return fs.readdirSync(path.join(base, d)); } catch { return []; } };
+  for (const f of ["swift/BrandMotion.swift", "android/values/motion.xml"]) if (fs.existsSync(path.join(base, f)) && !(f in outputs)) found.push(f);
+  for (const n of names("android/interpolator")) if (/^brand_.*\.xml$/.test(n) && !(`android/interpolator/${n}` in outputs)) found.push(`android/interpolator/${n}`);
+  for (const n of names("Colors.xcassets")) if (n.endsWith(".colorset") && !(`Colors.xcassets/${n}/Contents.json` in outputs)) found.push(`Colors.xcassets/${n}`);
+  return found.sort();
+}
+
+/** Move each orphan to removed-<date>/assets/tokens/<path> in the project (never deleted; -2, -3 when that folder already holds it). */
+function retireOrphans(project, base, list) {
+  const moved = [];
+  for (const r of list) {
+    const src = confine(project, path.join(base, r), "retired token file");
+    let n = 1, dest = confine(project, `removed-${today()}/assets/tokens/${r}`, "removed folder");
+    while (fs.existsSync(dest)) { n++; dest = confine(project, `removed-${today()}-${n}/assets/tokens/${r}`, "removed folder"); }
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.renameSync(src, dest);
+    moved.push(`${r} -> ${rel(project, dest)}`);
+  }
+  return moved;
 }
 
 async function main() {
@@ -448,8 +675,15 @@ async function main() {
       const f = path.join(base, relp);
       if (values.check) { if (!fs.existsSync(f) || fs.readFileSync(f, "utf8") !== text) stale.push(relp); } else if (writeIfChanged(f, text)) written++;
     }
-    if (values.check) report.add("outputs-current", stale.length ? "fail" : "pass", "assets/tokens matches the sources", { detail: stale.length ? `stale or missing: ${stale.join(", ")} (run: brand-creator tokens)` : `${Object.keys(outputs).length} file(s) current` });
-    else report.add("written", "info", "assets/tokens", { detail: `${written} file(s) written, ${Object.keys(outputs).length - written} unchanged` });
+    const left = orphans(base, outputs);
+    if (values.check) {
+      const problems = [...(stale.length ? [`stale or missing: ${stale.join(", ")}`] : []), ...(left.length ? [`no longer produced by the sources: ${left.join(", ")}`] : [])];
+      report.add("outputs-current", problems.length ? "fail" : "pass", "assets/tokens matches the sources",
+        { detail: problems.length ? `${problems.join("; ")} (run: brand-creator tokens${left.length ? `, which moves what is no longer produced to removed-${today()}/` : ""})` : `${Object.keys(outputs).length} file(s) current` });
+    } else {
+      report.add("written", "info", "assets/tokens", { detail: `${written} file(s) written, ${Object.keys(outputs).length - written} unchanged` });
+      if (left.length) report.add("retired", "warn", "files the sources no longer produce", { detail: `moved, never deleted: ${retireOrphans(project, base, left).join("; ")}` });
+    }
   }
   return report.finish();
 }

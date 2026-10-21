@@ -136,6 +136,7 @@ fontTools, Brotli and skia-pathops (`outline_glyphs.py`, `fontcheck.py`), Pillow
   qa/print.json                    owner thresholds of print-check (see Print); optional, stated defaults apply without it
   qa/states.json  qa/idempotence.json   state sets for states-check; the byte-difference allowlist for verify-idempotent
   motion/proof.json                the motion proof's cases (shot --motion)
+  motion/motion.json               the machine-readable motion spec (see Motion spec): signature move, parts, timeline in tokens, rules; read by the adapters
   motion/SPEC.md                   the motion hand-off (templates/MOTION-SPEC.md), only when something moves
   tray/tray.json                   the tray states and their masters (emit tray); qa/states.tray.json is written by it
   tools/inputs.json                staleness record of a generated pack (staleness --write)
@@ -191,8 +192,8 @@ DTCG 2025.10 is a Final Community Group Report. It is not a W3C Standard and not
 - `tokens/primitives.tokens.json`: colours as `{"$value": {"colorSpace": "oklch", "components": [L, C, H], "alpha": 1,
   "hex": "#rrggbb"}}` under a group with `"$type": "color"`. `hex` is the 6-digit sRGB fallback and must equal the
   gamut-mapped (CSS Color 4 style, culori) conversion of the oklch value; `brand-creator tokens --fix-hex` computes it.
-  Supported colour spaces: oklch, oklab, srgb, display-p3. Other types (dimension and duration as `{value, unit}`,
-  fontFamily, fontWeight, number) are emitted to CSS custom properties and tokens.json only.
+  Supported colour spaces: oklch, oklab, srgb, display-p3. Other types (dimension as `{value, unit}`, fontFamily,
+  fontWeight, number) are emitted to CSS custom properties and tokens.json only; durations and curves are described below and reach Swift and Android too.
 - `tokens/semantic.light.tokens.json` and `tokens/semantic.dark.tokens.json`: the same set of colour tokens, as aliases
   (`"{color.paper}"`) or literal colours. Semantic files carry colours only in this version.
 - Contrast pairs and other brand data live in `$extensions["brand-creator"]` of `semantic.light.tokens.json`:
@@ -214,10 +215,41 @@ DTCG 2025.10 is a Final Community Group Report. It is not a W3C Standard and not
   "label": "..."}]}`. `tokens` resolves them in light and dark into `tokens.json` (an unknown role fails); `contrast --cvd` holds them
   to the colour-vision distance. A miss the owner accepts goes in `tokens/exceptions.json` like a touching-pair miss.
 - Emitters need the semantic tokens `color.bg` and `color.text`; `color.muted` and `color.accent` are used when present.
+- Motion tokens (primitives only: a semantic file carries colours only). A duration is `"$type": "duration"` with `{"value": 320, "unit": "ms"}`
+  (`unit` is `ms` or `s`; the older `"320ms"` string is read too): a number of 0 or more that comes to whole milliseconds, because Android keeps a
+  duration as an integer. A curve is `"$type": "cubicBezier"` with `"$value": [x1, y1, x2, y2]`: four finite numbers, `x1` and `x2` within 0 and 1,
+  `y1` and `y2` unrestricted (a curve may overshoot); a duration is at most 2147483647 ms, the largest integer Android keeps. A group named `easing` gives `--easing-*`. A reference (`"{easing.standard}"`) resolves like any
+  other. Anything else fails the build (exit 1, report row `motion-tokens`), names the token path and writes nothing. The starter tokens carry three
+  curve proposals, `easing.standard` `[0.2, 0, 0, 1]`, `easing.enter` `[0, 0, 0, 1]` and `easing.exit` `[0.3, 0, 1, 1]`, which stay proposals until G4.
+- Outputs of the motion tokens, written only when the sources have a duration or a curve (a project with neither gets no motion file and no `motion`
+  entry in `tokens.json`, and its other outputs are byte for byte what they were):
+  - `tokens.css`: `--<path>: 320ms;` and `--<path>: cubic-bezier(x1, y1, x2, y2);` with the other non-colour primitives (an alias is `var(--other)`).
+  - `tokens.json`: under `other` the same strings, and under `motion` the numbers, both sorted by path: `"durations_ms": {"<path>": 320}` and
+    `"curves": {"<path>": [x1, y1, x2, y2]}` (an alias holds the numbers it resolves to). The motion spec reads the paths under `motion` to know what
+    a token is, and the adapters to know which tokens are durations and curves; the strings under `other` are for people and for the book.
+  - `swift/BrandMotion.swift`: `BrandMotion.Duration.<name>`, a `Double` in seconds, and `BrandMotion.Curve.<name>(duration:)`, which returns
+    `Animation.timingCurve(x1, y1, x2, y2, duration: duration)` (SwiftUI, iOS 13 and later). Each namespace is written only when it has a token, and a
+    duration and a curve of one name cannot clash: they sit in separate nested enums (`Duration`, `Curve`). `<name>` is the token path without its group
+    (`motion.base` is `base`), through the same `swiftId` rules as the colours: a Swift keyword is escaped with backticks, and `Type` and `Protocol`,
+    which no member can usefully be named, fail the build (`motion-names` for a duration or curve, `swift-names` for a colour).
+  - `android/values/motion.xml`: `<integer name="brand_<group>_<name>">` in whole milliseconds; `android/interpolator/brand_<group>_<name>.xml`: one
+    `pathInterpolator` per curve, with `controlX1`, `controlY1`, `controlX2` and `controlY2` as plain decimals (a number JavaScript prints as `1e-7`
+    is written out digit for digit, never rounded). The names are `androidName` of the token
+    path (`motion.base` is `brand_motion_base`, `easing.standard` is `brand_easing_standard`).
+  - A name that two tokens share inside one namespace (Swift `Duration`, Swift `Curve`, Android integers, Android interpolators), or that cannot be
+    written (not a Swift identifier, not an Android resource name, or an interpolator file name with a capital letter), fails the build (report row
+    `motion-names`), as a colour name collision does.
 - `build_tokens.mjs` is the only producer of colour values for code. It uses Style Dictionary 5.7.0 with custom
   transforms, then parses every emitted artefact back and compares it with the source colour, alpha included, the `@supports` values in
   oklch, oklab and display-p3 too; a value it cannot read, or a missing one, is a failure (round trip per transform). A see-through colour (alpha under 1) is `#rrggbbaa` in `tokens.css`, `#AARRGGBB` on Android and an opacity in Swift and
-  the colorsets.
+  the colorsets. The motion outputs are read back the same way: `tokens.css` (`320ms` or `0.32s`; `cubic-bezier(...)`; an alias followed to its end), the Swift
+  constants and `timingCurve` numbers, the Android integers and interpolator controls, and `tokens.json` (the numbers under `motion`, and `other` equal to the
+  CSS string). A value that cannot be read, is missing, or is there without a token is a failure, and so is a motion file written for a project with no
+  duration or curve.
+- Files the build owns under `assets/tokens/` that the sources no longer produce (the colorset folder of a removed colour role, the motion files once the
+  last duration or curve is gone, the interpolator of a removed or renamed curve) fail `tokens --check` (`outputs-current`: "no longer produced by the
+  sources"), and a build moves them to `removed-<date>/assets/tokens/<path>` (`removed-<date>-2/` when that already holds one), never deletes them, and
+  says so in a `retired` warning row.
 
 ## Board contract (data attributes)
 
@@ -596,6 +628,42 @@ that repeats forever is counted and shot where it is. Each view records `lazy_im
   `deviceorientation` or `devicemotion` listener (script-registered or inline), layout shift 0, rest frame equals the still. Pages are
   served from a local server that refuses every non-local request.
 
+### Motion spec (`motion/motion.json`)
+
+The machine-readable motion spec: the owner's G4 answer on motion, the signature move, the moving parts and the timeline written in tokens. It is the one
+source the adapters read now (see `adapters` and `applied-skill` below) and the book will read later; `motion/SPEC.md` (`templates/MOTION-SPEC.md`) is its
+prose twin for an implementer. `scripts/lib/motionspec.py` reads it: `load(project)` returns the validated document, or `None` when the file is absent.
+
+```json
+{"schema": 1,
+ "motion": "on",
+ "reason": "...",
+ "signature": {"name": "...", "description": "...", "where": ["..."]},
+ "parts": [{"id": "dot", "description": "..."}],
+ "timeline": [{"part": "dot", "property": "transform", "start": "{motion.stagger}", "duration": "{motion.base}", "easing": "{easing.standard}", "note": "..."}],
+ "rules": ["reduced motion: nothing moves", "..."]}
+```
+
+| key | what it holds |
+|---|---|
+| `schema` | `1`, a whole number: the only schema this version reads |
+| `motion` | `"on"` or `"off"`, the owner's G4 answer; `"off"` means nothing moves |
+| `reason` | required with `"off"`, a non-empty string (why, in the owner's words); refused with `"on"` |
+| `signature` | required with `"on"`, refused with `"off"`: `name` and `description` (non-empty strings) and `where` (a non-empty list of the places the move shows) |
+| `parts` | optional list of `{id, description}`, refused with `"off"`; `id` is lower case words joined by single hyphens (`a-z`, `0-9`, `-`) and unique |
+| `timeline` | optional list of steps, refused with `"off"`; a step has `part` (the id of a part), `property` (what moves, a non-empty string), `start`, `duration`, `easing` and an optional `note` |
+| `rules` | optional list of non-empty strings, the motion rules in plain words (`reduced motion: nothing moves`) |
+
+A step's `start` is `"0"`, a reference to a duration token (`"{motion.stagger}"`) or a reference times a number (`"{motion.stagger} * 2"`; the number is 0 or
+more). Its `duration` is a reference to a duration token and its `easing` a reference to a cubicBezier token. A reference is `{<token path>}` and must name a
+token of the right kind in the built tokens (`assets/tokens/tokens.json`, under `motion`; see Token sources).
+
+An unknown key is refused at every level. Every refusal is exit 2 and names the field path and what is wrong
+(`timeline[1].easing: no token named easing.nope (cubicBezier tokens: ...)`); all the problems of one document are listed, the first eight shown. Tokens that
+are not built are exit 3, and the message names `brand-creator tokens`; a document that is wrong in itself is exit 2 whether or not the tokens are built, and
+a document with no reference (motion off, or no timeline) needs no tokens. `check` validates the file whenever it exists: a failing `motion:spec` row (never a
+crash), or "not verified" when the tokens it names are not built.
+
 ### snapshot, verify-idempotent, staleness, specs-due
 
 - `snapshot take|diff|verify`: sha256 lists of folders (read only; a folder may be outside the project). Relative paths are relative to
@@ -628,7 +696,7 @@ The Acme example's `tools/grid_mark.py` and `tools/state_icons.py` are the worke
 
 ### What `check` gates from these
 
-A manifest row with `qa: [...]` needs a current, passing report from the matching tool (`downscale`, `states`, `motion`, `family`, `fonts`
+`motion/motion.json`, when it exists, is validated on every run (the `motion:spec` row; see Motion spec). A manifest row with `qa: [...]` needs a current, passing report from the matching tool (`downscale`, `states`, `motion`, `family`, `fonts`
 = `fontcheck`, `idempotent` = `verify-idempotent`); for `downscale` it is the report of the row's own `downscale_source` (a row without one fails,
 and a passing report on another file never counts); a report that exists is gated whether or not a row asks. A missing report is "not
 verified" (exit 3), a stale one too, a failing one exit 1. Slots off the band rule, platform-spec rows stamped stale or U, and
@@ -844,7 +912,7 @@ of those files, including the text of an adoption row's `change`, is searched li
 tokens (`assets/tokens/tokens.json`), BRAND-STATE.md and FACTS.md. BRAND.md: frontmatter `type` and `architecture` (standalone: master, independent; family-member:
 master, endorsed; product-in-family: product, endorsed; these pairings are brand-creator's reading, not something the format defines, so they can be overridden),
 then Strategy (the facts, the canonical direction), Voice (only `voice` and `tone` facts and the FORBIDDEN list; "no voice facts are recorded" otherwise), Visual
-(colour roles in light and dark, type families, the mark files, the G4 rules, motion durations) and Governance (naming and renames, claims and verbatim legal facts,
+(colour roles in light and dark, type families, the mark files, the G4 rules, motion) and Governance (naming and renames, claims and verbatim legal facts,
 the accessibility commitments with the computed ratios, approval). Contact and postal-address facts are left out. DESIGN.md: frontmatter `version: alpha`, `name`,
 `colors` (the light roles, `-dark` variants, `primary` when `--primary` names a role), `typography` (families only), `spacing`, `components` (one entry per
 `ui-text` pair, light and dark, as `{colors.x}` references), then the sections in the spec's order that have content. A role whose colour is see-through
@@ -857,11 +925,21 @@ that is not the bytes the report recorded (a hand edit) and treats a changed sou
 moves it to `removed-<date>[-n]/`. When `tools/inputs.json` exists, the adapters add `BRAND.md` and `DESIGN.md` to its globs (the pack then reads as stale until
 `staleness --write`), and `staleness --write` includes both whenever they exist.
 
+Motion is the same text in BRAND.md (`### Motion`), DESIGN.md (`## Motion`, prose between Components and Do's and Don'ts: the pinned format keeps a section it does
+not name, so no frontmatter key is invented) and the applied skill (`## Motion`): every duration token (by its type, the paths under `tokens.json`
+`motion.durations_ms`) and any other token of the `duration` and `motion` groups (`motion.distance`), each as `tokens.css` writes it and in name order (a
+`tokens.json` built before the `motion` entry existed lists the two groups only), then the curve tokens (from `motion.curves`: name and `cubic-bezier(x1, y1, x2, y2)`, in name order; a curve named `motion.*` is listed once, as a
+curve), then, when `motion/motion.json` exists, `Signature move: <name>. <description>` and `Shown in: <where>`, or `Nothing moves: <reason>` for `"off"`, and
+`Motion rules:` with its rules. The parts and the timeline stay in the spec. With no duration, no curve and no `motion.json` there is no motion section in
+any of the three and the files are as they were; a `motion.json` that is not valid stops the run (exit 2) before anything is written. The spec is an input of
+the `adapters` and `applied-skill` reports, and the state hash covers it: a changed, removed or newly added `motion/motion.json` makes both not verified.
+
 ### applied-skill
 
 `applied-skill --yes [--plan] [--replace]` writes `.claude/skills/<slug>-brand/SKILL.md` into the project from `templates/applied-skill/SKILL.md`: colours (light and
 dark) and the contrast pairs with their ratios, type families, the mark files (relative to the skill), the small-size rule (from `qa/rules.json`, or the plugin's
-proposal, said so), what is never done, the G4 rules, the facts that may be claimed (contact facts left out). It needs G5 and `--yes` (without it: the plan on stdout, a
+proposal, said so), motion (the section above, through the template's `{{motion}}`: a whole section or nothing, so a brand without motion gets the file it always
+had), what is never done, the G4 rules, the facts that may be claimed (contact facts left out). It needs G5 and `--yes` (without it: the plan on stdout, a
 message on stderr, exit 2; `--plan` exits 0). The name is `<slug>-brand` (lower case, hyphens, at most 64 characters, no `claude` or `anthropic`). Gated by `check` like
 the adapters (`applied-skill:file`, `applied-skill:state`).
 

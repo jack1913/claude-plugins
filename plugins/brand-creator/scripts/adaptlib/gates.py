@@ -75,7 +75,7 @@ def rows(project: Path, rep: Report) -> None:
                 rep.add(f"adapters:{fname}", "pass", f"{fname} is the bytes `adapters` wrote", detail="unchanged since it was generated")
         if r is not None and r.get("status") == "pass" and r.get("adapter_state_sha") != adapt.state_sha(project):
             rep.add("adapters:state", "skipped", "the adapters were made from the current BRAND-STATE.md and FACTS.md",
-                    detail="not verified: the name, architecture, edition, approval, rules or facts changed since the adapters report; run `brand-creator adapters` again")
+                    detail="not verified: the name, architecture, edition, approval, rules, facts or motion spec changed since the adapters report; run `brand-creator adapters` again")
     if p["skill"]:
         r = _report(project, "applied-skill")
         if r is not None:
@@ -85,4 +85,4 @@ def rows(project: Path, rep: Report) -> None:
                     detail="unchanged since it was generated" if same else f"{p['skill']} differs from what was generated: it was edited by hand. Change the sources and run `brand-creator applied-skill --yes`")
             if r.get("status") == "pass" and r.get("adapter_state_sha") != adapt.state_sha(project):
                 rep.add("applied-skill:state", "skipped", "the applied skill was made from the current BRAND-STATE.md and FACTS.md",
-                        detail="not verified: the name, rules or facts changed since the applied-skill report; run `brand-creator applied-skill --yes` again")
+                        detail="not verified: the name, rules, facts or motion spec changed since the applied-skill report; run `brand-creator applied-skill --yes` again")

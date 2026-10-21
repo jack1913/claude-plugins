@@ -6,7 +6,8 @@
 """brand-creator applied-skill: a small per-brand skill written into the project's own .claude/skills/<slug>-brand/, only with --yes.
 
 The skill carries what an agent needs to apply the brand: colours with their contrast ratios, type, the mark files and the small-size rule,
-what is never done, the owner's G4 rules and the facts that may be claimed. It is generated from the built tokens, BRAND-STATE.md and FACTS.md
+motion (the duration and curve tokens, and motion/motion.json: the signature move and the rules) when the brand has any, what is never done, the
+owner's G4 rules and the facts that may be claimed. It is generated from the built tokens, BRAND-STATE.md, FACTS.md and motion/motion.json
 (templates/applied-skill/SKILL.md fills it), so it never holds a second copy that can drift. Opt-in at gate G5: it needs G5 recorded and the
 owner's explicit OK, which is the flag --yes; without it the command prints what it would write and exits 2. --plan prints and exits 0.
 `check` treats the file as generated (a hand edit fails, a changed source makes the report not verified) and `check --cascade` searches it.
@@ -22,6 +23,7 @@ sys.path.insert(0, str(HERE / "lib"))
 sys.path.insert(0, str(HERE / "booklib"))
 sys.path.insert(0, str(HERE / "adaptlib"))
 import adapt  # noqa: E402
+import motionspec  # noqa: E402
 from _common import (EXIT_FAIL, EXIT_USAGE, Parser, Report, add_project_arg, confine, fail, find_project, main_guard, plugin_root,  # noqa: E402
                      require_gate, sha256_bytes, sha256_file, today, write_bytes_if_changed)
 
@@ -49,7 +51,8 @@ def main() -> int:
     data = text.encode("utf-8")
     if a.plan or not a.yes:
         print(f"would write {dest_rel} ({len(data)} bytes, {len(text.splitlines())} lines) in the project; nothing is written without --yes")
-        print("it holds: colours and contrast pairs, type, mark files and the small-size rule, what is never done, the G4 rules, and the facts that may be claimed")
+        print("it holds: colours and contrast pairs, type, mark files and the small-size rule, motion (when the tokens or motion/motion.json have any), what is never done, "
+              "the G4 rules, and the facts that may be claimed")
         if not a.plan:
             print("error: the applied skill is written into the project's .claude/skills/ and needs the owner's explicit OK at G5: re-run with --yes", file=sys.stderr)
         return 0 if a.plan else EXIT_USAGE
@@ -57,6 +60,8 @@ def main() -> int:
     rep.inputs.append(project / "assets" / "tokens" / "tokens.json")
     if (project / "FACTS.md").is_file():
         rep.inputs.append(project / "FACTS.md")
+    if (project / motionspec.FILE).is_file():
+        rep.inputs.append(project / motionspec.FILE)
     pf = project / "assets" / "_checks" / "applied-skill.json"
     prev_sha = None
     if pf.is_file():

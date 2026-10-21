@@ -99,12 +99,13 @@ Ask once, at G5, whether the owner wants either. Nothing below is written withou
 
 - `brand-creator adapters --brand-md --design-md [--primary <role>]`: `BRAND.md` (Strategy, Voice, Visual, Governance; `type` and `architecture` frontmatter
   from BRAND-STATE's architecture, overridable with `--bm-type` and `--bm-architecture`) and `DESIGN.md` (YAML tokens: colours with `-dark` variants,
-  type families, spacing, a component per text pair; then the section prose), both generated from the built tokens, BRAND-STATE.md and FACTS.md. Sections
+  type families, spacing, a component per text pair; then the section prose), both generated from the built tokens, BRAND-STATE.md, FACTS.md and
+  `motion/motion.json` when it exists (the motion section: durations, curves, the signature move and the rules, or why nothing moves). Sections
   with no source say so ("no voice facts are recorded"); contact facts stay out. DTCG stays the truth. `DESIGN.md` is linted by the pinned
   `@google/design.md` when `setup` installed it, else the result is "not verified" (exit 3), never a pass. An error, or a contrast-ratio finding, fails;
   other findings (`missing-primary`, `orphaned-tokens`) are warnings.
 - `brand-creator applied-skill --yes`: a small skill in the project's own `.claude/skills/<slug>-brand/SKILL.md` (colours and ratios, type, mark files and
-  the small-size rule, what is never done, the G4 rules, the facts that may be claimed). Without `--yes` it prints the plan and exits 2.
+  the small-size rule, motion when the brand has any, what is never done, the G4 rules, the facts that may be claimed). Without `--yes` it prints the plan and exits 2.
 - Both are generated files: `check` fails a hand edit, treats a changed source as not verified, and `check --cascade` searches them. `staleness` reads
   both as inputs of the pack. `--replace` moves a hand-edited file to `removed-<date>/` before writing a new one.
 

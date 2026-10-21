@@ -9,8 +9,9 @@
   adapters --design-md    DESIGN.md: YAML tokens (colors with `-dark` variants, typography, spacing, components from the text pairs) and the
                           section prose; then linted with the pinned @google/design.md when `brand-creator setup` installed it
 
-Both are written at the project root from the built tokens (assets/tokens/tokens.json), BRAND-STATE.md and FACTS.md; the DTCG sources stay the
-truth, and nothing is written without its flag. Every section with no source says so instead of inventing text; contact facts stay out.
+Both are written at the project root from the built tokens (assets/tokens/tokens.json), BRAND-STATE.md and FACTS.md, and motion/motion.json when it
+exists (the motion section: durations, curves, the signature move, the rules, or why nothing moves); the DTCG sources stay the truth, and nothing is
+written without its flag. Every section with no source says so instead of inventing text; contact facts stay out.
 `check` treats both files as generated: a hand edit fails, a changed source makes the report not verified, `check --cascade` searches them.
 DESIGN.md that cannot be linted (the package is not installed) is "not verified", never a pass: the files are still written, the exit code is 3.
 """
@@ -24,6 +25,7 @@ sys.path.insert(0, str(HERE / "lib"))
 sys.path.insert(0, str(HERE / "booklib"))
 sys.path.insert(0, str(HERE / "adaptlib"))
 import adapt  # noqa: E402
+import motionspec  # noqa: E402
 from _common import (EXIT_FAIL, EXIT_USAGE, Parser, Report, add_project_arg, confine, data_dir, fail, find_project,  # noqa: E402
                      main_guard, require_gate, run, sha256_bytes, sha256_file, today, write_bytes_if_changed)
 
@@ -72,6 +74,8 @@ def main() -> int:
     rep.inputs.append(doc_in)
     if (project / "FACTS.md").is_file():
         rep.inputs.append(project / "FACTS.md")
+    if (project / motionspec.FILE).is_file():
+        rep.inputs.append(project / motionspec.FILE)
     prev = {}
     pf = project / "assets" / "_checks" / "adapters.json"
     if pf.is_file():

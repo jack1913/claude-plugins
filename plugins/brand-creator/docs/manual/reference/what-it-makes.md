@@ -30,6 +30,18 @@ Each check writes a report to `assets/_checks/`. `check` reads every report that
 
 The thresholds are yours, kept in `qa/rules.json`. The plugin's numbers are proposals and say so.
 
+## Tokens
+
+`tokens` turns your colour, type and motion tokens into files for code, in `assets/tokens/`: CSS variables, a JSON copy,
+Swift colours with an asset catalogue, and Android colours. Durations and easing curves reach the apps too: Swift gets
+`BrandMotion`, and Android gets `motion.xml` and one interpolator per curve. Each file is read back and compared with your
+tokens before the build passes. A file your tokens no longer produce, like the colour set of a role you removed, is
+moved to `removed-<date>/`.
+
+When something moves, `motion/motion.json` says how: the signature move, the moving parts, a timeline written in your
+duration and curve tokens, and the motion rules. When nothing moves, it says why. BRAND.md, DESIGN.md and the brand's
+own skill repeat it.
+
 ## Web, social and profiles
 
 - `emit web`: favicons drawn per size (the browser tab gets your small drawing), PWA icons and a head snippet.

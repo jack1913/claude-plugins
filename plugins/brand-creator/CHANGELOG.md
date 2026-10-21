@@ -6,6 +6,59 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-10-21
+
+Motion becomes data: easing curves are tokens, durations and curves reach Swift and Android, and `motion/motion.json`
+holds the motion spec that BRAND.md, DESIGN.md and the brand's own skill repeat. A duration that is not whole
+milliseconds, or not written the DTCG way, now stops the build: run `brand-creator tokens` once after updating.
+
+### Added
+
+- Easing curves are tokens now. A `cubicBezier` token (`[x1, y1, x2, y2]`, x between 0 and 1) builds into `tokens.css` as
+  `--easing-standard: cubic-bezier(0.2, 0, 0, 1)`, and into the Swift and Android files below. A curve that is not four
+  numbers, or whose x leaves 0 to 1, stops the build and names the token. The starter tokens have an `easing` group with
+  three curves (`standard`, `enter`, `exit`), offered as proposals until you decide at G4.
+- Durations and curves reach the apps. `tokens` writes `swift/BrandMotion.swift` (`BrandMotion.Duration.base` in seconds
+  and `BrandMotion.Curve.standard(duration:)` for SwiftUI), `android/values/motion.xml` (durations in milliseconds) and one
+  `android/interpolator/brand_<name>.xml` per curve. A brand with no duration and no curve gets none of them. Every file is
+  read back and compared with the source before the build passes.
+- `motion/motion.json` is the motion spec as data: whether anything moves (and, if not, why, in your words), the signature
+  move, the moving parts, a timeline written as references to the duration and curve tokens, and the motion rules.
+  `brand-creator check` validates it, and names the field and what is wrong; a reference that is not a built token of the
+  right kind is an error.
+- BRAND.md, DESIGN.md and the brand's own skill say how the brand moves: the durations and curves, the signature move and
+  the rules, or "Nothing moves" with the reason. A change to `motion/motion.json` makes them read as out of date until they
+  are generated again.
+
+### Changed
+
+- `tokens.json` has a new `motion` entry (durations in milliseconds, curves as numbers) when the tokens have either;
+  `other` is as it was.
+- A duration must come to whole milliseconds, because Android keeps it as an integer: `12.5ms` now stops the build, and
+  `0.32s` is 320 ms.
+- Some token sources that built before now stop the build, each naming the token: a duration written as a bare number
+  (`"$value": 150`) or as `.5s` (write `0.5s`), a duration over 2147483647 ms, and two durations that would share a Swift
+  name (`duration.fast` next to `motion.fast`). In an existing project `tokens --check` fails until you run
+  `brand-creator tokens` once after updating, because of the new files and the new `motion` entry.
+- A project with durations but no curve and no motion spec gets the same `tokens.css`, Swift colours, Android colours and
+  BRAND.md as before (BRAND.md now also lists a duration outside the `duration` and `motion` groups). Its DESIGN.md and
+  brand skill gain a short Motion section that lists the durations.
+- The motion hand-off template and the G4 motion rule name the easing tokens, and the template points at
+  `motion/motion.json`.
+
+### Fixed
+
+- `emit social` keeps the manifest row of an old Open Graph image only while its file is there. Its warning now says to
+  run `emit social` again after moving the old images to `removed-<date>/`, which drops their rows, so `check` and the
+  book's file list stop expecting them.
+- A file `tokens` no longer produces, such as the colorset of a removed colour role or the interpolator of a renamed curve,
+  used to stay in `assets/tokens` while `tokens --check` passed. Now `--check` fails on it, and a build moves it to
+  `removed-<date>/`.
+- Every Swift keyword in a token name is escaped in the Swift files (the list was short; `Self` or `guard` did not
+  compile). A colour, duration or curve named `Type` or `Protocol` stops the build, since no member can use that name.
+- The brand skill is filled in one pass, so a G4 rule or a motion rule containing `{{name}}` is written as it is instead
+  of being filled in or refused.
+
 ## [0.3.3] - 2026-10-21
 
 Fixes from the first projects with several marks and the first approved books: `downscale` measures each mark's own

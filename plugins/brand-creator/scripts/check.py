@@ -27,6 +27,7 @@
   * --cascade "<old value or phrase>" (repeatable): no current project artefact may still contain it (text files, PDFs as text, the documents named by
     tools/cascade.json, --also and FAMILY.md parent_docs); lines that record a product repository's old value (ADOPTION.md, LAUNCH.md) warn, they do not fail
   * adoption.json (pins, numbering, accounting) and ADOPTION.md as rendered from it; BRAND.md, DESIGN.md and the applied skill as generated files
+  * motion/motion.json, when it exists: valid against its schema, and every duration and curve it names is a built token (a failing row, never a crash)
 A check that cannot be established is "not verified" (exit 3), never "pass". A failing gate is exit 1.
 """
 import json
@@ -47,7 +48,8 @@ from mark_lint import lint_svg_file, svg_files_under_assets  # noqa: E402
 import bookdata  # noqa: E402
 import cascade as cascade_mod  # noqa: E402
 import gates as adapt_gates  # noqa: E402
-from _common import EXIT_USAGE, CliError, fail  # noqa: E402
+import motionspec  # noqa: E402
+from _common import EXIT_CANNOT, EXIT_USAGE, CliError, fail  # noqa: E402
 
 EMITTERS = ("web", "social", "apple", "windows", "linux", "tray", "tauri", "wallet", "developer", "android", "chrome-ext", "msix", "profiles", "print", "presskit")   # each writes assets/_checks/emit-<name>.json
 # manifest `qa` value -> (report tool, the command that writes it)
@@ -221,6 +223,12 @@ def main() -> int:
                 rep.add("book:generated", "pass" if same else "fail", "book.html is the bytes `book` wrote (generated, never hand-edited)",
                         detail="unchanged since the build" if same else f"{out.get('path')} differs from what `book` wrote: it was edited by hand or by another tool; "
                         "edit book/chapters/*.md and run `brand-creator book`")
+    if (project / motionspec.FILE).is_file():   # the machine-readable motion spec: its schema, and each duration and curve it names must be a built token
+        try:
+            rep.add("motion:spec", "pass", "motion/motion.json is valid", detail=motionspec.summary(motionspec.load(project)))
+        except CliError as e:
+            unbuilt = e.code == EXIT_CANNOT
+            rep.add("motion:spec", "skipped" if unbuilt else "fail", "motion/motion.json is valid", detail=("not verified: " if unbuilt else "") + e.message)
     adapt_gates.rows(project, rep)
     bprobs = band_problems(project)
     if any("band" in a_ or "layer_bands" in a_ for a_ in arts):

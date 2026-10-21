@@ -184,7 +184,9 @@ def main() -> int:
     rep.add(f"file:{og_rel}", "pass", "written" if changed else "unchanged", bytes=len(d))
     stale_og = sorted(p.name for p in (project / out).glob("og-*.png") if p.name != og_rel)
     if stale_og:
-        rep.add("note:old og images", "warn", "superseded Open Graph files", detail=f"{', '.join(stale_og)} are no longer referenced; move them to removed-<date>/")
+        rep.add("note:old og images", "warn", "superseded Open Graph files",
+                detail=f"{', '.join(stale_og)} are no longer referenced; once no cached link preview needs them, move them to removed-<date>/ "
+                       "and run emit social again, which drops their manifest rows")
 
     repo_reason = lists_repository(project) if a.repo_images == "auto" else ("--repo-images yes" if a.repo_images == "yes" else None)
     repo_images = repo_reason is not None
@@ -322,10 +324,14 @@ def main() -> int:
     mf.stamp_specs(stamped)
     def old_og(p: str) -> bool:   # a fingerprinted Open Graph file: one this run did not write is the superseded card, kept for cached link previews
         return re.fullmatch(r"og-\d+x\d+-[0-9a-f]{8}\.png", Path(p).name) is not None
-    retired = mf.retire_unwritten("social", out, keep=lambda p: old_og(p) or (not a.posts and p.startswith(f"{out}/posts/")), mark=mid, superseded=old_og)
+    def kept_og(p: str) -> bool:   # kept while its file is there: once the owner has moved it away, its row goes too
+        return old_og(p) and (project / p).is_file()
+    retired = mf.retire_unwritten("social", out, keep=lambda p: kept_og(p) or (not a.posts and p.startswith(f"{out}/posts/")), mark=mid, superseded=kept_og)
     for p in retired:
         rep.add(f"retired:{p}", "warn", "slot no longer emitted",
-                detail=f"an earlier run wrote {p} but this run did not: the file was moved to removed-{today()}/ and its manifest row dropped")
+                detail=f"an earlier run wrote {p} but this run did not: "
+                       + (f"the file was moved to {mf.retired_to[p]}/" if p in mf.retired_to else "its file was already gone")
+                       + " and its manifest row dropped")
     mf.save()
     for wmsg in warns:
         rep.add("spec", "warn", "platform spec", detail=wmsg)

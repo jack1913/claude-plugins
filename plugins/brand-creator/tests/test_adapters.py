@@ -10,7 +10,7 @@ import shutil
 from pathlib import Path
 
 import pytest
-from helpers import FIXTURES, ROOT, bc, data_dir, mutate, mutate_json
+from helpers import FIXTURES, ROOT, bc, data_dir, mutate, mutate_json, report
 
 pytestmark = [pytest.mark.requires_setup, pytest.mark.requires_node]
 CANON = ["Overview", "Colors", "Typography", "Layout", "Elevation & Depth", "Shapes", "Components", "Do's and Don'ts"]
@@ -180,7 +180,8 @@ def test_design_md_carries_the_token_values_in_the_canonical_order(pack):
     assert (c["bg"], c["text"], c["accent"], c["primary"]) == ("#f9f7ee", "#0d1b2d", "#007d71", "#007d71")
     assert (c["bg-dark"], c["text-dark"], c["accent-dark"]) == ("#0e141d", "#f0eee7", "#4cd7c8")
     heads = re.findall(r"^## (.+)$", t, re.M)
-    assert heads == [h for h in CANON if h in heads] and heads[0] == "Overview" and "Colors" in heads and "Components" in heads
+    assert [h for h in heads if h != "Motion"] == [h for h in CANON if h in heads] and heads[0] == "Overview" and "Colors" in heads and "Components" in heads
+    assert heads.count("Motion") == 1 and heads.index("Motion") == heads.index("Components") + 1      # Acme has a duration: the one prose section the format does not name
     refs = re.findall(r'"\{colors\.([a-z-]+)\}"', t)
     assert refs and all(ref in c for ref in refs)                                  # every reference resolves to a colour the file defines
     assert "version: alpha" in t and "fontFamily" in t and "space-1: 4px" in t
@@ -355,3 +356,261 @@ def test_brand_md_mapping_agrees_with_the_architecture_reference():
     assert table == bm_map, (table, bm_map)
     intake = (ROOT / "skills" / "brand-creator" / "references" / "phases" / "00-intake.md").read_text(encoding="utf-8")
     assert re.search(r"^\s*\| family-member \| master\b", intake, re.M)
+
+
+# ---------------------------------------------------------------- motion: the duration and curve tokens and motion/motion.json
+
+SPEC_FILE = "motion/motion.json"
+
+
+def add_motion(p: Path, extra=None) -> None:
+    """Two more durations, and an easing group with a curve, an alias of it and an overshoot (y above 1), built into the tokens of the project."""
+    def groups(d):
+        d["motion"] = {"$type": "duration", "base": {"$value": {"value": 320, "unit": "ms"}}, "stagger": {"$value": {"value": 120, "unit": "ms"}}}
+        d["easing"] = {"$type": "cubicBezier", "standard": {"$value": [0.2, 0, 0, 1]}, "enter": {"$value": "{easing.standard}"}, "bounce": {"$value": [0.34, 1.56, 0.64, 1]}}
+        if extra:
+            extra(d)
+    mutate_json(p / "tokens" / "primitives.tokens.json", groups)
+    r = bc("tokens", project=p)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def on_spec() -> dict:
+    return {"schema": 1, "motion": "on",
+            "signature": {"name": " Settle ", "description": "The dot drops onto the grid\n  and settles.", "where": ["app icon", "empty\tstates"]},   # words are set on one line
+            "parts": [{"id": "dot", "description": "The accent dot of the mark."}],
+            "timeline": [{"part": "dot", "property": "transform", "start": "{motion.stagger} * 2", "duration": "{motion.base}", "easing": "{easing.standard}", "note": "drops two pixels"}],
+            "rules": ["reduced motion:  nothing moves", "nothing loops forever"]}
+
+
+def off_spec() -> dict:
+    return {"schema": 1, "motion": "off", "reason": "The owner wants a still brand:\nnothing in it needs   to move.", "rules": ["the still is complete"]}
+
+
+def put_spec(p: Path, doc: dict) -> None:
+    (p / "motion").mkdir(exist_ok=True)
+    (p / SPEC_FILE).write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
+
+
+def section(text: str, heading: str, until: str = "\n## ") -> str:
+    """The body of a heading, up to the next heading of its level or above (the end of the file when there is none)."""
+    return text.split(heading + "\n\n", 1)[1].split(until, 1)[0].strip()
+
+
+def motion_of(p: Path) -> tuple[str, str, str]:
+    """The Motion body of BRAND.md, DESIGN.md and the applied skill."""
+    skill = (p / ".claude" / "skills" / "acme-brand" / "SKILL.md").read_text()
+    return section((p / "BRAND.md").read_text(), "### Motion"), section((p / "DESIGN.md").read_text(), "## Motion"), section(skill, "## Motion")
+
+
+def maybe_row(p: Path, rid: str, tool="check") -> dict | None:
+    rep = json.loads((p / "assets" / "_checks" / f"{tool}.json").read_text())
+    return next((r for r in rep["results"] if r["id"] == rid), None)
+
+
+def generate(p: Path) -> None:
+    assert bc("adapters", "--brand-md", "--design-md", "--primary", "accent", "--replace", project=p).returncode in (0, 3)
+    assert bc("applied-skill", "--yes", "--replace", project=p).returncode == 0
+
+
+DURATIONS = ["- duration.fast: 150ms", "- motion.base: 320ms", "- motion.stagger: 120ms"]
+CURVES = ["- easing.bounce: cubic-bezier(0.34, 1.56, 0.64, 1)", "- easing.enter: cubic-bezier(0.2, 0, 0, 1)", "- easing.standard: cubic-bezier(0.2, 0, 0, 1)"]
+
+
+def test_brand_md_lists_the_curves_after_the_durations_with_their_numbers_and_an_alias_as_its_curve(pack):
+    add_motion(pack)
+    assert bc("adapters", "--brand-md", project=pack).returncode == 0
+    body = section((pack / "BRAND.md").read_text(), "### Motion")
+    assert body.splitlines() == DURATIONS + CURVES                          # an alias is printed as the numbers it resolves to, not as var(--...)
+
+
+def test_a_curve_in_the_motion_group_is_listed_as_a_curve_once_and_not_as_a_duration(pack):
+    add_motion(pack, lambda d: d["motion"].__setitem__("ease", {"$type": "cubicBezier", "$value": [0.4, 0, 0.2, 1]}))
+    assert bc("adapters", "--brand-md", project=pack).returncode == 0
+    lines = section((pack / "BRAND.md").read_text(), "### Motion").splitlines()
+    assert lines.count("- motion.ease: cubic-bezier(0.4, 0, 0.2, 1)") == 1 and len(lines) == 7
+    assert lines[:3] == DURATIONS and lines[-1] == "- motion.ease: cubic-bezier(0.4, 0, 0.2, 1)"      # the durations first, then every curve in name order
+
+
+def test_curves_numbers_are_plain_decimals_as_tokens_css_writes_them(pack):
+    add_motion(pack)
+    tj = pack / "assets" / "tokens" / "tokens.json"
+    mutate_json(tj, lambda d: d["motion"]["curves"].__setitem__("easing.tiny", [0.0000001, 1.0, 0.5, 2.50]))      # as a JSON reader may hand them over: floats
+    assert bc("adapters", "--brand-md", project=pack).returncode == 0
+    assert "- easing.tiny: cubic-bezier(0.0000001, 1, 0.5, 2.5)" in (pack / "BRAND.md").read_text()
+
+
+def test_the_motion_spec_reaches_brand_md_design_md_and_the_applied_skill_in_the_same_words(pack):
+    add_motion(pack)
+    mutate(pack / "BRAND-STATE.md", "- (rule) (...)", "- (rule) the accent is a fill, never text (proposal)")          # a G4 rule: DESIGN.md gets its Do's and Don'ts
+    put_spec(pack, on_spec())
+    generate(pack)
+    brand, design, skill = motion_of(pack)
+    want = "\n".join(DURATIONS + CURVES + ["", "Signature move: Settle. The dot drops onto the grid and settles.", "", "Shown in: app icon, empty states", "",
+                                          "Motion rules:", "", "- reduced motion: nothing moves", "- nothing loops forever"])
+    assert brand == design == skill == want
+    for text in ((pack / "BRAND.md").read_text(), (pack / "DESIGN.md").read_text(), (pack / ".claude" / "skills" / "acme-brand" / "SKILL.md").read_text()):
+        assert "drops two pixels" not in text and "ring" not in text                # the parts and the timeline are the hand-off's, not the brand's summary
+    skill_text = (pack / ".claude" / "skills" / "acme-brand" / "SKILL.md").read_text()
+    assert skill_text.index("\n## Mark\n") < skill_text.index("\n## Motion\n") < skill_text.index("\n## Never\n")
+    heads = re.findall(r"^## (.+)$", (pack / "DESIGN.md").read_text(), re.M)
+    assert heads[-3:] == ["Components", "Motion", "Do's and Don'ts"]                    # Motion sits before the guardrails, which stay last
+    fm = FM_RE.match((pack / "DESIGN.md").read_text()).group(1)
+    assert not re.search(r"^(motion|easing|duration)", fm, re.M), "no key of the pinned format is invented for motion"
+
+
+def test_a_motion_spec_that_says_off_says_why_nothing_moves(pack):
+    put_spec(pack, off_spec())
+    generate(pack)
+    brand, design, skill = motion_of(pack)
+    want = "\n".join(DURATIONS[:1] + ["", "Nothing moves: The owner wants a still brand: nothing in it needs to move.", "", "Motion rules:", "", "- the still is complete"])
+    assert brand == design == skill == want
+    assert "Signature move" not in brand + design + skill
+    bare = {"schema": 1, "motion": "off", "reason": "A still brand."}                  # no rules: no rules paragraph
+    put_spec(pack, bare)
+    generate(pack)
+    assert motion_of(pack)[0] == "- duration.fast: 150ms\n\nNothing moves: A still brand."
+
+
+def test_the_applied_skill_plan_says_it_holds_motion(pack):
+    r = bc("applied-skill", "--plan", project=pack)
+    assert r.returncode == 0 and "motion (when the tokens or motion/motion.json have any)" in r.stdout
+
+
+def test_a_spec_with_no_tokens_still_prints_what_it_says(pack):
+    mutate_json(pack / "tokens" / "primitives.tokens.json", lambda d: d.pop("duration"))
+    assert bc("tokens", project=pack).returncode == 0
+    put_spec(pack, off_spec())
+    generate(pack)
+    assert motion_of(pack)[0].startswith("Nothing moves: The owner wants a still brand")
+    assert "### Motion\n\nNothing moves: The owner" in (pack / "BRAND.md").read_text()          # no tokens line, and no blank line in front of the first paragraph
+    assert "## Motion\n\nNothing moves: The owner" in (pack / "DESIGN.md").read_text()
+
+
+def test_without_motion_the_files_are_as_they_were_and_with_durations_they_gain_the_motion_block_and_nothing_else(pack, tmp_path):
+    """Acme has one duration. The same project with no duration at all has no Motion anywhere; adding the duration adds exactly the Motion lines."""
+    bare = tmp_path / "bare"
+    shutil.copytree(pack, bare)
+    mutate_json(bare / "tokens" / "primitives.tokens.json", lambda d: d.pop("duration"))
+    assert bc("tokens", project=bare).returncode == 0
+    generate(pack)
+    generate(bare)
+    names = {"BRAND.md": "### Motion\n\n- duration.fast: 150ms\n\n", ".claude/skills/acme-brand/SKILL.md": "## Motion\n\n- duration.fast: 150ms\n\n",
+             "DESIGN.md": "\n## Motion\n\n- duration.fast: 150ms\n"}      # the last section of a DESIGN.md with no rules: the blank line before it goes with it
+    for name, block in names.items():
+        with_duration, without = (pack / name).read_text(), (bare / name).read_text()
+        assert "Motion" not in without and "{{" not in without, name
+        assert block in with_duration and with_duration.count(block) == 1, name
+        assert with_duration.replace(block, "") == without, f"{name}: the duration adds its Motion lines and changes nothing else"
+
+
+def test_a_motion_spec_that_is_not_valid_stops_the_adapters_and_the_applied_skill(pack):
+    add_motion(pack)
+    doc = on_spec()
+    doc["timeline"][0]["easing"] = "{easing.nope}"
+    put_spec(pack, doc)
+    r = bc("adapters", "--brand-md", "--design-md", project=pack)
+    assert r.returncode == 2 and "timeline[0].easing: no token named easing.nope" in r.stderr, r.stdout + r.stderr
+    assert not (pack / "BRAND.md").exists() and not (pack / "DESIGN.md").exists()
+    assert row(pack, "error", "adapters")["status"] == "fail"
+    r = bc("applied-skill", "--yes", project=pack)
+    assert r.returncode == 2 and "timeline[0].easing: no token named easing.nope" in r.stderr
+    assert not (pack / ".claude").exists()
+
+
+def test_the_motion_spec_is_a_source_of_the_adapters_and_the_skill(pack):
+    """A change to motion/motion.json, its removal, or its first appearance makes the reports not verified until the files are generated again."""
+    add_motion(pack)
+    put_spec(pack, on_spec())
+    generate(pack)
+    bc("check", project=pack)
+    assert row(pack, "report:adapters")["status"] == "pass" and row(pack, "report:applied-skill")["status"] == "pass"
+    assert maybe_row(pack, "adapters:state") is None                              # the row only exists when the sources moved on
+    changed = on_spec()
+    changed["rules"].append("one more rule")
+    put_spec(pack, changed)
+    bc("check", project=pack)
+    for tool in ("adapters", "applied-skill"):
+        r = row(pack, f"report:{tool}")
+        assert r["status"] == "skipped" and "motion/motion.json changed" in r["detail"], tool
+    for rid in ("adapters:state", "applied-skill:state"):                         # the state hash notices it as well, and says which source it was
+        assert row(pack, rid)["status"] == "skipped" and "motion spec" in row(pack, rid)["detail"], rid
+    generate(pack)
+    bc("check", project=pack)
+    assert row(pack, "report:adapters")["status"] == "pass" and row(pack, "adapters:BRAND.md")["status"] == "pass"
+    assert "one more rule" in (pack / "BRAND.md").read_text()
+    # a spec added after the files were made is not among the report's inputs: the state hash is what notices it
+    (pack / SPEC_FILE).rename(pack / "motion" / "motion.json.moved")
+    generate(pack)
+    bc("check", project=pack)
+    assert maybe_row(pack, "adapters:state") is None
+    (pack / "motion" / "motion.json.moved").rename(pack / SPEC_FILE)
+    bc("check", project=pack)
+    assert row(pack, "adapters:state")["status"] == "skipped" and "motion spec" in row(pack, "adapters:state")["detail"]
+    assert row(pack, "applied-skill:state")["status"] == "skipped" and "motion spec" in row(pack, "applied-skill:state")["detail"]
+    generate(pack)
+    bc("check", project=pack)
+    assert maybe_row(pack, "adapters:state") is None and maybe_row(pack, "applied-skill:state") is None
+
+
+@pytest.mark.requires_design_lint
+def test_the_pinned_design_md_format_keeps_the_motion_section_and_its_lint_passes(pack):
+    add_motion(pack)
+    put_spec(pack, on_spec())
+    r = bc("adapters", "--design-md", "--primary", "accent", project=pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert row(pack, "design-md:lint", "adapters")["status"] == "pass"
+    assert "0 error(s)" in row(pack, "design-md:lint", "adapters")["detail"]
+    assert "## Motion" in (pack / "DESIGN.md").read_text()
+    spec = (data_dir() / "node_modules" / "@google" / "design.md" / "dist" / "spec.md").read_text()
+    assert "Unknown section heading | Preserve; do not error" in spec               # the clause that keeps a prose section the format does not name
+
+
+def test_the_applied_skill_template_keeps_its_placeholder_guard_and_takes_the_motion_block_wherever_it_is_placed(pack, plugin_copy):
+    add_motion(pack)
+    put_spec(pack, on_spec())
+    tpl = plugin_copy / "templates" / "applied-skill" / "SKILL.md"
+    original = tpl.read_text()
+    # an unknown placeholder is refused, and nothing is written
+    tpl.write_text(original.replace("## Never", "{{nope}}\n\n## Never"))
+    r = bc("applied-skill", "--yes", project=pack, plugin=plugin_copy)
+    assert r.returncode == 2 and "placeholders this version does not know: {{nope}}" in r.stderr
+    assert not (pack / ".claude").exists()
+    # {{motion}} that is not followed by a blank line is filled too (the block with its heading, where the template put it), not refused as unknown
+    tpl.write_text(original.replace("{{motion}}\n\n", "Motion, if any: {{motion}}!\n\n"))
+    r = bc("applied-skill", "--yes", project=pack, plugin=plugin_copy)
+    assert r.returncode == 0, r.stderr
+    assert re.search(r"Motion, if any: ## Motion\n\n- duration\.fast: 150ms\n[\s\S]*- nothing loops forever!\n", (pack / ".claude" / "skills" / "acme-brand" / "SKILL.md").read_text())
+    # a template with no {{motion}} at all writes no motion, as every placeholder a template leaves out writes nothing
+    tpl.write_text(original.replace("{{motion}}\n\n", ""))
+    assert bc("applied-skill", "--yes", "--replace", project=pack, plugin=plugin_copy).returncode == 0
+    assert "Motion" not in (pack / ".claude" / "skills" / "acme-brand" / "SKILL.md").read_text()
+
+
+def test_a_duration_is_found_by_its_type_and_a_motion_group_token_that_is_no_duration_is_still_listed(pack):
+    """tokens.json `motion` says which tokens are durations, so one outside the duration and motion groups is listed; a motion-group token of another type
+    (a distance) is listed as tokens.css writes it, as before; a tokens.json built before the motion entry existed still lists its durations by group."""
+    def more(d):
+        d["timing"] = {"$type": "duration", "slow": {"$value": {"value": 640, "unit": "ms"}}}
+        d["motion"]["distance"] = {"$type": "dimension", "$value": {"value": 8, "unit": "px"}}
+    add_motion(pack, more)
+    assert bc("adapters", "--brand-md", project=pack).returncode == 0
+    lines = section((pack / "BRAND.md").read_text(), "### Motion").splitlines()
+    assert lines == ["- duration.fast: 150ms", "- motion.base: 320ms", "- motion.distance: 8px", "- motion.stagger: 120ms", "- timing.slow: 640ms"] + CURVES
+    mutate_json(pack / "assets" / "tokens" / "tokens.json", lambda d: d.pop("motion"))       # an earlier build: no motion entry, no curves known
+    assert bc("adapters", "--brand-md", "--replace", project=pack).returncode == 0
+    assert section((pack / "BRAND.md").read_text(), "### Motion").splitlines() == ["- duration.fast: 150ms", "- motion.base: 320ms", "- motion.distance: 8px",
+                                                                                   "- motion.stagger: 120ms"]
+
+
+def test_text_with_braces_in_the_motion_spec_or_the_rules_is_written_as_it_is_and_never_read_as_a_placeholder(pack):
+    add_motion(pack)
+    mutate(pack / "BRAND-STATE.md", "- (rule) (...)", "- (rule) say {{name}} in full, see {{facts}} (proposal)")   # placeholders filled before and after the text
+    doc = on_spec()
+    doc["rules"] = ["the dot moves like {{name}} says", "no {{wobble}} ever", "check {{facts}} first"]
+    put_spec(pack, doc)
+    generate(pack)
+    brand, design, skill = motion_of(pack)
+    assert brand == design == skill and "- the dot moves like {{name}} says\n- no {{wobble}} ever\n- check {{facts}} first" in skill
+    text = (pack / ".claude" / "skills" / "acme-brand" / "SKILL.md").read_text()
+    assert "- (rule) say {{name}} in full, see {{facts}} (proposal)" in text and "acme-brand" not in text.split("## Rules", 1)[1].split("\n## ", 1)[0]

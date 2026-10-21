@@ -6,7 +6,7 @@ import subprocess
 import sys
 
 import pytest
-from helpers import bc, failing, make_project, install_fixture, mutate, mutate_json, report
+from helpers import android_sdk, bc, failing, make_project, install_fixture, mutate, mutate_json, report
 
 pytestmark = pytest.mark.requires_setup
 
@@ -156,6 +156,112 @@ def test_out_of_gamut_oklch_gets_a_valid_in_gamut_hex(proj):
     assert tokens(proj, "--fix-hex").returncode == 0
     h = json.loads(p.read_text())["color"]["teal"]["$value"]["hex"]
     assert re.fullmatch(r"#[0-9a-f]{6}", h)
+
+
+MOTION_CURVES = {"standard": [0.2, 0, 0, 1], "bounce": [0.34, 1.56, 0.64, 1]}   # the second overshoots: y above 1
+MOTION_DURATIONS = {"base": (320, "ms"), "slow": (0.64, "s")}                    # a duration in each unit DTCG allows
+
+
+def add_motion(p):
+    def groups(d):
+        d["motion"] = {"$type": "duration", **{k: {"$value": {"value": v, "unit": u}} for k, (v, u) in MOTION_DURATIONS.items()}}
+        d["easing"] = {"$type": "cubicBezier", **{k: {"$value": c} for k, c in MOTION_CURVES.items()}}
+    mutate_json(p / "tokens" / "primitives.tokens.json", groups)
+
+
+def test_independent_round_trip_of_the_motion_outputs(proj):
+    """Read the CSS, Swift and Android motion files with code that shares nothing with build_tokens (regular expressions here, an XML parser for
+    Android) and compare them with the numbers written in the DTCG sources."""
+    import xml.etree.ElementTree as ET
+    add_motion(proj)
+    assert tokens(proj).returncode == 0
+    out = proj / "assets" / "tokens"
+    css = (out / "tokens.css").read_text()
+    for k, (value, unit) in MOTION_DURATIONS.items():
+        assert f"--motion-{k}: {value}{unit};" in css, k
+    for k, c in MOTION_CURVES.items():
+        m = re.search(rf"--easing-{k}: cubic-bezier\(([^)]*)\);", css)
+        assert m and [float(x) for x in m.group(1).split(",")] == c, k
+    swift = (out / "swift" / "BrandMotion.swift").read_text()
+    for k, (value, unit) in MOTION_DURATIONS.items():
+        m = re.search(rf"static let {k}: Double = ([\d.]+)\n", swift)
+        assert m and round(float(m.group(1)) * 1000, 6) == value * (1000 if unit == "s" else 1), k
+    for k, c in MOTION_CURVES.items():
+        m = re.search(rf"static func {k}\(duration: Double\) -> Animation \{{ Animation\.timingCurve\(([^)]*), duration: duration\) \}}", swift)
+        assert m and [float(x) for x in m.group(1).split(",")] == c, k
+    ints = {e.get("name"): e.text for e in ET.parse(out / "android" / "values" / "motion.xml").getroot().iter("integer")}
+    assert ints["brand_motion_base"] == "320" and ints["brand_motion_slow"] == "640" and ints["brand_duration_fast"] == "150"
+    ns = "{http://schemas.android.com/apk/res/android}"
+    for k, c in MOTION_CURVES.items():
+        root = ET.parse(out / "android" / "interpolator" / f"brand_easing_{k}.xml").getroot()
+        assert root.tag == "pathInterpolator", k
+        assert [float(root.get(ns + a)) for a in ("controlX1", "controlY1", "controlX2", "controlY2")] == c, k
+    tj = json.loads((out / "tokens.json").read_text())
+    assert tj["motion"]["curves"] == {f"easing.{k}": c for k, c in MOTION_CURVES.items()}
+    assert tj["motion"]["durations_ms"] == {"duration.fast": 150, "motion.base": 320, "motion.slow": 640}
+
+
+@pytest.mark.requires_aapt2
+def test_aapt2_compiles_and_links_the_android_motion_files(proj, tmp_path):
+    """The XML parser above reads the values back; aapt2, the Android build's own resource compiler, says they are valid resources for minSdk 21 (an
+    <integer> that does not fit 32 bits, or an attribute pathInterpolator does not have, fails here and nowhere else)."""
+    add_motion(proj)
+    assert tokens(proj).returncode == 0
+    aapt2, jar = android_sdk()
+    manifest = tmp_path / "AndroidManifest.xml"
+    manifest.write_text('<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.example.brand">'
+                        '<uses-sdk android:minSdkVersion="21"/></manifest>\n')
+
+    def build(res, name):
+        flat, gen = tmp_path / f"{name}.zip", tmp_path / f"{name}-gen"
+        r = subprocess.run([str(aapt2), "compile", "--dir", str(res), "-o", str(flat)], capture_output=True, text=True)
+        if r.returncode == 0:
+            r = subprocess.run([str(aapt2), "link", "-I", str(jar), "--manifest", str(manifest), "-o", str(tmp_path / f"{name}.apk"), "--java", str(gen), str(flat)],
+                               capture_output=True, text=True)
+        return r, gen
+
+    res = proj / "assets" / "tokens" / "android"
+    r, gen = build(res, "ok")
+    assert r.returncode == 0, r.stdout + r.stderr
+    rjava = next(gen.rglob("R.java")).read_text()
+    for name in ("brand_motion_base", "brand_motion_slow", "brand_duration_fast", "brand_easing_standard", "brand_easing_bounce"):
+        assert re.search(rf"\b{name}\s*=", rjava), name                    # R.integer.* and R.interpolator.* exist for every token
+    bad = tmp_path / "bad"
+    shutil.copytree(res, bad)
+    mutate(bad / "values" / "motion.xml", ">320<", ">3000000000<")      # the same commands refuse an integer that does not fit: the check can fail
+    r, _ = build(bad, "bad")
+    assert r.returncode != 0 and "integer" in r.stderr.lower(), r.stdout + r.stderr
+
+
+@pytest.mark.requires_macos
+@pytest.mark.requires_actool
+def test_the_generated_motion_swift_typechecks_for_macos_and_ios_13(proj):
+    """Animation.timingCurve(_:_:_:_:duration:) with the duration in seconds is what the Swift file calls; the compiler, not the round trip, says it is valid."""
+    add_motion(proj)
+    assert tokens(proj).returncode == 0
+    swift = proj / "assets" / "tokens" / "swift" / "BrandMotion.swift"
+    paths = {}
+    for sdk in ("macosx", "iphoneos"):
+        found = subprocess.run(["xcrun", "--sdk", sdk, "--show-sdk-path"], capture_output=True, text=True)
+        assert found.returncode == 0, f"the {sdk} SDK is not installed: {found.stderr}"
+        paths[sdk] = found.stdout.strip()
+
+    def typecheck(sdk, *extra):
+        return subprocess.run(["xcrun", "swiftc", "-typecheck", "-sdk", paths[sdk], *extra, str(swift)], capture_output=True, text=True)
+
+    for sdk, extra in (("macosx", []), ("iphoneos", ["-target", "arm64-apple-ios13.0"])):
+        r = typecheck(sdk, *extra)
+        assert r.returncode == 0, f"{sdk}: {r.stderr}"
+    def keywords(d):   # names that are Swift keywords are escaped, so they compile too
+        d["motion"]["Self"] = {"$value": {"value": 50, "unit": "ms"}}
+        d["easing"]["repeat"] = {"$value": [0.1, 0, 1, 1]}
+    mutate_json(proj / "tokens" / "primitives.tokens.json", keywords)
+    assert tokens(proj).returncode == 0 and "`Self`" in swift.read_text() and "`repeat`" in swift.read_text()
+    r = typecheck("macosx")
+    assert r.returncode == 0, r.stderr
+    mutate(swift, "timingCurve", "timingCurveX")        # the same command refuses a call that does not exist: the check can fail
+    r = typecheck("macosx")
+    assert r.returncode != 0 and "timingCurveX" in r.stderr
 
 
 @pytest.mark.requires_macos

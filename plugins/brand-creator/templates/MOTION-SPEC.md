@@ -1,7 +1,13 @@
 # (Brand name): motion hand-off spec
 
-Written only when something moves. Copy to `motion/SPEC.md`. Every value comes from the tokens (`motion.*`) or from
-this file; an implementer never guesses a timing. The proof is `brand-creator shot --motion motion/proof.json`.
+Written only when something moves. Copy to `motion/SPEC.md`. Every value comes from the tokens (`motion.*` durations,
+`easing.*` curves) or from this file; an implementer never guesses a timing. The proof is
+`brand-creator shot --motion motion/proof.json`.
+
+The machine-readable twin of this file is `motion/motion.json`: the same signature move, parts, timeline (as references
+to the duration and curve tokens) and rules as data, which `brand-creator check` validates and the adapters read (schema:
+`scripts/CONTRACT.md`, "Motion spec"). Keep the two in step; when motion is off, `motion/motion.json` says so with the
+owner's reason and this file is not written.
 
 ## Rules (the G4 "(rule)" lines this spec follows)
 
@@ -19,9 +25,9 @@ this file; an implementer never guesses a timing. The proof is `brand-creator sh
 
 ## Timeline
 
-| Step | Trigger | State from → to | Duration token | Curve (named) | Delay or stagger |
+| Step | Trigger | State from → to | Duration token | Curve token | Delay or stagger |
 |---|---|---|---|---|---|
-| (1) | (load / hover / press / scroll into view) | (`rest` → `press`) | (`motion.quick`) | (name) | (`motion.stagger`) |
+| (1) | (load / hover / press / scroll into view) | (`rest` → `press`) | (`motion.quick`) | (`easing.standard`) | (`motion.stagger`) |
 
 ## Reduced behaviour
 

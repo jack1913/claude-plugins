@@ -189,7 +189,7 @@
   },
   "motion": {
     "$type": "duration",
-    "$description": "Named durations; reduced motion means none of them run. Curves are named in the book until the emitter supports cubicBezier.",
+    "$description": "Named durations; reduced motion means none of them run.",
     "quick": {
       "$value": {
         "value": 160,
@@ -213,6 +213,34 @@
         "value": 120,
         "unit": "ms"
       }
+    }
+  },
+  "easing": {
+    "$type": "cubicBezier",
+    "$description": "Named curves as [x1, y1, x2, y2], x1 and x2 between 0 and 1. These three are proposals until G4: the owner approves or changes them with the motion rules.",
+    "standard": {
+      "$value": [
+        0.2,
+        0,
+        0,
+        1
+      ]
+    },
+    "enter": {
+      "$value": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    "exit": {
+      "$value": [
+        0.3,
+        0,
+        1,
+        1
+      ]
     }
   }
 }

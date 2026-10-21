@@ -48,6 +48,22 @@ def data_dir() -> Path | None:
     return Path(d) if d and (Path(d) / "setup.json").is_file() else None
 
 
+def android_sdk() -> tuple[Path, Path] | None:
+    """(aapt2, android.jar) from the newest build-tools and platform of the Android SDK (ANDROID_HOME, ANDROID_SDK_ROOT, else the default macOS
+    and Linux places); None when either is missing."""
+    def ver(p: Path) -> tuple:
+        return tuple(int(x) for x in p.name.removeprefix("android-").replace("-", ".").split(".") if x.isdigit())
+    for root in [os.environ.get("ANDROID_HOME", ""), os.environ.get("ANDROID_SDK_ROOT", ""), str(Path.home() / "Library/Android/sdk"), str(Path.home() / "Android/Sdk")]:
+        sdk = Path(root) if root.strip() else None
+        if not (sdk and sdk.is_dir()):
+            continue
+        tools = sorted((p for p in (sdk / "build-tools").glob("*") if (p / "aapt2").is_file()), key=ver)
+        jars = sorted((p for p in (sdk / "platforms").glob("android-*") if (p / "android.jar").is_file()), key=ver)
+        if tools and jars:
+            return tools[-1] / "aapt2", jars[-1] / "android.jar"
+    return None
+
+
 def bc(*args: str, project: Path | None = None, cwd: Path | None = None, env: dict | None = None,
        plugin: Path | None = None, data: Path | None = None, timeout: int = 300) -> subprocess.CompletedProcess:
     """Run bin/brand-creator. `plugin` runs a copy of the plugin; `project` adds --project (not for new/setup/prereq)."""

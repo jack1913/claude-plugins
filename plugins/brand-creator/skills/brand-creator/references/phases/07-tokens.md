@@ -28,18 +28,19 @@ one-line "(rule)" items that the owner approves at G4.
 | Output | Path |
 |---|---|
 | Token sources (the truth) | `tokens/primitives.tokens.json`, `tokens/semantic.light.tokens.json`, `tokens/semantic.dark.tokens.json` |
-| Built tokens | `assets/tokens/` (`tokens.css`, `tokens.json`, Swift, Android XML, `Colors.xcassets`) |
+| Built tokens | `assets/tokens/` (`tokens.css`, `tokens.json`, Swift, Android XML, `Colors.xcassets`; Swift and Android also carry the durations and the curves) |
 | Accepted misses | `tokens/exceptions.json` (one reason per entry) |
 | Reports | `assets/_checks/tokens.json`, `assets/_checks/contrast.json` |
 | Thresholds | `qa/rules.json` (`cvd`, and the P6 sections) |
 | Motion hand-off | `motion/SPEC.md` from `templates/MOTION-SPEC.md` (only when something moves) |
+| Motion spec as data | `motion/motion.json`: motion on or off, the signature move, the parts, the timeline in tokens, the rules (schema in `scripts/CONTRACT.md`; `check` validates it) |
 | Rules | BRAND-STATE.md Notes as "(rule)" lines, then G4 |
 
 ## Techniques
 
 1. **Two tiers, DTCG 2025.10.** DTCG 2025.10 is a Final Community Group Report: stable, but not a W3C Standard and not
    on the Standards Track, and no project file may say otherwise. *Primitives* hold the palette ladders, type scale, units
-   (hairline, frame, focus ring) and named durations. *Semantic* light and dark files hold the roles (`color.bg`,
+   (hairline, frame, focus ring), named durations and named curves. *Semantic* light and dark files hold the roles (`color.bg`,
    `color.text`, `color.muted`, `color.accent`, `color.mark`, `color.border` ...) as aliases (`"{color.paper}"`). Family
    members swap primitives only; the roles stay. Token names never contain `.`, `{`, `}` or start with `$`. The 2025.10
    resolver module exists, but the pinned Style Dictionary does not read it, so light and dark stay two files.
@@ -82,9 +83,12 @@ one-line "(rule)" items that the owner approves at G4.
    - A stated script budget for interactive pieces, in kB gzipped (proposal: 6 kB).
    - Delight (interaction, sound, a seamless loop that ends) is welcome only when it says something about the brand and
      obeys every rule above.
-   Durations are named tokens (`motion.quick`, `base`, `slow`, `stagger`). Name the curves in the book until the
-   emitter supports `cubicBezier`. Write the hand-off from `templates/MOTION-SPEC.md`: selectors, units, timeline, the
-   rest frame and the reduced behaviour.
+   Durations and curves are named tokens. Durations: `motion.quick`, `base`, `slow`, `stagger`. Curves: `easing.standard`,
+   `easing.enter`, `easing.exit`, each `$type` `cubicBezier` with `[x1, y1, x2, y2]` (x between 0 and 1, y free); the
+   starter's three are proposals until G4. The build writes them to CSS, Swift and Android. Write the hand-off from
+   `templates/MOTION-SPEC.md`: selectors, units, timeline, the rest frame and the reduced behaviour. Write the same
+   facts as data in `motion/motion.json` (the signature move, the parts, the timeline as references to these tokens, the
+   rules; or `"motion": "off"` with the owner's reason), which the adapters read.
 7. **Type and units.** A type scale in px or rem as DTCG dimensions (`{value, unit}`). A minimum label size the book
    will hold itself to. Hairline and frame units for strokes and padding. A focus ring that passes the UI gate on both
    grounds.
@@ -103,12 +107,12 @@ Offer the motion and script-budget rules only when something in the brand moves 
 - (rule) colours that touch in the mark at least 3:1, except the pairs listed in tokens/exceptions.json with a reason
 - (rule) colour-vision distance ΔE2000 at least 10 between role pairs, for protan, deutan and tritan (proposal)
 - (rule) theme follows the system; `data-theme` pins light or dark (when the brand has a site or an app)
-- (rule) reduced motion: nothing moves; durations 160 / 320 / 640 ms, stagger 120 ms (only when something moves)
+- (rule) reduced motion: nothing moves; durations `motion.quick` 160 / `base` 320 / `slow` 640 ms, `stagger` 120 ms; curves `easing.standard`, `enter` and `exit` (only when something moves)
 - (rule) interactive brand pieces stay within 6 kB of script, gzipped (proposal; only when the brand ships code)
 - (rule) accent and danger stay distinct (a `distinct` pair)
 
-Record it with `... state --project <dir> --record G4 "<plan> GO"`. Any later change to a rule or token follows the
-cascade (`check --cascade "<old value>"`).
+Record the motion answer, on or off, in `motion/motion.json` (off needs the owner's reason, in the owner's words). Then record the G4 plan with
+`... state --project <dir> --record G4 "<plan> GO"`. Any later change to a rule or token follows the cascade (`check --cascade "<old value>"`).
 
 ## Pitfalls
 
@@ -125,7 +129,11 @@ cascade (`check --cascade "<old value>"`).
 
 - `tokens` (script): Style Dictionary 5.7.0 is the only producer of colour values for code. Every emitted artefact is
   parsed back and compared with the source hex (a round trip per transform). A stored hex that is not the gamut-mapped
-  oklch fails, and `--check` fails when the outputs are stale.
+  oklch fails, and `--check` fails when the outputs are stale. A curve that is not four finite numbers with x1 and x2
+  between 0 and 1, and a duration that is not whole milliseconds, fail it too, named by token path; the Swift and Android
+  motion files are parsed back like the rest.
+- `check` (script): `motion/motion.json` is validated when it exists: its schema, and every duration and curve it names
+  must be a built token of that kind.
 - `contrast` (script): the UI pairs gate on WCAG 2.2 AA; the brand-rule pairs and the touching pairs from the raster gate
   on the owner's targets; an exception needs a reason and is reported when it matches nothing. Artwork with gradients is
   "not verified", never a pass.

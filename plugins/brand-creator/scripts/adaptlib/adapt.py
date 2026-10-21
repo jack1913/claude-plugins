@@ -1,5 +1,5 @@
 """Builders for the adapters (BRAND.md, DESIGN.md) and the per-brand applied skill: text generated from the built DTCG tokens
-(assets/tokens/tokens.json), BRAND-STATE.md and FACTS.md. Nothing is invented: a section with no source says so.
+(assets/tokens/tokens.json), BRAND-STATE.md, FACTS.md and motion/motion.json (when it exists). Nothing is invented: a section with no source says so.
 
 Shared by `brand-creator adapters`, `brand-creator applied-skill` and `brand-creator check` (which compares the state hash). Standard
 library only. No clock and no random numbers: the same inputs give the same bytes.
@@ -10,12 +10,14 @@ import hashlib
 import json
 import math
 import re
+from decimal import Decimal
 from pathlib import Path
 
 import bookdata
+import motionspec
 import qa_rules
 from _color import wcag_ratio
-from _common import EXIT_USAGE, fail, forbidden_terms, read_state
+from _common import EXIT_USAGE, fail, forbidden_terms, read_state, sha256_file
 
 BRAND_FILE = "BRAND.md"
 DESIGN_FILE = "DESIGN.md"
@@ -54,7 +56,9 @@ def view(project: Path) -> dict:
 
 def state_sha(project: Path) -> str:
     v = view(project)
-    return hashlib.sha256(json.dumps({"view": v, "facts": bookdata.facts(project)}, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    spec = project / motionspec.FILE
+    extra = {"motion": sha256_file(spec)} if spec.is_file() else {}   # the motion spec is a source of the adapters; a project without one hashes as it always did
+    return hashlib.sha256(json.dumps({"view": v, "facts": bookdata.facts(project), **extra}, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 
 def approval(v: dict) -> tuple[str, str]:
@@ -99,6 +103,40 @@ def pairs(doc: dict) -> list[dict]:
 
 def fonts(doc: dict) -> list[tuple[str, str]]:
     return [(k[5:], str(v)) for k, v in doc.get("other", {}).items() if k.startswith("font.")]
+
+
+def bezier(c: list) -> str:
+    """A curve as tokens.css writes it: cubic-bezier(0.2, 0, 0, 1), the numbers as plain decimals (1 and not 1.0, 0.0000001 and not 1e-07)."""
+    def num(n) -> str:
+        s = str(n) if isinstance(n, int) else format(Decimal(repr(float(n))), "f")
+        return s.rstrip("0").rstrip(".") if "." in s else s
+    return "cubic-bezier(" + ", ".join(num(n) for n in c) + ")"
+
+
+def motion_lines(project: Path, doc: dict) -> list[str]:
+    """What BRAND.md, DESIGN.md and the applied skill say about motion, as markdown lines without a heading: every duration token (by its type, tokens.json
+    `motion.durations_ms`) and any other token of the `duration` and `motion` groups (motion.distance), as tokens.css writes them; the curve tokens; then
+    motion/motion.json: the signature move and the rules, or why nothing moves. [] when there is nothing to say, so a project without motion keeps its files
+    as they were. A motion.json that is not valid stops the run (exit 2): nothing is written from half of it."""
+    mo = doc.get("motion") or {}
+    curves, durs = mo.get("curves", {}), mo.get("durations_ms", {})
+    # tokens.json `other` is in name order; a duration outside the two groups (timing.slow) is found by its type, and a tokens.json built before the
+    # motion entry existed still lists its durations by group
+    L = [f"- {k}: {val}" for k, val in doc.get("other", {}).items() if (k in durs or k.startswith(("duration.", "motion."))) and k not in curves]
+    L += [f"- {k}: {bezier(c)}" for k, c in curves.items()]   # tokens.json holds them in name order
+    spec = motionspec.load(project)
+    if spec:
+        paras = []
+        if spec["motion"] == "off":
+            paras.append(f"Nothing moves: {motionspec.one_line(spec['reason'])}")
+        else:
+            sig = spec["signature"]
+            paras += [f"Signature move: {motionspec.one_line(sig['name'])}. {motionspec.one_line(sig['description'])}",
+                      "Shown in: " + ", ".join(motionspec.one_line(w) for w in sig["where"])]
+        if spec.get("rules"):
+            paras.append("Motion rules:\n\n" + "\n".join(f"- {motionspec.one_line(r)}" for r in spec["rules"]))
+        L += ([""] if L else []) + "\n\n".join(paras).split("\n")
+    return L
 
 
 def logo_paths(project: Path) -> list[str]:
@@ -181,9 +219,9 @@ def brand_md(project: Path, *, bm_type: str | None = None, bm_arch: str | None =
     L += [""]
     if v["rules"]:
         L += ["### Rules", ""] + [f"- {r}" for r in v["rules"]] + [""]
-    durs = [(k, val) for k, val in doc.get("other", {}).items() if k.startswith(("duration.", "motion."))]   # motion.* in the starter tokens
-    if durs:
-        L += ["### Motion", ""] + [f"- {k}: {val}" for k, val in durs] + [""]
+    motion = motion_lines(project, doc)
+    if motion:
+        L += ["### Motion", ""] + motion + [""]
     L += ["## Governance", "", "### Naming", "", f"Name: {v['name']} (working slug `{v['slug']}`).", ""]
     ren = [ln for ln in v["renames"] if not re.fullmatch(r"\|[\s|:-]*\|?", ln.strip()) and not re.match(r"^\|\s*date\s*\|", ln.strip(), re.I)]
     if ren:
@@ -257,6 +295,9 @@ def design_md(project: Path, *, primary: str | None = None) -> str:
         L += ["## Layout", "", "Spacing steps come from the `dimension.space-*` tokens.", ""]
     if comps:
         L += ["## Components", "", "One entry per text pair that must meet WCAG AA 4.5:1, in light and dark.", ""]
+    motion = motion_lines(project, doc)
+    if motion:   # prose only: the pinned format keeps a section it does not know (it has no motion tokens), so no frontmatter key is invented for it
+        L += ["## Motion", ""] + motion + [""]
     if v["rules"]:
         L += ["## Do's and Don'ts", ""] + [f"- {r}" for r in v["rules"]] + [""]
     return "\n".join(L).rstrip("\n") + "\n"
@@ -288,6 +329,8 @@ def applied_skill_md(project: Path, template: str) -> str:
 
     sizes = ([band_line(b, f"{m['name']}, ") for m in rules["marks"].values() for b in m["bands"]] if rules["marks"]
              else [band_line(b) for b in rules.get("bands", [])])
+    lines = motion_lines(project, doc)
+    motion = "\n".join(["## Motion", "", *lines]) if lines else ""
     never = ["Do not stretch, squash or rotate the mark.", "Do not recolour the mark outside the palette's roles, or put it on its own colour.",
              "Do not crowd the mark: keep its clear space free."] + [f"Never write: {t}." for t in v["forbidden"]]
     fill = {
@@ -302,15 +345,16 @@ def applied_skill_md(project: Path, template: str) -> str:
         "mark": "\n".join([f"- `../../../{p}`" for p in logos] if logos else ["No mark file exists yet under `assets/logo/`."]),
         "small": f"At {ds['accent_rule_max_size']} px and below the accent must hold a solid {ds['accent_min_px']} x {ds['accent_min_px']} px square "
                  f"({'qa/rules.json' if 'downscale.accent_min_px' in rules['_from_file'] else 'the plugin proposal until qa/rules.json sets it'}).\n\n" + ("\n".join(sizes) if sizes else ""),
+        "motion": motion,
         "never": "\n".join(f"- {t}" for t in never),
         "rules": "\n".join([f"- {r}" for r in v["rules"]] if v["rules"] else ["No G4 rules are recorded yet."]),
         "facts": "\n".join(facts_table(public_facts(project))),
         "generated": GENERATED,
     }
-    out = template
-    for k, val in fill.items():
-        out = out.replace("{{" + k + "}}", val)
-    left = re.findall(r"\{\{[a-z-]+\}\}", out)
+    if not motion:   # a whole section or nothing: with no motion its line goes, and the blank line after it
+        template = template.replace("{{motion}}\n\n", "")
+    left = sorted({m for m in re.findall(r"\{\{([a-z-]+)\}\}", template) if m not in fill})
     if left:
-        fail(EXIT_USAGE, f"the applied-skill template has placeholders this version does not know: {', '.join(sorted(set(left)))}")
-    return out
+        fail(EXIT_USAGE, f"the applied-skill template has placeholders this version does not know: {', '.join('{{' + m + '}}' for m in left)}")
+    # one pass over the template's own placeholders: text filled in (a rule, a fact, the motion spec) is never read for placeholders again
+    return re.sub(r"\{\{([a-z-]+)\}\}", lambda m: fill[m.group(1)], template)

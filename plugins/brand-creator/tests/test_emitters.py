@@ -260,7 +260,7 @@ def test_social_images_have_the_spec_sizes_and_the_og_url_follows_the_bytes(acme
     assert r.returncode == 0
     names = sorted(p.name for p in out.glob("og-*.png"))
     assert len(names) == 2 and first in names
-    assert "superseded" in r.stdout and "removed-<date>" in r.stdout
+    assert "superseded" in r.stdout and "removed-<date>" in r.stdout and "run emit social again" in r.stdout
 
     def og_rows():
         return {a["path"].rsplit("/", 1)[1]: a for a in manifest(acme)["artefacts"] if a["path"].startswith("assets/social/og-")}
@@ -270,6 +270,15 @@ def test_social_images_have_the_spec_sizes_and_the_og_url_follows_the_bytes(acme
     assert [n for n, a in og_rows().items() if a.get("superseded")] == [first]
     assert social(acme).returncode == 0                                          # the first card again: it is current, the other one is kept
     assert [n for n, a in og_rows().items() if a.get("superseded")] == [n for n in names if n != first] and "superseded" not in og_rows()[first]
+    # the owner moves the old card away as the warning says and runs emit social again: its row goes too, so the manifest names no missing file
+    old = next(n for n in names if n != first)
+    (acme / "removed-2026-01-01/assets/social").mkdir(parents=True)
+    (out / old).rename(acme / "removed-2026-01-01/assets/social" / old)
+    r = social(acme)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert set(og_rows()) == {first} and "superseded" not in og_rows()[first]
+    assert "its file was already gone" in r.stdout and "superseded Open Graph files" not in r.stdout
+    assert sorted(p.name for p in out.glob("og-*.png")) == [first] and (acme / "removed-2026-01-01/assets/social" / old).is_file()
 
 
 def test_social_second_run_is_idempotent(acme):
