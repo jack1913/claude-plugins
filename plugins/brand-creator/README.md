@@ -1,3 +1,6 @@
+<!-- markdownlint-disable MD041 -->
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme-header-dark.png"><img src="assets/readme-header-light.png" alt="brand-creator: the brand-creator mark and name"></picture>
+
 # brand-creator
 
 Make a logo, colours and every brand file your product needs, step by step, with you deciding at each step.

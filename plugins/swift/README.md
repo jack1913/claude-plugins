@@ -1,3 +1,6 @@
+<!-- markdownlint-disable MD041 -->
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme-header-dark.png"><img src="assets/readme-header-light.png" alt="swift: the swift mark and name"></picture>
+
 # swift
 
 Have Claude write current SwiftUI, Swift 6 concurrency and Swift Testing, and review screens against Apple's guidelines.

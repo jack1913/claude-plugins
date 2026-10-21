@@ -1,3 +1,6 @@
+<!-- markdownlint-disable MD041 -->
+<picture><source media="(prefers-color-scheme: dark)" srcset="../assets/brand/wordmark-dark.svg"><img src="../assets/brand/wordmark.svg" alt="jack1913" width="176" height="28"></picture>
+
 # jack1913 plugins manual
 
 Plugins for Claude Code: make a brand, write better Swift, and think a plan through before you build it.

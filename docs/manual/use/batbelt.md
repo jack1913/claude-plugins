@@ -1,4 +1,4 @@
-# batbelt
+# <picture><source media="(prefers-color-scheme: dark)" srcset="../../assets/brand/batbelt-dark.svg"><img src="../../assets/brand/batbelt.svg" alt="batbelt mark" width="32" height="32"></picture> batbelt
 
 Grill a plan, prove a claim against real sources, and set up a repository for Claude.
 

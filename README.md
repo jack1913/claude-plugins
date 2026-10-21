@@ -1,6 +1,8 @@
 <!-- markdownlint-disable MD041 -->
 <div align="center">
 
+<picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/readme-header-dark.png"><img src="docs/assets/brand/readme-header-light.png" alt="jack1913: the batbelt, brand-creator and swift marks"></picture>
+
 # jack1913 plugins
 
 **Claude Code plugins that build brand identities, write current Swift, and pressure-test your plans.**
@@ -25,9 +27,9 @@ Three plugins, one marketplace. Install only the ones you need.
 
 | | Plugin | Use it to | Docs |
 | --- | --- | --- | --- |
-| 🎨 | **brand-creator** | Make a logo, colours and every brand file your product needs, step by step, with you deciding at each step | [card](docs/manual/use/brand-creator.md) · [README](plugins/brand-creator/README.md) |
-| 🐦 | **swift** | Have Claude write current SwiftUI, Swift 6 concurrency and Swift Testing, and review screens against Apple's guidelines | [card](docs/manual/use/swift.md) · [README](plugins/swift/README.md) |
-| 🦇 | **batbelt** | Grill a plan before you build it, check a claim against real sources, or set up a repository for Claude | [card](docs/manual/use/batbelt.md) · [README](plugins/batbelt/README.md) |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/brand-creator-dark.svg"><img src="docs/assets/brand/brand-creator.svg" alt="brand-creator mark" width="32" height="32"></picture> | **brand-creator** | Make a logo, colours and every brand file your product needs, step by step, with you deciding at each step | [card](docs/manual/use/brand-creator.md) · [README](plugins/brand-creator/README.md) |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/swift-dark.svg"><img src="docs/assets/brand/swift.svg" alt="swift mark" width="32" height="32"></picture> | **swift** | Have Claude write current SwiftUI, Swift 6 concurrency and Swift Testing, and review screens against Apple's guidelines | [card](docs/manual/use/swift.md) · [README](plugins/swift/README.md) |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/batbelt-dark.svg"><img src="docs/assets/brand/batbelt.svg" alt="batbelt mark" width="32" height="32"></picture> | **batbelt** | Grill a plan before you build it, check a claim against real sources, or set up a repository for Claude | [card](docs/manual/use/batbelt.md) · [README](plugins/batbelt/README.md) |
 
 Not sure which one? [Choose a plugin](docs/manual/getting-started/choose-a-plugin.md).
 

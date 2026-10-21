@@ -1,3 +1,6 @@
+<!-- markdownlint-disable MD041 -->
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme-header-dark.png"><img src="assets/readme-header-light.png" alt="batbelt: the batbelt mark and name"></picture>
+
 # batbelt
 
 Grill a plan, prove a claim against real sources, and set up a repository for Claude.

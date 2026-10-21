@@ -1,4 +1,4 @@
-# brand-creator
+# <picture><source media="(prefers-color-scheme: dark)" srcset="../../assets/brand/brand-creator-dark.svg"><img src="../../assets/brand/brand-creator.svg" alt="brand-creator mark" width="32" height="32"></picture> brand-creator
 
 Make a logo, colours and every brand file your product needs, step by step, with you deciding at each step.
 
