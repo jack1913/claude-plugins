@@ -25,7 +25,13 @@ Why: [ADR-0002](../adr/ADR-0002-per-plugin-versions-and-tags.md).
 
    It prints the plugin, the version it read from `plugin.json`, the tag name and the `git` commands it would run.
    Check that the version and the tag name are the ones you meant.
-5. Run it again without `--dry-run`. The tag lands on `HEAD`.
+5. Run it again without `--dry-run`. The tag lands on `HEAD`. It is created only in your clone: the command prints
+   the push line instead of running it.
+6. Push the tag:
+
+   ```bash
+   git push origin refs/tags/<name>--vX.Y.Z
+   ```
 
 Use `claude plugin tag`, never `git tag`. It reads the version from `plugin.json`, checks it against the marketplace
 entry, and names the tag `<name>--vX.Y.Z` for you.
