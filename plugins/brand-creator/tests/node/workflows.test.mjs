@@ -200,6 +200,16 @@ test("the session model is a ceiling: with a sonnet session no agent runs on opu
   assert.ok(forced.every((x) => x.runs === "claude-sonnet-5" && /FORCE/.test(x.why)));
 });
 
+test("a designer that returns nothing (cut off at its turn limit) is named as such, with where its files are", async () => {
+  const designer = (c) => c.agentType === "brand-creator:brand-designer";
+  const all = await run("directions", fixture("directions"), { respond: (c) => (designer(c) ? null : undefined) });
+  assert.match(all.error, /^directions: no designer built a board: .*cut off at its turn limit \(maxTurns in agents\/brand-designer\.md\).*rounds\/r1\/<key>\//);
+  const some = await run("directions", fixture("directions"), { respond: (c) => (c.label === "Lantern" ? null : undefined) });
+  assert.equal(some.error, null);
+  assert.ok(some.logs.some((m) => /^no board from: Lantern .*cut off at its turn limit/.test(m)), some.logs.join("|"));
+  for (const c of some.calls.filter(designer)) assert.match(c.prompt, /Return the schema before your turn limit/);
+});
+
 test("null guards: every agent returning null never crashes a workflow with a TypeError", async () => {
   for (const n of NAMES) {
     const r = await run(n, fixture(n), { respond: () => null });

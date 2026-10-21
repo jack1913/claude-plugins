@@ -5,8 +5,11 @@
 # ///
 """brand-creator emit social: Open Graph card, GitHub social preview, README header (light and dark).
 
-Every image is a designed card: an HTML page (templates/card.html, or --template) filled from the built tokens and the
-mark, rendered to PNG by the single Chromium driver (render.mjs card). Sizes come from platform-specs.json only.
+Every image is a designed card: an HTML page (templates/card.html, or --template) filled from the built tokens, the
+mark and the brand's drawn lettering (the lockup alone, or the wordmark next to the mark: --logo-svg, else assets/logo/lockup.svg,
+else wordmark.svg; the dark README header takes <name>-dark.svg next to it), rendered to PNG by the single Chromium driver (render.mjs
+card). With no lockup or wordmark, or with --name, the name is live text in the system font, and the report says so. Sizes come from
+platform-specs.json only.
   assets/social/og-<w>x<h>-<hash>.png   a new URL whenever the bytes change (platforms cache by URL)
   assets/social/github-social-<w>x<h>.png                only when INVENTORY.md or brief/BRIEF.md lists a code repository (or --repo-images yes)
   assets/social/readme-header-light.png, readme-header-dark.png   the same condition; otherwise an info row says why they were skipped
@@ -29,8 +32,9 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "lib"))
 import specs  # noqa: E402
 from _common import EXIT_FAIL, EXIT_USAGE, Parser, Report, confine, fail, find_project, main_guard, plugin_root, read_state, today  # noqa: E402
-from _emit import (add_common_args, facts as facts_of, fill_template, load_mark, load_tokens, need_colors, regulated_profession, render_card,  # noqa: E402
-                   lists_repository, require_gate, require_tier)
+from _emit import (add_common_args, add_logo_arg, card_lettering, card_lettering_setup, dark_sibling, facts as facts_of, fill_template,  # noqa: E402
+                   load_mark, load_tokens, need_colors, regulated_profession, render_card, lists_repository, require_gate,
+                   require_tier)
 from manifest import Manifest  # noqa: E402
 from pxio import png_size  # noqa: E402
 
@@ -45,7 +49,8 @@ def main() -> int:
     ap = Parser(prog="brand-creator emit social", description=__doc__, formatter_class=__import__("argparse").RawDescriptionHelpFormatter)
     add_common_args(ap)
     ap.add_argument("--template", help="card template (default: templates/card.html in the plugin)")
-    ap.add_argument("--name", help="name on the card (default: name in BRAND-STATE.md)")
+    add_logo_arg(ap, cards=True)
+    ap.add_argument("--name", help="name on the card, set as text (default: the drawn lockup or wordmark, else the name in BRAND-STATE.md as text)")
     ap.add_argument("--tagline", default="", help="one line under the name (must be a fact from FACTS.md)")
     ap.add_argument("--site-url", help="absolute site URL; writes og-meta.html with absolute og:image")
     ap.add_argument("--out-dir", default="assets/social", help="folder inside the project (default assets/social)")
@@ -79,18 +84,20 @@ def main() -> int:
 
     rep = Report("emit-social", project, paths + [tokens_path], renderer=a.renderer)
     mf = Manifest(project)
+    found, layout = card_lettering_setup(rep, project, a, template, tpl_path.name)
 
-    def card(variant: str, mode: str, w: int, h: int, mark_svg: str) -> bytes:
+    def card(variant: str, mode: str, w: int, h: int, mark_svg: str, art: str | None) -> bytes:
         bg, fg = need_colors(modes, mode, "color.bg", "color.text")
         muted = modes[mode].get("color.muted", fg)
         accent = modes[mode].get("color.accent", fg)
-        values = {"width": w, "height": h, "bg": bg, "fg": fg, "muted": muted, "accent": accent, "name": name,
-                  "tagline": a.tagline, "mark": re.sub(r"^\s*<\?xml[^>]*>\s*", "", mark_svg)}
+        lettering = card_lettering(layout, art, name, w, h)
+        values = {"width": w, "height": h, "bg": bg, "fg": fg, "muted": muted, "accent": accent, "name": name, "tagline": a.tagline,
+                  "layout": layout, "lettering": lettering, "mark": "" if layout == "lockup" else re.sub(r"^\s*<\?xml[^>]*>\s*", "", mark_svg)}
         src_rel = f"{out}/_build/{variant}.html"
         png_rel = f"{out}/_build/{variant}.png"
         src = confine(project, src_rel, what="card source")
         src.parent.mkdir(parents=True, exist_ok=True)
-        src.write_text(fill(template, {k: str(v) if k != "mark" else v for k, v in values.items()}), encoding="utf-8")
+        src.write_text(fill(template, {k: str(v) for k, v in values.items()}, raw=("mark", "lettering")), encoding="utf-8")
         info = render_card(project, src_rel, w, h, png_rel, mode)
         data = confine(project, png_rel, what="card").read_bytes()
         got = png_size(data)
@@ -98,7 +105,8 @@ def main() -> int:
         return data
 
     # Open Graph: new URL per change
-    d = card("og", "light", og["width"], og["height"], light)
+    art = found[0] if found else None
+    d = card("og", "light", og["width"], og["height"], light, art)
     h8 = hashlib.sha256(d).hexdigest()[:8]
     og_rel = f"og-{og['width']}x{og['height']}-{h8}.png"
     changed = mf.put(f"{out}/{og_rel}", d, emitter="social", specs=["open-graph"], width=og["width"], height=og["height"])
@@ -116,19 +124,23 @@ def main() -> int:
                        "add the repository to the brief, or pass --repo-images yes")
     else:
         # GitHub social preview
-        d = card("github-social", "light", gh["width"], gh["height"], light)
+        d = card("github-social", "light", gh["width"], gh["height"], light, art)
         gh_rel = f"github-social-{gh['width']}x{gh['height']}.png"
         changed = mf.put(f"{out}/{gh_rel}", d, emitter="social", specs=["github-social"], width=gh["width"], height=gh["height"])
         rep.add(f"file:{gh_rel}", "pass", "written" if changed else "unchanged", bytes=len(d))
 
         # README header, light and dark
-        for mode, art in (("light", light), ("dark", dark or light)):
-            d = card(f"readme-header-{mode}", mode, rh["width"], rh["height"], art)
+        art_dark = dark_sibling(project, found[1], rep.inputs) if layout != "type" else None
+        for mode, mark_art, lettering_svg in (("light", light, art), ("dark", dark or light, art_dark or art)):
+            d = card(f"readme-header-{mode}", mode, rh["width"], rh["height"], mark_art, lettering_svg)
             rel_name = f"readme-header-{mode}.png"
             changed = mf.put(f"{out}/{rel_name}", d, emitter="social", specs=["readme-header"], width=rh["width"], height=rh["height"])
             rep.add(f"file:{rel_name}", "pass", "written" if changed else "unchanged", bytes=len(d))
-        if dark is None:
+        if dark is None and layout != "lockup":   # a lockup card draws no separate mark
             rep.add("note:readme-header-dark", "warn", "no dark artwork", detail="the dark README header reuses the light mark artwork")
+        if layout != "type" and art_dark is None:
+            dark_name = str(Path(found[1]).with_name(Path(found[1]).stem + "-dark.svg"))
+            rep.add("note:readme-header-dark lettering", "warn", "no dark lettering", detail=f"no {dark_name}: the dark README header reuses the light {layout}")
 
     used_rows = ["open-graph"] + (["github-social", "readme-header"] if repo_images else [])
     if a.posts:

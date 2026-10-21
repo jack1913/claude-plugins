@@ -1,7 +1,7 @@
 # Print, press kit and social posts
 
 How to produce stationery, a press kit and social posts honestly. The rules and the checks are in `scripts/CONTRACT.md` ("Print, press kit and social
-posts"); this file is the method and the owner's hand-off. Standard and Full tier; print is opt-in with the owner (intake question 7).
+posts"); this file is the method and the owner's hand-off. Standard and Full tier; print is opt-in with the owner: ask before the packs, and their yes is `PRINT_REGION` in `finish.sh`.
 
 ## Contents
 

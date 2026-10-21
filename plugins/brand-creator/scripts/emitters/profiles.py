@@ -10,8 +10,10 @@ Writes under assets/profiles/ (override with --out-dir) and records every file i
                                    Most networks show it in a circle, so the gate is the circle: the mark's ink must stay inside the row's safe circle
                                    (a share of the radius). By default the mark is as large as fits (up to --content-fraction); a value you set is held to the same gate
   linkedin-banner-<w>x<h>.png, x-header-..., youtube-banner-..., facebook-cover-..., instagram-feed-..., instagram-story-...
-                                   one image per platform at its row's size, from templates/profile/banner.html (or --template): the mark and the name (and one line
-                                   of real copy with --tagline) laid out inside the row's safe rectangle, on the light ground, 24-bit PNG
+                                   one image per platform at its row's size, from templates/profile/banner.html (or --template): the brand's drawn lettering (the
+                                   lockup alone, or the wordmark next to the mark: --logo-svg, else assets/logo/lockup.svg, else wordmark.svg) and one line of real
+                                   copy with --tagline, laid out inside the row's safe rectangle, on the light ground, 24-bit PNG. With no lockup or wordmark, or
+                                   with --name, the name is live text in the system font, and the report says so
   _proof/<name>.png                the same image with the safe areas drawn on it (the platform's circle crop, the safe circle or rectangle, the areas outside in red).
                                    A proof for you to look at: never shipped, not in the manifest, and written even when a gate fails so you can see why
 Gate: before anything is shipped, the ink of every image must lie inside its safe area (the circle for the avatar, the rectangle for a banner). A mark or a name
@@ -20,6 +22,7 @@ that does not fit exits 1 and writes no image. Every size and safe area comes fr
 writes the circle-safe avatars only (400 and 800), because every business that is on a network needs that one picture, and skips the banners (an info row says so). Needs gate G3 and `brand-creator setup` (Chromium
 renders the banners). Idempotent: a second run writes nothing.
 """
+import html
 import sys
 from pathlib import Path
 
@@ -29,7 +32,7 @@ sys.path.insert(0, str(HERE.parent / "lib"))
 import svgtools  # noqa: E402
 from _color import parse_hex  # noqa: E402
 from _common import EXIT_FAIL, EXIT_USAGE, confine, fail, main_guard, plugin_root, read_state, write_bytes_if_changed  # noqa: E402
-from _emit import fill_template, render_card  # noqa: E402
+from _emit import add_logo_arg, art_img, card_lettering_setup, fill_template, fit_art, render_card  # noqa: E402
 from px_lib import from_png  # noqa: E402
 from pxio import png_color_type, png_size  # noqa: E402
 from tierb import INK_TOLERANCE_PX, PROFILE_BANNERS, TierBEmit, fit_share, ink_bbox_on, ink_far  # noqa: E402
@@ -38,6 +41,9 @@ AVATAR_MAX_CONTENT = 0.7     # the largest share of the avatar the mark's box fi
 ROW_MARK_SHARE = 0.7         # a wide safe rectangle: the mark's side as a share of its height
 COLUMN_MARK_SHARE = 0.5      # a tall one: the mark's side as a share of its width ...
 COLUMN_MARK_HEIGHT = 0.35    # ... and at most this share of its height
+LOCKUP_ROW = 0.92, 0.36      # a drawn lockup in a wide safe rectangle: at most this share of its width and of its height
+LOCKUP_COLUMN = 0.8          # ... in a tall one: at most this share of its width (and COLUMN_MARK_HEIGHT of its height)
+WORDMARK_SHARE = 0.75        # a drawn wordmark's height as a share of the name's type size (the caps of live text are about that tall)
 GAP_SHARE = 0.06             # the gap between the mark and the name, as a share of the safe rectangle's shorter side
 TITLE_ROW, TITLE_COLUMN = 0.2, 0.1   # the name's size as a share of the safe rectangle's height (wide) or width (tall)
 SUB_SHARE = 0.45             # the tagline's size as a share of the name's
@@ -67,6 +73,7 @@ def main() -> int:
         ap.add_argument("--content-fraction", type=float, help="share of the avatar the mark's box fills (default: the largest that fits the safe circle, "
                                                                f"up to {AVATAR_MAX_CONTENT:g}; a value you set is held to the same gate)")
         ap.add_argument("--template", help="banner template (default: templates/profile/banner.html in the plugin)")
+        add_logo_arg(ap, cards=True)
         ap.add_argument("--tagline", default="", help="one line on the banners (must be a value in FACTS.md)")
 
     e = TierBEmit.begin("profiles", __doc__, add_args=args)
@@ -119,18 +126,20 @@ def main() -> int:
                         f"profile photo, {n} px square, opaque; shown in a circle: the mark is {content:g} of the canvas and inside {av['safe_circle']:g} of the circle's radius",
                         {"safe_radius_px": round(radius, 2)}))
 
-    # ---- banners: the mark and the name inside each platform's safe rectangle
-    tpl_path = Path(a.template).expanduser().resolve() if a.template else plugin_root() / "templates" / "profile" / "banner.html"
-    if not tpl_path.is_file():
-        fail(EXIT_USAGE, f"banner template not found: {tpl_path}")
-    template = tpl_path.read_text(encoding="utf-8")
-    e.add_input(tpl_path)
+    # ---- banners: the mark and the name inside each platform's safe rectangle (none in the Quick tier, so nothing of theirs is read there)
     fg = e.colour("light", "color.text")
     muted, accent = e.modes["light"].get("color.muted", fg), e.modes["light"].get("color.accent", fg)
     quick = str(read_state(e.project).get("tier") or "") == "quick"
     if quick:
         rep.add("note:banners", "info", "no banners in the Quick tier", detail="the Quick tier writes the circle-safe avatar only; raise the tier with the owner's agreement "
                                                                            "(brand-creator state --set tier=standard) for the LinkedIn, X, YouTube, Facebook and Instagram images")
+    else:
+        tpl_path = Path(a.template).expanduser().resolve() if a.template else plugin_root() / "templates" / "profile" / "banner.html"
+        if not tpl_path.is_file():
+            fail(EXIT_USAGE, f"banner template not found: {tpl_path}")
+        template = tpl_path.read_text(encoding="utf-8")
+        e.add_input(tpl_path)
+        found, layout = card_lettering_setup(rep, e.project, a, template, tpl_path.name)
     for fname, row_id in ({} if quick else PROFILE_BANNERS).items():
         sz = e.sizes(row_id)
         w, h, s = sz["width"], sz["height"], sz["safe"]
@@ -140,8 +149,14 @@ def main() -> int:
         mark_px = round(sh * ROW_MARK_SHARE) if wide else round(min(sw * COLUMN_MARK_SHARE, sh * COLUMN_MARK_HEIGHT))
         title_px = round(sh * TITLE_ROW) if wide else round(sw * TITLE_COLUMN)
         d = e.drawing(mark_px)
+        if layout == "lockup":
+            art_w, art_h = fit_art(found[0], sw * LOCKUP_ROW[0], sh * LOCKUP_ROW[1]) if wide else fit_art(found[0], sw * LOCKUP_COLUMN, sh * COLUMN_MARK_HEIGHT)
+        elif layout == "wordmark":
+            art_w, art_h = fit_art(found[0], (sw - mark_px - round(short * GAP_SHARE)) if wide else sw, title_px * WORDMARK_SHARE)
+        lettering = art_img(found[0], art_w, art_h, e.brand) if layout != "type" else f"<h1>{html.escape(e.brand)}</h1>"
+        mark_html = d.svg.split("?>", 1)[-1].strip() if d.svg.lstrip().startswith("<?xml") else d.svg
         values = {"width": w, "height": h, "bg": ground, "fg": fg, "muted": muted, "accent": accent, "name": e.brand, "tagline": a.tagline,
-                  "mark": d.svg.split("?>", 1)[-1].strip() if d.svg.lstrip().startswith("<?xml") else d.svg,
+                  "layout": layout, "lettering": lettering, "mark": "" if layout == "lockup" else mark_html,
                   "safe_x": f"{s['x']:g}", "safe_y": f"{s['y']:g}", "safe_w": sw, "safe_h": sh,
                   "direction": "row" if wide else "column", "align": "left" if wide else "center", "items": "flex-start" if wide else "center",
                   "gap": round(short * GAP_SHARE), "mark_px": mark_px, "title_px": title_px, "sub_px": round(title_px * SUB_SHARE),
@@ -151,7 +166,7 @@ def main() -> int:
             src_rel = f"{out}/_build/{fname}{variant}.html"
             src = confine(e.project, src_rel, what="card source")
             src.parent.mkdir(parents=True, exist_ok=True)
-            src.write_text(fill_template(template, {**{k: str(v) for k, v in values.items() if k != "mark"}, "mark": values["mark"], "proof": proof}, raw=("mark", "proof")),
+            src.write_text(fill_template(template, {**{k: str(v) for k, v in values.items()}, "proof": proof}, raw=("mark", "lettering", "proof")),
                            encoding="utf-8")
             render_card(e.project, src_rel, w, h, f"{out}/_build/{fname}{variant}.png", "light")
             pngs[variant] = confine(e.project, f"{out}/_build/{fname}{variant}.png", what="card").read_bytes()
@@ -171,8 +186,9 @@ def main() -> int:
                 detail=f"ink box {bb}, safe rectangle x {s['x']:g} to {s['x'] + sw:g}, y {s['y']:g} to {s['y'] + sh:g}" + ("" if inside else "; see the proof image; a shorter name or a smaller template fixes it"))
         if not inside:
             failures.append(f"{fname}: ink box {bb} is not inside the safe rectangle")
+        what = {"lockup": "the drawn lockup", "wordmark": "the mark and the drawn wordmark", "type": "the mark and the name as text"}[layout]
         shipped.append((f"{fname}-{w}x{h}.png", rgb, row_id, f"profile-{fname}", (w, h), d,
-                        "the mark and the name" + (" and one line of real copy" if a.tagline else "") + f" inside the {sw:g} x {sh:g} px safe rectangle, light ground, 24-bit PNG",
+                        what + (" and one line of real copy" if a.tagline else "") + f" inside the {sw:g} x {sh:g} px safe rectangle, light ground, 24-bit PNG",
                         {"safe": {"x": s["x"], "y": s["y"], "width": sw, "height": sh}}))
 
     # ---- proofs first (never shipped), then the gate, then the files

@@ -32,10 +32,13 @@ The thresholds are yours, kept in `qa/rules.json`. The plugin's numbers are prop
 
 ## Web, social and profiles
 
-- `emit web`: favicons drawn per size, PWA icons and a head snippet.
+- `emit web`: favicons drawn per size (the browser tab gets your small drawing), PWA icons and a head snippet.
 - `emit social`: a social card, plus GitHub and README header images when the brief or inventory lists a code repository.
 - `emit profiles`: in every tier, a circle-safe avatar. Standard and Full add banner images for LinkedIn, X, YouTube,
   Facebook and Instagram, each inside the platform's safe area.
+
+Cards and banners show your name as you drew it (your lockup, or your wordmark next to the logo). Without either, the
+name is typed in a plain system font, and the report tells you so.
 
 Sizes the project has not read at the platform's own page are labelled `UNVERIFIED, recheck`, and `check` fails a file
 that lost the label.

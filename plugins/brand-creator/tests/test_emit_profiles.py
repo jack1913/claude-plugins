@@ -4,6 +4,7 @@
 Expected values are worked out by hand from the rows' numbers (400 and 800 px avatars, 1584x396 LinkedIn, 1500x500 X, 2560x1440 YouTube, 820x312
 Facebook, 1080x1350 Instagram feed, 1080x1920 story) or are properties of the output (colour type, where the ink is, what the proof shows that the
 shipped file does not). Safe areas are read from platform-specs.json through `specs`, the one table the emitters read."""
+import base64
 import json
 import re
 import shutil
@@ -174,10 +175,93 @@ def test_each_banner_has_the_spec_size_no_alpha_and_all_its_ink_inside_the_safe_
     assert not any(px[i] > 200 and px[i + 1] < 80 and px[i + 2] < 80 for i in range(0, len(px), 4))
 
 
-def test_the_name_and_the_real_tagline_are_drawn_and_nothing_else(pack):
-    html = (pack / OUT / "_build/linkedin-banner.html").read_text()
-    assert "<h1>Acme</h1>" in html and TAG in html
+def page(p: Path, fname: str) -> str:
+    """A banner's filled HTML without its comments (the template's comment lists the placeholders, and they are filled too)."""
+    return re.sub(r"<!--.*?-->", "", (p / OUT / f"_build/{fname}.html").read_text(), flags=re.S)
+
+
+def lettering_of(html: str) -> str:
+    """The SVG a banner or card shows as its drawn lettering (decoded from the <img> data URI)."""
+    m = re.search(r'<img class="lettering" alt="[^"]*" width="\d+" height="\d+" src="data:image/svg\+xml;base64,([A-Za-z0-9+/=]+)">', html)
+    assert m, "no drawn lettering on the page"
+    return base64.b64decode(m.group(1)).decode("utf-8")
+
+
+def test_the_drawn_wordmark_and_the_real_tagline_are_drawn_and_nothing_else(pack):
+    """Acme has a wordmark and no lockup: the banners set the mark and the drawn wordmark, never the name as live text."""
+    html = page(pack, "linkedin-banner")
+    assert '<body class="wordmark">' in html and TAG in html and "<h1>" not in html
+    assert lettering_of(html) == (pack / "assets/logo/wordmark.svg").read_text()
     assert "{{" not in html and "<script" not in html
+    rows = {x["id"]: x for x in report(pack, "emit-profiles")["results"]}
+    assert rows["note:lettering"]["status"] == "info" and rows["note:lettering"]["detail"] == "assets/logo/wordmark.svg (by its file name)"
+
+
+def test_a_lockup_stands_alone_with_no_second_mark_and_stays_inside_the_safe_rectangle(std):
+    shutil.copy2(std / "assets/logo/wordmark.svg", std / "assets/logo/lockup.svg")    # any pure-vector art named lockup stands alone
+    assert profiles(std).returncode == 0
+    for fname, (w, h) in BANNERS.items():
+        html = page(std, fname)
+        assert '<body class="lockup">' in html and '<div class="mark"></div>' in html and "<h1>" not in html
+        assert lettering_of(html) == (std / "assets/logo/lockup.svg").read_text()
+        s = specs.sizes(ROWS[fname])["safe"]
+        _far, bb = ink(std / OUT / f"{fname}-{w}x{h}.png")
+        assert bb[0] >= s["x"] - 1 and bb[2] <= s["x"] + s["width"] + 1 and (bb[2] - bb[0]) > 0.3 * s["width"], (fname, bb, s)
+
+
+def test_without_a_lockup_or_wordmark_the_name_is_text_and_the_report_warns(std):
+    for f in (std / "assets/logo").glob("wordmark*.svg"):
+        f.rename(std / f.name)
+    assert profiles(std).returncode == 0
+    html = page(std, "linkedin-banner")
+    assert '<body class="type">' in html and "<h1>Acme</h1>" in html and 'class="lettering"' not in html
+    row = next(x for x in report(std, "emit-profiles")["results"] if x["id"] == "note:lettering")
+    assert row["status"] == "warn" and "no assets/logo/lockup.svg or wordmark.svg" in row["detail"]
+
+
+def test_a_name_given_is_set_as_text_and_a_template_from_before_the_lettering_still_works(std, tmp_path):
+    assert profiles(std, "--name", "Acme Tools").returncode == 0
+    assert "<h1>Acme Tools</h1>" in page(std, "linkedin-banner")
+    row = next(x for x in report(std, "emit-profiles")["results"] if x["id"] == "note:lettering")
+    assert row["status"] == "info" and "--name" in row["detail"]
+    t = tmp_path / "banner.html"
+    shutil.copy2(ROOT / "templates/profile/banner.html", t)
+    mutate(t, '<div class="text">{{lettering}}', '<div class="text"><h1>{{name}}</h1>')    # a template written before 0.3.1
+    assert profiles(std, "--template", str(t)).returncode == 0
+    assert "<h1>Acme</h1>" in page(std, "linkedin-banner")
+    row = next(x for x in report(std, "emit-profiles")["results"] if x["id"] == "note:lettering")
+    assert row["status"] == "warn" and "no {{lettering}} placeholder" in row["detail"]
+
+
+def test_lockup_or_wordmark_comes_from_lettering_or_the_file_name_and_is_never_guessed(std):
+    """A --logo-svg whose name says wordmark keeps the mark next to it; a name that says neither stops the run (exit 2) until --lettering says."""
+    logo = std / "assets/logo"
+    shutil.copy2(logo / "wordmark.svg", logo / "acme-wordmark.svg")
+    assert profiles(std, "--logo-svg", "assets/logo/acme-wordmark.svg").returncode == 0
+    html = page(std, "linkedin-banner")
+    assert '<body class="wordmark">' in html and re.search(r'<div class="mark">\s*<svg', html)   # the mark stays next to a wordmark
+    shutil.copy2(logo / "wordmark.svg", logo / "logotype.svg")
+    r = profiles(std, "--logo-svg", "assets/logo/logotype.svg")
+    assert r.returncode == 2 and "--lettering lockup or --lettering wordmark" in r.stderr
+    assert profiles(std, "--logo-svg", "assets/logo/logotype.svg", "--lettering", "lockup").returncode == 0
+    assert '<body class="lockup">' in page(std, "linkedin-banner")
+    row = next(x for x in report(std, "emit-profiles")["results"] if x["id"] == "note:lettering")
+    assert row["detail"] == "assets/logo/logotype.svg (--lettering)"
+    # --name types the name, so drawn lettering next to it would go unused: refused, never dropped in silence
+    r = profiles(std, "--name", "Acme Tools", "--logo-svg", "assets/logo/acme-wordmark.svg")
+    assert r.returncode == 2 and "not both" in r.stderr
+    r = profiles(std, "--lettering", "wordmark")
+    assert r.returncode == 2 and "together with --logo-svg" in r.stderr
+
+
+def test_the_quick_tier_reads_no_lettering_so_a_lockup_it_never_uses_cannot_stop_it(acme):
+    """The Quick tier writes no banners: no lettering row, no lettering input, and a lockup that is not pure vector does not stop the avatars."""
+    (acme / "assets/logo/lockup.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 10"><text x="1" y="9">Acme</text></svg>')
+    r = profiles(acme)
+    assert r.returncode == 0, r.stdout + r.stderr
+    rep = report(acme, "emit-profiles")
+    assert "note:lettering" not in {x["id"] for x in rep["results"]} and "lockup.svg" not in json.dumps(rep)
+    assert sorted(f.name for f in (acme / OUT).glob("*.png")) == ["avatar-400.png", "avatar-800.png"]
 
 
 def test_a_tagline_that_is_not_a_facts_value_is_refused(std):

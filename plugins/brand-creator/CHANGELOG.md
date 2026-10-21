@@ -6,6 +6,46 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-21
+
+Fixes from the first projects built on 0.3.0: banners and cards show the drawn name, the browser tab shows the small
+drawing, and see-through colours keep their alpha.
+
+### Added
+
+- `favicon.drawing` in `qa/rules.json` fixes the drawing of `icon.svg`. It is kept in the project, so a rerun of
+  `emit web` keeps it.
+
+### Changed
+
+- Banners (`emit profiles`), social cards (`emit social`), the Play feature graphic (`emit android`) and the Chrome promo
+  tiles (`emit chrome-ext`) show the brand's drawn lettering: `lockup.svg` on its own, else `wordmark.svg` next to the
+  mark. `--logo-svg` names another file, and `--lettering lockup` or `--lettering wordmark` says which it is when its
+  file name does not. `--name` types the name in the system font instead, and cannot be combined with `--logo-svg`.
+  Without a lockup or wordmark, or with a template that has no `{{lettering}}` placeholder, the name is typed too and
+  the report warns. The dark README header uses the lettering's `-dark.svg`.
+- `icon.svg`, the favicon browsers show in the tab, is the band rule's drawing for the tab size instead of the large mark
+  shrunk. Its dark switch is that drawing's `-dark.svg`, checked as pure vector like the drawing.
+- `shot` loads lazy images first, waits for running animations and transitions to end (at most 15 s), and documents
+  `--wait` and `--dsf` in its usage line.
+- The designer agent can take 120 turns instead of 60 and is told to return its result before the limit. The
+  `directions` workflow names the turn limit as the likely cause when a designer returns nothing, and says where its
+  files are.
+
+### Fixed
+
+- `tokens.css` kept a see-through colour opaque (`#3a2448` for a scrim at 56%). It is now `#3a24488f`, and the round
+  trip compares the alpha in every output, the `@supports` values in oklch, oklab and display-p3 included, so the loss
+  can no longer pass.
+- The book's `self:durations` check and `BRAND.md` read only `duration.*` tokens, but the starter tokens name them
+  `motion.*`: a book with transitions failed its own check. Both names count now.
+- `emit print --font-file` escaped the quotes around the family name, so the pieces printed in Times. The name goes into
+  the pieces' CSS as written now, in single quotes, and a name with other characters is refused. Without
+  `--font-family` the name comes from the font's file name, with an axis tag such as `[wght]` left out.
+- `shot` called a lazy image broken when it was hidden at that width or below the fold.
+- The print docs cited an intake question 7 that does not exist; print is the owner's opt-in, set by `PRINT_REGION`.
+  The tier table marks print PDFs as opt-in, and the manual check lists the signature images at 1x and 2x.
+
 ## [0.3.0] - 2026-10-21
 
 The style research now comes before anything is drawn, marks are drawn on a design tool instead of as code, and the mark

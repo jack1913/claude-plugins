@@ -96,6 +96,20 @@ def test_brand_md_has_the_four_layers_and_the_frontmatter_of_the_architecture(pa
     assert bc("adapters", "--brand-md", "--bm-type", "company", project=pack).returncode == 2
 
 
+def test_brand_md_lists_the_durations_whether_they_are_named_duration_or_motion(pack):
+    tj = pack / "assets" / "tokens" / "tokens.json"
+    assert bc("adapters", "--brand-md", project=pack).returncode == 0
+    motion = (pack / "BRAND.md").read_text().split("### Motion", 1)[1].split("##", 1)[0]
+    n = motion.count("- duration.")
+    assert n == 1                                                       # Acme has one: duration.fast
+    doc = json.loads(tj.read_text())
+    doc["other"] = {("motion." + k.split(".", 1)[1] if k.startswith("duration.") else k): v for k, v in doc["other"].items()}
+    tj.write_text(json.dumps(doc, indent=2) + "\n")
+    assert bc("adapters", "--brand-md", "--replace", project=pack).returncode == 0
+    motion = (pack / "BRAND.md").read_text().split("### Motion", 1)[1].split("##", 1)[0]
+    assert motion.count("- motion.") == n                               # the starter tokens' names: listed as well
+
+
 def test_brand_md_invents_no_voice_and_keeps_contact_facts_out(pack):
     assert bc("adapters", "--brand-md", project=pack).returncode == 0
     t = (pack / "BRAND.md").read_text()

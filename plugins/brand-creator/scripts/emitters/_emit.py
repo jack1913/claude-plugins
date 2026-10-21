@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import html
 import json
 import re
 import subprocess
@@ -203,8 +205,133 @@ def deployment_targets(project: Path, overrides: list[str] | None = None) -> dic
     return out
 
 
-def add_logo_arg(ap) -> None:
-    ap.add_argument("--logo-svg", help="the logo art for wide and text-bearing slots (default: assets/logo/lockup.svg, then wordmark.svg, then the mark)")
+def add_logo_arg(ap, *, cards: bool = False) -> None:
+    """--logo-svg; the card and banner emitters (cards=True) also take --lettering, and their name falls back to typed text, never the mark."""
+    if not cards:
+        ap.add_argument("--logo-svg", help="the logo art for wide and text-bearing slots (default: assets/logo/lockup.svg, then wordmark.svg, then the mark)")
+        return
+    ap.add_argument("--logo-svg", help="the drawn lettering on the cards (default: assets/logo/lockup.svg, then wordmark.svg; "
+                                       "without either the name is typed in the system font)")
+    ap.add_argument("--lettering", choices=LETTERING_KINDS,
+                    help="what --logo-svg holds: lockup (the mark and the name together, shown alone) or wordmark (the name alone, shown "
+                         "next to the mark); needed when the file name says neither")
+    for act in ap._actions:   # the Emit frame gives every emitter --name; on a card or banner it also replaces the drawn lettering
+        if "--name" in act.option_strings:
+            act.help = ("the name, typed in the system font instead of the drawn lettering (default: the drawn lockup or wordmark; "
+                        "without either, the name in BRAND-STATE.md, typed)")
+
+
+LETTERING_FILES = ("assets/logo/lockup.svg", "assets/logo/wordmark.svg")
+LETTERING_KINDS = ("lockup", "wordmark")
+
+
+def lettering_art(project: Path, explicit: str | None, inputs: list) -> tuple[str, str] | None:
+    """The brand's drawn lettering: `explicit` (--logo-svg), else assets/logo/lockup.svg, else assets/logo/wordmark.svg; None when there is
+    none. Always pure vector (mark_lint); the file is added to `inputs`. -> (svg text, project path)."""
+    for c in [explicit] if explicit else LETTERING_FILES:
+        f = confine(project, c, what="--logo-svg")
+        if f.is_file():
+            text = f.read_text(encoding="utf-8")
+            bad = lint_svg_text(text)
+            if bad:
+                fail(EXIT_FAIL, f"mark_lint: {c} is not pure vector ({'; '.join(bad)}); outline text first")
+            if f not in inputs:
+                inputs.append(f)
+            return text, c
+        if explicit:
+            fail(EXIT_USAGE, f"--logo-svg not found: {c}")
+    return None
+
+
+def lettering_kind(rel: str, given: str | None) -> str:
+    """lockup or wordmark: --lettering when given, else the file name (lockup.svg, acme-lockup.svg, wordmark.svg, wordmark-outlined.svg).
+    A name that says neither or both stops the run (exit 2): the layout is never guessed."""
+    if given:
+        return given
+    says = [k for k in LETTERING_KINDS if k in Path(rel).stem.lower()]
+    if len(says) != 1:
+        fail(EXIT_USAGE, f"{rel}: the file name does not say whether it is a lockup (the mark and the name together) or a wordmark (the name "
+                         f"alone); pass --lettering lockup or --lettering wordmark")
+    return says[0]
+
+
+def card_lettering_setup(rep: Report, project: Path, a, template: str, template_name: str) -> tuple[tuple[str, str] | None, str]:
+    """The lettering of a card or banner emitter -> (art or None, layout). --name types the name, so --logo-svg or --lettering next to it
+    would be ignored: that pair stops the run (exit 2), and with --name no lettering file is read."""
+    explicit, kind = a.logo_svg, a.lettering
+    if a.name and (explicit or kind):
+        fail(EXIT_USAGE, "--name types the name in the system font, so --logo-svg and --lettering would not be used: pass --name, or the drawn "
+                         "lettering, not both")
+    if kind and not explicit:
+        fail(EXIT_USAGE, "--lettering says what --logo-svg holds: pass it together with --logo-svg")
+    found = None if a.name else lettering_art(project, explicit, rep.inputs)
+    return found, lettering_layout(rep, found, template, template_name, bool(a.name), kind=kind)
+
+
+def lettering_layout(rep: Report, found: tuple[str, str] | None, template: str, template_name: str, name_given: bool,
+                     kind: str | None = None) -> str:
+    """How a card or banner sets the name, said in a report row: 'lockup' (the art holds the mark and the name: it stands alone), 'wordmark'
+    (the drawn name next to the mark) or 'type' (the name as live text in the template's font). Type when --name was given (the art cannot
+    say another name), when there is no lettering art, or when the template has no {{lettering}} placeholder outside its comments (a
+    template written before 0.3.1). Lockup or wordmark comes from `kind` (--lettering), else from the file name (lettering_kind)."""
+    slot = "{{lettering}}" in re.sub(r"<!--.*?-->", "", template, flags=re.S)
+    if name_given:
+        rep.add("note:lettering", "info", "the name is live text in the system font", detail="--name sets the name as text: the drawn lettering says the recorded name")
+        return "type"
+    if found is None:
+        rep.add("note:lettering", "warn", "the name is live text in the system font",
+                detail="there is no assets/logo/lockup.svg or wordmark.svg: draw one (outlined, P6) and run this again for the brand's own lettering")
+        return "type"
+    if not slot:
+        rep.add("note:lettering", "warn", "the name is live text in the template's font",
+                detail=f"{template_name} has no {{{{lettering}}}} placeholder (a template from before 0.3.1): add it to show the drawn lockup or wordmark")
+        return "type"
+    layout = lettering_kind(found[1], kind)
+    rep.add("note:lettering", "info", f"the name is the drawn {layout}", detail=f"{found[1]} ({'--lettering' if kind else 'by its file name'})")
+    return layout
+
+
+CARD_LOCKUP = 0.82, 0.34   # a drawn lockup on templates/card.html: at most this share of the card's width (inside the 9vw side padding) and height
+CARD_WORDMARK = 0.1125     # a drawn wordmark's height as a share of the card's: 0.75 of the 15vh name, about the height of its caps
+
+
+def card_lettering(layout: str, art: str | None, name: str, w: int, h: int) -> str:
+    """{{lettering}} of templates/card.html at w x h: the drawn lockup or wordmark as an image sized to fit, or the name as an h1."""
+    if layout == "lockup":
+        return art_img(art, *fit_art(art, w * CARD_LOCKUP[0], h * CARD_LOCKUP[1]), name)
+    if layout == "wordmark":
+        return art_img(art, *fit_art(art, w * 0.82 - h * 0.64, h * CARD_WORDMARK), name)   # the width left beside the 58vh mark and the 6vh gap
+    return f"<h1>{html.escape(name)}</h1>"
+
+
+def fit_art(svg_text: str, max_w: float, max_h: float) -> tuple[int, int]:
+    """The largest whole-pixel box of the art's viewBox proportions inside max_w x max_h."""
+    vb = svgtools.viewbox(svgtools.parse(svg_text))
+    w, h = max_w, max_w * vb[3] / vb[2]
+    if h > max_h:
+        w, h = max_h * vb[2] / vb[3], max_h
+    return max(1, int(w)), max(1, int(h))
+
+
+def art_img(svg_text: str, w: int, h: int, alt: str) -> str:
+    """The art as an <img> of a data URI: its own document, so its ids and styles cannot clash with the mark inlined in the same page."""
+    data = base64.b64encode(svg_text.encode("utf-8")).decode("ascii")
+    return f'<img class="lettering" alt="{html.escape(alt)}" width="{w}" height="{h}" src="data:image/svg+xml;base64,{data}">'
+
+
+def dark_sibling(project: Path, src: str, inputs: list) -> str | None:
+    """<stem>-dark.svg next to a lettering file, linted like it; None when there is none."""
+    dark = str(Path(src).with_name(Path(src).stem + "-dark.svg"))
+    f = confine(project, dark, what="dark lettering")
+    if not f.is_file():
+        return None
+    text = f.read_text(encoding="utf-8")
+    bad = lint_svg_text(text)
+    if bad:
+        fail(EXIT_FAIL, f"mark_lint: {dark} is not pure vector ({'; '.join(bad)}); outline text first")
+    if f not in inputs:
+        inputs.append(f)
+    return text
 
 
 def version_below(version: str, floor: int) -> bool:
@@ -300,17 +427,42 @@ class Emit:
                 fail(EXIT_USAGE, f"unknown band {band!r} (defined: {', '.join(b['name'] for b in self.bands)})")
         else:
             picked = qa_rules.pick_band(self.bands, size_px)
-        f = confine(self.project, picked["drawing"], what=f"band {picked['name']!r} drawing")
+        return self.drawing_file(picked["drawing"], f"band {picked['name']!r}", band=picked["name"])
+
+    def drawing_file(self, rel: str, what: str, *, band: str | None = None) -> Drawing:
+        """A drawing named by a rule (a band, favicon.drawing): an existing .svg in the project, pure vector, recorded as an input."""
+        f = confine(self.project, rel, what=f"{what} drawing")
         if f.suffix.lower() != ".svg" or not f.is_file():
-            fail(EXIT_USAGE, f"band {picked['name']!r}: its drawing {picked['drawing']} must be an existing .svg file")
+            fail(EXIT_USAGE, f"{what}: its drawing {rel} must be an existing .svg file")
         text = f.read_text(encoding="utf-8")
         problems = lint_svg_text(text)
         if problems:
-            fail(EXIT_FAIL, f"mark_lint: {picked['drawing']} is not pure vector ({'; '.join(problems)})")
+            fail(EXIT_FAIL, f"mark_lint: {rel} is not pure vector ({'; '.join(problems)})")
         if f not in self.inputs_extra:
             self.inputs_extra.append(f)
             self.rep.inputs.append(f)
-        return Drawing(text, picked["drawing"], picked["name"])
+        return Drawing(text, rel, band)
+
+    def dark_file(self, d: Drawing) -> str | None:
+        """The drawn dark artwork of a drawing: its <name>-dark.svg sibling (the default mark: --svg-dark or mark-dark.svg); None when
+        there is none (nothing is derived here)."""
+        if not d.rel:
+            return self.dark
+        return self._drawn_dark(d.rel)
+
+    def _drawn_dark(self, rel: str) -> str | None:
+        """<name>-dark.svg next to a drawing: pure vector like it (exit 1 otherwise), recorded as an input; None when there is none."""
+        cand = self.project / (str(Path(rel).with_suffix("")) + "-dark.svg")
+        if not cand.is_file():
+            return None
+        text = cand.read_text(encoding="utf-8")
+        problems = lint_svg_text(text)
+        if problems:
+            fail(EXIT_FAIL, f"mark_lint: {cand.relative_to(self.project).as_posix()} is not pure vector ({'; '.join(problems)}); outline text first")
+        if cand not in self.inputs_extra:
+            self.inputs_extra.append(cand)
+            self.rep.inputs.append(cand)
+        return text
 
     def check_master_band(self, size_px: int, band: str | None, exemption: str | None) -> None:
         """Fail early (exit 1) when `band` is not the one the picker names for size_px and no one-line exemption says why."""
@@ -337,12 +489,9 @@ class Emit:
         else the light drawing recoloured through the tokens' light-to-dark roles (reported as a warning). A colour the tokens do not
         map fails: nothing is guessed."""
         if d.rel:
-            cand = self.project / (str(Path(d.rel).with_suffix("")) + "-dark.svg")
-            if cand.is_file():
-                if cand not in self.inputs_extra:
-                    self.inputs_extra.append(cand)
-                    self.rep.inputs.append(cand)
-                return cand.read_text(encoding="utf-8")
+            drawn = self._drawn_dark(d.rel)
+            if drawn is not None:
+                return drawn
         elif self.dark is not None:
             return self.dark
         mapping, clash = self.role_map()
@@ -362,20 +511,8 @@ class Emit:
     def logo_art(self) -> tuple[str, str]:
         """The logo art for wide or text-bearing slots: --logo-svg, else assets/logo/lockup.svg, else assets/logo/wordmark.svg, else the
         mark. Always pure vector. -> (svg text, the project path or 'the mark')."""
-        cands = [self.a.logo_svg] if getattr(self.a, "logo_svg", None) else ["assets/logo/lockup.svg", "assets/logo/wordmark.svg"]
-        for c in cands:
-            f = confine(self.project, c, what="--logo-svg")
-            if f.is_file():
-                text = f.read_text(encoding="utf-8")
-                bad = lint_svg_text(text)
-                if bad:
-                    fail(EXIT_FAIL, f"mark_lint: {c} is not pure vector ({'; '.join(bad)}); outline text first")
-                if f not in self.rep.inputs:
-                    self.rep.inputs.append(f)
-                return text, c
-            if getattr(self.a, "logo_svg", None):
-                fail(EXIT_USAGE, f"--logo-svg not found: {c}")
-        return self.light, "the mark"
+        found = lettering_art(self.project, getattr(self.a, "logo_svg", None), self.rep.inputs)
+        return found if found else (self.light, "the mark")
 
     def colour(self, mode: str, role: str) -> str:
         if role not in self.modes[mode]:

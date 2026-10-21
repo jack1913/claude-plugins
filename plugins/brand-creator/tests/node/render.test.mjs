@@ -40,6 +40,47 @@ test("shot: horizontal overflow, console errors and non-local requests each fail
   assert.equal(bc(["shot", "rounds/r1/board.html", "--project", p]).status, 0);
 });
 
+const PNG1 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==";
+
+test("shot: lazy images are loaded first, so one hidden at this width or below the fold is never reported broken", (t) => {
+  if (needSetup(t)) return;
+  const p = makeProject();
+  // a page with a desktop and a phone copy of each picture: Chromium never loads a lazy image that is display:none
+  const css = "<style>.m{display:none}@media (max-width:600px){.d{display:none}.m{display:block}}</style>";
+  const body = `<div style="height:3000px">tall</div><img class="d" loading="lazy" src="${PNG1}" width="40" height="40" alt="">`
+    + `<img class="m" loading="lazy" src="${PNG1}" width="20" height="20" alt="">`;
+  const rel = page(p, "lazy.html", body, css);
+  const r = bc(["shot", rel, "--project", p]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  for (const v of rep(p).results) {
+    assert.deepEqual(v.broken_images, [], v.id);
+    assert.equal(v.lazy_images, 2, v.id);
+    assert.match(v.detail, /2 lazy image\(s\) loaded first/);
+  }
+  // a really broken image is still reported
+  const bad = page(p, "bad.html", '<img loading="lazy" src="data:image/png;base64,AAAA" width="10" height="10" alt="">');
+  assert.equal(bc(["shot", bad, "--project", p]).status, 1);
+  assert.equal(rep(p).results[0].broken_images.length, 1);
+});
+
+test("shot: running animations are waited for, and one that repeats forever is named, not waited for", (t) => {
+  if (needSetup(t)) return;
+  const p = makeProject();
+  const css = "<style>@keyframes f{from{opacity:0}to{opacity:1}}.once{animation:f 1.2s forwards}.loop{animation:f 1s infinite}</style>";
+  let rel = page(p, "once.html", '<div class="once">moving once</div>', css);
+  assert.equal(bc(["shot", rel, "--project", p]).status, 0);
+  let v = rep(p).results[0];
+  assert.deepEqual(v.animations, { waited: 1, running: 0, capped: false });
+  assert.match(v.detail, /waited for 1 animation\(s\) to end/);
+  rel = page(p, "loop.html", '<div class="loop">moving forever</div>', css);
+  const t0 = Date.now();
+  assert.equal(bc(["shot", rel, "--project", p]).status, 0);
+  assert.ok(Date.now() - t0 < 60000, "an endless animation must not hold the shot until the cap in every view");
+  v = rep(p).results[0];
+  assert.deepEqual(v.animations, { waited: 0, running: 1, capped: false });
+  assert.match(v.detail, /1 animation\(s\) repeat forever: shot mid-way/);
+});
+
 test("shot: forbidden strings are counted from the project list", (t) => {
   if (needSetup(t)) return;
   const p = makeProject();

@@ -3,7 +3,7 @@ name: brand-designer
 description: Only for brand-creator workflows or an approved fleet; do not auto-delegate. Builds one direction board of a brand round inside the one folder it is given (rounds/rN/<direction>/) and reads its own screenshots before any visual claim.
 model: opus
 tools: Read, Write, Edit, Glob, Grep, Bash
-maxTurns: 60
+maxTurns: 120
 omitClaudeMd: true
 ---
 
@@ -51,3 +51,5 @@ TEST: screenshot 1440×900 light+dark and 390×844, Read every tile, iterate at 
 Return exactly what the prompt's OUTPUT asks for (a schema when one is given). Always include: the direction key and
 word name, the files you wrote (paths relative to the project), the one-line TEST check, the snapshot verify exit
 code, and the weak points in plain words. If you ran out of time, return what is done and what is not; never pad.
+Your limit is 120 turns, and an answer cut off at the limit never reaches the lead (your files stay on disk, unseen): by
+about turn 100, stop iterating and return what is built, with what is unfinished listed as weak points.

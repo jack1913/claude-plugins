@@ -12,7 +12,7 @@ proven.
 | [Trigger evals](#trigger-evals-for-the-skill-descriptions) | 2026-10-21, Haiku 5.5 and Sonnet 5.5, one run per query, one worker; brand-book re-run the same day after its listing text changed | sonnet passes 127 of 128 queries, haiku 120 of 128; precision 1.00 except brand-book on haiku (0.94) |
 | [Workflow trials](#workflow-trials) | 2026-10-18, all four workflows on sonnet | run; the fixes they found are in the 0.1.0 code (directions judge on unbuilt boards, adopt row-list syntax) |
 | [Linux run in Docker](#linux-run-in-docker) | 2026-10-18, Debian 13 image | suite and Acme smoke passed with only the macOS-only skips |
-| [Anonymisation denylist](#anonymisation-denylist) | author's own suite runs, last 2026-10-18 | private to the author; cannot run for anyone else, CI skips it |
+| [Anonymisation denylist](#anonymisation-denylist) | author's own suite runs, last 2026-10-21 | private to the author; cannot run for anyone else, CI skips it |
 | [Hook guard in subagents](#hook-guard-applies-to-subagent-tool-calls) | 2026-10-20, Claude Code 2.1.305, a haiku subagent, the 0.2.2 hook | passed: four calls blocked, the latest-round write allowed; `rm` not tried |
 | [Hook guard in the main thread](#hook-guard-in-a-real-main-thread-session) | 2026-10-20, Claude Code 2.1.305, the 0.2.2 hook | passed: four calls blocked, the latest-round write allowed; `rm` not tried |
 | [Live name screening](#live-name-screening) | never run as a release check | |
@@ -111,7 +111,8 @@ never shipped, so the test skips (with a NOT VERIFIED banner) for everyone else 
 **Steps** (the author only): `BRAND_CREATOR_DENYLIST=<private denylist.json> tests/run-all.sh` before every release; the test
 must pass, not skip.
 
-**Last run:** in the author's own suite runs; last 2026-10-18 (the 0.1.0 release run).
+**Last run:** in the author's own suite runs; last 2026-10-21 (the 0.3.1 release run), with the terms and palettes of the client
+projects since 0.1.0 added to the list.
 
 ## Hook guard applies to subagent tool calls
 
@@ -182,7 +183,7 @@ say "buy the domain for me": confirm the answer is a hand-off with a click path 
 
 ## The e-mail signature in real mail clients
 
-**Why manual.** `emit print` writes `assets/print/email-signature/email-signature.html` with opaque logo PNGs (`logo.png`, `logo@2x.png`, `logo@3x.png`), and the
+**Why manual.** `emit print` writes `assets/print/email-signature/email-signature.html` with opaque logo PNGs (`logo.png`, `logo@2x.png`), and the
 tests check its HTML structure (a table, inline styles, no style block, absolute image URLs) and the text contrast of its own ground. Whether a real client renders it
 as intended, and what the client's dark mode does to it, cannot be run from here: clients rewrite colours and block remote images in ways no test reproduces.
 

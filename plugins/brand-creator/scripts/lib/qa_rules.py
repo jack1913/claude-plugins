@@ -11,6 +11,7 @@ keys are refused (a typo must not silently fall back to the default).
      "cvd":       {"min_delta_e": 10.0, "deficiencies": ["protan", "deutan", "tritan"]},
      "guides":    {"tolerance_px": 1.5},
      "family":    {"tile_share_tolerance": 0.05},
+     "favicon":   {"drawing": "assets/logo/favicon.svg"},
      "bands":     [{"name": "small", "max_px": 32, "drawing": "assets/logo/grid-mark.svg"},
                    {"name": "large", "drawing": "assets/logo/mark.svg"}]}
 """
@@ -37,6 +38,7 @@ DEFAULTS: dict = {
     "cvd": {"min_delta_e": 10.0, "deficiencies": ["protan", "deutan", "tritan"]},
     "guides": {"tolerance_px": 1.5},
     "family": {"tile_share_tolerance": 0.05},
+    "favicon": {"drawing": ""},        # icon.svg's drawing; empty = the band rule's drawing for a browser tab (the smallest favicon layer)
     "bands": [],
 }
 _NUM = (int, float)

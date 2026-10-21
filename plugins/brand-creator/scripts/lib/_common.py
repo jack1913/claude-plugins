@@ -23,7 +23,7 @@ STATE_FILE = "BRAND-STATE.md"
 RENDERERS = ("resvg", "pillow")
 GATE_IDS = ("G0", "G1", "G1s", "G2", "G2b", "G3", "G4", "G5", "G6", "G7")
 # One User-Agent for every outbound request any script ever makes. Generic on purpose: no personal data, no "@".
-USER_AGENT = "brand-creator/0.3.0 (+https://example.invalid/brand-creator)"
+USER_AGENT = "brand-creator/0.3.1 (+https://example.invalid/brand-creator)"
 
 
 class CliError(Exception):

@@ -136,7 +136,8 @@ required surfaces in `brief/BRIEF.md`.
    and the fine vector above. They are G4 "(rule)" items and the owner's call. Hand masters exist only where the exact
    pixels ship: favicon layers, `.ico`, PNG icons, tray, Linux hicolor. Apple builds every size from one master.
    `emit web`, `emit windows`, `emit linux` and `emit tray` draw each size by the band rule, and `check` fails a layer
-   recorded off the rule. `icon.svg` is one scalable file and stays the default mark.
+   recorded off the rule. `icon.svg` is one scalable file shown in browser tabs: the band rule's drawing for the tab size, or
+   `favicon.drawing` in `qa/rules.json` when the owner picked another one.
 3. **Emit in chain order.** Copy `${CLAUDE_PLUGIN_ROOT}/templates/finish.sh.tpl` to `tools/finish.sh` and fill its
    three marked blocks (the options of block 2 are variables; a tagline or exemption with spaces is fine). The order is
    generators, tokens, contrast, emitters, gates, idempotence, staleness, check. Run the emitters one at a time while you
@@ -220,7 +221,9 @@ More Tier B outputs, with the same label rule: a file built from a spec row of s
   is held to the same gate, and a mark that does not fit fails the emit with nothing written (a rounder drawing is the fix, not a lower threshold). The tvOS App Store icon and the
   Top Shelf images are not written and ictool has no tvOS preview: say so when you hand the pack over.
 - **Profile images** (`emit profiles`, every tier, Chromium for the banners): a circle-safe avatar at 400 and 800 px (all the Quick tier writes), and, from the Standard tier, one image each for the LinkedIn, X, YouTube and Facebook
-  banners and the Instagram feed and story, from `templates/profile/banner.html` (or `--template`). Everything drawn lies inside the platform's safe area (the circle for the avatar,
+  banners and the Instagram feed and story, from `templates/profile/banner.html` (or `--template`), with the brand's drawn
+  lettering (`lockup.svg`, else `wordmark.svg` next to the mark). The name is typed in the system font with `--name`, or when neither file
+  exists, and then the report warns. Everything drawn lies inside the platform's safe area (the circle for the avatar,
   a rectangle for a banner); a name that is too long fails the emit instead of being cut off by the platform. `assets/profiles/_proof/` holds the same images with the safe areas drawn:
   show the person a proof image next to the real one, and say that the proof is never uploaded. Every size is status U in this version: read each platform's own page before the images go online
   (`brand-creator specs-due` lists the rows). One line of copy on a banner is a FACTS.md value (`--tagline`), never invented.

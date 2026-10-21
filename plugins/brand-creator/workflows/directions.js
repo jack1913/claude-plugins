@@ -176,7 +176,7 @@ function designerPrompt(d) {
     TEST + ' Run it as brand-creator --data "' + A.data + '" shot ' + folder + 'board.html --project "' + A.project + '" and Read every slice the report lists.',
     RULES,
     RESUME,
-    'OUTPUT: the schema; key must be ' + d.key + ' and every path in files must start with ' + folder + '. Aim to finish within 35 minutes; keep turns short; tail-limit command output.',
+    'OUTPUT: the schema; key must be ' + d.key + ' and every path in files must start with ' + folder + '. Aim to finish within 35 minutes; keep turns short; tail-limit command output. Return the schema before your turn limit (your agent file states it): an answer cut off at the limit never arrives, and the board is lost to this run.',
   ].join('\n')
 }
 const raw = await parallel(DIRS.map(d => () => agent(designerPrompt(d), opts('brand-designer', { label: d.name, phase: 'Design', schema: BOARD_SCHEMA }))))
@@ -186,7 +186,8 @@ const isBuilt = b => Boolean(b) && list(b.files).length > 0
 const missing = DIRS.filter((d, i) => !isBuilt(raw[i])).map(d => d.name)
 const notBuilt = DIRS.map((d, i) => (raw[i] && !isBuilt(raw[i])) ? d.name + ': ' + String(raw[i].idea || '(no reason given)').slice(0, 200) : null).filter(Boolean)
 const boards = raw.filter(Boolean).filter(isBuilt)
-if (!boards.length) fail('no designer built a board' + (notBuilt.length ? ' (' + notBuilt.join(' | ') + ')' : '') + ': nothing to judge; fix the cause (often the project path or the data folder) and relaunch to resume')
+const CUT_OFF = 'a designer that returned nothing was most often cut off at its turn limit (maxTurns in agents/brand-designer.md), and its half-built files are in ' + ROUND_DIR + '/<key>/'
+if (!boards.length) fail('no designer built a board' + (notBuilt.length ? ' (' + notBuilt.join(' | ') + ')' : '') + ': nothing to judge; fix the cause (often the project path or the data folder; ' + CUT_OFF + ') and relaunch to resume')
 const violations = []
 DIRS.forEach((d, i) => {
   const b = raw[i]
@@ -196,7 +197,7 @@ DIRS.forEach((d, i) => {
   for (const f of list(b.files).concat([b.board])) if (!String(f).startsWith(folder)) violations.push(d.name + ': wrote outside its folder: ' + f)
   if (b.snapshot_verify_exit !== 0) violations.push(d.name + ': snapshot verify exit ' + b.snapshot_verify_exit + ' (something outside ' + ROUND_DIR + '/ changed)')
 })
-if (missing.length) log('no board from: ' + missing.join(', ') + ' (stopped, failed or nothing built' + (notBuilt.length ? ': ' + notBuilt.join(' | ') : '') + '); relaunch to resume, or carry on without them')
+if (missing.length) log('no board from: ' + missing.join(', ') + ' (stopped, failed or nothing built' + (notBuilt.length ? ': ' + notBuilt.join(' | ') : '') + '; ' + CUT_OFF + '); relaunch to resume, or carry on without them')
 if (violations.length) log('VIOLATIONS: ' + violations.join(' | '))
 
 // ---------------------------------------------------------------- stage 3: judge (advisory)

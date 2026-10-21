@@ -338,11 +338,14 @@ def token_hexes(doc: dict) -> set[str]:
     return out
 
 
+DURATION_GROUPS = ("duration.", "motion.")   # the starter tokens name them motion.*; older projects and Acme use duration.*
+
+
 def motion_durations_ms(doc: dict) -> list[float]:
-    """Durations of the `duration.*` tokens in milliseconds."""
+    """Durations of the `duration.*` and `motion.*` tokens in milliseconds (a value that is not a duration, a curve, is skipped)."""
     out = []
     for k, v in doc.get("other", {}).items():
-        if k.startswith("duration."):
+        if k.startswith(DURATION_GROUPS):
             m = re.fullmatch(r"\s*([0-9.]+)\s*(ms|s)\s*", str(v))
             if m:
                 out.append(float(m.group(1)) * (1000 if m.group(2) == "s" else 1))

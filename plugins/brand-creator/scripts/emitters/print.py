@@ -46,6 +46,7 @@ SIGNATURE = "email-signature"
 CONTACT_LABELS = ("contact name", "contact role", "contact email", "contact phone", "postal address", "website")
 FONT_SUFFIXES = (".ttf", ".otf", ".woff", ".woff2")
 SYSTEM_FONTS = "Arial,Helvetica,sans-serif"
+FAMILY_CHARS = r"[A-Za-z0-9 ._-]+"   # what a family name may hold: it is written into the pieces' CSS as is
 SHA_SHOWN = 9   # hex digits of the profile hash shown in the report
 
 
@@ -168,9 +169,17 @@ def main() -> int:
         ff = confine(project, a.font_file, what="--font-file")
         if ff.suffix.lower() not in FONT_SUFFIXES or not ff.is_file():
             fail(EXIT_USAGE, f"--font-file must be an existing {'/'.join(FONT_SUFFIXES)} file inside the project")
-        fam = a.font_family or ff.stem
-        font_face = f'@font-face{{font-family:"{fam}";src:url("/{rel(project, ff)}")}}'
-        font_family = f'"{fam}",{SYSTEM_FONTS}'
+        if a.font_family:
+            fam = a.font_family
+            if not re.fullmatch(FAMILY_CHARS, fam):
+                fail(EXIT_USAGE, f"--font-family {fam!r}: use letters, digits, spaces, '.', '_' or '-' (the name goes into the pieces' CSS as written)")
+        else:   # from the file name: a variable font's axis tag ("Inter[wght]") and any other character the CSS cannot carry are dropped
+            fam = " ".join(re.sub(r"[^A-Za-z0-9 ._-]+", " ", re.sub(r"\[[^\]]*\]", "", ff.stem)).split())
+            if not fam:
+                fail(EXIT_USAGE, f"the font file name {ff.name!r} gives no usable family name: pass --font-family")
+        # single quotes: the family is safe both inside <style> and inside a double-quoted style="..." of a copied template
+        font_face = f"@font-face{{font-family:'{fam}';src:url(\"/{rel(project, ff)}\")}}"
+        font_family = f"'{fam}',{SYSTEM_FONTS}"
         e.add_input(ff)
         e.rep.add("note:font", "info", "brand font on the stationery", detail=f"{fam} from {rel(project, ff)}; its text is outlined in the PDF (check the licence allows it: fontcheck)")
     else:
@@ -235,7 +244,7 @@ def main() -> int:
             "legal_block": f'<div class="legal">{lines(legal)}</div>' if legal else "",
             "bar_h": num(bleed + lay.get("bar_extra", 0.0)), "rule_y": num(margin + lay.get("rule_below", 0.0)),
         }
-        raw_names = ("font_face", "marks", "logo", "logo_dark", "contact_block", "tagline_block", "legal_block")
+        raw_names = ("font_face", "font_family", "marks", "logo", "logo_dark", "contact_block", "tagline_block", "legal_block")
         tpl = template(piece)
         src_rel = f"{e.out}/_build/{piece}.html"
         src = confine(project, src_rel, what="print source")

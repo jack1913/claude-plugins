@@ -182,6 +182,8 @@ def test_feature_graphic_is_1024_by_500_and_has_no_alpha_channel(full):
     assert png_size(data) == (1024, 500) and png_color_type(data) == 2   # colour type 2 = RGB, no alpha
     html = (full / "assets/android/_build/feature-graphic.html").read_text()
     assert "Acme" in html and "{{" not in html
+    body = re.sub(r"<!--.*?-->", "", html, flags=re.S)
+    assert '<body class="wordmark">' in body and 'class="lettering"' in body and "<h1>" not in body   # the drawn wordmark, not typed text
 
 
 def test_the_tagline_on_the_feature_graphic_must_be_a_facts_value(full):
@@ -366,6 +368,9 @@ def test_chrome_ext_icons_store_icon_and_promo_tiles(full):
     for name, size in (("promo-small-440x280", (440, 280)), ("promo-marquee-1400x560", (1400, 560))):
         data = (base / f"store/{name}.png").read_bytes()
         assert png_size(data) == size and png_color_type(data) == 2
+    for key in ("small", "marquee"):
+        body = re.sub(r"<!--.*?-->", "", (base / f"_build/promo-{key}.html").read_text(), flags=re.S)
+        assert '<body class="wordmark">' in body and 'class="lettering"' in body and "<h1>" not in body, key
     doc = json.loads((base / "manifest.icons.json").read_text())
     assert doc == {"icons": {"16": "icons/icon-16.png", "32": "icons/icon-32.png", "48": "icons/icon-48.png", "128": "icons/icon-128.png"}}
     assert sorted(p.name for p in (base / "icons").iterdir()) == ["icon-128.png", "icon-16.png", "icon-32.png", "icon-48.png"]   # PNG only

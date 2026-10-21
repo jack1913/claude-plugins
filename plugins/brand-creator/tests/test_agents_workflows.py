@@ -57,7 +57,7 @@ def test_every_planned_agent_exists_with_its_tier_tools_and_turn_limit():
         got = {t.strip() for t in fm["tools"].split(",")}
         assert got == tools, (name, got ^ tools)
         assert "Agent" not in got and "Task" not in got, f"{name}: no recursive fan-out"
-        assert re.fullmatch(r"[1-9][0-9]", fm["maxTurns"]), name
+        assert re.fullmatch(r"[1-9][0-9]{1,2}", fm["maxTurns"]) and int(fm["maxTurns"]) <= 150, name   # a ceiling, not a target
         assert fm["description"].startswith(PREFIX), name
         assert "-tier" not in fm["description"], f"{name}: the tier lives in the model field, not the description"
         assert len(fm["description"]) <= 1024

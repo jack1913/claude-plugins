@@ -20,15 +20,19 @@ import {
   Report, forbiddenTerms, writeIfChanged, sha256, readStateTop, missingSharedLibs, findHeadlessShell,
 } from "./lib/_common.mjs";
 
+const ANIMATION_CAP_MS = 15000;   // shot waits at most this long for running animations and transitions to end
+
 const USAGE = `usage:
-  render.mjs shot <page.html> [--project DIR] [--name NAME] [--out DIR] [--slice CSS_PX] [--forbidden-file FILE] [--timeout MS]
+  render.mjs shot <page.html> [--project DIR] [--name NAME] [--out DIR] [--slice CSS_PX] [--forbidden-file FILE] [--timeout MS] [--dsf N] [--wait MS]
   render.mjs card <card.html> --width W --height H --out FILE.png [--project DIR] [--dsf N] [--scheme light|dark] [--json]
   render.mjs shot --motion <proof.json> [--project DIR]
   render.mjs fonts --text TEXT (--font-file FILE | --family NAME) [--json]
   render.mjs pdf <page.html> --out FILE.pdf --label TEXT [--project DIR] [--format A4|Letter] [--scheme light|dark] [--label-px N] [--timeout MS]
   render.mjs pdf <page.html> --out FILE.pdf --size-mm WxH [--bleed-mm N] [--measure FILE.json] [--project DIR] [--scheme light|dark] [--timeout MS]
   render.mjs selftest
-shots are written outside the project (default: <data>/scratch/...); the report goes to <project>/assets/_checks/shot.json.`;
+shots are written outside the project (default: <data>/scratch/...); the report goes to <project>/assets/_checks/shot.json.
+shot loads lazy images first, pauses --wait MS after load (default 300), then waits for running animations and transitions to end
+(at most ${ANIMATION_CAP_MS / 1000} s; one that repeats forever is shot where it is, and the report says so).`;
 
 const MIME = {
   ".html": "text/html; charset=utf-8", ".htm": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8",
@@ -182,6 +186,22 @@ async function measure(page, terms) {
   }, terms);
 }
 
+// Wait for the page's running animations and transitions with an end to finish, at most ANIMATION_CAP_MS (a capture after a fixed
+// pause lands mid-animation on a page that moves). One that repeats forever has no end: it is counted, not waited for.
+async function waitAnimations(page) {
+  return page.evaluate(async (cap) => {
+    const running = () => document.getAnimations().filter((a) => a.playState === "running");
+    const ends = (a) => Number.isFinite(a.effect?.getComputedTiming().endTime);
+    const finite = running().filter(ends);
+    let capped = false;
+    if (finite.length) {
+      await Promise.race([Promise.all(finite.map((a) => a.finished.catch(() => null))), new Promise((r) => setTimeout(() => { capped = true; r(); }, cap))]);
+    }
+    const left = running();
+    return { waited: finite.length, running: left.length, capped: capped && left.some(ends) };
+  }, ANIMATION_CAP_MS);
+}
+
 async function cmdShot(argv) {
   const { values, positionals } = parse(argv, {
     project: { type: "string" }, name: { type: "string" }, out: { type: "string" }, slice: { type: "string", default: "2000" },
@@ -219,7 +239,15 @@ async function cmdShot(argv) {
       try {
         await withTimeout(page.goto(url, { waitUntil: "load", timeout }), timeout + 5000, `loading ${url}`);
         await withTimeout(page.evaluate(() => document.fonts.ready), timeout, "fonts.ready");
+        // lazy images below the fold never load in a full-page shot: load them first, so they are drawn and not reported broken
+        const lazy = await withTimeout(page.evaluate(async () => {
+          const imgs = [...document.images].filter((i) => i.loading === "lazy");
+          for (const i of imgs) i.loading = "eager";
+          await Promise.all(imgs.map((i) => (i.complete ? null : new Promise((r) => { i.addEventListener("load", r, { once: true }); i.addEventListener("error", r, { once: true }); }))));
+          return imgs.length;
+        }), timeout, "lazy images");
         await page.waitForTimeout(waitMs);
+        const motion = await waitAnimations(page);
         const m = await measure(page, terms);
         const slices = [];
         for (let y = 0, n = 0; y < m.height; y += sliceH, n++) {
@@ -236,7 +264,10 @@ async function cmdShot(argv) {
         if (m.brokenImages.length) problems.push(`${m.brokenImages.length} broken image(s): ${m.brokenImages.slice(0, 2).join(" ")}`);
         if (hits.length) problems.push("forbidden strings: " + hits.map(([t, c]) => `${t} x${c}`).join(", "));
         report.add(`view:${view}`, problems.length ? "fail" : "pass", `${width}px ${scheme}, dsf ${dsf}`, {
-          detail: problems.length ? problems.join("; ") : `height ${m.height}px, ${slices.length} slice(s), ${m.images} image(s), ${m.fonts.length} font face(s), ${m.scripts.total} script(s), no overflow, no console errors, no non-local requests`,
+          detail: (problems.length ? problems.join("; ") : `height ${m.height}px, ${slices.length} slice(s), ${m.images} image(s), ${m.fonts.length} font face(s), ${m.scripts.total} script(s), no overflow, no console errors, no non-local requests`)
+            + (lazy ? `; ${lazy} lazy image(s) loaded first` : "") + (motion.waited ? `; waited for ${motion.waited} animation(s) to end` : "")
+            + (motion.running ? `; ${motion.running} animation(s) ${motion.capped ? `still running after ${ANIMATION_CAP_MS / 1000} s` : "repeat forever"}: shot mid-way` : ""),
+          lazy_images: lazy, animations: motion,
           height: m.height, scroll_width: m.scrollWidth, client_width: m.clientWidth, overflow: m.overflow, overflowing: m.overflowing,
           gutter_left: m.gutterLeft, gutter_right: m.gutterRight,
           console_errors: seen.errors, console_warnings: seen.warnings, non_local_requests: seen.nonLocal, failed_local_requests: seen.failedLocal,

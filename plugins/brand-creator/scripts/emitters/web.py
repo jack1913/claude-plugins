@@ -8,8 +8,10 @@
 Writes under assets/web/ (override with --out-dir) and records every file in assets/manifest.json.
   favicon.ico          layers from the spec row, at a stable URL (never fingerprinted); every layer is drawn by the size-band rule
                        (qa/rules.json) for its own size, so the 16 px layer is the hand drawing, not the fine vector shrunk
-  icon.svg             the mark; switches to the dark artwork with prefers-color-scheme. One scalable file cannot carry a
-                       drawing per size: it is the default mark (the browser shows the .ico layers for the tab only where it prefers them)
+  icon.svg             the drawing a browser shows in a tab, switching to its dark artwork (<name>-dark.svg) with prefers-color-scheme:
+                       favicon.drawing in qa/rules.json when the owner set one, else the band rule's drawing for the smallest favicon
+                       layer (the tab size), which is the default mark when the project has no bands. Browsers that support it show
+                       this file in the tab rather than the .ico, so it is the small drawing, not the fine vector shrunk
   apple-touch-icon.png opaque ground (iOS paints transparency black)
   icons/               PWA any-purpose icons, a separate maskable icon (content inside the safe circle), monochrome; each is
                        drawn by the band rule for its size
@@ -58,7 +60,6 @@ def main() -> int:
     if a.svg_mono:
         mono_path = confine(e.project, a.svg_mono, what="--svg-mono")
         e.add_input(mono_path)
-    light, dark = e.light, e.dark
 
     def put(relpath: str, data: bytes, rows: list[str], **extra) -> None:
         e.put(f"{out}/{relpath}", data, rows, **extra)
@@ -85,11 +86,19 @@ def main() -> int:
         rep.add("check:favicon.ico size", "warn", "Google Search recommends more than the largest layer",
                 detail=f"largest layer {max(favset['ico_layers'])}px, recommended {fav['recommended_min_px']}px")
 
-    # icon.svg with prefers-color-scheme
-    icon_svg = svgtools.combine_scheme(light, dark).encode()
-    put("icon.svg", icon_svg, ["favicon-set"], slot="favicon-svg", resampled_by="PAGE", note="one scalable file: the default mark, not a per-size drawing")
-    if dark is None:
-        rep.add("note:icon.svg", "warn", "no dark artwork", detail="icon.svg has no prefers-color-scheme switch because no --svg-dark was found")
+    # icon.svg with prefers-color-scheme: the drawing a browser shows in a tab
+    tab = min(favset["ico_layers"])
+    chosen = e.rules["favicon"]["drawing"]
+    d_tab = e.drawing_file(chosen, "favicon") if chosen else e.drawing(tab)
+    dark_tab = e.dark_file(d_tab)
+    why = f"favicon.drawing in {e.rules_src}" if chosen else (f"the band rule's drawing for a {tab} px tab" if d_tab.rel else "the default mark (no bands)")
+    icon_svg = svgtools.combine_scheme(d_tab.svg, dark_tab).encode()
+    put("icon.svg", icon_svg, ["favicon-set"], slot="favicon-svg", resampled_by="PAGE",
+        drawing_file=d_tab.rel or "the mark", note=f"one scalable file shown in browser tabs: {why}")
+    rep.add("note:icon.svg drawing", "info", "the drawing in icon.svg", detail=f"{d_tab.rel or 'the mark'} ({why})")
+    if dark_tab is None:
+        rep.add("note:icon.svg", "warn", "no dark artwork",
+                detail=f"icon.svg has no prefers-color-scheme switch: there is no dark file for {d_tab.rel or 'the mark'} (draw <name>-dark.svg next to it)")
 
     # apple-touch
     s_apple = favset["apple_touch"]

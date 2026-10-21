@@ -533,11 +533,24 @@ def test_a_brand_font_is_loaded_and_outlined(proj):
     r = bc("emit", "print", "--region", "EU", "--font-file", "assets/fonts/TestFont-subset.ttf", "--font-family", "Brand Test", "--only", "letterhead", project=proj)
     assert r.returncode == 0, r.stdout + r.stderr
     html = (proj / "assets/print/_build/letterhead.html").read_text()
-    assert '@font-face{font-family:"Brand Test";src:url("/assets/fonts/TestFont-subset.ttf")}' in html
+    assert '@font-face{font-family:\'Brand Test\';src:url("/assets/fonts/TestFont-subset.ttf")}' in html
+    # the pieces use it as written: escaped quotes (&quot;) made the rule invalid and Chromium printed in Times. Single quotes keep it
+    # valid in a double-quoted style="..." of a copied template too
+    assert "font-family:'Brand Test',Arial,Helvetica,sans-serif;" in html and "&quot;" not in html and '"Brand Test"' not in html
     assert fonts(proj / "assets/print/letterhead.rgb-proof.pdf") == []
     rows = {x["id"]: x for x in report(proj, "emit-print")["results"]}
     assert rows["note:font"]["status"] == "info"
     assert bc("emit", "print", "--region", "EU", "--font-file", "assets/fonts/missing.ttf", project=proj).returncode == 2
+    r = bc("emit", "print", "--region", "EU", "--font-file", "assets/fonts/TestFont-subset.ttf", "--font-family", 'Brand"}body{x', "--only", "letterhead", project=proj)
+    assert r.returncode == 2 and "use letters, digits, spaces" in r.stderr
+    # without --font-family the family comes from the file name; a variable font's axis tag is dropped instead of refusing a flag never passed
+    shutil.copy2(ROOT / "tests/fixtures/fonts/TestFont-subset.ttf", fdir / "Inter[wght].ttf")
+    r = bc("emit", "print", "--region", "EU", "--font-file", "assets/fonts/Inter[wght].ttf", "--only", "letterhead", project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "font-family:'Inter',Arial" in (proj / "assets/print/_build/letterhead.html").read_text()
+    shutil.copy2(ROOT / "tests/fixtures/fonts/TestFont-subset.ttf", fdir / "[wght].ttf")
+    r = bc("emit", "print", "--region", "EU", "--font-file", "assets/fonts/[wght].ttf", "--only", "letterhead", project=proj)
+    assert r.returncode == 2 and "gives no usable family name: pass --font-family" in r.stderr
 
 
 # ---------------------------------------------------------------- the e-mail signature

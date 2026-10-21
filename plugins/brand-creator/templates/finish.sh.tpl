@@ -41,7 +41,7 @@ TARGETS=(web social windows linux tray tauri wallet developer)
 [ "$("${BC[@]}" state --get tier)" = full ] && TARGETS+=(android chrome-ext msix)   # Tier B packs are Full tier only; delete the ones this brand does not ship to
 TIER="$("${BC[@]}" state --get tier)"
 TARGETS+=(profiles)   # every tier: Quick writes the avatar only; Standard and Full add the banners and the Instagram images
-PRINT_REGION="${PRINT_REGION:-}"  # EU, US or JP: print stationery is opt-in with the owner (question 7); empty = not opted in, nothing is printed
+PRINT_REGION="${PRINT_REGION:-}"  # EU, US or JP: print stationery is opt-in with the owner (ask before the packs); empty = not opted in, nothing is printed
 PRINT_ICC="${PRINT_ICC:-}"        # YOUR printer's CMYK profile (.icc): with it the PDFs are "PDF/X-4 candidate", without it "RGB proof, not print-ready"
 PRINT_BLEED="${PRINT_BLEED:-}"    # bleed in mm; empty = the region's default (printer-specific: ask your printer)
 IMAGE_BASE_URL="${IMAGE_BASE_URL:-}"   # https URL where the e-mail signature's PNGs will be hosted (print); empty = a placeholder, warned

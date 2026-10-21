@@ -27,7 +27,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "lib"))
 import svgtools  # noqa: E402
 from _common import EXIT_FAIL, EXIT_USAGE, confine, fail, main_guard, plugin_root  # noqa: E402
-from _emit import fill_template, render_card  # noqa: E402
+from _emit import add_logo_arg, card_lettering, card_lettering_setup, fill_template, render_card  # noqa: E402
 from pxio import png_color_type, png_size  # noqa: E402
 from px_lib import from_png  # noqa: E402
 from tierb import INK_TOLERANCE_PX, TierBEmit, ink_bbox  # noqa: E402
@@ -36,6 +36,7 @@ from tierb import INK_TOLERANCE_PX, TierBEmit, ink_bbox  # noqa: E402
 def main() -> int:
     def args(ap) -> None:
         ap.add_argument("--template", help="card template of the promo tiles (default: templates/card.html in the plugin)")
+        add_logo_arg(ap, cards=True)
         ap.add_argument("--tagline", default="", help="one line on the promo tiles (must be a value in FACTS.md)")
 
     e = TierBEmit.begin("chrome-ext", __doc__, add_args=args)
@@ -77,17 +78,19 @@ def main() -> int:
     if not tpl_path.is_file():
         fail(EXIT_USAGE, f"card template not found: {tpl_path}")
     template = tpl_path.read_text(encoding="utf-8")
+    found, layout = card_lettering_setup(rep, e.project, a, template, tpl_path.name)
     ground, fg = e.colour("light", "color.bg"), e.colour("light", "color.text")
     for key in ("small", "marquee"):
         w, h = promo[key]["width"], promo[key]["height"]
         d = e.drawing(max(w, h))
         values = {"width": w, "height": h, "bg": ground, "fg": fg, "muted": e.modes["light"].get("color.muted", fg),
                   "accent": e.modes["light"].get("color.accent", fg), "name": e.brand, "tagline": a.tagline,
-                  "mark": re.sub(r"^\s*<\?xml[^>]*>\s*", "", d.svg)}
+                  "layout": layout, "lettering": card_lettering(layout, found[0] if found else None, e.brand, w, h),
+                  "mark": "" if layout == "lockup" else re.sub(r"^\s*<\?xml[^>]*>\s*", "", d.svg)}
         src_rel = f"{out}/_build/promo-{key}.html"
         src = confine(e.project, src_rel, what="card source")
         src.parent.mkdir(parents=True, exist_ok=True)
-        src.write_text(fill_template(template, {k: str(v) if k != "mark" else v for k, v in values.items()}), encoding="utf-8")
+        src.write_text(fill_template(template, {k: str(v) for k, v in values.items()}, raw=("mark", "lettering")), encoding="utf-8")
         render_card(e.project, src_rel, w, h, f"{out}/_build/promo-{key}.png", "light")
         raw = confine(e.project, f"{out}/_build/promo-{key}.png", what="card").read_bytes()
         try:

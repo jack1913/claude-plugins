@@ -403,6 +403,23 @@ def test_a_motion_duration_outside_the_tokens_fails(proj):
 
 @setup
 @resvg
+def test_durations_named_motion_in_the_starter_tokens_count_as_well(proj):
+    """The starter tokens name their durations motion.*, Acme names them duration.*: the self-check reads both."""
+    tj = proj / "assets" / "tokens" / "tokens.json"
+    doc = json.loads(tj.read_text())
+    renamed = {("motion." + k.split(".", 1)[1] if k.startswith("duration.") else k): v for k, v in doc["other"].items()}
+    assert renamed != doc["other"]
+    doc["other"] = renamed
+    tj.write_text(json.dumps(doc, indent=2) + "\n")
+    assert bookdata.motion_durations_ms(doc) and not any(k.startswith("duration.") for k in doc["other"])
+    mutate(proj / "book.html", "</style>", "a{transition:color 150ms}</style>")
+    assert bc("book-lint", "--self-consistency", project=proj).returncode == 0
+    mutate(proj / "book.html", "150ms", "900ms")
+    assert bc("book-lint", "--self-consistency", project=proj).returncode == 1
+
+
+@setup
+@resvg
 def test_text_in_a_mark_fails_in_the_source_and_in_the_html(proj):
     mutate(proj / "assets/logo/mark.svg", "</svg>", "<text x='1' y='9'>A</text></svg>")
     out = bc("book", project=proj)

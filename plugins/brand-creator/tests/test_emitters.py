@@ -1,5 +1,6 @@
 """emit web and emit social: structure, stable URLs, fingerprints, idempotence, spec-driven sizes, mutation tests."""
 import ast
+import base64
 import json
 import re
 import shutil
@@ -94,13 +95,18 @@ def test_second_run_writes_nothing_and_fingerprints_follow_the_bytes(acme):
     r = web(acme)
     assert r.returncode == 0 and "0 written, 9 unchanged" in r.stdout
     assert before == {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in files}
-    # change the artwork: icon.svg, the touch icon and PWA icons get new fingerprints, favicon.ico keeps its URL
+    # change the large drawing: the touch icon and PWA icons get new fingerprints, icon.svg (the small band's drawing) keeps its own,
+    # and favicon.ico keeps its URL
+    svg_v = lambda head: re.search(r"icon\.svg\?v=([0-9a-f]{8})", head).group(1)   # noqa: E731
     mutate(acme / "assets/logo/mark.svg", "#007d71", "#b0125a")
     assert web(acme).returncode == 0
     head2 = (acme / WEB / "head.html").read_text()
-    assert head1 != head2
+    assert head1 != head2 and svg_v(head1) == svg_v(head2)
     assert re.search(r'href="/favicon\.ico"', head2) and "favicon.ico?" not in head2
-    assert re.search(r"icon\.svg\?v=([0-9a-f]{8})", head1).group(1) != re.search(r"icon\.svg\?v=([0-9a-f]{8})", head2).group(1)
+    # change the small drawing a tab shows: icon.svg gets a new fingerprint
+    mutate(acme / "assets/logo/grid-mark.svg", "#007d71", "#b0125a")
+    assert web(acme).returncode == 0
+    assert svg_v((acme / WEB / "head.html").read_text()) != svg_v(head2)
     assert manifest(acme)["artefacts"]  # every file is recorded with its hash
 
 
@@ -288,6 +294,37 @@ def test_social_needs_g3_tokens_and_a_complete_template(tmp_path, acme):
     r = social(acme, "--template", str(bad))
     assert r.returncode == 1 and "unfilled placeholders" in r.stderr and "unknown" in r.stderr
     assert social(acme, "--template", str(tmp_path / "missing.html")).returncode == 2
+
+
+def test_social_cards_show_the_drawn_wordmark_and_the_dark_header_its_dark_file(acme):
+    """Acme has wordmark.svg and wordmark-dark.svg: every card sets the drawn wordmark, the dark README header the dark one; no live name."""
+    assert social(acme, "--repo-images", "yes").returncode == 0
+    b = acme / "assets/social/_build"
+    for page, src in (("og", "wordmark.svg"), ("github-social", "wordmark.svg"), ("readme-header-light", "wordmark.svg"), ("readme-header-dark", "wordmark-dark.svg")):
+        html = re.sub(r"<!--.*?-->", "", (b / f"{page}.html").read_text(), flags=re.S)
+        m = re.search(r'src="data:image/svg\+xml;base64,([A-Za-z0-9+/=]+)"', html)
+        assert '<body class="wordmark">' in html and "<h1>" not in html and m, page
+        assert base64.b64decode(m.group(1)).decode("utf-8") == (acme / "assets/logo" / src).read_text(), page
+    rows = {x["id"]: x for x in report(acme, "emit-social")["results"]}
+    assert rows["note:lettering"]["status"] == "info" and "note:readme-header-dark lettering" not in rows
+    (acme / "assets/logo/wordmark-dark.svg").rename(acme / "wordmark-dark.svg")
+    assert social(acme, "--repo-images", "yes").returncode == 0
+    rows = {x["id"]: x for x in report(acme, "emit-social")["results"]}
+    assert rows["note:readme-header-dark lettering"]["status"] == "warn" and "wordmark-dark.svg" in rows["note:readme-header-dark lettering"]["detail"]
+
+
+def test_the_dark_readme_header_warns_about_the_light_mark_only_when_a_mark_is_drawn(acme):
+    """Without mark-dark.svg the dark header reuses the light mark and says so; a lockup card draws no separate mark, so no such warning."""
+    logo = acme / "assets/logo"
+    (logo / "mark-dark.svg").rename(acme / "mark-dark.svg")
+    assert social(acme, "--repo-images", "yes").returncode == 0
+    rows = {x["id"]: x for x in report(acme, "emit-social")["results"]}
+    assert rows["note:readme-header-dark"]["status"] == "warn"
+    shutil.copy2(logo / "wordmark.svg", logo / "lockup.svg")
+    shutil.copy2(logo / "wordmark-dark.svg", logo / "lockup-dark.svg")
+    assert social(acme, "--repo-images", "yes").returncode == 0
+    rows = {x["id"]: x for x in report(acme, "emit-social")["results"]}
+    assert "note:readme-header-dark" not in rows and rows["note:lettering"]["detail"].startswith("assets/logo/lockup.svg")
 
 
 def test_social_card_output_is_html_escaped(acme):

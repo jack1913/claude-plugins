@@ -620,6 +620,46 @@ def test_web_draws_every_favicon_layer_and_png_icon_by_the_band_rule(acme):
     assert "rules_source" in report(acme, "emit-web") and report(acme, "emit-web")["status"] == "pass"
 
 
+def test_icon_svg_is_the_drawing_a_tab_shows_by_the_band_rule_or_the_owners_favicon_drawing(acme):
+    """Browsers that read icon.svg show it in the tab, at the smallest favicon layer's size: the small band's drawing, never the fine
+    vector shrunk. favicon.drawing in qa/rules.json overrides it and is recorded, so a rerun keeps it."""
+    logo = acme / "assets/logo"
+    assert emit(acme, "web").returncode == 0
+    svg = (acme / "assets/web/icon.svg").read_text()
+    grid = (logo / "grid-mark.svg").read_text()
+    assert 'shape-rendering="crispEdges"' in svg and "M4 0h2v1h-2z" in grid and "M4 0h2v1h-2z" in svg   # the coarse grid, not mark.svg
+    assert "prefers-color-scheme:dark" in svg                                                          # with grid-mark-dark.svg
+    assert row(acme, "assets/web/icon.svg")["drawing_file"] == "assets/logo/grid-mark.svg"
+    rows = {x["id"]: x for x in report(acme, "emit-web")["results"]}
+    assert "band rule's drawing for a 16 px tab" in rows["note:icon.svg drawing"]["detail"] and "note:icon.svg" not in rows
+    # the owner names a drawing: it is used, and a second run without any flag keeps it
+    mutate_json(acme / "qa/rules.json", lambda d: d.__setitem__("favicon", {"drawing": "assets/logo/mark.svg"}))
+    for _ in range(2):
+        assert emit(acme, "web").returncode == 0
+        assert row(acme, "assets/web/icon.svg")["drawing_file"] == "assets/logo/mark.svg"
+        assert "M4 0h2v1h-2z" not in (acme / "assets/web/icon.svg").read_text()
+    assert "favicon.drawing in qa/rules.json" in next(x for x in report(acme, "emit-web")["results"] if x["id"] == "note:icon.svg drawing")["detail"]
+    # a drawing with no dark file next to it: no switch, and the report says which file is missing
+    shutil.copy2(logo / "mark.svg", logo / "tab.svg")
+    mutate_json(acme / "qa/rules.json", lambda d: d.__setitem__("favicon", {"drawing": "assets/logo/tab.svg"}))
+    assert emit(acme, "web").returncode == 0
+    assert "prefers-color-scheme" not in (acme / "assets/web/icon.svg").read_text()
+    warn = next(x for x in report(acme, "emit-web")["results"] if x["id"] == "note:icon.svg")
+    assert warn["status"] == "warn" and "assets/logo/tab.svg" in warn["detail"]
+    # its dark file is held to the drawing's rule: pure vector, or the emit stops (exit 1) instead of writing it into icon.svg
+    (logo / "tab-dark.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><text x="1" y="9">A</text></svg>')
+    r = emit(acme, "web")
+    assert r.returncode == 1 and "mark_lint: assets/logo/tab-dark.svg is not pure vector" in r.stderr
+    (logo / "tab-dark.svg").rename(acme / "tab-dark.svg")
+    # a drawing that does not exist, or a key the rules do not know, is a usage error, never a silent default
+    mutate_json(acme / "qa/rules.json", lambda d: d.__setitem__("favicon", {"drawing": "assets/logo/missing.svg"}))
+    r = emit(acme, "web")
+    assert r.returncode == 2 and "assets/logo/missing.svg must be an existing .svg file" in r.stderr
+    mutate_json(acme / "qa/rules.json", lambda d: d.__setitem__("favicon", {"svg": "assets/logo/mark.svg"}))
+    r = emit(acme, "web")
+    assert r.returncode == 2 and "unknown key favicon.svg" in r.stderr
+
+
 def test_the_band_rule_decides_the_web_layers_and_a_favicon_off_the_rule_fails_check(acme):
     # the owner moves the small band's limit up to 48 px: the 48 px layer is now the coarse drawing
     mutate_json(acme / "qa/rules.json", lambda d: d["bands"][0].__setitem__("max_px", 48))

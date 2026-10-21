@@ -177,7 +177,7 @@ def brand_md(project: Path, *, bm_type: str | None = None, bm_arch: str | None =
     L += [""]
     if v["rules"]:
         L += ["### Rules", ""] + [f"- {r}" for r in v["rules"]] + [""]
-    durs = [(k, val) for k, val in doc.get("other", {}).items() if k.startswith("duration.")]
+    durs = [(k, val) for k, val in doc.get("other", {}).items() if k.startswith(("duration.", "motion."))]   # motion.* in the starter tokens
     if durs:
         L += ["### Motion", ""] + [f"- {k}: {val}" for k, val in durs] + [""]
     L += ["## Governance", "", "### Naming", "", f"Name: {v['name']} (working slug `{v['slug']}`).", ""]

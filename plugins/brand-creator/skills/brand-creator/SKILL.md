@@ -64,7 +64,7 @@ These rules ship with the plugin and hold whatever the user's own configuration 
 | Tier | Phases | Outputs | `check` covers |
 |---|---|---|---|
 | Quick | P0 → style research (P1s) → one board (3 directions) → pick → one refine → mark → tokens → web + social → short guide (`book`, Quick chapters) → G5 | mark and lockup SVG/PNG, favicon set, OG card, circle-safe avatar (400, 800), tokens.css/json, short guide (`book.html`); GitHub preview and README headers only when the brief or inventory lists a repository | contrast, logo sheet, board lint, shots, book lint |
-| Standard | + P1 research (feeds P1s), P2 naming if the name is open, full book, web/social/profile/print packs | + book.html, names memo, print PDFs | + book lint, print check, font check |
+| Standard | + P1 research (feeds P1s), P2 naming if the name is open, full book, web/social/profile/print packs | + book.html, names memo, print PDFs (opt-in) | + book lint, print check, font check |
 | Full | + P1c inventory, platform emitters, adoption, launch | + Apple/Windows/Linux/Wallet/developer packs, ADOPTION, LAUNCH | + emitter compiles, idempotence, staleness |
 
 Rough length to state at G0: Quick 2-3 board rounds in one sitting; Standard 4-6 rounds over a day or two;

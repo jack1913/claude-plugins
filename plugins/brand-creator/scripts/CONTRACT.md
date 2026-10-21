@@ -215,7 +215,9 @@ DTCG 2025.10 is a Final Community Group Report. It is not a W3C Standard and not
   to the colour-vision distance. A miss the owner accepts goes in `tokens/exceptions.json` like a touching-pair miss.
 - Emitters need the semantic tokens `color.bg` and `color.text`; `color.muted` and `color.accent` are used when present.
 - `build_tokens.mjs` is the only producer of colour values for code. It uses Style Dictionary 5.7.0 with custom
-  transforms, then parses every emitted artefact back and compares it with the source hex (round trip per transform).
+  transforms, then parses every emitted artefact back and compares it with the source colour, alpha included, the `@supports` values in
+  oklch, oklab and display-p3 too; a value it cannot read, or a missing one, is a failure (round trip per transform). A see-through colour (alpha under 1) is `#rrggbbaa` in `tokens.css`, `#AARRGGBB` on Android and an opacity in Swift and
+  the colorsets.
 
 ## Board contract (data attributes)
 
@@ -374,7 +376,10 @@ recoloured through the token roles light to dark (a warning; a colour the tokens
 | `presskit` | `<slug>-press-kit.zip` | deterministic zip; Standard and Full tier |
 
 `emit web` draws every favicon.ico layer, the apple-touch icon and each PWA icon through `Emit.drawing(size)` (the band rule for the file's own
-size) and records the band (`layer_bands` for the .ico). `icon.svg` is one scalable file and stays the default mark.
+size) and records the band (`layer_bands` for the .ico). `icon.svg` is one scalable file, and browsers that read it show it in the tab:
+it is `favicon.drawing` from `qa/rules.json` when the owner set one, else the band rule's drawing for the smallest favicon layer (the
+tab size), so the default mark only when there are no bands. Its dark switch is the drawing's `<name>-dark.svg`; with none, there is
+no switch and a warning names the missing file. The manifest row records the file (`drawing_file`).
 
 `emit apple` exits 3 off macOS (and on a Mac without Xcode) before it reads the project. `emit tray` reads `tray/tray.json` (a state's source is a
 path, or a map of master size to path, or `{"light": ..., "dark": ...}` of those; a master serves only the sizes it divides, a size with no master
@@ -455,8 +460,12 @@ the numbers in `scripts/lib/qa_rules.py` are the agent's proposals, printed as p
  "cvd":       {"min_delta_e": 10.0, "deficiencies": ["protan", "deutan", "tritan"]},
  "guides":    {"tolerance_px": 1.5},
  "family":    {"tile_share_tolerance": 0.05},
+ "favicon":   {"drawing": "assets/logo/favicon.svg"},
  "bands":     [{"name": "small", "max_px": 32, "drawing": "assets/logo/grid-mark.svg"}, {"name": "large", "drawing": "assets/logo/mark.svg"}]}
 ```
+
+`favicon.drawing` (empty by default) fixes the drawing of `icon.svg` (`emit web`); it must be an existing `.svg` in the
+project (exit 2 otherwise) and pure vector (exit 1 otherwise), and so must its `-dark.svg` when there is one.
 
 An unknown section or key, a value of the wrong type or a number at or below 0 exits 2: a typo never falls back to the proposal.
 **Size bands:** `qa_rules.pick_band(bands, size_px)` is the one function that names the drawing for a body size (first band whose
@@ -521,6 +530,9 @@ the check "not verified" (exit 3). Paths are relative to FAMILY.md; a sibling re
 - `logo-sheet --guides` writes `assets/_checks/logo-guides.png` (the mark at 512 px with baseline, cap line, x-height and grid guides)
   and measures, for each horizontal guide, the distance in px to the strongest ink edge (`guides.tolerance_px`).
 
+Before measuring, `shot` loads every `loading="lazy"` image (one hidden at a width or below the fold never loads otherwise, and would
+count as broken), pauses `--wait` ms (default 300), then waits up to 15 s for running animations and transitions that have an end; one
+that repeats forever is counted and shot where it is. Each view records `lazy_images` and `animations` (`waited`, `running`, `capped`).
 `shot` also records, per view, `gutter_left` and `gutter_right`: the distance in css px from the nearest visible text or image box (outside horizontal scrollers) to the left and right edge of the viewport. They are data, never a verdict (a full-bleed page is legitimate); a page that promises a gutter, such as the generated book (16 px at 390), asserts on them.
 
 ### Motion proof (`shot --motion <proof.json>`)
@@ -630,7 +642,7 @@ FACTS.md value that contains it), `variants:open`, `chapters:required`, `edition
 as `{{count:NAME}}`), `facts:data`, `files:accounting` (every manifest row and artwork file has a `data-path` row with the right `data-sha`),
 `legal:<label>` (FACTS.md rows whose label starts `legal` must appear verbatim), `lang:parity` (every `lang=` + `data-key=` block exists in
 each content language with the same block structure; text in a language that is not in `content_languages` fails), `lang:<code>:<rule>` (warnings with line and offset: the `check` of each rule in `scripts/data/languages/<code>.json` run on the book text in that language, the whole text with one content language, the `lang=` elements with several; kinds `single-letter-nbsp` and `low-opening-quote`; `fontcheck --print-rules` prints every rule for a prompt). `--self-consistency` adds
-`self:durations` (CSS durations and delays are 0 or a `duration.*` token), `self:font-size` (no declared size under the minimum label size;
+`self:durations` (CSS durations and delays are 0 or a `duration.*` or `motion.*` token), `self:font-size` (no declared size under the minimum label size;
 rem and em are taken at 16 px, `var()` cannot be read and fails) and `self:colours` (hex, rgb() or named colours in CSS and SVG paint
 attributes must be token colours; other colour functions fail).
 
@@ -871,8 +883,13 @@ carries `UNVERIFIED, recheck (apple-watch-tv-safe, apple-watchos-appiconset): ` 
 
 **`emit profiles`** (`emitters/profiles.py`, template `templates/profile/banner.html`, report `emit-profiles`; every tier: the Quick tier writes the two avatars only and an info row says the banners are Standard; gate G3). It writes under
 `assets/profiles/`: `avatar-<px>.png` for each size of the `profile-avatar` row (400 and 800; opaque RGB, the mark centred) and one image per platform at its row's size
-(`linkedin-banner`, `x-header`, `youtube-banner`, `facebook-cover`, `instagram-feed`, `instagram-story`, named `<name>-<w>x<h>.png`; the mark and the name, plus one FACTS.md line with `--tagline`,
-laid out inside the row's `safe` rectangle, 24-bit PNG). Every size and safe area is read from `platform-specs.json`. The rows are all status U, so every file is labelled like the other Tier B files.
+(`linkedin-banner`, `x-header`, `youtube-banner`, `facebook-cover`, `instagram-feed`, `instagram-story`, named `<name>-<w>x<h>.png`; the brand's drawn lettering, plus one FACTS.md line with `--tagline`,
+laid out inside the row's `safe` rectangle, 24-bit PNG). The lettering is `--logo-svg`, else `assets/logo/lockup.svg` (it stands alone), else `assets/logo/wordmark.svg`
+(set next to the mark), shown as an image (`{{lettering}}`, `{{layout}}` = `lockup`, `wordmark` or `type`). Whether a file is a lockup or a wordmark comes from
+`--lettering`, else from its file name (a name that says neither or both exits 2). The name is live text in the system font only with `--name` (an info row;
+with `--logo-svg` or `--lettering` it exits 2), without a lockup or wordmark (a `note:lettering` warning), or with a template that has no `{{lettering}}` (a
+warning). The Quick tier reads no lettering: it writes no banners. `emit social`, `emit android` (the feature graphic) and `emit chrome-ext` (the promo tiles)
+follow the same rule for their cards (`templates/card.html`), and the dark README header takes the lettering's `<name>-dark.svg` (a warning without one). Every size and safe area is read from `platform-specs.json`. The rows are all status U, so every file is labelled like the other Tier B files.
 
 - **The gate comes before the files.** The avatar's ink must lie inside the `safe_circle` share of the circle (default box: the largest, up to 0.7 of the canvas, that fits; `--content-fraction` sets it
   and is held to the same gate); the ink of a banner (pixels unlike the ground, read from the rendered PNG) must lie inside its safe rectangle, so a name that is too long or a template that draws outside
