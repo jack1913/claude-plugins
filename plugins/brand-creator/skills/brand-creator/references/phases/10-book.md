@@ -88,9 +88,10 @@ it after the owner has seen it). The losing options and every switcher leave the
 `removed-<date>/`; the decision is recorded under Collapsed in BRAND-STATE.md. Rebuild the tokens and the book afterwards. Variants live only
 while undecided: `book-lint` fails any left in the book, and `book --allow-variants` exists only for a review build.
 
-The cover shows the edition and APPROVED only when G5 is recorded for that edition (`state --record G5` writes `approved_edition`). A
-generated book follows BRAND-STATE.md when rebuilt. A hand-authored book is patched to show the stamp before G5 is recorded. After approval an
-edition is not edited in place: `patch --new-edition` or `collapse --new-edition` opens the next one, which needs its own G5.
+The cover shows the edition and APPROVED (or the word `labels.<language>.APPROVED` gives in `book/book.json`, for the book's first
+content language) only when G5 is recorded for that edition (`state --record G5` writes `approved_edition`). A generated book follows
+BRAND-STATE.md when rebuilt. A hand-authored book is patched to show the stamp before G5 is recorded. After approval an edition is not
+edited in place: `patch --new-edition` or `collapse --new-edition` opens the next one, which needs its own G5.
 
 ## Adapters and the applied skill (opt-in at G5)
 

@@ -87,6 +87,25 @@ def fit(svg_text: str, width: int, height: int, *, box: tuple[float, float] | No
     return dump(wrap)
 
 
+def pixel_art(svg_text: str) -> bool:
+    """Art drawn on a pixel grid: its root says shape-rendering="crispEdges" (the pixel engines write it). Wherever the plugin chooses the size
+    (cards, banners, the side-by-side image, the book's cover), such art is scaled by whole numbers only, so every pixel stays square and the same size."""
+    return parse(svg_text).get("shape-rendering") == "crispEdges"
+
+
+def fit_box(svg_text: str, max_w: float, max_h: float) -> tuple[int, int]:
+    """The largest whole-pixel box of the art's viewBox proportions inside max_w x max_h; pixel art at a whole-number scale (pixel_art)."""
+    vb = viewbox(parse(svg_text))
+    if pixel_art(svg_text):
+        k = int(min(max_w / vb[2], max_h / vb[3]))
+        if k >= 1:
+            return int(vb[2] * k), int(vb[3] * k)
+    w, h = max_w, max_w * vb[3] / vb[2]
+    if h > max_h:
+        w, h = max_h * vb[2] / vb[3], max_h
+    return max(1, int(w)), max(1, int(h))
+
+
 PIXEL_GRID_MAX = 64   # a pixel mark is drawn on a small grid (16, 32, up to 64 cells); a larger crispEdges viewBox is a vector
 
 

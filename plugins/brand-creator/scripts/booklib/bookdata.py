@@ -45,6 +45,7 @@ CONFIG_FILE = "book/book.json"
 CHAPTER_DIR = "book/chapters"
 DEFAULT_OUTPUT = "book.html"
 PDF_LABEL = "RGB, not print-ready"
+APPROVED = "APPROVED"   # the cover's approval stamp word, and the English label that `labels` in book/book.json translates
 
 DEFAULT_SIZES = [16, 20, 32, 48, 64, 128, 180]
 LINT_DEFAULTS = {
@@ -122,7 +123,20 @@ def load_config(project: Path) -> tuple[dict, str]:
             fail(EXIT_USAGE, f"{CONFIG_FILE}: each font is {{family, file, weight?, style?}}")
     if cfg["min_label_px"] < 10:
         fail(EXIT_USAGE, f"{CONFIG_FILE}: min_label_px {cfg['min_label_px']} is below 10 px, the smallest label a reader can be asked to read")
+    if not isinstance(cfg["labels"], dict):
+        fail(EXIT_USAGE, f"{CONFIG_FILE}: labels must be an object of language code to its labels")
+    for lg, tr in cfg["labels"].items():
+        if not (isinstance(tr, dict) and all(isinstance(k, str) and isinstance(v, str) for k, v in tr.items())):
+            fail(EXIT_USAGE, f"{CONFIG_FILE}: labels.{lg} must be an object of English word to its translation, all text")
+        if APPROVED in tr and not tr[APPROVED].strip():
+            fail(EXIT_USAGE, f"{CONFIG_FILE}: labels.{lg}.{APPROVED} is the cover's approval stamp: write the word as text, or leave the entry out")
     return cfg, CONFIG_FILE
+
+
+def stamp_word(cfg: dict, lang: str) -> str:
+    """The word of the cover's approval stamp in `lang` (the book's first content language): its labels entry for APPROVED in book/book.json, else
+    APPROVED. English is never translated: its labels are the English words, as the generator's T() has it."""
+    return APPROVED if lang == "en" else cfg["labels"].get(lang, {}).get(APPROVED, APPROVED).strip()
 
 
 # ---------------------------------------------------------------- BRAND-STATE view
@@ -304,7 +318,8 @@ def manifest_view_sha(project: Path) -> str:
     """A hash of the manifest as the book reads it (see manifest_rows). Reports record it instead of listing assets/manifest.json as an input,
     so rebuilding the press kit, which changes the manifest, leaves the book reports current."""
     keep = ("path", "sha256", "bytes", "emitter", "slot", "size", "band")
-    rows = sorted(({k: r.get(k) for k in keep} for r in manifest_rows(project)), key=lambda r: r["path"])
+    rows = sorted(({**{k: r.get(k) for k in keep}, **({"superseded": True} if r.get("superseded") else {})} for r in manifest_rows(project)),
+                  key=lambda r: r["path"])   # `superseded` only where it is set, so a manifest without one hashes as it always did
     return hashlib.sha256(json.dumps(rows, sort_keys=True).encode()).hexdigest()
 
 

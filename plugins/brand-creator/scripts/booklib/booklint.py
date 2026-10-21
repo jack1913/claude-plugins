@@ -198,7 +198,7 @@ def lint(project: Path, text: str, *, path: str, view: dict, cfg: dict, tokens_d
     if is_html:
         res += _variant_rules(text, allow_variants)
         res += _chapter_rules(project, text, view)
-        res += _edition_rules(text, view)
+        res += _edition_rules(text, view, cfg)
         res += _count_rules(project, text, cfg, tokens_doc, facts_rows)
         res += _file_rules(project, text, L)
         res += _legal_rules(visible, facts_rows)
@@ -408,7 +408,7 @@ def _chapter_rules(project: Path, text: str, view: dict) -> list[dict]:
                 else f"{len(need)} required chapter(s) present")]
 
 
-def _edition_rules(text: str, view: dict) -> list[dict]:
+def _edition_rules(text: str, view: dict, cfg: dict) -> list[dict]:
     cover = next((t for t in htmlscan.tags(text) if not t.closing and "data-cover" in t.attrs), None)
     if cover is None:
         return [row("edition:stamp", "fail", "the cover carries the edition and the approval stamp from BRAND-STATE.md",
@@ -423,14 +423,19 @@ def _edition_rules(text: str, view: dict) -> list[dict]:
                      f"(G5 {'recorded' if view['g5'] else 'not recorded'}, approved_edition {view['approved_edition']}, edition {view['edition']})")
     end = htmlscan.element_end(text, cover)
     cover_text = htmlscan.visible_text(text[cover.start:end], with_attributes=False)
-    stamped = bool(re.search(r"\bAPPROVED\b", cover_text))
+    lang = view["content_languages"][0]
+    word = bookdata.stamp_word(cfg, lang)   # the first content language's label for APPROVED, else APPROVED
+    mark = next((t for t in htmlscan.tags(text[cover.start:end]) if not t.closing and "data-stamp-text" in t.attrs), None)   # the stamp element
+    seen = htmlscan.visible_text(text[cover.start:end][mark.start:htmlscan.element_end(text[cover.start:end], mark)], with_attributes=False) if mark else cover_text
+    stamped = bool(re.search(r"(?<!\w)" + re.escape(word) + r"(?!\w)", seen))   # in the stamp, so a cover label that shares the word cannot pass for it
     if stamped != (state == "approved"):
-        probs.append("the cover text " + ("says APPROVED but the edition is not approved" if stamped else "has no APPROVED stamp but the edition is approved"))
+        probs.append("the cover text " + (f"says {word} but the edition is not approved" if stamped else f"has no {word} stamp but the edition is approved"
+                                          + (f" (the first content language is {lang}: its stamp word is the labels.{lang}.APPROVED of book/book.json)" if word != bookdata.APPROVED else "")))
     if state == "approved" and date and date not in cover_text:
         probs.append(f"the cover does not show the approval date {date}")
     if probs:
         probs.append("a generated book follows BRAND-STATE.md when rebuilt (`brand-creator book`); a hand-authored book is patched: change the cover's "
-                     "data-edition, data-stamp and APPROVED <date> text with `brand-creator patch`, and do that before recording G5")
+                     f"data-edition, data-stamp and {word} <date> text with `brand-creator patch`, and do that before recording G5")
     return [row("edition:stamp", "fail" if probs else "pass", "the cover carries the edition and the approval stamp from BRAND-STATE.md",
                 "; ".join(probs) if probs else f"edition {view['edition']}, {state}" + (f" {date}" if date else ""))]
 

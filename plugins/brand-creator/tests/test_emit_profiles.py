@@ -233,6 +233,31 @@ def test_a_name_given_is_set_as_text_and_a_template_from_before_the_lettering_st
     assert row["status"] == "warn" and "no {{lettering}} placeholder" in row["detail"]
 
 
+def test_a_template_that_draws_its_own_name_is_an_info_row_and_one_that_types_it_still_warns(std, tmp_path):
+    """No {{lettering}} and no {{name}} outside the comments and the <title>: the template draws the name itself (outlined paths, for example), so
+    nothing is wrong and the row is info, with or without a lockup or wordmark file. A template that types {{name}} keeps its warning."""
+    def lettering_row():
+        return next(x for x in report(std, "emit-profiles")["results"] if x["id"] == "note:lettering")
+    t = tmp_path / "banner.html"
+    shutil.copy2(ROOT / "templates/profile/banner.html", t)
+    assert "{{name}}" in t.read_text()      # the <title> and the comment name it: neither counts
+    mutate(t, '<div class="text">{{lettering}}', '<div class="text"><svg class="own-name" viewBox="0 0 40 8" width="320" height="64"><path d="M0 0h40v8h-40z"/></svg>')
+    assert profiles(std, "--template", str(t)).returncode == 0       # Acme's wordmark.svg is there and is not placed
+    row = lettering_row()
+    assert row["status"] == "info" and row["label"] == "the template draws its own name" and "no {{lettering}} and no {{name}}" in row["detail"], row
+    assert 'class="own-name"' in page(std, "linkedin-banner") and "<h1>" not in page(std, "linkedin-banner") and 'class="lettering"' not in page(std, "linkedin-banner")
+    typed = tmp_path / "typed.html"
+    shutil.copy2(t, typed)
+    mutate(typed, '<div class="text"><svg class="own-name"', '<div class="text"><p>{{name}}</p><svg class="own-name"')
+    assert profiles(std, "--template", str(typed)).returncode == 0
+    row = lettering_row()
+    assert row["status"] == "warn" and "no {{lettering}} placeholder" in row["detail"]
+    for f in (std / "assets/logo").glob("wordmark*.svg"):             # without a drawn wordmark the own-name template still has nothing to warn about
+        f.rename(std / f.name)
+    assert profiles(std, "--template", str(t)).returncode == 0
+    assert lettering_row()["status"] == "info" and lettering_row()["label"] == "the template draws its own name"
+
+
 def test_lockup_or_wordmark_comes_from_lettering_or_the_file_name_and_is_never_guessed(std):
     """A --logo-svg whose name says wordmark keeps the mark next to it; a name that says neither stops the run (exit 2) until --lettering says."""
     logo = std / "assets/logo"

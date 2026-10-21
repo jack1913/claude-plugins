@@ -10,7 +10,7 @@ import shutil
 from pathlib import Path
 
 import pytest
-from helpers import FIXTURES, ROOT, bc, data_dir, mutate
+from helpers import FIXTURES, ROOT, bc, data_dir, mutate, mutate_json
 
 pytestmark = [pytest.mark.requires_setup, pytest.mark.requires_node]
 CANON = ["Overview", "Colors", "Typography", "Layout", "Elevation & Depth", "Shapes", "Components", "Do's and Don'ts"]
@@ -38,7 +38,7 @@ def front(text: str) -> dict:
 
 def colours(text: str, section="colors") -> dict:
     block = re.search(rf"^{section}:\n((?:  .*\n)+)", FM_RE.match(text).group(1) + "\n", re.M).group(1)
-    return {m.group(1): m.group(2) for ln in block.splitlines() if (m := re.match(r'^  ([a-z-]+): "(#[0-9a-f]{6})"$', ln))}
+    return {m.group(1): m.group(2) for ln in block.splitlines() if (m := re.match(r'^  ([a-z-]+): "(#[0-9a-f]{6}(?:[0-9a-f]{2})?)"$', ln))}
 
 
 def stub_data(tmp_path, answer: dict | None, version=PINNED) -> Path:
@@ -55,6 +55,17 @@ def stub_data(tmp_path, answer: dict | None, version=PINNED) -> Path:
         (pk / "package.json").write_text(json.dumps({"name": "@google/design.md", "version": version, "bin": {"design.md": "cli.js"}}))
         (pk / "cli.js").write_text(f"console.log({json.dumps(json.dumps(answer))});\n")
     return d
+
+
+def add_scrim(p: Path) -> None:
+    """A see-through role in both modes: a scrim at 56% (#3a2448, alpha byte 0x8f = 143 / 255, the colour of the tokens' own alpha test), built into the tokens."""
+    def plum(d):
+        d["color"]["plum"] = {"$value": {"colorSpace": "srgb", "components": [58 / 255, 36 / 255, 72 / 255], "alpha": 0.56, "hex": "#3a2448"}}
+    mutate_json(p / "tokens" / "primitives.tokens.json", plum)
+    for f in ("semantic.light.tokens.json", "semantic.dark.tokens.json"):
+        mutate_json(p / "tokens" / f, lambda d: d["color"].__setitem__("scrim", {"$value": "{color.plum}"}))
+    r = bc("tokens", project=p)
+    assert r.returncode == 0, r.stdout + r.stderr
 
 
 # ---------------------------------------------------------------- opt-in
@@ -94,6 +105,36 @@ def test_brand_md_has_the_four_layers_and_the_frontmatter_of_the_architecture(pa
     fm = front((pack / "BRAND.md").read_text())
     assert (fm["type"], fm["architecture"]) == ("product", "branded-house")
     assert bc("adapters", "--brand-md", "--bm-type", "company", project=pack).returncode == 2
+
+
+def test_a_see_through_role_is_printed_with_its_alpha_wherever_a_role_is_listed(pack):
+    """tokens.json carries the alpha of every role. A role under alpha 1 is #rrggbbaa (lower case, the form tokens.css prints) in BRAND.md, DESIGN.md and
+    the applied skill; an opaque role stays #rrggbb. The scrim is #3a2448 at 56%: 0.56 x 255 = 142.8, rounded to 143 = 0x8f."""
+    add_scrim(pack)
+    assert "--color-plum: #3a24488f;" in (pack / "assets/tokens/tokens.css").read_text()
+    assert bc("adapters", "--brand-md", "--design-md", "--primary", "accent", project=pack).returncode in (0, 3)
+    assert bc("applied-skill", "--yes", project=pack).returncode == 0
+    brand, design = (pack / "BRAND.md").read_text(), (pack / "DESIGN.md").read_text()
+    skill = (pack / ".claude" / "skills" / "acme-brand" / "SKILL.md").read_text()
+    for text in (brand, skill):
+        assert "| scrim | #3a24488f | #3a24488f |" in text and "| accent | #007d71 | #4cd7c8 |" in text and "| bg | #f9f7ee | #0e141d |" in text
+    c = colours(design)
+    assert (c["scrim"], c["scrim-dark"]) == ("#3a24488f", "#3a24488f")
+    assert (c["accent"], c["bg"], c["bg-dark"], c["primary"]) == ("#007d71", "#f9f7ee", "#0e141d", "#007d71")
+    for text in (brand, design, skill):
+        assert not re.search(r"#3a2448(?![0-9a-f])", text), "the scrim must not appear as an opaque colour"
+
+
+@pytest.mark.requires_design_lint
+def test_the_pinned_design_md_format_accepts_an_eight_digit_colour(pack):
+    """The format the plugin pins (@google/design.md) lists #RRGGBBAA as a colour; its own lint passes a DESIGN.md that has one."""
+    spec = (data_dir() / "node_modules" / "@google" / "design.md" / "dist" / "spec.md").read_text()
+    assert "`#RRGGBBAA`" in spec
+    add_scrim(pack)
+    r = bc("adapters", "--design-md", "--primary", "accent", project=pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "scrim: \"#3a24488f\"" in (pack / "DESIGN.md").read_text()
+    assert row(pack, "design-md:lint", "adapters")["status"] == "pass"
 
 
 def test_brand_md_lists_the_durations_whether_they_are_named_duration_or_motion(pack):

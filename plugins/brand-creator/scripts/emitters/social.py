@@ -34,10 +34,10 @@ sys.path.insert(0, str(HERE.parent / "lib"))
 import qa_rules  # noqa: E402
 import specs  # noqa: E402
 from _common import EXIT_FAIL, EXIT_USAGE, Parser, Report, confine, fail, find_project, main_guard, plugin_root, read_state, today  # noqa: E402
-from _emit import (add_common_args, add_logo_arg, art_img, card_lettering, card_lettering_setup, card_mark_size, dark_sibling,  # noqa: E402
-                   facts as facts_of, fill_template, fit_art, lettering_art, lettering_files, mark_accent, mark_tagline,
-                   load_mark, load_tokens, need_colors, regulated_profession, render_card, lists_repository, require_gate,
-                   require_tier)
+from _emit import (CARD_RULE_RADIUS, add_common_args, add_logo_arg, art_img, card_art, card_lettering, card_lettering_setup, card_mark_size,  # noqa: E402
+                   dark_sibling, facts as facts_of, fill_template, fit_art, lettering_art, lettering_files, mark_accent, mark_tagline,
+                   load_mark, load_tokens, need_colors, regulated_profession, render_card, lists_repository, require_gate, require_tier,
+                   rule_radius)
 from manifest import Manifest  # noqa: E402
 from pxio import png_size  # noqa: E402
 
@@ -75,16 +75,18 @@ def lineup_members(project: Path, a, rules: dict, rep: Report) -> list[dict]:
 
 def lineup_values(members: list[dict], layout: str, art: str | None, name: str, mode: str, w: int, h: int) -> dict:
     """The values of templates/lineup.html at w x h: each mark (its dark drawing on a dark card when it has one) as an image in its cell,
-    the wordmarks under them at one height, and the brand's lettering or typed name above. Pixel art is set at a whole-number scale."""
+    the wordmarks under them at one height, and the brand's lettering or typed name above. Pixel art is set at a whole-number scale, and
+    when every mark is pixel art the accent line under the name has square ends."""
     n = len(members)
     gap_x = round(w * LINEUP_GAP_X)
     cell_w = (w * LINEUP_ROW - (n - 1) * gap_x) / n
     box = min(h * LINEUP_MARK, cell_w * LINEUP_CELL)
     words = [m["wordmark_dark"] if mode == "dark" and m["wordmark_dark"] else m["wordmark"] for m in members]
     cap = min([fit_art(x, cell_w, h * LINEUP_CAPTION)[1] for x in words if x] or [round(h * LINEUP_CAPTION)])
-    figs = []
+    figs, drawings = [], []
     for m, word in zip(members, words):
         drawing = m["dark"] if mode == "dark" and m["dark"] else m["light"]
+        drawings.append(drawing)
         mw, mh = fit_art(drawing, box, box)
         data = base64.b64encode(drawing.encode("utf-8")).decode("ascii")
         caption = art_img(word, *fit_art(word, cell_w, cap), m["name"]) if word else html.escape(m["name"])
@@ -92,9 +94,10 @@ def lineup_values(members: list[dict], layout: str, art: str | None, name: str, 
                     f"<figcaption>{caption}</figcaption></figure>")
     title = (art_img(art, *fit_art(art, w * LINEUP_TITLE_ART[0], h * LINEUP_TITLE_ART[1]), name) if layout != "type" and art
              else f"<h1>{html.escape(name)}</h1>")
-    title_px = round(h * LINEUP_TITLE)
+    title_px, rule_h = round(h * LINEUP_TITLE), max(2, round(h * 0.012))
     return {"lettering": title, "marks": "".join(figs), "gap": round(h * 0.06), "gap_x": gap_x, "cell_w": int(cell_w), "caption_gap": round(h * 0.03), "caption_h": cap,
-            "caption_px": round(cap * 0.8), "title_px": title_px, "sub_px": round(h * 0.045), "rule_w": title_px * 2, "rule_h": max(2, round(h * 0.012))}
+            "caption_px": round(cap * 0.8), "title_px": title_px, "sub_px": round(h * 0.045), "rule_w": title_px * 2, "rule_h": rule_h,
+            "rule_radius": rule_radius(f"{rule_h}px", drawings)}
 
 
 def main() -> int:
@@ -168,7 +171,8 @@ def main() -> int:
         if lineup:
             return render(variant, mode, w, h, lineup_values(members, layout, art, name, mode, w, h), ("lettering", "marks"))
         values = {"layout": layout, "lettering": card_lettering(layout, art, name, w, h), "mark_size": card_mark_size(mark_svg, h),
-                  "mark": "" if layout == "lockup" else re.sub(r"^\s*<\?xml[^>]*>\s*", "", mark_svg)}
+                  "mark": "" if layout == "lockup" else re.sub(r"^\s*<\?xml[^>]*>\s*", "", mark_svg),
+                  "rule_radius": rule_radius(CARD_RULE_RADIUS, card_art(layout, mark_svg, art))}
         return render(variant, mode, w, h, values, ("mark", "lettering"))
 
     # Open Graph: new URL per change
@@ -316,8 +320,9 @@ def main() -> int:
 
     stamped, warns = specs.stamp(used_rows, today())
     mf.stamp_specs(stamped)
-    retired = mf.retire_unwritten("social", out, keep=lambda p: re.fullmatch(r"og-\d+x\d+-[0-9a-f]{8}\.png", Path(p).name) is not None
-                                  or (not a.posts and p.startswith(f"{out}/posts/")), mark=mid)
+    def old_og(p: str) -> bool:   # a fingerprinted Open Graph file: one this run did not write is the superseded card, kept for cached link previews
+        return re.fullmatch(r"og-\d+x\d+-[0-9a-f]{8}\.png", Path(p).name) is not None
+    retired = mf.retire_unwritten("social", out, keep=lambda p: old_og(p) or (not a.posts and p.startswith(f"{out}/posts/")), mark=mid, superseded=old_og)
     for p in retired:
         rep.add(f"retired:{p}", "warn", "slot no longer emitted",
                 detail=f"an earlier run wrote {p} but this run did not: the file was moved to removed-{today()}/ and its manifest row dropped")

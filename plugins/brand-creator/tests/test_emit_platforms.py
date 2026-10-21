@@ -670,6 +670,40 @@ def test_icon_svg_is_the_drawing_a_tab_shows_by_the_band_rule_or_the_owners_favi
     assert r.returncode == 2 and "unknown key favicon.svg" in r.stderr
 
 
+def test_a_changed_tab_drawing_is_warned_with_both_files_and_how_to_keep_the_old_one(acme):
+    """0.3.1 changed which drawing icon.svg uses without a word, so a project that had passed --svg got another tab icon. When the manifest says an
+    earlier run drew another drawing, the report warns with both files and the setting that keeps the old one; a first run and a rerun do not."""
+    def warn():
+        return {x["id"]: x for x in report(acme, "emit-web")["results"]}.get("note:icon.svg changed")
+    assert emit(acme, "web").returncode == 0 and warn() is None            # nothing to compare with
+    first = (acme / "assets/web/icon.svg").read_bytes()
+    assert emit(acme, "web").returncode == 0 and warn() is None            # the same drawing as the last run
+    mutate_json(acme / "qa/rules.json", lambda d: d.__setitem__("favicon", {"drawing": "assets/logo/mark.svg"}))
+    r = emit(acme, "web")
+    w = warn()
+    assert r.returncode == 0 and w["status"] == "warn" and report(acme, "emit-web")["status"] == "pass"     # a warning: the owner decides, nothing fails
+    assert "assets/logo/grid-mark.svg" in w["detail"] and "assets/logo/mark.svg" in w["detail"]
+    assert "set favicon.drawing to assets/logo/grid-mark.svg in qa/rules.json" in w["detail"]
+    assert row(acme, "assets/web/icon.svg")["drawing_file"] == "assets/logo/mark.svg"   # this run's drawing is the recorded one now
+    assert emit(acme, "web").returncode == 0 and warn() is None            # so the next run is quiet
+    mutate_json(acme / "qa/rules.json", lambda d: d.__setitem__("favicon", {"drawing": "assets/logo/grid-mark.svg"}))   # the advice, followed
+    assert emit(acme, "web").returncode == 0 and (acme / "assets/web/icon.svg").read_bytes() == first
+    # a project without bands drew its default mark; the band rule it adds draws another drawing: the old one has no file name to quote
+    mutate_json(acme / "qa/rules.json", lambda d: (d.pop("bands"), d.pop("favicon")))
+    assert emit(acme, "web").returncode == 0
+    assert row(acme, "assets/web/icon.svg")["drawing_file"] == "the mark"
+    mutate_json(acme / "qa/rules.json", lambda d: d.__setitem__("bands", [{"name": "all", "drawing": "assets/logo/grid-mark.svg"}]))
+    assert emit(acme, "web").returncode == 0
+    assert "drew the mark in icon.svg" in warn()["detail"] and "set favicon.drawing to the mark's file" in warn()["detail"]
+    # no warning when the tab does not change: the same file written another way, or the default mark named by its own path
+    mutate_json(acme / "qa/rules.json", lambda d: d.__setitem__("favicon", {"drawing": "./assets/logo/grid-mark.svg"}))
+    assert emit(acme, "web").returncode == 0 and warn() is None
+    mutate_json(acme / "qa/rules.json", lambda d: (d.pop("bands"), d.pop("favicon")))
+    assert emit(acme, "web").returncode == 0                               # no bands: the default mark
+    mutate_json(acme / "qa/rules.json", lambda d: d.__setitem__("favicon", {"drawing": "assets/logo/mark.svg"}))
+    assert emit(acme, "web").returncode == 0 and warn() is None            # the mark's own file: the same bytes, the same tab
+
+
 def test_the_band_rule_decides_the_web_layers_and_a_favicon_off_the_rule_fails_check(acme):
     # the owner moves the small band's limit up to 48 px: the 48 px layer is now the coarse drawing
     mutate_json(acme / "qa/rules.json", lambda d: d["bands"][0].__setitem__("max_px", 48))

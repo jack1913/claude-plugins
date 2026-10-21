@@ -39,7 +39,7 @@ The thresholds are yours, kept in `qa/rules.json`. The plugin's numbers are prop
 
 Cards and banners show your name as you drew it (your lockup, or your wordmark next to the logo). Without either, the
 name is typed in a plain system font, and the report tells you so. Pixel-art logos are scaled by whole numbers, so every
-pixel stays square.
+pixel stays square, and the line under the name gets square ends to match.
 
 Several products with their own logos, sharing one look? Each logo gets its own files: favicons, cards and headers. Your
 repository also gets images that show all of them side by side.

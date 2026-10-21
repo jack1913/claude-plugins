@@ -25,7 +25,8 @@ bands; the top-level bands and favicon.drawing then stay empty, and every tool t
                "tool-b": {"bands": [{"name": "all", "drawing": "assets/logo/tool-b.svg"}]}}}
 
 The last band's drawing is the mark's main drawing. name (default: the id) is what cards say when there is no drawn lettering,
-accent a token role for the cards' accent (default color.accent), tagline a FACTS.md label whose value goes under the name.
+accent a token role for the cards' accent and for the accent `downscale` measures on its drawings and its packs' files (default:
+color.accent on cards, downscale.accent_colour in downscale), tagline a FACTS.md label whose value goes under the name.
 """
 from __future__ import annotations
 

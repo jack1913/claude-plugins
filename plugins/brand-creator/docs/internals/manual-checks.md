@@ -111,7 +111,7 @@ never shipped, so the test skips (with a NOT VERIFIED banner) for everyone else 
 **Steps** (the author only): `BRAND_CREATOR_DENYLIST=<private denylist.json> tests/run-all.sh` before every release; the test
 must pass, not skip.
 
-**Last run:** in the author's own suite runs; last 2026-10-21 (the 0.3.1 and 0.3.2 release runs), with the terms and palettes of the client
+**Last run:** in the author's own suite runs; last 2026-10-21 (the 0.3.1 to 0.3.3 release runs), with the terms and palettes of the client
 projects since 0.1.0 added to the list.
 
 ## Hook guard applies to subagent tool calls

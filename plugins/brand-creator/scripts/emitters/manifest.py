@@ -17,6 +17,8 @@ A row may also carry (all optional, documented in scripts/CONTRACT.md):
   layer_bands   for a multi-layer file (.ico): {"<px>": band} of each layer's drawing; checked against the band rule
   mark          the id of the mark the file draws, when the project lists several marks (qa/rules.json marks); its bands are
                 the ones the row is checked against, and a run of one mark never retires another mark's rows
+  superseded    true on a row an emitter keeps on purpose after a later run replaced the file (emit social keeps the Open Graph
+                files of an earlier card: cached link previews may still use their URLs); the book's file list says so
 
 Size bands: qa/rules.json lists bands ({name, max_px, drawing}); pick_band() is the ONE function that picks the drawing for
 a body size. put_slot() records the band a slot used. A slot that uses a different band than the picker names is off the
@@ -90,12 +92,14 @@ class Manifest:
                 row["downscale_source"] = extra.pop("downscale_source", relpath)   # the file the downscale gate must have measured
         return self.put(relpath, data, emitter=emitter, specs=specs, **row, **extra)
 
-    def retire_unwritten(self, emitter: str, out: str, keep=None, mark: str | None = None) -> list[str]:
+    def retire_unwritten(self, emitter: str, out: str, keep=None, mark: str | None = None, superseded=None) -> list[str]:
         """Rows of `emitter` under `out/` that this run did not write describe slots that no longer exist (a removed tray state, a
         dropped target, a superseded fingerprinted name). Their files are MOVED (never deleted) to removed-<date>/<path> inside
         the project and the rows are dropped; returns the retired paths. `keep(path)` true spares a row (social keeps superseded Open
         Graph files: their URLs may still be in cached link previews, and the emitter warns about them instead). Only rows of the same
-        `mark` are touched (None: rows that name no mark), so a run of one mark never retires another's files, whatever the folders."""
+        `mark` are touched (None: rows that name no mark), so a run of one mark never retires another's files, whatever the folders.
+        A row this run did not write and `superseded(path)` is true for stays, marked `"superseded": true`: a later run replaced that file
+        and the row is kept on purpose (a row this run writes again carries no such mark)."""
         written = set(self.changed) | set(self.unchanged)
         self.retired_to = {}   # path -> removed-<date>[-n] folder it went to (for the report text)
         prefix = out.strip("/") + "/"
@@ -113,6 +117,10 @@ class Manifest:
                 shutil.move(str(src), str(dest))
                 self.retired_to[p] = f"removed-{today()}" + (f"-{n}" if n > 1 else "")
             del self.artefacts[p]
+        if superseded:
+            for p, a in self.artefacts.items():
+                if a.get("emitter") == emitter and a.get("mark") == mark and p.startswith(prefix) and p not in written and superseded(p):
+                    a["superseded"] = True
         return gone
 
     def stamp_specs(self, stamped: dict) -> None:

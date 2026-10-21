@@ -6,6 +6,47 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-10-21
+
+Fixes from the first projects with several marks and the first approved books: `downscale` measures each mark's own
+colour, the book's cover shows the drawn wordmark and its stamp speaks the book's language, and see-through colours keep
+their alpha in the generated text.
+
+### Changed
+
+- The accent line under the name has square ends when everything drawn on the card is pixel art, so it matches the pixels:
+  on social cards, banners, the Play feature graphic, the Chrome promo tiles and the side-by-side image (there, when every
+  mark is pixel art). Vector art keeps its round ends. The templates take a new `{{rule_radius}}`; a template of your own
+  without it keeps the rounding it has.
+- `emit web` warns when `icon.svg`, the drawing browsers show in the tab, changes to another drawing than on its last run,
+  and the warning names both files. The same file written another way, or the same bytes, is no change. To keep the old tab icon, set `favicon.drawing` in `qa/rules.json` to the old file
+  (`marks.<id>.favicon` for one of several marks).
+- The brand book's cover shows your drawn wordmark as its title when `assets/logo/wordmark.svg` exists: an image with the
+  name as its alt text, switched to `wordmark-dark.svg` in dark mode like the marks, and set at a whole-number scale when
+  it is pixel art. Without a wordmark the name is typed, as before.
+- The approval stamp on the book's cover says its word in the book's content language. Give the word in `book/book.json`
+  (`"labels": {"pl": {"APPROVED": "ZATWIERDZONO"}}`) and a Polish book says it; `book-lint` looks for that word, in a
+  hand-authored book too, in the stamp itself rather than anywhere on the cover. Without it the stamp stays `APPROVED`, and
+  the build says the label is missing. A `labels` entry that is not an object of words stops the build with a clear error.
+
+### Fixed
+
+- `downscale` measured every mark on `downscale.accent_colour`, so a mark with its own colour failed. It now measures the
+  drawings of a mark, and the files its packs emitted (an avatar, a registry icon), on that mark's `accent` from
+  `qa/rules.json`: `--accent` first, then the mark's accent, then `downscale.accent_colour`.
+- `BRAND.md`, `DESIGN.md` and the applied skill printed a see-through colour as if it were opaque. A role with an alpha
+  under 1 is now `#rrggbbaa` (as in `tokens.css`) wherever a role is listed, and opaque roles are unchanged. The DESIGN.md
+  format the plugin pins accepts the 8-digit form, and its lint passes it.
+- A card or banner template that draws its own name (outlined paths, for example) was warned about as typing the name.
+  With no `{{lettering}}` and no `{{name}}` it now gets an info row that says so, reads no lettering file, and refuses
+  `--name` and `--logo-svg`, which it would ignore; a template that types `{{name}}` is still warned.
+- The book PDF could print an empty page between two chapters: a chapter that went on from an earlier page and ended near
+  the bottom of its last page sent its bottom padding to a page of its own. The chapters and the cover keep no bottom
+  padding in print now.
+- The book's files chapter listed an Open Graph file that `emit social` keeps for cached link previews as if it were as
+  current as the new one. The manifest marks the kept file `"superseded": true`, and the files chapter says "superseded,
+  kept for cached link previews" next to it.
+
 ## [0.3.2] - 2026-10-21
 
 Several marks in one project: each product's mark gets its own drawings by size, files, reports and checks, and the

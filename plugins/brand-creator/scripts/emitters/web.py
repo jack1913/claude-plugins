@@ -11,7 +11,8 @@ Writes under assets/web/ (override with --out-dir) and records every file in ass
   icon.svg             the drawing a browser shows in a tab, switching to its dark artwork (<name>-dark.svg) with prefers-color-scheme:
                        favicon.drawing in qa/rules.json when the owner set one, else the band rule's drawing for the smallest favicon
                        layer (the tab size), which is the default mark when the project has no bands. Browsers that support it show
-                       this file in the tab rather than the .ico, so it is the small drawing, not the fine vector shrunk
+                       this file in the tab rather than the .ico, so it is the small drawing, not the fine vector shrunk. When the
+                       manifest says an earlier run drew another drawing, a warning names both and how to keep the old one
   apple-touch-icon.png opaque ground (iOS paints transparency black)
   icons/               PWA any-purpose icons, a separate maskable icon (content inside the safe circle), monochrome; each is
                        drawn by the band rule for its size
@@ -21,12 +22,14 @@ bytes change. Sizes come from platform-specs.json only. Needs gate G3. Idempoten
 """
 import hashlib
 import json
+import posixpath
 import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "lib"))
+import qa_rules  # noqa: E402
 import svgtools  # noqa: E402
 from _color import parse_hex  # noqa: E402
 from _common import EXIT_USAGE, confine, fail, main_guard  # noqa: E402
@@ -93,9 +96,18 @@ def main() -> int:
     dark_tab = e.dark_file(d_tab)
     why = (f"marks.{e.mark_id}.favicon" if e.mark else "favicon.drawing") + f" in {e.rules_src}" if chosen else (f"the band rule's drawing for a {tab} px tab" if d_tab.rel else "the default mark (no bands)")
     icon_svg = svgtools.combine_scheme(d_tab.svg, dark_tab).encode()
+    shows = d_tab.rel or "the mark"
+    last = e.mf.artefacts.get(f"{out}/icon.svg", {})   # what the last run put in the tab, read before this run's row replaces it
+    before = last.get("drawing_file")
     put("icon.svg", icon_svg, ["favicon-set"], slot="favicon-svg", resampled_by="PAGE",
-        drawing_file=d_tab.rel or "the mark", note=f"one scalable file shown in browser tabs: {why}")
-    rep.add("note:icon.svg drawing", "info", "the drawing in icon.svg", detail=f"{d_tab.rel or 'the mark'} ({why})")
+        drawing_file=shows, note=f"one scalable file shown in browser tabs: {why}")
+    rep.add("note:icon.svg drawing", "info", "the drawing in icon.svg", detail=f"{shows} ({why})")
+    if before and posixpath.normpath(before) != posixpath.normpath(shows) and last.get("sha256") != hashlib.sha256(icon_svg).hexdigest():
+        key = f"marks.{e.mark_id}.favicon" if e.mark else "favicon.drawing"
+        keep = before if before != "the mark" else "the mark's file (the --svg you passed, else assets/logo/mark.svg)"
+        rep.add("note:icon.svg changed", "warn", "icon.svg shows another drawing than on the last run",
+                detail=f"the last run drew {before} in icon.svg and this run draws {shows} ({why}): the browser tab changes. To keep the old tab icon, "
+                       f"set {key} to {keep} in {qa_rules.RULES_FILE}")
     if dark_tab is None:
         rep.add("note:icon.svg", "warn", "no dark artwork",
                 detail=f"icon.svg has no prefers-color-scheme switch: there is no dark file for {d_tab.rel or 'the mark'} (draw <name>-dark.svg next to it)")

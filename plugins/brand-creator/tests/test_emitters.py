@@ -262,6 +262,15 @@ def test_social_images_have_the_spec_sizes_and_the_og_url_follows_the_bytes(acme
     assert len(names) == 2 and first in names
     assert "superseded" in r.stdout and "removed-<date>" in r.stdout
 
+    def og_rows():
+        return {a["path"].rsplit("/", 1)[1]: a for a in manifest(acme)["artefacts"] if a["path"].startswith("assets/social/og-")}
+    # the kept card's row is marked superseded in the manifest; the current card's is not
+    assert set(og_rows()) == set(names) and [n for n, a in og_rows().items() if a.get("superseded")] == [first]
+    assert social(acme, "--name", "Acme Tools").returncode == 0                    # a rerun keeps the marking and writes nothing
+    assert [n for n, a in og_rows().items() if a.get("superseded")] == [first]
+    assert social(acme).returncode == 0                                          # the first card again: it is current, the other one is kept
+    assert [n for n, a in og_rows().items() if a.get("superseded")] == [n for n in names if n != first] and "superseded" not in og_rows()[first]
+
 
 def test_social_second_run_is_idempotent(acme):
     assert social(acme).returncode == 0
@@ -325,6 +334,50 @@ def test_the_dark_readme_header_warns_about_the_light_mark_only_when_a_mark_is_d
     assert social(acme, "--repo-images", "yes").returncode == 0
     rows = {x["id"]: x for x in report(acme, "emit-social")["results"]}
     assert "note:readme-header-dark" not in rows and rows["note:lettering"]["detail"].startswith("assets/logo/lockup.svg")
+
+
+@pytest.mark.parametrize("template, found, name_given, status, words", [
+    # no {{lettering}} and no {{name}} outside the comments and the <title>: the template draws its own name
+    ("<title>{{name}}</title><!-- {{name}} {{lettering}} --><svg></svg>", True, False, "info", "it draws the name itself"),
+    ("<TITLE lang=x>{{name}}</TITLE>\n<body><svg></svg></body>", True, False, "info", "it draws the name itself"),
+    ("<title>{{name}}</title><svg></svg>", False, False, "info", "it draws the name itself"),          # and it never needed a lockup or wordmark file
+    # a template that types {{name}} without {{lettering}} keeps its warning, and so does a card with no lettering file
+    ("<title>{{name}}</title><h1>{{name}}</h1>", True, False, "warn", "no {{lettering}} placeholder"),
+    ("<h1>{{name}}</h1>", False, False, "warn", "no {{lettering}} placeholder"),        # the template, not a missing file, keeps the art out
+    ("<div>{{lettering}}</div>", False, False, "warn", "there is no assets/logo/lockup.svg"),
+    # the normal cases are not touched
+    ("<title>{{name}}</title><div>{{lettering}}</div>", True, False, "info", "wordmark.svg (by its file name)"),
+    ("<h1>{{name}}</h1>", True, True, "info", "--name sets the name as text"),
+    ("<svg></svg>", True, True, "info", "it draws the name itself"),   # emit refuses --name with such a template first (exit 2)
+])
+def test_a_template_that_draws_its_own_name_is_told_apart_from_one_that_types_it(template, found, name_given, status, words, tmp_path):
+    import _emit
+    from _common import Report
+    rep = Report("emit-test", tmp_path)
+    _emit.lettering_layout(rep, ("<svg/>", "assets/logo/wordmark.svg") if found else None, template, "card.html", name_given)
+    row = rep.results[-1]
+    assert row["id"] == "note:lettering" and row["status"] == status and words in row["detail"], row
+
+
+OWN_NAME = ('<!doctype html><html><head><meta charset="utf-8"><title>{{name}}</title><style>html,body{margin:0;width:{{width}}px;'
+            'height:{{height}}px;background:{{bg}}}</style></head><body><svg xmlns="http://www.w3.org/2000/svg" width="40" height="10">'
+            '<rect width="40" height="10" fill="{{fg}}"/></svg></body></html>')
+
+
+def test_a_template_that_draws_its_own_name_reads_no_lettering_and_refuses_flags_it_would_ignore(acme, tmp_path):
+    """Such a template places no lettering: an unoutlined wordmark.svg cannot stop it and is not an input, and --name or --logo-svg, which it
+    would ignore, stop the run (exit 2) instead of being dropped in silence."""
+    tpl = tmp_path / "own-name.html"
+    tpl.write_text(OWN_NAME)
+    (acme / "assets/logo/wordmark.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 10"><text x="1" y="9">Acme</text></svg>')
+    r = social(acme, "--template", str(tpl))
+    assert r.returncode == 0, r.stdout + r.stderr
+    rep = report(acme, "emit-social")
+    assert {x["id"]: x for x in rep["results"]}["note:lettering"]["status"] == "info" and "wordmark.svg" not in json.dumps(rep["inputs"])
+    r = social(acme, "--template", str(tpl), "--name", "Acme Tools")
+    assert r.returncode == 2 and "it draws its own name, so --name would not be used" in r.stderr
+    r = social(acme, "--template", str(tpl), "--logo-svg", "assets/logo/mark.svg", "--lettering", "lockup")
+    assert r.returncode == 2 and "has no {{lettering}} placeholder to place it" in r.stderr
 
 
 def test_social_card_output_is_html_escaped(acme):

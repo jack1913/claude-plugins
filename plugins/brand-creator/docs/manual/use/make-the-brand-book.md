@@ -14,8 +14,9 @@ from your project, so it can't drift from your files.
 
    > /brand-creator:brand-book
 
-2. Claude builds `book.html`, one self-contained page with no script and no network, in light and dark. In Quick it is a
-   short guide: idea, mark, colour, files and changing the brand. Standard and Full add the full chapters.
+2. Claude builds `book.html`, one self-contained page with no script and no network, in light and dark. The cover shows
+   your name as you drew it, with your wordmark. In Quick it is a short guide: idea, mark, colour, files and changing the
+   brand. Standard and Full add the full chapters.
 3. Claude reviews the book against its own checklist and shows you the findings.
 4. Read it and approve it, or ask for a change.
 
@@ -24,6 +25,15 @@ from your project, so it can't drift from your files.
 Ask for the change: "update the guidelines after the colour change". Claude changes the source and rebuilds. It never
 edits `book.html` by hand. A hand-drawn logo has a hand-written book instead, which Claude edits through counted patches
 that open a new edition.
+
+## A book in another language
+
+The approval stamp says `APPROVED` until you give it the word in your language. For a Polish book, add this to
+`book/book.json`, and the cover says `ZATWIERDZONO` and the date:
+
+```json
+{"schema": 1, "labels": {"pl": {"APPROVED": "ZATWIERDZONO"}}}
+```
 
 ## Export a PDF
 

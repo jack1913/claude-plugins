@@ -10,13 +10,16 @@
        {{safe_x}} {{safe_y}} {{safe_w}} {{safe_h}}  the safe rectangle in px: everything that is drawn stays inside it, and the emitter fails when ink lands outside
        {{direction}} {{align}} {{items}} {{gap}}   row or column layout of the mark and the name, the text alignment and the alignment of the name block, the gap in px
        {{mark_px}} {{title_px}} {{sub_px}} {{rule_w}} {{rule_h}}   sizes in px worked out from the safe rectangle
+       {{rule_radius}}                            the corner radius of the accent line under the name: {{rule_h}} in px (round ends), or 0 (square
+                                                  ends) when everything on the banner is pixel art (crispEdges)
        {{bg}} {{fg}} {{muted}} {{accent}}         colours from the built tokens (color.bg, color.text, color.muted, color.accent)
        {{layout}}                                 lockup (the drawn lockup stands alone, {{mark}} is empty), wordmark (the drawn name next to the mark)
                                                   or type (the name as live text in the system font: no lockup or wordmark, or --name given)
        {{lettering}}                              the drawn lockup or wordmark as an image of class "lettering" sized to fit, or the name as an h1 heading for type
        {{name}} {{tagline}} {{mark}} {{proof}}
      Self-contained: no network, no web fonts (system stack). Copy it and pass it with --template to restyle; keep the placeholders. A template
-     without {{lettering}} (written before 0.3.1) still works: it gets the name as text, and the report warns. -->
+     without {{lettering}} (written before 0.3.1) still works: it gets the name as text, and the report warns; one with no {{name}} either draws
+     its own name (outlined paths, for example) and the report only says so. -->
 <style>
 html,body{margin:0;width:{{width}}px;height:{{height}}px;overflow:hidden;background:{{bg}};color:{{fg}}}
 body{position:relative;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
@@ -28,7 +31,7 @@ body{position:relative;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe 
 .lettering{display:block;margin-bottom:calc({{title_px}}px * 0.2)}   /* the space live text keeps under its baseline */
 .text{min-width:0;display:flex;flex-direction:column;align-items:{{items}}}
 h1{margin:0;font-size:{{title_px}}px;line-height:1.05;letter-spacing:-0.02em;font-weight:700}
-.rule{width:{{rule_w}}px;height:{{rule_h}}px;background:{{accent}};margin-top:{{rule_h}}px;border-radius:{{rule_h}}px}
+.rule{width:{{rule_w}}px;height:{{rule_h}}px;background:{{accent}};margin-top:{{rule_h}}px;border-radius:{{rule_radius}}}
 p{margin:{{rule_h}}px 0 0;font-size:{{sub_px}}px;line-height:1.3;color:{{muted}}}
 </style>
 </head>

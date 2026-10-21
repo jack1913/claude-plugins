@@ -279,8 +279,23 @@ def card_lettering_setup(rep: Report, project: Path, a, template: str, template_
                          "lettering, not both")
     if kind and not explicit:
         fail(EXIT_USAGE, "--lettering says what --logo-svg holds: pass it together with --logo-svg")
-    found = None if a.name else lettering_art(project, explicit, rep.inputs, mark_id)
+    slot, own_name = template_slots(template)
+    if a.name and own_name:
+        fail(EXIT_USAGE, f"--name types the name, but {template_name} has neither {{{{lettering}}}} nor {{{{name}}}}: it draws its own name, so --name "
+                         f"would not be used")
+    if explicit and not slot:
+        fail(EXIT_USAGE, f"--logo-svg names the lettering, but {template_name} has no {{{{lettering}}}} placeholder to place it")
+    # only a template with a {{lettering}} placeholder places the art: for any other one no lettering file is read or linted
+    found = lettering_art(project, explicit, rep.inputs, mark_id) if slot and not a.name else None
     return found, lettering_layout(rep, found, template, template_name, bool(a.name), kind=kind, mark_id=mark_id)
+
+
+def template_slots(template: str) -> tuple[bool, bool]:
+    """-> (the template places drawn lettering: {{lettering}}, it draws its own name: neither {{lettering}} nor {{name}}), comments and the
+    <title> element left out."""
+    plain = re.sub(r"<!--.*?-->", "", template, flags=re.S)
+    slot = "{{lettering}}" in plain
+    return slot, not slot and "{{name}}" not in re.sub(r"<title\b.*?</title\s*>", "", plain, flags=re.S | re.I)
 
 
 def lettering_layout(rep: Report, found: tuple[str, str] | None, template: str, template_name: str, name_given: bool,
@@ -288,19 +303,25 @@ def lettering_layout(rep: Report, found: tuple[str, str] | None, template: str, 
     """How a card or banner sets the name, said in a report row: 'lockup' (the art holds the mark and the name: it stands alone), 'wordmark'
     (the drawn name next to the mark) or 'type' (the name as live text in the template's font). Type when --name was given (the art cannot
     say another name), when there is no lettering art, or when the template has no {{lettering}} placeholder outside its comments (a
-    template written before 0.3.1). Lockup or wordmark comes from `kind` (--lettering), else from the file name (lettering_kind)."""
-    slot = "{{lettering}}" in re.sub(r"<!--.*?-->", "", template, flags=re.S)
+    template written before 0.3.1: a warning). A template with no {{lettering}} and no {{name}} either (comments and <title> left out) draws its
+    own name, outlined paths for example: an info row, not a warning. Lockup or wordmark comes from `kind` (--lettering), else from the file
+    name (lettering_kind)."""
+    slot, own_name = template_slots(template)
+    if own_name:
+        rep.add("note:lettering", "info", "the template draws its own name",
+                detail=f"{template_name} has no {{{{lettering}}}} and no {{{{name}}}} placeholder: it draws the name itself (outlined paths, for example), so no lockup or wordmark is placed and no name is typed")
+        return "type"
     if name_given:
         rep.add("note:lettering", "info", "the name is live text in the system font", detail="--name sets the name as text: the drawn lettering says the recorded name")
+        return "type"
+    if not slot:
+        rep.add("note:lettering", "warn", "the name is live text in the template's font",
+                detail=f"{template_name} has no {{{{lettering}}}} placeholder (a template from before 0.3.1): add it to show the drawn lockup or wordmark")
         return "type"
     if found is None:
         lockup, wordmark = lettering_files(mark_id)
         rep.add("note:lettering", "warn", "the name is live text in the system font",
                 detail=f"there is no {lockup} or {Path(wordmark).name}: draw one (outlined, P6) and run this again for the brand's own lettering")
-        return "type"
-    if not slot:
-        rep.add("note:lettering", "warn", "the name is live text in the template's font",
-                detail=f"{template_name} has no {{{{lettering}}}} placeholder (a template from before 0.3.1): add it to show the drawn lockup or wordmark")
         return "type"
     layout = lettering_kind(found[1], kind)
     rep.add("note:lettering", "info", f"the name is the drawn {layout}", detail=f"{found[1]} ({'--lettering' if kind else 'by its file name'})")
@@ -311,12 +332,13 @@ CARD_LOCKUP = 0.82, 0.34   # a drawn lockup on templates/card.html: at most this
 CARD_WORDMARK = 0.1125     # a drawn wordmark's height as a share of the card's: 0.75 of the 15vh name, about the height of its caps
 CARD_MARK = 0.58           # the mark's side on templates/card.html as a share of the card's height ...
 CARD_MARK_CSS = "58vh"     # ... and the same share as the template writes it
+CARD_RULE_RADIUS = "1vh"   # templates/card.html's accent line, as written there: its height, so its ends are round
 
 
 def pixel_art(svg_text: str) -> bool:
     """Art drawn on a pixel grid: its root says shape-rendering="crispEdges" (the pixel engines write it). Wherever the plugin chooses the size
     (cards, banners, the side-by-side image), such art is scaled by whole numbers only, so every pixel stays square and the same size."""
-    return svgtools.parse(svg_text).get("shape-rendering") == "crispEdges"
+    return svgtools.pixel_art(svg_text)
 
 
 def whole_px(svg_text: str, side_px: float) -> int:
@@ -333,6 +355,17 @@ def whole_px(svg_text: str, side_px: float) -> int:
 def card_mark_size(svg_text: str, h: int) -> str:
     """{{mark_size}} of templates/card.html: 58vh, or for pixel art the whole-number size in px that fits there."""
     return f"{whole_px(svg_text, h * CARD_MARK)}px" if pixel_art(svg_text) else CARD_MARK_CSS
+
+
+def card_art(layout: str, mark_svg: str | None, lettering: str | None) -> list[str]:
+    """The drawings a card or banner sets: the mark (a lockup stands alone, so none) and the drawn lettering (the type layout types the name, so none)."""
+    return [x for x in (None if layout == "lockup" else mark_svg, None if layout == "type" else lettering) if x]
+
+
+def rule_radius(round_css: str, drawn: list[str]) -> str:
+    """{{rule_radius}}, the corner radius of the accent line under the name: `round_css`, the template's own round ends, for vector art; 0 when
+    everything drawn is pixel art (pixel_art), so the line's ends are square like the pixels."""
+    return "0" if drawn and all(pixel_art(x) for x in drawn) else round_css
 
 
 def mark_accent(modes: dict, mode: str, mark: dict | None, fg: str) -> str:
@@ -372,15 +405,7 @@ def card_lettering(layout: str, art: str | None, name: str, w: int, h: int) -> s
 
 def fit_art(svg_text: str, max_w: float, max_h: float) -> tuple[int, int]:
     """The largest whole-pixel box of the art's viewBox proportions inside max_w x max_h; pixel art at a whole-number scale (pixel_art)."""
-    vb = svgtools.viewbox(svgtools.parse(svg_text))
-    if pixel_art(svg_text):
-        k = int(min(max_w / vb[2], max_h / vb[3]))
-        if k >= 1:
-            return int(vb[2] * k), int(vb[3] * k)
-    w, h = max_w, max_w * vb[3] / vb[2]
-    if h > max_h:
-        w, h = max_h * vb[2] / vb[3], max_h
-    return max(1, int(w)), max(1, int(h))
+    return svgtools.fit_box(svg_text, max_w, max_h)
 
 
 def art_img(svg_text: str, w: int, h: int, alt: str) -> str:

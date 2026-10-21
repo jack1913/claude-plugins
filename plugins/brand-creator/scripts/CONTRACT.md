@@ -349,7 +349,8 @@ personal data and no `@`.
 INVENTORY.md slot id), `size` (`WxH`), `resampled_by` (`OURS` our own master at the exact pixels, `SYS` a system downscale of one master, `PAGE`
 drawn by the page; the "who" of the plan), `note`, `band` (see QA gates), `exemption` and `qa` (the gates the file needs, from downscale, states, motion, family, fonts, idempotent, print; `check` requires a
 current passing report for each), and `downscale_source` (with `qa: ["downscale"]`: the project path of the master the downscale gate must have
-measured; `put_slot()` defaults it to the file itself, the Apple pack names its marketing master). A multi-size file (an `.ico`) carries `layers`
+measured; `put_slot()` defaults it to the file itself, the Apple pack names its marketing master), and `superseded` (`true` on a row kept on purpose
+after a later run replaced its file: the earlier Open Graph card). A multi-size file (an `.ico`) carries `layers`
 and `layer_bands` ({"16": band, ...}); `check` re-reads each layer's band against the rule for that layer's own size.
 Emitters write rows through `Manifest.put()` or `Manifest.put_slot()`; both write a file only when its bytes change.
 
@@ -381,7 +382,10 @@ drawing (exit 1), and one that leads out of the project, through a symlink, exit
 size) and records the band (`layer_bands` for the .ico). `icon.svg` is one scalable file, and browsers that read it show it in the tab:
 it is `favicon.drawing` from `qa/rules.json` when the owner set one, else the band rule's drawing for the smallest favicon layer (the
 tab size), so the default mark only when there are no bands. Its dark switch is the drawing's `<name>-dark.svg`; with none, there is
-no switch and a warning names the missing file. The manifest row records the file (`drawing_file`).
+no switch and a warning names the missing file. The manifest row records the file (`drawing_file`). When the manifest already has a row for
+`icon.svg` whose `drawing_file` is another drawing than this run's, the report warns (`note:icon.svg changed`) with both files and the setting
+that keeps the old tab icon: `favicon.drawing` in `qa/rules.json`, or `marks.<id>.favicon` for one of several marks. A row with no
+`drawing_file` (written before 0.3.1) is not compared.
 
 `emit apple` exits 3 off macOS (and on a Mac without Xcode) before it reads the project. `emit tray` reads `tray/tray.json` (a state's source is a
 path, or a map of master size to path, or `{"light": ..., "dark": ...}` of those; a master serves only the sizes it divides, a size with no master
@@ -394,7 +398,9 @@ write this time: the file is moved to `removed-<date>/<path>` in the project (ne
 `retired:<path>` warning and a `retired` list. A removed tray state, a dropped deployment target or a feature option that is gone no longer ships.
 `emit social` writes the GitHub social preview and the README headers only when `INVENTORY.md` lists a repository row or `brief/BRIEF.md` names a repository URL, a Repository line or a README/GitHub required surface (`--repo-images yes|no` forces it); otherwise an `note:repo-images` info row says why they were skipped.
 A folder the run skipped on purpose (`emit apple --no-cards`) is spared (`Emit.keep()`), and `emit social` spares superseded fingerprinted
-Open Graph files (cached link previews may still use their URL; it warns instead).
+Open Graph files (cached link previews may still use their URL; it warns instead). Their rows stay in the manifest marked `"superseded": true`
+(a row an emit writes again has no mark), and the book's files chapter lists them with the note "superseded, kept for cached link previews"
+instead of as a second current card.
 
 **Report inputs.** An emitter lists every file it read in its report: the marks, `assets/tokens/tokens.json`, `qa/rules.json` (the bands), and
 as used `FACTS.md` (store frames, AppStream, CLI identity), `INVENTORY.md` (Apple deployment targets), `tray/tray.json`, `--svg-mono` and the
@@ -489,8 +495,10 @@ A project whose products share one system but each have their own mark (a family
 
 - A mark id is lower-case letters and digits joined by hyphens: it names folders and reports. Every mark has at least one band, and the
   last band's drawing is its main drawing. `name` (default: the id) is what its cards say when there is no drawn lettering, `favicon`
-  fixes its `icon.svg` drawing, `accent` is the token role of its cards' accent (default `color.accent`; a role the tokens do not define
-  exits 1), and `tagline` is a `FACTS.md` label whose value goes under its name (a label `FACTS.md` lacks exits 1; `--tagline` wins).
+  fixes its `icon.svg` drawing, `accent` is the token role of its cards' accent and of the accent `downscale` measures on its drawings and
+  on the files its packs emitted (default: `color.accent` on cards, `downscale.accent_colour` in `downscale`; a role the tokens do not define
+  exits 1 on a card and 2 in `downscale`), and `tagline` is a `FACTS.md` label
+  whose value goes under its name (a label `FACTS.md` lacks exits 1; `--tagline` wins).
 - With `marks`, the top-level `bands` and `favicon.drawing` stay empty (exit 2 otherwise), and every emitter and `logo-sheet` take
   `--mark <id>`: a run without it, with an id the file does not list, or with `--svg`/`--svg-dark` exits 2, and so does `--mark` in a
   one-mark project. Nothing is guessed.
@@ -529,8 +537,9 @@ hex digits of the path hash). `check` ties a manifest row to the report whose `s
 as shipped (for example an actool output) with no resampling; pass every shipped file of one master in one run, since each run writes
 the master's report anew. When the master is one band's drawing (`qa/rules.json` `bands`), an info row `bands` names its sizes and the
 drawings that ship the others: its rows outside its band show what a system that shrinks this one master would make of it (an app icon),
-and a size drawn per band is measured as shipped, with `--png`. The accent colour and ground come from `tokens.json` (the role in
-`downscale.accent_colour`, mode `--mode light|dark`) or `--accent` / `--ground`.
+and a size drawn per band is measured as shipped, with `--png`. The accent colour and ground come from `tokens.json` (mode
+`--mode light|dark`) or `--accent` / `--ground`. The accent is `--accent`, else the `accent` role of the mark whose drawing the master is
+(`qa/rules.json` `marks.<id>.accent`), else `downscale.accent_colour`; the report's `accent.role` names the one it measured.
 
 ### states-check
 
@@ -653,7 +662,7 @@ from `templates/book/` and never overwrites; `[[fill: ...]]` left in a chapter f
 links. Raw HTML is escaped. Anything else is an error with the line number. Computed blocks on their own line: `{{marks[:stem,stem?]}}`,
 `{{mark-sizes}}` (the drawing the size band rule picks, rendered at exactly the size on light and dark, the enlarged copy being the same
 pixels, plus the downscale reports' accent measurements), `{{colours}}`, `{{contrast}}` (WCAG ratios computed from the tokens), `{{type}}`,
-`{{motion}}`, `{{tokens}}`, `{{files}}` (one row per manifest row and source artwork file with `data-path` and `data-sha`), `{{checks}}`,
+`{{motion}}`, `{{tokens}}`, `{{files}}` (one row per manifest row and source artwork file with `data-path` and `data-sha`; a row marked `superseded` carries a note saying so), `{{checks}}`,
 `{{decided}}`, `{{history}}`, `{{edition-log}}`, `{{donts}}` (five misuse drawings of the mark), `{{facts}}`. Inline: `{{count:NAME}}`
 (`files, slots, colours, pairs, roles, sizes, artwork, emitters, chapters`), `{{fact:LABEL}}` (a FACTS.md row's value), `{{edition}}`,
 `{{name}}`, `{{approved}}`. `::: variant GROUP NAME` and `::: switcher GROUP` fences are open choices (see `collapse`). Settings in
@@ -661,12 +670,20 @@ pixels, plus the downscale reports' accent measurements), `{{colours}}`, `{{cont
 embedded as data URIs), `labels` (`{lang: {English label: translation}}`; a label with no translation is shown in English and warned),
 `output`, `lint` (`history_chapter, forbidden, scratch, round, status_words, count_nouns, allow_external_links, files_exclude`).
 
+**The cover.** Its title (the `<h1>`) is the brand's drawn wordmark when `assets/logo/wordmark.svg` exists: an image whose alt is the name, with
+`wordmark-dark.svg` switched like the cover's marks (`sch-l` and `sch-d`; without a dark file the light one shows in both schemes, and a warning says so),
+in the cover's art box (at most 320 x 96 px; pixel art, an SVG whose root says `shape-rendering="crispEdges"`, at a whole-number scale: `svgtools.fit_box`,
+the rule the cards use). Without a wordmark the name is typed. In print the chapters and the cover keep no bottom padding: Chromium moves the padding of a
+box that goes on from an earlier page to a page of its own when the box ends within it of the page's end, and the next forced page break leaves that page empty.
+
 **The cover and adoption.** The `Adoption` row of the cover states only what the data back: `Adoption approved <date>` once G6 (the owner's go) is recorded, else `Adoption not yet approved`, and, when `adoption.json` exists, `; N of M rows done` counted from its `progress`. G6 alone never says "applied". `adoption.json` (row progress) is in the book's state view and inputs, so a progress change makes a built book stale; an `adoption.json` that is not an adoption record exits 2.
 
-**Edition and approval.** `edition` is the book's number. The cover (`data-cover`, `data-edition`, `data-stamp`) shows APPROVED and the G5
-date only when G5 is recorded and `approved_edition` equals `edition`; `state --record G5` writes `approved_edition`, so a later edition is
-pending until it is approved again. `patch` and `collapse` log under `## Edition log` and refuse to change an approved edition unless
-`--new-edition` opens the next. A hand-authored book must show the stamp before G5 is recorded (patch the cover, then record).
+**Edition and approval.** `edition` is the book's number. The cover (`data-cover`, `data-edition`, `data-stamp`) shows the stamp word and the G5
+date only when G5 is recorded and `approved_edition` equals `edition`; the word is APPROVED, or the `labels` entry of `book/book.json` for `APPROVED`
+in the book's first content language (`labels.pl.APPROVED`; English is never translated; an empty entry exits 2), and `book-lint` looks for that word,
+in a hand-authored book too; `state --record G5` writes `approved_edition`, so a later edition is pending until it is approved again.
+`patch` and `collapse` log under `## Edition log` and refuse to change an approved edition unless `--new-edition` opens the next. A
+hand-authored book must show the stamp before G5 is recorded (patch the cover, then record).
 
 **book-lint rows** (each one result in `assets/_checks/book-lint.json`): `html:head`, `ids:duplicate`, `anchors:broken`, `network:refs`
 (script, handlers, `<link>`, iframe, `src`/`srcset` that is not `data:`, http(s) in links or text, CSS `url()` that is not `data:`, `@import`),
@@ -830,7 +847,9 @@ then Strategy (the facts, the canonical direction), Voice (only `voice` and `ton
 (colour roles in light and dark, type families, the mark files, the G4 rules, motion durations) and Governance (naming and renames, claims and verbatim legal facts,
 the accessibility commitments with the computed ratios, approval). Contact and postal-address facts are left out. DESIGN.md: frontmatter `version: alpha`, `name`,
 `colors` (the light roles, `-dark` variants, `primary` when `--primary` names a role), `typography` (families only), `spacing`, `components` (one entry per
-`ui-text` pair, light and dark, as `{colors.x}` references), then the sections in the spec's order that have content. The report `adapters` records the sha256 of
+`ui-text` pair, light and dark, as `{colors.x}` references), then the sections in the spec's order that have content. A role whose colour is see-through
+(alpha under 1 in `tokens.json`) is written `#rrggbbaa`, lower case, as `tokens.css` writes it, wherever a role is listed (BRAND.md, DESIGN.md `colors`, the applied
+skill); an opaque role stays `#rrggbb`. The pinned DESIGN.md format lists `#RRGGBBAA` as a colour, and its lint passes it. The report `adapters` records the sha256 of
 each output and `adapter_state_sha` (a hash of what the adapters read from BRAND-STATE.md and FACTS.md). DESIGN.md is linted with `@google/design.md` (the version
 pinned in `scripts/package.json`, run with Node from `<data>/node_modules`; a different installed version is not trusted): an error or a `contrast-ratio` finding
 is `fail`, other warnings are `warn`, and a missing package is `skipped`, so the report is not-verified and the exit code 3. `check` gates the report, fails a file
@@ -924,11 +943,16 @@ laid out inside the row's `safe` rectangle, 24-bit PNG). The lettering is `--log
 (set next to the mark), shown as an image (`{{lettering}}`, `{{layout}}` = `lockup`, `wordmark` or `type`). Whether a file is a lockup or a wordmark comes from
 `--lettering`, else from its file name (a name that says neither or both exits 2). The name is live text in the system font only with `--name` (an info row;
 with `--logo-svg` or `--lettering` it exits 2), without a lockup or wordmark (a `note:lettering` warning), or with a template that has no `{{lettering}}` (a
-warning). The Quick tier reads no lettering: it writes no banners. `emit social`, `emit android` (the feature graphic) and `emit chrome-ext` (the promo tiles)
+warning). A template with no `{{lettering}}` and no `{{name}}` either (its comments and `<title>` left out) draws its own name, outlined paths for example: a
+`note:lettering` info row says so, with or without a lockup or wordmark file, and nothing is typed. The Quick tier reads no lettering: it writes no banners. `emit social`, `emit android` (the feature graphic) and `emit chrome-ext` (the promo tiles)
 follow the same rule for their cards (`templates/card.html`), and the dark README header takes the lettering's `<name>-dark.svg` (a warning without one).
 Pixel art (an SVG whose root says `shape-rendering="crispEdges"`) is set at a whole-number scale wherever the plugin picks the size, so every
 pixel stays square: the mark (card.html's `{{mark_size}}`, the banner's `{{mark_px}}`), the lettering on cards and banners, and the
-side-by-side image; at a fixed icon size the band's drawing decides. With several marks, each follows the rules of Several marks. Every size and safe area is read from `platform-specs.json`. The rows are all status U, so every file is labelled like the other Tier B files.
+side-by-side image; at a fixed icon size the band's drawing decides. The accent line under the name has square ends too: the cards
+(`card.html`), the banners (`banner.html`) and the side-by-side image (`lineup.html`) take `{{rule_radius}}` for its `border-radius`, which
+is 0 when everything drawn on the card is pixel art (the mark unless a lockup stands alone, the lettering unless the name is typed; on the
+side-by-side image every mark) and the template's own round ends otherwise (`1vh` on a card, the line's height on a banner and the image).
+A template of a project that has no `{{rule_radius}}` keeps its own `border-radius`. With several marks, each follows the rules of Several marks. Every size and safe area is read from `platform-specs.json`. The rows are all status U, so every file is labelled like the other Tier B files.
 
 - **The gate comes before the files.** The avatar's ink must lie inside the `safe_circle` share of the circle (default box: the largest, up to 0.7 of the canvas, that fits; `--content-fraction` sets it
   and is held to the same gate); the ink of a banner (pixels unlike the ground, read from the rendered PNG) must lie inside its safe rectangle, so a name that is too long or a template that draws outside

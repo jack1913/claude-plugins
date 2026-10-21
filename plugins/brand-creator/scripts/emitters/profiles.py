@@ -32,7 +32,8 @@ sys.path.insert(0, str(HERE.parent / "lib"))
 import svgtools  # noqa: E402
 from _color import parse_hex  # noqa: E402
 from _common import EXIT_FAIL, EXIT_USAGE, confine, fail, main_guard, plugin_root, read_state, write_bytes_if_changed  # noqa: E402
-from _emit import add_logo_arg, art_img, card_lettering_setup, fill_template, fit_art, mark_accent, mark_tagline, render_card, whole_px  # noqa: E402
+from _emit import (add_logo_arg, art_img, card_art, card_lettering_setup, fill_template, fit_art, mark_accent, mark_tagline, render_card,  # noqa: E402
+                   rule_radius, whole_px)
 from px_lib import from_png  # noqa: E402
 from pxio import png_color_type, png_size  # noqa: E402
 from tierb import INK_TOLERANCE_PX, PROFILE_BANNERS, TierBEmit, fit_share, ink_bbox_on, ink_far  # noqa: E402
@@ -157,12 +158,13 @@ def main() -> int:
             art_w, art_h = fit_art(found[0], (sw - mark_px - round(short * GAP_SHARE)) if wide else sw, title_px * WORDMARK_SHARE)
         lettering = art_img(found[0], art_w, art_h, e.brand) if layout != "type" else f"<h1>{html.escape(e.brand)}</h1>"
         mark_html = d.svg.split("?>", 1)[-1].strip() if d.svg.lstrip().startswith("<?xml") else d.svg
+        rule_h = max(2, round(title_px * RULE_SHARE))
         values = {"width": w, "height": h, "bg": ground, "fg": fg, "muted": muted, "accent": accent, "name": e.brand, "tagline": tagline,
                   "layout": layout, "lettering": lettering, "mark": "" if layout == "lockup" else mark_html,
                   "safe_x": f"{s['x']:g}", "safe_y": f"{s['y']:g}", "safe_w": sw, "safe_h": sh,
                   "direction": "row" if wide else "column", "align": "left" if wide else "center", "items": "flex-start" if wide else "center",
                   "gap": round(short * GAP_SHARE), "mark_px": mark_px, "title_px": title_px, "sub_px": round(title_px * SUB_SHARE),
-                  "rule_w": title_px * 2, "rule_h": max(2, round(title_px * RULE_SHARE))}
+                  "rule_w": title_px * 2, "rule_h": rule_h, "rule_radius": rule_radius(f"{rule_h}px", card_art(layout, d.svg, found[0] if found else None))}
         pngs = {}
         for variant, proof in (("", ""), ("-proof", proof_overlay(w, h, s))):
             src_rel = f"{out}/_build/{fname}{variant}.html"

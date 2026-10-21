@@ -7,7 +7,8 @@
      or its name under it, and the brand's own lettering or name above them. Filled by scripts/emitters/social.py (emit social without
      --mark) and rendered to PNG by render.mjs card, the only Chromium driver. Every value is HTML-escaped except the title and the row of
      marks, which the emitter builds itself (images of the drawings, so their ids cannot clash). Sizes in px are worked out from the card's
-     size, and pixel art is set at a whole-number scale. Self-contained: no network, no web fonts (system stack). Copy it and pass it
+     size, and pixel art is set at a whole-number scale. {{rule_radius}} is the accent line's corner radius: its height in px (round ends), or
+     0 (square ends) when every mark is pixel art. Self-contained: no network, no web fonts (system stack). Copy it and pass it
      with --template to restyle; keep every placeholder. -->
 <style>
 html,body{margin:0;width:{{width}}px;height:{{height}}px;overflow:hidden;background:{{bg}};color:{{fg}}}
@@ -16,7 +17,7 @@ body{display:flex;flex-direction:column;align-items:center;justify-content:cente
 .head{display:flex;flex-direction:column;align-items:center}
 h1{margin:0;font-size:{{title_px}}px;line-height:1.05;letter-spacing:-0.02em;font-weight:700}
 .lettering{display:block}
-.rule{width:{{rule_w}}px;height:{{rule_h}}px;background:{{accent}};margin-top:{{rule_h}}px;border-radius:{{rule_h}}px}
+.rule{width:{{rule_w}}px;height:{{rule_h}}px;background:{{accent}};margin-top:{{rule_h}}px;border-radius:{{rule_radius}}}
 .row{display:flex;gap:{{gap_x}}px;align-items:flex-start;justify-content:center}
 figure{margin:0;width:{{cell_w}}px;display:flex;flex-direction:column;align-items:center;gap:{{caption_gap}}px}
 .m{display:block}

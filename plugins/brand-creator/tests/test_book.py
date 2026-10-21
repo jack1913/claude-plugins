@@ -244,6 +244,149 @@ def test_the_cover_follows_the_gates_and_the_edition(proj):
     assert next(t for t in htmlscan.tags(html) if "data-cover" in t.attrs).attrs["data-stamp"] == "pending" and "APPROVED" not in html
 
 
+def cover_html(proj: Path) -> str:
+    html = (proj / "book.html").read_text()
+    start = html.index('id="cover"')
+    return html[start:html.index("</section>", start)]
+
+
+def lint_row(proj: Path, rid: str) -> dict:
+    return next(x for x in report(proj, "book-lint")["results"] if x["id"] == rid)
+
+
+@setup
+@resvg
+def test_the_approval_stamp_follows_the_content_language_and_the_lint_wants_that_word(proj):
+    """The stamp word is APPROVED, or the book/book.json labels entry for it in the book's first content language: the lint looks for that word,
+    so a Polish book can say its own, and a hand-authored cover follows the same rule. English is never translated."""
+    assert bc("state", "--set", "content_languages=pl", project=proj).returncode == 0
+    assert bc("state", "--record", "G5", "edition approved (test)", project=proj).returncode == 0
+    # no label for the word: it stays English, the book says so, and the lint accepts the English word
+    assert bc("book", project=proj).returncode == 0
+    assert "APPROVED 2026-10-17" in cover_html(proj)
+    assert re.search(r"label\(s\) have no pl translation[^\"]*APPROVED", json.dumps(report(proj, "book")))
+    assert bc("book-lint", "--self-consistency", project=proj).returncode == 0
+    # the project's own word: the stamp says it, the English one is gone, and the lint wants the project's
+    (proj / "book/book.json").write_text(json.dumps({"schema": 1, "labels": {"pl": {"APPROVED": "ZATWIERDZONO"}}}))
+    assert bc("book", project=proj).returncode == 0
+    assert "ZATWIERDZONO 2026-10-17" in cover_html(proj) and "APPROVED" not in cover_html(proj)
+    assert bc("book-lint", "--self-consistency", project=proj).returncode == 0
+    assert lint_row(proj, "edition:stamp")["status"] == "pass"
+    # a hand-authored cover that kept the English word where the labels say another fails, naming the word it wants
+    mutate(proj / "book.html", "ZATWIERDZONO 2026-10-17", "APPROVED 2026-10-17")
+    assert bc("book-lint", project=proj).returncode == 1
+    row = lint_row(proj, "edition:stamp")
+    assert row["status"] == "fail" and "has no ZATWIERDZONO stamp but the edition is approved" in row["detail"] and "labels.pl.APPROVED" in row["detail"]
+    mutate(proj / "book.html", "APPROVED 2026-10-17", "ZATWIERDZONO 2026-10-17")
+    assert bc("book-lint", project=proj).returncode == 0
+    # the lint's word is the first content language's: with pl,en the English chapters do not change the cover
+    assert bc("state", "--set", "content_languages=pl,en", project=proj).returncode == 0
+    for f in list((proj / "book/chapters").glob("*.md")):
+        shutil.copy(f, f.with_name(f.stem + ".pl.md"))
+        f.rename(f.with_name(f.stem + ".en.md"))
+    assert bc("book", project=proj).returncode == 0 and "ZATWIERDZONO 2026-10-17" in cover_html(proj)
+    assert bc("book-lint", project=proj).returncode == 0
+    # English is never translated, in the generator and in the lint alike
+    assert bc("state", "--set", "content_languages=en", project=proj).returncode == 0
+    for f in list((proj / "book/chapters").glob("*.pl.md")):
+        f.unlink()
+    for f in list((proj / "book/chapters").glob("*.en.md")):
+        f.rename(f.with_name(f.name.replace(".en.md", ".md")))
+    (proj / "book/book.json").write_text(json.dumps({"schema": 1, "labels": {"en": {"APPROVED": "SIGNED OFF"}}}))
+    assert bc("book", project=proj).returncode == 0 and "APPROVED 2026-10-17" in cover_html(proj) and "SIGNED OFF" not in cover_html(proj)
+    assert bc("book-lint", project=proj).returncode == 0
+
+
+def cover_title(proj: Path) -> str:
+    return re.search(r"<h1>(.*?)</h1>", cover_html(proj), re.S).group(1)
+
+
+@setup
+@resvg
+def test_the_cover_title_is_the_drawn_wordmark_with_its_dark_pair_and_the_name_as_alt(proj):
+    """Acme has a wordmark and its dark file: the cover's h1 holds both as images (alt = the name), switched like the cover's marks."""
+    import base64
+    html = (proj / "book.html").read_text()
+    imgs = [t for t in htmlscan.tags(cover_title(proj)) if t.name == "img"]
+    assert [(t.attrs["class"], t.attrs["data-mark"], t.attrs["alt"]) for t in imgs] == [("wm sch-l", "wordmark", "Acme"), ("wm sch-d", "wordmark-dark", "Acme")]
+    for t, f in zip(imgs, ("wordmark.svg", "wordmark-dark.svg")):
+        assert base64.b64decode(t.attrs["src"].split(",", 1)[1]).decode() == (proj / "assets/logo" / f).read_text()
+    # Acme's wordmark is 282.17 x 77.82: in the cover's art box (at most 320 wide, 96 tall) it is 320 wide and 320 x 77.82 / 282.17 = 88.25, so 88, tall
+    assert [(t.attrs["width"], t.attrs["height"]) for t in imgs] == [("320", "88")] * 2
+    assert "<h1>Acme</h1>" not in html and html.count('class="wm') == 2
+    assert ".cover .sch-d{display:none}" in html and "@media (prefers-color-scheme:dark){.cover .sch-l{display:none}.cover .sch-d{display:block}}" in html   # dark scheme
+    assert "@media print{" in html and ".cover .sch-l{display:block}.cover .sch-d{display:none}" in html                                                       # and print
+    r = bc("book-lint", "--self-consistency", project=proj)
+    assert r.returncode == 0, r.stdout
+    rows = {x["id"]: x["status"] for x in report(proj, "book-lint")["results"]}
+    for rid in ("marks:lint", "words:scratch", "words:round", "words:forbidden", "words:status", "images:alt", "edition:stamp", "self:colours", "self:font-size"):
+        assert rows[rid] == "pass", (rid, rows[rid])
+
+
+@setup
+@resvg
+def test_without_a_wordmark_the_cover_types_the_name_and_without_a_dark_one_it_says_so(proj):
+    logo = proj / "assets/logo"
+    (logo / "wordmark-dark.svg").rename(proj / "wordmark-dark.svg")
+    assert bc("book", project=proj).returncode == 0
+    imgs = [t for t in htmlscan.tags(cover_title(proj)) if t.name == "img"]
+    assert [t.attrs["class"] for t in imgs] == ["wm"] and "sch-" not in cover_title(proj)       # the light wordmark only: no switch
+    assert "wordmark-dark.svg does not exist; the cover shows the light wordmark in dark mode too" in json.dumps(report(proj, "book"))
+    assert bc("book-lint", "--self-consistency", project=proj).returncode == 0
+    (logo / "wordmark.svg").rename(proj / "wordmark.svg")
+    r = bc("book", project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert cover_title(proj) == "Acme" and "<h1>Acme</h1>" in cover_html(proj)                  # no wordmark: the typed name stays
+    assert bc("book-lint", "--self-consistency", project=proj).returncode == 0
+
+
+@setup
+@resvg
+def test_a_pixel_art_wordmark_on_the_cover_is_set_at_a_whole_number_scale(proj):
+    """A wordmark drawn on a 30 x 5 grid (shape-rendering crispEdges): a vector would be fitted to 320 x 53, pixel art takes the whole scale 10, so 300 x 50."""
+    for name, ink in (("wordmark", "#0d1b2d"), ("wordmark-dark", "#f0eee7")):
+        (proj / f"assets/logo/{name}.svg").write_text(
+            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 5" shape-rendering="crispEdges"><rect x="0" y="0" width="3" height="5" fill="{ink}"/>'
+            f'<rect x="4" y="0" width="26" height="1" fill="{ink}"/></svg>')
+    assert bc("book", project=proj).returncode == 0
+    imgs = [t for t in htmlscan.tags(cover_title(proj)) if t.name == "img"]
+    assert [(t.attrs["width"], t.attrs["height"]) for t in imgs] == [("300", "50")] * 2
+    assert bc("book-lint", "--self-consistency", project=proj).returncode == 0
+
+
+@setup
+@resvg
+def test_a_stamp_label_that_is_empty_or_not_text_is_a_usage_error(proj):
+    for bad in ("", "  "):
+        (proj / "book/book.json").write_text(json.dumps({"schema": 1, "labels": {"pl": {"APPROVED": bad}}}))
+        r = bc("book", project=proj)
+        assert r.returncode == 2 and "labels.pl.APPROVED is the cover's approval stamp" in r.stderr, (bad, r.stderr)
+    # a labels entry that is not an object of words stops the run with exit 2, never a traceback
+    for bad in ({"APPROVED": 7}, {"APPROVED": None}, "ZATWIERDZONO", ["ZATWIERDZONO"]):
+        (proj / "book/book.json").write_text(json.dumps({"schema": 1, "labels": {"pl": bad}}))
+        assert bc("state", "--set", "content_languages=pl", project=proj).returncode == 0
+        for cmd in (("book",), ("book-lint",)):
+            r = bc(*cmd, project=proj)
+            assert r.returncode == 2 and "labels.pl must be an object of English word to its translation" in r.stderr, (bad, cmd, r.stderr)
+
+
+@setup
+@resvg
+def test_the_stamp_word_is_trimmed_and_found_in_the_stamp_not_in_the_other_cover_labels(proj):
+    """Spaces around the label do not break the build, and a cover label that shares the stamp word (Approval translated as the same word)
+    cannot pass for the stamp while the edition waits for approval."""
+    assert bc("state", "--set", "content_languages=pl", project=proj).returncode == 0
+    (proj / "book/book.json").write_text(json.dumps({"schema": 1, "labels": {"pl": {"APPROVED": "Akceptacja", "Approval": "Akceptacja"}}}))
+    r = bc("book", project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr                       # pending: the Approval label says the word, the stamp does not
+    assert bc("book-lint", project=proj).returncode == 0 and lint_row(proj, "edition:stamp")["status"] == "pass"
+    assert bc("state", "--record", "G5", "edition approved (test)", project=proj).returncode == 0
+    (proj / "book/book.json").write_text(json.dumps({"schema": 1, "labels": {"pl": {"APPROVED": " ZATWIERDZONO "}}}))
+    r = bc("book", project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "ZATWIERDZONO 2026-10-17" in cover_html(proj) and bc("book-lint", project=proj).returncode == 0
+
+
 @setup
 @resvg
 def test_the_status_line_on_the_cover_is_a_facts_value_or_absent(proj):
@@ -272,7 +415,7 @@ def test_book_lint_passes_the_built_book_and_check_gates_it(proj):
 @setup
 @resvg
 def test_check_fails_a_generated_book_edited_by_hand_and_notices_a_state_change(proj):
-    mutate(proj / "book.html", "<h1>Acme</h1>", "<h1>Acme Corp</h1>")
+    mutate(proj / "book.html", '<p class="eyebrow">Brand book</p>', '<p class="eyebrow">Brand book, edited by hand</p>')   # the cover's title is the drawn wordmark: no text to edit
     bc("check", project=proj)
     ids = {x["id"]: x["status"] for x in report(proj, "check")["results"]}
     assert ids["book:generated"] == "fail" and ids["report:book"] == "pass"     # the sources did not change; the output did
@@ -547,6 +690,37 @@ def test_a_legal_disclosure_from_facts_must_appear_verbatim(proj):
     assert bc("book-lint", project=proj).returncode == 0
 
 
+@setup
+@resvg
+def test_a_superseded_open_graph_file_is_listed_with_a_note_and_the_book_goes_stale_when_the_marking_changes(proj):
+    """emit social keeps the Open Graph file of an earlier card (cached link previews may still use its URL), so its manifest row stays, marked
+    superseded: the files chapter lists it with a note instead of as a second current card, and a change of the marking makes the book stale."""
+    from helpers import mutate_json
+    assert bc("emit", "social", project=proj).returncode == 0
+    assert bc("emit", "social", "--name", "Acme Tools", project=proj).returncode == 0      # a new card, a new file name: the first one is kept
+    og = [a for a in json.loads((proj / "assets/manifest.json").read_text())["artefacts"] if a["path"].startswith("assets/social/og-")]
+    old, new = [a["path"] for a in og if a.get("superseded")], [a["path"] for a in og if not a.get("superseded")]
+    assert len(old) == 1 and len(new) == 1
+    assert bc("book", project=proj).returncode == 0
+    html = (proj / "book.html").read_text()
+    rows = {t.attrs["data-path"]: html[t.start:htmlscan.element_end(html, t)] for t in htmlscan.tags(html) if not t.closing and t.name == "tr" and "data-path" in t.attrs}
+    note = "superseded, kept for cached link previews"
+    assert note in rows[old[0]] and note not in rows[new[0]] and html.count(note) == 1
+    assert bc("book-lint", "--self-consistency", project=proj).returncode == 0
+    assert report(proj, "book-lint")["status"] == "pass" and {x["id"]: x["status"] for x in report(proj, "book-lint")["results"]}["files:accounting"] == "pass"
+    # the marking is part of what the book shows: without it the same book is not verified any more, with it again it is
+    bc("check", project=proj)
+    assert "report:book:manifest" not in {x["id"] for x in report(proj, "check")["results"]}
+    mutate_json(proj / "assets/manifest.json", lambda d: next(a for a in d["artefacts"] if a["path"] == old[0]).pop("superseded"))
+    bc("check", project=proj)
+    assert {x["id"]: x["status"] for x in report(proj, "check")["results"]}["report:book:manifest"] == "skipped"
+    # a manifest with no marked row hashes as it always did (the books of earlier projects stay current)
+    rows0 = sorted(({k: a.get(k) for k in ("path", "sha256", "bytes", "emitter", "slot", "size", "band")}
+                    for a in bookdata.manifest_rows(proj)), key=lambda r: r["path"])
+    import hashlib
+    assert bookdata.manifest_view_sha(proj) == hashlib.sha256(json.dumps(rows0, sort_keys=True).encode()).hexdigest()
+
+
 # ---------------------------------------------------------------- two content languages
 
 @setup
@@ -620,7 +794,12 @@ def test_book_pdf_is_an_rgb_proof_labelled_in_the_metadata_and_on_the_cover(proj
     pages = int(re.search(r"Pages:\s+(\d+)", info).group(1))
     assert pages >= 5 and "A4" in info
     first = subprocess.run(["pdftotext", "-f", "1", "-l", "1", str(pdf), "-"], capture_output=True, text=True).stdout
-    assert "RGB, not print-ready" in " ".join(first.split()) and "Acme" in first
+    assert "RGB, not print-ready" in " ".join(first.split()) and "brand book" in " ".join(first.split()).lower()   # the name is the drawn wordmark: an image, no text
+    # the drawn title prints as vector paths (no text, no raster image), so the guard is on the print CSS: nothing hides the cover's title
+    css = (proj / "book.html").read_text().split("<style>", 1)[1].split("</style>", 1)[0]
+    printed = css[css.index("@media print"):]
+    assert not re.search(r"(\.wm|\.cover\s+h1)[^{}]*\{[^}]*display\s*:\s*none", printed), "the print CSS hides the cover's drawn title"
+    assert re.search(r'<h1[^>]*><img class="wm[^"]*"', cover_html(proj))
     data = pdf.read_bytes()
     assert b"/DeviceCMYK" not in data and b"/OutputIntents" not in data and b"/ObjStm" not in data
     rows = {x["id"]: x["status"] for x in report(proj, "book-pdf")["results"]}
@@ -642,6 +821,80 @@ def test_book_pdf_refuses_a_book_that_does_not_lint_clean(proj):
     r = bc("book-pdf", project=proj)
     assert r.returncode == 1 and "does not lint clean" in r.stderr
     assert not (proj / "book.pdf").exists()
+
+
+PRINT_MARGIN_PT = 14 / 25.4 * 72   # render.mjs prints the book with a 14 mm margin on every side
+PX_PER_PT = 96 / 72                # CSS px per point
+
+
+def pdf_pages(pdf: Path) -> list[str]:
+    """The text of every page of a PDF, read with poppler's pdftotext."""
+    n = int(re.search(r"Pages:\s+(\d+)", subprocess.run(["pdfinfo", str(pdf)], capture_output=True, text=True).stdout).group(1))
+    return [subprocess.run(["pdftotext", "-f", str(i), "-l", str(i), str(pdf), "-"], capture_output=True, text=True).stdout for i in range(1, n + 1)]
+
+
+def room_below(pdf: Path, word: str) -> tuple[int, float]:
+    """(its page, CSS px between the word and the bottom of that page's content area) of the word's last line, read with pdftotext -bbox."""
+    for i in range(1, len(pdf_pages(pdf)) + 1):
+        xml = subprocess.run(["pdftotext", "-bbox", "-f", str(i), "-l", str(i), str(pdf), "-"], capture_output=True, text=True).stdout
+        w = re.search(rf'<word xMin="[\d.]+" yMin="[\d.]+" xMax="[\d.]+" yMax="([\d.]+)">{word}</word>', xml)
+        if w:
+            return i, (float(re.search(r'<page width="[\d.]+" height="([\d.]+)">', xml).group(1)) - PRINT_MARGIN_PT - float(w.group(1))) * PX_PER_PT
+    raise AssertionError(f"{word} is on no page of {pdf.name}")
+
+
+def assert_no_empty_page_when_the_end_is_near_the_page_bottom(proj: Path, html_for, next_title: str) -> None:
+    """`html_for(spacer)` is the book with its last block (the word ENDMARKER, on a page that goes on from an earlier one) `spacer` px lower. Print it
+    once, work out from that print how far ENDMARKER is above the page's content end, print it again with 30 px left (inside the 48 px of padding and
+    the 12 px of margin, or the 40 px of cover padding, that a box ending there needs below its last line) and check: the same number of pages, none
+    without text, and the next chapter on the very next page."""
+    def printed(spacer: int) -> Path:
+        (proj / "book.html").write_text(html_for(spacer))
+        r = bc("book-pdf", "--out", f"print-{spacer}.pdf", project=proj)
+        assert r.returncode == 0, r.stdout + r.stderr
+        return proj / f"print-{spacer}.pdf"
+    first = printed(0)
+    page, room = room_below(first, "ENDMARKER")
+    assert page >= 2, "the last block must be on a page that goes on from an earlier one, or this proves nothing"
+    second = printed(max(0, int(room - 30)))
+    page2, room2 = room_below(second, "ENDMARKER")
+    assert page2 == page and 0 < room2 < 40, (page, page2, room2)       # still on its page, and inside the 40 px the padding below its last line needs
+    pages = pdf_pages(second)
+    assert len(pages) == len(pdf_pages(first)), "the same book prints one page longer: an empty page came with the padding"
+    assert [n + 1 for n, t in enumerate(pages) if not t.strip()] == []
+    assert pages[page2].lstrip().startswith(next_title), pages[page2][:80]   # the next chapter starts on the very next page
+
+
+@setup
+@resvg
+@pytest.mark.requires_gs
+@pytest.mark.requires_pdftotext
+def test_no_page_of_the_book_pdf_is_empty_when_a_chapter_ends_at_the_bottom_of_its_last_page(proj):
+    """A chapter that goes on from an earlier page and ends within its bottom padding (48 px) and the margin of its last line (12 px) of the page's end
+    sent that padding to a page of its own, and the next chapter's page break left that page empty. The first chapter is lengthened to two pages."""
+    html0 = (proj / "book.html").read_text()
+    end = html0.index("\n</div>\n</section>", html0.index('id="idea"'))
+    filler = "<p>Acme sample text for this slot.</p>\n" * 50
+
+    def html_for(spacer: int) -> str:
+        return html0[:end] + "\n" + filler + (f'<div style="height:{spacer}px"></div>\n' if spacer else "") + "<p>ENDMARKER</p>" + html0[end:]
+    assert_no_empty_page_when_the_end_is_near_the_page_bottom(proj, html_for, "The mark by size")
+
+
+@setup
+@resvg
+@pytest.mark.requires_gs
+@pytest.mark.requires_pdftotext
+def test_no_page_of_the_book_pdf_is_empty_when_the_cover_ends_at_the_bottom_of_its_second_page(proj):
+    """The same for the cover (40 px of bottom padding, then the first chapter's page break): its table of contents starts a second page and is moved
+    down by its own top padding until its last entry ends 30 px above the page's end."""
+    html0 = (proj / "book.html").read_text()
+    assert html0.count('<ol class="toc">') == 1
+
+    def html_for(spacer: int) -> str:
+        page = html0.replace('<ol class="toc">', f'<ol class="toc" style="break-before:page;padding-top:{spacer}px">')
+        return page.replace("</ol>", '<li><a href="#idea" data-n="99">ENDMARKER</a></li></ol>', 1)
+    assert_no_empty_page_when_the_end_is_near_the_page_bottom(proj, html_for, "Idea")
 
 
 # ---------------------------------------------------------------- the press kit contains the book, so the book leaves it out

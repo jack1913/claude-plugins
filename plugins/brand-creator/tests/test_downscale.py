@@ -180,6 +180,44 @@ def test_a_master_that_is_one_bands_drawing_says_which_sizes_ship_another(proj):
     assert "bands" not in results(proj)                                                  # not a band's drawing: nothing to say
 
 
+def test_a_mark_with_its_own_accent_is_measured_on_that_accent(proj):
+    """With several marks each may name its accent role (qa/rules.json marks.<id>.accent): a master that is one of its drawings is measured
+    on that accent, not on downscale.accent_colour. Precedence: --accent, the mark's accent, downscale.accent_colour. Acme's accent is the
+    teal #007d71 (color.accent) and its muted colour the slate #4b596c (color.muted); the blocks below are one or the other."""
+    SLATE = "#4b596c"
+    master(proj / "assets/logo/tool-a.svg", 32, svg=True, accent=SLATE)   # a's own accent colour
+    master(proj / "assets/logo/tool-b.svg", 32, svg=True)                 # b names none: the teal of color.accent
+
+    def several(d):
+        del d["bands"]
+        d["marks"] = {"tool-a": {"bands": [{"name": "all", "drawing": "assets/logo/tool-a.svg"}], "accent": "color.muted"},
+                      "tool-b": {"bands": [{"name": "all", "drawing": "assets/logo/tool-b.svg"}]}}
+    mutate_json(proj / "qa/rules.json", several)
+    r = run(proj, "--renderer", "resvg", "--source", "assets/logo/tool-a.svg", "--sizes", "16")
+    assert r.returncode == 0, r.stdout
+    acc = downscale_report(proj)["accent"]
+    assert (acc["role"], acc["hex"]) == ("color.muted", SLATE) and results(proj)["downscale:16px"]["accent_square"] == 8   # 32 of 64 px is 8 of 16
+    # --accent comes first: the teal is not on a's drawing, so the accent vanishes
+    r = run(proj, "--renderer", "resvg", "--source", "assets/logo/tool-a.svg", "--sizes", "16", "--accent", ACCENT)
+    assert r.returncode == 1 and "the accent vanished" in results(proj)["downscale:16px"]["detail"] and downscale_report(proj)["accent"]["role"] == ACCENT
+    # a mark that names no accent falls back to downscale.accent_colour, which is color.accent unless the project sets it
+    r = run(proj, "--renderer", "resvg", "--source", "assets/logo/tool-b.svg", "--sizes", "16")
+    assert r.returncode == 0 and (downscale_report(proj)["accent"]["role"], downscale_report(proj)["accent"]["hex"]) == ("color.accent", ACCENT)
+    mutate_json(proj / "qa/rules.json", lambda d: d["downscale"].__setitem__("accent_colour", "color.text"))
+    assert run(proj, "--renderer", "resvg", "--source", "assets/logo/tool-b.svg", "--sizes", "16").returncode == 1
+    assert downscale_report(proj)["accent"]["role"] == "color.text"
+    r = run(proj, "--renderer", "resvg", "--source", "assets/logo/tool-a.svg", "--sizes", "16")   # the mark's accent still beats the project's default
+    assert r.returncode == 0 and downscale_report(proj)["accent"]["role"] == "color.muted"
+    # a master that is no mark's drawing keeps the project's default too
+    master(proj / "assets/logo/loose.svg", 32, svg=True, accent="#0d1b2d")
+    r = run(proj, "--renderer", "resvg", "--source", "assets/logo/loose.svg", "--sizes", "16")
+    assert r.returncode == 0 and downscale_report(proj)["accent"]["role"] == "color.text"
+    # a role the tokens do not define is a usage error that says where it was named, never a guess
+    mutate_json(proj / "qa/rules.json", lambda d: d["marks"]["tool-a"].__setitem__("accent", "color.nope"))
+    r = run(proj, "--renderer", "resvg", "--source", "assets/logo/tool-a.svg", "--sizes", "16")
+    assert r.returncode == 2 and "color.nope (marks.tool-a.accent) cannot be resolved" in r.stderr
+
+
 def test_an_accent_that_vanished_is_named_as_such(proj):
     master(proj / "assets/logo/none.png", 0)
     r = run(proj, "--renderer", "pillow", "--source", "assets/logo/none.png", "--sizes", "16")

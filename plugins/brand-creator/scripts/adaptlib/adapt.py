@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 from pathlib import Path
 
@@ -81,7 +82,10 @@ def yq(t) -> str:
 
 
 def mode_hex(doc: dict, mode: str, k: str) -> str:
-    return doc["modes"][mode][k]["hex"].lower()
+    """The colour of role k in a mode: lower-case #rrggbb, or #rrggbbaa when it is see-through (alpha under 1), as tokens.css prints it."""
+    c = doc["modes"][mode][k]
+    alpha = c.get("alpha", 1)
+    return c["hex"].lower() + (f"{math.floor(alpha * 255 + 0.5):02x}" if alpha < 1 else "")
 
 
 def pairs(doc: dict) -> list[dict]:

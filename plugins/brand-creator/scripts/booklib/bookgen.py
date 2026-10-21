@@ -30,6 +30,9 @@ DONTS = [("stretch", "Do not stretch or squash the mark."), ("rotate", "Do not r
          ("recolour", "Do not recolour the mark outside the palette's roles."), ("ground", "Do not put the mark on its own colour."),
          ("crowd", "Do not crowd the mark: keep its clear space free.")]
 
+# In print a chapter and the cover keep no bottom padding: a box that goes on from an earlier page and ends within its padding of the page's end
+# (the last line, its margin and the padding do not fit) sends the padding to a page of its own, and the next forced break (section.ch, break-before)
+# leaves that page empty. A test prints a chapter that ends there (test_book.py, the blank-page test).
 CSS = """
 :root{color-scheme:light dark;@@LIGHT@@}
 @media (prefers-color-scheme:dark){:root{@@DARK@@}}
@@ -84,7 +87,8 @@ td.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
 .marks figcaption{grid-column:1/-1;font-size:@@LABEL@@px;color:var(--muted);padding-top:6px}
 .ground{padding:24px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;min-height:132px}
 .g-light{background:@@GLIGHT@@}.g-dark{background:@@GDARK@@}
-img.mk{max-width:100%;height:auto}
+img.mk,img.wm{max-width:100%;height:auto}
+img.wm{display:block}
 img.px{image-rendering:pixelated;image-rendering:crisp-edges;display:block;max-width:none;height:auto}
 .sizes td{vertical-align:middle}.sizes .z{display:flex;gap:8px;align-items:flex-start}
 figure.pic{margin:0 0 16px;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
@@ -110,13 +114,14 @@ figcaption,.cap{font-size:@@LABEL@@px;color:var(--muted);line-height:1.5}
 @media print{
  @page{size:A4;margin:14mm}
  header.top,.skip{display:none}
- section.ch{break-before:page}.cover{break-after:page}
+ section.ch{break-before:page;padding-bottom:0}.cover{break-after:page;padding-bottom:0}
  figure,tr,.spec,.donts figure{break-inside:avoid}
  a{text-decoration:none}
  .cover .sch-l{display:block}.cover .sch-d{display:none}
 }
 """
 MARKS_CSS = ".cover .mks{display:flex;flex-wrap:wrap;gap:24px;align-items:flex-end;margin:0 0 32px}.cover .mks .mk{margin:0}"
+COVER_ART_W, COVER_ART_H = 320, 96   # the box of the cover's art: a mark is 96 px tall, a wide drawing at most 320 px wide
 
 
 class BookBuild:
@@ -204,10 +209,10 @@ class BookBuild:
         vb = svgtools.viewbox(svgtools.parse(svg_text))
         r = vb[2] / vb[3]
         if r <= 1.5:
-            h = 96
+            h = COVER_ART_H
             w = round(h * r)
         else:
-            w = min(320, round(96 * r))
+            w = min(COVER_ART_W, round(COVER_ART_H * r))
             h = round(w / r)
         return f'<img class="{cls}" data-mark="{esc(name)}" src="{self.svg_uri(svg_text)}" alt="{esc(alt)}" width="{w}" height="{h}">'
 
@@ -308,7 +313,7 @@ class BookBuild:
     def stamp_text(self, lang: str) -> str:
         state, date = bookdata.approval(self.view)
         if state == "approved":
-            return f"APPROVED {date}".strip()
+            return f"{self.T(lang, bookdata.APPROVED).strip()} {date}".strip()
         return self.T(lang, "Awaiting approval")
 
     # ------------------------------------------------------------ computed blocks
@@ -515,7 +520,8 @@ class BookBuild:
         for em in sorted(groups):
             trs = []
             for r in sorted(groups[em], key=lambda x: x["path"]):
-                trs.append(([f'<code>{esc(r["path"])}</code>', esc(r.get("slot", "")), esc(r.get("size", "")), esc(r.get("band", "")),
+                note = f'<br><span class="cap">{esc(self.T(lang, "superseded, kept for cached link previews"))}</span>' if r.get("superseded") else ""
+                trs.append(([f'<code>{esc(r["path"])}</code>{note}', esc(r.get("slot", "")), esc(r.get("size", "")), esc(r.get("band", "")),
                              (str(r["bytes"]),), f'<code>{r["sha256"][:8]}</code>'], {"data-path": r["path"], "data-sha": r["sha256"][:8]}))
             out.append(f"<h4>{esc(em)}</h4>" + self.table(head, trs))
         art = []
@@ -712,6 +718,21 @@ class BookBuild:
             return approved
         return f"{approved}; {a['done']} {self.T(lang, 'of')} {a['total']} {self.T(lang, 'rows done')}"
 
+    def cover_title(self, name: str) -> str:
+        """What the cover's h1 holds: the brand's drawn wordmark (assets/logo/wordmark.svg, and its -dark.svg switched like the cover's marks) as
+        an image whose alt is the name, in the cover's art box (pixel art at a whole-number scale); the typed name when there is no wordmark."""
+        light, dark = self.logo_pair("wordmark")
+        if not light.is_file():
+            return esc(name)
+        if not dark.is_file():
+            self.warn("cover", "assets/logo/wordmark-dark.svg does not exist; the cover shows the light wordmark in dark mode too")
+
+        def tag(p: Path, key: str, cls: str) -> str:
+            svg = self.mark_svg(p)
+            w, h = svgtools.fit_box(svg, COVER_ART_W, COVER_ART_H)
+            return f'<img class="{cls}" data-mark="{key}" src="{self.svg_uri(svg)}" alt="{esc(name)}" width="{w}" height="{h}">'
+        return tag(light, "wordmark", "wm sch-l" if dark.is_file() else "wm") + (tag(dark, "wordmark-dark", "wm sch-d") if dark.is_file() else "")
+
     def cover(self, titles: list[tuple[str, str]]) -> str:
         lang = self.langs[0]
         state, date = bookdata.approval(self.view)
@@ -742,7 +763,7 @@ class BookBuild:
         dl = "".join(f"<dt>{esc(k)}</dt><dd>{v}</dd>" for k, v in meta)
         toc = "".join(f'<li><a href="#{esc(cid)}" data-n="{i}">{esc(re.sub("<[^>]+>", "", t))}</a></li>' for i, (cid, t) in enumerate(titles, 1))
         return (f'<section class="cover wrap" id="cover" data-cover data-edition="{self.view["edition"]}" data-stamp="{state}">\n{lt}{dk}\n'
-                f'<p class="eyebrow">{esc(self.T(lang, "Brand book"))}</p>\n<h1>{esc(name)}</h1>\n<dl class="meta">{dl}</dl>\n<ol class="toc">{toc}</ol>\n</section>')
+                f'<p class="eyebrow">{esc(self.T(lang, "Brand book"))}</p>\n<h1>{self.cover_title(name)}</h1>\n<dl class="meta">{dl}</dl>\n<ol class="toc">{toc}</ol>\n</section>')
 
     def build(self) -> str:
         titles, sections = [], []

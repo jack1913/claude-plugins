@@ -16,6 +16,8 @@ Method (printed on every report, never a silent fallback):
   --renderer=pillow  resamples a PNG source (Lanczos). It cannot read SVG.
   elsewhere      no sips: the run stops (exit 3) unless --renderer is given or BRAND-STATE.md records the opt-in
                  `renderer: resvg (opted in <date>)`; --record-renderer writes that line.
+The accent is --accent, else the accent role of the mark whose drawing the source is (qa/rules.json marks.<id>.accent), else
+downscale.accent_colour.
 One report per measured source: assets/_checks/downscale/<slug>.json (`check` ties a manifest row's `downscale_source` to it).
 Before and after: --previous <older master> measures the same sizes on the earlier round's master; otherwise the earlier report
 of the same source is compared when it used the same method, master size, accent and ground (else an info row says so). --png measures files exactly as shipped (for example actool's own output) with no resampling.
@@ -35,6 +37,7 @@ import svgtools  # noqa: E402
 from _color import parse_hex  # noqa: E402
 from _common import (EXIT_CANNOT, EXIT_USAGE, Parser, Report, add_project_arg, confine, downscale_report_tool, fail, find_project, main_guard,  # noqa: E402
                      rasterise_svg, read_state, rel, run, scratch_dir, today)
+from manifest import load_artefacts  # noqa: E402
 from pxio import png_size, read_png  # noqa: E402
 
 RULE_LABEL = "brand rule (owner-adjustable): the accent keeps a solid square at small sizes"
@@ -72,8 +75,29 @@ def resolve_method(a, project: Path) -> tuple[str, str]:
                       "and `check` know. Nothing was measured.")
 
 
-def accent_colour(project: Path, a, rules: dict) -> tuple[str, str]:
-    """-> (#rrggbb, ground #rrggbb)."""
+def accent_role(project: Path, a, rules: dict, src: Path) -> tuple[str, str]:
+    """-> (the accent to measure, where it was named): --accent, else the accent role of the mark `src` belongs to (qa/rules.json
+    marks.<id>.accent: a mark's drawing, or a file a pack emitted for the mark), else downscale.accent_colour."""
+    if a.accent:
+        return a.accent, "--accent"
+    mid = qa_rules.mark_of_drawing(rules, project, src) or mark_of_master(project, src)
+    if mid and rules["marks"][mid]["accent"]:
+        return rules["marks"][mid]["accent"], f"marks.{mid}.accent"
+    return rules["downscale"]["accent_colour"], "downscale.accent_colour"
+
+
+def mark_of_master(project: Path, src: Path) -> str | None:
+    """The mark of a file a pack emitted (an avatar or registry icon the gates measure): the mark its manifest rows name, as their path or
+    downscale_source; None when no row names one. Rows of two marks stop the run (exit 2): the accent would be a guess."""
+    src_rel = rel(project, src)
+    marks = {r.get("mark") for r in load_artefacts(project) if src_rel in (r.get("path"), r.get("downscale_source"))} - {None}
+    if len(marks) > 1:
+        fail(EXIT_USAGE, f"{src_rel} is the master of rows of several marks ({', '.join(sorted(marks))}): pass --accent")
+    return next(iter(marks), None)
+
+
+def accent_colour(project: Path, a, spec: str, named_in: str) -> tuple[str, str]:
+    """-> (#rrggbb, ground #rrggbb) of the accent `spec` (a token role or #rrggbb, named in `named_in`)."""
     import json
     mode = a.mode
     tok = project / "assets" / "tokens" / "tokens.json"
@@ -83,7 +107,6 @@ def accent_colour(project: Path, a, rules: dict) -> tuple[str, str]:
             modes = json.loads(tok.read_text(encoding="utf-8"))["modes"][mode]
         except (ValueError, KeyError):
             fail(EXIT_USAGE, f"{rel(project, tok)} is not a brand-creator tokens.json (no modes.{mode})")
-    spec = a.accent or rules["downscale"]["accent_colour"]
     if spec.startswith("#"):
         try:
             parse_hex(spec)
@@ -92,8 +115,8 @@ def accent_colour(project: Path, a, rules: dict) -> tuple[str, str]:
         acc = spec.lower()
     else:
         if modes is None or spec not in modes:
-            fail(EXIT_USAGE, f"accent role {spec} cannot be resolved: build the tokens first (brand-creator tokens), or pass "
-                             f"--accent #rrggbb (or set downscale.accent_colour in qa/rules.json)")
+            fail(EXIT_USAGE, f"accent role {spec} ({named_in}) cannot be resolved: build the tokens first (brand-creator tokens), or pass "
+                             f"--accent #rrggbb (or set the accent in qa/rules.json: downscale.accent_colour, or marks.<id>.accent for a mark)")
         acc = modes[spec]["hex"].lower()
     ground = a.ground or (modes["color.bg"]["hex"].lower() if modes and "color.bg" in modes else ("#ffffff" if mode == "light" else "#111111"))
     try:
@@ -175,7 +198,8 @@ def main() -> int:
     ap.add_argument("--sizes", help="comma list of px sizes (default: platform-specs rows downscale-apple and favicon-set)")
     ap.add_argument("--master-size", type=int, default=MASTER_DEFAULT, help="px the SVG source is rasterised to before sips/pillow (default 1024)")
     ap.add_argument("--mode", choices=("light", "dark"), default="light", help="token mode for the accent and ground (default light)")
-    ap.add_argument("--accent", help="#rrggbb accent (default: qa/rules.json downscale.accent_colour, a token role resolved in tokens.json)")
+    ap.add_argument("--accent", help="#rrggbb accent (default: the accent role of the mark whose drawing --source is, qa/rules.json marks.<id>.accent; "
+                                     "else downscale.accent_colour; a token role resolved in tokens.json)")
     ap.add_argument("--ground", help="#rrggbb ground the master is composited on (default: color.bg of the mode)")
     ap.add_argument("--previous", help="the earlier round's master (PNG or SVG) to measure at the same sizes (before/after)")
     ap.add_argument("--png", action="append", default=[], metavar="FILE", help="measure a PNG exactly as shipped (repeatable; no resampling)")
@@ -214,7 +238,8 @@ def main() -> int:
             fail(EXIT_USAGE, f"--previous not found: {a.previous}")
         if method == "resvg" and prev.suffix.lower() != ".svg" or method == "pillow" and prev.suffix.lower() != ".png":
             fail(EXIT_CANNOT, f"--previous must be a {'.svg' if method == 'resvg' else '.png'} master for --renderer={method}")
-    acc, ground = accent_colour(project, a, rules)
+    role, role_in = accent_role(project, a, rules, src)
+    acc, ground = accent_colour(project, a, role, role_in)
     tol = float(rule["accent_tolerance"])
     shipped = [confine(project, p, what="--png") for p in a.png]
     for p in shipped:
@@ -250,7 +275,7 @@ def main() -> int:
     work = scratch_dir(project, "downscale")
     stamped, warns = specs.stamp(rows, today()) if rows else ({}, [])
     rep.extra = {"source": rel(project, src), "method": method, "method_reason": why, "sizes": sizes, "master_size": a.master_size,
-                 "accent": {"hex": acc, "mode": a.mode, "ground": ground, "tolerance": tol, "role": a.accent or rule["accent_colour"]},
+                 "accent": {"hex": acc, "mode": a.mode, "ground": ground, "tolerance": tol, "role": role},
                  "rule": {"accent_min_px": rule["accent_min_px"], "accent_rule_max_size": rule["accent_rule_max_size"], "source": rules_src,
                           "exemptions": [{k: e[k] for k in ("source", "max_px", "reason")} for e in exempt]},
                  "specs": stamped, "previous": rel(project, prev) if prev else None}

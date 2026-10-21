@@ -123,7 +123,8 @@ fences. Once the owner decides:
 
 1. G5 needs: the collapse done, `check` exit 0 with the book's reports current, and the owner's approval of this edition.
    Record it: `state --record G5 "<edition and what was approved>"` (it writes `approved_edition`; the cover then says
-   APPROVED). A hand-authored book is patched to show the stamp before G5 is recorded.
+   APPROVED, or the word `labels.<language>.APPROVED` gives in `book/book.json`, for the book's first content language).
+   A hand-authored book is patched to show the stamp before G5 is recorded.
 2. Ask once, at G5, with AskUserQuestion: BRAND.md and DESIGN.md for coding agents, and a per-brand skill in the
    project's own `.claude/skills/`. Recommend only what the owner will use. Without a yes, write neither.
 3. Yes to the adapters → `adapters --brand-md --design-md [--primary <role>]`. DESIGN.md is linted by the pinned

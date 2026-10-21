@@ -130,6 +130,17 @@ def test_each_mark_gets_its_own_files_report_rows_and_bands(multi):
     assert " 0 written" in emit(multi, "web", "--mark", "alpha").stdout   # idempotent per mark
 
 
+def test_a_changed_tab_drawing_of_one_mark_names_its_own_favicon_setting(multi):
+    assert emit(multi, "web", "--mark", "alpha").returncode == 0
+    mutate_json(multi / "qa/rules.json", lambda d: d["marks"]["alpha"].__setitem__("favicon", "assets/logo/alpha.svg"))
+    assert emit(multi, "web", "--mark", "alpha").returncode == 0
+    w = {x["id"]: x for x in report(multi, "emit-web/alpha")["results"]}["note:icon.svg changed"]
+    assert w["status"] == "warn" and "assets/logo/alpha-8.svg" in w["detail"] and "assets/logo/alpha.svg" in w["detail"]
+    assert "set marks.alpha.favicon to assets/logo/alpha-8.svg in qa/rules.json" in w["detail"]
+    assert emit(multi, "web", "--mark", "beta").returncode == 0     # beta's own run has no earlier row of its own: nothing to compare
+    assert "note:icon.svg changed" not in {x["id"] for x in report(multi, "emit-web/beta")["results"]}
+
+
 def test_a_run_of_one_mark_never_retires_another_marks_files(multi):
     """alpha written into a folder that holds beta's files: its runs leave beta's rows and files alone."""
     assert emit(multi, "web", "--mark", "beta").returncode == 0
@@ -246,6 +257,55 @@ def test_pixel_art_is_scaled_by_whole_numbers_and_vector_art_keeps_its_box():
     assert _emit.whole_px(px16, 10) == 10 and _emit.whole_px(px16, 47) == 32
 
 
+RULE_CSS = re.compile(r"\.rule\{[^}]*?height:([^;]+);[^}]*?border-radius:([^;}]+)\}")
+
+
+def rule_of(p: Path, rel: str) -> tuple[str, str]:
+    """(height, border-radius) of the accent line under the name on a built card page."""
+    m = RULE_CSS.search(page(p, rel))
+    assert m, f"{rel} has no accent line"
+    return m.group(1), m.group(2)
+
+
+def test_the_accent_line_has_square_ends_on_pixel_art_and_keeps_its_round_ends_on_vector_art(multi):
+    """Cards, banners, the Play feature graphic and the Chrome promo tiles set the line under the name with square ends (radius 0) when everything
+    drawn on them is pixel art, and with the template's round ends (1vh on a card, the line's own height on a banner) otherwise. alpha is pixel art
+    with a pixel wordmark; beta is Acme's vector mark with its name typed."""
+    assert bc("state", "--set", "tier=full", project=multi).returncode == 0
+    pages = (("social", "assets/social/{m}/_build/og.html", "1vh"), ("profiles", "assets/profiles/{m}/_build/linkedin-banner.html", None),
+             ("android", "assets/android/{m}/_build/feature-graphic.html", "1vh"), ("chrome-ext", "assets/chrome-ext/{m}/_build/promo-small.html", "1vh"))
+    for target, rel, round_css in pages:
+        for mark in ("alpha", "beta"):
+            r = emit(multi, target, "--mark", mark)
+            assert r.returncode == 0, (target, mark, r.stdout + r.stderr)
+            height, radius = rule_of(multi, rel.format(m=mark))
+            want = "0" if mark == "alpha" else (round_css or height)   # a banner's round end is its line's own height
+            assert radius == want, (target, mark, height, radius)
+    # a pixel mark next to a vector wordmark is not all pixel art: the ends stay round
+    shutil.copy2(FIXTURES / "assets/logo/wordmark.svg", multi / "assets/logo/alpha-wordmark.svg")
+    assert emit(multi, "social", "--mark", "alpha").returncode == 0
+    assert rule_of(multi, "assets/social/alpha/_build/og.html")[1] == "1vh"
+    # only the art that is drawn counts: a typed name draws no lettering (the vector wordmark is not shown), and a lockup stands alone (beta's vector mark is not)
+    assert emit(multi, "social", "--mark", "alpha", "--name", "Alpha").returncode == 0
+    assert '<body class="type">' in page(multi, "assets/social/alpha/_build/og.html") and rule_of(multi, "assets/social/alpha/_build/og.html")[1] == "0"
+    (multi / "assets/logo/beta-lockup.svg").write_text(ALPHA["alpha-wordmark"])
+    assert emit(multi, "social", "--mark", "beta").returncode == 0
+    assert '<body class="lockup">' in page(multi, "assets/social/beta/_build/og.html") and rule_of(multi, "assets/social/beta/_build/og.html")[1] == "0"
+
+
+def test_the_side_by_side_image_has_a_square_accent_line_only_when_every_mark_is_pixel_art(multi):
+    pages = ("og", "github-social", "readme-header-light", "readme-header-dark")
+    assert emit(multi, "social", "--repo-images", "yes").returncode == 0
+    for name in pages:
+        height, radius = rule_of(multi, f"assets/social/_build/{name}.html")
+        assert radius == height and radius.endswith("px"), (name, height, radius)       # alpha is pixel art, beta a vector: round, as before
+    (multi / "assets/logo/beta.svg").write_text(ALPHA["alpha"])                         # beta redrawn on a pixel grid, light and dark
+    (multi / "assets/logo/beta-dark.svg").write_text(ALPHA["alpha-dark"])
+    assert emit(multi, "social", "--repo-images", "yes").returncode == 0
+    for name in pages:
+        assert rule_of(multi, f"assets/social/_build/{name}.html")[1] == "0", name
+
+
 # ---------------------------------------------------------------- the book
 
 def test_the_book_shows_every_mark_its_sizes_and_one_set_of_misuse_figures(multi):
@@ -302,3 +362,24 @@ def test_the_finish_chain_runs_each_pack_per_mark_and_the_side_by_side_images_th
     assert report(multi, "idempotence")["status"] == "pass" and "check: PASS" in out
     cmds = " ".join(report(multi, "idempotence").get("commands", []))
     assert "--mark alpha" in cmds and "--mark beta" in cmds
+
+
+def test_downscale_measures_a_marks_accent_on_the_files_its_packs_emitted(multi):
+    """The gates measure the masters a pack emitted (an avatar, a registry icon), not the mark's drawings: such a file takes the accent of the
+    mark its manifest rows name. Rows of two marks for one file would make that a guess: exit 2."""
+    import sys
+    from helpers import downscale_report
+    r = emit(multi, "developer", "--mark", "beta")
+    assert r.returncode == 0, r.stdout + r.stderr
+    srcs = sorted({a["downscale_source"] for a in rows(multi) if a.get("mark") == "beta" and "downscale" in a.get("qa", [])})
+    assert srcs and all("/beta/" in s for s in srcs), srcs
+    ds = [] if sys.platform == "darwin" else ["--renderer=pillow"]
+    bc("downscale", "--source", srcs[0], *ds, project=multi)
+    acc = downscale_report(multi, srcs[0])["accent"]
+    assert acc["role"] == "color.muted", acc                     # beta's own accent, not color.accent
+    def two_marks(d):
+        twin = dict(next(a for a in d["artefacts"] if a.get("downscale_source") == srcs[0]))
+        d["artefacts"].append({**twin, "path": twin["path"] + ".twin", "mark": "alpha"})
+    mutate_json(multi / "assets/manifest.json", two_marks)
+    r = bc("downscale", "--source", srcs[0], *ds, project=multi)
+    assert r.returncode == 2 and "rows of several marks (alpha, beta): pass --accent" in r.stderr
