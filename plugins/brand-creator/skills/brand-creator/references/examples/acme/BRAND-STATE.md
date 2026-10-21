@@ -6,7 +6,7 @@ plugin_version: 0.1.0
 tier: quick                    # quick | standard | full (chosen at G0)
 phase: P5                      # P0 .. P13
 architecture: standalone       # inferred: no parent or siblings in the brief
-mark_source: generated         # triangle and dot drawn by code
+mark_source: generated         # triangle and dot kept as code
 language: en
 content_languages: en
 edition: 1
@@ -23,6 +23,7 @@ fixes_per_area: {}
 gates:
   G0: "2026-10-17 quick tier, generated mark, name decided"
   G1: ""
+  G1s: "2026-10-17 skipped by owner (worked example)"
   G2: "2026-10-17 picked Compass (A); Lantern kept as runner-up for restraint rules"
   G2b: ""
   G3: ""
@@ -42,6 +43,7 @@ Synthetic example. The frontmatter is machine-read (`brand-creator state`).
 - Explanation depth: short (one sentence per decision, detail on request)
 - Check-in density: after each round
 - Batched replies: yes
+- Drawing engine: not chosen yet
 
 ## Directions
 

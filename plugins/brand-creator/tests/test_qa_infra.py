@@ -450,6 +450,8 @@ def test_one_function_picks_the_drawing_for_a_body_size():
     ([{"name": "a", "max_px": 32}], "name and a drawing"),
     ([{"name": "a", "drawing": "x"}, {"name": "b", "drawing": "y"}], "only the last band may omit max_px"),
     ([{"name": "a", "max_px": 32, "drawing": "x"}, {"name": "b", "max_px": 16, "drawing": "y"}], "above the previous band"),
+    ([{"name": "a", "max_px": 32, "drawing": "x"}, {"name": "b", "max_px": 64, "drawing": "y"}], "the last band covers every larger size"),
+    ([{"name": "a", "max_px": 32, "drawing": "x"}], "the last band covers every larger size"),
     ([{"name": "a", "max_px": 32, "drawing": "x"}, {"name": "a", "drawing": "y"}], "unique"),
     ([{"name": "a", "max_px": 32, "drawing": "x", "colour": "red"}], "unknown keys"),
     ("small", "must be a list"),

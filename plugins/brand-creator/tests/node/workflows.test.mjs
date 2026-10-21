@@ -119,6 +119,54 @@ test("designers that stopped before writing are not boards: nothing built fails 
   assert.ok(!two.calls[3].prompt.includes("Harbor ["), "the judge is not pointed at a board that does not exist");
 });
 
+test("directions needs the G1s record before any agent starts, as adopt needs G6: nothing is drawn before the style pick", async () => {
+  const base = fixture("directions");
+  for (const g1s of ["", "   ", undefined, null]) {
+    const r = await run("directions", { ...base, g1s });
+    assert.match(r.error, /^directions: args\.g1s must carry the G1s record from BRAND-STATE\.md/, JSON.stringify(g1s));
+    assert.match(r.error, /style research \(P1s\) first/);
+    assert.equal(r.calls.length, 0, "nothing may start without the style pick");
+  }
+  const { g1s: _dropped, ...without } = base;
+  assert.match((await run("directions", without)).error, /args\.g1s must carry the G1s record/);
+  // a pick, a skip and an honest n/a for a project that was past round 1 when the style step arrived all count as recorded
+  for (const g1s of ["2026-10-17 picked Harbor + Ember palette", "2026-10-17 skipped by owner", "2026-10-18 n/a: round 1 drawn before the style step"]) {
+    const r = await run("directions", { ...base, g1s });
+    assert.equal(r.error, null, g1s);
+    assert.equal(r.calls.length, 4);
+  }
+});
+
+test("the designers draw inside the recorded style pick and the judge checks the boards against it", async () => {
+  const g1s = "2026-10-17 picked Harbor + Ember palette";
+  const r = await run("directions", { ...fixture("directions"), g1s });
+  const designers = r.calls.filter((c) => c.agentType === "brand-creator:brand-designer");
+  assert.equal(designers.length, 3);
+  for (const c of designers) {
+    assert.ok(c.prompt.includes(`STYLE PICK (G1s as recorded in BRAND-STATE.md): ${g1s}. Draw inside the style territories the owner picked`), c.label);
+    assert.ok(c.prompt.includes("/PROJECT/rounds/r0/board.html"), "the designer is told where the style board is");
+    assert.match(c.prompt, /you write ONLY inside rounds\/r1\/[a-z]+\//, "the style pick adds no write target: the designer still writes only its own folder");
+  }
+  const judge = r.calls.find((c) => c.agentType === "brand-creator:brand-judge");
+  assert.ok(judge.prompt.includes(`STYLE PICK (G1s as recorded in BRAND-STATE.md): ${g1s}.`));
+  assert.match(judge.prompt, /leaves the styles the owner picked is a MUST-FIX; a skip or an n\/a sets no style/);
+});
+
+test("fleet-plan refuses a directions run without the G1s record (exit 1, before any agent) and plans one that has it", () => {
+  const d = tmpdir("bc-fleet-g1s-");
+  const { g1s: _dropped, ...without } = fixture("directions");
+  const bad = path.join(d, "no-g1s.json");
+  fs.writeFileSync(bad, JSON.stringify(without));
+  const refused = bc(["fleet-plan", "directions", "--args", `@${bad}`]);
+  assert.equal(refused.status, 1, refused.stdout + refused.stderr);
+  assert.match(refused.stdout, /REFUSED by the script before any agent started: directions: args\.g1s must carry the G1s record/);
+  const good = path.join(d, "g1s.json");
+  fs.writeFileSync(good, JSON.stringify(fixture("directions")));
+  const plan = bc(["fleet-plan", "directions", "--args", `@${good}`, "--json"]);
+  assert.equal(plan.status, 0, plan.stdout + plan.stderr);
+  assert.equal(JSON.parse(plan.stdout).agents, 4);
+});
+
 test("adopt tells the implementer the row-list syntax of adoption status (one comma-separated argument)", async () => {
   const r = await run("adopt", fixture("adopt"));
   assert.equal(r.error, null);

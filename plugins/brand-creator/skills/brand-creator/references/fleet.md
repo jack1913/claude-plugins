@@ -50,7 +50,7 @@ run.
 
 | Workflow | Phase | Default agents | What it returns | Ends before |
 |---|---|---|---|---|
-| `directions` | P3 round 1, G2b-a reset rounds | 3 designers + 1 judge = 4; `inventory: true` adds 1 | one board per direction in `rounds/rN/<direction>/`, the judge's ranking, grafts, MUST-FIX and NICE lists, violations | G2 (the lead assembles the round page) |
+| `directions` | P3 round 1, G2b-a reset rounds; needs the style pick (G1s) first | 3 designers + 1 judge = 4; `inventory: true` adds 1 | one board per direction in `rounds/rN/<direction>/`, the judge's ranking, grafts, MUST-FIX and NICE lists, violations | G2 (the lead assembles the round page) |
 | `review-panel` | `/brand-creator:review panel` | 3 lenses + 1 judge = 4; each extra lens adds 1 | findings `{id, severity, where, evidence, why, change, effort}` per lens, then A / B / C, owner decisions, up to 5 strengths | the owner approving the list |
 | `naming` | P2, brand-naming steps 3 to 11 | 2 hunters + 1 screener + 1 judge = 4 | candidates, shortlist with classes, the name checker run (`--plan` unless the owner OK'd lookups), verdicts | G1 |
 | `adopt` | P11 after G6 | 2 per repository (implementer, then reviewer) | rows done / partly / not done with evidence, `cmp` and build/test results, no-decision fixes, decisions | every commit (three separate asks) |
@@ -58,7 +58,9 @@ run.
 The agent count is the number of `agent()` calls the script makes with the given arguments; `fleet-plan` counts them
 by running the script with stub agents, and a test keeps the default path of every workflow under 5.
 
-Copy panel and rule hardening are not shipped as workflows in this version.
+Copy panel and rule hardening are not shipped as workflows in this version. Nor is the style research (P1s): the lead builds
+the style board (`rounds/r0/board.html`) single-thread, and no designer starts before the owner's style pick is recorded as
+G1s, which is why `directions` takes it as an argument.
 
 ## Arguments every workflow needs
 
@@ -67,9 +69,13 @@ paths; `today` as `YYYY-MM-DD` (scripts cannot read the clock); `ceiling` (`opus
 model's family); `approved_agents` (the number the owner said yes to); `context_paths` (absolute paths the agents read
 fully: BRAND-STATE.md, brief/BRIEF.md, FACTS.md, research/cliches.md, the approved board). Then per workflow:
 
-- `directions`: `round` (`r1`), `directions` (2 to 4 `{key, name, paragraph}`; key = folder name, name = the word name
-  on the board), `brief` (`decisions`, `critique`, `forbidden`, `facts`, `layers`, `constraints`, `hardest_surface`),
-  optional `inventory: {repos: [{label, path}]}`, `previous_round`, `judge: false`.
+- `directions`: its designers draw the marks themselves as SVG, which is Claude-drawn SVG, so offer it only after the
+  owner's yes to that weaker way ([drawing-engines.md](drawing-engines.md)). Arguments: `round` (`r1`), `g1s` (required: the G1s record from BRAND-STATE.md, as `state --get gates.G1s` prints
+  it: the owner's pick on the style board `rounds/r0/board.html`, "skipped by owner", or "n/a: round 1 drawn before the
+  style step"; for a reset round it is the new pick, recorded after the style board of that round, never a skip; the script
+  refuses to start without it, as `adopt` does without `g6`, and tells the designers to draw inside the picked styles), `directions` (2 to 4 `{key, name, paragraph}`; key = folder name, name = the word name on the
+  board), `brief` (`decisions`, `critique`, `forbidden`, `facts`, `layers`, `constraints`, `hardest_surface`), optional
+  `inventory: {repos: [{label, path}]}`, `previous_round`, `judge: false`.
 - `review-panel`: `target` (`board`, `book`, `pack`, `all`), `target_paths`, optional `lenses` (design, content,
   technical, legal, platform, accessibility), `decisions`.
 - `naming`: `profile` (`software`, `consumer`, `personal`), `region` (two letters), `territories` (3 to 5), optional

@@ -18,11 +18,13 @@ edition: 1                     # the brand book's edition (a whole number); a ne
 approved_edition: ""           # the edition G5 approved; written by `state --record G5`. The book shows APPROVED only when it equals edition.
 book_chapters: []              # extra chapters to include, from: tone, photography, components (the tier and architecture decide the rest)
 canonical_direction: ""        # the direction that is the visible baseline after the pick
-reset_rounds: []               # round numbers that follow a full rejection, e.g. [4] (the positioning map is required again)
+reset_rounds: []               # rounds that follow a full rejection, e.g. [4, 5]: the style board run again, then the pick board (the map is required again there)
+# g1s_round: written by the tool, never by hand. `brand-creator state --record G1s "<decision>"` stores the highest round whose board is a style board at that moment; board-lint compares it with the style board of a reset round.
 fixes_per_area: {}             # area: count. A third incremental fix in one area trips the G-sys stop.
 gates:                         # date + decision, written by: brand-creator state --record G3 "<decision>"
   G0: ""                       # scope: tier, name language and status; the mark source as stated
   G1: ""                       # name go
+  G1s: ""                      # style pick (or "skipped by owner" before the first pick board, or "n/a: ..." past round 1); every pick board waits for it
   G2: ""                       # direction pick
   G2b: ""                      # reset or recover decision (only when used)
   G3: ""                       # refined approval (the approved round is frozen)
@@ -44,6 +46,7 @@ How the owner wants to work. Defaults are in the skill's working-style reference
 - Review surface: auto
 - Explanation depth: short (one sentence per decision, detail on request)
 - Check-in density: after each phase, with a one-line progress note per step
+- Drawing engine: not chosen yet (use-llm design canvas | Claude Code /design | Claude-drawn SVG, only with the owner's yes and its date)
 
 ## Directions
 

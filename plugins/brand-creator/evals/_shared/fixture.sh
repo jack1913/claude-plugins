@@ -21,11 +21,13 @@ fx_copy_acme() {
   (cd "$FX_ACME" && tar -cf - "${ex[@]}" .) | tar -xf -
 }
 
-# BRAND-STATE.md from variables. Defaults describe a Quick-tier project right after round 1 (G0 recorded, nothing picked).
+# BRAND-STATE.md from variables. Defaults describe a Quick-tier project right after round 1 (G0 recorded, nothing picked). G1s (the style
+# pick) defaults to a recorded skip so that the cases about the first board are not stopped by the style gate; `ST_G1S=""` (set, but empty)
+# leaves it empty, which is why it is read with ${ST_G1S-...} and not ${ST_G1S:-...}.
 fx_write_state() {
   local tier="${ST_TIER:-quick}" phase="${ST_PHASE:-P3}" canonical="${ST_CANONICAL:-}" incumbent="${ST_INCUMBENT:-none}"
   local inventory="${ST_INVENTORY:-}" lang="${ST_LANG:-en}" content="${ST_CONTENT:-en}" name="${ST_NAME:-Acme}" slug="${ST_SLUG:-acme}"
-  local g0="${ST_G0:-$FX_DATE $tier tier, generated mark, name decided}" g2="${ST_G2:-}" g3="${ST_G3:-}" g4="${ST_G4:-}" g5="${ST_G5:-}" g6="${ST_G6:-}"
+  local g0="${ST_G0:-$FX_DATE $tier tier, generated mark, name decided}" g1s="${ST_G1S-$FX_DATE skipped by owner}" g2="${ST_G2:-}" g3="${ST_G3:-}" g4="${ST_G4:-}" g5="${ST_G5:-}" g6="${ST_G6:-}"
   local approved="${ST_APPROVED:-}"
   cat > BRAND-STATE.md <<STATE
 ---
@@ -53,6 +55,7 @@ fixes_per_area: {}
 gates:
   G0: "$g0"
   G1: ""
+  G1s: "$g1s"
   G2: "$g2"
   G2b: ""
   G3: "$g3"
@@ -121,6 +124,14 @@ MD
   ST_TIER=standard ST_PHASE=P3 ST_G0="$FX_DATE standard tier, generated mark, name decided" \
   ST_INCUMBENT="a grey sans-serif wordmark on the current one-page site (assets/incumbent/wordmark.svg)" \
   ST_NOTES="No round yet. The incumbent wordmark is in assets/incumbent/." fx_write_state
+}
+
+# A Quick project right after G0, before any round: the brief exists, nothing is drawn and the owner has not picked a style (G1s is empty),
+# so the style research comes first. No incumbent, no research files, an empty Directions table.
+fx_before_style() {
+  fx_copy_acme rounds assets tokens tools tray motion qa research
+  ST_G1S="" ST_PHASE=P1s ST_DIRS='| (none yet) | | | | | | |' \
+  ST_NOTES="G0 is done. No round yet: the style research (G1s) comes before any board of directions." fx_write_state
 }
 
 # The owner's reply is bare: round 1 is on the board (labels 1-3) and a numbered chat list is open.

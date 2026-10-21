@@ -22,8 +22,12 @@ process one decision at a time, and you decide on taste.
    - how this brand relates to others you run, only if you mention a parent or sister brand;
    - the name, only if it's still open.
 
-3. Read how Claude plans to make the logo. It is drawn by code from simple shapes, drawn as vector shapes, or your
-   existing logo. Say so if you want it another way.
+3. Read how Claude plans to keep the logo: as code (a pixel grid or simple shapes), as vector shapes, or your existing
+   logo. Say so if you want it another way. Either way, the logo you get is a vector (SVG) file, drawn on a design tool
+   first ([Get your marks drawn](get-your-marks-drawn.md)); generated pictures are only used to explore ideas.
+
+4. Look at the style board. Before anything is drawn, Claude researches how brands like yours look and shows a few
+   styles with real examples. You pick; see [Pick and refine a direction](pick-and-refine-a-direction.md).
 
 Your project gets its own folder, like `./my-bakery/`, unless you name another place. Set a default folder in
 [Settings](../reference/settings.md).

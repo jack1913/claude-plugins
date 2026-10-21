@@ -117,7 +117,13 @@ fontTools, Brotli and skia-pathops (`outline_glyphs.py`, `fontcheck.py`), Pillow
   research/cliches.md              (optional; "Forbidden" bullets feed the FORBIDDEN count in shots; templates/cliches.md)
   research/names/<date>-check.md  research/names/<date>-verdict.md  research/names/raw/<date>/run-<n>/   P2 (names, brand-naming)
   INVENTORY.md                     P1c surface inventory (templates/INVENTORY.md); board-lint needs it in Full / product-in-family
-  rounds/r1/board.html ...         one folder per round; the page is board.html
+  rounds/r0/board.html             round 0: the style board (P1s, from templates/style-board.html); no mark is drawn in it
+  rounds/r1/board.html ...         one folder per drawn round; the page is board.html
+  rounds/r<N>/<direction>/<item>.svg, <item>-16/-32/-128.png, SOURCE.md   the kept marks of a drawn round: SVG masters, PNGs
+                                   exported from them, and where they came from (templates/SOURCE.md; drawing-engines.md)
+  brief/canvas-round-<N>.md        the drawing brief of round N (templates/canvas-brief.md)
+  .design/<slug>/                  the use-llm design canvas, when the drawing session starts in the project folder
+  research/YYYY-MM-DD-style.md  research/style-thumbs/   P1s notes behind the style board and the reference marks it shows as thumbnails
   tokens/{primitives,semantic.light,semantic.dark}.tokens.json
   assets/logo/mark.svg, mark-dark.svg     artwork (pure vector)
   assets/tokens/                   build_tokens output (css, json, swift, android, Colors.xcassets)
@@ -157,10 +163,26 @@ Keys: `slug, name, created, plugin_version, tier (quick|standard|full), phase, a
 product-in-family), mark_source (generated|authored-vector|existing), language (chat language), content_languages (language-set
 codes of the brand's own text, for example `pl` or `pl,en`; read by fontcheck, never defaulted from `language`), renderer, review_surface, review_url,
 incumbent (none or a line), inventory (path or "none (no target repo)"), edition (whole number, the brand book's), approved_edition (the edition G5 approved; `state --record G5` writes it), book_chapters (extra
-chapters: tone, photography, components), canonical_direction, reset_rounds ([4]),
-fixes_per_area (map), gates (G0 G1 G2 G2b G3 G4 G5 G6 G7)`. A recorded gate reads `"<date> <decision>"`; empty means
-not recorded. `brand-creator state --record G3 "<decision>"` writes it, `state --require G3` exits 1 when missing.
-`freeze`, `emit web` and `emit social` require G3. The `## Directions` table in the body is read by `state --json`.
+chapters: tone, photography, components), canonical_direction, reset_rounds ([4, 5]: the style board run again after a full rejection,
+then the pick board), g1s_round, fixes_per_area (map), gates (G0 G1 G1s G2 G2b G3 G4 G5 G6 G7)`. A recorded gate reads `"<date> <decision>"`;
+empty means not recorded. `brand-creator state --record G3 "<decision>"` writes it, `state --require G3` exits 1 when missing.
+`state --set KEY=VALUE` trims the spaces around the key and the value (`"reset_rounds =2,3"` is `reset_rounds`, checked as one), and a
+key that is not one word (letters, digits, `_` and `-`, dots between parts) exits 2 with nothing written.
+A list key (`reset_rounds`, `book_chapters`) is a flow list: `state --set reset_rounds=4,5` writes `reset_rounds: [4, 5]` (whole numbers
+from 1; anything else exits 2) and `state --set book_chapters=tone,photography` writes `book_chapters: [tone, photography]`. An older
+project may hold `reset_rounds` as the quoted string `"[4,5]"`; every reader goes through `State.reset_rounds()`, which takes both and
+reads runs of digits, so `"[10,11]"` is rounds 10 and 11.
+`freeze`, `emit web` and `emit social` require G3. `G1s` is the style pick of the style board: the owner's pick, `skipped by
+owner` (before the first pick board only), or for a project that was already past round 1 an honest `n/a: round 1 drawn before the
+style step`; every pick board waits for it (see the Board contract). `state --record G1s` also writes `g1s_round`: the highest round
+number whose `rounds/rN/board.html` is a style board at that moment (`r0` counts; a page that declares `data-board="style"` and
+`data-round="N"` and holds at least four named `territory` sections with content, as `board-lint`'s style gate counts one), or, when
+no round holds one, it removes the key. A round folder
+that only exists, a copy of an earlier board or a style board not written yet does not count, so a pick recorded before the new style
+board is written does not look as if it came after it. Only that command writes it: `state --set g1s_round=...` (and `--bump`) exits 2 with "written by --record G1s"; `--set gates.G1s=...` is refused the same way.
+`board-lint` reads it to tell a pick recorded after a full rejection from the one before it. The `## Directions` table in the body
+is read by `state --json`, which also reports `rounds` and `latest_round` as `rN` (`r0`, the style board, counts as a round) or
+`null` when no round exists.
 
 ## Token sources (DTCG 2025.10)
 
@@ -197,13 +219,33 @@ DTCG 2025.10 is a Final Community Group Report. It is not a W3C Standard and not
 
 ## Board contract (data attributes)
 
-`brand-creator board-lint <page>` finds sections by `data-section` attributes. Templates and generated boards must
+`brand-creator board-lint <page>` takes the round from the page's folder `rounds/rN/`; `--round N` is for a page outside `rounds/` (the
+review page), and on a page under `rounds/rM/` a different N exits 2. It finds sections by `data-section` attributes. Templates and generated boards must
 carry them; a required section that is missing, empty or a placeholder (`TODO`, `...`) fails. Template markers
 `[[fill: ...]]` left anywhere in text or attribute values fail the page (`page:unfilled`); HTML comments are ignored,
 so optional blocks can wait in comments.
 
-Page: `<body data-round="N" data-board="pick|refine">`. `data-round` must equal the folder `rounds/rN/` (catches a copied
-page that was not updated). Round 1 and every round listed in `reset_rounds` must be `pick` boards.
+Page: `<body data-round="N" data-board="pick|refine|style">`. `data-round` must equal the folder `rounds/rN/` (catches a copied
+page that was not updated). Round 1 must be a `pick` board. Round 0 is always the style board (`data-board="style"`,
+`rounds/r0/board.html`, from `templates/style-board.html`), and a round listed in `reset_rounds` holds either a style board or a
+pick board: after a full rejection the style research runs again on a new style board (required, never skipped), and the round after
+it (also listed) holds the pick board of the new territories. A style board anywhere else fails `page:data-board`, and so does a pick
+board: it belongs to round 1 or to a round listed in `reset_rounds` (after a full rejection); later rounds are refine boards. The round and
+the kind are read from one tag, the `<body>` (or the `<html>` tag when the body carries neither `data-round` nor `data-board`), by one
+module that `board-lint` and `state --record G1s` share, `scripts/boardlib/boardpage.py` (outside `scripts/lib/`, so that a change there
+does not make every pack stale). A repeated attribute counts by its first copy, as in a browser.
+
+On a refine board, `board-lint` also measures the kept masters of the round, as warnings only (`masters:*` rows, `scripts/marklib/marks.py`, kept outside `scripts/lib/` so that a change there does not make every pack stale):
+every SVG directly in a direction folder (`rounds/rN/<direction>/*.svg`; `drafts/` and `source/` are skipped), each `<name>-dark.svg` twin on
+the dark ground (without a twin, the light artwork is measured there too). `masters:ground:<file>:<mode>` names each flat colour that
+touches the ground under the target (`touching.ground` of the built tokens, else 3:1; the grounds are `color.bg` of the tokens, else
+`#ffffff` and `#111111`); a pixel drawing is read cell by cell, a side shared with a clear cell or with the drawing's edge being a contact,
+so two cells that meet only at a corner do not touch. `masters:outline:<direction>:<N>` compares the outline width of the pixel drawings of
+one grid size N in a direction (the most common depth of the outline colour, inward from the ground, among runs that end at another colour;
+a silhouette has no outline width and gets an info row) and warns when they differ. A pixel drawing is a crispEdges SVG with a square
+whole-number viewBox of at most 64 cells. An SVG that cannot be read or drawn is a `masters:file:<file>` warning (NOT measured), never a
+crash; `before/` (the old icons adoption replaces), `drafts/` and `source/` are skipped. Without resvg one `masters` warning says the
+masters were NOT measured; a round with no masters gets an info row.
 
 | `data-section` | required when | notes |
 |---|---|---|
@@ -220,6 +262,54 @@ page that was not updated). Round 1 and every round listed in `reset_rounds` mus
 | `questions` | always | contains `data-section="question"` items with `data-n` = 1, 2, 3 ... in order; each holds at least two options `data-option="a"`, `"b"` ... in order, exactly one with `data-recommended="true"` (none or several fail `question:N:options`); a question that lists the directions carries `data-lists="directions"` in the template and shows their names |
 | `reply` | always | how to answer: "Answer with a direction name, or question number plus option (1a)" and one sentence |
 
+Style board (`data-board="style"`, round 0) vocabulary. It has its own required set; the pick-board sections above do not
+apply to it except where named here:
+
+| `data-section` | required | notes |
+|---|---|---|
+| `audience`, `surfaces`, `norm` | yes | who sees the mark, where, the category norm and what to avoid; non-empty |
+| `territory` (repeat) | at least 4 | `data-name` (a word of 3+ letters, unique, and not a generic label: "Style 2", "Option B", "Territory 1", "Direction II", "Look 3", "Style-3" and "Option #2" fail, and so does a label word alone; the rule of direction names, see below); a non-empty child `data-field="idea"`; optional `data-field="per-item"` (how the style flexes across a family of marks, not linted); a child `data-field="references"` holding at least 3 `li` items, each with an `<a href="http(s)://...">` and a non-empty `data-field="take"` (`territory:<name>:references` fails with fewer); optionally, per reference, a thumbnail of its real mark: an `<img data-field="thumb">` with an inlined `data:image/...` URI as `src`, no `srcset` and non-empty `alt` text, in a `figure` with a non-empty `figcaption` (a caption naming the owner of the mark; the words and the language are the author's) (`territory:<name>:thumb:N` fails otherwise; a thumbnail outside any territory is checked as `thumb:N`) |
+| `none-of-these` | yes | |
+| `my-call` | yes | `data-field="recommendation"` and `data-field="critique"` (and the judge panels when `data-judge="ran"`) |
+| `questions` | yes | the same rules as pick boards: `data-n` 1, 2, 3 ..., lettered `data-option`s, exactly one `data-recommended="true"`; question 1 (which territories) is multi-pick: checkboxes in a question marked `data-multi="true"`, and the reply the page composes lists every ticked style; when the brief has several marks one question asks shared style or per item |
+| `reply` | yes | |
+
+Directions, positioning map, strategy core, hardest surface, reflex and the incumbent "Today" are not asked of a style board. The `[[fill: ...]]` marker rule applies.
+
+Images on a style board (`images:inlined`): every `<img src>`, and every `srcset` on an `<img>` or a `<source>`, is an inlined
+`data:image/...` URI. A linked image (`http(s)://`, protocol-relative `//`), a relative path or a missing `src` fails. The lint reads
+nothing else about the network: CSS `url()`, `<link>` and SVG `<image>` are not checked. A repeated attribute counts by its first copy, as in
+a browser: `<img src="https://x.example.org/a.png" src="data:image/png;base64,...">` is a linked image and fails. A thumbnail has its own result instead (`territory:<name>:thumb:N`, in the territory row above).
+
+Names: a direction or territory `data-name` fails `...:name` unless it is a word of 3+ letters that is not a label. A label is one of
+option, direction, variant, style, concept, route, territory, look, mood, idea, version or choice, alone or followed by a number, or
+by one letter or a roman numeral after a space, `-` or `#` ("Option 2", "Style A", "Direction II", "Option #2", "Style-3"). Words that
+only start like a label (Stylish, Routes, Looker, Moody) pass.
+
+Project level: every pick board (`data-board="pick"`: round 1, and the pick board of each reset round) fails `project:style-gate`
+while `gates.G1s` in BRAND-STATE.md is empty; a recorded pick, `skipped by owner` or an honest `n/a` all pass (`state --record G1s
+"<decision>"`) for round 1. Refine boards and style boards (round 0, and the style board of a reset round) are not affected.
+The pick board of a round R (2 or more) listed in `reset_rounds` follows a full rejection and passes `project:style-gate` only when
+the pick from before it no longer stands. With `last` the highest round below R whose `rounds/r<last>/board.html` is not a style board
+(`data-board` other than `style`: the rejected round, a pick or a refine board):
+
+- a style board (`data-board="style"`) must sit at `rounds/r<M>/board.html` for an M with `last < M < R` and M in `reset_rounds`
+  (the highest such M counts), and it counts only when it declares `data-round="M"` and holds at least four named `territory` sections
+  with content, the minimum of the style lint (a page that only says `data-board="style"`, or a copy that still declares the round it
+  came from, does not; the failure names it, for example "r2 has 0 of the 4 territories a style board needs" or
+  `r2 declares data-round="0" (a copied page)`);
+  otherwise it fails with "after a full rejection, show a new style board in a reset round before the next pick board";
+- `g1s_round` must be a whole number of at least M; missing or lower it fails with "G1s still holds the pick from before the
+  rejection: record the owner's new pick with state --record G1s ...".
+
+So an earlier pick, skip or n/a does not clear a full rejection: the lint reads the order of the rounds and the record, not the words of
+the record. `skipped by owner` is for the first pick board only, and the style board comes back after every full rejection, however many
+there are in a row (r1 pick, r2 style, r3 pick, r4 style, r5 pick).
+
+The review page of round 0: `review/index.html` has no template of its own in round 0; it is a copy of the style board
+(`cp rounds/r0/board.html review/index.html`), linted with `board-lint review/index.html --round 0`. The same holds for the style
+board of a reset round (`--round <N>`).
+
 Project level: in round 1, when the tier is `full` or the architecture is `product-in-family`, `INVENTORY.md` must exist or
 `inventory:` must start with `none` (for example `none (no target repo)`).
 
@@ -228,8 +318,15 @@ Project level: in round 1, when the tier is `full` or the architecture is `produ
 `hooks/hooks.json` runs `scripts/guard.py` before Write, Edit, MultiEdit, NotebookEdit and Bash. It does nothing unless
 the target has an ancestor folder containing `BRAND-STATE.md`. In a brand project it blocks (exit 2, reason on stderr):
 Edit, overwriting Write and new files in `history/`; deletes, moves, `sed -i`, redirects, `tee`, `truncate`, `dd of=`,
-`cp`/`install`/`ln`/`rsync` into `history/`; Edit, Write and Bash writes on any `rounds/rN/` that is not the latest round;
-deletes anywhere under `rounds/` and moves out of `rounds/` except from the latest round into a `removed-*` folder.
+`cp`/`install`/`ln`/`rsync` into `history/`; Edit, Write and Bash writes on any `rounds/rN/` that is not the latest round
+(the one exception: `rounds/r0/`, the style board, stays writable while `gates.G1s` in BRAND-STATE.md is empty or missing, so a
+project already past round 1 can run its style research as round 0; once G1s is recorded it is read-only like any earlier round. The
+exception opens only when `gates:` is a block map the guard fully understands: a state file it cannot read, a tab in a frontmatter
+indent, a quoted key, an indented line under a key that has a plain value or before the first key (the state reader rejects those too),
+a `gates:` with a value on its own line (a flow map such as `gates: {G1s: ""}`), a repeated `gates:` or a repeated key inside it opens
+nothing); deletes anywhere under `rounds/` and moves out of `rounds/` except from the latest (or open) round into a
+`removed-*` folder. `patch` asks the same question through the same function (`guard.round_is_open`), so it edits `rounds/r0/` exactly
+when the hook lets a write in.
 `brand-creator freeze` is always allowed. The same zones are protected from `git mv`, `git stash -u|-a|--include-untracked|--all`, `git clean`, `git checkout -- <path>`, `git restore`, and from `tar -x`, `unzip`, `7z x` and `ditto` extracting into them (listing and testing archives stay allowed). `BRAND_CREATOR_GUARD_STRICT=1` also blocks Bash writes into the latest round.
 It is best effort (an interpreter one-liner can still write); the real gate is `history/MANIFEST.sha256`, verified by
 `check`. Fail-open applies only to input it cannot parse (it prints a warning): a broken guard must not brick unrelated
@@ -352,7 +449,8 @@ the numbers in `scripts/lib/qa_rules.py` are the agent's proposals, printed as p
 
 ```json
 {"schema": 1,
- "downscale": {"accent_min_px": 4, "accent_rule_max_size": 32, "accent_colour": "color.accent", "accent_tolerance": 40},
+ "downscale": {"accent_min_px": 4, "accent_rule_max_size": 32, "accent_colour": "color.accent", "accent_tolerance": 40,
+               "exemptions": [{"source": "assets/logo/mark-16.svg", "max_px": 16, "reason": "..."}]},
  "states":    {"greyscale_min_diff": 0.10, "silhouette_min_diff": 0.10, "ground": "#808080"},
  "cvd":       {"min_delta_e": 10.0, "deficiencies": ["protan", "deutan", "tritan"]},
  "guides":    {"tolerance_px": 1.5},
@@ -362,7 +460,8 @@ the numbers in `scripts/lib/qa_rules.py` are the agent's proposals, printed as p
 
 An unknown section or key, a value of the wrong type or a number at or below 0 exits 2: a typo never falls back to the proposal.
 **Size bands:** `qa_rules.pick_band(bands, size_px)` is the one function that names the drawing for a body size (first band whose
-`max_px` covers it; only the last band may omit `max_px`). `Manifest.put_slot()` records the band a slot used; a slot that uses another
+`max_px` covers it; every band but the last has a `max_px`, and the last has none: it covers every larger size, and a last band
+with one exits 2). `Manifest.put_slot()` records the band a slot used; a slot that uses another
 band than the picker names needs a one-line `exemption` (exit 1 without), and `check` re-reads every recorded band from the manifest.
 
 ### downscale (`brand-creator downscale`)
@@ -370,7 +469,11 @@ band than the picker names needs a one-line `exemption` (exit 1 without), and `c
 One master (PNG, or an SVG rasterised once at `--master-size`) is shrunk to the sizes systems show (default: the union of the
 `downscale-apple` and `favicon-set` rows of platform-specs.json) and the accent is measured at each size: pixel count, bounding box and
 the largest solid square. Brand rule (default, owner-adjustable): at `accent_rule_max_size` px and below the accent holds a solid
-`accent_min_px` x `accent_min_px` square (fail; a vanished accent is named). Methods: `sips -z` on macOS (default), `--renderer=resvg`
+`accent_min_px` x `accent_min_px` square (fail; a vanished accent is named). A miss the owner accepts is a `downscale.exemptions` entry:
+`{"source": <the master's path in the project, as --source names it; ./ and \ are normalised>, "max_px": <size>, "reason": <why>}`. A failing row of that master's report at `max_px` and
+below, system or shipped, becomes a warning that carries the reason. Another master's miss is never excused, and an exemption that excused
+no row of its master's run is reported as `exemption:<n>` (warn), and so, in every run, is one whose source is not a file of the project. An exemption without a source inside the project, a whole `max_px` above 0
+or a reason exits 2. Methods: `sips -z` on macOS (default), `--renderer=resvg`
 (SVG source, a vector render per size) or `--renderer=pillow` (Lanczos on a PNG source). Off macOS there is no default: the run exits 3
 unless `--renderer` is given or BRAND-STATE records `renderer: <name> (opted in <date>)`. `--previous <older master>` (or the previous
 report of the same source) adds `compare:<size>px` rows: a smaller solid square at a rule size is a warning "REGRESSION". The earlier report is
@@ -378,7 +481,10 @@ used only when it measured the same source with the same method, master size, ac
 there is nothing comparable.
 **One report per measured source**: `assets/_checks/downscale/<slug>.json` (tool name `downscale/<slug>`, the slug is the file stem plus six
 hex digits of the path hash). `check` ties a manifest row to the report whose `source` equals the row's `downscale_source`. `--png FILE` measures a raster
-as shipped (for example an actool output) with no resampling. The accent colour and ground come from `tokens.json` (the role in
+as shipped (for example an actool output) with no resampling; pass every shipped file of one master in one run, since each run writes
+the master's report anew. When the master is one band's drawing (`qa/rules.json` `bands`), an info row `bands` names its sizes and the
+drawings that ship the others: its rows outside its band show what a system that shrinks this one master would make of it (an app icon),
+and a size drawn per band is measured as shipped, with `--png`. The accent colour and ground come from `tokens.json` (the role in
 `downscale.accent_colour`, mode `--mode light|dark`) or `--accent` / `--ground`.
 
 ### states-check
@@ -535,7 +641,7 @@ says so (rows `pdf:label-metadata`, `pdf:label-xmp`, `pdf:label-cover`, `pdf:col
 A book that does not lint clean is not exported. Print production (bleed, trim, PDF/X candidate) is a separate step.
 
 **patch** (`patch FILE --old T --new T --count N`): replaces and refuses, writing nothing, unless the text occurs exactly N times. Never edits
-`history/`, an earlier round or `assets/_checks/`; refuses `book.html` of a generated brand. On a book file it appends
+`history/`, an earlier round (the hook's rule: only the latest round, and `rounds/r0/` while G1s is empty, are open) or `assets/_checks/`; refuses `book.html` of a generated brand. On a book file it appends
 `- <date> edition <n>: patched <file> (<k> replacements)[: note]` to `## Edition log`. **collapse** (`--group G --keep NAME [--apply]`): removes
 every `::: variant G x` block of a losing option and every switcher from `book/chapters/*.md`, elements with `data-variant="G:x"` and
 `data-switcher="G"` from a hand-authored book, tokens whose `$extensions["brand-creator"].variant` is `G:x`; unwraps the winner; copies every
@@ -795,7 +901,8 @@ not allow (`PRINT_REGION` or `POST_FACTS` in Quick) stops the chain with exit 2 
   `args`; no clock, randomness, `import()` or `require()`. Each script checks its arguments before the first agent (exit by
   throwing `<workflow>: <message>`), refuses a run that plans more agents than `args.approved_agents`, caps every agent above
   `args.ceiling` with a per-call model, filters fan-out results with `.filter(Boolean)` and guards every awaited `null`.
-  `const RULES` holds the RULES line verbatim and `const AGENT_TIER` the tiers of the agent files.
+  `const RULES` holds the RULES line verbatim and `const AGENT_TIER` the tiers of the agent files. `directions` refuses to start without
+  `args.g1s` (the G1s record: nothing is drawn before the style pick), as `adopt` refuses without `args.g6`.
 - `brand-creator fleet-plan <workflow> --args <json | @file> [--session-model <m>] [--json]` (`scripts/fleet_plan.mjs`, no
   dependencies, no project needed): runs the script in a `node:vm` sandbox with stub hooks (the stub agent answers with the
   smallest value its schema allows; `Date.now()`, `Math.random()` and `new Date()` throw as in the runtime) and prints every
@@ -824,10 +931,11 @@ not allow (`PRINT_REGION` or `POST_FACTS` in Quick) stops the chain with exit 2 
 `case.yaml`. They are opt-in, billed and never run by `tests/run-all.sh` or the smoke test; the README ("Running the evals") has the
 commands. Conventions:
 
-- **Fixtures.** `evals/_shared/fixture.sh` holds the builders (`fx_r1_shown`, `fx_before_r1`, `fx_refine`, `fx_judge`, `fx_cascade`,
-  `fx_adoption`, `fx_commit`, `fx_brief_family`, `fx_brief_solo`); each `scaffold.sh` sources it by its own path and calls one. They copy
-  the synthetic Acme worked brand (without its README, which narrates round 1), write `BRAND-STATE.md` from variables and use no
-  network. A run's workspace is the project root, so step 0 finds `BRAND-STATE.md` at once.
+- **Fixtures.** `evals/_shared/fixture.sh` holds the builders (`fx_r1_shown`, `fx_before_r1`, `fx_before_style`, `fx_refine`, `fx_judge`,
+  `fx_cascade`, `fx_adoption`, `fx_commit`, `fx_brief_family`, `fx_brief_solo`); each `scaffold.sh` sources it by its own path and calls one. They
+  copy the synthetic Acme worked brand (without its README, which narrates round 1), write `BRAND-STATE.md` from variables (G1s defaults to a
+  recorded skip, so the cases that test the first board of directions are not stopped by the style gate; `ST_G1S=""` leaves it empty, which is
+  what `fx_before_style` does) and use no network. A run's workspace is the project root, so step 0 finds `BRAND-STATE.md` at once.
 - **Harness note.** The two cases that must prove "nothing was written" (adoption target, git state) end their prompt with a note asking
   the run to execute `bash .eval-verify/verify.sh > verify-result.txt`; a regex grader reads the file (`cmp` of every file against
   the pristine copy; commit, stash, worktree and branch counts). The tool-call graders are the first line, the file is the proof.

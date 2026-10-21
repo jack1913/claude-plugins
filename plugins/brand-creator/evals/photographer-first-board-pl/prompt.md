@@ -9,4 +9,4 @@ allowed_tools: [Read, Glob, Grep, Skill, AskUserQuestion, TodoWrite, Bash, Write
 expected_outcome: 'foto/rounds/r1/board.html exists with None of these; the reply is Polish; no registry check, no agent, no family or platform question (shots are not graded: a run has no set-up data folder).'
 ---
 
-Potrzebuję logo i identyfikacji wizualnej dla mojej pracowni fotograficznej w Krakowie. Nazwa: Pracownia Kadr, jest ostateczna. Wystarczy wersja Quick, resztę zdecyduj sam. Projekt umieść w ./foto/ (bieżący folder) i pokaż mi pierwszą tablicę z kierunkami.
+Potrzebuję logo i identyfikacji wizualnej dla mojej pracowni fotograficznej w Krakowie. Nazwa: Pracownia Kadr, jest ostateczna. Wystarczy wersja Quick, resztę zdecyduj sam. Pomiń badanie stylu, wybiorę z narysowanych kierunków. Projekt umieść w ./foto/ (bieżący folder) i pokaż mi pierwszą tablicę z kierunkami.

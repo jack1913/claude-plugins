@@ -26,6 +26,8 @@ show options with a stated pick. **Re-invoke this skill after compaction** (only
    When the projects folder is unset, the folder is not an AskUserQuestion item (the G0 call holds only choice
    questions): the plain-text facts message after G0 says "I'll create ./<slug>/ in the current folder unless you name another
    place". An open name gets the working slug `brand-<yyyymmdd>`, renamed after G1 and recorded under Renames.
+   Then comes P1s style research and its board (G1s); no board of directions is built before G1s is recorded (a pick, a
+   skip, or an honest "n/a" for a project that was already past round 1).
 
 Work inside the brand project from the first minute. Only page shots go to scratch (the tools put them under the data
 folder). Never build a brand in `/tmp`.
@@ -61,8 +63,8 @@ These rules ship with the plugin and hold whatever the user's own configuration 
 
 | Tier | Phases | Outputs | `check` covers |
 |---|---|---|---|
-| Quick | P0 → one board (3 directions) → pick → one refine → mark → tokens → web + social → short guide (`book`, Quick chapters) → G5 | mark and lockup SVG/PNG, favicon set, OG card, circle-safe avatar (400, 800), tokens.css/json, short guide (`book.html`); GitHub preview and README headers only when the brief or inventory lists a repository | contrast, logo sheet, board lint, shots, book lint |
-| Standard | + P1 research, P2 naming if the name is open, full book, web/social/profile/print packs | + book.html, names memo, print PDFs | + book lint, print check, font check |
+| Quick | P0 → style research (P1s) → one board (3 directions) → pick → one refine → mark → tokens → web + social → short guide (`book`, Quick chapters) → G5 | mark and lockup SVG/PNG, favicon set, OG card, circle-safe avatar (400, 800), tokens.css/json, short guide (`book.html`); GitHub preview and README headers only when the brief or inventory lists a repository | contrast, logo sheet, board lint, shots, book lint |
+| Standard | + P1 research (feeds P1s), P2 naming if the name is open, full book, web/social/profile/print packs | + book.html, names memo, print PDFs | + book lint, print check, font check |
 | Full | + P1c inventory, platform emitters, adoption, launch | + Apple/Windows/Linux/Wallet/developer packs, ADOPTION, LAUNCH | + emitter compiles, idempotence, staleness |
 
 Rough length to state at G0: Quick 2-3 board rounds in one sitting; Standard 4-6 rounds over a day or two;
@@ -72,11 +74,17 @@ Quick with an open or at-risk name runs the brand-naming skill (P2) before the b
 
 ## Two axes, recorded in BRAND-STATE.md
 
-- **Mark source** (inferred at G0 and stated, not asked): `generated` (drawn by code: grids, voxels, geometry; byte-exact
+- **Mark source** (inferred at G0 and stated, not asked): `generated` (kept as code: grids, voxels, geometry; byte-exact
   regeneration) | `authored-vector` (type-based or drawn vector, glyphs outlined, no live text) | `existing` (the owner's
   mark, audited). A mark in use → `existing`. Otherwise G0 records your provisional pick, and at G2 you settle it from the
-  chosen direction and state it as a default ("Compass is drawn by code, so generated, unless you say otherwise").
+  chosen direction and state it as a default ("Compass is kept as code, so generated, unless you say otherwise").
   Ask only when the owner has shown a preference (a hand-drawn sketch, "keep my logo, just tidy it").
+- **Vector first** (every mark source): the logo master is pure-vector SVG (`assets/logo/mark.svg`); PNG, ICO and every
+  other raster is exported from it, never the other way round. Generated images, photos and sketches are for exploring:
+  on a board each is labelled as exploration, and one becomes a mark only when it is traced (`potrace`) or redrawn as
+  vector and its curves are fixed by hand (`authored-vector`). Never ship a raster or an untouched trace as the logo.
+- **Drawing engine** (where marks are drawn): the use-llm design canvas, else Claude Code's /design (the owner types it),
+  else Claude-drawn SVG, only on the owner's yes. Never switch silently. [drawing-engines.md](references/drawing-engines.md)
 - **Architecture** (inferred, default `standalone`): `standalone` | `family-member` | `product-in-family`. Ask only
   when the brief or the repo shows a parent brand or siblings; ask for `FAMILY.md` only after family-member is picked.
 
@@ -86,8 +94,9 @@ Quick with an open or at-risk name runs the brand-naming skill (P2) before the b
 |---|---|---|---|---|
 | P0 | intake, architecture, scope, facts | G0 | [00-intake](references/phases/00-intake.md) | all |
 | P1 | research: constraints, market and clichés, surface inventory (`research/`, `INVENTORY.md`) | none (feeds G0 facts, map, FORBIDDEN) | [01-research](references/phases/01-research.md) | S, F |
+| P1s | style research: who sees the mark, the category norm, 4-6 style territories with 3+ named references each, on a visual style board (`rounds/r0/board.html`) | G1s | [01s-style-research](references/phases/01s-style-research.md) | all |
 | P2 | naming and name screening, only when the name is open or at risk: the brand-naming skill | G1 | [02-naming](references/phases/02-naming.md) | S, F; Q only with an open or at-risk name |
-| P3 | strategy core and 3-5 divergent directions (round 1) | shown, not asked | [03-strategy-directions](references/phases/03-strategy-directions.md) | all |
+| P3 | strategy core and 3-5 divergent directions (round 1), drawn inside the picked styles; waits for G1s | shown, not asked | [03-strategy-directions](references/phases/03-strategy-directions.md) | all |
 | P4 | selection, reset or recovery | G2, G2b-a, G2b-b | [04-selection](references/phases/04-selection.md) | all |
 | P5 | refinement rounds | G3 (freeze) | [05-refinement](references/phases/05-refinement.md) | all |
 | P6 | mark and logo system at real sizes | thresholds go to G4 | [06-mark](references/phases/06-mark.md) | all |
@@ -117,6 +126,15 @@ Read the phase file fully when entering a phase. Record every gate decision with
   answered ("Quick is fine, the name is final, you decide the rest") are not asked again: state your pick and go on.
 - **G1 Name go.** Verdict memo ("screening, not clearance") from the brand-naming skill and the owner's pick. The owner
   buys and files; you never do. Never call a name "available" or "clear".
+- **G1s Style pick.** Nothing is drawn before the owner has seen style research and picked styles. The style board
+  (P1s, every tier) is open on the review surface; the owner picks one or more territories, or "none: research again".
+  Restate the pick, then `state --record G1s "picked <territories>"` (it also writes `g1s_round`, the highest round whose
+  board is a style board). Before the first pick board the owner may skip it by saying so ("skip the research", in any language): record
+  `G1s "skipped by owner"`. Never skip it yourself. Research needs web access: without web tools say so and stop, never
+  invent references. Every pick board (round 1, each reset round) waits for G1s: run `state --require G1s` first;
+  `board-lint` fails one without it, and a reset round's pick board also until a new style board and the owner's new
+  pick are in (G2b-a). A project already past round 1 records `G1s "n/a: round 1 drawn before the style step"`, or runs
+  the style research now as round 0 (the hook keeps `rounds/r0/` writable while G1s is empty).
 - **G2 Direction pick.** The board is open on the review surface. Before building, restate: "You picked <Name>
   (board label X) and <graft>; building that now." Settle the mark source from that direction in the same message
   (a default "unless you say otherwise"; `state --set mark_source=...`). A bare token that could point at two lists ("1") → ask, or state
@@ -124,9 +142,10 @@ Read the phase file fully when entering a phase. Record every gate decision with
   the board as My call with `data-judge="ran"` and its judge-view, lead-view and middle-option panels, see
   board-contract.md). In the Full tier and for product-in-family the first board (so G2) waits for `INVENTORY.md` or
   `inventory: none (no target repo)` (board-lint).
-- **G2b-a Reset, nothing liked.** Run P1b research, show a positioning map with where the failed round sat, then 3-5
-  new territories: at least one far from the category norm, one per emotional register. Record the round in
-  `reset_rounds`.
+- **G2b-a Reset, nothing liked.** Run P1b research and the style research again (P1s: a new style board in the next
+  round, G1s recorded again), then show a positioning map with where the failed round sat and 3-5 new territories: at
+  least one far from the category norm, one per emotional register. Record both rounds in `reset_rounds`. The style
+  board is required: a skip is for the first pick board only, and the old G1s pick does not stand in for the new one.
 - **G2b-b Recover, the liked direction's refinement was rejected.** (1) Ask or infer exactly what was disliked;
   (2) restore the liked original as the visible baseline; (3) deepen it ("gentle refinement" = geometry and finish
   only, never character); (4) widen only if the owner asks. Graft only before the pick. State your reading of combined
@@ -190,16 +209,19 @@ machine?", with local marked (Recommended). Record the answer with `state --set 
 opened with `open` / `xdg-open` / `start` (print the absolute path if that fails). The plugin setting `artifact` is the
 owner's yes already; `local` means never upload. If Artifact is asked for but the tool is missing, say so before
 falling back to the local file. Each round regenerates one stable page, `review/index.html`, published to the same Artifact
-URL, recorded as `review_url`. Round folders stay as frozen copies.
+URL, recorded as `review_url`. Round 0's page is a copy of the style board. Round folders stay as frozen copies.
 
 ---
 
 ## Round mechanics
 
-Every board round, in this order (the `/brand-creator:round` skill wraps it):
+Every board round, in this order (the `/brand-creator:round` skill wraps it). Round 0 is the style board
+(`templates/style-board.html`, P1s) and round 1 does not start until G1s is recorded (a pick, "skipped by owner" or "n/a");
+after a full rejection the next pick board also waits for a new style board and a new pick (G2b-a):
 
 1. New folder `rounds/r<N>/`; from round 2 copy the previous round first (`cp -R rounds/r<N-1> rounds/r<N>`).
-   Earlier rounds are never edited; the hook blocks it.
+   Earlier rounds are never edited; the hook blocks it. Marks that need drawing are drawn first, on the session's drawing
+   engine, and come in as SVG masters with a `SOURCE.md` ([drawing-engines.md](references/drawing-engines.md)).
 2. Build the round page at `rounds/r<N>/board.html` from `${CLAUDE_PLUGIN_ROOT}/templates/round-page.html`
    (per-direction deep boards from `templates/board.html` go in `rounds/r<N>/<direction>/board.html`). Fill every
    `[[fill: ...]]`; the lint fails on any left. Follow [board-contract.md](references/board-contract.md).
@@ -208,7 +230,8 @@ Every board round, in this order (the `/brand-creator:round` skill wraps it):
    (1440 and 390, light and dark) and fix what you see. Iterate at least twice before showing. `shot` exits 3 (no
    Chromium yet): go on with steps 5 to 7, and the reply says the shots are not verified and names the fix.
 5. Regenerate `review/index.html` from `${CLAUDE_PLUGIN_ROOT}/templates/review/index.html`, lint it the same way, and
-   publish it to the review surface (same Artifact URL every round).
+   publish it to the review surface (same Artifact URL every round). Round 0 has no review template: copy the style
+   board (`cp rounds/r0/board.html review/index.html`) and lint it with `board-lint review/index.html --round 0`.
 6. Update BRAND-STATE.md: phase, Directions table (rejected / liked / DECIDED), `canonical_direction`, Still open.
 7. Reply with the response template and stop at the gate.
 
@@ -223,8 +246,9 @@ only after the fleet gate. When `disableWorkflows` is set, nothing changes excep
 Single-thread stays the default. When a fleet would help (Standard or Full; a round of 3 or 4 directions, a lens panel,
 a naming fan-out, an adoption across repositories), propose it and wait:
 
-1. Fill the workflow's arguments and run `brand-creator --data "${CLAUDE_PLUGIN_DATA}" fleet-plan <workflow> --args @<file>
-   --session-model <your model>` (nothing is launched; exit 1 = refused or above your model).
+1. Fill the workflow's arguments (`directions` takes the G1s record as `g1s` and refuses to start without it) and run
+   `brand-creator --data "${CLAUDE_PLUGIN_DATA}" fleet-plan <workflow> --args @<file> --session-model <your model>`
+   (nothing is launched; exit 1 = refused or above your model).
 2. State the agent count, the models that will actually run (your session model is the ceiling; `args.ceiling` caps
    every agent to it; `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` overrides the agent files), the size guideline and a rough
    cost (about one single-thread pass per agent), and that you will do it here if they prefer.
@@ -253,9 +277,10 @@ arguments, resume and the refine loop: [fleet.md](references/fleet.md).
 
 ```
 <project>/
-  BRAND-STATE.md  FACTS.md  brief/BRIEF.md  INVENTORY.md (Full, product-in-family)
+  BRAND-STATE.md  FACTS.md  brief/BRIEF.md  brief/canvas-round-<N>.md (drawing briefs)  INVENTORY.md (Full, product-in-family)
   research/ (research.md, cliches.md, positioning-map.md, dated notes, names/)
-  rounds/r1/board.html  rounds/r1/<direction>/
+  rounds/r0/board.html (style board)  rounds/r1/board.html  rounds/r1/<direction>/ (<item>.svg, -16/-32/-128.png, SOURCE.md)
+  .design/<slug>/ (the use-llm design canvas, when one is used)
   review/index.html                        tokens/*.tokens.json
   assets/logo/ assets/tokens/ assets/web/ assets/social/ assets/manifest.json assets/_checks/
   history/<date>-<name>/  history/MANIFEST.sha256   decisions/
@@ -291,13 +316,14 @@ Full file contract: `${CLAUDE_PLUGIN_ROOT}/scripts/CONTRACT.md`. Templates: `${C
 
 - [references/_index.md](references/_index.md): every reference file in one table, with what to use it for.
 - Phases: [00-intake](references/phases/00-intake.md), [01-research](references/phases/01-research.md),
-  [02-naming](references/phases/02-naming.md), [03-strategy-directions](references/phases/03-strategy-directions.md),
+  [01s-style-research](references/phases/01s-style-research.md), [02-naming](references/phases/02-naming.md), [03-strategy-directions](references/phases/03-strategy-directions.md),
   [04-selection](references/phases/04-selection.md), [05-refinement](references/phases/05-refinement.md),
   [06-mark](references/phases/06-mark.md), [07-tokens](references/phases/07-tokens.md),
   [08-assets](references/phases/08-assets.md), [09-qa](references/phases/09-qa.md),
   [10-book](references/phases/10-book.md), [11-adoption](references/phases/11-adoption.md),
   [12-history](references/phases/12-history.md), [13-launch](references/phases/13-launch.md).
-- [board-contract.md](references/board-contract.md): required board sections, territory card, rubric, generation prompts.
+- [board-contract.md](references/board-contract.md): required board sections (pick, refine and style boards), territory card, rubric, generation prompts.
+- [drawing-engines.md](references/drawing-engines.md): where marks are drawn (the use-llm design canvas, Claude Code's /design, or Claude-drawn SVG on the owner's yes), the drawing brief, what lands in the round, the canvas's known quirks.
 - [The brand-naming skill](../brand-naming/SKILL.md): P2 naming, prior art, screening and the verdict memo.
 - [The brand-book skill](../brand-book/SKILL.md): P10 book, self-review checklist, collapse, G5 opt-ins, the RGB proof PDF.
 - User-invoked: [brand-adopt](../brand-adopt/SKILL.md) (P11 apply), [check](../check/SKILL.md) (gates and cascade),

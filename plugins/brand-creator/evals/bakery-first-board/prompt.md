@@ -9,4 +9,4 @@ allowed_tools: [Read, Glob, Grep, Skill, AskUserQuestion, TodoWrite, Bash, Write
 expected_outcome: 'bakery/rounds/r1/board.html exists with None of these; no registry check, no agent, no family or platform question (shots are not graded: a run has no set-up data folder).'
 ---
 
-I'm opening a bakery called Brightloaf in Gdańsk, Poland. I need a logo and a look for the shop sign and Instagram. Quick tier is fine and the name is final; you decide the rest. Put the project in ./bakery/ (current folder) and show me a first board of directions.
+I'm opening a bakery called Brightloaf in Gdańsk, Poland. I need a logo and a look for the shop sign and Instagram. Quick tier is fine and the name is final; you decide the rest. Skip the style research, I will pick from drawn directions. Put the project in ./bakery/ (current folder) and show me a first board of directions.

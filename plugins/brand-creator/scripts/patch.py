@@ -9,7 +9,8 @@ Replaces TEXT in FILE and refuses, writing nothing, unless TEXT occurs exactly N
 aimed at something else). On a book file it also writes one line to the `## Edition log` of BRAND-STATE.md, and it refuses to edit
 an edition that was approved (G5) unless --new-edition opens the next one, so an approved edition never changes under its stamp.
 A generated book is never patched: edit book/chapters/*.md (patch works there) and run `brand-creator book`.
---old and --new may come from files (--old-file, --new-file) for multi-line text. Never touches history/ or earlier rounds.
+--old and --new may come from files (--old-file, --new-file) for multi-line text. Never touches history/ or earlier rounds: which
+rounds are earlier is the hook's own rule (guard.round_is_open: the latest round, and rounds/r0/ while G1s is empty).
 """
 import re
 import sys
@@ -17,9 +18,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "booklib"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bookdata  # noqa: E402
-from _common import (EXIT_FAIL, EXIT_USAGE, Parser, add_project_arg, confine, fail, find_project, latest_round, main_guard, read_state,  # noqa: E402
+from _common import (EXIT_FAIL, EXIT_USAGE, Parser, add_project_arg, confine, fail, find_project, main_guard, read_state,  # noqa: E402
                      rel, today, write_bytes_if_changed)
+from guard import round_is_open  # noqa: E402  (the hook's rule for which rounds may still be written: one copy, so patch and the hook agree)
 
 
 def is_book_file(project: Path, f: Path, cfg: dict) -> bool:
@@ -57,7 +60,7 @@ def main() -> int:
     parts = r.split("/")
     if parts[0] == "history" or parts[0].startswith("removed"):
         fail(EXIT_FAIL, f"{r} is frozen or kept as a backup; patch never edits history/ or removed-*/")
-    if parts[0] == "rounds" and len(parts) > 1 and re.fullmatch(r"r\d+", parts[1]) and int(parts[1][1:]) != latest_round(project):
+    if parts[0] == "rounds" and len(parts) > 1 and re.fullmatch(r"r\d+", parts[1]) and not round_is_open(project, int(parts[1][1:])):
         fail(EXIT_FAIL, f"{r} is in an earlier round, which is read-only")
     if parts[:2] == ["assets", "_checks"]:
         fail(EXIT_FAIL, "reports under assets/_checks/ are written by the checks, not patched")

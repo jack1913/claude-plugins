@@ -80,5 +80,6 @@ so (or clearly shows it, for example by switching language); then follow it over
 - Explanation depth: short           # short (one sentence per decision) | normal | detailed
 - Check-in density: after each phase # after each phase | after each round | only at gates
 - Batched replies: yes               # accept "1 ok 2 b"
+- Drawing engine: not chosen yet     # not chosen yet | use-llm design canvas | Claude Code /design | Claude-drawn SVG (only with the owner's yes, dated)
 - Notes: (anything else the owner asked for, paraphrased, with the date)
 ```

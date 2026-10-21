@@ -6,6 +6,114 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+### Added
+
+- A style research step before anything is drawn, in every tier: Claude researches who sees the mark, where, and what
+  the category looks like, then shows a style board (`rounds/r0/board.html`, from `templates/style-board.html`) with
+  four to six style territories, each grounded in three or more real, linked references with what to take and what to
+  avoid. You tick one or more styles (gate G1s) or say "skip the research". Without web access Claude says the research
+  needs it and stops; it never invents references. After a full rejection the style research runs again before the new
+  territories, on a new style board in a round listed in `reset_rounds`. That board is required: "skip the research" works
+  before the first board of directions only.
+- Each reference on the style board can show a small picture of its real mark: an inlined image with alt text, in a figure
+  with a caption (the template's caption says "shown for private research"; the words and the language are yours).
+  `board-lint` fails a thumbnail without alt text or without a non-empty caption. On a style board it also fails any
+  `<img src>`, and any `srcset` on an `<img>` or a `<source>`, that is not an inlined `data:image/` URI: a linked or
+  relative image fails. It checks nothing else about the network (CSS `url()` and `<link>` are not read).
+- `board-lint` checks the style board (`data-board="style"`, in round 0 or a reset round): audience, surfaces, norm, at
+  least four territories with word names and three linked references each, none of these, my call, questions and reply.
+  Generic territory names ("Style 1", "Option 2") fail, as they already did for directions.
+- After a full rejection the style gate is armed again. The pick board of a reset round fails `board-lint`
+  (`project:style-gate`) until a new style board sits in a reset round after the rejected round and the owner's new pick is
+  recorded after it, so the first pick no longer stands in. A page that only says `data-board="style"` is not that board: it
+  needs the four named territories with content that the style lint asks for, and a copied page that still declares the round
+  it came from does not count either. `state --record G1s` now also writes `g1s_round`, the highest round whose
+  board is a style board (and removes it when there is none), so a pick recorded before the new style board is written does
+  not count as coming after it; `state --set g1s_round=...` is refused.
+- The review page of round 0 is a copy of the style board (`board-lint review/index.html --round 0` passes on it).
+- Marks are drawn on a design tool: the use-llm design canvas when the session has it, else Claude Code's `/design`,
+  which you type because Claude can't start it. Without either, Claude says what is missing and draws the marks as SVG
+  itself only after your yes, as a weaker choice. The drawing brief goes to `brief/canvas-round-<N>.md` from a new
+  template, and the marks you keep come into the round as SVG with a `SOURCE.md` per direction (the tool, prompts, image
+  model, cost, tracing and hand fixes). From round 2 the brief has the drawing session start from a copy of the previous round,
+  as every round does. Generated pictures cost money on the canvas, and Claude says the cost in each reply.
+- The drawing brief gives every option an ID that names its board (for example `family1-bc-3`, so "the 3" can't mean two
+  options), sends your board answers to the brand-creator session, keeps drafts in the project instead of a session's
+  scratch folder, and sets an agent budget per run. Each `SOURCE.md` records the lineage of every kept mark and the agents and
+  tokens of each run.
+- A screening override goes on record: when you keep an option the screening or a judge flagged, a line in
+  `BRAND-STATE.md` says why and which extra check it triggered, and that check runs before G3.
+- Before you approve a refined round (G3), `board-lint` measures the round's kept marks and warns without failing the board: a
+  colour that touches the background under the target (3:1, or your tokens' `touching.ground`), on light or on dark, and
+  pixel marks of one family drawn with different outline widths (one at 2 px, its siblings at 1 px).
+- A behaviour eval, `style-gate-before-first-board`: on a fresh project the first turn draws no board of directions, and
+  without web tools Claude says the style research needs web access and stops.
+
+### Changed
+
+- Logo masters are vector. The mark is a pure-vector SVG and every PNG or icon is exported from it. Generated images,
+  photos and sketches are for exploring: a board labels them as exploration, and one becomes the mark only after it is
+  traced or redrawn as vector and fixed by hand. Refining a mark means editing the SVG, not generating a new image.
+- Every pick board waits for the style pick: `board-lint` fails the round 1 board, and the pick board of a reset round,
+  while gate G1s is not recorded (a pick, "skipped by owner" or an honest "n/a" all count for round 1). The state file has
+  a new `G1s` gate. Projects already past round 1 record G1s honestly, for example
+  `state --record G1s "n/a: round 1 drawn before the style step"`, or run the style research as round 0 now.
+- The hook keeps `rounds/r0/` writable while G1s is empty, so a project that is already past round 1 can still run its
+  style research as round 0. Once G1s is recorded it is read-only like any earlier round. The hook opens `rounds/r0/` only
+  when it reads the state file's `gates:` block with certainty: a tab in the indentation, a quoted key or a `gates:` with a
+  value on its own line (`gates: {G1s: ""}`) leaves it locked. `patch` follows the same rule, so it edits `rounds/r0/` exactly
+  when the hook allows a write there.
+- Direction and territory names are checked against a longer list of labels: "Territory 1", "Style A", "Option B", "Look 2",
+  "Mood 3", "Direction II", "Option #2" and "Style-3" fail, as the option, direction, variant, style, concept and route
+  labels did. Words that only start like a label (Harbor, Quarry, Looker, Moody, Routes) pass.
+- `/brand-creator:round` takes `style` as a board kind, builds round 0 from the style board template and runs
+  `state --require G1s` before any round 1 or reset pick board. The `directions` workflow takes the G1s record as its
+  `g1s` argument and refuses to start without it, as `adopt` does without `g6`.
+- The bakery, photographer and round-1 board evals skip the style research in their prompts (the photographer prompt in
+  Polish) so they keep testing the first board of directions.
+- A pick board belongs to round 1 or to a round listed in `reset_rounds`. `board-lint` now fails a pick board in any later
+  round (`page:data-board`: later rounds are refine boards). It used to accept one, so a pick board in round 2 that nobody had
+  listed passed on the old style pick.
+- `board-lint` and `state` read a page the same way: its round and its kind come from one tag, the body (or the html tag when
+  the body has neither), so `<html data-board="style"><body data-round="2" data-board="pick">` is a pick board.
+- In an older project, an earlier reset round's pick board fails `board-lint` when it is linted again (`project:style-gate`: no
+  new style board in a reset round after the rejected round, and no `g1s_round`), and so does a pick board in round 2 or later
+  that was never listed in `reset_rounds`. `brand-creator check` lints no round itself: it reads the `board-lint` report of the
+  latest round only (`rounds/r<N>/board.html`, N the highest) and asks for a new lint when that page changed, so only a round you
+  lint again can fail.
+- `brand-book`'s listing text names the optional chapters (tone of voice, photography), the clean-up of the options you
+  decided against, and says that a brand book for a brand that does not exist yet starts with `brand-creator`, even when the
+  ask says "brand book" or "księga znaku". In its trigger evals Sonnet now passes 27 of 27 queries (24 before) and Haiku 25 of
+  27 (23); Haiku still misses a clean-up request and still starts it for a new brand's book asked for in Polish.
+
+### Fixed
+
+- `logo-sheet` holds only the colours that touch the ground to the contrast target, found in the pixels as `contrast` finds
+  them. A cream face inside a black outline no longer fails on white, while a fill that runs off the drawing's edge still
+  counts. The target is your tokens' `touching.ground` unless you pass `--min-contrast`, and `tokens/exceptions.json` excuses
+  a colour against the ground as it does for `contrast`. Each tile's own edge must reach the target too, so a keyline thinner
+  than a pixel at 16 px fails there. With size bands in `qa/rules.json`, each tile is drawn from its band's drawing, and a
+  pixel drawing at the largest whole-number scale that fits, so the 16 px tile shows the 16 px drawing. Artwork with
+  gradients, or line art whose colours cannot be measured, says "not verified" instead of passing. A change to the bands or
+  the tokens makes the sheet stale for `check`, and a run that stops on a band error records the failure.
+- A last size band with a `max_px` (so nothing would draw a larger size, and the emitters would crash there) now exits 2
+  with the reason: the last band covers every larger size.
+- A small accent that fails the 4×4 rule on purpose (a row of 2 px cells that reads as a row) no longer blocks `check`
+  forever: `qa/rules.json` takes an exemption for one master up to a size, with your reason. The miss is then a warning that
+  carries the reason; another master's miss still fails, and an exemption that excuses nothing is reported.
+- `downscale` says when its master is one size band's drawing: which sizes ship another drawing, and that those are measured
+  as shipped with `--png`. Its other rows still show what a system that shrinks the one master (an app icon) would make of it.
+- `state` counts round 0 as a real round: `state --json` reports `latest_round` as `r0` for a project whose only round is
+  the style board, instead of none.
+- `state --set reset_rounds=[2,3]` saved the text "[2,3]" instead of a list, and `board-lint` read it one character at a time,
+  so `[10,11]` meant rounds 1, 0, 1 and 1. `state --set` now writes a real list for `reset_rounds` and `book_chapters`
+  (`reset_rounds` takes whole numbers from 1 and exits 2 for anything else), and a project that still holds the quoted text
+  reads right too, `"[10,11]"` as rounds 10 and 11.
+- `state --set "reset_rounds =2,3"` (a space before `=`) skipped the checks and wrote a key that left the state file unreadable.
+  Spaces around the key and the value are now trimmed, and a key that is not one word exits 2.
+- `board-lint rounds/r2/board.html --round 1` linted the page as round 1. A `--round` that contradicts the page's folder now
+  exits 2.
+
 ## [0.2.3] - 2026-10-20
 
 ### Changed

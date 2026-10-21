@@ -36,12 +36,14 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+sys.path.insert(0, str(Path(__file__).resolve().parent / "marklib"))
 import qa_rules  # noqa: E402
 import svgtools  # noqa: E402
 from _color import wcag_ratio  # noqa: E402
 from _common import (EXIT_CANNOT, EXIT_USAGE, Parser, Report, add_project_arg, add_renderer_arg, confine, fail,  # noqa: E402
                      find_project, main_guard, rasterise_svg, rel)
 from touching import analyse  # noqa: E402
+from marks import load_exceptions, load_json, matches, names_of  # noqa: E402  (shared with logo-sheet)
 
 WCAG = {
     "ui-text": (4.5, "WCAG 2.2 AA 1.4.3 (text)"),
@@ -54,16 +56,6 @@ LOGO_NAMES = ("mark", "lockup", "wordmark")  # assets/logo/<name>.svg (light gro
 RASTER = 512
 MARGIN = 8
 DEFAULT_TOUCH_MIN = 3.0
-
-
-def load_json(path: Path, what: str) -> dict:
-    try:
-        doc = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as e:
-        fail(EXIT_USAGE, f"{path.name}: cannot read {what} ({e})")
-    if not isinstance(doc, dict):
-        fail(EXIT_USAGE, f"{path.name}: {what} must be a JSON object")
-    return doc
 
 
 def touching_config(tj: dict) -> dict:
@@ -84,36 +76,6 @@ def touching_config(tj: dict) -> dict:
             fail(EXIT_USAGE, f"touching.pairs[{i}] needs a, b (token roles) and min (a number above 0)")
         out["pairs"].append({"a": pr["a"], "b": pr["b"], "min": float(pr["min"]), "label": pr.get("label")})
     return out
-
-
-def load_exceptions(path: Path) -> list[dict]:
-    if not path.is_file():
-        return []
-    items = load_json(path, "the exceptions register").get("exceptions")
-    if not isinstance(items, list):
-        fail(EXIT_USAGE, f"{path.name}: needs an \"exceptions\" list")
-    out = []
-    for i, e in enumerate(items):
-        ok = isinstance(e, dict) and all(isinstance(e.get(k), str) and e[k].strip() for k in ("a", "b", "reason"))
-        if not ok:
-            fail(EXIT_USAGE, f"{path.name}: exceptions[{i}] needs a, b and a non-empty reason (why this miss is accepted)")
-        mode = e.get("mode", "*")
-        if mode not in ("light", "dark", "*"):
-            fail(EXIT_USAGE, f"{path.name}: exceptions[{i}].mode must be light, dark or *, got {mode!r}")
-        out.append({"a": e["a"].strip().lower(), "b": e["b"].strip().lower(), "mode": mode, "reason": e["reason"].strip(), "used": False})
-    return out
-
-
-def names_of(tj: dict, mode: str, hexv: str) -> list[str]:
-    """Token roles (semantic first, then primitives) whose resolved colour is hexv, plus hexv itself."""
-    sem = sorted(k for k, v in tj["modes"][mode].items() if v["hex"].lower() == hexv)
-    prim = sorted(k for k, v in tj["primitives"].items() if v["hex"].lower() == hexv)
-    return sem + prim + [hexv]
-
-
-def matches(rule_a: str, rule_b: str, na: list[str], nb: list[str]) -> bool:
-    ra, rb = rule_a.lower(), rule_b.lower()
-    return (ra in na and rb in nb) or (ra in nb and rb in na)
 
 
 def logo_groups(project: Path) -> list[tuple[str, Path, Path | None]]:

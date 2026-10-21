@@ -415,3 +415,199 @@ def test_s3_a_rounds_only_project_is_protected(brands):
 def test_s3_nesting_limit_blocks_instead_of_failing_open(brands):
     cmd = "bash -c 'bash -c \"bash -c \\\"bash -c \\\\\\\"bash -c ls\\\\\\\"\\\"\"'"
     assert blocked(run_guard(tool("Bash", command=cmd, cwd=brands / "p1")))
+
+
+# ---- the style board (rounds/r0/) stays writable while G1s is empty: a project that is already past round 1 can run its style
+# ---- research as round 0 now; once G1s is recorded it is read-only like any earlier round
+
+def _style_project(tmp_path, g1s_lines, *, rounds=("r0", "r1"), state=None):
+    p = tmp_path / "brand"
+    for r in rounds:
+        (p / "rounds" / r).mkdir(parents=True)
+        (p / "rounds" / r / "board.html").write_text("<html>")
+    (p / "BRAND-STATE.md").write_text(state if state is not None else
+                                      'slug: x\ngates:\n  G0: "2026-10-17 quick"\n' + g1s_lines + '  G2: ""\n', encoding="utf-8")
+    if state is None:
+        text = (p / "BRAND-STATE.md").read_text()
+        (p / "BRAND-STATE.md").write_text("---\n" + text + "---\n# x\n")
+    return p
+
+
+EMPTY_G1S = {
+    "empty double quotes": '  G1s: ""\n',
+    "empty single quotes": "  G1s: ''\n",
+    "no value": "  G1s:\n",
+    "blank in quotes": '  G1s: "   "\n',
+    "the template line with its comment": '  G1s: ""                      # style pick (or "skipped by owner"); round 1 waits for it\n',
+    "a comment only": "  G1s:   # not yet\n",
+    "no G1s key (a project older than the gate)": "",
+}
+RECORDED_G1S = {
+    "a pick": '  G1s: "2026-10-17 picked Harbor + Ember"\n',
+    "a skip": '  G1s: "2026-10-17 skipped by owner"\n',
+    "an honest n/a with a colon": '  G1s: "2026-10-18 n/a: round 1 drawn before the style step"\n',
+    "unquoted text": "  G1s: 2026-10-17 picked Harbor\n",
+    "text before a comment": '  G1s: "2026-10-17 picked Harbor"   # the owner\'s call\n',
+}
+
+
+@pytest.mark.parametrize("why", sorted(EMPTY_G1S))
+def test_round_0_stays_writable_while_g1s_is_empty_even_with_round_1_on_disk(tmp_path, why):
+    p = _style_project(tmp_path, EMPTY_G1S[why])
+    for tool_name in ("Write", "Edit", "MultiEdit"):
+        r = run_guard(tool(tool_name, file_path=str(p / "rounds" / "r0" / "board.html")))
+        assert r.returncode == 0, (why, tool_name, r.stderr)
+    assert run_guard(tool("Write", file_path=str(p / "rounds" / "r0" / "new-note.md"))).returncode == 0   # a new file in r0
+    for cmd in ("echo x > rounds/r0/board.html", "cp /tmp/a.html rounds/r0/board.html", "sed -i '' s/a/b/ rounds/r0/board.html"):
+        r = run_guard(tool("Bash", command=cmd, cwd=p))
+        assert r.returncode == 0, (why, cmd, r.stderr)
+
+
+@pytest.mark.parametrize("why", sorted(RECORDED_G1S))
+def test_round_0_is_read_only_once_g1s_is_recorded_and_round_1_exists(tmp_path, why):
+    p = _style_project(tmp_path, RECORDED_G1S[why])
+    for tool_name in ("Write", "Edit", "MultiEdit"):
+        assert blocked(run_guard(tool(tool_name, file_path=str(p / "rounds" / "r0" / "board.html")))), (why, tool_name)
+    assert blocked(run_guard(tool("Write", file_path=str(p / "rounds" / "r0" / "new-note.md"))))
+    for cmd in ("echo x > rounds/r0/board.html", "sed -i '' s/a/b/ rounds/r0/board.html", "cp /tmp/a.html rounds/r0/board.html"):
+        r = run_guard(tool("Bash", command=cmd, cwd=p))
+        assert blocked(r) and "round r0" in r.stderr, (why, cmd, r.stderr)
+
+
+def test_the_r0_allowance_covers_only_r0_and_only_writes(tmp_path):
+    p = _style_project(tmp_path, '  G1s: ""\n', rounds=("r0", "r1", "r2"))
+    assert blocked(run_guard(tool("Edit", file_path=str(p / "rounds" / "r1" / "board.html"))))         # an earlier round stays locked
+    assert blocked(run_guard(tool("Write", file_path=str(p / "rounds" / "r1" / "new.md"))))
+    assert blocked(run_guard(tool("Bash", command="echo x > rounds/r1/board.html", cwd=p)))
+    assert run_guard(tool("Edit", file_path=str(p / "rounds" / "r2" / "board.html"))).returncode == 0   # the latest still is writable
+    for cmd in ("rm rounds/r0/board.html", "rm -rf rounds/r0", "mv rounds/r0 elsewhere", "mv rounds/r0/board.html /tmp/x.html"):
+        assert blocked(run_guard(tool("Bash", command=cmd, cwd=p))), cmd                                 # no deletes, no moves out
+    r = run_guard(tool("Bash", command="mv rounds/r0/board.html removed-2026-10-18/board.html", cwd=p))
+    assert r.returncode == 0, r.stderr   # a move into removed-<date>/ is allowed from a writable round, as from the latest round
+
+
+def test_a_new_r0_may_be_created_in_a_project_past_round_1_only_while_g1s_is_empty(tmp_path):
+    p = _style_project(tmp_path, '  G1s: ""\n', rounds=("r1", "r2"))
+    assert not (p / "rounds" / "r0").exists()
+    assert run_guard(tool("Write", file_path=str(p / "rounds" / "r0" / "board.html"))).returncode == 0
+    assert run_guard(tool("Bash", command="mkdir -p rounds/r0 && echo x > rounds/r0/board.html", cwd=p)).returncode == 0
+    (p / "BRAND-STATE.md").write_text((p / "BRAND-STATE.md").read_text().replace('G1s: ""', 'G1s: "2026-10-18 n/a: round 1 drawn before the style step"'))
+    assert blocked(run_guard(tool("Write", file_path=str(p / "rounds" / "r0" / "board.html"))))
+
+
+def test_r0_alone_is_the_latest_round_and_stays_writable_with_g1s_recorded(tmp_path):
+    """The usual new project: the style board is the only round, the owner picked, and 'none: research again' rewrites it."""
+    p = _style_project(tmp_path, RECORDED_G1S["a pick"], rounds=("r0",))
+    assert run_guard(tool("Edit", file_path=str(p / "rounds" / "r0" / "board.html"))).returncode == 0
+    assert run_guard(tool("Bash", command="echo x > rounds/r0/board.html", cwd=p)).returncode == 0
+    (p / "rounds" / "r1").mkdir()                       # the first drawn round appears: r0 is now an earlier round
+    assert blocked(run_guard(tool("Edit", file_path=str(p / "rounds" / "r0" / "board.html"))))
+
+
+def test_unreadable_state_never_opens_r0(tmp_path):
+    for why, state in (("no frontmatter", "slug: x\n"), ("frontmatter never closed", '---\nslug: x\ngates:\n  G1s: ""\n'),
+                       ("not text", None)):
+        p = _style_project(tmp_path / why.replace(" ", "-"), "", state=state if state is not None else "")
+        if state is None:
+            (p / "BRAND-STATE.md").write_bytes(b"---\n\xff\xfe\n  G1s: \"\"\n---\n")
+        r = run_guard(tool("Edit", file_path=str(p / "rounds" / "r0" / "board.html")))
+        assert blocked(r), (why, r.returncode, r.stderr)
+
+
+def test_a_g1s_line_outside_the_gates_map_does_not_open_r0(tmp_path):
+    state = '---\nslug: x\nnotes:\n  G1s: ""\ngates:\n  G0: "2026-10-17 quick"\n  G1s: "2026-10-17 picked Harbor"\n---\n'
+    p = _style_project(tmp_path, "", state=state)
+    assert blocked(run_guard(tool("Edit", file_path=str(p / "rounds" / "r0" / "board.html"))))
+    state = '---\nslug: x\ngates:\n  G0: "x"\nnotes:\n  G1s: "2026-10-17 picked Harbor"\n---\n'    # the real map has no G1s: empty
+    p2 = _style_project(tmp_path / "second", "", state=state)
+    assert run_guard(tool("Edit", file_path=str(p2 / "rounds" / "r0" / "board.html"))).returncode == 0
+
+
+# A gates map the guard does not fully understand opens nothing, whatever the G1s line seems to say: every state below reads as "G1s
+# empty" to a lax reader, so r0 would open if the guard guessed. (name -> the whole BRAND-STATE.md)
+UNREADABLE_STATES = {
+    "a tab-indented gates line": '---\nslug: x\ngates:\n\tG1s: ""\n---\n',
+    "a tab-indented line among spaces": '---\nslug: x\ngates:\n  G0: "2026-10-17 quick"\n\tG1s: ""\n  G2: ""\n---\n',
+    "a double-quoted key": '---\nslug: x\ngates:\n  G0: "2026-10-17 quick"\n  "G1s": ""\n---\n',
+    "a single-quoted key": "---\nslug: x\ngates:\n  G0: 'x'\n  'G1s': ''\n---\n",
+    "a flow map with the gate": '---\nslug: x\ngates: {G0: "x", G1s: ""}\n---\n',
+    "a flow map without the gate": '---\nslug: x\ngates: {G0: "x"}\n---\n',
+    "an empty flow map": "---\nslug: x\ngates: {}\n---\n",
+    "a text value on the gates line": "---\nslug: x\ngates: none\n---\n",
+    "an empty string on the gates line": '---\nslug: x\ngates: ""\n---\n',
+    "no gates key": "---\nslug: x\n---\n",
+    "gates twice": '---\nslug: x\ngates:\n  G1s: ""\ngates:\n  G0: "x"\n---\n',
+    "the same gate twice": '---\nslug: x\ngates:\n  G1s: "2026-10-17 picked Harbor"\n  G1s: ""\n---\n',
+    "a tab elsewhere in the frontmatter": '---\nslug: x\n\tname: y\ngates:\n  G1s: ""\n---\n',
+    "a list under another key": '---\nslug: x\nbook_chapters:\n  - tone\ngates:\n  G1s: ""\n---\n',
+    "text without a key": '---\nslug: x\njust some words\ngates:\n  G1s: ""\n---\n',
+    "an indented line before the first key": '---\n  note: y\nslug: x\ngates:\n  G1s: ""\n---\n',
+    "an indented line under a plain value": '---\nslug: x\nname: Acme\n  note: y\ngates:\n  G1s: ""\n---\n',
+    "an indented line under a quoted value": '---\nslug: x\nname: "Acme"\n  note: y\ngates:\n  G1s: ""\n---\n',
+    "an indented line under an empty string": '---\nslug: x\nnote: ""\n  G1s: ""\ngates:\n  G1s: ""\n---\n',
+    "an indented line under a flow list": '---\nslug: x\nbook_chapters: [tone]\n  note: y\ngates:\n  G1s: ""\n---\n',
+}
+
+
+@pytest.mark.parametrize("why", sorted(UNREADABLE_STATES))
+def test_a_gates_map_the_guard_does_not_fully_understand_never_opens_r0(tmp_path, why):
+    p = _style_project(tmp_path, "", state=UNREADABLE_STATES[why])
+    for tool_name in ("Write", "Edit", "MultiEdit"):
+        r = run_guard(tool(tool_name, file_path=str(p / "rounds" / "r0" / "board.html")))
+        assert blocked(r), (why, tool_name, r.returncode, r.stderr)
+    for cmd in ("echo x > rounds/r0/board.html", "sed -i '' s/a/b/ rounds/r0/board.html"):
+        assert blocked(run_guard(tool("Bash", command=cmd, cwd=p))), (why, cmd)
+    assert run_guard(tool("Edit", file_path=str(p / "rounds" / "r1" / "board.html"))).returncode == 0   # the latest round is never affected
+
+
+def test_the_same_states_written_as_a_plain_block_map_do_open_r0(tmp_path):
+    """The control for the table above: what makes those states unreadable is their form, not what they say."""
+    for i, state in enumerate(('---\nslug: x\ngates:\n  G0: "x"\n  G1s: ""\n---\n', "---\nslug: x\ngates:   # the gates\n  G1s: ''\n---\n",
+                               '---\nslug: x\nbook_chapters: [tone]\n# a comment\ngates:\n\n  G0: "x"\n  G2: ""\n---\n',
+                               # an indented line has a parent map to belong to: under a key with no value, under {}, or under a comment-only value
+                               '---\nslug: x\nnotes:\n  a: 1\ngates:\n  G1s: ""\n---\n', '---\nslug: x\nnotes: {}\n  a: 1\ngates:\n  G1s: ""\n---\n',
+                               '---\nslug: x\nnotes:   # a map\n    a: 1\n  b: 2\ngates:\n  G1s: ""\n---\n')):
+        p = _style_project(tmp_path / f"c{i}", "", state=state)
+        assert run_guard(tool("Edit", file_path=str(p / "rounds" / "r0" / "board.html"))).returncode == 0, state
+
+
+def test_what_the_guard_cannot_read_the_state_reader_rejects_too(tmp_path):
+    """Where the guard says 'unreadable', the shared state reader (scripts/lib/_common.py) cannot take the file either, or reads a text
+    where a map belongs: the two agree that nobody should act on such a state."""
+    import importlib.util
+    import _common
+    spec = importlib.util.spec_from_file_location("guard_under_test", GUARD)
+    g = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(g)
+    for why in ("a tab-indented gates line", "a double-quoted key", "a tab elsewhere in the frontmatter", "a list under another key", "text without a key",
+                "an indented line before the first key", "an indented line under a plain value", "an indented line under a quoted value",
+                "an indented line under an empty string", "an indented line under a flow list"):
+        p = _style_project(tmp_path / why.replace(" ", "-"), "", state=UNREADABLE_STATES[why])
+        assert g.gate_is_empty(p, "G1s") is False, why
+        with pytest.raises(_common.CliError):
+            _common.State(p / "BRAND-STATE.md").data()
+    p = _style_project(tmp_path / "flow", "", state=UNREADABLE_STATES["a flow map with the gate"])
+    assert g.gate_is_empty(p, "G1s") is False
+    assert not isinstance(_common.State(p / "BRAND-STATE.md").data()["gates"], dict)
+
+
+def test_strict_mode_still_blocks_shell_writes_into_an_open_r0(tmp_path):
+    p = _style_project(tmp_path, '  G1s: ""\n')
+    cmd = "echo x > rounds/r0/board.html"
+    assert run_guard(tool("Bash", command=cmd, cwd=p)).returncode == 0
+    assert blocked(run_guard(tool("Bash", command=cmd, cwd=p), env={"BRAND_CREATOR_GUARD_STRICT": "1"}))
+    assert run_guard(tool("Write", file_path=str(p / "rounds" / "r0" / "board.html")), env={"BRAND_CREATOR_GUARD_STRICT": "1"}).returncode == 0
+
+
+def test_gate_value_reader_agrees_with_the_state_parser(tmp_path):
+    """guard.py reads G1s without importing the shared state reader (it must start fast, on plain python3); both must agree."""
+    import importlib.util
+    import _common
+    spec = importlib.util.spec_from_file_location("guard_under_test", GUARD)
+    g = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(g)
+    for table in (EMPTY_G1S, RECORDED_G1S):
+        for why, line in table.items():
+            p = _style_project(tmp_path / why.replace(" ", "-").replace("'", ""), line)
+            recorded = bool(str((_common.State(p / "BRAND-STATE.md").get("gates", {}) or {}).get("G1s", "") or "").strip())
+            assert g.gate_is_empty(p, "G1s") is (not recorded), (why, line)

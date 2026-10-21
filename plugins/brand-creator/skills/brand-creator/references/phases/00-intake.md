@@ -85,7 +85,7 @@ ones that do not apply:
 
 **The mark source is not a question.** A mark in use means `existing`. Otherwise record your provisional pick
 (`generated` for a geometric or pixel idea, `authored-vector` for a type-based or drawn one) and settle it from the
-chosen direction at G2, stated as a default: "Compass is drawn by code, so generated, unless you say otherwise." A baker
+chosen direction at G2, stated as a default: "Compass is kept as code, so generated, unless you say otherwise." A baker
 or a photographer cannot judge a production method, and does not need to. Ask only when the owner has already shown a
 preference (a sketch they want kept, "just tidy my logo").
 

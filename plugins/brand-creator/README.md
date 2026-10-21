@@ -3,8 +3,9 @@
 Make a logo, colours and every brand file your product needs, step by step, with you deciding at each step.
 
 It works for any business or person, not just software: a bakery, a photographer, a band, a law practice, an app. You
-describe what you need. Claude shows you three different directions on one page, you pick one, and Claude builds it and
-checks it: it renders the logo at real sizes and measures colour contrast.
+describe what you need. Claude shows how brands like yours look and you pick the styles you like, then shows three
+different directions on one page and you pick one. Claude builds it and checks it: it renders the logo at real sizes and
+measures colour contrast.
 
 ## Install
 
@@ -26,7 +27,8 @@ Say this to Claude, with your own business:
 
 > A logo and a look for my bakery
 
-You get up to three quick questions, each with a suggested answer. Then one page shows three clearly different
+You get up to three quick questions, each with a suggested answer. Then a style board shows how brands like yours look,
+with real examples, and you pick the styles you like. Then one page shows three clearly different
 directions, plus "None of these". Answer by name, or like `1a 2b`. `ok` accepts every suggestion. Your project gets its
 own folder, like `./my-bakery/`.
 

@@ -112,7 +112,8 @@ runs only if you agree to use resvg instead of the macOS resampler, and its numb
      `tokens/exceptions.json`.
    - An accent under the 4×4 px rule at 16 px fails `downscale`, and a failing report blocks `check`: (a) a small-size
      drawing, which is design work (a brand-creator project); (b) the person sets their own minimum in `qa/rules.json`
-     (`{"schema": 1, "downscale": {"accent_min_px": 2}}`). Never change the number yourself to make the gate pass.
+     (`{"schema": 1, "downscale": {"accent_min_px": 2}}`); (c) an exemption for that one master and size, with the person's
+     reason (`downscale.exemptions`). Never change the number, or add an exemption, yourself to make the gate pass.
    Ship weaknesses named, never hidden.
 7. **Emit** each chosen target (`emit web`, `emit social --tagline "<FACTS line>"`, and the others). Read each report and
    the smallest image of each pack.

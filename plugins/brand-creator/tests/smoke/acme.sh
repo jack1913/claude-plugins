@@ -56,6 +56,7 @@ assert n != t, "no Required surfaces line to replace"
 open(sys.argv[1], "w").write(n)
 PY
 "${BC[@]}" state --project "$P" --record G0 "quick tier, generated mark" >/dev/null
+"${BC[@]}" state --project "$P" --record G1s "skipped by owner (smoke)" >/dev/null
 
 step "r1 round page (from templates/round-page.html), token sources and the mark"
 mkdir -p "$P/rounds/r1" "$P/tokens" "$P/assets/logo"
@@ -1155,7 +1156,7 @@ for c in "$ROOT"/evals/*/; do
     fi
   fi
 done
-[ "$n_cases" = 17 ] || die "expected 17 eval cases, found $n_cases"
+[ "$n_cases" = 18 ] || die "expected 18 eval cases, found $n_cases"
 ok "$n_cases cases: scaffolds ran, fixtures are brand projects, verify scripts pass on the untouched fixtures"
 if command -v claude >/dev/null; then
   python3 - "$ROOT" "$EV" <<'PY' || die "the real eval loader rejected a case"

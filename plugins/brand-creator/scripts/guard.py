@@ -13,7 +13,11 @@ Protects finished work inside a brand project, and nothing else:
     redirects (> >>), tee, truncate, dd of=, cp/install/ln/rsync into it. New files appear only through
     `brand-creator freeze`, which is always allowed.
   * <project>/rounds/rN/ : every round except the latest (highest N) is read-only: Edit, Write and Bash writes are
-    blocked (GAP S2-P5-t4). The latest round, and a new round with a higher N, stay writable.
+    blocked (GAP S2-P5-t4). The latest round, and a new round with a higher N, stay writable. One exception:
+    rounds/r0/ (the style board) stays writable while `gates.G1s` in BRAND-STATE.md is empty or missing, so a project
+    that is already past round 1 can still run its style research as round 0; once G1s is recorded it is read-only like
+    any earlier round. The exception needs a `gates:` block map the guard fully understands (see gate_is_empty); a state
+    it cannot read, or can read two ways, gives no exception. scripts/patch.py asks the same question through round_is_open.
     Deletes anywhere under rounds/ are blocked (move to removed-<date>/ instead, which is allowed from the latest
     round). BRAND_CREATOR_GUARD_STRICT=1 applies the literal plan reading: Bash redirects, sed -i, tee, cp and mv
     into ANY round are blocked too (use the Write tool for the latest round).
@@ -82,11 +86,87 @@ def project_root(p: Path) -> Path | None:
     return None
 
 
+def _strip_comment(raw: str) -> str:
+    """A frontmatter value without its trailing comment, quotes kept: '"" # note' -> '""'."""
+    quote, cut = "", len(raw)
+    for i, ch in enumerate(raw):
+        if quote:
+            if ch == quote and raw[i - 1] != "\\":
+                quote = ""
+        elif ch in "\"'":
+            quote = ch
+        elif ch == "#" and (i == 0 or raw[i - 1] in " \t"):
+            cut = i
+            break
+    return raw[:cut].strip()
+
+
+def _gate_value(raw: str) -> str:
+    """The text of a frontmatter value with its trailing comment and quotes removed: '"" # note' -> '', '"2026-10-17 x"' -> '2026-10-17 x'."""
+    value = _strip_comment(raw)
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        value = value[1:-1].strip()
+    return value
+
+
+# One `key: value` line as the state reader (scripts/lib/_common.py) takes it: indent of spaces only, an unquoted key.
+_STATE_LINE = re.compile(r"^(?P<indent> *)(?P<key>[A-Za-z0-9_.-]+):(?:\s+(?P<rest>.*))?$")
+
+
+def gate_is_empty(root: Path, gate: str) -> bool:
+    """True when BRAND-STATE.md can be read and its `gates:` block map holds no text for `gate` (a missing key counts as empty: the
+    project is older than the gate). Fails closed: anything the guard does not fully understand is False, so the guard falls back to
+    its normal rule and a state it cannot read never opens a door. That is: no file, not text, no frontmatter, frontmatter never
+    closed; a frontmatter line the state reader would reject (a tab in the indent, a quoted key, text without a key, an indented line
+    under a key that has a plain value or before the first key); no `gates:` key, or two; `gates:` with a value on its line (a flow
+    map such as `{G1s: ""}`, even `{}`, or any text) instead of a block of indented `KEY: value` lines; the same key twice inside
+    the block."""
+    try:
+        lines = (root / STATE_FILE).read_text(encoding="utf-8").split("\n")
+    except (OSError, UnicodeDecodeError):
+        return False
+    if not lines or lines[0].strip() != "---":
+        return False
+    end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
+    if end is None:
+        return False
+    gates: dict[str, str] | None = None
+    in_gates = False
+    opens_map = False   # the last top-level key has no value (or `{}`): an indented line has a map to belong to
+    for ln in lines[1:end]:
+        if not ln.strip() or ln.lstrip().startswith("#"):
+            continue
+        m = _STATE_LINE.match(ln)
+        if m is None:
+            return False
+        rest = m["rest"] or ""
+        if not m["indent"]:
+            opens_map = _strip_comment(rest) in ("", "{}")
+            in_gates = m["key"] == "gates"
+            if in_gates:
+                if gates is not None or _strip_comment(rest):
+                    return False
+                gates = {}
+        elif not opens_map:
+            return False   # the state reader rejects it ("indented key without a parent map"), so the guard opens nothing on it
+        elif in_gates:
+            if m["key"] in gates:
+                return False
+            gates[m["key"]] = _gate_value(rest)
+    return gates is not None and gates.get(gate, "") == ""
+
+
 def existing_rounds(root: Path) -> list[int]:
     d = root / "rounds"
     if not d.is_dir():
         return []
     return [int(m.group(1)) for c in d.iterdir() if c.is_dir() and (m := ROUND_RE.match(c.name))]
+
+
+def round_is_open(root: Path, n: int) -> bool:
+    """May files under rounds/r<n>/ of the project at `root` still be written? The latest round (and a new one above all the others),
+    and rounds/r0/ (the style board) while G1s is not recorded. The guard and scripts/patch.py both ask this, so they cannot disagree."""
+    return n >= max(existing_rounds(root) + [n]) or (n == 0 and gate_is_empty(root, "G1s"))
 
 
 class Zone:
@@ -100,8 +180,9 @@ class Zone:
             self.round_n = int(m.group(1))
         self.inside_round = self.round_n is not None and len(parts) > 2
 
-    def is_latest(self) -> bool:
-        return self.round_n is not None and self.round_n == max(existing_rounds(self.root) + [self.round_n])
+    def is_open(self) -> bool:
+        """May this round still be written? See round_is_open."""
+        return self.round_n is not None and round_is_open(self.root, self.round_n)
 
     def rel(self) -> str:
         return "/".join(self.parts) or "."
@@ -148,7 +229,7 @@ def check_file_tool(tool: str, raw_path: str, cwd: Path) -> str | None:
         if tool == "Write" and p.is_dir():
             return None
         return msg_history(z, how + (" (overwrite)" if tool == "Write" and p.exists() else " (new file)" if tool == "Write" else ""))
-    if z.round_n is not None and not z.is_latest():
+    if z.round_n is not None and not z.is_open():
         return msg_old_round(z, how)
     return None
 
@@ -318,14 +399,14 @@ def check_target(p: Path, op: str, *, to_removed: bool = False) -> str | None:
     if op == "delete":
         return msg_delete(z)
     if op == "move-from":
-        if to_removed and z.inside_round and z.is_latest():
+        if to_removed and z.inside_round and z.is_open():
             return None
         return (f"brand-creator guard: move blocked: {z.rel()} is under rounds/. Only files inside the latest round may "
                 f"be moved, and only into a removed-<date>/ folder.")
     if op == "write":
         if z.round_n is None:
             return None
-        if not z.is_latest():
+        if not z.is_open():
             return msg_old_round(z, "shell write")
         if strict():
             return msg_strict_write(z)

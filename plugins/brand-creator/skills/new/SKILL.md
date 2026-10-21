@@ -26,6 +26,7 @@ Thin wrapper: the process lives in the orchestrator skill and the intake phase f
 5. Fill `brief/BRIEF.md` and `FACTS.md` from what you read and what the owner answered; set `mark_source`
    (provisional until G2), `architecture`, `language`, `incumbent` and, when asked, `review_surface` with `state --set`; record G0 with `state --record G0 "<decision>"`.
 6. Reply with the response template: what was created (paths), the tier with expected rounds and session length,
-   what comes next (research or round 1), still open.
+   what comes next (category research in Standard and Full, then the style research and its board, then round 1),
+   still open.
 
 If `new` exits 3, tell the owner to run `/brand-creator:setup` first. RULES from the orchestrator apply.

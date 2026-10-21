@@ -26,12 +26,14 @@ Claude does the legwork.
    - how this brand relates to others you run (only if you mention a parent or sister brand),
    - the name (only if it's still open).
 
-   It may also ask once whether boards can be shown as a private claude.ai page. Claude also tells you how it will make
-   the logo: drawn by code from simple shapes, drawn as vector shapes, or your existing logo. Say so if you want it
+   It may also ask once whether boards can be shown as a private claude.ai page. Claude also tells you how it will keep
+   the logo: as code (a pixel grid or simple shapes), as vector shapes, or your existing logo. Say so if you want it
    another way.
 
-3. **Pick a direction.** One page, the board, shows three clearly different directions, plus "None of these". Answer by
-   name, or by question and option, like `1a 2b`. `ok` accepts every suggestion.
+3. **Pick a style, then a direction.** First a style board shows how brands like yours look, with real examples. You pick
+   the styles you like, or say "skip the research" (you can skip only before the first board of directions). Then one
+   page, the board, shows three clearly different directions, plus "None of these". Answer by name, or by question and
+   option, like `1a 2b`. `ok` accepts every suggestion.
 
 4. **Refine.** Run `/brand-creator:round` for one more round. Your pick is then locked (saved in `history/`).
 

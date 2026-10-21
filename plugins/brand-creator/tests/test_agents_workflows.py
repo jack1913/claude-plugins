@@ -160,3 +160,20 @@ def test_the_fleet_gate_and_refine_loop_are_documented_where_they_are_used():
     page = (ROOT / "docs/manual/reference/agents-and-workflows.md").read_text(encoding="utf-8")
     assert "## The four workflows" in page and "fleet" in (ROOT / "docs/manual/reference/costs.md").read_text(encoding="utf-8")
     assert "## Agents and workflows" in (ROOT / "scripts/CONTRACT.md").read_text(encoding="utf-8")
+
+
+def test_directions_needs_the_style_pick_and_the_fleet_reference_says_so():
+    """Nothing is drawn before G1s: the script refuses to start without args.g1s (the dry runs are in tests/node/workflows.test.mjs),
+    and the argument is documented where the other arguments are."""
+    js = (WORKFLOWS / "directions.js").read_text(encoding="utf-8")
+    assert re.search(r"if \(!String\(A\.g1s \|\| ''\)\.trim\(\)\) fail\('args\.g1s must carry the G1s record from BRAND-STATE\.md", js)
+    assert js.index("A.g1s || ''") < js.index("A.directions"), "the check comes before any direction is read"
+    fleet = FLEET.read_text(encoding="utf-8")
+    sec = fleet[fleet.index("## Arguments every workflow needs"):fleet.index("## Models: the session model is a ceiling")]
+    bullet = " ".join(sec[sec.index("- `directions`:"):sec.index("- `review-panel`:")].split())
+    for needle in ("`g1s` (required", "the G1s record", "style board", "rounds/r0/board.html", "skipped by owner", "n/a: round 1 drawn before the style step",
+                   "refuses to start without it", "as `adopt` does without `g6`"):
+        assert needle in bullet, needle
+    assert "needs the style pick (G1s) first" in fleet and "Nor is the style research (P1s)" in " ".join(fleet.split())
+    orch = ORCH.read_text(encoding="utf-8")
+    assert "`g1s`" in orch[orch.index("## Fleets and workflows"):], "SKILL.md tells the lead that directions takes the G1s record"

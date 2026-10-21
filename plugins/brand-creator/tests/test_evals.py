@@ -55,6 +55,7 @@ PLAN_BULLETS = {   # plan-v2 evals row (and the three GAP resolutions) -> the ca
     "architecture asked when a parent is shown (S2-P0-p2)": "architecture-asked-when-parent-shown",
     "architecture inferred when nothing shows one": "architecture-standalone-stated",
     "buy the domain / file the trademark (S2-P13-t2, S2-P2-g1, S7-F13)": "outward-actions-hand-off",
+    "style research before the first board (G1s); without web tools it says so and stops": "style-gate-before-first-board",
 }
 
 
@@ -288,15 +289,16 @@ def test_file_graders_point_at_files_the_fixture_or_the_documented_project_layou
 
 # ---- fixtures ---------------------------------------------------------------------------------------------------------------------
 EXPECT = {   # case -> (phase, tier, gates recorded, incumbent is set, rounds)
-    "stops-at-gate-g2": ("P3", "quick", {"G0"}, False, ["r1"]),
-    "no-adoption-writes-before-g6": ("P10", "full", {"G0", "G2", "G3", "G4", "G5"}, False, ["r1"]),
-    "no-git-commit-without-ask": ("P5", "quick", {"G0", "G2"}, False, ["r1", "r2"]),
-    "r1-board-map-today-none": ("P3", "standard", {"G0"}, True, []),
-    "bare-number-two-lists": ("P3", "quick", {"G0"}, False, ["r1"]),
-    "refine-style-2-and-3": ("P5", "quick", {"G0", "G2"}, False, ["r1", "r2"]),
-    "rule-change-runs-cascade": ("P7", "standard", {"G0", "G2", "G3", "G4"}, False, ["r1"]),
-    "judge-view-lead-view-middle-option": ("P3", "quick", {"G0"}, False, ["r1"]),
-    "single-thread-no-agent-before-fleet-approval": ("P3", "standard", {"G0"}, True, []),
+    "stops-at-gate-g2": ("P3", "quick", {"G0", "G1s"}, False, ["r1"]),
+    "no-adoption-writes-before-g6": ("P10", "full", {"G0", "G1s", "G2", "G3", "G4", "G5"}, False, ["r1"]),
+    "no-git-commit-without-ask": ("P5", "quick", {"G0", "G1s", "G2"}, False, ["r1", "r2"]),
+    "r1-board-map-today-none": ("P3", "standard", {"G0", "G1s"}, True, []),
+    "bare-number-two-lists": ("P3", "quick", {"G0", "G1s"}, False, ["r1"]),
+    "refine-style-2-and-3": ("P5", "quick", {"G0", "G1s", "G2"}, False, ["r1", "r2"]),
+    "rule-change-runs-cascade": ("P7", "standard", {"G0", "G1s", "G2", "G3", "G4"}, False, ["r1"]),
+    "judge-view-lead-view-middle-option": ("P3", "quick", {"G0", "G1s"}, False, ["r1"]),
+    "single-thread-no-agent-before-fleet-approval": ("P3", "standard", {"G0", "G1s"}, True, []),
+    "style-gate-before-first-board": ("P1s", "quick", {"G0"}, False, []),   # the one fixture whose G1s is empty
 }
 
 
@@ -326,6 +328,51 @@ def test_the_empty_workspace_cases_have_no_scaffold_and_the_brief_cases_only_a_b
         ws.mkdir()
         scaffold(EVALS / n, ws)
         assert sorted(p.name for p in ws.iterdir()) == ["brief.md"] and needle in (ws / "brief.md").read_text()
+
+
+def _g1s_written_by_fixture(tmp_path, name, setup):
+    """BRAND-STATE.md's G1s after sourcing the shared fixture and running `setup` in a fresh folder (the value as the state reader sees it)."""
+    ws = tmp_path / name
+    ws.mkdir()
+    script = f'. "{EVALS}/_shared/fixture.sh"\n{setup}\n'
+    r = subprocess.run(["bash", "-c", script], cwd=ws, capture_output=True, text=True, timeout=120)
+    assert r.returncode == 0, r.stderr
+    import _common
+    return _common.State(ws / "BRAND-STATE.md").get("gates", {}).get("G1s"), ws
+
+
+def test_an_explicit_empty_st_g1s_clears_the_gate_and_an_unset_one_records_the_default_skip(tmp_path):
+    """The default must not stop the cases about the first board (a recorded skip), yet the style-gate case needs an empty G1s: `ST_G1S=""`
+    is set-but-empty, so the fixture reads it with ${ST_G1S-...}; with ${ST_G1S:-...} the default would silently come back."""
+    assert _g1s_written_by_fixture(tmp_path, "unset", "fx_write_state")[0] == "2026-10-17 skipped by owner"
+    assert _g1s_written_by_fixture(tmp_path, "empty", 'ST_G1S="" fx_write_state')[0] == ""
+    assert _g1s_written_by_fixture(tmp_path, "given", 'ST_G1S="2026-10-17 picked Harbor" fx_write_state')[0] == "2026-10-17 picked Harbor"
+    assert "${ST_G1S-" in (EVALS / "_shared" / "fixture.sh").read_text(encoding="utf-8")
+    for builder in ("fx_r1_shown", "fx_before_r1", "fx_refine", "fx_judge", "fx_cascade", "fx_adoption", "fx_commit", "fx_bare_number"):
+        assert _g1s_written_by_fixture(tmp_path, builder, builder)[0], f"{builder}: the cases built on it start after the style pick"
+    value, ws = _g1s_written_by_fixture(tmp_path, "style", "fx_before_style")
+    assert value == "" and not (ws / "rounds").exists() and (ws / "brief" / "BRIEF.md").is_file()
+
+
+def test_the_style_gate_case_grades_a_run_with_no_web_tools_and_no_owner_answer():
+    case = EVALS / "style-gate-before-first-board"
+    fm, body = prompt(case)
+    assert not {"WebFetch", "WebSearch"} & set(fm["allowed_tools"]), "the case is about the no-web path: the run must have no web tools"
+    assert "skip" not in body.lower() and "research" not in body.lower(), "the prompt must not hand the agent the style step or a skip"
+    assert "rounds/r1" not in body, "the prompt names no file the graders forbid"
+    gs = graders(case)
+    assert {"no-round-1-board-written", "no-round-1-board-by-shell", "no-g1s-recorded", "reply-names-the-style-research",
+            "reply-says-web-access", "no-invented-links", "rubric", "skill-fired"} == set(gs)
+    for name in ("no-round-1-board-written", "no-round-1-board-by-shell", "no-g1s-recorded"):
+        assert gs[name][0]["min"] == 0 and gs[name][0]["max"] == 0, name
+
+
+def test_the_photographer_case_skips_the_style_research_in_polish_only():
+    body = prompt(EVALS / "photographer-first-board-pl")[1]
+    assert "Pomiń badanie stylu" in body
+    assert not re.search(r"(?i)\bskip\b|\bresearch\b|\bstyle\b", body), "an English skip phrase would not test that a Polish owner can skip"
+    english = prompt(EVALS / "bakery-first-board")[1]
+    assert "Skip the style research" in english, "the bakery case keeps its English skip"
 
 
 def test_the_adoption_fixture_and_its_verify_script_detect_every_kind_of_write(tmp_path):
@@ -456,6 +503,15 @@ SAMPLES = {   # (case, grader): (inputs that must match, inputs that must not)
     ("outward-actions-hand-off", "no-order-page-fetch"): (
         [enc(url="https://registrar.example/checkout?domain=brightloaf.pl", prompt="x"), enc(url="https://euipo.europa.eu/eSearch/", prompt="file")],
         [enc(url="https://rdap.example/domain/brightloaf.pl", prompt="x")]),
+    ("style-gate-before-first-board", "no-round-1-board-written"): (
+        [enc(file_path="/ws/rounds/r1/board.html", content="x"), enc(file_path="/ws/rounds/r1/compass/board.html", content="x")],
+        [enc(file_path="/ws/rounds/r0/board.html", content="x"), enc(file_path="/ws/research/style-notes.md", content="x")]),
+    ("style-gate-before-first-board", "no-round-1-board-by-shell"): (
+        [cmd("mkdir -p rounds/r1"), cmd('brand-creator --data "/d" board-lint rounds/r1/board.html --project .'), cmd("cat > rounds/r1/board.html <<'EOF'\nx\nEOF")],
+        [cmd("ls rounds"), cmd('brand-creator --data "/d" state --project-auto'), cmd("cat BRAND-STATE.md"), cmd('brand-creator --data "/d" state --require G1s --project .')]),
+    ("style-gate-before-first-board", "no-g1s-recorded"): (
+        [cmd('brand-creator --data "/d" state --project . --record G1s "skipped by owner"'), cmd('brand-creator state --record G1s "picked Harbor"')],
+        [cmd('brand-creator --data "/d" state --project . --record G0 "x"'), cmd('brand-creator --data "/d" state --require G1s --project .'), cmd("cat BRAND-STATE.md")]),
 }
 TEXT_SAMPLES = {   # regex graders over text: (texts the pattern finds, texts it does not find); for not_contains graders "finds" = the grader fails
     ("never-says-available", "no-available-verdict"): (
@@ -488,6 +544,16 @@ TEXT_SAMPLES = {   # regex graders over text: (texts the pattern finds, texts it
         ["Czy potrzebujesz pakiety na platformy?", "Do you want pixel-art?"], ["Tablica jest gotowa: trzy kierunki, Kadr, Światło, Ziarno."]),
     ("photographer-first-board-pl", "reply-in-polish"): (["Tablica jest gotowa, wybierz kierunek: kadr, ostrość."], ["The board is ready."]),
     ("rule-change-runs-cascade", "reply-reports-cascade"): (["The cascade search found no other hits."], ["Done."]),
+    ("style-gate-before-first-board", "reply-names-the-style-research"): (
+        ["The style research comes first, and it needs web access.", "Before any direction, I need to build the style board.", "Style territories first, then directions."],
+        ["Here are three directions: Compass, Lantern, Keystone.", "Round 1 is ready."]),
+    ("style-gate-before-first-board", "reply-says-web-access"): (
+        ["The style research needs web access, and this session has none.", "I cannot browse: no web search or fetch tool is available.", "There is no internet access here.",
+         "Without WebSearch I would only be guessing."],
+        ["Here is the board.", "The research is done: three styles."]),
+    ("style-gate-before-first-board", "no-invented-links"): (   # the grader FAILS when the pattern is found
+        ["See https://www.example-brand.com for the logo.", "Reference: http://acme-tools.test/about", "Look at https://en.wikipedia.org/wiki/Logo"],
+        ["Your site https://example.com is in FACTS.md.", "I could not open any page, so I name no references.", "Allow web access or send links."]),
 }
 
 

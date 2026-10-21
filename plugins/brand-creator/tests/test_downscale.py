@@ -117,6 +117,69 @@ def test_the_accent_rule_is_a_project_setting_and_fails_a_smudge(proj):
     assert results(proj)["downscale:16px"]["status"] == "info"  # 16 px is now above the rule size
 
 
+def test_an_exemption_excuses_a_miss_of_its_own_master_up_to_its_size_and_carries_the_reason(proj):
+    """An owner may accept a miss for one master at a size and below (a row of 2 px gold cells that reads as a row, not as an
+    accent): the miss becomes a warning that carries the reason. Another master, or a size above max_px, still fails, and an
+    exemption that excused nothing is reported, so the register of accepted misses stays honest."""
+    master(proj / "assets/logo/small.svg", 12, off=24, svg=True)   # 3 px at 16 px: a miss under the 4 x 4 default
+    master(proj / "assets/logo/other.svg", 12, off=24, svg=True)
+    why = "the gold reads as a row of capsules"
+    ex = {"source": "assets/logo/small.svg", "max_px": 16, "reason": why}
+    mutate_json(proj / "qa/rules.json", lambda d: d["downscale"].__setitem__("exemptions", [ex]))
+    r = run(proj, "--renderer", "resvg", "--source", "assets/logo/small.svg", "--sizes", "16")
+    row = results(proj)["downscale:16px"]
+    assert r.returncode == 0, r.stdout
+    assert row["status"] == "warn" and row["accent_square"] == 3 and why in row["detail"] and "downscale.exemptions" in row["detail"]
+    assert downscale_report(proj)["rule"]["exemptions"] == [ex]
+    assert run(proj, "--renderer", "resvg", "--source", "assets/logo/other.svg", "--sizes", "16").returncode == 1   # not its master
+    assert results(proj)["downscale:16px"]["status"] == "fail" and downscale_report(proj)["rule"]["exemptions"] == []
+    mutate_json(proj / "qa/rules.json", lambda d: d["downscale"]["exemptions"][0].__setitem__("max_px", 15))
+    assert run(proj, "--renderer", "resvg", "--source", "assets/logo/small.svg", "--sizes", "16").returncode == 1   # 16 is above 15
+    r = run(proj, "--renderer", "resvg", "--source", "assets/logo/small.svg", "--sizes", "40")                     # nothing to excuse
+    res = results(proj)
+    assert r.returncode == 0 and res["exemption:0"]["status"] == "warn" and "excused no failing row" in res["exemption:0"]["detail"]
+
+
+def test_an_exemption_path_is_read_as_written_and_one_that_names_no_file_is_reported(proj):
+    master(proj / "assets/logo/small.svg", 12, off=24, svg=True)
+    mutate_json(proj / "qa/rules.json", lambda d: d["downscale"].__setitem__(
+        "exemptions", [{"source": "./assets/logo/small.svg", "max_px": 16, "reason": "a row of cells"},
+                       {"source": "assets/logo/smal.svg", "max_px": 16, "reason": "a typo"}]))
+    r = run(proj, "--renderer", "resvg", "--source", "./assets/logo/small.svg", "--sizes", "16")
+    res = results(proj)
+    assert r.returncode == 0 and res["downscale:16px"]["status"] == "warn" and "a row of cells" in res["downscale:16px"]["detail"]
+    assert res["exemption:1"]["status"] == "warn" and "names assets/logo/smal.svg, which is not a file" in res["exemption:1"]["detail"]
+
+
+@pytest.mark.parametrize("bad, words", [
+    ({"source": "assets/logo/small.svg", "max_px": 16}, "reason must say why"),
+    ({"source": "assets/logo/small.svg", "max_px": 0, "reason": "x"}, "max_px must be a whole number above 0"),
+    ({"source": "/tmp/small.svg", "max_px": 16, "reason": "x"}, "source must be the master's path inside the project"),
+    ({"source": "../small.svg", "max_px": 16, "reason": "x"}, "source must be the master's path inside the project"),
+    ({"source": "assets/logo/small.svg", "max_px": 16, "reason": "x", "until": "2027"}, "unknown keys"),
+    ("assets/logo/small.svg", "must be an object"),
+])
+def test_an_exemption_without_its_master_a_size_or_a_reason_is_refused(proj, bad, words):
+    master(proj / "assets/logo/small.svg", 12, off=24, svg=True)
+    mutate_json(proj / "qa/rules.json", lambda d: d["downscale"].__setitem__("exemptions", [bad]))
+    r = run(proj, "--renderer", "resvg", "--source", "assets/logo/small.svg", "--sizes", "16")
+    assert r.returncode == 2 and words in r.stdout + r.stderr, r.stdout + r.stderr
+
+
+def test_a_master_that_is_one_bands_drawing_says_which_sizes_ship_another(proj):
+    """Acme's bands: grid-mark.svg up to 32 px, mark.svg above. Measuring either names its band and the other drawing, and points
+    at --png for the sizes drawn per band; the rows themselves are still the one master shrunk, as a system would."""
+    run(proj, "--renderer", "resvg", "--source", "assets/logo/grid-mark.svg", "--sizes", "16,64")
+    row = results(proj)["bands"]
+    assert row["status"] == "info" and "band 'small' (1 to 32 px)" in row["detail"] and "assets/logo/mark.svg (large)" in row["detail"]
+    assert "--png" in row["detail"] and "downscale:64px" in results(proj)                 # 64 px is measured from grid-mark.svg anyway
+    run(proj, "--renderer", "resvg", "--source", "assets/logo/mark.svg", "--sizes", "16")
+    assert "band 'large' (33 px and up)" in results(proj)["bands"]["detail"]
+    master(proj / "assets/logo/other.svg", 32, svg=True)
+    run(proj, "--renderer", "resvg", "--source", "assets/logo/other.svg", "--sizes", "16")
+    assert "bands" not in results(proj)                                                  # not a band's drawing: nothing to say
+
+
 def test_an_accent_that_vanished_is_named_as_such(proj):
     master(proj / "assets/logo/none.png", 0)
     r = run(proj, "--renderer", "pillow", "--source", "assets/logo/none.png", "--sizes", "16")

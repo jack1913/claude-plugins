@@ -17,6 +17,7 @@ guard do nothing there.
 | `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` | 2.1.257 | One model for every subagent and workflow agent |
 | Partial result when an agent reaches `maxTurns` | 2.1.246 | Older versions stop without the partial marking |
 | Workflow size guideline (`workflowSizeGuideline`) | 2.1.219 | Small under 5 agents, medium under 10 |
+| `/design`, the second way to get marks drawn | 2.1.234 | Claude Code's own artboard; it also needs a claude.ai login on a Pro, Max, Team or Enterprise plan |
 | `claude plugin eval` (maintainers only) | 2.1.269 | Behaviour evals |
 | `claude plugin validate` of marketplace and plugin together (maintainers only) | 2.1.289 | Release check |
 

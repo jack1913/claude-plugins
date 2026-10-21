@@ -16,6 +16,11 @@ export const meta = {
  * file is the opt-in speed-up. It ends before G2: the lead assembles rounds/rN/board.html from the boards, lints it,
  * publishes the review page and stops at the gate. No mid-run sign-off happens inside this script.
  *
+ * Nothing is drawn before the style pick: args.g1s carries the G1s record of BRAND-STATE.md (the owner's pick on the
+ * style board, "skipped by owner", or an honest "n/a: round 1 drawn before the style step"; for a reset round the new
+ * pick recorded after that round's style board, never a skip), and the script refuses to start without it, as adopt.js
+ * refuses without g6. The designers draw inside the picked styles.
+ *
  * Agents in the default path: 3 designers + 1 judge = 4 (size guideline small, < 5). `inventory: true` adds one
  * (5, guideline medium); a fourth direction adds one more. The script refuses to start when the planned count is
  * above args.approved_agents (the number the owner said yes to). `brand-creator fleet-plan directions --args <json>`
@@ -65,6 +70,7 @@ for (const k of ['project', 'plugin_root', 'data']) if (!isAbs(A[k])) fail('args
 if (!/^\d{4}-\d{2}-\d{2}$/.test(String(A.today || ''))) fail('args.today must be YYYY-MM-DD (scripts cannot read the clock)')
 if (!(A.ceiling in RANK)) fail('args.ceiling must be the session model family: opus, sonnet or haiku')
 if (!/^r[1-9][0-9]*$/.test(String(A.round || ''))) fail('args.round must look like r1')
+if (!String(A.g1s || '').trim()) fail('args.g1s must carry the G1s record from BRAND-STATE.md (the owner\'s style pick; their skip counts only before the first board of directions); without it nothing is drawn: run the style research (P1s) first')
 const DIRS = list(A.directions)
 if (DIRS.length < 2 || DIRS.length > 4) fail('args.directions must hold 2 to 4 directions (3 is the default round)')
 const keys = new Set(), names = new Set()
@@ -157,6 +163,7 @@ function designerPrompt(d) {
   return [
     'CONTEXT: READ FULLY: ' + CONTEXT.join(', ') + '. Project: ' + A.project + '. Plugin root: ' + A.plugin_root + '. Data folder: ' + A.data + '.',
     'DECISIONS ALREADY MADE BY THE OWNER: ' + numbered(B.decisions),
+    'STYLE PICK (G1s as recorded in BRAND-STATE.md): ' + A.g1s + '. Draw inside the style territories the owner picked on the style board (' + A.project + '/rounds/r0/board.html, or the style board of the latest reset round, when one exists); a skip or an n/a records that no style was picked, so the brief alone sets the look.',
     'CRITIQUE ITEMS (fix these): ' + numbered(B.critique, 'a'),
     'FAMILY LAYER (keep) / COMPANY LAYER (own) / FORBIDDEN: ' + (list(B.layers).join(' ') || 'standalone brand') + ' FORBIDDEN: ' + (list(B.forbidden).join('; ') || 'see research/cliches.md and the BRIEF Forbidden section'),
     'VERIFIED FACTS YOU MAY USE: ' + (list(B.facts).join('; ') || 'only rows of FACTS.md') + ' (nothing else may be claimed).',
@@ -199,6 +206,7 @@ if (JUDGE && boards.length >= 2) {
   judge = await agent([
     'CONTEXT: READ FULLY: ' + CONTEXT.join(', ') + '; the rubric in ' + A.plugin_root + '/skills/brand-creator/references/board-contract.md. Project: ' + A.project + '.',
     'DECISIONS ALREADY MADE BY THE OWNER: ' + numbered(B.decisions),
+    'STYLE PICK (G1s as recorded in BRAND-STATE.md): ' + A.g1s + '. A direction that leaves the styles the owner picked is a MUST-FIX; a skip or an n/a sets no style.',
     'COMPARE these boards (open each board.html and Read every screenshot slice listed): ' + boards.map(b => b.name + ' [' + b.key + ']: ' + b.board + ' slices: ' + list(b.screenshots).join(', ')).join(' | '),
     (A.previous_round ? 'PREVIOUS ROUND and best so far: ' + A.previous_round + ' (score against both on the same rubric).' : 'This is the first round: say so instead of comparing with a previous one.'),
     'Rank them, say which one you would take forward and what you would graft from the others; return a numbered MUST-FIX list and an optional NICE list. Be honest: if something is fine, say so; do not invent problems to fill the list. You advise; the owner decides.',

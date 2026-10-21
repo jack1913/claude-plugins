@@ -2,9 +2,11 @@
 import json
 import re
 import shutil
+import subprocess
+import sys
 
 import pytest
-from helpers import bc, make_project, mutate
+from helpers import ROOT, bc, make_project, mutate
 
 import _common
 
@@ -74,6 +76,76 @@ def test_patch_never_touches_history_earlier_rounds_or_paths_outside_the_project
     outside.write_text("alpha")
     r = bc("patch", str(outside), "--old", "alpha", "--new", "b", "--count", "1", project=proj)
     assert r.returncode == 2 and outside.read_text() == "alpha"
+
+
+def _round_files(proj, *rounds):
+    for r_ in rounds:
+        (proj / f"rounds/r{r_}").mkdir(parents=True, exist_ok=True)
+        (proj / f"rounds/r{r_}/board.html").write_text("alpha")
+
+
+def _patch_edits(proj, rel_path):
+    """Does `patch` edit the file? (It also puts the original text back, so the next question starts from the same file.)"""
+    r = bc("patch", rel_path, "--old", "alpha", "--new", "b", "--count", "1", project=proj)
+    assert r.returncode in (0, 1), r.stderr
+    if r.returncode == 1:
+        assert "earlier round" in r.stderr, r.stderr
+    (proj / rel_path).write_text("alpha")
+    return r.returncode == 0
+
+
+def _hook_allows(proj, rel_path):
+    payload = json.dumps({"tool_name": "Edit", "tool_input": {"file_path": str(proj / rel_path)}})
+    r = subprocess.run([sys.executable, str(ROOT / "scripts" / "guard.py")], input=payload, capture_output=True, text=True)
+    assert r.returncode in (0, 2), r.stderr
+    return r.returncode == 0
+
+
+def test_patch_edits_round_0_while_g1s_is_empty_and_stops_when_it_is_recorded(proj):
+    """The hook keeps rounds/r0/ (the style board) writable while G1s is empty, even with round 1 on disk. patch said 'is in an earlier round'."""
+    _round_files(proj, 0, 1)
+    assert not bc("state", "--get", "gates.G1s", project=proj).stdout.strip()
+    r = bc("patch", "rounds/r0/board.html", "--old", "alpha", "--new", "b", "--count", "1", project=proj)
+    assert r.returncode == 0, r.stderr
+    assert (proj / "rounds/r0/board.html").read_text() == "b"
+    assert bc("state", "--record", "G1s", "picked Harbor", project=proj).returncode == 0
+    (proj / "rounds/r0/board.html").write_text("alpha")
+    r = bc("patch", "rounds/r0/board.html", "--old", "alpha", "--new", "b", "--count", "1", project=proj)
+    assert r.returncode == 1 and "earlier round" in r.stderr and (proj / "rounds/r0/board.html").read_text() == "alpha"
+    assert bc("patch", "rounds/r1/board.html", "--old", "alpha", "--new", "b", "--count", "1", project=proj).returncode == 0   # r1 is the latest
+
+
+def test_the_allowance_is_for_round_0_only_and_a_later_round_is_still_earlier(proj):
+    _round_files(proj, 0, 1, 2)
+    assert _patch_edits(proj, "rounds/r0/board.html") is True and _patch_edits(proj, "rounds/r2/board.html") is True
+    r = bc("patch", "rounds/r1/board.html", "--old", "alpha", "--new", "b", "--count", "1", project=proj)
+    assert r.returncode == 1 and "earlier round" in r.stderr and (proj / "rounds/r1/board.html").read_text() == "alpha"
+
+
+# (state, rounds on disk) cases: patch and the hook must give the same answer for every round of every case
+AGREEMENT_STATES = {
+    "G1s empty": '---\nslug: x\ngates:\n  G1s: ""\n---\n',
+    "G1s missing": '---\nslug: x\ngates:\n  G0: "x"\n---\n',
+    "G1s recorded": '---\nslug: x\ngates:\n  G1s: "2026-10-17 picked Harbor"\n---\n',
+    "G1s skipped": '---\nslug: x\ngates:\n  G1s: "2026-10-17 skipped by owner"\n---\n',
+    "a tab-indented line": '---\nslug: x\ngates:\n\tG1s: ""\n---\n',
+    "a quoted key": '---\nslug: x\ngates:\n  "G1s": ""\n---\n',
+    "a flow map": '---\nslug: x\ngates: {G1s: ""}\n---\n',
+    "no gates at all": "---\nslug: x\n---\n",
+    "an indented line under a plain value": '---\nslug: x\nname: Acme\n  note: y\ngates:\n  G1s: ""\n---\n',
+    "an indented line before the first key": '---\n  note: y\nslug: x\ngates:\n  G1s: ""\n---\n',
+}
+
+
+@pytest.mark.parametrize("why", sorted(AGREEMENT_STATES))
+def test_patch_and_the_hook_give_the_same_answer_for_every_round(proj, why):
+    """One rule, one function (guard.round_is_open): they cannot drift. Checked on the real hook and the real patch command."""
+    _round_files(proj, 0, 1, 2)
+    (proj / "BRAND-STATE.md").write_text(AGREEMENT_STATES[why])
+    answers = {r_: (_hook_allows(proj, f"rounds/r{r_}/board.html"), _patch_edits(proj, f"rounds/r{r_}/board.html")) for r_ in (0, 1, 2)}
+    assert all(h == p_ for h, p_ in answers.values()), (why, answers)
+    assert answers[2][0] is True and answers[1][0] is False                                  # the latest round is open, a middle one is not
+    assert answers[0][0] is (why in ("G1s empty", "G1s missing")), (why, answers)          # r0 only on a state the guard fully understands
 
 
 @pytest.mark.parametrize("args,needle", [

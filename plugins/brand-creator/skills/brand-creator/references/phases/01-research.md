@@ -129,7 +129,7 @@ secondary source next to what you read from the site yourself.
 
 ## Gate
 
-P1 has no gate of its own. It feeds G0 facts (constraints become BRIEF lines), the round 1 board (alternatives,
+P1 has no gate of its own; the style research that follows it is [P1s](01s-style-research.md) with gate G1s. It feeds G0 facts (constraints become BRIEF lines), the round 1 board (alternatives,
 lineup, clichés, map) and FORBIDDEN in every prompt. Open decisions go to AskUserQuestion with a recommendation. In the
 Full tier and for product-in-family, round 1 cannot open until the inventory exists: `board-lint` fails the first
 board otherwise.

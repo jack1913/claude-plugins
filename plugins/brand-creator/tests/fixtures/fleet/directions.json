@@ -1,6 +1,6 @@
 {
   "project": "/PROJECT", "plugin_root": "/PLUGIN", "data": "/DATA", "today": "2026-10-17", "ceiling": "opus", "approved_agents": 4,
-  "round": "r1",
+  "round": "r1", "g1s": "2026-10-17 picked Harbor + Ember palette",
   "context_paths": ["/PROJECT/BRAND-STATE.md", "/PROJECT/brief/BRIEF.md", "/PROJECT/FACTS.md"],
   "brief": {"decisions": ["standalone brand", "generated mark"], "critique": [], "forbidden": ["the category's usual swoosh"], "facts": ["founded in the brief's year"]},
   "directions": [

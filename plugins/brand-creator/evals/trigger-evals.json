@@ -518,6 +518,62 @@
     {
       "query": "Write a brand voice guide for our support team's emails",
       "should_trigger": false
+    },
+    {
+      "query": "Our brand book still tells people to use bright studio shots on white, but we've gone documentary: real customers, natural light, nobody posing. Please rewrite the photography chapter to say that and leave every other chapter as it is.",
+      "should_trigger": true
+    },
+    {
+      "query": "We're opening a climbing gym in the spring and have nothing yet: no name, no logo, no colours. Can you write the brand book first, so the designers we hire just follow it?",
+      "should_trigger": false
+    },
+    {
+      "query": "Przejrzałem całą księgę znaku, nie mam uwag. Zapisz, że zatwierdzam tę wersję.",
+      "should_trigger": true
+    },
+    {
+      "query": "Przygotuj poradnik pisania dla redaktorów naszego bloga: jak formułujemy tytuły, jak długie są akapity, jak zwracamy się do czytelnika i jakich słów unikamy.",
+      "should_trigger": false
+    },
+    {
+      "query": "We were torn between the terracotta and the olive accent, and the owner just chose terracotta. Take olive out of the brand guidelines, along with the little toggle that flips between the two.",
+      "should_trigger": true
+    },
+    {
+      "query": "Brand's all signed off now. Can you cut the iOS and Android app icons and a social share image from the approved logo?",
+      "should_trigger": false
+    },
+    {
+      "query": "devs keep asking how our buttons and form fields should look. can the brand book get a components chapter for that, in our approved colours and fonts?",
+      "should_trigger": true
+    },
+    {
+      "query": "Szukam nazwy marki dla nowej pracowni ceramiki. Podrzuć kilka pomysłów i sprawdź, czy nie są już zajęte.",
+      "should_trigger": false
+    },
+    {
+      "query": "W rozdziale księgi znaku o tym, czego nie wolno robić z logo, brakuje dwóch przykładów: rozciągniętego znaku i znaku na niespokojnym tle. Dopisz je.",
+      "should_trigger": true
+    },
+    {
+      "query": "Our brand looks dated, so we're rebranding: redraw the logo in a cleaner style and pick a fresh colour palette and fonts to go with it.",
+      "should_trigger": false
+    },
+    {
+      "query": "Rozdział o tone of voice w naszych wytycznych marki brzmi jak pismo z urzędu. Przepisz go tak, żeby był luźniejszy i cieplejszy, ale nadal profesjonalny.",
+      "should_trigger": true
+    },
+    {
+      "query": "Logo and colours are signed off, so now I need print-ready business cards for the printer, with bleed and crop marks.",
+      "should_trigger": false
+    },
+    {
+      "query": "Add a history chapter to our guidelines showing our two earlier logos and the dates we dropped them. New hires keep grabbing the old one from a 2019 deck.",
+      "should_trigger": true
+    },
+    {
+      "query": "Set up a Docusaurus site for our product docs and theme it with our brand colours and logo.",
+      "should_trigger": false
     }
   ],
   "new": [

@@ -10,7 +10,8 @@ Plain words for the terms brand-creator uses.
 | Tier | How far to go: Quick, Standard or Full. See [Choose a tier](../getting-started/choose-a-tier.md) |
 | Direction | One clearly different idea for your brand: its own look, feel and logo. The first board shows three |
 | Board | One page that shows the directions (or the refined one) so you can compare them and answer. Claude checks it and photographs it at desktop and phone width, in light and dark |
-| Round | One pass of a board. Round 1 shows the directions; later rounds refine your pick. Finished rounds are locked |
+| Round | One pass of a board. Round 0 is the style research, round 1 shows the directions; later rounds refine your pick. Finished rounds are locked |
+| Style board | The page you see before anything is drawn: how brands like yours look, and four to six styles with real examples to pick from |
 | Gate | A point where Claude stops and waits for your decision, such as your pick or your OK on the finished files. Nothing continues until you answer |
 | Lock | A finished round is saved in `history/` with a checksum and then protected: nothing can change it quietly |
 | Mark | Your logo symbol. A lockup is the mark together with your name |

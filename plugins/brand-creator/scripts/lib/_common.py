@@ -21,7 +21,7 @@ from pathlib import Path
 EXIT_PASS, EXIT_FAIL, EXIT_USAGE, EXIT_CANNOT = 0, 1, 2, 3
 STATE_FILE = "BRAND-STATE.md"
 RENDERERS = ("resvg", "pillow")
-GATE_IDS = ("G0", "G1", "G2", "G2b", "G3", "G4", "G5", "G6", "G7")
+GATE_IDS = ("G0", "G1", "G1s", "G2", "G2b", "G3", "G4", "G5", "G6", "G7")
 # One User-Agent for every outbound request any script ever makes. Generic on purpose: no personal data, no "@".
 USER_AGENT = "brand-creator/0.2.3 (+https://example.invalid/brand-creator)"
 
@@ -302,6 +302,17 @@ def _format_scalar(v) -> str:
     return s
 
 
+def round_numbers(value) -> list[int]:
+    """The round numbers in a BRAND-STATE.md list value such as reset_rounds: a real list (`[2, 3]`; an item that is not a whole number is
+    skipped) or the quoted string an older `state --set` wrote (`"[2,3]"`), read as runs of digits so "[10,11]" is 10 and 11, never 1, 0,
+    1, 1. A missing, empty or odd value holds no rounds."""
+    if isinstance(value, (list, tuple)):
+        return [int(s) for s in (str(x).strip() for x in value) if re.fullmatch(r"[0-9]+", s)]
+    if isinstance(value, str):
+        return [int(s) for s in re.findall(r"[0-9]+", value)]
+    return []
+
+
 class State:
     """BRAND-STATE.md: a frontmatter block of 'key: value' lines (one level of nesting) followed by free markdown."""
 
@@ -348,6 +359,11 @@ class State:
             cur = cur[part]
         return cur
 
+    def reset_rounds(self) -> list[int]:
+        """The rounds listed in reset_rounds (after a full rejection: the style board run again, then the pick board). Every reader of the
+        key goes through here, so a list and the quoted string of an older project read the same."""
+        return round_numbers(self.get("reset_rounds"))
+
     # -- writing
     def set(self, dotted: str, value) -> None:
         parts = dotted.split(".")
@@ -385,6 +401,18 @@ class State:
             i += 1
         self.lines.insert(last + 1, f"  {parts[1]}: {sval}")
         self.end += 1
+
+    def remove(self, key: str) -> bool:
+        """Delete a top-level key from the frontmatter, with the indented lines under it. True when there was one to delete."""
+        idx = self._find(key, 0)
+        if idx is None:
+            return False
+        stop = idx + 1
+        while stop < self.end and self.lines[stop].startswith(" "):
+            stop += 1
+        del self.lines[idx:stop]
+        self.end -= stop - idx
+        return True
 
     def _find(self, key: str, indent: int):
         for i in range(1, self.end):

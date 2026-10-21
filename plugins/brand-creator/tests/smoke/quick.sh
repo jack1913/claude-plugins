@@ -142,6 +142,7 @@ ok "G3 is not recorded yet, so the emitters would refuse"
 
 # ------------------------------------------------------------------------------------------------------------------ the first board
 step "round 1: the first board (three directions), board-lint, four-view shots"
+qok g1s state --project "$P" --record G1s "skipped by owner (smoke)"
 mkdir -p "$P/rounds/r1"
 cp "$FIX/board.html" "$P/rounds/r1/board.html"
 qok board-lint board-lint rounds/r1/board.html --project "$P"

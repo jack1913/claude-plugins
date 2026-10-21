@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Acme: style research</title>
+<!--
+  brand-creator style board template (P1s, round 0). Copy to <project>/rounds/r0/board.html and fill every [[fill: ...]] marker;
+  `brand-creator board-lint` fails while any marker is left in text or attributes (HTML comments are ignored). After a full
+  rejection the style research runs again: copy it to the next round's folder instead, set data-round to that number and list
+  the round in reset_rounds, and delete the "skip the research" sentence in the Reply section (the style board is required then;
+  a skip is for the first pick board only). The review page of a style board is a copy of this page (board-lint review/index.html --round N).
+  Nothing is drawn yet: this page shows what the category looks like and 4-6 style territories, each grounded in 3+ named
+  real references with links. The owner picks; only then does round 1 start (gate G1s).
+  Write the page in the OWNER'S language, visual first: short lines, the references' marks described, no dense tables.
+  The data-section / data-field vocabulary is in scripts/CONTRACT.md ("Board contract") and references/board-contract.md.
+  Blocks marked OPTIONAL: delete them when they do not apply (never leave them empty).
+  Self-contained: no network, no web fonts. A reference's real mark may be shown as a thumbnail (OPTIONAL, one per
+  reference) only as an inlined data: image with alt text, in a figure with a non-empty figcaption. board-lint fails any
+  <img src> or srcset on this page that is not an inlined data:image/ URI, and a thumbnail without alt text or without a caption
+  (it does not look for particular words). Thumbnails are for this private research page: never reuse a mark, or a part of it, in a drawing.
+  Query parameters: ?t=light|dark forces a theme.
+-->
+<style>
+:root{
+  --bg:#f5f6f8;--surface:#ffffff;--sunk:#eceef1;--text:#16191d;--muted:#565d66;--line:#d9dce1;
+  --accent:#3b5b8c;--accent-ink:#ffffff;--good:#2f6b4f;--warn:#8a5a14;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans","Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --outline:#8a9099;--r:6px;color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#111316;--surface:#191c20;--sunk:#0c0e10;--text:#e7e9ec;--muted:#9aa1ab;--line:#2d3137;
+  --accent:#8fb0e3;--accent-ink:#0c1320;--good:#7fc4a2;--warn:#e0b26a;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111316;--surface:#191c20;--sunk:#0c0e10;--text:#e7e9ec;--muted:#9aa1ab;--line:#2d3137;
+  --accent:#8fb0e3;--accent-ink:#0c1320;--good:#7fc4a2;--warn:#e0b26a;color-scheme:dark}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.55 var(--sans)}
+main{max-width:1120px;margin:0 auto;padding:32px 16px 80px}
+h1,h2,h3{line-height:1.2;margin:0}
+h1{font-size:clamp(28px,5vw,40px);letter-spacing:-.01em}
+h2{font-size:22px;margin-bottom:12px}
+h3{font-size:18px}
+p,li,dd{overflow-wrap:anywhere}
+p{margin:0 0 10px}
+a{color:var(--accent)}
+.eyebrow,.num{font:600 12px/1.4 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
+.num{display:block}
+.lede{color:var(--muted);max-width:68ch;margin-top:10px}
+.muted{color:var(--muted)}
+.toc{display:flex;flex-wrap:wrap;gap:6px;margin:20px 0 8px;padding:0;list-style:none}
+.toc a{display:inline-block;padding:4px 10px;border:1px solid var(--line);border-radius:999px;font-size:13px;color:var(--text);text-decoration:none;background:var(--surface)}
+.block{margin-top:40px;padding-top:20px;border-top:1px solid var(--line)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))}
+.core{display:grid;gap:0;grid-template-columns:minmax(0,180px) minmax(0,1fr);margin:0}
+.core dt{font-weight:600;padding:8px 12px 8px 0;border-top:1px solid var(--line)}
+.core dd{margin:0;padding:8px 0;border-top:1px solid var(--line)}
+@media (max-width:600px){.core{grid-template-columns:minmax(0,1fr)}.core dd{border-top:0;padding-top:0}}
+.map{position:relative;aspect-ratio:16/10;width:100%;max-width:760px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+@media (max-width:600px){.map{aspect-ratio:1/1}}
+.map::before,.map::after{content:"";position:absolute;background:var(--line)}
+.map::before{left:50%;top:8%;bottom:8%;width:1px}
+.map::after{top:50%;left:6%;right:6%;height:1px}
+.axis{position:absolute;font:600 11px/1.2 var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.04em;max-width:40%}
+.axis.x0{left:8px;top:50%;transform:translateY(-130%)}.axis.x1{right:8px;top:50%;transform:translateY(-130%);text-align:right}
+.axis.y0{left:50%;bottom:6px;transform:translateX(8px)}.axis.y1{left:50%;top:6px;transform:translateX(8px)}
+.norm{position:absolute;border:1.5px dashed var(--muted);border-radius:50%;display:grid;place-items:center;font-size:12px;color:var(--muted);text-align:center;padding:4px}
+.dot{position:absolute;transform:translate(-50%,-50%);padding:3px 10px;border-radius:999px;background:var(--accent);color:var(--accent-ink);font:600 13px/1.3 var(--sans);white-space:nowrap}
+.dot.failed{background:transparent;color:var(--muted);border:1.5px dashed var(--muted)}
+.direction{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.dhead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.letter{font:700 13px/1 var(--mono);border:1px solid var(--line);border-radius:4px;padding:4px 6px}
+.register{margin-left:auto;font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 8px}
+.far{font-size:12px;color:var(--warn)}
+.idea{font-size:17px;margin:0}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tile{border-radius:4px;padding:12px;display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;min-height:120px;border:1px solid var(--line)}
+.tile.light{background:var(--d-paper);color:var(--d-ink);--m-accent:var(--d-accent)}
+.tile.dark{background:var(--d-paper-dark);color:var(--d-ink-dark);--m-accent:var(--d-accent-dark)}
+.tile svg{display:block;flex:none}
+.tile .big{width:72px;height:72px;margin-right:auto}
+.lockup{border-radius:4px;padding:14px 12px;background:var(--d-paper);color:var(--d-ink);display:flex;align-items:center;gap:10px;border:1px solid var(--line);--m-accent:var(--d-accent)}
+.lockup .word{font-weight:700;font-size:22px;letter-spacing:-.01em}
+.swatches{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:6px;margin:0;padding:0;list-style:none}
+.swatches li{border:1px solid var(--line);border-radius:4px;overflow:hidden;font-size:12px}
+.swatches i{display:block;height:36px}
+.swatches span{display:block;padding:4px 6px}
+.specimen{border:1px solid var(--line);border-radius:4px;padding:10px 12px}
+.specimen .aa{font-size:36px;line-height:1.1}
+.voice{margin:0;padding-left:18px}
+.fit{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;margin:0}
+.fit dt{font-weight:600}.fit dd{margin:0}
+.reflex{font-size:14px;background:var(--sunk);border-radius:4px;padding:8px 10px;margin:0}
+.vote{border:0;padding:0;margin:0;display:flex;gap:6px;flex-wrap:wrap}
+.vote legend{font-size:13px;color:var(--muted);margin-bottom:4px}
+.vote label,.options label{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:14px;cursor:pointer}
+.surface-row{margin-bottom:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px}
+.tab{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px 8px 0 0;font-size:13px;border:1px solid var(--line);border-bottom:0}
+.tab.light{background:#f1f2f4;color:#202327}.tab.dark{background:#26292e;color:#e4e6e9}
+.tab svg{width:16px;height:16px;flex:none}
+.callout{border-left:4px solid var(--accent);background:var(--surface);padding:14px 16px;border-radius:0 var(--r) var(--r) 0}
+.views{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));margin-top:12px}
+.questions{margin:0;padding-left:22px}
+.questions>li{margin-bottom:16px}
+.questions .q{font-weight:600;margin-bottom:6px}
+.options{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.options .rec{font-size:12px;color:var(--good);font-weight:600;white-space:nowrap;overflow-wrap:normal}
+.options label{border-radius:14px}
+.reply-out{font:15px/1.4 var(--mono);background:var(--sunk);border-radius:4px;padding:10px 12px;margin:8px 0;min-height:42px}
+button{font:inherit;font-size:14px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:6px 14px;cursor:pointer}
+.sprite{position:absolute;width:0;height:0;overflow:hidden}
+footer{margin-top:56px;font-size:13px;color:var(--muted)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+.territory{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.territory .idea{font-size:18px}
+.mood{display:flex;gap:0;border-radius:6px;overflow:hidden;border:1px solid var(--line);height:44px}
+.mood i{flex:1;display:block;outline:1px solid var(--outline);outline-offset:-1px}
+.refs{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.refs li{border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;background:var(--bg)}
+.refs .name{font-weight:600}
+.refs .seen{display:block;color:var(--muted);font-size:14px}
+.refs .take{display:block;color:var(--good);font-size:14px}
+.refs .avoid{display:block;color:var(--warn);font-size:14px}
+.thumb{margin:6px 0;display:flex;flex-direction:column;gap:4px}
+.thumb img{display:block;align-self:flex-start;max-width:100%;width:auto;height:auto;max-height:96px;padding:6px;background:#fff;border:1px solid var(--line);border-radius:4px;object-fit:contain}
+.thumb figcaption{font-size:12px;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:0;padding:0;list-style:none}
+.chips li{border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:14px;background:var(--surface)}
+.big-list{margin:0;padding-left:20px}
+.big-list li{margin-bottom:8px}
+</style>
+</head>
+<body data-round="0" data-board="style">
+
+<main>
+  <header>
+    <p class="eyebrow">Style research · before any drawing · 2026-10-17</p>
+    <h1>Acme: which look?</h1>
+    <p class="lede">Filled in for the test fixture.</p>
+    <ul class="toc">
+      <li><a href="#audience">Who sees it</a></li><li><a href="#surfaces">Where</a></li><li><a href="#norm">The norm</a></li>
+      <li><a href="#territories">Styles</a></li><li><a href="#none">None of these</a></li><li><a href="#call">My call</a></li><li><a href="#questions">Questions</a></li>
+    </ul>
+  </header>
+
+  <section class="block" id="audience" data-section="audience">
+    <h2><span class="num">1</span>Who sees the mark</h2>
+    <ul class="big-list">
+      <li>Filled in for the test fixture.</li>
+      <li>Filled in for the test fixture.</li>
+    </ul>
+  </section>
+
+  <section class="block" id="surfaces" data-section="surfaces">
+    <h2><span class="num">2</span>Where it is seen</h2>
+    <ul class="chips">
+      <li>Filled in for the test fixture.</li>
+      <li>Filled in for the test fixture.</li>
+      <li>Filled in for the test fixture.</li>
+    </ul>
+    <p class="muted">Filled in for the test fixture.</p>
+  </section>
+
+  <section class="block" id="norm" data-section="norm">
+    <h2><span class="num">3</span>What the category looks like (and what to avoid)</h2>
+    <ul class="big-list">
+      <li>Filled in for the test fixture.</li>
+      <li>Filled in for the test fixture.</li>
+    </ul>
+  </section>
+
+  <section class="block" id="territories">
+    <h2><span class="num">4</span>Style territories</h2>
+    <p class="muted">Filled in for the test fixture.</p>
+    <div class="grid">
+      <!-- Repeat this article for every territory (4-6). data-name: a word, identical in chat. At least 3 references each, every one with a link and a "take". -->
+      <article class="territory" data-section="territory" data-name="Harbor">
+        <h3>Harbor</h3>
+        <p class="idea" data-field="idea">Filled in for the test fixture.</p>
+        <div class="mood" role="img" aria-label="Filled in for the test fixture."><i style="background:#3b5b8c"></i><i style="background:#3b5b8c"></i><i style="background:#3b5b8c"></i><i style="background:#3b5b8c"></i></div>
+        <p class="muted">Filled in for the test fixture.</p>
+        <!-- OPTIONAL (delete when the brief has a single mark): how this style would flex across the family -->
+        <ul class="big-list" data-field="per-item">
+          <li>Filled in for the test fixture.</li>
+          <li>Filled in for the test fixture.</li>
+        </ul>
+        <ul class="refs" data-field="references">
+          <li><span class="name"><a href="https://example.com/reference">Filled in for the test fixture.</a></span>
+            <!-- OPTIONAL thumbnail (delete the figure when no image of the real mark could be fetched): the mark from an official image (the reference's own site or press page), a Wikimedia Commons image or a screenshot, saved under research/style-thumbs/, downscaled to about 240 px wide and inlined as a data: image. Caption: whose mark it is and where the image is from, then "shown for private research" in the owner's language. -->
+            <figure class="thumb"><img data-field="thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" alt="Filled in for the test fixture.">
+              <figcaption>Filled in for the test fixture. · shown for private research</figcaption></figure>
+            <span class="seen">Filled in for the test fixture.</span>
+            <span class="take" data-field="take">Take: Filled in for the test fixture.</span>
+            <span class="avoid">Avoid: Filled in for the test fixture.</span></li>
+          <li><span class="name"><a href="https://example.com/reference">Filled in for the test fixture.</a></span>
+            <figure class="thumb"><img data-field="thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" alt="Filled in for the test fixture.">
+              <figcaption>Filled in for the test fixture. · shown for private research</figcaption></figure>
+            <span class="seen">Filled in for the test fixture.</span>
+            <span class="take" data-field="take">Take: Filled in for the test fixture.</span>
+            <span class="avoid">Avoid: Filled in for the test fixture.</span></li>
+          <li><span class="name"><a href="https://example.com/reference">Filled in for the test fixture.</a></span>
+            <figure class="thumb"><img data-field="thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" alt="Filled in for the test fixture.">
+              <figcaption>Filled in for the test fixture. · shown for private research</figcaption></figure>
+            <span class="seen">Filled in for the test fixture.</span>
+            <span class="take" data-field="take">Take: Filled in for the test fixture.</span>
+            <span class="avoid">Avoid: Filled in for the test fixture.</span></li>
+        </ul>
+        <fieldset class="vote" data-vote="Harbor"><legend>Your vote</legend>
+          <label><input type="radio" name="vote-harbor" value="keep">keep</label><label><input type="radio" name="vote-harbor" value="drop">drop</label><label><input type="radio" name="vote-harbor" value="unsure">unsure</label></fieldset>
+      </article>
+      <article class="territory" data-section="territory" data-name="Ember">
+        <h3>Ember</h3>
+        <p class="idea" data-field="idea">Filled in for the test fixture.</p>
+        <div class="mood" role="img" aria-label="Filled in for the test fixture."><i style="background:#3b5b8c"></i><i style="background:#3b5b8c"></i><i style="background:#3b5b8c"></i><i style="background:#3b5b8c"></i></div>
+        <p class="muted">Filled in for the test fixture.</p>
+        <!-- OPTIONAL (delete when the brief has a single mark): how this style would flex across the family -->
+        <ul class="big-list" data-field="per-item">
+          <li>Filled in for the test fixture.</li>
+          <li>Filled in for the test fixture.</li>
+        </ul>
+        <ul class="refs" data-field="references">
+          <li><span class="name"><a href="https://example.com/reference">Filled in for the test fixture.</a></span>
+            <!-- OPTIONAL thumbnail (delete the figure when no image of the real mark could be fetched): the mark from an official image (the reference's own site or press page), a Wikimedia Commons image or a screenshot, saved under research/style-thumbs/, downscaled to about 240 px wide and inlined as a data: image. Caption: whose mark it is and where the image is from, then "shown for private research" in the owner's language. -->
+            <figure class="thumb"><img data-field="thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" alt="Filled in for the test fixture.">
+              <figcaption>Filled in for the test fixture. · shown for private research</figcaption></figure>
+            <span class="seen">Filled in for the test fixture.</span>
+            <span class="take" data-field="take">Take: Filled in for the test fixture.</span>
+            <span class="avoid">Avoid: Filled in for the test fixture.</span></li>
+          <li><span class="name"><a href="https://example.com/reference">Filled in for the test fixture.</a></span>
+            <figure class="thumb"><img data-field="thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" alt="Filled in for the test fixture.">
+              <figcaption>Filled in for the test fixture. · shown for private research</figcaption></figure>
+            <span class="seen">Filled in for the test fixture.</span>
+            <span class="take" data-field="take">Take: Filled in for the test fixture.</span>
+            <span class="avoid">Avoid: Filled in for the test fixture.</span></li>
+          <li><span class="name"><a href="https://example.com/reference">Filled in for the test fixture.</a></span>
+            <figure class="thumb"><img data-field="thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" alt="Filled in for the test fixture.">
+              <figcaption>Filled in for the test fixture. · shown for private research</figcaption></figure>
+            <span class="seen">Filled in for the test fixture.</span>
+            <span class="take" data-field="take">Take: Filled in for the test fixture.</span>
+            <span class="avoid">Avoid: Filled in for the test fixture.</span></li>
+        </ul>
+        <fieldset class="vote" data-vote="Ember"><legend>Your vote</legend>
+          <label><input type="radio" name="vote-ember" value="keep">keep</label><label><input type="radio" name="vote-ember" value="drop">drop</label><label><input type="radio" name="vote-ember" value="unsure">unsure</label></fieldset>
+      </article>
+      <article class="territory" data-section="territory" data-name="Quarry">
+        <h3>Quarry</h3>
+        <p class="idea" data-field="idea">Filled in for the test fixture.</p>
+        <div class="mood" role="img" aria-label="Filled in for the test fixture."><i style="background:#3b5b8c"></i><i style="background:#3b5b8c"></i><i style="background:#3b5b8c"></i><i style="background:#3b5b8c"></i></div>
+        <p class="muted">Filled in for the test fixture.</p>
+        <!-- OPTIONAL (delete when the brief has a single mark): how this style would flex across the family -->
+        <ul class="big-list" data-field="per-item">
+          <li>Filled in for the test fixture.</li>
+          <li>Filled in for the test fixture.</li>
+        </ul>
+        <ul class="refs" data-field="references">
+          <li><span class="name"><a href="https://example.com/reference">Filled in for the test fixture.</a></span>
+            <!-- OPTIONAL thumbnail (delete the figure when no image of the real mark could be fetched): the mark from an official image (the reference's own site or press page), a Wikimedia Commons image or a screenshot, saved under research/style-thumbs/, downscaled to about 240 px wide and inlined as a data: image. Caption: whose mark it is and where the image is from, then "shown for private research" in the owner's language. -->
+            <figure class="thumb"><img data-field="thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" alt="Filled in for the test fixture.">
+              <figcaption>Filled in for the test fixture. · shown for private research</figcaption></figure>
+            <span class="seen">Filled in for the test fixture.</span>
+            <span class="take" data-field="take">Take: Filled in for the test fixture.</span>
+            <span class="avoid">Avoid: Filled in for the test fixture.</span></li>
+          <li><span class="name"><a href="https://example.com/reference">Filled in for the test fixture.</a></span>
+            <figure class="thumb"><img data-field="thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" alt="Filled in for the test fixture.">
+              <figcaption>Filled in for the test fixture. · shown for private research</figcaption></figure>
+            <span class="seen">Filled in for the test fixture.</span>
+            <span class="take" data-field="take">Take: Filled in for the test fixture.</span>
+            <span class="avoid">Avoid: Filled in for the test fixture.</span></li>
+          <li><span class="name"><a href="https://example.com/reference">Filled in for the test fixture.</a></span>
+            <figure class="thumb"><img data-field="thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" alt="Filled in for the test fixture.">
+              <figcaption>Filled in for the test fixture. · shown for private research</figcaption></figure>
+            <span class="seen">Filled in for the test fixture.</span>
+            <span class="take" data-field="take">Take: Filled in for the test fixture.</span>
+            <span class="avoid">Avoid: Filled in for the test fixture.</span></li>
+        </ul>
+        <fieldset class="vote" data-vote="Quarry"><legend>Your vote</legend>
+          <label><input type="radio" name="vote-quarry" value="keep">keep</label><label><input type="radio" name="vote-quarry" value="drop">drop</label><label><input type="radio" name="vote-quarry" value="unsure">unsure</label></fieldset>
+      </article>
+      <article class="territory" data-section="territory" data-name="Meadow">
+        <h3>Meadow</h3>
+        <p class="idea" data-field="idea">Filled in for the test fixture.</p>
+        <div class="mood" role="img" aria-label="Filled in for the test fixture."><i style="background:#3b5b8c"></i><i style="background:#3b5b8c"></i><i style="background:#3b5b8c"></i><i style="background:#3b5b8c"></i></div>
+        <p class="muted">Filled in for the test fixture.</p>
+        <!-- OPTIONAL (delete when the brief has a single mark): how this style would flex across the family -->
+        <ul class="big-list" data-field="per-item">
+          <li>Filled in for the test fixture.</li>
+          <li>Filled in for the test fixture.</li>
+        </ul>
+        <ul class="refs" data-field="references">
+          <li><span class="name"><a href="https://example.com/reference">Filled in for the test fixture.</a></span>
+            <!-- OPTIONAL thumbnail (delete the figure when no image of the real mark could be fetched): the mark from an official image (the reference's own site or press page), a Wikimedia Commons image or a screenshot, saved under research/style-thumbs/, downscaled to about 240 px wide and inlined as a data: image. Caption: whose mark it is and where the image is from, then "shown for private research" in the owner's language. -->
+            <figure class="thumb"><img data-field="thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" alt="Filled in for the test fixture.">
+              <figcaption>Filled in for the test fixture. · shown for private research</figcaption></figure>
+            <span class="seen">Filled in for the test fixture.</span>
+            <span class="take" data-field="take">Take: Filled in for the test fixture.</span>
+            <span class="avoid">Avoid: Filled in for the test fixture.</span></li>
+          <li><span class="name"><a href="https://example.com/reference">Filled in for the test fixture.</a></span>
+            <figure class="thumb"><img data-field="thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" alt="Filled in for the test fixture.">
+              <figcaption>Filled in for the test fixture. · shown for private research</figcaption></figure>
+            <span class="seen">Filled in for the test fixture.</span>
+            <span class="take" data-field="take">Take: Filled in for the test fixture.</span>
+            <span class="avoid">Avoid: Filled in for the test fixture.</span></li>
+          <li><span class="name"><a href="https://example.com/reference">Filled in for the test fixture.</a></span>
+            <figure class="thumb"><img data-field="thumb" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" alt="Filled in for the test fixture.">
+              <figcaption>Filled in for the test fixture. · shown for private research</figcaption></figure>
+            <span class="seen">Filled in for the test fixture.</span>
+            <span class="take" data-field="take">Take: Filled in for the test fixture.</span>
+            <span class="avoid">Avoid: Filled in for the test fixture.</span></li>
+        </ul>
+        <fieldset class="vote" data-vote="Meadow"><legend>Your vote</legend>
+          <label><input type="radio" name="vote-meadow" value="keep">keep</label><label><input type="radio" name="vote-meadow" value="drop">drop</label><label><input type="radio" name="vote-meadow" value="unsure">unsure</label></fieldset>
+      </article>
+    </div>
+  </section>
+
+  <section class="block" id="none" data-section="none-of-these">
+    <h2><span class="num">5</span>None of these</h2>
+    <div class="callout"><p>If none of these is right, say so and what was missing. I research again from new angles before anything is drawn.</p></div>
+  </section>
+
+  <section class="block" id="call" data-section="my-call">
+    <h2><span class="num">6</span>My call</h2>
+    <p data-field="recommendation"><b>Recommendation:</b> Filled in for the test fixture.</p>
+    <p data-field="critique"><b>Honest critique:</b> Filled in for the test fixture.</p>
+  </section>
+
+  <section class="block" id="questions" data-section="questions">
+    <h2><span class="num">7</span>Questions</h2>
+    <ol class="questions">
+      <!-- Question 1 is multi-pick (checkboxes): the reply lists every ticked style. One option per territory, lettered in order; the last option is always "None of these: research again" (class none-pick: ticking it clears the others). -->
+      <li data-section="question" data-n="1" data-lists="territories" data-multi="true"><p class="q">Which style territories do I draw in? <span class="muted">Tick one or more.</span></p>
+        <ol class="options">
+          <li data-option="a" data-recommended="true"><label><input type="checkbox" name="q1" value="a">Harbor <span class="rec">Recommended</span></label></li>
+          <li data-option="b"><label><input type="checkbox" name="q1" value="b">Ember</label></li>
+          <li data-option="c"><label><input type="checkbox" name="q1" value="c">Quarry</label></li>
+          <li data-option="d"><label><input type="checkbox" name="q1" value="d">Meadow</label></li>
+          <li data-option="e"><label><input type="checkbox" name="q1" value="e" class="none-pick">None of these: research again</label></li>
+        </ol></li>
+      <!-- OPTIONAL (required when the brief has several marks; delete for a single mark): the family question -->
+      <li data-section="question" data-n="2"><p class="q">Filled in for the test fixture.</p>
+        <ol class="options">
+          <li data-option="a" data-recommended="true"><label><input type="radio" name="q2" value="a">a. One shared style <span class="rec">Recommended</span></label></li>
+          <li data-option="b"><label><input type="radio" name="q2" value="b">b. A style per item</label></li>
+          <li data-option="c"><label><input type="radio" name="q2" value="c">c. Shared base, each item with its own twist</label></li>
+        </ol></li>
+      <!-- More questions: data-n="3" ...; options lettered a, b, c ... in order (data-option); exactly one data-recommended. Question 1 shows the territory names; every other question keeps visible "a." prefixes so "2b" works. -->
+    </ol>
+  </section>
+
+  <section class="block" id="reply" data-section="reply">
+    <h2>Reply</h2>
+    <p>Answer with one or more territory names, or question number plus option (1a). Add one sentence on anything you want different, for example "Harbor, but Filled in for the test fixture.". Or say "skip the research" to go straight to drawing. Batched answers work: "1a, 2b".</p>
+    <div class="reply-out" id="reply-out" aria-live="polite">Pick options above to compose a reply, or type your own.</div>
+    <button type="button" id="copy-reply">Copy reply</button>
+  </section>
+
+  <footer>Made with brand-creator · style research · checked with board-lint</footer>
+</main>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var t = q.get("t");
+  if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+  var v = q.get("v");
+  if (v) document.querySelectorAll("[data-variant]").forEach(function (el) { el.hidden = el.getAttribute("data-variant") !== v; });
+  var out = document.getElementById("reply-out");
+  var placeholder = out ? out.textContent : "";
+  function pickName(input) {
+    var label = input.parentNode.cloneNode(true);
+    label.querySelectorAll(".rec").forEach(function (x) { x.remove(); });
+    return label.textContent.trim();
+  }
+  function compose() {
+    var parts = [];
+    document.querySelectorAll("[data-section=question]").forEach(function (qq) {
+      var picked = Array.prototype.slice.call(qq.querySelectorAll("input:checked"));
+      if (!picked.length) return;
+      if (qq.hasAttribute("data-lists")) parts.push(picked.map(pickName).join(", "));
+      else parts.push(qq.getAttribute("data-n") + picked.map(function (c) { return c.value; }).join(""));
+    });
+    document.querySelectorAll("fieldset[data-vote]").forEach(function (f) {
+      var c = f.querySelector("input:checked");
+      if (c) parts.push(f.getAttribute("data-vote") + " " + c.value);
+    });
+    if (out) out.textContent = parts.length ? parts.join(", ") : placeholder;
+  }
+  document.addEventListener("change", function (e) {
+    var el = e.target, qq = el.closest ? el.closest("[data-multi]") : null;
+    if (qq && el.checked) qq.querySelectorAll("input[type=checkbox]").forEach(function (o) {   // "None of these" excludes the styles, and the styles exclude it
+      if (o !== el && (el.classList.contains("none-pick") || o.classList.contains("none-pick"))) o.checked = false;
+    });
+    compose();
+  });
+  var btn = document.getElementById("copy-reply");
+  if (btn) btn.addEventListener("click", function () {
+    var text = out ? out.textContent : "";
+    var done = function () { btn.textContent = "Copied"; };
+    var fallback = function () { var r = document.createRange(); r.selectNodeContents(out); var s = getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = "Selected: copy it"; };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+  });
+})();
+</script>
+</body>
+</html>

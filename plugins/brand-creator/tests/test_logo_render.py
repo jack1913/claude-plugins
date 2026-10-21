@@ -3,7 +3,7 @@ import json
 import struct
 
 import pytest
-from helpers import bc, failing, mutate, report
+from helpers import bc, failing, mutate, mutate_json, report
 
 from pxio import png_size
 
@@ -41,8 +41,147 @@ def test_a_dark_tile_that_vanishes_fails(acme):
 @pytest.mark.requires_resvg
 def test_logo_sheet_contrast_target_is_adjustable_and_enforced(acme):
     assert bc("logo-sheet", "--min-contrast", "3", project=acme).returncode == 0
-    r = bc("logo-sheet", "--min-contrast", "6", project=acme)  # the teal dot is 4.7:1 on the light ground
-    assert r.returncode == 1 and "light:16px" in failing(report(acme, "logo-sheet"))
+    row = {r["id"]: r for r in report(acme, "logo-sheet")["results"]}["light:64px"]   # the fine vector, past the small band
+    navy = row["min_ratio"]                                                          # the triangle is what touches the ground
+    assert [c["hex"] for c in row["colours"]] == ["#0d1b2d"] and navy > 10
+    r = bc("logo-sheet", "--min-contrast", f"{navy + 0.5:.2f}", project=acme)
+    assert r.returncode == 1 and "light:64px" in failing(report(acme, "logo-sheet"))
+    assert bc("logo-sheet", "--min-contrast", f"{navy - 0.5:.2f}", project=acme).returncode == 0
+
+
+LIGHT = "#ffffff"
+
+
+def _mark(proj, name, body):
+    (proj / "assets" / "logo" / name).write_text(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">{body}</svg>')
+    return f"assets/logo/{name}"
+
+
+@pytest.mark.requires_resvg
+def test_only_colours_that_touch_the_ground_are_held_to_it(acme):
+    """A cream face inside a black outline is 1.15:1 against white but never meets the ground, so it passes; the same cream
+    with no outline touches the ground and fails. (The old rule held every colour with 5 % of the ink to the ground.)"""
+    framed = _mark(acme, "framed.svg", '<rect x="2" y="2" width="28" height="28" fill="#121212"/><rect x="6" y="6" width="20" height="20" fill="#f2efe6"/>')
+    bare = _mark(acme, "bare.svg", '<rect x="2" y="2" width="28" height="28" fill="#121212"/><rect x="6" y="6" width="26" height="20" fill="#f2efe6"/>')
+    bc("logo-sheet", "--svg", framed, "--ground-light", LIGHT, project=acme)   # no dark twin: the black frame fails on the dark ground
+    rep = report(acme, "logo-sheet")
+    assert not [i for i in failing(rep) if i.startswith("light:")], failing(rep)
+    rows = {r["id"]: r for r in rep["results"]}
+    assert [c["hex"] for c in rows["light:64px"]["colours"]] == ["#121212"]
+    r = bc("logo-sheet", "--svg", bare, "--ground-light", LIGHT, project=acme)
+    assert r.returncode == 1 and "light:64px" in failing(report(acme, "logo-sheet"))
+    worst = {r["id"]: r for r in report(acme, "logo-sheet")["results"]}["light:64px"]
+    assert "#f2efe6 touches the light ground" in worst["detail"] and worst["min_ratio"] == 1.15
+
+
+@pytest.mark.requires_resvg
+def test_a_keyline_thinner_than_a_pixel_fails_where_it_blends_into_the_ground(acme):
+    """A 0.4-unit black keyline around a cream face (32 viewBox): at 512 px the black meets the ground at 18.73:1, but at 16 px the
+    keyline covers a fifth of a pixel, so the tile's edge reaches far less and fails there; at 180 px it is solid and passes."""
+    key = _mark(acme, "key.svg", '<rect x="1" y="1" width="30" height="30" fill="#121212"/>'
+                                 '<rect x="1.4" y="1.4" width="29.2" height="29.2" fill="#f2efe6"/>')
+    bc("logo-sheet", "--svg", key, "--ground-light", LIGHT, project=acme)
+    rows = {r["id"]: r for r in report(acme, "logo-sheet")["results"]}
+    assert rows["light:16px"]["status"] == "fail" and "edge reaches only" in rows["light:16px"]["detail"]
+    assert rows["light:16px"]["edge_ratio"] < 3 and rows["light:16px"]["min_ratio"] > 10   # the colour alone would pass
+    assert rows["light:180px"]["status"] == "pass" and rows["light:180px"]["edge_ratio"] > 10
+
+
+@pytest.mark.requires_resvg
+@pytest.mark.parametrize("stroke, colour", [("0.3", "#e5e2d6"), ("0.08", "#121212")])
+def test_line_art_never_passes_unmeasured(acme, stroke, colour):
+    """Line art: a pale 0.3 stroke (1.21:1 against white) and a 0.08 stroke with no flat colour at 512 px. Each tile either fails, on
+    its visibility or its measured edge, or says NOT verified; none passes, as the old rule did ("lowest contrast None:1")."""
+    (acme / "assets" / "logo" / "hair.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'
+                                                      f'<circle cx="32" cy="32" r="20" fill="none" stroke="{colour}" stroke-width="{stroke}"/></svg>')
+    bc("logo-sheet", "--svg", "assets/logo/hair.svg", "--ground-light", LIGHT, project=acme)
+    rows = {r["id"]: r for r in report(acme, "logo-sheet")["results"] if r["id"].startswith("light:") and r["id"].endswith("px")}
+    assert rows and not [i for i, r in rows.items() if r["status"] == "pass"], rows
+    for r in rows.values():
+        assert (r["status"] == "fail") or (r["status"] == "skipped" and "NOT verified" in r["detail"]), r
+    if colour == "#e5e2d6":
+        assert rows["light:180px"]["status"] == "fail"             # under a pixel wide even at 180 px: never fully opaque
+
+
+@pytest.mark.requires_resvg
+def test_the_target_comes_from_the_tokens_and_a_ground_exception_excuses_a_colour(acme):
+    """No --min-contrast: the target is touching.ground of the built tokens, as for `contrast` and board-lint. A colour that
+    tokens/exceptions.json excuses against the ground is a warning that carries the reason, not a failure."""
+    assert bc("logo-sheet", project=acme).returncode == 0
+    assert report(acme, "logo-sheet")["target"] == {"min": 3.0, "from": "touching.ground in the tokens"}
+    mutate_json(acme / "assets" / "tokens" / "tokens.json", lambda d: d["touching"].__setitem__("ground", 30.0))
+    assert bc("logo-sheet", project=acme).returncode == 1                      # nothing reaches 30:1
+    bare = _mark(acme, "bare.svg", '<rect x="2" y="2" width="28" height="28" fill="#121212"/><rect x="6" y="6" width="26" height="20" fill="#f2efe6"/>')
+    why = "the cream band runs off on purpose"
+    mutate_json(acme / "tokens" / "exceptions.json", lambda d: d["exceptions"].append({"a": "#f2efe6", "b": "ground", "mode": "light", "reason": why}))
+    bc("logo-sheet", "--svg", bare, "--ground-light", LIGHT, "--min-contrast", "3", project=acme)
+    row = {r["id"]: r for r in report(acme, "logo-sheet")["results"]}["light:64px"]
+    assert row["status"] == "warn" and why in row["detail"] and "excused by tokens/exceptions.json" in row["detail"]
+
+
+@pytest.mark.requires_resvg
+def test_a_band_error_is_recorded_and_a_rules_change_makes_the_report_stale(acme):
+    """The rules and the tokens are inputs of the report, so `check` sees a changed band as a stale sheet; and a run that stops on a
+    band error writes a failing report instead of leaving the last passing one standing."""
+    assert bc("logo-sheet", project=acme).returncode == 0
+    mutate_json(acme / "qa" / "rules.json", lambda d: d["bands"][0].__setitem__("note", "a new note"))
+    out = bc("check", project=acme).stdout
+    assert any("report:logo-sheet" in ln and "qa/rules.json changed" in ln for ln in out.splitlines()), out[-2000:]
+    mutate_json(acme / "qa" / "rules.json", lambda d: d["bands"][0].__setitem__("drawing", "assets/logo/missing.svg"))
+    assert bc("logo-sheet", project=acme).returncode == 2
+    rep = report(acme, "logo-sheet")
+    assert rep["status"] == "fail" and "error" in {r["id"] for r in rep["results"]}
+
+
+@pytest.mark.requires_resvg
+def test_a_large_crisp_vector_is_not_taken_for_a_pixel_grid(acme):
+    (acme / "assets" / "logo" / "crisp.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" shape-rendering="crispEdges">'
+                                                       '<rect x="10" y="10" width="80" height="80" fill="#0d1b2d"/></svg>')
+    bc("logo-sheet", "--svg", "assets/logo/crisp.svg", project=acme)
+    rows = {r["id"]: r for r in report(acme, "logo-sheet")["results"]}
+    assert rows["light:128px"]["placement"]["grid"] is None and not [i for i in rows if i.endswith(":scale")]
+
+
+@pytest.mark.requires_resvg
+def test_a_gradient_mark_is_not_verified_instead_of_passed(acme):
+    grad = _mark(acme, "grad.svg", '<defs><linearGradient id="g"><stop offset="0" stop-color="#0d1b2d"/><stop offset="1" stop-color="#007d71"/>'
+                                   '</linearGradient></defs><rect x="2" y="2" width="28" height="28" fill="url(#g)"/>')
+    bc("logo-sheet", "--svg", grad, project=acme)
+    rows = {r["id"]: r for r in report(acme, "logo-sheet")["results"]}
+    assert rows["light:64px"]["status"] == "skipped" and "NOT verified" in rows["light:64px"]["detail"]
+
+
+@pytest.mark.requires_resvg
+def test_tiles_follow_the_size_bands_at_whole_number_scales(acme):
+    """Acme's bands: the 10 px grid mark up to 32 px, the fine vector above. A pixel drawing is drawn at the largest whole-number
+    scale that fits its tile and centred on whole pixels: 10 px at 16 (offset 3), 20 at 20, 30 at 32."""
+    assert bc("logo-sheet", project=acme).returncode == 0
+    rep = report(acme, "logo-sheet")
+    assert rep["bands"]["applied"] is True
+    assert {s: f for s, f in rep["bands"]["tiles"].items()} == {"16": "assets/logo/grid-mark.svg", "20": "assets/logo/grid-mark.svg",
+                                                                "32": "assets/logo/grid-mark.svg", "64": "assets/logo/mark.svg",
+                                                                "128": "assets/logo/mark.svg", "180": "assets/logo/mark.svg"}
+    rows = {r["id"]: r for r in rep["results"]}
+    assert rows["light:16px"]["placement"] == {"grid": 10, "scale": 1, "offset": 3} and rows["light:16px"]["bbox"][0] >= 3
+    assert rows["light:20px"]["placement"] == {"grid": 10, "scale": 2, "offset": 0}
+    assert rows["dark:32px"]["placement"] == {"grid": 10, "scale": 3, "offset": 1} and rows["dark:32px"]["drawing"] == "assets/logo/grid-mark.svg"
+    assert rows["light:64px"]["placement"]["grid"] is None                         # the vector is fitted, not stepped
+    # a mark that is none of the bands' drawings is drawn at every size, and the report says so
+    assert bc("logo-sheet", "--svg", "assets/logo/wordmark.svg", project=acme).returncode in (0, 1)
+    rep = report(acme, "logo-sheet")
+    assert rep["bands"]["applied"] is False and {r["id"] for r in rep["results"]} >= {"bands"}
+
+
+@pytest.mark.requires_resvg
+def test_a_pixel_grid_larger_than_its_tile_is_flagged(acme):
+    mutate_json(acme / "qa" / "rules.json", lambda d: d["bands"][0].__setitem__("drawing", "assets/logo/big-grid.svg"))
+    (acme / "assets" / "logo" / "big-grid.svg").write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" shape-rendering="crispEdges"><path d="M2 2h20v20h-20z" fill="#0d1b2d"/></svg>')
+    bc("logo-sheet", project=acme)
+    rows = {r["id"]: r for r in report(acme, "logo-sheet")["results"]}
+    assert rows["light:16px:scale"]["status"] == "warn" and "larger than the 16 px tile" in rows["light:16px:scale"]["detail"]
+    assert rows["light:20px:scale"]["status"] == "warn" and "light:32px:scale" not in rows    # 24 fits 32 once
+    assert rows["light:32px"]["placement"] == {"grid": 24, "scale": 1, "offset": 4}
 
 
 @pytest.mark.requires_resvg

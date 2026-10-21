@@ -13,8 +13,14 @@ approved fleet; do not auto-delegate." That is a request to Claude, not a lock.
 | --- | --- | --- | --- |
 | directions | `/brand-creator:directions` | 3 designers (each in its own `rounds/rN/<direction>/` folder) and 1 advisory judge | Your direction pick |
 | review-panel | `/brand-creator:review-panel` | 3 read-only reviewers, one per angle, and 1 judge | You approve the list |
+
+The directions workflow's designers draw the marks as SVG code themselves, so Claude offers it only after your yes to that
+weaker way ([Get your marks drawn](../use/get-your-marks-drawn.md)).
 | naming | `/brand-creator:naming` | 2 name hunters, 1 screener (no lookups without your privacy OK) and 1 judge | Your name pick |
 | adopt | `/brand-creator:adopt` | Per repository: 1 implementer on your branch and 1 independent reviewer | Every commit. It never commits |
+
+The directions workflow starts only after you picked a style, or skipped that step before your first board. If you reject
+every direction, it starts again only after you pick a style on a new style board. Nothing is drawn before.
 
 ## What the agents can do
 

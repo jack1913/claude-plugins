@@ -15,6 +15,7 @@ FIXTURES = ROOT / "skills" / "brand-creator" / "references" / "examples" / "acme
 sys.path.insert(0, str(ROOT / "scripts" / "lib"))
 sys.path.insert(0, str(ROOT / "scripts" / "emitters"))
 sys.path.insert(0, str(ROOT / "scripts" / "booklib"))
+sys.path.insert(0, str(ROOT / "scripts" / "boardlib"))
 sys.path.insert(0, str(ROOT / "scripts" / "printlib"))
 sys.path.insert(0, str(ROOT / "scripts" / "adaptlib"))
 
@@ -114,13 +115,16 @@ def install_fixture(project: Path, *, tokens=True, logo=True, board=True, qa=Tru
     if board:
         (project / "rounds" / "r1").mkdir(parents=True, exist_ok=True)
         shutil.copy2(FIXTURES / "rounds" / "r1" / "board.html", project / "rounds" / "r1" / "board.html")
+        # round 1 waits for the style pick (G1s); a fixture that builds a round 1 pick board records the owner's skip
+        r = bc("state", "--record", "G1s", "skipped by owner", project=project)
+        assert r.returncode == 0, r.stderr
 
 
-def make_r2_board(project: Path) -> Path:
-    """Derive a valid round 2 refine board from the round 1 example page."""
+def make_r2_board(project: Path, rnd: int = 2) -> Path:
+    """Derive a valid refine board from the round 1 example page: round 2, or round `rnd` when a test needs a refine board later on."""
     import re
     src = (FIXTURES / "rounds" / "r1" / "board.html").read_text(encoding="utf-8")
-    page = src.replace('data-round="1" data-board="pick"', 'data-round="2" data-board="refine"')
+    page = src.replace('data-round="1" data-board="pick"', f'data-round="{rnd}" data-board="refine"')
     # a refine board has one direction, no map, no strategy core, no none-of-these
     for sid in ("positioning-map", "strategy-core", "none-of-these", "weak-points"):
         page, n = re.subn(r'<section class="block" id="[a-z]+" data-section="%s">.*?</section>' % sid, "", page, flags=re.S)
@@ -138,7 +142,7 @@ def make_r2_board(project: Path) -> Path:
     marker = '<section class="block" id="directions">'
     assert page.count(marker) == 1
     page = page.replace(marker, extra + marker)
-    out = project / "rounds" / "r2" / "board.html"
+    out = project / "rounds" / f"r{rnd}" / "board.html"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(page, encoding="utf-8")
     return out
@@ -199,3 +203,48 @@ def fill_markers(project: Path, text: str = "Acme sample text for this slot.") -
             f.write_text(new, encoding="utf-8")
             n += k
     return n
+
+
+STYLE_STAND_IN = "Filled in for the test fixture."
+STYLE_TINY_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+
+
+def fill_style_board(template: str, names: tuple[str, ...] = ("Harbor", "Ember", "Quarry", "Meadow")) -> str:
+    """The style board template as a finished page that must pass board-lint: the territory article repeated once per name and every
+    [[fill: ...]] marker outside an HTML comment replaced with stand-in text (a link, a colour, a tiny inlined image where the
+    marker asks for one). The committed copy is tests/fixtures/style-board-filled.html; a test keeps the two in step."""
+    import re
+    m = re.search(r'      <article class="territory".*?</article>\n', template, re.S)
+    assert m, "the template has no territory article"
+    first = m.group(0)
+
+    def named(block: str, name: str) -> str:
+        return block.replace("[[fill: Name one]]", name).replace("vote-one", f"vote-{name.lower()}")
+
+    more = "".join(named(first, n) for n in names[1:])
+    marker = re.search(r"      <!-- \[\[fill: articles for territories two to four.*?-->\n", template, re.S)
+    assert marker, "the template has no 'articles for territories two to four' comment"
+    page = template.replace(first, named(first, names[0]), 1).replace(marker.group(0), more, 1)
+    for word, name in zip(("one", "two", "three", "four"), names):
+        page = page.replace(f"[[fill: Name {word}]]", name)
+
+    def stand_in(mm: "re.Match[str]") -> str:
+        s = mm.group(0)[len("[[fill:"):-2].strip()
+        if s.startswith("language code"):
+            return "en"
+        if s == "Brand":
+            return "Acme"
+        if s == "YYYY-MM-DD":
+            return "2026-10-17"
+        if s.startswith("#hex"):
+            return "#3b5b8c"
+        if s.startswith("https://"):
+            return "https://example.com/reference"
+        if s.startswith("data:image"):
+            return STYLE_TINY_PNG
+        return STYLE_STAND_IN
+
+    out = []
+    for piece in re.split(r"(<!--.*?-->)", page, flags=re.S):      # markers inside HTML comments stay as the template wrote them
+        out.append(piece if piece.startswith("<!--") else re.sub(r"\[\[fill:.*?\]\](?!\])", stand_in, piece, flags=re.S))
+    return "".join(out)

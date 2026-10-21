@@ -87,6 +87,36 @@ def fit(svg_text: str, width: int, height: int, *, box: tuple[float, float] | No
     return dump(wrap)
 
 
+PIXEL_GRID_MAX = 64   # a pixel mark is drawn on a small grid (16, 32, up to 64 cells); a larger crispEdges viewBox is a vector
+
+
+def pixel_grid(svg_text: str) -> int | None:
+    """The grid size of a pixel drawing: shape-rendering crispEdges on the root (attribute or style) and a square viewBox
+    "0 0 N N" of whole numbers with N at most PIXEL_GRID_MAX. Any other drawing -> None."""
+    root = parse(svg_text)
+    style = root.get("style", "").replace(" ", "").lower()
+    if root.get("shape-rendering", "").strip() != "crispEdges" and "shape-rendering:crispedges" not in style:
+        return None
+    x, y, w, h = viewbox(root)
+    if x != 0 or y != 0 or w != h or w != int(w) or not 1 <= w <= PIXEL_GRID_MAX:
+        return None
+    return int(w)
+
+
+def place_whole(svg_text: str, size: int) -> tuple[str, dict]:
+    """Wrapper SVG of size x size. A pixel drawing (pixel_grid) whose grid fits is drawn at the largest whole-number scale and
+    centred on whole pixels, so every pixel of it stays one colour; any other drawing, or a grid larger than the size, is fitted
+    to the canvas as fit() does. -> (svg, {"grid": N or None, "scale": k or None, "offset": px or None})."""
+    grid = pixel_grid(svg_text)
+    if not grid or grid > size:
+        return fit(svg_text, size, size), {"grid": grid, "scale": None, "offset": None}
+    k = size // grid
+    off = (size - grid * k) // 2
+    wrap = _wrapper(size, size, None)
+    wrap.append(nested(parse(svg_text), off, off, grid * k, grid * k))
+    return dump(wrap), {"grid": grid, "scale": k, "offset": off}
+
+
 def fit_in_circle(svg_text: str, size: int, radius_frac: float, *, bg: str | None) -> str:
     """Square canvas; the mark's viewBox rectangle is scaled so its half-diagonal fits inside radius_frac*size."""
     root = parse(svg_text)

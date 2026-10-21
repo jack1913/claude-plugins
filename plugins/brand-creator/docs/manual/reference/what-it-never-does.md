@@ -13,6 +13,8 @@ The limits brand-creator keeps, so you know what stays yours.
 - **No "print-ready".** Print files stay proofs until your printer checks them. Without your printer's colour profile a
   file is an "RGB proof, not print-ready". With it, it's a "PDF/X-4 candidate (preflight with your printer)". Getting your
   printer's proof is your step.
+- **No marks drawn in code without your yes.** Marks are drawn on a design tool, and it never starts `/design` for you.
+  It draws marks as SVG code itself only when no design tool is there and you say yes to that weaker way.
 - **No made-up facts.** Text on boards and in the book uses only facts you confirmed, kept in `FACTS.md`.
 - **No quiet skips.** A check that can't run says "not verified" and why. It never counts as a pass.
 
@@ -23,8 +25,9 @@ a `BRAND-STATE.md`). Inside one it keeps `history/` and every round except the l
 folder from being deleted or moved. It blocks the call and tells Claude why. It is a best-effort guard, not a lock: a
 programming one-liner can still write a file. The checksum check in `/brand-creator:check` is the real protection.
 
-**Not yet checked in a live session.** The hook's decisions are tested, but nobody has yet watched it block a call in a
-real Claude Code session, in the main thread or inside an agent. If you rely on it, run `/brand-creator:check` too.
+**Checked live, in the main thread and inside an agent.** In a real Claude Code session the hook blocked a write to an
+earlier round, a new file in `history/`, a shell write into an earlier round and a move of the project folder, and let a
+write to the latest round through, both in the main thread and in an agent's tool calls. Run `/brand-creator:check` too.
 
 ## Related
 

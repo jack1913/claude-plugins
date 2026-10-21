@@ -8,6 +8,7 @@ machine-checked part (the `data-section` and `data-field` vocabulary) is defined
 
 - [Two templates](#two-templates)
 - [Required sections of a round page](#required-sections-of-a-round-page)
+- [Style board (round 0)](#style-board-round-0)
 - [Per-direction cells](#per-direction-cells)
 - [Territory card (round 2+ and resets)](#territory-card-round-2-and-resets)
 - [Generation prompts](#generation-prompts)
@@ -21,8 +22,9 @@ machine-checked part (the `data-section` and `data-field` vocabulary) is defined
 | Template | Copied to | Kind | Use |
 |---|---|---|---|
 | `templates/round-page.html` | `rounds/r<N>/board.html` | `pick` (round 1, resets) or `refine` | the page the owner reviews; linted |
+| `templates/style-board.html` | `rounds/r0/board.html` (after a full rejection also `rounds/r<N>/board.html` of a reset round) | `style` | the style research page before anything is drawn (P1s, every tier); linted; the owner's pick is gate G1s |
 | `templates/board.html` | `rounds/r<N>/<direction>/board.html` | `refine` | one direction in depth (Standard, Full); can serve as the round page of a one-direction refine round |
-| `templates/review/index.html` | `review/index.html` | same as the round | the stable review page, regenerated every round, published to one URL |
+| `templates/review/index.html` | `review/index.html` | same as the round | the stable review page, regenerated every round, published to one URL; for a style board (round 0) the page is a copy of the style board instead (`cp rounds/r0/board.html review/index.html`, then `board-lint review/index.html --round 0`) |
 
 Fill every `[[fill: ...]]` marker; `board-lint` fails on any that remain (in text or attributes; HTML comments are
 ignored). Delete optional blocks you do not use rather than leaving them empty.
@@ -47,6 +49,38 @@ ignored). Delete optional blocks you do not use rather than leaving them empty.
 Also carry, where they apply (not linted): a keep / drop / unsure vote per territory, "Decisions for you" from the
 review pass (as questions), and "why this is not <sibling>" in family modes. If today's mark still wins, say so on
 the board.
+
+## Style board (round 0)
+
+`<body data-round="0" data-board="style">`, written in the owner's language, visual first (colour strips, short lines,
+no dense tables). It carries no drawn mark; round 1 starts after the owner's pick (G1s). After a full rejection the style
+research runs again: a new style board goes in the next round, which is added to `reset_rounds`, and the pick board of the
+new territories follows in the round after it (also listed), once the owner's new pick is recorded. The style board is
+required then: "skipped by owner" is for the first pick board only, and `board-lint` fails a reset round's pick board
+(`project:style-gate`) that has no newer style board, or no newer pick behind it. The lint accepts a style board in round 0
+and in a round listed in `reset_rounds`, and nowhere else; a pick board belongs to round 1 or to a reset round, and later
+rounds are refine boards.
+
+| Section (`data-section`) | What it holds |
+|---|---|
+| `audience` | who sees the mark and what they expect |
+| `surfaces` | where it is seen, the hardest one named |
+| `norm` | the category norm and what to avoid |
+| `territory` (repeat, 4 or more) | `data-name` (a word of 3+ letters, never a label such as "Style 2"), `data-field="idea"`, optional `data-field="per-item"` (a family of marks), and `data-field="references"`: a list of 3+ `li`, each with an `<a href="https://...">` and a `data-field="take"` (what to take, what to avoid), and where an image of the real mark could be fetched a thumbnail (below) |
+| `none-of-these` | the way out: research again |
+| `my-call` | `data-field="recommendation"` and `data-field="critique"` |
+| `questions` | numbered, lettered options, exactly one recommended; question 1 (which territories) is multi-pick with checkboxes and the reply lists every ticked style; with several marks in the brief one question asks shared style or per item |
+| `reply` | how to answer |
+
+**Thumbnails.** Visual first means each reference shows its real mark where one can be fetched: from official images (the
+reference's own site or press page), from Wikimedia Commons images, or from a screenshot. Save the original under `research/style-thumbs/`, downscale a copy to about
+240 px wide and inline it: `<img data-field="thumb" src="data:image/...;base64,..." alt="the mark in words">` in a `<figure>` with a
+`<figcaption>` that says whose mark it is, where the image is from and that it is shown for private research (in the owner's
+language). `board-lint` fails a thumbnail whose `src` is not an inlined `data:image/` URI, that has a `srcset`, that has no alt
+text, or whose `<figure>` has no non-empty `<figcaption>` (it does not look for particular words); on a style board it also fails
+any other `<img>` whose `src`, and any `srcset` on an `<img>` or `<source>`, is not an inlined `data:image/` URI. A reference with
+no fetchable image simply has none. A thumbnail is for the research page only: never reuse a reference's mark, or a part of it,
+in anything you draw.
 
 ## Per-direction cells
 

@@ -14,11 +14,16 @@
 ## Goal
 
 Three to five directions that differ in **strategy**, not three looks of one idea, shown on one round page the owner
-can react to in a minute. The owner reacts to boards, not to questions.
+can react to in a minute. The owner reacts to boards, not to questions. Round 1 draws **inside the styles the owner
+picked** at G1s ([01s-style-research](01s-style-research.md)) and does not start before G1s is recorded (a pick, a skip or an
+honest "n/a"). The pick board of a reset round waits for more: a new style board after the rejected round, and the owner's
+new pick recorded after it (a skip is for the first pick board only; see [04-selection](04-selection.md)).
 
 ## Inputs
 
 - `brief/BRIEF.md`, `FACTS.md`, the architecture line and never-borrow list.
+- `gates.G1s` in BRAND-STATE.md and the style board (`rounds/r0/board.html`): the territories the owner picked set the
+  look every direction works inside; directions still differ in strategy and register.
 - Research when it exists (Standard and Full): `research/cliches.md`, the category's competitive alternatives, the
   5-competitor lineup. In Quick, do a short category scan yourself (a handful of searches) before drawing.
 - Real content: the owner's own copy, product names, offers. Never lorem ipsum.
@@ -49,7 +54,9 @@ can react to in a minute. The owner reacts to boards, not to questions.
    an argument written on the board (`data-field="reflex"`). If every direction shares one archetype, they are not
    divergent; replace one.
 5. **Design systems, not marks.** Each direction shows mark, wordmark, type, colour and a real hero together; the cell
-   list is in [board-contract.md](../board-contract.md).
+   list is in [board-contract.md](../board-contract.md). The mark is SVG. A generated image may sit beside it, labelled
+   as exploration; it never stands in for the direction's mark. The marks are drawn on a drawing engine before the
+   board is built: [drawing-engines](../drawing-engines.md).
 6. **Hardest surface.** Show every direction on the one surface from BRIEF (or from INVENTORY.md when it exists).
 7. **Family modes.** Each direction states what it keeps from the family layer and what it owns; check family fit
    before polish, and show "why this is not <sibling>".
@@ -75,7 +82,8 @@ instruction to reply with a direction name, or question number plus option (1a),
 
 ## Enforcement
 
-- `board-lint` (round 1): strategy core, positioning map with every direction placed and one `data-far="true"`,
+- `board-lint` (round 1, and the pick board of a reset round): `project:style-gate` fails the board while `gates.G1s` is empty (a reset round's
+  pick board also until a new style board and a newer pick are there); strategy core, positioning map with every direction placed and one `data-far="true"`,
   at least 3 directions with word names and one register each, an idea and a reflex result per direction, hardest
   surface, None of these, My call with recommendation and critique, numbered questions with lettered options, reply.
 - `shot`: four views with no overflow, console errors or network requests; forbidden-string counts from BRIEF and
@@ -89,3 +97,7 @@ With the owner's yes at the fleet gate, round 1 (or a reset round) can run as th
 `brand-creator:brand-judge`; `inventory: true` runs the P1c survey first with `brand-creator:brand-inventory`. Default
 3 designers and the judge, 4 agents. You still write the strategy core, the territories and the round page, and stop at
 G2. Arguments, models and the gate: [fleet.md](../fleet.md).
+
+Its designers draw the marks themselves, as SVG: that is Claude-drawn SVG, the weaker way of
+[drawing-engines](../drawing-engines.md). Offer the workflow only after the owner's yes to that way; with a drawing
+engine, draw the marks there and build the round in this thread.

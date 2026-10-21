@@ -54,6 +54,8 @@ Turn the chosen direction into a board the owner approves, in two or three round
 7. **Gentle refinement** means geometry and finish only, never character.
 8. **G-sys tripwire.** Count incremental fixes per area (`state --bump fixes_per_area.<area>`). The third in one area
    stops the loop: write a numbered-rules system spec, review it adversarially, get a GO.
+9. **Redrawing.** A change the SVG cannot take as an edit (a mark drawn again, a new variant) is drawn on the project's
+   drawing engine and imported as vector: [drawing-engines](../drawing-engines.md). Edits stay edits of the SVG master.
 
 ## Gate G3
 
@@ -73,10 +75,15 @@ also require G3.
 - Editing the previous round in place, which destroys the baseline the owner compares against.
 - Patching the same lockup three times instead of writing its rules (G-sys).
 - Reporting "done" from code without looking at the rendered result.
+- Refining by generating a new image of the mark. Changes are made on the SVG master; a new image is exploration.
 
 ## Enforcement
 
-- `board-lint` (round 2+): What changed, Weak points, losers with one-line reasons, My call, questions, reply.
+- `board-lint` (round 2+): What changed, Weak points, losers with one-line reasons, My call, questions, reply. On a refine
+  board it also measures the round's kept masters, as warnings that never fail the board: a colour that touches the ground
+  under the target (3:1, or `touching.ground` of the tokens) on light or dark, and pixel marks of one direction and grid size
+  drawn with different outline widths. A file it cannot read or draw is a warning too. Read them before showing the board:
+  fix them, or name them under Weak points.
 - Hook: Edit and overwriting Write on any round that is not the latest are blocked; `history/` only via `freeze`.
 - `check`: history manifest intact; contrast and logo-sheet reports current.
 

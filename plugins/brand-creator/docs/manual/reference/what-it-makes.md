@@ -19,7 +19,7 @@ Each check writes a report to `assets/_checks/`. `check` reads every report that
 | Command | What it proves |
 | --- | --- |
 | `contrast`, `contrast --cvd` | Text, UI and mark contrast in light and dark. Colours stay distinguishable under protan, deutan and tritan colour-blindness simulation |
-| `logo-sheet`, `logo-sheet --guides` | The mark at real sizes. Baseline, cap line and x-height measured on the ink |
+| `logo-sheet`, `logo-sheet --guides` | The mark at real sizes, each size from its own drawing when you have one per size. Baseline, cap line and x-height measured on the ink |
 | `downscale` | What survives when one master is shrunk to the sizes systems show: accent pixels, bounding box and the solid-square rule |
 | `states-check` | State sets (idle, active, error) differ in greyscale and in silhouette |
 | `family-check` | Family modes: shared glyphs equal the family's sources, and tile shares agree across products (`FAMILY.md`) |

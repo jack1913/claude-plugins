@@ -5,7 +5,8 @@ of them in `<project>/qa/rules.json`; every report says whether a value is the p
 keys are refused (a typo must not silently fall back to the default).
 
     {"schema": 1,
-     "downscale": {"accent_min_px": 4, "accent_rule_max_size": 32, "accent_colour": "color.accent", "accent_tolerance": 40},
+     "downscale": {"accent_min_px": 4, "accent_rule_max_size": 32, "accent_colour": "color.accent", "accent_tolerance": 40,
+                   "exemptions": [{"source": "assets/logo/mark-16.svg", "max_px": 16, "reason": "..."}]},
      "states":    {"greyscale_min_diff": 0.10, "silhouette_min_diff": 0.10, "ground": "#808080"},
      "cvd":       {"min_delta_e": 10.0, "deficiencies": ["protan", "deutan", "tritan"]},
      "guides":    {"tolerance_px": 1.5},
@@ -17,6 +18,7 @@ from __future__ import annotations
 
 import copy
 import json
+import posixpath
 from pathlib import Path
 
 from _common import EXIT_USAGE, fail
@@ -29,6 +31,7 @@ DEFAULTS: dict = {
         "accent_rule_max_size": 32,    # ... at this size and below
         "accent_colour": "color.accent",  # a token role (resolved in tokens.json) or #rrggbb
         "accent_tolerance": 40,        # RGB distance within which a pixel still counts as the accent
+        "exemptions": [],              # misses the owner accepts: {"source": <master>, "max_px": <size>, "reason": <why>}
     },
     "states": {"greyscale_min_diff": 0.10, "silhouette_min_diff": 0.10, "ground": "#808080"},
     "cvd": {"min_delta_e": 10.0, "deficiencies": ["protan", "deutan", "tritan"]},
@@ -68,9 +71,35 @@ def validate_bands(bands) -> list[dict]:
             if not isinstance(mx, int) or isinstance(mx, bool) or mx <= prev:
                 fail(EXIT_USAGE, f"{RULES_FILE}: bands[{i}].max_px must be a whole number above the previous band's ({prev})")
             prev = mx
+        if mx is not None and last:
+            fail(EXIT_USAGE, f"{RULES_FILE}: the last band covers every larger size, so it has no max_px (bands[{i}] stops at {mx} px, "
+                             f"and nothing would draw a larger size)")
         out.append({"name": b["name"].strip(), "max_px": mx, "drawing": b["drawing"].strip(), "note": b.get("note", "")})
     if len({b["name"] for b in out}) != len(out):
         fail(EXIT_USAGE, f"{RULES_FILE}: band names must be unique")
+    return out
+
+
+def validate_exemptions(items) -> list[dict]:
+    """downscale.exemptions: each a miss the owner accepts for one master at a size and below, with the reason in words."""
+    if not isinstance(items, list):
+        fail(EXIT_USAGE, f"{RULES_FILE}: downscale.exemptions must be a list")
+    out = []
+    for i, e in enumerate(items):
+        where = f"{RULES_FILE}: downscale.exemptions[{i}]"
+        if not isinstance(e, dict):
+            fail(EXIT_USAGE, f"{where} must be an object with source, max_px and reason")
+        extra = set(e) - {"source", "max_px", "reason"}
+        if extra:
+            fail(EXIT_USAGE, f"{where} has unknown keys {sorted(extra)}")
+        src, mx, why = e.get("source"), e.get("max_px"), e.get("reason")
+        if not (isinstance(src, str) and src.strip()) or src.strip().startswith("/") or ".." in Path(src.strip()).parts:
+            fail(EXIT_USAGE, f"{where}.source must be the master's path inside the project, as downscale --source names it")
+        if not isinstance(mx, int) or isinstance(mx, bool) or mx <= 0:
+            fail(EXIT_USAGE, f"{where}.max_px must be a whole number above 0 (the largest size it excuses)")
+        if not (isinstance(why, str) and why.strip()):
+            fail(EXIT_USAGE, f"{where}.reason must say why the owner accepts the miss")
+        out.append({"source": posixpath.normpath(src.strip().replace("\\", "/")), "max_px": mx, "reason": why.strip()})
     return out
 
 
@@ -104,7 +133,7 @@ def load(project: Path) -> tuple[dict, str]:
             if k not in DEFAULTS[sec]:
                 fail(EXIT_USAGE, f"{RULES_FILE}: unknown key {sec}.{k} (known: {', '.join(DEFAULTS[sec])})")
             _check(sec, k, v, DEFAULTS[sec][k])
-            rules[sec][k] = v
+            rules[sec][k] = validate_exemptions(v) if (sec, k) == ("downscale", "exemptions") else v
             rules["_from_file"].append(f"{sec}.{k}")
     return rules, RULES_FILE
 

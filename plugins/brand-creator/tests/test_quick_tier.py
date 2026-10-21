@@ -115,6 +115,7 @@ def test_the_bakery_board_passes_board_lint(tmp_path):
     p = make_project(tmp_path, slug="marlow-lane", name="Marlow Lane Bakery")
     (p / "rounds" / "r1").mkdir(parents=True)
     shutil.copy2(BAKERY / "board.html", p / "rounds" / "r1" / "board.html")
+    assert bc("state", "--record", "G1s", "skipped by owner", project=p).returncode == 0  # round 1 waits for the style pick
     r = bc("board-lint", "rounds/r1/board.html", project=p)
     assert r.returncode == 0, r.stdout + r.stderr
     assert "board-lint: PASS" in r.stdout

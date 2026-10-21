@@ -142,18 +142,28 @@ def measure_png(path: Path, acc: str, ground: str, tol: float) -> dict:
             "ink_px": sum(im.ink_mask((w, h, px), ground))}
 
 
-def gate(rep: Report, rid: str, label: str, m: dict, size: int, rule: dict, where: str) -> None:
+def gate(rep: Report, rid: str, label: str, m: dict, size: int, rule: dict, where: str, exempt: list | None = None) -> None:
+    """One accent row. A miss that an exemption of this master covers (downscale.exemptions in qa/rules.json, up to its max_px)
+    becomes a warning carrying the owner's reason, and the exemption is marked as used; a row that passes uses none."""
     need, upto = rule["accent_min_px"], rule["accent_rule_max_size"]
     base = f"accent {m['accent_px']} px, box {m['accent_box'] or 'none'}, largest solid square {m['accent_square']} px"
     if size > upto:
         rep.add(rid, "info", f"{size} px, above the {upto} px rule", detail=f"{base} ({where})", **m)
-    elif m["accent_square"] >= need:
+        return
+    if m["accent_square"] >= need:
         rep.add(rid, "pass", RULE_LABEL, detail=f"{size} px: {base}; needs a {need}x{need} square ({where})", **m)
-    elif m["accent_px"] == 0:
-        rep.add(rid, "fail", RULE_LABEL, detail=f"{size} px: the accent vanished ({where})", **m)
+        return
+    cover = next((e for e in exempt or [] if size <= e["max_px"]), None)
+    if cover:
+        cover["used"] = True
+        where = f"{where}; excused by qa/rules.json downscale.exemptions: {cover['reason']}"
+    status = "warn" if cover else "fail"
+    if m["accent_px"] == 0:
+        rep.add(rid, status, RULE_LABEL, detail=f"{size} px: the accent vanished ({where})", **m)
     else:
-        rep.add(rid, "fail", RULE_LABEL, detail=f"{size} px: {base}; needs a {need}x{need} square ({where}). Redraw the accent "
-                                                 f"larger or on a coarser grid, or change the rule in qa/rules.json", **m)
+        rep.add(rid, status, RULE_LABEL, detail=f"{size} px: {base}; needs a {need}x{need} square ({where})"
+                + ("" if cover else ". Redraw the accent larger or on a coarser grid, change the rule in qa/rules.json, or record "
+                                    "an exemption with the owner's reason (downscale.exemptions)"), **m)
 
 
 def main() -> int:
@@ -213,6 +223,8 @@ def main() -> int:
 
     # One report per measured source (assets/_checks/downscale/<slug>.json): `check` matches a manifest row to the report of ITS master.
     tool = downscale_report_tool(rel(project, src))
+    # The owner's accepted misses for THIS master (an exemption of another master never applies here).
+    exempt = [dict(e, index=i) for i, e in enumerate(rule["exemptions"]) if e["source"] == rel(project, src)]
     # The previous run's numbers (read before the report is overwritten) are comparable only when that run measured the same
     # source with the same method, master size, accent and ground; anything else would report false regressions.
     import json
@@ -239,13 +251,26 @@ def main() -> int:
     stamped, warns = specs.stamp(rows, today()) if rows else ({}, [])
     rep.extra = {"source": rel(project, src), "method": method, "method_reason": why, "sizes": sizes, "master_size": a.master_size,
                  "accent": {"hex": acc, "mode": a.mode, "ground": ground, "tolerance": tol, "role": a.accent or rule["accent_colour"]},
-                 "rule": {"accent_min_px": rule["accent_min_px"], "accent_rule_max_size": rule["accent_rule_max_size"], "source": rules_src},
+                 "rule": {"accent_min_px": rule["accent_min_px"], "accent_rule_max_size": rule["accent_rule_max_size"], "source": rules_src,
+                          "exemptions": [{k: e[k] for k in ("source", "max_px", "reason")} for e in exempt]},
                  "specs": stamped, "previous": rel(project, prev) if prev else None}
     for i, w in enumerate(warns):
         rep.add(f"spec:{w.split()[2]}:{i}", "warn", "platform spec row", detail=w)
     print(f"method: {renderer_str}; rule from {rules_src}: accent {rule['accent_min_px']}x{rule['accent_min_px']} px at "
           f"{rule['accent_rule_max_size']} px and below")
 
+    # A master that is one band's drawing (qa/rules.json bands) ships only at its band's sizes; the other rows say what a system that
+    # shrinks ONE master (an app icon) would show. Sizes drawn per band are measured as shipped, with --png.
+    bands = rules["bands"]
+    own = next((b for b in bands if confine(project, b["drawing"], what=f"band {b['name']!r} drawing").resolve() == src.resolve()), None)
+    if own:
+        i = bands.index(own)
+        lo = bands[i - 1]["max_px"] + 1 if i else 1
+        span = f"{lo} to {own['max_px']} px" if own["max_px"] is not None else f"{lo} px and up"
+        others = ", ".join(f"{b['drawing']} ({b['name']})" for b in bands if b is not own)
+        rep.add("bands", "info", "size bands", detail=f"{rel(project, src)} is the drawing of band {own['name']!r} ({span}); other sizes ship "
+                                                      f"{others or 'no other drawing'}. Rows outside {span} show what a system that shrinks "
+                                                      f"this one master would make of it; a size drawn per band is measured as shipped with --png")
     if not prev and not last:
         rep.add("compare:none", "info", "before/after", detail=f"no comparable earlier run ({why_not}); pass --previous <older master> to compare")
     master = master_png(src, method, a.master_size, work, "resvg") if method != "resvg" else None
@@ -253,7 +278,7 @@ def main() -> int:
     for size in sizes:
         m = measure_png(shrink(src, size, method, work, "now", master), acc, ground, tol)
         rid = f"downscale:{size}px"
-        gate(rep, rid, "", m, size, rule, f"{src.name} via {label}")
+        gate(rep, rid, "", m, size, rule, f"{src.name} via {label}", exempt)
         before = None
         if prev:
             before = measure_png(shrink(prev, size, method, work, "prev", prev_master), acc, ground, tol)
@@ -275,7 +300,17 @@ def main() -> int:
             fail(EXIT_USAGE, f"--png {rel(project, p)} is not a PNG")
         if w != h:
             fail(EXIT_USAGE, f"--png {rel(project, p)} is {w}x{h}; icons are square")
-        gate(rep, f"shipped:{rel(project, p)}", "", measure_png(p, acc, ground, tol), w, rule, "as shipped, not resampled")
+        gate(rep, f"shipped:{rel(project, p)}", "", measure_png(p, acc, ground, tol), w, rule, "as shipped, not resampled", exempt)
+    for i, e in enumerate(rule["exemptions"]):   # a typo in an exemption's source would excuse nothing, silently
+        if not (project / e["source"]).is_file():
+            rep.add(f"exemption:{i}", "warn", "an exemption that names no file",
+                    detail=f"qa/rules.json downscale.exemptions[{i}] names {e['source']}, which is not a file in the project: it excuses "
+                           f"nothing (write the master's path as --source names it)")
+    for e in exempt:   # an exemption that excused nothing is reported, so the register of accepted misses stays honest
+        if not e.get("used"):
+            rep.add(f"exemption:{e['index']}", "warn", "an exemption with nothing to excuse",
+                    detail=f"qa/rules.json downscale.exemptions[{e['index']}] ({e['source']}, {e['max_px']} px and below) excused no failing "
+                           f"row in this run; remove it once the drawing passes")
     return rep.finish()
 
 

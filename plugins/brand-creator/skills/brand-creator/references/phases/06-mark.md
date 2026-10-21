@@ -37,11 +37,14 @@ written as numbers the owner approved.
 
 ## Techniques by mark source
 
-- **generated** (grid, pixel, voxel, geometry drawn by code): the generator in `tools/` is the source; the SVG and PNGs
+- **generated** (grid, pixel, voxel or geometry kept as code; drawing it is still the drawing step of
+  [drawing-engines](../drawing-engines.md)): the generator in `tools/` is the source; the SVG and PNGs
   are its output and are never edited by hand. Build grids with `scripts/lib/px_lib.py` (`grid_image()` reads a mark
   drawn as text; deterministic PNG, ICO and run-length SVG writers). Rebuilds must be byte-identical; prove a refactor
   with `snapshot take`, change, `snapshot take`, `snapshot diff`. The Acme example's `tools/grid_mark.py` is the worked
-  case.
+  case. A pixel mark ships as SVG rectangles with `shape-rendering="crispEdges"`, and its PNGs stay crisp only at
+  whole-number scales: for a size that is not a multiple of the grid (a 16 grid at 180 px is 11.25x), render at the
+  largest whole multiple that fits and centre it on the padded canvas.
 - **authored-vector** (type-based or drawn), in this order:
   1. `fontcheck --lang <codes>` on the candidate font: coverage for the brand's language sets (`content_languages` in
      BRAND-STATE, never the chat language), a licence hint from the file, Chromium's platform-font report.
@@ -51,10 +54,16 @@ written as numbers the owner approved.
      `--baseline`, `--cap-line`, `--x-line`, `--grid`), with the measured px offset to the nearest ink edge. Report a
      fault as "12 px off the cap line, 0.2 px after the fix", never as "fixed".
   One projection per drawing; mixed projections are a fault even when they look fine.
+  From a raster exploration the owner picked (a generated image, photo or sketch): trace it,
+  `magick in.png -colorspace Gray -threshold 50% pbm:- | potrace -s -o mark.svg -`, then fix the curves by hand, remove
+  specks and set the fill to a token. The raster stays with its round as the source; it never goes in `assets/logo/`.
+  Where marks are drawn in the first place, and how a kept one is imported into the round, is
+  [drawing-engines](../drawing-engines.md).
 - **existing** (the owner's mark), the audit comes before any other work:
   1. Input: SVG must be pure vector (mark_lint); PDF goes through `pdftocairo -svg`; a raster is warned about ("icons
      drawn from it will be soft and the small sizes cannot be redrawn"). Offer the vector from whoever made it, a trace
-     (`potrace`) as an explicit, approved step, or a redraw as `authored-vector`. Never a silent trace.
+     (`potrace`) as an explicit, approved step, or a redraw as `authored-vector`. Never a silent trace. The traced or
+     redrawn SVG becomes the master; the owner's raster stays as a reference only.
   2. `logo-sheet` at 16, 32 and 180 (and the rest of the sheet) on light and dark; Read it.
   3. `contrast` (every colour of the artwork must be a token; touching pairs and the ground) and `downscale` (the
      accent at the system sizes).
@@ -73,7 +82,9 @@ written as numbers the owner approved.
    Check lockup rows with the longest-language strings at 390 px wide.
 4. **Accent minimum.** A small accent must stay readable: at 32 px and below it holds a solid 4×4 px square on the real
    downscale (the default rule, `downscale.accent_min_px` and `accent_rule_max_size` in `qa/rules.json`). A vanished
-   accent is named as such. A low-contrast accent is used only as a fill with an edge, never as text.
+   accent is named as such. A miss the owner accepts (a row of 2 px cells that reads as a row) is an exemption with their
+   reason, for that master and size: `downscale.exemptions` in `qa/rules.json`, a warning instead of a failure. A
+   low-contrast accent is used only as a fill with an edge, never as text.
 5. **Signature move.** Each brand owns one move (it presses, slides, crosses, rises) and one colour role that no
    sibling uses. In family modes, compare against the siblings' tiles side by side.
 6. **Distinctive assets.** List the non-name assets the brand claims (shape, colour role, move, pattern) and compare
@@ -84,7 +95,8 @@ written as numbers the owner approved.
    Hand masters only where the exact pixels ship (favicon layers, .ico, PNG icons, tray, Linux hicolor): `emit web`,
    `emit windows`, `emit linux` and `emit tray` draw each size by the rule, and `check` re-reads every layer's band.
    A system that shrinks one master (Apple, the registry icon, the avatar) gets one master, and if its small sizes need
-   the coarse drawing the exemption says so. Judge the 16 px version first, then draw the rest.
+   the coarse drawing the exemption says so. Judge the 16 px version first, then draw the rest, on the session's drawing
+   engine ([drawing-engines](../drawing-engines.md)).
 8. **Safe zones become size-band constraints.** Platform rules (Android adaptive 66 of 108 dp, the maskable circle, circular
    watch and headset icons, store icons with padding) constrain what the mark may put near its edges. Verified sizes
    live in `scripts/emitters/platform-specs.json`; never type sizes from memory.
@@ -112,8 +124,12 @@ for example "(rule) band B from 25 to 79 px" or "(rule) accent at least 4×4 px 
 
 ## Enforcement
 
-- `logo-sheet` (script): renders every size on both grounds with resvg and writes the report. `--guides` adds the
-  geometry proof: guide lines (baseline, cap line, x-height from an outlined mark's `data-*` metrics, or `--baseline`,
+- `logo-sheet` (script): renders every size on both grounds with resvg and writes the report. Each tile is drawn from the
+  drawing its size band names (`qa/rules.json` `bands`, when `--svg` is one of their drawings), a pixel drawing at the largest
+  whole-number scale that fits. Only the colours that touch the ground are held to the target (`--min-contrast`, by default
+  `touching.ground` of the tokens), so a face inside an outline is not, and `tokens/exceptions.json` can excuse one as it does
+  for `contrast`; each tile's own edge must reach the target too, so a keyline thinner than a pixel fails at 16 px. Line art
+  whose colours cannot be measured is "not verified", never a pass. `--guides` adds the geometry proof: guide lines (baseline, cap line, x-height from an outlined mark's `data-*` metrics, or `--baseline`,
   `--cap-line`, `--x-line`, `--grid`) over the mark at 512 px, with the measured offset to the nearest ink edge
   (tolerance `guides.tolerance_px` in `qa/rules.json`).
 - `outline-glyphs` (script): type-based marks only. fontTools pins the variable axes, skia-pathops removes overlaps,
