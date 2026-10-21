@@ -759,9 +759,9 @@ def test_the_docs_say_what_the_last_fixes_of_the_style_gate_do():
             assert needle not in flat, (rel, needle)
 
 
-def test_the_unreleased_changelog_tells_the_last_fixes_and_what_an_older_project_sees():
+def test_the_0_3_0_changelog_tells_the_last_fixes_and_what_an_older_project_sees():
     text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-    start = text.index("## [Unreleased]")
+    start = text.index("## [0.3.0]")
     unreleased = " ".join(text[start:text.index("\n## [", start + 5)].split())
     for needle in (
             # D and E: the style gate counts a real style board, and g1s_round follows it
@@ -1065,9 +1065,9 @@ def test_the_mark_source_says_kept_as_code_and_images_wait_for_the_budget():
     assert "- Drawing engine: not chosen yet" in acme[acme.index("## Collaboration"):acme.index("## Directions")]
 
 
-def test_the_unreleased_changelog_has_one_added_bullet_for_the_drawing_engines():
+def test_the_0_3_0_changelog_has_one_added_bullet_for_the_drawing_engines():
     text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-    start = text.index("## [Unreleased]")
+    start = text.index("## [0.3.0]")
     unreleased = text[start:text.index("\n## [", start + 5)]
     added = unreleased[unreleased.index("### Added"):unreleased.index("### Changed")]
     mine = [b for b in re.findall(r"(?m)^- .*(?:\n  .*)*", added) if "design canvas" in b]

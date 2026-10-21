@@ -6,6 +6,22 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-21
+
+The style research now comes before anything is drawn, marks are drawn on a design tool instead of as code, and the mark
+checks judge pixel marks the way they ship.
+
+Breaking changes, each with what to do:
+
+- A round 1 board, and the pick board of a reset round, fail `board-lint` until gate G1s is recorded. A project already
+  past round 1: `state --record G1s "n/a: round 1 drawn before the style step"`, or run the style research as round 0.
+- A pick board in a round that `reset_rounds` does not list fails `page:data-board`. List the round
+  (`state --set reset_rounds=2,3`) or make the page a refine board.
+- The `directions` workflow needs the G1s record as its `g1s` argument and does not start without it.
+- A last size band with a `max_px` exits 2. Remove `max_px` from the last band: it covers every larger size.
+- `logo-sheet` judges only the colours that touch the ground, checks each tile's edge, and says "not verified" for line art
+  it cannot measure. Run it again; a deliberate low-contrast edge goes in `tokens/exceptions.json` with a reason.
+
 ### Added
 
 - A style research step before anything is drawn, in every tier: Claude researches who sees the mark, where, and what
