@@ -5,7 +5,8 @@
 #   1 the project's own generators (tools/*.py built with scripts/lib/px_lib.py)
 #   2 tokens, contrast
 #   3 the emitters for the targets this brand has (apple needs macOS with Xcode; android, chrome-ext and msix need the Full tier; profiles, print and
-#     the social posts need Standard or Full), then print-check when print was emitted
+#     the social posts need Standard or Full), then print-check when print was emitted. With several marks (qa/rules.json marks) each emitter runs
+#     once per mark (--mark <id>), and emit social once more without --mark for the images that show every mark side by side
 #   4 the gates (downscale on every master a manifest row names, states-check). Off macOS there is no sips and no iconutil: set ICNS_RENDERER=pillow
 #     (emit tauri) and DOWNSCALE_RENDERER=pillow or resvg (the downscale gates) in block 2, the explicit opt-ins; without them those two steps exit 3
 #   5 verify-idempotent: the whole emit chain run twice must give byte-identical files
@@ -92,15 +93,29 @@ for g in ${GENERATORS[@]+"${GENERATORS[@]}"}; do step "generator $g"; python3 "$
 step "tokens";   "${BC[@]}" tokens
 step "contrast"; "${BC[@]}" contrast
 
+# the marks of a project with several of them (qa/rules.json marks), in the file's order; none for a one-mark project
+MARKS=()
+while IFS= read -r m; do [ -z "$m" ] || MARKS+=("$m"); done <<< "$(python3 -c '
+import json, os
+print("\n".join(json.load(open("qa/rules.json")).get("marks", {}) if os.path.isfile("qa/rules.json") else []))
+')"
+
 cmds=()
-emit_one() {   # emit_one <target>: run it, and add it to the idempotence run
-  local t="$1"
-  step "emit $t"
+emit_run() {   # emit_run <target> [<mark>]: run it, and add it to the idempotence run
+  local t="$1" m="${2:-}"
+  step "emit $t${m:+ --mark $m}"
   emit_args "$t"
+  [ -z "$m" ] || EMIT_ARGS+=(--mark "$m")
   "${BC[@]}" emit "$t" ${EMIT_ARGS[@]+"${EMIT_ARGS[@]}"}
   # the idempotence run takes each command as one shell-quoted string: printf %q keeps every argument whole
   local q="" w; for w in "$t" --project '{project}' ${EMIT_ARGS[@]+"${EMIT_ARGS[@]}"}; do q+="$(printf '%q ' "$w")"; done
   cmds+=(--cmd "{bc} emit $q")
+}
+emit_one() {   # emit_one <target>: once, or once per mark (and emit social once more without one: every mark side by side)
+  local t="$1" m
+  if [ ${#MARKS[@]} -eq 0 ]; then emit_run "$t"; return; fi
+  for m in "${MARKS[@]}"; do emit_run "$t" "$m"; done
+  [ "$t" != social ] || emit_run social
 }
 for t in "${TARGETS[@]}"; do emit_one "$t"; done
 case " ${TARGETS[*]} " in *" print "*) step "print-check"; "${BC[@]}" print-check ${PRINT_ICC:+--icc "$PRINT_ICC"} ;; esac
@@ -132,8 +147,12 @@ fi
 case "$TIER" in
   standard|full)
     EMIT_ARGS=(); [ "$HAVE_BOOK" = yes ] || EMIT_ARGS+=(--no-book)
-    step "emit presskit"
-    "${BC[@]}" emit presskit ${EMIT_ARGS[@]+"${EMIT_ARGS[@]}"} ;;
+    if [ ${#MARKS[@]} -eq 0 ]; then
+      step "emit presskit"
+      "${BC[@]}" emit presskit ${EMIT_ARGS[@]+"${EMIT_ARGS[@]}"}
+    else
+      for m in "${MARKS[@]}"; do step "emit presskit --mark $m"; "${BC[@]}" emit presskit --mark "$m" ${EMIT_ARGS[@]+"${EMIT_ARGS[@]}"}; done
+    fi ;;
 esac
 "${BC[@]}" staleness --write
 "${BC[@]}" check

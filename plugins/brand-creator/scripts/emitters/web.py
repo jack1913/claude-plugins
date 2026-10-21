@@ -88,10 +88,10 @@ def main() -> int:
 
     # icon.svg with prefers-color-scheme: the drawing a browser shows in a tab
     tab = min(favset["ico_layers"])
-    chosen = e.rules["favicon"]["drawing"]
+    chosen = e.favicon_drawing
     d_tab = e.drawing_file(chosen, "favicon") if chosen else e.drawing(tab)
     dark_tab = e.dark_file(d_tab)
-    why = f"favicon.drawing in {e.rules_src}" if chosen else (f"the band rule's drawing for a {tab} px tab" if d_tab.rel else "the default mark (no bands)")
+    why = (f"marks.{e.mark_id}.favicon" if e.mark else "favicon.drawing") + f" in {e.rules_src}" if chosen else (f"the band rule's drawing for a {tab} px tab" if d_tab.rel else "the default mark (no bands)")
     icon_svg = svgtools.combine_scheme(d_tab.svg, dark_tab).encode()
     put("icon.svg", icon_svg, ["favicon-set"], slot="favicon-svg", resampled_by="PAGE",
         drawing_file=d_tab.rel or "the mark", note=f"one scalable file shown in browser tabs: {why}")

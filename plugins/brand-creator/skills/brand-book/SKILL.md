@@ -68,7 +68,8 @@ never passed.
 3. Never type a number, a colour value, a file list or a status: computed blocks (`{{marks}}`, `{{mark-sizes}}`,
    `{{contrast}}`, `{{files}}`, `{{checks}}`, `{{donts}}`), counts (`{{count:files}}`) and facts (`{{fact:label}}`)
    come from data. A claim is a FACTS.md row or it is not written. Round, version and decision wording goes only in
-   the history chapter.
+   the history chapter. With several marks (`qa/rules.json` `marks`) the cover and these blocks show every mark: a table
+   of sizes per mark, and `{{marks:wordmark?}}` finds each mark's `<id>-wordmark.svg`.
 4. `book`. It writes `book.html` only when the page lints clean.
 5. `book --verify` rebuilds in memory and compares with the file: the build is byte-identical or it is a defect to
    report, not to paper over.

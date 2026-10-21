@@ -70,7 +70,7 @@ exit code) before it exits, so the previous passing report cannot survive a fail
 recorded once. `brand-creator check` reads these reports, recomputes each
 report's `inputs` hashes, and treats a stale report (inputs changed since) as not verified. Tool names: `tokens`,
 `contrast`, `logo-sheet`, `board-lint`, `shot`, `emit-web`, `emit-social`, `emit-apple`, `emit-windows`, `emit-linux`, `emit-tray`, `emit-tauri`, `emit-wallet`, `emit-developer`, `check`, `names`, `downscale`, `states`, `family`, `fontcheck`,
-`motion` (from `shot --motion`), `idempotence` (from `verify-idempotent`), `staleness`, `book`, `book-lint`, `book-pdf`, `print-check`, `adoption`, `adapters`, `applied-skill`, `launch-todo`, and one `emit-<target>` per emitter
+`motion` (from `shot --motion`), `idempotence` (from `verify-idempotent`), `staleness`, `book`, `book-lint`, `book-pdf`, `print-check`, `adoption`, `adapters`, `applied-skill`, `launch-todo`, and one `emit-<target>` per emitter (with several marks, `emit-<target>/<mark>` and `logo-sheet/<mark>` per mark)
 (`emit-web`, `emit-social`, `emit-apple`, `emit-windows`, `emit-linux`, `emit-tray`, `emit-tauri`, `emit-wallet`, `emit-developer`, `emit-print`, `emit-presskit`). The renderer in use is stored in the report and
 printed on every run.
 
@@ -358,10 +358,12 @@ Emitters write rows through `Manifest.put()` or `Manifest.put_slot()`; both writ
 Every emitter needs gate G3, reads sizes only from `platform-specs.json` (a test fails on a literal size in any emitter file), writes under
 `assets/<target>/` (`--out-dir` overrides) laid out as the target repo's own paths, records rows through `Manifest.put_slot()` (a file that is a
 drawing at a size: slot, size, band, resampled-by) or `Manifest.put()` (a document, a colour set, a rendered card), and writes
-`assets/_checks/emit-<target>.json`. The drawing for a size is the one the band rule in `qa/rules.json` names (`Emit.drawing()`; the default
+`assets/_checks/emit-<target>.json` (with several marks: `--mark <id>`, `assets/<target>/<id>/` and `emit-<target>/<id>.json`, see Several
+marks). The drawing for a size is the one the band rule in `qa/rules.json` names (`Emit.drawing()`; the default
 mark when the project defines no bands). `--master-band <name>` draws a file the system shrinks from another band and needs `--exemption`
 (exit 1 without it, before anything is written). The dark artwork of a drawing is its `<name>-dark.svg` sibling, else the light drawing
-recoloured through the token roles light to dark (a warning; a colour the tokens do not map exits 1).
+recoloured through the token roles light to dark (a warning; a colour the tokens do not map exits 1). A `-dark.svg` must be pure vector like its
+drawing (exit 1), and one that leads out of the project, through a symlink, exits 2 before it is read.
 
 | Target | Output | Gates in the emit |
 |---|---|---|
@@ -387,7 +389,7 @@ is exit 2). `Assets.car` files are compiled into a scratch folder and compared b
 for `qa: ["downscale"]` needs a current passing downscale report; the emit prints the command (`downscale --source <master>`) but does not run it,
 because each master has its own report (`assets/_checks/downscale/<slug>.json`).
 
-**Slots that no longer exist.** Every emitter run ends by retiring the rows it owns (same `emitter`, under its `--out-dir`) that it did not
+**Slots that no longer exist.** Every emitter run ends by retiring the rows it owns (same `emitter` and the same `mark`, under its `--out-dir`) that it did not
 write this time: the file is moved to `removed-<date>/<path>` in the project (never deleted), the manifest row is dropped and the report gets a
 `retired:<path>` warning and a `retired` list. A removed tray state, a dropped deployment target or a feature option that is gone no longer ships.
 `emit social` writes the GitHub social preview and the README headers only when `INVENTORY.md` lists a repository row or `brief/BRIEF.md` names a repository URL, a Repository line or a README/GitHub required surface (`--repo-images yes|no` forces it); otherwise an `note:repo-images` info row says why they were skipped.
@@ -472,6 +474,40 @@ An unknown section or key, a value of the wrong type or a number at or below 0 e
 `max_px` covers it; every band but the last has a `max_px`, and the last has none: it covers every larger size, and a last band
 with one exits 2). `Manifest.put_slot()` records the band a slot used; a slot that uses another
 band than the picker names needs a one-line `exemption` (exit 1 without), and `check` re-reads every recorded band from the manifest.
+
+### Several marks (`qa/rules.json` `marks`)
+
+A project whose products share one system but each have their own mark (a family of tools, a marketplace of plugins) lists them in
+`marks` instead of the top-level `bands`:
+
+```json
+"marks": {"tool-a": {"bands": [{"name": "small", "max_px": 16, "drawing": "assets/logo/tool-a-16.svg"},
+                               {"name": "large", "drawing": "assets/logo/tool-a.svg"}],
+                     "name": "Tool A", "favicon": "", "accent": "color.tool-a", "tagline": "tool-a one-liner"},
+          "tool-b": {"bands": [{"name": "all", "drawing": "assets/logo/tool-b.svg"}]}}
+```
+
+- A mark id is lower-case letters and digits joined by hyphens: it names folders and reports. Every mark has at least one band, and the
+  last band's drawing is its main drawing. `name` (default: the id) is what its cards say when there is no drawn lettering, `favicon`
+  fixes its `icon.svg` drawing, `accent` is the token role of its cards' accent (default `color.accent`; a role the tokens do not define
+  exits 1), and `tagline` is a `FACTS.md` label whose value goes under its name (a label `FACTS.md` lacks exits 1; `--tagline` wins).
+- With `marks`, the top-level `bands` and `favicon.drawing` stay empty (exit 2 otherwise), and every emitter and `logo-sheet` take
+  `--mark <id>`: a run without it, with an id the file does not list, or with `--svg`/`--svg-dark` exits 2, and so does `--mark` in a
+  one-mark project. Nothing is guessed.
+- A `--mark` run draws that mark's drawings by its own bands, takes its lettering from `assets/logo/<id>-lockup.svg`, else
+  `<id>-wordmark.svg` (each with its `-dark.svg`), writes under `assets/<target>/<id>/` and reports in `assets/_checks/emit-<target>/<id>.json`.
+  Its manifest rows carry `"mark": "<id>"`; `check` holds each row to its own mark's bands, and a run retires only rows of its own mark, so
+  one mark's run never moves another's files, whatever the folders.
+- `emit social` without `--mark` makes the brand-level images from `templates/lineup.html`: the Open Graph card, the GitHub social preview
+  and the README headers show every mark side by side in cells of one width, each with its drawn wordmark under it (its name typed, and a
+  warning, without one) and the brand's own lettering or typed name above. `--posts` needs `--mark` (exit 2).
+- `logo-sheet --mark <id>` writes `assets/_checks/logo-sheet/<id>.png` and the report `logo-sheet/<id>`; `check` expects one per mark, and
+  a `marks:<id>` row fails when a drawing the mark's bands name is missing. `contrast` checks the touching colours of every drawing each
+  mark's bands name and of its lockup and wordmark. `downscale` measures a master against the bands of the mark it belongs to.
+- The book: the cover sets every mark side by side, `{{mark-sizes}}` has a table per mark, `{{donts}}` draws the misuse from the first mark
+  (or `{{donts:<id>}}`) and says it stands for every mark, `{{marks}}` and `{{marks:*}}` show every mark, and a name with no file of its own
+  is looked up per mark (`{{marks:wordmark?}}` shows each `<id>-wordmark.svg`).
+- `finish.sh` runs each emitter once per mark (`--mark <id>`) and `emit social` once more without it.
 
 ### downscale (`brand-creator downscale`)
 
@@ -889,7 +925,10 @@ laid out inside the row's `safe` rectangle, 24-bit PNG). The lettering is `--log
 `--lettering`, else from its file name (a name that says neither or both exits 2). The name is live text in the system font only with `--name` (an info row;
 with `--logo-svg` or `--lettering` it exits 2), without a lockup or wordmark (a `note:lettering` warning), or with a template that has no `{{lettering}}` (a
 warning). The Quick tier reads no lettering: it writes no banners. `emit social`, `emit android` (the feature graphic) and `emit chrome-ext` (the promo tiles)
-follow the same rule for their cards (`templates/card.html`), and the dark README header takes the lettering's `<name>-dark.svg` (a warning without one). Every size and safe area is read from `platform-specs.json`. The rows are all status U, so every file is labelled like the other Tier B files.
+follow the same rule for their cards (`templates/card.html`), and the dark README header takes the lettering's `<name>-dark.svg` (a warning without one).
+Pixel art (an SVG whose root says `shape-rendering="crispEdges"`) is set at a whole-number scale wherever the plugin picks the size, so every
+pixel stays square: the mark (card.html's `{{mark_size}}`, the banner's `{{mark_px}}`), the lettering on cards and banners, and the
+side-by-side image; at a fixed icon size the band's drawing decides. With several marks, each follows the rules of Several marks. Every size and safe area is read from `platform-specs.json`. The rows are all status U, so every file is labelled like the other Tier B files.
 
 - **The gate comes before the files.** The avatar's ink must lie inside the `safe_circle` share of the circle (default box: the largest, up to 0.7 of the canvas, that fits; `--content-fraction` sets it
   and is held to the same gate); the ink of a banner (pixels unlike the ground, read from the rendered PNG) must lie inside its safe rectangle, so a name that is too long or a template that draws outside

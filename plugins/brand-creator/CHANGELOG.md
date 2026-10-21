@@ -6,6 +6,33 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-10-21
+
+Several marks in one project: each product's mark gets its own drawings by size, files, reports and checks, and the
+repository's own images show every mark side by side.
+
+### Added
+
+- Several marks in one project: `qa/rules.json` `marks` lists each product's mark with its own size bands, and optionally
+  its name, tab drawing, accent colour and tagline. Every emitter and `logo-sheet` take `--mark <id>`. Each mark gets its
+  own folder (`assets/<pack>/<id>/`), report and manifest rows, and a run never moves another mark's files. `check`
+  expects every mark's reports and drawings, and `contrast` checks the colours that touch in every mark's drawings.
+- `emit social` without `--mark` makes the repository's own images: every mark side by side, each with its drawn
+  wordmark under it (`templates/lineup.html`).
+- The book shows every mark: on the cover, in a size table per mark, and in the wordmark chapter (`<id>-wordmark.svg`).
+  `finish.sh` runs each pack once per mark.
+
+### Changed
+
+- Pixel-art marks and lettering (`shape-rendering="crispEdges"`) are scaled by whole numbers on cards, banners and the
+  side-by-side image, so every pixel stays square. Vector art is unchanged.
+
+### Fixed
+
+- A `-dark.svg` next to a drawing could be a symlink that leads out of the project, and the emitters, `logo-sheet` and
+  `board-lint` read it. Every such path is now confined to the project, as is a logo name in a book chapter
+  (`{{marks:../x}}`), which exits 2. Every emitter also checks a `-dark.svg` as pure vector before it uses it.
+
 ## [0.3.1] - 2026-10-21
 
 Fixes from the first projects built on 0.3.0: banners and cards show the drawn name, the browser tab shows the small

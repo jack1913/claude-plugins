@@ -31,15 +31,24 @@ def add_common_args(ap) -> None:
     ap.add_argument("--svg", help="mark SVG for light grounds (default: assets/logo/mark.svg)")
     ap.add_argument("--svg-dark", help="mark SVG for dark grounds (default: assets/logo/mark-dark.svg when it exists)")
     ap.add_argument("--tokens", help="built tokens.json (default: assets/tokens/tokens.json)")
+    ap.add_argument("--mark", help="the mark to draw, by its id in qa/rules.json marks (needed when the project lists several marks)")
 
 
-def load_mark(project: Path, a) -> tuple[str, str | None, list[Path]]:
-    light = confine(project, a.svg or "assets/logo/mark.svg", what="--svg")
-    if not light.is_file():
-        fail(EXIT_USAGE, f"mark SVG not found: {light.relative_to(project)} (pass --svg)")
-    dark = confine(project, a.svg_dark, what="--svg-dark") if a.svg_dark else project / "assets/logo/mark-dark.svg"
-    if a.svg_dark and not dark.is_file():
-        fail(EXIT_USAGE, f"--svg-dark not found: {a.svg_dark}")
+def load_mark(project: Path, a, mark: dict | None = None) -> tuple[str, str | None, list[Path]]:
+    """The light and dark artwork of the mark: the --mark entry's main drawing (its last band) and the -dark.svg next to it, else --svg
+    and --svg-dark, else assets/logo/mark.svg and mark-dark.svg. -> (light text, dark text or None, the files read)."""
+    if mark:
+        light = confine(project, qa_rules.master_of(mark), what=f"mark {mark['id']!r} drawing")
+        if not light.is_file():
+            fail(EXIT_USAGE, f"mark {mark['id']!r}: its drawing {qa_rules.master_of(mark)} does not exist (the last band in qa/rules.json marks)")
+        dark = confine(project, light.with_name(light.stem + "-dark.svg"), what="dark drawing")
+    else:
+        light = confine(project, a.svg or "assets/logo/mark.svg", what="--svg")
+        if not light.is_file():
+            fail(EXIT_USAGE, f"mark SVG not found: {light.relative_to(project)} (pass --svg)")
+        dark = confine(project, a.svg_dark or "assets/logo/mark-dark.svg", what="--svg-dark" if a.svg_dark else "dark drawing")
+        if a.svg_dark and not dark.is_file():
+            fail(EXIT_USAGE, f"--svg-dark not found: {a.svg_dark}")
     paths = [light] + ([dark] if dark.is_file() else [])
     texts = [p.read_text(encoding="utf-8") for p in paths]
     for p, t in zip(paths, texts):
@@ -225,10 +234,15 @@ LETTERING_FILES = ("assets/logo/lockup.svg", "assets/logo/wordmark.svg")
 LETTERING_KINDS = ("lockup", "wordmark")
 
 
-def lettering_art(project: Path, explicit: str | None, inputs: list) -> tuple[str, str] | None:
-    """The brand's drawn lettering: `explicit` (--logo-svg), else assets/logo/lockup.svg, else assets/logo/wordmark.svg; None when there is
+def lettering_files(mark_id: str | None) -> tuple[str, str]:
+    """Where the drawn lettering lives: assets/logo/lockup.svg and wordmark.svg, or <id>-lockup.svg and <id>-wordmark.svg for one of several marks."""
+    return (f"assets/logo/{mark_id}-lockup.svg", f"assets/logo/{mark_id}-wordmark.svg") if mark_id else LETTERING_FILES
+
+
+def lettering_art(project: Path, explicit: str | None, inputs: list, mark_id: str | None = None) -> tuple[str, str] | None:
+    """The brand's drawn lettering: `explicit` (--logo-svg), else the lockup, else the wordmark (lettering_files); None when there is
     none. Always pure vector (mark_lint); the file is added to `inputs`. -> (svg text, project path)."""
-    for c in [explicit] if explicit else LETTERING_FILES:
+    for c in [explicit] if explicit else lettering_files(mark_id):
         f = confine(project, c, what="--logo-svg")
         if f.is_file():
             text = f.read_text(encoding="utf-8")
@@ -255,7 +269,8 @@ def lettering_kind(rel: str, given: str | None) -> str:
     return says[0]
 
 
-def card_lettering_setup(rep: Report, project: Path, a, template: str, template_name: str) -> tuple[tuple[str, str] | None, str]:
+def card_lettering_setup(rep: Report, project: Path, a, template: str, template_name: str,
+                         mark_id: str | None = None) -> tuple[tuple[str, str] | None, str]:
     """The lettering of a card or banner emitter -> (art or None, layout). --name types the name, so --logo-svg or --lettering next to it
     would be ignored: that pair stops the run (exit 2), and with --name no lettering file is read."""
     explicit, kind = a.logo_svg, a.lettering
@@ -264,12 +279,12 @@ def card_lettering_setup(rep: Report, project: Path, a, template: str, template_
                          "lettering, not both")
     if kind and not explicit:
         fail(EXIT_USAGE, "--lettering says what --logo-svg holds: pass it together with --logo-svg")
-    found = None if a.name else lettering_art(project, explicit, rep.inputs)
-    return found, lettering_layout(rep, found, template, template_name, bool(a.name), kind=kind)
+    found = None if a.name else lettering_art(project, explicit, rep.inputs, mark_id)
+    return found, lettering_layout(rep, found, template, template_name, bool(a.name), kind=kind, mark_id=mark_id)
 
 
 def lettering_layout(rep: Report, found: tuple[str, str] | None, template: str, template_name: str, name_given: bool,
-                     kind: str | None = None) -> str:
+                     kind: str | None = None, mark_id: str | None = None) -> str:
     """How a card or banner sets the name, said in a report row: 'lockup' (the art holds the mark and the name: it stands alone), 'wordmark'
     (the drawn name next to the mark) or 'type' (the name as live text in the template's font). Type when --name was given (the art cannot
     say another name), when there is no lettering art, or when the template has no {{lettering}} placeholder outside its comments (a
@@ -279,8 +294,9 @@ def lettering_layout(rep: Report, found: tuple[str, str] | None, template: str, 
         rep.add("note:lettering", "info", "the name is live text in the system font", detail="--name sets the name as text: the drawn lettering says the recorded name")
         return "type"
     if found is None:
+        lockup, wordmark = lettering_files(mark_id)
         rep.add("note:lettering", "warn", "the name is live text in the system font",
-                detail="there is no assets/logo/lockup.svg or wordmark.svg: draw one (outlined, P6) and run this again for the brand's own lettering")
+                detail=f"there is no {lockup} or {Path(wordmark).name}: draw one (outlined, P6) and run this again for the brand's own lettering")
         return "type"
     if not slot:
         rep.add("note:lettering", "warn", "the name is live text in the template's font",
@@ -293,6 +309,56 @@ def lettering_layout(rep: Report, found: tuple[str, str] | None, template: str, 
 
 CARD_LOCKUP = 0.82, 0.34   # a drawn lockup on templates/card.html: at most this share of the card's width (inside the 9vw side padding) and height
 CARD_WORDMARK = 0.1125     # a drawn wordmark's height as a share of the card's: 0.75 of the 15vh name, about the height of its caps
+CARD_MARK = 0.58           # the mark's side on templates/card.html as a share of the card's height ...
+CARD_MARK_CSS = "58vh"     # ... and the same share as the template writes it
+
+
+def pixel_art(svg_text: str) -> bool:
+    """Art drawn on a pixel grid: its root says shape-rendering="crispEdges" (the pixel engines write it). Wherever the plugin chooses the size
+    (cards, banners, the side-by-side image), such art is scaled by whole numbers only, so every pixel stays square and the same size."""
+    return svgtools.parse(svg_text).get("shape-rendering") == "crispEdges"
+
+
+def whole_px(svg_text: str, side_px: float) -> int:
+    """The side for a mark box of at most side_px: for pixel art the largest whole multiple of its grid (the longer viewBox side) that
+    fits, at least 1x; for other art side_px rounded."""
+    if pixel_art(svg_text):
+        vb = svgtools.viewbox(svgtools.parse(svg_text))
+        grid = max(vb[2], vb[3])
+        if side_px >= grid:
+            return int(grid * int(side_px // grid))
+    return round(side_px)
+
+
+def card_mark_size(svg_text: str, h: int) -> str:
+    """{{mark_size}} of templates/card.html: 58vh, or for pixel art the whole-number size in px that fits there."""
+    return f"{whole_px(svg_text, h * CARD_MARK)}px" if pixel_art(svg_text) else CARD_MARK_CSS
+
+
+def mark_accent(modes: dict, mode: str, mark: dict | None, fg: str) -> str:
+    """The cards' accent in `mode`: the token role the mark names (qa/rules.json marks.<id>.accent), else color.accent, else the text
+    colour. A role the mark names that the tokens do not define stops the run (exit 1): it never falls back."""
+    role = mark["accent"] if mark else ""
+    if role:
+        if role not in modes[mode]:
+            fail(EXIT_FAIL, f"mark {mark['id']!r} names the accent {role}, which the {mode} tokens do not define")
+        return modes[mode][role]
+    return modes[mode].get("color.accent", fg)
+
+
+def mark_tagline(project: Path, mark: dict | None, given: str, inputs: list) -> str:
+    """The line under the name: --tagline when given, else the FACTS.md value of the mark's tagline label (qa/rules.json
+    marks.<id>.tagline; a label FACTS.md does not have stops the run, exit 1), else nothing."""
+    if given or not (mark and mark["tagline"]):
+        return given
+    f = project / "FACTS.md"
+    if f.is_file() and f not in inputs:
+        inputs.append(f)
+    fx = facts(project)
+    label = mark["tagline"].lower()
+    if label not in fx:
+        fail(EXIT_FAIL, f"mark {mark['id']!r}: its tagline label {mark['tagline']!r} is not in FACTS.md (labels: {', '.join(sorted(fx)) or 'none'})")
+    return fx[label]
 
 
 def card_lettering(layout: str, art: str | None, name: str, w: int, h: int) -> str:
@@ -305,8 +371,12 @@ def card_lettering(layout: str, art: str | None, name: str, w: int, h: int) -> s
 
 
 def fit_art(svg_text: str, max_w: float, max_h: float) -> tuple[int, int]:
-    """The largest whole-pixel box of the art's viewBox proportions inside max_w x max_h."""
+    """The largest whole-pixel box of the art's viewBox proportions inside max_w x max_h; pixel art at a whole-number scale (pixel_art)."""
     vb = svgtools.viewbox(svgtools.parse(svg_text))
+    if pixel_art(svg_text):
+        k = int(min(max_w / vb[2], max_h / vb[3]))
+        if k >= 1:
+            return int(vb[2] * k), int(vb[3] * k)
     w, h = max_w, max_w * vb[3] / vb[2]
     if h > max_h:
         w, h = max_h * vb[2] / vb[3], max_h
@@ -351,14 +421,17 @@ class Emit:
     def __init__(self, name: str, a: argparse.Namespace, project: Path):
         self.name, self.a, self.project = name, a, project
         self.st = read_state(project).data()
-        self.brand = str(a.name or self.st.get("name") or self.st.get("slug"))
-        self.slug = str(self.st.get("slug") or self.brand).lower()
-        self.light, self.dark, self.mark_paths = load_mark(project, a)
-        self.modes, self.tokens_path = load_tokens(project, a)
-        self.out = a.out_dir.strip("/")
         self.rules, self.rules_src = qa_rules.load(project)
-        self.bands = self.rules["bands"]
-        self.rep = Report(f"emit-{name}", project, self.mark_paths + [self.tokens_path], renderer=a.renderer)
+        self.mark = qa_rules.select_mark(a, self.rules)   # one of several marks (qa/rules.json marks), or None
+        self.mark_id = self.mark["id"] if self.mark else None
+        self.brand = str(a.name or (self.mark["name"] if self.mark else None) or self.st.get("name") or self.st.get("slug"))
+        self.slug = str(self.mark_id or self.st.get("slug") or self.brand).lower()
+        self.light, self.dark, self.mark_paths = load_mark(project, a, self.mark)
+        self.modes, self.tokens_path = load_tokens(project, a)
+        self.out = (a.out_dir or (f"assets/{name}/{self.mark_id}" if self.mark else f"assets/{name}")).strip("/")
+        self.bands = qa_rules.bands_for(self.rules, self.mark_id)
+        self.favicon_drawing = self.mark["favicon"] if self.mark else self.rules["favicon"]["drawing"]
+        self.rep = Report(f"emit-{name}" + (f"/{self.mark_id}" if self.mark else ""), project, self.mark_paths + [self.tokens_path], renderer=a.renderer)
         self.mf = Manifest(project)
         self.used: list[str] = []
         self.inputs_extra: list[Path] = []
@@ -373,7 +446,7 @@ class Emit:
         ap = Parser(prog=f"brand-creator emit {name}", description=doc, formatter_class=argparse.RawDescriptionHelpFormatter)
         add_common_args(ap)
         ap.add_argument("--name", help="brand name (default: name in BRAND-STATE.md)")
-        ap.add_argument("--out-dir", default=f"assets/{name}", help=f"folder inside the project (default assets/{name})")
+        ap.add_argument("--out-dir", help=f"folder inside the project (default assets/{name}; with --mark, assets/{name}/<mark>)")
         if add_args:
             add_args(ap)
         a = ap.parse_args(argv)
@@ -452,13 +525,13 @@ class Emit:
 
     def _drawn_dark(self, rel: str) -> str | None:
         """<name>-dark.svg next to a drawing: pure vector like it (exit 1 otherwise), recorded as an input; None when there is none."""
-        cand = self.project / (str(Path(rel).with_suffix("")) + "-dark.svg")
+        cand = confine(self.project, str(Path(rel).with_suffix("")) + "-dark.svg", what="dark drawing")   # a symlink out of the project is refused
         if not cand.is_file():
             return None
         text = cand.read_text(encoding="utf-8")
         problems = lint_svg_text(text)
         if problems:
-            fail(EXIT_FAIL, f"mark_lint: {cand.relative_to(self.project).as_posix()} is not pure vector ({'; '.join(problems)}); outline text first")
+            fail(EXIT_FAIL, f"mark_lint: {str(Path(rel).with_suffix(''))}-dark.svg is not pure vector ({'; '.join(problems)}); outline text first")
         if cand not in self.inputs_extra:
             self.inputs_extra.append(cand)
             self.rep.inputs.append(cand)
@@ -540,7 +613,7 @@ class Emit:
                      "written" if changed else "unchanged", bytes=len(data), **{k: v for k, v in extra.items() if k in ("size", "band")})
 
     def put(self, rel: str, data: bytes, rows: list[str], **extra) -> bool:
-        changed = self.mf.put(rel, data, emitter=self.name, specs=rows, **extra)
+        changed = self.mf.put(rel, data, emitter=self.name, specs=rows, **({"mark": self.mark_id} if self.mark_id else {}), **extra)
         self._row(rel, changed, data, extra)
         return changed
 
@@ -548,7 +621,8 @@ class Emit:
              exemption: str | None = None, **extra) -> bool:
         """Write a file that serves a size: records slot, size, band (the drawing's band, or the picker's) and who made the pixels."""
         band = drawing.band if drawing else None
-        changed = self.mf.put_slot(rel, data, emitter=self.name, specs=rows, slot=slot, size_px=size_px, band=band, exemption=exemption, **extra)
+        changed = self.mf.put_slot(rel, data, emitter=self.name, specs=rows, slot=slot, size_px=size_px, band=band, exemption=exemption,
+                                   mark=self.mark_id, **extra)
         row = self.mf.artefacts[rel]
         self._row(rel, changed, data, row)
         return changed
@@ -556,7 +630,7 @@ class Emit:
     def finish(self) -> int:
         stamped, warns = specs.stamp(self.used, today())
         self.mf.stamp_specs(stamped)
-        retired = self.mf.retire_unwritten(self.name, self.out, keep=lambda p: any(p.startswith(k) for k in self.kept))
+        retired = self.mf.retire_unwritten(self.name, self.out, keep=lambda p: any(p.startswith(k) for k in self.kept), mark=self.mark_id)
         for p in retired:
             self.rep.add(f"retired:{p}", "warn", "slot no longer emitted",
                          detail=f"an earlier run wrote {p} but this run did not: "

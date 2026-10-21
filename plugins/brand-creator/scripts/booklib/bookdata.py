@@ -359,7 +359,8 @@ def has_motion(project: Path) -> bool:
 
 
 def has_wordmark(project: Path) -> bool:
-    return any(re.match(r"^(wordmark|lockup)", p.stem) and p.suffix.lower() == ".svg" for p in logo_files(project))
+    """A wordmark or lockup in assets/logo: wordmark*.svg and lockup*.svg, or <id>-wordmark.svg and <id>-lockup.svg of one of several marks."""
+    return any(re.search(r"(^|-)(wordmark|lockup)(-|$)", p.stem) and p.suffix.lower() == ".svg" for p in logo_files(project))
 
 
 def chapters_for(project: Path, view: dict) -> list[str]:

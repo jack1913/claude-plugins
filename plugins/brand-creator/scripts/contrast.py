@@ -11,7 +11,8 @@
   3. APCA Lc: an advisory column only (computed with colorjs.io by `brand-creator tokens`). It never gates and WCAG 3,
      which is a working draft, is never claimed.
   4. Touching pairs (brand rule): the logo SVGs (assets/logo/mark.svg and mark-dark.svg, plus lockup and wordmark when
-     present) are rasterised with resvg, every pair of flat colours that really touch each other, and every colour that
+     present; with several marks in qa/rules.json, every drawing each mark's bands name and its lockup and wordmark) are rasterised
+     with resvg, every pair of flat colours that really touch each other, and every colour that
      touches the ground, is found in the pixels (not declared by hand), mapped to token roles and held to a target.
 
 Pairs come from the tokens ($extensions["brand-creator"].pairs in semantic.light.tokens.json) and are evaluated in
@@ -78,13 +79,20 @@ def touching_config(tj: dict) -> dict:
     return out
 
 
-def logo_groups(project: Path) -> list[tuple[str, Path, Path | None]]:
+def logo_groups(project: Path, rules: dict) -> list[tuple[str, Path, Path | None]]:
+    """The logo artwork whose touching colours are checked, each with its -dark.svg: assets/logo/mark.svg, lockup.svg and wordmark.svg;
+    with several marks (qa/rules.json marks) every drawing each mark's bands name, and its <id>-lockup.svg and <id>-wordmark.svg."""
+    if rules["marks"]:
+        rels = list(dict.fromkeys(r for mid, m in rules["marks"].items()
+                                  for r in [b["drawing"] for b in m["bands"]] + [f"assets/logo/{mid}-lockup.svg", f"assets/logo/{mid}-wordmark.svg"]))
+    else:
+        rels = [f"assets/logo/{name}.svg" for name in LOGO_NAMES]
     out = []
-    for name in LOGO_NAMES:
-        light = project / "assets" / "logo" / f"{name}.svg"
+    for r in rels:
+        light = confine(project, r, what="logo")
         if light.is_file():
-            dark = project / "assets" / "logo" / f"{name}-dark.svg"
-            out.append((name, light, dark if dark.is_file() else None))
+            dark = confine(project, light.with_name(light.stem + "-dark.svg"), what="dark logo")
+            out.append((light.stem, light, dark if dark.is_file() else None))
     return out
 
 
@@ -118,8 +126,13 @@ def check_touching(rep: Report, project: Path, tj: dict, exceptions: list[dict],
         ground_hex = {m: tj["modes"][m]["color.bg"]["hex"].lower() for m in ("light", "dark")}
     except KeyError:
         fail(EXIT_USAGE, "tokens.json has no color.bg in light and dark mode; the ground of the touching pairs cannot be named")
-    groups = logo_groups(project)
-    if not any(g[0] == "mark" for g in groups):
+    rules, _rules_src = qa_rules.load(project)
+    groups = logo_groups(project, rules)
+    if rules["marks"] and not groups:
+        rep.add("touching:marks", "skipped", TOUCH_LABEL, section="touching-pairs",
+                detail="none of the drawings qa/rules.json marks names exists, so the pairs that touch in the artwork were NOT checked")
+        return False
+    if not rules["marks"] and not any(g[0] == "mark" for g in groups):
         rep.add("touching:mark.svg", "skipped", TOUCH_LABEL, section="touching-pairs",
                 detail="assets/logo/mark.svg not found, so the pairs that touch in the artwork were NOT checked. Build the mark "
                        "first, or pass --skip-marks to leave this check out on purpose.")
@@ -290,7 +303,8 @@ def main() -> int:
 
     exc_path = confine(project, a.exceptions or "tokens/exceptions.json", what="--exceptions")
     exceptions = load_exceptions(exc_path)
-    inputs = [tok, exc_path] + [x for g in logo_groups(project) for x in g[1:] if x is not None]
+    rules_file = project / qa_rules.RULES_FILE   # with several marks it names the drawings checked, so a change there makes the report stale
+    inputs = [tok, exc_path] + [x for g in logo_groups(project, qa_rules.load(project)[0]) for x in g[1:] if x is not None] + ([rules_file] if rules_file.is_file() else [])
     rep = Report("contrast", project, inputs, renderer=a.renderer)
     rep.extra = {"notes": ["WCAG 2.2 UI pairs gate. Mark/lockup targets are owner-set brand rules: WCAG 2.2 exempts logo text.",
                            "Touching pairs are found in the pixels of the logo SVGs (resvg, 512 px) and held to touching targets; "

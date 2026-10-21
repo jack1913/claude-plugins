@@ -27,7 +27,8 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "lib"))
 import svgtools  # noqa: E402
 from _common import EXIT_FAIL, EXIT_USAGE, confine, fail, main_guard, plugin_root  # noqa: E402
-from _emit import add_logo_arg, card_lettering, card_lettering_setup, fill_template, render_card  # noqa: E402
+from _emit import (add_logo_arg, card_lettering, card_lettering_setup, card_mark_size, fill_template, mark_accent, mark_tagline,  # noqa: E402
+                   render_card)
 from pxio import png_color_type, png_size  # noqa: E402
 from px_lib import from_png  # noqa: E402
 from tierb import INK_TOLERANCE_PX, TierBEmit, ink_bbox  # noqa: E402
@@ -78,15 +79,16 @@ def main() -> int:
     if not tpl_path.is_file():
         fail(EXIT_USAGE, f"card template not found: {tpl_path}")
     template = tpl_path.read_text(encoding="utf-8")
-    found, layout = card_lettering_setup(rep, e.project, a, template, tpl_path.name)
+    found, layout = card_lettering_setup(rep, e.project, a, template, tpl_path.name, e.mark_id)
+    tagline = mark_tagline(e.project, e.mark, a.tagline, rep.inputs)
     ground, fg = e.colour("light", "color.bg"), e.colour("light", "color.text")
     for key in ("small", "marquee"):
         w, h = promo[key]["width"], promo[key]["height"]
         d = e.drawing(max(w, h))
         values = {"width": w, "height": h, "bg": ground, "fg": fg, "muted": e.modes["light"].get("color.muted", fg),
-                  "accent": e.modes["light"].get("color.accent", fg), "name": e.brand, "tagline": a.tagline,
+                  "accent": mark_accent(e.modes, "light", e.mark, fg), "name": e.brand, "tagline": tagline,
                   "layout": layout, "lettering": card_lettering(layout, found[0] if found else None, e.brand, w, h),
-                  "mark": "" if layout == "lockup" else re.sub(r"^\s*<\?xml[^>]*>\s*", "", d.svg)}
+                  "mark": "" if layout == "lockup" else re.sub(r"^\s*<\?xml[^>]*>\s*", "", d.svg), "mark_size": card_mark_size(d.svg, h)}
         src_rel = f"{out}/_build/promo-{key}.html"
         src = confine(e.project, src_rel, what="card source")
         src.parent.mkdir(parents=True, exist_ok=True)
@@ -99,7 +101,7 @@ def main() -> int:
             fail(EXIT_FAIL, f"the {key} promo tile has transparent pixels ({err}); the template must paint a ground over the whole card")
         e.slot(f"{out}/store/promo-{key}-{w}x{h}.png", rgb, ["chrome-ext-promo"], slot=f"chrome-web-store-promo-{key}", size_px=(w, h), drawing=d,
                resampled_by="PAGE", note=f"{key} promotional tile" + (" (required by the store)" if promo[key].get("required") else " (optional)")
-                                         + ": the mark and the name" + (" and one line of real copy" if a.tagline else "") + ", opaque")
+                                         + ": the mark and the name" + (" and one line of real copy" if tagline else "") + ", opaque")
         got = png_size(rgb)
         rep.add(f"check:promo-{key} size", "pass" if got == (w, h) and png_color_type(rgb) == 2 else "fail", "PNG at the spec size, 24-bit (opaque)",
                 detail=f"{got[0]}x{got[1]}, colour type {png_color_type(rgb)}")

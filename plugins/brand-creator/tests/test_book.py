@@ -355,6 +355,14 @@ def test_a_typed_count_that_disagrees_with_the_data_fails(proj):
 
 @setup
 @resvg
+def test_a_logo_name_that_leaves_the_project_is_refused(proj):
+    mutate(proj / "book/chapters/mark.md", "## By size", "{{marks:../../../outside}}\n\n## By size")
+    r = bc("book", project=proj)
+    assert r.returncode == 2 and "outside the project" in r.stderr, r.stdout + r.stderr
+
+
+@setup
+@resvg
 def test_a_round_word_in_chapter_two_fails_but_the_history_chapter_may_use_it(proj):
     mutate(proj / "book/chapters/mark.md", "## By size", "## By size\n\nThis came out of Round 2 and v3.\n")
     build_fails(proj, "'Round 2'", "words:round")

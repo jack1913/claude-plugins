@@ -279,7 +279,11 @@ def applied_skill_md(project: Path, template: str) -> str:
     ds = rules["downscale"]
     logos = logo_paths(project)
     fs = fonts(doc)
-    sizes = [f"- {b.get('name', 'band')}: {'up to ' + str(b['max_px']) + ' px' if b.get('max_px') else 'larger sizes'} uses `{b.get('drawing', '')}`" for b in rules.get("bands", [])]
+    def band_line(b: dict, who: str = "") -> str:
+        return f"- {who}{b.get('name', 'band')}: {'up to ' + str(b['max_px']) + ' px' if b.get('max_px') else 'larger sizes'} uses `{b.get('drawing', '')}`"
+
+    sizes = ([band_line(b, f"{m['name']}, ") for m in rules["marks"].values() for b in m["bands"]] if rules["marks"]
+             else [band_line(b) for b in rules.get("bands", [])])
     never = ["Do not stretch, squash or rotate the mark.", "Do not recolour the mark outside the palette's roles, or put it on its own colour.",
              "Do not crowd the mark: keep its clear space free."] + [f"Never write: {t}." for t in v["forbidden"]]
     fill = {

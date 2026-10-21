@@ -17,7 +17,7 @@ import bookmd
 import qa_rules
 import svgtools
 from _color import wcag_ratio
-from _common import EXIT_FAIL, EXIT_USAGE, fail, rasterise_svg, sha256_file
+from _common import EXIT_FAIL, EXIT_USAGE, confine, fail, rasterise_svg, sha256_file
 from mark_lint import lint_svg_text
 
 esc = bookmd.esc
@@ -116,6 +116,7 @@ figcaption,.cap{font-size:@@LABEL@@px;color:var(--muted);line-height:1.5}
  .cover .sch-l{display:block}.cover .sch-d{display:none}
 }
 """
+MARKS_CSS = ".cover .mks{display:flex;flex-wrap:wrap;gap:24px;align-items:flex-end;margin:0 0 32px}.cover .mks .mk{margin:0}"
 
 
 class BookBuild:
@@ -179,7 +180,6 @@ class BookBuild:
                 "line": m.get("color.line", border), "mark": m.get("color.mark", text)}
 
     def read(self, rel: str, what: str) -> Path:
-        from _common import confine
         p = confine(self.project, rel, what=what)
         if not p.is_file():
             fail(EXIT_USAGE, f"{what} {rel} not found in the project")
@@ -278,7 +278,6 @@ class BookBuild:
                                        f"book-lint still fails it)")
 
     def image(self, path: str, alt: str, lang: str, line: int) -> str:
-        from _common import confine
         if not alt.strip():
             raise bookmd.MdError(line, f"image {path} has no alt text; write ![what it shows](path)")
         try:
@@ -313,20 +312,43 @@ class BookBuild:
         return self.T(lang, "Awaiting approval")
 
     # ------------------------------------------------------------ computed blocks
+    def marks_rules(self) -> dict:
+        """qa/rules.json: its marks (several marks, each with its own bands) decide the cover, the marks, the sizes and the misuse figures."""
+        return qa_rules.load(self.project)[0]
+
+    def mark_files(self, mid: str):
+        """A declared mark's main drawing (its last band in qa/rules.json marks) and the -dark.svg next to it."""
+        light = confine(self.project, qa_rules.master_of(qa_rules.mark_entry(self.marks_rules(), mid)), what="mark drawing")
+        return light, confine(self.project, light.with_name(light.stem + "-dark.svg"), what="dark mark drawing")
+
     def logo_pair(self, stem: str):
-        light = self.project / "assets" / "logo" / f"{stem}.svg"
-        dark = self.project / "assets" / "logo" / f"{stem}-dark.svg"
+        """assets/logo/<stem>.svg and its -dark.svg, both inside the project (a stem with ../ or a symlink out is refused)."""
+        light = confine(self.project, f"assets/logo/{stem}.svg", what="logo")
+        dark = confine(self.project, f"assets/logo/{stem}-dark.svg", what="dark logo")
         return light, dark
 
     def b_marks(self, arg: str, lang: str) -> str:
+        rules = self.marks_rules()
         names = [n.strip() for n in (arg or "mark").split(",") if n.strip()]
         if names == ["*"]:
-            names = sorted({p.stem for p in bookdata.logo_files(self.project) if p.suffix == ".svg" and not p.stem.endswith(("-dark", "-master"))})
+            names = list(rules["marks"]) if rules["marks"] else sorted({p.stem for p in bookdata.logo_files(self.project)
+                                                                         if p.suffix == ".svg" and not p.stem.endswith(("-dark", "-master"))})
+        elif rules["marks"]:   # several marks: "mark" is every mark, and a name with no file of its own is looked up per mark (wordmark -> <id>-wordmark)
+            expanded = []
+            for raw in names:
+                stem, opt = raw.rstrip("?"), "?" if raw.endswith("?") else ""
+                if stem == "mark":
+                    expanded += list(rules["marks"])
+                elif stem in rules["marks"] or confine(self.project, f"assets/logo/{stem}.svg", what="logo").is_file():
+                    expanded.append(raw)
+                else:
+                    expanded += [f"{mid}-{stem}{opt}" for mid in rules["marks"]]
+            names = expanded
         figs = []
         for raw in names:
             optional = raw.endswith("?")
             stem = raw.rstrip("?")
-            light, dark = self.logo_pair(stem)
+            light, dark = self.mark_files(stem) if stem in rules["marks"] else self.logo_pair(stem)
             if not light.is_file():
                 if optional:
                     self.info("marks", f"assets/logo/{stem}.svg does not exist; skipped (optional)")
@@ -338,7 +360,8 @@ class BookBuild:
                 cells.append(f'<div class="ground g-dark">{self.img_tag(self.mark_svg(dark), stem + "-dark", f"{self.view["name"]} {stem} on a dark ground")}</div>')
             else:
                 self.warn("marks", f"assets/logo/{stem}-dark.svg does not exist; {stem} is shown on the light ground only")
-            cap = f"{esc(stem)} · assets/logo/{esc(stem)}.svg · {len(light.read_bytes())} bytes"
+            where = qa_rules.master_of(rules["marks"][stem]) if stem in rules["marks"] else f"assets/logo/{stem}.svg"
+            cap = f"{esc(stem)} · {esc(where)} · {len(light.read_bytes())} bytes"
             figs.append(f'<figure>{"".join(cells)}<figcaption>{cap}</figcaption></figure>')
         return '<div class="marks">' + "".join(figs) + "</div>"
 
@@ -351,14 +374,23 @@ class BookBuild:
 
     def b_mark_sizes(self, arg: str, lang: str) -> str:
         rules, _src = qa_rules.load(self.project)
-        bands = rules["bands"]
+        if rules["marks"]:   # several marks: one table per mark, each from its own bands
+            out = []
+            for m in rules["marks"].values():
+                out += [f"<h4>{esc(m['name'])}</h4>", self.size_table(m["bands"], qa_rules.master_of(m), m["name"], lang)]
+        else:
+            out = [self.size_table(rules["bands"], "assets/logo/mark.svg", None, lang)]
+        return self.size_notes(out, lang)
+
+    def size_table(self, bands: list, master: str, who: str | None, lang: str) -> str:
+        """The size proof of one mark: at each size the drawing its band rule picks, at exactly those pixels, on both grounds."""
         rows = []
         for s in self.cfg["sizes"]:
             band = qa_rules.pick_band(bands, s) if bands else None
-            draw = self.project / (band["drawing"] if band else "assets/logo/mark.svg")
+            draw = confine(self.project, band["drawing"] if band else master, what="size drawing")
             if not draw.is_file():
                 fail(EXIT_FAIL, f"the drawing for {s} px, {draw.relative_to(self.project)}, does not exist")
-            dark = draw.with_name(draw.stem + "-dark.svg")
+            dark = confine(self.project, draw.with_name(draw.stem + "-dark.svg"), what="dark size drawing")
             zoom = max(1, min(8, 128 // s))
             cells = [f"{s} px", f"{esc(draw.relative_to(self.project).as_posix())}" + (f" ({esc(band['name'])})" if band else "")]
             for mode, f, bg in (("light", draw, self.light["bg"]), ("dark", dark, self.dark["bg"])):
@@ -367,14 +399,17 @@ class BookBuild:
                     self.warn("mark-sizes", f"{f.relative_to(self.project)} does not exist; the {s} px dark proof is left out")
                     continue
                 uri = self.data_uri_png(self._raster(f, s, bg))
-                alt = f"{self.view['name']} mark at {s} px, {mode} ground"
+                alt = f"{who or self.view['name']} mark at {s} px, {mode} ground"
                 one = f'<img class="px" src="{uri}" alt="{esc(alt)}" width="{s}" height="{s}">'
                 big = f'<img class="px" src="{uri}" alt="" aria-hidden="true" width="{s * zoom}" height="{s * zoom}">' if zoom > 1 else ""
                 cells.append(f'<div class="z">{one}{big}</div>')
             rows.append(cells)
         head = [self.T(lang, "Size"), self.T(lang, "Drawing"), self.T(lang, "Light ground"), self.T(lang, "Dark ground")]
-        out = [self.table(head, rows, "stack sizes"),
-               f'<p class="cap">{esc(self.T(lang, "Each image is the drawing for that size, rendered at exactly those pixels; the enlarged copy next to it is the same pixels, not a new render."))}</p>']
+        return self.table(head, rows, "stack sizes")
+
+    def size_notes(self, out: list[str], lang: str) -> str:
+        """The size tables, then the note under them and the downscale measurements of every master."""
+        out.append(f'<p class="cap">{esc(self.T(lang, "Each image is the drawing for that size, rendered at exactly those pixels; the enlarged copy next to it is the same pixels, not a new render."))}</p>')
         reps = sorted((self.project / "assets" / "_checks" / "downscale").glob("*.json")) if (self.project / "assets/_checks/downscale").is_dir() else []
         if not reps:
             self.warn("mark-sizes", "no downscale report: the small-size measurement table is left out; run `brand-creator downscale --source <master>`")
@@ -567,9 +602,16 @@ class BookBuild:
         return self.table([self.T(lang, "Fact"), self.T(lang, "Value"), self.T(lang, "Source"), self.T(lang, "Confirmed")], rows)
 
     def b_donts(self, arg: str, lang: str) -> str:
-        light, _dark = self.logo_pair("mark")
-        if not light.is_file():
-            fail(EXIT_FAIL, "{{donts}} draws the misuse from assets/logo/mark.svg, which does not exist")
+        rules = self.marks_rules()
+        if rules["marks"]:   # several marks: one set of figures, drawn from the first mark (or the one {{donts:<id>}} names)
+            shown = arg.strip() if arg and arg.strip() else next(iter(rules["marks"]))
+            light, _dark = self.mark_files(shown)
+            if not light.is_file():
+                fail(EXIT_FAIL, f"{{{{donts}}}} draws the misuse from {shown}'s drawing {qa_rules.master_of(rules['marks'][shown])}, which does not exist")
+        else:
+            light, _dark = self.logo_pair("mark")
+            if not light.is_file():
+                fail(EXIT_FAIL, "{{donts}} draws the misuse from assets/logo/mark.svg, which does not exist")
         base = self.mark_svg(light)
         root = svgtools.parse(base)
         S = 160
@@ -596,7 +638,8 @@ class BookBuild:
                      f'{inner}<path d="M10 10 150 150M150 10 10 150" stroke="{ink}" stroke-width="3" fill="none"/></svg>')
             figs.append(f'<figure><img data-mark="dont-{key}" src="{self.svg_uri(frame)}" alt="{esc(self.T(lang, caption))}" width="{S}" height="{S}">'
                         f"<figcaption>{esc(self.T(lang, caption))}</figcaption></figure>")
-        return '<div class="donts">' + "".join(figs) + "</div>"
+        note = (f'<p class="cap">{esc(self.T(lang, "Shown with one mark; the same applies to every mark."))}</p>' if rules["marks"] else "")
+        return '<div class="donts">' + "".join(figs) + "</div>" + note
 
     # ------------------------------------------------------------ chapters and the page
     def chapter_file(self, cid: str, lang: str) -> Path:
@@ -655,6 +698,8 @@ class BookBuild:
                      "@@DISPLAY@@": display, "@@MONO@@": mono, "@@LABEL@@": f"{self.cfg['min_label_px']:g}",
                      "@@GLIGHT@@": self.light["bg"], "@@GDARK@@": self.dark["bg"]}.items():
             css = css.replace(k, v)
+        if self.marks_rules()["marks"]:   # the cover's row of marks (only a book with several marks has one)
+            css = css.rstrip() + "\n" + MARKS_CSS
         return css.strip()
 
     def adoption_line(self, lang: str) -> str:
@@ -670,12 +715,23 @@ class BookBuild:
     def cover(self, titles: list[tuple[str, str]]) -> str:
         lang = self.langs[0]
         state, date = bookdata.approval(self.view)
-        light, dark = self.logo_pair("mark")
-        if not light.is_file():
-            fail(EXIT_FAIL, "the cover needs assets/logo/mark.svg, which does not exist")
         name = self.view["name"]
-        lt = self.img_tag(self.mark_svg(light), "mark", f"{name} mark", "mk sch-l" if dark.is_file() else "mk")
-        dk = self.img_tag(self.mark_svg(dark), "mark-dark", f"{name} mark", "mk sch-d") if dark.is_file() else ""
+        rules = self.marks_rules()
+        if rules["marks"]:   # several marks: all of them, side by side
+            cells = []
+            for mid, m in rules["marks"].items():
+                light, dark = self.mark_files(mid)
+                if not light.is_file():
+                    fail(EXIT_FAIL, f"the cover needs {mid}'s drawing {qa_rules.master_of(m)}, which does not exist")
+                cells.append(self.img_tag(self.mark_svg(light), mid, f"{m['name']} mark", "mk sch-l" if dark.is_file() else "mk")
+                             + (self.img_tag(self.mark_svg(dark), f"{mid}-dark", f"{m['name']} mark", "mk sch-d") if dark.is_file() else ""))
+            lt, dk = '<div class="mks">' + "".join(f"<span>{c}</span>" for c in cells) + "</div>", ""
+        else:
+            light, dark = self.logo_pair("mark")
+            if not light.is_file():
+                fail(EXIT_FAIL, "the cover needs assets/logo/mark.svg, which does not exist")
+            lt = self.img_tag(self.mark_svg(light), "mark", f"{name} mark", "mk sch-l" if dark.is_file() else "mk")
+            dk = self.img_tag(self.mark_svg(dark), "mark-dark", f"{name} mark", "mk sch-d") if dark.is_file() else ""
         meta = [(self.T(lang, "Edition"), f'<span data-edition-value="{self.view["edition"]}">{self.view["edition"]}</span>'),
                 (self.T(lang, "Approval"), f'<span class="tag" data-stamp-text>{esc(self.stamp_text(lang))}</span>')]
         status = bookdata.fact_value(self.facts, "status")

@@ -154,12 +154,13 @@ def main() -> int:
     ap = Parser(prog="brand-creator logo-sheet", description=__doc__, formatter_class=__import__("argparse").RawDescriptionHelpFormatter)
     add_project_arg(ap)
     add_renderer_arg(ap)
-    ap.add_argument("--svg", help="mark SVG for the light ground (default: assets/logo/mark.svg)")
+    ap.add_argument("--svg", help="mark SVG for the light ground (default: assets/logo/mark.svg, or the --mark's main drawing)")
+    ap.add_argument("--mark", help="the mark to sheet, by its id in qa/rules.json marks (needed when the project lists several marks)")
     ap.add_argument("--svg-dark", help="mark SVG for the dark ground (default: <name>-dark.svg next to --svg when it exists, else the light file)")
     ap.add_argument("--ground-light", help="#rrggbb (default: color.bg of the light tokens, else #ffffff)")
     ap.add_argument("--ground-dark", help="#rrggbb (default: color.bg of the dark tokens, else #111111)")
     ap.add_argument("--min-contrast", type=float, help="brand-rule graphic contrast target (default: touching.ground of the built tokens, else 3)")
-    ap.add_argument("--out", help="sheet PNG inside the project (default: assets/_checks/logo-sheet.png)")
+    ap.add_argument("--out", help="sheet PNG inside the project (default: assets/_checks/logo-sheet.png; with --mark, assets/_checks/logo-sheet/<mark>.png)")
     ap.add_argument("--guides", action="store_true", help="geometry proof: guide lines over the mark at 512 px, with the measured distance to the ink")
     ap.add_argument("--baseline", type=float, metavar="Y", help="baseline guide at this y in the mark's viewBox units (default: data-baseline)")
     ap.add_argument("--cap-line", type=float, metavar="Y", help="cap-line guide at this y (default: data-baseline minus data-cap-height)")
@@ -168,20 +169,23 @@ def main() -> int:
     ap.add_argument("--window", type=float, default=12.0, help="search window in px around a horizontal guide for the ink edge (default 12)")
     a = ap.parse_args()
     project = find_project(a.project)
-    svg_path = confine(project, a.svg or "assets/logo/mark.svg", what="--svg")
+    rules, rules_src = qa_rules.load(project)
+    mark = qa_rules.select_mark(a, rules)   # with several marks, one sheet (and one report) per mark
+    mid = mark["id"] if mark else None
+    svg_path = confine(project, a.svg or (qa_rules.master_of(mark) if mark else "assets/logo/mark.svg"), what="--svg")
     if not svg_path.is_file():
         fail(EXIT_USAGE, f"mark SVG not found: {svg_path.relative_to(project)} (pass --svg)")
     # the dark twin of the light file named (mark.svg -> mark-dark.svg, wordmark-outlined.svg -> wordmark-outlined-dark.svg); never another mark
-    dark_path = confine(project, a.svg_dark, what="--svg-dark") if a.svg_dark else svg_path.with_name(svg_path.stem + "-dark.svg")
+    dark_path = confine(project, a.svg_dark, what="--svg-dark") if a.svg_dark else confine(project, svg_path.with_name(svg_path.stem + "-dark.svg"), what="dark drawing")
     if a.svg_dark and not dark_path.is_file():
         fail(EXIT_USAGE, f"--svg-dark not found: {a.svg_dark}")
     use_dark = dark_path.is_file()
-    out = confine(project, a.out or "assets/_checks/logo-sheet.png", what="--out")
+    out = confine(project, a.out or (f"assets/_checks/logo-sheet/{mid}.png" if mid else "assets/_checks/logo-sheet.png"), what="--out")
     tokens_file, exc_file = project / "assets" / "tokens" / "tokens.json", project / "tokens" / "exceptions.json"
     # The report exists before anything below can stop the run, so a failure is recorded in it instead of leaving the last passing
     # report standing; the rules (bands), the tokens (grounds, target) and the exceptions register are inputs, so a change there makes
     # the report stale for `check`.
-    rep = Report("logo-sheet", project, [svg_path] + ([dark_path] if use_dark else []) + [project / qa_rules.RULES_FILE, tokens_file, exc_file],
+    rep = Report("logo-sheet" + (f"/{mid}" if mid else ""), project, [svg_path] + ([dark_path] if use_dark else []) + [project / qa_rules.RULES_FILE, tokens_file, exc_file],
                  renderer=a.renderer)
     light_txt = svg_path.read_text(encoding="utf-8")
     dark_txt = dark_path.read_text(encoding="utf-8") if use_dark else light_txt
@@ -197,8 +201,7 @@ def main() -> int:
     tj = load_json(tokens_file, "the built tokens") if tokens_file.is_file() else None
 
     # ---- the drawing of each tile: the size bands of qa/rules.json when --svg is one of their drawings, else --svg at every size
-    rules, rules_src = qa_rules.load(project)
-    bands = rules["bands"]
+    bands = qa_rules.bands_for(rules, mid)
     band_files = {b["name"]: confine(project, b["drawing"], what=f"band {b['name']!r} drawing") for b in bands}
     use_bands = bool(bands) and svg_path.resolve() in {f.resolve() for f in band_files.values()}
     art: dict[Path, tuple[str, str]] = {svg_path.resolve(): (light_txt, dark_txt)}   # light and dark artwork per drawing
@@ -209,7 +212,7 @@ def main() -> int:
             if f.suffix.lower() != ".svg" or not f.is_file():
                 fail(EXIT_USAGE, f"band drawing {rel(project, f)} must be an existing .svg file (qa/rules.json bands)")
             lt = f.read_text(encoding="utf-8")
-            df = f.with_name(f.stem + "-dark.svg")
+            df = confine(project, f.with_name(f.stem + "-dark.svg"), what="dark drawing")
             dt = df.read_text(encoding="utf-8") if df.is_file() else lt
             bad = lint_svg_text(lt) + (lint_svg_text(dt) if df.is_file() else [])
             if bad:

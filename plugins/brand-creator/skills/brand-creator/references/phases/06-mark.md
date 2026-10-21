@@ -94,6 +94,8 @@ written as numbers the owner approved.
    "assets/logo/mark.svg"}`. Every manifest slot records its band; a slot off the rule needs a one-line exemption.
    Hand masters only where the exact pixels ship (favicon layers, .ico, PNG icons, tray, Linux hicolor): `emit web`,
    `emit windows`, `emit linux` and `emit tray` draw each size by the rule, and `check` re-reads every layer's band.
+   Several marks (a family of products on one system) go in `qa/rules.json` `marks`, each with its own bands; the logo sheet,
+   the emitters and `check` then run per mark (`--mark <id>`, scripts/CONTRACT.md "Several marks").
    A system that shrinks one master (Apple, the registry icon, the avatar) gets one master, and if its small sizes need
    the coarse drawing the exemption says so. Judge the 16 px version first, then draw the rest, on the session's drawing
    engine ([drawing-engines](../drawing-engines.md)).

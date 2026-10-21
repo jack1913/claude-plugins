@@ -21,6 +21,7 @@ platform-specs.json only.
                                         posts/PRE-PUBLICATION.md lists the checklist the owner ticks before anything is published.
 Intermediate HTML and PNGs live in assets/social/_build/. Needs gate G3 and `brand-creator setup`.
 """
+import base64
 import hashlib
 import html
 import re
@@ -30,9 +31,11 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "lib"))
+import qa_rules  # noqa: E402
 import specs  # noqa: E402
 from _common import EXIT_FAIL, EXIT_USAGE, Parser, Report, confine, fail, find_project, main_guard, plugin_root, read_state, today  # noqa: E402
-from _emit import (add_common_args, add_logo_arg, card_lettering, card_lettering_setup, dark_sibling, facts as facts_of, fill_template,  # noqa: E402
+from _emit import (add_common_args, add_logo_arg, art_img, card_lettering, card_lettering_setup, card_mark_size, dark_sibling,  # noqa: E402
+                   facts as facts_of, fill_template, fit_art, lettering_art, lettering_files, mark_accent, mark_tagline,
                    load_mark, load_tokens, need_colors, regulated_profession, render_card, lists_repository, require_gate,
                    require_tier)
 from manifest import Manifest  # noqa: E402
@@ -40,20 +43,70 @@ from pxio import png_size  # noqa: E402
 
 NOTE_MAX = 110   # characters of a post's text kept in its manifest note
 EDU_MAX_POINTS = 4   # numbered points an educational post can hold and stay readable
+# the side-by-side image (templates/lineup.html), as shares of the card's height h unless named otherwise
+LINEUP_ROW = 0.86        # the row of marks: at most this share of the card's width
+LINEUP_GAP_X = 0.04      # between two cells, as a share of the card's width; every mark has a cell of the same width
+LINEUP_MARK = 0.42       # a mark's box: at most this, and at most LINEUP_CELL of its cell's width
+LINEUP_CELL = 0.8
+LINEUP_CAPTION = 0.10    # the drawn wordmark (or the typed name) under each mark: at most this tall, one height for all
+LINEUP_TITLE = 0.11      # the brand's name typed above, or its drawn lettering up to LINEUP_TITLE_ART of the width and height
+LINEUP_TITLE_ART = 0.6, 0.14
 
 
 fill = fill_template
 
 
+def lineup_members(project: Path, a, rules: dict, rep: Report) -> list[dict]:
+    """Every mark of qa/rules.json marks for the side-by-side image: its main drawing and dark one, and its drawn wordmark
+    (<id>-wordmark.svg) and dark one when they exist; a warning names each mark whose name is typed instead."""
+    members = []
+    for m in rules["marks"].values():
+        light, dark, paths = load_mark(project, a, m)
+        rep.inputs += [q for q in paths if q not in rep.inputs]
+        wm_rel = lettering_files(m["id"])[1]
+        wm = lettering_art(project, wm_rel, rep.inputs) if confine(project, wm_rel, what="wordmark").is_file() else None
+        if wm is None:
+            rep.add(f"note:lineup {m['id']}", "warn", "a name typed in the system font",
+                    detail=f"no {wm_rel}: {m['name']} is typed under its mark; draw the wordmark (outlined, P6) for the brand's own lettering")
+        members.append({"id": m["id"], "name": m["name"], "light": light, "dark": dark, "wordmark": wm[0] if wm else None,
+                        "wordmark_dark": dark_sibling(project, wm_rel, rep.inputs) if wm else None})
+    return members
+
+
+def lineup_values(members: list[dict], layout: str, art: str | None, name: str, mode: str, w: int, h: int) -> dict:
+    """The values of templates/lineup.html at w x h: each mark (its dark drawing on a dark card when it has one) as an image in its cell,
+    the wordmarks under them at one height, and the brand's lettering or typed name above. Pixel art is set at a whole-number scale."""
+    n = len(members)
+    gap_x = round(w * LINEUP_GAP_X)
+    cell_w = (w * LINEUP_ROW - (n - 1) * gap_x) / n
+    box = min(h * LINEUP_MARK, cell_w * LINEUP_CELL)
+    words = [m["wordmark_dark"] if mode == "dark" and m["wordmark_dark"] else m["wordmark"] for m in members]
+    cap = min([fit_art(x, cell_w, h * LINEUP_CAPTION)[1] for x in words if x] or [round(h * LINEUP_CAPTION)])
+    figs = []
+    for m, word in zip(members, words):
+        drawing = m["dark"] if mode == "dark" and m["dark"] else m["light"]
+        mw, mh = fit_art(drawing, box, box)
+        data = base64.b64encode(drawing.encode("utf-8")).decode("ascii")
+        caption = art_img(word, *fit_art(word, cell_w, cap), m["name"]) if word else html.escape(m["name"])
+        figs.append(f'<figure><img class="m" alt="{html.escape(m["name"])} mark" width="{mw}" height="{mh}" src="data:image/svg+xml;base64,{data}">'
+                    f"<figcaption>{caption}</figcaption></figure>")
+    title = (art_img(art, *fit_art(art, w * LINEUP_TITLE_ART[0], h * LINEUP_TITLE_ART[1]), name) if layout != "type" and art
+             else f"<h1>{html.escape(name)}</h1>")
+    title_px = round(h * LINEUP_TITLE)
+    return {"lettering": title, "marks": "".join(figs), "gap": round(h * 0.06), "gap_x": gap_x, "cell_w": int(cell_w), "caption_gap": round(h * 0.03), "caption_h": cap,
+            "caption_px": round(cap * 0.8), "title_px": title_px, "sub_px": round(h * 0.045), "rule_w": title_px * 2, "rule_h": max(2, round(h * 0.012))}
+
+
 def main() -> int:
     ap = Parser(prog="brand-creator emit social", description=__doc__, formatter_class=__import__("argparse").RawDescriptionHelpFormatter)
     add_common_args(ap)
-    ap.add_argument("--template", help="card template (default: templates/card.html in the plugin)")
+    ap.add_argument("--template", help="card template (default: templates/card.html in the plugin; for the side-by-side image of a project with "
+                                        "several marks, templates/lineup.html)")
     add_logo_arg(ap, cards=True)
     ap.add_argument("--name", help="name on the card, set as text (default: the drawn lockup or wordmark, else the name in BRAND-STATE.md as text)")
     ap.add_argument("--tagline", default="", help="one line under the name (must be a fact from FACTS.md)")
     ap.add_argument("--site-url", help="absolute site URL; writes og-meta.html with absolute og:image")
-    ap.add_argument("--out-dir", default="assets/social", help="folder inside the project (default assets/social)")
+    ap.add_argument("--out-dir", help="folder inside the project (default assets/social; with --mark, assets/social/<mark>)")
     ap.add_argument("--repo-images", choices=("auto", "yes", "no"), default="auto",
                     help="the GitHub social preview and the README headers: auto (default) writes them only when INVENTORY.md or the brief lists a code repository; yes or no forces it")
     ap.add_argument("--posts", action="store_true", help="also write the post templates (Standard tier): carousel, square and educational posts")
@@ -72,44 +125,58 @@ def main() -> int:
             fail(EXIT_USAGE, "content_languages is not set in BRAND-STATE.md; it is never defaulted from the chat language. Set it: "
                              "brand-creator state --set content_languages=en")
     st = read_state(project).data()
-    name = a.name or str(st.get("name") or st.get("slug"))
-    light, dark, paths = load_mark(project, a)
+    rules, _rules_src = qa_rules.load(project)
+    mark = qa_rules.select_mark(a, rules, required=False)
+    mid = mark["id"] if mark else None
+    lineup = bool(rules["marks"]) and mark is None   # several marks and no --mark: the images show every mark side by side
+    if lineup and a.posts:
+        fail(EXIT_USAGE, "a post shows one mark: pass --mark <id> with --posts")
+    name = a.name or (mark["name"] if mark else str(st.get("name") or st.get("slug")))
+    light, dark, paths = (None, None, []) if lineup else load_mark(project, a, mark)
     modes, tokens_path = load_tokens(project, a)
-    tpl_path = Path(a.template).expanduser().resolve() if a.template else plugin_root() / "templates" / "card.html"
+    tpl_path = Path(a.template).expanduser().resolve() if a.template else plugin_root() / "templates" / ("lineup.html" if lineup else "card.html")
     if not tpl_path.is_file():
         fail(EXIT_USAGE, f"card template not found: {tpl_path}")
     template = tpl_path.read_text(encoding="utf-8")
-    out = a.out_dir.strip("/")
+    out = (a.out_dir or (f"assets/social/{mid}" if mid else "assets/social")).strip("/")
     og, gh, rh = specs.sizes("open-graph"), specs.sizes("github-social"), specs.sizes("readme-header")
 
-    rep = Report("emit-social", project, paths + [tokens_path], renderer=a.renderer)
+    rep = Report("emit-social" + (f"/{mid}" if mid else ""), project, paths + [tokens_path], renderer=a.renderer)
+    rep.inputs += [q for q in (project / qa_rules.RULES_FILE,) if q.is_file()]
     mf = Manifest(project)
-    found, layout = card_lettering_setup(rep, project, a, template, tpl_path.name)
+    of_mark = {"mark": mid} if mid else {}            # every row of a --mark run names its mark
+    tagline = mark_tagline(project, mark, a.tagline, rep.inputs)
+    found, layout = card_lettering_setup(rep, project, a, template, tpl_path.name, mid)
+    members = lineup_members(project, a, rules, rep) if lineup else []
 
-    def card(variant: str, mode: str, w: int, h: int, mark_svg: str, art: str | None) -> bytes:
+    def render(variant: str, mode: str, w: int, h: int, values: dict, raw: tuple) -> bytes:
         bg, fg = need_colors(modes, mode, "color.bg", "color.text")
-        muted = modes[mode].get("color.muted", fg)
-        accent = modes[mode].get("color.accent", fg)
-        lettering = card_lettering(layout, art, name, w, h)
-        values = {"width": w, "height": h, "bg": bg, "fg": fg, "muted": muted, "accent": accent, "name": name, "tagline": a.tagline,
-                  "layout": layout, "lettering": lettering, "mark": "" if layout == "lockup" else re.sub(r"^\s*<\?xml[^>]*>\s*", "", mark_svg)}
+        values = {"width": w, "height": h, "bg": bg, "fg": fg, "muted": modes[mode].get("color.muted", fg), "accent": mark_accent(modes, mode, mark, fg),
+                  "name": name, "tagline": tagline, **values}
         src_rel = f"{out}/_build/{variant}.html"
         png_rel = f"{out}/_build/{variant}.png"
         src = confine(project, src_rel, what="card source")
         src.parent.mkdir(parents=True, exist_ok=True)
-        src.write_text(fill(template, {k: str(v) for k, v in values.items()}, raw=("mark", "lettering")), encoding="utf-8")
-        info = render_card(project, src_rel, w, h, png_rel, mode)
+        src.write_text(fill(template, {k: str(v) for k, v in values.items()}, raw=raw), encoding="utf-8")
+        render_card(project, src_rel, w, h, png_rel, mode)
         data = confine(project, png_rel, what="card").read_bytes()
         got = png_size(data)
         rep.add(f"check:{variant} size", "pass" if got == (w, h) else "fail", "PNG size equals the spec row", detail=f"{got[0]}x{got[1]}, wanted {w}x{h}")
         return data
+
+    def card(variant: str, mode: str, w: int, h: int, mark_svg: str | None, art: str | None) -> bytes:
+        if lineup:
+            return render(variant, mode, w, h, lineup_values(members, layout, art, name, mode, w, h), ("lettering", "marks"))
+        values = {"layout": layout, "lettering": card_lettering(layout, art, name, w, h), "mark_size": card_mark_size(mark_svg, h),
+                  "mark": "" if layout == "lockup" else re.sub(r"^\s*<\?xml[^>]*>\s*", "", mark_svg)}
+        return render(variant, mode, w, h, values, ("mark", "lettering"))
 
     # Open Graph: new URL per change
     art = found[0] if found else None
     d = card("og", "light", og["width"], og["height"], light, art)
     h8 = hashlib.sha256(d).hexdigest()[:8]
     og_rel = f"og-{og['width']}x{og['height']}-{h8}.png"
-    changed = mf.put(f"{out}/{og_rel}", d, emitter="social", specs=["open-graph"], width=og["width"], height=og["height"])
+    changed = mf.put(f"{out}/{og_rel}", d, emitter="social", specs=["open-graph"], width=og["width"], height=og["height"], **of_mark)
     rep.add(f"file:{og_rel}", "pass", "written" if changed else "unchanged", bytes=len(d))
     stale_og = sorted(p.name for p in (project / out).glob("og-*.png") if p.name != og_rel)
     if stale_og:
@@ -126,7 +193,7 @@ def main() -> int:
         # GitHub social preview
         d = card("github-social", "light", gh["width"], gh["height"], light, art)
         gh_rel = f"github-social-{gh['width']}x{gh['height']}.png"
-        changed = mf.put(f"{out}/{gh_rel}", d, emitter="social", specs=["github-social"], width=gh["width"], height=gh["height"])
+        changed = mf.put(f"{out}/{gh_rel}", d, emitter="social", specs=["github-social"], width=gh["width"], height=gh["height"], **of_mark)
         rep.add(f"file:{gh_rel}", "pass", "written" if changed else "unchanged", bytes=len(d))
 
         # README header, light and dark
@@ -134,10 +201,17 @@ def main() -> int:
         for mode, mark_art, lettering_svg in (("light", light, art), ("dark", dark or light, art_dark or art)):
             d = card(f"readme-header-{mode}", mode, rh["width"], rh["height"], mark_art, lettering_svg)
             rel_name = f"readme-header-{mode}.png"
-            changed = mf.put(f"{out}/{rel_name}", d, emitter="social", specs=["readme-header"], width=rh["width"], height=rh["height"])
+            changed = mf.put(f"{out}/{rel_name}", d, emitter="social", specs=["readme-header"], width=rh["width"], height=rh["height"], **of_mark)
             rep.add(f"file:{rel_name}", "pass", "written" if changed else "unchanged", bytes=len(d))
-        if dark is None and layout != "lockup":   # a lockup card draws no separate mark
+        if dark is None and layout != "lockup" and not lineup:   # a lockup card draws no separate mark; the side-by-side image checks each mark
             rep.add("note:readme-header-dark", "warn", "no dark artwork", detail="the dark README header reuses the light mark artwork")
+        for m in members:   # the side-by-side image: each mark and wordmark on the dark header
+            if m["dark"] is None:
+                rep.add(f"note:readme-header-dark {m['id']}", "warn", "no dark artwork",
+                        detail=f"the dark README header shows {m['id']}'s light drawing: draw the -dark.svg next to its main drawing")
+            if m["wordmark"] and m["wordmark_dark"] is None:
+                rep.add(f"note:readme-header-dark {m['id']} lettering", "warn", "no dark lettering",
+                        detail=f"no {Path(lettering_files(m['id'])[1]).stem}-dark.svg: the dark README header reuses {m['id']}'s light wordmark")
         if layout != "type" and art_dark is None:
             dark_name = str(Path(found[1]).with_name(Path(found[1]).stem + "-dark.svg"))
             rep.add("note:readme-header-dark lettering", "warn", "no dark lettering", detail=f"no {dark_name}: the dark README header reuses the light {layout}")
@@ -168,7 +242,7 @@ def main() -> int:
                     detail="brief/BRIEF.md has no answered 'Regulated profession' line: answer it before posting (a regulated profession needs the pre-publication checklist)")
         reg_attr = f' data-regulated-checklist="skills/brand-creator/references/regulated-industries.md#typical-guardrails" data-regulated-profession="{html.escape(prof, quote=True)}"' if prof else ""
         bg, fg = need_colors(modes, "light", "color.bg", "color.text")
-        muted, accent = modes["light"].get("color.muted", fg), modes["light"].get("color.accent", fg)
+        muted, accent = modes["light"].get("color.muted", fg), mark_accent(modes, "light", mark, fg)
         mark_art = re.sub(r"^\s*<\?xml[^>]*>\s*", "", light)
 
         def post(kind: str, tpl_name: str, size: dict, name_: str, **vals) -> str:
@@ -190,7 +264,7 @@ def main() -> int:
                     detail=f"{got[0]}x{got[1]}, wanted {size['width']}x{size['height']}")
             row = "social-post-1x1" if size is p1 else "social-post-4x5"
             changed = mf.put(f"{out}/posts/{name_}.png", data, emitter="social", specs=[row], width=size["width"], height=size["height"], kind=kind,
-                             note=vals.get("headline", "")[:NOTE_MAX])
+                             note=vals.get("headline", "")[:NOTE_MAX], **of_mark)
             rep.add(f"file:posts/{name_}.png", "pass", "written" if changed else "unchanged", bytes=len(data))
             texts[name_] = vals.get("headline", "") if not vals.get("points_block") else "; ".join(f"{l}: {v}" for l, v in picked)
             return name_
@@ -221,7 +295,7 @@ def main() -> int:
                      "- [ ] each claim is a FACTS.md row the owner confirmed", "", "## Posts", ""]
             lines += [f"- {n}.png: {texts[n]}" for n in written]
             changed = mf.put(f"{out}/posts/PRE-PUBLICATION.md", ("\n".join(lines) + "\n").encode(), emitter="social", specs=["social-post-4x5"],
-                             note="regulated profession: the owner ticks it before posting")
+                             note="regulated profession: the owner ticks it before posting", **of_mark)
             rep.add("file:posts/PRE-PUBLICATION.md", "pass", "written" if changed else "unchanged")
 
     if a.site_url:
@@ -235,7 +309,7 @@ def main() -> int:
             f'<meta property="og:image:height" content="{og["height"]}">',
             f'<meta name="twitter:card" content="summary_large_image">',
             f'<meta name="twitter:image" content="{base}/{og_rel}">', ""])
-        changed = mf.put(f"{out}/og-meta.html", meta.encode(), emitter="social", specs=["open-graph"])
+        changed = mf.put(f"{out}/og-meta.html", meta.encode(), emitter="social", specs=["open-graph"], **of_mark)
         rep.add("file:og-meta.html", "pass", "written" if changed else "unchanged")
     else:
         rep.add("note:og-meta", "info", "no --site-url", detail="og:image needs an absolute URL; re-run with --site-url to write og-meta.html")
@@ -243,7 +317,7 @@ def main() -> int:
     stamped, warns = specs.stamp(used_rows, today())
     mf.stamp_specs(stamped)
     retired = mf.retire_unwritten("social", out, keep=lambda p: re.fullmatch(r"og-\d+x\d+-[0-9a-f]{8}\.png", Path(p).name) is not None
-                                  or (not a.posts and p.startswith(f"{out}/posts/")))
+                                  or (not a.posts and p.startswith(f"{out}/posts/")), mark=mid)
     for p in retired:
         rep.add(f"retired:{p}", "warn", "slot no longer emitted",
                 detail=f"an earlier run wrote {p} but this run did not: the file was moved to removed-{today()}/ and its manifest row dropped")

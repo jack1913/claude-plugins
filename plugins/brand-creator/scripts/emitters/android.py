@@ -30,7 +30,8 @@ sys.path.insert(0, str(HERE.parent / "lib"))
 import svgtools  # noqa: E402
 from _common import EXIT_FAIL, EXIT_USAGE, confine, fail, main_guard, plugin_root  # noqa: E402
 from _color import parse_hex  # noqa: E402
-from _emit import add_logo_arg, card_lettering, card_lettering_setup, fill_template, render_card  # noqa: E402
+from _emit import (add_logo_arg, card_lettering, card_lettering_setup, card_mark_size, fill_template, mark_accent, mark_tagline,  # noqa: E402
+                   render_card)
 from pxio import png_color_type, png_size, read_png  # noqa: E402
 from px_lib import from_png  # noqa: E402
 from tierb import INK_TOLERANCE_PX, TierBEmit, ink_far, png_with_srgb  # noqa: E402
@@ -191,10 +192,12 @@ def main() -> int:
         fail(EXIT_USAGE, f"card template not found: {tpl_path}")
     fg = e.colour("light", "color.text")
     template = tpl_path.read_text(encoding="utf-8")
-    found, layout = card_lettering_setup(rep, e.project, a, template, tpl_path.name)
-    values = {"width": fw, "height": fh, "bg": ground, "fg": fg, "muted": e.modes["light"].get("color.muted", fg), "accent": e.modes["light"].get("color.accent", fg),
-              "name": e.brand, "tagline": a.tagline, "layout": layout, "lettering": card_lettering(layout, found[0] if found else None, e.brand, fw, fh),
-              "mark": "" if layout == "lockup" else re.sub(r"^\s*<\?xml[^>]*>\s*", "", e.drawing(max(fw, fh)).svg)}
+    found, layout = card_lettering_setup(rep, e.project, a, template, tpl_path.name, e.mark_id)
+    tagline = mark_tagline(e.project, e.mark, a.tagline, rep.inputs)
+    mark_svg = e.drawing(max(fw, fh)).svg
+    values = {"width": fw, "height": fh, "bg": ground, "fg": fg, "muted": e.modes["light"].get("color.muted", fg), "accent": mark_accent(e.modes, "light", e.mark, fg),
+              "name": e.brand, "tagline": tagline, "layout": layout, "lettering": card_lettering(layout, found[0] if found else None, e.brand, fw, fh),
+              "mark": "" if layout == "lockup" else re.sub(r"^\s*<\?xml[^>]*>\s*", "", mark_svg), "mark_size": card_mark_size(mark_svg, fh)}
     src_rel = f"{out}/_build/feature-graphic.html"
     src = confine(e.project, src_rel, what="card source")
     src.parent.mkdir(parents=True, exist_ok=True)
@@ -206,7 +209,7 @@ def main() -> int:
     except ValueError as err:
         fail(EXIT_FAIL, f"the feature graphic has transparent pixels ({err}); the template must paint a ground over the whole card")
     e.slot(f"{out}/play/feature-graphic.png", rgb, ["android-feature-graphic"], slot="google-play-feature-graphic", size_px=(fw, fh), drawing=e.drawing(max(fw, fh)),
-           resampled_by="PAGE", note="the mark, the name" + (" and one line of real copy" if a.tagline else "") + " on the light ground, 24-bit PNG with no alpha")
+           resampled_by="PAGE", note="the mark, the name" + (" and one line of real copy" if tagline else "") + " on the light ground, 24-bit PNG with no alpha")
     ok = png_size(rgb) == (fw, fh) and png_color_type(rgb) == 2 and feat["alpha"] is False
     rep.add("check:feature graphic", "pass" if ok else "fail", "1024 x 500 at the spec size, 24-bit (RGB), no alpha channel",
             detail=f"{png_size(rgb)}, colour type {png_color_type(rgb)}")

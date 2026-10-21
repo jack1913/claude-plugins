@@ -620,6 +620,16 @@ def test_web_draws_every_favicon_layer_and_png_icon_by_the_band_rule(acme):
     assert "rules_source" in report(acme, "emit-web") and report(acme, "emit-web")["status"] == "pass"
 
 
+def test_a_dark_drawing_that_links_out_of_the_project_is_refused(acme, tmp_path):
+    """A drawing's -dark.svg is read through confine: a symlink that leaves the project stops the emit (exit 2) before anything is read."""
+    dark = acme / "assets/logo/grid-mark-dark.svg"
+    outside = tmp_path / "outside-dark.svg"
+    dark.rename(outside)
+    dark.symlink_to(outside)
+    r = emit(acme, "web")
+    assert r.returncode == 2 and "outside the project" in r.stderr, r.stdout + r.stderr
+
+
 def test_icon_svg_is_the_drawing_a_tab_shows_by_the_band_rule_or_the_owners_favicon_drawing(acme):
     """Browsers that read icon.svg show it in the tab, at the smallest favicon layer's size: the small band's drawing, never the fine
     vector shrunk. favicon.drawing in qa/rules.json overrides it and is recorded, so a rerun keeps it."""

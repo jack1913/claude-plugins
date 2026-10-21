@@ -143,7 +143,7 @@ def check_masters(rep: Report, project: Path, rnd: int) -> None:
     for d, files in found.items():
         light = [f for f in files if not f.stem.endswith("-dark")]
         for f in light:
-            twin = f.with_name(f.stem + "-dark.svg")
+            twin = confine(project, f.with_name(f.stem + "-dark.svg"), what="dark master")
             for art, mode, ground in ((f, "light", gl), (twin if twin.is_file() else f, "dark", gd)):
                 rid = f"masters:ground:{rel(project, art)}:{mode}"
                 contacts = measured(ground_contacts, art)

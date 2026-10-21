@@ -138,22 +138,28 @@ required surfaces in `brief/BRIEF.md`.
    `emit web`, `emit windows`, `emit linux` and `emit tray` draw each size by the band rule, and `check` fails a layer
    recorded off the rule. `icon.svg` is one scalable file shown in browser tabs: the band rule's drawing for the tab size, or
    `favicon.drawing` in `qa/rules.json` when the owner picked another one.
-3. **Emit in chain order.** Copy `${CLAUDE_PLUGIN_ROOT}/templates/finish.sh.tpl` to `tools/finish.sh` and fill its
+3. **Several marks.** When the products share one system but each has its own mark, `qa/rules.json` lists them in `marks`,
+   each with its own bands (and its name, favicon, accent role and tagline label); the top-level `bands` stay empty. Run every
+   emitter once per mark with `--mark <id>`: its files go to `assets/<target>/<id>/`, its report to `emit-<target>/<id>`, and its
+   lettering is `assets/logo/<id>-lockup.svg` or `<id>-wordmark.svg`. Run `emit social` once more without `--mark` for the
+   repository's own images: every mark side by side with its wordmark under it. `logo-sheet --mark <id>` gives one sheet per
+   mark, and `check` expects all of them (scripts/CONTRACT.md, "Several marks").
+4. **Emit in chain order.** Copy `${CLAUDE_PLUGIN_ROOT}/templates/finish.sh.tpl` to `tools/finish.sh` and fill its
    three marked blocks (the options of block 2 are variables; a tagline or exemption with spaces is fine). The order is
    generators, tokens, contrast, emitters, gates, idempotence, staleness, check. Run the emitters one at a time while you
    build, then the whole chain. An emitter moves the files of slots that no longer exist (a removed tray state) to
    `removed-<date>/` and says so in its report.
-4. **Downscale proof.** For each `SYS` master run `downscale --source <master>`, with `--previous <older master>` for a
+5. **Downscale proof.** For each `SYS` master run `downscale --source <master>`, with `--previous <older master>` for a
    before/after. Each master has its own report and `check` ties every manifest row to the report of its own master
    (`downscale_source`): a passing report on another file never vouches for it. The default content fraction of a master
    can leave the 16 px accent under the rule (`--content-fraction`, in finish.sh `ICON_CONTENT`): measure, then set. For a raster as shipped run `downscale --png <file>`. Read the numbers. At 32 px and below the accent
    must hold a solid 4×4 px square (the default rule; the owner may change it in `qa/rules.json`). A shrunk master that
    fails needs `--master-band <band> --exemption "<one line why>"`, then a new measurement.
-5. **Tray and state sets.** `emit tray` reads `tray/tray.json`, writes `qa/states.tray.json` and runs `states-check`.
+6. **Tray and state sets.** `emit tray` reads `tray/tray.json`, writes `qa/states.tray.json` and runs `states-check`.
    Two states that look alike in greyscale or silhouette fail the emit.
-6. **Prove and gate.** Run `verify-idempotent --cmd "<the chain>"` (two runs, byte-identical), then `staleness --write`,
+7. **Prove and gate.** Run `verify-idempotent --cmd "<the chain>"` (two runs, byte-identical), then `staleness --write`,
    then `check --project <dir>` until it exits 0.
-7. **Report** with the brand-creator response template. Set each built slot to EXISTS in INVENTORY.md. Copying into the
+8. **Report** with the brand-creator response template. Set each built slot to EXISTS in INVENTORY.md. Copying into the
    product repos is P11 and waits for G6.
 
 ## Rules every pack follows

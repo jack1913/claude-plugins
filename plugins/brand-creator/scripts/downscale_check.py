@@ -261,7 +261,7 @@ def main() -> int:
 
     # A master that is one band's drawing (qa/rules.json bands) ships only at its band's sizes; the other rows say what a system that
     # shrinks ONE master (an app icon) would show. Sizes drawn per band are measured as shipped, with --png.
-    bands = rules["bands"]
+    bands = qa_rules.bands_for(rules, qa_rules.mark_of_drawing(rules, project, src))   # with several marks, the bands of the mark it belongs to
     own = next((b for b in bands if confine(project, b["drawing"], what=f"band {b['name']!r} drawing").resolve() == src.resolve()), None)
     if own:
         i = bands.index(own)

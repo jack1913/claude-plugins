@@ -9,7 +9,9 @@
   * mark_lint: every SVG under assets/ is pure vector (no <text>, <tspan>, font-family, @font-face, external href)
   * every artefact listed in assets/manifest.json exists and still has its emitted hash
   * the reports in assets/_checks/ that the existing artefacts call for are present, current (their input hashes still
-    match) and passing: tokens, contrast, logo-sheet, board-lint and shot for the latest round, and emit-<target> for each emitter that wrote artefacts
+    match) and passing: tokens, contrast, logo-sheet, board-lint and shot for the latest round, and emit-<target> for each emitter that wrote artefacts;
+    with several marks (qa/rules.json marks) logo-sheet/<mark> for each mark and emit-<target>/<mark> for each mark an emitter drew, and every
+    drawing a mark's bands name must exist
   * the QA gates an artefact asks for: a manifest row with `qa: ["downscale", ...]` needs a current passing report from
     downscale, states-check, shot --motion, family-check, fontcheck or verify-idempotent; a report that exists is gated too.
     The downscale report must be the one for the row's own master (`downscale_source`); a report on another file does not count
@@ -38,6 +40,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "adaptlib"))
 from _common import (Parser, Report, add_project_arg, downscale_report_tool, find_project, latest_round, main_guard, read_state, rel,  # noqa: E402
                      sha256_file, verify_history)
 from manifest import band_problems, load_artefacts, verify as verify_manifest  # noqa: E402
+import qa_rules  # noqa: E402
 import tierb  # noqa: E402
 from stale import INPUTS_FILE, check_project as check_staleness  # noqa: E402
 from mark_lint import lint_svg_file, svg_files_under_assets  # noqa: E402
@@ -127,8 +130,16 @@ def main() -> int:
     expectations = []
     if tokens.is_file():
         expectations += [("tokens", "brand-creator tokens", None), ("contrast", "brand-creator contrast", None)]
+    rules, _rules_src = qa_rules.load(project)
+    for mid, m in rules["marks"].items():
+        missing = [b["drawing"] for b in m["bands"] if not (project / b["drawing"]).is_file()]
+        rep.add(f"marks:{mid}", "fail" if missing else "pass", "every drawing the mark's bands name exists",
+                detail=f"missing: {', '.join(missing)}" if missing else ", ".join(b["drawing"] for b in m["bands"]))
     if any(project.glob("assets/logo/*.svg")):
-        expectations.append(("logo-sheet", "brand-creator logo-sheet", None))
+        if rules["marks"]:   # one logo sheet per mark: a passing sheet of one mark never stands in for another
+            expectations += [(f"logo-sheet/{mid}", f"brand-creator logo-sheet --mark {mid}", None) for mid in rules["marks"]]
+        else:
+            expectations.append(("logo-sheet", "brand-creator logo-sheet", None))
     n = latest_round(project)
     if n is not None and (project / "rounds" / f"r{n}" / "board.html").is_file():
         page = f"rounds/r{n}/board.html"
@@ -151,10 +162,10 @@ def main() -> int:
     if (project / "assets" / "_checks" / "book-pdf.json").is_file():
         expectations.append(("book-pdf", "brand-creator book-pdf", None))
     expectations += [(t, c, None) for t, c in adapt_gates.expected_reports(project)]
-    emitters = {a_.get("emitter") for a_ in arts}
+    drawn = {(a_.get("emitter"), a_.get("mark")) for a_ in arts}   # one report per emitter, and per mark when the rows name one
     for em in EMITTERS:
-        if em in emitters:
-            expectations.append((f"emit-{em}", f"brand-creator emit {em}", None))
+        for mk in sorted({mk for e_, mk in drawn if e_ == em}, key=lambda x: x or ""):
+            expectations.append((f"emit-{em}" + (f"/{mk}" if mk else ""), f"brand-creator emit {em}" + (f" --mark {mk}" if mk else ""), None))
     wanted = {k for a_ in arts for k in a_.get("qa", [])}
     unknown = sorted(wanted - set(QA_GATES))
     for k in unknown:

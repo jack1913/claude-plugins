@@ -15,6 +15,8 @@ A row may also carry (all optional, documented in scripts/CONTRACT.md):
   downscale_source  with qa "downscale": the project path of the master the downscale gate must have measured (the report
                 for that source, assets/_checks/downscale/<slug>.json, must be current and passing)
   layer_bands   for a multi-layer file (.ico): {"<px>": band} of each layer's drawing; checked against the band rule
+  mark          the id of the mark the file draws, when the project lists several marks (qa/rules.json marks); its bands are
+                the ones the row is checked against, and a run of one mark never retires another mark's rows
 
 Size bands: qa/rules.json lists bands ({name, max_px, drawing}); pick_band() is the ONE function that picks the drawing for
 a body size. put_slot() records the band a slot used. A slot that uses a different band than the picker names is off the
@@ -55,7 +57,7 @@ class Manifest:
 
     def put_slot(self, relpath: str, data: bytes, *, emitter: str, specs: list[str], slot: str, size_px: int | tuple[int, int],
                  band: str | None = None, exemption: str | None = None, resampled_by: str = "OURS", note: str = "",
-                 qa: list[str] | None = None, inv: str | None = None, **extra) -> bool:
+                 qa: list[str] | None = None, inv: str | None = None, mark: str | None = None, **extra) -> bool:
         """put() for a slot with a size: records the slot, size, who made the pixels and the band used.
 
         `size_px` is the side of a square or (width, height); the band follows the longer side. `inv` is the INVENTORY.md slot id.
@@ -63,16 +65,19 @@ class Manifest:
         w, h = (size_px, size_px) if isinstance(size_px, int) else size_px
         size_px = max(w, h)
         rules, _src = qa_rules.load(self.project)
-        picked = qa_rules.pick_band(rules["bands"], size_px)
+        bands = qa_rules.bands_for(rules, mark)
+        picked = qa_rules.pick_band(bands, size_px)
         used = band or (picked["name"] if picked else None)
         if picked and used != picked["name"] and not (exemption and exemption.strip()):
             fail(EXIT_FAIL, f"slot {slot} at {size_px} px uses band {used!r} but the band rule picks {picked['name']!r}; "
                             f"an off-rule slot needs a stated exemption (one line, why this slot differs)")
         if band and not picked:
             fail(EXIT_USAGE, f"slot {slot}: band {band!r} was named but qa/rules.json defines no bands")
-        if band and picked and not any(b["name"] == band for b in rules["bands"]):
-            fail(EXIT_USAGE, f"slot {slot}: unknown band {band!r} (defined: {', '.join(b['name'] for b in rules['bands'])})")
+        if band and picked and not any(b["name"] == band for b in bands):
+            fail(EXIT_USAGE, f"slot {slot}: unknown band {band!r} (defined: {', '.join(b['name'] for b in bands)})")
         row = {"slot": slot, "size": f"{w}x{h}", "resampled_by": resampled_by, "note": note}
+        if mark:
+            row["mark"] = mark
         if inv:
             row["inv"] = inv
         if used:
@@ -85,16 +90,17 @@ class Manifest:
                 row["downscale_source"] = extra.pop("downscale_source", relpath)   # the file the downscale gate must have measured
         return self.put(relpath, data, emitter=emitter, specs=specs, **row, **extra)
 
-    def retire_unwritten(self, emitter: str, out: str, keep=None) -> list[str]:
+    def retire_unwritten(self, emitter: str, out: str, keep=None, mark: str | None = None) -> list[str]:
         """Rows of `emitter` under `out/` that this run did not write describe slots that no longer exist (a removed tray state, a
         dropped target, a superseded fingerprinted name). Their files are MOVED (never deleted) to removed-<date>/<path> inside
         the project and the rows are dropped; returns the retired paths. `keep(path)` true spares a row (social keeps superseded Open
-        Graph files: their URLs may still be in cached link previews, and the emitter warns about them instead)."""
+        Graph files: their URLs may still be in cached link previews, and the emitter warns about them instead). Only rows of the same
+        `mark` are touched (None: rows that name no mark), so a run of one mark never retires another's files, whatever the folders."""
         written = set(self.changed) | set(self.unchanged)
         self.retired_to = {}   # path -> removed-<date>[-n] folder it went to (for the report text)
         prefix = out.strip("/") + "/"
-        gone = sorted(p for p, a in self.artefacts.items() if a.get("emitter") == emitter and p.startswith(prefix) and p not in written
-                      and not (keep and keep(p)))
+        gone = sorted(p for p, a in self.artefacts.items() if a.get("emitter") == emitter and a.get("mark") == mark and p.startswith(prefix)
+                      and p not in written and not (keep and keep(p)))
         for p in gone:
             src = confine(self.project, p, what="retired artefact")
             if src.is_file():
@@ -139,11 +145,14 @@ def verify(project: Path) -> list[str]:
 def band_problems(project: Path) -> list[str]:
     """Slots that sit off the band rule without an exemption, or name a band the rules no longer define."""
     rules, _src = qa_rules.load(project)
-    bands = rules["bands"]
     out = []
     for a in load_artefacts(project):
         if "band" not in a:
             continue
+        if a.get("mark") and a["mark"] not in rules["marks"]:
+            out.append(f"{a['path']}: records mark {a['mark']!r}, which qa/rules.json marks no longer lists")
+            continue
+        bands = qa_rules.bands_for(rules, a.get("mark"))
         m = a.get("size", "").split("x")
         if not (len(m) == 2 and m[0].isdigit()):
             out.append(f"{a['path']}: has a band but no usable size {a.get('size')!r}")
@@ -162,12 +171,15 @@ def band_problems(project: Path) -> list[str]:
 def layer_band_problems(project: Path) -> list[str]:
     """Layers of a multi-layer file (.ico) whose drawing is off the band rule for the layer's own size, with no exemption."""
     rules, _src = qa_rules.load(project)
-    bands = rules["bands"]
-    names = {b["name"] for b in bands}
     out = []
     for a in load_artefacts(project):
         if "layer_bands" not in a:
             continue
+        if a.get("mark") and a["mark"] not in rules["marks"]:
+            out.append(f"{a['path']}: records mark {a['mark']!r}, which qa/rules.json marks no longer lists")
+            continue
+        bands = qa_rules.bands_for(rules, a.get("mark"))
+        names = {b["name"] for b in bands}
         for px, used in sorted(a["layer_bands"].items(), key=lambda kv: int(kv[0])):
             if not bands:
                 if used is not None:

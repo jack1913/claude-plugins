@@ -32,7 +32,7 @@ sys.path.insert(0, str(HERE.parent / "lib"))
 import svgtools  # noqa: E402
 from _color import parse_hex  # noqa: E402
 from _common import EXIT_FAIL, EXIT_USAGE, confine, fail, main_guard, plugin_root, read_state, write_bytes_if_changed  # noqa: E402
-from _emit import add_logo_arg, art_img, card_lettering_setup, fill_template, fit_art, render_card  # noqa: E402
+from _emit import add_logo_arg, art_img, card_lettering_setup, fill_template, fit_art, mark_accent, mark_tagline, render_card, whole_px  # noqa: E402
 from px_lib import from_png  # noqa: E402
 from pxio import png_color_type, png_size  # noqa: E402
 from tierb import INK_TOLERANCE_PX, PROFILE_BANNERS, TierBEmit, fit_share, ink_bbox_on, ink_far  # noqa: E402
@@ -128,7 +128,7 @@ def main() -> int:
 
     # ---- banners: the mark and the name inside each platform's safe rectangle (none in the Quick tier, so nothing of theirs is read there)
     fg = e.colour("light", "color.text")
-    muted, accent = e.modes["light"].get("color.muted", fg), e.modes["light"].get("color.accent", fg)
+    muted, accent = e.modes["light"].get("color.muted", fg), mark_accent(e.modes, "light", e.mark, fg)
     quick = str(read_state(e.project).get("tier") or "") == "quick"
     if quick:
         rep.add("note:banners", "info", "no banners in the Quick tier", detail="the Quick tier writes the circle-safe avatar only; raise the tier with the owner's agreement "
@@ -139,7 +139,8 @@ def main() -> int:
             fail(EXIT_USAGE, f"banner template not found: {tpl_path}")
         template = tpl_path.read_text(encoding="utf-8")
         e.add_input(tpl_path)
-        found, layout = card_lettering_setup(rep, e.project, a, template, tpl_path.name)
+        found, layout = card_lettering_setup(rep, e.project, a, template, tpl_path.name, e.mark_id)
+        tagline = mark_tagline(e.project, e.mark, a.tagline, rep.inputs)
     for fname, row_id in ({} if quick else PROFILE_BANNERS).items():
         sz = e.sizes(row_id)
         w, h, s = sz["width"], sz["height"], sz["safe"]
@@ -149,13 +150,14 @@ def main() -> int:
         mark_px = round(sh * ROW_MARK_SHARE) if wide else round(min(sw * COLUMN_MARK_SHARE, sh * COLUMN_MARK_HEIGHT))
         title_px = round(sh * TITLE_ROW) if wide else round(sw * TITLE_COLUMN)
         d = e.drawing(mark_px)
+        mark_px = whole_px(d.svg, mark_px)   # pixel art: a whole multiple of its grid, so every pixel stays square
         if layout == "lockup":
             art_w, art_h = fit_art(found[0], sw * LOCKUP_ROW[0], sh * LOCKUP_ROW[1]) if wide else fit_art(found[0], sw * LOCKUP_COLUMN, sh * COLUMN_MARK_HEIGHT)
         elif layout == "wordmark":
             art_w, art_h = fit_art(found[0], (sw - mark_px - round(short * GAP_SHARE)) if wide else sw, title_px * WORDMARK_SHARE)
         lettering = art_img(found[0], art_w, art_h, e.brand) if layout != "type" else f"<h1>{html.escape(e.brand)}</h1>"
         mark_html = d.svg.split("?>", 1)[-1].strip() if d.svg.lstrip().startswith("<?xml") else d.svg
-        values = {"width": w, "height": h, "bg": ground, "fg": fg, "muted": muted, "accent": accent, "name": e.brand, "tagline": a.tagline,
+        values = {"width": w, "height": h, "bg": ground, "fg": fg, "muted": muted, "accent": accent, "name": e.brand, "tagline": tagline,
                   "layout": layout, "lettering": lettering, "mark": "" if layout == "lockup" else mark_html,
                   "safe_x": f"{s['x']:g}", "safe_y": f"{s['y']:g}", "safe_w": sw, "safe_h": sh,
                   "direction": "row" if wide else "column", "align": "left" if wide else "center", "items": "flex-start" if wide else "center",
@@ -188,7 +190,7 @@ def main() -> int:
             failures.append(f"{fname}: ink box {bb} is not inside the safe rectangle")
         what = {"lockup": "the drawn lockup", "wordmark": "the mark and the drawn wordmark", "type": "the mark and the name as text"}[layout]
         shipped.append((f"{fname}-{w}x{h}.png", rgb, row_id, f"profile-{fname}", (w, h), d,
-                        what + (" and one line of real copy" if a.tagline else "") + f" inside the {sw:g} x {sh:g} px safe rectangle, light ground, 24-bit PNG",
+                        what + (" and one line of real copy" if tagline else "") + f" inside the {sw:g} x {sh:g} px safe rectangle, light ground, 24-bit PNG",
                         {"safe": {"x": s["x"], "y": s["y"], "width": sw, "height": sh}}))
 
     # ---- proofs first (never shipped), then the gate, then the files
