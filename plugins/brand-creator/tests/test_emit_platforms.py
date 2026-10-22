@@ -906,6 +906,9 @@ def test_the_filled_finish_chain_runs_through_to_check(acme, tmp_path):
                      "print('generator saw the plugin root')\n")
     fin.write_text(tpl.replace("  tools/grid_mark.py\n", "  tools/grid_mark.py\n  tools/root_probe.py\n"))
     assert "root_probe.py" in fin.read_text()
+    # the project sets its own colour-vision threshold: the chain runs contrast with --cvd, so the report keeps those rows
+    rules = json.loads((acme / "qa/rules.json").read_text())
+    (acme / "qa/rules.json").write_text(json.dumps({**rules, "cvd": {"min_delta_e": 10.0}}))
     # the round-level gates are outside the chain (they judge the board, not a pack); `check` wants them current
     for cmd in (("logo-sheet",), ("board-lint", "rounds/r1/board.html"), ("shot", "rounds/r1/board.html")):
         assert bc(*cmd, project=acme).returncode == 0, cmd
@@ -920,6 +923,8 @@ def test_the_filled_finish_chain_runs_through_to_check(acme, tmp_path):
     out = r.stdout + r.stderr
     assert r.returncode == 0, out[-3000:]
     assert "generator saw the plugin root" in out and "unrecognized arguments" not in out
+    assert "== plugin version\nbrand-creator " in out and ": not checked: " in out   # the chain asks first; a checkout cannot tell, and says so
+    assert "== contrast --cvd\n" in out and any(r.get("section") == "cvd" for r in report(acme, "contrast")["results"])
     assert "emit developer" in out and "== downscale assets/developer/" in out and "check: PASS" in out
     # the multi-word values arrived whole, as one argument each
     assert row(acme, "assets/developer/avatar/acme-avatar-1024.png")["exemption"] == exemption

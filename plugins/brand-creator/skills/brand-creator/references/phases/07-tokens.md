@@ -138,8 +138,13 @@ Record the motion answer, on or off, in `motion/motion.json` (off needs the owne
   on the owner's targets; an exception needs a reason and is reported when it matches nothing. Artwork with gradients is
   "not verified", never a pass.
 - `contrast --cvd` (script): ΔE2000 under each deficiency, the threshold from `qa/rules.json`, the method named per row.
-- `shot --motion` (script): rest frame equals the still at device scale 1 and 2, control pairs must differ, no
-  infinite animation, whole pixels, layout shift 0, and a reduced pass with no running animation and no motion listener.
+- `shot --motion` (script): a page's motion is seeked, not waited for: no infinite animation, layout shift 0 and no animated
+  layout property (move the mark with `transform` and `opacity`), whole pixels for a pixel mark (a vector mark may ease), at
+  360 and 390 px nothing past an edge and no sideways scroll, the rest frame equal to the still in the page itself (a
+  named-state file: at device scale 1 and 2, control pairs must differ), and a reduced pass with no running animation and no
+  motion listener. Motion driven by `requestAnimationFrame` cannot be seeked: its edges and whole pixels are "not verified",
+  so write the motion as CSS animations, transitions or `element.animate()`. One report per proof file. `frames` writes
+  stills of the motion into `motion/frames/` for the book.
 - `check --cascade` (script): no current file still holds an old value.
 - Prose: this file and the G4 "(rule)" list. Touch scrolling, audio and the script budget are not measured; they are
   listed in [09-qa](09-qa.md) as judgement items.

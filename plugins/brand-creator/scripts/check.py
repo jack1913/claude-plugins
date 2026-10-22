@@ -14,7 +14,10 @@
     drawing a mark's bands name must exist
   * the QA gates an artefact asks for: a manifest row with `qa: ["downscale", ...]` needs a current passing report from
     downscale, states-check, shot --motion, family-check, fontcheck or verify-idempotent; a report that exists is gated too.
-    The downscale report must be the one for the row's own master (`downscale_source`); a report on another file does not count
+    The downscale report must be the one for the row's own master (`downscale_source`); a report on another file does not count.
+    shot --motion writes one report per proof file (assets/_checks/motion/<slug>-<hash6>.json): each is gated, except one whose proof sits under
+    rounds/, history/ or a removed-*/ folder (an exploration proof: listed, never failing); a report whose proof file is gone is a warning to move it
+    to removed-<date>/; a row's motion gate needs one passing gated report. A motion.json of an earlier version is still gated, with a warning
   * size bands: a slot off the band rule (qa/rules.json) needs an exemption recorded in the manifest
   * staleness: when tools/inputs.json exists, upstream inputs, the plugin version and the emitter code must match it
   * platform-spec rows the pack was built from that are stale or unverified are warned about (specs-due lists them)
@@ -38,8 +41,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "emitters"))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "booklib"))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "adaptlib"))
-from _common import (Parser, Report, add_project_arg, downscale_report_tool, find_project, latest_round, main_guard, read_state, rel,  # noqa: E402
-                     sha256_file, verify_history)
+from _common import (Parser, Report, add_project_arg, downscale_report_tool, find_project, latest_round, main_guard, motion_proof_kind, read_state,  # noqa: E402
+                     rel, sha256_file, verify_history)
 from manifest import band_problems, load_artefacts, verify as verify_manifest  # noqa: E402
 import qa_rules  # noqa: E402
 import tierb  # noqa: E402
@@ -56,7 +59,7 @@ EMITTERS = ("web", "social", "apple", "windows", "linux", "tray", "tauri", "wall
 QA_GATES = {
     "downscale": ("downscale", "brand-creator downscale --source <master>"),   # per-source reports: see main()
     "states": ("states", "brand-creator states-check"),
-    "motion": ("motion", "brand-creator shot --motion <proof.json>"),
+    "motion": ("motion", "brand-creator shot --motion <proof.json>"),   # per-proof reports (assets/_checks/motion/): see main(); a motion.json is the earlier layout
     "family": ("family", "brand-creator family-check"),
     "fonts": ("fontcheck", "brand-creator fontcheck"),
     "idempotent": ("idempotence", "brand-creator verify-idempotent --cmd ..."),
@@ -173,8 +176,8 @@ def main() -> int:
     for k in unknown:
         rep.add(f"qa:{k}", "fail", "known QA gate", detail=f"a manifest row asks for QA gate {k!r}; the known gates are {', '.join(sorted(QA_GATES))}")
     for key, (tool, cmd) in QA_GATES.items():
-        if key == "downscale":
-            continue   # one report per measured source: handled below
+        if key in ("downscale", "motion"):
+            continue   # one report per measured source, one per proof file: handled below
         if key in wanted or (project / "assets" / "_checks" / f"{tool}.json").is_file():
             expectations.append((tool, cmd, None))
     # downscale: a row's qa gate is met only by a passing, current report for ITS master (`downscale_source`), never by a report on another file
@@ -200,9 +203,50 @@ def main() -> int:
             src = None
         st, detail = report_state(project, tool, f"brand-creator downscale --source {src or '<master>'}")
         rep.add(f"report:{tool}", st, "gate report", detail=detail)
+    # motion: one report per proof file. A proof under rounds/, history/ or a removed-*/ folder is an exploration proof (listed, never failing); a
+    # report whose proof is gone is a warning (move the report to removed-<date>/); the rest are gated. A row that asks for the gate needs one passing.
+    motion_cmd = QA_GATES["motion"][1]
+    motion_passing: list[str] = []
+    legacy = project / "assets" / "_checks" / "motion.json"
+    if legacy.is_file():   # the report of an earlier version: gated as it was, and said to be out of date
+        st, detail = report_state(project, "motion", motion_cmd)
+        rep.add("report:motion", st, "gate report", detail=detail)
+        rep.add("report:motion:legacy", "warn", "motion reports are one per proof file now",
+                detail=f"{rel(project, legacy)} is from an earlier version; shot --motion writes assets/_checks/motion/<slug>-<hash6>.json for each proof now: "
+                       f"re-run `{motion_cmd}` and move {rel(project, legacy)} to removed-<date>/")
+        if st == "pass":
+            motion_passing.append("report:motion")
+    for f in sorted((project / "assets" / "_checks" / "motion").glob("*.json")):
+        tool = f"motion/{f.stem}"
+        try:
+            proof = json.loads(f.read_text(encoding="utf-8")).get("proof")
+        except (ValueError, AttributeError):
+            proof = None   # not readable: report_state fails it, as for any report
+        proof = proof if isinstance(proof, str) else None
+        kind = motion_proof_kind(project, proof)
+        run_cmd = f"brand-creator shot --motion {proof or '<proof.json>'}"
+        if kind == "gone":
+            rep.add(f"report:{tool}", "warn", "gate report", detail=f"the proof {proof} no longer exists, so {rel(project, f)} gates nothing; move it to removed-<date>/")
+        elif kind == "exploration":
+            rep.add(f"report:{tool}", "info", "gate report", detail=f"exploration proof, not gated: {proof} is under rounds/, history/ or a removed-*/ folder")
+        else:
+            st, detail = report_state(project, tool, run_cmd)
+            rep.add(f"report:{tool}", st, "gate report", detail=detail)
+            if st == "pass":
+                motion_passing.append(f"report:{tool}")
+    if "motion" in wanted:
+        rep.add("qa:motion", "pass" if motion_passing else "skipped", "a manifest row asks for the motion gate",
+                detail=f"met by {', '.join(motion_passing)}" if motion_passing else f"not verified: no current passing motion report of a proof of this project; run `{motion_cmd}`")
+    cvd_set = any(k == "cvd" or k.startswith("cvd.") for k in rules["_from_file"])   # the project's own colour-vision threshold
     for tool, cmd, page in expectations:
         st, detail = report_state(project, tool, cmd, page)
         rep.add(f"report:{tool}", st, "gate report", detail=detail)
+        if tool == "contrast" and st == "pass" and cvd_set:
+            doc0 = json.loads((project / "assets" / "_checks" / "contrast.json").read_text(encoding="utf-8"))
+            if not any(r.get("section") == "cvd" for r in doc0.get("results", [])):
+                rep.add("report:contrast:cvd", "skipped", "the contrast report has the colour-vision rows qa/rules.json asks for",
+                        detail="not verified: qa/rules.json sets a colour-vision threshold (cvd) and the contrast report has no colour-vision rows; re-run "
+                               "`brand-creator contrast --cvd` (a tools/finish.sh copied before 0.3.5 runs contrast without --cvd: add it there too)")
         if tool in ("book", "book-lint", "book-pdf") and st == "pass":
             doc0 = json.loads((project / "assets" / "_checks" / f"{tool}.json").read_text(encoding="utf-8"))
             if doc0.get("manifest_view_sha") != bookdata.manifest_view_sha(project):

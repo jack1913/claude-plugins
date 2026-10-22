@@ -133,6 +133,9 @@ DOCUMENT_REFUSALS = [
     ("a start times a word", on_doc, put("timeline", 1, "start", value="{motion.stagger} * x"), r'timeline\[1\]\.start: must be "0".* got "\{motion\.stagger\} \* x"'),
     ("a start times a negative number", on_doc, put("timeline", 1, "start", value="{motion.stagger} * -1"), r"timeline\[1\]\.start: must be \"0\""),
     ("a start plus a number", on_doc, put("timeline", 1, "start", value="{motion.stagger} + 1"), r"timeline\[1\]\.start: must be \"0\""),
+    ("a start that is a difference", on_doc, put("timeline", 1, "start", value="{motion.base} - {motion.stagger}"), r"timeline\[1\]\.start: must be \"0\".* or a sum of them"),
+    ("a sum with a part missing", on_doc, put("timeline", 1, "start", value="{motion.base} +"), r"timeline\[1\]\.start: must be \"0\""),
+    ("a sum with 0 in it", on_doc, put("timeline", 1, "start", value="0 + {motion.base}"), r"timeline\[1\]\.start: must be \"0\""),
     ("a duration that is a literal", on_doc, put("timeline", 0, "duration", value="320ms"), r'timeline\[0\]\.duration: must be a reference to a duration token such as "\{motion\.base\}", got "320ms"'),
     ("a duration times a number", on_doc, put("timeline", 0, "duration", value="{motion.base} * 2"), r"timeline\[0\]\.duration: must be a reference to a duration token"),
     ("a step without a duration", on_doc, drop("timeline", 0, "duration"), r"timeline\[0\]\.duration: must be a reference to a duration token .* got null"),
@@ -194,6 +197,8 @@ def test_a_reference_must_name_a_built_token_of_the_right_kind(proj):
         ("a curve that is a duration", ("timeline", 1, "easing"), "{motion.base}", r"timeline\[1\]\.easing: \{motion\.base\} is not a cubicBezier token \(cubicBezier tokens: "),
         ("a start that is a curve", ("timeline", 0, "start"), "{easing.enter}", r"timeline\[0\]\.start: \{easing\.enter\} is not a duration token"),
         ("a start that does not exist", ("timeline", 1, "start"), "{motion.nope} * 2", r"timeline\[1\]\.start: no token named motion\.nope"),
+        ("a sum whose second part is a curve", ("timeline", 1, "start"), "{motion.base} + {easing.enter} * 2", r"timeline\[1\]\.start: \{easing\.enter\} is not a duration token"),
+        ("a sum whose first part does not exist", ("timeline", 1, "start"), "{motion.nope} + {motion.stagger}", r"timeline\[1\]\.start: no token named motion\.nope"),
     ]
     for what, path, value, expected in cases:
         doc = on_doc()
@@ -201,7 +206,8 @@ def test_a_reference_must_name_a_built_token_of_the_right_kind(proj):
         write(proj, doc)
         msg = refusal(proj)
         assert re.search(expected, msg), f"{what}: {msg}"
-    for ok in ("0", "{motion.stagger}", "{motion.stagger} * 2", "{motion.stagger}*1.5", "{duration.fast} * 0"):
+    for ok in ("0", "{motion.stagger}", "{motion.stagger} * 2", "{motion.stagger}*1.5", "{duration.fast} * 0", "{motion.base} + {motion.stagger}",
+               "{motion.base} + {motion.stagger} * 2", "{motion.base}+{motion.quick}*0.5+{duration.fast}"):
         doc = on_doc()
         doc["timeline"][0]["start"] = ok
         write(proj, doc)

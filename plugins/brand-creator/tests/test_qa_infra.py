@@ -600,3 +600,127 @@ def test_every_qa_report_the_new_tools_write_is_a_gate_in_check(acme):
     assert bc("states-check", project=acme).returncode == 1
     r = bc("check", project=acme)
     assert r.returncode == 1 and "report:states" in failing(report(acme, "check"))
+
+
+# ================================================================ motion reports in `check`: one per proof file (assets/_checks/motion/<slug>-<hash6>.json)
+
+def motion_report(project: Path, proof: str, status: str = "pass") -> Path:
+    """The report `shot --motion` writes for a proof, written by hand: these tests need no browser."""
+    from _common import motion_report_tool
+    f = project / "assets" / "_checks" / (motion_report_tool(proof) + ".json")
+    f.parent.mkdir(parents=True, exist_ok=True)
+    inputs = [{"path": proof, "sha256": sha(project / proof)}] if (project / proof).is_file() else []
+    row = {"id": "motion:demo:control", "status": "fail" if status == "fail" else "pass", "label": "control", "detail": "x"}
+    f.write_text(json.dumps({"tool": motion_report_tool(proof), "version": "0", "inputs_sha": "0" * 64, "inputs": inputs, "renderer": "x",
+                             "results": [row], "status": status, "proof": proof}, indent=2) + "\n")
+    return f
+
+
+def put_proof(project: Path, rel_path: str) -> str:
+    """A proof file (`check` only hashes it) at a project path."""
+    f = project / rel_path
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text('{"schema": 1, "cases": []}\n')
+    return rel_path
+
+
+def motion_row(project: Path, proof: str) -> dict:
+    from _common import motion_report_tool
+    return next(x for x in report(project, "check")["results"] if x["id"] == f"report:{motion_report_tool(proof)}")
+
+
+def test_a_motion_report_is_gated_as_a_downscale_one_is_current_failing_or_stale(proj):
+    proof = put_proof(proj, "motion/proof.json")
+    motion_report(proj, proof)
+    assert bc("check", project=proj).returncode == 0 and motion_row(proj, proof)["status"] == "pass"
+    mutate(proj / proof, '"cases": []', '"cases": [ ]')   # the proof changed since the report was made
+    r = bc("check", project=proj)
+    row = motion_row(proj, proof)
+    assert r.returncode == 3 and row["status"] == "skipped" and "stale" in row["detail"] and "motion/proof.json changed" in row["detail"]
+    assert f"brand-creator shot --motion {proof}" in row["detail"]
+    mutate(proj / proof, '"cases": [ ]', '"cases": []')
+    motion_report(proj, proof, "fail")
+    r = bc("check", project=proj)
+    assert r.returncode == 1 and motion_row(proj, proof)["status"] == "fail" and "motion:demo:control" in motion_row(proj, proof)["detail"]
+
+
+def test_two_motion_proofs_are_two_reports_and_a_passing_one_never_stands_in_for_a_failing_one(proj):
+    a, b = put_proof(proj, "motion/proof.json"), put_proof(proj, "motion/hero.json")
+    motion_report(proj, a)
+    motion_report(proj, b, "fail")
+    r = bc("check", project=proj)
+    assert r.returncode == 1
+    assert motion_row(proj, a)["status"] == "pass" and motion_row(proj, b)["status"] == "fail"
+    assert len(list((proj / "assets/_checks/motion").glob("*.json"))) == 2
+    from _common import motion_report_tool
+    assert motion_report_tool(a) != motion_report_tool("rounds/r2/proof.json")   # the same file name in another folder is another report
+
+
+def test_a_proof_under_rounds_history_or_removed_is_an_exploration_listed_and_never_gated(proj):
+    from _common import history_files, sha256_file, write_history_manifest
+    tries = [put_proof(proj, p) for p in ("rounds/r2/proof.json", "history/r1/motion/proof.json", "removed-2026-10-21/proof.json", "motion/removed-old/proof.json")]
+    hist = proj / "history"
+    write_history_manifest(hist, {f.relative_to(hist).as_posix(): sha256_file(f) for f in history_files(hist)})   # frozen the way `freeze` writes it
+    for t in tries:
+        motion_report(proj, t, "fail")   # each would fail the check if it were gated
+    r = bc("check", project=proj)
+    assert r.returncode == 0, r.stdout
+    for t in tries:
+        row = motion_row(proj, t)
+        assert row["status"] == "info" and "exploration proof, not gated" in row["detail"] and t in row["detail"], t
+    near = put_proof(proj, "motion/rounds-proof.json")   # "rounds" in a file name is not a rounds/ folder
+    motion_report(proj, near, "fail")
+    assert bc("check", project=proj).returncode == 1 and motion_row(proj, near)["status"] == "fail"
+
+
+def test_a_motion_report_whose_proof_is_gone_is_a_warning_that_names_it(proj):
+    motion_report(proj, "motion/gone.json")        # the proof was never there, or moved away
+    motion_report(proj, "rounds/r2/gone.json")     # an exploration proof that is gone is a gone proof first
+    r = bc("check", project=proj)
+    assert r.returncode == 0, r.stdout
+    for p in ("motion/gone.json", "rounds/r2/gone.json"):
+        row = motion_row(proj, p)
+        assert row["status"] == "warn" and p in row["detail"] and "no longer exists" in row["detail"] and "removed-<date>/" in row["detail"]
+        assert "assets/_checks/motion/gone-" in row["detail"] or "assets/_checks/motion/gone" in row["detail"]
+
+
+def test_a_manifest_row_that_asks_for_motion_needs_a_passing_gated_report(proj):
+    m = Manifest(proj)
+    m.put("assets/s/mark.png", Img(16, 16, "#007d71").png(), emitter="t", specs=[], qa=["motion"])
+    m.save()
+    qa = lambda: next(x for x in report(proj, "check")["results"] if x["id"] == "qa:motion")   # noqa: E731
+    r = bc("check", project=proj)
+    assert r.returncode == 3 and qa()["status"] == "skipped" and "brand-creator shot --motion <proof.json>" in qa()["detail"]
+    motion_report(proj, put_proof(proj, "rounds/r2/proof.json"))   # a passing report of an exploration proof does not count
+    assert bc("check", project=proj).returncode == 3 and qa()["status"] == "skipped"
+    stale = put_proof(proj, "motion/old.json")
+    motion_report(proj, stale)
+    mutate(proj / stale, '"cases": []', '"cases": [ ]')             # a stale one does not count either
+    assert bc("check", project=proj).returncode == 3 and qa()["status"] == "skipped"
+    good = put_proof(proj, "motion/proof.json")
+    motion_report(proj, good)
+    r = bc("check", project=proj)
+    assert qa()["status"] == "pass" and "report:motion/proof-" in qa()["detail"]
+    assert r.returncode == 3   # the stale report still says "not verified" on its own row, as it should
+    mutate(proj / stale, '"cases": [ ]', '"cases": []')
+    assert bc("check", project=proj).returncode == 0
+
+
+def test_a_motion_json_of_an_earlier_version_is_still_gated_with_a_warning_to_run_the_proof_again(proj):
+    legacy = proj / "assets/_checks/motion.json"
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    legacy.write_text(json.dumps({"tool": "motion", "version": "0", "inputs_sha": "0" * 64, "inputs": [], "renderer": "x", "status": "fail",
+                                  "results": [{"id": "motion:demo-page:cls:normal", "status": "fail", "label": "cls", "detail": "x"}]}) + "\n")
+    r = bc("check", project=proj)
+    res = {x["id"]: x for x in report(proj, "check")["results"]}
+    assert r.returncode == 1 and res["report:motion"]["status"] == "fail" and "motion:demo-page:cls:normal" in res["report:motion"]["detail"]
+    warn = res["report:motion:legacy"]
+    assert warn["status"] == "warn" and "assets/_checks/motion/<slug>-<hash6>.json" in warn["detail"] and "brand-creator shot --motion <proof.json>" in warn["detail"]
+    assert "removed-<date>/" in warn["detail"]
+    mutate_json(legacy, lambda d: (d.__setitem__("status", "pass"), d["results"][0].__setitem__("status", "pass")))
+    m = Manifest(proj)
+    m.put("assets/s/mark.png", Img(16, 16, "#007d71").png(), emitter="t", specs=[], qa=["motion"])
+    m.save()
+    r = bc("check", project=proj)
+    res = {x["id"]: x for x in report(proj, "check")["results"]}
+    assert r.returncode == 0 and res["report:motion"]["status"] == "pass" and res["qa:motion"]["status"] == "pass" and res["report:motion:legacy"]["status"] == "warn"

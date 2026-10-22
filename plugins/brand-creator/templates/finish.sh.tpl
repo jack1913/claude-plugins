@@ -88,10 +88,15 @@ emit_args() {                   # sets EMIT_ARGS (an array, so every value stays
   return 0
 }
 
-step "plugin version: $("${BC[@]}" version)"
+# a session that still runs an older copy of the plugin than the one installed stops here (start a new session); a checkout says "not checked"
+step "plugin version"; "${BC[@]}" version --check
 for g in ${GENERATORS[@]+"${GENERATORS[@]}"}; do step "generator $g"; python3 "$g"; done
 step "tokens";   "${BC[@]}" tokens
-step "contrast"; "${BC[@]}" contrast
+# a project whose qa/rules.json sets a colour-vision threshold (cvd) keeps its colour-vision rows: without --cvd the report would lose them, and check
+# says so ("not verified")
+CONTRAST_ARGS=()
+python3 -c 'import json, os, sys; sys.exit(0 if os.path.isfile("qa/rules.json") and json.load(open("qa/rules.json")).get("cvd") else 1)' && CONTRAST_ARGS+=(--cvd)
+step "contrast ${CONTRAST_ARGS[*]-}"; "${BC[@]}" contrast ${CONTRAST_ARGS[@]+"${CONTRAST_ARGS[@]}"}
 
 # the marks of a project with several of them (qa/rules.json marks), in the file's order; none for a one-mark project
 MARKS=()

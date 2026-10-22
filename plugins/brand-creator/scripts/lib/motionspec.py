@@ -18,7 +18,8 @@ KEYS = {"": ("schema", "motion", "reason", "signature", "parts", "timeline", "ru
         "part": ("id", "description"), "step": ("part", "property", "start", "duration", "easing", "note")}
 ID = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*")
 REF = re.compile(r"\{([^{}\s]+)\}")
-START = re.compile(r"\{([^{}\s]+)\}(?:\s*\*\s*(\d+(?:\.\d+)?))?")
+TERM = r"\{([^{}\s]+)\}(?:\s*\*\s*(\d+(?:\.\d+)?))?"   # a duration reference, or one times a number of 0 or more
+START = re.compile(rf"{TERM}(?:\s*\+\s*{TERM})*")             # a term, or a sum of them: "{motion.base} + {motion.stagger} * 2"
 KIND = {"duration": "duration", "curve": "cubicBezier"}   # what a reference must name, in the words of the DTCG type
 
 
@@ -109,12 +110,11 @@ def check(doc) -> tuple[list[str], list[tuple[str, str, str]]]:
                 if not text(step.get("property")):
                     bad.append(f"{at}.property: required, what moves (for example transform)")
                 start = step.get("start")
-                m = START.fullmatch(start) if isinstance(start, str) else None
-                if m:
-                    refs.append((f"{at}.start", m.group(1), "duration"))
+                if isinstance(start, str) and START.fullmatch(start.strip()):
+                    refs += [(f"{at}.start", m.group(1), "duration") for m in re.finditer(TERM, start)]   # every part of a sum is a duration token
                 elif start != "0":
-                    bad.append(f'{at}.start: must be "0", a duration reference such as "{{motion.stagger}}", or a reference times a number such as "{{motion.stagger}} * 2", '
-                               f"got {json.dumps(start)}")
+                    bad.append(f'{at}.start: must be "0", a duration reference such as "{{motion.stagger}}", a reference times a number such as "{{motion.stagger}} * 2", '
+                               f'or a sum of them such as "{{motion.base}} + {{motion.stagger}} * 2", got {json.dumps(start)}')
                 for key, kind, example in (("duration", "duration", "{motion.base}"), ("easing", "curve", "{easing.standard}")):
                     v = step.get(key)
                     m = REF.fullmatch(v) if isinstance(v, str) else None

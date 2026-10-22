@@ -25,7 +25,8 @@ Each check writes a report to `assets/_checks/`. `check` reads every report that
 | `family-check` | Family modes: shared glyphs equal the family's sources, and tile shares agree across products (`FAMILY.md`) |
 | `fontcheck`, `fonts` | Glyph coverage for the brand's languages, a licence hint, and which font Chromium really used |
 | `outline-glyphs` | Type-based marks as paths with no live text |
-| `shot --motion` | Animation states equal the static mark. Reduced motion shows the still. No layout shift |
+| `shot --motion` | The mark's motion is stepped through, not waited for: no layout shift, the animated parts stay on a phone screen (360 and 390 pixels wide), the rest frame equals the still to the pixel, and pixel marks move in whole pixels. Reduced motion shows the still. Motion a script draws frame by frame (`requestAnimationFrame`) cannot be stepped through, so its phone-screen check says "not verified". One report per proof file |
+| `frames` | Stills of the mark along its motion, a strip of them and the reduced-motion still, written into `motion/frames/` for the brand book |
 | `snapshot`, `verify-idempotent`, `staleness`, `specs-due` | Byte-identity proofs, two-run idempotence, stale packs, and platform sizes due for a recheck |
 
 The thresholds are yours, kept in `qa/rules.json`. The plugin's numbers are proposals and say so.

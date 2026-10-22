@@ -30,7 +30,11 @@ project
 
 checks and renders
   shot <page.html>        four-view page shots (1440/390 x light/dark) with an overflow/console/network report
+  shot --motion <proof>   motion proof: named states against the still, a page's animations seeked through (layout shift, whole pixels, edges at
+                          phone widths, rest frame compared in the page itself), reduced motion; one report per proof file
   card <card.html>        render an HTML card to a PNG (OG, repo social, README header)
+  frames <proof.json>     stills of a page case's mark along its motion (--case, --count N or --at 0,25,50,75,100): a strip and the reduced-motion
+                          still too, into motion/frames/<case>/, each written only when its bytes change
   logo-sheet              real-size logo sheet (16/20/32/64/128/180, light and dark, x4 favicon, header mock)
   contrast                WCAG 2.2 AA UI pairs, brand-rule pairs, colours that touch in the logo SVGs, APCA advisory
   board-lint <page.html>  required board sections (data-section attributes) for a round page
@@ -100,7 +104,9 @@ environment
   prereq --for <tier>     report MISSING / what it blocks / install command (quick|standard|full|apple|print|names|adoption)
   smoke                   dev helper: run the Acme end-to-end smoke test
   root                    print the plugin root (the folder a project's own generators import scripts/lib from)
-  version | help
+  version [--check]       the plugin's version; --check: is it the copy Claude Code has installed (exit 1 when another copy is: start a new
+                          session; "not checked" when it cannot tell, such as a checkout of the repository)
+  help
 
 Run `brand-creator <subcommand> --help` for the options of each.
 EOF
@@ -125,7 +131,12 @@ sub="$1"; shift
 
 case "$sub" in
   help|-h|--help) usage; exit 0 ;;
-  version|--version) python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['version'])" "$ROOT/.claude-plugin/plugin.json"; exit 0 ;;
+  version|--version)
+    case "${1:-}" in
+      "")      python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['version'])" "$ROOT/.claude-plugin/plugin.json"; exit 0 ;;
+      --check) ;;   # is this the copy Claude Code has installed? (tools/finish.sh runs it first): a bootstrap script, run below
+      *)       die "version takes no argument but --check" ;;
+    esac ;;
   root)           printf '%s\n' "$ROOT"; exit 0 ;;   # the plugin root: tools/finish.sh hands it to a project's own generators as BRAND_CREATOR_ROOT
 esac
 
@@ -133,7 +144,7 @@ if [ -n "$data" ]; then
   mkdir -p "$data" 2>/dev/null || die "cannot create the data directory: $data"
   data="$(cd -P "$data" && pwd)"
   export BRAND_CREATOR_DATA="$data"
-elif [ "$sub" != "prereq" ]; then
+elif [ "$sub" != "prereq" ] && [ "$sub" != "version" ] && [ "$sub" != "--version" ]; then
   die "no data directory. Pass --data <dir> (skills pass \${CLAUDE_PLUGIN_DATA}) or set BRAND_CREATOR_DATA."
 fi
 export BRAND_CREATOR_ROOT="$ROOT"
@@ -142,7 +153,7 @@ export PYTHONDONTWRITEBYTECODE=1 PYTHONUTF8=1 PYTHONIOENCODING=utf-8
 need() { # need <tool> <what for> <install hint>
   command -v "$1" >/dev/null 2>&1 || { echo "brand-creator: cannot run: $1 not found ($2). $3 Run: brand-creator prereq --for quick" >&2; exit 3; }
 }
-py_boot() { # standard-library scripts that must work before (or without) uv: setup, prereq, state
+py_boot() { # standard-library scripts that must work before (or without) uv: setup, prereq, state, version --check
   local f="$1" c tried=""; shift
   need python3 "bootstrap scripts" "Install Python 3.10 or newer."
   # The first python3 on PATH that starts and is 3.10 or newer (as uv picks one): an older or broken python3 earlier on
@@ -161,11 +172,13 @@ js()      { local f="$1"; shift; need node "render and token scripts" "Install N
 case "$sub" in
   setup)      py_boot setup.py "$@" ;;
   prereq)     py_boot prereq.py "$@" ;;
+  version|--version) py_boot version_check.py "$ROOT" "$PWD" ;;   # only --check gets here
   new)        py new.py "$@" ;;
   state)      py_boot state.py "$@" ;;   # stdlib only: must work without uv (the status skill injects it)
   freeze)     py freeze.py "$@" ;;
   shot)       js render.mjs shot "$@" ;;
   card)       js render.mjs card "$@" ;;
+  frames)     js render.mjs frames "$@" ;;
   logo-sheet) py logo_sheet.py "$@" ;;
   contrast)   py contrast.py "$@" ;;
   board-lint) py board_lint.py "$@" ;;

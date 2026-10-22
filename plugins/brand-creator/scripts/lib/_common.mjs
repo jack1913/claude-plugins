@@ -184,6 +184,24 @@ export function today() {
 export const sha256 = (buf) => crypto.createHash("sha256").update(buf).digest("hex");
 export const sha256File = (p) => sha256(fs.readFileSync(p));
 
+/** The report tool name (-> assets/_checks/<dir>/<slug>-<hash6>.json) of a proof file: one report per proof, so a run of one proof never touches the
+ *  report of another. The slug is the file stem, the hash the first six hex of the sha256 of its project-relative posix path.
+ *  Twin of motion_report_tool in _common.py (a test makes both answer the same); `dir` is "motion" for shot --motion, "frames" for frames. */
+export function proofReportTool(proofRel, dir = "motion") {
+  const src = proofRel.split(path.sep).join("/");
+  const slug = path.posix.basename(src, path.posix.extname(src)).replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase() || "proof";
+  return `${dir}/${slug}-${sha256(src).slice(0, 6)}`;
+}
+
+/** Art drawn on a pixel grid: the root element of the SVG says shape-rendering="crispEdges". Twin of pixel_art in svgtools.py, which reads the parsed
+ *  root; here the root tag is read as text (comments and the XML declaration before it are skipped). */
+export function pixelArt(svgText) {
+  const root = /<svg\b(?:[^>"']|"[^"]*"|'[^']*')*>/.exec(svgText.replace(/<!--[\s\S]*?-->/g, ""));
+  if (!root) return false;
+  for (const m of root[0].matchAll(/\s([^\s=/>]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)) if (m[1] === "shape-rendering") return (m[2] ?? m[3]) === "crispEdges";
+  return false;
+}
+
 /** Put-on-byte-change. Returns true when the file was (re)written. */
 export function writeIfChanged(file, data) {
   if (fs.existsSync(file) && Buffer.compare(fs.readFileSync(file), Buffer.from(data)) === 0) return false;

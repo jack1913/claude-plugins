@@ -189,13 +189,17 @@ ids = {r["id"]: r["status"] for r in json.load(open(sys.argv[1]))["results"]}
 assert ids["cmap:TestFont-subset.ttf:pl"] == "pass" and ids["platform:TestFont-subset.ttf"] == "pass", ids
 PY
 "${BC[@]}" shot --motion motion/proof.json --project "$P" >/dev/null || die "the motion proof failed"
-python3 - "$P/assets/_checks/motion.json" <<'PY' || die "motion report is wrong"
-import json, sys
-rep = json.load(open(sys.argv[1]))
+python3 - "$P/assets/_checks" <<'PY' || die "motion report is wrong"
+import glob, json, os, sys
+# one report per proof file (assets/_checks/motion/<slug>-<hash6>.json); nothing writes assets/_checks/motion.json any more
+(f,) = glob.glob(sys.argv[1] + "/motion/proof-*.json")
+rep = json.load(open(f))
 ids = [r["id"] for r in rep["results"]]
-assert rep["status"] == "pass" and "motion:dot-press:2x:control:rest!=pressed" in ids and "motion:demo-page:reduced:animations" in ids, ids
+assert rep["status"] == "pass" and rep["proof"] == "motion/proof.json" and rep["tool"] == "motion/" + os.path.basename(f)[:-5], rep["tool"]
+assert "motion:dot-press:2x:control:rest!=pressed" in ids and "motion:demo-page:reduced:animations" in ids and "motion:demo-page:edges:360" in ids, ids
+assert not os.path.exists(sys.argv[1] + "/motion.json")
 PY
-ok "states differ, colours survive colour-vision simulation, font covers pl and de, motion proof passes at 1x and 2x with a control"
+ok "states differ, colours survive colour-vision simulation, font covers pl and de, motion proof passes at 1x and 2x with a control, one report per proof"
 
 step "platform packs: the Acme tray masters are rebuilt byte for byte, then windows, linux, tray, tauri, wallet and developer are emitted"
 cp "$FIX/FACTS.md" "$P/FACTS.md"

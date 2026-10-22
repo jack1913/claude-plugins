@@ -17,7 +17,7 @@ import bookmd
 import qa_rules
 import svgtools
 from _color import wcag_ratio
-from _common import EXIT_FAIL, EXIT_USAGE, confine, fail, rasterise_svg, sha256_file
+from _common import EXIT_FAIL, EXIT_USAGE, confine, fail, motion_proof_kind, rasterise_svg, sha256_file
 from mark_lint import lint_svg_text
 
 esc = bookmd.esc
@@ -496,15 +496,36 @@ class BookBuild:
                 if k.startswith(("duration.", "easing.", "motion."))]
         out = [self.table([self.T(lang, "Token"), self.T(lang, "Value")], rows) if rows else
                f"<p>{esc(self.T(lang, 'The tokens define no durations.'))}</p>"]
-        doc, stale = self.load_report("assets/_checks/motion.json")
-        if doc:
+        reps = self.motion_reports()
+        shown = 0
+        for rf, proof in reps:
+            doc, stale = self.load_report(rf)
+            if not doc:
+                continue
             prow = [[esc(r["id"]), f'<span class="st">{esc(r["status"])}</span>'] for r in doc.get("results", []) if r["status"] in ("pass", "fail", "warn")]
-            out.append(f"<h4>{esc(self.T(lang, 'Motion proof'))}</h4>" + self.table([self.T(lang, "Case"), self.T(lang, "Result")], prow))
+            out.append(f"<h4>{esc(self.T(lang, 'Motion proof') + (f': {proof}' if len(reps) > 1 and proof else ''))}</h4>" + self.table([self.T(lang, "Case"), self.T(lang, "Result")], prow))
             if stale:
-                self.warn("motion", f"the motion report is stale ({'; '.join(stale[:2])})")
-        else:
+                self.warn("motion", f"the motion report {rf} is stale ({'; '.join(stale[:2])})")
+            shown += 1
+        if not shown:
             self.warn("motion", "no motion report; the motion proof table is left out (run `brand-creator shot --motion motion/proof.json`)")
         return "\n".join(out)
+
+    def motion_reports(self) -> list[tuple[str, str | None]]:
+        """The motion reports the book shows -> [(report path, its proof)]: the one of an earlier version (assets/_checks/motion.json), and one per proof file of
+        the project (assets/_checks/motion/). A report of a proof under rounds/, history/ or removed-*/, or of one that no longer exists, is left out: it
+        proves nothing about the brand as it stands."""
+        out = [("assets/_checks/motion.json", None)] if (self.project / "assets" / "_checks" / "motion.json").is_file() else []
+        d = self.project / "assets" / "_checks" / "motion"
+        for f in sorted(d.glob("*.json")) if d.is_dir() else []:
+            try:
+                proof = json.loads(f.read_text(encoding="utf-8")).get("proof")
+            except ValueError:
+                proof = None   # load_report says it is not valid JSON, and the book leaves it out
+            proof = proof if isinstance(proof, str) else None
+            if motion_proof_kind(self.project, proof) == "gated":
+                out.append((f.relative_to(self.project).as_posix(), proof))
+        return out
 
     def b_tokens(self, arg: str, lang: str) -> str:
         rows = [[esc(k), f"<code>{esc(str(v))}</code>"] for k, v in sorted(self.doc.get("other", {}).items())]
@@ -545,6 +566,7 @@ class BookBuild:
         tools = list(PROOF_TOOLS)
         d = self.project / "assets" / "_checks" / "downscale"
         tools += [f"downscale/{p.stem}" for p in sorted(d.glob("*.json"))] if d.is_dir() else []
+        tools += [f"motion/{Path(rf).stem}" for rf, _proof in self.motion_reports() if rf != "assets/_checks/motion.json"]
         rows = []
         for t in tools:
             doc, stale = self.load_report(f"assets/_checks/{t}.json")

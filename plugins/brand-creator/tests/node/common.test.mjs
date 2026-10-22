@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { ROOT, tmpdir, makeProject, DATA, needSetup } from "./_helpers.mjs";
 
 process.env.BRAND_CREATOR_DATA = process.env.BRAND_CREATOR_DATA || tmpdir("bc-node-nodata-");
@@ -171,4 +172,43 @@ test("render.mjs reports missing system libraries instead of telling the user to
   const src = fs.readFileSync(path.join(ROOT, "scripts/render.mjs"), "utf8");
   assert.match(src, /missingSharedLibs\(findHeadlessShell\(setup\.browsers_path, setup\.chromium_revision\)\)/);
   assert.match(src, /this system lacks shared libraries it needs/);
+});
+
+// the two twins of Python functions that render.mjs needs: the name of a proof's report, and whether a drawing is pixel art
+const python = (code, ...args) => {
+  const r = spawnSync("python3", ["-c", `import json, sys; sys.path.insert(0, sys.argv[1])\n${code}`, path.join(ROOT, "scripts/lib"), ...args], { encoding: "utf8", env: { ...process.env, PYTHONDONTWRITEBYTECODE: "1" } });
+  assert.equal(r.status, 0, r.stderr);
+  return JSON.parse(r.stdout);
+};
+
+test("the report name of a proof file is the same in JS and in Python, and the hash is the one of its project-relative path", () => {
+  const paths = ["motion/proof.json", "rounds/r2/Motion Proof (v2).json", "\u00fcn\u00ef/\u00e7ode.json", "a.b.c.json", "-.json", "x/y/z/.json", "Z", "motion/proof.json.json", "motion/PROOF.JSON"];
+  const want = python("from _common import motion_report_tool\nprint(json.dumps([motion_report_tool(p) for p in json.loads(sys.argv[2])]))", JSON.stringify(paths));
+  assert.deepEqual(paths.map((x) => C.proofReportTool(x)), want);
+  assert.equal(C.proofReportTool("motion/proof.json"), `motion/proof-${C.sha256("motion/proof.json").slice(0, 6)}`);   // the first six hex of sha256 of the path
+  assert.equal(C.proofReportTool("rounds/r2/Motion Proof (v2).json"), `motion/motion-proof-v2-${C.sha256("rounds/r2/Motion Proof (v2).json").slice(0, 6)}`); // the stem, lower-cased, runs of other characters as one dash
+  assert.equal(C.proofReportTool("motion/proof.json", "frames"), C.proofReportTool("motion/proof.json").replace("motion/", "frames/"));
+  assert.notEqual(C.proofReportTool("motion/proof.json"), C.proofReportTool("rounds/r2/proof.json")); // the same file name in two folders is two reports
+});
+
+test("pixelArt reads the root of an SVG the way svgtools.pixel_art does", () => {
+  const NS = 'xmlns="http://www.w3.org/2000/svg"';
+  const cases = [
+    [`<svg ${NS} shape-rendering="crispEdges" viewBox="0 0 8 8"/>`, true],
+    [`<svg ${NS} viewBox="0 0 8 8" width="8" shape-rendering='crispEdges'><rect width="8" height="8"/></svg>`, true],
+    [`<?xml version="1.0"?>\n<!-- drawn on a grid -->\n<svg ${NS} shape-rendering="crispEdges"/>`, true],
+    [`<svg ${NS} aria-label="a > b" shape-rendering="crispEdges"/>`, true],
+    [`<svg ${NS} shape-rendering="geometricPrecision"/>`, false],
+    [`<svg ${NS} shape-rendering="crispedges"/>`, false],
+    [`<svg ${NS} viewBox="0 0 8 8"/>`, false],
+    [`<svg ${NS}><g shape-rendering="crispEdges"/></svg>`, false],
+    [`<svg ${NS} style="shape-rendering:crispEdges"/>`, false],
+    [`<svg ${NS} data-shape-rendering="crispEdges"/>`, false],
+    [`<svg ${NS} aria-label="shape-rendering='crispEdges'"/>`, false],
+    [`<!-- <svg shape-rendering="crispEdges"> -->\n<svg ${NS} viewBox="0 0 8 8"/>`, false],
+  ];
+  const want = python("import svgtools\nprint(json.dumps([svgtools.pixel_art(t) for t in json.loads(sys.argv[2])]))", JSON.stringify(cases.map((c) => c[0])));
+  assert.deepEqual(want, cases.map((c) => c[1]), "the Python side answers as written here");
+  assert.deepEqual(cases.map((c) => C.pixelArt(c[0])), cases.map((c) => c[1]));
+  assert.equal(C.pixelArt("not an svg"), false);
 });

@@ -23,7 +23,7 @@ STATE_FILE = "BRAND-STATE.md"
 RENDERERS = ("resvg", "pillow")
 GATE_IDS = ("G0", "G1", "G1s", "G2", "G2b", "G3", "G4", "G5", "G6", "G7")
 # One User-Agent for every outbound request any script ever makes. Generic on purpose: no personal data, no "@".
-USER_AGENT = "brand-creator/0.3.4 (+https://example.invalid/brand-creator)"
+USER_AGENT = "brand-creator/0.3.5 (+https://example.invalid/brand-creator)"
 
 
 class CliError(Exception):
@@ -222,6 +222,26 @@ def downscale_report_tool(source_rel: str) -> str:
     src = Path(source_rel).as_posix()
     slug = re.sub(r"[^A-Za-z0-9]+", "-", Path(src).stem).strip("-").lower() or "source"
     return f"downscale/{slug}-{hashlib.sha256(src.encode()).hexdigest()[:6]}"
+
+
+def motion_report_tool(proof_rel: str) -> str:
+    """The report tool name (-> assets/_checks/motion/<slug>-<hash6>.json) of `shot --motion` on one proof file: one report per proof, so a run of
+    one proof never touches another's. The slug is the file stem, the hash the first six hex of the sha256 of the project-relative posix path.
+    Twin of proofReportTool in _common.mjs (a test makes both answer the same)."""
+    src = Path(proof_rel).as_posix()
+    slug = re.sub(r"[^A-Za-z0-9]+", "-", Path(src).stem).strip("-").lower() or "proof"
+    return f"motion/{slug}-{hashlib.sha256(src.encode()).hexdigest()[:6]}"
+
+
+def motion_proof_kind(project: Path, proof: str | None) -> str:
+    """Where a motion report stands, judged by the proof file it names: "gone" (that file no longer exists), "exploration" (it sits under rounds/,
+    history/ or a removed-*/ folder: a try-out, listed by `check` and never gated) or "gated" (a proof of the project; also a report that names none)."""
+    if not proof:
+        return "gated"
+    p = Path(proof)
+    if not (project / p).is_file():
+        return "gone"
+    return "exploration" if any(part in ("rounds", "history") or part.startswith("removed-") for part in p.parts[:-1]) else "gated"
 
 
 def sha256_file(p: Path) -> str:

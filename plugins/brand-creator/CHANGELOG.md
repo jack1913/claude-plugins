@@ -6,6 +6,78 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-10-22
+
+The motion proof, second release: it steps through a page's motion instead of waiting for it, looks at phone screens, compares
+the rest frame in the page itself, and keeps one report per proof. A new command writes stills of the motion. A proof that
+passed before can now fail or say "not verified": an animation of `top`, `width` or `margin` fails, and motion driven by
+`requestAnimationFrame` cannot be checked at the phone widths. A project made before this version should add two lines to its
+`tools/finish.sh` (see Changed).
+
+### Added
+
+- `brand-creator frames <proof.json>` writes stills of a page's mark along its motion into `motion/frames/<case>/`: five by
+  default (0, 25, 50, 75 and 100 percent of the motion), or `--count N`, or the points you name with `--at 0,40,100`.
+  Next to them: `strip.png` with the stills side by side, `reduced.png` (the mark under reduced motion) and `frames.json`
+  with each still's time and checksum. The files are in your project because the brand book will show them. A file is
+  written only when its bytes change, so a second run says "unchanged". `--case <name>` picks one case. It writes nothing,
+  and says why, for a page with nothing to step through, a page that also moves by `requestAnimationFrame` while the stills
+  are taken (they would differ from run to run), and a case whose folder holds the stills of another proof. A strip wider
+  than Chromium can write is refused with the number of stills that fit.
+- The motion proof looks at phone screens. It loads the page again at 360 and 390 pixels wide (`"widths"` in the case
+  changes them) and, at every point of the motion, checks that the page cannot be swiped sideways, that no part of the mark
+  goes past the left, top or right edge, and that the page is no taller than at rest. A failure names the moment, the part,
+  the edge and how far: `at 62% (310 ms): g#letter-a 22 px past the right edge at 360 px`.
+- A pixel mark is held to whole pixels at every point of the motion and at every keyframe, not at nine fixed points, whether
+  it moves by `transform` or by the `translate`, `rotate` and `scale` properties. A mark counts as a pixel mark when its still
+  says `shape-rendering="crispEdges"` on the root; `"pixel": true` or `"pixel": false` in the case overrides that.
+- `brand-creator version --check` says whether the session runs the copy of the plugin that Claude Code has installed. After
+  an update, a session that started before it still runs the old copy: the command then exits 1 and says to start a new
+  session. In a checkout of the repository it says "not checked".
+- A step of `motion/motion.json` can start at a sum: `"{motion.base} + {motion.stagger} * 2"` starts a step when another ends,
+  plus a stagger. Every part of the sum must be a duration token.
+
+### Changed
+
+- `shot --motion` writes one report per proof file: `assets/_checks/motion/<name>-<hash>.json`, where the name is the proof
+  file's name and the hash comes from its path as the disk spells it. It used to write `assets/_checks/motion.json`, so a
+  second proof, or a try-out under `rounds/`, overwrote the report of the first. Run each proof again to get its report. An old
+  `motion.json` is still checked, with a warning to run the proof again; move it to `removed-<date>/` afterwards.
+- `check` reads every motion report on its own terms. A proof under `rounds/`, `history/` or a `removed-*/` folder is a try-out:
+  its report is listed and never fails the check. A report whose proof file is gone gives a warning that names it and says
+  to move it to `removed-<date>/`. A pack file that asks for the motion check needs at least one passing report of a proof of
+  the project, and says "not verified" and which command to run when there is none. The brand book's motion table shows the
+  same reports.
+- The motion proof steps through a page instead of waiting for it. It pauses every CSS animation, CSS transition and
+  `element.animate()` on the page and sets each to a time: 0 and every 1/32 of the motion, every 1/32 of each animation's own
+  run (so a short animation inside a long motion is not stepped over), every keyframe (at its real time when the whole
+  animation has an easing), and the peak of every curve that overshoots. A page with a 10 second animation no longer takes 10
+  seconds. Motion a script starts later is looked for at every frame until `settle_ms` and stepped through from its own start.
+- Motion driven by `requestAnimationFrame` cannot be stepped through. The page is still given `settle_ms` in real time and a
+  warning row says so, and now the phone-width rows and a pixel mark's whole-pixel row say "not verified" instead of passing
+  with nothing measured. A `requestAnimationFrame` loop that still runs after `settle_ms` fails `loops` and `settled`.
+- An animation of a layout property (`top`, `left`, `width`, `height`, `margin`, `padding` and the like) fails the layout-shift
+  row: it moves the page around it, and Chromium does not count a step of under 3 pixels as a shift, so stepping through it
+  cannot measure all of it. A `transform` or `opacity` animation passes.
+- The rest frame is compared in the page itself. The proof cuts the mark's box out of the page and draws your still exactly
+  where the mark draws: in the `<img>` itself for an image, and for an inline SVG over its content box, in its own parent and
+  out of reach of the page's style sheets, so an offset page, a faded parent or a style rule for `svg circle` changes nothing.
+  The default tolerance is now 0, where it was 8 of 255, because the two are drawn the same way; `"tolerance"` in the case
+  still works. A mark an ancestor rotates cannot be placed exactly and says "not verified".
+- A vector mark may ease smoothly: its whole-pixel row is information only (`a vector mark: smooth easing allowed`). Before,
+  every mark was held to whole pixels, which no smooth easing curve can meet.
+- `templates/finish.sh.tpl` checks the plugin version first (`version --check`) and runs `contrast --cvd` when your
+  `qa/rules.json` sets a colour-vision threshold. A project made before this version should do the same in its
+  `tools/finish.sh`: replace the `plugin version` step with `step "plugin version"; "${BC[@]}" version --check`, and add
+  `--cvd` to the `contrast` step if `qa/rules.json` has a `cvd` section.
+
+### Fixed
+
+- `check` no longer passes when `qa/rules.json` sets a colour-vision threshold and the contrast report has no colour-vision
+  rows (a chain that ran `contrast` without `--cvd` dropped them): it says "not verified" and names `contrast --cvd`.
+- In BRAND.md, DESIGN.md and the brand's own skill, the places the signature move shows are a list, one per line, like the
+  motion rules. A place with a comma in its name stays one item.
+
 ## [0.3.4] - 2026-10-21
 
 Motion becomes data: easing curves are tokens, durations and curves reach Swift and Android, and `motion/motion.json`

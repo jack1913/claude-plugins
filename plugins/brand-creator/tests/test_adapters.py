@@ -440,13 +440,23 @@ def test_curves_numbers_are_plain_decimals_as_tokens_css_writes_them(pack):
     assert "- easing.tiny: cubic-bezier(0.0000001, 1, 0.5, 2.5)" in (pack / "BRAND.md").read_text()
 
 
+def test_each_place_the_signature_shows_in_is_a_bullet_of_its_own_even_one_with_a_comma(pack):
+    add_motion(pack)
+    spec = on_spec()
+    spec["signature"]["where"] = ["app icon, at small sizes", "the loading screen"]
+    put_spec(pack, spec)
+    generate(pack)
+    for text in motion_of(pack):
+        assert "\nShown in:\n\n- app icon, at small sizes\n- the loading screen\n\nMotion rules:" in text, text
+
+
 def test_the_motion_spec_reaches_brand_md_design_md_and_the_applied_skill_in_the_same_words(pack):
     add_motion(pack)
     mutate(pack / "BRAND-STATE.md", "- (rule) (...)", "- (rule) the accent is a fill, never text (proposal)")          # a G4 rule: DESIGN.md gets its Do's and Don'ts
     put_spec(pack, on_spec())
     generate(pack)
     brand, design, skill = motion_of(pack)
-    want = "\n".join(DURATIONS + CURVES + ["", "Signature move: Settle. The dot drops onto the grid and settles.", "", "Shown in: app icon, empty states", "",
+    want = "\n".join(DURATIONS + CURVES + ["", "Signature move: Settle. The dot drops onto the grid and settles.", "", "Shown in:", "", "- app icon", "- empty states", "",
                                           "Motion rules:", "", "- reduced motion: nothing moves", "- nothing loops forever"])
     assert brand == design == skill == want
     for text in ((pack / "BRAND.md").read_text(), (pack / "DESIGN.md").read_text(), (pack / ".claude" / "skills" / "acme-brand" / "SKILL.md").read_text()):

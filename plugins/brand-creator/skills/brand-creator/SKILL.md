@@ -297,7 +297,7 @@ Full file contract: `${CLAUDE_PLUGIN_ROOT}/scripts/CONTRACT.md`. Templates: `${C
 | contrast report | `contrast --project <dir>` |
 | real-size logo sheet | `logo-sheet --project <dir>`, then Read `assets/_checks/logo-sheet.png` |
 | mark geometry, fonts, small sizes | `outline-glyphs`, `logo-sheet --guides`, `fontcheck --lang <code>`, `downscale --source <master.png>`, `states-check`, `family-check`, `contrast --cvd` (details: `scripts/CONTRACT.md`, "QA gates and mark tooling") |
-| motion proof, byte identity, stale packs | `shot --motion <proof.json>`; `snapshot take|diff`, `verify-idempotent --cmd "<chain>"`, `staleness`, `specs-due` |
+| motion proof and its stills, byte identity, stale packs | `shot --motion <proof.json>`, `frames <proof.json>`; `snapshot take|diff`, `verify-idempotent --cmd "<chain>"`, `staleness`, `specs-due` |
 | web and social files | `emit web --project <dir>`; `emit social --project <dir> --tagline "<FACTS line>"` |
 | platform packs (Full tier, from INVENTORY.md) | `emit apple` (macOS with Xcode only), `emit windows`, `emit linux --app-id <id>`, `emit tray` (needs `tray/tray.json`), `emit tauri`, `emit wallet`, `emit developer`; sizes come from [platform-specs](references/platform-specs.md); the chain is `templates/finish.sh.tpl`; method: [the brand-assets skill](../brand-assets/SKILL.md) |
 | Android, Chrome extension and MSIX packs (Full tier; Tier B) | `emit android` (adaptive icon with monochrome layer, Play icon, feature graphic; the mark must fit the 66 dp safe zone), `emit chrome-ext`, `emit msix` (app-list sizes with unplated and lightunplated files); files built from a status U spec row carry the label "UNVERIFIED, recheck" (see [brand-assets](../brand-assets/SKILL.md)) |

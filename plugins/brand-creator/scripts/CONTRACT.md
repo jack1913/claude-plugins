@@ -32,11 +32,11 @@ once; a script that does not use them is wrong, not special.
 
 Skills call `brand-creator [--data <dir>] <subcommand> ...` (Claude Code puts the plugin's `bin/` on the Bash PATH; a host
 that does not, such as a `claude plugin eval` run, gets `"${CLAUDE_PLUGIN_ROOT}/bin/brand-creator"`, the same file, and the
-skills say so). `setup`, `prereq` and `state` run on the first `python3` on PATH that starts and is 3.10 or newer (a broken
+skills say so). `setup`, `prereq`, `state` and `version --check` run on the first `python3` on PATH that starts and is 3.10 or newer (a broken
 or older one earlier on PATH is skipped, as uv skips it for the other scripts); none → exit 3 naming each one tried.
 Skills pass `--data "${CLAUDE_PLUGIN_DATA}"`, always quoted (a data path may hold a space; a test fails on any
 unquoted form in the skills). `BRAND_CREATOR_DATA` is the environment equivalent. Every subcommand
-except `help`, `version` and `prereq` needs one of them and exits 2 with a clear message otherwise. The data directory
+except `help`, `version` (and `version --check`, see the finish chain), `root` and `prereq` needs one of them and exits 2 with a clear message otherwise. The data directory
 holds `node_modules/`, the Chromium build (when setup had to install one), `setup.json`, `cache/` (the IANA RDAP
 bootstrap, 24 h) and scratch output. Nothing
 is ever written under the plugin root (it changes on every update).
@@ -70,7 +70,7 @@ exit code) before it exits, so the previous passing report cannot survive a fail
 recorded once. `brand-creator check` reads these reports, recomputes each
 report's `inputs` hashes, and treats a stale report (inputs changed since) as not verified. Tool names: `tokens`,
 `contrast`, `logo-sheet`, `board-lint`, `shot`, `emit-web`, `emit-social`, `emit-apple`, `emit-windows`, `emit-linux`, `emit-tray`, `emit-tauri`, `emit-wallet`, `emit-developer`, `check`, `names`, `downscale`, `states`, `family`, `fontcheck`,
-`motion` (from `shot --motion`), `idempotence` (from `verify-idempotent`), `staleness`, `book`, `book-lint`, `book-pdf`, `print-check`, `adoption`, `adapters`, `applied-skill`, `launch-todo`, and one `emit-<target>` per emitter (with several marks, `emit-<target>/<mark>` and `logo-sheet/<mark>` per mark)
+`motion/<slug>-<hash6>` (from `shot --motion`, one per proof file; see Motion proof) and `frames/<slug>-<hash6>` (from `frames`), `idempotence` (from `verify-idempotent`), `staleness`, `book`, `book-lint`, `book-pdf`, `print-check`, `adoption`, `adapters`, `applied-skill`, `launch-todo`, and one `emit-<target>` per emitter (with several marks, `emit-<target>/<mark>` and `logo-sheet/<mark>` per mark)
 (`emit-web`, `emit-social`, `emit-apple`, `emit-windows`, `emit-linux`, `emit-tray`, `emit-tauri`, `emit-wallet`, `emit-developer`, `emit-print`, `emit-presskit`). The renderer in use is stored in the report and
 printed on every run.
 
@@ -135,7 +135,8 @@ fontTools, Brotli and skia-pathops (`outline_glyphs.py`, `fontcheck.py`), Pillow
   qa/rules.json                    owner thresholds and size bands (see QA gates); optional, proposals apply without it
   qa/print.json                    owner thresholds of print-check (see Print); optional, stated defaults apply without it
   qa/states.json  qa/idempotence.json   state sets for states-check; the byte-difference allowlist for verify-idempotent
-  motion/proof.json                the motion proof's cases (shot --motion)
+  motion/proof.json                the motion proof's cases (shot --motion); any name, in any folder: one report per proof file
+  motion/frames/<case>/            the stills `frames` writes of a page case: <NN>-<pct>.png, strip.png, reduced.png, frames.json (inside the project on purpose: the book shows them)
   motion/motion.json               the machine-readable motion spec (see Motion spec): signature move, parts, timeline in tokens, rules; read by the adapters
   motion/SPEC.md                   the motion hand-off (templates/MOTION-SPEC.md), only when something moves
   tray/tray.json                   the tray states and their masters (emit tray); qa/states.tray.json is written by it
@@ -438,8 +439,11 @@ instead of as a second current card.
 as used `FACTS.md` (store frames, AppStream, CLI identity), `INVENTORY.md` (Apple deployment targets), `tray/tray.json`, `--svg-mono` and the
 band drawings. Editing any of them makes the emit report stale.
 
-Chain: `templates/finish.sh.tpl` is the ordered build (generators, tokens, contrast, emitters, gates, `verify-idempotent`, `staleness --write`,
-`check`). It exports `BRAND_CREATOR_CHAIN=1`; a generator that rewrites a whole output folder calls `_common.require_chain()` and exits 1
+Chain: `templates/finish.sh.tpl` is the ordered build (`version --check`, generators, tokens, contrast, emitters, gates, `verify-idempotent`,
+`staleness --write`, `check`). `version --check` comes first: a session that still runs an older copy of the plugin than the one Claude Code
+has installed (`installed_plugins.json` next to the plugin cache: a user install, or a project or local one for this folder) exits 1 there and
+says to start a new session; a copy that is not in a plugin cache (a checkout) or a record that cannot be read is "not checked" (exit 0). The
+chain runs `contrast --cvd` when `qa/rules.json` has a `cvd` section. It exports `BRAND_CREATOR_CHAIN=1`; a generator that rewrites a whole output folder calls `_common.require_chain()` and exits 1
 outside the chain. The options of block 2 are variables (`TAGLINE`, `APP_ID`, `MASTER_BAND`, `EXEMPTION`, `ICON_CONTENT`, `VISIONOS_CONTENT`; an
 environment variable of the same name overrides) that reach each emitter as separate quoted arguments, and the idempotence commands are built
 with `printf %q`, so a tagline or an exemption with spaces stays one argument. `BRAND_CREATOR_ROOT` (for the generators) comes from
@@ -621,12 +625,114 @@ that repeats forever is counted and shot where it is. Each view records `lazy_im
   states that must differ). Each state is rendered at device scale 1 and 2 (inline SVG and an `<img>` drawn on a canvas); the stored file
   must show its rest frame, rest must equal `static` pixel for pixel, and every control pair must differ (a comparison that cannot see a
   difference proves nothing). A case with no control pair fails.
-- `page`: `page`, `selector` (the mark's element), `static`, optional `settle_ms` (default 1500), `max_cls` (default 0), `tolerance`
-  (default 8 of 255). Normal pass: no infinite animation, every animation ended after `settle_ms`, whole-pixel motion, layout shift 0,
-  rest frame equals the still; a control requires that the normal pass shows motion. Reduced pass (`prefers-reduced-motion: reduce`
-  emulated): no running animation, no `requestAnimationFrame` loop, no `pointermove`, `mousemove`, `touchmove`, `wheel`, `scroll`,
-  `deviceorientation` or `devicemotion` listener (script-registered or inline), layout shift 0, rest frame equals the still. Pages are
-  served from a local server that refuses every non-local request.
+- `page`: `page`, `selector` (the mark's element), `static`, and the optional keys `settle_ms` (default 1500: how long a page driven by
+  `requestAnimationFrame` is given, and how long the reduced pass watches the page), `max_cls` (default 0), `tolerance` (default 0 of 255),
+  `pixel` (`true` or `false`) and `widths` (default `[360, 390]`). A bad value is a usage error (exit 2), raised before a browser starts.
+  Pages are served from a local server that refuses every non-local request. The rows, in the order of the report:
+  - `control`: the normal pass must show motion, an animation or a `requestAnimationFrame` call, else the reduced result below proves nothing.
+    A page that shows neither within 150 ms of load is looked at every frame until `settle_ms`: what a script starts later is paused at once, seeked
+    from its own start, and the row says when it began (in ms after the page started loading); a page that shows nothing by then fails.
+  - **`sampling`: the page is seeked, never waited for.** After load and `fonts.ready`, every Web Animation (CSS animation, CSS transition,
+    `element.animate()`) is paused where the page has it, and so is one a script starts within the first 150 ms (or later, as above); each is
+    then set to a time. The motion's length is the latest finite `endTime` of them (with none that lasts, the longest first iteration). The
+    sample points are 0 and every 1/32 of the length; every keyframe of every animation in page time; the turns of its easings; and every 1/32
+    of each animation's own iterations, `delay + (iteration + k/32) x iteration duration`, so that a short animation inside a long motion is not
+    stepped over. A keyframe's time is `delay + (iteration + p) x iteration duration`, where p is the input progress at which the easing of
+    the whole effect (a CSS transition's timing function, the `easing` of `element.animate()`; linear for a CSS animation) reaches the
+    keyframe's offset; a reversed iteration (`direction: reverse`, an odd one of `alternate`, an even one of `alternate-reverse`) counts it
+    from the other end, a partial last iteration only up to its end, and an infinite animation only over its first iteration. The turns are
+    where an easing turns back or holds a pose: the peak of a `cubic-bezier` whose y1 or y2 lies outside 0..1 (where y'(t) = 0), the middle
+    of each step of `steps(n)` (64 steps at most) and the stops of `linear()`, for a keyframe's own easing and for the effect's. An easing the
+    proof does not read is taken as linear and named in the row (a warning). All animations are set to the same time, each counted from its
+    own start. At most 400 points: past that the even points stay, the keyframes and turns come next and the animations' own points last, each
+    kind thinned evenly over the motion (an animation of very many iterations is collected from every n-th one), and the row says so. An
+    animation that begins only when another ends is finished, not stepped through, and the row (a warning) names it. The row lists the points
+    (`points_ms`, `points_pct`) and the time the normal pass took (`elapsed_ms`).
+  - **Motion driven by `requestAnimationFrame` cannot be seeked.** A page that still calls it 150 ms after load, or begins to while the
+    animations are stepped through, is waited for `settle_ms` in real time, and the `sampling` row (a warning) says `sampled in real time:
+    requestAnimationFrame-driven motion cannot be seeked`. What it draws between two frames is not known, so the `edges:<width>` rows and
+    a pixel mark's `whole-pixel` row are "not verified" (`skipped`) unless the seekable points already fail them, never a pass with nothing
+    measured. Its calls are counted over the 500 ms after `settle_ms`: a loop that still calls it fails `loops` and `settled`. An animation
+    on a scroll or view timeline cannot be seeked either: the row names it.
+  - `loops`: an infinite animation fails (it is still sampled over its first iteration), and so does a `requestAnimationFrame` loop (above).
+    `settled`: every animation is finite and, after each is seeked to its end (`finish()`; the animations the end of one starts are finished
+    in turn, four rounds at most), none is running; one that cannot be finished fails and is named. `settle_ms` is not waited for Web
+    Animations: a 10 s animation is seeked, not waited for.
+  - `cls:normal`: layout shift is measured while the points are stepped through, with a rendered frame between two steps, so that the
+    layout-shift observer sees each. Chromium does not count a move of under 3 css px between two frames as a shift, and a step of the motion
+    is often smaller than that, so an animation of a layout property fails the row whatever was measured: `top`, `right`, `bottom`, `left`,
+    `inset`, `width`, `height` and their `min-`/`max-` and logical forms, `margin`, `padding`, a border width, `font-size`, `line-height`,
+    `letter-spacing`, `word-spacing`, `flex-basis`/`-grow`/`-shrink`, `gap`, the grid templates and `aspect-ratio` (`layout_properties` names
+    each with its animation). A `transform` or `opacity` animation does not.
+  - `normal:rest=static`: **the rest frame is compared in the page itself.** After the motion ends the mark element's box (rounded outward
+    to whole pixels, the page's own background) is screenshotted, after the element is hidden for two frames and shown again (a part a CSS
+    transition moved across the mark can leave the old drawing of the places it passed). Then the static SVG is drawn where the element draws,
+    and the same clip is screenshotted:
+    - an `<img>` shows the still itself: its source is swapped (`srcset`, `sizes` and the `<source>`s of a `<picture>` set aside, its size
+      held), so its box, border, padding, ancestors and raster are its own;
+    - anything else gets the still in a shadow root, which the page's style sheets cannot reach (a rule for `svg circle` neither styles nor
+      animates it, and a page that recolours its mark at rest fails), on a host that resets every inherited property, placed in the element's
+      own parent (the parent's opacity, filter and transform apply to it too): over the content box of an outermost `<svg>`, whose children
+      are hidden so its own border and background stay, or over the whole box of any other element, which is hidden as a whole; with the
+      element's own transform about the same origin. The host is placed by measuring it, so a positioned or offset ancestor does not move it;
+      one that ends more than 0.01 css px off, as an ancestor's rotation or skew makes it, is "not verified" (`skipped`), never compared.
+    Same page and position, same raster tiles: the comparison is exact (`tolerance` 0; a larger value is accepted). A reference drawn on a
+    scratch page at the origin is not the same raster away from it (Chromium draws in tiles about 256 px wide that advance 254 px; a lockup
+    at x = 53 differed in dozens of pixels). Before the pictures are taken each animation is committed to plain style (`commitStyles()`) and
+    cancelled, since an element that keeps an animation, even a finished one, is drawn on a layer of its own with antialiasing a few levels
+    off. A mark the page keeps on a layer of its own (`will-change`, a 3D transform), or rotates or scales at rest by its own transform, still
+    is: give it a `tolerance`. So does an animation on a pseudo-element, which has no inline style to commit to: the row names it. A mark with
+    no box fails the row. A failing pair is kept in the data folder's scratch area, outside the project, in a folder named after the case (its
+    name made a folder name, as for frames).
+  - `whole-pixel`: for a pixel mark, the case's static SVG with `shape-rendering="crispEdges"` on its root (the pixel art of `svgtools.pixel_art`),
+    or `"pixel": true` (`"pixel": false` turns it off), every sample point must show a whole-pixel translation (the `e` and `f` of the matrix
+    of its `translate`, `rotate` and `scale` properties and then its `transform`, in the element's own units; a percentage in `translate` is
+    of the element's reference box) of every animated target. A percentage on a pseudo-element cannot be read and makes the row "not
+    verified". For a vector mark the row is info: `a vector mark: smooth easing allowed`.
+  - `edges:<width>` (one row per width, `edges:360` and `edges:390` unless `widths` says other whole numbers from 200 to 4000; an empty list
+    is an info row `edges`): the page is loaded again at that width (800 high), looked at as the normal pass is (a motion a script starts
+    later is waited for), and at every sample point of its own animations these must hold: `documentElement.scrollWidth <= clientWidth`
+    (the page cannot be swiped sideways), the box of the mark element and of every element inside it with a non-empty box has `left >= 0`,
+    `top >= 0` and `right <= clientWidth`, and `scrollHeight` is no more than at rest (every animation at its end). A failure names the point,
+    the element (tag plus id, class or `data-part`), the edge and how far past it, the worst of each, four of them and how many more:
+    `at 62% (310 ms): g#letter-a 22 px past the right edge at 360 px`; the page's own line comes after the elements'. A mark with no box at
+    that width is a warning, not a pass in silence.
+  - Reduced pass (`prefers-reduced-motion: reduce` emulated; the page is watched for `settle_ms`): `reduced:animations` (an animation that
+    is running when the proof first sees it fails), `reduced:raf` (no `requestAnimationFrame` call in the last 500 ms of the watch),
+    `reduced:listeners` (no `pointermove`, `mousemove`, `touchmove`, `wheel`, `scroll`, `deviceorientation` or `devicemotion` listener,
+    script-registered or inline), `cls:reduced`, and `reduced:rest=static` (compared in place as above).
+- **One report per proof file**: `assets/_checks/motion/<slug>-<hash6>.json` (tool name `motion/<slug>-<hash6>`, the slug is the proof's
+  file stem, the hash the first six hex of the sha256 of its project-relative posix path, as the disk spells it (on macOS `MOTION/PROOF.JSON`
+  is `motion/proof.json`, and has its report); `motion_report_tool` in `_common.py` and
+  `proofReportTool` in `_common.mjs` give the same name). It carries `proof`, the proof's path. Two runs of different proofs never touch each other's report;
+  nothing writes `assets/_checks/motion.json` any more. `check` gates every report there as it gates a downscale one: a proof under
+  `rounds/`, `history/` or a `removed-*/` folder is an exploration proof, listed as an info row (`exploration proof, not gated`) and never
+  failing; a report whose proof file no longer exists is a warning that names it and says to move the report to `removed-<date>/`; a manifest
+  row with `qa: ["motion"]` needs at least one passing gated report (the `qa:motion` row; "not verified" without one, naming the command). A
+  `motion.json` of an earlier version is still gated as before, with a warning (`report:motion:legacy`) to run `shot --motion` again. The
+  book's Motion chapter and its proof table read the same reports, the gated ones.
+
+### Frames (`frames <proof.json> [--case NAME] [--count N | --at 0,25,50,75,100]`)
+
+For each page case of a proof (or the named one; a states case is skipped with an info row, or a usage error when named) the page is seeked as
+above and the mark element's box (its box at rest, rounded outward to whole pixels) is screenshotted at device scale 2 on the page's own
+background, at each point: by default five, 0, 25, 50, 75 and 100 percent of the motion's length; `--count N` spreads N points evenly (1 to
+100), `--at` names percentages (0 to 100, in the order given). Written into the project, in `motion/frames/<case>/` (the case name made a
+folder name: letters, digits, `.`, `_`, `-`; two names that make one folder are a usage error):
+
+- `<NN>-<pct>.png`: one still per point, `NN` its place from 00, `pct` its percent (`16.67` for a third of a hundred);
+- `strip.png`: the stills side by side, in order, with no gap;
+- `reduced.png`: the element under `prefers-reduced-motion: reduce`;
+- `frames.json`: each frame's `percent`, `ms`, `file` (project-relative) and `sha256`, the strip's and the reduced still's, the motion's
+  length and the picture size; no date and no version, so a rerun is byte-identical.
+
+Each file is written only when its bytes change; a rerun says `unchanged`. A still of an earlier run with other points is left where it is
+(nothing is deleted) and named in a warning row. A case with no seekable motion (no Web Animation, or only one on a scroll timeline, or
+motion driven by `requestAnimationFrame`) exits 1 and says why, and writes no file; so does a page that calls `requestAnimationFrame` while
+the stills are taken (they would differ from run to run). A case's folder belongs to one proof: when its `frames.json` names another proof,
+or cannot be read, the run is a usage error (exit 2) before a browser starts, naming the folder to move to `removed-<date>/` or the case to
+rename. A strip wider or higher than 65535 px (the largest picture Chromium's canvas writes) is a usage error that says how many stills fit. Nothing else in the project is written but the report,
+`assets/_checks/frames/<slug>-<hash6>.json` (named like the motion report; `check` does not gate it).
 
 ### Motion spec (`motion/motion.json`)
 
@@ -654,8 +760,9 @@ prose twin for an implementer. `scripts/lib/motionspec.py` reads it: `load(proje
 | `timeline` | optional list of steps, refused with `"off"`; a step has `part` (the id of a part), `property` (what moves, a non-empty string), `start`, `duration`, `easing` and an optional `note` |
 | `rules` | optional list of non-empty strings, the motion rules in plain words (`reduced motion: nothing moves`) |
 
-A step's `start` is `"0"`, a reference to a duration token (`"{motion.stagger}"`) or a reference times a number (`"{motion.stagger} * 2"`; the number is 0 or
-more). Its `duration` is a reference to a duration token and its `easing` a reference to a cubicBezier token. A reference is `{<token path>}` and must name a
+A step's `start` is `"0"`, a reference to a duration token (`"{motion.stagger}"`), a reference times a number (`"{motion.stagger} * 2"`; the number is 0 or
+more), or a sum of those (`"{motion.base} + {motion.stagger} * 2"`: a step that starts when another ends, plus a stagger); every reference in it must name a
+duration token. Its `duration` is a reference to a duration token and its `easing` a reference to a cubicBezier token. A reference is `{<token path>}` and must name a
 token of the right kind in the built tokens (`assets/tokens/tokens.json`, under `motion`; see Token sources).
 
 An unknown key is refused at every level. Every refusal is exit 2 and names the field path and what is wrong
@@ -698,8 +805,10 @@ The Acme example's `tools/grid_mark.py` and `tools/state_icons.py` are the worke
 
 `motion/motion.json`, when it exists, is validated on every run (the `motion:spec` row; see Motion spec). A manifest row with `qa: [...]` needs a current, passing report from the matching tool (`downscale`, `states`, `motion`, `family`, `fonts`
 = `fontcheck`, `idempotent` = `verify-idempotent`); for `downscale` it is the report of the row's own `downscale_source` (a row without one fails,
-and a passing report on another file never counts); a report that exists is gated whether or not a row asks. A missing report is "not
-verified" (exit 3), a stale one too, a failing one exit 1. Slots off the band rule, platform-spec rows stamped stale or U, and
+and a passing report on another file never counts); for `motion` it is at least one passing gated report (the `qa:motion` row; see Motion proof); a report that exists is gated whether or not a row asks. A missing report is "not
+verified" (exit 3), a stale one too, a failing one exit 1. When `qa/rules.json` sets a colour-vision threshold (a key of its `cvd`
+section), a passing contrast report without colour-vision rows (one `contrast` wrote without `--cvd`) is "not verified" too
+(`report:contrast:cvd`, naming `contrast --cvd`). Slots off the band rule, platform-spec rows stamped stale or U, and
 `tools/inputs.json` differences are gated or warned as described above.
 
 ## Brand book
@@ -929,8 +1038,8 @@ Motion is the same text in BRAND.md (`### Motion`), DESIGN.md (`## Motion`, pros
 not name, so no frontmatter key is invented) and the applied skill (`## Motion`): every duration token (by its type, the paths under `tokens.json`
 `motion.durations_ms`) and any other token of the `duration` and `motion` groups (`motion.distance`), each as `tokens.css` writes it and in name order (a
 `tokens.json` built before the `motion` entry existed lists the two groups only), then the curve tokens (from `motion.curves`: name and `cubic-bezier(x1, y1, x2, y2)`, in name order; a curve named `motion.*` is listed once, as a
-curve), then, when `motion/motion.json` exists, `Signature move: <name>. <description>` and `Shown in: <where>`, or `Nothing moves: <reason>` for `"off"`, and
-`Motion rules:` with its rules. The parts and the timeline stay in the spec. With no duration, no curve and no `motion.json` there is no motion section in
+curve), then, when `motion/motion.json` exists, `Signature move: <name>. <description>` and `Shown in:` with one bullet per place, or `Nothing moves: <reason>`
+for `"off"`, and `Motion rules:` with one bullet per rule. The parts and the timeline stay in the spec. With no duration, no curve and no `motion.json` there is no motion section in
 any of the three and the files are as they were; a `motion.json` that is not valid stops the run (exit 2) before anything is written. The spec is an input of
 the `adapters` and `applied-skill` reports, and the state hash covers it: a changed, removed or newly added `motion/motion.json` makes both not verified.
 

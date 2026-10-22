@@ -126,3 +126,21 @@ def test_build_tokens_resolves_distinct_roles_and_refuses_unknown_ones(acme):
                 lambda doc: doc["$extensions"]["brand-creator"]["distinct"].append({"a": "color.danger", "b": "color.nope"}))
     r = bc("tokens", project=acme)
     assert r.returncode == 1 and "color.nope" in r.stdout
+
+
+def test_a_project_that_sets_its_own_cvd_threshold_is_not_verified_by_a_contrast_report_without_colour_vision_rows(acme):
+    """A chain that runs contrast without --cvd rewrites the report without its colour-vision rows: check says so instead of passing on the rest."""
+    rows = lambda: {r["id"]: r for r in report(acme, "check")["results"]}   # noqa: E731
+    assert bc("contrast", project=acme).returncode == 0
+    bc("check", project=acme)
+    assert "report:contrast:cvd" not in rows()                               # no threshold of the project's own: nothing is asked for
+    (acme / "qa/rules.json").write_text(json.dumps({**json.loads((acme / "qa/rules.json").read_text()), "cvd": {"min_delta_e": 12.0}}))
+    assert bc("contrast", project=acme).returncode == 0
+    bc("check", project=acme)
+    row = rows()["report:contrast:cvd"]
+    assert row["status"] == "skipped" and row["detail"].startswith("not verified: qa/rules.json sets a colour-vision threshold (cvd) and the contrast report has no "
+                                                                   "colour-vision rows; re-run `brand-creator contrast --cvd`")
+    assert report(acme, "check")["status"] != "pass"
+    assert bc("contrast", "--cvd", project=acme).returncode == 0
+    bc("check", project=acme)
+    assert "report:contrast:cvd" not in rows()

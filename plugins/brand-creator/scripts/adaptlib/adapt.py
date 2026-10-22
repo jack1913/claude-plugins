@@ -132,7 +132,7 @@ def motion_lines(project: Path, doc: dict) -> list[str]:
         else:
             sig = spec["signature"]
             paras += [f"Signature move: {motionspec.one_line(sig['name'])}. {motionspec.one_line(sig['description'])}",
-                      "Shown in: " + ", ".join(motionspec.one_line(w) for w in sig["where"])]
+                      "Shown in:\n\n" + "\n".join(f"- {motionspec.one_line(w)}" for w in sig["where"])]   # a list, like the rules: a place may hold a comma
         if spec.get("rules"):
             paras.append("Motion rules:\n\n" + "\n".join(f"- {motionspec.one_line(r)}" for r in spec["rules"]))
         L += ([""] if L else []) + "\n\n".join(paras).split("\n")

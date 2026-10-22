@@ -140,7 +140,7 @@ def test_no_personal_paths_or_email_addresses_in_shipped_files():
 def test_plugin_json_matches_the_plan():
     d = json.loads((ROOT / ".claude-plugin/plugin.json").read_text())
     assert d["name"] == "brand-creator" and d["displayName"] and d["description"]
-    assert d["version"] == "0.3.4" and re.fullmatch(r"\d+\.\d+\.\d+", d["version"])
+    assert d["version"] == "0.3.5" and re.fullmatch(r"\d+\.\d+\.\d+", d["version"])
     assert d["author"] == {"name": "Jacek Pytlik"} and d["license"] == "MIT" and d["keywords"]
     assert d["homepage"] == "https://github.com/jack1913/claude-plugins/tree/main/plugins/brand-creator"  # a homepage must parse as a URL
     assert d["repository"] == "https://github.com/jack1913/claude-plugins"
@@ -193,7 +193,7 @@ def test_node_dependencies_are_pinned_exactly_and_locked():
 
 
 def test_every_uv_script_has_a_committed_lock_and_pep723_metadata():
-    bootstrap = {"setup.py", "prereq.py", "guard.py"}
+    bootstrap = {"setup.py", "prereq.py", "guard.py", "version_check.py"}
     for p in sorted((ROOT / "scripts").rglob("*.py")):
         if {"lib", "vendor", "booklib", "boardlib", "marklib", "printlib", "adaptlib"} & set(p.relative_to(ROOT / "scripts").parts) or p.name in ("specs.py", "manifest.py", "_emit.py", "tierb.py"):
             continue

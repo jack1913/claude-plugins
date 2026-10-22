@@ -933,3 +933,44 @@ def test_the_press_kit_is_left_out_of_the_book_and_does_not_make_its_reports_sta
     mutate_json(proj / "assets/manifest.json", bump)
     rows = check_rows()
     assert rows["report:book:manifest"] == "skipped" and rows["report:book-lint:manifest"] == "skipped"
+
+
+# ---------------------------------------------------------------- the motion proof in the book: one report per proof file
+
+def put_motion_report(project: Path, proof: str, rows: list[tuple[str, str]]) -> Path:
+    """A proof file and the report `shot --motion` writes for it (assets/_checks/motion/<slug>-<hash6>.json), written by hand."""
+    from _common import motion_report_tool, sha256_file
+    f = project / proof
+    f.parent.mkdir(parents=True, exist_ok=True)
+    if not f.is_file():
+        f.write_text('{"schema": 1, "cases": []}\n')
+    out = project / "assets" / "_checks" / (motion_report_tool(proof) + ".json")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    results = [{"id": i, "status": s, "label": "x", "detail": ""} for i, s in rows]
+    out.write_text(json.dumps({"tool": motion_report_tool(proof), "version": "0", "inputs_sha": "0" * 64, "inputs": [{"path": proof, "sha256": sha256_file(f)}], "renderer": "x",
+                               "results": results, "status": "pass", "proof": proof}, indent=2) + "\n")
+    return out
+
+
+@setup
+@resvg
+def test_the_book_shows_each_proofs_motion_report_and_leaves_an_exploration_proof_out(proj):
+    from _common import motion_report_tool
+    put_motion_report(proj, "motion/proof.json", [("motion:demo-page:cls:normal", "pass"), ("motion:demo-page:whole-pixel", "info"), ("motion:demo-page:edges:360", "fail")])
+    put_motion_report(proj, "rounds/r2/try.json", [("motion:tryout:marker", "pass")])        # a try-out: not part of the brand as it stands
+    r = bc("book", project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    html = (proj / "book.html").read_text()
+    assert "motion:demo-page:cls:normal" in html and "motion:demo-page:edges:360" in html and "motion:demo-page:whole-pixel" not in html   # pass, fail and warn rows; info rows are not
+    assert "motion:tryout:marker" not in html
+    tool = motion_report_tool("motion/proof.json")
+    assert f">{tool}<" in html and motion_report_tool("rounds/r2/try.json") not in html      # the proof table lists the report of the proof, under its own name
+    assert "<h4>Motion proof</h4>" in html and "Motion proof:" not in html                   # one report: the plain heading
+    put_motion_report(proj, "motion/hero.json", [("motion:hero:control", "pass")])          # a second proof of the project: each gets its table, named
+    assert bc("book", project=proj).returncode == 0
+    html = (proj / "book.html").read_text()
+    assert "<h4>Motion proof: motion/proof.json</h4>" in html and "<h4>Motion proof: motion/hero.json</h4>" in html and "motion:hero:control" in html
+    (proj / "assets/_checks/motion").rename(proj.parent / "moved-away")                      # no report at all: the table is left out, and the build says so
+    r = bc("book", project=proj)
+    assert r.returncode == 0 and "motion:demo-page:cls:normal" not in (proj / "book.html").read_text()
+    assert "no motion report" in r.stdout + r.stderr
