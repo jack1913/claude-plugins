@@ -295,10 +295,16 @@ test("one report per proof file, named after the proof; another proof's run neve
 test("a proof typed in another letter case is the same file: one report, named as the disk spells it", (t) => {
   if (needSetup(t)) return;
   const p = motionProject();
-  if (!fs.existsSync(path.join(p, "MOTION/PROOF.JSON"))) return t.skip("this file system tells letter cases apart: MOTION/PROOF.JSON is another file");
   const states = JSON.parse(fs.readFileSync(path.join(p, "motion/proof.json"), "utf8")).cases[0];
   writeProof(p, [states], "motion/proof.json");
-  assert.equal(run(p, "MOTION/PROOF.JSON").status, 0);
+  const r = run(p, "MOTION/PROOF.JSON");
+  if (!fs.existsSync(path.join(p, "MOTION/PROOF.JSON"))) { // a file system that tells letter cases apart (Linux): another file, which does not exist
+    assert.equal(r.status, 2, r.stdout + r.stderr);
+    assert.match(r.stderr, /motion proof not found: MOTION\/PROOF\.JSON/);
+    assert.ok(!fs.existsSync(path.join(p, "assets/_checks/motion")), "no report for a proof that is not there");
+    return;
+  }
+  assert.equal(r.status, 0, r.stdout + r.stderr); // macOS: the same file
   assert.deepEqual(fs.readdirSync(path.join(p, "assets/_checks/motion")), [path.basename(reportFile(p))]);
   assert.equal(rep(p).proof, "motion/proof.json");
 });
