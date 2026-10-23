@@ -9,11 +9,13 @@ from __future__ import annotations
 import base64
 import html
 import json
+import math
 import re
 from pathlib import Path
 
 import bookdata
 import bookmd
+import motionspec
 import qa_rules
 import svgtools
 from _color import wcag_ratio
@@ -24,6 +26,8 @@ esc = bookmd.esc
 FONT_MIME = {".woff2": ("font/woff2", "woff2"), ".woff": ("font/woff", "woff"), ".ttf": ("font/ttf", "truetype"), ".otf": ("font/otf", "opentype")}
 IMG_MIME = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif", ".svg": "image/svg+xml"}
 PROOF_TOOLS = ["tokens", "contrast", "logo-sheet", "states", "family", "fontcheck", "motion", "idempotence", "staleness"]
+# the checks of a states case that name states (the part of a row id after the case): 1x:control:rest!=draft-v2, 1x:draft-v2=expected, 1x:state:draft-v2
+STATE_CHECK = re.compile(r"(?P<head>\d+x:)(?:control:(?P<a>.+?)!=(?P<b>.+)|state:(?P<s>.+)|(?P<e>.+)=expected)")
 KIND_LABEL = {"ui-text": "text, WCAG 2.2 AA", "ui-text-large": "large text, WCAG 2.2 AA", "ui-component": "component, WCAG 2.2 AA",
               "brand-rule": "brand rule (logos WCAG-exempt)"}
 DONTS = [("stretch", "Do not stretch or squash the mark."), ("rotate", "Do not rotate the mark."),
@@ -121,6 +125,31 @@ figcaption,.cap{font-size:@@LABEL@@px;color:var(--muted);line-height:1.5}
 }
 """
 MARKS_CSS = ".cover .mks{display:flex;flex-wrap:wrap;gap:24px;align-items:flex-end;margin:0 0 32px}.cover .mks .mk{margin:0}"
+# The rules every replay of the motion chapter shares, added only to a book that has one (a book without is byte for byte what it was). The two checkboxes are
+# visually hidden with clip, never display:none, so the keyboard reaches them; each replay's own rules (the animation that starts it again, the four keyframes
+# that step through the strip) follow, in BookBuild.demo_rules. The flipbook is the strip <img> itself, cropped to one still by object-fit:none and moved from still
+# to still by object-position; the strip is embedded once: the <source> of its <picture> carries it with the density that makes one still its css size, and the <img>
+# has the 1 x 1 PIXEL for the src the HTML standard asks of it. Reduced motion shows the still and
+# hides the flipbook and the controls on a screen (`screen and`, so that a printout made with reduced motion on is not left with the still and the times); print shows the
+# flipbook whole (no animation, the full strip scaled to the page, !important to win over the id rules).
+DEMO_CSS = """
+.motion-demo{position:relative;margin:0 0 24px}
+.motion-demo input{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
+.motion-demo label{display:inline-block;margin:0 8px 8px 0;padding:0 12px;border:1px solid var(--text);font-size:@@LABEL@@px;line-height:28px;cursor:pointer}
+.motion-demo input[id^="bc-slow-"]:checked+label{background:var(--text);color:var(--bg)}
+.motion-demo input:focus-visible+label{outline:2px solid var(--text);outline-offset:3px}
+.motion-stage{display:block;width:max-content;max-width:100%;overflow-x:auto;border:1px solid var(--line);margin:0 0 8px}
+.motion-flip{display:block;object-fit:none}
+.motion-reduced,.motion-times{display:none}
+.motion-reduced{max-width:100%;height:auto}
+@media screen and (prefers-reduced-motion:reduce){.motion-demo input,.motion-demo label{display:none}.motion-flip{display:none}.motion-reduced{display:block}}
+@media print{.motion-demo input,.motion-demo label{display:none}.motion-stage{width:auto;overflow:visible}.motion-flip{animation:none!important;width:100%;max-width:100%;height:auto;object-fit:fill}.motion-times{display:block}}
+"""
+# a 1 x 1 transparent PNG: the src an <img> has to have, which the browser does not draw when the <source> before it matches
+PIXEL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNgAAIAAAUAAen63NgAAAAASUVORK5CYII="
+MIN_STILLS = 9   # a replay of fewer stills jumps: the build says so
+SLOWER = "4\u00d7 slower"   # the label of the box that plays a replay at a quarter of the speed (the multiplication sign, not an x)
+MOTION_GROUPS = ("duration.", "easing.", "motion.")   # the token groups of the motion chapter's token table
 COVER_ART_W, COVER_ART_H = 320, 96   # the box of the cover's art: a mark is 96 px tall, a wide drawing at most 320 px wide
 
 
@@ -148,6 +177,8 @@ class BookBuild:
         self.variants: list[str] = []
         self.missing_labels: dict[str, set[str]] = {}
         self._raster_cache: dict = {}
+        self._demos: list[dict] | None = None   # the replays of the motion chapter, found once
+        self.demo_css: list[str] = []           # the rules of each replay built, in the order built
         self.light, self.dark = self._roles("light"), self._roles("dark")
         self.counts = bookdata.counts(project, self.cfg, self.doc, len(self.chapter_ids))
 
@@ -492,24 +523,304 @@ class BookBuild:
         return "\n".join(out)
 
     def b_motion(self, arg: str, lang: str) -> str:
-        rows = [[esc(k), f"<code>{esc(str(v))}</code>"] for k, v in sorted(self.doc.get("other", {}).items())
-                if k.startswith(("duration.", "easing.", "motion."))]
-        out = [self.table([self.T(lang, "Token"), self.T(lang, "Value")], rows) if rows else
-               f"<p>{esc(self.T(lang, 'The tokens define no durations.'))}</p>"]
-        reps = self.motion_reports()
-        shown = 0
-        for rf, proof in reps:
+        spec = motionspec.load(self.project)   # None without motion/motion.json; one that is not valid stops the book (exit 2), as it stops the adapters
+        off = spec is not None and spec["motion"] == "off"
+        if spec is None:
+            self.warn("motion", "motion/motion.json is missing, so the motion chapter has no signature move and no timeline (the file is described in "
+                                "scripts/CONTRACT.md, \"Motion spec\")")
+        else:
+            self.add_input(self.project / motionspec.FILE)
+        if off:
+            left = bookdata.frames_folders(self.project)
+            if left:
+                self.warn("motion", f"motion/motion.json says nothing moves, so the replay of {', '.join(left)} in {bookdata.FRAMES_DIR}/ is left out")
+            out = [f"<p>{esc(self.T(lang, 'Nothing moves'))}: {esc(motionspec.one_line(spec['reason']))}</p>"]
+        else:
+            demos = self.motion_demos()
+            replay = [f"<h4>{esc(self.T(lang, 'Replay'))}</h4>"] + [self.demo_html(d, lang, spec) for d in demos] if demos else []
+            out = self.motion_spec(spec, lang, replay) if spec else [self.motion_token_table(lang)] + replay
+        out += self.motion_proofs(lang, spec, quiet=off)
+        return "\n".join(out)
+
+    def motion_token_table(self, lang: str) -> str:
+        """Every duration, easing and motion token of the tokens, with the value as the tokens write it (a project with no motion/motion.json shows this alone)."""
+        rows = [[esc(k), f"<code>{esc(str(v))}</code>"] for k, v in sorted(self.doc.get("other", {}).items()) if k.startswith(MOTION_GROUPS)]
+        return self.table([self.T(lang, "Token"), self.T(lang, "Value")], rows) if rows else f"<p>{esc(self.T(lang, 'The tokens define no durations.'))}</p>"
+
+    def proof_names(self, lang: str) -> dict[str, str]:
+        """What the book's text calls each motion report it shows, by the report's path: `Motion proof`, or `Motion proof 1`, `Motion proof 2` ... when there are several, in the order
+        of the proofs' paths (the report of an earlier version, which names no proof, first). Never the proof's file name or the report's, which hold the author's working name for the
+        proof (hero-v2): the word rules of the book read all of its text. They stay in the data-proof and data-report attributes."""
+        reps = sorted(self.motion_reports(), key=lambda r: (r[1] is not None, r[1] or ""))
+        return {rf: self.T(lang, "Motion proof") + (f" {n}" if len(reps) > 1 else "") for n, (rf, _proof) in enumerate(reps, 1)}
+
+    def motion_proofs(self, lang: str, spec: dict | None, *, quiet: bool) -> list[str]:
+        """A table per gated motion report (nothing moving needs no proof: `quiet` leaves the warning for a missing report out)."""
+        out, shown = [], 0
+        names = self.proof_names(lang)
+        for rf, proof in self.motion_reports():
             doc, stale = self.load_report(rf)
             if not doc:
                 continue
-            prow = [[esc(r["id"]), f'<span class="st">{esc(r["status"])}</span>'] for r in doc.get("results", []) if r["status"] in ("pass", "fail", "warn")]
-            out.append(f"<h4>{esc(self.T(lang, 'Motion proof') + (f': {proof}' if len(reps) > 1 and proof else ''))}</h4>" + self.table([self.T(lang, "Case"), self.T(lang, "Result")], prow))
+            prow = self.proof_rows(rf, doc, proof, lang, spec)
+            at = f' data-proof="{esc(proof)}"' if proof else ""
+            out.append(f"<h4{at}>{esc(names[rf])}</h4>" + self.table([self.T(lang, "Case"), self.T(lang, "Check"), self.T(lang, "Result")], prow))
             if stale:
                 self.warn("motion", f"the motion report {rf} is stale ({'; '.join(stale[:2])})")
             shown += 1
-        if not shown:
+        if not shown and not quiet:
             self.warn("motion", "no motion report; the motion proof table is left out (run `brand-creator shot --motion motion/proof.json`)")
-        return "\n".join(out)
+        return out
+
+    def proof_rows(self, rf: str, doc: dict, proof: str | None, lang: str, spec: dict | None) -> list:
+        """The rows of one motion report as [case, check, result] (with a data-check attribute where the check names states), the checks of a case together. A row id is motion:<case>:<check>, and a case is the author's working name for
+        a proof (hero-v2, draft-x), which the word rules of the book read: the table shows the check alone, under the name the chapter gives the case's replay (the signature
+        move) or, with no replay, `Case` and its number in the report. The checks of a states case name its states (1x:control:rest!=draft-v2), the author's working names too:
+        they are shown by their place in the case, `state 2`, and the check as it is stays in the row's data-check attribute. A row that belongs to none of the report's cases is
+        said in a warning and shown by its label."""
+        cases = doc.get("cases") if isinstance(doc.get("cases"), list) else []
+        names = [c["name"] for c in cases if isinstance(c, dict) and isinstance(c.get("name"), str)]
+        at = proof or (doc["proof"] if isinstance(doc.get("proof"), str) else None)
+        by_case, strays = {n: [] for n in names}, []
+        for r in doc.get("results", []):
+            if r["status"] not in ("pass", "fail", "warn"):
+                continue
+            own = max((n for n in names if r["id"].startswith(f"motion:{n}:")), key=len, default=None)   # the longest: a case name may hold a colon
+            (by_case[own] if own is not None else strays).append(r)
+        st = lambda r: f'<span class="st">{esc(r["status"])}</span>'   # noqa: E731
+        rows = []
+        for i, n in enumerate(names, 1):
+            demo = next((d for d in self._demos or [] if d["case"] == n and (at is None or d["doc"]["proof"] == at)), None)
+            who = esc(self.demo_name(demo, lang, spec) if demo else f"{self.T(lang, 'Case')} {i}")
+            checks = [r["id"][len(f"motion:{n}:"):] for r in by_case[n]]
+            places = self.state_places(checks)
+            for r, check in zip(by_case[n], checks):
+                shown = self.state_check(check, places)
+                rows.append(([who, esc(shown), st(r)], {"data-check": check}) if shown != check else [who, esc(check), st(r)])
+        if strays:
+            who = esc(f"{self.T(lang, 'Case')} {len(names) + 1}")
+            places = self.state_places([m.group(1) for r in strays if (m := re.search(r":(\d+x:.*)$", r["id"]))])
+            for r in strays:
+                label = str(r.get("label") or "-")
+                for name, place in places.items():   # the label of an expected-state check says `state <name> equals its reference drawing`
+                    label = re.sub(rf"(?<!\w)state {re.escape(name)}(?!\w)", place, label)
+                rows.append([who, esc(label), st(r)])
+            self.warn("motion", f"the motion report {rf} has {len(strays)} row(s) that belong to none of its cases ({', '.join(names) or 'it lists none'}), such as {strays[0]['id']}: the table "
+                                f"shows them by their labels under a case of their own; run `brand-creator shot --motion {at or '<proof.json>'}` again")
+        return rows
+
+    @staticmethod
+    def state_places(checks: list[str]) -> dict[str, str]:
+        """{state name: "state N"} for the states that the checks of a states case name (STATE_CHECK), N being the order they come up in: those of the control pairs first (a pair
+        starts with the rest state), then those of the expected-state checks, then the states a check did not find."""
+        found = [m for m in map(STATE_CHECK.fullmatch, checks) if m]
+        names = [m.group(g) for groups in (("a", "b"), ("e",), ("s",)) for m in found for g in groups if m.group(g)]
+        return {name: f"state {i}" for i, name in enumerate(dict.fromkeys(names), 1)}
+
+    @staticmethod
+    def state_check(check: str, places: dict[str, str]) -> str:
+        """A check of a states case with its state names replaced by their places (see state_places); any other check as it is."""
+        m = STATE_CHECK.fullmatch(check)
+        if not m:
+            return check
+        if m.group("a"):
+            return f"{m.group('head')}control:{places[m.group('a')]}!={places[m.group('b')]}"
+        return f"{m.group('head')}state:{places[m.group('s')]}" if m.group("s") else f"{m.group('head')}{places[m.group('e')]}=expected"
+
+    # ------------------------------------------------------------ the motion spec (motion/motion.json) as the chapter shows it
+    def motion_spec(self, spec: dict, lang: str, replay: list[str]) -> list[str]:
+        """The signature move, the replay, the parts, the timeline with every reference as its token and its value, the tokens and the rules."""
+        t = lambda text: esc(self.T(lang, text))   # noqa: E731
+        one = motionspec.one_line
+        sig = spec["signature"]
+        out = [f"<p><strong>{t('Signature move')}: {esc(one(sig['name']))}.</strong> {esc(one(sig['description']))}</p>",
+               f"<p>{t('Shown in')}:</p><ul>" + "".join(f"<li>{esc(one(w))}</li>" for w in sig["where"]) + "</ul>"] + replay
+        if spec.get("parts"):
+            rows = [[f"<code>{esc(p['id'])}</code>", esc(one(p["description"]))] for p in spec["parts"]]
+            out.append(f"<h4>{t('Parts')}</h4>" + self.table([self.T(lang, "Part"), self.T(lang, "Description")], rows))
+        if spec.get("timeline"):
+            out.append(f"<h4>{t('Timeline')}</h4>" + self.table([self.T(lang, h) for h in ("Part", "Property", "Start", "Duration", "Easing", "Note")],
+                                                                 [self.timeline_row(st) for st in spec["timeline"]]))
+        out.append(f"<h4>{t('Motion tokens')}</h4>" + self.motion_tokens(lang))
+        if spec.get("rules"):
+            out.append(f"<h4>{t('Motion rules')}</h4><ul>" + "".join(f"<li>{esc(one(r))}</li>" for r in spec["rules"]) + "</ul>")
+        return out
+
+    def timeline_row(self, step: dict) -> list[str]:
+        """One step of the timeline: every reference as its token name and what it resolves to (motionspec.load has checked that each one exists)."""
+        mo = self.doc.get("motion") or {}
+        durs, curves = mo.get("durations_ms", {}), mo.get("curves", {})
+        start = step["start"].strip()
+        ms = 0 if start == "0" else sum(durs[m.group(1)] * float(m.group(2) or 1) for m in re.finditer(motionspec.TERM, start))
+        expr = re.sub(r"\s*\*\s*", " \u00d7 ", re.sub(r"[{}]", "", start))   # {motion.base} + {motion.stagger} * 2 -> motion.base + motion.stagger x 2
+        dur, ease = step["duration"][1:-1], step["easing"][1:-1]
+        return [f"<code>{esc(step['part'])}</code>", esc(step["property"]),
+                f"{bookdata.num_text(ms)} ms" + ("" if start == "0" else f" <code>{esc(expr)}</code>"),
+                f"{bookdata.num_text(durs[dur])} ms <code>{esc(dur)}</code>", f"{esc(bookdata.curve_css(curves[ease]))} <code>{esc(ease)}</code>",
+                esc(motionspec.one_line(step.get("note", "")))]
+
+    def motion_tokens(self, lang: str) -> str:
+        """The duration and curve tokens of tokens.json `motion` (a duration in ms, a curve with its four numbers and its drawing), then any other token of the
+        motion groups (motion.distance) as the tokens write it."""
+        mo = self.doc.get("motion") or {}
+        durs, curves = mo.get("durations_ms", {}), mo.get("curves", {})
+        rest = [(k, v) for k, v in sorted(self.doc.get("other", {}).items()) if k.startswith(MOTION_GROUPS) and k not in durs and k not in curves]
+        out = []
+        if durs:
+            out.append(self.table([self.T(lang, "Token"), self.T(lang, "Duration")], [[esc(k), f"{bookdata.num_text(ms)} ms"] for k, ms in sorted(durs.items())]))
+        if curves:
+            out.append(self.table([self.T(lang, "Token"), self.T(lang, "Curve"), self.T(lang, "Drawing")],
+                                  [[esc(k), f"<code>{esc(bookdata.curve_css(c))}</code>", curve_svg(k, c)] for k, c in sorted(curves.items())]))
+        if rest:
+            out.append(self.table([self.T(lang, "Token"), self.T(lang, "Value")], [[esc(k), f"<code>{esc(str(v))}</code>"] for k, v in rest]))
+        return "\n".join(out) or f"<p>{esc(self.T(lang, 'The tokens define no durations or curves.'))}</p>"
+
+    # ------------------------------------------------------------ the replay: a flipbook of the stills `frames` wrote, played by CSS alone
+    def motion_demos(self) -> list[dict]:
+        """One replay per motion/frames/<case>/frames.json of a gated proof (the same for every language). What cannot be shown is said in a build warning."""
+        if self._demos is None:
+            self._demos = []
+            for folder in bookdata.frames_orphans(self.project):
+                self.warn("motion", f"{bookdata.FRAMES_DIR}/{folder}/ has no frames.json, so its stills cannot be replayed: run `brand-creator frames <proof>` again, or move the folder to removed-<date>/")
+            for folder in bookdata.frames_folders(self.project):
+                d = self.load_demo(folder)
+                if d and any(o["slug"] == d["slug"] for o in self._demos):
+                    self.warn("motion", f"{bookdata.FRAMES_DIR}/{folder}/ makes the same control ids as {bookdata.FRAMES_DIR}/{next(o for o in self._demos if o['slug'] == d['slug'])['folder']}/ "
+                                        f"({d['slug']}); its replay is left out: rename one of the cases")
+                    d = None
+                if d:
+                    self._demos.append(d)
+            if not self._demos:
+                self.no_frames_warning()
+        return self._demos
+
+    def no_frames_warning(self) -> None:
+        """No replay was built (nothing is in motion/frames/, or what is there cannot be shown, each said above): say what makes one."""
+        proofs = [p for _rf, p in self.motion_reports() if p]
+        if "motion/proof.json" not in proofs:
+            proofs.append("motion/proof.json")
+        proofs = [p for p in proofs if (self.project / p).is_file()]
+        pages = [p for p in proofs if self.has_page_case(p)]
+        if proofs and not pages:
+            self.info("motion", f"{proofs[0]} has no page case (a page that moves the mark), so the motion chapter has no replay")
+        else:
+            made = (f"no stills in {bookdata.FRAMES_DIR}/" if not bookdata.frames_folders(self.project) else f"none of the stills in {bookdata.FRAMES_DIR}/ can be shown (see above)")
+            self.warn("motion", f"{made}, so the motion chapter has no replay: run `brand-creator frames {(pages or ['motion/proof.json'])[0]} --count 25`"
+                      + ("" if proofs else " (it needs the motion proof, motion/proof.json)"))
+
+    def has_page_case(self, proof: str) -> bool:
+        pages = bookdata.proof_page_cases(self.project, proof)
+        return True if pages is None else bool(pages)   # a proof the build cannot read is not the reason there are no stills: `frames` will say what is wrong with it
+
+    def load_demo(self, folder: str) -> dict | None:
+        """motion/frames/<folder>/ as a replay: the document and the bytes of the strip and the reduced still. None, with a warning, when it cannot be shown."""
+        at = f"{bookdata.FRAMES_DIR}/{folder}"
+        doc, bad = bookdata.read_frames(self.project, folder)
+        if doc is None:
+            self.warn("motion", f"{bad[0]}{f' (and {len(bad) - 1} more)' if len(bad) > 1 else ''}; its replay is left out: run `brand-creator frames <proof>` again")
+            return None
+        why = bookdata.replay_skip(self.project, folder, doc)   # a try-out proof, a case in the wrong folder, a missing picture, a case the proof no longer has
+        if why:
+            self.warn("motion", why)
+            return None
+        case, proof, cmd = doc["case"], doc["proof"], bookdata.frames_command(doc)
+        self.add_input(self.project / at / "frames.json")   # only the stills of a gated proof are inputs of the book: the others it never shows
+        self.add_input(self.project / proof)
+        data = {}
+        for key in ("strip", "reduced"):
+            f = confine(self.project, doc[key]["file"], what="frames file")
+            data[key] = f.read_bytes()
+            self.add_input(f)
+        off = []   # a file that is not the one frames.json lists (edited, or written by a run that frames.json does not record)
+        for f in [*doc["frames"], doc["strip"], doc["reduced"]]:
+            q = self.project / f["file"]
+            if not q.is_file():
+                off.append(f"{Path(f['file']).name} is missing")
+            elif sha256_file(q) != f["sha256"]:
+                off.append(f"{Path(f['file']).name} is not the file listed")
+        if off:
+            self.warn("motion", f"{at}/: {'; '.join(off[:3])}{f'; {len(off) - 3} more' if len(off) > 3 else ''}; frames.json and the files disagree: run `{cmd}`")
+        self.vouch(doc, folder)
+        n = len(doc["frames"])
+        if n < MIN_STILLS:
+            self.warn("motion", f"the replay of {case} jumps between {n} still{'s' if n != 1 else ''}; `brand-creator frames {proof} --count 25` makes it smooth")
+        pcts = sorted(f["percent"] for f in doc["frames"])
+        if pcts[0] > 0 or pcts[-1] < 100:
+            self.warn("motion", f"the stills of {case} run from {bookdata.num_text(pcts[0], 2)} % to {bookdata.num_text(pcts[-1], 2)} % of the motion: the replay starts on the first "
+                                f"and ends on the last of them, not on the rest frame")
+        if len(set(pcts)) < n:
+            self.warn("motion", f"two stills of {case} are at the same percent: the replay shows the later one")
+        return {"case": case, "folder": folder, "slug": bookdata.case_slug(case), "doc": doc, **data}
+
+    def vouch(self, doc: dict, folder: str) -> None:
+        """Whether the last `frames` run vouches for the stills of this case: the report of the proof (one report per proof, rewritten by every run, whatever cases it
+        took) must be current and hold a passing frames:<case> row. A warning, with the command that takes the case's stills again, when it does not."""
+        case, proof = doc["case"], doc["proof"]
+        pages = bookdata.proof_page_cases(self.project, proof)
+        # a report covers one run, and a run with --case leaves the proof's other cases unvouched: a proof of several page cases is run whole
+        cmd = (f"run `{bookdata.frames_command(doc)}` (all {len(pages)} page cases of {proof}: the report vouches only for the cases of its last run)"
+               if pages and len(pages) > 1 else f"run `{bookdata.frames_command(doc, case)}`")
+        tool = bookdata.frames_report_tool(proof)
+        if pages is None:
+            self.warn("motion", f"{proof} cannot be read as a motion proof, so whether {case} is still a page case of it is not known; mend it, then {cmd}")
+        rep, stale = self.load_report(f"assets/_checks/{tool}.json")
+        row = next((r for r in (rep or {}).get("results", []) if isinstance(r, dict) and r.get("id") == f"frames:{case}"), None)
+        if rep is None and not stale:
+            self.warn("motion", f"no frames report for {proof} (assets/_checks/{tool}.json): the stills of {case} are not known to be current; {cmd}")
+        elif stale:
+            self.warn("motion", f"the frames report of {proof} is stale ({'; '.join(stale[:2])}); {cmd}")
+        elif row is None:
+            ran = ", ".join(c.get("name", "?") for c in rep.get("cases", []) if isinstance(c, dict)) or "no case"
+            self.warn("motion", f"the frames report of {proof} does not cover {case} (its last run took {ran}): the stills of {case} are not known to be current; {cmd}")
+        elif row.get("status") != "pass":
+            self.warn("motion", f"the last `frames` run for {proof} did not pass for {case}, so its stills may be older than the page; {cmd}")
+
+    def demo_name(self, d: dict, lang: str, spec: dict | None) -> str:
+        """What the page's text calls a replay: the signature move's name when motion.json is on, else "The mark in motion", numbered (1), (2) ... when the chapter has
+        several. Never the case: its id is the author's working name for a proof (hero-v2, draft-x), and the book's word rules read the text of a page."""
+        base = motionspec.one_line(spec["signature"]["name"]) if spec else self.T(lang, "The mark in motion")
+        return f"{base} ({self._demos.index(d) + 1})" if len(self._demos) > 1 else base
+
+    def demo_html(self, d: dict, lang: str, spec: dict | None) -> str:
+        """The figure of one replay (CONTRACT.md, "Brand book"), and its rules for the stylesheet."""
+        t = lambda text: esc(self.T(lang, text))   # noqa: E731
+        doc, case = d["doc"], d["case"]
+        suffix = f"-{lang}" if len(self.langs) > 1 else ""   # every language has its own copy of the chapter, and ids are unique in a page
+        rid, sid = f"bc-replay-{d['slug']}{suffix}", f"bc-slow-{d['slug']}{suffix}"
+        w, h = (bookdata.num_text(x) for x in doc["size"])
+        n, ms = len(doc["frames"]), bookdata.num_text(doc["length_ms"])
+        name = esc(self.demo_name(d, lang, spec))
+        self.demo_css.append(self.demo_rules(d, rid, sid, suffix))
+        times = ", ".join(f"{bookdata.num_text(f['percent'], 2)} % ({bookdata.num_text(f['ms'], 2)} ms)" for f in doc["frames"])
+        flip_alt = f"{name}: {t('the mark in motion')}" if spec else name
+        return (f'<figure class="motion-demo" data-motion-demo="{esc(case)}" data-length-ms="{ms}" data-frames="{n}">\n'
+                f'<input type="checkbox" id="{rid}"><label for="{rid}">{t("Replay")}</label>\n'
+                f'<input type="checkbox" id="{sid}"><label for="{sid}">{t(SLOWER)}</label>\n'
+                f'<div class="motion-stage"><picture><source type="image/png" srcset="{self.data_uri_png(d["strip"])} {bookdata.num_text(doc["scale"])}x">'
+                f'<img class="motion-flip" src="{PIXEL}" alt="{flip_alt}" width="{w}" height="{h}"></picture>'
+                f'<img class="motion-reduced" src="{self.data_uri_png(d["reduced"])}" alt="{name}: {t("the still shown when motion is reduced")}" width="{w}" height="{h}"></div>\n'
+                f'<p class="cap motion-times">{t("Stills at")}: {esc(times)}</p>\n'
+                f'<figcaption>{name}: {ms} ms, {n} {t("stills")}, {w} \u00d7 {h} px</figcaption>\n</figure>')
+
+    def demo_rules(self, d: dict, rid: str, sid: str, suffix: str) -> str:
+        """The CSS of one replay. The flipbook is the strip <img>, moved from still to still by @keyframes (object-position: -i x w px at the percent of still i, each
+        still held until the next, step-end) over data-length-ms, once, and left on the last. Four identical @keyframes carry four names, one for each state of the two
+        checkboxes, so toggling either one is a new animation-name and the replay starts again, with no script; 4x slower is a longer duration."""
+        doc = d["doc"]
+        ms = doc["length_ms"]
+        names = {k: f"bc-flip-{d['slug']}{suffix}-{k}" for k in ("r0s0", "r1s0", "r0s1", "r1s1")}   # r: the replay box is checked, s: the 4x slower box is
+        flip = ".motion-stage .motion-flip"
+        sel = {"r0s0": f"#{rid}~{flip}", "r1s0": f"#{rid}:checked~{flip}", "r0s1": f"#{sid}:checked~{flip}", "r1s1": f"#{rid}:checked~#{sid}:checked~{flip}"}
+        frames = "".join(f"{p}%{{object-position:{x} 0}}" for p, x in bookdata.flipbook_steps(doc))
+        return "\n".join([
+            f"{sel['r0s0']}{{animation:{names['r0s0']} {bookdata.num_text(ms)}ms step-end 1 both}}",
+            f"{sel['r1s0']}{{animation-name:{names['r1s0']}}}",
+            f"{sel['r0s1']}{{animation-name:{names['r0s1']};animation-duration:{bookdata.num_text(4 * ms)}ms}}",
+            f"{sel['r1s1']}{{animation-name:{names['r1s1']}}}",
+            *[f"@keyframes {nm}{{{frames}}}" for nm in names.values()],
+            "@media (prefers-reduced-motion:reduce){" + ",".join(sel.values()) + "{animation:none}}"])
+
+    flipbook_steps = staticmethod(bookdata.flipbook_steps)   # the keyframes of a replay, shared with book-lint
 
     def motion_reports(self) -> list[tuple[str, str | None]]:
         """The motion reports the book shows -> [(report path, its proof)]: the one of an earlier version (assets/_checks/motion.json), and one per proof file of
@@ -563,12 +874,14 @@ class BookBuild:
         return "\n".join(out)
 
     def b_checks(self, arg: str, lang: str) -> str:
-        tools = list(PROOF_TOOLS)
+        tools = [(t, t, {}) for t in PROOF_TOOLS]
         d = self.project / "assets" / "_checks" / "downscale"
-        tools += [f"downscale/{p.stem}" for p in sorted(d.glob("*.json"))] if d.is_dir() else []
-        tools += [f"motion/{Path(rf).stem}" for rf, _proof in self.motion_reports() if rf != "assets/_checks/motion.json"]
+        tools += [(f"downscale/{p.stem}", f"downscale/{p.stem}", {}) for p in sorted(d.glob("*.json"))] if d.is_dir() else []
+        names = self.proof_names(lang)   # a motion report is named like its proof's table in the Motion chapter: the proof's name and the report's stay in the row's data attributes
+        tools += [(f"motion/{Path(rf).stem}", names[rf], {"data-report": f"motion/{Path(rf).stem}", **({"data-proof": proof} if proof else {})}) for rf, proof in self.motion_reports()
+                  if rf != "assets/_checks/motion.json"]
         rows = []
-        for t in tools:
+        for t, shown, attrs in tools:
             doc, stale = self.load_report(f"assets/_checks/{t}.json")
             if not doc:
                 continue
@@ -576,7 +889,8 @@ class BookBuild:
             state = self.T(lang, "stale") if stale else self.T(lang, "current")
             if stale:
                 self.warn("proof", f"the {t} report is stale ({'; '.join(stale[:2])})")
-            rows.append([esc(t), f'<span class="st">{esc(str(doc.get("status", "")))}</span>', (str(n["pass"]),), (str(n["warn"]),), (str(n["fail"]),), esc(state)])
+            cells = [esc(shown), f'<span class="st">{esc(str(doc.get("status", "")))}</span>', (str(n["pass"]),), (str(n["warn"]),), (str(n["fail"]),), esc(state)]
+            rows.append((cells, attrs) if attrs else cells)
         if not rows:
             self.warn("proof", "no proof reports under assets/_checks/; the proof table is empty")
             return f"<p>{esc(self.T(lang, 'No proof has been recorded.'))}</p>"
@@ -722,6 +1036,8 @@ class BookBuild:
             return ";".join(f"--{k}:{v}" for k, v in m.items())
         body, display, mono = self.stacks()
         css = CSS
+        if self.demo_css:
+            css = css.rstrip() + "\n" + DEMO_CSS.strip() + "\n" + "\n".join(self.demo_css)
         for k, v in {"@@LIGHT@@": vars_(self.light), "@@DARK@@": vars_(self.dark), "@@FACES@@": self.fonts_css(), "@@BODY@@": body,
                      "@@DISPLAY@@": display, "@@MONO@@": mono, "@@LABEL@@": f"{self.cfg['min_label_px']:g}",
                      "@@GLIGHT@@": self.light["bg"], "@@GDARK@@": self.dark["bg"]}.items():
@@ -809,6 +1125,32 @@ class BookBuild:
                 f'<header class="top"><div class="wrap"><span class="nm">{esc(self.view["name"])}</span><nav aria-label="{esc(self.T(lang0, "Chapters"))}">{nav}</nav></div></header>\n'
                 f'<main id="main">\n{cover}\n<div class="wrap">\n' + "\n".join(sections) + f"\n</div>\n</main>\n{colophon}\n</body>\n</html>\n")
         return head + body
+
+
+def curve_svg(token: str, c: list) -> str:
+    """A cubic-bezier curve drawn: time across, progress up, 40 px to the unit, the lines for progress 0 and 1 dashed. The picture is as high as the curve needs,
+    so an overshoot above 1 or below 0 has room; it holds no text (its aria-label names the token and the curve). The numbers are rounded to 2 places: the same
+    curve is the same drawing on every run."""
+    x1, y1, x2, y2 = (float(v) for v in c)
+    # y(t) = 3(1-t)^2 t y1 + 3(1-t) t^2 y2 + t^3 is highest and lowest at t = 0, t = 1 or where y'(t) = 3(a t^2 + b t + c) is 0
+    a, b, c0 = 3 * y1 - 3 * y2 + 1, 2 * y2 - 4 * y1, y1
+    ts = [0.0, 1.0]
+    if abs(a) > 1e-12:
+        disc = b * b - 4 * a * c0
+        ts += [(-b + sign * math.sqrt(disc)) / (2 * a) for sign in (1, -1)] if disc >= 0 else []
+    elif abs(b) > 1e-12:
+        ts.append(-c0 / b)
+    ys = [3 * (1 - t) ** 2 * t * y1 + 3 * (1 - t) * t * t * y2 + t ** 3 for t in ts if 0 <= t <= 1]
+    top, bottom = max([1.0, *ys]), min([0.0, *ys])
+    unit, pad = 40, 6
+    x_ = lambda x: bookdata.num_text(pad + x * unit, 2)            # noqa: E731
+    y_ = lambda y: bookdata.num_text(pad + (top - y) * unit, 2)    # noqa: E731
+    w, h = unit + 2 * pad, bookdata.num_text((top - bottom) * unit + 2 * pad, 2)
+    label = f"{token}: {bookdata.curve_css(c)}"
+    return (f'<svg class="curve" viewBox="0 0 {w} {h}" width="{w}" height="{h}" role="img" aria-label="{esc(label)}">'
+            f'<g stroke="currentColor" stroke-opacity=".35" stroke-dasharray="2 3"><line x1="{x_(0)}" y1="{y_(0)}" x2="{x_(1)}" y2="{y_(0)}"/>'
+            f'<line x1="{x_(0)}" y1="{y_(1)}" x2="{x_(1)}" y2="{y_(1)}"/></g>'
+            f'<path d="M{x_(0)} {y_(0)}C{x_(x1)} {y_(y1)} {x_(x2)} {y_(y2)} {x_(1)} {y_(1)}" fill="none" stroke="currentColor" stroke-width="2"/></svg>')
 
 
 _LANG_CACHE: dict = {}

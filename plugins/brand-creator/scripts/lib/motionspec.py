@@ -1,4 +1,4 @@
-"""motion/motion.json: the machine-readable motion spec, the one source the adapters read now and the book will read later.
+"""motion/motion.json: the machine-readable motion spec, the one source the adapters and the brand book read.
 
 load(project) -> the validated document, or None when the file is absent. Anything wrong is exit 2 naming the field path and what is wrong, never
 a guess. The references to duration and curve tokens are looked up in the built tokens (assets/tokens/tokens.json); when those are not built that is

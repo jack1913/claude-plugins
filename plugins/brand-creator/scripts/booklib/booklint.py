@@ -7,10 +7,13 @@ from __future__ import annotations
 
 import base64
 import fnmatch
+import hashlib
 import html as _html
 import re
+import struct
 import urllib.parse
 from pathlib import Path
+from typing import NamedTuple
 
 import bookdata
 import htmlscan
@@ -59,9 +62,57 @@ def _data_uri_text(src: str) -> str | None:
 
 # ---------------------------------------------------------------- CSS reading (for the self-consistency rules)
 
-def css_blocks(css: str) -> list[tuple[str, str]]:
+def _at_statement(css: str, i: int) -> int:
+    """The index just after the ';' that ends the statement at-rule (@layer a,b; @import url(x); @charset "utf-8";) starting at css[i], or -1 when a block opens first."""
+    quote, depth = "", 0
+    for k in range(i, len(css)):
+        ch = css[k]
+        if quote:
+            quote = "" if ch == quote and css[k - 1] != "\\" else quote
+        elif ch in "\"'":
+            quote = ch
+        elif ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth = max(depth - 1, 0)
+        elif not depth and ch == "{":
+            return -1
+        elif not depth and ch == ";":
+            return k + 1
+    return -1
+
+
+def _flat_declarations(body: str) -> str:
+    """The declarations of a style rule that holds nested rules, its own and those inside the nested blocks, as one body (what comes before a nested block's `{` after the
+    last `;` is its selector, and is dropped)."""
+    out, i = [], 0
+    while True:
+        j = body.find("{", i)
+        if j < 0:
+            return "".join(out) + body[i:]
+        depth, k = 1, j + 1
+        while k < len(body) and depth:
+            depth += (body[k] == "{") - (body[k] == "}")
+            k += 1
+        before = body[i:j]
+        out.append(before[:before.rfind(";") + 1] + _flat_declarations(body[j + 1:k - 1]) + ";")
+        i = k
+
+
+def css_rules(css: str, ctx: tuple[str, ...] = ()) -> list[tuple[tuple[str, ...], str, str, bool]]:
+    """Every block with no block inside it as (the at-rules around it, its prelude, its body, whether it holds nested rules): the @media and @keyframes that css_blocks loses.
+    A statement at-rule (@layer a,b; @import url(x); @charset "utf-8";) ends at its ';' and comes out as (the at-rules around it, the statement with its ';', "", False), so that
+    the rule after it is read. A style rule that holds nested rules (CSS nesting) is one block whose body is every declaration inside it, its own and the nested ones, with True."""
     out, i = [], 0
     while i < len(css):
+        k = i
+        while k < len(css) and css[k].isspace():
+            k += 1
+        end = _at_statement(css, k) if css.startswith("@", k) else -1
+        if end > 0:
+            out.append((ctx, css[k:end].strip(), "", False))
+            i = end
+            continue
         j = css.find("{", i)
         if j < 0:
             break
@@ -69,13 +120,19 @@ def css_blocks(css: str) -> list[tuple[str, str]]:
         while k < len(css) and depth:
             depth += (css[k] == "{") - (css[k] == "}")
             k += 1
-        body = css[j + 1:k - 1]
-        if "{" in body:
-            out += css_blocks(body)
+        body, head = css[j + 1:k - 1], css[i:j].strip()
+        if "{" not in body:
+            out.append((ctx, head, body, False))
+        elif head.startswith("@"):
+            out += css_rules(body, ctx + (head,))
         else:
-            out.append((css[i:j].strip(), body))
+            out.append((ctx, head, _flat_declarations(body), True))
         i = k
     return out
+
+
+def css_blocks(css: str) -> list[tuple[str, str]]:
+    return [(head, body) for _ctx, head, body, _nested in css_rules(css)]
 
 
 def decls(body: str) -> list[tuple[str, str]]:
@@ -204,6 +261,7 @@ def lint(project: Path, text: str, *, path: str, view: dict, cfg: dict, tokens_d
         res += _legal_rules(visible, facts_rows)
         res += _parity_rules(text, view)
         res += _language_rules(text, view)
+        res += _motion_rules(project, text, view)
         if self_consistency:
             res += _self_rules(text, cfg, tokens_doc)
     return res
@@ -637,12 +695,13 @@ def _self_rules(text: str, cfg: dict, doc: dict) -> list[dict]:
     out = []
     ds = book_css_decls(text)
     allowed = bookdata.motion_durations_ms(doc)
+    own = _demo_allowance(text)
     bad = []
     for where, p, v in ds:
         if p in ("transition", "transition-duration", "transition-delay", "animation", "animation-duration", "animation-delay"):
             for m in re.finditer(r"(?<![\w.-])(\d*\.?\d+)(ms|s)\b", v):
                 ms = float(m.group(1)) * (1000 if m.group(2) == "s" else 1)
-                if ms != 0 and not any(abs(ms - a) < 0.5 for a in allowed):
+                if ms != 0 and not any(abs(ms - a) < 0.5 for a in allowed + own(where)):
                     bad.append(f"{p}: {m.group(0)} in {where[:40]} is not a duration token ({', '.join(f'{a:g}ms' for a in allowed) or 'the tokens define none'})")
     out.append(row("self:durations", "fail" if bad else "pass", "every CSS duration and delay is one of the motion tokens (or 0)",
                    "; ".join(bad[:4]) if bad else f"{sum(1 for _, p, _ in ds if 'transition' in p or 'animation' in p)} motion declaration(s)"))
@@ -693,25 +752,937 @@ def _self_rules(text: str, cfg: dict, doc: dict) -> list[dict]:
     return out
 
 
-# ---------------------------------------------------------------- reports
+# ---------------------------------------------------------------- the motion rows: the book's CSS with its @media context, a small selector matcher, the cascade
 
-def lint_inputs(project: Path, book: Path) -> list[Path]:
-    """Every file a lint run read: the book, tokens, manifest, facts, config, the FORBIDDEN sources and the mark artwork."""
-    out = [book]
-    for rel in ("assets/tokens/tokens.json", "FACTS.md", "book/book.json", "brief/BRIEF.md", "research/cliches.md"):
-        if (project / rel).is_file():
-            out.append(project / rel)
-    out += bookdata.logo_files(project)
+class _Rule(NamedTuple):
+    media: tuple[str, ...]                                   # the at-rules around the rule (@media ...)
+    sels: list[tuple[str, tuple[int, int, int], list | None]]   # each selector of its list: (text, specificity, compounds; None when the lint cannot read it)
+    decls: list[tuple[str, str, bool, int]]                  # (property, value, !important, place in the source)
+    nested: bool = False                                     # the rule holds nested rules: its decls are every declaration inside it, and the cascade does not apply it
+
+
+class _El:
+    """An element of the book as the motion rows need it: its tag, attributes, parent, element children and the offsets of its start tag and end."""
+    __slots__ = ("tag", "attrs", "parent", "kids", "start", "end")
+
+    def __init__(self, tag: str, attrs: dict, parent: "_El | None", start: int):
+        self.tag, self.attrs, self.parent, self.kids, self.start, self.end = tag, attrs, parent, [], start, start
+
+
+_TIME = re.compile(r"[+-]?(?:\d+\.?\d*|\.\d+)(ms|s)", re.I)
+_ANIM_WORDS = {"none", "infinite", "normal", "reverse", "alternate", "alternate-reverse", "forwards", "backwards", "both", "running", "paused", "ease", "ease-in",
+               "ease-out", "ease-in-out", "linear", "step-start", "step-end", "initial", "inherit", "unset", "revert"}
+_TIMING_WORDS = {"linear", "ease", "ease-in", "ease-out", "ease-in-out", "step-start", "step-end"}
+_REDUCE = re.compile(r"^(?:(?:only )?(?:screen|all) and )?\(prefers-reduced-motion:reduce\)$")
+
+
+def _layers(value: str) -> list[list[str]]:
+    """A comma list of space separated words; a function such as steps(2, end) is one word."""
+    return [re.findall(r"[^\s(]+(?:\([^)]*\))?", layer) for layer in re.split(r",(?![^()]*\))", value) if layer.strip()]
+
+
+def _ms(word: str) -> float | None:
+    m = _TIME.fullmatch(word.strip())
+    return None if not m else float(word.strip()[:-len(m.group(1))]) * (1000 if m.group(1).lower() == "s" else 1)
+
+
+def _animation(value: str) -> tuple[list[str], float | None, bool, str, str]:
+    """(the animation name of each layer of an `animation` value, the duration of its first layer in ms, whether a layer repeats forever, and of the first layer its
+    iteration count and its timing function, as a shorthand that leaves them out sets them: 1 and ease); no name is `none`."""
+    names, dur, forever, count, timing = [], None, False, "1", "ease"
+    for i, words in enumerate(_layers(value)):
+        names.append(next((w for w in words if not _TIME.fullmatch(w) and w.lower() not in _ANIM_WORDS and not re.fullmatch(r"[\d.]+", w)
+                           and not w.lower().startswith(("steps(", "cubic-bezier(", "linear("))), "none"))
+        if i == 0:
+            dur = next((_ms(w) for w in words if _TIME.fullmatch(w)), None)
+            count = next((w for w in words if re.fullmatch(r"\d*\.?\d+", w)), "1")   # the one bare number of the shorthand
+            timing = next((w for w in words if w.lower() in _TIMING_WORDS or w.lower().startswith(("steps(", "cubic-bezier(", "linear("))), "ease")
+        forever = forever or "infinite" in (w.lower() for w in words)
+    return names, dur, forever, count, timing
+
+
+def _animation_more(value: str) -> tuple[str, str, str, float]:
+    """Of the first layer of an `animation` value: its direction, play state and fill mode (as a shorthand that leaves them out sets them: normal, running and none) and
+    its delay in ms (the second time of the layer, else 0)."""
+    words = (_layers(value) or [[]])[0]
+    low = [w.lower() for w in words]
+    pick = lambda options, default: next((w for w in low if w in options), default)   # noqa: E731
+    times = [_ms(w) for w in words if _TIME.fullmatch(w)]
+    return (pick(("normal", "reverse", "alternate", "alternate-reverse"), "normal"), pick(("running", "paused"), "running"), pick(("forwards", "backwards", "both"), "none"),
+            times[1] if len(times) > 1 else 0.0)
+
+
+def _longhands(prop: str, value: str) -> list[tuple[str, str]]:
+    """The longhands the motion rows read from an `animation` or `transition` shorthand (the declaration itself is kept as well)."""
+    if prop == "animation":
+        names, dur, forever, count, timing = _animation(value)
+        direction, play, fill, delay = _animation_more(value)
+        return [("animation-name", ", ".join(names)), ("animation-duration", f"{bookdata.num_text(dur or 0)}ms"),
+                ("animation-iteration-count", "infinite" if forever else count), ("animation-timing-function", timing),
+                ("animation-direction", direction), ("animation-play-state", play), ("animation-fill-mode", fill), ("animation-delay", f"{bookdata.num_text(delay)}ms")]
+    if prop == "transition":
+        layers = _layers(value)
+        return [("transition-duration", ", ".join(f"{bookdata.num_text(next((_ms(w) for w in words if _TIME.fullmatch(w)), 0.0) or 0.0)}ms" for words in layers)),
+                ("transition-property", "none" if all(words[:1] == ["none"] for words in layers) else "all")]
+    return []
+
+
+def _declared(body: str) -> list[tuple[str, str, bool]]:
+    """The declarations of a block or of a style attribute as (property, value, !important); each `animation` or `transition` is followed by the longhands the rows read."""
+    out = []
+    for prop, val in decls(body):
+        imp = bool(re.search(r"!\s*important\s*$", val, re.I))
+        val = re.sub(r"\s*!\s*important\s*$", "", val, flags=re.I)
+        out += [(p2, v2, imp) for p2, v2 in [(prop, val)] + _longhands(prop, val)]
     return out
 
 
-def write_report(project: Path, book: Path, results: list[dict], **extra) -> "Report":
+_TOKEN = re.compile(r"""(?P<ws>\s+)|(?P<comb>[>+~])|(?P<type>\*|[A-Za-z][\w-]*)|\#(?P<id>[\w-]+)|\.(?P<cls>[\w-]+)
+    |\[\s*(?P<attr>[\w-]+)\s*(?:(?P<op>[~|^$*]?=)\s*(?:"(?P<dq>[^"]*)"|'(?P<sq>[^']*)'|(?P<bare>[^\]\s]+))\s*)?\]
+    |::(?P<pe>[\w-]+)(?:\([^)]*\))?|:(?P<pc>[\w-]+)(?:\((?P<parg>[^)]*)\))?""", re.X)
+
+
+def parse_selector(sel: str) -> list[tuple[str, dict]] | None:
+    """A complex selector as [(the combinator before the compound, the compound)]; the compound is {type, ids, classes, attrs, pseudos, elements}. The lint reads
+    type, #id, .class, [attr] forms, pseudo-classes and elements and the four combinators; anything else makes it None (the rule is not read)."""
+    parts, comp, comb, pos, sel = [], None, " ", 0, sel.strip()
+    while pos < len(sel):
+        m = _TOKEN.match(sel, pos)
+        if not m:
+            return None
+        pos = m.end()
+        if m.group("ws") is not None or m.group("comb"):
+            if comp is not None:
+                parts.append((comb, comp))
+                comp, comb = None, " "
+            if m.group("comb"):
+                comb = m.group("comb")
+            continue
+        if comp is None:
+            comp = {"type": None, "ids": [], "classes": [], "attrs": [], "pseudos": [], "elements": []}
+        if m.group("type"):
+            comp["type"] = m.group("type").lower()
+        elif m.group("id"):
+            comp["ids"].append(m.group("id"))
+        elif m.group("cls"):
+            comp["classes"].append(m.group("cls"))
+        elif m.group("attr"):
+            val = next((g for g in (m.group("dq"), m.group("sq"), m.group("bare")) if g is not None), None)
+            comp["attrs"].append((m.group("attr").lower(), m.group("op"), val))
+        elif m.group("pe"):
+            comp["elements"].append(m.group("pe"))
+        else:
+            comp["pseudos"].append(m.group("pc").lower())
+    if comp is None:
+        return None
+    parts.append((comb, comp))
+    return parts
+
+
+def _specificity(parts: list[tuple[str, dict]]) -> tuple[int, int, int]:
+    a = sum(len(c["ids"]) for _, c in parts)
+    b = sum(len(c["classes"]) + len(c["attrs"]) + len(c["pseudos"]) for _, c in parts)
+    c = sum((c["type"] not in (None, "*")) + len(c["elements"]) for _, c in parts)
+    return a, b, c
+
+
+def _compound_matches(el: _El, comp: dict, checked: frozenset, loose: bool = False) -> bool:
+    if comp["elements"] or comp["type"] not in (None, "*", el.tag):
+        return False
+    classes = el.attrs.get("class", "").split()
+    if any(i != el.attrs.get("id") for i in comp["ids"]) or any(c not in classes for c in comp["classes"]):
+        return False
+    for name, op, val in comp["attrs"]:
+        v = el.attrs.get(name)
+        if v is None or (op == "=" and v != val) or (op == "~=" and val not in v.split()) or (op == "|=" and v != val and not v.startswith(val + "-")) \
+                or (op == "^=" and not (val and v.startswith(val))) or (op == "$=" and not (val and v.endswith(val))) or (op == "*=" and not (val and val in v)):
+            return False
+    # :checked is the state the row asks about; any other pseudo-class (:hover, :focus-visible, :not() ...) is a state the page is not in, or a condition the lint does
+    # not evaluate: it matches nothing, and a rule that sets what a motion row reads is named in that row (`loose` takes them as true, to tell whether it could reach)
+    if loose:
+        return all(ps != "checked" or el.tag == "input" for ps in comp["pseudos"])
+    return all(ps == "checked" and el.tag == "input" and el.attrs.get("id") in checked for ps in comp["pseudos"])
+
+
+def _matches(el: _El, parts: list[tuple[str, dict]], i: int, checked: frozenset, loose: bool = False) -> bool:
+    comb, comp = parts[i]
+    if not _compound_matches(el, comp, checked, loose):
+        return False
+    if i == 0:
+        return True
+    par = el.parent
+    if comb in (" ", ">"):
+        while par is not None and par.tag != "#root":
+            if _matches(par, parts, i - 1, checked, loose):
+                return True
+            if comb == ">":
+                return False
+            par = par.parent
+        return False
+    sibs = par.kids[:par.kids.index(el)] if par is not None else []
+    return bool(sibs) and (_matches(sibs[-1], parts, i - 1, checked, loose) if comb == "+" else any(_matches(x, parts, i - 1, checked, loose) for x in sibs))
+
+
+def _split_list(sel: str) -> list[str]:
+    return [x.strip() for x in re.split(r",(?![^()\[\]]*[)\]])", sel) if x.strip()]
+
+
+def _norm_sel(sel: str) -> str:
+    return re.sub(r"\s*([>+~,])\s*", r"\1", re.sub(r"\s+", " ", sel.strip()))
+
+
+def _media_query(at_rule: str) -> str:
+    return re.sub(r"\s*:\s*", ":", re.sub(r"\s+", " ", at_rule[6:].strip().lower()))
+
+
+def _media_holds(media: tuple[str, ...], mode: str) -> bool:
+    """Whether the rule applies when the page is shown on a screen (mode "screen"), with reduced motion asked for ("reduce") or printed ("print"). A condition
+    the lint does not read is taken to hold: a rule under it may apply."""
+    def term(t: str) -> bool:
+        t = re.sub(r"^only ", "", t.strip())
+        return {"print": mode == "print", "screen": mode != "print", "(prefers-reduced-motion:reduce)": mode == "reduce",
+                "(prefers-reduced-motion:no-preference)": mode != "reduce"}.get(t, True)
+    return all(any(all(term(t) for t in alt.split(" and ")) for alt in _media_query(m).split(",")) for m in media if m.lower().startswith("@media"))
+
+
+_UNREAD_AT = ("@layer", "@scope", "@container", "@supports")
+
+
+def _unevaluated(media: tuple[str, ...]) -> tuple[str, ...]:
+    """The at-rules around a rule that the cascade does not evaluate: a layer changes who wins, @scope which elements a rule reaches, @container and @supports whether it applies."""
+    return tuple(m for m in media if m.lower().startswith(_UNREAD_AT))
+
+
+def _in_reduce_block(media: tuple[str, ...]) -> bool:
+    return any(_REDUCE.match(_media_query(m)) for m in media if m.lower().startswith("@media"))
+
+
+def _only_without_reduce(media: tuple[str, ...]) -> bool:
+    return any("(prefers-reduced-motion:no-preference)" in _media_query(m).split(" and ") for m in media if m.lower().startswith("@media"))
+
+
+def style_rules(text: str) -> tuple[list[_Rule], dict[str, list[tuple[str, str]]], list[str]]:
+    """The style rules of the book's <style> elements in source order, its @keyframes (name -> the frames as (selector without spaces, declarations as `p:v;p:v`); a
+    @keyframes with no name is kept under ""), and the data: URIs of its url()s: a picture is a megabyte of base64 that the rules are not read through, so each stands
+    in the rules as `data:@N` for the N-th of the list. A layer statement (`@layer a, b;`) is a rule with no declarations whose one selector is the statement, and a rule that
+    holds nested rules has `nested` set: neither is applied by the cascade, and _unread names them."""
+    rules, frames, uris, seq = [], {}, [], 0
+
+    def stand_in(m: re.Match) -> str:
+        uris.append(m.group(2))
+        return f"url(data:@{len(uris) - 1})"
+    for m in re.finditer(r"<style\b[^>]*>(.*?)</style\s*>", text, re.I | re.S):
+        css = re.sub(r"url\(\s*(['\"]?)(data:[^)'\"]*)\1\s*\)", stand_in, m.group(1), flags=re.I)
+        for ctx, head, body, nested in css_rules(re.sub(r"/\*.*?\*/", "", css, flags=re.S)):
+            kf = next((c for c in ctx if c.lower().startswith("@keyframes")), None)
+            if kf:
+                frames.setdefault(kf[len("@keyframes"):].strip(), []).append((re.sub(r"\s+", "", head), ";".join(f"{p}:{' '.join(v.split())}" for p, v in decls(body))))
+                continue
+            if head.startswith("@"):
+                if head.lower().startswith("@layer") and head.endswith(";"):   # a layer statement orders layers, which the cascade does not evaluate: _unread names it
+                    rules.append(_Rule(ctx, [(_norm_sel(head[:-1]), (0, 0, 0), None)], []))
+                continue
+            ds = []
+            for p2, v2, imp in _declared(body):
+                seq += 1
+                ds.append((p2, v2, imp, seq))
+            sels = []
+            for sel in _split_list(head):
+                parts = parse_selector(sel)
+                sels.append((sel, _specificity(parts) if parts else (0, 0, 0), parts))
+            rules.append(_Rule(ctx, sels, ds, nested))
+    return rules, frames, uris
+
+
+def _winner(rules: list[_Rule], el: _El, prop: str, *, checked: frozenset = frozenset(), mode: str = "screen") -> tuple[str | None, bool, bool]:
+    """(the value of `prop` on `el`, whether it is its style attribute's, whether it is !important) once the rules that apply and the style attribute have been weighed:
+    importance first, then the style attribute over any rule, then specificity, then the later declaration (so an inline declaration beats a rule of the same importance and
+    an !important rule beats an inline one that is not); (None, False, False) when nothing sets it. A rule inside @layer, @scope, @container or @supports, and a rule that holds
+    nested rules, is not applied: the cascade does not evaluate them (_unread names those that set what a row reads)."""
+    best, key = None, None
+    for r in rules:
+        if not _media_holds(r.media, mode) or _unevaluated(r.media) or r.nested:
+            continue
+        spec = max((sp for _t, sp, parts in r.sels if parts and _matches(el, parts, len(parts) - 1, checked)), default=None)
+        if spec is None:
+            continue
+        for p, v, imp, seq in r.decls:
+            if p == prop and (key is None or (imp, 0, spec, seq) > key):
+                best, key = v, (imp, 0, spec, seq)
+    for n, (p, v, imp) in enumerate(_declared(_strip_data(el.attrs.get("style", ""))), 1):
+        if p == prop and (key is None or (imp, 1, (0, 0, 0), n) > key):
+            best, key = v, (imp, 1, (0, 0, 0), n)
+    return best, key is not None and key[1] == 1, key is not None and bool(key[0])
+
+
+def _cascade(rules: list[_Rule], el: _El, prop: str, *, checked: frozenset = frozenset(), mode: str = "screen") -> str | None:
+    """The value of `prop` on `el` (see _winner); None when nothing sets it."""
+    return _winner(rules, el, prop, checked=checked, mode=mode)[0]
+
+
+def _dom(text: str) -> _El:
+    """The elements of the book as a tree (the root is "#root"); an end tag closes the nearest open element of its name."""
+    root = _El("#root", {}, None, 0)
+    stack = [root]
+    for t in htmlscan.tags(text):
+        if t.closing:
+            for k in range(len(stack) - 1, 0, -1):
+                if stack[k].tag == t.name:
+                    for e in stack[k:]:
+                        e.end = t.end
+                    del stack[k:]
+                    break
+            continue
+        e = _El(t.name, t.attrs, stack[-1], t.start)
+        stack[-1].kids.append(e)
+        if t.void:
+            e.end = t.end
+        else:
+            stack.append(e)
+    for e in stack[1:]:
+        e.end = len(text)
+    return root
+
+
+def _walk(el: _El):
+    todo = [el]
+    while todo:
+        e = todo.pop()
+        yield e
+        todo.extend(reversed(e.kids))
+
+
+def _motion_demos(root: _El) -> list[dict]:
+    """Every <figure data-motion-demo> of the book with its parts: the two checkboxes (by the start of their ids), their labels, the flipbook (the strip <img>), the
+    reduced still, and the four states of the checkboxes as the sets of ids that are checked."""
+    out = []
+    for fig in (e for e in _walk(root) if e.tag == "figure" and "data-motion-demo" in e.attrs):
+        els = list(_walk(fig))
+
+        def one(tag: str, cls: str) -> "_El | None":
+            return next((e for e in els if e.tag == tag and cls in e.attrs.get("class", "").split()), None)
+        boxes = [e for e in els if e.tag == "input" and e.attrs.get("type", "").lower() == "checkbox"]
+        d = {"case": fig.attrs["data-motion-demo"], "fig": fig, "els": els, "labels": [e for e in els if e.tag == "label"],
+             "flip": next((e for e in els if "motion-flip" in e.attrs.get("class", "").split()), None), "reduced": one("img", "motion-reduced"),
+             "replay": next((e for e in boxes if e.attrs.get("id", "").startswith("bc-replay-")), None),
+             "slow": next((e for e in boxes if e.attrs.get("id", "").startswith("bc-slow-")), None)}
+        ids = [(d[k].attrs["id"] if d[k] else None) for k in ("replay", "slow")]
+        d["states"] = {(r, s): frozenset(i for i, on in zip(ids, (r, s)) if on and i) for r in (0, 1) for s in (0, 1)}
+        out.append(d)
+    return out
+
+
+_STOPPING = {"animation-name": lambda v: all(n.strip().lower() == "none" for n in v.split(",")),
+          "transition-property": lambda v: all(n.strip().lower() == "none" for n in v.split(",")),
+          "transition-duration": lambda v: not any(_ms(w) for w in v.split(","))}   # the longhands that switch a motion off, and the values that do it
+_STOP_LONGHANDS = {"animation": ("animation-name",), "transition": ("transition-property", "transition-duration")}
+
+
+def _best(r: _Rule, prop: str) -> tuple[str, str, bool, int] | None:
+    """The declaration of `prop` that wins inside the rule: an !important one before any other, and the later of two of the same importance."""
+    return max((d for d in r.decls if d[0] == prop), key=lambda d: (d[2], d[3]), default=None)
+
+
+def _stops(r: _Rule, kind: str) -> dict[str, tuple[bool, int]]:
+    """The longhands the rule switches animations (kind "animation": animation-name none) or transitions off with (transition-property none, a transition-duration of 0), each with
+    the importance and the place of the declaration that wins in the rule; empty when the rule switches nothing off."""
+    wins = {lh: _best(r, lh) for lh in _STOP_LONGHANDS[kind]}
+    return {lh: (d[2], d[3]) for lh, d in wins.items() if d and _STOPPING[lh](d[1])}
+
+
+def _starts(r: _Rule) -> list[tuple[str, str, dict[str, bool]]]:
+    """What the rule starts, as (kind, words, {longhand: !important}): ("animation", "the animation <names>", animation-name) and ("transition", "a transition" with a duration
+    above 0, transition-duration and, when the rule sets one, transition-property): the longhands a stop has to win on, each as the declaration that wins in the rule has it."""
+    out = []
+    name = _best(r, "animation-name")
+    live = [n.strip() for n in name[1].split(",") if n.strip().lower() not in ("", "none")] if name else []
+    if live:
+        out.append(("animation", "the animation " + ", ".join(live), {"animation-name": name[2]}))
+    dur, prop = _best(r, "transition-duration"), _best(r, "transition-property")
+    if dur and any(_ms(w) for w in dur[1].split(",")):
+        out.append(("transition", "a transition", {"transition-duration": dur[2], **({"transition-property": prop[2]} if prop else {})}))
+    return out
+
+
+def _meet(a: tuple, b: tuple) -> bool:
+    """Whether one element can be selected by both selectors (each as _Rule.sels holds it): the same text, or last compounds that agree on the tag, the id and the pseudo-element.
+    A selector the lint cannot read meets only its own text."""
+    if _norm_sel(a[0]) == _norm_sel(b[0]):
+        return True
+    if a[2] is None or b[2] is None:
+        return False
+    ca, cb = a[2][-1][1], b[2][-1][1]
+    return len({c["type"] for c in (ca, cb)} - {None, "*"}) < 2 and len(set(ca["ids"]) | set(cb["ids"])) < 2 and ca["elements"] == cb["elements"]
+
+
+def _gaps_under_reduced_motion(rules: list[_Rule], text: str) -> tuple[list[str], int, list[str]]:
+    """-> (the rules that start an animation or a transition and are not switched off under prefers-reduced-motion: reduce, how many such rules the book has, the stops the
+    cascade does not look at). A rule is switched off by a rule inside @media (prefers-reduced-motion: reduce) for the same selector (or for *) that sets animation: none
+    (animation-name: none), or transition: none (a transition-property of none or a transition-duration of 0) and that wins on that longhand against every rule that can select the
+    same element and sets it to a value that does not stop the motion: importance first, then specificity, then the later declaration (the start's own declarations too, so a start
+    marked !important is switched off only by an !important stop, and a * only with !important, which an !important rule for a class outweighs). A stop that wins on another
+    longhand counts (`transition-property: none` against an important duration). A rule that starts the same kind of motion under another selector is checked for itself; one
+    that only sets a longhand (`main .y { transition-property: color }`) has to be switched off under its own selector too. A stop inside @layer, @scope, @container or
+    @supports, or in a rule that holds nested rules, is not counted, and is named: the cascade does not evaluate them."""
+    gaps, n, unread = [], 0, []
+    live = [q for q in rules if _media_holds(q.media, "reduce") and not _unevaluated(q.media) and not q.nested]   # what applies when the preference is on, as the cascade reads it
+    alone = {id(q): {k for k, *_ in _starts(q)} if not (_in_reduce_block(q.media) or _only_without_reduce(q.media)) else set() for q in live}   # the kinds a rule is checked for itself
+
+    def outweighing(sel, lh, weight, kind, q, start=None):
+        """The selectors of the rules other than the stop q that can select what `sel` selects, set `lh` to a value that does not stop the motion and outweigh `weight`; the
+        start rule's own declarations are weighed too when it sits where the cascade does not look (an !important start in @supports needs an !important stop all the same)."""
+        pool = live if start is None or any(p is start for p in live) else live + [start]
+        for p in pool:
+            d = _best(p, lh)
+            if p is q or d is None or _STOPPING[lh](d[1]):
+                continue
+            kinds = alone[id(p)] if id(p) in alone else {k for k, *_ in _starts(p)}
+            for y in p.sels:
+                if _meet(sel, y) and (d[2], y[1], d[3]) > weight and (kind not in kinds or _norm_sel(y[0]) == _norm_sel(sel[0])):
+                    yield y
+
+    def covered(sel, kind, seen, start=None):
+        """-> (whether a rule in @media (prefers-reduced-motion: reduce) for `sel` or `*` wins on a longhand that stops `kind` against every rule that outweighs it, the first
+        selector that outweighs a stop and is not `sel`'s own, else None)"""
+        want, blame = _norm_sel(sel[0]), None
+        for q in live:
+            if not _in_reduce_block(q.media):
+                continue
+            for x_text, _sp, _parts in q.sels:
+                x = _norm_sel(x_text)
+                if x not in (want, "*"):
+                    continue
+                for lh, (imp, seq) in _stops(q, kind).items():
+                    weight = (imp, sel[1] if x == want else (0, 0, 0), seq)
+                    hit = next((y for y in outweighing(sel, lh, weight, kind, q, start) if _norm_sel(y[0]) in seen | {want} or not covered(y, kind, seen | {want})[0]), None)
+                    if hit is None:
+                        return True, None
+                    blame = blame or (hit if _norm_sel(hit[0]) != want else None)
+        return False, blame
+
+    def not_looked_at(sel, kind):
+        """The rules in @media (prefers-reduced-motion: reduce) for `sel` or `*` that would switch the motion off, from where the cascade does not look, as _unread words them."""
+        want = _norm_sel(sel[0])
+        return [f"{_norm_sel(x_text)} (sets {kind})" + (f" inside {' and '.join(_unevaluated(q.media))}" if _unevaluated(q.media) else "") + (" with nested rules" if q.nested else "")
+                for q in rules if _in_reduce_block(q.media) and _media_holds(q.media, "reduce") and (_unevaluated(q.media) or q.nested) and _stops(q, kind)
+                for x_text, _sp, _parts in q.sels if _norm_sel(x_text) in (want, "*")]
+
+    for r in rules:
+        if _in_reduce_block(r.media) or _only_without_reduce(r.media):
+            continue
+        for kind, what, against in _starts(r):
+            n += 1
+            imp = any(against.values())
+            off = 'animation: none' if kind == 'animation' else 'transition: none'
+            for sel in r.sels:
+                if _unevaluated(r.media) or r.nested:   # a start where the cascade does not look: weighed as if it applies, and named
+                    unread.append(f"{_norm_sel(sel[0])} (starts {kind})" + (f" inside {' and '.join(_unevaluated(r.media))}" if _unevaluated(r.media) else "")
+                                  + (" with nested rules" if r.nested else ""))
+                ok, blame = covered(sel, kind, frozenset(), r)
+                if ok:
+                    continue
+                if blame:
+                    gaps.append(f"{sel[0]!r} starts {what}{' with !important' if imp else ''} and the {off} for it in @media (prefers-reduced-motion: reduce) is outweighed by {blame[0]!r}")
+                else:
+                    gaps.append(f"{sel[0]!r} starts {what}{' with !important' if imp else ''} and no later rule in @media (prefers-reduced-motion: reduce) sets "
+                                + (f"{off} !important for it" if imp else f"{off} for it (or for * with !important)"))
+                unread += not_looked_at(sel, kind)
+    for t in htmlscan.tags(text):   # an inline style cannot be switched off by a media query
+        st = t.attrs.get("style") if not t.closing else None
+        if st:
+            pseudo = _Rule((), [], [(p2, v2, imp, 0) for p2, v2, imp in _declared(_strip_data(st))])
+            for _kind, what, _against in _starts(pseudo):
+                n += 1
+                gaps.append(f"<{t.name} style> starts {what}; an inline style cannot be switched off under reduced motion: move it into a rule")
+    return gaps, n, list(dict.fromkeys(unread))
+
+
+def _zero(v: str) -> bool:
+    try:
+        return float(v[:-1] if v.endswith("%") else v) == 0
+    except ValueError:
+        return False
+
+
+def _unseen(el: _El, rules: list[_Rule], st: frozenset, *, opacity: bool) -> str | None:
+    """Why `el` is not shown on a screen when the checkboxes are in the state `st`, else None: it or an ancestor has the hidden or the inert attribute, is
+    display: none, or is visibility: hidden (the innermost value that says visible or hidden counts, as visibility is inherited), and with `opacity` is at opacity 0
+    (any ancestor at 0 makes the product 0). A style attribute weighs above the rules of its importance (_winner). Outside the reduced-motion and print media: the book as a screen shows it."""
+    def value(n: _El, prop: str) -> tuple[str, str]:   # (the value, and who says it)
+        v, own, _imp = _winner(rules, n, prop, checked=st)
+        return (v or "").strip().lower(), "its style says" if own else "a rule says"
+    seen = False   # an element between this one and the ancestor said visibility: visible, which an ancestor's hidden does not outweigh
+    n = el
+    while n is not None and n.tag != "#root":
+        who = f"<{n.tag}{' ' + n.attrs['id'] if n.attrs.get('id') else ''}>"
+        where = "" if n is el else f" (on its ancestor {who})"
+        for attr in ("hidden", "inert"):
+            if attr in n.attrs:
+                return f"it has the {attr} attribute" if n is el else f"its ancestor {who} has the {attr} attribute"
+        v, said = value(n, "display")
+        if v == "none":
+            return f"{said} display: none{where}"
+        v, said = value(n, "visibility")
+        if not seen:
+            if v in ("hidden", "collapse"):
+                return f"{said} visibility: {v}{where}"
+            seen = v == "visible"
+        if opacity:
+            v, said = value(n, "opacity")
+            if _zero(v):
+                return f"{said} opacity: 0{where}"
+        n = n.parent
+    return None
+
+
+def _hidden_from_keyboard(d: dict, which: str, rules: list[_Rule]) -> str | None:
+    """Why the checkbox is out of the keyboard's reach (outside the reduced-motion and print media), else None: it is disabled or has a negative tabindex, or it or an
+    ancestor is hidden, inert, display: none or visibility: hidden."""
+    el = d[which]
+    if "disabled" in el.attrs:
+        return "it has the disabled attribute"
+    if el.attrs.get("tabindex", "0").strip().startswith("-"):
+        return "it has a negative tabindex"
+    for st in d["states"].values():
+        why = _unseen(el, rules, st, opacity=False)
+        if why:
+            return why
+    return None
+
+
+def _reduced_problems(d: dict, rules: list[_Rule]) -> list[str]:
+    """What is wrong with one demo under reduced motion: the flipbook must be hidden and have no animation, the reduced still shown, the controls hidden."""
+    out, case = [], d["case"]
+    if d["flip"] is None:
+        return [f"{case}: no flipbook (an element with the class motion-flip)"]
+    for st in d["states"].values():
+        shown = _cascade(rules, d["flip"], "display", checked=st, mode="reduce")
+        anim = _cascade(rules, d["flip"], "animation-name", checked=st, mode="reduce")
+        if (shown or "inline").strip().lower() != "none":
+            out.append(f"{case}: the flipbook is shown under reduced motion (display: {shown or 'the default'})")
+            break
+        if anim and any(n.strip().lower() != "none" for n in anim.split(",")):
+            out.append(f"{case}: the flipbook still has an animation under reduced motion ({anim}); it needs animation: none")
+            break
+    if d["reduced"] is None:
+        out.append(f"{case}: no reduced still (an <img class=\"motion-reduced\">)")
+    elif (_cascade(rules, d["reduced"], "display", mode="reduce") or "inline").strip().lower() == "none":
+        out.append(f"{case}: the reduced still is not shown under reduced motion (display: none)")
+    for e in [d["replay"], d["slow"], *d["labels"]]:
+        if e is not None and (_cascade(rules, e, "display", mode="reduce") or "inline").strip().lower() != "none":
+            out.append(f"{case}: <{e.tag}{' ' + e.attrs['id'] if 'id' in e.attrs else ''}> is shown under reduced motion, where the flipbook it controls is not")
+            break
+    return out
+
+
+def _first_unseen(el: _El, rules: list[_Rule], d: dict, *, opacity: bool) -> str | None:
+    """Why `el` is not shown on a screen in some state of the demo's two checkboxes (the first reason), else None."""
+    return next(filter(None, (_unseen(el, rules, st, opacity=opacity) for st in d["states"].values())), None)
+
+
+def _steps_differ(frames: list[tuple[str, str]], want: dict[float, str]) -> str | None:
+    """How the keyframes of a flipbook (as style_rules reads them) differ from the steps frames.json gives ({percent: `object-position:<x> 0`}), else None."""
+    got = {}
+    for sel, body in frames:
+        for part in sel.split(","):
+            part = part.strip().lower()
+            pct = 0.0 if part == "from" else 100.0 if part == "to" else float(part[:-1]) if re.fullmatch(r"\d*\.?\d+%", part) else None
+            if pct is not None:
+                got[pct] = body   # a later keyframe for the same percent wins
+    for pct in sorted(set(got) | set(want)):
+        at = bookdata.num_text(pct, 2)
+        if pct not in got:
+            return f"no keyframe at {at} %, where frames.json has a still"
+        if pct not in want:
+            return f"a keyframe at {at} % has no still in frames.json"
+        if got[pct] != want[pct]:
+            return f"at {at} % it has `{got[pct]}`, frames.json gives `{want[pct]}`"
+    return None
+
+
+def _replay_problems(d: dict, rules: list[_Rule], kfs: dict, text: str, doc: dict | None) -> list[str]:
+    """What is wrong with one demo's controls and flipbook: both checkboxes with an id, a label with text, the keyboard's reach, the labels and the flipbook shown on a
+    screen, and a new animation-name (so a new run) for every change of either box, 4 x data-length-ms for the slow one, played once with step-end, forwards (direction
+    normal), running, held at both ends (fill mode both) and at once (delay 0), @keyframes that exist, are the same for the four names and step through the stills `doc`
+    (frames.json) lists, each at its percent."""
+    out, case, fig = [], d["case"], d["fig"]
+    try:
+        length = float(fig.attrs.get("data-length-ms", ""))
+    except ValueError:
+        length = 0.0
+    if not length > 0:
+        out.append(f"{case}: data-length-ms is not a number above 0")
+    for which in ("replay", "slow"):
+        el = d[which]
+        if el is None:
+            out.append(f"{case}: no checkbox whose id starts with bc-{which}-")
+            continue
+        id_ = el.attrs["id"]
+        mine = [x for x in d["labels"] if x.attrs.get("for") == id_]
+        if not mine:
+            out.append(f"{case}: #{id_} has no <label for=\"{id_}\">")
+        elif not any(htmlscan.visible_text(text[x.start:x.end], with_attributes=False).strip() for x in mine):
+            out.append(f"{case}: the label of #{id_} has no visible text")
+        for x in mine:
+            why = _first_unseen(x, rules, d, opacity=True)
+            if why:
+                out.append(f"{case}: the label of #{id_} is not shown on a screen: {why}")
+                break
+        why = _hidden_from_keyboard(d, which, rules)
+        if why:
+            out.append(f"{case}: #{id_} is out of the keyboard's reach: {why}")
+    if d["flip"] is None:
+        return out + [f"{case}: no flipbook (an element with the class motion-flip)"]
+    why = _first_unseen(d["flip"], rules, d, opacity=True)
+    if why:
+        out.append(f"{case}: the flipbook is not shown on a screen: {why}")
+    odd = _picture(d["flip"])[2]
+    if odd:
+        out.append(_odd_source(case, odd))
+    for st in d["states"].values():   # an animation is below an !important declaration in the cascade: the keyframes cannot move what one holds
+        pos, _own, imp = _winner(rules, d["flip"], "object-position", checked=st)
+        if imp:
+            out.append(f"{case}: the flipbook has object-position: {pos} !important, which the keyframes cannot override, so the replay is frozen")
+            break
+    if d["replay"] is None or d["slow"] is None:
+        return out
+    got = {}
+    for (r, s), st in d["states"].items():
+        name = _cascade(rules, d["flip"], "animation-name", checked=st)
+        dur = _cascade(rules, d["flip"], "animation-duration", checked=st)
+        count = (_cascade(rules, d["flip"], "animation-iteration-count", checked=st) or "1").split(",")[0].strip().lower()
+        timing = re.split(r",(?![^()]*\))", _cascade(rules, d["flip"], "animation-timing-function", checked=st) or "")[0].strip()   # the first of a list: steps(1, end) is one
+        direction, play, fill = ((_cascade(rules, d["flip"], f"animation-{k}", checked=st) or default).split(",")[0].strip().lower()
+                                 for k, default in (("direction", "normal"), ("play-state", "running"), ("fill-mode", "none")))
+        delay = (_cascade(rules, d["flip"], "animation-delay", checked=st) or "0s").split(",")[0].strip()
+        got[(r, s)] = (name or "none").strip()
+        state = f"replay {'checked' if r else 'unchecked'}, slow {'checked' if s else 'unchecked'}"
+        if got[(r, s)].lower() == "none":
+            out.append(f"{case}: the flipbook has no animation ({state})")
+            continue
+        ms = _ms((dur or "").split(",")[0])
+        want = 4 * length if s else length
+        if ms is None or abs(ms - want) >= 0.5:
+            out.append(f"{case}: the flipbook runs for {bookdata.num_text(ms) + ' ms' if ms is not None else 'no set time'} ({state}), not {bookdata.num_text(want)} ms "
+                       f"({'4 x ' if s else ''}data-length-ms)")
+        if count == "infinite":
+            out.append(f"{case}: the flipbook repeats forever ({state}); it plays once")
+        elif not _is_one(count):
+            out.append(f"{case}: the flipbook plays {count} times ({state}); it plays once")
+        if re.sub(r"\s+", "", (timing or "ease").lower()) not in ("step-end", "steps(1,end)", "steps(1,jump-end)", "steps(1)"):
+            out.append(f"{case}: the flipbook's timing function is {timing or 'ease (the default)'} ({state}), not step-end: each still must hold until the next")
+        if direction != "normal":
+            out.append(f"{case}: the flipbook's direction is {direction} ({state}), not normal: the stills must play in order, once")
+        if play != "running":
+            out.append(f"{case}: the flipbook's play state is {play} ({state}), not running: it would not play")
+        if fill != "both":
+            out.append(f"{case}: the flipbook's fill mode is {fill} ({state}), not both: it must show the first still before it starts and stay on the last when it ends")
+        if _ms(delay) != 0:   # a delay that cannot be read as a time is not 0 either
+            out.append(f"{case}: the flipbook's delay is {delay} ({state}), not 0: it must start at once")
+        if got[(r, s)] not in kfs:
+            out.append(f"{case}: there is no @keyframes {got[(r, s)]} ({state})")
+    for a, b, what in (((0, 0), (1, 0), "checking the replay box"), ((0, 0), (0, 1), "checking the slow box"),
+                       ((1, 0), (1, 1), "checking the slow box with the replay box checked"), ((0, 1), (1, 1), "checking the replay box with the slow box checked")):
+        if got[a] == got[b]:
+            out.append(f"{case}: {what} does not change the flipbook's animation-name (still {got[a]}), so the replay would not start again")
+    named = [n for n in dict.fromkeys(got.values()) if n in kfs]
+    if len({repr(kfs[n]) for n in named}) > 1:
+        out.append(f"{case}: the @keyframes of {', '.join(named)} are not the same")
+    if doc is not None:
+        want = {float(p): f"object-position:{x} 0" for p, x in bookdata.flipbook_steps(doc)}
+        for n in named:
+            why = _steps_differ(kfs[n], want)
+            if why:
+                out.append(f"{case}: the @keyframes {n} do not step through the stills of frames.json: {why}")
+                break
+    return out
+
+
+def _is_one(count: str) -> bool:
+    try:
+        return float(count) == 1
+    except ValueError:
+        return False
+
+
+def _png_dims(b: bytes) -> tuple[int, int] | None:
+    return struct.unpack(">II", b[16:24]) if b[:8] == b"\x89PNG\r\n\x1a\n" and len(b) >= 24 else None
+
+
+def _data_png(src: str) -> bytes | None:
+    m = re.match(r"(?is)^\s*data:image/png;base64,(.*)$", src)
+    try:
+        return base64.b64decode(m.group(1), validate=True) if m else None
+    except ValueError:
+        return None
+
+
+def _picture(el: "_El | None") -> tuple[str | None, float, str | None]:
+    """(the picture an <img> shows, its density, the <source> that keeps the lint from knowing it): the first candidate (`data:... 2x` is 2) of the srcset of the first <source>
+    before it in its <picture> (the strip is there; the img's own src is a 1 x 1 stand-in), else of its own srcset, else its src (1). That <source> is read only when it has no
+    media attribute and its type is absent or image/png: a browser skips one with a media that does not match or a type it does not know, and then draws the stand-in, and the lint
+    cannot tell: then there is no picture, and the third answer is that <source> written out (`<source type="image/x-nope">`)."""
+    if el is None:
+        return None, 1.0, None
+    par = el.parent
+    before = par.kids[:par.kids.index(el)] if par is not None and par.tag == "picture" else []
+    source = next((k for k in before if k.tag == "source" and k.attrs.get("srcset", "").strip()), None)
+    if source is not None and ("media" in source.attrs or "type" in source.attrs and source.attrs["type"].strip().lower() != "image/png"):
+        return None, 1.0, "<source" + "".join(f' {a}="{source.attrs[a]}"' for a in ("media", "type") if a in source.attrs) + ">"
+    ss = source.attrs["srcset"].strip() if source is not None else el.attrs.get("srcset", "").strip()
+    if not ss:
+        return el.attrs.get("src"), 1.0, None
+    parts = ss.split(None, 1)   # a data: URI holds commas but no space: the first word is the URL, the rest its descriptor
+    m = re.fullmatch(r"(\d*\.?\d+)x", parts[1].split(",")[0].strip()) if len(parts) > 1 else None
+    return parts[0].rstrip(","), float(m.group(1)) if m else 1.0, None
+
+
+def _odd_source(case: str, source: str) -> str:
+    """The sentence motion:replay and motion:stills share for a <source> that _picture does not read."""
+    return (f"{case}: the flipbook's {source} may not be the one a browser takes the strip from: it skips a <source> with a media attribute that does not match or a type that is not "
+            "image/png, and then draws the 1 x 1 stand-in (the strip's <source> needs no media attribute and type=\"image/png\", or none)")
+
+
+def _px(v: str | None) -> float | None:
+    m = re.fullmatch(r"\s*(\d*\.?\d+)(?:px)?\s*", v or "")
+    return float(m.group(1)) if m else None
+
+
+def _stills_problems(project: Path, d: dict, rules: list[_Rule], doc: dict | None, bad: list[str]) -> tuple[list[str], list[str]]:
+    """-> (what is wrong, what only deserves a warning) for one demo: its flipbook (the strip) and reduced still against the files frames.json lists, its
+    data-length-ms and data-frames against frames.json, and the flipbook's size, density and fit. `doc` is frames.json (None, and `bad` says why, when it cannot be read)."""
+    case, fig = d["case"], d["fig"]
+    folder = bookdata.case_folder(case)
+    if doc is None:
+        return [f"{case}: {bad[0]}"], []
+    out, warn = [], []
+    if doc["case"] != case:
+        return [f"{case}: {bookdata.FRAMES_DIR}/{folder}/frames.json is for the case {doc['case']!r}"], []
+    older = "the book shows stills older than motion/frames: run brand-creator book"
+    try:
+        if abs(float(fig.attrs.get("data-length-ms", "")) - doc["length_ms"]) >= 0.0005:
+            out.append(f"{case}: data-length-ms is {fig.attrs.get('data-length-ms')}, frames.json says {bookdata.num_text(doc['length_ms'])} ({older})")
+    except ValueError:
+        out.append(f"{case}: data-length-ms is not a number")
+    if fig.attrs.get("data-frames") != str(len(doc["frames"])):
+        out.append(f"{case}: data-frames is {fig.attrs.get('data-frames')}, frames.json lists {len(doc['frames'])} ({older})")
+    flip = d["flip"]
+    url, density, odd = _picture(flip)
+    shown = {"reduced": d["reduced"].attrs.get("src", "") if d["reduced"] else None, "flipbook": url if flip is not None else None}
+    if odd:   # the strip's <source> is one a browser may skip: the picture is not read, and motion:replay says the same
+        out.append(_odd_source(case, odd))
+        del shown["flipbook"]
+    for what, src in shown.items():
+        key = "reduced" if what == "reduced" else "strip"
+        want_file = project / doc[key]["file"]
+        if src is None:
+            out.append(f"{case}: no {what} picture in the demo" + (' (an <img class="motion-flip"> in a <picture> whose <source> has a srcset that is a data: URI)' if what == "flipbook" else ""))
+            continue
+        got = _data_png(src)
+        if got is None:
+            out.append(f"{case}: the {what} picture is not a base64 data:image/png URI")
+        elif not want_file.is_file():
+            out.append(f"{case}: {doc[key]['file']} is gone ({older})")
+        elif got != want_file.read_bytes():
+            out.append(f"{case}: the {what} picture is not {doc[key]['file']} ({older})")
+        elif hashlib.sha256(got).hexdigest() != doc[key]["sha256"]:
+            out.append(f"{case}: the {what} picture is {doc[key]['file']}, which is not the file frames.json lists (its sha256 differs): run brand-creator frames, then brand-creator book")
+    w, h = doc["size"]
+    n, scale = len(doc["frames"]), doc["scale"]
+    for what, count in (("flipbook", n), ("reduced", 1)):
+        png = _data_png(shown[what]) if shown.get(what) else None
+        if png and _png_dims(png) != (round(count * w * scale), round(h * scale)):
+            warn.append(f"{case}: the {what} picture is {'x'.join(map(str, _png_dims(png) or ()))} px, frames.json says {count} still(s) of "
+                        f"{bookdata.num_text(w)} x {bookdata.num_text(h)} px at {bookdata.num_text(scale)}x: run brand-creator frames again")
+    if flip is not None:
+        st0 = d["states"][(0, 0)]
+        if url is not None and abs(density - scale) > 1e-6:
+            out.append(f"{case}: the flipbook picture is drawn at {bookdata.num_text(density)}x, frames.json says the stills are {bookdata.num_text(scale)}x, so one still would not fill "
+                       f"{bookdata.num_text(w)} x {bookdata.num_text(h)} px: the srcset of its <source> needs the descriptor {bookdata.num_text(scale)}x")
+        size, limited = [], []
+        for k in ("width", "height"):
+            v = _px(_cascade(rules, flip, k, checked=st0) or flip.attrs.get(k))
+            for lim, clamp in (("max", min), ("min", max)):   # the size is held under its max- first, and over its min- after: a min- wins where they meet
+                raw = (_cascade(rules, flip, f"{lim}-{k}", checked=st0) or "").strip().lower()
+                if raw in ("", "none", "auto"):   # the initial values
+                    continue
+                if _px(raw) is None:
+                    out.append(f"{case}: the flipbook's {lim}-{k} is {raw}, which the lint does not read as px: it may show more or less than one still")
+                elif v is not None and clamp(v, _px(raw)) != v:
+                    v = clamp(v, _px(raw))
+                    limited.append(f"{lim}-{k}: {raw}")
+            size.append(v)
+        (fw, fh), by = size, f" ({', '.join(limited)})" if limited else ""
+        if (fw, fh) != (float(w), float(h)):
+            out.append(f"{case}: the flipbook is {bookdata.num_text(fw) if fw is not None else 'of no set width'} x {bookdata.num_text(fh) if fh is not None else 'of no set height'} px{by}, "
+                       f"one still of frames.json is {bookdata.num_text(w)} x {bookdata.num_text(h)} px" + ("" if limited else f" ({older})"))   # a limit is no old book: rebuilding does not mend it
+        fit = (_cascade(rules, flip, "object-fit", checked=st0) or "").strip().lower()
+        if fit != "none":
+            out.append(f"{case}: the flipbook's object-fit is {fit or 'not set'}; it needs none, so that the strip shows one still at a time")
+    return out, warn
+
+
+def _demo_allowance(text: str):
+    """-> a function from the selector of a rule to the durations (ms) the rule may use besides the tokens: for a rule whose selectors match elements of one motion demo
+    and of nothing else in the book, that demo's data-length-ms and four times it; for any other rule (a selector that matches nothing, or also something outside the
+    demo, or in two demos), none."""
+    root = _dom(text)
+    demos = _motion_demos(root) if "data-motion-demo" in text else []
+    lengths, owner = [], {}   # (length, demo) of each demo that has one; the number of the demo each of its elements lies in
+    for d in demos:
+        try:
+            lengths.append((float(d["fig"].attrs.get("data-length-ms", "")), d))
+        except ValueError:
+            continue
+        owner.update({id(e): len(lengths) - 1 for e in d["els"]})
+    every = [e for e in _walk(root) if e.tag != "#root"] if lengths else []
+    states = {st for _n, d in lengths for st in d["states"].values()}
+    cache: dict[str, list[float]] = {}
+
+    def allowance(where: str) -> list[float]:
+        if where not in cache:
+            figs, ok = set(), True
+            for sel in _split_list(where):
+                parts = parse_selector(sel)
+                hit = [e for e in every if parts and any(_matches(e, parts, len(parts) - 1, st) for st in states)]
+                if not hit or any(id(e) not in owner for e in hit):
+                    ok = False
+                    break
+                figs |= {owner[id(e)] for e in hit}
+            n = lengths[next(iter(figs))][0] if ok and len(figs) == 1 else None
+            cache[where] = sorted({n, 4 * n}) if n is not None else []
+        return cache[where]
+    return allowance
+
+
+def _read_by(prop: str) -> tuple[str, ...]:
+    """The motion rows that read a property of the cascade."""
+    if prop in ("display", "visibility", "opacity") or prop.startswith(("animation", "transition")):
+        return ("motion:reduced", "motion:replay")
+    if prop == "object-position":
+        return ("motion:replay",)
+    return ("motion:stills",) if prop in ("object-fit", "width", "height", "min-width", "max-width", "min-height", "max-height") else ()
+
+
+def _unread(rules: list[_Rule], demos: list[dict]) -> dict[str, list[str]]:
+    """{motion row: ["<selector> (sets display)", ...]}: the rules that set what a row reads (display, visibility, opacity, animation* and transition* for
+    motion:reduced and motion:replay; object-position for motion:replay; object-fit, width, height and their min- and max- for motion:stills) under a selector the lint cannot
+    evaluate, inside @layer, @scope, @container or @supports ("... inside @layer demo") or holding nested rules ("... with nested rules"), and that could reach an element of a
+    demo or an ancestor of one. A layer statement (`@layer a, b;`) is in every row: it orders layers. The cascade the rows read applies none of them: a selector it cannot
+    parse, or one with a pseudo-class other than :checked (:is, :not, :where, :has, :hover ...), matches nothing, the at-rules are not evaluated, and a rule that holds nested
+    rules is not applied. Each row says which rules it left out."""
+    reach = {}
+    for d in demos:
+        n = d["fig"]
+        for e in d["els"]:
+            reach[id(e)] = e
+        while n is not None and n.tag != "#root":
+            reach[id(n)] = n
+            n = n.parent
+    out: dict[str, list[str]] = {"motion:reduced": [], "motion:replay": [], "motion:stills": []}
+    for r in rules:
+        if not (_media_holds(r.media, "screen") or _media_holds(r.media, "reduce")):
+            continue
+        if r.sels and r.sels[0][0].startswith("@layer"):   # a layer statement (style_rules): it orders layers the cascade does not evaluate, so it may change any row
+            for row_ in out:
+                out[row_].append(f"{r.sels[0][0]} (orders the layers of the cascade)")
+            continue
+        sets = {}   # row -> what the rule sets that the row reads
+        for p, *_rest in r.decls:
+            for row_ in _read_by(p):
+                sets.setdefault(row_, set()).add(p.split("-")[0] if p.startswith(("animation", "transition")) else p)
+        around = _unevaluated(r.media)   # a rule inside @layer, @scope, @container or @supports is not applied, whatever its selector
+        for text_, _sp, parts in r.sels:
+            if not sets or (parts is not None and not around and not r.nested and not any(ps != "checked" for _c, c in parts for ps in c["pseudos"])):
+                continue   # sets nothing a row reads, or a selector the cascade evaluates
+            if parts is not None and not any(_matches(e, parts, len(parts) - 1, frozenset(), True) for e in reach.values()):
+                continue   # a selector it cannot evaluate, but one that reaches nothing of a demo
+            for row_, props in sets.items():
+                out[row_].append(f"{_norm_sel(text_)} (sets {', '.join(sorted(props))})" + (f" inside {' and '.join(around)}" if around else "") + (" with nested rules" if r.nested else ""))
+    return out
+
+
+def _note_unread(row_: dict, unread: list[str]) -> None:
+    """Say in a row which rules it could not read: a row that would pass is a warning then, never a pass in silence."""
+    if unread:
+        text = "; ".join(f"not read: {x}" for x in dict.fromkeys(unread[:4])) + (f"; {len(unread) - 4} more" if len(unread) > 4 else "")
+        row_["detail"] = f"{row_['detail']}; {text}" if row_["detail"] else text
+        if row_["status"] == "pass":
+            row_["status"] = "warn"
+
+
+def _motion_rules(project: Path, text: str, view: dict) -> list[dict]:
+    """motion:reduced, motion:replay and motion:stills. A book with nothing for a row to measure gets it as info, never as a pass."""
+    rules, kfs, _uris = style_rules(text)
+    gaps, moving, stops_unread = _gaps_under_reduced_motion(rules, text)
+    demos = _motion_demos(_dom(text)) if "data-motion-demo" in text else []
+    red = row("motion:reduced", "pass", "nothing in the book moves under prefers-reduced-motion: reduce")
+    rep = row("motion:replay", "info", "every motion demo starts again from its two checkboxes, which the keyboard reaches", "no motion demo")
+    sti = row("motion:stills", "info", "every motion demo shows the stills in motion/frames", "no motion demo")
+    for d in demos:
+        gaps += _reduced_problems(d, rules)
+    if gaps:
+        red.update(status="fail", detail="; ".join(gaps[:4]) + (f"; {len(gaps) - 4} more" if len(gaps) > 4 else ""))
+    elif demos or moving:
+        red["detail"] = f"{moving} rule(s) that start an animation or a transition, each switched off" + (f"; {len(demos)} motion demo(s) show their still" if demos else "")
+    else:
+        red.update(status="info", detail="no motion demo, and no rule that starts an animation or a transition")
+    fails, warns = [], []
+    if demos:
+        frames = {id(d): bookdata.read_frames(project, bookdata.case_folder(d["case"])) for d in demos}
+        probs = [p for d in demos for p in _replay_problems(d, rules, kfs, text, frames[id(d)][0])] + (["a @keyframes with no name"] if "" in kfs else [])
+        rep.update(status="fail" if probs else "pass", detail="; ".join(probs[:4]) + (f"; {len(probs) - 4} more" if len(probs) > 4 else "") if probs
+                   else f"{len(demos)} demo(s): {', '.join(d['case'] for d in demos)}")
+        for d in demos:
+            f_, w_ = _stills_problems(project, d, rules, *frames[id(d)])
+            fails += f_
+            warns += w_
+    # the stills a generated book has to show and does not: the book was built before `frames` ran (or before the case came into the proof)
+    missing = _stills_without_replay(project, view, {d["case"] for d in demos})
+    (warns if view.get("mark_source") == "authored-vector" else fails).extend(missing)
+    if demos or missing:
+        sti.update(status="fail" if fails else "warn" if warns else "pass",
+                   detail="; ".join((fails + warns)[:4]) + (f"; {len(fails + warns) - 4} more" if len(fails + warns) > 4 else "") if fails or warns
+                   else f"{len(demos)} demo(s): {', '.join(d['case'] for d in demos)}")
+    unread = _unread(rules, demos) if demos else {"motion:reduced": [], "motion:replay": [], "motion:stills": []}
+    unread["motion:reduced"] = list(dict.fromkeys(unread["motion:reduced"] + stops_unread))   # a stop the cascade does not look at, for a rule that starts motion with no other stop
+    for row_, key in ((red, "motion:reduced"), (rep, "motion:replay"), (sti, "motion:stills")):
+        _note_unread(row_, unread[key])
+    return [red, rep, sti]
+
+
+def _stills_without_replay(project: Path, view: dict, shown: set[str]) -> list[str]:
+    """The cases whose stills the build would make a replay of (a gated proof's, in a motion chapter this book has, with motion not off) and that the book has none of:
+    a book built before `frames` ran, or before the case came into the proof."""
+    if not bookdata.shows_stills(project, view):
+        return []
+    how = ("this book is hand-written: add the replay with `brand-creator patch`" if view.get("mark_source") == "authored-vector"
+           else "run brand-creator book (the Motion chapter shows the replay through its {{motion}} line)")
+    return [f"{doc['case']}: its stills are in {bookdata.FRAMES_DIR}/{folder}/ and the book has no replay of them: {how}" for folder, doc in bookdata.replayable(project)
+            if doc["case"] not in shown]
+
+
+# ---------------------------------------------------------------- reports
+
+def lint_inputs(project: Path, book: Path, view: dict) -> list[Path]:
+    """Every file a lint run read: the book, tokens, manifest, facts, config, the FORBIDDEN sources, the mark artwork, whether motion is on (motion/motion.json) and,
+    for a book that shows stills, the stills of the gated proofs with their proofs."""
+    out = [book]
+    for rel in ("assets/tokens/tokens.json", "FACTS.md", "book/book.json", "brief/BRIEF.md", "research/cliches.md", "motion/motion.json"):
+        if (project / rel).is_file():
+            out.append(project / rel)
+    out += bookdata.logo_files(project)
+    return out + bookdata.frames_inputs(project, view)
+
+
+def write_report(project: Path, book: Path, results: list[dict], *, view: dict, **extra) -> "Report":
     """A book-lint Report for `results` (not yet finished; the caller prints and exits with report.finish())."""
     from _common import Report
-    rep = Report("book-lint", project, lint_inputs(project, book))
+    rep = Report("book-lint", project, lint_inputs(project, book, view))
     for r in results:
         extra_r = {k: v for k, v in r.items() if k not in ("id", "status", "label")}
         rep.add(r["id"], r["status"], r["label"], **extra_r)
     rep.extra.update(extra)
     rep.extra["manifest_view_sha"] = bookdata.manifest_view_sha(project)
+    rep.extra["frames_view_sha"] = bookdata.frames_view_sha(project, view)   # the list of the stills a book can show: `check` sees one that appeared, went or changed
     return rep

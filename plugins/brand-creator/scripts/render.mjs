@@ -37,7 +37,8 @@ shots are written outside the project (default: <data>/scratch/...); the report 
 shot loads lazy images first, pauses --wait MS after load (default 300), then waits for running animations and transitions to end
 (at most ${ANIMATION_CAP_MS / 1000} s; one that repeats forever is shot where it is, and the report says so).
 shot --motion writes one report per proof file: <project>/assets/_checks/motion/<slug>-<hash6>.json. frames writes its stills inside the project, into
-motion/frames/<case>/, each file only on a byte change, and its report to <project>/assets/_checks/frames/<slug>-<hash6>.json.`;
+motion/frames/<case>/, each file only on a byte change, and its report to <project>/assets/_checks/frames/<slug>-<hash6>.json. Both reports take as inputs the
+proof, the pages and every project file the pages loaded (a stylesheet, tokens.css, a script, an image), so a change to one of them makes the report stale.`;
 
 const MIME = {
   ".html": "text/html; charset=utf-8", ".htm": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8",
@@ -78,6 +79,7 @@ async function launch() {
 
 function startServer(root) {
   const realRoot = fs.realpathSync(root);
+  const served = new Set();   // every project file that was answered with its bytes (a stylesheet, a script, an image, a font ... of the page)
   const srv = http.createServer((req, res) => {
     try {
       const u = new URL(req.url, "http://x");
@@ -88,12 +90,14 @@ function startServer(root) {
       if (r.startsWith("..") || path.isAbsolute(r) || fs.statSync(real).isDirectory()) { res.writeHead(404); res.end(); return; }
       res.writeHead(200, { "content-type": MIME[path.extname(real).toLowerCase()] || "application/octet-stream", "cache-control": "no-store" });
       res.end(fs.readFileSync(real));
+      served.add(real);
     } catch (e) {
       res.writeHead(500); res.end(String(e.message));
     }
   });
   return new Promise((ok) => srv.listen(0, "127.0.0.1", () => ok({
     origin: `http://127.0.0.1:${srv.address().port}`,
+    served: () => [...served],
     close: () => new Promise((done) => srv.close(done)),
   })));
 }
@@ -350,7 +354,7 @@ async function cmdCard(argv) {
 //          cannot be seeked: the page is then waited for settle_ms in real time, and a row says so. Normal pass (900 x 700): no infinite
 //          loop, every animation ends, CLS = 0 while it is stepped through, whole-pixel motion for a pixel mark, rest frame = the static SVG
 //          drawn in the same page at the same place (equal to the pixel). The same page at the phone widths (360 and 390, 800 high): at every
-//          step no horizontal overflow, no part of the mark past the left, top or right edge, the page no taller than at rest. Reduced pass
+//          step no horizontal overflow, no painted part of the mark past the left, top or right edge, the page no taller than at rest. Reduced pass
 //          (prefers-reduced-motion: reduce): no running animation, no requestAnimationFrame loop, no motion listener, CLS = 0, rest frame =
 //          static SVG. A control: the normal pass must show motion, else the reduced result is vacuous.
 //  frames: the same seeking, to write stills of the mark (motion/frames/<case>/), see cmdFrames.
@@ -557,7 +561,9 @@ function inPageDescribe() {
 }
 /** Step through the points: seek every animation, with a rendered frame before each step when `paced` (so the layout-shift observer sees each),
  *  and read what was asked for. pixel: the translation of every animated target must be whole pixels. edges: nothing of the mark past the
- *  left, top or right edge, the page no wider than the screen and no taller than at rest. Reports the worst of each. */
+ *  left, top or right edge, the page no wider than the screen and no taller than at rest. A box of the mark counts where it is painted: cut by every
+ *  ancestor that clips it up to the mark element's own clip, and not at all while it is transparent (opacity 0, its own or an ancestor's) or visibility:
+ *  hidden. Reports the worst of each. */
 async function inPageSample({ el, points, end, pixel, edges, paced }) {
   const bc = window.__bc, doc = document.documentElement;
   const out = { pixelBad: [], pixelUnread: [], targets: 0, edgeBad: [], edgeCount: 0, boxes: 0, restHeight: null };
@@ -598,6 +604,61 @@ async function inPageSample({ el, points, end, pixel, edges, paced }) {
     const tag = e.tagName.toLowerCase(), cls = (e.getAttribute("class") || "").trim().split(/\s+/).filter(Boolean).slice(0, 2), part = e.getAttribute("data-part");
     return tag + (e.id ? "#" + e.id : cls.length ? "." + cls.join(".") : part ? `[data-part=${part}]` : "");
   };
+  // the part of a box that is painted: the box cut by what clips it, between the element and the mark element (the mark's own overflow, or an <svg>'s viewport,
+  // included), as [left, top, right, bottom]; null when none of it is painted. Read afresh at every point: the clips move with the animation.
+  const OPEN = [-Infinity, -Infinity, Infinity, Infinity], cut = (a, b) => [Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.min(a[2], b[2]), Math.min(a[3], b[3])];
+  const padBox = (a) => {   // the padding box of an element (what its overflow clips to), in the viewport
+    const r = a.getBoundingClientRect(), cs = getComputedStyle(a), px = (p) => parseFloat(cs.getPropertyValue(p)) || 0;
+    return [r.left + px("border-left-width"), r.top + px("border-top-width"), r.right - px("border-right-width"), r.bottom - px("border-bottom-width")];
+  };
+  const ownClip = (a) => {   // what an ancestor clips of its content
+    const cs = getComputedStyle(a);
+    if (cs.display === "contents") return OPEN;
+    if (a instanceof SVGSVGElement) {   // an <svg> clips what leaves its viewport, unless it says overflow: visible
+      if (cs.overflowX === "visible" && cs.overflowY === "visible") return OPEN;
+      if (!a.ownerSVGElement) return padBox(a);
+      const m = a.parentNode.getScreenCTM?.();   // a nested <svg>: its x, y, width and height, in the user space it is placed in
+      if (!m) return OPEN;
+      const xs = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([i, j]) => new DOMPoint(a.x.baseVal.value + i * a.width.baseVal.value, a.y.baseVal.value + j * a.height.baseVal.value).matrixTransform(m));
+      return [Math.min(...xs.map((q) => q.x)), Math.min(...xs.map((q) => q.y)), Math.max(...xs.map((q) => q.x)), Math.max(...xs.map((q) => q.y))];
+    }
+    if (a instanceof SVGElement) return OPEN;
+    const both = cs.contain.split(" ").some((c) => c === "paint" || c === "strict" || c === "content"), ox = both || cs.overflowX !== "visible", oy = both || cs.overflowY !== "visible";
+    if (!ox && !oy) return OPEN;
+    const b = padBox(a);
+    return [ox ? b[0] : -Infinity, oy ? b[1] : -Infinity, ox ? b[2] : Infinity, oy ? b[3] : Infinity];
+  };
+  const containing = (e, cs) => {   // the element whose clip reaches e: a positioned box escapes the overflow of the ancestors between it and its containing block
+    if (cs.position !== "absolute" && cs.position !== "fixed") return e.parentElement;
+    for (let n = e.parentElement; n; n = n.parentElement) {
+      const c = getComputedStyle(n);
+      if ((cs.position === "absolute" && c.position !== "static") || c.transform !== "none" || c.perspective !== "none" || c.filter !== "none" || /paint|layout|strict|content/.test(c.contain)) return n;
+    }
+    return null;
+  };
+  let seen = new Map();   // element -> {alpha: the product of the opacity of it and its ancestors, clip: what clips it between the mark element and it}
+  const state = (e) => {
+    let m = seen.get(e);
+    if (m) return m;
+    const cs = getComputedStyle(e);
+    let alpha = parseFloat(cs.opacity), clip = OPEN;
+    if (e === el) for (let n = e.parentElement; n; n = n.parentElement) alpha *= parseFloat(getComputedStyle(n).opacity);
+    else {
+      alpha *= state(e.parentElement).alpha;
+      const cb = containing(e, cs);
+      if (cb && el.contains(cb)) clip = cut(state(cb).clip, ownClip(cb));
+    }
+    m = { alpha, clip, hidden: cs.visibility === "hidden" || cs.visibility === "collapse" };
+    seen.set(e, m);
+    return m;
+  };
+  const painted = (e) => {
+    const m = state(e);
+    if (!(m.alpha > 0) || m.hidden) return null;
+    const r = e.getBoundingClientRect(), box = [r.left, r.top, r.right, r.bottom];   // the box of a nested <svg> is that of its content, which its own viewport clips as well
+    const p = cut(e instanceof SVGSVGElement && e.ownerSVGElement ? cut(box, ownClip(e)) : box, m.clip), w = p[2] - p[0], h = p[3] - p[1];
+    return w >= 0 && h >= 0 && (w > 0 || h > 0) ? p : null;   // a box with no extent, or none of it inside what clips it, is not painted
+  };
   if (edges) { bc.seek(end); out.restHeight = doc.scrollHeight; }   // "at rest": every animation at its end
   out.targets = new Set(bc.anims.filter((s) => s.target).map((s) => s.target)).size;
   for (let i = 0; i < points.length; i++) {
@@ -616,13 +677,14 @@ async function inPageSample({ el, points, end, pixel, edges, paced }) {
       if (doc.scrollWidth > cw) note("html", "right", doc.scrollWidth - cw, i);
       if (doc.scrollHeight > out.restHeight) note("html", "bottom", doc.scrollHeight - out.restHeight, i);
       let boxes = 0;
+      seen = new Map();
       for (const e of [el, ...el.querySelectorAll("*")]) {
-        const r = e.getBoundingClientRect();
-        if (!(r.width > 0 || r.height > 0)) continue;
+        const r = painted(e);
+        if (!r) continue;
         boxes++;
-        if (r.left < -EPS) note(name(e), "left", -r.left, i);
-        if (r.top < -EPS) note(name(e), "top", -r.top, i);
-        if (r.right > cw + EPS) note(name(e), "right", r.right - cw, i);
+        if (r[0] < -EPS) note(name(e), "left", -r[0], i);
+        if (r[1] < -EPS) note(name(e), "top", -r[1], i);
+        if (r[2] > cw + EPS) note(name(e), "right", r[2] - cw, i);
       }
       out.boxes = Math.max(out.boxes, boxes);
     }
@@ -642,15 +704,26 @@ async function inPageFinish() {
   return stuck;
 }
 /** Turn the state every animation is in (the end of a finished one, the end of the first iteration of an infinite one) into plain style and drop the
- *  animation (commitStyles, then cancel). A page that keeps an animation is drawn with layers of its own, and what is drawn after them is drawn
- *  with antialiasing a few levels off the same drawing made without one: that is the compositor's noise, not a difference of the rest frame, and
- *  it would fail an exact comparison. */
+ *  animation. A page that keeps an animation is drawn with layers of its own, and what is drawn after them is drawn with antialiasing a few levels off the
+ *  same drawing made without one: that is the compositor's noise, not a difference of the rest frame, and it would fail an exact comparison. What is written
+ *  is what the page draws, read before anything is cancelled: the computed style of each property an animation moves, for an animation whose effect still
+ *  applies (a fill holds it). One whose effect no longer applies (`animation: hide 1s 1s backwards` after its end) is only cancelled: commitStyles() would
+ *  write its keyframe value (visibility: hidden) over the style the page has at rest. An animation on a pseudo-element, which has no inline style, and one
+ *  with a value that reads empty stay, and are named. */
 function inPageSettle() {
-  const left = [];
+  const left = [], plan = [];
+  const kebab = (p) => (p.startsWith("--") ? p : p === "cssFloat" ? "float" : p === "cssOffset" ? "offset" : p.replace(/[A-Z]/g, (m) => "-" + m.toLowerCase()));
   for (const s of window.__bc.anims) {
     if (!s.seekable) continue;
-    try { s.a.commitStyles(); s.a.cancel(); } catch { left.push(s.name + (s.pseudo ? " on " + s.pseudo : "")); }   // nowhere to write the style (a pseudo-element): it stays
+    const name = s.name + (s.pseudo ? " on " + s.pseudo : "");
+    if (s.a.effect.getComputedTiming().progress === null) { plan.push({ s, vals: [] }); continue; }   // nothing of it applies any more: the style without it is the rest state
+    if (s.pseudo || !s.target) { left.push(name); continue; }                                       // nowhere to write the style (a pseudo-element): it stays
+    const cs = getComputedStyle(s.target), vals = s.props.map((p) => [kebab(p), cs.getPropertyValue(kebab(p))]);
+    if (vals.some(([, v]) => v === "")) { left.push(name); continue; }                              // a value it cannot read is not written: it stays
+    plan.push({ s, vals });
   }
+  for (const { s } of plan) s.a.cancel();
+  for (const { s, vals } of plan) for (const [p, v] of vals) s.target.style.setProperty(p, v);
   return left;
 }
 /** The animations that are running right now: after every one of the page's has been finished, a started one is a motion that did not end. */
@@ -1165,6 +1238,7 @@ async function cmdMotion(values, positionals) {
     await browser.close();
     await server.close();
   }
+  inputs.push(...server.served());   // what the page loaded (tokens.css, a stylesheet, a script, an image): a motion that lives there makes the report stale when it changes
   return report.finish();
 }
 
@@ -1310,6 +1384,7 @@ async function cmdFrames(argv) {
     await browser.close();
     await server.close();
   }
+  inputs.push(...server.served());   // what the page loaded: the stills are stale when one of those files changes
   return report.finish();
 }
 

@@ -25,7 +25,7 @@ Each check writes a report to `assets/_checks/`. `check` reads every report that
 | `family-check` | Family modes: shared glyphs equal the family's sources, and tile shares agree across products (`FAMILY.md`) |
 | `fontcheck`, `fonts` | Glyph coverage for the brand's languages, a licence hint, and which font Chromium really used |
 | `outline-glyphs` | Type-based marks as paths with no live text |
-| `shot --motion` | The mark's motion is stepped through, not waited for: no layout shift, the animated parts stay on a phone screen (360 and 390 pixels wide), the rest frame equals the still to the pixel, and pixel marks move in whole pixels. Reduced motion shows the still. Motion a script draws frame by frame (`requestAnimationFrame`) cannot be stepped through, so its phone-screen check says "not verified". One report per proof file |
+| `shot --motion` | The mark's motion is stepped through, not waited for: no layout shift, the animated parts stay on a phone screen (360 and 390 pixels wide), the rest frame equals the still to the pixel, and pixel marks move in whole pixels. Reduced motion shows the still. Motion a script draws frame by frame (`requestAnimationFrame`) cannot be stepped through, so its phone-screen check says "not verified". One report per proof file, and a change to a file the page loads (such as `tokens.css`) makes it stale |
 | `frames` | Stills of the mark along its motion, a strip of them and the reduced-motion still, written into `motion/frames/` for the brand book |
 | `snapshot`, `verify-idempotent`, `staleness`, `specs-due` | Byte-identity proofs, two-run idempotence, stale packs, and platform sizes due for a recheck |
 
@@ -40,8 +40,8 @@ tokens before the build passes. A file your tokens no longer produce, like the c
 moved to `removed-<date>/`.
 
 When something moves, `motion/motion.json` says how: the signature move, the moving parts, a timeline written in your
-duration and curve tokens, and the motion rules. When nothing moves, it says why. BRAND.md, DESIGN.md and the brand's
-own skill repeat it.
+duration and curve tokens, and the motion rules. When nothing moves, it says why. BRAND.md, DESIGN.md, the brand's
+own skill and the brand book repeat it.
 
 ## Web, social and profiles
 
@@ -75,6 +75,14 @@ emitters wrote, the state, the facts, the check reports and your chapter text. I
 colour, files, changing the brand. Counts and colour ratios are computed, so they cannot drift. `book-lint` checks it.
 `book-pdf` exports an RGB proof labelled "RGB, not print-ready". A hand-drawn mark has a hand-written book that `patch`
 edits with counted replacements.
+
+When your brand moves, the motion chapter shows how, from `motion/motion.json`: the signature move, the parts, the
+timeline with each duration and curve by name and value, a small drawing of every curve, and the rules. It also replays
+the motion. Run `frames motion/proof.json --count 25` first, and the book plays each page's motion as a short animation.
+"Replay" starts it again and "4× slower" plays it slowly, from a click or the keyboard, with no script. With reduced
+motion switched on, the chapter shows the still and nothing moves. In print it shows the stills side by side with
+their times. If the stills are missing, older than the page or too few to look smooth, `book` says so and names the
+command to run. A book built before the stills existed fails its check until you build it again.
 
 ## Print, press kit and posts (Standard and Full)
 

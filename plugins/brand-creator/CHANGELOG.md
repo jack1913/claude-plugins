@@ -6,6 +6,124 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-10-23
+
+The brand book's motion chapter shows the motion from the project's data, and replays it with no script. Three fixes for the
+motion proof of 0.3.5 come with it. A project made before this version should look at two things of its own: add the `frames` step
+to its `tools/finish.sh` (see Changed), and take `will-change` off a still. A still that the page keeps on a layer of its own
+(`will-change: transform`, a 3D transform) is drawn with antialiasing a few levels off the still's file, so the exact rest-frame
+comparison fails it. In 0.3.4, `will-change` was the way to make the scratch-page comparison pass; since 0.3.5 the comparison
+draws the still where the mark is, and does not need it.
+
+### Added
+
+- The motion chapter is built from `motion/motion.json`: the signature move and where it shows, the moving parts, a timeline
+  in which every reference is its token name and its value (`560 ms motion.base + motion.stagger × 2`, `320 ms motion.base`,
+  `cubic-bezier(0.2, 0, 0, 1) easing.standard`), every duration in milliseconds, every curve with its four numbers and a small
+  drawing, and the motion rules. When nothing moves, the chapter says why and shows no replay. A project with no
+  `motion/motion.json` keeps its token table and the build warns that the chapter has no signature move or timeline. A
+  `motion.json` that is not valid stops the build, as it stops `adapters`. The chapter appears as soon as `motion/motion.json`
+  exists, whether motion is on or off.
+- The chapter replays the motion. For each page case that `frames` took stills of, the book plays the mark moving: the stills
+  are one image side by side, shown one at a time by the page's own CSS (no script), and the image is in the book once. "Replay"
+  starts it again, "4× slower" plays it at a quarter of the speed, and both work from a click or the keyboard. Under reduced
+  motion the book shows the still instead and nothing moves. In print it shows the whole strip, scaled to the page, with the
+  times of the stills, also when the printout is made with reduced motion on. The words around a replay name it after the
+  signature move (or "The mark in motion", numbered when there are several), never after the case, so a case called `hero-v2`
+  does not trip the book's word rules. The proof table follows the same rule: it shows each check of the motion report
+  (`cls:normal`, `edges:360`), not the row id, which holds the case's name, and groups the checks of a case under its replay's
+  name, or `Case 2` (its place in the report) when it has none. The checks of a states case name its states
+  (`1x:control:rest!=draft-v2`): the table shows them by their place in the case, `1x:control:state 1!=state 2`. A proof is
+  `Motion proof`, or `Motion proof 1`, `Motion proof 2` ... in the order of the proofs' paths when there are several, in the
+  chapter and in the report table, never its file name or its report's name. The names stay in `data-proof`, `data-report` and
+  `data-check` attributes, so a proof file called `hero-v2` or a state called `draft-v2` no longer stops the book. Run
+  `brand-creator frames motion/proof.json --count 25` before `book`; fewer than 9 stills jump, and the build says so.
+- The build says what it could not show, and the command that fixes it: no stills yet, or none that can be shown (when motion
+  is on), stills of a try-out proof, of a proof that is gone or of a case the proof no longer has (left out), a still that is not
+  the file `frames.json` lists, and a `frames` report that is stale, missing, failed or does not cover the case. A run of
+  `frames --case X` leaves the stills of the other cases without a report that vouches for them, so for a proof of several page
+  cases the warning names the run of every case, `frames <proof> --count N`, and for a proof of one `frames <proof> --case <case>
+  --count N`. `book` never runs `frames` itself.
+- `book-lint` has three new rows for the replay. `motion:reduced` fails any rule that starts an animation or a transition with
+  a duration and has no matching rule that switches it off inside `@media (prefers-reduced-motion: reduce)` (a start marked
+  `!important` needs a stop marked `!important`, weighed on the longhand that stops it: a transition-property of `none` or a
+  duration of 0, and the longhand's winner in the rule counts, not its last declaration). A stop is weighed against every other
+  rule that can select the same element and sets that longhand: `.y { transition-duration: 150ms }` with
+  `main .y { transition-property: color }` is not switched off by `.y { transition-property: none }`, because the more specific
+  rule outweighs it, and the row says which one. A stop inside `@layer`, `@scope`, `@container` or `@supports`, or in a rule
+  that holds nested rules, is not counted: the gap stays and the row names the rule. A start in such a place is weighed as if it
+  applies (an `!important` one still needs an `!important` stop) and is named too. A `style` attribute is read like a rule
+  (`transition: color 150ms!important` needs no space). The row also fails any replay that still shows its moving picture or its
+  two boxes there, or hides its still. `motion:replay` fails a box with no label or no label text, a box or a label the keyboard or
+  the eye cannot reach (hidden by itself or by any ancestor: `inert`, `hidden`, `display: none`, `visibility: hidden`,
+  `opacity: 0`), a box that does not start the replay again, a slow replay that is not four times as long, a replay that does not
+  play once or does not hold each still (`step-end`), a replay that does not play forwards (direction `normal`), running, held at
+  both ends (fill mode `both`) and at once (delay 0), keyframes that are missing, have no name, differ or do not step through the
+  stills of `frames.json`, an `object-position` marked `!important` on the flipbook (the keyframes cannot override it, so the
+  replay is frozen), and a `<source>` with a `media` attribute or a type other than `image/png`, which a browser may skip to
+  draw the 1 × 1 stand-in. `motion:stills` fails the same `<source>`, and a book whose pictures, length or number of stills are not
+  those in `motion/frames/` ("the book shows stills older than motion/frames: run brand-creator book"), a picture that is not
+  the file `frames.json` lists (by its sha256), a replay that is not one still wide and high (its `width` and `height` held by
+  `max-` and `min-`: a limit that makes it another size fails, and so does one the lint cannot read as px), and a generated book
+  that has no replay of stills that are there now (it was built before `frames` ran, or its Motion chapter file has no
+  `{{motion}}` line). A selector the lint cannot read (`:is`, `:not`, `:where`, `:has`, `:hover` ...) is named in the row it
+  affects ("not read: ..."), as a warning, and so is a rule inside `@layer`, `@scope`, `@container` or `@supports`, which the
+  lint does not evaluate, a style rule that holds nested rules (CSS nesting), and a `@layer a, b;` statement, which orders layers
+  (named in all three rows). A statement at-rule (`@layer`, `@import`, `@charset`) ends at its semicolon, so the rule after it is
+  read. The lint weighs a `style` attribute: it beats a rule of the same importance, and an `!important` rule beats it when it is
+  not important. A book with no replay gets the three rows as information, never as a pass.
+
+### Changed
+
+- `templates/book/motion.md` holds only your words now: why it moves, and what reduced motion does. The block fills in the rest.
+  A chapter file you wrote from the old template, with its `{{motion}}` line, gets all of it with no change.
+- `book-lint --self-consistency` lets a replay use its own length and four times it as durations, besides the motion tokens, in
+  a rule that reaches that replay and nothing else in the book. Everywhere else a duration must still be a token or 0.
+- `book-lint` fails a book that has a transition or an animation (a hand-written `transition: color 150ms`) that nothing
+  switches off under reduced motion. A book from `brand-creator book` has none, so only a hand-edited book is affected.
+- `book` records `motion/motion.json`, the stills, their proof and their `frames` report as inputs of its report, and `book-lint`
+  records the stills, their proof and `motion/motion.json`, so changing any of them makes `check` say the book is stale. Only the
+  stills of a gated proof count, and only for a book that has the Motion chapter while motion is not off (a Quick book is not
+  made "not verified" by `frames`); a try-out's do not. Both reports also record the list of those stills, with the checksum of
+  each strip and reduced still (or `absent`), so `check` says "not verified" when stills appear, go or change after the book was
+  built, and when a picture goes and comes back.
+- `check` gates the `frames` reports (`assets/_checks/frames/<name>-<hash>.json`) as it gates the motion reports. A current,
+  passing report passes and a failing one fails. A stale one is "not verified" and names `brand-creator frames <proof> --count N`
+  (or the `--at` points of its last run) and then `brand-creator book`, which replays the stills the report vouches for. A
+  current, passing report is "not verified" too when a case of the proof has stills in `motion/frames/` and the report has no
+  passing row for it: every run rewrites the one report of a proof, so `frames --case X` after a change to the page leaves the
+  other cases' stills unvouched, and `check` names `brand-creator frames <proof> --count N` (which takes every case) and then
+  `brand-creator book`. The report of a try-out proof (under `rounds/`, `history/` or a `removed-*/` folder) is listed and never
+  fails, and the report of a proof that is gone is a warning that says to move it to `removed-<date>/`.
+- `templates/finish.sh.tpl` takes fresh stills before it builds the book: in the Standard and Full tier (the Quick book has no
+  Motion chapter), when `motion/motion.json` says on and `motion/proof.json` has a page case, it runs
+  `frames motion/proof.json --count 25` (it writes only `motion/frames/` and its report; `FRAMES_ARGS` in block 2 sets other
+  points, such as fewer stills for a wide mark). A failure that writes a failing report (exit 1: a page `frames` cannot step
+  through, such as `requestAnimationFrame` or a scroll timeline, or one that does not load cleanly) does not stop the chain: it prints
+  `finish.sh: frames could not take the stills (see above); the book keeps the stills of the last run that worked, if any, and
+  check says why` and goes on to the book, and `check` fails the report. Any other failure of `frames` (exit 2: a strip wider than
+  Chromium writes, a case folder that holds another proof's stills; exit 3: it could not run) leaves no failing report for `check`
+  to gate, so the chain stops with that exit code. A project made before this version should add the same step before `book` in
+  its `tools/finish.sh`.
+
+### Fixed
+
+- The rest frame of the motion proof no longer fails on a page that swaps a still for a moving copy. A still hidden by
+  `animation: hide 1s 1s backwards` and a copy shown by `visibility: hidden; animation: show 1s 1s backwards` are, once the motion
+  has ended, the still visible and the copy hidden. The proof wrote the keyframe values over that (the still hidden, the copy
+  visible) and compared the copy with the still: a false failure. It now writes what the page draws, and only drops an animation
+  whose effect no longer applies.
+- The phone-width rows (`edges:360`, `edges:390`) count a part of the mark only where it is painted. A part scaled up inside a
+  wrapper with `overflow-x: clip`, and transparent at 0 ms by a backwards fill, was reported past the left edge on several rows
+  while the page never got wider. What an ancestor clips (an `overflow`, `contain: paint`, the viewport of an `<svg>`) is cut off,
+  and a part at opacity 0 or `visibility: hidden` is not counted. An `<svg>` mark clips its parts at its own viewport unless it
+  says `overflow: visible`.
+- The `frames` and `shot --motion` reports record every project file the page loads (a stylesheet, `tokens.css`, a script, an
+  image) as inputs, not only the page and the proof. A motion that lives in such a file (`animation: press var(--motion-base)`)
+  kept a "current" report after the file changed. Now the book and `check` see both reports as stale. `check` used to leave the
+  `frames` report out: after the owner ran `shot --motion` and `book` as it asked, it passed while the book replayed the old
+  stills. It now says "not verified" until `frames` and then `book` have run (see Changed).
+
 ## [0.3.5] - 2026-10-22
 
 The motion proof, second release: it steps through a page's motion instead of waiting for it, looks at phone screens, compares

@@ -144,7 +144,8 @@ Record the motion answer, on or off, in `motion/motion.json` (off needs the owne
   named-state file: at device scale 1 and 2, control pairs must differ), and a reduced pass with no running animation and no
   motion listener. Motion driven by `requestAnimationFrame` cannot be seeked: its edges and whole pixels are "not verified",
   so write the motion as CSS animations, transitions or `element.animate()`. One report per proof file. `frames` writes
-  stills of the motion into `motion/frames/` for the book.
+  stills of the motion into `motion/frames/` for the book, whose Motion chapter replays them (`frames motion/proof.json
+  --count 25` before `book`: fewer than 9 stills jump).
 - `check --cascade` (script): no current file still holds an old value.
 - Prose: this file and the G4 "(rule)" list. Touch scrolling, audio and the script budget are not measured; they are
   listed in [09-qa](09-qa.md) as judgement items.

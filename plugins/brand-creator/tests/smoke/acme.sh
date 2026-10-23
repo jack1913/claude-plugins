@@ -9,7 +9,7 @@
 # -> platform packs (windows, linux, tray, tauri, wallet, developer; on macOS also apple: .icon, actool per platform, legacy sets, visionOS,
 # DMG, store frames, watchOS and tvOS packs for the targets INVENTORY.md lists; elsewhere `emit apple` must exit 3) -> Tier B packs (tier raised to full: android, chrome-ext, msix,
 # profiles; the safe-zone gates on mutated marks and an overflowing name) -> snapshot, idempotence over the whole emit chain, staleness, specs -> check -> freeze -> check again -> guard hook on the frozen history.
-# -> brand book (generated: skeletons, build, lint, byte-identical rebuild, check, labelled RGB PDF; six mutations; patch and collapse on a hand-authored copy)
+# -> brand book (generated: the stills of the demo page, skeletons, build with the motion chapter's replay, lint, byte-identical rebuild, check, labelled RGB PDF; eight mutations; patch and collapse on a hand-authored copy)
 # -> print and press (print PDFs trim + 2 x bleed, boxes, outlined text, RGB proof label, print-check with four mutations, a PDF/X-4 candidate only with --icc, press kit, social posts)
 # -> adoption (a synthetic target repository surveyed read only, pins, progress), check --cascade, BRAND.md and DESIGN.md (linted), the applied skill, LAUNCH.md
 # -> names (offline replay) -> brand-assets standalone entry (existing mark into ./brand-assets/: srgb tokens, audit, owner decisions, web +
@@ -659,7 +659,7 @@ printf '\n- %s: the 16 px accent keeps a 2 px solid square (measured); the owner
 "${BC[@]}" check --project "$A" >/dev/null || die "check fails on the standalone brand-assets project"
 ok "standalone: srgb tokens from the mark, audit found two weaknesses, each resolved by a recorded owner decision, check passes"
 
-step "brand book: chapter skeletons, filled, built, linted, rebuilt byte for byte, exported as a labelled RGB PDF (on a copy of the finished pack)"
+step "brand book: the stills of the demo page, chapter skeletons, filled, built with the replay, linted, rebuilt byte for byte, exported as a labelled RGB PDF (on a copy of the finished pack)"
 BK="$SMOKE/book"; cp -R "$P" "$BK"
 "${BC[@]}" state --project "$BK" --set tier=standard --set content_languages=en --set book_chapters=tone >/dev/null
 mut() { python3 - "$@" <<'PY'
@@ -671,6 +671,14 @@ open(f, "w").write(t.replace(old, new, 1))
 PY
 }
 mut "$BK/BRAND-STATE.md" "- (rule) (...)" "- (rule) the accent is a fill, never text (proposal)"
+# the motion chapter replays the stills of the proof's page: 25 of them make it smooth (fewer than 9 and the build warns)
+"${BC[@]}" frames motion/proof.json --count 25 --project "$BK" >/dev/null || die "frames failed on the Acme motion proof"
+python3 - "$BK" <<'PY' || die "frames wrote the wrong stills"
+import json, sys
+d = json.load(open(sys.argv[1] + "/motion/frames/demo-page/frames.json"))
+assert d["case"] == "demo-page" and d["proof"] == "motion/proof.json" and d["length_ms"] == 320 and len(d["frames"]) == 25 and d["size"] == [64, 64], d
+PY
+ok "frames: 25 stills of the demo page, a strip and the reduced still in motion/frames/demo-page/"
 "${BC[@]}" book --init --project "$BK" >/dev/null || die "book --init failed"
 python3 - "$BK" <<'PY'
 import glob, re, sys
@@ -685,7 +693,7 @@ PY
 "${BC[@]}" book --project "$BK" | tail -n 1
 expect_file "$BK/book.html"
 python3 - "$BK" <<'PY' || die "the generated book is wrong"
-import json, re, sys
+import base64, json, re, sys
 from html.parser import HTMLParser
 p = sys.argv[1]
 html = open(p + "/book.html").read()
@@ -706,14 +714,27 @@ assert q.counts["files"] == str(len(manifest)) and {m["path"] for m in manifest}
 assert "<script" not in html and not re.search(r"(?:src|href)=[\"']https?:", html) and all(s.startswith("data:") for s in q.imgs)
 assert "prefers-color-scheme:dark" in html and "16.15:1" in html      # contrast computed from the tokens (Acme text on its ground)
 assert re.search(r"<h3[^>]*>Governance</h3>", html), "the changing chapter lost the Governance section of its skeleton"
-print(f"   ok: {len(q.sections)} chapters, {q.counts['files']} files computed from the manifest, {len(q.imgs)} embedded images, light and dark")
+# the motion chapter replays the demo page: a figure with its two checkboxes, the flipbook (the strip, embedded once) and the reduced still, and no script
+assert html.count('<figure class="motion-demo" data-motion-demo="demo-page" data-length-ms="320" data-frames="25">') == 1, "the motion chapter has no replay of the demo page"
+assert 'id="bc-replay-demo-page"' in html and 'id="bc-slow-demo-page"' in html and "@keyframes bc-flip-demo-page-r1s1" in html and "prefers-reduced-motion:reduce" in html
+assert 'class="motion-reduced"' in html and '<picture><source type="image/png" srcset="data:image/png;base64,' in html and '<img class="motion-flip" src="data:image/png;base64,' in html and 'class="motion-strip"' not in html and html.count("@keyframes bc-flip-demo-page-") == 4
+strip = base64.b64encode(open(sys.argv[1] + "/motion/frames/demo-page/strip.png", "rb").read()).decode()
+assert html.count(strip) == 1, "the strip is in the book more than once"
+print(f"   ok: {len(q.sections)} chapters, {q.counts['files']} files computed from the manifest, {len(q.imgs)} embedded images, the demo page's replay, light and dark")
 PY
 cp "$BK/book.html" "$SMOKE/book.first.html"
 "${BC[@]}" book --project "$BK" | grep -q "unchanged" || die "a second book build changed the file"
 cmp -s "$BK/book.html" "$SMOKE/book.first.html" || die "the book is not byte-identical on rebuild"
 "${BC[@]}" book --verify --project "$BK" >/dev/null || die "book --verify failed on a fresh build"
 "${BC[@]}" book-lint --self-consistency --project "$BK" >/dev/null || die "book-lint --self-consistency failed on the generated book"
-ok "book built from tokens, manifest, state, facts and reports; lint and self-consistency pass; the rebuild is byte-identical"
+python3 - "$BK/assets/_checks/book-lint.json" <<'PY' || die "the motion rows of book-lint did not measure the replay"
+import json, sys
+rows = {r["id"]: r for r in json.load(open(sys.argv[1]))["results"]}
+for rid in ("motion:reduced", "motion:replay", "motion:stills", "self:durations"):
+    assert rows[rid]["status"] == "pass", (rid, rows[rid])
+assert "demo-page" in rows["motion:replay"]["detail"] and "demo-page" in rows["motion:stills"]["detail"], rows
+PY
+ok "book built from tokens, manifest, state, facts and reports; lint and self-consistency pass (the replay is read by motion:reduced, motion:replay and motion:stills); the rebuild is byte-identical"
 BS="$SMOKE/book-shot"; cp -R "$BK" "$BS"      # a copy: shot rewrites assets/_checks/shot.json
 "${BC[@]}" shot book.html --project "$BS" --out "$SMOKE/book-shots" --dsf 1 >/dev/null || die "the book's four-view shot failed"
 python3 - "$BS/assets/_checks/shot.json" <<'PY' || die "the book lost its side gutter"
@@ -761,12 +782,14 @@ m_status() { mut "$1/book/chapters/idea.md" "## The idea" "## The idea
 The shop is coming soon."; }
 m_text()   { mut "$1/assets/logo/mark.svg" "</svg>" "<text x='1' y='9'>A</text></svg>"; }
 m_dur()    { mut "$1/book.html" "</style>" "a{transition:color 900ms}</style>"; }
+m_stills() { mut "$1/book.html" 'data-length-ms="320"' 'data-length-ms="321"'; }
 brk count  "but the data say $files_n files" m_count
 brk round  "'Round 2'" m_round
 brk net    "network address in a link" m_net
 brk status "'coming soon'" m_status
 brk text   "<text> element" m_text
 BRK_CMD="book-lint --self-consistency" brk duration "900ms" m_dur
+BRK_CMD="book-lint --self-consistency" brk stills "the book shows stills older than motion/frames: run brand-creator book" m_stills
 BRK_CMD=check brk handedit "differs from what \`book\` wrote" m_dur
 
 step "print and press: stationery as honest print PDFs, print-check with four mutations, a PDF/X-4 candidate only with --icc, press kit, social posts (on a copy of the pack that has the book)"

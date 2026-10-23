@@ -136,8 +136,8 @@ fontTools, Brotli and skia-pathops (`outline_glyphs.py`, `fontcheck.py`), Pillow
   qa/print.json                    owner thresholds of print-check (see Print); optional, stated defaults apply without it
   qa/states.json  qa/idempotence.json   state sets for states-check; the byte-difference allowlist for verify-idempotent
   motion/proof.json                the motion proof's cases (shot --motion); any name, in any folder: one report per proof file
-  motion/frames/<case>/            the stills `frames` writes of a page case: <NN>-<pct>.png, strip.png, reduced.png, frames.json (inside the project on purpose: the book shows them)
-  motion/motion.json               the machine-readable motion spec (see Motion spec): signature move, parts, timeline in tokens, rules; read by the adapters
+  motion/frames/<case>/            the stills `frames` writes of a page case: <NN>-<pct>.png, strip.png, reduced.png, frames.json (inside the project on purpose: the book replays them)
+  motion/motion.json               the machine-readable motion spec (see Motion spec): signature move, parts, timeline in tokens, rules; read by the adapters and the book
   motion/SPEC.md                   the motion hand-off (templates/MOTION-SPEC.md), only when something moves
   tray/tray.json                   the tray states and their masters (emit tray); qa/states.tray.json is written by it
   tools/inputs.json                staleness record of a generated pack (staleness --write)
@@ -678,11 +678,16 @@ that repeats forever is counted and shot where it is. Each view records `lazy_im
       one that ends more than 0.01 css px off, as an ancestor's rotation or skew makes it, is "not verified" (`skipped`), never compared.
     Same page and position, same raster tiles: the comparison is exact (`tolerance` 0; a larger value is accepted). A reference drawn on a
     scratch page at the origin is not the same raster away from it (Chromium draws in tiles about 256 px wide that advance 254 px; a lockup
-    at x = 53 differed in dozens of pixels). Before the pictures are taken each animation is committed to plain style (`commitStyles()`) and
-    cancelled, since an element that keeps an animation, even a finished one, is drawn on a layer of its own with antialiasing a few levels
-    off. A mark the page keeps on a layer of its own (`will-change`, a 3D transform), or rotates or scales at rest by its own transform, still
-    is: give it a `tolerance`. So does an animation on a pseudo-element, which has no inline style to commit to: the row names it. A mark with
-    no box fails the row. A failing pair is kept in the data folder's scratch area, outside the project, in a folder named after the case (its
+    at x = 53 differed in dozens of pixels). Before the pictures are taken each animation is turned into plain style and cancelled, since an element that keeps an animation, even a
+    finished one, is drawn on a layer of its own with antialiasing a few levels off. What is written is what the page draws: after every animation
+    has been finished (and the ones their ends start), for each animation whose effect still applies (progress is not null: a fill holds it) the
+    computed style of each property it moves is read, then every animation is cancelled, then the values read are written inline. An animation whose
+    effect no longer applies is only cancelled: `animation: hide 1s 1s backwards` with `@keyframes hide {from, to {visibility: hidden}}` leaves the
+    element visible once it has ended, and `commitStyles()` (which writes the keyframe value) would have hidden it. A mark the page keeps on a layer
+    of its own (`will-change`, a 3D transform), or rotates or scales at rest by its own transform, still is: remove `will-change` from a still (it was the way
+    to make the earlier scratch-page comparison pass; the in-page comparison does not need it), or give the case a `tolerance`. An animation on a
+    pseudo-element whose effect still applies has no inline style to write to, and one with a property whose value reads empty cannot be written: each
+    stays on the page, and the row names it. A mark with no box fails the row. A failing pair is kept in the data folder's scratch area, outside the project, in a folder named after the case (its
     name made a folder name, as for frames).
   - `whole-pixel`: for a pixel mark, the case's static SVG with `shape-rendering="crispEdges"` on its root (the pixel art of `svgtools.pixel_art`),
     or `"pixel": true` (`"pixel": false` turns it off), every sample point must show a whole-pixel translation (the `e` and `f` of the matrix
@@ -693,7 +698,13 @@ that repeats forever is counted and shot where it is. Each view records `lazy_im
     is an info row `edges`): the page is loaded again at that width (800 high), looked at as the normal pass is (a motion a script starts
     later is waited for), and at every sample point of its own animations these must hold: `documentElement.scrollWidth <= clientWidth`
     (the page cannot be swiped sideways), the box of the mark element and of every element inside it with a non-empty box has `left >= 0`,
-    `top >= 0` and `right <= clientWidth`, and `scrollHeight` is no more than at rest (every animation at its end). A failure names the point,
+    `top >= 0` and `right <= clientWidth`, and `scrollHeight` is no more than at rest (every animation at its end). **A box counts only where it
+    is painted**: it is cut by every ancestor that clips it, from the element up to and including the mark element (an HTML ancestor with `overflow-x`
+    or `overflow-y` other than `visible` clips that axis, to its padding box; `contain: paint`, `strict` or `content` clips both; an `<svg>` clips to
+    its viewport, a nested one to its `x`, `y`, `width` and `height`, unless it says `overflow: visible`; a positioned box is cut only by its containing
+    block and the ancestors above it), and it is not counted at all while its effective opacity (the product over the element and its ancestors) is 0 or
+    it is `visibility: hidden`. A part an `<svg>` mark clips at its own viewport is therefore not past an edge; say `overflow: visible` on the `<svg>` to
+    have the parts counted where they move (the page still does not scroll: an `<svg>`'s content never widens it). A failure names the point,
     the element (tag plus id, class or `data-part`), the edge and how far past it, the worst of each, four of them and how many more:
     `at 62% (310 ms): g#letter-a 22 px past the right edge at 360 px`; the page's own line comes after the elements'. A mark with no box at
     that width is a warning, not a pass in silence.
@@ -704,7 +715,9 @@ that repeats forever is counted and shot where it is. Each view records `lazy_im
 - **One report per proof file**: `assets/_checks/motion/<slug>-<hash6>.json` (tool name `motion/<slug>-<hash6>`, the slug is the proof's
   file stem, the hash the first six hex of the sha256 of its project-relative posix path, as the disk spells it (on macOS `MOTION/PROOF.JSON`
   is `motion/proof.json`, and has its report); `motion_report_tool` in `_common.py` and
-  `proofReportTool` in `_common.mjs` give the same name). It carries `proof`, the proof's path. Two runs of different proofs never touch each other's report;
+  `proofReportTool` in `_common.mjs` give the same name). It carries `proof`, the proof's path. Its `inputs` are the proof, each case's page and still, and every project file the local server answered
+  while the pages were open (a linked stylesheet or token file such as `assets/tokens/tokens.css`, a script, an image, a font), so that a motion that
+  lives in one of them makes the report stale when it changes, for `check` and for the book. Two runs of different proofs never touch each other's report;
   nothing writes `assets/_checks/motion.json` any more. `check` gates every report there as it gates a downscale one: a proof under
   `rounds/`, `history/` or a `removed-*/` folder is an exploration proof, listed as an info row (`exploration proof, not gated`) and never
   failing; a report whose proof file no longer exists is a warning that names it and says to move the report to `removed-<date>/`; a manifest
@@ -732,12 +745,23 @@ motion driven by `requestAnimationFrame`) exits 1 and says why, and writes no fi
 the stills are taken (they would differ from run to run). A case's folder belongs to one proof: when its `frames.json` names another proof,
 or cannot be read, the run is a usage error (exit 2) before a browser starts, naming the folder to move to `removed-<date>/` or the case to
 rename. A strip wider or higher than 65535 px (the largest picture Chromium's canvas writes) is a usage error that says how many stills fit. Nothing else in the project is written but the report,
-`assets/_checks/frames/<slug>-<hash6>.json` (named like the motion report; `check` does not gate it).
+`assets/_checks/frames/<slug>-<hash6>.json` (named like the motion report; `check` gates it as it gates a motion report, below). Its `inputs` are those of the motion report: the proof, the pages
+and every project file they loaded. One report per proof file is rewritten by every run and holds the rows of the cases that run took (`--case X` leaves the report
+with the row of X alone), which is how the book tells the stills a run vouches for (below). It also records `points_pct`, the points of the run.
+
+`check` gates every report there by the proof it names, as it gates the motion reports (the proof of a report is read from the report): a current, passing report is a pass and a failing
+one a failure; a stale one (a page, a stylesheet or a script the page loaded, or the proof, changed since the stills were taken) is "not verified" and names `brand-creator frames <proof>
+--count N` (`--at` with the points when they are not evenly spread; `--count 25` when the report records none) **and then `brand-creator book`**, because the book replays the stills the
+report vouches for; a report of a proof under `rounds/`, `history/` or a `removed-*/` folder is an info row (`exploration proof, not gated`), and one whose proof file is gone a warning that
+says to move it to `removed-<date>/`. The motion report being current says nothing about the stills, so a stylesheet change is not "verified" until `frames` and `book` have run. A current, passing report is
+"not verified" as well when a case of its proof has stills in `motion/frames/<case>/` (that `frames.json` names the proof, and the case is still a page case of it) and the report has no passing `frames:<case>`
+row for it: a run of `frames --case X` rewrites the report with the row of X alone, so the other cases replay stills that nothing vouches for. The row names the cases and the run that takes every case,
+`brand-creator frames <proof> --count N` (or `--at`), **and then `brand-creator book`**.
 
 ### Motion spec (`motion/motion.json`)
 
 The machine-readable motion spec: the owner's G4 answer on motion, the signature move, the moving parts and the timeline written in tokens. It is the one
-source the adapters read now (see `adapters` and `applied-skill` below) and the book will read later; `motion/SPEC.md` (`templates/MOTION-SPEC.md`) is its
+source the adapters (see `adapters` and `applied-skill` below) and the book ("Brand book") read; `motion/SPEC.md` (`templates/MOTION-SPEC.md`) is its
 prose twin for an implementer. `scripts/lib/motionspec.py` reads it: `load(project)` returns the validated document, or `None` when the file is absent.
 
 ```json
@@ -805,7 +829,7 @@ The Acme example's `tools/grid_mark.py` and `tools/state_icons.py` are the worke
 
 `motion/motion.json`, when it exists, is validated on every run (the `motion:spec` row; see Motion spec). A manifest row with `qa: [...]` needs a current, passing report from the matching tool (`downscale`, `states`, `motion`, `family`, `fonts`
 = `fontcheck`, `idempotent` = `verify-idempotent`); for `downscale` it is the report of the row's own `downscale_source` (a row without one fails,
-and a passing report on another file never counts); for `motion` it is at least one passing gated report (the `qa:motion` row; see Motion proof); a report that exists is gated whether or not a row asks. A missing report is "not
+and a passing report on another file never counts); for `motion` it is at least one passing gated report (the `qa:motion` row; see Motion proof); a report that exists is gated whether or not a row asks (the `frames` reports too, by the proof each names; see Frames). A missing report is "not
 verified" (exit 3), a stale one too, a failing one exit 1. When `qa/rules.json` sets a colour-vision threshold (a key of its `cvd`
 section), a passing contrast report without colour-vision rows (one `contrast` wrote without `--cvd`) is "not verified" too
 (`report:contrast:cvd`, naming `contrast --cvd`). Slots off the band rule, platform-spec rows stamped stale or U, and
@@ -825,11 +849,11 @@ rebuilds in memory and compares. `check` gates a generated book three ways: a cu
 `--self-consistency`, a current `book` report, and a `book.html` whose sha256 is the one `book` recorded (a hand edit fails). `authored-vector`:
 the book is hand-authored HTML; `book` exits 2, `book-lint` is the gate, `patch` is the only edit path (below). Both reports record
 `state_view_sha`, a hash of what the book reads from BRAND-STATE.md and FACTS.md (edition, approval, G6, directions, rules, edition log,
-facts); `check` treats a report whose view changed as not verified. A change to the phase or review URL does not. The reports also record `manifest_view_sha`, a hash of the manifest rows the book shows (everything except the press kit, which contains the book's PDF, so the book cannot name its hash and a rebuilt kit must not make the book stale; the files chapter says where the kit is, without a checksum); `assets/manifest.json` is not a report input, and a changed row the book shows makes `book`, `book-lint` and `book-pdf` not verified.
+facts); `check` treats a report whose view changed as not verified. A change to the phase or review URL does not. The reports also record `frames_view_sha`, a hash of the list of the stills of the gated proofs: for each `motion/frames/<case>/` the sha256 of its `frames.json` and of its strip and its reduced still, or `absent` for a picture that is not there (so one that goes and comes back is seen). A `check` that finds it different says "not verified" (`report:book:frames`, `report:book-lint:frames`), which is how stills that appeared, went or changed after the book was built are noticed. The list is empty, and the stills are none of the inputs of `book`, `book-lint` and `book-pdf`, for a book that shows none: one whose chapter list has no `motion` (a Quick book) or whose `motion/motion.json` says `off`. They also record `manifest_view_sha`, a hash of the manifest rows the book shows (everything except the press kit, which contains the book's PDF, so the book cannot name its hash and a rebuilt kit must not make the book stale; the files chapter says where the kit is, without a checksum); `assets/manifest.json` is not a report input, and a changed row the book shows makes `book`, `book-lint` and `book-pdf` not verified.
 
 **Chapters.** Registry order, selected from `tier`, `architecture`, the project's files and `book_chapters`: quick `idea, mark, colour,
-files, changing` (plus `wordmark` when `assets/logo` has a wordmark or lockup); standard adds `motion` (when `motion/proof.json` or
-`motion/SPEC.md` exists), `type`, `use`, `proof`, `donts`, `history`; full adds `adoption` and `launch`; `endorsement` and `family` in the
+files, changing` (plus `wordmark` when `assets/logo` has a wordmark or lockup); standard adds `motion` (when `motion/proof.json`,
+`motion/SPEC.md` or `motion/motion.json`, on or off, exists), `type`, `use`, `proof`, `donts`, `history`; full adds `adoption` and `launch`; `endorsement` and `family` in the
 family modes; `tone`, `photography`, `components` only when named in `book_chapters`. Each chapter is `book/chapters/<id>.md`
 (`<id>.<lang>.md` for each language when `content_languages` has several; every language is required). `book --init` copies the skeletons
 from `templates/book/` and never overwrites; `[[fill: ...]]` left in a chapter fails the build.
@@ -846,6 +870,58 @@ pixels, plus the downscale reports' accent measurements), `{{colours}}`, `{{cont
 `book/book.json` (unknown keys are exit 2): `min_label_px` (default 12, stated in the book), `sizes`, `fonts` (`{family, file, weight, style}`,
 embedded as data URIs), `labels` (`{lang: {English label: translation}}`; a label with no translation is shown in English and warned),
 `output`, `lint` (`history_chapter, forbidden, scratch, round, status_words, count_nouns, allow_external_links, files_exclude`).
+
+**The motion chapter.** `{{motion}}` shows `motion/motion.json` ("Motion spec") and the project's tokens. With the spec `"on"`: the signature move
+(`Signature move: <name>.` and its description, then `Shown in:` as a list), the replay (below), a parts table (`Part`, `Description`), a timeline table
+(`Part`, `Property`, `Start`, `Duration`, `Easing`, `Note`) in which every reference is its token name and what it resolves to (a start is its sum in ms and the
+expression, `560 ms motion.base + motion.stagger × 2`, or `0 ms`; a duration its ms and token; an easing `cubic-bezier(x1, y1, x2, y2)` and token), the tokens of
+`tokens.json` `motion` (a table of every duration in ms, a table of every curve with its four numbers and a small drawing of it: an inline `<svg>` with
+`role="img"`, an `aria-label` naming the token and the curve, no text, room above 1 and below 0 for an overshoot, 40 px to the unit and the numbers rounded to two
+places, so the drawing is the same on every run; then any other `duration.*`, `easing.*` or `motion.*` token as the tokens write it), the motion rules as a list, and
+a table per gated motion report (`shot --motion`) with the columns `Case`, `Check` and `Result`: one row per pass, fail or warn row of the report (as before; info and not verified rows are not shown), its `Check` the row id
+without `motion:<case>:` (`cls:normal`, `edges:360`), the checks of a case together, and the `Case` cell the name the chapter gives that case's replay (the signature move, numbered like the replay's text), else
+`Case` and the case's place in the report's `cases` list (`Case 2`); **the case's own name is never printed** (see "The replay"). The heading of a table is `Motion proof` (`<h4 data-proof="<proof path>">`), or
+`Motion proof 1`, `Motion proof 2` ... when there are several, in the order of the proofs' paths (the report of an earlier version, which names no proof, first); the report table of the proof chapter (`{{checks}}`)
+names the same reports the same way, the report's name in a `data-report` attribute and its proof in `data-proof`. **A proof's file name and its report's name (`hero-v2`, `motion/hero-v2-3fa1b2`) are the author's working names too, and are never printed.**
+The checks of a states case name its states (`1x:control:rest!=draft-v2`, `1x:draft-v2=expected`, `1x:state:draft-v2`, written by `shot --motion`, which keeps them in the row ids): the table prints each state by
+its place in the case, in the order the control pairs, then the expected-state checks, then the states a check did not find name them (`1x:control:state 1!=state 2`), and keeps the check as the report
+has it in the row's `data-check` attribute (a row whose check names no state has none). A row that belongs to none of the report's `cases` is
+shown by its `label` under a case of its own (the state names of an expected-state label by their place too), and a build warning names it. With `"off"`: `Nothing moves: <reason>` and the proof tables, if any; no replay (stills that exist are
+left out, and a build warning says so). Without `motion/motion.json` (a project from before it): the table of every `duration.*`, `easing.*` and `motion.*` token as
+the tokens write it, the replay if stills exist, the proof tables, and a build warning that the chapter has no signature move and no timeline. A `motion/motion.json`
+that is not valid stops the build (exit 2), as it stops the adapters. `templates/book/motion.md` holds only the owner's prose (why it moves, reduced motion); a chapter
+file written from an earlier template, with its own `{{motion}}` line, gets all of the above.
+
+**The replay.** For each `motion/frames/<case>/frames.json` (written by `frames`) whose proof is a gated proof of the project the chapter holds one
+`<figure class="motion-demo" data-motion-demo="<case>" data-length-ms="<length_ms>" data-frames="<N>">` with, in this order: a checkbox `id="bc-replay-<case-slug>"` and its
+`<label for>` (`Replay`); a checkbox `id="bc-slow-<case-slug>"` and its label (`4× slower`, with the multiplication sign); `<div class="motion-stage">` holding the flipbook
+(`<picture><source type="image/png" srcset="<strip data: URI> <scale>x"><img class="motion-flip" src="<1 x 1 PNG data: URI>" alt width height></picture>`, `strip.png` in the `<source>`) and the reduced still (`<img class="motion-reduced" alt>`, `reduced.png`); the
+percentages and times of the stills in `<p class="cap motion-times">`; and a `<figcaption>`. The case slug is the case name in lower case with each run of other characters
+made one hyphen; with several content languages each language's copy ends `-<language>`, so ids stay unique. **The case is an id, not text**: it stays in `data-motion-demo`
+and in the ids and animation names, and the text a reader gets (the alts, the figcaption, the proof table) names the replay by the signature move of `motion/motion.json` when motion is on,
+else `The mark in motion`, followed by ` (1)`, ` (2)` ... when the chapter has several replays, so a case named `hero-v2` or `draft-x` does not trip the word rules. Every image
+is a `data:` URI of the file's exact bytes, and **the strip is embedded once**: the flipbook is the strip `<img>` itself, in a `<picture>` whose `<source>` holds the strip in a `srcset`
+with the density `<scale>x` of `frames.json` (so that one still is its css size), `width` and `height` of one still (`size` of `frames.json`) and `object-fit: none` so that it shows one still
+at a time; the `<img>` has the `src` the HTML standard asks of it, a 1 × 1 transparent PNG (68 bytes, a `data:` URI of 114 characters) that the browser does not draw while the `<source>` matches, where a `src` with
+the strip would embed it twice. book-lint reads the strip from the `<source>` (else from the `<img>`'s own `srcset`, else its `src`), and only from a `<source>` with no `media` attribute and a `type` that is absent or `image/png`: a browser skips a
+`<source>` whose media does not match or whose type it does not know and draws the stand-in, which the lint cannot tell from the outside, so `motion:replay` and `motion:stills` fail and name that `<source>`. `object-position: -i × w px 0` moves it from still to still. The keyframes put still i at its percent (`@keyframes`, a keyframe at 0 and at 100
+whatever the points are), each held until the next (`step-end`), over `length_ms`, once, fill `both`: it ends on the last still. The checkboxes start it again with CSS alone: four
+identical `@keyframes` (`bc-flip-<case-slug>-r0s0`, `-r1s0`, `-r0s1`, `-r1s1`, for the replay and slow boxes unchecked or checked) and the rules `#bc-replay-…:checked`,
+`#bc-slow-…:checked` and both, reaching the flipbook through the siblings (`~`), choose among them, so toggling either box is a new `animation-name` and a new run; the slow
+box also sets `animation-duration` to 4 × `length_ms`. The inputs are visually hidden with `clip`, never `display:none`, the `hidden` attribute or a negative `tabindex` outside the
+media below, so the keyboard reaches them. Under `prefers-reduced-motion: reduce` on a screen (`@media screen and (prefers-reduced-motion: reduce)`) the flipbook is not shown and has `animation: none`, the two controls and
+their labels are not shown, and the reduced still is. In print, with the preference on or off, the controls and the reduced still are not shown, and the same flipbook is: no animation
+(`!important`, to outweigh the id rules), the full strip width scaled to the page (`width: 100%`, `height: auto`, `object-fit: fill`), with the times under it. The book's rules for replays (`DEMO_CSS` and the block of each case in
+`bookgen.py`) follow its own, and only when it has one: a book without is byte for byte what it was. What cannot be shown is a build warning, never silence: stills of an
+exploration proof (`rounds/`, `history/`, `removed-*/`) or of a proof that is gone, a `frames.json` that cannot be read (or names a proof outside the project), a folder that is not its case's own, two cases that make one
+id, a missing strip or reduced still, and a case the proof no longer has as a page case (`<case> is no longer a page case of <proof>: move motion/frames/<case>/ to
+removed-<date>/`): each is left out. Built, and warned about: fewer than 9 stills (the warning says it jumps between N stills and that `brand-creator frames <proof> --count 25`
+makes it smooth); a file that is not the one `frames.json` lists; a `frames` report (`assets/_checks/frames/<slug>-<hash6>.json`) that does not vouch for the case, which is
+a report that is missing, stale, without a `frames:<case>` row (one report per proof is rewritten by every run, so `frames --case X` leaves the other cases' stills unvouched) or with
+that row not passing (each warning names the run to make: `brand-creator frames <proof> --count N` for a proof of several page cases, since a run of one case would leave the
+others unvouched, and `brand-creator frames <proof> --case <case> --count N` for a proof of one; `book` does not run `frames`); stills that do not run from 0 to 100 percent, or two at one percent. A motion chapter that is not off and has no replay built (no stills, or
+none that can be shown) warns with `brand-creator frames motion/proof.json --count 25` (an info note instead when the proof has no page case, which `frames` needs). Only the stills
+of gated proofs are inputs of the `book` and `book-lint` reports (with their proofs and `motion/motion.json`), and only for a book that has the Motion chapter and whose motion is not `off`; a try-out's are not.
 
 **The cover.** Its title (the `<h1>`) is the brand's drawn wordmark when `assets/logo/wordmark.svg` exists: an image whose alt is the name, with
 `wordmark-dark.svg` switched like the cover's marks (`sch-l` and `sch-d`; without a dark file the light one shows in both schemes, and a warning says so),
@@ -871,8 +947,45 @@ FACTS.md value that contains it), `variants:open`, `chapters:required`, `edition
 `counts:typed` (a digit followed by `files`, `slots`, `colours`, `pairs`, `roles`, `sizes` or `chapters` in prose must equal the data; write it
 as `{{count:NAME}}`), `facts:data`, `files:accounting` (every manifest row and artwork file has a `data-path` row with the right `data-sha`),
 `legal:<label>` (FACTS.md rows whose label starts `legal` must appear verbatim), `lang:parity` (every `lang=` + `data-key=` block exists in
-each content language with the same block structure; text in a language that is not in `content_languages` fails), `lang:<code>:<rule>` (warnings with line and offset: the `check` of each rule in `scripts/data/languages/<code>.json` run on the book text in that language, the whole text with one content language, the `lang=` elements with several; kinds `single-letter-nbsp` and `low-opening-quote`; `fontcheck --print-rules` prints every rule for a prompt). `--self-consistency` adds
-`self:durations` (CSS durations and delays are 0 or a `duration.*` or `motion.*` token), `self:font-size` (no declared size under the minimum label size;
+each content language with the same block structure; text in a language that is not in `content_languages` fails), `lang:<code>:<rule>` (warnings with line and offset: the `check` of each rule in `scripts/data/languages/<code>.json` run on the book text in that language, the whole text with one content language, the `lang=` elements with several; kinds `single-letter-nbsp` and `low-opening-quote`; `fontcheck --print-rules` prints every rule for a prompt), and three rows for the replay of the motion
+chapter, which read the book's CSS with its `@media` context, the elements it styles and the cascade (type, `#id`, `.class`, `[attribute]`, `:checked` and the four
+combinators). **A rule the cascade does not apply is named, never passed over in silence**: a selector it cannot parse, or one with a pseudo-class other than `:checked`
+(`:is`, `:not`, `:where`, `:has`, `:hover` ...), applies to nothing, and so do a rule inside `@layer`, `@scope`, `@container` or `@supports` (the cascade weighs no layers, scopes or
+conditions) and a style rule that holds nested rules (CSS nesting: the cascade does not resolve `&`); when such a rule sets what a row reads (`display`, `visibility`, `opacity`, `animation*`,
+`transition*` for `motion:reduced` and `motion:replay`; `object-position` for `motion:replay`; `object-fit`, `width`, `height` and their `min-` and `max-` for `motion:stills`) and could reach an element of a demo or an ancestor
+of one, that row says `not read: <selector> (sets display)` (`... inside @layer demo` for a rule in an at-rule, `... with nested rules` for a block that holds nested rules, its own declarations and the nested ones
+counted) and a row that would pass is a warning. A layer statement (`@layer a, b;`) orders layers the cascade does not weigh: all three rows say `not read: @layer a,b (orders the layers of the cascade)`. A statement
+at-rule (`@layer`, `@import`, `@charset`) ends at its semicolon, so the rule after it is read. **A style attribute is weighed**: it beats a rule of the same importance, however specific, and
+an `!important` rule beats an inline declaration that is not important (an important inline declaration beats an important rule). `motion:reduced` (under `prefers-reduced-motion: reduce` nothing in the book moves: every rule that starts an
+animation, or a transition with a duration above 0, is switched off by a rule inside `@media (prefers-reduced-motion: reduce)` for the same selector, or for `*` with
+`!important` (a `*` rule alone is weaker than any class), that sets `animation: none` or `animation-name: none`, or `transition: none`; **the cascade is weighed per longhand,
+and a stop counts when it wins on a longhand that stops the thing** (`animation-name: none`; `transition-property: none` or a `transition-duration` of 0), against the declaration that wins in the start's own rule (an
+`!important` one before a later plain one) and against every other rule that can select the same element and sets that longhand to a value that does not stop it (importance, then specificity, then the later rule): a start marked
+`!important` on that longhand is switched off only by a stop marked `!important`, and not by a `*`, which an `!important` rule for a class outweighs, while `.y{transition-duration:150ms!important;transition-property:color}`
+is switched off by a plain `.y{transition:none}` in the reduced-motion block (its property wins, and no transition runs), `.y{transition-property:color!important;transition-duration:150ms!important;transition:color 150ms}`
+is not, and `.y{transition-duration:150ms}` with `main .y{transition-property:color}` is not switched off by `.y{transition-property:none}` (the row says `outweighed by 'main .y'`; a rule that starts the same kind of
+motion under another selector is checked for itself, and one that only sets a longhand needs a stop under its own selector). A stop inside `@layer`, `@scope`, `@container` or `@supports`, or in a rule that holds nested
+rules, is not counted: the gap stays and the row names the stop (`not read: .x (sets animation) inside @layer r`); a start there is weighed as if it applies (an `!important`
+start still needs an `!important` stop) and named (`not read: .zz (starts animation) inside @supports (display:grid)`). A rule under `no-preference` needs none; an inline `style` is read like a rule (`!important` needs no
+space before it), cannot be switched off and fails; and every motion demo hides its flipbook and stops its animation there, shows its reduced still and hides its controls), `motion:replay` (every
+`[data-motion-demo]` has both checkboxes, ids starting `bc-replay-` and `bc-slow-`, each with a `<label for>` holding visible text; neither checkbox removed from the keyboard
+(`hidden`, `disabled`, a negative `tabindex`, or it or **any ancestor** `inert`, `hidden`, `display:none` or `visibility:hidden` outside the reduced-motion and print media), and both labels and
+the flipbook **shown on a screen** (no ancestor hidden, `display:none`, `visibility:hidden` unless a child says `visible`, or at `opacity:0`); in each of the four states of the boxes the
+flipbook has an animation of the right length (`data-length-ms`, and 4 × it with the slow box checked) that **plays once** (an iteration count of 1) with **`step-end`**, **forwards**
+(direction `normal`), **running**, held at both ends (fill mode **`both`**) and **at once** (delay 0; an `animation` shorthand that leaves these out sets `normal`, `running`, `none` and 0),
+and an `@keyframes` that exists, the four `@keyframes` are the same and **step through the stills of `frames.json`** (a keyframe at the percent of each still, with `object-position: -i × w px 0`,
+nothing else in it), and checking either box changes the `animation-name`, so the replay starts again; a `@keyframes` with no name is reported as such; an `object-position` marked `!important` on the flipbook, which the
+keyframes cannot override (an animation is below an `!important` declaration), fails with "the replay is frozen"; and the strip's `<source>` is one the lint can read, see "The replay"), `motion:stills` (each demo's flipbook
+picture and reduced still are the bytes of the files `frames.json` lists, **and the sha256 it lists**: a picture that is not that file fails with "run brand-creator frames, then
+brand-creator book"; its `data-length-ms` and `data-frames` are its `length_ms` and number of stills; the flipbook is one still wide and high (its `width` and `height`, held by `max-width`, `min-width`,
+`max-height` and `min-height`; a limit that is not a size in px fails), draws its strip at the density of
+`scale` and has `object-fit: none`; a difference fails with "the book shows stills older than motion/frames: run brand-creator book"; a picture of another size is a warning;
+**it also fails a generated book that has no replay of a case whose stills the build would make one of** (a gated proof, a motion chapter in the book, motion not off, the case still a page
+case, both pictures there: "its stills are in motion/frames/<case>/ and the book has no replay of them: run brand-creator book", the book was built before `frames` ran); for a
+hand-written book that is a warning). A book with nothing for a row to measure gets it as info (`no motion demo`), never a pass; `motion:reduced` still reads the
+animations and transitions of a book that has no demo. `--self-consistency` adds
+`self:durations` (CSS durations and delays are 0 or a `duration.*` or `motion.*` token; a rule whose selectors match elements of one motion demo and of nothing else in the book
+may also use that demo's `data-length-ms` and four times it; a selector that matches nothing, or also something outside, or in two demos, keeps the token-only rule), `self:font-size` (no declared size under the minimum label size;
 rem and em are taken at 16 px, `var()` cannot be read and fails) and `self:colours` (hex, rgb() or named colours in CSS and SVG paint
 attributes must be token colours; other colour functions fail).
 
@@ -1151,7 +1264,12 @@ A template of a project that has no `{{rule_radius}}` keeps its own `border-radi
 
 **The finish chain.** `templates/finish.sh.tpl` runs the book, print, press-kit and post steps and the Tier B packs, each gated by the tier like the CLI: `emit profiles` (every tier; avatar only in Quick); `emit print` (Standard and Full, and only
 when `PRINT_REGION` is set: print is opt-in with the owner; `PRINT_ICC`, `PRINT_BLEED`, `IMAGE_BASE_URL` are optional) followed by `print-check`; `emit social` gets `--posts` and a `--post-fact` per
-label of `POST_FACTS` (semicolon separated) when that is set; `book` and `book-pdf` when `book/chapters/` exists (the chain never writes or fills chapters; without the folder the log says `book: skipped`);
+label of `POST_FACTS` (semicolon separated) when that is set; `book` and `book-pdf` when `book/chapters/` exists (the chain never writes or fills chapters; without the folder the log says `book: skipped`), and before them
+`frames motion/proof.json` with `FRAMES_ARGS` (a block-2 option, default `--count 25`; fewer stills for a mark too wide for 25) in the Standard and Full tier (the Quick book has no Motion chapter) when `motion/motion.json` says `on` and `motion/proof.json` has a page case, so that the Motion chapter
+replays stills of the page as it is now (it writes only `motion/frames/` and its report; a rerun with nothing changed writes nothing). A page `frames` cannot step through (motion driven by
+`requestAnimationFrame`, a scroll timeline) makes it exit 1 with a failing report: the chain says so in one line on stderr (`finish.sh: frames could not take the stills (see above); the book keeps the stills of
+the last run that worked, if any, and check says why`) and goes on to `book`, and `check` fails the failing `frames` report (see "Frames"). Any other non-zero exit of `frames` (2: a strip wider than Chromium writes, a
+case folder that holds another proof's stills; 3: it could not run) leaves no failing report for `check` to gate, so the chain says so (`finish.sh: frames stopped with exit N ...`) and stops with that exit code;
 `emit presskit` (Standard and Full; `--no-book` when there was no book). `book`, `book-pdf` and the press kit come after the gates and `verify-idempotent`, because the book reads the downscale and
 idempotence reports (a book built before them is stale once they are rewritten, and `check` says "not verified") and the kit holds `book.pdf`; the book's file list leaves the kit out. A value set for a step the tier does
 not allow (`PRINT_REGION` or `POST_FACTS` in Quick) stops the chain with exit 2 before any step runs. Every emit step except the press kit is in the idempotence run.

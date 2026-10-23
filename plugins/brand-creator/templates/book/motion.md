@@ -1,12 +1,10 @@
-## What moves
+## Why it moves
 
-[[fill: what moves, why it moves, and what never moves. Motion is static first: the still is the mark, the movement is an addition that can be taken away. Delight is welcome only when it expresses the brand and keeps these rules.]]
+[[fill: why the brand moves at all, in the brand's voice, and what never moves. The block below shows the move, its parts, its timing and its replay from the project's data, so write what it cannot say: what the movement says about the brand. Motion is static first: the still is the mark, the movement is an addition that can be taken away. Delight is welcome only when it expresses the brand and keeps the motion rules below.]]
 
-## Timing
+## The motion
 
 {{motion}}
-
-[[fill: the rules the timings serve: the longest duration, the easing, nothing that delays reading or blocks input, no replay of a motion already shown when the reader moves within the page. The book's own pages keep the same limits.]]
 
 ## Reduced motion
 

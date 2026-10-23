@@ -26,6 +26,17 @@ Ask for the change: "update the guidelines after the colour change". Claude chan
 edits `book.html` by hand. A hand-drawn logo has a hand-written book instead, which Claude edits through counted patches
 that open a new edition.
 
+## If your brand moves
+
+The Motion chapter can replay your brand's motion, with no script. Before you build the book, ask Claude for "stills of
+the motion", or run `brand-creator frames motion/proof.json --count 25`. The chapter then plays the mark's movement on
+its own page, with a "Replay" box and a "4× slower" box you can click or reach with the keyboard. With reduced motion
+switched on, it shows the still and nothing moves. If the stills are missing or older than the page, the build tells you
+which command to run, and `check` tells you when you took them after the book was built, or when the page (or a stylesheet
+it loads) changed since you took them, or when a later run for one case (`--case`) left the other cases' stills without a
+check: run `frames`, then `book`. The `tools/finish.sh` of a new Standard or Full project takes fresh stills for you; an
+older one needs the `frames` step added before `book`.
+
 ## A book in another language
 
 The approval stamp says `APPROVED` until you give it the word in your language. For a Polish book, add this to

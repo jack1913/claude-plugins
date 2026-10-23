@@ -66,11 +66,14 @@ never passed.
 2. `book --init` writes the skeleton of each chapter this book needs into `book/chapters/`; it never overwrites. Each
    `[[fill: ...]]` marker says what belongs there. Replace every one, one chapter at a time.
 3. Never type a number, a colour value, a file list or a status: computed blocks (`{{marks}}`, `{{mark-sizes}}`,
-   `{{contrast}}`, `{{files}}`, `{{checks}}`, `{{donts}}`), counts (`{{count:files}}`) and facts (`{{fact:label}}`)
+   `{{contrast}}`, `{{files}}`, `{{checks}}`, `{{donts}}`, `{{motion}}`), counts (`{{count:files}}`) and facts (`{{fact:label}}`)
    come from data. A claim is a FACTS.md row or it is not written. Round, version and decision wording goes only in
    the history chapter. With several marks (`qa/rules.json` `marks`) the cover and these blocks show every mark: a table
    of sizes per mark, and `{{marks:wordmark?}}` finds each mark's `<id>-wordmark.svg`.
-4. `book`. It writes `book.html` only when the page lints clean.
+4. `book`. It writes `book.html` only when the page lints clean. A brand that moves: run `frames motion/proof.json --count 25` first, so the
+   Motion chapter can replay the page's motion (`book` never runs it; it warns, with the command, when the stills are missing, older than
+   the page or fewer than 9; `tools/finish.sh` takes them before the book). `book-lint` fails a generated book that has no replay of stills
+   that exist.
 5. `book --verify` rebuilds in memory and compares with the file: the build is byte-identical or it is a defect to
    report, not to paper over.
 6. `shot book.html`, then Read the 1440 and 390 px slices in light and dark before any visual claim. Iterate.
@@ -97,7 +100,7 @@ re-checked), then numbered "Decisions for you", each with a recommendation. `/br
 |---|---|---|
 | 1 | No mark depends on an installed font | `book-lint` (`marks:lint`); outline text with `outline-glyphs` |
 | 2 | Formal and short names are used consistently, and as the regulator requires where one applies | read every chapter and the cover; [regulated-industries](../brand-creator/references/regulated-industries.md) |
-| 3 | The book obeys its own rules: motion durations, the smallest label, the palette | `book-lint --self-consistency` |
+| 3 | The book obeys its own rules: motion durations, reduced motion, the smallest label, the palette | `book-lint --self-consistency` (`motion:reduced`, `motion:replay`, `motion:stills`) |
 | 4 | Legal and regulatory statements match a dated source | FACTS.md `legal:` rows, verbatim, and the owner's source; UNVERIFIED when none was read |
 | 5 | The system has not drifted back into a rejected direction | the history chapter against the Directions table; judgement, said as such |
 | 6 | Every chapter the tier needs is there | `book-lint` (`chapters:required`) |

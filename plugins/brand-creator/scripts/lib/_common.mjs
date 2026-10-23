@@ -277,6 +277,7 @@ export class Report {
   write() {
     const recs = [...this.inputs].map((p) => path.resolve(p)).filter((p) => fs.existsSync(p))
       .map((p) => ({ path: rel(this.project, fs.realpathSync(p)), sha256: sha256File(p) }))
+      .filter((r, i, all) => all.findIndex((x) => x.path === r.path) === i)   // an input named twice (the page of two cases, a file the server served) is recorded once
       .sort((a, b) => (a.path < b.path ? -1 : 1));
     const h = crypto.createHash("sha256");
     for (const r of recs) h.update(`${r.path}\0${r.sha256}\n`);

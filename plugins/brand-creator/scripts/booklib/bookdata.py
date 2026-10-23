@@ -9,9 +9,11 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import shlex
+from decimal import Decimal
 from pathlib import Path
 
-from _common import EXIT_CANNOT, EXIT_USAGE, State, fail, read_state
+from _common import EXIT_CANNOT, EXIT_USAGE, State, fail, motion_proof_kind, motion_report_tool, read_state, sha256_file
 
 # ---------------------------------------------------------------- the chapter registry
 
@@ -19,7 +21,7 @@ from _common import EXIT_CANNOT, EXIT_USAGE, State, fail, read_state
 CHAPTERS = [
     ("idea", "Idea", ("quick", "standard", "full"), "always"),
     ("mark", "The mark by size", ("quick", "standard", "full"), "always"),
-    ("motion", "Motion", ("standard", "full"), "motion"),            # when motion/proof.json or motion/SPEC.md exists
+    ("motion", "Motion", ("standard", "full"), "motion"),            # when motion/proof.json, motion/SPEC.md or motion/motion.json exists
     ("wordmark", "Wordmark and lockup", ("quick", "standard", "full"), "wordmark"),   # when assets/logo holds a wordmark or lockup
     ("endorsement", "Endorsement", ("standard", "full"), "family"),  # family modes only
     ("colour", "Colour", ("quick", "standard", "full"), "always"),
@@ -370,7 +372,8 @@ def motion_durations_ms(doc: dict) -> list[float]:
 # ---------------------------------------------------------------- chapters and counts
 
 def has_motion(project: Path) -> bool:
-    return (project / "motion" / "proof.json").is_file() or (project / "motion" / "SPEC.md").is_file()
+    """Motion is decided once the project has a motion proof, the prose spec, or motion/motion.json (on or off: a brand that does not move says so)."""
+    return any((project / "motion" / f).is_file() for f in ("proof.json", "SPEC.md", "motion.json"))
 
 
 def has_wordmark(project: Path) -> bool:
@@ -421,3 +424,244 @@ COUNT_NAMES = ("files", "slots", "colours", "pairs", "roles", "sizes", "artwork"
 
 def sha8(b: bytes) -> str:
     return hashlib.sha256(b).hexdigest()[:8]
+
+
+# ---------------------------------------------------------------- the stills of a page case (motion/frames/<case>/, written by `frames`)
+
+FRAMES_DIR = "motion/frames"
+
+
+def num_text(v: float, places: int = 3) -> str:
+    """A number as plain short text: 240, 3.5, 16.67 (no exponent, no trailing zeros)."""
+    s = f"{v:.{places}f}"
+    s = s.rstrip("0").rstrip(".") if "." in s else s
+    return "0" if s in ("", "-0") else s
+
+
+def curve_css(c: list) -> str:
+    """A curve as tokens.css writes it: cubic-bezier(0.2, 0, 0, 1), the numbers as plain decimals (1 and not 1.0, 0.0000001 and not 1e-07)."""
+    def plain(n) -> str:
+        s = str(n) if isinstance(n, int) else format(Decimal(repr(float(n))), "f")
+        return s.rstrip("0").rstrip(".") if "." in s else s
+    return "cubic-bezier(" + ", ".join(plain(n) for n in c) + ")"
+
+
+def case_folder(name: str) -> str:
+    """A case name as the folder `frames` writes its stills to (letters, digits, . _ -; a leading . or - dropped): twin of caseFolder in render.mjs."""
+    return re.sub(r"[^A-Za-z0-9._-]+", "-", str(name)).lstrip(".-")
+
+
+def case_slug(name: str) -> str:
+    """A case name as the id part of a demo's controls and animations: lower case letters and digits joined by single hyphens."""
+    return re.sub(r"[^a-z0-9]+", "-", str(name).lower()).strip("-")
+
+
+def frames_report_tool(proof_rel: str) -> str:
+    """The report tool name (-> assets/_checks/frames/<slug>-<hash6>.json) of `frames` on one proof file: the name of its motion report, under frames/."""
+    return "frames/" + motion_report_tool(proof_rel).split("/", 1)[1]
+
+
+def frames_folders(project: Path) -> list[str]:
+    """The case folders of motion/frames/ that hold a frames.json, in name order."""
+    d = project / FRAMES_DIR
+    return sorted(p.name for p in d.iterdir() if (p / "frames.json").is_file()) if d.is_dir() else []
+
+
+def frames_orphans(project: Path) -> list[str]:
+    """The folders of motion/frames/ with no frames.json (stills of a run that was cut short, or a file that was moved away), in name order."""
+    d = project / FRAMES_DIR
+    return sorted(p.name for p in d.iterdir() if p.is_dir() and not (p / "frames.json").is_file()) if d.is_dir() else []
+
+
+def read_frames(project: Path, folder: str) -> tuple[dict | None, list[str]]:
+    """motion/frames/<folder>/frames.json as `frames` writes it -> (the document, []) or (None, what is wrong with it). Every file it names must lie in the folder."""
+    where = f"{FRAMES_DIR}/{folder}/frames.json"
+    try:
+        doc = json.loads((project / where).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        return None, [f"{where} cannot be read as JSON ({e})"]
+    if not isinstance(doc, dict):
+        return None, [f"{where} is not a JSON object"]
+    bad = []
+
+    def num(v) -> bool:
+        return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+    def sha(v) -> bool:
+        return isinstance(v, str) and re.fullmatch(r"[0-9a-f]{64}", v) is not None
+
+    def inside(v) -> bool:
+        return v.startswith(f"{FRAMES_DIR}/{folder}/") and ".." not in v.split("/")
+
+    if doc.get("schema") != 1:
+        bad.append(f"schema is {doc.get('schema')!r}, this version reads 1")
+    bad += [f"{k} is missing" for k in ("case", "proof", "page", "selector") if not (isinstance(doc.get(k), str) and doc[k])]
+    if isinstance(doc.get("proof"), str) and doc["proof"] and (Path(doc["proof"]).is_absolute() or ".." in Path(doc["proof"]).parts):
+        bad.append("proof must be a path inside the project (the book reads it, and records it as an input)")
+    if not (num(doc.get("length_ms")) and doc["length_ms"] > 0):
+        bad.append("length_ms must be a number above 0")
+    if not (num(doc.get("scale")) and doc["scale"] > 0):
+        bad.append("scale must be a number above 0")
+    size = doc.get("size")
+    if not (isinstance(size, list) and len(size) == 2 and all(num(x) and x > 0 for x in size)):
+        bad.append("size must be [width, height] in css px")
+    frames = doc.get("frames")
+    if not (isinstance(frames, list) and frames and all(isinstance(f, dict) and num(f.get("percent")) and 0 <= f["percent"] <= 100 and num(f.get("ms"))
+                                                       and isinstance(f.get("file"), str) and sha(f.get("sha256")) for f in frames)):
+        bad.append("frames must be a non-empty list of {percent from 0 to 100, ms, file, sha256}")
+    for k in ("strip", "reduced"):
+        if not (isinstance(doc.get(k), dict) and isinstance(doc[k].get("file"), str) and sha(doc[k].get("sha256"))):
+            bad.append(f"{k} must be {{file, sha256}}")
+    if not bad:
+        out = next((f for f in [*(x["file"] for x in frames), doc["strip"]["file"], doc["reduced"]["file"]] if not inside(f)), None)
+        if out:
+            bad.append(f"it lists {out}, which is not in {FRAMES_DIR}/{folder}/ (the folder was renamed or moved: move it back, or run `frames` again)")
+    return (None, [f"{where}: {p}" for p in bad]) if bad else (doc, [])
+
+
+def frames_command(doc: dict, case: str | None = None) -> str:
+    """The `frames` command that writes the points of this frames.json again: --count N when they are N evenly spread ones, else --at with the percentages;
+    with `case`, for that case only (--case)."""
+    pcts = [f["percent"] for f in doc["frames"]]
+    n = len(pcts)
+    even = [0.0] if n == 1 else [100 * i / (n - 1) for i in range(n)]
+    arg = f"--count {n}" if all(abs(a - b) < 0.011 for a, b in zip(pcts, even)) else "--at " + ",".join(num_text(p, 2) for p in pcts)
+    return f"brand-creator frames {shlex.quote(doc['proof'])}" + (f" --case {shlex.quote(case)}" if case else "") + f" {arg}"
+
+
+def flipbook_steps(doc: dict) -> list[tuple[str, str]]:
+    """(percent, x of the object-position) of the keyframes of a replay: each still from its percent on, in time order (the stills of `--at` may come in any order),
+    and a keyframe at 0 and at 100 whatever the points are, so the flipbook never falls back to the element's own position. The strip is N stills of the width w
+    side by side, so still i is shown by shifting it left by i x w css px. The build writes these and book-lint reads them back."""
+    w, at = doc["size"][0], {}
+    for i, f in enumerate(doc["frames"]):
+        at[f["percent"]] = i   # two stills at one percent: the later one is shown
+    at.setdefault(0, at[min(at)])
+    at.setdefault(100, at[max(at)])
+    return [(num_text(p, 2), "0" if i == 0 else f"-{num_text(i * w)}px") for p, i in sorted(at.items())]
+
+
+def frames_proof(project: Path, folder: str) -> str | None:
+    """The proof a frames.json names, or None when the file cannot be read or names none (read_frames says what is wrong with it)."""
+    try:
+        v = json.loads((project / FRAMES_DIR / folder / "frames.json").read_text(encoding="utf-8")).get("proof")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return v if isinstance(v, str) else None
+
+
+def gated_frames_folders(project: Path) -> list[str]:
+    """The case folders of motion/frames/ the book can show: those whose frames.json names a gated proof of the project. The stills of a try-out proof (under
+    rounds/, history/ or removed-*/) or of a proof that is gone are never shown, so they are no input of a book. A frames.json that cannot be read counts: the
+    build says so, and the book has to notice when it is mended."""
+    return [f for f in frames_folders(project) if motion_proof_kind(project, frames_proof(project, f)) == "gated"]
+
+
+def proof_page_cases(project: Path, proof: str) -> list[str] | None:
+    """The names of the page cases of a motion proof, or None when the file cannot be read as a proof (no file, not JSON, no list of cases)."""
+    try:
+        cases = json.loads((project / proof).read_text(encoding="utf-8"))["cases"]
+        return [c["name"] for c in cases if isinstance(c, dict) and c.get("type") == "page" and isinstance(c.get("name"), str)]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
+def proof_stills(project: Path, proof: str) -> list[str]:
+    """The cases of `proof` that have stills in motion/frames/ for the book to show: the case of each frames.json that names the proof and is still a page case of it (the
+    build leaves a case the proof no longer has out, and says so). A frames.json that cannot be read names no proof."""
+    pages, out = proof_page_cases(project, proof), []
+    for folder in frames_folders(project):
+        try:
+            doc = json.loads((project / FRAMES_DIR / folder / "frames.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(doc, dict) and doc.get("proof") == proof and isinstance(doc.get("case"), str) and (pages is None or doc["case"] in pages):
+            out.append(doc["case"])
+    return out
+
+
+def replay_skip(project: Path, folder: str, doc: dict) -> str | None:
+    """Why the build leaves out the replay of motion/frames/<folder>/ (the sentence of its warning), else None. The build warns with this sentence, and book-lint
+    asks the same question to know which stills a book has to show: one the build left out, and said so, is no failure of the book."""
+    at, proof, case = f"{FRAMES_DIR}/{folder}", doc["proof"], doc["case"]
+    kind = motion_proof_kind(project, proof)
+    if kind != "gated":
+        return (f"{at}/ holds the stills of {proof}, " + ("an exploration proof (under rounds/, history/ or removed-*/)" if kind == "exploration" else "a proof that no longer exists")
+                + "; its replay is left out")
+    cmd = frames_command(doc)
+    if case_folder(case) != folder or not case_slug(case):
+        return f"{at}/ holds the case {case!r}, which belongs in {FRAMES_DIR}/{case_folder(case) or '<a folder name>'}/; its replay is left out: run `{cmd}`"
+    for key in ("strip", "reduced"):
+        if not (project / doc[key]["file"]).is_file():
+            return f"{doc[key]['file']} is listed in {at}/frames.json and does not exist; the replay of {case} is left out: run `{cmd}`"
+    pages = proof_page_cases(project, proof)
+    if pages is not None and case not in pages:
+        return f"{case} is no longer a page case of {proof}: move {at}/ to removed-<date>/ (its replay is left out)"
+    return None
+
+
+def replayable(project: Path) -> list[tuple[str, dict]]:
+    """[(folder, frames.json)] of the stills the build makes a replay of, in name order: readable, of a gated proof, of a page case that is still in its proof, with
+    both pictures there, and the first of the cases that make one id."""
+    out, slugs = [], set()
+    for folder in gated_frames_folders(project):
+        doc, _bad = read_frames(project, folder)
+        if doc is None or replay_skip(project, folder, doc) is not None or case_slug(doc["case"]) in slugs:
+            continue
+        slugs.add(case_slug(doc["case"]))
+        out.append((folder, doc))
+    return out
+
+
+def motion_is_off(project: Path) -> bool:
+    """Whether motion/motion.json says nothing moves. A file that is absent or cannot be read is not "off": the build and `check` say what is wrong with it."""
+    try:
+        return json.loads((project / "motion" / "motion.json").read_text(encoding="utf-8")).get("motion") == "off"
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
+def shows_stills(project: Path, view: dict) -> bool:
+    """Whether the book can replay stills: its chapter list has the Motion chapter and motion/motion.json does not say nothing moves. Only then are the stills of the gated
+    proofs part of what its reports depend on (a Quick book, or one for a brand that does not move, is not made stale by `frames`)."""
+    return "motion" in chapters_for(project, view) and not motion_is_off(project)
+
+
+def frames_view(project: Path, view: dict) -> list[dict]:
+    """[{path, sha256, strip, reduced}] of every gated proof's case folder: its frames.json (path and sha256) and the sha256 of its strip and of its reduced still, or "absent"
+    (a picture frames.json lists, else strip.png or reduced.png): the list of the stills a book can show, empty for a book that shows none (see shows_stills). A report records
+    it (frames_view_sha), so that `check` sees stills that appeared, went or changed after the book was built, and a strip that went and came back."""
+    if not shows_stills(project, view):
+        return []
+    out = []
+    for folder in gated_frames_folders(project):
+        at = f"{FRAMES_DIR}/{folder}"
+        doc, _bad = read_frames(project, folder)
+        pics = {k: project / (doc[k]["file"] if doc else f"{at}/{k}.png") for k in ("strip", "reduced")}
+        out.append({"path": f"{at}/frames.json", "sha256": sha256_file(project / at / "frames.json"), **{k: sha256_file(f) if f.is_file() else "absent" for k, f in pics.items()}})
+    return out
+
+
+def frames_view_sha(project: Path, view: dict) -> str:
+    h = hashlib.sha256()
+    for r in frames_view(project, view):
+        h.update(f"{r['path']}\0{r['sha256']}\0{r['strip']}\0{r['reduced']}\n".encode())
+    return h.hexdigest()
+
+
+def frames_changed(project: Path, view: dict, recorded: str | None) -> bool:
+    """Whether the stills of the gated proofs now in motion/frames/ are other than those a report recorded (its frames_view_sha). A report from before the key (None)
+    is out of date only when there are stills now."""
+    return bool(frames_view(project, view)) if recorded is None else recorded != frames_view_sha(project, view)
+
+
+def frames_inputs(project: Path, view: dict) -> list[Path]:
+    """The files a book's replays are made of: the frames.json of every gated proof and, for the readable ones, its strip, its reduced still and the proof (whether the
+    case is still in it decides whether the book shows it). None for a book that shows no stills (see shows_stills)."""
+    out = []
+    for folder in gated_frames_folders(project) if shows_stills(project, view) else []:
+        out.append(project / FRAMES_DIR / folder / "frames.json")
+        doc, _bad = read_frames(project, folder)
+        if doc:
+            out += [project / doc["strip"]["file"], project / doc["reduced"]["file"], project / doc["proof"]]
+    return [p for p in out if p.is_file()]

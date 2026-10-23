@@ -543,7 +543,7 @@ def test_a_status_word_not_in_facts_fails_and_one_in_facts_passes(proj):
 @setup
 @resvg
 def test_a_motion_duration_outside_the_tokens_fails(proj):
-    mutate(proj / "book.html", "</style>", "a{transition:color 900ms}</style>")
+    mutate(proj / "book.html", "</style>", "a{transition:color 900ms}@media (prefers-reduced-motion:reduce){a{transition:none}}</style>")   # switched off under reduced motion, as motion:reduced wants
     r = bc("book-lint", "--self-consistency", project=proj)
     assert r.returncode == 1
     detail = next(x["detail"] for x in report(proj, "book-lint")["results"] if x["id"] == "self:durations")
@@ -563,7 +563,7 @@ def test_durations_named_motion_in_the_starter_tokens_count_as_well(proj):
     doc["other"] = renamed
     tj.write_text(json.dumps(doc, indent=2) + "\n")
     assert bookdata.motion_durations_ms(doc) and not any(k.startswith("duration.") for k in doc["other"])
-    mutate(proj / "book.html", "</style>", "a{transition:color 150ms}</style>")
+    mutate(proj / "book.html", "</style>", "a{transition:color 150ms}@media (prefers-reduced-motion:reduce){a{transition:none}}</style>")
     assert bc("book-lint", "--self-consistency", project=proj).returncode == 0
     mutate(proj / "book.html", "150ms", "900ms")
     assert bc("book-lint", "--self-consistency", project=proj).returncode == 1
@@ -937,8 +937,8 @@ def test_the_press_kit_is_left_out_of_the_book_and_does_not_make_its_reports_sta
 
 # ---------------------------------------------------------------- the motion proof in the book: one report per proof file
 
-def put_motion_report(project: Path, proof: str, rows: list[tuple[str, str]]) -> Path:
-    """A proof file and the report `shot --motion` writes for it (assets/_checks/motion/<slug>-<hash6>.json), written by hand."""
+def put_motion_report(project: Path, proof: str, rows: list[tuple[str, str]], cases: tuple[str, ...] = ()) -> Path:
+    """A proof file and the report `shot --motion` writes for it (assets/_checks/motion/<slug>-<hash6>.json), written by hand; `cases` are the names it records."""
     from _common import motion_report_tool, sha256_file
     f = project / proof
     f.parent.mkdir(parents=True, exist_ok=True)
@@ -948,7 +948,7 @@ def put_motion_report(project: Path, proof: str, rows: list[tuple[str, str]]) ->
     out.parent.mkdir(parents=True, exist_ok=True)
     results = [{"id": i, "status": s, "label": "x", "detail": ""} for i, s in rows]
     out.write_text(json.dumps({"tool": motion_report_tool(proof), "version": "0", "inputs_sha": "0" * 64, "inputs": [{"path": proof, "sha256": sha256_file(f)}], "renderer": "x",
-                               "results": results, "status": "pass", "proof": proof}, indent=2) + "\n")
+                               "results": results, "status": "pass", "proof": proof, "cases": [{"name": n, "type": "page"} for n in cases]}, indent=2) + "\n")
     return out
 
 
@@ -956,21 +956,22 @@ def put_motion_report(project: Path, proof: str, rows: list[tuple[str, str]]) ->
 @resvg
 def test_the_book_shows_each_proofs_motion_report_and_leaves_an_exploration_proof_out(proj):
     from _common import motion_report_tool
-    put_motion_report(proj, "motion/proof.json", [("motion:demo-page:cls:normal", "pass"), ("motion:demo-page:whole-pixel", "info"), ("motion:demo-page:edges:360", "fail")])
-    put_motion_report(proj, "rounds/r2/try.json", [("motion:tryout:marker", "pass")])        # a try-out: not part of the brand as it stands
+    put_motion_report(proj, "motion/proof.json", [("motion:demo-page:cls:normal", "pass"), ("motion:demo-page:whole-pixel", "info"), ("motion:demo-page:edges:360", "fail")], ("demo-page",))
+    put_motion_report(proj, "rounds/r2/try.json", [("motion:tryout:marker", "pass")], ("tryout",))        # a try-out: not part of the brand as it stands
     r = bc("book", project=proj)
     assert r.returncode == 0, r.stdout + r.stderr
     html = (proj / "book.html").read_text()
-    assert "motion:demo-page:cls:normal" in html and "motion:demo-page:edges:360" in html and "motion:demo-page:whole-pixel" not in html   # pass, fail and warn rows; info rows are not
-    assert "motion:tryout:marker" not in html
+    assert ">cls:normal<" in html and ">edges:360<" in html and "whole-pixel" not in html   # pass, fail and warn rows; info rows are not
+    assert "demo-page" not in html and ">marker<" not in html and "tryout" not in html     # a row id holds the case's name: the table shows the check, under the number of the case
     tool = motion_report_tool("motion/proof.json")
-    assert f">{tool}<" in html and motion_report_tool("rounds/r2/try.json") not in html      # the proof table lists the report of the proof, under its own name
-    assert "<h4>Motion proof</h4>" in html and "Motion proof:" not in html                   # one report: the plain heading
-    put_motion_report(proj, "motion/hero.json", [("motion:hero:control", "pass")])          # a second proof of the project: each gets its table, named
+    assert f'data-report="{tool}"' in html and f">{tool}<" not in html and motion_report_tool("rounds/r2/try.json") not in html      # the report table lists the report of the proof, not under its name
+    assert '<h4 data-proof="motion/proof.json">Motion proof</h4>' in html and "Motion proof:" not in html                              # one report: the plain heading, the path in an attribute
+    put_motion_report(proj, "motion/hero.json", [("motion:hero:control", "pass")], ("hero",))          # a second proof of the project: each gets its table, numbered by the order of the paths
     assert bc("book", project=proj).returncode == 0
     html = (proj / "book.html").read_text()
-    assert "<h4>Motion proof: motion/proof.json</h4>" in html and "<h4>Motion proof: motion/hero.json</h4>" in html and "motion:hero:control" in html
+    assert '<h4 data-proof="motion/hero.json">Motion proof 1</h4>' in html and '<h4 data-proof="motion/proof.json">Motion proof 2</h4>' in html and ">control<" in html and "motion:hero" not in html
+    assert "motion/proof.json</" not in html and "motion/hero.json</" not in html and ">Motion proof 1<" in html and ">Motion proof 2<" in html     # the paths are not text; the report table names the same two
     (proj / "assets/_checks/motion").rename(proj.parent / "moved-away")                      # no report at all: the table is left out, and the build says so
     r = bc("book", project=proj)
-    assert r.returncode == 0 and "motion:demo-page:cls:normal" not in (proj / "book.html").read_text()
+    assert r.returncode == 0 and ">cls:normal<" not in (proj / "book.html").read_text()
     assert "no motion report" in r.stdout + r.stderr

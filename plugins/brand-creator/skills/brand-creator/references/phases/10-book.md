@@ -26,6 +26,8 @@ runs the same self-review.
 ## Inputs
 
 - Built tokens (`brand-creator tokens`), the mark SVGs, `assets/manifest.json` from the emitters, the contrast and downscale reports.
+- When the brand moves: `motion/motion.json` (the signature move, the timeline, the rules; the Motion chapter shows it) and the stills in
+  `motion/frames/` that `brand-creator frames` writes (the chapter replays them).
 - BRAND-STATE.md: tier, architecture, `mark_source`, `content_languages`, `edition`, the Directions table, the Rules section, gates.
 - FACTS.md: every claim in the book's own words is a row there, or it is not written.
 - `book/chapters/*.md` (generated mode) or `book.html` (authored-vector mode).
@@ -33,6 +35,7 @@ runs the same self-review.
 ## Outputs and paths
 
 - `book.html`: fonts and images inline as data URIs, no script, no network, light and dark through `prefers-color-scheme` and the tokens.
+  The Motion chapter's replay of the mark's motion is CSS only: two checkboxes start it again and play it four times slower.
 - `book.pdf`: an RGB proof labelled "RGB, not print-ready" in its metadata and on its cover; never offered as a print file.
 - `assets/_checks/book.json`, `book-lint.json`, `book-pdf.json`; `removed-<date>/` after a collapse.
 - Which chapters appear: the tier, the architecture and the project decide (`scripts/CONTRACT.md`, "Brand book").
@@ -49,9 +52,16 @@ runs the same self-review.
 2. Fill every `[[fill: ...]]` marker, one chapter at a time. Computed blocks (`{{marks}}`, `{{mark-sizes}}`, `{{contrast}}`, `{{files}}`,
    `{{checks}}`, `{{donts}}` ...) and counts (`{{count:files}}`) come from data: never type a number, a colour value or a file list. A claim about
    the brand is `{{fact:label}}` or words that restate a FACTS.md row. Status words ("available", "launching", "in development") need a row.
-3. `brand-creator book`. It lints the page and writes it only when it lints clean. Read the 1440 and 390 px shots
-   (`brand-creator shot book.html`) before any visual claim, in light and dark.
-4. `brand-creator book-lint --self-consistency`, then `brand-creator check`. `check` fails a book.html that is not the bytes `book` wrote.
+3. A brand that moves: the Motion chapter replays the stills of the motion proof's page, so run `brand-creator frames motion/proof.json
+   --count 25` before `book` (25 stills play smoothly; fewer than 9 jump, and the build says so; `tools/finish.sh` does it for you in the Standard and Full tier
+   when motion is on and the proof has a page case, and goes on to the book after a failure that writes a failing report (exit 1: a page it cannot step through or that does not load cleanly, a mark with no box): `check` then fails the report; exit 2 or 3 stops the chain). `book` never runs `frames`: when the stills are missing, older than the page or not the
+   files `frames.json` lists, it warns and names the command. Write `motion/motion.json`
+   first (the owner's motion decision); the chapter's block shows it, and a file that is not valid stops the build.
+4. `brand-creator book`. It lints the page and writes it only when it lints clean. Read the 1440 and 390 px shots
+   (`brand-creator shot book.html`) before any visual claim, in light and dark. The Motion chapter under reduced motion is not a shot
+   (`shot` has no reduced-motion view): the `motion:reduced` row of `book-lint` and the browser test (`tests/node/bookmotion.test.mjs`)
+   prove that the still shows and nothing moves.
+5. `brand-creator book-lint --self-consistency`, then `brand-creator check`. `check` fails a book.html that is not the bytes `book` wrote.
 
 ## Method: authored-vector mark source
 
@@ -71,7 +81,7 @@ Run the lint, then read the book as a stranger would. Each item has a check or a
 |---|---|
 | No mark depends on an installed font | `book-lint` `marks:lint`; outline text with `outline-glyphs` |
 | Formal and short names are used consistently (and per the regulator's rule where one applies) | read the book; judgement |
-| The book obeys its own rules (motion durations, smallest label, palette) | `book-lint --self-consistency` |
+| The book obeys its own rules (motion durations, reduced motion, smallest label, palette) | `book-lint --self-consistency` (`self:durations`, `motion:reduced`, `motion:replay`, `motion:stills`) |
 | Legal and regulatory statements match a dated source | FACTS.md `legal:` rows (verbatim) and the owner's source; judgement |
 | The system has not drifted back into a rejected direction | read the history chapter against the Directions table; judgement |
 | Required chapters are present for the tier | `book-lint` `chapters:required` |
@@ -121,6 +131,10 @@ and an applied brand skill are written only on the owner's explicit yes at this 
 - Round, version and decision wording outside the history chapter ("Round 2", "v3", "item a", "Decision 4").
 - Leaving choice scaffolding (variants, switchers) in the book after the decision.
 - Editing the generated `book.html`: the next build overwrites it and `check` fails it meanwhile.
+- Building the book before `frames`: the Motion chapter then has no replay (and a motion that is on gets a warning that names the command).
+  Re-run `frames` after the page's motion changes, then `book`: `motion:stills` fails a book that shows older stills, or that has no
+  replay of stills that now exist, and `check` says "not verified" when stills appeared, went or changed since the book was built, or when the
+  `frames` report is stale (the page or a stylesheet it loads changed): run `frames`, then `book`.
 - Calling the PDF print-ready. It is an RGB proof; a printer's own proof and a print profile come from the owner.
 - A book approved with a stale proof table: rebuild after every change to a report's inputs; `check` says which report is stale.
 

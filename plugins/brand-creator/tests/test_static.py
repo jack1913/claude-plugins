@@ -140,7 +140,7 @@ def test_no_personal_paths_or_email_addresses_in_shipped_files():
 def test_plugin_json_matches_the_plan():
     d = json.loads((ROOT / ".claude-plugin/plugin.json").read_text())
     assert d["name"] == "brand-creator" and d["displayName"] and d["description"]
-    assert d["version"] == "0.3.5" and re.fullmatch(r"\d+\.\d+\.\d+", d["version"])
+    assert d["version"] == "0.3.6" and re.fullmatch(r"\d+\.\d+\.\d+", d["version"])
     assert d["author"] == {"name": "Jacek Pytlik"} and d["license"] == "MIT" and d["keywords"]
     assert d["homepage"] == "https://github.com/jack1913/claude-plugins/tree/main/plugins/brand-creator"  # a homepage must parse as a URL
     assert d["repository"] == "https://github.com/jack1913/claude-plugins"
@@ -343,3 +343,13 @@ def test_every_install_hint_that_names_brew_also_names_linux():
             if "Linux" not in text[max(0, m.start() - 120):m.end() + 160]:
                 offenders.append(f"{p.relative_to(ROOT)}:{text.count(chr(10), 0, m.start()) + 1}")
     assert offenders == [], "macOS-only install hints: " + ", ".join(offenders)
+
+
+def test_the_changelog_tells_a_project_to_take_will_change_off_a_still_in_the_release_that_fixed_the_rest_frame():
+    """0.3.6 (Unreleased until it is cut): a still the page keeps on a layer of its own fails the exact rest-frame comparison by antialiasing, and `will-change` was the
+    way to make the 0.3.4 scratch-page comparison pass."""
+    text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    start = text.index("## [0.3.6]") if "## [0.3.6]" in text else text.index("## [Unreleased]")
+    section = " ".join(text[start:text.index("\n## [", start + 5)].split())
+    assert "take `will-change` off a still" in section and "`will-change: transform`, a 3D transform" in section and "antialiasing" in section and "0.3.4" in section
+    assert "### Fixed" in section and "`edges:360`, `edges:390`" in section and "backwards" in section      # the two fixes of 0.3.5 that the project found are listed as fixes

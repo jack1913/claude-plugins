@@ -242,6 +242,18 @@ def test_qa_phase_lists_every_check_command_and_cites_real_deliberate_break_test
         assert kind in text, kind
 
 
+def test_the_book_phase_does_not_ask_for_a_reduced_motion_view_of_the_book_because_no_command_offers_one():
+    """10-book asks an agent to read the Motion chapter under reduced motion only through the row and the browser test that prove it: `shot` has no such view."""
+    text = (REFS / "phases" / "10-book.md").read_text(encoding="utf-8")
+    flat = " ".join(text.split())
+    assert "reduced motion switched on" not in flat
+    assert "`shot` has no reduced-motion view" in flat and "`motion:reduced` row of `book-lint`" in flat and "tests/node/bookmotion.test.mjs" in flat
+    assert (ROOT / "tests/node/bookmotion.test.mjs").is_file()
+    render = (ROOT / "scripts/render.mjs").read_text(encoding="utf-8")
+    options = re.search(r"async function cmdShot\(argv\) \{\n  const \{ values, positionals \} = parse\(argv, \{(.*?)\}\);", render, re.S).group(1)
+    assert "reduced" not in options and "scheme" not in options, "shot offers a reduced-motion option now: 10-book can ask for it"
+
+
 def test_wrappers_are_user_invoked_and_call_the_entry_point_in_the_exact_form():
     for w in WRAPPERS:
         p = SKILLS / w / "SKILL.md"

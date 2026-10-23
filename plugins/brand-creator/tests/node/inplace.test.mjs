@@ -6,7 +6,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { needSetup, motionProject, run, byId, failing, writeProof, writePage, pageCase, mutateText, writeLockup, LOCKUP } from "./_motion.mjs";
+import { needSetup, motionProject, run, byId, failing, writeProof, writePage, pageCase, mutateText, writeLockup, LOCKUP, ROOT } from "./_motion.mjs";
+import { loadDep, readSetup } from "../../scripts/lib/_common.mjs";
 
 const DOT = (svg, attrs) => svg.replace('<circle cx="44" cy="52" r="9"', '<circle class="lk-dot" cx="44" cy="52" r="9"').replace("<svg ", `<svg ${attrs} `);
 // the lockup 53 px from the left (and 20 down), its dot pressing two pixels and back; under reduced motion nothing moves
@@ -190,4 +191,59 @@ test("an animation that cannot be turned into plain style is named in the row, n
   run(p, proof);
   assert.match(rest(p, proof).detail, /; press on ::before could not be turned into plain style and stays on the page, which may colour a few pixels/);
   assert.doesNotMatch(rest(p, proof, "reduced").detail, /plain style/); // under reduced motion there is nothing left to name
+});
+
+test("a still hidden by a backwards fill and a moving copy shown by one are, once the motion has ended, the still visible and the copy hidden: the rest frame is compared as drawn", (t) => {
+  if (needSetup(t)) return;
+  // `hide` holds the still hidden and `show` the copy visible only until the motion ends (fill: backwards): after finish() neither effect applies, the still is visible and the
+  // copy hidden. commitStyles() wrote their keyframe values (visibility: hidden on the still, visible on the copy) over that, and the comparison drew the copy
+  const still = LOCKUP.replace("<svg ", '<svg class="still" '), copy = LOCKUP.replace('<circle cx="44" cy="52" r="9"', '<circle cx="64" cy="52" r="9"').replace("<svg ", '<svg class="copy" ');
+  const mark = `<div id="mark" style="position:relative;width:320px;height:90px">${still}${copy}</div>`;
+  const css = "#mark{display:block;margin:20px 0 0 53px}.still,.copy{position:absolute;left:0;top:0}.still{animation:hide 320ms 100ms backwards}"
+    + ".copy{visibility:hidden;animation:show 320ms 100ms backwards,shift 320ms 100ms both}@keyframes hide{from,to{visibility:hidden}}@keyframes show{from,to{visibility:visible}}"
+    + "@keyframes shift{from{transform:translateX(0)}to{transform:translateX(30px)}}@media (prefers-reduced-motion: reduce){.still,.copy{animation:none}}";
+  const { p, proof } = lockupProject({ mark, css, extra: { widths: [] } });
+  const r = run(p, proof);
+  assert.equal(r.status, 0, r.stdout);
+  for (const which of ["normal", "reduced"]) {
+    assert.equal(rest(p, proof, which).status, "pass", `${which}: ${rest(p, proof, which).detail}`);
+    assert.equal(rest(p, proof, which).px_differ, 0);
+  }
+  assert.doesNotMatch(rest(p, proof).detail, /plain style/);          // all three animations were turned into plain style (the third, `shift`, which still applies), or just dropped
+  assert.match(byId(p, proof)["motion:case:sampling"].detail, /^3 Web Animation\(s\) paused and seeked/);
+});
+
+test("the settle step writes what an animation draws and keeps what it cannot write: a pseudo-element, and a property whose value reads empty", async (t) => {
+  if (needSetup(t)) return;
+  const src = fs.readFileSync(path.join(ROOT, "scripts/render.mjs"), "utf8");
+  const settle = /function inPageSettle\(\) \{[\s\S]*?\n\}\n/.exec(src)?.[0];
+  assert.ok(settle, "inPageSettle is in render.mjs");
+  process.env.PLAYWRIGHT_BROWSERS_PATH = readSetup().browsers_path;
+  const browser = await (await loadDep("playwright-core")).chromium.launch({ headless: true });
+  try {
+    const page = await (await browser.newContext()).newPage();
+    await page.setContent("<!doctype html><style>#a,#b,#c,#d{width:10px;height:10px}#d::before{content:'x'}</style><div id=a></div><div id=b></div><div id=c></div><div id=d></div>");
+    const got = await page.evaluate(`(() => {
+      ${settle}
+      const mk = (id, frames, opts) => { const el = document.getElementById(id), a = el.animate(frames, opts); return { el, a }; };
+      const fill = { duration: 100, fill: "both" };
+      // a: its effect applies at its end (fill: both): the computed value is written, the animation dropped
+      // b: only a backwards fill: nothing applies at the end, so nothing is written (commitStyles would write visibility: hidden) and the animation is dropped
+      // c: a property that reads empty (a name no style knows): not written, the animation stays and is named
+      // d: an animation on a pseudo-element that still applies: nowhere to write, it stays and is named
+      const A = mk("a", [{ width: "10px" }, { width: "40px" }], fill), B = mk("b", [{ visibility: "hidden" }, { visibility: "hidden" }], { duration: 100, delay: 50, fill: "backwards" });
+      const C = mk("c", [{ width: "10px" }, { width: "30px" }], fill), D = mk("d", [{ width: "10px" }, { width: "30px" }], { ...fill, pseudoElement: "::before" });
+      const all = [["a", A, ["width"]], ["b", B, ["visibility"]], ["c", C, ["fooBar"]], ["d", D, ["width"]]];
+      window.__bc = { anims: all.map(([name, x, props]) => ({ a: x.a, seekable: true, name, props, target: x.el, pseudo: name === "d" ? "::before" : null })) };
+      for (const x of [A, B, C, D]) x.a.finish();
+      const left = inPageSettle();
+      return { left, a: document.getElementById("a").style.width, b: document.getElementById("b").style.visibility, c: document.getElementById("c").style.cssText,
+        playing: document.getAnimations().map((x) => x.effect.target.id + (x.effect.pseudoElement || "")) };
+    })()`);
+    assert.deepEqual(got.left, ["c", "d on ::before"]);
+    assert.equal(got.a, "40px");                         // written from the computed style
+    assert.equal(got.b, "");                             // the effect no longer applied: nothing written
+    assert.equal(got.c, "");
+    assert.deepEqual(got.playing.sort(), ["c", "d::before"]);   // a and b were dropped; c and d stay
+  } finally { await browser.close(); }
 });

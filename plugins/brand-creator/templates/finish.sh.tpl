@@ -10,7 +10,9 @@
 #   4 the gates (downscale on every master a manifest row names, states-check). Off macOS there is no sips and no iconutil: set ICNS_RENDERER=pillow
 #     (emit tauri) and DOWNSCALE_RENDERER=pillow or resvg (the downscale gates) in block 2, the explicit opt-ins; without them those two steps exit 3
 #   5 verify-idempotent: the whole emit chain run twice must give byte-identical files
-#   6 the brand book when book/chapters/ exists (book, book-pdf: they read the reports of steps 4 and 5), then the press kit (Standard and Full): the kit holds book.pdf
+#   6 the brand book when book/chapters/ exists (frames first, Standard and Full, when the brand moves: motion/motion.json says on and motion/proof.json has a page case,
+#     so that the Motion chapter replays fresh stills, with FRAMES_ARGS of block 2; a failure that writes a failing report (exit 1) does not stop the chain, exit 2 or 3 does; then book, book-pdf: they read the reports of steps 4
+#     and 5), then the press kit (Standard and Full): the kit holds book.pdf
 #   7 staleness --write (records the inputs, the plugin version and the emitter code the pack was built from), then check
 #
 # The chain sets BRAND_CREATOR_CHAIN=1. A generator that clears or rewrites a whole output folder calls
@@ -46,6 +48,7 @@ PRINT_REGION="${PRINT_REGION:-}"  # EU, US or JP: print stationery is opt-in wit
 PRINT_ICC="${PRINT_ICC:-}"        # YOUR printer's CMYK profile (.icc): with it the PDFs are "PDF/X-4 candidate", without it "RGB proof, not print-ready"
 PRINT_BLEED="${PRINT_BLEED:-}"    # bleed in mm; empty = the region's default (printer-specific: ask your printer)
 IMAGE_BASE_URL="${IMAGE_BASE_URL:-}"   # https URL where the e-mail signature's PNGs will be hosted (print); empty = a placeholder, warned
+FRAMES_ARGS="${FRAMES_ARGS:---count 25}"   # the stills of the Motion chapter (Standard and Full, when the brand moves): --count N or --at 0,25,50,75,100; a wide mark may need fewer (frames says how many fit)
 POST_FACTS="${POST_FACTS:-}"      # labels of FACTS.md rows, one per post line, separated by semicolons, for example "spare parts;repair guide"; empty = no social posts
 POST_LABELS=(); [ -z "$POST_FACTS" ] || IFS=';' read -r -a POST_LABELS <<< "$POST_FACTS"
 case "$TIER" in
@@ -143,6 +146,20 @@ done <<< "$SOURCES"
 # The kit is deterministic (tested with `emit presskit` run twice); it is not in the idempotence run, which has to finish before the book is built.
 HAVE_BOOK=no
 if [ -d book/chapters ]; then
+  # a brand that moves has stills of its motion in the book (the Motion chapter, Standard and Full tier, replays them): take them again first, so that they are the page as it is
+  # now. `frames` writes only motion/frames/ (and its report); a rerun with nothing changed writes nothing. A page it cannot step through (motion driven by requestAnimationFrame,
+  # a scroll timeline) exits 1 and writes a failing report: that is said and the chain goes on, the book keeps the stills of the last run that worked, if any, and `check` fails
+  # the report and says why. Any other non-zero exit (2: a strip too wide, a case folder that holds another proof's stills; 3: it could not run) leaves no failing report for `check` to gate: the chain stops with that exit code
+  case "$TIER" in
+    standard|full)
+      if python3 -c 'import json, sys; ok = json.load(open("motion/motion.json")).get("motion") == "on" and any(c.get("type") == "page" for c in json.load(open("motion/proof.json")).get("cases", [])); sys.exit(0 if ok else 1)' 2>/dev/null; then
+        read -r -a FRAMES_OPTS <<< "$FRAMES_ARGS"
+        step "frames motion/proof.json $FRAMES_ARGS"
+        rc=0; "${BC[@]}" frames motion/proof.json "${FRAMES_OPTS[@]}" || rc=$?
+        if [ "$rc" -eq 1 ]; then echo "finish.sh: frames could not take the stills (see above); the book keeps the stills of the last run that worked, if any, and check says why" >&2
+        elif [ "$rc" -ne 0 ]; then echo "finish.sh: frames stopped with exit $rc (see above); check has no failing report to gate, so the chain stops here (the number of stills is FRAMES_ARGS in block 2)" >&2; exit "$rc"; fi
+      fi ;;
+  esac
   step "book";     "${BC[@]}" book
   step "book-pdf"; "${BC[@]}" book-pdf
   HAVE_BOOK=yes

@@ -10,9 +10,12 @@ the book needs at read time that is not inline; scratch words, round language ou
 words; status words ("coming soon", "launching", "available", "now live" ...) not backed by a FACTS.md value; per-language key
 parity for content_languages; mark_lint on every embedded or linked mark SVG; required chapters for the tier; the edition and the
 APPROVED stamp against BRAND-STATE.md; computed counts, typed counts and quoted facts against the data; manifest accounting (every
-manifest row is in the files chapter); legal disclosures from FACTS.md; leftover choice scaffolding.
---self-consistency adds the book's obedience to its own rules: CSS durations and delays within the motion tokens, no font size under
-the book's minimum label size, every colour one of the brand's tokens.
+manifest row is in the files chapter); legal disclosures from FACTS.md; leftover choice scaffolding; the motion chapter's replay:
+nothing moves under prefers-reduced-motion, the replay starts again from its two checkboxes (which the keyboard reaches) and steps through the
+stills of motion/frames/ (rows motion:reduced, motion:replay, motion:stills; info when the book has no replay, a failure when a generated book
+has none of stills that exist); a selector the lint cannot evaluate, or a rule inside @layer, @scope, @container or @supports, is named in the row it affects.
+--self-consistency adds the book's obedience to its own rules: CSS durations and delays within the motion tokens (a replay may also
+use its own length and four times it, in a rule that reaches that replay and nothing else), no font size under the book's minimum label size, every colour one of the brand's tokens.
 BOOK defaults to `output` in book/book.json, else book.html. Exit 0 pass, 1 a rule failed, 2 usage, 3 not verified.
 """
 import sys
@@ -46,7 +49,7 @@ def main() -> int:
     text = f.read_text(encoding="utf-8")
     results = booklint.lint(project, text, path=target, view=view, cfg=cfg, tokens_doc=doc, facts_rows=facts,
                             self_consistency=a.self_consistency, allow_variants=a.allow_variants)
-    rep = booklint.write_report(project, f, results, state_view_sha=bookdata.view_sha(view, facts), self_consistency=a.self_consistency,
+    rep = booklint.write_report(project, f, results, view=view, state_view_sha=bookdata.view_sha(view, facts), self_consistency=a.self_consistency,
                                 book_file=f.relative_to(project.resolve()).as_posix())
     return rep.finish(quiet_pass=True)
 

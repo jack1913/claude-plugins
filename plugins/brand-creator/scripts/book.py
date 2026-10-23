@@ -6,8 +6,9 @@
 """brand-creator book: build the brand book (generated and existing marks) from data, or scaffold its chapter files.
 
   book                    build book.html (self-contained: fonts and images inline, no script, no network, light and dark) from the
-                          tokens, assets/manifest.json, BRAND-STATE.md, FACTS.md, the contrast and downscale reports and
-                          book/chapters/*.md; lint it (book-lint, with --self-consistency); write it only when it lints clean
+                          tokens, assets/manifest.json, BRAND-STATE.md, FACTS.md, motion/motion.json and the stills in motion/frames/
+                          (the motion chapter's replay), the contrast and downscale reports and book/chapters/*.md; lint it (book-lint,
+                          with --self-consistency); write it only when it lints clean
   book --init             copy the skeleton of every chapter this book needs from templates/book/ into book/chapters/ (never overwrites)
   book --verify           rebuild in memory and compare with the book on disk (a hand edit or a stale book fails)
   book --allow-variants   build with choice scaffolding still open, for a review (book-lint still fails it until `collapse`)
@@ -89,7 +90,7 @@ def main() -> int:
     failing = [r for r in results if r["status"] == "fail"]
     rep.extra.update({"mode": "generated", "output": {"path": out_rel, "sha256": sha256_bytes(data), "bytes": len(data)},
                       "chapters": build.chapter_ids, "languages": build.langs, "state_view_sha": state_sha,
-                      "manifest_view_sha": bookdata.manifest_view_sha(project),
+                      "manifest_view_sha": bookdata.manifest_view_sha(project), "frames_view_sha": bookdata.frames_view_sha(project, build.view),
                       "written": False})
     if a.verify:
         cur = out.read_bytes() if out.is_file() else None
@@ -104,7 +105,7 @@ def main() -> int:
         return rc or EXIT_FAIL
     changed = write_bytes_if_changed(out, data)
     rep.extra["written"] = changed
-    lrep = booklint.write_report(project, out, results, state_view_sha=state_sha, self_consistency=True, book_file=out_rel)
+    lrep = booklint.write_report(project, out, results, view=build.view, state_view_sha=state_sha, self_consistency=True, book_file=out_rel)
     lrep.finish(quiet_pass=True)
     rc = rep.finish(quiet_pass=True)
     print(f"book: {rel(project, out)} {'written' if changed else 'unchanged'} ({len(data)} bytes, {len(build.chapter_ids)} chapters, {','.join(build.langs)})")

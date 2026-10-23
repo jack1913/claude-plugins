@@ -17,7 +17,10 @@
     The downscale report must be the one for the row's own master (`downscale_source`); a report on another file does not count.
     shot --motion writes one report per proof file (assets/_checks/motion/<slug>-<hash6>.json): each is gated, except one whose proof sits under
     rounds/, history/ or a removed-*/ folder (an exploration proof: listed, never failing); a report whose proof file is gone is a warning to move it
-    to removed-<date>/; a row's motion gate needs one passing gated report. A motion.json of an earlier version is still gated, with a warning
+    to removed-<date>/; a row's motion gate needs one passing gated report. A motion.json of an earlier version is still gated, with a warning.
+    `frames` writes one report per proof file as well (assets/_checks/frames/<slug>-<hash6>.json), gated the same way: failing is a failure, stale is
+    "not verified" and names `frames <proof> --count N` and then `book` (the book replays the stills the report vouches for), and so is a current one
+    that has no passing frames:<case> row for a case of the proof with stills in motion/frames/ (a run of `frames --case` vouches for that case alone)
   * size bands: a slot off the band rule (qa/rules.json) needs an exemption recorded in the manifest
   * staleness: when tools/inputs.json exists, upstream inputs, the plugin version and the emitter code must match it
   * platform-spec rows the pack was built from that are stale or unverified are warned about (specs-due lists them)
@@ -25,7 +28,8 @@
     "UNVERIFIED, recheck"; the adaptive icon has its background, foreground and monochrome layers at every density; every MSIX app-list size has its plain,
     unplated and lightunplated files; every avatar and banner of the profile pack is written and its ink still lies inside its safe area
   * the brand book: when book.html exists, a current passing book-lint report made with --self-consistency whose edition, approval and
-    facts still match BRAND-STATE.md and FACTS.md; for a generated book also a current `book` report and a book.html that is still the
+    facts still match BRAND-STATE.md and FACTS.md, and whose list of the stills of the gated proofs (motion/frames/*/frames.json) is the one
+    now on disk; for a generated book also a current `book` report and a book.html that is still the
     bytes `book` wrote (a hand edit fails); a book.pdf report that exists is gated like any other
   * --cascade "<old value or phrase>" (repeatable): no current project artefact may still contain it (text files, PDFs as text, the documents named by
     tools/cascade.json, --also and FAMILY.md parent_docs); lines that record a product repository's old value (ADOPTION.md, LAUNCH.md) warn, they do not fail
@@ -67,15 +71,16 @@ QA_GATES = {
 }
 
 
-def report_state(project: Path, tool: str, run_cmd: str, expect_page: str | None = None, expect_source: str | None = None):
-    """-> (status, detail) for a report on disk: pass | fail | skipped."""
+def report_state(project: Path, tool: str, run_cmd: str, expect_page: str | None = None, expect_source: str | None = None, then: str | None = None):
+    """-> (status, detail) for a report on disk: pass | fail | skipped. `then` is a command to run after `run_cmd` (the stills are taken again, then the book is rebuilt)."""
+    again = f"`{run_cmd}`" + (f" and then `{then}`" if then else "")
     f = project / "assets" / "_checks" / f"{tool}.json"
     if not f.is_file():
-        return "skipped", f"not verified: no {tool} report; run `{run_cmd}`"
+        return "skipped", f"not verified: no {tool} report; run {again}"
     try:
         doc = json.loads(f.read_text(encoding="utf-8"))
     except ValueError:
-        return "fail", f"{rel(project, f)} is not valid JSON; re-run `{run_cmd}`"
+        return "fail", f"{rel(project, f)} is not valid JSON; re-run {again}"
     stale = []
     for rec in doc.get("inputs", []):
         p = project / rec["path"]
@@ -88,7 +93,7 @@ def report_state(project: Path, tool: str, run_cmd: str, expect_page: str | None
     if expect_source and doc.get("source") != expect_source:
         stale.append(f"the report measured {doc.get('source')}, the manifest needs {expect_source}")
     if stale:
-        return "skipped", f"not verified: {tool} report is stale ({'; '.join(stale)}); re-run `{run_cmd}`"
+        return "skipped", f"not verified: {tool} report is stale ({'; '.join(stale)}); re-run {again}"
     st = doc.get("status")
     if st == "pass":
         return "pass", f"{tool} report is current and passing"
@@ -96,6 +101,57 @@ def report_state(project: Path, tool: str, run_cmd: str, expect_page: str | None
         failing = [r["id"] for r in doc.get("results", []) if r.get("status") == "fail"][:4]
         return "fail", f"{tool} report is failing ({', '.join(failing)}); see assets/_checks/{tool}.json"
     return "skipped", f"not verified: {tool} report status is {st!r}"
+
+
+def gate_proof_reports(project: Path, rep: Report, folder: str, command, vouches=None) -> list[str]:
+    """Gate every report under assets/_checks/<folder>/ (one per proof file) by the proof it names: a proof under rounds/, history/ or a removed-*/ folder is an exploration
+    proof (listed, never failing), a report whose proof is gone is a warning, the rest are gated. `command(doc, proof)` -> (the command that writes the report again, the command
+    to run after it or None). `vouches(project, doc, proof)` -> why a current, passing report does not stand for all it should (then it is "not verified"), else None.
+    -> the rows that pass."""
+    passing = []
+    for f in sorted((project / "assets" / "_checks" / folder).glob("*.json")):
+        tool = f"{folder}/{f.stem}"
+        try:
+            doc = json.loads(f.read_text(encoding="utf-8"))
+            proof = doc.get("proof")
+        except (ValueError, AttributeError):
+            doc, proof = None, None   # not readable: report_state fails it, as for any report
+        proof = proof if isinstance(proof, str) else None
+        kind = motion_proof_kind(project, proof)
+        if kind == "gone":
+            rep.add(f"report:{tool}", "warn", "gate report", detail=f"the proof {proof} no longer exists, so {rel(project, f)} gates nothing; move it to removed-<date>/")
+        elif kind == "exploration":
+            rep.add(f"report:{tool}", "info", "gate report", detail=f"exploration proof, not gated: {proof} is under rounds/, history/ or a removed-*/ folder")
+        else:
+            run_cmd, then = command(doc, proof)
+            st, detail = report_state(project, tool, run_cmd, then=then)
+            gap = vouches(project, doc, proof) if vouches and st == "pass" else None
+            if gap:
+                st, detail = "skipped", f"not verified: {gap}; re-run `{run_cmd}`" + (f" and then `{then}`" if then else "")
+            rep.add(f"report:{tool}", st, "gate report", detail=detail)
+            if st == "pass":
+                passing.append(f"report:{tool}")
+    return passing
+
+
+def frames_again(doc: dict | None, proof: str | None) -> tuple[str, str]:
+    """The commands that make a stale `frames` report current: the run it records (its points as --count N or --at), then the book, which replays the stills it vouches for."""
+    pts = (doc or {}).get("points_pct")
+    if proof and isinstance(pts, list) and pts and all(isinstance(p, (int, float)) and not isinstance(p, bool) for p in pts):
+        return bookdata.frames_command({"proof": proof, "frames": [{"percent": p} for p in pts]}), "brand-creator book"
+    return f"brand-creator frames {proof or '<proof.json>'} --count 25", "brand-creator book"
+
+
+def frames_unvouched(project: Path, doc: dict | None, proof: str | None) -> str | None:
+    """Why a current, passing `frames` report does not vouch for the stills the book replays, else None. One report is kept per proof and every run rewrites it, so after
+    `frames --case X` it covers X alone: a case of the proof that has stills in motion/frames/ and no passing frames:<case> row in it replays stills that nothing says are
+    the page as it is now (the run that took them may be older than a change to the page)."""
+    if not proof or not isinstance(doc, dict):
+        return None
+    passed = {r.get("id") for r in doc.get("results", []) if isinstance(r, dict) and r.get("status") == "pass"}
+    left = [c for c in bookdata.proof_stills(project, proof) if f"frames:{c}" not in passed]
+    took = ", ".join(str(c.get("name")) for c in doc.get("cases", []) if isinstance(c, dict)) or "no case"
+    return f"the frames report of {proof} does not vouch for the stills of {', '.join(left)} in motion/frames/ (its last run took {took})" if left else None
 
 
 def main() -> int:
@@ -150,6 +206,7 @@ def main() -> int:
         page = f"rounds/r{n}/board.html"
         expectations += [("board-lint", f"brand-creator board-lint {page}", page), ("shot", f"brand-creator shot {page}", page)]
     book_state_sha = None
+    book_view = None
     book_out = None
     try:
         bcfg, _ = bookdata.load_config(project)
@@ -161,7 +218,8 @@ def main() -> int:
         if str(read_state(project).get("mark_source", "")) != "authored-vector":
             expectations.append(("book", "brand-creator book", None))
         try:
-            book_state_sha = bookdata.view_sha(bookdata.state_view(project), bookdata.facts(project))
+            book_view = bookdata.state_view(project)
+            book_state_sha = bookdata.view_sha(book_view, bookdata.facts(project))
         except CliError as e:
             rep.add("book:state", "fail", "BRAND-STATE.md has what the book needs (edition, content_languages, mark_source)", detail=e.message)
     if (project / "assets" / "_checks" / "book-pdf.json").is_file():
@@ -216,24 +274,10 @@ def main() -> int:
                        f"re-run `{motion_cmd}` and move {rel(project, legacy)} to removed-<date>/")
         if st == "pass":
             motion_passing.append("report:motion")
-    for f in sorted((project / "assets" / "_checks" / "motion").glob("*.json")):
-        tool = f"motion/{f.stem}"
-        try:
-            proof = json.loads(f.read_text(encoding="utf-8")).get("proof")
-        except (ValueError, AttributeError):
-            proof = None   # not readable: report_state fails it, as for any report
-        proof = proof if isinstance(proof, str) else None
-        kind = motion_proof_kind(project, proof)
-        run_cmd = f"brand-creator shot --motion {proof or '<proof.json>'}"
-        if kind == "gone":
-            rep.add(f"report:{tool}", "warn", "gate report", detail=f"the proof {proof} no longer exists, so {rel(project, f)} gates nothing; move it to removed-<date>/")
-        elif kind == "exploration":
-            rep.add(f"report:{tool}", "info", "gate report", detail=f"exploration proof, not gated: {proof} is under rounds/, history/ or a removed-*/ folder")
-        else:
-            st, detail = report_state(project, tool, run_cmd)
-            rep.add(f"report:{tool}", st, "gate report", detail=detail)
-            if st == "pass":
-                motion_passing.append(f"report:{tool}")
+    motion_passing += gate_proof_reports(project, rep, "motion", lambda doc, proof: (f"brand-creator shot --motion {proof or '<proof.json>'}", None))
+    # frames: one report per proof file too (assets/_checks/frames/), gated the same way: the book replays the stills it vouches for, so a stale one is "not verified" until
+    # `frames` and then `book` have run again (the motion report being current says nothing about the stills)
+    gate_proof_reports(project, rep, "frames", frames_again, frames_unvouched)
     if "motion" in wanted:
         rep.add("qa:motion", "pass" if motion_passing else "skipped", "a manifest row asks for the motion gate",
                 detail=f"met by {', '.join(motion_passing)}" if motion_passing else f"not verified: no current passing motion report of a proof of this project; run `{motion_cmd}`")
@@ -254,6 +298,9 @@ def main() -> int:
                         detail=f"not verified: the files the emitters wrote changed since the {tool} report; re-run `{cmd}`")
         if tool in ("book", "book-lint") and st == "pass":
             doc = json.loads((project / "assets" / "_checks" / f"{tool}.json").read_text(encoding="utf-8"))
+            if book_view is not None and bookdata.frames_changed(project, book_view, doc.get("frames_view_sha")):   # (a BRAND-STATE.md the book cannot read is failed above)
+                rep.add(f"report:{tool}:frames", "skipped", "the book was checked against the stills now in motion/frames/",
+                        detail=f"not verified: stills of a gated proof appeared, went or changed since the {tool} report; re-run `{cmd}`")
             if book_state_sha and doc.get("state_view_sha") != book_state_sha:
                 rep.add(f"report:{tool}:state", "skipped", "the book was checked against the current BRAND-STATE.md and FACTS.md",
                         detail=f"not verified: the edition, approval, decided items or facts changed since the {tool} report; re-run `{cmd}`")
