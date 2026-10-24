@@ -297,7 +297,15 @@ def test_a_motion_json_that_cannot_be_read_is_not_verified_never_a_pass(proj):
     assert r.returncode == 3, r.stdout                                                       # whether nothing moves is recorded cannot be told
     assert rows(proj)["motion:off"]["status"] == "skipped" and "not verified" in detail(proj, "motion:off") and "cannot be read as JSON" in detail(proj, "motion:off")
     spec.write_text("[1]")
-    assert lint(proj).returncode == 3 and "is not a JSON object" in detail(proj, "motion:off")
+    assert lint(proj).returncode == 3 and "must be a JSON object" in detail(proj, "motion:off")
+    # a JSON object that `brand-creator motion` and `state` refuse is no answer here either (0.4.0 read "off" with no reason as "nothing moves is recorded"): the same message, never a pass or a fail
+    for doc in ({"schema": 1, "motion": "off"}, {"schema": 1, "motion": "on"}):
+        spec.write_text(json.dumps(doc))
+        refused = bc("motion", project=proj)
+        assert refused.returncode == 2, refused.stdout
+        r = lint(proj)
+        assert r.returncode == 3 and rows(proj)["motion:off"]["status"] == "skipped", (doc, r.stdout)
+        assert detail(proj, "motion:off").startswith("not verified: " + refused.stderr.strip().removeprefix("error: ")), (detail(proj, "motion:off"), refused.stderr)
 
 
 def test_a_motion_board_is_round_2_or_later_and_is_never_a_reset_round(proj):

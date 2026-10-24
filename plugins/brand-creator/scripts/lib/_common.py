@@ -23,7 +23,7 @@ STATE_FILE = "BRAND-STATE.md"
 RENDERERS = ("resvg", "pillow")
 GATE_IDS = ("G0", "G1", "G1s", "G2", "G2b", "G3", "G4", "G5", "G6", "G7")
 # One User-Agent for every outbound request any script ever makes. Generic on purpose: no personal data, no "@".
-USER_AGENT = "brand-creator/0.4.0 (+https://example.invalid/brand-creator)"
+USER_AGENT = "brand-creator/0.4.1 (+https://example.invalid/brand-creator)"
 
 
 class CliError(Exception):
@@ -233,6 +233,11 @@ def motion_report_tool(proof_rel: str) -> str:
     return f"motion/{slug}-{hashlib.sha256(src.encode()).hexdigest()[:6]}"
 
 
+def frames_report_tool(proof_rel: str) -> str:
+    """The report tool name (-> assets/_checks/frames/<slug>-<hash6>.json) of `frames` on one proof file: the name of its motion report, under frames/."""
+    return "frames/" + motion_report_tool(proof_rel).split("/", 1)[1]
+
+
 def motion_proof_kind(project: Path, proof: str | None) -> str:
     """Where a motion report stands, judged by the proof file it names: "gone" (that file no longer exists), "exploration" (it sits under rounds/,
     history/ or a removed-*/ folder: a try-out, listed by `check` and never gated) or "gated" (a proof of the project; also a report that names none)."""
@@ -250,6 +255,18 @@ def sha256_file(p: Path) -> str:
         for chunk in iter(lambda: f.read(1 << 20), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def stale_inputs(project: Path, doc: dict) -> list[str]:
+    """Why a report no longer stands for the files it was made from: each file of its `inputs` that is gone or changed since (by sha256). One rule for `check` and board-lint."""
+    stale = []
+    for rec in doc.get("inputs", []):
+        p = project / rec["path"]
+        if not p.is_file():
+            stale.append(f"{rec['path']} is gone")
+        elif sha256_file(p) != rec["sha256"]:
+            stale.append(f"{rec['path']} changed")
+    return stale
 
 
 def write_bytes_if_changed(path: Path, data: bytes) -> bool:

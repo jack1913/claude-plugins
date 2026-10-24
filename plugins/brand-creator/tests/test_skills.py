@@ -1272,7 +1272,8 @@ def test_the_tokens_phase_has_the_motion_round_and_the_motion_rules_are_quick_on
                    "In Quick, record the motion answer, on or off, in `motion/motion.json` now",
                    "In Standard and Full it is there already, and `check` fails `motion:decided` once G4 is recorded without it.",
                    "(when the brand moves) |", "`motion:decided` fails without the file (on or off)",
-                   "`motion:proof` (the report of a try-out proof never counts); from G3 to G4 an undecided motion is an info row. Quick has neither row."):
+                   "a brand that moves needs a current passing report of `motion/proof.json`, the proof of the approved move,",
+                   "`motion:proof` (the report of any other proof never counts, a try-out's included, and a failing one fails the row); from G3 to G4 an undecided motion is an info row. Quick has neither row."):
         assert needle in flat, needle
     enforcement = flat[flat.index("## Enforcement"):]
     for row in MOTION_ROWS:
@@ -1367,7 +1368,9 @@ def test_the_docs_say_a_card_and_its_folder_are_spelt_alike_and_that_check_quote
                    "each with its id and detail, and, only when one names `requestAnimationFrame`, adds that such a move stays not verified however often the proof runs",
                    "the row of the report itself, `report:motion/<slug>-<hash6>`, quotes the same rows (a stale report says it is stale, as for every report)"):
         assert needle in contract, needle
-    assert ("a current report that says not-verified is quoted, up to three of the rows it could not verify and what to do about them, and neither the report of a try-out proof nor the one report of an earlier version counts") in qa
+    assert ("a brand that moves with no current passing report of `motion/proof.json`, the proof of the approved move (`motion:proof`: a missing `motion/proof.json` fails, a current failing report of it fails, "
+            "even beside a passing report of the same file under another name, an unproved one is not verified, a current report that says not-verified is quoted, up to three of the rows it could not verify and what to do about them, and the report of any other proof never "
+            "counts: another proof of the project, one that names no proof, a try-out's or the one report of an earlier version)") in qa
     assert "(one that is current and says not-verified is quoted, in its own row and in `motion:proof`: the rows it could not verify)" in qa
     check_py = " ".join((ROOT / "scripts" / "check.py").read_text(encoding="utf-8").split())
     assert "A current report that says not-verified is quoted, in its own row and in motion:proof: up to three of the rows it could not verify, and what to do about them (motionboard.unverified_why" in check_py
@@ -1419,11 +1422,12 @@ def test_the_template_the_contract_and_the_qa_phase_say_what_stops_the_chain_on_
 
 def test_the_contract_and_the_qa_phase_say_what_the_motion_board_lint_reads_quotes_and_names_and_how_the_chain_finds_the_report_it_wrote():
     """What the code of this release does, said once where each page already describes it: the lint report lists the files the variants' reports were made from, a report that is no verdict is quoted
-    (the advice about requestAnimationFrame only when a row names it), a passing report that names no proof is named by its file, and the chain finds the report `shot --motion` wrote by what it printed."""
+    (the advice about requestAnimationFrame only when a row names it), motion:proof counts the report of motion/proof.json alone, and the chain finds the report `shot --motion` wrote by what it printed."""
     contract = _flat(ROOT / "scripts" / "CONTRACT.md")
     for needle in ("and every file those two reports were made from (their own `inputs`: the files the page loaded, such as a stylesheet, `tokens.css` or a script, where the move may live)",
                    "the row quotes the rows of the report that are not verified, each with its id and detail; one that names `requestAnimationFrame` adds that such a move stays not verified however often the proof runs",
-                   "a report that names no proof is named by its file, `assets/_checks/motion/<slug>-<hash6>.json`",
+                   "The report of any other proof never counts: another proof of the project (gated in its own row all the same), a report that names no proof, the report of a try-out proof, "
+                   "and the one report of an earlier version, `assets/_checks/motion.json`.",
                    "the step is judged by whether `shot --motion` printed the report it wrote, `report: <path>`"):
         assert needle in contract, needle
     assert "judged by whether that report changed while it ran" not in contract
@@ -1491,7 +1495,9 @@ def test_the_manual_says_standard_and_full_settle_motion_and_shows_no_internal_c
                    "On a motion board, the check looks at each variant's page, proof and stills, and at whether the strip on the board is the picture that was taken of the page as it is now.",
                    "| `motion:decided` fails |", "| `motion:decided` shows \"not decided yet\" |",
                    "| `motion:proof` fails and says to write `motion/proof.json` |", "| `motion:proof` says \"not verified\" |",
-                   "There is no passing proof of your brand's move yet: it has not run, it failed, or the page changed since it ran.",
+                   "| `motion:proof` fails and says the proof of the approved move fails |", "The proof ran and found a problem with the move.",
+                   "There is no passing proof of your brand's move yet: it has not run, the page changed since it ran, or it could not check part of the move.",
+                   "If it names what it could not check, ask Claude to change the move that way",
                    "`brand-creator shot --motion motion/proof.json`"):
         assert needle in checks, needle
 
@@ -1537,6 +1543,14 @@ def test_the_check_page_names_the_motion_rows_and_the_command_each_message_asks_
     bc("check", project=p)
     assert row("motion:proof")["status"] == "skipped" and "`brand-creator shot --motion motion/proof.json`" in row("motion:proof")["detail"]
     assert "`motion:proof` says \"not verified\"" in page and "`brand-creator shot --motion motion/proof.json`" in page
+    from _common import motion_report_tool, sha256_file
+    tool = motion_report_tool("motion/proof.json")                                               # the proof ran and failed: the report `shot --motion` leaves, current and failing
+    (p / "assets" / "_checks" / "motion").mkdir(parents=True, exist_ok=True)
+    (p / "assets" / "_checks" / f"{tool}.json").write_text(json.dumps({"tool": tool, "version": "0", "inputs_sha": "0" * 64, "renderer": "x", "proof": "motion/proof.json", "status": "fail",
+                                                                       "inputs": [{"path": "motion/proof.json", "sha256": sha256_file(p / "motion" / "proof.json")}],
+                                                                       "results": [{"id": "motion:case:control", "status": "fail", "label": "x", "detail": "x"}]}), encoding="utf-8")
+    assert bc("check", project=p).returncode == 1 and row("motion:proof")["status"] == "fail" and row("motion:proof")["detail"].startswith("the proof of the approved move fails:")
+    assert "`motion:proof` fails and says the proof of the approved move fails" in page and "run `brand-creator shot --motion motion/proof.json` again" in page
 
 
 def test_adr_0005_records_that_motion_is_part_of_standard_and_full_and_is_listed():

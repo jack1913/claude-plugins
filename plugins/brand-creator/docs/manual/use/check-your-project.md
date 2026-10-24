@@ -63,7 +63,8 @@ start only after you see their count, models, size and cost and say yes.
 | `motion:decided` fails | Standard and Full settle motion before you approve the system rules. Ask Claude for a motion round, or record that nothing moves: `brand-creator motion --off "<your reason>"` |
 | `motion:decided` shows "not decided yet" | A reminder, not a failure. Settle motion before you approve the system rules |
 | `motion:proof` fails and says to write `motion/proof.json` | Your brand moves, so its approved move needs a proof. Ask Claude to write it |
-| `motion:proof` says "not verified" | There is no passing proof of your brand's move yet: it has not run, it failed, or the page changed since it ran. Run `brand-creator shot --motion motion/proof.json` and read what it says |
+| `motion:proof` fails and says the proof of the approved move fails | The proof ran and found a problem with the move. Ask Claude to fix the move, then run `brand-creator shot --motion motion/proof.json` again |
+| `motion:proof` says "not verified" | There is no passing proof of your brand's move yet: it has not run, the page changed since it ran, or it could not check part of the move. Run `brand-creator shot --motion motion/proof.json` and read what it says. If it names what it could not check, ask Claude to change the move that way |
 
 More: [Troubleshooting](../reference/troubleshooting.md).
 

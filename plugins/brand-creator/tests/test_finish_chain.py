@@ -285,7 +285,8 @@ def test_a_motion_proof_that_fails_does_not_stop_the_chain_and_check_fails_its_r
     assert out.count("finish.sh: the motion proof failed (see above); the chain goes on and check fails the report") == 1, out[-3000:]
     in_order(out, ["gates", "motion", "shot --motion motion/proof.json", "frames motion/proof.json --count 25", "book", "book-pdf", "emit presskit"])      # and it did go on
     rows = check_rows(acme)
-    assert next(x for k, x in rows.items() if k.startswith("report:motion/proof-"))["status"] == "fail" and rows["motion:proof"]["status"] == "skipped"
+    assert next(x for k, x in rows.items() if k.startswith("report:motion/proof-"))["status"] == "fail" and rows["motion:proof"]["status"] == "fail"
+    assert rows["motion:proof"]["detail"].startswith("the proof of the approved move fails: motion/proof-"), rows["motion:proof"]["detail"]
     assert r.returncode == 1 and "check: FAIL" in out
 
 

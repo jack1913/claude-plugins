@@ -13,7 +13,7 @@ import shlex
 from decimal import Decimal
 from pathlib import Path
 
-from _common import EXIT_CANNOT, EXIT_USAGE, State, fail, motion_proof_kind, motion_report_tool, read_state, sha256_file
+from _common import EXIT_CANNOT, EXIT_USAGE, State, fail, frames_report_tool, motion_proof_kind, read_state, sha256_file   # frames_report_tool: read as bookdata.frames_report_tool (bookgen, the tests)
 
 # ---------------------------------------------------------------- the chapter registry
 
@@ -454,11 +454,6 @@ def case_folder(name: str) -> str:
 def case_slug(name: str) -> str:
     """A case name as the id part of a demo's controls and animations: lower case letters and digits joined by single hyphens."""
     return re.sub(r"[^a-z0-9]+", "-", str(name).lower()).strip("-")
-
-
-def frames_report_tool(proof_rel: str) -> str:
-    """The report tool name (-> assets/_checks/frames/<slug>-<hash6>.json) of `frames` on one proof file: the name of its motion report, under frames/."""
-    return "frames/" + motion_report_tool(proof_rel).split("/", 1)[1]
 
 
 def frames_folders(project: Path) -> list[str]:

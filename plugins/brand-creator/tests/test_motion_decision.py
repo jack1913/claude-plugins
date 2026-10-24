@@ -299,9 +299,12 @@ def test_a_brand_that_moves_needs_a_passing_gated_proof_of_the_approved_move(tmp
     r = check(p)
     assert r.returncode == 3 and row(p, "motion:proof")["status"] == "skipped"
     mutate(p / "motion" / "proof.json", '"cases": [ ]', '"cases": []')
-    gated_report(p, status="fail")                                                           # a failing report keeps its own fail row; motion:proof does not claim a pass
+    gated_report(p, status="fail")                                                           # the proof ran and failed: its report fails, and so does motion:proof, never "not verified"
     r = check(p)
-    assert r.returncode == 1 and row(p, "motion:proof")["status"] == "skipped"
+    got = row(p, "motion:proof")
+    assert r.returncode == 1 and got["status"] == "fail", r.stdout
+    assert got["detail"].startswith("the proof of the approved move fails: motion/proof-") and "report is failing (motion:case:control)" in got["detail"], got["detail"]
+    assert got["detail"].endswith("change the move as its failing rows say, then run `brand-creator shot --motion motion/proof.json`"), got["detail"]
     assert any(x["status"] == "fail" and x["id"].startswith("report:motion/proof-") for x in report(p, "check")["results"])
     assert f.is_file()
 
@@ -367,8 +370,9 @@ def test_check_quotes_three_rows_of_a_report_that_is_not_verified_and_says_when_
     assert report_row(p, f)["detail"].endswith(f"report status is 'not-verified' (it lists no row that is not verified): run `{SHOT}`")
 
 
-def test_a_stale_or_failing_report_says_what_it_always_said_and_quotes_no_row(tmp_path):
-    """The rows are quoted of a report that is current: a stale one is not a report of this proof as it is now (its rows say nothing about it), and a failing one has its own fail row."""
+def test_a_stale_report_is_run_again_and_a_failing_one_fails_motion_proof_and_neither_quotes_a_row(tmp_path):
+    """The rows are quoted of a report that is current and no verdict: a stale one is not a report of this proof as it is now (its rows say nothing about it), and a failing one is a
+    verdict: motion:proof fails with the report's own row, and asks to change the move, not only to run the proof again (0.4.0 called it not verified)."""
     p = project(tmp_path, "standard", ("G3", "G4"))
     write_spec(p, ON)
     f = not_verified(p, RAF_ROW)
@@ -378,8 +382,11 @@ def test_a_stale_or_failing_report_says_what_it_always_said_and_quotes_no_row(tm
     assert "is stale" in report_row(p, f)["detail"] and RAF_ROW[0] not in report_row(p, f)["detail"] + row(p, "motion:proof")["detail"]
     mutate(p / "motion" / "proof.json", '"cases": [ ]', '"cases": []')
     gated_report(p, status="fail")
-    check(p)
-    assert row(p, "motion:proof")["detail"] == f"not verified: run `{SHOT}`" and report_row(p, f)["status"] == "fail"
+    r = check(p)
+    own, got = report_row(p, f), row(p, "motion:proof")
+    assert r.returncode == 1 and own["status"] == "fail" and got["status"] == "fail", r.stdout
+    assert got["detail"] == f"the proof of the approved move fails: {own['detail']}; change the move as its failing rows say, then run `{SHOT}`", got["detail"]
+    assert RAF_ROW[0] not in got["detail"] and "not verified" not in got["detail"]
 
 
 def test_the_report_of_a_proof_the_disk_spells_in_another_letter_case_is_found_by_the_proof_it_names(tmp_path):
@@ -445,30 +452,55 @@ def test_the_report_of_an_earlier_version_never_satisfies_the_proof_of_the_appro
     assert r.returncode == 0 and row(p, "motion:proof")["status"] == "pass" and row(p, "motion:proof")["detail"] == "met by the report of motion/proof.json", r.stdout
 
 
-def test_motion_proof_names_the_proofs_whose_reports_meet_it(tmp_path):
+def test_the_report_of_another_proof_of_the_project_never_satisfies_the_proof_of_the_approved_move(tmp_path):
+    """0.4.0 passed motion:proof on any passing gated report, so a passing proof of another page met it while motion/proof.json did not exist, and check passed a brand whose approved
+    move had no proof at all (finish.sh said check fails it). Only the report of motion/proof.json counts; another proof's is gated in its own row, as before."""
     p = project(tmp_path, "standard", ("G3", "G4"))
     write_spec(p, ON)
+    gated_report(p, "site/proof.json")                                                       # another proof of the project, passing
+    r = check(p)
+    got = row(p, "motion:proof")
+    assert r.returncode == 1 and got["status"] == "fail" and got["detail"].endswith("there is no proof of the approved move: write motion/proof.json"), r.stdout
+    assert any(x["status"] == "pass" and x["id"].startswith("report:motion/proof-") for x in report(p, "check")["results"])     # its own row passes all the same
+    (p / "motion" / "proof.json").write_text('{"schema": 1, "cases": []}\n')
+    r = check(p)
+    assert r.returncode == 3 and row(p, "motion:proof")["detail"] == f"not verified: run `{SHOT}`", r.stdout     # the approved proof has no report yet: the other one still does not stand in
     gated_report(p, "motion/proof.json")
-    gated_report(p, "site/proof.json")                                                       # another proof of the project, gated too
     assert check(p).returncode == 0
-    assert row(p, "motion:proof")["detail"] == "met by the report of motion/proof.json, site/proof.json"
+    assert row(p, "motion:proof")["detail"] == "met by the report of motion/proof.json"     # the approved proof alone, never the other one beside it
 
 
-def test_motion_proof_names_the_file_of_a_passing_report_that_names_no_proof(tmp_path):
-    """A report with no `proof` key cannot say which proof it is of (it is gated all the same, as a proof of the project): the row names the report file, never its own id `report:motion/<name>`."""
+def test_a_failing_report_of_the_approved_proof_is_never_outvoted_by_a_passing_one_of_the_same_file(tmp_path):
+    """Two names can reach motion/proof.json: a disk that does not tell letter cases apart (Motion/proof.json once, motion/proof.json after a rename), or a link. Each name gets its own report, both
+    current. A current failure of the approved proof fails motion:proof, whatever another report of the same file says (a link stands in for the second name, the same on every kind of disk)."""
+    p = project(tmp_path, "standard", ("G3", "G4"))
+    write_spec(p, ON)
+    (p / "motion").mkdir(exist_ok=True)
+    (p / "motion" / "proof.json").write_text('{"schema": 1, "cases": []}\n')
+    (p / "motion" / "alias.json").symlink_to("proof.json")                                   # a second name of the one file
+    assert (p / "motion/alias.json").samefile(p / "motion/proof.json")
+    gated_report(p, "motion/alias.json")                                                     # passing, under the other name
+    f = gated_report(p, status="fail")                                                       # failing, under the name the chain types
+    r = check(p)
+    got = row(p, "motion:proof")
+    assert r.returncode == 1 and got["status"] == "fail", r.stdout
+    assert got["detail"] == f"the proof of the approved move fails: {report_row(p, f)['detail']}; change the move as its failing rows say, then run `{SHOT}`", got["detail"]
+    gated_report(p)                                                                          # the approved proof passes under both names: met by both
+    assert check(p).returncode == 0 and row(p, "motion:proof")["detail"] == "met by the report of motion/alias.json, motion/proof.json"
+
+
+def test_a_passing_report_that_names_no_proof_never_satisfies_the_proof_of_the_approved_move(tmp_path):
+    """A report with no `proof` key cannot say which proof it is of: it is gated all the same, as a proof of the project, in its own row, but it is never taken for the report of motion/proof.json."""
     p = project(tmp_path, "standard", ("G3", "G4"))
     write_spec(p, ON)
     f = gated_report(p, "motion/proof.json")
     mutate_json(f, lambda d: d.pop("proof"))
     r = check(p)
     got = row(p, "motion:proof")
-    name = f.relative_to(p).as_posix()
-    assert name.startswith("assets/_checks/motion/proof-") and name.endswith(".json")
-    assert r.returncode == 0 and got["status"] == "pass" and got["detail"] == f"met by the report of {name}", (r.stdout, got)
-    gated_report(p, "site/proof.json")                                                       # beside the report of another proof: both are named, in order
-    assert check(p).returncode == 0
-    assert row(p, "motion:proof")["detail"] == f"met by the report of {name}, site/proof.json"
-    assert "report:motion/proof-" not in row(p, "motion:proof")["detail"]
+    assert r.returncode == 3 and got["status"] == "skipped" and got["detail"] == f"not verified: run `{SHOT}`", (r.stdout, got)
+    assert report_row(p, f)["status"] == "pass"                                              # gated in its own row
+    gated_report(p, "motion/proof.json")                                                     # the report as `shot --motion` writes it, naming its proof
+    assert check(p).returncode == 0 and row(p, "motion:proof")["detail"] == "met by the report of motion/proof.json"
 
 
 def test_motion_proof_asks_nothing_before_g4_and_nothing_of_a_brand_that_does_not_move(tmp_path):

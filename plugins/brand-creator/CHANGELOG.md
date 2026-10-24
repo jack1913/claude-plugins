@@ -6,6 +6,23 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-24
+
+A brand that moves now passes `motion:proof` only on a passing report of `motion/proof.json`, the proof of its approved
+move. A project that 0.4.0 passed on the report of another proof no longer passes: `check` fails it while
+`motion/proof.json` does not exist (write it), and says "not verified" until `brand-creator shot --motion
+motion/proof.json` passes.
+
+### Fixed
+
+- `check` counts only the report of `motion/proof.json` for `motion:proof`. In 0.4.0 a passing report of any other proof
+  of the project met it, so a brand that moves could pass `check` with no proof of its approved move, while `finish.sh`
+  said `check` would fail it. A report that names no proof no longer counts either.
+- `check` fails `motion:proof` when the proof of the approved move ran and failed, and names its report. 0.4.0 called it
+  "not verified" and asked only to run the proof again.
+- `board-lint` reads `motion/motion.json` the way `brand-creator motion` and `state` do: a file they refuse, such as `off`
+  with no reason, is "not verified" in `motion:off` with the same message, never read as "nothing moves is recorded".
+
 ## [0.4.0] - 2026-10-24
 
 Motion is part of the Standard and Full tiers now. A Standard or Full project that has already recorded its system rules

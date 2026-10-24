@@ -189,8 +189,9 @@ words: `brand-creator motion --off "<reason>"` writes it). In Standard and Full 
   motion files are parsed back like the rest.
 - `check` (script): `motion/motion.json` is validated when it exists: its schema, and every duration and curve it names
   must be a built token of that kind. With the tier Standard or Full and G4 recorded, `motion:decided` fails without the
-  file (on or off), and a brand that moves needs a passing gated motion report, `motion:proof` (the report of a try-out proof
-  never counts); from G3 to G4 an undecided motion is an info row. Quick has neither row.
+  file (on or off), and a brand that moves needs a current passing report of `motion/proof.json`, the proof of the
+  approved move, `motion:proof` (the report of any other proof never counts, a try-out's included, and a failing one fails
+  the row); from G3 to G4 an undecided motion is an info row. Quick has neither row.
 - `motion` (script): prints the decision (`on`, `off` or `not decided`, with what is due before G4), and `--off "<reason>"`
   records that nothing moves once, never over an answer. `state` prints the same line.
 - `board-lint` on a motion board (script): `motion:g3`, `motion:off`, `motion:variants`, `motion:files`, `motion:proof`,

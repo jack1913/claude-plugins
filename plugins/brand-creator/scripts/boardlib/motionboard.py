@@ -18,7 +18,7 @@ import re
 from pathlib import Path
 from urllib.parse import unquote, unquote_to_bytes
 
-from _common import CliError, Report, confine, gate_recorded, motion_report_tool, rel, sha256_bytes, sha256_file
+from _common import CliError, Report, confine, frames_report_tool, gate_recorded, motion_report_tool, rel, sha256_bytes, sha256_file, stale_inputs
 from boardpage import FILL, GENERIC_NAME, WORD_NAME, Node
 import motionspec
 
@@ -42,7 +42,7 @@ class Variant:
         self.proof = f"{self.dir}/proof.json"
         self.frames = f"{self.dir}/frames/{name}"
         self.report = f"assets/_checks/{motion_report_tool(self.proof)}.json"
-        self.frames_report = f"assets/_checks/frames/{motion_report_tool(self.proof).split('/', 1)[1]}.json"   # named like the motion report, under frames/ (bookdata.frames_report_tool)
+        self.frames_report = f"assets/_checks/{frames_report_tool(self.proof)}.json"
 
 
 def shown(problems: list[str], limit: int = 6) -> str:
@@ -56,17 +56,13 @@ def add_row(rep: Report, rid: str, label: str, problems: list[str], passed: str)
 # ---------------------------------------------------------------- the gates of the round
 
 def motion_off(project: Path) -> tuple[bool | None, str]:
-    """(whether motion/motion.json says nothing moves, the reason it gives); (None, why) when the file cannot be read as the owner's answer. Absent is not off."""
-    f = project / motionspec.FILE
-    if not f.is_file():
-        return False, ""
+    """(whether motion/motion.json says nothing moves, the reason it gives), read as `brand-creator motion` and `state` read it (motionspec.decision); (None, the message of the motion spec)
+    when the file is not a valid answer: one that `motion` refuses is never read as "nothing moves" here. Absent is not off."""
     try:
-        doc = json.loads(f.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as e:
-        return None, f"{motionspec.FILE} cannot be read as JSON ({e})"
-    if not isinstance(doc, dict):
-        return None, f"{motionspec.FILE} is not a JSON object"
-    return doc.get("motion") == "off", motionspec.one_line(doc.get("reason", ""))
+        d = motionspec.decision(project)
+    except CliError as e:
+        return None, e.message
+    return d["motion"] == "off", motionspec.one_line(d.get("reason", ""))
 
 
 def gate_rows(rep: Report, project: Path) -> None:
@@ -77,7 +73,7 @@ def gate_rows(rep: Report, project: Path) -> None:
     off, why = motion_off(project)
     label = "a motion round does not contradict a recorded \"nothing moves\""
     if off is None:
-        rep.add("motion:off", "skipped", label, detail=f"not verified: {why}; `brand-creator motion` says what is wrong with it")
+        rep.add("motion:off", "skipped", label, detail=f"not verified: {why}; `brand-creator motion` refuses the file with the same message: fix it, then lint again")
     elif off:
         rep.add("motion:off", "fail", label, detail=f"nothing moves is recorded: a motion round contradicts it ({motionspec.FILE}: {why}); turning it on is a rule change: edit {motionspec.FILE}, "
                                                     "then run `brand-creator check --cascade` with the old wording as its value")
@@ -192,17 +188,12 @@ def files_problems(project: Path, v: Variant, page_rel: str, rnd: int) -> list[s
 # ---------------------------------------------------------------- the proof of each variant, and the stills the card shows
 
 def read_report(project: Path, report: str, proof: str) -> tuple[dict | None, list[str]]:
-    """The report of `proof` at `report`, read as `check` reads one: (its document, why it is stale). Stale: it cannot be read, it is the report of another proof, or a file it was made from is gone or changed."""
+    """The report of `proof` at `report`, read as `check` reads one: (its document, why it is stale). Stale: it cannot be read, it is the report of another proof, or a file it was made from is gone or changed
+    (_common.stale_inputs, the rule `check` applies)."""
     try:
         doc = json.loads((project / report).read_text(encoding="utf-8"))
         stale = [] if doc.get("proof") == proof else [f"it is the report of {doc.get('proof')}"]
-        for rec in doc.get("inputs", []):
-            g = project / rec["path"]
-            if not g.is_file():
-                stale.append(f"{rec['path']} is gone")
-            elif sha256_file(g) != rec["sha256"]:
-                stale.append(f"{rec['path']} changed")
-        return doc, stale
+        return doc, stale + stale_inputs(project, doc)
     except (OSError, ValueError, AttributeError, KeyError, TypeError) as e:
         return None, [f"it cannot be read ({type(e).__name__}: {e})"]
 
