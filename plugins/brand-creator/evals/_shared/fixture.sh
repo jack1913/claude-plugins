@@ -34,7 +34,7 @@ fx_write_state() {
 slug: $slug
 name: "$name"
 created: $FX_DATE
-plugin_version: 0.3.6
+plugin_version: 0.4.0
 tier: $tier
 phase: $phase
 architecture: standalone
@@ -170,9 +170,23 @@ Caveat: no downscale or competitor check was run by the judge.
 MD
 }
 
+# Motion decided as "nothing moves", in motion/motion.json (a synthetic reason). Standard and Full decide motion before G4, so a project that has recorded G4 holds
+# this record: without it `brand-creator check` fails motion:decided, which has nothing to do with the case the fixture is for.
+fx_motion_off() {
+  mkdir -p motion
+  cat > motion/motion.json <<'JSON'
+{
+  "schema": 1,
+  "motion": "off",
+  "reason": "The brand lives on paper and in a shop window: nothing on a screen moves."
+}
+JSON
+}
+
 # A Standard project with a rule written down in several places (the cascade case).
 fx_cascade() {
   fx_copy_acme
+  fx_motion_off
   mkdir -p book/chapters
   cat > book/chapters/marks.md <<'MD'
 # The mark
@@ -193,6 +207,7 @@ MD
 # A Full-tier project whose book is approved (G5); G6 is not recorded; the product repository (the adoption target) sits inside.
 fx_adoption() {
   fx_copy_acme
+  fx_motion_off
   mkdir -p product-repo/src
   cat > product-repo/README.md <<'MD'
 # Shopfront

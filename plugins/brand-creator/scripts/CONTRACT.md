@@ -121,6 +121,8 @@ fontTools, Brotli and skia-pathops (`outline_glyphs.py`, `fontcheck.py`), Pillow
   rounds/r1/board.html ...         one folder per drawn round; the page is board.html
   rounds/r<N>/<direction>/<item>.svg, <item>-16/-32/-128.png, SOURCE.md   the kept marks of a drawn round: SVG masters, PNGs
                                    exported from them, and where they came from (templates/SOURCE.md; drawing-engines.md)
+  rounds/r<N>/<variant>/           a motion round (data-board="motion", templates/motion-board.html; see Board contract): one folder per variant with index.html (the move where it
+                                   will be seen), proof.json (a page case named <variant>) and frames/<variant>/ (the stills `frames` took of it)
   brief/canvas-round-<N>.md        the drawing brief of round N (templates/canvas-brief.md)
   .design/<slug>/                  the use-llm design canvas, when the drawing session starts in the project folder
   research/YYYY-MM-DD-style.md  research/style-thumbs/   P1s notes behind the style board and the reference marks it shows as thumbnails
@@ -135,9 +137,11 @@ fontTools, Brotli and skia-pathops (`outline_glyphs.py`, `fontcheck.py`), Pillow
   qa/rules.json                    owner thresholds and size bands (see QA gates); optional, proposals apply without it
   qa/print.json                    owner thresholds of print-check (see Print); optional, stated defaults apply without it
   qa/states.json  qa/idempotence.json   state sets for states-check; the byte-difference allowlist for verify-idempotent
-  motion/proof.json                the motion proof's cases (shot --motion); any name, in any folder: one report per proof file
-  motion/frames/<case>/            the stills `frames` writes of a page case: <NN>-<pct>.png, strip.png, reduced.png, frames.json (inside the project on purpose: the book replays them)
-  motion/motion.json               the machine-readable motion spec (see Motion spec): signature move, parts, timeline in tokens, rules; read by the adapters and the book
+  motion/proof.json                the motion proof's cases (shot --motion); any name, in any folder: one report per proof file; the proof of the approved move
+  motion/frames/<case>/            the stills `frames` writes of a page case of a gated proof: <NN>-<pct>.png, strip.png, reduced.png, frames.json (inside the project on purpose: the book
+                                   replays them; a try-out proof in the latest round or in removed-*/ keeps its stills beside it, in <its folder>/frames/<case>/; history/ and the earlier rounds are read-only: refused)
+  motion/motion.json               the one record of the motion decision (see The motion decision): absent = not decided, "off" = nothing moves, "on" = the approved move, which is the machine-readable
+                                   motion spec (see Motion spec): signature move, parts, timeline in tokens, rules; read by the adapters and the book
   motion/SPEC.md                   the motion hand-off (templates/MOTION-SPEC.md), only when something moves
   tray/tray.json                   the tray states and their masters (emit tray); qa/states.tray.json is written by it
   tools/inputs.json                staleness record of a generated pack (staleness --write)
@@ -184,7 +188,7 @@ that only exists, a copy of an earlier board or a style board not written yet do
 board is written does not look as if it came after it. Only that command writes it: `state --set g1s_round=...` (and `--bump`) exits 2 with "written by --record G1s"; `--set gates.G1s=...` is refused the same way.
 `board-lint` reads it to tell a pick recorded after a full rejection from the one before it. The `## Directions` table in the body
 is read by `state --json`, which also reports `rounds` and `latest_round` as `rN` (`r0`, the style board, counts as a round) or
-`null` when no round exists.
+`null` when no round exists, and `motion`, the decision of `brand-creator motion` (see The motion decision).
 
 ## Token sources (DTCG 2025.10)
 
@@ -260,12 +264,13 @@ carry them; a required section that is missing, empty or a placeholder (`TODO`, 
 `[[fill: ...]]` left anywhere in text or attribute values fail the page (`page:unfilled`); HTML comments are ignored,
 so optional blocks can wait in comments.
 
-Page: `<body data-round="N" data-board="pick|refine|style">`. `data-round` must equal the folder `rounds/rN/` (catches a copied
+Page: `<body data-round="N" data-board="pick|refine|style|motion">`. `data-round` must equal the folder `rounds/rN/` (catches a copied
 page that was not updated). Round 1 must be a `pick` board. Round 0 is always the style board (`data-board="style"`,
 `rounds/r0/board.html`, from `templates/style-board.html`), and a round listed in `reset_rounds` holds either a style board or a
 pick board: after a full rejection the style research runs again on a new style board (required, never skipped), and the round after
 it (also listed) holds the pick board of the new territories. A style board anywhere else fails `page:data-board`, and so does a pick
-board: it belongs to round 1 or to a round listed in `reset_rounds` (after a full rejection); later rounds are refine boards. The round and
+board: it belongs to round 1 or to a round listed in `reset_rounds` (after a full rejection); later rounds are refine boards. A `motion` board is a round from 2 on, in any tier,
+with its own rows (see The motion board below); in round 0 or 1, or in a round listed in `reset_rounds`, it fails `page:data-board`. The round and
 the kind are read from one tag, the `<body>` (or the `<html>` tag when the body carries neither `data-round` nor `data-board`), by one
 module that `board-lint` and `state --record G1s` share, `scripts/boardlib/boardpage.py` (outside `scripts/lib/`, so that a change there
 does not make every pack stale). A repeated attribute counts by its first copy, as in a browser.
@@ -284,13 +289,13 @@ masters were NOT measured; a round with no masters gets an info row.
 
 | `data-section` | required when | notes |
 |---|---|---|
-| `what-changed` | round 2 and later | "What changed since the review" |
+| `what-changed` | round 2 and later (a motion board: from its second) | "What changed since the review" |
 | `today` | `incumbent` in BRAND-STATE is not `none` | the incumbent as variant 0 |
 | `positioning-map` | round 1 and rounds in `reset_rounds` | must contain an element `data-direction="<name>"` for every direction; at least one direction has `data-far="true"`; in reset rounds also a non-empty `data-field="failed-round"` showing where the failed round sat |
 | `strategy-core` | round 1 | shown for reaction |
 | `direction` (repeat) | always; at least 3 on pick boards, 1 otherwise | `data-name` (a word of 3+ letters, unique, identical on the board and in chat), optional `data-letter` (one unique capital; off by default, and `question:N:letters` warns when a letter equals an option letter of a question that does not list the directions), `data-register` (required on pick boards, unique per direction: one per emotional register), optional `data-far="true"`, a non-empty child `data-field="idea"`, and on pick boards a non-empty `data-field="reflex"` (the reflex test against `references/ai-defaults.json`: "no hits" or each hit with its argument) |
 | `hardest-surface` | always | the one surface where the mark is most likely to fail |
-| `weak-points` | round 2 and later | |
+| `weak-points` | round 2 and later (a motion board: from its second) | |
 | `losers` | round 2 and later | contains `data-section="loser"` items, each with a one-line (max 200 characters) `data-field="reason"` |
 | `none-of-these` | pick boards | |
 | `my-call` | always | children `data-field="recommendation"` and `data-field="critique"`; with `data-judge="ran"` also `judge-view`, `lead-view`, `middle-option` |
@@ -321,6 +326,12 @@ option, direction, variant, style, concept, route, territory, look, mood, idea, 
 by one letter or a roman numeral after a space, `-` or `#` ("Option 2", "Style A", "Direction II", "Option #2", "Style-3"). Words that
 only start like a label (Stylish, Routes, Looker, Moody) pass.
 
+Votes (`page:votes`, on every kind of board: pick, refine, style and motion): the vote of each card is a `<fieldset data-vote="<name>">` of keep / drop / unsure radios, and a radio name is one group for the whole page, so the radios of
+a card are named `vote-<name>`, the name as written in its `data-vote`, letter case included (`vote-Compass` for the card Compass, never `vote-compass`), and no two cards share a name. The row fails when two vote fieldsets
+share a radio name (a card copied with the name of the one it came from: one group, and a vote on one card clears the vote on the other; every card of the earlier templates said `vote-one`) or when a card's radios are not all named
+`vote-<its name>` (a radio with no name counts), names the cards, what it found, and the fix (`name="vote-<name>"` on each card). Two votes that carry the same `data-vote` are told apart by their place ("Compass (vote #1)"). A page
+with no vote at all gets an info row: a vote is optional. The motion board has the row too, among its own.
+
 Project level: every pick board (`data-board="pick"`: round 1, and the pick board of each reset round) fails `project:style-gate`
 while `gates.G1s` in BRAND-STATE.md is empty; a recorded pick, `skipped by owner` or an honest `n/a` all pass (`state --record G1s
 "<decision>"`) for round 1. Refine boards and style boards (round 0, and the style board of a reset round) are not affected.
@@ -347,6 +358,54 @@ board of a reset round (`--round <N>`).
 
 Project level: in round 1, when the tier is `full` or the architecture is `product-in-family`, `INVENTORY.md` must exist or
 `inventory:` must start with `none` (for example `none (no target repo)`).
+
+### The motion board (`data-board="motion"`)
+
+A motion round tries the brand's signature move as variants after G3. Standard and Full decide motion for every brand and run it by default (see The motion decision); Quick may run one when something moves. It is a round from 2 on in
+any tier: `rounds/rN/board.html`, from `templates/motion-board.html` (built on `templates/round-page.html`: the same tokens, header, hardest surface, My call, questions and reply). A motion board is no pick, style, reset or rejected
+round: the map and style-round logic, `reset_rounds` and the style re-arming of a later pick board ignore it (the round "rejected" before a reset is never a motion round), the style gate does not apply to it, and the kept masters of the
+round are not measured. Its code is `scripts/boardlib/motionboard.py` (outside `scripts/lib/`, like `boardpage.py`).
+
+One folder per variant, `rounds/rN/<name>/`, made before the page:
+
+| in the folder | what it is |
+|---|---|
+| `index.html` | the move where it will be seen, with the approved mark in place |
+| `proof.json` | its proof: a page case named `<name>` whose `page` is `rounds/rN/<name>/index.html`, the page the card links, with a `selector` and `static` = an approved master of `assets/logo/` (the approved still, never one of the variant's own) |
+| `frames/<name>/` | the stills of `brand-creator frames rounds/rN/<name>/proof.json --count 25` (see Frames: a try-out proof keeps them beside it): `strip.png`, `reduced.png`, `frames.json` and the stills |
+
+and, in `assets/_checks/motion/` and `assets/_checks/frames/`, the reports of `brand-creator shot --motion rounds/rN/<name>/proof.json` and of `brand-creator frames rounds/rN/<name>/proof.json --count 25`. One card per variant: an element with `data-motion-variant="<name>"` (the `<article class="variant">` of the template).
+The name is a word of 3 or more letters that is not a label ("Variant 2" and "Option B" fail: the rule of direction names), unique (capitals do not tell two apart), and also the name of the folder, so it keeps to letters, digits, `-` and `_`.
+Inside the card:
+
+| in the card | what it holds |
+|---|---|
+| `<img data-field="strip">` | the strip of the stills, `<name>/frames/<name>/strip.png` |
+| `<img data-field="reduced">` | the reduced-motion still, `<name>/frames/<name>/reduced.png` |
+| `<a data-field="live" href="<name>/index.html">` | the live page, one click away (the board has no replay) |
+| an element with `data-proof="pass"` or `"fail"`, and its text | the proof line: what `shot --motion` found for this variant |
+| `data-field="what-it-is"`, `"cost"`, `"degrades-to"` | What it is, Cost and Degrades to (what remains with no script and with reduced motion), each with text |
+| `<fieldset data-vote="<name>">` | the owner's vote, as on the round page (the `page:votes` row, as on every board); its radios are named `vote-<name>`, a group of their own per card |
+
+The pictures are the project's own files by a relative path, read from the page's folder as a browser reads it, or, in the copy published on a review surface (`review/index.html`, linted with `--round N`), `data:` URIs of the same bytes. The inlined-image
+rule of the style board (`images:inlined`) belongs to that board and is not applied here; a picture from the network (`http(s)://`, `//`), an absolute path or a path outside the project fails `motion:stills`. The first motion board of a project (no
+earlier round has `data-board="motion"`) shows exactly 3 variants and needs no What changed and Weak points (info rows); a later one, the refine loop on the picked or combined variant, shows 1 or more and needs both, as a refine board does from round 2.
+Hardest surface, My call, questions and reply are required as on every board; there is no `positioning-map`, `strategy-core`, `today`, `losers`, `none-of-these` or `direction` section, no `project:*` row and no `masters:*` row, and `--min-directions` is
+not used (an info row says so). Each row is one result for the whole board and names the variants it fails:
+
+| row | fails when |
+|---|---|
+| `motion:g3` | G3 is not recorded ("a motion round follows the approved design (G3)") |
+| `motion:off` | `motion/motion.json` says `off` ("nothing moves is recorded: a motion round contradicts it"); "not verified" (`skipped`, exit 3) when it cannot be read as a JSON object; absent or `on` passes |
+| `motion:variants` | the count (exactly 3 on the project's first motion board, 1 or more on a later one) or a name (a word, not a label, a folder name, unique) |
+| `motion:files` | a variant has no folder, or one that is not spelt as the card spells it (an entry of `rounds/rN/` equal to the card's name, letter case included: a disk that does not tell letter cases apart, macOS or Windows, opens `settle/` for the card `Settle`, but `shot --motion` and `frames` name their reports after the folder as the disk spells it, so the reports the board asks for are never made; the row says the card and its folder must be spelt alike, on every kind of disk), no `index.html` or no `proof.json`; the proof has no page case named `<name>`, or its `page` is not `rounds/rN/<name>/index.html`, the page the card links (a proof copied from an earlier round and still pointing there fails), or its `static` is not an existing file of `assets/logo/` (an approved master: a variant has no still of its own); `frames/<name>/strip.png` or `reduced.png` is missing; the card has no link to the live page or it does not lead to `<name>/index.html` |
+| `motion:proof` | a variant has no motion report of its proof, a stale one (a file it read changed) or one that is no verdict (not-verified), each naming `brand-creator shot --motion rounds/rN/<name>/proof.json` (the row quotes the rows of the report that are not verified, each with its id and detail; one that names `requestAnimationFrame` adds that such a move stays not verified however often the proof runs, and says to write it as CSS animations, CSS transitions or `element.animate()`; the other not-verified rows `shot --motion` writes, a percentage translation on a pseudo-element or a still that cannot be placed over the mark, are quoted and given no such advice); the card's `data-proof` is not `pass` or `fail`, is not the report's status (a failing proof shown as `fail` is honest and passes) or has no text |
+| `motion:stills` | a variant has no `frames` report of its proof (`assets/_checks/frames/<slug>-<hash6>.json`), a stale one (the proof, the page or a file the page loaded changed since the stills were taken: `shot --motion` run again does not make the stills current) or one with no passing `frames:<name>` row; the strip or the reduced still the card shows is not the file `frames.json` lists, by sha256; also the file on disk differs from `frames.json`, `frames.json` cannot be read or is of another proof or case (a folder copied from an earlier round), or the card has no, or two, `<img data-field="strip">` or `"reduced"`; each names `brand-creator frames rounds/rN/<name>/proof.json --count 25` |
+| `motion:fields` | What it is, Cost or Degrades to is missing, empty, a placeholder or still holds a `[[fill: ...]]` marker, in a card |
+
+`page:data-board` also fails a motion board in round 0 or 1 or in a round listed in `reset_rounds`. The `inputs` of the lint report are the page and, of each variant, `proof.json`, `index.html`, `frames.json`, the strip, the reduced still, the motion report and the frames report, and every file those two reports were made from (their own `inputs`:
+the files the page loaded, such as a stylesheet, `tokens.css` or a script, where the move may live), so `check` calls the report stale ("not verified") as soon
+as one of them changes: take the stills and the proofs first, lint, and shoot the board last (`shot` writes `assets/_checks/shot.json` for one page, and `check` wants the one of `rounds/r<latest>/board.html`).
 
 ## Hook guard
 
@@ -730,8 +789,11 @@ that repeats forever is counted and shot where it is. Each view records `lazy_im
 For each page case of a proof (or the named one; a states case is skipped with an info row, or a usage error when named) the page is seeked as
 above and the mark element's box (its box at rest, rounded outward to whole pixels) is screenshotted at device scale 2 on the page's own
 background, at each point: by default five, 0, 25, 50, 75 and 100 percent of the motion's length; `--count N` spreads N points evenly (1 to
-100), `--at` names percentages (0 to 100, in the order given). Written into the project, in `motion/frames/<case>/` (the case name made a
-folder name: letters, digits, `.`, `_`, `-`; two names that make one folder are a usage error):
+100), `--at` names percentages (0 to 100, in the order given). Written into the project, for a gated proof (a proof of the project: the only stills the book replays) in `motion/frames/<case>/`, and for a
+try-out proof, one under `rounds/`, `history/` or a `removed-*/` folder (`motion_proof_kind` in `_common.py` and its twin `motionProofKind` in `_common.mjs`; one table of cases in the tests pins both), beside it in
+`<the proof's folder>/frames/<case>/`: a motion round keeps the stills of each variant in `rounds/rN/<name>/frames/<name>/` and never touches `motion/frames/`. `history/` is frozen and every round but the latest is read-only (the hook
+guard keeps both from an edit, and cannot see what a command writes), so a proof inside `history/`, or inside `rounds/rN/` while a higher `rounds/rM/` exists, is a usage error (exit 2) before a browser starts and before anything is written: it says why and
+what to do, take the stills before the round is frozen or the next one begins, or copy the proof and its page into the latest round and run `frames` there. The case name is made a folder name (letters, digits, `.`, `_`, `-`; two names that make one folder are a usage error):
 
 - `<NN>-<pct>.png`: one still per point, `NN` its place from 00, `pct` its percent (`16.67` for a third of a hundred);
 - `strip.png`: the stills side by side, in order, with no gap;
@@ -744,7 +806,8 @@ Each file is written only when its bytes change; a rerun says `unchanged`. A sti
 motion driven by `requestAnimationFrame`) exits 1 and says why, and writes no file; so does a page that calls `requestAnimationFrame` while
 the stills are taken (they would differ from run to run). A case's folder belongs to one proof: when its `frames.json` names another proof,
 or cannot be read, the run is a usage error (exit 2) before a browser starts, naming the folder to move to `removed-<date>/` or the case to
-rename. A strip wider or higher than 65535 px (the largest picture Chromium's canvas writes) is a usage error that says how many stills fit. Nothing else in the project is written but the report,
+rename. The rule holds per folder: the folder of a try-out proof is its own folder's `frames/`, so a gated proof and a try-out one with a case of the same name never meet, and two try-out proofs of one folder do. A try-out
+folder whose `frames.json` names a proof of another folder is a round copied whole, its stills with it: they are taken again in place and an info row, `frames:<case>:copied`, says so. A strip wider or higher than 65535 px (the largest picture Chromium's canvas writes) is a usage error that says how many stills fit. Nothing else in the project is written but the report,
 `assets/_checks/frames/<slug>-<hash6>.json` (named like the motion report; `check` gates it as it gates a motion report, below). Its `inputs` are those of the motion report: the proof, the pages
 and every project file they loaded. One report per proof file is rewritten by every run and holds the rows of the cases that run took (`--case X` leaves the report
 with the row of X alone), which is how the book tells the stills a run vouches for (below). It also records `points_pct`, the points of the run.
@@ -760,9 +823,9 @@ row for it: a run of `frames --case X` rewrites the report with the row of X alo
 
 ### Motion spec (`motion/motion.json`)
 
-The machine-readable motion spec: the owner's G4 answer on motion, the signature move, the moving parts and the timeline written in tokens. It is the one
-source the adapters (see `adapters` and `applied-skill` below) and the book ("Brand book") read; `motion/SPEC.md` (`templates/MOTION-SPEC.md`) is its
-prose twin for an implementer. `scripts/lib/motionspec.py` reads it: `load(project)` returns the validated document, or `None` when the file is absent.
+The one record of the owner's decision on motion, and, when the brand moves, the machine-readable motion spec: the signature move, the moving parts and the timeline written in tokens. Absent means motion is not decided; `"off"`
+means nothing moves; `"on"` is the approved move. It is the one source the adapters (see `adapters` and `applied-skill` below) and the book ("Brand book") read; `motion/SPEC.md` (`templates/MOTION-SPEC.md`) is its
+prose twin for an implementer. `scripts/lib/motionspec.py` reads it: `load(project)` returns the validated document, or `None` when the file is absent (`load(project, tokens=False)` checks the document alone and leaves its references unresolved: what `decision()` reads).
 
 ```json
 {"schema": 1,
@@ -777,7 +840,7 @@ prose twin for an implementer. `scripts/lib/motionspec.py` reads it: `load(proje
 | key | what it holds |
 |---|---|
 | `schema` | `1`, a whole number: the only schema this version reads |
-| `motion` | `"on"` or `"off"`, the owner's G4 answer; `"off"` means nothing moves |
+| `motion` | `"on"` or `"off"`, the owner's answer on motion (Standard and Full: before G4); `"off"` means nothing moves |
 | `reason` | required with `"off"`, a non-empty string (why, in the owner's words); refused with `"on"` |
 | `signature` | required with `"on"`, refused with `"off"`: `name` and `description` (non-empty strings) and `where` (a non-empty list of the places the move shows) |
 | `parts` | optional list of `{id, description}`, refused with `"off"`; `id` is lower case words joined by single hyphens (`a-z`, `0-9`, `-`) and unique |
@@ -794,6 +857,22 @@ An unknown key is refused at every level. Every refusal is exit 2 and names the 
 are not built are exit 3, and the message names `brand-creator tokens`; a document that is wrong in itself is exit 2 whether or not the tokens are built, and
 a document with no reference (motion off, or no timeline) needs no tokens. `check` validates the file whenever it exists: a failing `motion:spec` row (never a
 crash), or "not verified" when the tokens it names are not built.
+
+### The motion decision (`brand-creator motion [--json] [--off "<reason>"]`)
+
+`scripts/motion.py` reads and records the decision in `motion/motion.json` through `scripts/lib/motionspec.py` (`decision()`, `status_lines()`). Standard and Full decide motion for every brand before G4: a motion round after G3 (the
+default), or "nothing moves", recorded once by the owner. Quick decides it at G4 and only when something moves: no due line and no `check` row.
+
+- `motion` prints one status line and exits 0: `motion: on (signature: <name>)`, `motion: off (nothing moves: <reason>)` or `motion: not decided`. The last is followed, in Standard and Full once G3 is recorded, by
+  `` due before G4: run the motion round, or record nothing moves with `brand-creator motion --off "<the owner's reason>"` ``. `--json` prints `{"motion": "on" | "off" | "undecided", "signature": <name> (on), "reason": <text> (off)}`.
+  A `motion/motion.json` that is not valid in itself exits 2 with the message of the motion spec and is never read as an answer. The tokens it names are not looked up: the motion round comes before the tokens are built, so an answer whose timeline names
+  tokens not built yet is still printed, `--off` over it is the exit-2 refusal below, and whether the tokens are built is the `motion:spec` row of `check`.
+- `motion --off "<reason>"` records that nothing moves, once, in the owner's words. With no `motion/motion.json` it writes `{"schema": 1, "motion": "off", "reason": "<reason>"}` (checked by the motion spec before it writes; it creates
+  `motion/`), prints `recorded: nothing moves (<reason>) in motion/motion.json` and exits 0. Already off, it writes nothing and prints `already recorded: nothing moves (<the recorded reason>)`; when the reason given differs it says the
+  recorded one stands and that changing it is an edit of `motion/motion.json` followed by `brand-creator check --cascade`; exit 0. On, it writes nothing and exits 2: `` motion/motion.json says the brand moves (signature <name>); turning it
+  off is a rule change: edit motion/motion.json and run `brand-creator check --cascade` ``. An empty or blank reason exits 2, and so does `--off` together with `--json`.
+- `state` (the summary) prints the same line, so Step 0 of the skill sees the decision and never asks again; `state --json` has it as `"motion"` (the data of `motion --json`). A `motion/motion.json` the summary cannot read is a
+  `motion: cannot be read (...)` line and `{"motion": "unreadable", "problem": ...}`, never an exit code: the summary must always print.
 
 ### snapshot, verify-idempotent, staleness, specs-due
 
@@ -827,7 +906,15 @@ The Acme example's `tools/grid_mark.py` and `tools/state_icons.py` are the worke
 
 ### What `check` gates from these
 
-`motion/motion.json`, when it exists, is validated on every run (the `motion:spec` row; see Motion spec). A manifest row with `qa: [...]` needs a current, passing report from the matching tool (`downscale`, `states`, `motion`, `family`, `fonts`
+`motion/motion.json`, when it exists, is validated on every run (the `motion:spec` row; see Motion spec). Standard and Full decide motion before G4 (see The motion decision), so with the tier `standard` or `full` and G4 recorded
+`motion:decided` passes when `motion/motion.json` exists (on or off; whether it is valid stays the `motion:spec` row) and fails when it does not: "Standard and Full decide motion before G4: run the motion round, or record nothing moves
+with `brand-creator motion --off "<the owner's reason>"`". With motion `on` under the same condition `motion:proof` passes when a gated motion report passes, naming the proofs ("met by the report of motion/proof.json"; a report that names no proof is named by its file, `assets/_checks/motion/<slug>-<hash6>.json`; the report of a try-out proof never counts, and neither does the one report of an earlier version, `assets/_checks/motion.json`, which cannot be told from a try-out's); otherwise it fails when
+`motion/proof.json` does not exist ("motion/motion.json says the brand moves, but there is no proof of the approved move: write motion/proof.json") and is "not verified" when it does ("run `brand-creator shot --motion motion/proof.json`");
+when the report of that proof is current and says not-verified, the row says why, as `board-lint` says it of a variant (one function, `motionboard.unverified_why`): it quotes up to three of the rows the report could not verify, each with its id and detail, and, only when one names
+`requestAnimationFrame`, adds that such a move stays not verified however often the proof runs and says to write it as CSS animations, CSS transitions or `element.animate()`; the row of the report itself, `report:motion/<slug>-<hash6>`, quotes the same rows
+(a stale report says it is stale, as for every report);
+a failing gated report keeps its own fail row. With the tier `standard` or `full`, G3 recorded, G4 not and no `motion/motion.json`, `motion:decided` is an info row ("not decided yet; due before G4: ..."); before G3, and in Quick, there is no row.
+A manifest row with `qa: [...]` needs a current, passing report from the matching tool (`downscale`, `states`, `motion`, `family`, `fonts`
 = `fontcheck`, `idempotent` = `verify-idempotent`); for `downscale` it is the report of the row's own `downscale_source` (a row without one fails,
 and a passing report on another file never counts); for `motion` it is at least one passing gated report (the `qa:motion` row; see Motion proof); a report that exists is gated whether or not a row asks (the `frames` reports too, by the proof each names; see Frames). A missing report is "not
 verified" (exit 3), a stale one too, a failing one exit 1. When `qa/rules.json` sets a colour-vision threshold (a key of its `cvd`
@@ -1265,8 +1352,14 @@ A template of a project that has no `{{rule_radius}}` keeps its own `border-radi
 **The finish chain.** `templates/finish.sh.tpl` runs the book, print, press-kit and post steps and the Tier B packs, each gated by the tier like the CLI: `emit profiles` (every tier; avatar only in Quick); `emit print` (Standard and Full, and only
 when `PRINT_REGION` is set: print is opt-in with the owner; `PRINT_ICC`, `PRINT_BLEED`, `IMAGE_BASE_URL` are optional) followed by `print-check`; `emit social` gets `--posts` and a `--post-fact` per
 label of `POST_FACTS` (semicolon separated) when that is set; `book` and `book-pdf` when `book/chapters/` exists (the chain never writes or fills chapters; without the folder the log says `book: skipped`), and before them
+a `motion` step in the Standard and Full tier (Quick decides motion at G4 and has none), which never skips in silence: it prints the decision, and with `motion/motion.json` on and a `motion/proof.json` it runs `shot --motion motion/proof.json`
+(exit 1 writes a failing report: the chain says `finish.sh: the motion proof failed (see above); ...` and goes on, and `check` fails the report; exit 3 after the step wrote the report of the proof (for example a move driven by `requestAnimationFrame`) is a
+report that says not-verified: the chain says `finish.sh: the motion proof is not verified (see above); ...` and goes on, and `check` says why (the step is judged by whether `shot --motion` printed the report it wrote, `report: <path>`: the file is named after the proof as the disk spells its path, which is not always as the chain typed it, so the chain reads the name from that line); any other exit, and an exit 3 that wrote none (Chromium cannot start),
+leave nothing for `check` to gate, so the chain says `finish.sh: shot --motion stopped with exit N ...` and stops with that exit code); on without a `motion/proof.json` it says which file is missing and goes on (`check` fails `motion:proof` once G4 is recorded); off it prints `nothing moves: <reason>`; with no `motion/motion.json` it prints
+`motion is not decided: ...` and goes on (`check` fails `motion:decided` once G4 is recorded); a `motion/motion.json` that is not valid in itself stops the chain at once with exit 2 (one that is valid in itself but names a token that is not built does not, because `motion` reads the answer from the
+document alone: `book` stops the chain on that token, or, with no book, `check` fails `motion:spec`). Then
 `frames motion/proof.json` with `FRAMES_ARGS` (a block-2 option, default `--count 25`; fewer stills for a mark too wide for 25) in the Standard and Full tier (the Quick book has no Motion chapter) when `motion/motion.json` says `on` and `motion/proof.json` has a page case, so that the Motion chapter
-replays stills of the page as it is now (it writes only `motion/frames/` and its report; a rerun with nothing changed writes nothing). A page `frames` cannot step through (motion driven by
+replays stills of the page as it is now (it writes only `motion/frames/` and its report; a rerun with nothing changed writes nothing; whenever it takes none, a line says why: `finish.sh: no stills taken: ...`). A page `frames` cannot step through (motion driven by
 `requestAnimationFrame`, a scroll timeline) makes it exit 1 with a failing report: the chain says so in one line on stderr (`finish.sh: frames could not take the stills (see above); the book keeps the stills of
 the last run that worked, if any, and check says why`) and goes on to `book`, and `check` fails the failing `frames` report (see "Frames"). Any other non-zero exit of `frames` (2: a strip wider than Chromium writes, a
 case folder that holds another proof's stills; 3: it could not run) leaves no failing report for `check` to gate, so the chain says so (`finish.sh: frames stopped with exit N ...`) and stops with that exit code;

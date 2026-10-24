@@ -8,6 +8,7 @@
 //   render.mjs shot --motion <proof.json>  motion proof: named states vs the static SVG at dsf 1 and 2; a page seeked through its motion (whole
 //                               pixels, CLS, phone-width edges, the rest frame compared in the page), reduced motion; one report per proof file
 //   render.mjs frames <proof.json>  stills of a page case's mark along its motion, a strip and the reduced-motion still, into motion/frames/
+//                               (a try-out proof in the latest round or removed-*/ keeps them in its own folder, <folder>/frames/; history/ and earlier rounds are refused)
 //   render.mjs fonts             which fonts Chromium really uses for a text (CSS.getPlatformFontsForNode), with a control
 //   render.mjs pdf <page.html>  the page as a PDF (print media, RGB), with a label on its first page; book_pdf.py finishes the file
 //   render.mjs pdf <page.html> --size-mm WxH [--measure FILE.json]  print stationery: exact page size in mm, no margins, no label on the
@@ -19,7 +20,7 @@ import http from "node:http";
 import { parseArgs } from "node:util";
 import {
   EXIT, die, mainGuard, dataDir, readSetup, loadDep, findProject, confine, outsideProject, scratchDir, rel,
-  Report, forbiddenTerms, writeIfChanged, sha256, readStateTop, missingSharedLibs, findHeadlessShell, proofReportTool, pixelArt,
+  Report, forbiddenTerms, writeIfChanged, sha256, readStateTop, missingSharedLibs, findHeadlessShell, proofReportTool, pixelArt, motionProofKind,
 } from "./lib/_common.mjs";
 
 const ANIMATION_CAP_MS = 15000;   // shot waits at most this long for running animations and transitions to end
@@ -37,8 +38,9 @@ shots are written outside the project (default: <data>/scratch/...); the report 
 shot loads lazy images first, pauses --wait MS after load (default 300), then waits for running animations and transitions to end
 (at most ${ANIMATION_CAP_MS / 1000} s; one that repeats forever is shot where it is, and the report says so).
 shot --motion writes one report per proof file: <project>/assets/_checks/motion/<slug>-<hash6>.json. frames writes its stills inside the project, into
-motion/frames/<case>/, each file only on a byte change, and its report to <project>/assets/_checks/frames/<slug>-<hash6>.json. Both reports take as inputs the
-proof, the pages and every project file the pages loaded (a stylesheet, tokens.css, a script, an image), so a change to one of them makes the report stale.`;
+motion/frames/<case>/ (a try-out proof, one in the latest round or a removed-*/ folder: <its folder>/frames/<case>/; a proof in history/ or in an earlier round is refused, those are read-only), each file only on a byte change, and its report to
+<project>/assets/_checks/frames/<slug>-<hash6>.json. Both reports take as inputs the proof, the pages and every project file the pages loaded (a stylesheet, tokens.css, a
+script, an image), so a change to one of them makes the report stale.`;
 
 const MIME = {
   ".html": "text/html; charset=utf-8", ".htm": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8",
@@ -1247,6 +1249,8 @@ async function cmdMotion(values, positionals) {
 // element's box out of the page at device scale 2 (the page's own background), and write motion/frames/<case>/<NN>-<pct>.png, strip.png (the frames
 // side by side, in order), reduced.png (the element under prefers-reduced-motion: reduce) and frames.json. The files are in the project on purpose (the
 // brand book shows them); each is written only on a byte change, so a rerun is byte-identical. A case with nothing to seek fails, and says why.
+// A try-out proof (an exploration proof: under rounds/ or a removed-*/ folder; history/ and every round but the latest are refused, see readOnlyWhy) keeps its stills beside it, in
+// <its folder>/frames/<case>/, so that a motion round holds its own stills and never touches motion/frames/, the only stills the book replays.
 const FRAMES_DSF = 2;
 const MAX_PICTURE_PX = 65535;   // the widest and highest picture Chromium's canvas writes (one more is an IndexSizeError)
 
@@ -1266,10 +1270,10 @@ async function joinStrip(diff, pngs) {
   return Buffer.from(b64, "base64");
 }
 
-async function framesCase(browser, server, project, c, slug, pcts, specRel, report, inputs, diff) {
+async function framesCase(browser, server, project, c, slug, base, pcts, specRel, report, inputs, diff) {
   if (!c.page || !c.selector) die(EXIT.USAGE, `motion case ${c.name}: a page case needs "page" and "selector" (the mark's element)`);
   const { abs, url } = pageUrl(project, server.origin, c.page); inputs.push(abs);
-  const o = pageOptions(c), rid = `frames:${c.name}`, label = "frames of the mark's motion", dir = `motion/frames/${slug}`;
+  const o = pageOptions(c), rid = `frames:${c.name}`, label = "frames of the mark's motion", dir = `${base}/${slug}`;
   const fail = (detail, extra = {}) => report.add(rid, "fail", label, { detail, ...extra });
   let plan, clip, shots = [], reducedShot;
   const N = await openPage(browser, server, url, { dsf: FRAMES_DSF });
@@ -1335,6 +1339,19 @@ async function framesCase(browser, server, project, c, slug, pcts, specRel, repo
   if (old.length) report.add(`${rid}:stale`, "warn", "frames left from an earlier run", { detail: `${old.join(", ")} in ${dir}/ are not part of this run (other points, or fewer); move them to removed-<date>/` });
 }
 
+/** Why the folder of a proof is not written to (null when it can be). history/ is frozen and every round before the latest is read-only: the guard keeps both from an edit, but it cannot see what a
+ *  command writes, and `frames` writes its stills beside the proof. */
+function readOnlyWhy(project, specRel) {
+  const [top, round] = specRel.split("/");
+  const tail = "(frames writes its stills beside the proof)";
+  const how = "copy the proof and its page into the latest round and run frames there";
+  if (top === "history") return `${specRel} is inside history/, which is read-only ${tail}: take the stills before \`freeze\`, or ${how}`;
+  if (top !== "rounds" || !/^r\d+$/.test(round ?? "")) return null;
+  const dir = path.join(project, "rounds");
+  const latest = Math.max(...fs.readdirSync(dir).filter((n) => /^r\d+$/.test(n) && fs.statSync(path.join(dir, n)).isDirectory()).map((n) => Number(n.slice(1))));
+  return Number(round.slice(1)) < latest ? `${specRel} is inside rounds/${round}/, and every round before the latest (rounds/r${latest}/) is read-only ${tail}: ${how}` : null;
+}
+
 async function cmdFrames(argv) {
   const { values, positionals } = parse(argv, { project: { type: "string" }, case: { type: "string" }, count: { type: "string" }, at: { type: "string" } });
   if (positionals.length !== 1) die(EXIT.USAGE, "frames needs exactly one proof.json\n" + USAGE);
@@ -1361,23 +1378,34 @@ async function cmdFrames(argv) {
   if (!picked.length) die(EXIT.USAGE, `${positionals[0]} has no page case: frames needs a page that moves the mark`);
   const slugs = picked.map((c) => caseFolder(c.name));   // the case name is a folder name
   if (slugs.some((s) => !s) || new Set(slugs).size !== slugs.length) die(EXIT.USAGE, "the case names must make different folder names (letters, digits, . _ -)");
-  // a case's stills come from one proof: a try-out proof with a case of the same name never overwrites the stills the book shows
-  for (const s of slugs) {
-    const fj = confine(project, `motion/frames/${s}/frames.json`, "frames file");
+  const readOnly = readOnlyWhy(project, specRel);   // before the browser starts, before anything is written
+  if (readOnly) die(EXIT.USAGE, readOnly);
+  // where the stills go: a gated proof (a proof of the project) keeps them in motion/frames/, the one folder the book replays; a try-out proof (in the latest round or a removed-*/ folder)
+  // keeps them beside it, in <its folder>/frames/, which no other proof writes to, so a motion round holds its own stills and never touches the project's
+  const exploring = motionProofKind(project, specRel) === "exploration";
+  const base = exploring ? `${path.posix.dirname(specRel)}/frames` : "motion/frames";
+  // a case's folder belongs to one proof: a second proof with a case of the same name never overwrites the stills of the first. A try-out folder whose frames.json names a proof of
+  // another folder is a copy of an earlier round (the stills came along with it): it is taken again in place, said in the report
+  const copied = [];
+  for (const [i, s] of slugs.entries()) {
+    const fj = confine(project, `${base}/${s}/frames.json`, "frames file");
     if (!fs.existsSync(fj)) continue;
     let owner;
-    try { owner = JSON.parse(fs.readFileSync(fj, "utf8")).proof; } catch (e) { die(EXIT.USAGE, `motion/frames/${s}/frames.json cannot be read (${e.message}): move motion/frames/${s}/ to removed-<date>/ first`); }
-    if (owner !== specRel) die(EXIT.USAGE, `motion/frames/${s}/ holds the stills of ${typeof owner === "string" ? owner : "another proof"}, and a case's stills come from one proof: rename the case in ${specRel}, or move motion/frames/${s}/ to removed-<date>/`);
+    try { owner = JSON.parse(fs.readFileSync(fj, "utf8")).proof; } catch (e) { die(EXIT.USAGE, `${base}/${s}/frames.json cannot be read (${e.message}): move ${base}/${s}/ to removed-<date>/ first`); }
+    if (owner === specRel) continue;
+    if (exploring && typeof owner === "string" && path.posix.dirname(owner) !== path.posix.dirname(specRel)) { copied.push({ name: picked[i].name, dir: `${base}/${s}`, owner }); continue; }
+    die(EXIT.USAGE, `${base}/${s}/ holds the stills of ${typeof owner === "string" ? owner : "another proof"}, and a case's stills come from one proof: rename the case in ${specRel}, or move ${base}/${s}/ to removed-<date>/`);
   }
   const inputs = [specFile];
   const report = new Report(proofReportTool(specRel, "frames"), project, inputs);
   report.extra = { proof: specRel, cases: picked.map((c) => ({ name: c.name })), points_pct: pcts, engine: "Chromium (Playwright)" };
+  for (const k of copied) report.add(`frames:${k.name}:copied`, "info", "stills copied along with an earlier round", { detail: `${k.dir}/ held the stills of ${k.owner} (the round was copied whole): they are taken again here, for ${specRel}` });
   const browser = await launch();
   const server = await startServer(project);
   try {
     const diff = await scratchPage(browser);
     for (const c of spec.cases) {
-      if (picked.includes(c)) await framesCase(browser, server, project, c, slugs[picked.indexOf(c)], pcts, specRel, report, inputs, diff);
+      if (picked.includes(c)) await framesCase(browser, server, project, c, slugs[picked.indexOf(c)], base, pcts, specRel, report, inputs, diff);
       else if (values.case === undefined) report.add(`frames:${c.name}`, "info", "frames of the mark's motion", { detail: "a states case has no page to seek; frames works on page cases" });
     }
   } finally {

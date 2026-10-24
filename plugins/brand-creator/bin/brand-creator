@@ -27,6 +27,8 @@ project
   new <slug>              scaffold a brand project (BRAND-STATE.md, FACTS.md, DECISIONS.md, brief/BRIEF.md)
   state                   print or query BRAND-STATE.md (--require G3, --record G3 "<decision>", --json)
   freeze <round> --name N copy an approved round to history/ with a banner and update history/MANIFEST.sha256
+  motion                  the motion decision (motion/motion.json): on, off (nothing moves) or not decided; --off "<reason>" records that nothing
+                          moves, once (--json for data). Standard and Full decide it before G4: the motion round, or --off
 
 checks and renders
   shot <page.html>        four-view page shots (1440/390 x light/dark) with an overflow/console/network report
@@ -34,10 +36,11 @@ checks and renders
                           phone widths, rest frame compared in the page itself), reduced motion; one report per proof file
   card <card.html>        render an HTML card to a PNG (OG, repo social, README header)
   frames <proof.json>     stills of a page case's mark along its motion (--case, --count N or --at 0,25,50,75,100): a strip and the reduced-motion
-                          still too, into motion/frames/<case>/, each written only when its bytes change
+                          still too, into motion/frames/<case>/ (a try-out proof in the latest round or removed-*/: <its folder>/frames/<case>/; a proof in
+                          history/ or an earlier round is refused: read-only), each written only when its bytes change
   logo-sheet              real-size logo sheet (16/20/32/64/128/180, light and dark, x4 favicon, header mock)
   contrast                WCAG 2.2 AA UI pairs, brand-rule pairs, colours that touch in the logo SVGs, APCA advisory
-  board-lint <page.html>  required board sections (data-section attributes) for a round page
+  board-lint <page.html>  required board sections (data-section attributes) for a round page; a motion round's variants too (folder, proof, stills, their reports)
   check                   all gates for the artefacts that exist; --cascade "<old value>" greps for leftovers
 
 quality gates (assets, motion, fonts)
@@ -176,6 +179,7 @@ case "$sub" in
   new)        py new.py "$@" ;;
   state)      py_boot state.py "$@" ;;   # stdlib only: must work without uv (the status skill injects it)
   freeze)     py freeze.py "$@" ;;
+  motion)     py motion.py "$@" ;;
   shot)       js render.mjs shot "$@" ;;
   card)       js render.mjs card "$@" ;;
   frames)     js render.mjs frames "$@" ;;

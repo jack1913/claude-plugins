@@ -38,8 +38,11 @@ already says.
 ## Method: freeze and history
 
 1. After G3: `brand-creator freeze r<N> --name approved-board --project <dir>`. It copies the round, adds the banner and
-   updates the manifest. Freeze the round behind each later approval too (a system-rules board at G4, a recovery round)
-   with a name that says what was approved. `freeze` copies a round folder only.
+   updates the manifest. Freeze the round behind each later approval too (a system-rules board at G4, a recovery round,
+   the approved motion round: `freeze r<N> --name approved-motion`, with its variants, proofs and stills kept as written)
+   with a name that says what was approved. `freeze` copies a round folder only. Take every still before a freeze: `frames`
+   refuses a proof inside `history/` and one in a round before the latest (both are read-only), so a frozen round keeps the
+   stills it was frozen with.
 2. Rejected directions stay in their rounds and in the Directions table, each with the owner's reason in one line. The
    history chapter of the book tells the path from them; it never shows a rejected direction as an option.
 3. Keep the "before": copy the old icons and marks the adoption will replace into the current round (`rounds/r<N>/before/`)

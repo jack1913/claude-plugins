@@ -1,0 +1,30 @@
+{
+  "about": "One table of cases for the rule that tells a gated motion proof from an exploration (try-out) proof and from a gone one: motion_proof_kind in scripts/lib/_common.py and motionProofKind in scripts/lib/_common.mjs must answer every row the same (tests/test_qa_infra.py and tests/node/common.test.mjs read this file). `files` are the project files that exist, `kind` the answer.",
+  "cases": [
+    {"why": "a proof of the project", "proof": "motion/proof.json", "files": ["motion/proof.json"], "kind": "gated"},
+    {"why": "a proof at the top of the project", "proof": "proof.json", "files": ["proof.json"], "kind": "gated"},
+    {"why": "a report that names no proof is gated", "proof": null, "files": [], "kind": "gated"},
+    {"why": "an empty name is no proof either", "proof": "", "files": [], "kind": "gated"},
+    {"why": "the file is not there", "proof": "motion/proof.json", "files": [], "kind": "gone"},
+    {"why": "a folder is not a proof file", "proof": "motion/proof.json", "files": ["motion/proof.json/x"], "kind": "gone"},
+    {"why": "a try-out in a round", "proof": "rounds/r2/proof.json", "files": ["rounds/r2/proof.json"], "kind": "exploration"},
+    {"why": "a try-out of one variant of a motion round", "proof": "rounds/r3/Bounce/proof.json", "files": ["rounds/r3/Bounce/proof.json"], "kind": "exploration"},
+    {"why": "a try-out straight in rounds/", "proof": "rounds/proof.json", "files": ["rounds/proof.json"], "kind": "exploration"},
+    {"why": "a frozen proof", "proof": "history/2026-10-23-approved-motion/Bounce/proof.json", "files": ["history/2026-10-23-approved-motion/Bounce/proof.json"], "kind": "exploration"},
+    {"why": "a proof moved aside", "proof": "removed-2026-10-23/proof.json", "files": ["removed-2026-10-23/proof.json"], "kind": "exploration"},
+    {"why": "a removed-* folder deeper down", "proof": "motion/removed-old/proof.json", "files": ["motion/removed-old/proof.json"], "kind": "exploration"},
+    {"why": "a removed-* folder with a number", "proof": "removed-2026-10-23-2/motion/proof.json", "files": ["removed-2026-10-23-2/motion/proof.json"], "kind": "exploration"},
+    {"why": "a gone try-out is gone first", "proof": "rounds/r2/proof.json", "files": [], "kind": "gone"},
+    {"why": "a file called rounds.json is not a rounds/ folder", "proof": "rounds.json", "files": ["rounds.json"], "kind": "gated"},
+    {"why": "the last part is the file: a file named history is no folder", "proof": "motion/history", "files": ["motion/history"], "kind": "gated"},
+    {"why": "a file named removed-x is no folder either", "proof": "motion/removed-x", "files": ["motion/removed-x"], "kind": "gated"},
+    {"why": "rounds-copy is not rounds", "proof": "assets/rounds-copy/proof.json", "files": ["assets/rounds-copy/proof.json"], "kind": "gated"},
+    {"why": "a folder named removed is not removed-*", "proof": "removed/proof.json", "files": ["removed/proof.json"], "kind": "gated"},
+    {"why": "the names are case sensitive", "proof": "Rounds/r2/proof.json", "files": ["Rounds/r2/proof.json"], "kind": "gated"},
+    {"why": "a leading ./ is dropped", "proof": "./rounds/r2/proof.json", "files": ["rounds/r2/proof.json"], "kind": "exploration"},
+    {"why": "a doubled slash is dropped", "proof": "rounds//r2/proof.json", "files": ["rounds/r2/proof.json"], "kind": "exploration"},
+    {"why": "a . in the middle is dropped", "proof": "motion/./proof.json", "files": ["motion/proof.json"], "kind": "gated"},
+    {"why": "a .. is kept, as pathlib keeps it: the path still goes through rounds/", "proof": "rounds/r2/../../motion/proof.json", "files": ["motion/proof.json", "rounds/r2/keep.txt"], "kind": "exploration"},
+    {"why": "a .. is kept: a path that goes through motion/ first and then up and into rounds/", "proof": "motion/../rounds/r2/proof.json", "files": ["motion/keep.txt", "rounds/r2/proof.json"], "kind": "exploration"}
+  ]
+}

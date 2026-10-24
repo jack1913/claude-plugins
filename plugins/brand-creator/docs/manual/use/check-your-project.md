@@ -13,8 +13,8 @@ you approve.
 
    > /brand-creator:check
 
-2. Claude runs every check for your tier: boards, contrast, logo sheet, packs, book, print, adoption and the checksums of
-   your locked rounds. It reports the result:
+2. Claude runs every check for your tier: boards, contrast, logo sheet, motion, packs, book, print, adoption and the
+   checksums of your locked rounds. It reports the result:
    - 0: everything passed;
    - 1: a check failed, with the file and the fix the message names;
    - 2: the command was used wrongly;
@@ -23,6 +23,11 @@ you approve.
    A check that did not run is never reported as a pass.
 3. Claude fixes nothing unasked. It offers the fixes as one list: those that need no decision first, then numbered
    decisions with a recommendation.
+
+In Standard and Full, once you approve the system rules, the check also wants your answer on motion: a motion round, or
+your word that nothing moves. If your brand moves, it wants a passing proof of the approved move too. Before that, an
+open question on motion is only a reminder. On a motion board, the check looks at each variant's page, proof and stills,
+and at whether the strip on the board is the picture that was taken of the page as it is now.
 
 ## Search for leftovers
 
@@ -55,6 +60,10 @@ start only after you see their count, models, size and cost and say yes.
 | --- | --- |
 | A tool stops with code 3 | Run `/brand-creator:setup`, or the install command the message names |
 | A report is "stale" | Its inputs changed since it ran. Run the check again |
+| `motion:decided` fails | Standard and Full settle motion before you approve the system rules. Ask Claude for a motion round, or record that nothing moves: `brand-creator motion --off "<your reason>"` |
+| `motion:decided` shows "not decided yet" | A reminder, not a failure. Settle motion before you approve the system rules |
+| `motion:proof` fails and says to write `motion/proof.json` | Your brand moves, so its approved move needs a proof. Ask Claude to write it |
+| `motion:proof` says "not verified" | There is no passing proof of your brand's move yet: it has not run, it failed, or the page changed since it ran. Run `brand-creator shot --motion motion/proof.json` and read what it says |
 
 More: [Troubleshooting](../reference/troubleshooting.md).
 

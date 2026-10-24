@@ -100,3 +100,7 @@ and the owner's yes:
    "Decisions for you". It edits nothing.
 3. You apply the no-decision fixes (or argue in one line), re-run the checks, and show the board at G3 with the
    decisions. Without the yes, you do step 2 yourself, honestly. Details: [fleet.md](../fleet.md).
+
+The motion round of Standard and Full (after G3, [07-tokens](07-tokens.md), "The motion round") uses this loop too: the owner's
+numbered list is the answer to the variants, the one reviewer call runs `shot --motion` on each variant's proof and reads each
+strip, and a later motion round is a copy of the previous one.

@@ -1,8 +1,8 @@
 # (Brand name): motion hand-off spec
 
-Written only when something moves. Copy to `motion/SPEC.md`. Every value comes from the tokens (`motion.*` durations,
-`easing.*` curves) or from this file; an implementer never guesses a timing. The proof is
-`brand-creator shot --motion motion/proof.json`.
+Written when the brand moves: in Standard and Full after the motion round approved the move, in Quick only when something
+moves. Copy to `motion/SPEC.md`. Every value comes from the tokens (`motion.*` durations, `easing.*` curves) or from this
+file; an implementer never guesses a timing. The proof is `brand-creator shot --motion motion/proof.json`.
 
 The machine-readable twin of this file is `motion/motion.json`: the same signature move, parts, timeline (as references
 to the duration and curve tokens) and rules as data, which `brand-creator check` validates and the adapters read (schema:

@@ -319,6 +319,27 @@ def test_project_fixtures_are_valid_brand_projects_in_the_stated_phase(name, tmp
     assert not (ws / "README.md").exists() or name == "rule-change-runs-cascade", "the worked brand's README narrates round 1; it must not leak"
 
 
+@pytest.mark.parametrize("name", ["rule-change-runs-cascade", "no-adoption-writes-before-g6"])
+def test_the_fixtures_that_record_g4_decide_motion_so_that_their_cases_are_not_derailed_by_check(name, tmp_path):
+    """Standard and Full decide motion before G4: a fixture that records G4 holds motion/motion.json (off, with a synthetic reason), or `check` fails motion:decided
+    in a case that is about a rule change or an adoption. The other fixtures stop before G4 and have none."""
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    scaffold(EVALS / name, ws)
+    doc = json.loads((ws / "motion" / "motion.json").read_text(encoding="utf-8"))
+    assert doc["schema"] == 1 and doc["motion"] == "off" and doc["reason"].strip()
+    r = bc("motion", project=ws)
+    assert r.returncode == 0 and r.stdout.startswith("motion: off (nothing moves: The brand lives on paper"), r.stdout
+    bc("check", project=ws)
+    rows = {x["id"]: x["status"] for x in json.loads((ws / "assets" / "_checks" / "check.json").read_text(encoding="utf-8"))["results"]}
+    assert rows["motion:decided"] == "pass" and "motion:proof" not in rows and "motion:spec" in rows
+    for other in sorted(set(EXPECT) - {"rule-change-runs-cascade", "no-adoption-writes-before-g6"}):
+        w = tmp_path / other
+        w.mkdir()
+        scaffold(EVALS / other, w)
+        assert not (w / "motion" / "motion.json").exists(), other                     # none of them records G4: motion is not asked yet
+
+
 def test_the_empty_workspace_cases_have_no_scaffold_and_the_brief_cases_only_a_brief(tmp_path):
     for n in ("g0-asks-scope-before-board", "no-open-feelings-question", "bakery-first-board", "photographer-first-board-pl",
               "never-says-available", "outward-actions-hand-off"):

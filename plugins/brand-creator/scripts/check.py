@@ -35,6 +35,9 @@
     tools/cascade.json, --also and FAMILY.md parent_docs); lines that record a product repository's old value (ADOPTION.md, LAUNCH.md) warn, they do not fail
   * adoption.json (pins, numbering, accounting) and ADOPTION.md as rendered from it; BRAND.md, DESIGN.md and the applied skill as generated files
   * motion/motion.json, when it exists: valid against its schema, and every duration and curve it names is a built token (a failing row, never a crash)
+  * Standard and Full decide motion before G4: once G4 is recorded, motion/motion.json must exist, on or off (motion:decided), and a brand that moves needs a passing
+    gated motion report (motion:proof; one of a try-out proof never counts, nor does the one report of an earlier version). A current report that says not-verified is quoted, in its own row and in motion:proof:
+    up to three of the rows it could not verify, and what to do about them (motionboard.unverified_why, the words board-lint uses for a variant). From G3 to G4 an undecided motion is an info row. Quick decides it at G4: no row
 A check that cannot be established is "not verified" (exit 3), never "pass". A failing gate is exit 1.
 """
 import json
@@ -45,8 +48,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "emitters"))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "booklib"))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "adaptlib"))
-from _common import (Parser, Report, add_project_arg, downscale_report_tool, find_project, latest_round, main_guard, motion_proof_kind, read_state,  # noqa: E402
-                     rel, sha256_file, verify_history)
+sys.path.insert(0, str(Path(__file__).resolve().parent / "boardlib"))
+from _common import (Parser, Report, add_project_arg, downscale_report_tool, find_project, gate_recorded, latest_round, main_guard, motion_proof_kind,  # noqa: E402
+                     read_state, rel, sha256_file, verify_history)
 from manifest import band_problems, load_artefacts, verify as verify_manifest  # noqa: E402
 import qa_rules  # noqa: E402
 import tierb  # noqa: E402
@@ -56,6 +60,7 @@ import bookdata  # noqa: E402
 import cascade as cascade_mod  # noqa: E402
 import gates as adapt_gates  # noqa: E402
 import motionspec  # noqa: E402
+import motionboard  # noqa: E402
 from _common import EXIT_CANNOT, EXIT_USAGE, CliError, fail  # noqa: E402
 
 EMITTERS = ("web", "social", "apple", "windows", "linux", "tray", "tauri", "wallet", "developer", "android", "chrome-ext", "msix", "profiles", "print", "presskit")   # each writes assets/_checks/emit-<name>.json
@@ -100,15 +105,18 @@ def report_state(project: Path, tool: str, run_cmd: str, expect_page: str | None
     if st == "fail":
         failing = [r["id"] for r in doc.get("results", []) if r.get("status") == "fail"][:4]
         return "fail", f"{tool} report is failing ({', '.join(failing)}); see assets/_checks/{tool}.json"
+    if tool == "motion" or tool.startswith("motion/"):   # a current report of `shot --motion` that is no verdict: it says which rows it could not verify, and what to do, as board-lint says it of a variant
+        quoted, how = motionboard.unverified_why(doc, run_cmd)
+        return "skipped", f"not verified: {tool} report status is {st!r} ({quoted}): {how}"
     return "skipped", f"not verified: {tool} report status is {st!r}"
 
 
-def gate_proof_reports(project: Path, rep: Report, folder: str, command, vouches=None) -> list[str]:
+def gate_proof_reports(project: Path, rep: Report, folder: str, command, vouches=None) -> dict[str, str | None]:
     """Gate every report under assets/_checks/<folder>/ (one per proof file) by the proof it names: a proof under rounds/, history/ or a removed-*/ folder is an exploration
     proof (listed, never failing), a report whose proof is gone is a warning, the rest are gated. `command(doc, proof)` -> (the command that writes the report again, the command
     to run after it or None). `vouches(project, doc, proof)` -> why a current, passing report does not stand for all it should (then it is "not verified"), else None.
-    -> the rows that pass."""
-    passing = []
+    -> the rows that pass, each with the proof its report is of (None when it names none)."""
+    passing: dict[str, str | None] = {}
     for f in sorted((project / "assets" / "_checks" / folder).glob("*.json")):
         tool = f"{folder}/{f.stem}"
         try:
@@ -130,7 +138,7 @@ def gate_proof_reports(project: Path, rep: Report, folder: str, command, vouches
                 st, detail = "skipped", f"not verified: {gap}; re-run `{run_cmd}`" + (f" and then `{then}`" if then else "")
             rep.add(f"report:{tool}", st, "gate report", detail=detail)
             if st == "pass":
-                passing.append(f"report:{tool}")
+                passing[f"report:{tool}"] = proof
     return passing
 
 
@@ -152,6 +160,58 @@ def frames_unvouched(project: Path, doc: dict | None, proof: str | None) -> str 
     left = [c for c in bookdata.proof_stills(project, proof) if f"frames:{c}" not in passed]
     took = ", ".join(str(c.get("name")) for c in doc.get("cases", []) if isinstance(c, dict)) or "no case"
     return f"the frames report of {proof} does not vouch for the stills of {', '.join(left)} in motion/frames/ (its last run took {took})" if left else None
+
+
+def unverified_note(project: Path, approved: str) -> str | None:
+    """Why the proof `approved` (motion/proof.json) is not verified, when its report is current and says so: the rows it could not verify, quoted, and what to do (motionboard.unverified_why); else None (no
+    such report, a stale one, a verdict). The report is found by the proof it names, as the same file as `approved`: a disk that does not tell letter cases apart names it after the proof as it spells it (Motion/proof.json),
+    which is not always as it is typed here."""
+    cmd = f"brand-creator shot --motion {approved}"
+    for f in sorted((project / "assets" / "_checks" / "motion").glob("*.json")):
+        try:
+            proof = json.loads(f.read_text(encoding="utf-8")).get("proof")
+        except (OSError, ValueError, AttributeError):
+            continue
+        if not (isinstance(proof, str) and proof and (project / proof).is_file() and (project / proof).samefile(project / approved)):
+            continue
+        doc, stale = motionboard.read_report(project, rel(project, f), proof)
+        if doc and not stale and doc.get("status") not in ("pass", "fail"):
+            quoted, how = motionboard.unverified_why(doc, cmd)
+            return f"the motion report of {approved} is {doc.get('status')!r}, not a verdict ({quoted}): {how}"
+    return None
+
+
+def motion_decision_rows(project: Path, rep: Report, proofs: list[str]) -> None:
+    """Standard and Full decide motion before G4: motion/motion.json, on or off with the owner's reason. Once G4 is recorded it must exist (motion:decided; whether it is valid is the
+    motion:spec row), and when it says the brand moves a gated motion report must pass (motion:proof; `proofs` are the proofs of the passing gated reports, or the report file of one that names no proof: the reports of try-out
+    proofs and the one report of an earlier version, which cannot be told from a try-out's, are not among them). From G3 to G4 an undecided motion is an info row. Quick decides it
+    at G4, and only when something moves: no row."""
+    if str(read_state(project).get("tier", "") or "").strip().lower() not in ("standard", "full"):
+        return
+    spec = project / motionspec.FILE
+    label = "motion is decided before G4"
+    if not gate_recorded(project, "G4"):
+        if gate_recorded(project, "G3") and not spec.is_file():
+            rep.add("motion:decided", "info", label, detail=f"not decided yet; due before G4: {motionspec.DECIDE}")
+        return
+    if not spec.is_file():
+        rep.add("motion:decided", "fail", label, detail=f"Standard and Full decide motion before G4: {motionspec.DECIDE}")
+        return
+    try:
+        mode = json.loads(spec.read_text(encoding="utf-8")).get("motion")
+    except (OSError, ValueError, AttributeError):
+        mode = None   # a file that cannot be read still counts as decided here; motion:spec fails it
+    rep.add("motion:decided", "pass", label, detail=f"{motionspec.FILE} exists" + (f" (motion {mode})" if mode in ("on", "off") else ""))
+    if mode != "on":
+        return
+    label = "the approved move has a passing proof"
+    if proofs:
+        rep.add("motion:proof", "pass", label, detail=f"met by the report of {', '.join(proofs)}")
+    elif not (project / "motion" / "proof.json").is_file():
+        rep.add("motion:proof", "fail", label, detail=f"{motionspec.FILE} says the brand moves, but there is no proof of the approved move: write motion/proof.json")
+    else:   # a failing gated report keeps its own fail row; this one says the proof of the approved move is not established
+        why = unverified_note(project, "motion/proof.json")   # the report of the approved proof is current and no verdict: not "run it again" but which rows it could not verify
+        rep.add("motion:proof", "skipped", label, detail=f"not verified: {why}" if why else "not verified: run `brand-creator shot --motion motion/proof.json`")
 
 
 def main() -> int:
@@ -274,7 +334,8 @@ def main() -> int:
                        f"re-run `{motion_cmd}` and move {rel(project, legacy)} to removed-<date>/")
         if st == "pass":
             motion_passing.append("report:motion")
-    motion_passing += gate_proof_reports(project, rep, "motion", lambda doc, proof: (f"brand-creator shot --motion {proof or '<proof.json>'}", None))
+    gated = gate_proof_reports(project, rep, "motion", lambda doc, proof: (f"brand-creator shot --motion {proof or '<proof.json>'}", None))
+    motion_passing += list(gated)
     # frames: one report per proof file too (assets/_checks/frames/), gated the same way: the book replays the stills it vouches for, so a stale one is "not verified" until
     # `frames` and then `book` have run again (the motion report being current says nothing about the stills)
     gate_proof_reports(project, rep, "frames", frames_again, frames_unvouched)
@@ -320,6 +381,9 @@ def main() -> int:
         except CliError as e:
             unbuilt = e.code == EXIT_CANNOT
             rep.add("motion:spec", "skipped" if unbuilt else "fail", "motion/motion.json is valid", detail=("not verified: " if unbuilt else "") + e.message)
+    # the proofs of the passing gated reports, a report that names none by its file; the report of an earlier version is in motion_passing (qa:motion), never here
+    met_by = sorted(proof or f"assets/_checks/{row.removeprefix('report:')}.json" for row, proof in gated.items())
+    motion_decision_rows(project, rep, met_by)
     adapt_gates.rows(project, rep)
     bprobs = band_problems(project)
     if any("band" in a_ or "layer_bands" in a_ for a_ in arts):

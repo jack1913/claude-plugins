@@ -36,6 +36,10 @@ def prepare(acme: Path, tier: str, targets: str) -> Path:
     return fin
 
 
+def record_g4(acme: Path) -> None:
+    assert bc("state", "--record", "G4", "system rules approved (test)", project=acme).returncode == 0
+
+
 def run(fin: Path, tmp_path: Path, **env_extra) -> subprocess.CompletedProcess:
     env = {**os.environ, "PATH": f"{ROOT / 'bin'}:{os.environ['PATH']}", "BRAND_CREATOR_TODAY": "2026-10-17", "BRAND_CREATOR_DATA": os.environ.get("BRAND_CREATOR_DATA", ""),
            **env_extra}
@@ -109,12 +113,18 @@ def test_a_brand_that_moves_takes_fresh_stills_before_the_book_in_the_chain(acme
 ON = {"schema": 1, "motion": "on", "signature": {"name": "Press", "description": "The dot presses down two pixels and comes back.", "where": ["app icon"]}}
 
 
-def moving_brand(acme: Path, tier: str) -> Path:
-    """A project at `tier` whose book chapters are filled and whose motion is on (the Acme proof has a page case): the chain of a brand that moves."""
+def book_brand(acme: Path, tier: str) -> Path:
+    """A project at `tier` whose book chapters are filled and whose motion is not decided (there is no motion/motion.json)."""
     fin = prepare(acme, tier, "web")
     assert bc("book", "--init", project=acme).returncode == 0
     assert fill_markers(acme) > 3
     mutate(acme / "BRAND-STATE.md", "- (rule) (...)", "- (rule) the accent is a fill, never text (proposal)")
+    return fin
+
+
+def moving_brand(acme: Path, tier: str) -> Path:
+    """A project at `tier` whose book chapters are filled and whose motion is on (the Acme proof has a page case): the chain of a brand that moves."""
+    fin = book_brand(acme, tier)
     (acme / "motion" / "motion.json").write_text(json.dumps(ON))
     return fin
 
@@ -150,14 +160,18 @@ def test_a_page_frames_can_no_longer_step_through_leaves_the_book_the_stills_of_
     assert r.returncode == 1 and "check: FAIL" in out
 
 
-def stubbed_frames(tmp_path: Path, code: int) -> str:
-    """A PATH on which brand-creator is the real one, except that `frames` stops at once with `code` (3: Chromium cannot run)."""
+def stubbed(tmp_path: Path, word: str, code: int) -> str:
+    """A PATH on which brand-creator is the real one, except that a call with `word` among its arguments (frames, --motion) stops at once with `code` (3: Chromium cannot run)."""
     d = tmp_path / "stub"
     d.mkdir()
     exe = d / "brand-creator"
-    exe.write_text(f'#!/usr/bin/env bash\ncase " $* " in *" frames "*) echo "stub: frames cannot run" >&2; exit {code} ;; esac\nexec "{ROOT / "bin" / "brand-creator"}" "$@"\n')
+    exe.write_text(f'#!/usr/bin/env bash\ncase " $* " in *" {word} "*) echo "stub: {word} cannot run" >&2; exit {code} ;; esac\nexec "{ROOT / "bin" / "brand-creator"}" "$@"\n')
     exe.chmod(0o755)
     return f"{d}:{ROOT / 'bin'}:{os.environ['PATH']}"
+
+
+def stubbed_frames(tmp_path: Path, code: int) -> str:
+    return stubbed(tmp_path, "frames", code)
 
 
 @pytest.mark.parametrize("how, code", [("a strip wider than Chromium writes", 2), ("frames cannot run", 3)])
@@ -193,9 +207,219 @@ def test_the_quick_chain_takes_no_stills_because_its_book_has_no_motion_chapter(
     out = r.stdout + r.stderr
     assert r.returncode == 0, out[-3000:]
     ss = steps(out)
-    assert not any(s.startswith("frames") for s in ss) and "book" in ss and "book-pdf" in ss, ss
-    assert not (acme / "motion/frames").exists() and not list((acme / "assets/_checks").glob("frames/*"))
+    assert not any(s.startswith(("frames", "motion", "shot --motion")) for s in ss) and "book" in ss and "book-pdf" in ss, ss      # Quick decides motion at G4, and only when something moves: no step, no line
+    assert "nothing moves" not in out and "motion is not decided" not in out and "motion is on" not in out
+    assert not (acme / "motion/frames").exists() and not list((acme / "assets/_checks").glob("frames/*")) and not list((acme / "assets/_checks").glob("motion/*"))
     assert 'data-chapter="motion"' not in (acme / "book.html").read_text() and "check: PASS" in out
+
+
+OFF = {"schema": 1, "motion": "off", "reason": "The brand lives on paper and in a shop window."}
+NOT_DECIDED_LINE = 'motion is not decided: run the motion round, or record nothing moves with `brand-creator motion --off "<the owner\'s reason>"` (check fails motion:decided once G4 is recorded)'
+
+
+def check_rows(acme: Path) -> dict:
+    return {x["id"]: x for x in report(acme, "check")["results"]}
+
+
+def test_a_brand_that_does_not_move_says_so_in_the_chain_which_takes_no_proof_and_no_stills_and_check_passes_at_g4(acme, tmp_path):
+    fin = book_brand(acme, "standard")
+    (acme / "motion" / "motion.json").write_text(json.dumps(OFF))
+    record_g4(acme)
+    r = run(fin, tmp_path)
+    out = r.stdout + r.stderr
+    assert r.returncode == 0, out[-3000:]
+    ss = steps(out)
+    in_order(out, ["gates", "motion", "book", "book-pdf", "emit presskit"])                          # before the book, which reads its reports
+    assert not any(s.startswith(("shot --motion", "frames")) for s in ss), ss
+    assert "nothing moves: The brand lives on paper and in a shop window." in out                    # printed, not skipped in silence
+    assert "finish.sh: no stills taken: nothing moves (motion/motion.json), so the Motion chapter has nothing to replay" in out
+    assert "check: PASS" in out and check_rows(acme)["motion:decided"]["status"] == "pass" and "motion:proof" not in check_rows(acme)
+    assert not list((acme / "assets/_checks").glob("motion/*")) and not (acme / "motion/frames").exists()
+
+
+def test_a_brand_with_no_decision_on_motion_goes_on_and_says_so_and_check_fails_it_once_g4_is_recorded(acme, tmp_path):
+    fin = book_brand(acme, "standard")
+    record_g4(acme)
+    r = run(fin, tmp_path)
+    out = r.stdout + r.stderr
+    assert out.count(NOT_DECIDED_LINE) == 1 and "finish.sh: no stills taken: motion is not decided, so the Motion chapter has no replay" in out, out[-3000:]
+    in_order(out, ["gates", "motion", "book", "book-pdf", "emit presskit"])                          # the chain went on
+    assert not any(s.startswith(("shot --motion", "frames")) for s in steps(out))
+    assert r.returncode == 1 and "check: FAIL" in out and "[FAIL] motion:decided" in out
+    assert check_rows(acme)["motion:decided"]["status"] == "fail"
+
+
+def test_a_brand_that_moves_has_its_approved_move_proved_before_the_stills_and_the_book_read_the_report(acme, tmp_path):
+    fin = moving_brand(acme, "standard")
+    record_g4(acme)
+    r = run(fin, tmp_path)
+    out = r.stdout + r.stderr
+    assert r.returncode == 0, out[-3000:]
+    in_order(out, ["gates", "motion", "shot --motion motion/proof.json", "frames motion/proof.json --count 25", "book", "book-pdf", "emit presskit"])
+    assert "motion is on: signature Press" in out and "check: PASS" in out
+    rows = check_rows(acme)
+    assert rows["motion:decided"]["status"] == "pass" and rows["motion:proof"]["status"] == "pass" and rows["motion:proof"]["detail"] == "met by the report of motion/proof.json"
+    assert 'data-chapter="motion"' in (acme / "book.html").read_text()
+
+
+def test_a_brand_that_moves_with_no_proof_file_goes_on_and_says_which_file_is_missing_and_check_fails_it_at_g4(acme, tmp_path):
+    fin = moving_brand(acme, "standard")
+    (acme / "motion" / "proof.json").rename(acme / "motion" / "proof.json.moved")
+    record_g4(acme)
+    r = run(fin, tmp_path)
+    out = r.stdout + r.stderr
+    assert out.count("finish.sh: motion/motion.json says the brand moves, but there is no motion/proof.json to prove the approved move: write it, then run `brand-creator shot --motion motion/proof.json`") == 1, out[-3000:]
+    assert "finish.sh: no stills taken: motion/proof.json is missing, cannot be read or has no page case" in out
+    in_order(out, ["gates", "motion", "book", "book-pdf", "emit presskit"])                          # the chain went on
+    assert not any(s.startswith(("shot --motion", "frames")) for s in steps(out))
+    got = check_rows(acme)["motion:proof"]
+    assert r.returncode == 1 and got["status"] == "fail" and "write motion/proof.json" in got["detail"], out[-3000:]
+
+
+def test_a_motion_proof_that_fails_does_not_stop_the_chain_and_check_fails_its_report(acme, tmp_path):
+    fin = moving_brand(acme, "standard")
+    mutate(acme / "motion/demo.html", *NO_MOTION)                                                   # nothing on the page moves: the proof has no motion to prove
+    record_g4(acme)
+    r = run(fin, tmp_path)
+    out = r.stdout + r.stderr
+    assert out.count("finish.sh: the motion proof failed (see above); the chain goes on and check fails the report") == 1, out[-3000:]
+    in_order(out, ["gates", "motion", "shot --motion motion/proof.json", "frames motion/proof.json --count 25", "book", "book-pdf", "emit presskit"])      # and it did go on
+    rows = check_rows(acme)
+    assert next(x for k, x in rows.items() if k.startswith("report:motion/proof-"))["status"] == "fail" and rows["motion:proof"]["status"] == "skipped"
+    assert r.returncode == 1 and "check: FAIL" in out
+
+
+RAF_MOTION = (("#dot { animation: press 320ms steps(2, end) 1 both; }", "#dot { }"),      # the move is drawn by requestAnimationFrame: the proof cannot step through it
+              ("</main>", '</main>\n<script>if (!matchMedia("(prefers-reduced-motion: reduce)").matches) { const t0 = performance.now(), dot = document.getElementById("dot"); '
+                          '(function tick(now) { const k = Math.min(1, (now - t0) / 320); dot.style.transform = "translateY(" + Math.round(2 * Math.sin(Math.PI * k)) + "px)"; '
+                          'if (k < 1) requestAnimationFrame(tick); })(t0); }</script>'))
+
+
+def earlier_motion_report(acme: Path) -> Path:
+    """The report of an earlier run of `shot --motion motion/proof.json` (not verified), as the chain before this one left it: a run that writes nothing leaves it as it is."""
+    from _common import motion_report_tool, sha256_file
+    tool = motion_report_tool("motion/proof.json")
+    f = acme / "assets" / "_checks" / (tool + ".json")
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(json.dumps({"tool": tool, "version": "0", "inputs_sha": "0" * 64, "inputs": [{"path": "motion/proof.json", "sha256": sha256_file(acme / "motion/proof.json")}], "renderer": "x",
+                             "proof": "motion/proof.json", "status": "not-verified", "results": [{"id": "motion:demo-page:edges:360", "status": "skipped", "label": "x", "detail": "x"}]}) + "\n")
+    return f
+
+
+def says_why(row: dict, proof: str = "motion/proof.json") -> None:
+    """What `check` tells of the report of a move driven by requestAnimationFrame, in the row of the report and in motion:proof: the rows `shot --motion` could not verify, quoted, and that running it again changes
+    nothing (`proof` is the file the command it names runs on: the row of the report says it as the report records it)."""
+    assert "motion:demo-page:edges:360: not verified: the mark is also moved by requestAnimationFrame, which cannot be seeked" in row["detail"], row["detail"]
+    assert f"a move driven by requestAnimationFrame stays not verified however often it runs: write the move with one of them, then run `brand-creator shot --motion {proof}`" in row["detail"], row["detail"]
+
+
+def test_a_motion_proof_that_is_not_verified_goes_on_because_it_wrote_its_report_and_check_says_why(acme, tmp_path):
+    """`shot --motion` exits 3 after writing a report that says not-verified when the move is driven by requestAnimationFrame: check has that report to gate, so the chain goes on (a chain of 0.3.6 did)."""
+    fin = prepare(acme, "standard", "web")
+    (acme / "motion" / "motion.json").write_text(json.dumps(ON))
+    for edit in RAF_MOTION:
+        mutate(acme / "motion/demo.html", *edit)
+    record_g4(acme)
+    r = run(fin, tmp_path)
+    out = r.stdout + r.stderr
+    assert out.count("finish.sh: the motion proof is not verified (see above); the chain goes on and check says why") == 1, out[-3000:]
+    assert "shot --motion stopped with exit" not in out and "the motion proof failed" not in out
+    in_order(out, ["gates", "motion", "shot --motion motion/proof.json", "book: skipped", "emit presskit"])        # the chain went on, past the step and to the end
+    rows = check_rows(acme)
+    gated = next(x for k, x in rows.items() if k.startswith("report:motion/proof-"))
+    assert gated["status"] == "skipped" and "not-verified" in gated["detail"] and rows["motion:proof"]["status"] == "skipped", gated     # check says why
+    says_why(gated)
+    says_why(rows["motion:proof"])
+    assert r.returncode == 3 and "check: NOT-VERIFIED" in out, out[-3000:]
+
+
+def test_a_proof_the_disk_spells_in_another_letter_case_than_the_chain_types_it_is_judged_by_the_report_it_wrote(acme, tmp_path):
+    """`shot --motion` names its report after the proof as the disk spells it: a disk that does not tell letter cases apart (macOS) takes motion/proof.json for Motion/proof.json, and the report is
+    named after the second. The chain types the first, so an exit 3 that wrote its report must still be found (the chain of 0.3.6 looked for the report of the name it typed and stopped). Where letter
+    cases differ (Linux) `motion` is made a second name for the folder, a link, so that both spellings reach the proof there too and the test asserts the same on either kind of disk."""
+    from _common import motion_report_tool
+    fin = prepare(acme, "standard", "web")
+    (acme / "motion" / "motion.json").write_text(json.dumps(ON))
+    for edit in RAF_MOTION:
+        mutate(acme / "motion/demo.html", *edit)
+    record_g4(acme)
+    (acme / "motion").rename(acme / "Motion")
+    if not (acme / "motion").exists():                                                            # a disk that tells letter cases apart: motion/ is another folder, so give it the name of this one
+        (acme / "motion").symlink_to("Motion")
+    assert (acme / "motion/proof.json").samefile(acme / "Motion/proof.json")
+    r = run(fin, tmp_path)
+    out = r.stdout + r.stderr
+    assert out.count("finish.sh: the motion proof is not verified (see above); the chain goes on and check says why") == 1, out[-3000:]
+    assert "shot --motion stopped with exit" not in out and "the motion proof failed" not in out
+    in_order(out, ["gates", "motion", "shot --motion motion/proof.json", "book: skipped", "emit presskit"])        # the chain went on, past the step and to the end
+    assert sorted(f.name for f in (acme / "assets/_checks/motion").glob("*.json")) == [motion_report_tool("Motion/proof.json").split("/")[1] + ".json"]      # named as the disk spells the proof
+    rows = check_rows(acme)
+    gated = next(x for k, x in rows.items() if k.startswith("report:motion/proof-"))
+    assert gated["status"] == "skipped" and "not-verified" in gated["detail"]                        # check has the report to gate and says why
+    says_why(gated, "Motion/proof.json")                                                              # the report names the proof as the disk spells it
+    says_why(rows["motion:proof"])                                                                   # motion:proof asks for the approved proof as it is typed, and finds its report by the file it names
+    assert r.returncode == 3 and "check: NOT-VERIFIED" in out, out[-3000:]
+
+
+def test_a_motion_proof_that_is_not_verified_and_wrote_nothing_stops_the_chain_though_an_earlier_report_is_there(acme, tmp_path):
+    """The step is judged by what it wrote: an exit 3 beside a report of the run before (it is the same file) is a run that could not start, and check has nothing new to gate."""
+    fin = moving_brand(acme, "standard")
+    old = earlier_motion_report(acme)
+    before = (old.read_bytes(), old.stat().st_mtime_ns)
+    r = run(fin, tmp_path, PATH=stubbed(tmp_path, "--motion", 3))
+    out = r.stdout + r.stderr
+    assert r.returncode == 3, out[-3000:]
+    assert "finish.sh: shot --motion stopped with exit 3 (see above); check has no failing report to gate, so the chain stops here" in out and "is not verified (see above)" not in out
+    ss = steps(out)
+    assert ss[-1] == "shot --motion motion/proof.json" and "book" not in ss, ss
+    assert (old.read_bytes(), old.stat().st_mtime_ns) == before
+
+
+@pytest.mark.parametrize("code", [2, 3])
+def test_a_motion_proof_that_stops_with_exit_2_or_3_stops_the_chain_with_that_exit_code(acme, tmp_path, code):
+    fin = moving_brand(acme, "standard")
+    r = run(fin, tmp_path, PATH=stubbed(tmp_path, "--motion", code))
+    out = r.stdout + r.stderr
+    assert r.returncode == code, out[-3000:]
+    assert f"finish.sh: shot --motion stopped with exit {code} (see above); check has no failing report to gate, so the chain stops here" in out and "the motion proof failed" not in out
+    ss = steps(out)
+    assert ss[-1] == "shot --motion motion/proof.json" and "book" not in ss and not any(s.startswith("frames") for s in ss), ss
+    assert not (acme / "book.html").exists()
+
+
+def test_a_motion_json_that_is_not_valid_stops_the_chain_at_the_motion_step_with_exit_2(acme, tmp_path):
+    fin = moving_brand(acme, "standard")
+    (acme / "motion" / "motion.json").write_text("{not json")
+    r = run(fin, tmp_path)
+    out = r.stdout + r.stderr
+    assert r.returncode == 2 and "error: motion/motion.json: cannot be read as JSON" in out, out[-3000:]
+    ss = steps(out)
+    assert ss[-1] == "motion" and "book" not in ss and not any(s.startswith(("shot --motion", "frames")) for s in ss), ss
+    assert "motion is not decided" not in out and "nothing moves" not in out                         # an unreadable answer is not read as "not decided"
+
+
+NOT_BUILT = {**ON, "parts": [{"id": "dot", "description": "The accent dot of the mark."}],      # valid in itself: its timeline names a duration token that the built tokens do not have
+             "timeline": [{"part": "dot", "property": "transform", "start": "0", "duration": "{motion.nowhere}", "easing": "{easing.standard}"}]}
+
+
+@pytest.mark.parametrize("book", [True, False])
+def test_a_motion_json_that_is_valid_in_itself_but_names_a_token_that_is_not_built_does_not_stop_the_chain_at_the_motion_step(acme, tmp_path, book):
+    """`brand-creator motion` reads the answer from the document alone, so the motion step goes on; the token is looked up by the book (it stops the chain there, exit 2) and by `check`
+    (its motion:spec row fails). A chain with no book goes on to `check`."""
+    fin = moving_brand(acme, "standard") if book else prepare(acme, "standard", "web")
+    (acme / "motion" / "motion.json").write_text(json.dumps(NOT_BUILT))
+    r = run(fin, tmp_path)
+    out = r.stdout + r.stderr
+    ss = steps(out)
+    assert "motion is on: signature Press" in out and "shot --motion motion/proof.json" in ss, out[-3000:]                 # the motion step took the answer and went on to the proof
+    assert "no token named motion.nowhere" in out and "motion/motion.json: cannot be read" not in out
+    if book:
+        assert r.returncode == 2 and ss[-1] == "book" and "book-pdf" not in ss and not re.search(r"^check: ", out, re.M), (ss, out[-3000:])      # the book stopped it, with the exit code of its refusal
+        assert not (acme / "book.html").exists()
+    else:
+        assert r.returncode == 1 and "check: FAIL" in out and "book: skipped" in "\n".join(ss), out[-3000:]                    # nothing stopped it: check says so
+        got = check_rows(acme)["motion:spec"]
+        assert got["status"] == "fail" and "no token named motion.nowhere" in got["detail"], got
 
 
 def test_the_chain_takes_stills_only_for_a_brand_that_moves_and_has_a_page_case_to_take_them_of(acme):
@@ -262,7 +486,7 @@ def test_the_template_names_every_step_the_cli_gates_by_tier():
     assert "TARGETS+=(profiles)" in body and "TARGETS+=(print)" in body and "TARGETS+=(android chrome-ext msix)" in body
     assert 'step "book";' in body and 'step "book-pdf";' in body and 'emit presskit' in body and "print-check" in body and "--posts" in body
     # the emitters, then the gates (the book reads their reports), then the book, the book PDF and the press kit (it holds the PDF), then staleness and check
-    order = [body.index(s) for s in ('for t in "${TARGETS[@]}"; do emit_one', 'step "gates"', 'verify-idempotent', 'step "frames motion/proof.json $FRAMES_ARGS"', 'step "book";', 'step "book-pdf";',
+    order = [body.index(s) for s in ('for t in "${TARGETS[@]}"; do emit_one', 'step "gates"', 'verify-idempotent', 'step "motion"', 'step "shot --motion motion/proof.json"', 'step "frames motion/proof.json $FRAMES_ARGS"', 'step "book";', 'step "book-pdf";',
                                      '"${BC[@]}" emit presskit', "staleness --write")]
     assert order == sorted(order)
     # nothing in the chain writes the owner's chapters

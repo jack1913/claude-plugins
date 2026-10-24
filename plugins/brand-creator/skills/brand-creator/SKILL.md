@@ -23,11 +23,10 @@ show options with a stated pick. **Re-invoke this skill after compaction** (only
    ask which.
 3. Nothing → run G0 (below), then scaffold with
    `brand-creator --data "${CLAUDE_PLUGIN_DATA}" new <slug> --name "<Name>" --tier <tier> --root <folder>`.
-   When the projects folder is unset, the folder is not an AskUserQuestion item (the G0 call holds only choice
-   questions): the plain-text facts message after G0 says "I'll create ./<slug>/ in the current folder unless you name another
-   place". An open name gets the working slug `brand-<yyyymmdd>`, renamed after G1 and recorded under Renames.
-   Then comes P1s style research and its board (G1s); no board of directions is built before G1s is recorded (a pick, a
-   skip, or an honest "n/a" for a project that was already past round 1).
+   When the projects folder is unset, the folder is not an AskUserQuestion item: the plain-text facts message after G0
+   says "I'll create ./<slug>/ in the current folder unless you name another place". An open name gets the working slug
+   `brand-<yyyymmdd>`, renamed after G1 and recorded under Renames.
+   Then comes P1s style research and its board (G1s); no board of directions is built before G1s is recorded (see G1s).
 
 Work inside the brand project from the first minute. Only page shots go to scratch (the tools put them under the data
 folder). Never build a brand in `/tmp`.
@@ -64,11 +63,11 @@ These rules ship with the plugin and hold whatever the user's own configuration 
 | Tier | Phases | Outputs | `check` covers |
 |---|---|---|---|
 | Quick | P0 → style research (P1s) → one board (3 directions) → pick → one refine → mark → tokens → web + social → short guide (`book`, Quick chapters) → G5 | mark and lockup SVG/PNG, favicon set, OG card, circle-safe avatar (400, 800), tokens.css/json, short guide (`book.html`); GitHub preview and README headers only when the brief or inventory lists a repository | contrast, logo sheet, board lint, shots, book lint |
-| Standard | + P1 research (feeds P1s), P2 naming if the name is open, full book, web/social/profile/print packs | + book.html, names memo, print PDFs (opt-in) | + book lint, print check, font check |
+| Standard | + P1 research (feeds P1s), P2 naming if the name is open, a motion round after G3 (or nothing moves), full book, web/social/profile/print packs | + book.html, names memo, print PDFs (opt-in) | + book lint, print check, font check, motion proof |
 | Full | + P1c inventory, platform emitters, adoption, launch | + Apple/Windows/Linux/Wallet/developer packs, ADOPTION, LAUNCH | + emitter compiles, idempotence, staleness |
 
-Rough length to state at G0: Quick 2-3 board rounds in one sitting; Standard 4-6 rounds over a day or two;
-Full several sessions. Folders appear when their phase starts. Existing mark (Quick): audit the supplied SVG/PNG/PDF
+Rough length to state at G0: Quick 2-3 board rounds in one sitting; Standard 4-6 rounds over a day or two, and 2-3 more
+for motion; Full several sessions. Folders appear when their phase starts. Existing mark (Quick): audit the supplied SVG/PNG/PDF
 at 16/32/180 → palette → short guide → files.
 Quick with an open or at-risk name runs the brand-naming skill (P2) before the board, or moves up a tier; state which at G0.
 
@@ -100,7 +99,7 @@ Quick with an open or at-risk name runs the brand-naming skill (P2) before the b
 | P4 | selection, reset or recovery | G2, G2b-a, G2b-b | [04-selection](references/phases/04-selection.md) | all |
 | P5 | refinement rounds | G3 (freeze) | [05-refinement](references/phases/05-refinement.md) | all |
 | P6 | mark and logo system at real sizes | thresholds go to G4 | [06-mark](references/phases/06-mark.md) | all |
-| P7 | tokens and system rules | G4 | [07-tokens](references/phases/07-tokens.md) | all |
+| P7 | motion round (S, F), then tokens and system rules | G4 | [07-tokens](references/phases/07-tokens.md) | all |
 | P8 | asset packs: the brand-assets skill | needs G3 | [08-assets](references/phases/08-assets.md) | all (web, social in Quick) |
 | P9 | QA gates | `check` exit 0 | [09-qa](references/phases/09-qa.md) | all |
 | P10 | brand book or short guide: [the brand-book skill](../brand-book/SKILL.md) | G5 | [10-book](references/phases/10-book.md) | all (short in Quick) |
@@ -151,10 +150,12 @@ Read the phase file fully when entering a phase. Record every gate decision with
   only, never character); (4) widen only if the owner asks. Graft only before the pick. State your reading of combined
   picks ("style 2 and 3") before building. `canonical_direction` in BRAND-STATE names the baseline.
 - **G3 Refined approval.** A board with "What changed" and "Weak points" is approved; record G3, then
-  `... freeze r<N> --name approved-board`.
+  `... freeze r<N> --name approved-board`. Standard and Full: the motion round follows P6, unless the owner says nothing
+  moves (asked once, with your pick; 07-tokens).
 - **G4 System rules.** Thresholds, size bands, endorsement, motion, theme behaviour: each a one-line revertable
   "(rule)" item. Your numbers are proposals. A written plan, then an explicit GO. In Quick or for a business without a
-  product UI, show them as plain-language defaults and leave out motion and script rules unless something moves (07-tokens).
+  product UI, show them as plain-language defaults; Quick leaves out motion and script rules unless something moves.
+  Standard and Full decide motion before G4 (07-tokens).
 - **G-sys tripwire.** A third incremental fix in the same area (`... state --bump fixes_per_area.<area>` on each) →
   stop. Write a numbered-rules system spec, review it adversarially, get the owner's GO before more edits.
 - **G5 Pack and book.** Edition approved; collapse step (remove losing variants and switchers, keep a dated copy).
@@ -209,7 +210,7 @@ machine?", with local marked (Recommended). Record the answer with `state --set 
 opened with `open` / `xdg-open` / `start` (print the absolute path if that fails). The plugin setting `artifact` is the
 owner's yes already; `local` means never upload. If Artifact is asked for but the tool is missing, say so before
 falling back to the local file. Each round regenerates one stable page, `review/index.html`, published to the same Artifact
-URL, recorded as `review_url`. Round 0's page is a copy of the style board. Round folders stay as frozen copies.
+URL, recorded as `review_url`. Round 0's page is a copy of the style board.
 
 ---
 
@@ -221,9 +222,11 @@ after a full rejection the next pick board also waits for a new style board and 
 
 1. New folder `rounds/r<N>/`; from round 2 copy the previous round first (`cp -R rounds/r<N-1> rounds/r<N>`).
    Earlier rounds are never edited; the hook blocks it. Marks that need drawing are drawn first, on the session's drawing
-   engine, and come in as SVG masters with a `SOURCE.md` ([drawing-engines.md](references/drawing-engines.md)).
+   engine, and come in as SVG masters with a `SOURCE.md` ([drawing-engines.md](references/drawing-engines.md)). A motion
+   round is the exception: the first starts as an empty folder, a later one copies the previous motion round (the round skill).
 2. Build the round page at `rounds/r<N>/board.html` from `${CLAUDE_PLUGIN_ROOT}/templates/round-page.html`
-   (per-direction deep boards from `templates/board.html` go in `rounds/r<N>/<direction>/board.html`). Fill every
+   (per-direction deep boards from `templates/board.html` go in `rounds/r<N>/<direction>/board.html`; a motion round from
+   `templates/motion-board.html`). Fill every
    `[[fill: ...]]`; the lint fails on any left. Follow [board-contract.md](references/board-contract.md).
 3. `... board-lint rounds/r<N>/board.html --project <dir>` until exit 0.
 4. `... shot rounds/r<N>/board.html --project <dir>`; Read every slice listed in `assets/_checks/shot.json`
@@ -231,7 +234,9 @@ after a full rejection the next pick board also waits for a new style board and 
    Chromium yet): go on with steps 5 to 7, and the reply says the shots are not verified and names the fix.
 5. Regenerate `review/index.html` from `${CLAUDE_PLUGIN_ROOT}/templates/review/index.html`, lint it the same way, and
    publish it to the review surface (same Artifact URL every round). Round 0 has no review template: copy the style
-   board (`cp rounds/r0/board.html review/index.html`) and lint it with `board-lint review/index.html --round 0`.
+   board (`cp rounds/r0/board.html review/index.html`) and lint it with `board-lint review/index.html --round 0`. A motion
+   round has no review template either: its review page is a copy of the board with its pictures inlined (the round skill),
+   linted with `--round <N>`.
 6. Update BRAND-STATE.md: phase, Directions table (rejected / liked / DECIDED), `canonical_direction`, Still open.
 7. Reply with the response template and stop at the gate.
 
@@ -271,6 +276,10 @@ arguments, resume and the refine loop: [fleet.md](references/fleet.md).
 - `... state --set phase=P5 --set canonical_direction=Compass`.
 - `... state --record G2 "picked Compass with Lantern's dot"` and `--require G3`.
 - `... state --bump fixes_per_area.lockup`: count incremental fixes (G-sys).
+- `... motion`: the motion decision. The `state` summary prints the same `motion:` line (`on (signature: ...)`, `off (nothing moves:
+  ...)` or `not decided`), so read it before you ask: an answer there is final and is never asked again.
+  `... motion --off "<the owner's reason>"` records that nothing moves, once, in the owner's words; it never writes over an
+  answer (a brand that moves is recorded by the motion round, [07-tokens](references/phases/07-tokens.md)).
 - Decisions with reasons go to `decisions/` or the Notes block; liked/rejected lines are paraphrased owner signals.
 
 ## Project layout
@@ -280,6 +289,8 @@ arguments, resume and the refine loop: [fleet.md](references/fleet.md).
   BRAND-STATE.md  FACTS.md  brief/BRIEF.md  brief/canvas-round-<N>.md (drawing briefs)  INVENTORY.md (Full, product-in-family)
   research/ (research.md, cliches.md, positioning-map.md, dated notes, names/)
   rounds/r0/board.html (style board)  rounds/r1/board.html  rounds/r1/<direction>/ (<item>.svg, -16/-32/-128.png, SOURCE.md)
+  rounds/r<N>/<variant>/ (a motion round: index.html, proof.json, frames/<variant>/)
+  motion/ (motion.json: the one record of the motion decision, absent = not decided; proof.json, frames/<case>/ of the approved move)
   .design/<slug>/ (the use-llm design canvas, when one is used)
   review/index.html                        tokens/*.tokens.json
   assets/logo/ assets/tokens/ assets/web/ assets/social/ assets/manifest.json assets/_checks/
@@ -297,6 +308,7 @@ Full file contract: `${CLAUDE_PLUGIN_ROOT}/scripts/CONTRACT.md`. Templates: `${C
 | contrast report | `contrast --project <dir>` |
 | real-size logo sheet | `logo-sheet --project <dir>`, then Read `assets/_checks/logo-sheet.png` |
 | mark geometry, fonts, small sizes | `outline-glyphs`, `logo-sheet --guides`, `fontcheck --lang <code>`, `downscale --source <master.png>`, `states-check`, `family-check`, `contrast --cvd` (details: `scripts/CONTRACT.md`, "QA gates and mark tooling") |
+| the motion decision (Standard and Full: before G4); the motion round is `/brand-creator:round motion` | `motion`, `motion --off "<the owner's reason>"` |
 | motion proof and its stills, byte identity, stale packs | `shot --motion <proof.json>`, `frames <proof.json>`; `snapshot take|diff`, `verify-idempotent --cmd "<chain>"`, `staleness`, `specs-due` |
 | web and social files | `emit web --project <dir>`; `emit social --project <dir> --tagline "<FACTS line>"` |
 | platform packs (Full tier, from INVENTORY.md) | `emit apple` (macOS with Xcode only), `emit windows`, `emit linux --app-id <id>`, `emit tray` (needs `tray/tray.json`), `emit tauri`, `emit wallet`, `emit developer`; sizes come from [platform-specs](references/platform-specs.md); the chain is `templates/finish.sh.tpl`; method: [the brand-assets skill](../brand-assets/SKILL.md) |
@@ -322,7 +334,7 @@ Full file contract: `${CLAUDE_PLUGIN_ROOT}/scripts/CONTRACT.md`. Templates: `${C
   [08-assets](references/phases/08-assets.md), [09-qa](references/phases/09-qa.md),
   [10-book](references/phases/10-book.md), [11-adoption](references/phases/11-adoption.md),
   [12-history](references/phases/12-history.md), [13-launch](references/phases/13-launch.md).
-- [board-contract.md](references/board-contract.md): required board sections (pick, refine and style boards), territory card, rubric, generation prompts.
+- [board-contract.md](references/board-contract.md): required board sections (pick, refine, style and motion boards), territory card, variant card, rubric, generation prompts.
 - [drawing-engines.md](references/drawing-engines.md): where marks are drawn (the use-llm design canvas, Claude Code's /design, or Claude-drawn SVG on the owner's yes), the drawing brief, what lands in the round, the canvas's known quirks.
 - [The brand-naming skill](../brand-naming/SKILL.md): P2 naming, prior art, screening and the verdict memo.
 - [The brand-book skill](../brand-book/SKILL.md): P10 book, self-review checklist, collapse, G5 opt-ins, the RGB proof PDF.

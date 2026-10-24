@@ -9,7 +9,11 @@ Sections are found by data-section attributes (the vocabulary is documented in s
 A section that exists but is empty fails. What is required depends on the round (path rounds/rN/ or --round),
 on BRAND-STATE.md (incumbent, reset_rounds, tier, architecture, inventory, gates.G1s, g1s_round) and on the page's data-board kind
 (pick: round 1 or a round listed in reset_rounds; refine: the later rounds; style: the style research page of round 0, or of a round
-listed in reset_rounds; see scripts/CONTRACT.md).
+listed in reset_rounds; motion: a round from 2 on, after G3, that tries the signature move as variants; see scripts/CONTRACT.md).
+A motion board is no pick, style, reset or rejected round: it has its own rows (motion:g3, motion:off, motion:variants, motion:files, motion:proof,
+motion:stills, motion:fields; boardlib/motionboard.py), the kept masters are not measured on it, and the style gate never counts it.
+Every kind of board also gets page:votes: the vote of each card (<fieldset data-vote="<name>">) is a radio group of its own, its radios named vote-<name>
+(two cards that share a radio name are one group, and a vote on one clears the vote on the other).
 Exit 1 lists every missing or empty requirement.
 On a refine board the kept masters of the round (rounds/rN/<direction>/*.svg, each <name>-dark.svg twin on the dark ground) are also
 measured, as warnings only: every flat colour that touches the ground below the target (3:1, or touching.ground of the built tokens),
@@ -27,19 +31,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "marklib"))
 from _common import (EXIT_USAGE, CliError, Parser, Report, add_project_arg, confine, fail, find_project, gate_recorded,  # noqa: E402
                      list_rounds, main_guard, read_state, rel)
 import svgtools  # noqa: E402
-from boardpage import (MIN_TERRITORIES, PLACEHOLDER, Node, declared_round, is_style_board, page_kind, parse_dom, read_page,  # noqa: E402
-                       sections, territory_count)
+from boardpage import (DATA_IMAGE, FILL, GENERIC_NAME, KINDS, MIN_TERRITORIES, PLACEHOLDER, WORD_NAME, Node, declared_round,  # noqa: E402
+                       is_style_board, page_kind, parse_dom, read_page, sections, territory_count)
+import motionboard  # noqa: E402
 from _color import parse_hex, wcag_ratio  # noqa: E402
 from marks import ground_contacts, ground_target, outline_width, tokens_ground  # noqa: E402
-
-FILL = "[[fill"
-# "Option 2", "Style A", "Direction II", "Option #2", "Style-3": a label, not a word name. A label word alone, or followed by a number
-# (with or without a separator), or by one letter or a roman numeral after a space, "-" or "#". "Routes", "Looker" and "Moody" are words.
-_LABEL_WORDS = "option|direction|variant|style|concept|route|territory|look|mood|idea|version|choice"
-_ROMAN = "(?=[ivxlcdm])m{0,3}(?:cm|cd|d?c{0,3})(?:xc|xl|l?x{0,3})(?:ix|iv|v?i{0,3})"
-GENERIC_NAME = re.compile(rf"^(?:{_LABEL_WORDS})(?:\d+|[\s#-]+(?:\d+|[^\W\d_]|{_ROMAN}))?$", re.I)
-WORD_NAME = re.compile(r"^[^\W\d_]{3,}")
-DATA_IMAGE = re.compile(r"^data:image/[a-z0-9.+-]+[;,]", re.I)
 
 
 def srcset_urls(value: str) -> list[str]:
@@ -72,6 +68,37 @@ def srcset_urls(value: str) -> list[str]:
     return urls
 
 
+VOTE = "data-vote"
+
+
+def check_votes(rep: Report, root: Node) -> None:
+    """page:votes, on every kind of board: the vote of each card (a <fieldset data-vote="<name>"> of keep / drop / unsure radios) is a radio group of its own. A radio name is one group for the whole page, so
+    two cards that share one (a card copied with the name of the one it came from; every card of the 0.3.6 templates said vote-one) are one group, and a vote on one clears the vote on the other. The radios of a
+    card are named vote-<name>, the name being the card's data-vote as written (the templates write it so). A page with no vote gets an info row: a vote is optional."""
+    groups = [(n.attrs[VOTE].strip(), [r.attrs.get("name") for r in n.walk() if r.tag == "input" and r.attrs.get("type", "").strip().lower() == "radio"]) for n in root.walk() if VOTE in n.attrs]
+    if not groups:
+        rep.add("page:votes", "info", "not required here", detail="no vote on this page: a vote (keep / drop / unsure per card) is optional")
+        return
+    label = "each card's vote is a radio group of its own, named vote-<its name>"
+    cards = [nm if sum(1 for g, _ in groups if g == nm) == 1 else f"{nm} (vote #{i})" for i, (nm, _) in enumerate(groups, 1)]   # two votes that carry one name are told apart by their place
+    users: dict[str, list[str]] = {}
+    for card, (_, radios) in zip(cards, groups):
+        for name in dict.fromkeys(r for r in radios if r):
+            users.setdefault(name, []).append(card)
+    problems = [f'{", ".join(who[:-1])} and {who[-1]} share the radio name "{name}", so they are one vote group and a vote on one clears the vote on the others'
+                for name, who in users.items() if len(who) > 1]
+    for card, (nm, radios) in zip(cards, groups):
+        found = [f'"{r}"' if r else "a radio with no name" for r in dict.fromkeys(radios) if r != f"vote-{nm}"]
+        if found:
+            problems.append(f'{card}: its radios must all be named "vote-{nm}" (found: {", ".join(found)})')
+    if not problems:
+        rep.add("page:votes", "pass", label, detail=f"{len(groups)} vote group(s), one per card: " + ", ".join(f"vote-{nm}" for nm, _ in groups))
+        return
+    first = groups[0][0]
+    rep.add("page:votes", "fail", label, detail="; ".join(problems[:8]) + (f"; and {len(problems) - 8} more" if len(problems) > 8 else "")
+            + f'. To fix it, name the radios of each card vote-<its name>, a group of their own per card (name="vote-{first}" on the card {first})')
+
+
 def style_rearmed(project: Path, rnd: int, reset_rounds: list[int], g1s_round: int | None) -> tuple[bool, str]:
     """After a full rejection the pick board of reset round `rnd` needs a new style board and a style pick recorded after it.
     The rejected round is the highest earlier round whose board is not a style board. The new style board is a style board in a
@@ -80,6 +107,7 @@ def style_rearmed(project: Path, rnd: int, reset_rounds: list[int], g1s_round: i
     asks. G1s must have been recorded when that round or a later style board was on disk (g1s_round, written by `state --record G1s`).
     Returns (ok, detail)."""
     pages = {n: read_page(path / "board.html") for n, path in list_rounds(project) if n < rnd}
+    pages = {n: root for n, root in pages.items() if page_kind(root) != "motion"}   # a motion round is not a round the owner rejected, and no style board lies in it
     last = max((n for n, root in pages.items() if page_kind(root) != "style"), default=-1)
     declared = [n for n, root in pages.items() if page_kind(root) == "style" and n > last and n in reset_rounds]
     styles = [n for n in declared if is_style_board(pages[n], n)]
@@ -228,9 +256,13 @@ def main() -> int:
     map_round = rnd == 1 or rnd in reset_rounds
     style_round = rnd == 0 or rnd in reset_rounds   # the style research runs before round 1, and again after a full rejection
     kind = page_kind(root)
-    if kind not in ("pick", "refine", "style"):
-        rep.add("page:data-board", "fail", "page declares its kind", detail='<body data-board="pick|refine|style"> is missing or invalid')
+    if kind not in KINDS:
+        rep.add("page:data-board", "fail", "page declares its kind", detail='<body data-board="pick|refine|style|motion"> is missing or invalid')
         kind = "pick" if map_round else "refine"
+    elif kind == "motion" and (rnd < 2 or rnd in reset_rounds):
+        rep.add("page:data-board", "fail", "page declares its kind",
+                detail=("a motion board is round 2 or later (round 0 is the style board, round 1 the first pick board)" if rnd < 2 else
+                        f"round {rnd} is listed in reset_rounds: a style board or a pick board belongs there; a motion board is a round of its own"))
     elif kind == "style" and not style_round:
         rep.add("page:data-board", "fail", "page declares its kind",
                 detail=f'a style board is round 0 (rounds/r0/, data-round="0") or a round listed in reset_rounds, not round {rnd}')
@@ -244,6 +276,7 @@ def main() -> int:
                 detail=f"round {rnd} must be a pick board (data-board=\"pick\"), or a style board when the style research runs again (reset rounds)")
     else:
         rep.add("page:data-board", "pass", "page declares its kind", detail=kind)
+    check_votes(rep, root)
     incumbent = (a.incumbent == "yes") if a.incumbent else str(st.get("incumbent", "none") or "none").strip().lower() not in ("none", "", "no")
 
     def need(sid: str, required: bool, why: str) -> Node | None:
@@ -385,8 +418,27 @@ def main() -> int:
         check_questions(qs)
         need("reply", True, "how to answer: a territory name or letter and one sentence")
 
+    def check_motion(rnd: int) -> None:
+        """A motion board (data-board="motion"): the gates of the round, the sections every board has, and one card per variant (boardlib/motionboard.py).
+        The first motion board of a project shows exactly three variants and needs no What changed and Weak points; a later one (the refine loop on the picked or
+        combined variant) shows one or more and needs both, as a refine board does. No map, no directions, no None of these section, no kept masters."""
+        first = not any(page_kind(read_page(d / "board.html")) == "motion" for n, d in list_rounds(project) if n < rnd)
+        motionboard.gate_rows(rep, project)
+        if a.min_directions:
+            rep.add("directions:count", "info", "not required here", detail="a motion board shows variants of one move (motion:variants), not directions; --min-directions is not used")
+        need("what-changed", not first, "from the second motion board: what changed since the review")
+        need("hardest-surface", True, "the one place where the move is hardest to get right")
+        need("weak-points", not first, "from the second motion board: honest weak points")
+        check_my_call()
+        check_questions(need("questions", True, "numbered questions with lettered options, answerable by number from a phone"))
+        need("reply", True, "how to answer: a variant name or letter and one sentence")
+        motionboard.variant_rows(rep, project, rnd, root, page, first)
+
     if kind == "style":
         check_style(rnd)
+        return rep.finish()
+    if kind == "motion":
+        check_motion(rnd)
         return rep.finish()
 
     need("what-changed", rnd >= 2, "from round 2: what changed since the review")

@@ -85,8 +85,11 @@ written as numbers the owner approved.
    accent is named as such. A miss the owner accepts (a row of 2 px cells that reads as a row) is an exemption with their
    reason, for that master and size: `downscale.exemptions` in `qa/rules.json`, a warning instead of a failure. A
    low-contrast accent is used only as a fill with an edge, never as text.
-5. **Signature move.** Each brand owns one move (it presses, slides, crosses, rises) and one colour role that no
-   sibling uses. In family modes, compare against the siblings' tiles side by side.
+5. **Signature move.** Every brand owns one colour role that no sibling uses; a brand that moves also owns one move (it
+   presses, slides, crosses, rises). Name the move once: it is the `signature` of `motion/motion.json`, which the book, the
+   adapters and the motion round use; in Standard and Full it is tried in the motion round after G3
+   ([07-tokens](07-tokens.md)), and a brand that does not move records that once (`brand-creator motion --off "<reason>"`).
+   In family modes, compare against the siblings' tiles side by side.
 6. **Distinctive assets.** List the non-name assets the brand claims (shape, colour role, move, pattern) and compare
    them with the 5-competitor lineup; drop any that a competitor already owns.
 7. **Size bands.** A different drawing per body size, chosen by one function (`qa_rules.pick_band()`), for example

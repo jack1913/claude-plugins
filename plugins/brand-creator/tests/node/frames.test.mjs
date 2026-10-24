@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { needSetup, bc, motionProject, writeProof, writePage, pageCase, readPng, columns, sha256Of, tree } from "./_motion.mjs";
+import { tmpdir } from "./_helpers.mjs";
 import { proofReportTool } from "../../scripts/lib/_common.mjs";
 
 const frames = (p, ...args) => bc(["frames", ...args, "--project", p]);
@@ -168,19 +169,101 @@ test("a page that also moves by requestAnimationFrame while the stills are taken
   assert.ok(!fs.existsSync(path.join(p, "motion/frames")));
 });
 
-test("a case's stills come from one proof: another proof with a case of the same name is refused before anything is drawn", (t) => {
+test("a case's stills come from one proof: another proof of the project with a case of the same name is refused before anything is drawn", (t) => {
   if (needSetup(t)) return;
   const p = motionProject();
   assert.equal(frames(p, "motion/proof.json", "--count", "2").status, 0);
   const before = tree(dirOf(p));
-  fs.mkdirSync(path.join(p, "rounds/r2"), { recursive: true });
   const demo = JSON.parse(fs.readFileSync(path.join(p, "motion/proof.json"), "utf8")).cases.find((c) => c.name === "demo-page");
-  const tryout = writeProof(p, [demo], "rounds/r2/proof.json");
-  const r = frames(p, tryout);
+  const other = writeProof(p, [demo], "motion/other.json");                       // a second proof of the project: its stills would go to the same folder
+  const r = frames(p, other);
   assert.equal(r.status, 2, r.stdout + r.stderr);
-  assert.match(r.stderr, /motion\/frames\/demo-page\/ holds the stills of motion\/proof\.json, and a case's stills come from one proof: rename the case in rounds\/r2\/proof\.json, or move motion\/frames\/demo-page\/ to removed-<date>\//);
+  assert.match(r.stderr, /motion\/frames\/demo-page\/ holds the stills of motion\/proof\.json, and a case's stills come from one proof: rename the case in motion\/other\.json, or move motion\/frames\/demo-page\/ to removed-<date>\//);
   assert.deepEqual(tree(dirOf(p)), before);
   assert.equal(frames(p, "motion/proof.json", "--count", "2").status, 0); // the proof that wrote them may write them again
+});
+
+test("a try-out proof keeps its stills beside it, in the latest round or a removed-*/ folder, and never touches the stills of the project the book replays", (t) => {
+  if (needSetup(t)) return;
+  const p = motionProject();
+  assert.equal(frames(p, "motion/proof.json", "--count", "2").status, 0);       // the project's own stills, with a case of the same name
+  const mine = tree(path.join(p, "motion/frames"));
+  const demo = JSON.parse(fs.readFileSync(path.join(p, "motion/proof.json"), "utf8")).cases.find((c) => c.name === "demo-page");
+  for (const where of ["rounds/r2", "rounds/r3/Bounce", "removed-2026-10-23"]) {   // each is the latest round when it is run (r3 does not exist before r2 is done)
+    fs.mkdirSync(path.join(p, where), { recursive: true });
+    const proof = writeProof(p, [demo], `${where}/proof.json`);
+    const r = frames(p, proof, "--count", "3");
+    assert.equal(r.status, 0, `${where}: ${r.stdout}${r.stderr}`);
+    const dir = path.join(p, where, "frames/demo-page");
+    assert.deepEqual(fs.readdirSync(dir).sort(), ["00-0.png", "01-50.png", "02-100.png", "frames.json", "reduced.png", "strip.png"], where);
+    const d = JSON.parse(fs.readFileSync(path.join(dir, "frames.json"), "utf8"));
+    assert.equal(d.proof, proof); assert.equal(d.case, "demo-page");
+    for (const f of d.frames) { assert.equal(f.file, `${where}/frames/demo-page/${path.basename(f.file)}`); assert.equal(sha256Of(fs.readFileSync(path.join(p, f.file))), f.sha256); }
+    assert.equal(d.strip.file, `${where}/frames/demo-page/strip.png`); assert.equal(sha256Of(fs.readFileSync(path.join(p, d.strip.file))), d.strip.sha256);
+    assert.equal(d.reduced.file, `${where}/frames/demo-page/reduced.png`); assert.equal(sha256Of(fs.readFileSync(path.join(p, d.reduced.file))), d.reduced.sha256);
+    assert.ok(r.stdout.includes(`strip.png, reduced.png and frames.json in ${where}/frames/demo-page/: written (6 of 6 file(s) changed)`), r.stdout);
+    const report = JSON.parse(fs.readFileSync(path.join(p, "assets/_checks", proofReportTool(proof, "frames") + ".json"), "utf8"));   // the report is named after the proof, as for any proof
+    assert.equal(report.proof, proof); assert.equal(report.status, "pass"); assert.equal(report.results[0].dir, `${where}/frames/demo-page`);
+    const again = frames(p, proof, "--count", "3");                                // a rerun is byte-identical here too
+    assert.equal(again.status, 0); assert.match(again.stdout, new RegExp(`in ${where}/frames/demo-page/: unchanged`));
+  }
+  assert.deepEqual(tree(path.join(p, "motion/frames")), mine);                    // not one byte of the project's stills changed, and none was added
+  assert.deepEqual(fs.readdirSync(path.join(p, "motion/frames")), ["demo-page"]);
+});
+
+test("a proof inside history/ or inside a round before the latest one is refused before a browser starts: they are read-only", (t) => {
+  if (needSetup(t)) return;
+  const p = motionProject();
+  const demo = JSON.parse(fs.readFileSync(path.join(p, "motion/proof.json"), "utf8")).cases.find((c) => c.name === "demo-page");
+  const proofs = ["rounds/r2/Settle", "rounds/r3/Settle", "history/2026-10-23-approved-motion"].map((where) => { fs.mkdirSync(path.join(p, where), { recursive: true }); return writeProof(p, [demo], `${where}/proof.json`); });
+  const [early, latest, frozen] = proofs;
+  const before = tree(p);
+  const nowhere = tmpdir("bc-nosetup-");        // a data folder that was never set up: a run that got as far as the browser would stop with exit 3
+  assert.equal(bc(["frames", "motion/proof.json", "--project", p], { data: nowhere }).status, 3);
+  const old = bc(["frames", early, "--count", "2", "--project", p], { data: nowhere });
+  assert.equal(old.status, 2, old.stdout + old.stderr);
+  assert.match(old.stderr, /rounds\/r2\/Settle\/proof\.json is inside rounds\/r2\/, and every round before the latest \(rounds\/r3\/\) is read-only \(frames writes its stills beside the proof\): copy the proof and its page into the latest round and run frames there/);
+  const cold = bc(["frames", frozen, "--count", "2", "--project", p], { data: nowhere });
+  assert.equal(cold.status, 2, cold.stdout + cold.stderr);
+  assert.match(cold.stderr, /history\/2026-10-23-approved-motion\/proof\.json is inside history\/, which is read-only \(frames writes its stills beside the proof\): take the stills before `freeze`, or copy the proof and its page into the latest round and run frames there/);
+  for (const [name, proof] of [["a round before the latest", early], ["history", frozen]]) {
+    const r = frames(p, proof, "--count", "2");                                    // and with the browser at hand: still refused, still nothing written
+    assert.equal(r.status, 2, `${name}: ${r.stdout}${r.stderr}`);
+  }
+  assert.deepEqual(tree(p), before);                                             // not one file written or changed: no stills, no report
+  const r = frames(p, latest, "--count", "2");                                   // the latest round is the one that is written
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.ok(fs.existsSync(path.join(p, "rounds/r3/Settle/frames/demo-page/strip.png")));
+  fs.mkdirSync(path.join(p, "rounds/r4"));                                       // a newer round: r3 is read-only from now on
+  const again = frames(p, latest, "--count", "2");
+  assert.equal(again.status, 2, again.stdout + again.stderr);
+  assert.match(again.stderr, /rounds\/r3\/Settle\/proof\.json is inside rounds\/r3\/, and every round before the latest \(rounds\/r4\/\) is read-only/);
+  assert.equal(frames(p, "motion/proof.json", "--count", "2").status, 0);        // the project's own proof is not in a round: always written
+});
+
+test("the folder of a try-out proof belongs to one proof too, and a round copied whole is taken again in place, said in the report", (t) => {
+  if (needSetup(t)) return;
+  const p = motionProject();
+  const demo = JSON.parse(fs.readFileSync(path.join(p, "motion/proof.json"), "utf8")).cases.find((c) => c.name === "demo-page");
+  fs.mkdirSync(path.join(p, "rounds/r2"), { recursive: true });
+  const first = writeProof(p, [demo], "rounds/r2/proof.json");
+  assert.equal(frames(p, first, "--count", "2").status, 0);
+  const before = tree(path.join(p, "rounds/r2/frames"));
+  const second = writeProof(p, [demo], "rounds/r2/other.json");                  // another proof of the same folder, a case of the same name
+  const r = frames(p, second);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /rounds\/r2\/frames\/demo-page\/ holds the stills of rounds\/r2\/proof\.json, and a case's stills come from one proof: rename the case in rounds\/r2\/other\.json, or move rounds\/r2\/frames\/demo-page\/ to removed-<date>\//);
+  assert.deepEqual(tree(path.join(p, "rounds/r2/frames")), before);
+  // the next round is a copy of this one, stills included: they name the proof of rounds/r2/, and the proof of rounds/r3/ takes them again
+  fs.cpSync(path.join(p, "rounds/r2"), path.join(p, "rounds/r3"), { recursive: true });
+  const copy = "rounds/r3/proof.json";
+  const c = frames(p, copy, "--count", "2");
+  assert.equal(c.status, 0, c.stdout + c.stderr);
+  assert.match(c.stdout, /\[INFO\] frames:demo-page:copied .*rounds\/r3\/frames\/demo-page\/ held the stills of rounds\/r2\/proof\.json \(the round was copied whole\): they are taken again here, for rounds\/r3\/proof\.json/);
+  const d = JSON.parse(fs.readFileSync(path.join(p, "rounds/r3/frames/demo-page/frames.json"), "utf8"));
+  assert.equal(d.proof, copy); assert.ok(d.frames.every((f) => f.file.startsWith("rounds/r3/frames/demo-page/")) && d.strip.file === "rounds/r3/frames/demo-page/strip.png");
+  assert.deepEqual(tree(path.join(p, "rounds/r2/frames")), before);                // the earlier round is as it was
+  assert.doesNotMatch(frames(p, copy, "--count", "2").stdout, /:copied/);         // and the folder is the copy's own now
 });
 
 test("a strip wider than Chromium can write is a usage error that says how many stills fit", (t) => {

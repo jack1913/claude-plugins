@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="[[fill: language code of the owner, e.g. en]]">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>[[fill: Brand]]: round [[fill: N]], motion</title>
+<!--
+  brand-creator motion board template. Copy to <project>/rounds/rN/board.html (round 2 or later, after G3) and fill every [[fill: ...]] marker;
+  `brand-creator board-lint` fails while any marker is left in text or attributes (HTML comments are ignored).
+  The data-section / data-field vocabulary is defined in scripts/CONTRACT.md ("Board contract") and explained in
+  skills/brand-creator/references/board-contract.md. Built on templates/round-page.html: the same tokens, header, hardest surface, My call, questions and reply.
+  One folder per variant, rounds/rN/<name>/, made before this page: index.html (the move where it will be seen, the approved mark in place), proof.json
+  (a page case named <name> whose page is rounds/rN/<name>/index.html), the report of `brand-creator shot --motion rounds/rN/<name>/proof.json` and the stills of
+  `brand-creator frames rounds/rN/<name>/proof.json --count 25` (rounds/rN/<name>/frames/<name>/strip.png, reduced.png, frames.json). Each card below shows them.
+  The first motion board of a project shows exactly 3 variants; a later one (the refine loop on the picked or combined variant) shows 1 or more and needs
+  What changed and Weak points. Blocks marked OPTIONAL: delete them when they do not apply (never leave them empty).
+  The pictures are the project's own files by relative path (board-lint reads the bytes the card shows and compares them with frames.json); a copy of this page
+  that is published somewhere else (review/index.html) holds them as data: URIs instead. Self-contained: no network, no web fonts unless inlined as data: URIs,
+  system font stack for the page chrome. There is no replay here: the live page of each variant is one click away.
+  Query parameters: ?t=light|dark forces a theme; ?v=Name shows only the card of that variant (data-motion-variant="Name").
+-->
+<style>
+:root{
+  --bg:#f5f6f8;--surface:#ffffff;--sunk:#eceef1;--text:#16191d;--muted:#565d66;--line:#d9dce1;
+  --accent:#3b5b8c;--accent-ink:#ffffff;--good:#2f6b4f;--warn:#8a5a14;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans","Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --r:6px;color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#111316;--surface:#191c20;--sunk:#0c0e10;--text:#e7e9ec;--muted:#9aa1ab;--line:#2d3137;
+  --accent:#8fb0e3;--accent-ink:#0c1320;--good:#7fc4a2;--warn:#e0b26a;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111316;--surface:#191c20;--sunk:#0c0e10;--text:#e7e9ec;--muted:#9aa1ab;--line:#2d3137;
+  --accent:#8fb0e3;--accent-ink:#0c1320;--good:#7fc4a2;--warn:#e0b26a;color-scheme:dark}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.55 var(--sans)}
+main{max-width:1120px;margin:0 auto;padding:32px 16px 80px;counter-reset:sec}
+h1,h2,h3{line-height:1.2;margin:0}
+h1{font-size:clamp(28px,5vw,40px);letter-spacing:-.01em}
+h2{font-size:22px;margin-bottom:12px}
+h3{font-size:18px}
+p,li,dd{overflow-wrap:anywhere}
+p{margin:0 0 10px}
+a{color:var(--accent)}
+.eyebrow,.num{font:600 12px/1.4 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
+.num{display:block}
+.n>h2 .num::before{counter-increment:sec;content:counter(sec)}
+.lede{color:var(--muted);max-width:68ch;margin-top:10px}
+.muted{color:var(--muted)}
+.toc{display:flex;flex-wrap:wrap;gap:6px;margin:20px 0 8px;padding:0;list-style:none}
+.toc a{display:inline-block;padding:4px 10px;border:1px solid var(--line);border-radius:999px;font-size:13px;color:var(--text);text-decoration:none;background:var(--surface)}
+.block{margin-top:40px;padding-top:20px;border-top:1px solid var(--line)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))}
+.variant{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.variant[hidden]{display:none}
+.dhead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.strip,.still{margin:0}
+.strip-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:4px;background:var(--sunk)}
+.strip-scroll img{display:block;height:var(--still-h,96px);width:auto;max-width:none}
+.still img{display:block;height:var(--still-h,96px);width:auto;max-width:100%;border:1px solid var(--line);border-radius:4px}
+figcaption{font-size:13px;color:var(--muted);margin-top:4px}
+.live{margin:0}
+.proof{margin:0;font-size:14px;background:var(--sunk);border-radius:4px;padding:8px 10px;border-left:4px solid var(--muted)}
+.proof[data-proof="pass"]{border-left-color:var(--good)}
+.proof[data-proof="fail"]{border-left-color:var(--warn)}
+.fit{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;margin:0}
+.fit dt{font-weight:600}.fit dd{margin:0}
+.vote{border:0;padding:0;margin:0;display:flex;gap:6px;flex-wrap:wrap}
+.vote legend{font-size:13px;color:var(--muted);margin-bottom:4px}
+.vote label,.options label{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:14px;cursor:pointer}
+.views{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));margin-top:12px}
+.callout{border-left:4px solid var(--accent);background:var(--surface);padding:14px 16px;border-radius:0 var(--r) var(--r) 0}
+.questions{margin:0;padding-left:22px}
+.questions>li{margin-bottom:16px}
+.questions .q{font-weight:600;margin-bottom:6px}
+.options{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.options .rec{font-size:12px;color:var(--good);font-weight:600;white-space:nowrap;overflow-wrap:normal}
+.options label{border-radius:14px}
+.reply-out{font:15px/1.4 var(--mono);background:var(--sunk);border-radius:4px;padding:10px 12px;margin:8px 0;min-height:42px}
+button{font:inherit;font-size:14px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:6px 14px;cursor:pointer}
+footer{margin-top:56px;font-size:13px;color:var(--muted)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body data-round="[[fill: N]]" data-board="motion">
+
+<main>
+  <header>
+    <p class="eyebrow">Round [[fill: N]] · motion board · [[fill: YYYY-MM-DD]]</p>
+    <h1>[[fill: Brand]]: round [[fill: N]], motion</h1>
+    <p class="lede">[[fill: one sentence: what this page asks the owner to decide, for example which of the three moves goes forward]]</p>
+    <ul class="toc">
+      <li><a href="#changed">What changed</a></li><!-- OPTIONAL: delete with its section below (the first motion board) -->
+      <li><a href="#variants">Variants</a></li><li><a href="#hardest">Hardest surface</a></li>
+      <li><a href="#weak">Weak points</a></li><!-- OPTIONAL: delete with its section below (the first motion board) -->
+      <li><a href="#call">My call</a></li><li><a href="#questions">Questions</a></li>
+    </ul>
+  </header>
+
+  <!-- OPTIONAL (required from the second motion board; delete in the first one) -->
+  <section class="block" id="changed" data-section="what-changed">
+    <h2><span class="num">00</span>What changed since the review</h2>
+    <ol><li>[[fill: owner's numbered item → what changed in the move, measured where possible]]</li></ol>
+  </section>
+
+  <section class="block n" id="variants">
+    <h2><span class="num"></span>[[fill: Three variants of the move / the variant after the review]]</h2>
+    <div class="grid">
+      <!-- Repeat this article for every variant (exactly 3 on the first motion board, 1 or more on a later one). data-motion-variant: a word of 3 letters or more,
+           identical in chat, and the name of the folder rounds/rN/<name>/ (letters, digits, - and _; not "Variant 2"). -->
+      <article class="variant" data-motion-variant="[[fill: Name one]]">
+        <div class="dhead"><h3>[[fill: Name one]]</h3></div>
+        <figure class="strip">
+          <div class="strip-scroll" tabindex="0" role="group" aria-label="[[fill: Name one]]: the stills, scroll sideways"><img data-field="strip" src="[[fill: Name one]]/frames/[[fill: Name one]]/strip.png" alt="[[fill: Name one]]: [[fill: number of stills]] stills of the move, first on the left"></div>
+          <figcaption>The move in [[fill: number of stills]] stills, the first on the left. [[fill: how long it lasts and what the owner should look at]]</figcaption>
+        </figure>
+        <figure class="still">
+          <img data-field="reduced" src="[[fill: Name one]]/frames/[[fill: Name one]]/reduced.png" alt="[[fill: Name one]] with reduced motion: the approved still">
+          <figcaption>With reduced motion: this still, and nothing moves.</figcaption>
+        </figure>
+        <p class="live"><a data-field="live" href="[[fill: Name one]]/index.html">Open the live page</a> to watch it move where it will be seen.</p>
+        <p class="proof" data-proof="[[fill: pass or fail]]">[[fill: the proof line, from the report of shot --motion: how many checks passed or which failed, for example "Proof: pass (41 checks: rest frame equals the still, no layout shift, whole pixels, phone widths, reduced motion)"]]</p>
+        <dl class="fit">
+          <dt>What it is</dt><dd data-field="what-it-is">[[fill: the move in a sentence or two: what moves, how far, how long, and where it is seen]]</dd>
+          <dt>Cost</dt><dd data-field="cost">[[fill: the script, the bytes and the effort to build and keep it, for example "none: CSS only, about 40 lines"]]</dd>
+          <dt>Degrades to</dt><dd data-field="degrades-to">[[fill: what remains with no script and with reduced motion, for example "the approved still; nothing moves"]]</dd>
+        </dl>
+        <fieldset class="vote" data-vote="[[fill: Name one]]"><legend>Your vote</legend>
+          <label><input type="radio" name="vote-[[fill: Name one]]" value="keep">keep</label><label><input type="radio" name="vote-[[fill: Name one]]" value="drop">drop</label><label><input type="radio" name="vote-[[fill: Name one]]" value="unsure">unsure</label></fieldset>
+      </article>
+      <!-- [[fill: articles for variants two and three, same structure; a later motion board may show one or more]] -->
+    </div>
+  </section>
+
+  <section class="block n" id="hardest" data-section="hardest-surface">
+    <h2><span class="num"></span>Hardest surface: [[fill: the place the move is hardest to get right, e.g. the app icon on a 390 px screen]]</h2>
+    <p>[[fill: what the proof measured there for each variant: layout shift, whole pixels, the edges at phone widths, reduced motion, and what still goes wrong]]</p>
+  </section>
+
+  <!-- OPTIONAL (required from the second motion board; delete in the first one) -->
+  <section class="block n" id="weak" data-section="weak-points">
+    <h2><span class="num"></span>Weak points</h2>
+    <ul><li>[[fill: honest weak point, with a number where possible]]</li></ul>
+  </section>
+
+  <!-- With a judge: add data-judge="ran" to this section and uncomment the views block. -->
+  <section class="block n" id="call" data-section="my-call">
+    <h2><span class="num"></span>My call</h2>
+    <p data-field="recommendation"><b>Recommendation:</b> [[fill: the variant you would take forward, and why in one sentence]]</p>
+    <p data-field="critique"><b>Honest critique:</b> [[fill: the weakest part of your own pick, or of the owner's earlier pick]]</p>
+    <!--
+    <div class="views">
+      <div class="panel" data-field="judge-view"><b>Judge</b><p>[[fill: ...]]</p></div>
+      <div class="panel" data-field="lead-view"><b>Lead</b><p>[[fill: ...]]</p></div>
+      <div class="panel" data-field="middle-option"><b>Middle option</b><p>[[fill: ...]]</p></div>
+    </div>
+    -->
+  </section>
+
+  <section class="block n" id="questions" data-section="questions">
+    <h2><span class="num"></span>Questions</h2>
+    <ol class="questions">
+      <li data-section="question" data-n="1" data-lists="variants"><p class="q">Which variant goes forward?</p>
+        <ol class="options">
+          <li data-option="a" data-recommended="true"><label><input type="radio" name="q1" value="a">[[fill: Name one]] <span class="rec">Recommended</span></label></li>
+          <li data-option="b"><label><input type="radio" name="q1" value="b">[[fill: Name two]]</label></li>
+          <li data-option="c"><label><input type="radio" name="q1" value="c">[[fill: Name three]]</label></li>
+          <li data-option="d"><label><input type="radio" name="q1" value="d">Combine two of them (say which in your reply)</label></li>
+          <li data-option="e"><label><input type="radio" name="q1" value="e">None of these (say what was missing)</label></li>
+        </ol></li>
+      <!-- More questions: data-n="2", "3" ...; options lettered a, b, c ... in order (data-option); exactly one data-recommended. Question 1 (data-lists="variants") shows the variant names as its option labels and the composed reply names the variant; every other question keeps visible "a." prefixes so "2b" works. -->
+    </ol>
+  </section>
+
+  <section class="block" id="reply" data-section="reply">
+    <h2>Reply</h2>
+    <p>Answer with a variant name, or question number plus option (1a). Add one sentence on anything you want changed, for example "[[fill: Name one]], but [[fill: a change]]". Batched answers work: "1a, 2b".</p>
+    <div class="reply-out" id="reply-out" aria-live="polite">Pick options above to compose a reply, or type your own.</div>
+    <button type="button" id="copy-reply">Copy reply</button>
+  </section>
+
+  <footer>Made with brand-creator · motion round [[fill: N]] · checked with board-lint and four-view shots</footer>
+</main>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var t = q.get("t");
+  if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+  var v = q.get("v");
+  if (v) document.querySelectorAll("[data-motion-variant]").forEach(function (el) { el.hidden = el.getAttribute("data-motion-variant") !== v; });
+  var out = document.getElementById("reply-out");
+  function compose() {
+    var parts = [];
+    document.querySelectorAll("[data-section=question]").forEach(function (qq) {
+      var c = qq.querySelector("input:checked");
+      if (c) parts.push(qq.hasAttribute("data-lists") ? c.parentNode.textContent.replace("Recommended", "").trim() : qq.getAttribute("data-n") + c.value);
+    });
+    document.querySelectorAll("fieldset[data-vote]").forEach(function (f) {
+      var c = f.querySelector("input:checked");
+      if (c) parts.push(f.getAttribute("data-vote") + " " + c.value);
+    });
+    if (out && parts.length) out.textContent = parts.join(", ");
+  }
+  document.addEventListener("change", compose);
+  var btn = document.getElementById("copy-reply");
+  if (btn) btn.addEventListener("click", function () {
+    var text = out ? out.textContent : "";
+    var done = function () { btn.textContent = "Copied"; };
+    var fallback = function () { var r = document.createRange(); r.selectNodeContents(out); var s = getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = "Selected: copy it"; };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+  });
+})();
+</script>
+</body>
+</html>

@@ -235,7 +235,7 @@ def fill_style_board(template: str, names: tuple[str, ...] = ("Harbor", "Ember",
     first = m.group(0)
 
     def named(block: str, name: str) -> str:
-        return block.replace("[[fill: Name one]]", name).replace("vote-one", f"vote-{name.lower()}")
+        return block.replace("[[fill: Name one]]", name)
 
     more = "".join(named(first, n) for n in names[1:])
     marker = re.search(r"      <!-- \[\[fill: articles for territories two to four.*?-->\n", template, re.S)
@@ -259,6 +259,46 @@ def fill_style_board(template: str, names: tuple[str, ...] = ("Harbor", "Ember",
         if s.startswith("data:image"):
             return STYLE_TINY_PNG
         return STYLE_STAND_IN
+
+    out = []
+    for piece in re.split(r"(<!--.*?-->)", page, flags=re.S):      # markers inside HTML comments stay as the template wrote them
+        out.append(piece if piece.startswith("<!--") else re.sub(r"\[\[fill:.*?\]\](?!\])", stand_in, piece, flags=re.S))
+    return "".join(out)
+
+
+MOTION_STAND_IN = "Filled in for the test fixture."
+
+
+def fill_motion_board(template: str, names: tuple[str, ...] = ("Settle", "Bounce", "Glide"), *, rnd: int = 2, first: bool = True,
+                      statuses: dict | None = None, brand: str = "Acme") -> str:
+    """The motion board template as a finished page that must pass board-lint: the variant article repeated once per name and every [[fill: ...]] marker outside an HTML
+    comment replaced with stand-in text. `first` is the first motion board of a project, which does without the two blocks a later one needs (What changed, Weak points);
+    `statuses` maps a variant name to the proof line of its card (default pass). The folders, the stills and the reports of the variants are the test's to make."""
+    import re
+    m = re.search(r'      <article class="variant".*?</article>\n', template, re.S)
+    assert m, "the template has no variant article"
+    block = m.group(0)
+    marker = re.search(r"      <!-- \[\[fill: articles for variants two and three.*?-->\n", template, re.S)
+    assert marker, "the template has no 'articles for variants two and three' comment"
+
+    def named(b: str, name: str) -> str:
+        return b.replace("[[fill: Name one]]", name).replace('data-proof="[[fill: pass or fail]]"', f'data-proof="{(statuses or {}).get(name, "pass")}"')
+
+    page = template.replace(block, named(block, names[0]) if names else "", 1).replace(marker.group(0), "".join(named(block, n) for n in names[1:]), 1)
+    for word, name in zip(("one", "two", "three"), names):
+        page = page.replace(f"[[fill: Name {word}]]", name)
+    if first:   # the first motion board of a project has no earlier board to say what changed since
+        for sid in ("what-changed", "weak-points"):
+            page, n = re.subn(r'  <!-- OPTIONAL \(required from the second motion board; delete in the first one\) -->\n  <section class="block(?: n)?" id="[a-z]+" data-section="%s">.*?</section>\n\n' % sid, "", page, flags=re.S)
+            assert n == 1, sid
+        page, n = re.subn(r'      <li><a href="#(?:changed|weak)">[^<]*</a></li><!-- OPTIONAL: delete with its section below \(the first motion board\) -->\n', "", page)
+        assert n == 2, "the table of contents lists the two optional sections"
+
+    def stand_in(mm: "re.Match[str]") -> str:
+        s = mm.group(0)[len("[[fill:"):-2].strip()
+        if s.startswith("language code"):
+            return "en"
+        return {"Brand": brand, "N": str(rnd), "YYYY-MM-DD": "2026-10-17", "number of stills": "25"}.get(s, MOTION_STAND_IN)
 
     out = []
     for piece in re.split(r"(<!--.*?-->)", page, flags=re.S):      # markers inside HTML comments stay as the template wrote them

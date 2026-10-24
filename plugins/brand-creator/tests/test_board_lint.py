@@ -260,6 +260,128 @@ def test_templates_carry_the_contract_and_fail_until_filled(proj, template):
     assert r.returncode == 1 and "page:unfilled" in failing(report(proj, "board-lint")), r.stdout
 
 
+CARD = re.compile(r'      <article class="(?:direction|territory)".*?</article>\n', re.S)   # the one card a board template holds: a direction, or a territory on the style board
+
+
+@pytest.mark.parametrize("template", ["round-page.html", "style-board.html", "review/index.html"])
+def test_each_card_of_a_board_template_has_a_vote_group_of_its_own_named_after_its_direction(template):
+    """A radio name is one group for the whole page: with one name for every card (`vote-one`) a vote on the second card unchecks the first. The helpers that fill a template rename nothing, so this
+    reads the template as it ships: the radios of the card carry the name of the card's own direction, and three cards made from it are three groups (the motion board's own test is in
+    tests/test_motion_board.py; tests/node/boardvotes.test.mjs has the browser decide)."""
+    from boardpage import parse_dom
+    src = (ROOT / "templates" / template).read_text(encoding="utf-8")
+    assert src.count('name="vote-[[fill: Name one]]"') == 3 and "vote-one" not in src, template                  # keep, drop and unsure of the one card, as it ships
+    card = CARD.search(src).group(0)
+    names = ("Compass", "Lantern", "Keystone")
+    page = src.replace(card, "".join(card.replace("[[fill: Name one]]", n) for n in names), 1)
+    root = parse_dom(page)
+    groups = {n.attrs["data-vote"]: sorted({r.attrs.get("name") for r in n.walk() if r.tag == "input"}) for n in root.walk() if "data-vote" in n.attrs}
+    assert groups == {n: [f"vote-{n}"] for n in names}, (template, groups)
+    options = {r.attrs.get("name") for n in root.walk() if n.attrs.get("data-section") == "question" for r in n.walk() if r.tag == "input"}
+    assert options and not options & {g for gs in groups.values() for g in gs}, (template, options)          # the questions keep their own groups
+
+
+# ---------------------------------------------------------------- the votes: page:votes, a radio group of its own per card
+
+def make_board(proj: Path, kind: str) -> tuple[str, tuple[str, ...]]:
+    """A finished board of a kind that shows cards with a vote: (its page in the project, the names of its cards). Pick: the round 1 board of the Acme example; refine: the board derived from it (one card);
+    style: the committed fixture, the style board template filled (the motion board's own tests are in tests/test_motion_board.py)."""
+    if kind == "pick":
+        return "rounds/r1/board.html", ("Compass", "Lantern", "Keystone")
+    if kind == "refine":
+        make_r2_board(proj)
+        return "rounds/r2/board.html", ("Compass",)
+    page = proj / "rounds" / "r0" / "board.html"
+    page.parent.mkdir(parents=True)
+    page.write_text(STYLE_FIXTURE.read_text(encoding="utf-8"), encoding="utf-8")
+    return "rounds/r0/board.html", ("Harbor", "Ember", "Quarry", "Meadow")
+
+
+def votes(proj: Path) -> dict:
+    return next(x for x in report(proj, "board-lint")["results"] if x["id"] == "page:votes")
+
+
+@pytest.mark.parametrize("kind", ["pick", "refine", "style"])
+def test_a_board_whose_cards_each_have_a_vote_group_of_their_own_passes_page_votes(proj, kind):
+    page, names = make_board(proj, kind)
+    r = lint(proj, page)
+    assert r.returncode == 0, r.stdout
+    got = votes(proj)
+    assert got["status"] == "pass" and got["detail"] == f"{len(names)} vote group(s), one per card: " + ", ".join(f"vote-{n}" for n in names), got
+
+
+@pytest.mark.parametrize("kind", ["pick", "refine", "style"])
+def test_a_card_whose_radios_are_not_named_after_it_fails_page_votes_naming_the_card_and_the_fix(proj, kind):
+    """The Acme example once wrote vote-compass for the card Compass, and the templates vote-one for every card: the name is `vote-` and the card's name as written, a group of its own."""
+    page, names = make_board(proj, kind)
+    board = proj / page
+    first = names[0]
+    for wrong in ("vote-one", f"vote-{first.lower()}", "vote", f"{first}"):
+        before = mutate(board, f'name="vote-{first}"', f'name="{wrong}"', count=3)                  # keep, drop and unsure of the card
+        r = lint(proj, page)
+        assert r.returncode == 1 and "page:votes" in failing(report(proj, "board-lint")), (wrong, r.stdout)
+        got = votes(proj)
+        assert got["status"] == "fail" and f'{first}: its radios must all be named "vote-{first}" (found: "{wrong}")' in got["detail"], (wrong, got["detail"])
+        assert f'name="vote-{first}" on the card {first}' in got["detail"], got["detail"]            # the fix
+        board.write_text(before)
+    assert lint(proj, page).returncode == 0
+    mutate(board, f'<input type="radio" name="vote-{first}" value="drop">', '<input type="radio" value="drop">')       # one radio with no name at all is no group
+    r = lint(proj, page)
+    assert r.returncode == 1 and f'{first}: its radios must all be named "vote-{first}" (found: a radio with no name)' in votes(proj)["detail"], votes(proj)["detail"]
+
+
+@pytest.mark.parametrize("kind", ["pick", "style"])
+def test_cards_that_share_a_radio_name_are_one_group_and_fail_page_votes_naming_them(proj, kind):
+    """A radio name is one group for the whole page: a card copied with the name of the one it came from (every card of the 0.3.6 templates said vote-one) clears the vote of the other."""
+    page, names = make_board(proj, kind)
+    board = proj / page
+    a, b = names[:2]
+    mutate(board, f'name="vote-{b}"', f'name="vote-{a}"', count=3)                                   # the second card was copied and not renamed
+    r = lint(proj, page)
+    assert r.returncode == 1 and "page:votes" in failing(report(proj, "board-lint")), r.stdout
+    why = votes(proj)["detail"]
+    assert f'{a} and {b} share the radio name "vote-{a}", so they are one vote group and a vote on one clears the vote on the others' in why, why
+    assert f'{b}: its radios must all be named "vote-{b}" (found: "vote-{a}")' in why and f'{a}: its radios' not in why, why
+    for n in names[2:]:                                                                              # and every card the same, as the 0.3.6 templates made them
+        mutate(board, f'name="vote-{n}"', f'name="vote-{a}"', count=3)
+    mutate(board, f'name="vote-{a}"', 'name="vote-one"', count=3 * len(names))
+    assert lint(proj, page).returncode == 1
+    why = votes(proj)["detail"]
+    assert f'{", ".join(names[:-1])} and {names[-1]} share the radio name "vote-one"' in why and f'{a}: its radios must all be named "vote-{a}" (found: "vote-one")' in why, why
+
+
+def test_two_votes_that_carry_the_same_name_share_a_group_even_when_each_is_named_right(proj):
+    """A card copied whole, its name unchanged: both fieldsets say Compass and both name their radios vote-Compass, which is one group."""
+    page, names = make_board(proj, "pick")
+    board = proj / page
+    mutate(board, 'data-vote="Lantern"', 'data-vote="Compass"')
+    mutate(board, 'name="vote-Lantern"', 'name="vote-Compass"', count=3)
+    r = lint(proj, page)
+    assert r.returncode == 1 and "page:votes" in failing(report(proj, "board-lint")), r.stdout
+    why = votes(proj)["detail"]
+    assert 'Compass (vote #1) and Compass (vote #2) share the radio name "vote-Compass"' in why and "its radios must all be named" not in why, why
+
+
+def test_a_board_with_no_vote_gets_an_info_row_not_a_failure(proj):
+    page, _ = make_board(proj, "pick")
+    board = proj / page
+    text = board.read_text(encoding="utf-8")
+    board.write_text(re.sub(r'<fieldset class="vote" data-vote="[^"]+">.*?</fieldset>', "", text, flags=re.S), encoding="utf-8")
+    assert board.read_text(encoding="utf-8") != text and 'data-vote="' not in board.read_text(encoding="utf-8")
+    r = lint(proj, page)
+    got = votes(proj)
+    assert r.returncode == 0 and got["status"] == "info" and got["detail"] == "no vote on this page: a vote (keep / drop / unsure per card) is optional", (r.stdout, got)
+
+
+def test_the_acme_example_names_the_radios_of_each_card_as_the_card_is_written():
+    """The worked example is a finished pick board: its votes pass the row, so the name of each group is `vote-` and the card's name as it stands in data-vote and data-name."""
+    from boardpage import parse_dom
+    root = parse_dom((ROOT / "skills" / "brand-creator" / "references" / "examples" / "acme" / "rounds" / "r1" / "board.html").read_text(encoding="utf-8"))
+    cards = [n.attrs["data-name"] for n in root.walk() if n.attrs.get("data-section") == "direction"]
+    groups = {n.attrs["data-vote"]: {r.attrs.get("name") for r in n.walk() if r.tag == "input"} for n in root.walk() if "data-vote" in n.attrs}
+    assert cards == ["Compass", "Lantern", "Keystone"] and groups == {c: {f"vote-{c}"} for c in cards}, groups
+
+
 # ---------------------------------------------------------------- PF-8 recommended option, PF-2 direction letters
 
 def test_a_question_needs_exactly_one_recommended_option(proj):

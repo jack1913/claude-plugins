@@ -23,7 +23,7 @@ that is one brand with two voices, not an architecture question.
   neutrals, hairlines, corner style, voice, languages, legal register. Lives in `FAMILY.md`.
 - **Company layer** (unique per brand): mark, wordmark technique, typefaces, accent, hero, header and footer.
 - **Product layer** (inside a parent): shared tile construction, shared letters copied cell for cell, one accent per
-  product distinct from siblings and from the parent, one signature move per product.
+  product distinct from siblings and from the parent, and one signature move for a product that moves.
 
 ## Never-borrow lists
 
@@ -50,6 +50,6 @@ token primitives only; semantic roles stay the same so code and books stay compa
 
 ## Checks
 
-- Each brand owns one signature move and one colour role no sibling uses (compare tiles side by side).
+- Every brand owns one colour role no sibling uses; a brand that moves also owns one move (compare tiles side by side).
 - Family fit is checked before polish; boards in family modes say what each direction keeps and owns.
 - Cross-product tile ratios and shared glyphs are checked by `brand-creator family-check` (reads the `FAMILY.md` block).

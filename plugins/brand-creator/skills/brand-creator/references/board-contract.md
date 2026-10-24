@@ -9,6 +9,7 @@ machine-checked part (the `data-section` and `data-field` vocabulary) is defined
 - [Two templates](#two-templates)
 - [Required sections of a round page](#required-sections-of-a-round-page)
 - [Style board (round 0)](#style-board-round-0)
+- [Motion board (a round after G3)](#motion-board-a-round-after-g3)
 - [Per-direction cells](#per-direction-cells)
 - [Territory card (round 2+ and resets)](#territory-card-round-2-and-resets)
 - [Generation prompts](#generation-prompts)
@@ -23,6 +24,7 @@ machine-checked part (the `data-section` and `data-field` vocabulary) is defined
 |---|---|---|---|
 | `templates/round-page.html` | `rounds/r<N>/board.html` | `pick` (round 1, resets) or `refine` | the page the owner reviews; linted |
 | `templates/style-board.html` | `rounds/r0/board.html` (after a full rejection also `rounds/r<N>/board.html` of a reset round) | `style` | the style research page before anything is drawn (P1s, every tier); linted; the owner's pick is gate G1s |
+| `templates/motion-board.html` | `rounds/r<N>/board.html` of a motion round | `motion` | the brand's signature move as variants, after G3 (Standard and Full: every brand unless nothing moves; Quick: when something moves); linted; below |
 | `templates/board.html` | `rounds/r<N>/<direction>/board.html` | `refine` | one direction in depth (Standard, Full); can serve as the round page of a one-direction refine round |
 | `templates/review/index.html` | `review/index.html` | same as the round | the stable review page, regenerated every round, published to one URL; for a style board (round 0) the page is a copy of the style board instead (`cp rounds/r0/board.html review/index.html`, then `board-lint review/index.html --round 0`) |
 
@@ -46,9 +48,13 @@ ignored). Delete optional blocks you do not use rather than leaving them empty.
 | `questions` | always | numbered questions (`data-n`), each with lettered options (`data-option="a"`...), exactly one marked recommended (zero or two fail `board-lint`); the question that lists the directions shows their names |
 | `reply` | always | how to answer: "Answer with a direction name, or question number plus option (1a)" and one sentence; batched answers welcome ("1a 2c") |
 
-Also carry, where they apply (not linted): a keep / drop / unsure vote per territory, "Decisions for you" from the
-review pass (as questions), and "why this is not <sibling>" in family modes. If today's mark still wins, say so on
-the board.
+Also carry, where they apply (not linted): "Decisions for you" from the review pass (as questions), and "why this is not
+<sibling>" in family modes. If today's mark still wins, say so on the board.
+
+A keep / drop / unsure vote per card (a direction, a territory or a variant) is optional, and `board-lint` checks it when it is
+there (`page:votes`, on every kind of board): the radios of a card are named `vote-<name>`, the name as written in its
+`data-vote`, letter case included, a group of their own per card: two cards that share a name are one group, and a vote on one clears the other.
+The row fails a board whose cards share a radio name, or whose radios are not named after their card, names the cards and the fix.
 
 ## Style board (round 0)
 
@@ -81,6 +87,55 @@ text, or whose `<figure>` has no non-empty `<figcaption>` (it does not look for 
 any other `<img>` whose `src`, and any `srcset` on an `<img>` or `<source>`, is not an inlined `data:image/` URI. A reference with
 no fetchable image simply has none. A thumbnail is for the research page only: never reuse a reference's mark, or a part of it,
 in anything you draw.
+
+## Motion board (a round after G3)
+
+`<body data-round="N" data-board="motion">`, from `templates/motion-board.html`, built on the round page's frame (the same
+tokens, header, hardest surface, My call, questions and reply). It is a round from 2 on, in any tier, once G3 is recorded:
+Standard and Full run one for every brand unless the owner records that nothing moves ([07-tokens](phases/07-tokens.md),
+"The motion round"), Quick only when something moves. It is no pick, style, reset or rejected round, so the map, the style
+gate and the kept masters do not apply to it.
+
+One folder per variant, `rounds/r<N>/<name>/`, made before the page: `index.html` (the move where it will be seen, the
+approved mark in place), `proof.json` (one page case named `<name>`, its page that `index.html`, its `static` an approved
+master of `assets/logo/`) and, in `frames/<name>/`, the stills of `frames rounds/r<N>/<name>/proof.json --count 25`; and the
+reports of `shot --motion` and of `frames` on that proof.
+
+| Section (`data-section`) | When | What it holds |
+|---|---|---|
+| `what-changed` | from the second motion board | "What changed since the review", the owner's numbered items first |
+| one card per variant | always: exactly 3 on the project's first motion board, 1 or more on a later one | below |
+| `hardest-surface` | always | the one place the move is hardest to get right, and what the proof measured there for each variant |
+| `weak-points` | from the second motion board | honest weak points, measured where possible |
+| `my-call` | always | as on every board |
+| `questions` | always | as on every board; question 1 asks which variant goes forward and lists their names, one option combines two, one says none of these |
+| `reply` | always | how to answer: a variant name, or question number plus option |
+
+There is no `today`, `strategy-core`, `positioning-map`, `direction`, `losers` or `none-of-these` section.
+
+**The variant card** is an element `data-motion-variant="<name>"` (a word of 3 or more letters, never "Variant 2", unique,
+and also the folder name) that holds:
+
+- the strip (`<img data-field="strip">`, `<name>/frames/<name>/strip.png`) and the still under reduced motion
+  (`<img data-field="reduced">`, `reduced.png`), by relative path, or as `data:` URIs of the same bytes on the review copy
+  (`review/index.html`, linted with `--round N`);
+- a link to the live page (`<a data-field="live" href="<name>/index.html">`): the board has no replay;
+- the proof line, an element `data-proof="pass"` or `"fail"` with its text, saying what `shot --motion` found. It must say
+  what the report says: a failing proof labelled `fail` is honest and passes the lint, labelled `pass` it fails it;
+- What it is, Cost and Degrades to (what remains with no script and with reduced motion): `data-field="what-it-is"`,
+  `"cost"` and `"degrades-to"`, filled, with no marker left;
+- the vote, `<fieldset data-vote="<name>">`, as on the round page (`page:votes` checks it, as on every board).
+
+`board-lint` gives one row per rule, each one result for the whole board that names the variants it fails: `motion:g3` (G3
+is recorded), `motion:off` (`motion/motion.json` does not say nothing moves), `motion:variants` (the count, and a word name
+each), `motion:files` (each variant's folder, spelt as the card spells it, letter case included, its page and proof: the proof's page is that `index.html`, and a proof copied from
+an earlier round and still pointing there fails), `motion:proof` (a current motion report of each proof, and the card's proof
+line equals its status; a missing or stale one names `brand-creator shot --motion rounds/r<N>/<name>/proof.json`; a report
+that is not a verdict quotes the rows it could not verify, and for a move driven by `requestAnimationFrame`, which
+stays not verified, says to write it as CSS animations, transitions or `element.animate()`),
+`motion:stills` (a current passing `frames` report of each proof, so the stills are of the page as it is now, and the strip
+and the reduced still on the card are the files `frames.json` lists, by sha256) and `motion:fields` (the three fields).
+Taking a proof or its stills again after the lint makes the lint report stale: lint again, and shoot the board last.
 
 ## Per-direction cells
 

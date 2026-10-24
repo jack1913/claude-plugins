@@ -673,6 +673,24 @@ def test_a_proof_under_rounds_history_or_removed_is_an_exploration_listed_and_ne
     assert bc("check", project=proj).returncode == 1 and motion_row(proj, near)["status"] == "fail"
 
 
+KINDS = ROOT / "tests" / "fixtures" / "motion-proof-kinds.json"   # the one table of cases the Python rule and its JavaScript twin (tests/node/common.test.mjs) are both pinned to
+
+
+def test_the_proof_kind_rule_answers_the_shared_table_of_cases(tmp_path):
+    """motion_proof_kind: gated, exploration (under rounds/, history/ or a removed-*/ folder) or gone. The table is read by the JavaScript twin too (motionProofKind), so
+    that `frames`, which decides where its stills go by it, and `check`, which decides what it gates, cannot come to tell two paths apart differently."""
+    from _common import motion_proof_kind
+    cases = json.loads(KINDS.read_text(encoding="utf-8"))["cases"]
+    assert len(cases) >= 20 and {c["kind"] for c in cases} == {"gated", "exploration", "gone"}
+    for i, c in enumerate(cases):
+        project = tmp_path / f"p{i}"
+        project.mkdir()
+        for f in c["files"]:
+            (project / f).parent.mkdir(parents=True, exist_ok=True)
+            (project / f).write_text("x\n")
+        assert motion_proof_kind(project, c["proof"]) == c["kind"], c["why"]
+
+
 def test_a_motion_report_whose_proof_is_gone_is_a_warning_that_names_it(proj):
     motion_report(proj, "motion/gone.json")        # the proof was never there, or moved away
     motion_report(proj, "rounds/r2/gone.json")     # an exploration proof that is gone is a gone proof first

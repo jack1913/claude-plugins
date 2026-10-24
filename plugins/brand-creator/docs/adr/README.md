@@ -10,5 +10,6 @@ Why brand-creator works the way it does, one decision per file. Decisions made b
 | [ADR-0002](ADR-0002-style-research-before-the-first-drawing.md) | Style research and a style pick come before the first drawing | accepted |
 | [ADR-0003](ADR-0003-logo-masters-are-vector.md) | Logo masters are vector; rasters are for exploring | accepted |
 | [ADR-0004](ADR-0004-marks-are-drawn-on-a-design-engine.md) | Marks are drawn on a design engine; Claude-drawn SVG only on the owner's yes | accepted |
+| [ADR-0005](ADR-0005-motion-is-part-of-standard-and-full.md) | Motion is part of Standard and Full: a motion round, or the owner records that nothing moves | accepted |
 
 New records follow [ADR-TEMPLATE.md](ADR-TEMPLATE.md).

@@ -11,6 +11,11 @@ A synthetic worked brand, Acme, shows a finished project: `skills/brand-creator/
 Round pages are built from a template, checked by `board-lint` and photographed by `shot` at 1440 and 390 pixels wide, in
 light and dark. Approved rounds are frozen with `freeze` into `history/`, with a checksum manifest that `check` verifies.
 
+In Standard and Full, a motion round adds one more kind of board after you approve the design: three variants of your
+logo's move, each with its own folder (a page, a proof and its stills) next to the board. `board-lint` checks that each
+variant has all three, that the strip on the board is the very picture taken from that page, and that the proof line says
+what the proof found.
+
 ## Checks
 
 Each check writes a report to `assets/_checks/`. `check` reads every report that exists, and a check that cannot run is
@@ -26,7 +31,7 @@ Each check writes a report to `assets/_checks/`. `check` reads every report that
 | `fontcheck`, `fonts` | Glyph coverage for the brand's languages, a licence hint, and which font Chromium really used |
 | `outline-glyphs` | Type-based marks as paths with no live text |
 | `shot --motion` | The mark's motion is stepped through, not waited for: no layout shift, the animated parts stay on a phone screen (360 and 390 pixels wide), the rest frame equals the still to the pixel, and pixel marks move in whole pixels. Reduced motion shows the still. Motion a script draws frame by frame (`requestAnimationFrame`) cannot be stepped through, so its phone-screen check says "not verified". One report per proof file, and a change to a file the page loads (such as `tokens.css`) makes it stale |
-| `frames` | Stills of the mark along its motion, a strip of them and the reduced-motion still, written into `motion/frames/` for the brand book |
+| `frames` | Stills of the mark along its motion, a strip of them and the reduced-motion still, written into `motion/frames/` for the brand book. The stills of a variant in a motion round stay next to that variant |
 | `snapshot`, `verify-idempotent`, `staleness`, `specs-due` | Byte-identity proofs, two-run idempotence, stale packs, and platform sizes due for a recheck |
 
 The thresholds are yours, kept in `qa/rules.json`. The plugin's numbers are proposals and say so.
@@ -39,9 +44,11 @@ Swift colours with an asset catalogue, and Android colours. Durations and easing
 tokens before the build passes. A file your tokens no longer produce, like the colour set of a role you removed, is
 moved to `removed-<date>/`.
 
-When something moves, `motion/motion.json` says how: the signature move, the moving parts, a timeline written in your
-duration and curve tokens, and the motion rules. When nothing moves, it says why. BRAND.md, DESIGN.md, the brand's
-own skill and the brand book repeat it.
+`motion/motion.json` keeps your answer on motion. When something moves, it says how: the signature move, the moving
+parts, a timeline written in your duration and curve tokens, and the motion rules. When nothing moves, it says why, in your
+words. In Standard and Full the file always exists once you have answered, and `check` fails without it after you approve
+the system rules. `brand-creator motion` shows the answer, and `brand-creator motion --off "<your reason>"` records that
+nothing moves. BRAND.md, DESIGN.md, the brand's own skill and the brand book repeat it.
 
 ## Web, social and profiles
 
@@ -76,8 +83,9 @@ colour, files, changing the brand. Counts and colour ratios are computed, so the
 `book-pdf` exports an RGB proof labelled "RGB, not print-ready". A hand-drawn mark has a hand-written book that `patch`
 edits with counted replacements.
 
-When your brand moves, the motion chapter shows how, from `motion/motion.json`: the signature move, the parts, the
-timeline with each duration and curve by name and value, a small drawing of every curve, and the rules. It also replays
+In Standard and Full the motion chapter is always in the book once motion is decided. When nothing moves, it says so and
+gives your reason, with no replay. When your brand moves, it shows how, from `motion/motion.json`: the signature move, the
+parts, the timeline with each duration and curve by name and value, a small drawing of every curve, and the rules. It also replays
 the motion. Run `frames motion/proof.json --count 25` first, and the book plays each page's motion as a short animation.
 "Replay" starts it again and "4× slower" plays it slowly, from a click or the keyboard, with no script. With reduced
 motion switched on, the chapter shows the still and nothing moves. In print it shows the stills side by side with

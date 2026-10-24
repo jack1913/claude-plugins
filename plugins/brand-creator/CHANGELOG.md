@@ -6,6 +6,82 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-24
+
+Motion is part of the Standard and Full tiers now. A Standard or Full project that has already recorded its system rules
+needs `motion/motion.json` before `brand-creator check` passes again: run the motion round, or record that nothing moves with
+`brand-creator motion --off "<your reason>"`. Until then `check` fails `motion:decided`. Quick is as it was: motion is
+settled at the end, with the system rules, and only when something moves. This release changes what `check` expects of a
+Standard or Full project, so it may break one made before it. A board made from an older template also fails `board-lint`'s
+new `page:votes` row until each card's vote carries its direction's name (see Fixed).
+
+### Added
+
+- `brand-creator motion` says where you stand on motion: `motion: on (signature: <name>)`, `motion: off (nothing moves:
+  <reason>)` or `motion: not decided`. In Standard and Full, once the design is approved, "not decided" is followed by what
+  is due before the system rules. `--json` prints the same as data. `brand-creator motion --off "<reason>"` records that
+  nothing moves, once, in your words, in `motion/motion.json` (it creates the folder). It never writes over an answer: asked
+  again it says `already recorded` and leaves the file alone, and when `motion/motion.json` says your brand moves it refuses
+  (exit 2), because turning motion off is a rule change: edit the file, then run `brand-creator check --cascade`. An empty
+  reason is refused too. It reads your answer from that file alone, so it shows it even when the move names tokens that are
+  not built yet (`check` says so). `brand-creator state` prints the same line, so Claude sees your answer and never asks
+  again.
+- A motion round: `/brand-creator:round motion` builds a board of three variants of your logo's one move, after you approve
+  the design, in any tier. Standard and Full run one for every brand unless you say that nothing moves (asked once, with a
+  recommendation); Quick may run one when something moves. Each variant has a folder of its own, `rounds/r<N>/<name>/`, with
+  a page where the move is seen, a proof and its 25 stills. Its card shows a strip of the stills, the still you get with
+  reduced motion, a link to the live page, what the proof found, what the move is, what it costs, what is left with no
+  script, and a vote. You pick one or combine two, and the next motion round (one or more variants, with what changed and the
+  weak points) refines it. When you approve a variant, Claude builds the tokens the move needs and runs the variants' proofs,
+  stills and the lint again so that the round's record is current, locks the round as `approved-motion`, copies the variant
+  into `motion/`, records "on" in `motion/motion.json`, proves it and takes its stills for the book. The board's page is a
+  new template, `templates/motion-board.html`.
+- `board-lint` reads a motion board (`data-board="motion"`) with seven rows, each naming the variants it fails: `motion:g3`
+  (the design is approved), `motion:off` (nothing moves is not recorded), `motion:variants` (exactly three on the first
+  motion board, a word for each name), `motion:files` (each variant's folder, spelt as the card spells it, letter case
+  included, its page and proof; the proof is of the page the card links and compares with the approved logo in
+  `assets/logo/`, so a proof copied from an earlier round and still pointing there fails), `motion:proof` (each proof has a
+  current report, and the proof line on the card says what it found; a move drawn by `requestAnimationFrame` stays "not
+  verified", and the row says to use CSS animations, transitions or `element.animate()`; the row quotes up to three of the
+  rows the report could not verify), `motion:stills` (the strip and the still on the card are the very files `frames` took,
+  checked byte for byte, and `frames` took them of the page as it is now) and `motion:fields` (What it is, Cost and Degrades
+  to are filled in). A motion board never counts as a round of directions, a style round or a rejected round.
+- `check` has two new rows in Standard and Full once the system rules are recorded. `motion:decided` fails without
+  `motion/motion.json`, "on" or "off". For a brand that moves, `motion:proof` needs a passing proof of the approved move: it
+  fails when `motion/proof.json` is missing, and says "not verified" until `shot --motion motion/proof.json` has run; when
+  the report is there and says not verified, that row and the row of the report itself quote up to three of the rows it could
+  not verify and what to do about them, as `board-lint` does for a variant. The proof of a try-out in a round never counts,
+  and neither does the one report of an earlier version (`assets/_checks/motion.json`): run `shot --motion motion/proof.json`
+  again. From the moment the design is approved until the system rules are recorded, an open question on motion is an
+  information row. Quick has neither row.
+
+### Changed
+
+- `frames` keeps the stills of a try-out proof beside it: a proof in the latest round or in a `removed-*/` folder writes them
+  to `<its folder>/frames/<case>/`, not to `motion/frames/<case>/`. The stills of your brand's approved move stay in
+  `motion/frames/`, the only ones the book replays. A round copied whole, with the stills of an earlier proof in it, has them
+  taken again in place, and the report says so. A proof inside `history/` or in a round before the latest one is refused
+  (exit 2, before anything is written), because both are read-only: take the stills before you freeze the round or start the
+  next one, or copy the proof and its page into the latest round and run `frames` there.
+- A new Standard or Full project's `tools/finish.sh` has a motion step before the stills and the book. It prints your answer:
+  "nothing moves" with your reason, or "motion is not decided" with what to do, or, for a brand that moves, it runs `shot
+  --motion motion/proof.json`. A failing proof goes on, and `check` fails its report; a proof that is not verified goes on
+  too (exit 3 after it wrote its report, for example a move drawn by `requestAnimationFrame`), and `check` says that it is
+  not verified, and why; any other stop (exit 2, or exit 3 with no report written, as when Chromium is missing) stops the
+  chain; a missing `motion/proof.json` is said and the chain goes on. The stills step says why whenever it takes none. A
+  project made before this version can copy the step from the template into its `tools/finish.sh`. Quick has no step.
+- The system rules in Standard and Full offer the motion rules from the approved move, and none when nothing moves. In Quick
+  they are offered only when something in the brand moves, as before.
+
+### Fixed
+
+- The templates of the round page, the style board and the review copy gave every card's vote the same radio name, so a page
+  made by copying the card had one vote group: a vote on one direction cleared your vote on the one before. The radios of
+  each card now carry its direction's name (`vote-<name>`), as on the motion board, and every vote stays. `board-lint` checks
+  it on every kind of board (`page:votes`): it fails a board whose cards share a radio name, or whose radios are not named
+  `vote-<its name>` (the name as written on the card, letter case included), names the cards and the fix, so a page made from
+  an older template, or a card copied and not renamed, no longer passes.
+
 ## [0.3.6] - 2026-10-23
 
 The brand book's motion chapter shows the motion from the project's data, and replays it with no script. Three fixes for the

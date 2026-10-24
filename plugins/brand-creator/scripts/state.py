@@ -5,7 +5,7 @@
 # ///
 """brand-creator state: print or query BRAND-STATE.md, record gates, require gates.
 
-  state                          human summary
+  state                          human summary (with the motion decision: the line `brand-creator motion` prints)
   state --json                   everything machine-readable
   state --get tier               one value (dotted keys: gates.G3, fixes_per_area.logo)
   state --set tier=standard      set a frontmatter value (not gates.* or g1s_round; use --record). A list key is written as a real
@@ -25,10 +25,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "boardlib"))
-from _common import (EXIT_FAIL, EXIT_USAGE, GATE_IDS, Parser, STATE_FILE, add_project_arg, fail, find_project,  # noqa: E402
+from _common import (EXIT_FAIL, EXIT_USAGE, GATE_IDS, CliError, Parser, STATE_FILE, add_project_arg, fail, find_project,  # noqa: E402
                      gate_recorded, latest_round, list_rounds, main_guard, read_state, today, try_find_project,
                      verify_history)
 from boardpage import is_style_board, read_page  # noqa: E402
+import motionspec  # noqa: E402
 
 
 # Keys whose values other tools branch on (board_lint, freeze, prereq). A typo here must not pass silently.
@@ -88,6 +89,15 @@ def list_value(key: str, value: str) -> list:
     return items
 
 
+def motion_decision(project: Path) -> dict:
+    """The motion decision as `brand-creator motion` reports it. A summary must always print (the status skill injects it), so a motion/motion.json that cannot
+    be read is said in the summary, with the message `motion` gives, and is no exit code here."""
+    try:
+        return motionspec.decision(project)
+    except CliError as e:
+        return {"motion": "unreadable", "problem": e.message}
+
+
 def summary(project: Path) -> dict:
     st = read_state(project)
     d = st.data()
@@ -97,6 +107,7 @@ def summary(project: Path) -> dict:
         "project": str(project), "state": d, "directions": st.directions(),
         "rounds": [f"r{n}" for n, _ in list_rounds(project)],
         "latest_round": (f"r{latest}" if latest is not None else None),
+        "motion": motion_decision(project),
         "frozen": sorted(p.name for p in hist.iterdir() if p.is_dir()) if hist.is_dir() else [],
         "history_problems": verify_history(project),
     }
@@ -116,6 +127,8 @@ def print_summary(s: dict) -> None:
         if str(gates.get(g, "")).strip():
             print(f"  {g}: {gates[g]}")
     print(f"rounds: {' '.join(s['rounds']) or '-'}   latest: {s['latest_round'] if s['latest_round'] is not None else '-'}")
+    m = s["motion"]
+    print(f"motion: cannot be read ({m['problem']})" if m["motion"] == "unreadable" else "\n".join(motionspec.status_lines(Path(s["project"]), m)))
     if d.get("fixes_per_area"):
         print("fixes per area: " + ", ".join(f"{k}={v}" for k, v in d["fixes_per_area"].items()))
     if d.get("canonical_direction"):

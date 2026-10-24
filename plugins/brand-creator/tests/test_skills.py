@@ -648,7 +648,7 @@ def test_orchestrator_stays_under_the_line_limit_and_its_top_under_the_character
 def test_the_round_wrapper_builds_round_0_from_the_style_board_and_checks_the_gate_before_any_pick_board():
     p = SKILLS / "round" / "SKILL.md"
     fm, body = frontmatter(p)
-    assert fm["argument-hint"] == "[style|pick|refine] [what this round should answer]"
+    assert fm["argument-hint"] == "[style|pick|refine|motion] [what this round should answer]"
     assert ": " not in fm["description"] and "style board" in fm["description"] and len(fm["description"]) <= 1024
     flat = " ".join(body.split())
     for needle in ("references/phases/01s-style-research.md", "templates/style-board.html", '`data-board="style"`', "round 0", "`rounds/r0/`",
@@ -840,7 +840,7 @@ def test_stale_pointers_name_the_style_step_in_the_contract_the_tier_page_and_th
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "style board" in readme
     commands = (ROOT / "docs" / "manual" / "reference" / "commands.md").read_text(encoding="utf-8")
-    assert "`[style\\|pick\\|refine] [what this round should answer]`" in commands
+    assert "`[style\\|pick\\|refine\\|motion] [what this round should answer]`" in commands
 
 
 # ---- the drawing engine step (ADR-0004): the use-llm design canvas, else Claude Code's /design, else Claude-drawn SVG on the owner's yes
@@ -1133,3 +1133,487 @@ def test_the_manual_explains_the_drawing_step_on_one_task_page_and_in_costs_and_
     assert "**No marks drawn in code without your yes.**" in limits and "never starts `/design` for you" in limits
     versions = (MANUAL / "reference" / "claude-code-versions.md").read_text(encoding="utf-8")
     assert "| `/design`, the second way to get marks drawn | 2.1.234 |" in versions
+
+
+# ---- motion is part of Standard and Full (ADR-0005): the decision before G4, the motion round, the motion board
+
+PHASES = REFS / "phases"
+MOTION_ROWS = ("motion:g3", "motion:off", "motion:variants", "motion:files", "motion:proof", "motion:stills", "motion:fields")   # written by hand: the rows a motion board's lint can write
+INTERNAL_CODE = re.compile(r"\b(?:G\d[a-z]?|P\d{1,2}s?|ADR-\d+)\b")   # gate, phase and decision numbers: never on a user page
+
+
+def _top(text):
+    return text[: text.index("## Round mechanics")]
+
+
+def _between(text, start, end):
+    return text[text.index(start):text.index(end)]
+
+
+def test_the_orchestrator_says_standard_and_full_decide_motion_before_g4_and_quick_only_when_something_moves():
+    text = ORCH.read_text(encoding="utf-8")
+    top = _top(text)
+    flat = " ".join(top.split())
+
+    def row(name):
+        return next(ln for ln in top.splitlines() if ln.startswith(f"| {name} |"))
+
+    assert "a motion round after G3 (or nothing moves), full book" in row("Standard") and row("Standard").rstrip().endswith("font check, motion proof |")
+    assert "motion" not in row("Quick"), "Quick keeps its own rule: no motion round in its row"
+    assert "| P7 | motion round (S, F), then tokens and system rules | G4 |" in row("P7")
+    for needle in ("Standard 4-6 rounds over a day or two, and 2-3 more for motion; Full several sessions.",
+                   "Standard and Full: the motion round follows P6, unless the owner says nothing moves (asked once, with your pick; 07-tokens).",
+                   "show them as plain-language defaults; Quick leaves out motion and script rules unless something moves. Standard and Full decide motion before G4 (07-tokens)."):
+        assert needle in flat, needle
+    assert "and leave out motion and script rules unless something moves" not in flat, "the old G4 sentence let every tier leave motion out"
+    assert "the motion round comes next" not in flat, "P6 (the masters) comes between G3 and the motion round, as 07-tokens says: after G3 and the P6 masters"
+    below = " ".join(text[text.index("## Round mechanics"):].split())
+    for needle in ("A motion round is the exception: the first starts as an empty folder, a later one copies the previous motion round (the round skill).",
+                   "a motion round from `templates/motion-board.html`",
+                   "A motion round has no review template either: its review page is a copy of the board with its pictures inlined (the round skill), linted with `--round <N>`."):
+        assert needle in below, needle
+    state = " ".join(_between(text, "## Recording state", "## Project layout").split())
+    for needle in ("`... motion`: the motion decision.", "an answer there is final and is never asked again",
+                   "`... motion --off \"<the owner's reason>\"` records that nothing moves, once, in the owner's words; it never writes over an answer"):
+        assert needle in state, needle
+    layout = text[text.index("## Project layout"):]
+    for needle in ("rounds/r<N>/<variant>/ (a motion round: index.html, proof.json, frames/<variant>/)",
+                   "motion/ (motion.json: the one record of the motion decision, absent = not decided; proof.json, frames/<case>/ of the approved move)"):
+        assert needle in layout, needle
+    commands = " ".join(text[text.index("## Commands by phase"):].split())
+    assert "| the motion decision (Standard and Full: before G4); the motion round is `/brand-creator:round motion` | `motion`, `motion --off \"<the owner's reason>\"` |" in commands
+    assert "required board sections (pick, refine, style and motion boards), territory card, variant card" in commands
+
+
+def test_the_round_wrapper_has_a_motion_kind_whose_variants_are_made_before_the_board():
+    fm, body = frontmatter(SKILLS / "round" / "SKILL.md")
+    assert fm["argument-hint"] == "[style|pick|refine|motion] [what this round should answer]"
+    assert "motion board" in fm["description"] and ": " not in fm["description"] and len(fm["description"]) <= 1024
+    flat = " ".join(body.split())
+    for needle in ("`refine` and `motion` (a round after G3 that tries the signature move as variants; steps below, \"A motion round\")",
+                   "`07-tokens.md` (\"The motion round\", for a motion round)", "A motion round is the exception (below).",
+                   "Before a motion board, run `state --project <dir> --require G3` (exit 1: the design is not approved yet; say so and stop)",
+                   "`motion: off` means the owner recorded that nothing moves, so say a motion round contradicts it and stop",
+                   "(changing it is an edit of `motion/motion.json`, then `check --cascade`); `on` or `not decided` go on.",
+                   "a motion round from `${CLAUDE_PLUGIN_ROOT}/templates/motion-board.html` (`data-board=\"motion\"`), once its variants are made",
+                   "Rounds 1 and later, except a motion round: from `${CLAUDE_PLUGIN_ROOT}/templates/review/index.html`",
+                   "A motion board: copy it the same way, then give each picture a `data:image/png;base64,...` src of the same file",
+                   "(`../rounds/r<N>/<name>/index.html`; it opens from this machine only)"):
+        assert needle in flat, needle
+    section = flat[flat.index("## A motion round"):]
+    for needle in ("The first motion round is a new, empty folder (`mkdir rounds/r<N>`): do not copy the refine round.",
+                   "A later one, the refine loop on the picked or combined variant, starts as `cp -R rounds/r<N-1> rounds/r<N>` of the previous motion round",
+                   "set the `page` of each `rounds/r<N>/<name>/proof.json` to `rounds/r<N>/<name>/index.html` (a proof that still points into the old round fails `board-lint`)",
+                   "The first motion round shows exactly 3 variants", "A later one shows 1 or more.",
+                   "(`frames` cannot step through `requestAnimationFrame`)",
+                   '"selector": "<the mark\'s element>", "static": "assets/logo/mark.svg"}]}',
+                   "shot --motion rounds/r<N>/<name>/proof.json --project <dir>", "frames rounds/r<N>/<name>/proof.json --count 25 --project <dir>",
+                   "and never in `motion/frames/`", "Read every `strip.png` and `reduced.png` before you say what the move does.",
+                   "A page changed after that needs both runs again: `board-lint` fails stills of an older page.",
+                   "shoot the board last: `shot` keeps one report, and `check` wants the one of the latest board.",
+                   "follow \"The motion round\" in `07-tokens.md`: build the tokens it needs, run the variants' proofs, stills and the lint again so that the round's record is current, "
+                   "freeze the round as `approved-motion`, then copy the variant into `motion/` and record `motion/motion.json`."):
+        assert needle in section, needle
+    # the variants are made, proved and given their stills before the board is built from them, and the board is shot last
+    order = [section.index(n) for n in ("`index.html`: the move where it will be seen", "shot --motion rounds/r<N>/<name>/proof.json", "frames rounds/r<N>/<name>/proof.json --count 25",
+                                        "Build the board from the template", "shoot the board last")]
+    assert order == sorted(order), order
+
+
+def test_the_tokens_phase_has_the_motion_round_and_the_motion_rules_are_quick_only_when_something_moves():
+    raw = (PHASES / "07-tokens.md").read_text(encoding="utf-8")
+    flat = " ".join(raw.split())
+    head = "## The motion round (Standard and Full)"
+    assert "- [The motion round (Standard and Full)](#the-motion-round-standard-and-full)" in raw
+    assert raw.index("## Techniques") < raw.index(head) < raw.index("## Gate")
+    section = " ".join(_between(raw, head, "## Gate").split())
+    for needle in ("Standard and Full decide motion for every brand before G4: a motion round (the default), or the owner records that nothing moves.",
+                   "absent means not decided", "Quick keeps its own rule: motion is decided at G4, and only when something moves; a Quick brand that moves may run a motion round too.",
+                   "After G3 and the P6 masters, before G4.", "**The question, at G3, asked once.** One question, two options, your pick marked (Recommended)",
+                   "Recommend nothing moves for a brand with no screen presence (a bakery, a practice, a photographer, a shop that sells on paper)",
+                   "`brand-creator motion --off \"<the owner's reason, in the owner's words>\"` writes `motion/motion.json` once and never over an answer",
+                   "Never run it on a reason of your own, and never ask again once the state summary shows an answer.",
+                   "`/brand-creator:round motion` ([the round skill](../../../round/SKILL.md)): 3 variants of the signature move P6 named",
+                   "which shows 1 or more variants and needs What changed and Weak points.",
+                   "[05-refinement](05-refinement.md)'s: a designer pass, at most one `brand-creator:brand-reviewer` call per round",
+                   "Copy the approved variant's page into `motion/` and its `proof.json` to `motion/proof.json`, with every path that moved rewritten",
+                   "so build the tokens first: copy `templates/tokens/*.tokens.json` to `tokens/` if that is not done yet (Inputs above; the starter already holds `motion.quick`, `base`, `slow`, `stagger` and `easing.standard`, `enter`, `exit`)",
+                   "and run `brand-creator tokens`, which writes `assets/tokens/`.", "Then write `motion/motion.json` with `\"motion\": \"on\"`",
+                   "until the tokens are built `motion` and `state` still show the answer, and `check` says `motion:spec` is not verified.",
+                   "`frames` refuses a proof inside `history/` and one in a round before the latest, both read-only",
+                   "Run `shot --motion motion/proof.json` and `frames motion/proof.json --count 25`",
+                   "`... freeze r<N> --name approved-motion`", "Then G4, with the motion rules.",
+                   # the order of the approval: building the tokens changes tokens.css, a file the variants load, so the round is made current again before it is frozen
+                   "Building them changes `tokens.css`, a file the variants' pages load, so the variants' reports and the lint of the round are stale, and `check` says \"not verified\" for a round the owner approved: "
+                   "run `shot --motion` and `frames` on each variant's proof again, then `board-lint rounds/r<N>/board.html`, then `shot rounds/r<N>/board.html` (the board last), so that the record of the round is current.",
+                   "A later change to a file the variants load (a token, a master) makes that lint stale again until they are run again, as for any proof."):
+        assert needle in section, needle
+    order = [section.index(n) for n in ("so build the tokens first", "and run `brand-creator tokens`, which writes", "Building them changes `tokens.css`", "run `shot --motion` and `frames` on each variant's proof again",
+                                        "then `board-lint rounds/r<N>/board.html`", "so that the record of the round is current", "Then freeze the round:", "`... freeze r<N> --name approved-motion`",
+                                        "Copy the approved variant's page into `motion/`", "Then write `motion/motion.json` with", "Run `shot --motion motion/proof.json`", "Then G4")]
+    assert order == sorted(order) and len(set(order)) == len(order), order
+    # every "only when something moves" is Quick-only now: Standard and Full decided motion before the gate
+    hits = list(re.finditer(r"something (?:in the brand )?moves", flat))
+    assert len(hits) >= 4, len(hits)
+    for m in hits:
+        assert "Quick" in flat[max(0, m.start() - 170):m.start()], flat[max(0, m.start() - 170):m.end()]
+    assert "(only when something moves)" not in flat
+    for needle in ("with the signature move P6 named and the approved still (`assets/logo/mark.svg`) that a motion round starts from.",
+                   "It is also the one record of the decision: absent means not decided |",
+                   "| The motion round (Standard and Full) | `rounds/r<N>/board.html` (`data-board=\"motion\"`) and one folder per variant, `rounds/r<N>/<variant>/`; once approved: `motion/proof.json`, `motion/frames/` and `history/<date>-approved-motion/` |",
+                   "In Standard and Full that file is written when the motion round is approved, or by `brand-creator motion --off`, before G4; in Quick, at G4.",
+                   "\"None of these\", with what was missing, gives a new motion round (three new variants are fine), or the owner says nothing moves.",
+                   "- Asking the motion question again when the state summary already shows an answer, or answering it for the owner: a motion round or nothing moves is the owner's call, and `motion --off` takes the owner's reason, never yours.",
+                   "- A copied motion round whose proofs still point into the old round (`board-lint` fails `motion:files`), and an approved `motion/proof.json` that still names the page inside a round",
+                   "- `motion` (script): prints the decision (`on`, `off` or `not decided`, with what is due before G4), and `--off \"<reason>\"` records that nothing moves once, never over an answer. `state` prints the same line.",
+                   "the variants of a motion round keep theirs beside each proof, in `rounds/r<N>/<variant>/frames/<variant>/` (`frames` refuses a proof inside `history/` or in a round before the latest).",
+                   "Standard and Full decided motion before this gate: offer the motion rules from the approved move, and none when nothing moves. In Quick offer them only when something in the brand moves.",
+                   "(when `motion/motion.json` says on; in Quick, only when something moves)",
+                   "In Quick, record the motion answer, on or off, in `motion/motion.json` now",
+                   "In Standard and Full it is there already, and `check` fails `motion:decided` once G4 is recorded without it.",
+                   "(when the brand moves) |", "`motion:decided` fails without the file (on or off)",
+                   "`motion:proof` (the report of a try-out proof never counts); from G3 to G4 an undecided motion is an info row. Quick has neither row."):
+        assert needle in flat, needle
+    enforcement = flat[flat.index("## Enforcement"):]
+    for row in MOTION_ROWS:
+        assert f"`{row}`" in enforcement, row
+    line = next(ln for ln in raw.splitlines() if ln.startswith("- (rule) reduced motion"))
+    assert "easing.standard" in line and "`enter`" in line and "`exit`" in line and "`motion.quick`" in line
+
+
+def test_the_phase_files_and_references_carry_the_motion_round():
+    mark = _flat(PHASES / "06-mark.md")
+    for needle in ("Every brand owns one colour role that no sibling uses; a brand that moves also owns one move (it presses, slides, crosses, rises).",
+                   "it is the `signature` of `motion/motion.json`, which the book, the adapters and the motion round use",
+                   "in Standard and Full it is tried in the motion round after G3 ([07-tokens](07-tokens.md))",
+                   "a brand that does not move records that once (`brand-creator motion --off \"<reason>\"`)"):
+        assert needle in mark, needle
+    book = _flat(PHASES / "10-book.md")
+    assert ("In Standard and Full motion is decided before G4, so the Motion chapter is always in the book once it is decided: it shows the signature move, the timeline and the rules, "
+            "or `Nothing moves` with the owner's reason and no replay.") in book
+    assert "reduced motion switched on" not in book, "the pins of test_the_book_phase_does_not_ask_for_a_reduced_motion_view stay"
+    history = _flat(PHASES / "12-history.md")
+    for needle in ("the approved motion round: `freeze r<N> --name approved-motion`, with its variants, proofs and stills kept as written",
+                   "Take every still before a freeze: `frames` refuses a proof inside `history/` and one in a round before the latest (both are read-only), so a frozen round keeps the stills it was frozen with."):
+        assert needle in history, needle
+    refine = _flat(PHASES / "05-refinement.md")
+    assert ("The motion round of Standard and Full (after G3, [07-tokens](07-tokens.md), \"The motion round\") uses this loop too: the owner's numbered list is the answer to the variants, "
+            "the one reviewer call runs `shot --motion` on each variant's proof and reads each strip, and a later motion round is a copy of the previous one.") in refine
+    fragments = _flat(REFS / "prompt-fragments.md")
+    assert ("A motion round (`data-board=\"motion\"`): run `brand-creator shot --motion rounds/r<N>/<variant>/proof.json` on each variant's proof and give its exit code and failing rows; "
+            "Read each variant's `strip.png` and `reduced.png` before saying what moves") in fragments
+    reviewer = (ROOT / "agents" / "brand-reviewer.md").read_text(encoding="utf-8")
+    assert "Checks a refine or motion round, a review-panel angle" in reviewer.splitlines()[2]
+    flat_reviewer = " ".join(reviewer.split())
+    for needle in ("**Motion rounds** (`data-board=\"motion\"`): run `brand-creator --data \"<data>\" shot --motion rounds/r<N>/<variant>/proof.json --project <project>` on each variant's proof",
+                   "Read each variant's `strip.png` and `reduced.png` (`rounds/r<N>/<variant>/frames/<variant>/`) before saying what moves",
+                   "check that each card's proof line says what its report says; run `board-lint` on the board and report its `motion:*` rows"):
+        assert needle in flat_reviewer, needle
+    spec = " ".join((ROOT / "templates" / "MOTION-SPEC.md").read_text(encoding="utf-8").split())
+    assert "Written when the brand moves: in Standard and Full after the motion round approved the move, in Quick only when something moves." in spec
+    assert "Written only when something moves" not in spec
+
+
+def test_the_board_contract_describes_the_motion_board_the_variant_card_and_every_row_the_lint_writes():
+    src = (ROOT / "scripts" / "boardlib" / "motionboard.py").read_text(encoding="utf-8")
+    assert sorted(set(re.findall(r'"(motion:[a-z0-9]+)"', src))) == sorted(MOTION_ROWS), "the lint writes a row the docs do not know, or the docs name one it never writes"
+    raw = (REFS / "board-contract.md").read_text(encoding="utf-8")
+    assert "- [Motion board (a round after G3)](#motion-board-a-round-after-g3)" in raw and "## Motion board (a round after G3)" in raw
+    assert raw.index("## Style board (round 0)") < raw.index("## Motion board (a round after G3)") < raw.index("## Per-direction cells")
+    flat = " ".join(raw.split())
+    assert "| `templates/motion-board.html` | `rounds/r<N>/board.html` of a motion round | `motion` |" in flat
+    section = " ".join(_between(raw, "## Motion board (a round after G3)", "## Per-direction cells").split())
+    for needle in ("`<body data-round=\"N\" data-board=\"motion\">`, from `templates/motion-board.html`", "It is a round from 2 on, in any tier, once G3 is recorded",
+                   "It is no pick, style, reset or rejected round", "One folder per variant, `rounds/r<N>/<name>/`, made before the page",
+                   "| `what-changed` | from the second motion board |", "exactly 3 on the project's first motion board, 1 or more on a later one",
+                   "| `weak-points` | from the second motion board |", "There is no `today`, `strategy-core`, `positioning-map`, `direction`, `losers` or `none-of-these` section.",
+                   "an element `data-motion-variant=\"<name>\"` (a word of 3 or more letters, never \"Variant 2\", unique, and also the folder name)",
+                   "the strip (`<img data-field=\"strip\">`, `<name>/frames/<name>/strip.png`) and the still under reduced motion (`<img data-field=\"reduced\">`, `reduced.png`)",
+                   "or as `data:` URIs of the same bytes on the review copy", "a link to the live page (`<a data-field=\"live\" href=\"<name>/index.html\">`): the board has no replay",
+                   "the proof line, an element `data-proof=\"pass\"` or `\"fail\"` with its text", "a failing proof labelled `fail` is honest and passes the lint, labelled `pass` it fails it",
+                   "`data-field=\"what-it-is\"`, `\"cost\"` and `\"degrades-to\"`", "`<fieldset data-vote=\"<name>\">`",
+                   "a proof copied from an earlier round and still pointing there fails",
+                   "stale one names `brand-creator shot --motion rounds/r<N>/<name>/proof.json`", "are the files `frames.json` lists, by sha256",
+                   "Taking a proof or its stills again after the lint makes the lint report stale: lint again, and shoot the board last."):
+        assert needle in section, needle
+    for row in MOTION_ROWS:
+        assert f"`{row}`" in section, row
+
+
+def test_the_contract_and_the_qa_phase_name_every_motion_row_and_the_motion_decision():
+    contract = _flat(ROOT / "scripts" / "CONTRACT.md")
+    board = contract[contract.index("### The motion board"):contract.index("## Hook guard")]
+    qa = _flat(PHASES / "09-qa.md")
+    for row in MOTION_ROWS:
+        assert f"`{row}`" in board and f"`{row}`" in qa, row
+    assert "and `motion`, the decision of `brand-creator motion` (see The motion decision)." in contract
+    for needle in ("### The motion decision (`brand-creator motion [--json] [--off \"<reason>\"]`)", "`state --json` has it as `\"motion\"`"):
+        assert needle in contract, needle
+
+
+def test_the_docs_say_a_card_and_its_folder_are_spelt_alike_and_that_check_quotes_a_report_that_is_not_verified():
+    """Two fixes of this release, said where each page already describes the rows: motion:files reads the listing of the round's folder (a disk that does not tell letter cases apart opens settle/ for the card Settle,
+    and the reports are named after the folder as the disk spells it), and `check` says why a current report of the approved proof is not verified, as board-lint does for a variant."""
+    ref = _flat(REFS / "board-contract.md")
+    contract = _flat(ROOT / "scripts" / "CONTRACT.md")
+    qa = _flat(PHASES / "09-qa.md")
+    assert "`motion:files` (each variant's folder, spelt as the card spells it, letter case included, its page and proof:" in ref
+    board = contract[contract.index("### The motion board"):contract.index("## Hook guard")]
+    assert ("| `motion:files` | a variant has no folder, or one that is not spelt as the card spells it (an entry of `rounds/rN/` equal to the card's name, letter case included: a disk that does not tell letter cases apart, "
+            "macOS or Windows, opens `settle/` for the card `Settle`, but `shot --motion` and `frames` name their reports after the folder as the disk spells it, so the reports the board asks for are never made; "
+            "the row says the card and its folder must be spelt alike, on every kind of disk)") in board
+    assert "a folder that is not spelt as the card spells it, letter case included, which a disk that does not tell letter cases apart opens all the same (`motion:files`)" in qa
+    for needle in ("when the report of that proof is current and says not-verified, the row says why, as `board-lint` says it of a variant (one function, `motionboard.unverified_why`): it quotes up to three of the rows the report could not verify, "
+                   "each with its id and detail, and, only when one names `requestAnimationFrame`, adds that such a move stays not verified however often the proof runs",
+                   "the row of the report itself, `report:motion/<slug>-<hash6>`, quotes the same rows (a stale report says it is stale, as for every report)"):
+        assert needle in contract, needle
+    assert ("a current report that says not-verified is quoted, up to three of the rows it could not verify and what to do about them, and neither the report of a try-out proof nor the one report of an earlier version counts") in qa
+    assert "(one that is current and says not-verified is quoted, in its own row and in `motion:proof`: the rows it could not verify)" in qa
+    check_py = " ".join((ROOT / "scripts" / "check.py").read_text(encoding="utf-8").split())
+    assert "A current report that says not-verified is quoted, in its own row and in motion:proof: up to three of the rows it could not verify, and what to do about them (motionboard.unverified_why" in check_py
+
+
+def test_the_contract_and_the_board_reference_say_the_radios_of_a_card_are_a_vote_group_of_its_own_and_that_board_lint_checks_it():
+    """The templates name the radios of a card `vote-<name>` (tests/test_board_lint.py reads the templates, tests/node/boardvotes.test.mjs opens them) and `board-lint` fails a board that does not (`page:votes`,
+    on every kind of board): the pages that describe the board say why, and that it is linted."""
+    ref = _flat(REFS / "board-contract.md")
+    contract = _flat(ROOT / "scripts" / "CONTRACT.md")
+    assert ("there (`page:votes`, on every kind of board): the radios of a card are named `vote-<name>`, the name as written in its `data-vote`, letter case included, a group of their own per card: "
+            "two cards that share a name are one group, and a vote on one clears the other.") in ref
+    assert "The row fails a board whose cards share a radio name, or whose radios are not named after their card, names the cards and the fix." in ref
+    assert "- the vote, `<fieldset data-vote=\"<name>\">`, as on the round page (`page:votes` checks it, as on every board)." in ref and "as on the round page (not linted)" not in ref
+    assert "Also carry, where they apply (not linted): \"Decisions for you\" from the review pass (as questions)" in ref and "unsure vote per territory (its radios" not in ref   # the vote is no longer among what the lint does not read
+    assert "| `<fieldset data-vote=\"<name>\">` | the owner's vote, as on the round page (the `page:votes` row, as on every board); its radios are named `vote-<name>`, a group of their own per card |" in contract
+    votes = contract[contract.index("Votes (`page:votes`, on every kind of board"):]
+    votes = votes[:votes.index("Project level:")]
+    for needle in ("pick, refine, style and motion", "the name as written in its `data-vote`, letter case included (`vote-Compass` for the card Compass, never `vote-compass`), and no two cards share a name",
+                   "The row fails when two vote fieldsets share a radio name", "or when a card's radios are not all named `vote-<its name>` (a radio with no name counts)", "names the cards, what it found, and the fix",
+                   "Two votes that carry the same `data-vote` are told apart by their place", "A page with no vote at all gets an info row: a vote is optional."):
+        assert needle in votes, needle
+
+
+def test_the_template_the_contract_and_the_qa_phase_say_what_stops_the_chain_on_a_motion_json_and_what_an_exit_3_that_wrote_its_report_does():
+    """One story in three places. A motion/motion.json that is not valid in itself stops the chain at the motion step (exit 2); one that is valid in itself but names a token that is not built does not
+    (`motion` reads the answer from the document alone): `book` stops the chain on that token, or, with no book, `check` fails motion:spec (tests/test_finish_chain.py runs both). A proof that exits 3 after it
+    wrote its report goes on too, and `check` says why: it is not verified, which is not a failure."""
+    tpl = re.sub(r"\s+", " ", re.sub(r"\n#", " ", (ROOT / "templates" / "finish.sh.tpl").read_text(encoding="utf-8")))
+    contract = _flat(ROOT / "scripts" / "CONTRACT.md")
+    contract = contract[contract.index("**The finish chain.**"):contract.index("## Agents and workflows")]      # the book's own "a motion.json that is not valid stops the build" is another page of the contract
+    qa = _flat(PHASES / "09-qa.md")
+    for what, text, now, old, tail in (
+            ("finish.sh.tpl", tpl, "that is not valid in itself stops it at once", "that is not valid stops it", "`check` fails motion:spec."),
+            ("CONTRACT.md", contract, "that is not valid in itself stops the chain at once", "that is not valid stops the chain", "`check` fails `motion:spec`)."),
+            ("09-qa.md", qa, "stops at once on a `motion/motion.json` that is not valid in itself (", "stops at once on a `motion/motion.json` that is not valid |", "`check` fails `motion:spec`) |")):
+        assert now in text and old not in text, f"{what}: a spec that is valid in itself but names a token that is not built does not stop the chain at the motion step"
+        assert "names a token that is not built does not" in text, what
+        assert "`book` stops the chain on that token, or, with no book, " + tail in text, what
+    assert ("(exit 1 goes on and `check` fails the report; an exit 3 after the step wrote its not-verified report, for example a move driven by requestAnimationFrame, goes on too, "
+            "and `check` says why: not verified, exit 3;") in qa
+    assert "and so does an exit 3 after the step wrote its not-verified report" not in qa, "check does not fail a report that says not-verified: it says why"
+    assert "a move driven by rAF, goes on too" not in qa, "an exit 3 that wrote its report is not only a move driven by requestAnimationFrame: a CSS animation `shot --motion` cannot read is not verified too"
+    assert "goes on too, and `check` says why (not verified)" in tpl and "so does a proof that is not verified" not in tpl
+    assert "(exit 3 after it wrote its report: for example a move driven by requestAnimationFrame, which cannot be stepped through) goes on too" in tpl
+    assert "exit 3 after the step wrote the report of the proof (for example a move driven by `requestAnimationFrame`) is a report that says not-verified" in contract
+    assert "as for a move driven by `requestAnimationFrame`" not in contract
+
+
+def test_the_contract_and_the_qa_phase_say_what_the_motion_board_lint_reads_quotes_and_names_and_how_the_chain_finds_the_report_it_wrote():
+    """What the code of this release does, said once where each page already describes it: the lint report lists the files the variants' reports were made from, a report that is no verdict is quoted
+    (the advice about requestAnimationFrame only when a row names it), a passing report that names no proof is named by its file, and the chain finds the report `shot --motion` wrote by what it printed."""
+    contract = _flat(ROOT / "scripts" / "CONTRACT.md")
+    for needle in ("and every file those two reports were made from (their own `inputs`: the files the page loaded, such as a stylesheet, `tokens.css` or a script, where the move may live)",
+                   "the row quotes the rows of the report that are not verified, each with its id and detail; one that names `requestAnimationFrame` adds that such a move stays not verified however often the proof runs",
+                   "a report that names no proof is named by its file, `assets/_checks/motion/<slug>-<hash6>.json`",
+                   "the step is judged by whether `shot --motion` printed the report it wrote, `report: <path>`"):
+        assert needle in contract, needle
+    assert "judged by whether that report changed while it ran" not in contract
+    qa = _flat(PHASES / "09-qa.md")
+    assert "a report that is no verdict (the row quotes the rows the report could not verify; one that names a move driven by rAF" in qa
+    assert "a move driven by rAF stays not verified: the row says to write it" not in qa
+
+
+def test_the_architecture_reference_gives_every_brand_a_colour_role_and_only_a_brand_that_moves_a_move():
+    """The wording of phase 6: motion is decided in Standard and Full, and a brand that does not move owns no move."""
+    arch = _flat(REFS / "architecture.md")
+    assert "Every brand owns one colour role no sibling uses; a brand that moves also owns one move (compare tiles side by side)." in arch
+    assert "one accent per product distinct from siblings and from the parent, and one signature move for a product that moves." in arch
+    assert "owns one signature move" not in arch and "one signature move per product" not in arch
+    mark = _flat(PHASES / "06-mark.md")
+    assert "Every brand owns one colour role that no sibling uses; a brand that moves also owns one move" in mark
+
+
+def test_the_manual_says_standard_and_full_settle_motion_and_shows_no_internal_codes():
+    pages = {name: MANUAL / name for name in ("getting-started/choose-a-tier.md", "use/pick-and-refine-a-direction.md", "reference/what-it-makes.md",
+                                              "use/make-the-brand-book.md", "reference/commands.md", "use/check-your-project.md", "reference/glossary.md")}
+    flat = {name: _flat(p) for name, p in pages.items()}
+    for name, p in pages.items():
+        found = INTERNAL_CODE.findall(p.read_text(encoding="utf-8"))
+        assert not found, f"{name}: gate, phase or decision numbers on a user page: {found}"
+    tier = flat["getting-started/choose-a-tier.md"]
+    for needle in ("a motion round (three ways your logo could move, or you say that nothing moves)", "and the motion round adds 2 or 3", "## Motion in each tier",
+                   "**Quick:** your logo moves only if something in your brand moves.",
+                   "**Standard and Full:** you settle motion for every brand, once, before you approve the system rules. Claude asks and says which it would pick."):
+        assert needle in tier, needle
+    pick = flat["use/pick-and-refine-a-direction.md"]
+    for needle in ("## Try a motion round (Standard and Full)", "Claude asks one question, once: does your logo move?", "/brand-creator:round motion",
+                   "Say that nothing moves, with a short reason in your own words, and Claude records it. Or say yes to a motion round.",
+                   "Each variant shows a strip of stills", "the still you get when reduced motion is on",
+                   "Answer by name, or by question and option like `1a`. You can ask to combine two variants",
+                   "Claude refines your pick in further rounds, like any other board, and shows what changed and the weak points.",
+                   "When you approve a variant, Claude keeps it as your brand's approved move, with its proof and its stills (the brand book replays them), and locks the round.",
+                   "Either answer is asked once.",
+                   "it changes `motion/motion.json` and searches the project for places that still say the old thing",
+                   "| A motion round is refused before you approved the design |", "| A motion round is refused because nothing moves is recorded |"):
+        assert needle in pick, needle
+    makes = flat["reference/what-it-makes.md"]
+    for needle in ("In Standard and Full, a motion round adds one more kind of board after you approve the design",
+                   "the strip on the board is the very picture taken from that page", "The stills of a variant in a motion round stay next to that variant",
+                   "`motion/motion.json` keeps your answer on motion.", "`brand-creator motion --off \"<your reason>\"` records that nothing moves",
+                   "In Standard and Full the motion chapter is always in the book once motion is decided."):
+        assert needle in makes, needle
+    book = flat["use/make-the-brand-book.md"]
+    for needle in ("In Standard and Full, motion is settled first: you tried a motion round, or you said that nothing moves.",
+                   "In Standard and Full the book always has a Motion chapter once motion is settled."):
+        assert needle in book, needle
+    commands = flat["reference/commands.md"]
+    for needle in ("`[style\\|pick\\|refine\\|motion] [what this round should answer]`", "in Standard and Full, a motion round)", ": `round`, `motion`",
+                   "Records, once, that nothing moves.", "`motion` is a round after you approve the design that tries your logo's move",
+                   "| `style`, `pick`, `refine` or `motion` | Which kind of board to build.", "## motion", "This is a `brand-creator` command, not a slash command",
+                   "| `--off \"<reason>\"` | Records that nothing moves, with your reason in your own words. It never writes over an earlier answer",
+                   "| `--json` | Prints the answer as data. Not together with `--off` |"):
+        assert needle in commands, needle
+    glossary = flat["reference/glossary.md"]
+    assert "| Round | One pass of a board. Round 0 is the style research, round 1 shows the directions; later rounds refine your pick. In Standard and Full, a motion round shows three ways your logo could move. Finished rounds are locked |" in glossary
+    checks = flat["use/check-your-project.md"]
+    for needle in ("boards, contrast, logo sheet, motion, packs, book, print, adoption",
+                   "In Standard and Full, once you approve the system rules, the check also wants your answer on motion: a motion round, or your word that nothing moves.",
+                   "If your brand moves, it wants a passing proof of the approved move too. Before that, an open question on motion is only a reminder.",
+                   "On a motion board, the check looks at each variant's page, proof and stills, and at whether the strip on the board is the picture that was taken of the page as it is now.",
+                   "| `motion:decided` fails |", "| `motion:decided` shows \"not decided yet\" |",
+                   "| `motion:proof` fails and says to write `motion/proof.json` |", "| `motion:proof` says \"not verified\" |",
+                   "There is no passing proof of your brand's move yet: it has not run, it failed, or the page changed since it ran.",
+                   "`brand-creator shot --motion motion/proof.json`"):
+        assert needle in checks, needle
+
+
+def test_the_pages_that_quote_what_motion_prints_quote_what_it_really_prints(tmp_path):
+    from helpers import bc, make_project
+    p = make_project(tmp_path, tier="standard")
+    commands = _flat(MANUAL / "reference" / "commands.md")
+    r = bc("motion", project=p)
+    assert (r.returncode, r.stdout) == (0, "motion: not decided\n") and "`motion: not decided`" in commands
+    r = bc("motion", "--off", "x", project=p)
+    assert (r.returncode, r.stdout) == (0, "recorded: nothing moves (x) in motion/motion.json\n") and "`recorded: nothing moves (<reason>) in motion/motion.json`" in commands
+    r = bc("motion", project=p)
+    assert r.stdout == "motion: off (nothing moves: x)\n" and "`motion: off (nothing moves: <reason>)`" in commands
+    r = bc("motion", "--off", "y", project=p)
+    assert r.returncode == 0 and r.stdout.startswith("already recorded: nothing moves (x)") and "`already recorded`" in commands
+    (p / "motion" / "motion.json").write_text(json.dumps({"schema": 1, "motion": "on", "signature": {"name": "Settle", "description": "The dot settles.", "where": ["app icon"]}}), encoding="utf-8")
+    r = bc("motion", project=p)
+    assert r.stdout == "motion: on (signature: Settle)\n" and "`motion: on (signature: <name>)`" in commands
+    r = bc("motion", "--off", "z", project=p)
+    assert r.returncode == 2 and "says the brand moves" in r.stderr and "refuses when your brand moves" in commands
+
+
+def test_the_check_page_names_the_motion_rows_and_the_command_each_message_asks_for(tmp_path):
+    from helpers import bc, make_project, report
+    p = make_project(tmp_path, tier="standard")
+    page = _flat(MANUAL / "use" / "check-your-project.md")
+
+    def row(rid):
+        return next((r for r in report(p, "check")["results"] if r["id"] == rid), None)
+
+    assert bc("state", "--record", "G3", "approved for the test", project=p).returncode == 0
+    bc("check", project=p)
+    assert row("motion:decided")["status"] == "info" and "not decided yet" in row("motion:decided")["detail"] and "`motion:decided` shows \"not decided yet\"" in page
+    assert bc("state", "--record", "G4", "approved for the test", project=p).returncode == 0
+    assert bc("check", project=p).returncode == 1 and row("motion:decided")["status"] == "fail" and "`motion:decided` fails" in page
+    assert "brand-creator motion --off" in row("motion:decided")["detail"] and "`brand-creator motion --off \"<your reason>\"`" in page
+    (p / "motion").mkdir()
+    (p / "motion" / "motion.json").write_text(json.dumps({"schema": 1, "motion": "on", "signature": {"name": "Settle", "description": "The dot settles.", "where": ["app icon"]}}), encoding="utf-8")
+    assert bc("check", project=p).returncode == 1 and row("motion:proof")["status"] == "fail" and "write motion/proof.json" in row("motion:proof")["detail"]
+    assert "`motion:proof` fails and says to write `motion/proof.json`" in page
+    (p / "motion" / "proof.json").write_text('{"schema": 1, "cases": []}', encoding="utf-8")
+    bc("check", project=p)
+    assert row("motion:proof")["status"] == "skipped" and "`brand-creator shot --motion motion/proof.json`" in row("motion:proof")["detail"]
+    assert "`motion:proof` says \"not verified\"" in page and "`brand-creator shot --motion motion/proof.json`" in page
+
+
+def test_adr_0005_records_that_motion_is_part_of_standard_and_full_and_is_listed():
+    adrs = sorted((ROOT / "docs" / "adr").glob("ADR-0005-*.md"))
+    assert [a.name for a in adrs] == ["ADR-0005-motion-is-part-of-standard-and-full.md"], adrs
+    text = adrs[0].read_text(encoding="utf-8")
+    flat = " ".join(text.split())
+    assert text.startswith("# ADR-0005: ") and "- **Status:** accepted" in text and "- **Date:** 2026-10-23" in text
+    assert re.findall(r"^## (.+)$", text, re.M) == ["Context", "Decision", "Consequences"]
+    source = " ".join(next(re.finditer(r"- \*\*Source:\*\*.*(?:\n  .*)*", text)).group(0).split())
+    assert "(../../CHANGELOG.md)" in source and "(0.4.0)" in source and "07-tokens.md" in source and "CONTRACT.md" in source
+    assert not re.search(r"\.md:\d", text), "sources are cited by file or heading, never by line"
+    context = flat[flat.index("## Context"):flat.index("## Decision")]
+    for needle in ("Decision 910 of the [archived decisions log](../archive/decisions-log.md), \"Board voice line and G4 examples fit the business\"",
+                   "left the motion and script-budget rules out of the system rules unless something moves or ships code",
+                   "0.3.4 made it data", "0.3.5 made the motion proof (`shot --motion`) step through a page", "and added `frames`", "0.3.6 built the brand book's Motion chapter"):
+        assert needle in context, needle
+    decision = flat[flat.index("## Decision"):flat.index("## Consequences")]
+    for needle in ("Standard and Full decide motion for every brand before G4: a motion round after G3 (the default), or the owner records that nothing moves, once, with a reason in the owner's words.",
+                   "`motion/motion.json` stays the one record: absent means not decided, `off` means nothing moves, `on` is the approved move.",
+                   "`brand-creator motion` shows and records the decision, and `state` prints the same line, so the question is asked once.",
+                   "`motion --off \"<reason>\"` writes once and never over an answer", "`motion:decided` fails without `motion/motion.json`",
+                   "On approval the tokens the move needs are built and the round's proofs, stills and lint are made current again, the round is frozen as `approved-motion`, "
+                   "and the approved variant is copied into `motion/`, recorded as `\"on\"`, proved and given its stills.",
+                   "`motion:proof` needs a passing proof of the approved move (the proof of a try-out never counts)",
+                   "Quick keeps the rule of decision 910: motion is decided at G4, and only when something moves. Quick runs a motion round only when something moves and has no check row.",
+                   "so the stills in `motion/frames/`, the only ones the book replays, are those of the approved move"):
+        assert needle in decision, needle
+    consequences = flat[flat.index("## Consequences"):]
+    assert ("A Standard or Full project that recorded G4 before this change has no `motion/motion.json`, so `check` fails `motion:decided` until it decides: "
+            "a motion round, or `brand-creator motion --off \"<reason>\"`.") in consequences
+    readme = (ROOT / "docs" / "adr" / "README.md").read_text(encoding="utf-8")
+    row = next((ln for ln in readme.splitlines() if ln.startswith("| [ADR-0005]")), None)
+    assert row and f"]({adrs[0].name})" in row and row.rstrip().endswith("| accepted |"), row
+
+
+def test_the_changelog_of_the_motion_release_opens_with_the_migration_note_and_lists_what_it_added_and_changed():
+    text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    start = text.index("## [0.4.0]") if "## [0.4.0]" in text else text.index("## [Unreleased]")
+    section = text[start:text.index("\n## [", start + 5)]
+    head = " ".join(section[:section.index("### Added")].split())
+    for needle in ("A Standard or Full project that has already recorded its system rules needs `motion/motion.json` before `brand-creator check` passes again",
+                   "run the motion round, or record that nothing moves with `brand-creator motion --off \"<your reason>\"`", "Until then `check` fails `motion:decided`.",
+                   "Quick is as it was: motion is settled at the end, with the system rules, and only when something moves.",
+                   "This release changes what `check` expects of a Standard or Full project, so it may break one made before it."):
+        assert needle in head, needle
+    order = ["Added", "Changed", "Deprecated", "Removed", "Fixed", "Security"]
+    sections = re.findall(r"(?m)^### (.+)$", section)
+    assert sections[:2] == ["Added", "Changed"] and sections == sorted(sections, key=order.index), "sections in the order of the standard, Added and Changed first"
+    assert not re.search(r"(?m)^\s*[*+] ", section), "bullets are dashes"
+    flat = " ".join(section.split())
+    added = flat[flat.index("### Added"):flat.index("### Changed")]
+    changed = flat[flat.index("### Changed"):]
+    for needle in ("`brand-creator motion` says where you stand on motion", "`motion: not decided`", "`already recorded`", "(exit 2)", "`brand-creator state` prints the same line",
+                   "`/brand-creator:round motion` builds a board of three variants", "`rounds/r<N>/<name>/`", "locks the round as `approved-motion`", "`templates/motion-board.html`",
+                   "`motion:decided` fails without `motion/motion.json`", "`motion:proof` needs a passing proof of the approved move", "Quick has neither row.",
+                   "so it shows it even when the move names tokens that are not built yet (`check` says so)",
+                   "compares with the approved logo in `assets/logo/`", "stays \"not verified\", and the row says to use CSS animations, transitions or `element.animate()`",
+                   "and `frames` took them of the page as it is now", "and neither does the one report of an earlier version (`assets/_checks/motion.json`)"):
+        assert needle in added, needle
+    for row in MOTION_ROWS:
+        assert f"`{row}`" in added, row
+    assert "a Motion chapter as soon as motion is decided" not in flat, "the book already had its Motion chapter once motion.json existed (0.3.6): no code changed here"
+    for needle in ("`frames` keeps the stills of a try-out proof beside it", "`<its folder>/frames/<case>/`",
+                   "A proof inside `history/` or in a round before the latest one is refused (exit 2, before anything is written), because both are read-only: take the stills before you freeze the round or start the next one",
+                   "`tools/finish.sh` has a motion step before the stills and the book", "Quick has no step.",
+                   "A failing proof goes on, and `check` fails its report; a proof that is not verified goes on too (exit 3 after it wrote its report, for example a move drawn by `requestAnimationFrame`), "
+                   "and `check` says that it is not verified, and why",
+                   "any other stop (exit 2, or exit 3 with no report written, as when Chromium is missing) stops the chain",
+                   "offer the motion rules from the approved move, and none when nothing moves"):
+        assert needle in changed, needle
+    assert "so does a proof that is not verified" not in flat, "check does not fail a proof that is not verified: it says so, and why"
+    assert "the row quotes up to three of the rows the report could not verify" in added and "the row quotes any other row the report could not verify" not in flat
+    assert "each variant's folder, spelt as the card spells it, letter case included, its page and proof" in added
+    assert ("When you approve a variant, Claude builds the tokens the move needs and runs the variants' proofs, stills and the lint again so that the round's record is current, locks the round as `approved-motion`, "
+            "copies the variant into `motion/`, records \"on\" in `motion/motion.json`, proves it and takes its stills for the book.") in added
+    assert "that row and the row of the report itself quote up to three of the rows it could not verify and what to do about them, as `board-lint` does for a variant" in added
+    fixed = flat[flat.index("### Fixed"):]
+    assert "and every vote stays." in fixed and "the three votes stay" not in flat, "a style board has four to six cards, a round page three to five: every vote stays"
+    assert "`board-lint` checks it on every kind of board (`page:votes`): it fails a board whose cards share a radio name, or whose radios are not named `vote-<its name>`" in fixed

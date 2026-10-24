@@ -12,6 +12,8 @@
 # -> brand book (generated: the stills of the demo page, skeletons, build with the motion chapter's replay, lint, byte-identical rebuild, check, labelled RGB PDF; eight mutations; patch and collapse on a hand-authored copy)
 # -> print and press (print PDFs trim + 2 x bleed, boxes, outlined text, RGB proof label, print-check with four mutations, a PDF/X-4 candidate only with --icc, press kit, social posts)
 # -> adoption (a synthetic target repository surveyed read only, pins, progress), check --cascade, BRAND.md and DESIGN.md (linted), the applied skill, LAUNCH.md
+# -> motion before G4 (Standard and Full: check fails an undecided motion, `motion --off` records nothing moves once, a brand that moves needs a passing proof of the approved move, a motion round of
+# three variants with their stills passes board-lint and its board is shot; on copies of the finished pack)
 # -> names (offline replay) -> brand-assets standalone entry (existing mark into ./brand-assets/: srgb tokens, audit, owner decisions, web +
 # windows packs, check) -> fleets (fleet-plan dry runs of the opt-in workflows, the designers' snapshot guard; no model is called)
 # -> evals (every behaviour case's scaffold builds a valid fixture project; the real `claude plugin eval` loader accepts every case; nothing is run or billed).
@@ -588,6 +590,126 @@ set -e
 [ "$rc_frozen" = 2 ] || die "the guard did not block an edit of frozen history (exit $rc_frozen)"
 [ "$rc_notes" = 0 ] || die "the guard blocked an unrelated write (exit $rc_notes)"
 ok "edit of history/ blocked, write of notes.md allowed"
+
+step "motion before G4 (Standard and Full): check fails an undecided motion, motion --off records nothing moves once, a brand that moves needs a passing proof of the approved move, a motion round of three variants passes board-lint (on copies of the finished pack)"
+check_ids() { python3 -c "import json,sys;print(' '.join(r['id'] for r in json.load(open(sys.argv[1] + '/assets/_checks/check.json'))['results'] if r['status']==sys.argv[2]))" "$@"; }
+check_status() { python3 -c "import json,sys;print(next((r['status'] for r in json.load(open(sys.argv[1] + '/assets/_checks/check.json'))['results'] if r['id']==sys.argv[2]), 'absent'))" "$@"; }
+file_state() { python3 -c "import hashlib,os,sys;f=sys.argv[1];print(hashlib.sha256(open(f,'rb').read()).hexdigest(), os.stat(f).st_mtime_ns)" "$@"; }
+MD="$SMOKE/motion-decided"; cp -R "$P" "$MD"
+[ "$("${BC[@]}" state --project "$MD" --get tier)" = full ] || die "the finished pack is not at the Full tier"
+"${BC[@]}" state --project "$MD" --record G4 "system rules approved (smoke)" >/dev/null
+"${BC[@]}" motion --project "$MD" | grep -qx "motion: not decided" || die "motion does not say that nothing is decided"
+set +e; "${BC[@]}" check --project "$MD" >/dev/null; rc=$?; set -e
+[ "$rc" = 1 ] && [ "$(check_ids "$MD" fail)" = "motion:decided" ] || die "check must fail motion:decided, and only it, once G4 is recorded with no decision on motion (exit $rc: $(check_ids "$MD" fail))"
+ok "G4 recorded and nothing decided on motion: check fails motion:decided (exit 1)"
+"${BC[@]}" motion --off "the brand lives on paper and in a shop window (smoke)" --project "$MD" | grep -q "^recorded: nothing moves" || die "motion --off did not record"
+"${BC[@]}" check --project "$MD" >/dev/null || die "check must pass once motion is recorded as nothing moves"
+[ "$(check_status "$MD" motion:decided)" = pass ] && [ "$(check_status "$MD" motion:proof)" = absent ] || die "motion:decided must pass, and no proof is asked of a brand that does not move"
+state_before="$(file_state "$MD/motion/motion.json")"
+"${BC[@]}" motion --off "another reason" --project "$MD" | grep -q "^already recorded: nothing moves (the brand lives on paper" || die "a second motion --off must say it is already recorded"
+[ "$(file_state "$MD/motion/motion.json")" = "$state_before" ] || die "a second motion --off wrote motion/motion.json"
+ok "motion --off: check passes, a second motion --off writes nothing"
+MO="$SMOKE/motion-on"; cp -R "$P" "$MO"
+python3 - "$MO" <<'PY' || die "the motion spec of the Acme copy could not be written"
+import json, sys
+p = sys.argv[1]
+f = p + "/tokens/primitives.tokens.json"
+d = json.load(open(f))
+d["easing"] = {"$type": "cubicBezier", "standard": {"$value": [0.2, 0, 0, 1]}}   # a curve next to Acme's one duration, so that the timeline can name both tokens
+json.dump(d, open(f, "w"), indent=2)
+open(p + "/motion/motion.json", "w").write(json.dumps({
+    "schema": 1, "motion": "on", "signature": {"name": "Press", "description": "The dot presses down two pixels and comes back.", "where": ["app icon", "empty states"]},
+    "parts": [{"id": "dot", "description": "The accent dot of the mark."}],
+    "timeline": [{"part": "dot", "property": "transform", "start": "0", "duration": "{duration.fast}", "easing": "{easing.standard}", "note": "two whole pixels down and back"}],
+    "rules": ["reduced motion: nothing moves"]}, indent=2) + "\n")
+PY
+"${BC[@]}" tokens --project "$MO" >/dev/null || die "tokens failed in the motion copy"
+"${BC[@]}" state --project "$MO" --record G4 "system rules approved (smoke)" >/dev/null
+"${BC[@]}" motion --project "$MO" | grep -qx "motion: on (signature: Press)" || die "motion does not name the signature"
+"${BC[@]}" shot --motion motion/proof.json --project "$MO" >/dev/null || die "the Acme motion proof failed in the copy"
+set +e; "${BC[@]}" check --project "$MO" >/dev/null; set -e
+for row in motion:spec motion:decided motion:proof; do [ "$(check_status "$MO" "$row")" = pass ] || die "$row must pass for a brand that moves with a passing proof (it is $(check_status "$MO" "$row"))"; done
+ok "a motion spec valid against Acme's tokens and a passing proof of the approved move: motion:spec, motion:decided and motion:proof pass"
+MR="$SMOKE/motion-round"; cp -R "$P" "$MR"
+python3 - "$MR" "$FIX" <<'PY' || die "the variants of the motion round could not be written"
+# three variants of one move, each a page of its own with the approved mark in place (the Acme demo page with the move changed), and the proof of each
+import json, sys
+from pathlib import Path
+p, fix = Path(sys.argv[1]), Path(sys.argv[2])
+demo = (fix / "motion/demo.html").read_text()
+anim, keys = "#dot { animation: press 320ms steps(2, end) 1 both; }", "@keyframes press { 0% { transform: translateY(0); } 50% { transform: translateY(2px); } 100% { transform: translateY(0); } }"
+assert anim in demo and keys in demo
+moves = {"Settle": (anim, keys),
+         "Bounce": ("#dot { animation: press 480ms steps(4, end) 1 both; }", "@keyframes press { 0% { transform: translateY(0); } 25% { transform: translateY(2px); } 50% { transform: translateY(0); } 75% { transform: translateY(2px); } 100% { transform: translateY(0); } }"),
+         "Glide": ("#dot { animation: press 640ms steps(2, end) 1 both; }", "@keyframes press { 0% { transform: translateX(0); } 50% { transform: translateX(2px); } 100% { transform: translateX(0); } }")}
+for name, (a, k) in moves.items():
+    d = p / "rounds" / "r2" / name
+    d.mkdir(parents=True)
+    (d / "index.html").write_text(demo.replace(anim, a).replace(keys, k).replace("Acme dot, motion demo", f"Acme dot, {name}"))
+    (d / "proof.json").write_text(json.dumps({"schema": 1, "cases": [{"name": name, "type": "page", "page": f"rounds/r2/{name}/index.html", "selector": "#mark", "static": "assets/logo/mark.svg", "settle_ms": 700}]}, indent=2) + "\n")
+PY
+for v in Settle Bounce Glide; do
+  "${BC[@]}" shot --motion "rounds/r2/$v/proof.json" --project "$MR" >/dev/null || die "the proof of the variant $v failed"
+  "${BC[@]}" frames "rounds/r2/$v/proof.json" --count 25 --project "$MR" >/dev/null || die "frames failed on the variant $v"
+  [ -s "$MR/rounds/r2/$v/frames/$v/strip.png" ] && [ -s "$MR/rounds/r2/$v/frames/$v/reduced.png" ] || die "the stills of the variant $v are not beside its proof"
+done
+[ ! -e "$MR/motion/frames/Settle" ] || die "frames wrote the stills of a variant into motion/frames/"
+python3 - "$MR" "$ROOT" <<'PY' || die "the motion board could not be written"
+import json, sys
+from pathlib import Path
+p, root = Path(sys.argv[1]), Path(sys.argv[2])
+sys.path.insert(0, str(root / "tests")); sys.path.insert(0, str(root / "scripts/lib"))
+from helpers import fill_motion_board   # the template with its markers filled by stand-in text; the proof line of each card is what its report says
+from _common import motion_report_tool
+names = ("Settle", "Bounce", "Glide")
+statuses = {n: json.loads((p / "assets/_checks" / f"{motion_report_tool(f'rounds/r2/{n}/proof.json')}.json").read_text())["status"] for n in names}
+assert set(statuses.values()) == {"pass"}, statuses
+(p / "rounds/r2/board.html").write_text(fill_motion_board((root / "templates/motion-board.html").read_text(), names, rnd=2, statuses=statuses))
+PY
+"${BC[@]}" board-lint rounds/r2/board.html --project "$MR" >/dev/null || die "the motion board does not pass board-lint"
+python3 - "$MR/assets/_checks/board-lint.json" <<'PY' || die "the motion rows of board-lint are wrong"
+import json, sys
+rows = {r["id"]: r["status"] for r in json.load(open(sys.argv[1]))["results"]}
+assert all(rows.get(k) == "pass" for k in ("page:data-board", "motion:g3", "motion:off", "motion:variants", "motion:files", "motion:proof", "motion:stills", "motion:fields")), rows
+PY
+"${BC[@]}" shot rounds/r2/board.html --project "$MR" >/dev/null || die "the motion board does not pass its four-view shots (the strips and the page must not overflow)"
+ok "a motion round after G3: 3 variants (a page, a proof and 25 stills each, taken beside the proof) pass board-lint, and the board passes its four views"
+board_bad() { python3 - "$MR/assets/_checks/board-lint.json" "$@" <<'PY'
+import json, sys
+bad = [r["id"] for r in json.load(open(sys.argv[1]))["results"] if r["status"] == "fail"]
+assert bad == sys.argv[2:], (bad, sys.argv[2:])
+PY
+}
+cp "$MR/rounds/r2/board.html" "$SMOKE/motion-board.good"
+python3 - "$MR/rounds/r2/board.html" <<'PY'
+import sys
+f = sys.argv[1]
+t = open(f).read()
+old = 'src="Bounce/frames/Bounce/strip.png"'
+assert old in t
+open(f, "w").write(t.replace(old, 'src="Settle/frames/Settle/strip.png"'))   # the card of one variant shows the strip of another
+PY
+set +e; "${BC[@]}" board-lint rounds/r2/board.html --project "$MR" >/dev/null; rc=$?; set -e
+[ "$rc" = 1 ] && board_bad motion:stills || die "a card that shows another variant's strip must fail motion:stills, and only it (exit $rc)"
+ok "a strip that is not the file frames.json lists fails motion:stills"
+cp "$SMOKE/motion-board.good" "$MR/rounds/r2/board.html"
+printf '\n<!-- changed after its stills were taken -->\n' >> "$MR/rounds/r2/Bounce/index.html"
+"${BC[@]}" shot --motion rounds/r2/Bounce/proof.json --project "$MR" >/dev/null || die "the proof of Bounce failed after a comment was added to its page"
+set +e; "${BC[@]}" board-lint rounds/r2/board.html --project "$MR" >/dev/null; rc=$?; set -e
+[ "$rc" = 1 ] && board_bad motion:stills || die "stills taken of an older page must fail motion:stills, and only it, once the proof has run again (exit $rc)"
+"${BC[@]}" frames rounds/r2/Bounce/proof.json --count 25 --project "$MR" >/dev/null || die "frames failed on Bounce again"
+"${BC[@]}" board-lint rounds/r2/board.html --project "$MR" >/dev/null || die "the board must pass again once frames has taken the stills of the page as it is now"
+ok "a page changed after its stills were taken: the proof run again is not enough, motion:stills fails until frames has run again"
+python3 - "$MR/rounds/r2/Glide/proof.json" <<'PY'
+import json, sys
+f = sys.argv[1]
+d = json.load(open(f))
+d["cases"][0]["page"] = "rounds/r2/Settle/index.html"   # a proof copied from another round or folder, its page not updated: it points at a page that is not the variant's own
+json.dump(d, open(f, "w"), indent=2)
+PY
+set +e; "${BC[@]}" board-lint rounds/r2/board.html --project "$MR" >/dev/null; rc=$?; set -e
+[ "$rc" = 1 ] && board_bad motion:files motion:proof motion:stills || die "a proof whose page is not its variant's index.html must fail motion:files (and its motion and frames reports are stale: the proof changed), and nothing else (exit $rc)"
+ok "a proof copied from another round and not updated fails motion:files (and the motion and frames reports of the changed proof are stale)"
 
 step "names: offline replay of the recorded fixtures (no network; the live path is the manual requires_network test)"
 "${BC[@]}" names granite zqxvkrmpl --tlds com,io --offline "$ROOT/tests/fixtures/names/software" --project "$P" >/dev/null || die "names replay failed"

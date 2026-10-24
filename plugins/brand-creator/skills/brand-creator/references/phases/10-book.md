@@ -26,8 +26,9 @@ runs the same self-review.
 ## Inputs
 
 - Built tokens (`brand-creator tokens`), the mark SVGs, `assets/manifest.json` from the emitters, the contrast and downscale reports.
-- When the brand moves: `motion/motion.json` (the signature move, the timeline, the rules; the Motion chapter shows it) and the stills in
-  `motion/frames/` that `brand-creator frames` writes (the chapter replays them).
+- `motion/motion.json`, on or off. In Standard and Full motion is decided before G4, so the Motion chapter is always in the book
+  once it is decided: it shows the signature move, the timeline and the rules, or `Nothing moves` with the owner's reason and no replay.
+  When the brand moves, also the stills in `motion/frames/` that `brand-creator frames` writes (the chapter replays them).
 - BRAND-STATE.md: tier, architecture, `mark_source`, `content_languages`, `edition`, the Directions table, the Rules section, gates.
 - FACTS.md: every claim in the book's own words is a row there, or it is not written.
 - `book/chapters/*.md` (generated mode) or `book.html` (authored-vector mode).

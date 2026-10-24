@@ -13,7 +13,7 @@ Claude can also start it when your request matches. [Glossary](glossary.md) expl
 | `/brand-creator:brand-book` | you or Claude | Builds, updates, reviews and exports the brand book | — |
 | `/brand-creator:setup` | you only | Installs the tools brand-creator needs, after showing what it will download and getting your yes | `[--force]` |
 | `/brand-creator:new` | you only | Starts a new brand project and asks up to three quick questions | `[slug]` |
-| `/brand-creator:round` | you only | Builds the next round of boards (the style board first, then directions, then refinements) and stops for your decision | `[style\|pick\|refine] [what this round should answer]` |
+| `/brand-creator:round` | you only | Builds the next round of boards (the style board first, then directions, refinements and, in Standard and Full, a motion round) and stops for your decision | `[style\|pick\|refine\|motion] [what this round should answer]` |
 | `/brand-creator:status` | you only | Shows where the project stands and what comes next | — |
 | `/brand-creator:check` | you only | Runs every check that applies, and optionally searches for leftovers of old values | `[<old value or phrase> ...]` |
 | `/brand-creator:review` | you only | Reviews the latest work and gives you one list to approve | `[board\|book\|pack\|all] [panel]` |
@@ -23,7 +23,7 @@ Claude can also start it when your request matches. [Glossary](glossary.md) expl
 Each command has a how-to page:
 
 - [Start a brand](../use/start-a-brand.md): `brand-creator`, `new`, `status`, `setup`
-- [Pick and refine a direction](../use/pick-and-refine-a-direction.md): `round`
+- [Pick and refine a direction](../use/pick-and-refine-a-direction.md): `round`, `motion`
 - [Name your brand](../use/name-your-brand.md): `brand-naming`
 - [Make icons and images from your logo](../use/make-icons-and-images.md): `brand-assets`
 - [Make the brand book](../use/make-the-brand-book.md): `brand-book`
@@ -79,8 +79,22 @@ Agents are helpers that workflows start. They never start on their own, and none
 
 | Argument | What it does | Default |
 | --- | --- | --- |
-| `pick` or `refine` | Which kind of board to build | Worked out from your project |
+| `style`, `pick`, `refine` or `motion` | Which kind of board to build. `motion` is a round after you approve the design that tries your logo's move | Worked out from your project |
 | text | The question this round should answer | Worked out from your project |
+
+## motion
+
+> brand-creator motion --off "We only show the logo on paper and in the shop window"
+
+Records, once, that nothing moves. This is a `brand-creator` command, not a slash command: Claude runs it when you say
+that nothing moves, and you can type it too. Without arguments it says where you stand: `motion: on (signature: <name>)`,
+`motion: off (nothing moves: <reason>)` or `motion: not decided`. With `--off` it prints `recorded: nothing moves (<reason>)
+in motion/motion.json`.
+
+| Argument | What it does | Default |
+| --- | --- | --- |
+| `--off "<reason>"` | Records that nothing moves, with your reason in your own words. It never writes over an earlier answer: asked again, it says `already recorded`, and it refuses when your brand moves | — |
+| `--json` | Prints the answer as data. Not together with `--off` | Off |
 
 ## check
 

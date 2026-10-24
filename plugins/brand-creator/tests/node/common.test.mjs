@@ -191,6 +191,19 @@ test("the report name of a proof file is the same in JS and in Python, and the h
   assert.notEqual(C.proofReportTool("motion/proof.json"), C.proofReportTool("rounds/r2/proof.json")); // the same file name in two folders is two reports
 });
 
+test("the kind of a motion proof (gated, exploration or gone) is the same rule in JS and in Python: both answer one table of cases", () => {
+  const table = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/fixtures/motion-proof-kinds.json"), "utf8")).cases;
+  assert.ok(table.length >= 20 && new Set(table.map((c) => c.kind)).size === 3);
+  const dirs = table.map((c, i) => {
+    const project = tmpdir(`bc-kind-${i}-`);
+    for (const f of c.files) { fs.mkdirSync(path.dirname(path.join(project, f)), { recursive: true }); fs.writeFileSync(path.join(project, f), "x\n"); }
+    return project;
+  });
+  table.forEach((c, i) => assert.equal(C.motionProofKind(dirs[i], c.proof), c.kind, c.why));
+  const want = python("from pathlib import Path\nfrom _common import motion_proof_kind\nprint(json.dumps([motion_proof_kind(Path(d), p) for d, p in json.loads(sys.argv[2])]))", JSON.stringify(table.map((c, i) => [dirs[i], c.proof])));
+  assert.deepEqual(want, table.map((c) => c.kind), "the Python side answers as the table says");
+});
+
 test("pixelArt reads the root of an SVG the way svgtools.pixel_art does", () => {
   const NS = 'xmlns="http://www.w3.org/2000/svg"';
   const cases = [

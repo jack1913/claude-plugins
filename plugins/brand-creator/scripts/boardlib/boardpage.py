@@ -19,6 +19,15 @@ SKIP_TEXT = {"script", "style", "template"}
 HEADINGS = {"h1", "h2", "h3", "h4", "h5", "h6"}
 PLACEHOLDER = re.compile(r"^\s*(todo|tbd|\.\.\.|\(\.\.\.\)|lorem ipsum.*)\s*$", re.I)
 MIN_TERRITORIES = 4   # a style board shows at least this many style territories (the style lint requires them)
+KINDS = ("pick", "refine", "style", "motion")   # the data-board values; a motion board (a round after G3 that tries the signature move) is no pick, style, reset or rejected round
+FILL = "[[fill"
+# "Option 2", "Style A", "Direction II", "Option #2", "Style-3": a label, not a word name. A label word alone, or followed by a number
+# (with or without a separator), or by one letter or a roman numeral after a space, "-" or "#". "Routes", "Looker" and "Moody" are words.
+_LABEL_WORDS = "option|direction|variant|style|concept|route|territory|look|mood|idea|version|choice"
+_ROMAN = "(?=[ivxlcdm])m{0,3}(?:cm|cd|d?c{0,3})(?:xc|xl|l?x{0,3})(?:ix|iv|v?i{0,3})"
+GENERIC_NAME = re.compile(rf"^(?:{_LABEL_WORDS})(?:\d+|[\s#-]+(?:\d+|[^\W\d_]|{_ROMAN}))?$", re.I)
+WORD_NAME = re.compile(r"^[^\W\d_]{3,}")
+DATA_IMAGE = re.compile(r"^data:image/[a-z0-9.+-]+[;,]", re.I)
 
 
 class Node:

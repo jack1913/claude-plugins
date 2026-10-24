@@ -7,6 +7,8 @@ from your project, so it can't drift from your files.
 
 - You have a brand project with an approved logo and colours. A brand that doesn't exist yet starts with
   [Start a brand](start-a-brand.md).
+- In Standard and Full, motion is settled first: you tried a motion round, or you said that nothing moves. See
+  [Pick and refine a direction](pick-and-refine-a-direction.md).
 
 ## Build it
 
@@ -27,6 +29,9 @@ edits `book.html` by hand. A hand-drawn logo has a hand-written book instead, wh
 that open a new edition.
 
 ## If your brand moves
+
+In Standard and Full the book always has a Motion chapter once motion is settled. When nothing moves, it says so and gives
+your reason, and there is nothing to replay. When your brand moves, read on.
 
 The Motion chapter can replay your brand's motion, with no script. Before you build the book, ask Claude for "stills of
 the motion", or run `brand-creator frames motion/proof.json --count 25`. The chapter then plays the mark's movement on

@@ -193,6 +193,18 @@ export function proofReportTool(proofRel, dir = "motion") {
   return `${dir}/${slug}-${sha256(src).slice(0, 6)}`;
 }
 
+/** Where a motion proof stands, judged by its project-relative path: "gone" (no such file), "exploration" (it sits under rounds/, history/ or a removed-*\/ folder: a try-out,
+ *  never gated) or "gated" (a proof of the project; also a missing path). Twin of motion_proof_kind in _common.py (a test pins both to one table of cases): the folders are
+ *  read as pathlib reads them, so an empty part and a "." are dropped and a ".." is kept. */
+export function motionProofKind(project, proof) {
+  if (!proof) return "gated";
+  let isFile = false;
+  try { isFile = fs.statSync(path.resolve(project, proof)).isFile(); } catch { /* no such file */ }
+  if (!isFile) return "gone";
+  const folders = proof.split("/").filter((s) => s !== "" && s !== ".").slice(0, -1);
+  return folders.some((s) => s === "rounds" || s === "history" || s.startsWith("removed-")) ? "exploration" : "gated";
+}
+
 /** Art drawn on a pixel grid: the root element of the SVG says shape-rendering="crispEdges". Twin of pixel_art in svgtools.py, which reads the parsed
  *  root; here the root tag is read as text (comments and the XML declaration before it are skipped). */
 export function pixelArt(svgText) {

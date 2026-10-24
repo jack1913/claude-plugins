@@ -10,10 +10,13 @@
 #   4 the gates (downscale on every master a manifest row names, states-check). Off macOS there is no sips and no iconutil: set ICNS_RENDERER=pillow
 #     (emit tauri) and DOWNSCALE_RENDERER=pillow or resvg (the downscale gates) in block 2, the explicit opt-ins; without them those two steps exit 3
 #   5 verify-idempotent: the whole emit chain run twice must give byte-identical files
-#   6 the brand book when book/chapters/ exists (frames first, Standard and Full, when the brand moves: motion/motion.json says on and motion/proof.json has a page case,
-#     so that the Motion chapter replays fresh stills, with FRAMES_ARGS of block 2; a failure that writes a failing report (exit 1) does not stop the chain, exit 2 or 3 does; then book, book-pdf: they read the reports of steps 4
-#     and 5), then the press kit (Standard and Full): the kit holds book.pdf
-#   7 staleness --write (records the inputs, the plugin version and the emitter code the pack was built from), then check
+#   6 motion (Standard and Full decide it for every brand before G4): the decision is printed, never skipped in silence; a brand that moves has its approved move proved
+#     (shot --motion motion/proof.json: exit 1 writes a failing report and exit 3 a not-verified one, the chain goes on and check gates the report; any other exit, or an exit 3
+#     that wrote none, stops it), before the stills and the book read the report
+#   7 the brand book when book/chapters/ exists (frames first, Standard and Full, when the brand moves: motion/motion.json says on and motion/proof.json has a page case,
+#     so that the Motion chapter replays fresh stills, with FRAMES_ARGS of block 2, and a line says whenever it takes none; a failure that writes a failing report (exit 1) does
+#     not stop the chain, exit 2 or 3 does; then book, book-pdf: they read the reports of steps 4 and 5), then the press kit (Standard and Full): the kit holds book.pdf
+#   8 staleness --write (records the inputs, the plugin version and the emitter code the pack was built from), then check
 #
 # The chain sets BRAND_CREATOR_CHAIN=1. A generator that clears or rewrites a whole output folder calls
 # `require_chain()` (scripts/lib/_common.py) and refuses to run without it: run alone it would wipe files that later steps refill.
@@ -141,6 +144,40 @@ while IFS= read -r src; do
 done <<< "$SOURCES"
 [ -f qa/states.json ] && "${BC[@]}" states-check
 "${BC[@]}" verify-idempotent "${cmds[@]}"
+# ---- motion: Standard and Full decide it for every brand before G4 (a motion round, or `brand-creator motion --off "<reason>"`); Quick decides it at G4, only when something moves, and has no step.
+# The decision is printed, whatever it is. A brand that moves has its approved move proved before the stills and the book read the report: a failing proof (exit 1) writes a failing report, so the
+# chain goes on and `check` fails it; a proof that is not verified (exit 3 after it wrote its report: for example a move driven by requestAnimationFrame, which cannot be stepped through) goes on too, and `check` says why (not verified).
+# Any other exit leaves no report to gate, so it stops the chain with that exit code: exit 2, and an exit 3 that did not write the report of the proof (Chromium cannot start). A motion/motion.json
+# that is not valid in itself stops it at once (exit 2, the message of `brand-creator motion`); one that is valid in itself but names a token that is not built does not, because `motion` reads the answer
+# from the document alone: `book` stops the chain on that token, or, with no book, `check` fails motion:spec. With no decision the chain goes on and says so: `check` fails motion:decided once G4 is recorded.
+wrote_report() {   # wrote_report <what shot --motion printed>: it printed the report it wrote ("report: <path>": the file is named after the proof as the disk spells its path, not always as typed here), and that file is there
+  local f; f="$(printf '%s\n' "$1" | sed -n 's/^report: //p' | tail -n 1)"
+  [ -n "$f" ] && [ -f "$f" ]
+}
+MOTION_STATE=undecided
+case "$TIER" in
+  standard|full)
+    step "motion"
+    MOTION_JSON="$("${BC[@]}" motion --json)"
+    MOTION_LINE="$(python3 -c 'import json, sys; d = json.loads(sys.argv[1]); print(d["motion"], " ".join(str(d.get("signature") or d.get("reason") or "").split()), sep="\t")' "$MOTION_JSON")"
+    MOTION_STATE="${MOTION_LINE%%$'\t'*}"; MOTION_TEXT="${MOTION_LINE#*$'\t'}"
+    case "$MOTION_STATE" in
+      on)
+        echo "motion is on: signature $MOTION_TEXT"
+        if [ -f motion/proof.json ]; then
+          step "shot --motion motion/proof.json"
+          rc=0; SHOT_OUT="$("${BC[@]}" shot --motion motion/proof.json)" || rc=$?
+          [ -z "$SHOT_OUT" ] || printf '%s\n' "$SHOT_OUT"
+          if [ "$rc" -eq 1 ]; then echo "finish.sh: the motion proof failed (see above); the chain goes on and check fails the report" >&2
+          elif [ "$rc" -eq 3 ] && wrote_report "$SHOT_OUT"; then echo "finish.sh: the motion proof is not verified (see above); the chain goes on and check says why" >&2
+          elif [ "$rc" -ne 0 ]; then echo "finish.sh: shot --motion stopped with exit $rc (see above); check has no failing report to gate, so the chain stops here" >&2; exit "$rc"; fi
+        else
+          echo "finish.sh: motion/motion.json says the brand moves, but there is no motion/proof.json to prove the approved move: write it, then run \`brand-creator shot --motion motion/proof.json\` (check fails motion:proof once G4 is recorded)" >&2
+        fi ;;
+      off) echo "nothing moves: $MOTION_TEXT" ;;
+      *) echo "motion is not decided: run the motion round, or record nothing moves with \`brand-creator motion --off \"<the owner's reason>\"\` (check fails motion:decided once G4 is recorded)" >&2 ;;
+    esac ;;
+esac
 # ---- block 4: the brand book and the press kit. They come after the gates because the book reads the downscale and idempotence reports (a book built before
 # them is stale the moment they are rewritten), and the kit holds book.pdf, so it follows the book (the book's file list leaves the kit out).
 # The kit is deterministic (tested with `emit presskit` run twice); it is not in the idempotence run, which has to finish before the book is built.
@@ -158,6 +195,12 @@ if [ -d book/chapters ]; then
         rc=0; "${BC[@]}" frames motion/proof.json "${FRAMES_OPTS[@]}" || rc=$?
         if [ "$rc" -eq 1 ]; then echo "finish.sh: frames could not take the stills (see above); the book keeps the stills of the last run that worked, if any, and check says why" >&2
         elif [ "$rc" -ne 0 ]; then echo "finish.sh: frames stopped with exit $rc (see above); check has no failing report to gate, so the chain stops here (the number of stills is FRAMES_ARGS in block 2)" >&2; exit "$rc"; fi
+      else
+        case "$MOTION_STATE" in
+          off) echo "finish.sh: no stills taken: nothing moves (motion/motion.json), so the Motion chapter has nothing to replay" ;;
+          on)  echo "finish.sh: no stills taken: motion/proof.json is missing, cannot be read or has no page case (frames takes the stills of a page that moves the mark), so the Motion chapter has no replay" ;;
+          *)   echo "finish.sh: no stills taken: motion is not decided, so the Motion chapter has no replay" ;;
+        esac
       fi ;;
   esac
   step "book";     "${BC[@]}" book

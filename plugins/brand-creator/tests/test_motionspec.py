@@ -251,6 +251,36 @@ def test_tokens_that_are_not_built_are_exit_3_naming_the_command_and_a_broken_do
     assert row(proj)["status"] == "fail" and "schema: must be 1" in row(proj)["detail"], r.stdout
 
 
+def test_the_decision_is_read_without_the_tokens_the_spec_names_and_a_broken_document_is_still_exit_2(proj):
+    """`motion` and `state` print the answer: a duration or a curve the tokens do not have (yet) is motion:spec's to say, never the answer's."""
+    write(proj, on_doc())
+    mutate_json(proj / SPEC, lambda d: d["timeline"][0].__setitem__("easing", "{easing.nowhere}"))
+    assert "timeline[0].easing: no token named easing.nowhere" in refusal(proj)              # load() looks every reference up ...
+    assert motionspec.decision(proj) == {"motion": "on", "signature": "Settle"}              # ... the answer does not
+    write(proj, on_doc())
+    tj = proj / "assets" / "tokens" / "tokens.json"
+    tj.rename(tj.with_name("tokens.json.moved"))
+    refusal(proj, EXIT_CANNOT)                                                               # tokens not built: load() is exit 3
+    assert motionspec.decision(proj) == {"motion": "on", "signature": "Settle"}
+    assert motionspec.load(proj, tokens=False) == on_doc()
+    tj.with_name("tokens.json.moved").rename(tj)
+    tj.write_text("{broken", encoding="utf-8")                                               # tokens that cannot be read: the same
+    refusal(proj, EXIT_CANNOT)
+    assert motionspec.decision(proj) == {"motion": "on", "signature": "Settle"}
+    doc = on_doc()
+    doc["schema"] = 2
+    write(proj, doc)
+    with pytest.raises(CliError) as e:
+        motionspec.decision(proj)
+    assert e.value.code == EXIT_USAGE and "schema: must be 1" in e.value.message             # wrong in itself: exit 2, with the tokens built or not
+    write(proj, "{not json")
+    with pytest.raises(CliError) as e:
+        motionspec.decision(proj)
+    assert e.value.code == EXIT_USAGE and "cannot be read as JSON" in e.value.message
+    write(proj, off_doc())
+    assert motionspec.decision(proj) == {"motion": "off", "reason": off_doc()["reason"]}
+
+
 def test_tokens_built_before_they_had_motion_are_named_in_the_refusal(proj):
     mutate_json(proj / "assets" / "tokens" / "tokens.json", lambda d: d.pop("motion"))
     write(proj, on_doc())

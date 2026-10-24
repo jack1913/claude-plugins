@@ -48,6 +48,30 @@ can't be skipped), and then shows new directions, including at least one far fro
 
 You can combine picks ("refine with style 2 and 3"). Claude states how it reads that before it builds.
 
+## Try a motion round (Standard and Full)
+
+After you approve the refined board, Claude asks one question, once: does your logo move? A shop or a practice that lives
+on paper and in a window rarely needs to. A logo seen in an app or on a site often does. Claude tells you which it
+recommends, and why.
+
+1. Say that nothing moves, with a short reason in your own words, and Claude records it. Or say yes to a motion round.
+2. For a motion round, Claude builds a board of three variants of your logo's one move, each on a page where you would
+   really see it. You can also ask for it yourself:
+
+   > /brand-creator:round motion
+
+3. Read the board. Each variant shows a strip of stills, so you can read the move frame by frame, the still you get when
+   reduced motion is on, a link to the live page, what the proof found, what the move is, what it costs and what is left
+   with no script.
+4. Answer by name, or by question and option like `1a`. You can ask to combine two variants ("Settle, with Glide's
+   curve"), or say that none of them fits and what was missing.
+5. Claude refines your pick in further rounds, like any other board, and shows what changed and the weak points.
+6. When you approve a variant, Claude keeps it as your brand's approved move, with its proof and its stills (the brand
+   book replays them), and locks the round.
+
+Either answer is asked once. To change your mind later, ask Claude: it changes `motion/motion.json` and searches the
+project for places that still say the old thing.
+
 ## Check it worked
 
 - The finished round is in `history/`, and `/brand-creator:status` shows your pick.
@@ -63,6 +87,8 @@ You can combine picks ("refine with style 2 and 3"). Claude states how it reads 
 | Claude says the style research needs web access | Allow web access, or send links or screenshots of brands you like. Before your first board of directions you can also say "skip the research" |
 | You started the brand before the style step existed | Either have Claude run the style research now (`/brand-creator:round style`), or tell it your first board was drawn before that step. Both are fine |
 | A bare "1" when two lists are on the board | Claude asks which list you mean, or says what it assumed |
+| A motion round is refused before you approved the design | The motion round comes after you approve the refined board. Approve it first |
+| A motion round is refused because nothing moves is recorded | The two contradict each other. To try motion after all, ask Claude to change `motion/motion.json`, so it can search the project for places that still say nothing moves |
 
 ## Related
 

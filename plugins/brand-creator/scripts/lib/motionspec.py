@@ -3,6 +3,9 @@
 load(project) -> the validated document, or None when the file is absent. Anything wrong is exit 2 naming the field path and what is wrong, never
 a guess. The references to duration and curve tokens are looked up in the built tokens (assets/tokens/tokens.json); when those are not built that is
 exit 3 naming `brand-creator tokens`. The schema is in scripts/CONTRACT.md ("Motion spec"). Standard library only; no clock and no random numbers.
+
+decision(project) and status_lines(project, decision) are the owner's answer as `motion` and `state` print it: on, off (nothing moves) or not decided. The answer is read from the document
+alone, without looking its tokens up (the motion round comes before the tokens are built): whether they are built is the spec row of `check`.
 """
 from __future__ import annotations
 
@@ -10,10 +13,12 @@ import json
 import re
 from pathlib import Path
 
-from _common import EXIT_CANNOT, EXIT_USAGE, CliError, fail
+from _common import EXIT_CANNOT, EXIT_USAGE, CliError, fail, gate_recorded, read_state
 
 FILE = "motion/motion.json"
 TOKENS = "assets/tokens/tokens.json"
+# what Standard and Full say while motion is not decided (the line of `motion` and `state`, the rows of `check`, the finish chain): one sentence, one place
+DECIDE = 'run the motion round, or record nothing moves with `brand-creator motion --off "<the owner\'s reason>"`'
 KEYS = {"": ("schema", "motion", "reason", "signature", "parts", "timeline", "rules"), "signature": ("name", "description", "where"),
         "part": ("id", "description"), "step": ("part", "property", "start", "duration", "easing", "note")}
 ID = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*")
@@ -48,7 +53,7 @@ def check(doc) -> tuple[list[str], list[tuple[str, str, str]]]:
         bad.append(f"schema: must be 1 (the only schema this version reads), got {json.dumps(schema)}" if "schema" in doc else "schema: required, 1")
     mode = doc.get("motion")
     if mode not in ("on", "off"):
-        bad.append(f'motion: must be "on" or "off", got {json.dumps(mode)}' if "motion" in doc else 'motion: required, "on" or "off" (the owner\'s answer at G4)')
+        bad.append(f'motion: must be "on" or "off", got {json.dumps(mode)}' if "motion" in doc else 'motion: required, "on" or "off" (the owner\'s answer on motion)')
     if "reason" in doc and not text(doc["reason"]):
         bad.append("reason: must be a non-empty string")
     if mode == "off":
@@ -160,8 +165,8 @@ def ref_problems(refs: list[tuple[str, str, str]], built: dict) -> list[str]:
     return bad
 
 
-def load(project: Path) -> dict | None:
-    """The validated motion spec of a project, or None when motion/motion.json does not exist."""
+def load(project: Path, *, tokens: bool = True) -> dict | None:
+    """The validated motion spec of a project, or None when motion/motion.json does not exist. tokens=False checks the document itself and leaves its references unresolved."""
     f = project / FILE
     if not f.is_file():
         return None
@@ -170,7 +175,7 @@ def load(project: Path) -> dict | None:
     except (OSError, ValueError) as e:
         fail(EXIT_USAGE, f"{FILE}: cannot be read as JSON ({e})")
     bad, refs = check(doc)
-    if refs:
+    if refs and tokens:
         try:
             built = built_tokens(project)
         except CliError:
@@ -192,3 +197,26 @@ def summary(doc: dict) -> str:
         return f"motion off: {one_line(doc['reason'])}"
     return (f"motion on: signature {doc['signature']['name']!r}, {len(doc.get('parts', []))} part(s), {len(doc.get('timeline', []))} timeline step(s), "
             f"{len(doc.get('rules', []))} rule(s)")
+
+
+def decision(project: Path) -> dict:
+    """The owner's answer on motion, from the one record of it: {"motion": "on", "signature": name}, {"motion": "off", "reason": text} or {"motion": "undecided"} when
+    there is no motion/motion.json. A file that is not valid in itself is load()'s exit 2, never read as an answer; the tokens it names are not looked up."""
+    doc = load(project, tokens=False)
+    if doc is None:
+        return {"motion": "undecided"}
+    return {"motion": "off", "reason": doc["reason"]} if doc["motion"] == "off" else {"motion": "on", "signature": doc["signature"]["name"]}
+
+
+def due_before_g4(project: Path) -> bool:
+    """Standard and Full decide motion before G4, from the moment G3 is recorded; Quick decides it at G4, and only when something moves."""
+    return str(read_state(project).get("tier", "") or "").strip().lower() in ("standard", "full") and bool(gate_recorded(project, "G3"))
+
+
+def status_lines(project: Path, d: dict) -> list[str]:
+    """The line `motion` and `state` print for a decision (as decision() returns it); while it is open in Standard and Full after G3, a second line says it is due."""
+    if d["motion"] == "on":
+        return [f"motion: on (signature: {one_line(d['signature'])})"]
+    if d["motion"] == "off":
+        return [f"motion: off (nothing moves: {one_line(d['reason'])})"]
+    return ["motion: not decided", *([f"due before G4: {DECIDE}"] if due_before_g4(project) else [])]

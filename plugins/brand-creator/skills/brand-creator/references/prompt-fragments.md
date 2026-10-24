@@ -67,6 +67,9 @@ Generalised from prompts that worked; use them as written or close to it.
 - Challenge each finding: verify the important ones yourself; reject anything wrong, cosmetic without real benefit,
   or in conflict with the approved guide or the owner's decisions.
 - Split findings into fixes that need no decision and a numbered "Decisions for you" list with a recommendation each.
+- A motion round (`data-board="motion"`): run `brand-creator shot --motion rounds/r<N>/<variant>/proof.json` on each
+  variant's proof and give its exit code and failing rows; Read each variant's `strip.png` and `reduced.png` before saying
+  what moves; check that each card's proof line says what its report says and that `board-lint` passes its `motion:*` rows.
 
 **Implementation and safety**
 
