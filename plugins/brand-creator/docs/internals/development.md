@@ -31,7 +31,7 @@ BRAND_CREATOR_DATA=<set-up data dir> tests/run-all.sh
 A quicker pytest-only run, without the smokes:
 
 ```bash
-uv run --no-project --with pytest --with pytest-xdist python -m pytest tests -q -n 4
+uv run --no-project --with-requirements tests/requirements.txt python -m pytest tests -q -n 4
 ```
 
 ## Run Linux in Docker

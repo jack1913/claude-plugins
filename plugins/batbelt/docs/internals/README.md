@@ -26,7 +26,7 @@ Notes for people who change batbelt. For using it, read the [manual](../manual/R
 From the repository root:
 
 ```bash
-uv run --no-project --with pytest --with pyyaml python -m pytest tests -q
+uv run --no-project --with-requirements tests/requirements.txt python -m pytest tests -q
 ```
 
 - `tests/test_plugin.py` checks the plugin's shape: skills present, frontmatter, links that stay inside the plugin.

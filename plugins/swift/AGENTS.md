@@ -98,7 +98,7 @@ The plugin's own skills live in `skills/`, not in `.claude/skills/`.
 - A change under a forked skill (`skills/swiftui/`, `skills/concurrency/`, `skills/testing/`) is its own commit, with its `UPSTREAM.md` → Deviations row — in that upstream's section — in that commit (spec §4; part-2 spec §3). This applies while writing, when no `paths:` rule has loaded.
 - Never hand-edit the block between the `BEGIN GENERATED` / `END GENERATED` markers in `platform-availability.md`; run `python3 maintenance/check-apis.py --write-table`.
 - New code in `maintenance/apicheck/` or `maintenance/check-apis.py` stays standard-library-only, including while a file is being created (`.claude/rules/apicheck-stdlib-only.md` only loads on read); see `docs/internals/agent-instructions.md`.
-- Release through `changelog-release`, then, from the monorepo root, `claude plugin tag plugins/swift`; see `docs/internals/work-on-it.md#release`.
+- Release through `changelog-release`, push `main`, wait until the commit's CI has passed, then, from the monorepo root, `claude plugin tag plugins/swift` and push the tag; see `docs/internals/work-on-it.md#release`.
 
 ## 5. Documentation map
 

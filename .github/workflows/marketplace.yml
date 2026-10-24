@@ -2,14 +2,20 @@ name: marketplace
 
 on:
   push:
+    branches:
+      - main
     paths:
       - ".claude-plugin/**"
       - ".github/scripts/check-marketplace.py"
+      - ".github/scripts/check-workflows.py"
+      - ".github/workflows/**"
       - ".github/workflows/marketplace.yml"
   pull_request:
     paths:
       - ".claude-plugin/**"
       - ".github/scripts/check-marketplace.py"
+      - ".github/scripts/check-workflows.py"
+      - ".github/workflows/**"
       - ".github/workflows/marketplace.yml"
   workflow_dispatch:
 
@@ -18,8 +24,12 @@ permissions:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
       - name: Every marketplace entry has its plugin folder, and every folder is listed
         run: python3 .github/scripts/check-marketplace.py
+      - name: Every workflow runs on main and pull requests, never on tags, with a pinned runner and a read-only token
+        run: python3 .github/scripts/check-workflows.py
+      - name: The workflow check catches each rule broken on purpose
+        run: python3 .github/scripts/check-workflows.py --self-test

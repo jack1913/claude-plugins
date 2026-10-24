@@ -12,7 +12,7 @@ smoke=0
 [ "${1:-}" = "--smoke" ] && smoke=1
 rc=0
 # pytest-xdist spreads the tests over worker processes (BRAND_CREATOR_TEST_WORKERS, default 8; 0 runs them in one process)
-uv run --no-project --with pytest --with pytest-xdist python -m pytest tests -q -n "${BRAND_CREATOR_TEST_WORKERS:-8}" || rc=1
+uv run --no-project --with-requirements tests/requirements.txt python -m pytest tests -q -n "${BRAND_CREATOR_TEST_WORKERS:-8}" || rc=1
 node --test "tests/node/*.test.mjs" || rc=1
 if [ "$smoke" = 1 ]; then
   bash tests/smoke/acme.sh || rc=1

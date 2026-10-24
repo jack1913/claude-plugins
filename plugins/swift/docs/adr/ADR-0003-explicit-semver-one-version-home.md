@@ -27,3 +27,9 @@ Rejected:
 - A push without a version bump never reaches installs.
 - `0.0.0` means unreleased; the first release is `0.1.0` (plan, Global Constraints).
 - The marketplace entry must stay free of `version`, or the two copies can disagree.
+
+## Update 2026-10-24
+
+In the monorepo a tag push runs no CI (the marketplace's ADR-0004), so steps 3 and 4 now run the other way round:
+the release commit is pushed first, and `swift--v<version>` is created and pushed only after every CI run of that
+commit has passed (`docs/internals/work-on-it.md#release`).

@@ -1,0 +1,4 @@
+# The test tools this suite uses directly. tests/requirements.txt pins them and everything they need; regenerate it with
+#   uv pip compile --universal --python-version 3.10 tests/requirements.in -o tests/requirements.txt
+pytest==9.1.1
+pytest-xdist==3.8.0

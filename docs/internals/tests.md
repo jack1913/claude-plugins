@@ -1,10 +1,12 @@
 <!-- markdownlint-disable-file MD014 -->
 # Tests
 
-Each plugin has its own checks, run from the folder each section names. CI runs a plugin's checks when its folder or
-its workflow changes (batbelt also on `tests/**` and `.claude-plugin/**`), or when started by hand
-(`workflow_dispatch`); see `.github/workflows/<plugin>.yml`. The docs checks are in the
-[docs standard, §8](docs-standard.md#8-checks).
+Each plugin has its own checks, run from the folder each section names. CI runs a plugin's checks on a push to `main`
+or a pull request that changes its folder or its workflow (batbelt also `tests/**` and `.claude-plugin/**`), or when
+started by hand (`workflow_dispatch`); a tag push runs nothing
+([ADR-0004](../adr/ADR-0004-ci-runs-on-main-and-pull-requests-never-on-tags.md)). See
+`.github/workflows/<plugin>.yml`. Test tools are pinned in each suite's `tests/requirements.txt`. The docs checks are in
+the [docs standard, §8](docs-standard.md#8-checks).
 
 ## Marketplace
 
@@ -18,12 +20,20 @@ $ python3 .github/scripts/check-marketplace.py
 3 plugins checked, 0 errors
 ```
 
+The workflow check runs from the repository root too. A pass prints `5 workflows checked, 0 errors`, and `--self-test`
+ends with `self-test: N of N broken rules caught`:
+
+```bash
+python3 .github/scripts/check-workflows.py
+python3 .github/scripts/check-workflows.py --self-test
+```
+
 ## batbelt
 
 From the repository root (its tests live in `tests/`). A pass ends with a line like `N passed in Ts`:
 
 ```bash
-uv run --no-project --with pytest --with pyyaml python -m pytest tests -q
+uv run --no-project --with-requirements tests/requirements.txt python -m pytest tests -q
 ```
 
 ## swift

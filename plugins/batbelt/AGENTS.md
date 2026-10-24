@@ -29,7 +29,7 @@ No `CLAUDE.md` at this folder's root: `claude plugin validate --strict` rejects 
 ## Rules for working here
 
 - A change stays inside `plugins/batbelt/`, plus `tests/` and `.github/workflows/batbelt.yml`.
-- Run the tests from the repository root: `uv run --no-project --with pytest --with pyyaml python -m pytest tests -q`.
+- Run the tests from the repository root: `uv run --no-project --with-requirements tests/requirements.txt python -m pytest tests -q`.
 - Do not bump `version` in `plugin.json` except when releasing. Release with the `changelog-release` skill at the repository root.
 - Files under `skills/onboard-repo/templates/` are stamped into other repositories. Do not edit them as docs.
 - A renamed or removed skill or document needs its row above fixed in the same change.

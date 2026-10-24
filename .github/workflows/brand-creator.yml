@@ -20,6 +20,8 @@ name: brand-creator
 
 on:
   push:
+    branches:
+      - main
     paths:
       - "plugins/brand-creator/**"
       - ".github/workflows/brand-creator.yml"
@@ -32,9 +34,10 @@ on:
 permissions:
   contents: read
 
+# A superseded pull-request run is cancelled; a run on main never is, because it is the commit's only verdict.
 concurrency:
-  group: brand-creator-${{ github.ref }}
-  cancel-in-progress: true
+  group: brand-creator-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 defaults:
   run:
@@ -63,7 +66,10 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: "24"
+      # the uv of tests/docker/Dockerfile (UV_VERSION)
       - uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.12.11"
       - name: Install the Claude Code CLI
         id: claude
         run: |
@@ -78,20 +84,24 @@ jobs:
         run: claude plugin validate "$GITHUB_WORKSPACE/plugins/brand-creator" --strict
       - name: The validator catches a broken manifest (mutation test)
         if: steps.claude.outputs.available == 'true'
-        run: uv run --no-project --with pytest python -m pytest tests/test_static.py -q -k claude_plugin_validate
+        run: uv run --no-project --with-requirements tests/requirements.txt python -m pytest tests/test_static.py -q -k claude_plugin_validate
         env:
           BRAND_CREATOR_REQUIRE_ALL: "1"
 
   macos:
-    runs-on: macos-latest
+    runs-on: macos-26
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
           node-version: "24"
+      # the uv of tests/docker/Dockerfile (UV_VERSION)
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.12.11"
       - name: Install the tools the plugin documents
-        run: brew install uv resvg imagemagick ghostscript poppler ripgrep potrace
+        run: brew install resvg imagemagick ghostscript poppler ripgrep potrace
       - name: Select the newest Xcode (the Icon Composer .icon pipeline needs Xcode 26 or later)
         run: |
           # shellcheck disable=SC2012
@@ -103,7 +113,7 @@ jobs:
       - name: brand-creator setup (npm ci, Chromium)
         run: bin/brand-creator --data "$RUNNER_TEMP/bc-data" setup --yes
       - name: Apple-tool tests (a missing Apple tool is a failure here, not a skip)
-        run: uv run --no-project --with pytest --with pytest-xdist python -m pytest tests -q -n 3 -m "requires_macos or requires_actool"
+        run: uv run --no-project --with-requirements tests/requirements.txt python -m pytest tests -q -n 3 -m "requires_macos or requires_actool"
         env:
           BRAND_CREATOR_DATA: ${{ runner.temp }}/bc-data
           BRAND_CREATOR_REQUIRE_ALL: "1"

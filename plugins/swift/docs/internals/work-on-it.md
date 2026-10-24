@@ -108,21 +108,28 @@ Versions follow SemVer, and `version` in `.claude-plugin/plugin.json` is the onl
 Prerequisite: the `origin` remote of the monorepo checkout points at `jack1913/claude-plugins`, which holds the plugin and the marketplace `jack1913` ([ADR-0015](../adr/ADR-0015-plugin-moves-into-the-claude-plugins-monorepo.md)). The marketplace entry for `swift` carries no `version`, so a release needs no change there.
 
 1. Run the `changelog-release` skill. It raises `version` in `.claude-plugin/plugin.json`, writes `CHANGELOG.md` and stages both; it never commits (`.claude/skills/changelog-release/SKILL.md`).
-2. Commit.
-3. From the monorepo root, check the tag with a dry run, then create it:
+2. Commit, and push the commit alone:
+
+   ```bash
+   git push origin main
+   ```
+
+3. Wait until every CI run of that commit has passed. In the monorepo a tag push runs no CI, so this run is the release's only check:
+
+   ```bash
+   gh run list --commit "$(git rev-parse HEAD)" --json workflowName,status,conclusion
+   ```
+
+   The list must name at least `docs` and `swift` (a release commit changes `CHANGELOG.md` and `plugin.json`), every run with `"status":"completed"` and `"conclusion":"success"`. An empty list means the runs have not started yet: ask again in a minute. If one fails, fix it in a new commit first.
+
+4. From the monorepo root, check the tag with a dry run, then create it and push it:
 
    ```bash
    claude plugin tag plugins/swift --dry-run
    claude plugin tag plugins/swift
+   git push origin swift--v<version>
    ```
 
    The dry run prints the plugin name, the version it read from `plugin.json`, and the tag it would create (`swift--v<version>`), then the `git tag` and `git push` commands it would run. It creates nothing.
-
-4. Push the commit, then the tag:
-
-   ```bash
-   git push origin main
-   git push origin swift--v<version>
-   ```
 
 A push without a version bump never reaches installs, because Claude Code keys updates on the version ([Plugins reference: version management](https://code.claude.com/docs/en/plugins-reference)).

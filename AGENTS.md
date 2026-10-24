@@ -27,6 +27,7 @@ brand-creator, swift), each one self-contained and versioned on its own.
 | --- | --- |
 | Plugins listed in the marketplace | `.claude-plugin/marketplace.json` (`plugins[]`) |
 | What the marketplace check enforces | `.github/scripts/check-marketplace.py` (module docstring) |
+| What the workflow check enforces (triggers, filters, runners, permissions, cancellation) | `.github/scripts/check-workflows.py` (module docstring) |
 | A plugin's version (its only home) | `plugins/<name>/.claude-plugin/plugin.json` (`version`) |
 | How each plugin is tested in CI | `.github/workflows/<name>.yml` (`run:` lines) |
 | What the docs check enforces | `.github/scripts/check-docs-standard.py` (module docstring), `.markdownlint-cli2.yaml`, `lychee.toml` |
@@ -50,7 +51,7 @@ unscoped rule taxes every session. Keep this table in step with `.claude/rules/`
 
 | When you need... | Where to look |
 | --- | --- |
-| CI workflow shape: triggers, matching `paths:` filters, read-only token (`.github/workflows/*.yml`) | `.claude/rules/ci-workflow-per-plugin.md` |
+| CI workflow shape: push on main only, matching `paths:` filters, pinned runners, read-only token (`.github/workflows/*.yml`) | `.claude/rules/ci-workflow-per-plugin.md` |
 
 ### Skills
 
@@ -69,12 +70,13 @@ invoked, so reference material belongs here rather than in a rule.
   `AGENTS.md`, `CLAUDE.md` or `README.md` has the rules for working on it.
 - Adding a plugin: follow `docs/internals/add-a-plugin.md` —
   folder, marketplace entry, workflow, then `python3 .github/scripts/check-marketplace.py`,
+  `python3 .github/scripts/check-workflows.py`,
   `claude plugin validate . --strict` and `claude plugin validate plugins/<name> --strict`. Write the new workflow by
-  copying an existing one: `push`, `pull_request` and `workflow_dispatch`, the same `paths:` list on both, and
-  `permissions: contents: read` (`.claude/rules/ci-workflow-per-plugin.md` owns this; a `paths:` rule fires on Read,
+  copying an existing one: `push` on `main` only, `pull_request` and `workflow_dispatch`, the same `paths:` list on
+  both, a pinned runner and `permissions: contents: read` (`.claude/rules/ci-workflow-per-plugin.md` owns this; a `paths:` rule fires on Read,
   not on creating a file, so this line carries it).
-- Release tags are `<name>--vX.Y.Z`, made with `claude plugin tag plugins/<name>` from the repo root, never `git tag`
-  (`docs/internals/release.md`).
+- Release tags are `<name>--vX.Y.Z`, made with `claude plugin tag plugins/<name>` from the repo root, never `git tag`,
+  and only once every CI run of the release commit on `main` has passed (a tag push runs no CI; `docs/internals/release.md`).
 - Docs describe implemented state, and follow `docs/internals/docs-standard.md` (layout, voice, skill descriptions,
   changelogs, ADRs) — in every plugin too.
 - `docs/archive/**` is frozen — never edited.

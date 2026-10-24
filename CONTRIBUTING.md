@@ -32,8 +32,10 @@ Each plugin releases on its own, and its tag is made with `claude plugin tag plu
 ## What CI checks
 
 - `docs.yml` checks every Markdown file against the docs standard.
-- Each plugin's workflow runs its tests when its folder changes.
-- `marketplace.yml` checks that `marketplace.json` and the `plugins/` folder agree.
+- Each plugin's workflow runs its tests on a push to `main` or a pull request that changes its folder. A push to
+  another branch runs nothing: open a pull request, or start the workflow with `gh workflow run <workflow> --ref <branch>`.
+- `marketplace.yml` checks that `marketplace.json` and the `plugins/` folder agree, and that every workflow keeps the
+  agreed shape (`.github/scripts/check-workflows.py`).
 
 Run the docs checks yourself from the repository root:
 

@@ -17,7 +17,18 @@ Why: [ADR-0002](../adr/ADR-0002-per-plugin-versions-and-tags.md).
    ```
 
 3. Commit and push the changelog and version bump.
-4. Dry-run the tag, from the repository root:
+4. Wait until every CI run of that commit on `main` has passed. A tag push runs no CI, so this run is the release's only
+   check ([ADR-0004](../adr/ADR-0004-ci-runs-on-main-and-pull-requests-never-on-tags.md)):
+
+   ```bash
+   gh run list --commit "$(git rev-parse HEAD)" --json workflowName,status,conclusion
+   ```
+
+   The list must name at least `docs` and the plugin's own workflow (a release commit changes `CHANGELOG.md` and
+   `plugin.json`), every run with `"status":"completed"` and `"conclusion":"success"`. An empty list means the runs
+   have not started yet: ask again in a minute. If one fails, fix it in a new commit and wait again; never tag a commit
+   whose CI failed.
+5. Dry-run the tag, from the repository root:
 
    ```bash
    claude plugin tag plugins/<name> --dry-run
@@ -25,9 +36,9 @@ Why: [ADR-0002](../adr/ADR-0002-per-plugin-versions-and-tags.md).
 
    It prints the plugin, the version it read from `plugin.json`, the tag name and the `git` commands it would run.
    Check that the version and the tag name are the ones you meant.
-5. Run it again without `--dry-run`. The tag lands on `HEAD`. It is created only in your clone: the command prints
+6. Run it again without `--dry-run`. The tag lands on `HEAD`. It is created only in your clone: the command prints
    the push line instead of running it.
-6. Push the tag:
+7. Push the tag:
 
    ```bash
    git push origin refs/tags/<name>--vX.Y.Z

@@ -1,6 +1,8 @@
 name: batbelt
 on:
   push:
+    branches:
+      - main
     paths:
       - "plugins/batbelt/**"
       - "tests/**"
@@ -19,9 +21,12 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
+      # the uv that plugins/brand-creator/tests/docker/Dockerfile pins (UV_VERSION)
       - uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.12.11"
       - name: Tests
-        run: uv run --no-project --with pytest --with pyyaml python -m pytest tests -q
+        run: uv run --no-project --with-requirements tests/requirements.txt python -m pytest tests -q

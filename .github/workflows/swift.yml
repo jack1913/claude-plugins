@@ -5,6 +5,8 @@ name: swift
 
 on:
   push:
+    branches:
+      - main
     paths:
       - "plugins/swift/**"
       - ".github/workflows/swift.yml"
@@ -23,7 +25,7 @@ defaults:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
       - name: Unit tests (the apicheck package, the upstream-diff script, the recorder, the review scorer)

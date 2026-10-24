@@ -4,6 +4,8 @@ name: docs
 
 on:
   push:
+    branches:
+      - main
     paths:
       - "**/*.md"
       - "**/.claude-plugin/*.json"
@@ -26,7 +28,7 @@ permissions:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
       - name: Skills, agents, plugin.json, marketplace entries, changelogs, ADRs and AGENTS.md pointers

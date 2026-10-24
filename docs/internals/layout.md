@@ -7,10 +7,10 @@ plugin plus `marketplace.yml` and `docs.yml`. Why one repository:
 | Path | What it holds |
 | --- | --- |
 | `.claude-plugin/marketplace.json` | The marketplace `jack1913`; every `source` is `./plugins/<name>` |
-| `.github/workflows/<plugin>.yml` | That plugin's CI, run when its folder or its workflow file changes (batbelt: also `tests/**` and `.claude-plugin/**`) or by hand |
-| `.github/workflows/marketplace.yml` | Checks `marketplace.json` |
+| `.github/workflows/<plugin>.yml` | That plugin's CI, run on a push to `main` or a pull request that changes its folder or its workflow file (batbelt: also `tests/**` and `.claude-plugin/**`), or by hand; never on a tag |
+| `.github/workflows/marketplace.yml` | Checks `marketplace.json`, and the shape of every workflow |
 | `.github/workflows/docs.yml` | Checks the docs against the [docs standard](docs-standard.md) |
-| `.github/scripts/` | The checks those two workflows run: `check-marketplace.py`, `check-docs-standard.py` |
+| `.github/scripts/` | The checks those two workflows run: `check-marketplace.py`, `check-workflows.py`, `check-docs-standard.py` |
 | `plugins/<name>/` | One plugin: `.claude-plugin/plugin.json`, docs, tests, `CHANGELOG.md`, version (batbelt: its tests are in the root `tests/`) |
 | `tests/` | batbelt's tests (brand-creator and swift keep theirs in their own folder) |
 | `docs/` | The marketplace's manual, internals and decision records |

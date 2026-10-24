@@ -236,7 +236,7 @@ blocked, the write into `r2` went through. `rm` was not tried.
 **Why manual.** The name checker's tests replay recorded responses; the live tests (`requires_network`) talk to real
 registries and are deselected unless `BRAND_CREATOR_LIVE=1`.
 
-**Steps.** `BRAND_CREATOR_LIVE=1 uv run --no-project --with pytest python -m pytest tests -m requires_network`, then
+**Steps.** `BRAND_CREATOR_LIVE=1 uv run --no-project --with-requirements tests/requirements.txt python -m pytest tests -m requires_network`, then
 `brand-creator names <a neutral made-up word> --profile software --region PL --yes` in a throwaway project: every source must
 answer REGISTERED, NOT-FOUND or UNKNOWN with its control, and the memo must say "screening, not clearance".
 

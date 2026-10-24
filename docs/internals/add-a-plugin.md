@@ -1,7 +1,7 @@
 <!-- markdownlint-disable-file MD014 -->
 # Add a plugin
 
-A new plugin is a folder, a marketplace entry and a workflow. Two checks confirm the result before you push (step 4).
+A new plugin is a folder, a marketplace entry and a workflow. Three checks confirm the result before you push (step 4).
 Cutting its first release is on [Release a plugin](release.md).
 
 ## 1. Create the folder
@@ -18,15 +18,17 @@ Add an entry to `.claude-plugin/marketplace.json` with `"source": "./plugins/<na
 
 ## 3. Add its workflow
 
-Add `.github/workflows/<name>.yml` that runs the plugin's tests, triggered on `push`, `pull_request` and
-`workflow_dispatch`, with the same `paths:` filter on both (`plugins/<name>/**` and the workflow file) and
-`permissions: contents: read`. Copy an existing one, for example `.github/workflows/swift.yml`. The rule is in
-`.claude/rules/ci-workflow-per-plugin.md`.
+Add `.github/workflows/<name>.yml` that runs the plugin's tests, triggered on `push` to `main` only (so a tag push runs
+nothing), `pull_request` and `workflow_dispatch`, with the same `paths:` filter on both (`plugins/<name>/**` and the
+workflow file), a pinned runner image such as `ubuntu-24.04` and `permissions: contents: read`. Copy an existing one, for
+example `.github/workflows/swift.yml`. The rule is in `.claude/rules/ci-workflow-per-plugin.md`, and
+`.github/scripts/check-workflows.py` checks it.
 
 ## 4. Check, then push
 
 ```bash
 $ python3 .github/scripts/check-marketplace.py
+$ python3 .github/scripts/check-workflows.py
 $ claude plugin validate . --strict
 $ claude plugin validate plugins/<name> --strict
 ```
