@@ -82,7 +82,8 @@ def verify(tmp_path, text, rc=0, env=None):
     log = tmp_path / "run.log"
     log.write_text(text, encoding="utf-8")
     import os
-    return subprocess.run([sys.executable, str(VERIFY), str(log), str(rc)], capture_output=True, text=True, env={**os.environ, "BRAND_CREATOR_DENYLIST": "x", **(env or {})})
+    base = {k: v for k, v in os.environ.items() if k != "BRAND_CREATOR_TEST_PARTS"}   # the CI job running these tests sets its own part; these logs are whole runs
+    return subprocess.run([sys.executable, str(VERIFY), str(log), str(rc)], capture_output=True, text=True, env={**base, "BRAND_CREATOR_DENYLIST": "x", **(env or {})})
 
 
 def test_the_verifier_accepts_exactly_the_expected_off_macos_skips(tmp_path):
@@ -155,3 +156,110 @@ def test_ci_workflow_values_are_valid_yaml():
             if why and not m.group(2).strip().startswith("${{"):
                 bad.append(f"brand-creator.yml:{n}: {m.group(1)} {why}")
     assert not bad, "\n".join(bad)
+
+
+# ---------------------------------------------------------------- the suite in parts (one CI job each), its deadlines and its time limits
+
+PYTEST_ONLY = GOOD[:GOOD.index("ℹ tests 53")]        # what a pytest-only run prints
+NODE_ONLY = GOOD[GOOD.index("ℹ tests 53"):GOOD.index("\n   NOT VERIFIED: the claude CLI")] + "\n"   # what a node-only run prints
+SMOKE_ONLY = GOOD[GOOD.index("\n   NOT VERIFIED: the claude CLI"):]                              # what a smoke-only run prints
+
+
+@pytest.mark.parametrize("parts, text", [("pytest", PYTEST_ONLY), ("node", NODE_ONLY), ("smoke", SMOKE_ONLY), ("pytest,node,smoke", GOOD)])
+def test_the_verifier_accepts_the_log_of_each_part_it_was_asked_for(tmp_path, parts, text):
+    r = verify(tmp_path, text, env={"BRAND_CREATOR_TEST_PARTS": parts})
+    assert r.returncode == 0 and f"LINUX RUN OK ({parts.replace(',', ', ')})" in r.stdout, r.stdout + r.stderr
+
+
+@pytest.mark.parametrize("parts, text, why", [
+    ("pytest,node", PYTEST_ONLY, "no node:test summary"),                 # a part that was asked for and left no summary did not run: a failure
+    ("pytest,smoke", PYTEST_ONLY, "did not print SMOKE PASSED"),
+    ("node", NODE_ONLY.replace("ℹ fail 0", "ℹ fail 1"), "node:test: fail=1"),
+    ("smoke", SMOKE_ONLY.replace("SMOKE PASSED", "SMOKE FAILED"), "did not print SMOKE PASSED"),
+])
+def test_the_verifier_fails_a_part_that_did_not_run_or_failed(tmp_path, parts, text, why):
+    r = verify(tmp_path, text, env={"BRAND_CREATOR_TEST_PARTS": parts})
+    assert r.returncode == 1 and why in r.stderr, r.stdout + r.stderr
+    r = verify(tmp_path, PYTEST_ONLY, env={"BRAND_CREATOR_TEST_PARTS": "pytest"})   # the positive control: the same verifier passes the pytest part alone
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_the_verifier_refuses_a_part_it_does_not_know(tmp_path):
+    r = verify(tmp_path, GOOD, env={"BRAND_CREATOR_TEST_PARTS": "pytest,unit"})
+    assert r.returncode == 2 and "name one or more of pytest, node, smoke" in r.stderr
+
+
+@pytest.mark.parametrize("parts, args, why", [("unit", [], "unknown part 'unit'"), ("smoke", [], "runs nothing (smoke needs --smoke)")])
+def test_run_all_refuses_a_selection_that_names_an_unknown_part_or_runs_nothing(parts, args, why):
+    import os
+    r = subprocess.run(["bash", str(ROOT / "tests" / "run-all.sh"), *args], capture_output=True, text=True, env={**os.environ, "BRAND_CREATOR_TEST_PARTS": parts})
+    assert r.returncode == 2 and why in r.stderr, r.stdout + r.stderr
+
+
+def test_ci_runs_each_part_in_its_own_job_and_one_gate_passes_only_when_all_did():
+    text = ci_text()
+    job = text[text.index("  linux-suite:"):text.index("\n  linux:\n")]
+    gate = text[text.index("\n  linux:\n"):text.index("\n  validate:")]
+    parts = re.findall(r"- part: (\w+)\n\s+suite-minutes: (\d+)\n\s+job-minutes: (\d+)", job)
+    assert sorted(p for p, _, _ in parts) == ["node", "pytest", "smoke"], parts
+    for part, suite, jobm in parts:
+        assert int(suite) + 10 <= int(jobm), f"{part}: the deadline inside the container must end well before the job's ({suite} vs {jobm} minutes)"
+    assert "fail-fast: false" in job and "BRAND_CREATOR_TEST_PARTS: ${{ matrix.part }}" in job and "BRAND_CREATOR_SUITE_MINUTES: ${{ matrix.suite-minutes }}" in job
+    assert "if: ${{ !cancelled() }}" in job and "uses: actions/upload-artifact@v" in job        # the log and the JUnit file are kept, a failing run's too
+    assert "needs: linux-suite" in gate and "if: ${{ always() }}" in gate                      # the gate runs even when a part failed or was cancelled
+    assert 'test "${{ needs.linux-suite.result }}" = success' in gate                          # and only success passes it: skipped or cancelled is never green
+
+
+def test_the_container_stops_a_hung_suite_at_its_deadline_and_still_checks_the_log():
+    run = (DOCKER / "run.sh").read_text()
+    inside = (DOCKER / "in-container.sh").read_text()
+    assert "--init --ipc=host" in run                                                          # a real PID 1 that passes signals on; Chromium's shared memory
+    for env in ("BRAND_CREATOR_TEST_PARTS", "BRAND_CREATOR_SUITE_MINUTES"):
+        assert f'-e {env}="${{{env}' in run, env
+    assert 'timeout --signal=TERM --kill-after=60 "${minutes}m" tests/run-all.sh --smoke' in inside
+    assert inside.index("timeout --signal=TERM") < inside.index('python3 tests/docker/verify_log.py "$LOG" "$rc"')   # the verifier runs after the deadline too
+    assert "--durations=25" in inside and "--junitxml=/out/pytest-junit.xml" in inside
+
+
+def test_every_test_has_a_time_limit_and_the_whole_chain_tests_have_a_longer_one(request):
+    """pytest-timeout comes from tests/requirements.txt; conftest gives every test DEFAULT_TIMEOUT unless it carries its own, so a hung test fails by name."""
+    import conftest
+    import test_finish_chain
+    assert request.config.pluginmanager.hasplugin("timeout"), "run the tests with tests/requirements.txt (uv run --no-project --with-requirements tests/requirements.txt ...)"
+    assert request.node.get_closest_marker("timeout").args == (conftest.DEFAULT_TIMEOUT,) == (300,)
+    assert any(m.name == "timeout" and m.args == (1200,) for m in test_finish_chain.pytestmark)
+    assert "pytest-timeout==" in (ROOT / "tests" / "requirements.in").read_text()
+
+
+def test_pytest_hands_waiting_tests_to_idle_workers_everywhere_it_runs_in_parallel():
+    """With the default `load` scheduling a block of long tests (test_finish_chain) sat queued on one worker while the others were idle:
+    25.7 min on 8 workers; `worksteal` moves waiting tests to idle workers: 11.0 min, the same 1880 tests."""
+    assert "--dist worksteal" in (ROOT / "tests" / "run-all.sh").read_text()
+    macos = [ln for ln in ci_text().splitlines() if "-m \"requires_macos or requires_actool\"" in ln]
+    assert macos and all("--dist worksteal" in ln for ln in macos), macos
+
+
+def test_the_verifier_tests_ignore_the_part_their_own_ci_job_runs(tmp_path, monkeypatch):
+    """The CI job that runs pytest sets BRAND_CREATOR_TEST_PARTS=pytest, and pytest's workers inherit it. The logs these tests write by
+    hand are whole runs, so verify() must not pass that on: with it, a failing node:test summary read as a pytest-only run and passed."""
+    monkeypatch.setenv("BRAND_CREATOR_TEST_PARTS", "pytest")
+    r = verify(tmp_path, GOOD.replace("ℹ fail 0", "ℹ fail 2"))
+    assert r.returncode == 1 and "node:test: fail=2" in r.stderr, r.stdout + r.stderr
+
+
+@pytest.mark.parametrize("parts", ["pytest, node", " node ,pytest", "pytest,,node"])
+def test_run_all_and_the_verifier_read_a_list_with_spaces_or_empty_items_the_same_way(tmp_path, parts):
+    """Spaces around a name and empty items are ignored by both, so neither silently drops a part the other runs (0.4.2's run-all
+    validated 'pytest, node' and then ran pytest alone)."""
+    import os
+    text = GOOD
+    r = verify(tmp_path, text, env={"BRAND_CREATOR_TEST_PARTS": parts})
+    assert r.returncode == 0 and ("LINUX RUN OK (pytest, node)" in r.stdout or "LINUX RUN OK (node, pytest)" in r.stdout), r.stdout + r.stderr
+    stub = tmp_path / "bin"
+    stub.mkdir()
+    for tool in ("uv", "node"):
+        (stub / tool).write_text(f"#!/bin/sh\necho STUB {tool} ran\n")
+        (stub / tool).chmod(0o755)
+    r = subprocess.run(["bash", str(ROOT / "tests" / "run-all.sh")], capture_output=True, text=True,
+                       env={**os.environ, "PATH": f"{stub}:{os.environ['PATH']}", "BRAND_CREATOR_TEST_PARTS": parts})
+    assert r.returncode == 0 and "STUB uv ran" in r.stdout and "STUB node ran" in r.stdout, r.stdout + r.stderr

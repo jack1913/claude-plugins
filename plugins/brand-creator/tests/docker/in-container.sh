@@ -4,8 +4,10 @@
 # 1. copies the plugin from the read-only mount /src to /work/repo/plugins/brand-creator (no .git, no caches: the copy is what a user would install)
 #    and the CI workflow and the root marketplace.json from /src-ci (the monorepo layout the tests expect)
 # 2. brand-creator prereq --for full, then `brand-creator setup --yes` into a data directory inside the container (npm ci, Chromium)
-# 3. tests/run-all.sh --smoke WITHOUT BRAND_CREATOR_REQUIRE_ALL (pytest, node:test, the Acme smoke on the paths that apply off macOS)
-# 4. tests/docker/verify_log.py reads the log: every skip must be an expected one (macOS-only tests), anything else is a failure
+# 3. tests/run-all.sh --smoke WITHOUT BRAND_CREATOR_REQUIRE_ALL (pytest, node:test, the Acme smoke on the paths that apply off macOS),
+#    only the parts BRAND_CREATOR_TEST_PARTS names, within BRAND_CREATOR_SUITE_MINUTES (past it the suite is stopped, and step 4 still runs)
+# 4. tests/docker/verify_log.py reads the log: every skip must be an expected one (macOS-only tests), anything else is a failure;
+#    with /out mounted, the log and pytest's JUnit file are kept there
 set -euo pipefail
 
 SRC=/src
@@ -62,17 +64,27 @@ assert missing == ["xcode"], f"after setup only xcode may be MISSING on Linux, g
 print("   ok: MISSING after setup =", missing)
 PY
 
-step "tests/run-all.sh --smoke (no BRAND_CREATOR_REQUIRE_ALL: macOS-only tests must report NOT VERIFIED)"
+step "tests/run-all.sh --smoke (parts: ${BRAND_CREATOR_TEST_PARTS:-all}; no BRAND_CREATOR_REQUIRE_ALL: macOS-only tests must report NOT VERIFIED)"
 export BRAND_CREATOR_DATA="$DATA"
 export BRAND_CREATOR_TEST_WORKERS="${BRAND_CREATOR_TEST_WORKERS:-4}"
 export ACME_SMOKE_DIR=/work/acme-smoke
-export PYTEST_ADDOPTS="-rs ${PYTEST_ADDOPTS:-}"
+export PYTEST_ADDOPTS="-rs --durations=25 ${PYTEST_ADDOPTS:-}"   # the 25 slowest tests are printed in every run: where the time goes
+if [ -d /out ]; then
+  [ -w /out ] || { echo "in-container.sh: /out is mounted but $(id -un) cannot write to it" >&2; exit 1; }
+  export PYTEST_ADDOPTS="$PYTEST_ADDOPTS --junitxml=/out/pytest-junit.xml"
+fi
 unset BRAND_CREATOR_REQUIRE_ALL
+minutes="${BRAND_CREATOR_SUITE_MINUTES:-45}"
 set +e
-tests/run-all.sh --smoke 2>&1 | tee "$LOG"
+# timeout stops the whole process group (pytest's workers, node, the browsers) at the deadline, so step 4 always runs
+timeout --signal=TERM --kill-after=60 "${minutes}m" tests/run-all.sh --smoke 2>&1 | tee "$LOG"
 rc=${PIPESTATUS[0]}
 set -e
+if [ "$rc" = 124 ] || [ "$rc" = 137 ]; then
+  echo "in-container.sh: the suite passed its deadline of ${minutes} minutes and was stopped (exit $rc)" | tee -a "$LOG"
+fi
 echo "tests/run-all.sh exit code: $rc"
+if [ -d /out ]; then cp "$LOG" /out/run-all.log; fi
 
 step "verify the log"
 python3 tests/docker/verify_log.py "$LOG" "$rc"

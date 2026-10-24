@@ -1,15 +1,18 @@
 # Continuous integration for the brand-creator plugin, in the monorepo jack1913/claude-plugins (GitHub reads only the root .github/).
-# Every job runs in plugins/brand-creator; the workflow starts only on changes under that folder or to this file, so the macOS job
+# Every job that checks out the repository runs in plugins/brand-creator (the linux gate needs no checkout); the workflow starts only on changes under that folder or to this file, so the macOS job
 # (the expensive one) runs only when this plugin changes.
 #
-#   linux     builds tests/docker/Dockerfile (Debian 13, Python 3.13, Node 24, resvg, ImageMagick, Ghostscript, poppler, ripgrep,
-#             potrace, fonts) and runs tests/docker/run.sh: `brand-creator setup` (npm ci + Chromium), pytest, node:test and the Acme
-#             smoke on the paths that apply off macOS. The macOS-only tests are NOT VERIFIED there by design; tests/docker/verify_log.py
-#             accepts exactly those and fails on any other skip.
+#   linux-suite  three parallel jobs, one per part of the suite (pytest, node, smoke), each building tests/docker/Dockerfile
+#             (Debian 13, Python 3.13, Node 24, resvg, ImageMagick, Ghostscript, poppler, ripgrep, potrace, fonts) and running
+#             tests/docker/run.sh with BRAND_CREATOR_TEST_PARTS: `brand-creator setup` (npm ci + Chromium), then that part, on the paths
+#             that apply off macOS, within a deadline inside the container (BRAND_CREATOR_SUITE_MINUTES) that ends before the job's.
+#             The macOS-only tests are NOT VERIFIED there by design; tests/docker/verify_log.py accepts exactly those and fails on any
+#             other skip, and on a part that left no summary. The run log and pytest's JUnit file are kept as an artifact.
+#   linux     passes only when every linux-suite job passed: a failed, cancelled or skipped part is never green.
 #   validate  `claude plugin validate --strict` through the Claude Code CLI installed from npm. On the pinned CLI (2.1.302) it checks the
 #             plugin manifest only: a skill with broken YAML frontmatter or an unknown key in hooks.json still passes it.
 #             The skill and agent frontmatter and hooks.json are checked by the repository's own tests (tests/test_skills.py,
-#             tests/test_agents_workflows.py, tests/test_guard.py), which run in the linux job. This job also runs the test that mutates
+#             tests/test_agents_workflows.py, tests/test_guard.py), which run in the linux-suite pytest job. This job also runs the test that mutates
 #             plugin.json and expects the validator to catch it. If the CLI cannot be installed or started (no registry access), the job
 #             says so and SKIPS: a skip is printed, never a pass.
 #   macos     the Apple-tool tests (requires_macos, requires_actool: sips, iconutil, actool, assetutil, the .icon pipeline) and the Acme
@@ -48,15 +51,54 @@ env:
   CLAUDE_CODE_VERSION: "2.1.302"
 
 jobs:
-  linux:
+  linux-suite:
+    name: "linux (${{ matrix.part }})"
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: ${{ matrix.job-minutes }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # suite-minutes: the deadline inside the container; job-minutes leaves room for the image, setup and the log check
+        include:
+          - part: pytest
+            suite-minutes: 45
+            job-minutes: 60
+          - part: node
+            suite-minutes: 15
+            job-minutes: 30
+          - part: smoke
+            suite-minutes: 30
+            job-minutes: 45
     steps:
       - uses: actions/checkout@v5
-      - name: Build the Linux image and run the suite and the Acme smoke inside it
+      - name: Build the Linux image and run one part of the suite inside it
         run: tests/docker/run.sh
         env:
           BRAND_CREATOR_TEST_WORKERS: "4"
+          BRAND_CREATOR_TEST_PARTS: ${{ matrix.part }}
+          BRAND_CREATOR_SUITE_MINUTES: ${{ matrix.suite-minutes }}
+          BRAND_CREATOR_TEST_OUT: ${{ runner.temp }}/bc-out
+      - name: Keep the run log and the JUnit file
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-${{ matrix.part }}-reports
+          path: ${{ runner.temp }}/bc-out
+          retention-days: 14
+
+  linux:
+    needs: linux-suite
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Every part of the Linux suite passed
+        run: |
+          echo "linux-suite: ${{ needs.linux-suite.result }}"
+          test "${{ needs.linux-suite.result }}" = success
 
   validate:
     runs-on: ubuntu-24.04
@@ -113,7 +155,7 @@ jobs:
       - name: brand-creator setup (npm ci, Chromium)
         run: bin/brand-creator --data "$RUNNER_TEMP/bc-data" setup --yes
       - name: Apple-tool tests (a missing Apple tool is a failure here, not a skip)
-        run: uv run --no-project --with-requirements tests/requirements.txt python -m pytest tests -q -n 3 -m "requires_macos or requires_actool"
+        run: uv run --no-project --with-requirements tests/requirements.txt python -m pytest tests -q -n 3 --dist worksteal -m "requires_macos or requires_actool"
         env:
           BRAND_CREATOR_DATA: ${{ runner.temp }}/bc-data
           BRAND_CREATOR_REQUIRE_ALL: "1"

@@ -13,7 +13,8 @@ from pathlib import Path
 import pytest
 from helpers import FIXTURES, ROOT, bc, fill_markers, mutate, report
 
-pytestmark = [pytest.mark.requires_setup, pytest.mark.requires_resvg, pytest.mark.requires_gs, pytest.mark.requires_pdftotext]
+pytestmark = [pytest.mark.requires_setup, pytest.mark.requires_resvg, pytest.mark.requires_gs, pytest.mark.requires_pdftotext,
+              pytest.mark.timeout(1200)]   # a whole chain per test: about 280 s at most on a laptop under load, more on CI
 TAG = "a repair guide is in every box"
 
 

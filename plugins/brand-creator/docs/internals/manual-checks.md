@@ -97,7 +97,7 @@ row-list syntax.
 
 **Why manual.** It needs Docker; CI repeats it once the repository is pushed.
 
-**Steps.** `tests/docker/run.sh`. It builds the image, runs `setup` from scratch, pytest, node:test and the Acme smoke, and
+**Steps.** `tests/docker/run.sh` (all three parts; `BRAND_CREATOR_TEST_PARTS` picks some). It builds the image, runs `setup` from scratch, pytest, node:test and the Acme smoke, and
 fails on any skip other than the macOS-only ones.
 
 **Last run:** 2026-10-18, Debian 13 image (Python 3.13, Node 24): passed with only the macOS-only NOT VERIFIED skips.
@@ -268,7 +268,7 @@ what fails; until then the [platform support](../manual/reference/platform-suppo
 **Why manual.** `.github/workflows/brand-creator.yml` (at the root of the claude-plugins monorepo) runs only once the repository is pushed, and its action versions were not checked
 online.
 
-**Steps.** After the first push, read each job's log: the Linux job must end with the Docker run's PASSED line, the validate
+**Steps.** After the first push, read each job's log: each of the three Linux jobs (pytest, node, smoke) must end with the Docker run's `LINUX RUN OK` line and the `linux` gate must pass, the validate
 job must run (not skip) `claude plugin validate --strict`, and the macOS job must run the Apple-tool tests with
 `BRAND_CREATOR_REQUIRE_ALL=1`. Record the run URL and the result.
 

@@ -30,6 +30,11 @@ def pytest_configure(config):
                  ("requires_pdftotext", "needs poppler's pdftotext on PATH"),
                  ("requires_network", "talks to real services; deselected unless BRAND_CREATOR_LIVE=1 (manual live smoke)")):
         config.addinivalue_line("markers", f"{m}: {d}")
+    if not config.pluginmanager.hasplugin("timeout"):   # run without tests/requirements.txt: no time limit, and the mark is still known
+        config.addinivalue_line("markers", "timeout(seconds): the most a test may run (pytest-timeout, from tests/requirements.txt)")
+
+
+DEFAULT_TIMEOUT = 300   # seconds a test may run before pytest-timeout stops it as hung; a module that needs longer marks itself (test_finish_chain)
 
 
 LIVE = os.environ.get("BRAND_CREATOR_LIVE") == "1"
@@ -37,7 +42,13 @@ DESELECTED_LIVE: list[str] = []
 
 
 def pytest_collection_modifyitems(config, items):
-    """Live-network tests are manual: deselected (not skipped, so REQUIRE_ALL stays meaningful) unless BRAND_CREATOR_LIVE=1."""
+    """Every test gets a time limit (DEFAULT_TIMEOUT unless it carries its own), so a hung test fails by name instead of
+    holding the whole run until CI kills it. Live-network tests are manual: deselected (not skipped, so REQUIRE_ALL stays
+    meaningful) unless BRAND_CREATOR_LIVE=1."""
+    if config.pluginmanager.hasplugin("timeout"):
+        for it in items:
+            if it.get_closest_marker("timeout") is None:
+                it.add_marker(pytest.mark.timeout(DEFAULT_TIMEOUT))
     if LIVE:
         return
     keep = []

@@ -22,6 +22,13 @@ BRAND_CREATOR_DATA=<set-up data dir> tests/run-all.sh
 - `tests/run-all.sh` runs pytest and `node --test`. `--smoke` adds two end-to-end runs: the Acme smoke
   (`tests/smoke/acme.sh`, a synthetic brand through every pack) and the Quick-tier smoke (`tests/smoke/quick.sh`, a
   made-up bakery on a PATH with no Apple tools and no git, ending with the short guide).
+- `BRAND_CREATOR_TEST_PARTS=pytest` (or `node`, `smoke`, comma-separated) runs only those parts, as each CI job does. An
+  unknown part, or a choice that runs nothing, is a usage error (exit 2).
+- pytest runs with `--dist worksteal`, so a block of long tests never waits on one worker (the suite takes under half the
+  time it took with the default `load`). Every test has a time limit: 300 s, or 1200 s in `test_finish_chain.py`
+  (pytest-timeout from `tests/requirements.txt`); a node test has 180 s. A hung test fails by name.
+- The test tools are pinned, with every package they need, in `tests/requirements.txt`, compiled by uv from
+  `tests/requirements.in` (the command is in both files).
 - Mutation tests prove each gate by breaking a scratch copy.
 - A test that cannot run prints "NOT VERIFIED". `BRAND_CREATOR_REQUIRE_ALL=1` turns every such skip into a failure.
 - Tests that talk to real services (`requires_network`) run only with `BRAND_CREATOR_LIVE=1`.
@@ -31,22 +38,26 @@ BRAND_CREATOR_DATA=<set-up data dir> tests/run-all.sh
 A quicker pytest-only run, without the smokes:
 
 ```bash
-uv run --no-project --with-requirements tests/requirements.txt python -m pytest tests -q -n 4
+uv run --no-project --with-requirements tests/requirements.txt python -m pytest tests -q -n 4 --dist worksteal
 ```
 
 ## Run Linux in Docker
 
 `tests/docker/run.sh` builds the Debian 13 image, copies the plugin in read-only, runs `setup`, pytest, node:test and the
-Acme smoke, and accepts only the macOS-only NOT VERIFIED skips.
+Acme smoke, and accepts only the macOS-only NOT VERIFIED skips. `BRAND_CREATOR_TEST_PARTS` picks the parts, and
+`BRAND_CREATOR_SUITE_MINUTES` (default 45) is the deadline inside the container: past it the suite is stopped and the log is
+still checked. `BRAND_CREATOR_TEST_OUT=<dir>` keeps the run log and pytest's JUnit file in a new `linux-run.*` folder inside it.
 
 ## CI
 
-`.github/workflows/brand-creator.yml` at the root of the monorepo runs three jobs. Each runs in `plugins/brand-creator/`.
-It starts only on changes under `plugins/brand-creator/` or to the workflow file.
+`.github/workflows/brand-creator.yml` at the root of the monorepo runs these jobs. Each job that checks out the repository runs in
+`plugins/brand-creator/`; the `linux` gate needs no checkout.
+It starts on a push to `main` or a pull request that changes `plugins/brand-creator/` or the workflow file, never on a tag.
 
 | Job | What it runs |
 | --- | --- |
-| Linux | the Docker suite (`tests/docker/run.sh`) |
+| Linux (pytest), Linux (node), Linux (smoke) | one part of the Docker suite each (`tests/docker/run.sh` with `BRAND_CREATOR_TEST_PARTS`), in parallel, each within its own deadline; the run log and the JUnit file are kept as an artifact |
+| linux | passes only when all three Linux parts passed: a failed, cancelled or skipped part is never green |
 | Validate | `claude plugin validate --strict` on the plugin, and the validate test in `tests/test_static.py` |
 | macOS | the Apple-tool tests and smoke, with `BRAND_CREATOR_REQUIRE_ALL=1` |
 

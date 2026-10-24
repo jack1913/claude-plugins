@@ -63,8 +63,8 @@ bin/brand-creator --data <dir> setup --yes
 BRAND_CREATOR_DATA=<dir> tests/run-all.sh --smoke
 ```
 
-CI runs the same suite inside a Linux container (`tests/docker/run.sh`) and the Apple-tool tests on macOS
-(`.github/workflows/brand-creator.yml`). More: [its development notes](../../plugins/brand-creator/docs/internals/development.md).
+CI runs the same suite inside a Linux container (`tests/docker/run.sh`), one part (pytest, node, smoke) per parallel job, and
+the Apple-tool tests on macOS (`.github/workflows/brand-creator.yml`). More: [its development notes](../../plugins/brand-creator/docs/internals/development.md).
 
 Without the data directory, the tests that need it print a "NOT VERIFIED" banner. A skip is not a pass.
 

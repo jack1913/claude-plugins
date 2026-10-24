@@ -1473,7 +1473,9 @@ commands. Conventions:
   libraries of Chromium's headless shell, and a non-root user. The plugin and its data directory are not in the image.
 - **Run.** `tests/docker/run.sh` builds it and runs `tests/docker/in-container.sh` on a read-only mount of the checkout: copy to a
   scratch folder, `prereq --for full` (only `xcode` may be MISSING once setup ran), `setup --yes` into a data directory inside the
-  container, `tests/run-all.sh --smoke` without `BRAND_CREATOR_REQUIRE_ALL`, then `tests/docker/verify_log.py`.
+  container, `tests/run-all.sh --smoke` without `BRAND_CREATOR_REQUIRE_ALL` (only the parts `BRAND_CREATOR_TEST_PARTS` names, stopped
+  at the deadline `BRAND_CREATOR_SUITE_MINUTES`), then `tests/docker/verify_log.py`, which also fails a part that was asked for and left
+  no summary. `docker run --init --ipc=host`; with `BRAND_CREATOR_TEST_OUT` the run log and pytest's JUnit file are kept.
 - **What counts as passing off macOS.** pytest and node:test have no failure, the smoke printed `SMOKE PASSED` (`emit apple` exit 3 with its
   message), and every skip is a NOT VERIFIED skip with an expected reason: `not macOS`, `actool is not available`, `the claude CLI is not on
   PATH`, and the missing denylist when `BRAND_CREATOR_DENYLIST` was not mounted. Any other skip is a bug. The exact counts and the banner
@@ -1481,6 +1483,6 @@ commands. Conventions:
 - **Off-macOS opt-ins.** `downscale` needs `--renderer=pillow|resvg` (or a recorded opt-in), `emit tauri` needs `--renderer pillow`; tests, the
   smoke and `finish.sh` (`DOWNSCALE_RENDERER`, `ICNS_RENDERER`) name them. Usage errors (exit 2) are reported before "cannot measure here"
   (exit 3), so a bad call gives the same answer on every OS.
-- **CI.** `.github/workflows/brand-creator.yml` (at the monorepo root, working directory `plugins/brand-creator`, started only by changes to that folder or the file): `linux` (the Docker run), `validate` (`claude plugin validate --strict` and the manifest-mutation test;
+- **CI.** `.github/workflows/brand-creator.yml` (at the monorepo root, working directory `plugins/brand-creator`, started by a push to `main` or a pull request that changes that folder or the file, never by a tag): `linux-suite` (the Docker run, one job per part: pytest, node, smoke), `linux` (passes only when every part passed), `validate` (`claude plugin validate --strict` and the manifest-mutation test;
   a documented skip when the CLI cannot be installed), `macos` (`requires_macos` and `requires_actool` tests with REQUIRE_ALL=1, and the
   Acme smoke). It never runs `claude plugin eval`.

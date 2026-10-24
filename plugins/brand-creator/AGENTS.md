@@ -40,7 +40,7 @@ No `CLAUDE.md` at this folder's root: `claude plugin validate --strict` rejects 
 ## Rules for working here
 
 - A change stays inside `plugins/brand-creator/`, plus `.github/workflows/brand-creator.yml`.
-- Run the tests from this folder: `uv run --no-project --with-requirements tests/requirements.txt python -m pytest tests -q -n 4`.
+- Run the tests from this folder: `uv run --no-project --with-requirements tests/requirements.txt python -m pytest tests -q -n 4 --dist worksteal`.
   Tests that need a set-up data directory skip with a NOT VERIFIED banner; a skip is not a pass.
 - Do not bump `version` in `plugin.json` except when releasing. Release with the `changelog-release` skill at the
   repository root.
