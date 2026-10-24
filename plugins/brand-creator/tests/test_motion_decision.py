@@ -479,14 +479,33 @@ def test_a_failing_report_of_the_approved_proof_is_never_outvoted_by_a_passing_o
     (p / "motion" / "proof.json").write_text('{"schema": 1, "cases": []}\n')
     (p / "motion" / "alias.json").symlink_to("proof.json")                                   # a second name of the one file
     assert (p / "motion/alias.json").samefile(p / "motion/proof.json")
-    gated_report(p, "motion/alias.json")                                                     # passing, under the other name
+    a = gated_report(p, "motion/alias.json")                                                 # passing, under the other name
     f = gated_report(p, status="fail")                                                       # failing, under the name the chain types
     r = check(p)
     got = row(p, "motion:proof")
     assert r.returncode == 1 and got["status"] == "fail", r.stdout
-    assert got["detail"] == f"the proof of the approved move fails: {report_row(p, f)['detail']}; change the move as its failing rows say, then run `{SHOT}`", got["detail"]
+    assert got["detail"] == (f"the proof of the approved move fails: {report_row(p, f)['detail']}; change the move as its failing rows say, then run `{SHOT}` (another report of the same file "
+                             f"passes, {a.relative_to(p).as_posix()}: when one of the two is left from before its folder was renamed by letter case, move that report to removed-<date>/)"), got["detail"]
     gated_report(p)                                                                          # the approved proof passes under both names: met by both
     assert check(p).returncode == 0 and row(p, "motion:proof")["detail"] == "met by the report of motion/alias.json, motion/proof.json"
+
+
+def test_a_report_of_the_approved_proof_that_cannot_be_read_is_no_verdict_on_the_move(tmp_path):
+    """A report of motion/proof.json that is JSON but no report fails its own row (it cannot be read), but no proof ran: motion:proof never says the move fails or asks to change it, and a
+    passing report of the same file under another name still meets it."""
+    p = project(tmp_path, "standard", ("G3", "G4"))
+    write_spec(p, ON)
+    f = gated_report(p)
+    mutate_json(f, lambda d: d.__setitem__("inputs", None))                                  # names its proof, but its inputs are no list
+    r = check(p)
+    got, own = row(p, "motion:proof"), report_row(p, f)
+    assert r.returncode == 1 and own["status"] == "fail" and "cannot be read as a report" in own["detail"], r.stdout
+    assert got["status"] == "skipped" and got["detail"] == f"not verified: run `{SHOT}`", got
+    (p / "motion" / "alias.json").symlink_to("proof.json")
+    gated_report(p, "motion/alias.json")
+    r = check(p)
+    got = row(p, "motion:proof")
+    assert r.returncode == 1 and got["status"] == "pass" and got["detail"] == "met by the report of motion/alias.json", got     # the unreadable report still fails its own row
 
 
 def test_a_passing_report_that_names_no_proof_never_satisfies_the_proof_of_the_approved_move(tmp_path):

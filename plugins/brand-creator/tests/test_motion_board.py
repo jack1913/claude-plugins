@@ -299,13 +299,28 @@ def test_a_motion_json_that_cannot_be_read_is_not_verified_never_a_pass(proj):
     spec.write_text("[1]")
     assert lint(proj).returncode == 3 and "must be a JSON object" in detail(proj, "motion:off")
     # a JSON object that `brand-creator motion` and `state` refuse is no answer here either (0.4.0 read "off" with no reason as "nothing moves is recorded"): the same message, never a pass or a fail
-    for doc in ({"schema": 1, "motion": "off"}, {"schema": 1, "motion": "on"}):
+    spec.write_text(json.dumps({"schema": 1, "motion": "off"}))
+    refused = bc("motion", project=proj)
+    assert refused.returncode == 2, refused.stdout
+    r = lint(proj)
+    assert r.returncode == 3 and rows(proj)["motion:off"]["status"] == "skipped", r.stdout
+    assert detail(proj, "motion:off").startswith("not verified: " + refused.stderr.strip().removeprefix("error: ")), (detail(proj, "motion:off"), refused.stderr)
+
+
+def test_a_motion_json_that_says_on_records_no_nothing_moves_even_when_it_is_not_valid_in_itself(proj):
+    """An answer that says the brand moves cannot contradict a motion round, whatever else is wrong with it (0.4.1 made every motion board not verified until an unrelated error was fixed):
+    motion:off passes and names the error `brand-creator motion` refuses the file with; `check` fails it in motion:spec."""
+    make_round(proj)
+    (proj / "motion").mkdir()
+    spec = proj / "motion" / "motion.json"
+    on = {"schema": 1, "motion": "on", "signature": {"name": "Settle", "description": "The dot settles.", "where": ["app icon"]}}
+    for doc in ({"schema": 1, "motion": "on"}, {**on, "colour": "x"}):                          # no signature; an unknown key
         spec.write_text(json.dumps(doc))
         refused = bc("motion", project=proj)
         assert refused.returncode == 2, refused.stdout
         r = lint(proj)
-        assert r.returncode == 3 and rows(proj)["motion:off"]["status"] == "skipped", (doc, r.stdout)
-        assert detail(proj, "motion:off").startswith("not verified: " + refused.stderr.strip().removeprefix("error: ")), (detail(proj, "motion:off"), refused.stderr)
+        assert r.returncode == 0 and rows(proj)["motion:off"]["status"] == "pass", (doc, r.stdout)
+        assert refused.stderr.strip().removeprefix("error: ") in detail(proj, "motion:off") and "says the brand moves" in detail(proj, "motion:off"), detail(proj, "motion:off")
 
 
 def test_a_motion_board_is_round_2_or_later_and_is_never_a_reset_round(proj):
@@ -845,6 +860,22 @@ def test_the_lint_report_goes_stale_when_a_file_the_page_of_a_variant_loads_chan
     assert lint(proj).returncode == 0
     bc("check", project=proj)
     assert row()["status"] == "pass"
+
+
+def test_the_lint_report_of_a_motion_board_goes_stale_when_motion_json_changes(proj):
+    """motion:off reads motion/motion.json, so the lint report lists it: an answer changed after the lint (on to off, here) makes `check` ask for the lint again, and that lint finds the
+    contradiction. Before 0.4.2 the passing report stayed current and nothing said that the round now contradicts a recorded "nothing moves"."""
+    make_round(proj)
+    (proj / "motion").mkdir()
+    spec = proj / "motion" / "motion.json"
+    spec.write_text(json.dumps({"schema": 1, "motion": "on"}))                                  # not valid in itself, but says the brand moves: the lint passes
+    assert lint(proj).returncode == 0 and rows(proj)["motion:off"]["status"] == "pass"
+    assert "motion/motion.json" in {i["path"] for i in report(proj, "board-lint")["inputs"]}
+    spec.write_text(json.dumps({"schema": 1, "motion": "off", "reason": "The brand has no screen presence."}))
+    bc("check", project=proj)
+    got = next(x for x in report(proj, "check")["results"] if x["id"] == "report:board-lint")
+    assert got["status"] == "skipped" and "motion/motion.json changed" in got["detail"], got
+    assert lint(proj).returncode == 1 and rows(proj)["motion:off"]["status"] == "fail"
 
 
 def test_check_wants_the_lint_and_the_shot_of_the_latest_round_when_it_is_a_motion_round(proj):

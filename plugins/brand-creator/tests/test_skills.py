@@ -1369,7 +1369,7 @@ def test_the_docs_say_a_card_and_its_folder_are_spelt_alike_and_that_check_quote
                    "the row of the report itself, `report:motion/<slug>-<hash6>`, quotes the same rows (a stale report says it is stale, as for every report)"):
         assert needle in contract, needle
     assert ("a brand that moves with no current passing report of `motion/proof.json`, the proof of the approved move (`motion:proof`: a missing `motion/proof.json` fails, a current failing report of it fails, "
-            "even beside a passing report of the same file under another name, an unproved one is not verified, a current report that says not-verified is quoted, up to three of the rows it could not verify and what to do about them, and the report of any other proof never "
+            "even beside a passing report of the same file under another name, an unproved one is not verified, and so is one whose report cannot be read, a current report that says not-verified is quoted, up to three of the rows it could not verify and what to do about them, and the report of any other proof never "
             "counts: another proof of the project, one that names no proof, a try-out's or the one report of an earlier version)") in qa
     assert "(one that is current and says not-verified is quoted, in its own row and in `motion:proof`: the rows it could not verify)" in qa
     check_py = " ".join((ROOT / "scripts" / "check.py").read_text(encoding="utf-8").split())

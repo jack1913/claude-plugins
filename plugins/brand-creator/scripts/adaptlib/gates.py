@@ -36,11 +36,13 @@ def expected_reports(project: Path) -> list[tuple[str, str]]:
 
 
 def _report(project: Path, tool: str) -> dict | None:
+    """The report `tool` wrote, or None when there is none or it is no JSON object (the generic report gate of `check` says which)."""
     f = project / "assets" / "_checks" / f"{tool}.json"
     try:
-        return json.loads(f.read_text(encoding="utf-8")) if f.is_file() else None
+        doc = json.loads(f.read_text(encoding="utf-8")) if f.is_file() else None
     except ValueError:
         return None
+    return doc if isinstance(doc, dict) else None
 
 
 def rows(project: Path, rep: Report) -> None:
@@ -61,12 +63,13 @@ def rows(project: Path, rep: Report) -> None:
     p = present(project)
     if p["adapters"]:
         r = _report(project, "adapters")
-        outs = (r or {}).get("outputs", {})
+        outs = (r or {}).get("outputs")
+        outs = outs if isinstance(outs, dict) else {}
         for fname in p["adapters"]:
             if r is None:
-                continue   # the generic report gate already says it is missing
+                continue   # the generic report gate already says it is missing or no report
             rec = outs.get(fname)
-            if rec is None:
+            if not (isinstance(rec, dict) and isinstance(rec.get("sha256"), str)):
                 rep.add(f"adapters:{fname}", "fail", f"{fname} was written by `brand-creator adapters`", detail=f"{fname} exists but the adapters report does not record writing it: run `brand-creator adapters`")
             elif sha256_file(project / fname) != rec["sha256"]:
                 rep.add(f"adapters:{fname}", "fail", f"{fname} is the bytes `adapters` wrote",
@@ -79,10 +82,14 @@ def rows(project: Path, rep: Report) -> None:
     if p["skill"]:
         r = _report(project, "applied-skill")
         if r is not None:
-            rec = r.get("output", {})
-            same = rec.get("path") == p["skill"] and sha256_file(project / p["skill"]) == rec.get("sha256")
-            rep.add("applied-skill:file", "pass" if same else "fail", "the applied skill is the bytes `applied-skill` wrote",
-                    detail="unchanged since it was generated" if same else f"{p['skill']} differs from what was generated: it was edited by hand. Change the sources and run `brand-creator applied-skill --yes`")
+            rec = r.get("output")
+            if not isinstance(rec, dict):
+                rep.add("applied-skill:file", "fail", "the applied skill is the bytes `applied-skill` wrote",
+                        detail="the applied-skill report records no output it wrote: run `brand-creator applied-skill --yes`")
+            else:
+                same = rec.get("path") == p["skill"] and sha256_file(project / p["skill"]) == rec.get("sha256")
+                rep.add("applied-skill:file", "pass" if same else "fail", "the applied skill is the bytes `applied-skill` wrote",
+                        detail="unchanged since it was generated" if same else f"{p['skill']} differs from what was generated: it was edited by hand. Change the sources and run `brand-creator applied-skill --yes`")
             if r.get("status") == "pass" and r.get("adapter_state_sha") != adapt.state_sha(project):
                 rep.add("applied-skill:state", "skipped", "the applied skill was made from the current BRAND-STATE.md and FACTS.md",
                         detail="not verified: the name, rules, facts or motion spec changed since the applied-skill report; run `brand-creator applied-skill --yes` again")

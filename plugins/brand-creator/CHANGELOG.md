@@ -6,6 +6,26 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-10-24
+
+### Fixed
+
+- `board-lint`: a `motion/motion.json` that says `on` but is not valid in itself no longer makes `motion:off` "not
+  verified". 0.4.1 did, so every motion board lint stopped at exit 3 until the unrelated error was fixed. An answer that
+  says the brand moves cannot record that nothing moves, so the row passes and names the error; `check` still fails it
+  in `motion:spec`.
+- `board-lint`: the lint report of a motion board lists `motion/motion.json`, so `check` asks for the lint again when
+  the answer changes after it. An answer turned from `on` to `off` after the lint went unnoticed until the next lint.
+- `check`: a report that is valid JSON but no report (a list, `"inputs": null`, an input with no path) is its own
+  failing row, instead of stopping `check` with a traceback. So is a report that `check` reads again after its own row
+  passed and that lacks what it reads: the colour-vision rows of `contrast`, the output `book` recorded, the stills a
+  `frames` report vouches for, and the files `adapters` and `applied-skill` wrote.
+- `check`: a report of `motion/proof.json` that cannot be read is no verdict on the move: `motion:proof` says "not
+  verified" and asks for the proof to run again, never that the move fails.
+- `check`: when the proof of the approved move fails and another report of the same file passes (a folder renamed by
+  letter case on macOS or Windows can leave one behind), `motion:proof` names the passing one and says that a leftover
+  can be moved to `removed-<date>/`.
+
 ## [0.4.1] - 2026-10-24
 
 A brand that moves now passes `motion:proof` only on a passing report of `motion/proof.json`, the proof of its approved

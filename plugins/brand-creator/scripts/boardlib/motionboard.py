@@ -56,13 +56,23 @@ def add_row(rep: Report, rid: str, label: str, problems: list[str], passed: str)
 # ---------------------------------------------------------------- the gates of the round
 
 def motion_off(project: Path) -> tuple[bool | None, str]:
-    """(whether motion/motion.json says nothing moves, the reason it gives), read as `brand-creator motion` and `state` read it (motionspec.decision); (None, the message of the motion spec)
-    when the file is not a valid answer: one that `motion` refuses is never read as "nothing moves" here. Absent is not off."""
+    """(whether motion/motion.json says nothing moves, the reason it gives), read as `brand-creator motion` and `state` read it (motionspec.decision): one that `motion` refuses is never read
+    as "nothing moves" here, so it is (None, the message of the motion spec). A refused file that says "on" is (False, that message): it cannot record that nothing moves, whatever else is wrong
+    with it (check fails it in motion:spec). Absent is not off."""
     try:
         d = motionspec.decision(project)
     except CliError as e:
-        return None, e.message
+        return (False if says_on(project) else None), e.message
     return d["motion"] == "off", motionspec.one_line(d.get("reason", ""))
+
+
+def says_on(project: Path) -> bool:
+    """Whether motion/motion.json is a JSON object whose "motion" is "on", valid in itself or not."""
+    try:
+        doc = json.loads((project / motionspec.FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return isinstance(doc, dict) and doc.get("motion") == "on"
 
 
 def gate_rows(rep: Report, project: Path) -> None:
@@ -71,12 +81,17 @@ def gate_rows(rep: Report, project: Path) -> None:
     rep.add("motion:g3", "pass" if g3 else "fail", "a motion round follows the approved design (G3)",
             detail=f"G3: {g3}" if g3 else "a motion round follows the approved design (G3): record the owner's approval of the refined board first (`brand-creator state --record G3 \"<decision>\"`)")
     off, why = motion_off(project)
+    if (project / motionspec.FILE).is_file():   # the lint report is stale once the answer changes (on to off, say): `check` asks for the lint again
+        rep.inputs.append(project / motionspec.FILE)
     label = "a motion round does not contradict a recorded \"nothing moves\""
     if off is None:
         rep.add("motion:off", "skipped", label, detail=f"not verified: {why}; `brand-creator motion` refuses the file with the same message: fix it, then lint again")
     elif off:
         rep.add("motion:off", "fail", label, detail=f"nothing moves is recorded: a motion round contradicts it ({motionspec.FILE}: {why}); turning it on is a rule change: edit {motionspec.FILE}, "
                                                     "then run `brand-creator check --cascade` with the old wording as its value")
+    elif why:   # it says "on" but `motion` refuses it: no contradiction, and the error is said here too
+        rep.add("motion:off", "pass", label, detail=f"{motionspec.FILE} says the brand moves, so it records no \"nothing moves\"; it is not valid in itself ({why}): "
+                                                    "fix it, `brand-creator check` fails it in motion:spec")
     else:
         rep.add("motion:off", "pass", label, detail=f"{motionspec.FILE} does not say nothing moves" if (project / motionspec.FILE).is_file() else "no motion/motion.json: motion is not decided yet")
 

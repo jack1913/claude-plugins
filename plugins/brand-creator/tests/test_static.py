@@ -140,7 +140,7 @@ def test_no_personal_paths_or_email_addresses_in_shipped_files():
 def test_plugin_json_matches_the_plan():
     d = json.loads((ROOT / ".claude-plugin/plugin.json").read_text())
     assert d["name"] == "brand-creator" and d["displayName"] and d["description"]
-    assert d["version"] == "0.4.1" and re.fullmatch(r"\d+\.\d+\.\d+", d["version"])
+    assert d["version"] == "0.4.2" and re.fullmatch(r"\d+\.\d+\.\d+", d["version"])
     assert d["author"] == {"name": "Jacek Pytlik"} and d["license"] == "MIT" and d["keywords"]
     assert d["homepage"] == "https://github.com/jack1913/claude-plugins/tree/main/plugins/brand-creator"  # a homepage must parse as a URL
     assert d["repository"] == "https://github.com/jack1913/claude-plugins"

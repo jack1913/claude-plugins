@@ -93,6 +93,14 @@ def read_report_state(project: Path, tool: str, run_cmd: str, expect_page: str |
         doc = json.loads(f.read_text(encoding="utf-8"))
     except ValueError:
         return "fail", f"{rel(project, f)} is not valid JSON; re-run {again}", None, False
+    try:
+        return judged_report(project, tool, doc, run_cmd, again, expect_page, expect_source)
+    except (AttributeError, KeyError, TypeError) as e:   # JSON that is no report: a list, "inputs": null, an input with no path, a result that is not an object
+        return "fail", f"{rel(project, f)} cannot be read as a report ({type(e).__name__}: {e}); re-run {again}", None, False
+
+
+def judged_report(project: Path, tool: str, doc: dict, run_cmd: str, again: str, expect_page: str | None, expect_source: str | None) -> tuple[str, str, dict, bool]:
+    """read_report_state's verdict on a report it has read: stale, passing, failing or no verdict."""
     stale = stale_inputs(project, doc)
     if expect_page and doc.get("page") != expect_page:
         stale.append(f"the report is for {doc.get('page')}, the latest page is {expect_page}")
@@ -134,7 +142,11 @@ def gate_proof_reports(project: Path, rep: Report, folder: str, command, vouches
         else:
             run_cmd, then = command(doc, proof)
             st, detail, read, current = read_report_state(project, tool, run_cmd, then=then)
-            gap = vouches(project, doc, proof) if vouches and st == "pass" else None
+            try:
+                gap = vouches(project, doc, proof) if vouches and st == "pass" else None
+            except (AttributeError, KeyError, TypeError) as e:   # a passing report whose cases or results are no list of objects
+                gap, current = None, False
+                st, detail = "fail", f"{rel(project, f)} cannot be read as a report ({type(e).__name__}: {e}); re-run `{run_cmd}`" + (f" and then `{then}`" if then else "")
             if gap:
                 st, detail = "skipped", f"not verified: {gap}; re-run `{run_cmd}`" + (f" and then `{then}`" if then else "")
             rep.add(f"report:{tool}", st, "gate report", detail=detail)
@@ -194,10 +206,12 @@ def motion_decision_rows(project: Path, rep: Report, gated: list[dict]) -> None:
         return
     mine = [g for g in gated if g["proof"] and (project / g["proof"]).is_file() and (project / g["proof"]).samefile(approved)]
     passing = sorted({g["proof"] for g in mine if g["status"] == "pass"})
-    failing = [g for g in mine if g["status"] == "fail"]
+    failing = [g for g in mine if g["status"] == "fail" and g["current"]]   # a verdict: a report that cannot be read fails its own row, but no proof ran
     unsure = [g for g in mine if g["status"] == "skipped" and g["current"]]   # current and no verdict: not "run it again" but which rows it could not verify
     if failing:   # the proof ran and failed: a failure, as the report's own row is, never "not verified", and never outvoted by a passing report of the same file under another name
-        rep.add("motion:proof", "fail", label, detail=f"the proof of the approved move fails: {failing[0]['detail']}; change the move as its failing rows say, then run `{cmd}`")
+        also = ", ".join(f"assets/_checks/{g['row'].removeprefix('report:')}.json" for g in mine if g["status"] == "pass")
+        rep.add("motion:proof", "fail", label, detail=f"the proof of the approved move fails: {failing[0]['detail']}; change the move as its failing rows say, then run `{cmd}`"
+                + (f" (another report of the same file passes, {also}: when one of the two is left from before its folder was renamed by letter case, move that report to removed-<date>/)" if also else ""))
     elif passing:
         rep.add("motion:proof", "pass", label, detail=f"met by the report of {', '.join(passing)}")
     elif unsure:
@@ -311,8 +325,8 @@ def main() -> int:
             continue
         try:
             src = json.loads(f.read_text(encoding="utf-8")).get("source")
-        except ValueError:
-            src = None
+        except (ValueError, AttributeError):
+            src = None   # not readable as a report: report_state fails it
         st, detail = report_state(project, tool, f"brand-creator downscale --source {src or '<master>'}")
         rep.add(f"report:{tool}", st, "gate report", detail=detail)
     # motion: one report per proof file. A proof under rounds/, history/ or a removed-*/ folder is an exploration proof (listed, never failing); a
@@ -342,7 +356,8 @@ def main() -> int:
         rep.add(f"report:{tool}", st, "gate report", detail=detail)
         if tool == "contrast" and st == "pass" and cvd_set:
             doc0 = json.loads((project / "assets" / "_checks" / "contrast.json").read_text(encoding="utf-8"))
-            if not any(r.get("section") == "cvd" for r in doc0.get("results", [])):
+            results = doc0.get("results") if isinstance(doc0.get("results"), list) else []   # a passing report with no list of results has no colour-vision rows either
+            if not any(isinstance(r, dict) and r.get("section") == "cvd" for r in results):
                 rep.add("report:contrast:cvd", "skipped", "the contrast report has the colour-vision rows qa/rules.json asks for",
                         detail="not verified: qa/rules.json sets a colour-vision threshold (cvd) and the contrast report has no colour-vision rows; re-run "
                                "`brand-creator contrast --cvd` (a tools/finish.sh copied before 0.3.5 runs contrast without --cvd: add it there too)")
@@ -363,12 +378,16 @@ def main() -> int:
                 rep.add("report:book-lint:self", "skipped", "the book-lint report includes the self-consistency rules",
                         detail="not verified: the report was made without --self-consistency; re-run `brand-creator book-lint --self-consistency`")
             if tool == "book":
-                out = doc.get("output", {})
-                f = project / out.get("path", "")
-                same = f.is_file() and sha256_file(f) == out.get("sha256")
-                rep.add("book:generated", "pass" if same else "fail", "book.html is the bytes `book` wrote (generated, never hand-edited)",
-                        detail="unchanged since the build" if same else f"{out.get('path')} differs from what `book` wrote: it was edited by hand or by another tool; "
-                        "edit book/chapters/*.md and run `brand-creator book`")
+                out = doc.get("output")
+                if not (isinstance(out, dict) and isinstance(out.get("path"), str) and out["path"]):
+                    rep.add("book:generated", "fail", "book.html is the bytes `book` wrote (generated, never hand-edited)",
+                            detail="the book report records no output it wrote: run `brand-creator book`")
+                else:
+                    f = project / out["path"]
+                    same = f.is_file() and sha256_file(f) == out.get("sha256")
+                    rep.add("book:generated", "pass" if same else "fail", "book.html is the bytes `book` wrote (generated, never hand-edited)",
+                            detail="unchanged since the build" if same else f"{out.get('path')} differs from what `book` wrote: it was edited by hand or by another tool; "
+                            "edit book/chapters/*.md and run `brand-creator book`")
     if (project / motionspec.FILE).is_file():   # the machine-readable motion spec: its schema, and each duration and curve it names must be a built token
         try:
             rep.add("motion:spec", "pass", "motion/motion.json is valid", detail=motionspec.summary(motionspec.load(project)))

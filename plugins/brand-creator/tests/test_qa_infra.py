@@ -656,6 +656,69 @@ def test_two_motion_proofs_are_two_reports_and_a_passing_one_never_stands_in_for
     assert motion_report_tool(a) != motion_report_tool("rounds/r2/proof.json")   # the same file name in another folder is another report
 
 
+@pytest.mark.parametrize("bad", [[1], {"proof": "motion/proof.json", "inputs": None, "status": "pass"}, {"proof": "motion/proof.json", "inputs": [{"sha256": "0" * 64}], "status": "pass"},
+                                 {"proof": "motion/proof.json", "inputs": [], "status": "fail", "results": [7]}])
+def test_a_report_that_is_json_but_no_report_is_its_own_failing_row_never_a_crash(proj, bad):
+    """0.4.1 stopped `check` with a traceback on a report that is valid JSON but no report (board-lint already said it cannot be read): it is the report's own failing row now, for a
+    gated motion report and for a downscale report, which is read for its source before it is gated."""
+    proof = put_proof(proj, "motion/proof.json")
+    motion_report(proj, proof).write_text(json.dumps(bad))
+    down = proj / "assets" / "_checks" / "downscale" / "mark-000000.json"
+    down.parent.mkdir(parents=True, exist_ok=True)
+    down.write_text(json.dumps(bad))
+    r = bc("check", project=proj)
+    assert r.returncode == 1 and "Traceback" not in r.stdout + r.stderr, r.stdout + r.stderr
+    rows = {x["id"]: x for x in report(proj, "check")["results"]}
+    for got in (motion_row(proj, proof), rows["report:downscale/mark-000000"]):
+        assert got["status"] == "fail" and "cannot be read as a report" in got["detail"] and "re-run `brand-creator" in got["detail"], got
+
+
+AGAIN_CASES = {   # a report `check` reads again after its generic row passed: what is in the project, what the report holds, the row it must give (id, status, words in its detail)
+    "contrast results null": ({"assets/tokens/tokens.json": {}, "qa/rules.json": {"schema": 1, "cvd": {"min_delta_e": 10.0}}},
+                              ("contrast", {"status": "pass", "inputs": [], "results": None}), ("report:contrast:cvd", "skipped", "no colour-vision rows")),
+    "contrast result 7": ({"assets/tokens/tokens.json": {}, "qa/rules.json": {"schema": 1, "cvd": {"min_delta_e": 10.0}}},
+                          ("contrast", {"status": "pass", "inputs": [], "results": [7]}), ("report:contrast:cvd", "skipped", "no colour-vision rows")),
+    "book output null": ({"book.html": "<!doctype html><title>b</title>"}, ("book", {"status": "pass", "inputs": [], "output": None}),
+                         ("book:generated", "fail", "records no output it wrote")),
+    "book output path null": ({"book.html": "<!doctype html><title>b</title>"}, ("book", {"status": "pass", "inputs": [], "output": {"path": None, "sha256": "x"}}),
+                              ("book:generated", "fail", "records no output it wrote")),
+    "frames cases null": ({"motion/proof.json": {"schema": 1, "cases": []}}, ("frames", {"proof": "motion/proof.json", "inputs": [], "status": "pass", "results": [], "cases": None}),
+                          ("report:frames", "fail", "cannot be read as a report")),
+    "frames results null": ({"motion/proof.json": {"schema": 1, "cases": []}}, ("frames", {"proof": "motion/proof.json", "inputs": [], "status": "pass", "results": None}),
+                            ("report:frames", "fail", "cannot be read as a report")),
+    "frames id is a list": ({"motion/proof.json": {"schema": 1, "cases": []}}, ("frames", {"proof": "motion/proof.json", "inputs": [], "status": "pass", "results": [{"id": [1], "status": "pass"}]}),
+                            ("report:frames", "fail", "cannot be read as a report")),
+    "adapters list": ({"BRAND.md": "# brand\n"}, ("adapters", [1]), ("report:adapters", "fail", "cannot be read as a report")),
+    "adapters outputs null": ({"BRAND.md": "# brand\n"}, ("adapters", {"status": "pass", "inputs": [], "outputs": None}), ("adapters:BRAND.md", "fail", "does not record writing it")),
+    "adapters output without sha256": ({"BRAND.md": "# brand\n"}, ("adapters", {"status": "pass", "inputs": [], "outputs": {"BRAND.md": {"path": "BRAND.md"}}}),
+                                       ("adapters:BRAND.md", "fail", "does not record writing it")),
+    "applied-skill list": ({".claude/skills/acme-brand/SKILL.md": "---\nname: acme-brand\n---\n"}, ("applied-skill", [1]), ("report:applied-skill", "fail", "cannot be read as a report")),
+    "applied-skill output null": ({".claude/skills/acme-brand/SKILL.md": "---\nname: acme-brand\n---\n"}, ("applied-skill", {"status": "pass", "inputs": [], "output": None}),
+                                  ("applied-skill:file", "fail", "records no output it wrote")),
+}
+
+
+@pytest.mark.parametrize("case", sorted(AGAIN_CASES))
+def test_a_report_check_reads_again_after_its_row_passed_never_stops_check(proj, case):
+    """Beyond the generic report row, `check` reads some reports again (the colour-vision rows, the book's output, the stills a frames report vouches for, what the adapters and the applied
+    skill wrote). A report there that is JSON but not the report it should be gives a row that says so, never a traceback (0.4.1 stopped on every one of these)."""
+    from _common import frames_report_tool
+    files, (tool, doc), (rid, status, words) = AGAIN_CASES[case]
+    for rel_path, body in files.items():
+        f = proj / rel_path
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(body if isinstance(body, str) else json.dumps(body))
+    name = frames_report_tool("motion/proof.json") if tool == "frames" else tool
+    rf = proj / "assets" / "_checks" / f"{name}.json"
+    rf.parent.mkdir(parents=True, exist_ok=True)
+    rf.write_text(json.dumps(doc))
+    r = bc("check", project=proj)
+    assert "Traceback" not in r.stdout + r.stderr, r.stdout + r.stderr
+    rows = {x["id"]: x for x in report(proj, "check")["results"]}
+    got = rows[f"report:{name}" if rid == "report:frames" else rid]
+    assert got["status"] == status and words in got["detail"], got
+
+
 def test_a_proof_under_rounds_history_or_removed_is_an_exploration_listed_and_never_gated(proj):
     from _common import history_files, sha256_file, write_history_manifest
     tries = [put_proof(proj, p) for p in ("rounds/r2/proof.json", "history/r1/motion/proof.json", "removed-2026-10-21/proof.json", "motion/removed-old/proof.json")]
