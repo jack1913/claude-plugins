@@ -30,6 +30,11 @@ BRAND_CREATOR_DATA=<set-up data dir> tests/run-all.sh
 - The test tools are pinned, with every package they need, in `tests/requirements.txt`, compiled by uv from
   `tests/requirements.in` (the command is in both files).
 - Mutation tests prove each gate by breaking a scratch copy.
+- `tests/mutation_ledger.py` lists deliberate breaks of the plugin, each with the tests that must catch it, and replays them
+  on a copy of the plugin (the checkout is never changed). Replay it whenever tests are merged, rewritten or deleted:
+  every break must still be caught. For example the finish chain's branches moved from whole chains
+  (`test_finish_chain.py`, which keeps two real ones) to `test_finish_chain_steps.py`, which runs the same template against
+  a stand-in for `brand-creator`; `--group finish-chain` replays its breaks.
 - A test that cannot run prints "NOT VERIFIED". `BRAND_CREATOR_REQUIRE_ALL=1` turns every such skip into a failure.
 - Tests that talk to real services (`requires_network`) run only with `BRAND_CREATOR_LIVE=1`.
 - The anonymisation test needs a private denylist (`BRAND_CREATOR_DENYLIST`) and skips without it.

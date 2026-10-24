@@ -1397,7 +1397,7 @@ def test_the_contract_and_the_board_reference_say_the_radios_of_a_card_are_a_vot
 
 def test_the_template_the_contract_and_the_qa_phase_say_what_stops_the_chain_on_a_motion_json_and_what_an_exit_3_that_wrote_its_report_does():
     """One story in three places. A motion/motion.json that is not valid in itself stops the chain at the motion step (exit 2); one that is valid in itself but names a token that is not built does not
-    (`motion` reads the answer from the document alone): `book` stops the chain on that token, or, with no book, `check` fails motion:spec (tests/test_finish_chain.py runs both). A proof that exits 3 after it
+    (`motion` reads the answer from the document alone): `book` stops the chain on that token (test_book_motion.py, and the chain's branch in test_finish_chain_steps.py), or, with no book, `check` fails motion:spec (test_motionspec.py). A proof that exits 3 after it
     wrote its report goes on too, and `check` says why: it is not verified, which is not a failure."""
     tpl = re.sub(r"\s+", " ", re.sub(r"\n#", " ", (ROOT / "templates" / "finish.sh.tpl").read_text(encoding="utf-8")))
     contract = _flat(ROOT / "scripts" / "CONTRACT.md")

@@ -594,6 +594,34 @@ def test_a_frames_report_that_is_stale_missing_or_failed_is_a_warning_that_names
     assert not [w for w in motion_warnings(mp) if "frames" in w]
 
 
+def test_a_motion_json_that_names_a_token_that_is_not_built_stops_the_book_with_exit_2(mp):
+    """`brand-creator motion` reads the answer from the document alone, so the finish chain's motion step goes on; the book looks every duration
+    and curve up among the built tokens and refuses one that is not there (exit 2), before it writes anything."""
+    doc = {**on_doc(), "parts": [{"id": "dot", "description": "The accent dot of the mark."}],
+           "timeline": [{"part": "dot", "property": "transform", "start": "0", "duration": "{motion.nowhere}", "easing": "{easing.standard}"}]}
+    write_spec(mp, doc)
+    r = build(mp, code=2)
+    assert "no token named motion.nowhere" in r.stdout + r.stderr, r.stdout + r.stderr
+    assert not (mp / "book.html").exists()
+
+
+def test_a_frames_run_that_fails_keeps_the_stills_of_the_last_run_that_worked_and_the_book_replays_them(mp):
+    """The finish chain says so after a failed `frames` ("the book keeps the stills of the last run that worked"), and the tools make it true: a real run that
+    worked, then the page loses its motion and a run fails (exit 1, a failing report) over the earlier stills. They are kept byte for byte, and the book replays
+    them, with a warning that they may be older than the page."""
+    write_spec(mp, on_doc())
+    assert bc("frames", "motion/proof.json", "--count", "9", project=mp).returncode == 0
+    folder = mp / "motion" / "frames" / "demo-page"
+    before = {f.name: f.read_bytes() for f in folder.iterdir()}
+    mutate(mp / "motion/demo.html", "animation: press 320ms steps(2, end) 1 both;", "")         # nothing on the page moves any more
+    r = bc("frames", "motion/proof.json", "--count", "9", project=mp)
+    assert r.returncode == 1 and "no seekable motion" in r.stdout + r.stderr, r.stdout + r.stderr
+    assert {f.name: f.read_bytes() for f in folder.iterdir()} == before
+    build(mp)
+    assert 'data-motion-demo="demo-page"' in (mp / "book.html").read_text()
+    assert any("did not pass for demo-page, so its stills may be older than the page" in w for w in motion_warnings(mp)), motion_warnings(mp)
+
+
 def test_the_frames_command_in_a_warning_writes_the_same_points_again(mp):
     def cmd(pcts):
         return bookdata.frames_command({"proof": "motion/p.json", "frames": [{"percent": x} for x in pcts]})

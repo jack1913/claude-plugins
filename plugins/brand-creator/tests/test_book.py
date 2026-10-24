@@ -906,6 +906,7 @@ def test_the_press_kit_is_left_out_of_the_book_and_does_not_make_its_reports_sta
     r = bc("emit", "presskit", "--no-book", project=proj)
     assert r.returncode == 0, r.stdout + r.stderr
     kit = "assets/presskit/acme-press-kit.zip"
+    assert "no book PDF in the kit" in json.dumps(report(proj, "emit-presskit"))      # the kit says what it lacks (the finish chain passes --no-book without a book)
     assert any(a["path"] == kit for a in json.loads((proj / "assets/manifest.json").read_text())["artefacts"])
     r = bc("book", project=proj)                                     # the files chapter now says where the kit is, without its checksum
     assert r.returncode == 0, r.stdout + r.stderr
