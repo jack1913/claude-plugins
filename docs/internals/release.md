@@ -18,7 +18,8 @@ Why: [ADR-0002](../adr/ADR-0002-per-plugin-versions-and-tags.md).
 
 3. Commit and push the changelog and version bump.
 4. Wait until every CI run of that commit on `main` has passed. A tag push runs no CI, so this run is the release's only
-   check ([ADR-0004](../adr/ADR-0004-ci-runs-on-main-and-pull-requests-never-on-tags.md)):
+   check ([ADR-0004](../adr/ADR-0004-ci-runs-on-main-and-pull-requests-never-on-tags.md)), and GitHub accepts the tag
+   only on a commit where the checks `<name>` and `docs` passed (the tag rulesets below):
 
    ```bash
    gh run list --commit "$(git rev-parse HEAD)" --json workflowName,status,conclusion
@@ -27,7 +28,9 @@ Why: [ADR-0002](../adr/ADR-0002-per-plugin-versions-and-tags.md).
    The list must name at least `docs` and the plugin's own workflow (a release commit changes `CHANGELOG.md` and
    `plugin.json`), every run with `"status":"completed"` and `"conclusion":"success"`. An empty list means the runs
    have not started yet: ask again in a minute. If one fails, fix it in a new commit and wait again; never tag a commit
-   whose CI failed.
+   whose CI failed. The tag then goes on the fix commit, which needs both checks too: a workflow whose paths that commit
+   did not change never starts there, so start it by hand on `main`'s current commit with
+   `gh workflow run <workflow>.yml --ref main` (`docs.yml`, or the plugin's own).
 5. Dry-run the tag, from the repository root:
 
    ```bash
@@ -44,8 +47,38 @@ Why: [ADR-0002](../adr/ADR-0002-per-plugin-versions-and-tags.md).
    git push origin refs/tags/<name>--vX.Y.Z
    ```
 
+   Pushed too early, the tag is refused, and nothing is created on GitHub:
+
+   ```text illustrative
+   remote: error: GH013: Repository rule violations found for refs/tags/<name>--vX.Y.Z.
+   remote: - Required status check "<name>" is expected.
+    ! [remote rejected] <name>--vX.Y.Z -> <name>--vX.Y.Z (push declined due to repository rule violations)
+   ```
+
+   "is expected" means the check has no result on that commit: its workflow is still running (wait, then push the tag
+   again), or it never started there (start it by hand, as in step 4). "is failing" means it failed: fix it in a new
+   commit, delete the local tag (`git tag -d <name>--vX.Y.Z`), and tag the new commit once both checks passed on it.
+
 Use `claude plugin tag`, never `git tag`. It reads the version from `plugin.json`, checks it against the marketplace
 entry, and names the tag `<name>--vX.Y.Z` for you.
+
+## The tag rulesets
+
+Each plugin has a tag ruleset on GitHub, "<name> release tags" (Settings, Rules, Rulesets): a tag `<name>--v*` is accepted
+only on a commit where the checks `<name>` and `docs` passed. Each check is its workflow's verdict, a job named after the
+workflow that passes only when every other job in it passed. Nobody can bypass the rulesets.
+Why: [ADR-0005](../adr/ADR-0005-release-tags-need-a-passing-ci-verdict.md).
+
+Their source is `.github/rulesets/<name>-release-tags.json`, which `check-workflows.py` checks in CI. GitHub keeps its
+own copy, so after changing a file, or to catch a change made in the web interface, compare the two from the repository
+root (it needs `gh`, signed in):
+
+```bash
+python3 .github/scripts/check-workflows.py --live
+```
+
+It also reports a tag ruleset on GitHub that no file describes, which could refuse tags on its own. A difference is
+printed with the `gh api` command that brings GitHub's copy in line with the file.
 
 ## Installed copies update only on a bump
 
@@ -56,3 +89,6 @@ then update with `claude plugin update <name>@jack1913` (see [Install a plugin](
 
 `claude plugin tag` tags `HEAD`. A release that was never tagged can be tagged later only from a checkout of its own
 commit: check it out, then run the same command there. List what is tagged with `git tag -l '<name>--v*'`.
+
+A commit made before the verdict jobs existed (ADR-0005) has no `<name>` check, so its ruleset refuses the tag. Set that ruleset's enforcement to
+Disabled (Settings, Rules, Rulesets), push the tag, then set it back to Active and confirm with `--live`.

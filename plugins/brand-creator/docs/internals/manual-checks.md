@@ -25,7 +25,7 @@ proven.
 | [E-mail signature in real mail clients](#the-e-mail-signature-in-real-mail-clients) | never run | |
 | [A real Linux desktop session](#a-real-linux-desktop-session) | never run | |
 | [Windows](#windows) | never run | |
-| [CI first run](#ci-first-run) | never run (the repository has not been pushed) | |
+| [CI first run](#ci-first-run) | 2026-10-25, run 40154228151: the earlier layout passed; the macOS halves and the verdict have not run yet | |
 
 ## Behaviour evals (`claude plugin eval`)
 
@@ -268,8 +268,10 @@ what fails; until then the [platform support](../manual/reference/platform-suppo
 **Why manual.** `.github/workflows/brand-creator.yml` (at the root of the claude-plugins monorepo) runs only once the repository is pushed, and its action versions were not checked
 online.
 
-**Steps.** After the first push, read each job's log: each of the three Linux jobs (pytest, node, smoke) must end with the Docker run's `LINUX RUN OK` line and the `linux` gate must pass, the validate
-job must run (not skip) `claude plugin validate --strict`, and the macOS job must run the Apple-tool tests with
-`BRAND_CREATOR_REQUIRE_ALL=1`. Record the run URL and the result.
+**Steps.** After the first push, read each job's log: each of the three Linux jobs (pytest, node, smoke) must end with the Docker run's `LINUX RUN OK` line, the validate
+job must run (not skip) `claude plugin validate --strict`, the macos (pytest) job must run the Apple-tool tests with
+`BRAND_CREATOR_REQUIRE_ALL=1`, each macOS smoke job must print the `SMOKE PASSED` line of its half, and the `brand-creator`
+verdict must pass. Record the run URL and the result.
 
-**Last run:** never (the repository has not been pushed).
+**Last run:** 2026-10-25, run 40154228151 (commit 24a09e1), in the earlier layout (one macOS job, a `linux` gate): every
+job passed. The two macOS smoke jobs and the `brand-creator` verdict have not run yet.

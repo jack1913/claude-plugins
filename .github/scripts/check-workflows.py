@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
-"""Check the shape of every workflow in .github/workflows/. Standard library only; run from the repository root.
+"""Check the shape of every workflow in .github/workflows/ and every release-tag ruleset in .github/rulesets/. Standard library
+only; run from the repository root.
 
-    python3 .github/scripts/check-workflows.py              check the workflows as they are
-    python3 .github/scripts/check-workflows.py --self-test  break each rule in a copy, and fail unless the check catches it
+    python3 .github/scripts/check-workflows.py                     check the workflows and rulesets as they are
+    python3 .github/scripts/check-workflows.py --self-test         break each rule in a copy, and fail unless the check catches it
+    python3 .github/scripts/check-workflows.py --ruleset <plugin>  print the release-tag ruleset that plugin needs (its file's content)
+    python3 .github/scripts/check-workflows.py --live              compare the rulesets on GitHub with the files (needs gh, signed in;
+                                                                   CI never runs it, so a change made on GitHub shows up only here)
 
-The rule is .claude/rules/ci-workflow-per-plugin.md; why: docs/adr/ADR-0004-ci-runs-on-main-and-pull-requests-never-on-tags.md.
+The rule is .claude/rules/ci-workflow-per-plugin.md; why: docs/adr/ADR-0004-ci-runs-on-main-and-pull-requests-never-on-tags.md
+and docs/adr/ADR-0005-release-tags-need-a-passing-ci-verdict.md.
 Fails when:
   - the workflow files are not one <plugin>.yml per plugin under plugins/ plus marketplace.yml and docs.yml (a .yaml file
     is reported too: GitHub runs both extensions);
@@ -15,10 +20,20 @@ Fails when:
   - the top-level permissions are not contents: read, or a job sets its own permissions;
   - a job runs on a floating runner image (any runs-on that says latest), or on one this check cannot read;
   - a run on main can be cancelled or replaced: the concurrency block must be top-level, its group must hold github.sha
-    (one group per commit on main), and cancel-in-progress must be false or ${{ github.event_name == 'pull_request' }}.
+    (one group per commit on main), and cancel-in-progress must be false or ${{ github.event_name == 'pull_request' }};
+  - a workflow has no job named after it (its verdict: for a plugin's workflow and docs.yml, the check a release-tag ruleset
+    requires), that job sets a name of its own or runs only under a condition (a job skipped by its if counts as passed in a
+    required check), or, in a workflow of more than one job, it does not need every other job, does not run
+    if: ${{ always() }}, or its steps are not exactly VERDICT_STEPS (which fail unless every job it needs succeeded);
+  - another job's check carries a workflow's name (a ruleset requiring that check could read the wrong job);
+  - docs.yml does not run this check: every ruleset requires its job, so this is what checks the verdicts on every commit a
+    release tag can point to;
+  - .github/rulesets/ does not hold exactly one <plugin>-release-tags.json per plugin, each equal to what --ruleset prints:
+    tags <plugin>--v* need the checks <plugin> and docs, from GitHub Actions, on the tagged commit; enforced, with no bypass.
 The reader understands only the YAML these keys use here (block mappings, block lists of scalars, quoted scalars); anything
 else in them is reported as unreadable, never passed.
 """
+import json
 import re
 import sys
 from pathlib import Path
@@ -27,6 +42,18 @@ ROOT = Path(__file__).resolve().parents[2]
 PR_ONLY = "${{ github.event_name == 'pull_request' }}"
 TRIGGERS = {"push", "pull_request", "workflow_dispatch"}
 KEY = re.compile(r"([A-Za-z_][\w-]*):(?:\s+(.*))?")
+ALWAYS = ("${{ always() }}", "always()")
+ACTIONS = 15368   # the GitHub Actions app: a check of the same name from any other source does not count
+# The steps of a verdict that waits for other jobs, dedented to the job's keys: it fails unless every job it needs succeeded
+# (a failed, cancelled or skipped job is never green).
+VERDICT_STEPS = r"""steps:
+  - name: Every job passed
+    env:
+      NEEDS: ${{ toJSON(needs) }}
+    run: |
+      jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<< "$NEEDS"
+      jq -e 'all(.[]; .result == "success")' <<< "$NEEDS" > /dev/null"""
+DOCS_RUNS_CHECK = re.compile(r"^\s+run: python3 \.github/scripts/check-workflows\.py$", re.M)
 
 
 class Unreadable(Exception):
@@ -129,7 +156,101 @@ def read(text: str) -> tuple[dict, list[str]]:
     return out, lines
 
 
-def check_one(f: str, text: str, plugins: list[str]) -> list[str]:
+def read_jobs(lines: list[str]) -> dict[str, dict]:
+    """{job id: the job's own name, needs and if, where it sets them}: needs as written (a scalar or a block list of job ids)."""
+    start = next((k for k, ln in enumerate(lines) if ln == "jobs:"), None)
+    if start is None or start + 1 >= len(lines) or indent(lines[start + 1]) == 0:
+        raise Unreadable("no top-level jobs: block with a job in it")
+    job_ind = indent(lines[start + 1])
+    jobs: dict[str, dict] = {}
+    job: dict = {}
+    key_ind = None
+    i = start + 1
+    while i < len(lines) and indent(lines[i]) > 0:
+        ln, ind = lines[i], indent(lines[i])
+        m = KEY.fullmatch(ln.strip())
+        if ind == job_ind:
+            if not m or m.group(2):
+                raise Unreadable(f"jobs: {ln.strip()!r} is not a job id")
+            job, key_ind = jobs.setdefault(m.group(1), {}), None
+        elif ind < job_ind:
+            raise Unreadable(f"jobs: unexpected indentation at {ln.strip()!r}")
+        else:
+            key_ind = ind if key_ind is None else key_ind
+            if ind == key_ind and m and m.group(1) in ("name", "needs", "if"):
+                key, val = m.group(1), m.group(2)
+                deeper = i + 1 < len(lines) and indent(lines[i + 1]) > key_ind
+                if val and deeper:   # a plain scalar YAML folds on over the next lines: the value is not what this line says
+                    raise Unreadable(f"jobs: {key}: {val} goes on over more than one line: write it on one line")
+                if val:
+                    job[key] = scalar(val)
+                elif key == "needs" and deeper:
+                    items = []
+                    while i + 1 < len(lines) and indent(lines[i + 1]) > key_ind:
+                        i += 1
+                        if not lines[i].lstrip().startswith("- "):
+                            raise Unreadable(f"jobs: needs: {lines[i].strip()!r} is not an item of a block list")
+                        items.append(scalar(lines[i].lstrip()[2:]))
+                    job[key] = items
+                else:
+                    raise Unreadable(f"jobs: {key} has no value on its line: write it there ({key} needs a block list only for needs)")
+        i += 1
+    return jobs
+
+
+def verdict_steps(text: str, name: str) -> str | None:
+    """The steps block of job `name` as written, without comment and blank lines, dedented to the job's keys; None without one."""
+    raw = text.replace("\r\n", "\n").split("\n")
+    start = next((k for k, ln in enumerate(raw) if strip_comment(ln) == f"  {name}:"), None)
+    if start is None:
+        return None
+    body = []
+    for ln in raw[start + 1:]:
+        if not ln.strip() or ln.lstrip().startswith("#"):
+            continue
+        if indent(ln) <= 2:
+            break
+        body.append(ln.rstrip())
+    at = next((k for k, ln in enumerate(body) if ln == "    steps:"), None)
+    if at is None:
+        return None
+    steps = [body[at]] + [ln for ln in body[at + 1:]]
+    end = next((k for k, ln in enumerate(steps) if k and indent(ln) <= 4), len(steps))
+    return "\n".join(ln[4:] for ln in steps[:end])
+
+
+def check_verdict(f: str, text: str, jobs: dict[str, dict], verdicts: set[str]) -> list[str]:
+    """The workflow's verdict: one job named after the workflow, which waits for every other job, reports on every run and fails
+    unless every job it waits for succeeded."""
+    name, errors = f.removesuffix(".yml"), []
+    for jid, job in sorted(jobs.items()):
+        shown = job.get("name", jid)
+        if shown in verdicts and jid != name:
+            errors.append(f"{f}: job {jid}'s check is named {shown}, the verdict of {shown}.yml: a ruleset requiring {shown} could read this job instead")
+    if name not in jobs:
+        return errors + [f"{f}: has no job {name}: a workflow's verdict, the check a release-tag ruleset requires, is the job named after it"]
+    verdict = jobs[name]
+    if "name" in verdict:
+        errors.append(f"{f}: job {name} sets name: {verdict['name']}: its check must be named {name}, so it sets no name of its own")
+    others = sorted(set(jobs) - {name})
+    cond = verdict.get("if")
+    if others:
+        needs = verdict.get("needs") or []
+        needs = [needs] if isinstance(needs, str) else needs
+        missing = [j for j in others if j not in needs]
+        if missing:
+            errors.append(f"{f}: job {name} does not need {', '.join(missing)}: the verdict must wait for every other job")
+        if cond not in ALWAYS:
+            errors.append(f"{f}: job {name} must run if: ${{{{ always() }}}}: a job skipped after a failure counts as passed in a required check")
+        if verdict_steps(text, name) != VERDICT_STEPS:
+            errors.append(f"{f}: job {name}'s steps must be exactly VERDICT_STEPS of check-workflows.py (as in brand-creator.yml): "
+                          "they fail unless every job it needs succeeded")
+    elif cond is not None and cond not in ALWAYS:
+        errors.append(f"{f}: job {name} runs only if: {cond}: a verdict skipped by its condition counts as passed in a required check")
+    return errors
+
+
+def check_one(f: str, text: str, plugins: list[str], verdicts: set[str]) -> list[str]:
     errors: list[str] = []
     top, lines = read(text)
     name = f.removesuffix(".yml")
@@ -175,34 +296,91 @@ def check_one(f: str, text: str, plugins: list[str]) -> list[str]:
                 errors.append(f"{f}: runs-on {said} is a floating runner image: pin it, for example ubuntu-24.04")
             elif not val.strip() or val.strip()[:1] in tuple("[{$"):
                 errors.append(f"{f}: runs-on {said} cannot be read as one pinned image label: write it as one, for example ubuntu-24.04")
+    if f == "docs.yml" and not DOCS_RUNS_CHECK.search("\n".join(strip_comment(ln) for ln in text.split("\n"))):
+        errors.append(f"{f} does not run `python3 .github/scripts/check-workflows.py`: every release-tag ruleset requires its job, "
+                      "so that step checks the verdicts on every commit a release tag can point to")
+    return errors + check_verdict(f, text, read_jobs(lines), verdicts)
+
+
+def release_ruleset(plugin: str) -> dict:
+    """The tag ruleset a plugin's releases need: a tag <plugin>--v* only on a commit where the plugin's verdict and docs passed."""
+    return {
+        "name": f"{plugin} release tags",
+        "target": "tag",
+        "enforcement": "active",
+        "bypass_actors": [],
+        "conditions": {"ref_name": {"include": [f"refs/tags/{plugin}--v*"], "exclude": []}},
+        "rules": [{"type": "required_status_checks", "parameters": {
+            "strict_required_status_checks_policy": False,
+            "do_not_enforce_on_create": False,
+            "required_status_checks": [{"context": plugin, "integration_id": ACTIONS}, {"context": "docs", "integration_id": ACTIONS}],
+        }}],
+    }
+
+
+def first_difference(got, want, at: str = "") -> str:
+    """Where two JSON values first differ, as `<path> is <got>, not <want>`."""
+    if isinstance(got, dict) and isinstance(want, dict):
+        for k in sorted(set(got) | set(want)):
+            if k not in got:
+                return f"{at}{k} is missing"
+            if k not in want:
+                return f"{at}{k} is not part of it"
+            if got[k] != want[k]:
+                return first_difference(got[k], want[k], f"{at}{k}.")
+    if isinstance(got, list) and isinstance(want, list) and len(got) == len(want):
+        for n, (g, w) in enumerate(zip(got, want)):
+            if g != w:
+                return first_difference(g, w, f"{at}{n}.")
+    return f"{at.rstrip('.') or 'the file'} is {json.dumps(got)}, not {json.dumps(want)}"
+
+
+def check_rulesets(rulesets: dict[str, str], plugins: list[str]) -> list[str]:
+    """Every problem with the release-tag rulesets ({file name: text}) of a repository whose plugins are `plugins`."""
+    expected = {f"{p}-release-tags.json": p for p in plugins}
+    errors = [f".github/rulesets/{f} is not a plugin's release-tag ruleset (<plugin>-release-tags.json)" for f in sorted(set(rulesets) - set(expected))]
+    for f, p in sorted(expected.items()):
+        if f not in rulesets:
+            errors.append(f"plugins/{p} has no release-tag ruleset .github/rulesets/{f} (write it with --ruleset {p})")
+            continue
+        try:
+            got = json.loads(rulesets[f])
+        except ValueError as e:
+            errors.append(f".github/rulesets/{f} is not JSON: {e}")
+            continue
+        if got != release_ruleset(p):
+            errors.append(f".github/rulesets/{f} is not the ruleset {p} needs: {first_difference(got, release_ruleset(p))} (print it with --ruleset {p})")
     return errors
 
 
-def check(workflows: dict[str, str], plugins: list[str]) -> list[str]:
-    """Every problem with the workflows ({file name: text}) of a repository whose plugins are `plugins`."""
+def check(workflows: dict[str, str], plugins: list[str], rulesets: dict[str, str]) -> list[str]:
+    """Every problem with the workflows and the rulesets ({file name: text}) of a repository whose plugins are `plugins`."""
     errors = [f"{f}: use the .yml extension (GitHub runs .yaml files too, and this check reads .yml)" for f in sorted(workflows) if not f.endswith(".yml")]
     yml = {f: t for f, t in workflows.items() if f.endswith(".yml")}
     expected = {f"{p}.yml" for p in plugins} | {"marketplace.yml", "docs.yml"}
     errors += [f"{f} is not a plugin's workflow, marketplace.yml or docs.yml" for f in sorted(set(yml) - expected)]
     errors += [f"plugins/{p} has no workflow .github/workflows/{p}.yml" for p in sorted(plugins) if f"{p}.yml" not in yml]
+    verdicts = {f.removesuffix(".yml") for f in yml}
     for f, text in sorted(yml.items()):
         try:
-            errors += check_one(f, text, plugins)
+            errors += check_one(f, text, plugins, verdicts)
         except Unreadable as e:
             errors.append(f"{f}: unreadable: {e}")
-    return errors
+    return errors + check_rulesets(rulesets, plugins)
 
 
-def repo() -> tuple[dict[str, str], list[str]]:
+def repo() -> tuple[dict[str, str], list[str], dict[str, str]]:
     folder = ROOT / ".github" / "workflows"
     workflows = {p.name: p.read_text(encoding="utf-8") for p in sorted(folder.iterdir()) if p.suffix in (".yml", ".yaml")}
     plugins = sorted(d.name for d in (ROOT / "plugins").iterdir() if d.is_dir())
-    return workflows, plugins
+    folder = ROOT / ".github" / "rulesets"
+    rulesets = {p.name: p.read_text(encoding="utf-8") for p in sorted(folder.iterdir()) if p.is_file()} if folder.is_dir() else {}
+    return workflows, plugins, rulesets
 
 
 JOB = "    runs-on: ubuntu-24.04\n"
-# (what breaks, the workflow file it breaks, the text, its replacement, the words the error must hold);
-# None as the file adds a workflow named by the text (its content the replacement) or removes it (replacement None)
+# (what breaks, the file it breaks, the text, its replacement, the words the error must hold); a .json file is a ruleset;
+# None as the file adds a file named by the text (its content the replacement) or removes it (replacement None)
 MUTATIONS = [
     ("push runs on every branch", "brand-creator.yml", "    branches:\n      - main\n", "", "push must run on main only"),
     ("push also runs on tags", "swift.yml", "    branches:\n      - main\n", "    branches:\n      - main\n    tags:\n      - \"*\"\n", "push has tags"),
@@ -223,18 +401,44 @@ MUTATIONS = [
     ("a stray workflow", None, "stray.yml", "name: stray\n", "stray.yml is not a plugin's workflow"),
     ("a .yaml workflow", None, "release.yaml", "name: release\n", "release.yaml: use the .yml extension"),
     ("a plugin without a workflow", None, "swift.yml", None, "plugins/swift has no workflow"),
+    ("a workflow without its verdict", "swift.yml", "\n  swift:\n", "\n  test:\n", "swift.yml: has no job swift"),
+    ("a verdict that does not wait for a job", "brand-creator.yml", "      - validate\n", "", "does not need validate"),
+    ("a verdict skipped after a failure", "brand-creator.yml", "    if: ${{ always() }}\n", "", "job brand-creator must run if:"),
+    ("a verdict with a name of its own", "docs.yml", "\n  docs:\n", "\n  docs:\n    name: check\n", "job docs sets name: check"),
+    ("another job's check carries a verdict's name", "brand-creator.yml", "\n  validate:\n", "\n  validate:\n    name: docs\n", "the verdict of docs.yml"),
+    ("a plugin without a release-tag ruleset", None, "swift-release-tags.json", None, "plugins/swift has no release-tag ruleset"),
+    ("a stray ruleset", None, "main-branch.json", "{}\n", "main-branch.json is not a plugin's release-tag ruleset"),
+    ("a ruleset that is not JSON", "batbelt-release-tags.json", '"target": "tag",', '"target": "tag"', "batbelt-release-tags.json is not JSON"),
+    ("a ruleset that requires another check", "brand-creator-release-tags.json", '"context": "brand-creator"', '"context": "linux"', "required_status_checks.0.context is \"linux\""),
+    ("a ruleset that lets an admin bypass it", "batbelt-release-tags.json", '"bypass_actors": []',
+     '"bypass_actors": [{"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always"}]', "bypass_actors is"),
+    ("a ruleset over every tag", "swift-release-tags.json", '"refs/tags/swift--v*"', '"refs/tags/*"', "ref_name.include.0 is \"refs/tags/*\""),
+    ("a ruleset that only evaluates", "swift-release-tags.json", '"enforcement": "active"', '"enforcement": "evaluate"', "enforcement is \"evaluate\""),
+    ("a ruleset that lets a tag be created anyway", "brand-creator-release-tags.json", '"do_not_enforce_on_create": false', '"do_not_enforce_on_create": true',
+     "do_not_enforce_on_create is true"),
+    ("a ruleset that takes the check from any app", "brand-creator-release-tags.json", '"integration_id": 15368\n', '"integration_id": 1\n', "integration_id is 1"),
+    ("a verdict that passes whatever the jobs did", "brand-creator.yml", "          jq -e 'all(.[]; .result == \"success\")' <<< \"$NEEDS\" > /dev/null\n",
+     "          true\n", "steps must be exactly VERDICT_STEPS"),
+    ("a single-job verdict skipped by its condition", "swift.yml", "\n  swift:\n", "\n  swift:\n    if: github.event_name == 'pull_request'\n",
+     "job swift runs only if:"),
+    ("a verdict condition folded over two lines", "brand-creator.yml", "    if: ${{ always() }}\n",
+     "    if: always()\n      && github.event_name == 'pull_request'\n", "goes on over more than one line"),
+    ("a job name on the next line", "brand-creator.yml", "\n  validate:\n", "\n  validate:\n    name:\n      - docs\n", "name has no value on its line"),
+    ("docs that no longer checks the verdicts", "docs.yml", "        run: python3 .github/scripts/check-workflows.py\n", "",
+     "docs.yml does not run `python3 .github/scripts/check-workflows.py`"),
 ]
 
 
 def self_test() -> int:
-    workflows, plugins = repo()
-    base = check(workflows, plugins)
+    workflows, plugins, rulesets = repo()
+    base = check(workflows, plugins, rulesets)
     if base:
-        print("self-test: the workflows as they are must pass first:", *base, sep="\n  ", file=sys.stderr)
+        print("self-test: the workflows and rulesets as they are must pass first:", *base, sep="\n  ", file=sys.stderr)
         return 1
     missed = []
     for what, f, old, new, words in MUTATIONS:
-        copy = dict(workflows)
+        wf, rs = dict(workflows), dict(rulesets)
+        copy = rs if (f or old).endswith(".json") else wf
         if f is None:
             if new is None:
                 copy.pop(old)
@@ -245,7 +449,7 @@ def self_test() -> int:
             continue
         else:
             copy[f] = copy[f].replace(old, new)
-        got = check(copy, plugins)
+        got = check(wf, plugins, rs)
         if not any(words in e for e in got):
             missed.append(f"{what}: not caught (errors: {got or 'none'})")
     for m in missed:
@@ -254,17 +458,68 @@ def self_test() -> int:
     return 1 if missed else 0
 
 
-def main() -> int:
-    if sys.argv[1:] == ["--self-test"]:
-        return self_test()
-    if sys.argv[1:]:
-        print(__doc__, file=sys.stderr)
-        return 2
-    workflows, plugins = repo()
-    errors = check(workflows, plugins)
+def live() -> int:
+    """Every plugin's ruleset on GitHub, compared with its file: 0 when all match, 1 when one differs or is missing, 3 when gh cannot ask."""
+    import subprocess
+
+    def gh(*args: str):
+        r = subprocess.run(["gh", "api", *args], capture_output=True, text=True, cwd=ROOT)   # {owner}/{repo}: this repository's
+        if r.returncode:
+            raise OSError(f"gh api {' '.join(args)}: {r.stderr.strip() or r.returncode}")
+        return json.loads(r.stdout)
+
+    workflows, plugins, rulesets = repo()
+    if check(workflows, plugins, rulesets):
+        print("--live: the files fail the check first: run it without --live", file=sys.stderr)
+        return 1
+    errors = []
+    try:
+        listed = [r for page in gh("--paginate", "--slurp", "repos/{owner}/{repo}/rulesets") for r in page]
+        have = {r["name"]: r["id"] for r in listed}
+        expected = {release_ruleset(p)["name"] for p in plugins}
+        for r in listed:   # a tag ruleset no file describes can refuse tags while every file matches
+            if r.get("target") == "tag" and r["name"] not in expected:
+                errors.append(f"GitHub has a tag ruleset {r['name']!r} (id {r['id']}, {r.get('enforcement')}) that no file describes")
+        for p in plugins:
+            f, want = f".github/rulesets/{p}-release-tags.json", release_ruleset(p)
+            if want["name"] not in have:
+                errors.append(f"GitHub has no ruleset {want['name']!r}: create it with gh api --method POST 'repos/{{owner}}/{{repo}}/rulesets' --input {f}")
+                continue
+            got = gh(f"repos/{{owner}}/{{repo}}/rulesets/{have[want['name']]}")
+            got = {k: got.get(k) for k in want}
+            if got != want:
+                errors.append(f"the ruleset {want['name']!r} on GitHub is not {f}: {first_difference(got, want)} "
+                              f"(update it with gh api --method PUT 'repos/{{owner}}/{{repo}}/rulesets/{have[want['name']]}' --input {f})")
+    except (OSError, ValueError) as e:   # no gh, not signed in, no network, or an answer that is not JSON
+        print(f"--live: cannot read the rulesets on GitHub: {e}", file=sys.stderr)
+        return 3
     for e in errors:
         print("ERROR:", e, file=sys.stderr)
-    print(f"{len(workflows)} workflows checked, {len(errors)} errors")
+    print(f"{len(plugins)} release-tag rulesets on GitHub compared with their files, {len(errors)} errors")
+    return 1 if errors else 0
+
+
+def main() -> int:
+    args = sys.argv[1:]
+    if args == ["--self-test"]:
+        return self_test()
+    if args == ["--live"]:
+        return live()
+    if len(args) == 2 and args[0] == "--ruleset":
+        _, plugins, _ = repo()
+        if args[1] not in plugins:
+            print(f"--ruleset: {args[1]} is not a plugin under plugins/ ({', '.join(plugins)})", file=sys.stderr)
+            return 2
+        print(json.dumps(release_ruleset(args[1]), indent=2))
+        return 0
+    if args:
+        print(__doc__, file=sys.stderr)
+        return 2
+    workflows, plugins, rulesets = repo()
+    errors = check(workflows, plugins, rulesets)
+    for e in errors:
+        print("ERROR:", e, file=sys.stderr)
+    print(f"{len(workflows)} workflows and {len(rulesets)} release-tag rulesets checked, {len(errors)} errors")
     return 1 if errors else 0
 
 

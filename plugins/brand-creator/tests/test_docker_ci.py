@@ -100,6 +100,9 @@ def test_the_verifier_accepts_exactly_the_expected_off_macos_skips(tmp_path):
     (lambda t: t.replace("ℹ skipped 0", "ℹ skipped 1"), "node:test: skipped=1"),
     (lambda t: t.replace("ℹ fail 0", "ℹ fail 2"), "node:test: fail=2"),
     (lambda t: t.replace("SMOKE PASSED", "SMOKE FAILED"), "did not print SMOKE PASSED"),
+    (lambda t: t.replace("SMOKE PASSED: Acme at", "SMOKE PASSED (part finish: the shared build, then tools/finish.sh): Acme at"),
+     "did not print SMOKE PASSED for the whole smoke"),                                                           # half a smoke is not the smoke
+    (lambda t: t.replace("SMOKE PASSED: Acme at", "QUICK SMOKE PASSED: Acme at"), "did not print SMOKE PASSED for the whole smoke"),
     (lambda t: t.replace("NOT VERIFIED: the claude CLI is not on PATH; the real eval loader was not run", "NOT VERIFIED: fonts are missing"), "unexpected NOT VERIFIED lines in the smoke"),
     (lambda t: t.replace("920 passed, 47 skipped", "920 passed, 48 skipped"), "-rs list names"),   # a skip that was not reported with its reason
 ])
@@ -125,11 +128,12 @@ def test_the_denylist_skip_is_expected_only_when_no_denylist_was_mounted(tmp_pat
 
 def test_ci_workflow_runs_linux_validate_and_macos_and_never_the_billed_eval():
     text = ci_text()
-    for job in ("linux:", "validate:", "macos:"):
+    for job in ("linux-suite:", "validate:", "macos-suite:", "brand-creator:"):
         assert re.search(rf"^  {job}$", text, re.M), job
     assert "tests/docker/run.sh" in text                                             # the same entry point a developer uses
     assert "claude plugin validate" in text and "--strict" in text
-    assert "SKIPPED" in text and "available=false" in text                           # the documented skip when the CLI cannot be installed
+    validate = text[text.index("\n  validate:\n"):text.index("\n  macos-suite:\n")]
+    assert "claude --version" in validate and "available=" not in validate and "if:" not in validate   # no CLI fails the job: the verdict never passes an unvalidated manifest
     assert "requires_macos or requires_actool" in text and text.count("BRAND_CREATOR_REQUIRE_ALL") >= 2
     assert "setup --yes" in text and "acme.sh" in text
     for ln in text.splitlines():
@@ -196,18 +200,47 @@ def test_run_all_refuses_a_selection_that_names_an_unknown_part_or_runs_nothing(
     assert r.returncode == 2 and why in r.stderr, r.stdout + r.stderr
 
 
-def test_ci_runs_each_part_in_its_own_job_and_one_gate_passes_only_when_all_did():
+def test_ci_runs_each_part_in_its_own_job_and_the_verdict_passes_only_when_every_job_did():
     text = ci_text()
-    job = text[text.index("  linux-suite:"):text.index("\n  linux:\n")]
-    gate = text[text.index("\n  linux:\n"):text.index("\n  validate:")]
+    job = text[text.index("  linux-suite:"):text.index("\n  validate:\n")]
+    verdict = text[text.index("\n  brand-creator:\n"):]                                        # the check the release-tag ruleset requires
     parts = re.findall(r"- part: (\w+)\n\s+suite-minutes: (\d+)\n\s+job-minutes: (\d+)", job)
     assert sorted(p for p, _, _ in parts) == ["node", "pytest", "smoke"], parts
     for part, suite, jobm in parts:
         assert int(suite) + 10 <= int(jobm), f"{part}: the deadline inside the container must end well before the job's ({suite} vs {jobm} minutes)"
     assert "fail-fast: false" in job and "BRAND_CREATOR_TEST_PARTS: ${{ matrix.part }}" in job and "BRAND_CREATOR_SUITE_MINUTES: ${{ matrix.suite-minutes }}" in job
     assert "if: ${{ !cancelled() }}" in job and "uses: actions/upload-artifact@v" in job        # the log and the JUnit file are kept, a failing run's too
-    assert "needs: linux-suite" in gate and "if: ${{ always() }}" in gate                      # the gate runs even when a part failed or was cancelled
-    assert 'test "${{ needs.linux-suite.result }}" = success' in gate                          # and only success passes it: skipped or cancelled is never green
+    jobs = re.findall(r"^  ([\w-]+):$", text[text.index("\njobs:\n"):], re.M)
+    needs = re.findall(r"^      - ([\w-]+)$", verdict[:verdict.index("\n    if:")], re.M)
+    assert sorted(needs) == sorted(j for j in jobs if j != "brand-creator"), (jobs, needs)  # the verdict waits for every other job
+    assert "if: ${{ always() }}" in verdict                                                    # and runs even when one failed or was cancelled
+    assert "NEEDS: ${{ toJSON(needs) }}" in verdict and """jq -e 'all(.[]; .result == "success")'""" in verdict   # only success passes it: skipped or cancelled is never green
+
+
+def test_macos_runs_the_apple_tool_tests_and_each_half_of_the_smoke_in_a_job_of_its_own(tmp_path):
+    """The Acme smoke took 15 of the macOS job's 22 minutes. Its two halves share the build up to the frozen round, then one runs
+    tools/finish.sh and the other every section after it, so they run side by side. That holds because finish.sh works on its own
+    copy of the pack, taken before any later section writes into it (names does), and nothing later reads that copy or its logs."""
+    import os
+    text = ci_text()
+    job = text[text.index("  macos-suite:"):text.index("\n  brand-creator:\n")]
+    assert re.findall(r"- part: ([\w-]+)", job) == ["pytest", "smoke-finish", "smoke-rest"]
+    assert re.findall(r"^ +smoke: (\w+)$", job, re.M) == ["finish", "rest"]
+    assert "fail-fast: false" in job and "ACME_SMOKE_PART: ${{ matrix.smoke }}" in job
+    assert "if: matrix.part == 'pytest'" in job and "if: matrix.part != 'pytest'" in job       # each job runs its part only
+    acme = (ROOT / "tests" / "smoke" / "acme.sh").read_text()
+    shared, tail = acme.split('\nif [ "$PART" != rest ]; then\n')
+    finish, rest = tail.split('\nfi\nif [ "$PART" = finish ]; then\n')
+    code = [ln for ln in shared.splitlines() if ln.strip() and not ln.startswith("#")]
+    assert code[-4:] == ['step "freeze the approved round, then check again"', '"${BC[@]}" freeze r1 --name approved-board --project "$P"',
+                         'expect_file "$P/history/MANIFEST.sha256"', '"${BC[@]}" check --project "$P"'], code[-4:]  # the shared build ends at the frozen round
+    steps = re.findall(r'^step "([^"]+)', finish, re.M)
+    assert len(steps) == 1 and steps[0].startswith("tools/finish.sh from the template"), steps                       # one half is that section alone
+    assert re.match(r"  printf '\\nSMOKE PASSED \(part finish[^\n]*\n  exit 0\nfi\n", rest)                      # and it ends there
+    assert len(re.findall(r'^step "', rest, re.M)) >= 10                                                            # the other half is every later section
+    r = subprocess.run(["bash", str(ROOT / "tests" / "smoke" / "acme.sh")], capture_output=True, text=True,
+                       env={**os.environ, "BRAND_CREATOR_DATA": str(tmp_path), "ACME_SMOKE_PART": "half"})
+    assert r.returncode == 2 and "use all, finish or rest" in r.stderr, r.stdout + r.stderr                       # a part it does not know runs nothing
 
 
 def test_the_container_stops_a_hung_suite_at_its_deadline_and_still_checks_the_log():

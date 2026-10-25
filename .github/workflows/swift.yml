@@ -24,7 +24,8 @@ defaults:
     working-directory: plugins/swift
 
 jobs:
-  test:
+  # named after the workflow: its check is the verdict a release tag swift--v* needs (.github/rulesets/)
+  swift:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5

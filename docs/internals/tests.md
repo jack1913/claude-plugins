@@ -20,8 +20,8 @@ $ python3 .github/scripts/check-marketplace.py
 3 plugins checked, 0 errors
 ```
 
-The workflow check runs from the repository root too. A pass prints `5 workflows checked, 0 errors`, and `--self-test`
-ends with `self-test: N of N broken rules caught`:
+The workflow check, which also checks the release-tag rulesets, runs from the repository root too. A pass prints
+`5 workflows and 3 release-tag rulesets checked, 0 errors`, and `--self-test` ends with `self-test: N of N broken rules caught`:
 
 ```bash
 python3 .github/scripts/check-workflows.py
@@ -64,7 +64,9 @@ BRAND_CREATOR_DATA=<dir> tests/run-all.sh --smoke
 ```
 
 CI runs the same suite inside a Linux container (`tests/docker/run.sh`), one part (pytest, node, smoke) per parallel job, and
-the Apple-tool tests on macOS (`.github/workflows/brand-creator.yml`). More: [its development notes](../../plugins/brand-creator/docs/internals/development.md).
+on macOS the Apple-tool tests and the two halves of the Acme smoke, each in a job of its own
+(`.github/workflows/brand-creator.yml`). Its verdict, the `brand-creator` check, passes only when every job passed. More:
+[its development notes](../../plugins/brand-creator/docs/internals/development.md).
 
 Without the data directory, the tests that need it print a "NOT VERIFIED" banner. A skip is not a pass.
 

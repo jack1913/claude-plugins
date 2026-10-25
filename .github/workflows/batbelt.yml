@@ -20,7 +20,8 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  # named after the workflow: its check is the verdict a release tag batbelt--v* needs (.github/rulesets/)
+  batbelt:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5

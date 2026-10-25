@@ -1,6 +1,6 @@
 # Continuous integration for the brand-creator plugin, in the monorepo jack1913/claude-plugins (GitHub reads only the root .github/).
-# Every job that checks out the repository runs in plugins/brand-creator (the linux gate needs no checkout); the workflow starts only on changes under that folder or to this file, so the macOS job
-# (the expensive one) runs only when this plugin changes.
+# Every job that checks out the repository runs in plugins/brand-creator (the verdict needs no checkout); the workflow starts only on changes under that folder or to this file, so the macOS jobs
+# (the expensive ones) run only when this plugin changes.
 #
 #   linux-suite  three parallel jobs, one per part of the suite (pytest, node, smoke), each building tests/docker/Dockerfile
 #             (Debian 13, Python 3.13, Node 24, resvg, ImageMagick, Ghostscript, poppler, ripgrep, potrace, fonts) and running
@@ -8,15 +8,19 @@
 #             that apply off macOS, within a deadline inside the container (BRAND_CREATOR_SUITE_MINUTES) that ends before the job's.
 #             The macOS-only tests are NOT VERIFIED there by design; tests/docker/verify_log.py accepts exactly those and fails on any
 #             other skip, and on a part that left no summary. The run log and pytest's JUnit file are kept as an artifact.
-#   linux     passes only when every linux-suite job passed: a failed, cancelled or skipped part is never green.
 #   validate  `claude plugin validate --strict` through the Claude Code CLI installed from npm. On the pinned CLI (2.1.302) it checks the
 #             plugin manifest only: a skill with broken YAML frontmatter or an unknown key in hooks.json still passes it.
 #             The skill and agent frontmatter and hooks.json are checked by the repository's own tests (tests/test_skills.py,
 #             tests/test_agents_workflows.py, tests/test_guard.py), which run in the linux-suite pytest job. This job also runs the test that mutates
-#             plugin.json and expects the validator to catch it. If the CLI cannot be installed or started (no registry access), the job
-#             says so and SKIPS: a skip is printed, never a pass.
-#   macos     the Apple-tool tests (requires_macos, requires_actool: sips, iconutil, actool, assetutil, the .icon pipeline) and the Acme
-#             smoke with `emit apple`, with BRAND_CREATOR_REQUIRE_ALL=1 so a missing tool fails instead of skipping.
+#             plugin.json and expects the validator to catch it. If the CLI cannot be installed or started, the job fails: an
+#             unvalidated manifest never passes the verdict.
+#   macos-suite  three parallel jobs on macOS: the Apple-tool tests (requires_macos, requires_actool: sips, iconutil, actool,
+#             assetutil, the .icon pipeline) with BRAND_CREATOR_REQUIRE_ALL=1 so a missing tool fails instead of skipping, and the
+#             two halves of the Acme smoke with `emit apple` (ACME_SMOKE_PART: the shared build, then tools/finish.sh or every
+#             other section).
+#   brand-creator  the workflow's verdict: passes only when every other job passed (a failed, cancelled or skipped job is never green).
+#             A release tag brand-creator--v* is accepted only on a commit where this check and docs passed
+#             (.github/rulesets/brand-creator-release-tags.json, docs/adr/ADR-0005-release-tags-need-a-passing-ci-verdict.md).
 #
 # `claude plugin eval` is never run here (it is billed); the evals are run by hand, see docs/internals/manual-checks.md.
 name: brand-creator
@@ -86,20 +90,6 @@ jobs:
           path: ${{ runner.temp }}/bc-out
           retention-days: 14
 
-  linux:
-    needs: linux-suite
-    if: ${{ always() }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    defaults:
-      run:
-        working-directory: .
-    steps:
-      - name: Every part of the Linux suite passed
-        run: |
-          echo "linux-suite: ${{ needs.linux-suite.result }}"
-          test "${{ needs.linux-suite.result }}" = success
-
   validate:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -112,27 +102,32 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           version: "0.12.11"
+      # a CLI that cannot be installed fails the job: an unvalidated manifest must not pass the verdict
       - name: Install the Claude Code CLI
-        id: claude
         run: |
-          if npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" && claude --version; then
-            echo "available=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::warning title=claude plugin validate SKIPPED::the claude CLI could not be installed here; the manifest was NOT validated"
-          fi
+          npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+          claude --version
       - name: claude plugin validate --strict
-        if: steps.claude.outputs.available == 'true'
         run: claude plugin validate "$GITHUB_WORKSPACE/plugins/brand-creator" --strict
       - name: The validator catches a broken manifest (mutation test)
-        if: steps.claude.outputs.available == 'true'
         run: uv run --no-project --with-requirements tests/requirements.txt python -m pytest tests/test_static.py -q -k claude_plugin_validate
         env:
           BRAND_CREATOR_REQUIRE_ALL: "1"
 
-  macos:
+  macos-suite:
+    name: "macos (${{ matrix.part }})"
     runs-on: macos-26
-    timeout-minutes: 60
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        # smoke: the half of tests/smoke/acme.sh that part runs (ACME_SMOKE_PART); the halves share the build up to the frozen round
+        include:
+          - part: pytest
+          - part: smoke-finish
+            smoke: finish
+          - part: smoke-rest
+            smoke: rest
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -155,11 +150,13 @@ jobs:
       - name: brand-creator setup (npm ci, Chromium)
         run: bin/brand-creator --data "$RUNNER_TEMP/bc-data" setup --yes
       - name: Apple-tool tests (a missing Apple tool is a failure here, not a skip)
+        if: matrix.part == 'pytest'
         run: uv run --no-project --with-requirements tests/requirements.txt python -m pytest tests -q -n 3 --dist worksteal -m "requires_macos or requires_actool"
         env:
           BRAND_CREATOR_DATA: ${{ runner.temp }}/bc-data
           BRAND_CREATOR_REQUIRE_ALL: "1"
-      - name: "Acme smoke (the macOS path: emit apple, actool per platform, sips)"
+      - name: "Acme smoke, one half (the macOS path: emit apple, actool per platform, sips)"
+        if: matrix.part != 'pytest'
         run: |
           set -o pipefail
           tests/smoke/acme.sh | tee "$RUNNER_TEMP/smoke.log"
@@ -168,3 +165,25 @@ jobs:
         env:
           BRAND_CREATOR_DATA: ${{ runner.temp }}/bc-data
           ACME_SMOKE_DIR: ${{ runner.temp }}/acme-smoke
+          ACME_SMOKE_PART: ${{ matrix.smoke }}
+
+  # The verdict: the one check a release tag needs. It runs even when a job failed or was cancelled (a skipped job would
+  # count as passed in a required check) and passes only when every job it needs passed.
+  brand-creator:
+    needs:
+      - linux-suite
+      - validate
+      - macos-suite
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Every job passed
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<< "$NEEDS"
+          jq -e 'all(.[]; .result == "success")' <<< "$NEEDS" > /dev/null

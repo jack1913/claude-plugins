@@ -3,7 +3,8 @@
 
     verify_log.py <log> <run-all exit code>
 
-Acceptable: pytest and node:test have no failure and no error, the Acme smoke printed SMOKE PASSED, and every skipped test is a
+Acceptable: pytest and node:test have no failure and no error, the whole Acme smoke passed (its line `SMOKE PASSED: Acme at ...`:
+the line of one half, `SMOKE PASSED (part ...)`, is not the whole smoke), and every skipped test is a
 "NOT VERIFIED" skip whose reason is one of EXPECTED below. A skip that is not on the list is a bug (a test that silently depends on
 macOS or on a tool the Linux image should have), so it fails the run. The exact counts and the NOT VERIFIED banner are printed.
 BRAND_CREATOR_TEST_PARTS (pytest, node, smoke, comma-separated; default all three) names the parts the run was asked for, as
@@ -28,6 +29,7 @@ EXPECTED = {
 if not os.environ.get("BRAND_CREATOR_DENYLIST"):   # the denylist is the owner's private file: run.sh mounts it when given
     EXPECTED["BRAND_CREATOR_DENYLIST is not set"] = "the anonymisation denylist is never shipped (run.sh mounts it from BRAND_CREATOR_DENYLIST)"
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
+WHOLE_SMOKE = re.compile(r"^SMOKE PASSED: Acme at ", re.M)   # tests/smoke/acme.sh with every section (ACME_SMOKE_PART unset or all)
 
 
 PARTS = ("pytest", "node", "smoke")
@@ -77,8 +79,8 @@ def main() -> int:
                 problems.append(f"node:test: skipped={node.get('skipped')} todo={node.get('todo')} (nothing in the node suite may be skipped)")
 
     # ---- smoke
-    if "smoke" in parts and "SMOKE PASSED" not in text:
-        problems.append("the Acme smoke did not print SMOKE PASSED")
+    if "smoke" in parts and not WHOLE_SMOKE.search(text):
+        problems.append("the Acme smoke did not print SMOKE PASSED for the whole smoke")
     smoke_nv = [ln.strip() for ln in lines if ln.strip().startswith("NOT VERIFIED:")]
     bad_smoke = [ln for ln in smoke_nv if not any(ln.startswith(f"NOT VERIFIED: {e}") for e in EXPECTED)]
     if bad_smoke:
@@ -91,7 +93,7 @@ def main() -> int:
     print("parts  :", ", ".join(parts))
     print("pytest :", summary.strip() if summary else "not asked for")
     print("node   :", (", ".join(f"{k} {v}" for k, v in node.items()) or "no summary") if "node" in parts else "not asked for")
-    print("smoke  :", ("SMOKE PASSED" if "SMOKE PASSED" in text else "NOT PASSED") if "smoke" in parts else "not asked for",
+    print("smoke  :", ("SMOKE PASSED" if WHOLE_SMOKE.search(text) else "NOT PASSED") if "smoke" in parts else "not asked for",
           "; NOT VERIFIED lines:", smoke_nv or "none")
     start = next((i for i, ln in enumerate(lines) if "TEST(S) NOT VERIFIED" in ln), None)
     print("NOT VERIFIED banner (verbatim):")

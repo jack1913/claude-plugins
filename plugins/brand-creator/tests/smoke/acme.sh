@@ -8,7 +8,8 @@
 # -> board-lint -> QA and mark tooling (px_lib marks, outlined wordmark, downscale, states, colour-vision, guides, fonts, motion)
 # -> platform packs (windows, linux, tray, tauri, wallet, developer; on macOS also apple: .icon, actool per platform, legacy sets, visionOS,
 # DMG, store frames, watchOS and tvOS packs for the targets INVENTORY.md lists; elsewhere `emit apple` must exit 3) -> Tier B packs (tier raised to full: android, chrome-ext, msix,
-# profiles; the safe-zone gates on mutated marks and an overflowing name) -> snapshot, idempotence over the whole emit chain, staleness, specs -> check -> freeze -> check again -> guard hook on the frozen history.
+# profiles; the safe-zone gates on mutated marks and an overflowing name) -> snapshot, idempotence over the whole emit chain, staleness, specs -> check -> freeze -> check again
+# -> tools/finish.sh from the template (the whole chain, on a copy) -> guards on copies of the finished pack -> guard hook on the frozen history.
 # -> brand book (generated: the stills of the demo page, skeletons, build with the motion chapter's replay, lint, byte-identical rebuild, check, labelled RGB PDF; eight mutations; patch and collapse on a hand-authored copy)
 # -> print and press (print PDFs trim + 2 x bleed, boxes, outlined text, RGB proof label, print-check with four mutations, a PDF/X-4 candidate only with --icc, press kit, social posts)
 # -> adoption (a synthetic target repository surveyed read only, pins, progress), check --cascade, BRAND.md and DESIGN.md (linted), the applied skill, LAUNCH.md
@@ -19,6 +20,9 @@
 # -> evals (every behaviour case's scaffold builds a valid fixture project; the real `claude plugin eval` loader accepts every case; nothing is run or billed).
 # The r1 page is the worked example filled from templates/round-page.html (three directions). A previous smoke folder
 # is moved aside (to <parent>/removed/), never deleted.
+# ACME_SMOKE_PART=finish or rest runs one half of it (default all: both): the shared build up to the frozen round, then
+# tools/finish.sh alone (finish) or every section after it (rest). CI runs the two halves side by side on macOS; neither
+# half alone is the whole smoke, and each says which half passed.
 set -euo pipefail
 
 HERE="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -35,6 +39,8 @@ die()  { printf 'SMOKE FAILED: %s\n' "$*" >&2; exit 1; }
 png_size() { python3 -c "import struct,sys;d=open(sys.argv[1],'rb').read(24);assert d[:8]==b'\x89PNG\r\n\x1a\n';print(*struct.unpack('>II',d[16:24]))" "$1"; }
 expect_size() { local got; got="$(png_size "$1")"; [ "$got" = "$2 $3" ] || die "$1 is $got, expected $2 $3"; ok "$(basename "$1") is $2x$3"; }
 expect_file() { [ -s "$1" ] || die "missing or empty: $1"; ok "$1"; }
+PART="${ACME_SMOKE_PART:-all}"   # all, or one half of the smoke: finish or rest (see the top of this file)
+case "$PART" in all|finish|rest) ;; *) printf 'SMOKE FAILED: ACME_SMOKE_PART=%s: use all, finish or rest\n' "$PART" >&2; exit 2 ;; esac
 
 step "tools"
 "${BC[@]}" prereq --for quick >/dev/null || die "prerequisites are missing (run: brand-creator prereq --for quick)"
@@ -443,6 +449,77 @@ step "freeze the approved round, then check again"
 expect_file "$P/history/MANIFEST.sha256"
 "${BC[@]}" check --project "$P"
 
+# The smoke's two halves start here, so CI can run them side by side on macOS (ACME_SMOKE_PART): finish is the next
+# section alone, rest is every section after it. That works because tools/finish.sh runs on its own copy ($SMOKE/guard-finish),
+# taken before any later section writes into $P (names does), and nothing after it reads that copy or its logs.
+if [ "$PART" != rest ]; then
+step "tools/finish.sh from the template: the whole chain (every emitter that applies at the Full tier, print, posts, book, press kit) with multi-word options, a generator and every gate, then check"
+G4="$SMOKE/guard-finish"; cp -R "$P" "$G4"
+python3 - "$ROOT/templates/finish.sh.tpl" "$G4/tools/finish.sh" <<'PY'
+import sys
+t = open(sys.argv[1]).read()
+for g in ("grid_mark.py", "state_icons.py"):
+    assert f"  # tools/{g}\n" in t
+    t = t.replace(f"  # tools/{g}\n", f"  tools/{g}\n")
+open(sys.argv[2], "w").write(t)
+PY
+chmod +x "$G4/tools/finish.sh"
+# the book's chapters are the owner's text: the chain never writes them, so the smoke starts and fills them here (the way the book step does below)
+"${BC[@]}" state --project "$G4" --set content_languages=en --set book_chapters=tone >/dev/null
+"${BC[@]}" book --init --project "$G4" >/dev/null || die "book --init failed in the finish copy"
+python3 - "$G4" <<'PY' || die "the finish copy's chapters could not be filled"
+import glob, re, sys
+n = 0
+for f in glob.glob(sys.argv[1] + "/book/chapters/*.md"):
+    t = open(f).read()
+    t, k = re.subn(r"\[\[fill:.*?\]\](?!\])", "Acme sample text for this slot.", t, flags=re.S)
+    n += k
+    open(f, "w").write(t)
+assert n > 10, n
+f = sys.argv[1] + "/BRAND-STATE.md"
+t = open(f).read()
+assert "- (rule) (...)" in t
+open(f, "w").write(t.replace("- (rule) (...)", "- (rule) the accent is a fill, never text (proposal)", 1))
+PY
+# a set PRINT_REGION in the Quick tier stops the chain at once (exit 2), before any step runs: a value is never silently ignored
+QF="$SMOKE/guard-finish-quick"; cp -R "$G4" "$QF"; "${BC[@]}" state --project "$QF" --set tier=quick >/dev/null
+set +e; ( cd "$QF" && env -u BRAND_CREATOR_ROOT PATH="$ROOT/bin:$PATH" PRINT_REGION=EU bash tools/finish.sh > "$SMOKE/finish-quick.log" 2>&1 ); rc_q=$?; set -e
+[ "$rc_q" = 2 ] && grep -q "Standard and Full tier" "$SMOKE/finish-quick.log" && ! grep -q "^== tokens" "$SMOKE/finish-quick.log" || die "PRINT_REGION in the Quick tier must stop the chain with exit 2 before any step (exit $rc_q)"
+ok "finish.sh: PRINT_REGION in the Quick tier stops the chain (exit 2) before any step runs"
+( cd "$G4" && env -u BRAND_CREATOR_ROOT ${FIN_OPT[@]+"${FIN_OPT[@]}"} PATH="$ROOT/bin:$PATH" TAGLINE="a repair guide is in every box" APP_ID=org.example.Acme MASTER_BAND=small \
+    EXEMPTION="the system shrinks this one master to 16 px; the coarse-grid drawing keeps the accent" ICON_CONTENT=0.8 VISIONOS_CONTENT=0.6 \
+    PRINT_REGION=EU IMAGE_BASE_URL=https://img.example.com/brand POST_FACTS="spare parts;repair guide;batch size" \
+    bash tools/finish.sh > "$SMOKE/finish.log" 2>&1 ) || { tail -30 "$SMOKE/finish.log" >&2; die "tools/finish.sh did not run through (log: $SMOKE/finish.log)"; }
+grep -q "^check: PASS" "$SMOKE/finish.log" || die "finish.sh ended without a passing check"
+python3 - "$SMOKE/finish.log" "$G4" <<'PY' || die "the finish chain did not run every step that applies at the Full tier, in order"
+import re, sys
+from pathlib import Path
+log = Path(sys.argv[1]).read_text()
+steps = re.findall(r"^== (.+)$", log, re.M)
+def at(name):
+    i = [k for k, s in enumerate(steps) if s == name or s.startswith(name + " ")]
+    assert i, (name, steps)
+    return i[0]
+want = ["emit web", "emit social", "emit android", "emit chrome-ext", "emit msix", "emit profiles", "emit print", "print-check", "gates", "book", "book-pdf", "emit presskit"]
+if sys.platform == "darwin":
+    want.insert(want.index("emit android"), "emit apple")
+order = [at(n) for n in want]
+assert order == sorted(order), dict(zip(want, order))
+p = Path(sys.argv[2])
+for f in ("book.html", "book.pdf", "assets/presskit/acme-press-kit.zip", "assets/social/posts/carousel-4x5-01.png", "assets/print/letterhead.rgb-proof.pdf",
+          "assets/profiles/avatar-400.png", "assets/android/res/mipmap-hdpi/ic_launcher_foreground.png", "assets/chrome-ext/icons/icon-128.png", "assets/msix/Assets/StoreLogo.scale-100.png"):
+    assert (p / f).is_file(), f
+if sys.platform == "darwin":
+    assert (p / "assets/apple/watchos/Assets.xcassets/AppIcon.appiconset/AppIcon-watchOS-1024.png").is_file() and (p / "assets/apple/tvos/Assets.xcassets/Contents.json").is_file()
+print("   ok:", ", ".join(want))
+PY
+ok "finish.sh: generators, tokens, every emitter that applies (Tier B, profiles, print, posts), book, book-pdf, press kit, downscale gates, idempotence, staleness and check all ran from the template"
+fi
+if [ "$PART" = finish ]; then
+  printf '\nSMOKE PASSED (part finish: the shared build, then tools/finish.sh): Acme at %s\n' "$P"
+  exit 0
+fi
+
 step "guards on a copy of the finished pack: a failing master, a favicon off the band rule, an edited fact, a removed tray state"
 G="$SMOKE/guard"; cp -R "$P" "$G"
 failing_ids() { python3 -c "import json,sys;print(' '.join(r['id'] for r in json.load(open(sys.argv[1]))['results'] if r['status']==sys.argv[2]))" "$G/assets/_checks/check.json" "$1"; }
@@ -517,68 +594,6 @@ assert any(r["id"].startswith("report:downscale/grid-mark-master") and r["status
 PY
   ok "a passing downscale report on the grid master does not vouch for the Apple master that fails at 16 px"
 fi
-
-step "tools/finish.sh from the template: the whole chain (every emitter that applies at the Full tier, print, posts, book, press kit) with multi-word options, a generator and every gate, then check"
-G4="$SMOKE/guard-finish"; cp -R "$P" "$G4"
-python3 - "$ROOT/templates/finish.sh.tpl" "$G4/tools/finish.sh" <<'PY'
-import sys
-t = open(sys.argv[1]).read()
-for g in ("grid_mark.py", "state_icons.py"):
-    assert f"  # tools/{g}\n" in t
-    t = t.replace(f"  # tools/{g}\n", f"  tools/{g}\n")
-open(sys.argv[2], "w").write(t)
-PY
-chmod +x "$G4/tools/finish.sh"
-# the book's chapters are the owner's text: the chain never writes them, so the smoke starts and fills them here (the way the book step does below)
-"${BC[@]}" state --project "$G4" --set content_languages=en --set book_chapters=tone >/dev/null
-"${BC[@]}" book --init --project "$G4" >/dev/null || die "book --init failed in the finish copy"
-python3 - "$G4" <<'PY' || die "the finish copy's chapters could not be filled"
-import glob, re, sys
-n = 0
-for f in glob.glob(sys.argv[1] + "/book/chapters/*.md"):
-    t = open(f).read()
-    t, k = re.subn(r"\[\[fill:.*?\]\](?!\])", "Acme sample text for this slot.", t, flags=re.S)
-    n += k
-    open(f, "w").write(t)
-assert n > 10, n
-f = sys.argv[1] + "/BRAND-STATE.md"
-t = open(f).read()
-assert "- (rule) (...)" in t
-open(f, "w").write(t.replace("- (rule) (...)", "- (rule) the accent is a fill, never text (proposal)", 1))
-PY
-# a set PRINT_REGION in the Quick tier stops the chain at once (exit 2), before any step runs: a value is never silently ignored
-QF="$SMOKE/guard-finish-quick"; cp -R "$G4" "$QF"; "${BC[@]}" state --project "$QF" --set tier=quick >/dev/null
-set +e; ( cd "$QF" && env -u BRAND_CREATOR_ROOT PATH="$ROOT/bin:$PATH" PRINT_REGION=EU bash tools/finish.sh > "$SMOKE/finish-quick.log" 2>&1 ); rc_q=$?; set -e
-[ "$rc_q" = 2 ] && grep -q "Standard and Full tier" "$SMOKE/finish-quick.log" && ! grep -q "^== tokens" "$SMOKE/finish-quick.log" || die "PRINT_REGION in the Quick tier must stop the chain with exit 2 before any step (exit $rc_q)"
-ok "finish.sh: PRINT_REGION in the Quick tier stops the chain (exit 2) before any step runs"
-( cd "$G4" && env -u BRAND_CREATOR_ROOT ${FIN_OPT[@]+"${FIN_OPT[@]}"} PATH="$ROOT/bin:$PATH" TAGLINE="a repair guide is in every box" APP_ID=org.example.Acme MASTER_BAND=small \
-    EXEMPTION="the system shrinks this one master to 16 px; the coarse-grid drawing keeps the accent" ICON_CONTENT=0.8 VISIONOS_CONTENT=0.6 \
-    PRINT_REGION=EU IMAGE_BASE_URL=https://img.example.com/brand POST_FACTS="spare parts;repair guide;batch size" \
-    bash tools/finish.sh > "$SMOKE/finish.log" 2>&1 ) || { tail -30 "$SMOKE/finish.log" >&2; die "tools/finish.sh did not run through (log: $SMOKE/finish.log)"; }
-grep -q "^check: PASS" "$SMOKE/finish.log" || die "finish.sh ended without a passing check"
-python3 - "$SMOKE/finish.log" "$G4" <<'PY' || die "the finish chain did not run every step that applies at the Full tier, in order"
-import re, sys
-from pathlib import Path
-log = Path(sys.argv[1]).read_text()
-steps = re.findall(r"^== (.+)$", log, re.M)
-def at(name):
-    i = [k for k, s in enumerate(steps) if s == name or s.startswith(name + " ")]
-    assert i, (name, steps)
-    return i[0]
-want = ["emit web", "emit social", "emit android", "emit chrome-ext", "emit msix", "emit profiles", "emit print", "print-check", "gates", "book", "book-pdf", "emit presskit"]
-if sys.platform == "darwin":
-    want.insert(want.index("emit android"), "emit apple")
-order = [at(n) for n in want]
-assert order == sorted(order), dict(zip(want, order))
-p = Path(sys.argv[2])
-for f in ("book.html", "book.pdf", "assets/presskit/acme-press-kit.zip", "assets/social/posts/carousel-4x5-01.png", "assets/print/letterhead.rgb-proof.pdf",
-          "assets/profiles/avatar-400.png", "assets/android/res/mipmap-hdpi/ic_launcher_foreground.png", "assets/chrome-ext/icons/icon-128.png", "assets/msix/Assets/StoreLogo.scale-100.png"):
-    assert (p / f).is_file(), f
-if sys.platform == "darwin":
-    assert (p / "assets/apple/watchos/Assets.xcassets/AppIcon.appiconset/AppIcon-watchOS-1024.png").is_file() and (p / "assets/apple/tvos/Assets.xcassets/Contents.json").is_file()
-print("   ok:", ", ".join(want))
-PY
-ok "finish.sh: generators, tokens, every emitter that applies (Tier B, profiles, print, posts), book, book-pdf, press kit, downscale gates, idempotence, staleness and check all ran from the template"
 
 step "guard hook: frozen history is protected, unrelated paths are not"
 payload() { python3 -c "import json,sys;print(json.dumps({'tool_name':sys.argv[1],'tool_input':{sys.argv[2]:sys.argv[3]},'cwd':sys.argv[4]}))" "$@"; }
@@ -1335,4 +1350,8 @@ step "state"
 "${BC[@]}" state --project "$P" --require G3 >/dev/null
 "${BC[@]}" state --project "$P"
 
-printf '\nSMOKE PASSED: Acme at %s\n' "$P"
+if [ "$PART" = rest ]; then
+  printf '\nSMOKE PASSED (part rest: the shared build, then every section but tools/finish.sh): Acme at %s\n' "$P"
+else
+  printf '\nSMOKE PASSED: Acme at %s\n' "$P"
+fi

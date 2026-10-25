@@ -18,7 +18,7 @@ needs a record goes in [`docs/adr/`](docs/adr/README.md).
 
 ## Add a plugin
 
-A folder, a marketplace entry and a workflow. Steps: [Add a plugin](docs/internals/add-a-plugin.md).
+A folder, a marketplace entry, a workflow and a release-tag ruleset. Steps: [Add a plugin](docs/internals/add-a-plugin.md).
 
 ## Run the tests
 

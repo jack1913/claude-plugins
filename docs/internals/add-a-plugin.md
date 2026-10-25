@@ -1,7 +1,7 @@
 <!-- markdownlint-disable-file MD014 -->
 # Add a plugin
 
-A new plugin is a folder, a marketplace entry and a workflow. Three checks confirm the result before you push (step 4).
+A new plugin is a folder, a marketplace entry, a workflow and a release-tag ruleset. Three checks confirm the result before you push (step 4).
 Cutting its first release is on [Release a plugin](release.md).
 
 ## 1. Create the folder
@@ -20,9 +20,21 @@ Add an entry to `.claude-plugin/marketplace.json` with `"source": "./plugins/<na
 
 Add `.github/workflows/<name>.yml` that runs the plugin's tests, triggered on `push` to `main` only (so a tag push runs
 nothing), `pull_request` and `workflow_dispatch`, with the same `paths:` filter on both (`plugins/<name>/**` and the
-workflow file), a pinned runner image such as `ubuntu-24.04` and `permissions: contents: read`. Copy an existing one, for
-example `.github/workflows/swift.yml`. The rule is in `.claude/rules/ci-workflow-per-plugin.md`, and
+workflow file), a pinned runner image such as `ubuntu-24.04` and `permissions: contents: read`. Name its job `<name>`:
+that job is the workflow's verdict, the check its release tags need. A workflow of several jobs adds that job last; it
+needs every other job, runs `if: ${{ always() }}` and copies its steps word for word from
+`.github/workflows/brand-creator.yml`, where they fail unless every job it needs succeeded. Copy an existing
+workflow, for example `.github/workflows/swift.yml`. The rule is in `.claude/rules/ci-workflow-per-plugin.md`, and
 `.github/scripts/check-workflows.py` checks it.
+
+Then write the plugin's release-tag ruleset and create it on GitHub, from the repository root:
+
+```bash
+python3 .github/scripts/check-workflows.py --ruleset <name> > .github/rulesets/<name>-release-tags.json
+gh api --method POST 'repos/{owner}/{repo}/rulesets' --input .github/rulesets/<name>-release-tags.json
+```
+
+Until the ruleset exists on GitHub, the plugin's tags are not checked ([The tag rulesets](release.md#the-tag-rulesets)).
 
 ## 4. Check, then push
 

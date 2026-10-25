@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - ".claude-plugin/**"
+      - ".github/rulesets/**"
       - ".github/scripts/check-marketplace.py"
       - ".github/scripts/check-workflows.py"
       - ".github/workflows/**"
@@ -13,6 +14,7 @@ on:
   pull_request:
     paths:
       - ".claude-plugin/**"
+      - ".github/rulesets/**"
       - ".github/scripts/check-marketplace.py"
       - ".github/scripts/check-workflows.py"
       - ".github/workflows/**"
@@ -23,13 +25,14 @@ permissions:
   contents: read
 
 jobs:
-  check:
+  # named after the workflow, as every workflow's verdict is (.github/scripts/check-workflows.py)
+  marketplace:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
       - name: Every marketplace entry has its plugin folder, and every folder is listed
         run: python3 .github/scripts/check-marketplace.py
-      - name: Every workflow runs on main and pull requests, never on tags, with a pinned runner and a read-only token
+      - name: Every workflow runs on main and pull requests, never on tags, with a pinned runner, a read-only token and one verdict job; every plugin has its release-tag ruleset
         run: python3 .github/scripts/check-workflows.py
-      - name: The workflow check catches each rule broken on purpose
+      - name: The workflow and ruleset check catches each rule broken on purpose
         run: python3 .github/scripts/check-workflows.py --self-test

@@ -24,6 +24,8 @@ BRAND_CREATOR_DATA=<set-up data dir> tests/run-all.sh
   made-up bakery on a PATH with no Apple tools and no git, ending with the short guide).
 - `BRAND_CREATOR_TEST_PARTS=pytest` (or `node`, `smoke`, comma-separated) runs only those parts, as each CI job does. An
   unknown part, or a choice that runs nothing, is a usage error (exit 2).
+- `ACME_SMOKE_PART=finish` (or `rest`) runs one half of the Acme smoke, as each macOS smoke job does: the build up to the
+  frozen round, then `tools/finish.sh` alone, or every section after it. The default, `all`, runs both.
 - pytest runs with `--dist worksteal`, so a block of long tests never waits on one worker (the suite takes under half the
   time it took with the default `load`). Every test has a time limit: 300 s, or 1200 s in `test_finish_chain.py`
   (pytest-timeout from `tests/requirements.txt`); a node test has 180 s. A hung test fails by name.
@@ -56,16 +58,17 @@ still checked. `BRAND_CREATOR_TEST_OUT=<dir>` keeps the run log and pytest's JUn
 
 ## CI
 
-`.github/workflows/brand-creator.yml` at the root of the monorepo runs these jobs. Each job that checks out the repository runs in
-`plugins/brand-creator/`; the `linux` gate needs no checkout.
+`.github/workflows/brand-creator.yml` at the root of the monorepo runs these jobs, all in parallel except the verdict. Each job
+that checks out the repository runs in `plugins/brand-creator/`; the verdict needs no checkout.
 It starts on a push to `main` or a pull request that changes `plugins/brand-creator/` or the workflow file, never on a tag.
 
 | Job | What it runs |
 | --- | --- |
-| Linux (pytest), Linux (node), Linux (smoke) | one part of the Docker suite each (`tests/docker/run.sh` with `BRAND_CREATOR_TEST_PARTS`), in parallel, each within its own deadline; the run log and the JUnit file are kept as an artifact |
-| linux | passes only when all three Linux parts passed: a failed, cancelled or skipped part is never green |
-| Validate | `claude plugin validate --strict` on the plugin, and the validate test in `tests/test_static.py` |
-| macOS | the Apple-tool tests and smoke, with `BRAND_CREATOR_REQUIRE_ALL=1` |
+| linux (pytest), linux (node), linux (smoke) | one part of the Docker suite each (`tests/docker/run.sh` with `BRAND_CREATOR_TEST_PARTS`), each within its own deadline; the run log and the JUnit file are kept as an artifact |
+| validate | `claude plugin validate --strict` on the plugin, and the validate test in `tests/test_static.py` |
+| macos (pytest) | the Apple-tool tests, with `BRAND_CREATOR_REQUIRE_ALL=1` |
+| macos (smoke-finish), macos (smoke-rest) | the two halves of the Acme smoke on macOS (`ACME_SMOKE_PART`), with `emit apple` |
+| brand-creator | the verdict: passes only when every other job passed (a failed, cancelled or skipped job is never green). A release tag `brand-creator--v*` is accepted only on a commit where it and `docs` passed ([Release a plugin](../../../../docs/internals/release.md#the-tag-rulesets)) |
 
 The workflow never runs `claude plugin eval`: it is billed. See [Evals](evals.md).
 
