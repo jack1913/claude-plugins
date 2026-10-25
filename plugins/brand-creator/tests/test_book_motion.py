@@ -1,7 +1,9 @@
 """The brand book's motion chapter: the motion spec as the chapter shows it (the signature move, the parts, the timeline with every reference as its token and its
 value, the tokens with their curves drawn, the rules), the replay built from the stills `frames` wrote (markup, rules, warnings), and the book-lint rows that guard it
-(motion:reduced, motion:replay, motion:stills, self:durations), each broken on purpose. The stills here are written by a helper: a flipbook needs pictures, not a
-browser. A real browser plays one in tests/node/bookmotion.test.mjs, and the Acme smoke builds one from real stills."""
+(motion:reduced, motion:replay, motion:stills, self:durations), each broken on purpose. The rows are read in this process, from the booklint.lint call that
+scripts/book_lint.py makes (test_the_built_replay_passes_... holds the command to the same rows; its exit codes and its report are checked where the command is run), and
+a book that was just built is read from the report the build wrote. The stills here are written by a helper: a flipbook needs pictures, not a browser. A real browser plays
+one in tests/node/bookmotion.test.mjs, and the Acme smoke builds one from real stills."""
 import base64
 import hashlib
 import json
@@ -18,7 +20,7 @@ import bookdata
 import bookgen
 import booklint
 import htmlscan
-from _common import motion_report_tool, sha256_file
+from _common import find_project, motion_report_tool, sha256_file
 from px_lib import Img
 
 pytestmark = [pytest.mark.requires_setup, pytest.mark.requires_resvg]
@@ -132,9 +134,30 @@ def motion_warnings(p: Path) -> list[str]:
 
 
 def lint(p: Path) -> dict:
-    """book-lint --self-consistency; -> {row id: row}."""
-    bc("book-lint", "--self-consistency", project=p)
+    """book-lint --self-consistency of the book as it is on disk, run in this process: the booklint.lint call of scripts/book_lint.py with the same arguments, and no report
+    (test_the_built_replay_passes_... holds the command to the same rows). -> {row id: row}."""
+    project = find_project(str(p))
+    cfg, _src = bookdata.load_config(project)
+    doc, _tp = bookdata.tokens(project)
+    text = (project / cfg["output"]).read_text(encoding="utf-8")
+    results = booklint.lint(project, text, path=cfg["output"], view=bookdata.state_view(project), cfg=cfg, tokens_doc=doc, facts_rows=bookdata.facts(project),
+                            self_consistency=True, allow_variants=False)
+    return {r["id"]: r for r in results}
+
+
+def book_rows(p: Path) -> dict:
+    """The rows of the book-lint report that the last `book` wrote: it lints the book it writes, with --self-consistency, in that same booklint.lint call, so after a build that
+    changed nothing since these are the rows of a lint run now. -> {row id: row}."""
     return {x["id"]: x for x in report(p, "book-lint")["results"]}
+
+
+def restored(p: Path, before: str) -> None:
+    """A mutation taken back leaves the book byte for byte as it was, a page that was linted already (the one built, which lints clean: test_the_built_replay_passes_..., or one
+    a test linted at a step of its own): there is nothing to lint again."""
+    now = html_of(p)
+    if now != before:
+        at = next((i for i, (a, b) in enumerate(zip(now, before)) if a != b), min(len(now), len(before)))
+        raise AssertionError(f"the restore left the book other than it was, from offset {at}: it was {before[max(0, at - 40):at + 40]!r}, it is {now[max(0, at - 40):at + 40]!r}")
 
 
 def chapter(html: str, cid: str) -> str:
@@ -262,7 +285,8 @@ def test_each_curve_is_drawn_as_an_svg_with_a_role_an_aria_label_and_no_text(mp)
     labels = [re.search(r'aria-label="([^"]*)"', s).group(1) for s in svgs]
     assert labels == ["easing.enter: cubic-bezier(0, 0, 0, 1)", "easing.exit: cubic-bezier(0.3, 0, 1, 1)", "easing.standard: cubic-bezier(0.2, 0, 0, 1)"]
     assert all('role="img"' in s and "<text" not in s and "<tspan" not in s and s.count("<path") == 1 for s in svgs)      # one path: the curve (the guides are two lines)
-    assert bc("book-lint", "--self-consistency", project=mp).returncode == 0       # marks:lint reads every inline <svg>: pure vector, and self:colours: no colour of its own
+    rows = book_rows(mp)       # the build lints the book it writes: marks:lint reads every inline <svg> (pure vector), and self:colours wants no colour of its own
+    assert rows["marks:lint"]["status"] == "pass" and rows["self:colours"]["status"] == "pass", (rows["marks:lint"], rows["self:colours"])
 
 
 def curve_points(svg: str) -> tuple[float, list[tuple[float, float]]]:
@@ -391,11 +415,9 @@ def test_the_chapter_template_holds_only_the_owners_prose_around_the_block():
 
 # ---------------------------------------------------------------- B: the replay
 
-def test_each_frames_json_of_a_gated_proof_becomes_one_replay_with_the_markup_of_the_contract(mp):
-    write_spec(mp, on_doc())
-    write_frames(mp, n=9)
-    build(mp)
-    fig = figure(chapter(html_of(mp), "motion"))
+def test_each_frames_json_of_a_gated_proof_becomes_one_replay_with_the_markup_of_the_contract(mbook):
+    """Read on the book of the `mbook` fixture (motion.json on, nine stills of the demo page, built): the build this test would make."""
+    fig = figure(chapter(html_of(mbook), "motion"))
     assert re.match(r"<figure[^>]*>", fig).group(0) == f'<figure class="motion-demo" data-motion-demo="demo-page" data-length-ms="{LENGTH}" data-frames="9">'
     assert re.findall(r"<(input|label|div|span|img|p|figcaption)\b", fig) == ["input", "label", "input", "label", "div", "img", "img", "p", "figcaption"]
     assert '<input type="checkbox" id="bc-replay-demo-page"><label for="bc-replay-demo-page">Replay</label>' in fig
@@ -405,19 +427,19 @@ def test_each_frames_json_of_a_gated_proof_becomes_one_replay_with_the_markup_of
     assert list(imgs) == ["motion-flip", "motion-reduced"] and stage.startswith('<picture><source type="image/png" srcset="data:image/png;base64,') and '</picture><img class="motion-reduced"' in stage
     flip, source = imgs["motion-flip"], next(t.attrs for t in htmlscan.tags(fig) if t.name == "source")
     assert source["srcset"].endswith(" 2x") and "srcset" not in flip                     # the strip once, in the <source>: its density is the stills' scale (2x), so one still is its css size
-    assert base64.b64decode(source["srcset"][:-3].split(",", 1)[1]) == (mp / FRAMES / "strip.png").read_bytes()      # the file's exact bytes
+    assert base64.b64decode(source["srcset"][:-3].split(",", 1)[1]) == (mbook / FRAMES / "strip.png").read_bytes()      # the file's exact bytes
     # valid HTML: the <img> has the src the standard asks of it, a 1 x 1 transparent PNG that nothing draws while the <source> matches (a second copy of the strip would double the book)
     assert flip["src"] == bookgen.PIXEL and booklint._png_dims(booklint._data_png(flip["src"])) == (1, 1)
     png = booklint._data_png(flip["src"])
     assert png[25] == 6 and zlib.decompress(png[png.index(b"IDAT") + 4:png.index(b"IEND") - 8]) == b"\x00\x00\x00\x00\x00"      # colour type RGBA, one row: filter 0 and a pixel of four zero bytes
     assert [t.name for t in htmlscan.tags(stage)][:4] == ["picture", "source", "img", "picture"]
-    assert imgs["motion-reduced"]["src"].startswith("data:image/png;base64,") and base64.b64decode(imgs["motion-reduced"]["src"].split(",", 1)[1]) == (mp / FRAMES / "reduced.png").read_bytes()
+    assert imgs["motion-reduced"]["src"].startswith("data:image/png;base64,") and base64.b64decode(imgs["motion-reduced"]["src"].split(",", 1)[1]) == (mbook / FRAMES / "reduced.png").read_bytes()
     assert flip["alt"] == "Settle: the mark in motion" and imgs["motion-reduced"]["alt"] == "Settle: the still shown when motion is reduced"
     assert (flip["width"], flip["height"], imgs["motion-reduced"]["width"], imgs["motion-reduced"]["height"]) == ("8", "8", "8", "8")      # one still
     times = re.search(r'<p class="cap motion-times">(.*?)</p>', fig).group(1)
     assert times.startswith("Stills at: 0 % (0 ms), 12.5 % (50 ms), 25 % (100 ms)") and times.endswith("100 % (400 ms)")
     assert fig.rstrip().endswith("</figcaption>\n</figure>") and "<figcaption>Settle: 400 ms, 9 stills, 8 × 8 px</figcaption>" in fig
-    assert chapter(html_of(mp), "motion").index('<h4>Replay</h4>') < chapter(html_of(mp), "motion").index("<figure")
+    assert chapter(html_of(mbook), "motion").index('<h4>Replay</h4>') < chapter(html_of(mbook), "motion").index("<figure")
 
 
 def test_the_replay_is_the_strip_stepped_through_by_four_identical_keyframes_that_a_checkbox_chooses_between(bp):
@@ -533,7 +555,7 @@ def test_a_missing_strip_leaves_the_replay_out_and_two_cases_that_make_one_id_ke
     ws = " | ".join(motion_warnings(mp))
     assert "motion/frames/no-strip/strip.png is listed in motion/frames/no-strip/frames.json and does not exist; the replay of no-strip is left out" in ws
     assert "motion/frames/a.b/ makes the same control ids as motion/frames/a-b/ (a-b); its replay is left out: rename one of the cases" in ws
-    assert lint(mp)["ids:duplicate"]["status"] == "pass"
+    assert book_rows(mp)["ids:duplicate"]["status"] == "pass"
 
 
 def test_a_replay_of_fewer_than_nine_stills_is_built_and_the_build_names_the_command_that_makes_it_smooth(mp):
@@ -672,7 +694,7 @@ def test_with_two_languages_every_chapter_has_its_own_replay_with_its_own_ids_an
     assert re.findall(r'<input type="checkbox" id="([^"]*)"', html) == ["bc-replay-demo-page-pl", "bc-slow-demo-page-pl", "bc-replay-demo-page-en", "bc-slow-demo-page-en"]
     for lang in ("pl", "en"):
         assert f"bc-flip-demo-page-{lang}-r1s1" in css_of(html) and f'for="bc-slow-demo-page-{lang}"' in html
-    rows = lint(mp)
+    rows = book_rows(mp)
     assert all(rows[r]["status"] == "pass" for r in ("ids:duplicate", "lang:parity", "motion:reduced", "motion:replay", "motion:stills", "self:durations")), \
         {k: (v["status"], v["detail"]) for k, v in rows.items() if v["status"] not in ("pass", "info")}
 
@@ -746,7 +768,7 @@ def test_a_case_folder_and_a_report_are_named_as_frames_names_them_and_every_rea
     assert re.findall(r'data-motion-demo="([^"]*)"', html) == [bookdata.case_folder(n) and n for n in sorted(names, key=bookdata.case_folder)]
     assert 'id="bc-replay-hero-page-2"' in html and 'id="bc-slow-caf"' in html
     assert not [w for w in motion_warnings(mp) if "frames" in w and "jumps" not in w], motion_warnings(mp)
-    rows = lint(mp)
+    rows = book_rows(mp)
     assert all(rows[r]["status"] == "pass" for r in ("motion:reduced", "motion:replay", "motion:stills", "ids:duplicate", "self:durations")), \
         {k: (v["status"], v["detail"]) for k, v in rows.items() if v["status"] not in ("pass", "info")}
 
@@ -754,13 +776,16 @@ def test_a_case_folder_and_a_report_are_named_as_frames_names_them_and_every_rea
 # ---------------------------------------------------------------- C: the book-lint rows
 
 def test_the_built_replay_passes_the_three_motion_rows_and_a_book_without_one_gets_info_rows(bp, mp):
-    rows = lint(bp)
+    cli = bc("book-lint", "--self-consistency", project=bp)                         # the command, which the lint of the other tests (in this process) stands in for: its exit code ...
+    assert cli.returncode == 0, cli.stdout + cli.stderr
+    rows = book_rows(bp)                                                            # ... and its report
+    assert rows == lint(bp), "lint() has to be the booklint.lint call of scripts/book_lint.py with its arguments: the rows of the command are not the rows it gives"
     for r in ("motion:reduced", "motion:replay", "motion:stills", "self:durations", "marks:lint", "images:alt", "network:refs", "ids:duplicate"):
         assert rows[r]["status"] == "pass", (r, rows[r])
     assert "demo-page" in rows["motion:replay"]["detail"] and "demo-page" in rows["motion:stills"]["detail"] and "1 motion demo(s)" in rows["motion:reduced"]["detail"]
     assert bc("book-lint", project=bp).returncode == 0                              # the plain lint reads the motion rows as well
     build(mp)
-    plain = lint(mp)
+    plain = book_rows(mp)
     for r in ("motion:reduced", "motion:replay", "motion:stills"):
         assert plain[r]["status"] == "info" and plain[r]["detail"].startswith("no motion demo"), (r, plain[r])        # nothing measured is never a pass
 
@@ -768,8 +793,7 @@ def test_the_built_replay_passes_the_three_motion_rows_and_a_book_without_one_ge
 def break_book(p: Path, old: str, new: str, row: str, needle: str, count: int = 1) -> dict:
     """Mutate the book, check that the lint fails on `row` and says `needle`, and return the rows."""
     mutate(p / "book.html", old, new, count)
-    assert bc("book-lint", "--self-consistency", project=p).returncode == 1
-    rows = {x["id"]: x for x in report(p, "book-lint")["results"]}
+    rows = lint(p)
     assert rows[row]["status"] == "fail" and needle in rows[row]["detail"], (row, rows[row])
     return rows
 
@@ -826,37 +850,40 @@ def test_motion_reduced_takes_a_star_rule_only_with_important_a_later_rule_only_
 
 
 def test_motion_reduced_fails_a_demo_that_still_shows_its_flipbook_or_hides_its_still_or_leaves_its_controls(bp):
+    pristine = html_of(bp)
     ok = "{display:none}.motion-flip{display:none}.motion-reduced{display:block}}"
     break_book(bp, ok, "{display:none}.motion-flip{display:block}.motion-reduced{display:block}}", "motion:reduced", "demo-page: the flipbook is shown under reduced motion")
     mutate(bp / "book.html", "{display:none}.motion-flip{display:block}.motion-reduced{display:block}}", "{display:none}.motion-flip{display:none}.motion-reduced{display:none}}")
     rows = lint(bp)
     assert rows["motion:reduced"]["status"] == "fail" and "demo-page: the reduced still is not shown under reduced motion" in rows["motion:reduced"]["detail"]
     mutate(bp / "book.html", "{display:none}.motion-flip{display:none}.motion-reduced{display:none}}", ok)
-    assert lint(bp)["motion:reduced"]["status"] == "pass"
+    restored(bp, pristine)
     break_book(bp, "@media screen and (prefers-reduced-motion:reduce){.motion-demo input,.motion-demo label{display:none}", "@media screen and (prefers-reduced-motion:reduce){.motion-demo input,.motion-demo label{display:inline-block}",
                "motion:reduced", "is shown under reduced motion, where the flipbook it controls is not")
     mutate(bp / "book.html", "@media screen and (prefers-reduced-motion:reduce){.motion-demo input,.motion-demo label{display:inline-block}", "@media screen and (prefers-reduced-motion:reduce){.motion-demo input,.motion-demo label{display:none}")
-    assert lint(bp)["motion:reduced"]["status"] == "pass"
+    restored(bp, pristine)
     break_book(bp, '<img class="motion-reduced"', '<img class="motion-redux"', "motion:reduced", "demo-page: no reduced still")
     mutate(bp / "book.html", '<img class="motion-redux"', '<img class="motion-reduced"')
-    assert lint(bp)["motion:reduced"]["status"] == "pass"
+    restored(bp, pristine)
 
 
 def test_motion_reduced_fails_a_demo_whose_flipbook_keeps_an_animation_under_reduced_motion(bp):
+    pristine = html_of(bp)
     ok = "#bc-slow-demo-page:checked~.motion-stage .motion-flip,#bc-replay-demo-page:checked~#bc-slow-demo-page:checked~.motion-stage .motion-flip{animation:none}}"
     rows = break_book(bp, ok, "#bc-slow-demo-page:checked~.motion-stage .motion-flip{animation:none}}", "motion:reduced",
                       "'#bc-replay-demo-page:checked~#bc-slow-demo-page:checked~.motion-stage .motion-flip' starts the animation")
     assert "the flipbook still has an animation under reduced motion" in rows["motion:reduced"]["detail"]
     mutate(bp / "book.html", "#bc-slow-demo-page:checked~.motion-stage .motion-flip{animation:none}}", ok)
-    assert lint(bp)["motion:reduced"]["status"] == "pass"
+    restored(bp, pristine)
 
 
 def test_motion_replay_fails_a_checkbox_without_an_id_a_label_or_label_text(bp):
+    pristine = html_of(bp)
     break_book(bp, '<label for="bc-replay-demo-page">Replay</label>', '<label for="bc-replay-demo-page"></label>', "motion:replay", "the label of #bc-replay-demo-page has no visible text")
     mutate(bp / "book.html", '<label for="bc-replay-demo-page"></label>', '<label for="bc-replay-demo-page"><span></span> </label>')
     assert lint(bp)["motion:replay"]["status"] == "fail"
     mutate(bp / "book.html", '<label for="bc-replay-demo-page"><span></span> </label>', '<label for="bc-replay-demo-page">Replay</label>')
-    assert lint(bp)["motion:replay"]["status"] == "pass"
+    restored(bp, pristine)
     break_book(bp, '<label for="bc-slow-demo-page">', '<label for="somewhere-else">', "motion:replay", '#bc-slow-demo-page has no <label for="bc-slow-demo-page">')
     mutate(bp / "book.html", '<label for="somewhere-else">', '<label for="bc-slow-demo-page">')
     break_book(bp, '<input type="checkbox" id="bc-slow-demo-page">', '<input type="checkbox" id="slow-demo-page">', "motion:replay", "no checkbox whose id starts with bc-slow-")
@@ -867,6 +894,7 @@ def test_motion_replay_fails_a_checkbox_without_an_id_a_label_or_label_text(bp):
 
 
 def test_motion_replay_fails_a_checkbox_the_keyboard_cannot_reach_outside_the_reduced_motion_and_print_media(bp):
+    pristine = html_of(bp)
     for old, new, why in (('<input type="checkbox" id="bc-replay-demo-page">', '<input type="checkbox" id="bc-replay-demo-page" hidden>', "it has the hidden attribute"),
                           ('<input type="checkbox" id="bc-slow-demo-page">', '<input type="checkbox" id="bc-slow-demo-page" tabindex="-1">', "it has a negative tabindex"),
                           ('<input type="checkbox" id="bc-slow-demo-page">', '<input type="checkbox" id="bc-slow-demo-page" disabled>', "it has the disabled attribute"),
@@ -875,7 +903,7 @@ def test_motion_replay_fails_a_checkbox_the_keyboard_cannot_reach_outside_the_re
         rows = break_book(bp, old, new, "motion:replay", "is out of the keyboard's reach")
         assert why in rows["motion:replay"]["detail"]
         mutate(bp / "book.html", new, old)
-        assert lint(bp)["motion:replay"]["status"] == "pass"
+        restored(bp, pristine)
     for rule, why in ((".motion-demo input{display:none}", "a rule says display: none"), ("#bc-slow-demo-page{visibility:hidden}", "a rule says visibility: hidden"),
                       ("input[type=checkbox]{display:none}", "a rule says display: none"), ("@media (max-width:600px){.motion-demo input{display:none}}", "a rule says display: none")):
         rows = break_book(bp, "</style>", rule + "</style>", "motion:replay", "out of the keyboard's reach")
@@ -887,25 +915,26 @@ def test_motion_replay_fails_a_checkbox_the_keyboard_cannot_reach_outside_the_re
 
 
 def test_motion_replay_fails_when_a_checkbox_does_not_start_the_flipbook_again_or_the_slow_one_is_not_four_times_as_long(bp):
+    pristine = html_of(bp)
     break_book(bp, "#bc-replay-demo-page:checked~.motion-stage .motion-flip{animation-name:bc-flip-demo-page-r1s0}",
                "#bc-replay-demo-page:checked~.motion-stage .motion-flip{animation-name:bc-flip-demo-page-r0s0}", "motion:replay",
                "checking the replay box does not change the flipbook's animation-name (still bc-flip-demo-page-r0s0), so the replay would not start again")
     mutate(bp / "book.html", "#bc-replay-demo-page:checked~.motion-stage .motion-flip{animation-name:bc-flip-demo-page-r0s0}",
            "#bc-replay-demo-page:checked~.motion-stage .motion-flip{animation-name:bc-flip-demo-page-r1s0}")
-    assert lint(bp)["motion:replay"]["status"] == "pass"
+    restored(bp, pristine)
     break_book(bp, f"#bc-slow-demo-page:checked~.motion-stage .motion-flip{{animation-name:bc-flip-demo-page-r0s1;animation-duration:{4 * LENGTH}ms}}",
                "#bc-slow-demo-page:checked~.motion-stage .motion-flip{animation-name:bc-flip-demo-page-r0s1}", "motion:replay",
                f"the flipbook runs for {LENGTH} ms (replay unchecked, slow checked), not {4 * LENGTH} ms (4 x data-length-ms)")
     mutate(bp / "book.html", "animation-name:bc-flip-demo-page-r0s1}", "animation-name:bc-flip-demo-page-r0s1;animation-duration:2000ms}")
     assert lint(bp)["motion:replay"]["status"] == "fail"
     mutate(bp / "book.html", "animation-name:bc-flip-demo-page-r0s1;animation-duration:2000ms}", f"animation-name:bc-flip-demo-page-r0s1;animation-duration:{4 * LENGTH}ms}}")
-    assert lint(bp)["motion:replay"]["status"] == "pass"
+    restored(bp, pristine)
     break_book(bp, "#bc-replay-demo-page:checked~#bc-slow-demo-page:checked~.motion-stage .motion-flip{animation-name:bc-flip-demo-page-r1s1}",
                "#bc-replay-demo-page:checked~#bc-slow-demo-page:checked~.motion-stage .motion-flip{animation-name:bc-flip-demo-page-r0s1}", "motion:replay",
                "checking the replay box with the slow box checked does not change the flipbook's animation-name (still bc-flip-demo-page-r0s1)")
     mutate(bp / "book.html", "#bc-replay-demo-page:checked~#bc-slow-demo-page:checked~.motion-stage .motion-flip{animation-name:bc-flip-demo-page-r0s1}",
            "#bc-replay-demo-page:checked~#bc-slow-demo-page:checked~.motion-stage .motion-flip{animation-name:bc-flip-demo-page-r1s1}")
-    assert lint(bp)["motion:replay"]["status"] == "pass"
+    restored(bp, pristine)
     break_book(bp, f"animation:bc-flip-demo-page-r0s0 {LENGTH}ms step-end 1 both", "animation:bc-flip-demo-page-r0s0 step-end 1 both", "motion:replay",
                f"the flipbook runs for 0 ms (replay unchecked, slow unchecked), not {LENGTH} ms (data-length-ms)")
     mutate(bp / "book.html", "animation:bc-flip-demo-page-r0s0 step-end 1 both", f"animation:bc-flip-demo-page-r0s0 {LENGTH}ms step-end 1 both")
@@ -914,22 +943,24 @@ def test_motion_replay_fails_when_a_checkbox_does_not_start_the_flipbook_again_o
 
 
 def test_motion_replay_fails_keyframes_that_are_missing_differ_or_a_flipbook_that_repeats_forever(bp):
+    pristine = html_of(bp)
     break_book(bp, "@keyframes bc-flip-demo-page-r1s0{", "@keyframes bc-flip-demo-page-zzz{", "motion:replay", "there is no @keyframes bc-flip-demo-page-r1s0")
     mutate(bp / "book.html", "@keyframes bc-flip-demo-page-zzz{", "@keyframes bc-flip-demo-page-r1s0{")
-    assert lint(bp)["motion:replay"]["status"] == "pass"
+    restored(bp, pristine)
     break_book(bp, "@keyframes bc-flip-demo-page-r1s1{0%{object-position:0 0}", "@keyframes bc-flip-demo-page-r1s1{0%{object-position:-8px 0}", "motion:replay",
                "the @keyframes of bc-flip-demo-page-r0s0, bc-flip-demo-page-r0s1, bc-flip-demo-page-r1s0, bc-flip-demo-page-r1s1 are not the same")
     mutate(bp / "book.html", "@keyframes bc-flip-demo-page-r1s1{0%{object-position:-8px 0}", "@keyframes bc-flip-demo-page-r1s1{0%{object-position:0 0}")
-    assert lint(bp)["motion:replay"]["status"] == "pass"
+    restored(bp, pristine)
     break_book(bp, f"{LENGTH}ms step-end 1 both", f"{LENGTH}ms step-end infinite both", "motion:replay", "the flipbook repeats forever")
     mutate(bp / "book.html", f"{LENGTH}ms step-end infinite both", f"{LENGTH}ms step-end 1 both")
-    assert lint(bp)["motion:replay"]["status"] == "pass"
+    restored(bp, pristine)
 
 
 def test_motion_replay_fails_a_demo_with_no_flipbook_and_one_whose_rules_do_not_reach_it(bp):
+    pristine = html_of(bp)
     break_book(bp, '<img class="motion-flip"', '<img class="motion-flap"', "motion:replay", "no flipbook (an element with the class motion-flip)")
     mutate(bp / "book.html", '<img class="motion-flap"', '<img class="motion-flip"')
-    assert lint(bp)["motion:replay"]["status"] == "pass"
+    restored(bp, pristine)
     # the checkboxes after the stage cannot reach it with ~: toggling them would change nothing
     fig = figure(html_of(bp))
     first = '<input type="checkbox" id="bc-replay-demo-page"><label for="bc-replay-demo-page">Replay</label>\n'
@@ -948,16 +979,16 @@ def test_motion_stills_fails_a_picture_that_is_not_the_file_in_motion_frames_a_l
     mutate(bp / "book.html", f'srcset="{reduced} 2x"', f'srcset="{strip} 2x"')
     break_book(bp, f'<img class="motion-reduced" src="{reduced}"', f'<img class="motion-reduced" src="{strip}"', "motion:stills", "the reduced picture is not motion/frames/demo-page/reduced.png")
     mutate(bp / "book.html", f'<img class="motion-reduced" src="{strip}"', f'<img class="motion-reduced" src="{reduced}"')
-    assert lint(bp)["motion:stills"]["status"] == "pass"
+    restored(bp, html)
     break_book(bp, f' srcset="{strip} 2x"', "", "motion:stills", "the flipbook picture is not motion/frames/demo-page/strip.png")      # no strip in the <source>: the 1 x 1 stand-in is what the <img> shows
     mutate(bp / "book.html", '<source type="image/png">', f'<source type="image/png" srcset="{strip} 2x">')
-    assert lint(bp)["motion:stills"]["status"] == "pass"
+    restored(bp, html)
     pic = f'<picture><source type="image/png" srcset="{strip} 2x"><img class="motion-flip" src="{bookgen.PIXEL}"'
     break_book(bp, pic, '<picture><img class="motion-flip"', "motion:stills", 'no flipbook picture in the demo (an <img class="motion-flip"> in a <picture> whose <source> has a srcset that is a data: URI)')
     mutate(bp / "book.html", '<picture><img class="motion-flip"', f'<picture><img class="motion-flip" src="{bookgen.PIXEL}" srcset="{strip} 2x"')      # a hand-written book may have the strip on the <img> itself
     assert lint(bp)["motion:stills"]["status"] == "pass"
     mutate(bp / "book.html", f'<picture><img class="motion-flip" src="{bookgen.PIXEL}" srcset="{strip} 2x"', pic)
-    assert lint(bp)["motion:stills"]["status"] == "pass"
+    restored(bp, html)
     break_book(bp, f'<img class="motion-reduced" src="{reduced}"', '<img class="motion-reduced" src="data:image/png;base64,@@@@"', "motion:stills", "the reduced picture is not a base64 data:image/png URI")
     mutate(bp / "book.html", '<img class="motion-reduced" src="data:image/png;base64,@@@@"', f'<img class="motion-reduced" src="{reduced}"')
     rows = break_book(bp, f'data-length-ms="{LENGTH}"', f'data-length-ms="{LENGTH + 1}"', "motion:stills", f"data-length-ms is {LENGTH + 1}, frames.json says {LENGTH}")
@@ -968,7 +999,7 @@ def test_motion_stills_fails_a_picture_that_is_not_the_file_in_motion_frames_a_l
     break_book(bp, f'data-length-ms="{LENGTH}"', 'data-length-ms="x"', "motion:stills", "data-length-ms is not a number")
     break_book(bp, 'data-length-ms="x"', 'data-length-ms="0"', "motion:replay", "data-length-ms is not a number above 0")
     mutate(bp / "book.html", 'data-length-ms="0"', f'data-length-ms="{LENGTH}"')
-    assert lint(bp)["motion:stills"]["status"] == "pass"
+    restored(bp, html)
     # the flipbook shows one still of the strip at a time: the strip's density is the stills' scale, the img is one still wide and high, and object-fit is none
     break_book(bp, f'srcset="{strip} 2x"', f'srcset="{strip}"', "motion:stills", "the flipbook picture is drawn at 1x, frames.json says the stills are 2x, so one still would not fill 8 x 8 px: the srcset of its <source> needs the descriptor 2x")
     mutate(bp / "book.html", f'srcset="{strip}"', f'srcset="{strip} 2x"')
@@ -976,16 +1007,15 @@ def test_motion_stills_fails_a_picture_that_is_not_the_file_in_motion_frames_a_l
     mutate(bp / "book.html", 'alt="Settle: the mark in motion" width="9"', 'alt="Settle: the mark in motion" width="8"')
     break_book(bp, ".motion-flip{display:block;object-fit:none}", ".motion-flip{display:block;object-fit:fill}", "motion:stills", "the flipbook's object-fit is fill")
     mutate(bp / "book.html", ".motion-flip{display:block;object-fit:fill}", ".motion-flip{display:block;object-fit:none}")
-    assert lint(bp)["motion:stills"]["status"] == "pass"
+    restored(bp, html)
 
 
 def test_motion_stills_fails_a_book_built_before_the_stills_were_taken_again_and_passes_once_it_is_rebuilt(bp):
-    assert lint(bp)["motion:stills"]["status"] == "pass"
     write_frames(bp, shade=1)                                                       # `frames` ran again: the same names, other pictures
     rows = lint(bp)
     assert rows["motion:stills"]["status"] == "fail" and OLDER in rows["motion:stills"]["detail"]
     build(bp)
-    assert lint(bp)["motion:stills"]["status"] == "pass"
+    assert book_rows(bp)["motion:stills"]["status"] == "pass"
     write_frames(bp, n=11, shade=1)                                                 # more stills: the count differs
     rows = lint(bp)
     assert rows["motion:stills"]["status"] == "fail" and f"data-frames is 9, frames.json lists 11 ({OLDER})" in rows["motion:stills"]["detail"]
@@ -1019,11 +1049,10 @@ def test_motion_stills_fails_a_picture_whose_sha256_is_not_the_one_frames_json_l
     rows = break_book(bp, f'srcset="{old} 2x"', f'srcset="{edited} 2x"', "motion:stills",
                       "the flipbook picture is motion/frames/demo-page/strip.png, which is not the file frames.json lists (its sha256 differs): run brand-creator frames, then brand-creator book")
     assert "the flipbook picture is 100x16 px, frames.json says 9 still(s) of 8 x 8 px at 2x: run brand-creator frames again" in rows["motion:stills"]["detail"]      # a size that does not fit stays a warning
-    assert bc("book-lint", "--self-consistency", project=bp).returncode == 1        # and it fails the book
 
 
 def test_the_reports_list_the_spec_and_the_stills_as_inputs_so_check_notices_new_ones(bp):
-    assert lint(bp)["motion:stills"]["status"] == "pass"
+    assert bc("book-lint", "--self-consistency", project=bp).returncode == 0           # the command writes its own report: the one that is read here and by `check` below
     inputs = {i["path"] for i in report(bp, "book-lint")["inputs"]}
     assert {f"{FRAMES}/frames.json", f"{FRAMES}/strip.png", f"{FRAMES}/reduced.png"} <= inputs
     built = {i["path"] for i in report(bp, "book")["inputs"]}                             # the book's own report names the spec, the stills and the report of the run that took them
@@ -1107,26 +1136,28 @@ def test_check_does_not_take_a_frames_report_for_the_stills_of_a_case_it_did_not
 
 
 def test_a_hand_authored_book_with_a_replay_is_read_by_the_same_rows(bp):
+    pristine = html_of(bp)
     assert bc("state", "--set", "mark_source=authored-vector", project=bp).returncode == 0
     assert bc("book", project=bp).returncode == 2                                       # the generator refuses: the book is the author's
     rows = lint(bp)
     assert all(rows[r]["status"] == "pass" for r in ("motion:reduced", "motion:replay", "motion:stills", "self:durations")), {k: v["detail"] for k, v in rows.items() if v["status"] == "fail"}
     break_book(bp, f'data-length-ms="{LENGTH}"', f'data-length-ms="{LENGTH + 1}"', "motion:stills", "data-length-ms")
     mutate(bp / "book.html", f'data-length-ms="{LENGTH + 1}"', f'data-length-ms="{LENGTH}"')
-    assert lint(bp)["motion:stills"]["status"] == "pass"
+    restored(bp, pristine)
 
 
 def test_self_durations_lets_a_replay_use_its_own_length_and_four_times_it_and_nothing_else_may(bp):
-    assert lint(bp)["self:durations"]["status"] == "pass"                           # 400ms and 1600ms are not tokens, but they are this replay's
+    # 400ms and 1600ms are not tokens, but they are this replay's: the book as built passes self:durations (test_the_built_replay_passes_...)
     rows = break_book(bp, "</style>", f"a{{transition:color {LENGTH}ms}}@media (prefers-reduced-motion:reduce){{a{{transition:none}}}}</style>", "self:durations", f"transition: {LENGTH}ms in a")
     assert "is not a duration token" in rows["self:durations"]["detail"]
     mutate(bp / "book.html", f"a{{transition:color {LENGTH}ms}}", "a{transition:color 150ms}")
     assert lint(bp)["self:durations"]["status"] == "pass"                           # a token is fine anywhere
+    with_token = html_of(bp)
     rows = break_book(bp, f"animation:bc-flip-demo-page-r0s0 {LENGTH}ms step-end 1 both", "animation:bc-flip-demo-page-r0s0 500ms step-end 1 both", "self:durations",
                       "animation: 500ms in #bc-replay-demo-page~")
     assert rows["motion:replay"]["status"] == "fail"
     mutate(bp / "book.html", "animation:bc-flip-demo-page-r0s0 500ms step-end 1 both", f"animation:bc-flip-demo-page-r0s0 {LENGTH}ms step-end 1 both")
-    assert lint(bp)["self:durations"]["status"] == "pass"
+    restored(bp, with_token)
     break_book(bp, "</style>", f".motion-flip,a{{animation-delay:{LENGTH}ms}}</style>", "self:durations", f"animation-delay: {LENGTH}ms in .motion-flip,a")      # a rule that reaches more than the replay
     mutate(bp / "book.html", f".motion-flip,a{{animation-delay:{LENGTH}ms}}", f"#bc-slow-demo-page:checked~.motion-stage .motion-flip{{animation-delay:{4 * LENGTH}ms}}")
     assert lint(bp)["self:durations"]["status"] == "pass"                           # four times the length is the replay's as well, in any of its rules
@@ -1197,7 +1228,7 @@ def test_a_book_built_before_the_stills_exist_fails_motion_stills_once_they_appe
     write_spec(mp, on_doc())
     page_case(mp, "later")                                                              # a second page case, with no stills yet
     build(mp)                                                                           # motion on and no stills: the book has no replay, and the build says so
-    assert "data-motion-demo" not in html_of(mp) and lint(mp)["motion:stills"]["status"] == "info"
+    assert "data-motion-demo" not in html_of(mp) and book_rows(mp)["motion:stills"]["status"] == "info"
     bc("check", project=mp)
     ids = {x["id"]: x["status"] for x in report(mp, "check")["results"]}
     assert ids["report:book-lint"] == "pass" and ids["report:book"] == "pass" and "report:book-lint:frames" not in ids
@@ -1213,12 +1244,14 @@ def test_a_book_built_before_the_stills_exist_fails_motion_stills_once_they_appe
     ids = {x["id"]: x for x in report(mp, "check")["results"]}
     assert ids["report:book-lint:frames"]["status"] == "skipped" and ids["report:book:frames"]["status"] == "skipped"
     assert "stills of a gated proof appeared, went or changed since the book-lint report; re-run `brand-creator book-lint --self-consistency`" in ids["report:book-lint:frames"]["detail"]
-    rows = lint(mp)
+    cli = bc("book-lint", "--self-consistency", project=mp)                             # the command fails a book that was built before its stills (exit 1), and its report says why
+    assert cli.returncode == 1
+    rows = book_rows(mp)
+    assert rows == lint(mp), "lint() has to give the rows of the command on a failing book as well"
     assert rows["motion:stills"]["status"] == "fail"
     assert "demo-page: its stills are in motion/frames/demo-page/ and the book has no replay of them: run brand-creator book (the Motion chapter shows the replay through its {{motion}} line)" in rows["motion:stills"]["detail"]
-    assert bc("book-lint", "--self-consistency", project=mp).returncode == 1
     build(mp)                                                                           # what the lint asks for
-    assert lint(mp)["motion:stills"]["status"] == "pass" and 'data-motion-demo="demo-page"' in html_of(mp)
+    assert book_rows(mp)["motion:stills"]["status"] == "pass" and 'data-motion-demo="demo-page"' in html_of(mp)
     bc("check", project=mp)
     ids = {x["id"]: x["status"] for x in report(mp, "check")["results"]}
     assert ids["report:book-lint"] == "pass" and "report:book-lint:frames" not in ids and "report:book:frames" not in ids
@@ -1240,12 +1273,11 @@ def test_stills_the_build_left_out_and_said_so_and_those_of_a_motion_that_is_off
     assert re.findall(r'data-motion-demo="([^"]*)"', html_of(mp)) == ["a-b", "demo-page"]
     ws = " | ".join(motion_warnings(mp))
     assert "no-strip" in ws and "rounds-over is no longer a page case" in ws and "makes the same control ids" in ws
-    rows = lint(mp)
+    rows = book_rows(mp)
     assert rows["motion:stills"]["status"] in ("pass", "warn") and "no-strip" not in rows["motion:stills"]["detail"] and "rounds-over" not in rows["motion:stills"]["detail"]
-    assert bc("book-lint", "--self-consistency", project=mp).returncode == 0           # the book is what the build made of them: nothing is missing from it
     write_spec(mp, off_doc())                                                           # nothing moves: stills are not shown, and the book is not asked for them
     build(mp)
-    assert lint(mp)["motion:stills"]["status"] == "info"
+    assert book_rows(mp)["motion:stills"]["status"] == "info"
     write_spec(mp, on_doc())
     shutil.move(str(mp / "motion/frames/demo-page"), str(mp.parent / "demo.moved"))
     build(mp)
@@ -1264,7 +1296,7 @@ def test_a_quick_book_has_no_motion_chapter_and_is_not_asked_for_a_replay(mp):
             f.rename(mp.parent / f.name)
     build(mp)
     assert "motion" not in [t.attrs["data-chapter"] for t in htmlscan.tags(html_of(mp)) if t.name == "section" and "data-chapter" in t.attrs]
-    assert lint(mp)["motion:stills"]["status"] == "info"
+    assert book_rows(mp)["motion:stills"]["status"] == "info"
 
 
 def test_the_list_of_stills_carries_the_strip_and_the_reduced_still_so_that_a_picture_that_goes_and_comes_back_is_seen_by_check(bp):
@@ -1325,6 +1357,7 @@ def test_stills_are_no_input_of_a_book_that_shows_none_and_taking_them_does_not_
 
 
 def test_motion_replay_walks_the_ancestors_of_the_boxes_and_the_labels_and_wants_the_labels_and_the_flipbook_shown_on_a_screen(bp):
+    pristine = html_of(bp)
     for old, new, needles in (
             ('<figure class="motion-demo"', '<figure hidden class="motion-demo"', ("#bc-replay-demo-page is out of the keyboard's reach: its ancestor <figure> has the hidden attribute",
                                                                                   "the label of #bc-replay-demo-page is not shown on a screen: its ancestor <figure> has the hidden attribute",
@@ -1338,7 +1371,7 @@ def test_motion_replay_walks_the_ancestors_of_the_boxes_and_the_labels_and_wants
         for n in needles[1:]:
             assert n in rows["motion:replay"]["detail"], (n, rows["motion:replay"]["detail"])
         mutate(bp / "book.html", new, old)
-        assert lint(bp)["motion:replay"]["status"] == "pass"
+        restored(bp, pristine)
     for rule, needle in ((".motion-demo label{display:none}", "the label of #bc-replay-demo-page is not shown on a screen: a rule says display: none"),
                          (".motion-demo label{opacity:0}", "the label of #bc-replay-demo-page is not shown on a screen: a rule says opacity: 0"),
                          (".motion-stage{display:none}", "the flipbook is not shown on a screen: a rule says display: none (on its ancestor <div>)"),
@@ -1353,8 +1386,6 @@ def test_motion_replay_walks_the_ancestors_of_the_boxes_and_the_labels_and_wants
 
 
 def test_a_selector_the_lint_cannot_read_is_named_in_the_rows_that_read_what_it_sets_and_the_row_is_a_warning_not_a_pass(bp):
-    rows = lint(bp)
-    assert all(rows[r]["status"] == "pass" and "not read" not in rows[r]["detail"] for r in ("motion:reduced", "motion:replay", "motion:stills"))      # the book's own rules are all read
     for rule, sets, who in ((".motion-flip:not(.zz){display:none}", "display", ("motion:reduced", "motion:replay")),
                             (".motion-flip:is(img){animation:none}", "animation", ("motion:reduced", "motion:replay")),
                             (".motion-demo :where(label){visibility:hidden}", "visibility", ("motion:reduced", "motion:replay")),
@@ -1414,7 +1445,7 @@ def test_the_text_of_a_replay_is_named_after_the_signature_move_or_the_mark_in_m
                                          ("motion:hero-v2:edges:360", "warn"), ("motion:draft-x:control", "fail"), ("motion:draft-x:settled", "pass")])      # and `shot --motion` ran: its rows hold the case names
     r = build(mp)                                                                       # the book is written: no word rule fails
     html = html_of(mp)
-    assert rows_pass(lint(mp), "words:round", "words:scratch") and "NOT written" not in r.stdout + r.stderr
+    assert rows_pass(book_rows(mp), "words:round", "words:scratch") and "NOT written" not in r.stdout + r.stderr
     proof = table_after(chapter(html, "motion"), "Motion proof")                        # the checks, grouped by case, under the replay's name or the case's number: never the case
     assert proof == [["Case 1", "1x:file=rest", "pass"], ["Case 2", "control", "pass"], ["Settle (2)", "cls:normal", "pass"], ["Settle (2)", "edges:360", "warn"],
                      ["Settle (1)", "control", "fail"], ["Settle (1)", "settled", "pass"]]      # dot-press and demo-page have no replay here; draft-x is the first replay, hero-v2 the second
@@ -1464,7 +1495,7 @@ def test_a_proof_file_a_report_or_a_state_with_a_working_name_never_reaches_the_
     mutate_json(mp / "assets/_checks" / f"{motion_report_tool('motion/old-v1.json')}.json", lambda d: (d.pop("cases"), d["results"][1].update(label="state old-state equals its reference drawing")))      # no case listed: rows by label
     r = build(mp)                                                                       # the book is written: no word rule fails
     html = html_of(mp)
-    rows = lint(mp)
+    rows = book_rows(mp)
     assert "NOT written" not in r.stdout + r.stderr and not [k for k, v in rows.items() if v["status"] == "fail"], {k: v["detail"] for k, v in rows.items() if v["status"] == "fail"}
     shown = htmlscan.visible_text(html)                                                 # all the text a reader (or a word rule) gets, the alt and title attributes too
     reports = [motion_report_tool(x) for x in ("motion/hero-v2.json", "motion/draft-x.json", "motion/old-v1.json")]
@@ -1489,7 +1520,6 @@ def rows_pass(rows: dict, *ids: str) -> bool:
 
 
 def test_self_durations_gives_the_replay_length_only_to_a_rule_that_reaches_one_demo_and_nothing_else(bp, mp):
-    assert lint(bp)["self:durations"]["status"] == "pass"
     rows = break_book(bp, "</style>", f"img{{animation-delay:{LENGTH}ms}}</style>", "self:durations", f"animation-delay: {LENGTH}ms in img")             # touches the demo's images and every other image of the book
     assert "is not a duration token" in rows["self:durations"]["detail"]
     mutate(bp / "book.html", f"img{{animation-delay:{LENGTH}ms}}", f".motion-flip{{animation-delay:{LENGTH}ms}}")
@@ -1503,16 +1533,14 @@ def test_self_durations_gives_the_replay_length_only_to_a_rule_that_reaches_one_
     write_frames(mp, case="second")
     write_frames(mp, vouch=[CASE, "second"])
     build(mp)
-    assert lint(mp)["self:durations"]["status"] == "pass"
+    assert book_rows(mp)["self:durations"]["status"] == "pass"
     break_book(mp, "</style>", f".motion-flip{{animation-delay:{LENGTH}ms}}</style>", "self:durations", f"animation-delay: {LENGTH}ms in .motion-flip")
     mutate(mp / "book.html", f".motion-flip{{animation-delay:{LENGTH}ms}}", f"#bc-slow-second:checked~.motion-stage .motion-flip{{animation-delay:{4 * LENGTH}ms}}")
     assert lint(mp)["self:durations"]["status"] == "pass"                               # an id of one demo reaches that demo's flipbook only
 
 
 def test_a_keyframes_with_no_name_is_said_in_motion_replay_and_does_not_crash_the_lint(bp):
-    rows = break_book(bp, "</style>", "@keyframes{0%{opacity:0}100%{opacity:1}}</style>", "motion:replay", "a @keyframes with no name")
-    r = bc("book-lint", "--self-consistency", project=bp)
-    assert "Traceback" not in r.stderr and "IndexError" not in r.stderr and rows["motion:replay"]["status"] == "fail"
+    break_book(bp, "</style>", "@keyframes{0%{opacity:0}100%{opacity:1}}</style>", "motion:replay", "a @keyframes with no name")      # the lint runs in this process: a crash on it (it was an IndexError) is an error here
     mutate(bp / "book.html", "@keyframes{0%{opacity:0}100%{opacity:1}}", "@keyframes   {0%{opacity:0}}")
     assert "a @keyframes with no name" in lint(bp)["motion:replay"]["detail"]
 
@@ -1537,12 +1565,13 @@ def test_the_stills_of_an_exploration_proof_are_no_input_of_the_book_or_of_book_
 
 
 def test_motion_replay_reads_the_timing_function_the_iteration_count_and_the_keyframes_against_frames_json(bp):
+    pristine = html_of(bp)
     once = f"{LENGTH}ms step-end 1 both"
     break_book(bp, once, f"{LENGTH}ms step-end 3 both", "motion:replay", "the flipbook plays 3 times (replay unchecked, slow unchecked); it plays once")
     mutate(bp / "book.html", f"{LENGTH}ms step-end 3 both", f"{LENGTH}ms step-end 1.5 both")
     assert "plays 1.5 times" in lint(bp)["motion:replay"]["detail"]
     mutate(bp / "book.html", f"{LENGTH}ms step-end 1.5 both", once)
-    assert lint(bp)["motion:replay"]["status"] == "pass"
+    restored(bp, pristine)
     break_book(bp, once, f"{LENGTH}ms linear 1 both", "motion:replay", "the flipbook's timing function is linear (replay unchecked, slow unchecked), not step-end: each still must hold until the next")
     mutate(bp / "book.html", f"{LENGTH}ms linear 1 both", f"{LENGTH}ms 1 both")
     assert "the flipbook's timing function is ease (replay unchecked, slow unchecked), not step-end" in lint(bp)["motion:replay"]["detail"]      # a shorthand without one sets ease
@@ -1555,7 +1584,7 @@ def test_motion_replay_reads_the_timing_function_the_iteration_count_and_the_key
     # a longhand after the shorthand counts as much as the shorthand
     break_book(bp, "</style>", "#bc-replay-demo-page~.motion-stage .motion-flip{animation-timing-function:ease-in}</style>", "motion:replay", "the flipbook's timing function is ease-in (replay unchecked, slow unchecked)")
     mutate(bp / "book.html", "#bc-replay-demo-page~.motion-stage .motion-flip{animation-timing-function:ease-in}</style>", "</style>")
-    assert lint(bp)["motion:replay"]["status"] == "pass"
+    restored(bp, pristine)
     # the keyframes are the stills of frames.json: a percent that moved, a position that is wrong, one that is missing or extra, and a property that changes how a step is held
     kf = lambda x: f"object-position:{x} 0"      # noqa: E731
     rows = break_book(bp, f"12.5%{{{kf('-8px')}}}", f"13%{{{kf('-8px')}}}", "motion:replay", "do not step through the stills of frames.json: no keyframe at 12.5 %, where frames.json has a still", count=4)
@@ -1576,6 +1605,7 @@ def test_motion_replay_reads_the_timing_function_the_iteration_count_and_the_key
 
 
 def test_motion_replay_fails_a_flipbook_whose_direction_play_state_fill_mode_or_delay_would_not_play_the_stills_once_in_order(bp):
+    pristine = html_of(bp)
     once = f"{LENGTH}ms step-end 1 both"
     for new, needle in ((f"{LENGTH}ms step-end 1 reverse both", "the flipbook's direction is reverse (replay unchecked, slow unchecked), not normal"),
                         (f"{LENGTH}ms step-end 1 alternate both", "the flipbook's direction is alternate (replay unchecked, slow unchecked), not normal"),
@@ -1585,7 +1615,7 @@ def test_motion_replay_fails_a_flipbook_whose_direction_play_state_fill_mode_or_
                         (f"{LENGTH}ms 50ms step-end 1 both", "the flipbook's delay is 50ms (replay unchecked, slow unchecked), not 0")):      # the second time of the shorthand is the delay
         break_book(bp, once, new, "motion:replay", needle)
         mutate(bp / "book.html", new, once)
-        assert lint(bp)["motion:replay"]["status"] == "pass"
+        restored(bp, pristine)
     base = "#bc-replay-demo-page~.motion-stage .motion-flip"
     for prop, value, needle in (("animation-direction", "reverse", "direction is reverse"), ("animation-play-state", "paused", "play state is paused"),
                                 ("animation-fill-mode", "backwards", "fill mode is backwards"), ("animation-delay", "1s", "delay is 1s")):      # a longhand after the shorthand counts as much
@@ -1595,10 +1625,11 @@ def test_motion_replay_fails_a_flipbook_whose_direction_play_state_fill_mode_or_
     rule = "#bc-slow-demo-page:checked~.motion-stage .motion-flip{animation-direction:reverse}"                  # one state of the two boxes is enough
     break_book(bp, "</style>", rule + "</style>", "motion:replay", "the flipbook's direction is reverse (replay unchecked, slow checked), not normal")
     mutate(bp / "book.html", rule + "</style>", "</style>")
-    assert lint(bp)["motion:replay"]["status"] == "pass"
+    restored(bp, pristine)
 
 
 def test_a_style_attribute_is_weighed_in_the_cascade_over_a_rule_of_its_importance_and_below_an_important_one(bp):
+    pristine = html_of(bp)
     flip = '<img class="motion-flip"'
     inline = lambda css: f'<img class="motion-flip" style="{css}"'      # noqa: E731
     break_book(bp, flip, inline("animation-timing-function:linear"), "motion:replay", "the flipbook's timing function is linear (replay unchecked, slow unchecked)")      # a style attribute counts
@@ -1613,7 +1644,7 @@ def test_a_style_attribute_is_weighed_in_the_cascade_over_a_rule_of_its_importan
     assert lint(bp)["motion:replay"]["status"] == "pass"                                                         # an inline declaration beats a rule of its importance, however specific
     mutate(bp / "book.html", inline("animation-timing-function:step-end"), flip)
     mutate(bp / "book.html", "#bc-replay-demo-page~.motion-stage .motion-flip.motion-flip{animation-timing-function:linear}", "")
-    assert lint(bp)["motion:replay"]["status"] == "pass"
+    restored(bp, pristine)
     # the other rows read it too: the size and the fit of the flipbook, and whether it is shown
     break_book(bp, flip, inline("width:9px"), "motion:stills", "the flipbook is 9 x 8 px")
     mutate(bp / "book.html", inline("width:9px"), inline("object-fit:fill"))
@@ -1765,9 +1796,10 @@ def test_a_block_that_holds_nested_rules_is_named_in_the_rows_it_could_affect_an
 
 def test_motion_replay_fails_an_important_object_position_and_motion_stills_reads_the_limits_of_the_size_like_the_size(bp):
     flip, inline = ".motion-flip", lambda css: f'<img class="motion-flip" style="{css}"'      # noqa: E731
-    row = try_css(bp, f"{flip}{{object-position:0 0!important}}")["motion:replay"]
+    rows = try_css(bp, f"{flip}{{object-position:0 0!important}}")
+    row = rows["motion:replay"]
     assert row["status"] == "fail" and "the flipbook has object-position: 0 0 !important, which the keyframes cannot override, so the replay is frozen" in row["detail"]
-    assert try_css(bp, f"{flip}{{object-position:0 0!important}}")["motion:stills"]["status"] == "pass"       # the replay's row, not the stills'
+    assert rows["motion:stills"]["status"] == "pass"       # the replay's row, not the stills'
     for css in (f"{flip}{{object-position:0 0}}", f"@media print{{{flip}{{object-position:0 0!important}}}}"):      # the keyframes move a plain declaration; print has no animation
         assert try_css(bp, css)["motion:replay"]["status"] == "pass", css
     break_book(bp, '<img class="motion-flip"', inline("object-position:0 0!important"), "motion:replay", "object-position: 0 0 !important, which the keyframes cannot override")      # an inline one too
@@ -1790,6 +1822,7 @@ def test_motion_replay_fails_an_important_object_position_and_motion_stills_read
 
 
 def test_a_source_a_browser_may_skip_keeps_the_strip_from_being_read_and_fails_motion_replay_and_motion_stills_naming_it(bp):
+    pristine = html_of(bp)
     plain = '<source type="image/png" srcset='
     for attrs, named in (('type="image/x-nope"', '<source type="image/x-nope">'), ('type="image/webp"', '<source type="image/webp">'),
                          ('type="image/png" media="(min-width:99999px)"', '<source media="(min-width:99999px)" type="image/png">'), ('media="all"', '<source media="all">'),
@@ -1800,7 +1833,7 @@ def test_a_source_a_browser_may_skip_keeps_the_strip_from_being_read_and_fails_m
             assert rows[r]["status"] == "fail" and f"the flipbook's {named} may not be the one a browser takes the strip from" in rows[r]["detail"], (attrs, r, rows[r])
         assert "the flipbook picture is not" not in rows["motion:stills"]["detail"] and "no flipbook picture" not in rows["motion:stills"]["detail"], rows["motion:stills"]      # it names the source, not the picture
         mutate(bp / "book.html", f"<source {attrs} srcset=", plain)
-        assert lint(bp)["motion:stills"]["status"] == "pass"
+        restored(bp, pristine)
     for attrs in ("", 'type="IMAGE/PNG"', 'type=" image/png "'):                                              # the strip's source needs no media and a png type, or no type
         mutate(bp / "book.html", plain, f"<source {attrs} srcset=")
         rows = lint(bp)

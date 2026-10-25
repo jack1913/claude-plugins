@@ -410,6 +410,7 @@ def test_book_lint_passes_the_built_book_and_check_gates_it(proj):
     bc("check", project=proj)
     ids = {x["id"]: x["status"] for x in report(proj, "check")["results"]}
     assert ids["report:book-lint"] == "pass" and ids["report:book"] == "pass" and ids["book:generated"] == "pass"
+    assert not [k for k in ids if k.startswith(("report:book-lint:", "report:book:"))], ids     # what each report recorded (state, manifest, stills, self-consistency) is current
 
 
 @setup

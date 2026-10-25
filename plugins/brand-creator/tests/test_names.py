@@ -413,6 +413,12 @@ class FakeNet:
         monkeypatch.setattr(cn, "system_resolvers", lambda: ["192.0.2.53"])
         monkeypatch.setattr(cn, "dns_query_ns", self._dns)
         monkeypatch.setattr(cn.time, "sleep", lambda s: None)
+        real_init = cn.Live.__init__
+
+        def no_spacing(live, *a, **kw):   # Transport's default `sleep` is time.sleep itself, bound when the class was defined: the patch above never reaches it
+            kw.setdefault("sleep", lambda s: None)
+            real_init(live, *a, **kw)
+        monkeypatch.setattr(cn.Live, "__init__", no_spacing)
         monkeypatch.setattr(cn.Live, "gh_ready", lambda self: False)
 
     def _next(self, key):
