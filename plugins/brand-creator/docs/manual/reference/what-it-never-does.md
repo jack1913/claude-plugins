@@ -21,13 +21,15 @@ The limits brand-creator keeps, so you know what stays yours.
 ## The safety hook
 
 A hook runs before Claude writes a file or runs a shell command. It does nothing outside a brand project (a folder with
-a `BRAND-STATE.md`). Inside one it keeps `history/` and every round except the latest read-only, and stops a project
+a `BRAND-STATE.md`). Inside one it keeps `history/` and every round except the latest read-only (round 0, the style
+research board, stays open until the style is picked), and stops a project
 folder from being deleted or moved. It blocks the call and tells Claude why. It is a best-effort guard, not a lock: a
 programming one-liner can still write a file. The checksum check in `/brand-creator:check` is the real protection.
 
-**Checked live, in the main thread and inside an agent.** In a real Claude Code session the hook blocked a write to an
-earlier round, a new file in `history/`, a shell write into an earlier round and a move of the project folder, and let a
-write to the latest round through, both in the main thread and in an agent's tool calls. Run `/brand-creator:check` too.
+**Checked live, in the main thread and inside an agent.** In a real Claude Code session, an earlier version of the hook
+blocked a write to an earlier round, a new file in `history/`, a shell write into an earlier round and a move of the
+project folder, and let a write to the latest round through, both in the main thread and in an agent's tool calls. The
+plugin's tests cover the rules added since. Run `/brand-creator:check` too.
 
 ## Related
 
