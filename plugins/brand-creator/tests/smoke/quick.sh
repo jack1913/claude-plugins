@@ -33,6 +33,21 @@ png_size() { python3 -c "import struct,sys;d=open(sys.argv[1],'rb').read(24);ass
 expect_size() { local got; got="$(png_size "$1")"; [ "$got" = "$2 $3" ] || die "$1 is $got, expected $2 $3"; ok "$(basename "$1") is $2x$3"; }
 expect_file() { [ -s "$1" ] || die "missing or empty: $1"; ok "$1"; }
 
+# The tools never write into the data directory the smoke is given: they get one of the smoke's own, with every entry of the given one as a
+# symlink except the folders the tools write while they run (scratch, the names checker's cache). The tools write scratch output under
+# <data>/scratch, one folder per project path, and QUICK_SMOKE_DIR can be a new path on every run. It is removed only after QUICK SMOKE PASSED
+# (PASSED=1: a smoke stopped by a signal reaches the EXIT trap with $? = 0); any other end keeps it and prints where.
+SETUP_DATA="$(cd -P "$BRAND_CREATOR_DATA" && pwd)" || die "BRAND_CREATOR_DATA=$BRAND_CREATOR_DATA is not a folder"
+BRAND_CREATOR_DATA="$(mktemp -d "${TMPDIR:-/tmp}/brand-creator-quick-data.XXXXXX")"
+for e in "$SETUP_DATA"/*; do [ -e "$e" ] || continue; case "${e##*/}" in scratch|cache) ;; *) ln -s "$e" "$BRAND_CREATOR_DATA/" ;; esac; done
+export BRAND_CREATOR_DATA
+PASSED=0
+own_data_exit() {
+  if [ "$PASSED" = 1 ]; then rm -rf -- "$BRAND_CREATOR_DATA" || printf 'could not remove %s\n' "$BRAND_CREATOR_DATA" >&2
+  else printf 'the quick smoke did not pass, so its data directory is kept: %s\n' "$BRAND_CREATOR_DATA" >&2; fi
+}
+trap own_data_exit EXIT
+
 # ---------------------------------------------------------------------------------------------------------------- the environment
 step "scaffold folder $SMOKE"
 if [ -e "$SMOKE" ]; then
@@ -147,6 +162,9 @@ mkdir -p "$P/rounds/r1"
 cp "$FIX/board.html" "$P/rounds/r1/board.html"
 qok board-lint board-lint rounds/r1/board.html --project "$P"
 qok shot shot rounds/r1/board.html --project "$P"
+[ ! -L "$BRAND_CREATOR_DATA/scratch" ] && ls -d "$BRAND_CREATOR_DATA"/scratch/marlow-lane-*/shots >/dev/null 2>&1 \
+  || die "the shots are not in the smoke's own data directory: the tools were given another one, or its scratch folder is a link"
+ok "the shots went to the smoke's own data directory"
 python3 - "$P/assets/_checks/shot.json" "$P/assets/_checks/board-lint.json" <<'PY' || die "shot or board-lint report is not what the Quick tier needs"
 import json, sys
 rep = json.load(open(sys.argv[1]))
@@ -367,4 +385,5 @@ for forbidden in ("assets/apple", "assets/android", "assets/windows", "assets/li
 print("   ok: no Apple, Android, Windows, Linux, print, press-kit, inventory, adoption or launch file in the Quick project (the short guide, book.html, is there)")
 PY
 
+PASSED=1
 printf '\nQUICK SMOKE PASSED: %s\n' "$P"

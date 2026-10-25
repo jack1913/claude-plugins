@@ -42,6 +42,10 @@ BRAND_CREATOR_DATA=<set-up data dir> tests/run-all.sh
 - Tests that talk to real services (`requires_network`) run only with `BRAND_CREATOR_LIVE=1`.
 - The anonymisation test needs a private denylist (`BRAND_CREATOR_DENYLIST`) and skips without it.
 - A set-up data directory comes from `brand-creator --data <dir> setup --yes`.
+- No run writes into the data directory it is given. pytest, node:test and each smoke give the tools a data directory of
+  their own: links to the given one's npm packages and Chromium, and a scratch folder of its own. pytest keeps it with its
+  last three runs. node:test and the smokes delete theirs only after a passing run; any other run keeps it, and a failing
+  run prints where. node:test treats its temporary projects the same way.
 
 A quicker pytest-only run, without the smokes:
 

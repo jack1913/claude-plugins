@@ -29,7 +29,6 @@ HERE="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd -P "$HERE/../.." && pwd)"
 FIX="$ROOT/skills/brand-creator/references/examples/acme"   # the synthetic worked brand
 : "${BRAND_CREATOR_DATA:?set BRAND_CREATOR_DATA to a data directory prepared by: brand-creator --data <dir> setup --yes}"
-BC=("$ROOT/bin/brand-creator" --data "$BRAND_CREATOR_DATA")
 SMOKE="${ACME_SMOKE_DIR:-${TMPDIR:-/tmp}/brand-creator-acme-smoke}"
 export BRAND_CREATOR_TODAY="${BRAND_CREATOR_TODAY:-2026-10-17}"
 
@@ -41,6 +40,21 @@ expect_size() { local got; got="$(png_size "$1")"; [ "$got" = "$2 $3" ] || die "
 expect_file() { [ -s "$1" ] || die "missing or empty: $1"; ok "$1"; }
 PART="${ACME_SMOKE_PART:-all}"   # all, or one half of the smoke: finish or rest (see the top of this file)
 case "$PART" in all|finish|rest) ;; *) printf 'SMOKE FAILED: ACME_SMOKE_PART=%s: use all, finish or rest\n' "$PART" >&2; exit 2 ;; esac
+# The tools never write into the data directory the smoke is given: they get one of the smoke's own, with every entry of the given one as a
+# symlink except the folders the tools write while they run (scratch, the names checker's cache). The tools write scratch output under
+# <data>/scratch, one folder per project path, and ACME_SMOKE_DIR can be a new path on every run. It is removed only after SMOKE PASSED
+# (PASSED=1: a smoke stopped by a signal reaches the EXIT trap with $? = 0); any other end keeps it and prints where.
+SETUP_DATA="$(cd -P "$BRAND_CREATOR_DATA" && pwd)" || die "BRAND_CREATOR_DATA=$BRAND_CREATOR_DATA is not a folder"
+BRAND_CREATOR_DATA="$(mktemp -d "${TMPDIR:-/tmp}/brand-creator-acme-data.XXXXXX")"
+for e in "$SETUP_DATA"/*; do [ -e "$e" ] || continue; case "${e##*/}" in scratch|cache) ;; *) ln -s "$e" "$BRAND_CREATOR_DATA/" ;; esac; done
+export BRAND_CREATOR_DATA
+PASSED=0
+own_data_exit() {
+  if [ "$PASSED" = 1 ]; then rm -rf -- "$BRAND_CREATOR_DATA" || printf 'could not remove %s\n' "$BRAND_CREATOR_DATA" >&2
+  else printf 'the smoke did not pass, so its data directory is kept: %s\n' "$BRAND_CREATOR_DATA" >&2; fi
+}
+trap own_data_exit EXIT
+BC=("$ROOT/bin/brand-creator" --data "$BRAND_CREATOR_DATA")
 
 step "tools"
 "${BC[@]}" prereq --for quick >/dev/null || die "prerequisites are missing (run: brand-creator prereq --for quick)"
@@ -121,6 +135,9 @@ expect_size "$P/assets/social/readme-header-dark.png" 1280 320
 step "board lint and four-view shots"
 "${BC[@]}" board-lint rounds/r1/board.html --project "$P"
 "${BC[@]}" shot rounds/r1/board.html --project "$P"
+[ ! -L "$BRAND_CREATOR_DATA/scratch" ] && ls -d "$BRAND_CREATOR_DATA"/scratch/acme-*/shots >/dev/null 2>&1 \
+  || die "the shots are not in the smoke's own data directory: the tools were given another one, or its scratch folder is a link"
+ok "the shots went to the smoke's own data directory"
 python3 - "$P/assets/_checks/shot.json" <<'PY'
 import json, sys
 rep = json.load(open(sys.argv[1]))
@@ -516,6 +533,7 @@ PY
 ok "finish.sh: generators, tokens, every emitter that applies (Tier B, profiles, print, posts), book, book-pdf, press kit, downscale gates, idempotence, staleness and check all ran from the template"
 fi
 if [ "$PART" = finish ]; then
+  PASSED=1
   printf '\nSMOKE PASSED (part finish: the shared build, then tools/finish.sh): Acme at %s\n' "$P"
   exit 0
 fi
@@ -1350,6 +1368,7 @@ step "state"
 "${BC[@]}" state --project "$P" --require G3 >/dev/null
 "${BC[@]}" state --project "$P"
 
+PASSED=1
 if [ "$PART" = rest ]; then
   printf '\nSMOKE PASSED (part rest: the shared build, then every section but tools/finish.sh): Acme at %s\n' "$P"
 else

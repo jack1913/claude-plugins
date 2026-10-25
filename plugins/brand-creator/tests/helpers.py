@@ -1,6 +1,8 @@
 """Shared helpers for the brand-creator test suite."""
 from __future__ import annotations
 
+import atexit
+import functools
 import json
 import os
 import shutil
@@ -24,7 +26,14 @@ sys.path.insert(0, str(ROOT / "scripts" / "adaptlib"))
 OFF_MAC_DOWNSCALE = [] if sys.platform == "darwin" else ["--renderer=pillow"]
 OFF_MAC_TAURI = [] if sys.platform == "darwin" else ["--renderer", "pillow"]
 
-_FALLBACK = Path(tempfile.mkdtemp(prefix="bc-test-data-"))  # for commands that need a --data value but no dependencies
+
+@functools.cache
+def _no_setup_data() -> Path:
+    """For commands that need a --data value but no dependencies, when no set-up data directory is given: made on first use, one per
+    process, removed when the process exits."""
+    d = Path(tempfile.mkdtemp(prefix="bc-test-data-"))
+    atexit.register(shutil.rmtree, d, True)
+    return d
 
 
 def path_without(tmp_path: Path, *hidden: str, keep: tuple[str, ...] = ()) -> str:
@@ -46,6 +55,17 @@ def path_without(tmp_path: Path, *hidden: str, keep: tuple[str, ...] = ()) -> st
 def data_dir() -> Path | None:
     d = os.environ.get("BRAND_CREATOR_DATA", "").strip()
     return Path(d) if d and (Path(d) / "setup.json").is_file() else None
+
+
+def own_data(given: Path, into: Path) -> Path:
+    """Make `into` a data directory of the tests' own and return it: every entry of the set-up data directory `given` (setup.json, the npm
+    packages, Chromium) as a symlink, except the folders the tools write while they run (scratch, the names checker's cache), which `into`
+    keeps for itself. The tools write scratch output under <data>/scratch, one folder per project path, and the tests make new project paths
+    on every run: aimed at a developer's own data directory, they would leave that scratch there for good."""
+    for e in given.resolve().iterdir():   # absolute targets: a relative one would be read from `into`
+        if e.name not in ("scratch", "cache"):
+            (into / e.name).symlink_to(e)
+    return into
 
 
 def android_sdk() -> tuple[Path, Path] | None:
@@ -70,7 +90,7 @@ def bc(*args: str, project: Path | None = None, cwd: Path | None = None, env: di
     exe = (plugin or ROOT) / "bin" / "brand-creator"
     full_env = {**os.environ, "BRAND_CREATOR_TODAY": "2026-10-17", **(env or {})}
     cmd = [str(exe)]
-    d = data or data_dir() or _FALLBACK
+    d = data or data_dir() or _no_setup_data()
     cmd += ["--data", str(d)]
     cmd += list(args)
     if project is not None:

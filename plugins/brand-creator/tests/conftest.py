@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from helpers import FIXTURES, ROOT, android_sdk, bc, data_dir, install_fixture, make_project  # noqa: E402
+from helpers import FIXTURES, ROOT, android_sdk, bc, data_dir, install_fixture, make_project, own_data  # noqa: E402
 
 NOT_VERIFIED: list[tuple[str, str]] = []
 REQUIRE_ALL = os.environ.get("BRAND_CREATOR_REQUIRE_ALL") == "1"
@@ -128,6 +128,20 @@ def pytest_terminal_summary(terminalreporter):
             tr.write_line(f"  {sum(1 for _, x in NOT_VERIFIED if x == w)} skipped because: {w}")
         tr.write_line("  Set BRAND_CREATOR_DATA to a set-up data directory (brand-creator --data <dir> setup --yes), or set "
                       "BRAND_CREATOR_REQUIRE_ALL=1 to turn these skips into failures.")
+
+
+@pytest.fixture(scope="session", autouse=True)
+def setup_data(tmp_path_factory):
+    """The set-up data directory the run was given (BRAND_CREATOR_DATA), or None. The tools never write into it: for the whole session
+    BRAND_CREATOR_DATA names a data directory of the run's own (own_data in helpers.py) among pytest's temporary folders, which pytest
+    deletes, scratch output included, once three newer runs exist."""
+    given = data_dir()
+    if given is None:
+        yield None
+        return
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("BRAND_CREATOR_DATA", str(own_data(given, tmp_path_factory.mktemp("data"))))
+        yield given
 
 
 @pytest.fixture(scope="session")

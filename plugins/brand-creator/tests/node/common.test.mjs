@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { ROOT, tmpdir, makeProject, DATA, needSetup } from "./_helpers.mjs";
+import { ROOT, tmpdir, makeProject, DATA, SETUP_DATA, bc, needSetup } from "./_helpers.mjs";
 
 process.env.BRAND_CREATOR_DATA = process.env.BRAND_CREATOR_DATA || tmpdir("bc-node-nodata-");
 const C = await import(path.join(ROOT, "scripts/lib/_common.mjs"));
@@ -123,6 +123,20 @@ test("loadDep loads ESM packages from <data>/node_modules (createRequire resolut
   } finally {
     process.env.BRAND_CREATOR_DATA = saved;
   }
+});
+
+test("the tools write scratch into a data directory of the test process's own, never into the given one", (t) => {
+  if (needSetup(t)) return;
+  assert.notEqual(fs.realpathSync(DATA), fs.realpathSync(SETUP_DATA));
+  assert.equal(fs.realpathSync(path.join(DATA, "node_modules")), fs.realpathSync(path.join(SETUP_DATA, "node_modules")));
+  assert.equal(process.env.BRAND_CREATOR_DATA, DATA);
+  const root = tmpdir();
+  assert.equal(bc(["new", "probe", "--name", "Probe", "--root", root]).status, 0);
+  const r = bc(["snapshot", "take", "brief", "--name", "probe", "--project", path.join(root, "probe")]);   // no --out: <data>/scratch/<project>/snapshots/
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const out = r.stdout.split("-> ").pop().trim();
+  assert.ok(fs.existsSync(out) && out.startsWith(fs.realpathSync(path.join(DATA, "scratch")) + path.sep), out);
+  assert.ok(!fs.existsSync(path.join(SETUP_DATA, "scratch", path.basename(path.dirname(path.dirname(out))))));
 });
 
 test("dataDir requires BRAND_CREATOR_DATA", () => {

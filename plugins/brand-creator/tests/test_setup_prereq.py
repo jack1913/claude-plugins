@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from helpers import ROOT, bc, data_dir
+from helpers import ROOT, bc, data_dir, make_project
 
 sys.path.insert(0, str(ROOT / "scripts"))
 import prereq  # noqa: E402
@@ -186,6 +186,20 @@ def test_a_read_only_data_dir_is_a_cannot_run_not_a_crash(tmp_path):
     finally:
         d.chmod(0o755)
     assert r.returncode == 3 and "cannot write scratch output under the data directory" in r.stderr and "at Object" not in r.stderr, (r.returncode, r.stderr)
+
+
+@pytest.mark.requires_setup
+def test_the_tools_write_scratch_into_the_runs_own_data_dir_never_into_the_given_one(setup_data, tmp_path):
+    """conftest.py gives the tools a data directory of the run's own (own_data): the given one's npm packages and Chromium through symlinks,
+    and a scratch folder of its own, so test projects never leave scratch output in a developer's real data directory."""
+    own = data_dir()
+    assert own.resolve() != setup_data.resolve() and (own / "node_modules").resolve() == (setup_data / "node_modules").resolve()
+    p = make_project(tmp_path)
+    r = bc("snapshot", "take", "brief", "--name", "probe", project=p)     # a snapshot without --out goes to <data>/scratch/<project>/snapshots/
+    assert r.returncode == 0, r.stdout + r.stderr
+    out = Path(r.stdout.rsplit("-> ", 1)[1].strip())
+    assert out.is_file() and out.is_relative_to((own / "scratch").resolve()), out
+    assert not (setup_data / "scratch" / out.parent.parent.name).exists()
 
 
 def test_bin_resolves_the_plugin_root_through_a_symlink(tmp_path):

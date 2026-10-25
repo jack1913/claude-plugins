@@ -236,7 +236,7 @@ def test_macos_runs_the_apple_tool_tests_and_each_half_of_the_smoke_in_a_job_of_
                          'expect_file "$P/history/MANIFEST.sha256"', '"${BC[@]}" check --project "$P"'], code[-4:]  # the shared build ends at the frozen round
     steps = re.findall(r'^step "([^"]+)', finish, re.M)
     assert len(steps) == 1 and steps[0].startswith("tools/finish.sh from the template"), steps                       # one half is that section alone
-    assert re.match(r"  printf '\\nSMOKE PASSED \(part finish[^\n]*\n  exit 0\nfi\n", rest)                      # and it ends there
+    assert re.match(r"  PASSED=1\n  printf '\\nSMOKE PASSED \(part finish[^\n]*\n  exit 0\nfi\n", rest)          # and it ends there, as a pass
     assert len(re.findall(r'^step "', rest, re.M)) >= 10                                                            # the other half is every later section
     r = subprocess.run(["bash", str(ROOT / "tests" / "smoke" / "acme.sh")], capture_output=True, text=True,
                        env={**os.environ, "BRAND_CREATOR_DATA": str(tmp_path), "ACME_SMOKE_PART": "half"})
