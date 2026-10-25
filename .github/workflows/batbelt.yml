@@ -19,10 +19,15 @@ on:
 permissions:
   contents: read
 
+env:
+  # the Claude Code CLI that validates the manifest: the version brand-creator.yml pins (CLAUDE_CODE_VERSION)
+  CLAUDE_CODE_VERSION: "2.1.302"
+
 jobs:
   # named after the workflow: its check is the verdict a release tag batbelt--v* needs (.github/rulesets/)
   batbelt:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
       # the uv that plugins/brand-creator/tests/docker/Dockerfile pins (UV_VERSION)
@@ -31,3 +36,13 @@ jobs:
           version: "0.12.11"
       - name: Tests
         run: uv run --no-project --with-requirements tests/requirements.txt python -m pytest tests -q
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+      # a CLI that cannot be installed fails the job: an unvalidated manifest must not pass the verdict
+      - name: Install the Claude Code CLI
+        run: |
+          npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+          claude --version
+      - name: claude plugin validate --strict
+        run: claude plugin validate "$GITHUB_WORKSPACE/plugins/batbelt" --strict

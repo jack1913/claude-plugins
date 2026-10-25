@@ -65,19 +65,24 @@ entry, and names the tag `<name>--vX.Y.Z` for you.
 ## The tag rulesets
 
 Each plugin has a tag ruleset on GitHub, "<name> release tags" (Settings, Rules, Rulesets): a tag `<name>--v*` is accepted
-only on a commit where the checks `<name>` and `docs` passed. Each check is its workflow's verdict, a job named after the
-workflow that passes only when every other job in it passed. Nobody can bypass the rulesets.
-Why: [ADR-0005](../adr/ADR-0005-release-tags-need-a-passing-ci-verdict.md).
+only on a commit where the checks `<name>` and `docs` passed, and once pushed it can be neither deleted nor moved. Each
+check is its workflow's verdict, a job named after the workflow that passes only when every other job in it passed. Nobody
+can bypass the rulesets. Why: [ADR-0005](../adr/ADR-0005-release-tags-need-a-passing-ci-verdict.md) and
+[ADR-0006](../adr/ADR-0006-main-and-release-tags-cannot-be-rewritten.md).
 
-Their source is `.github/rulesets/<name>-release-tags.json`, which `check-workflows.py` checks in CI. GitHub keeps its
-own copy, so after changing a file, or to catch a change made in the web interface, compare the two from the repository
-root (it needs `gh`, signed in):
+A tag pushed by mistake therefore stays. To remove or move one, set its ruleset's enforcement to Disabled, change the tag,
+then set it back to Active and confirm with `--live`. `main` has a ruleset of its own, "main branch": it can be neither
+deleted nor force-pushed, and a push that only adds commits goes through.
+
+Their source is `.github/rulesets/<name>-release-tags.json`, and `main-branch.json` for `main`, which `check-workflows.py`
+checks in CI. GitHub keeps its own copy, so after changing a file, or to catch a change made in the web interface, compare
+the two from the repository root (it needs `gh`, signed in):
 
 ```bash
 python3 .github/scripts/check-workflows.py --live
 ```
 
-It also reports a tag ruleset on GitHub that no file describes, which could refuse tags on its own. A difference is
+It also reports a ruleset on GitHub that no file describes, which could refuse tags or pushes on its own. A difference is
 printed with the `gh api` command that brings GitHub's copy in line with the file.
 
 ## Installed copies update only on a bump

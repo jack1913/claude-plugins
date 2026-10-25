@@ -30,11 +30,12 @@ jobs:
   # named after the workflow: its check is the verdict every release tag needs, with the plugin's own (.github/rulesets/)
   docs:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
       # Not a docs check: every release-tag ruleset requires this job, so this step checks the verdicts the rulesets rely on
       # on every commit a release tag can point to (marketplace.yml runs it, with --self-test, when a workflow changes).
-      - name: Every workflow's verdict and every release-tag ruleset (check-workflows.py)
+      - name: Every workflow's verdict and timeouts, and every ruleset (check-workflows.py)
         run: python3 .github/scripts/check-workflows.py
       - name: Skills, agents, plugin.json, marketplace entries, changelogs, ADRs and AGENTS.md pointers
         run: python3 .github/scripts/check-docs-standard.py --strict

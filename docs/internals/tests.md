@@ -20,8 +20,8 @@ $ python3 .github/scripts/check-marketplace.py
 3 plugins checked, 0 errors
 ```
 
-The workflow check, which also checks the release-tag rulesets, runs from the repository root too. A pass prints
-`5 workflows and 3 release-tag rulesets checked, 0 errors`, and `--self-test` ends with `self-test: N of N broken rules caught`:
+The workflow check, which also checks the rulesets, runs from the repository root too. A pass prints
+`5 workflows and 4 rulesets checked, 0 errors`, and `--self-test` ends with `self-test: N of N broken rules caught`:
 
 ```bash
 python3 .github/scripts/check-workflows.py
@@ -45,8 +45,8 @@ python3 -m unittest discover maintenance/tests
 ```
 
 CI also runs two checks from `plugins/swift` (`.github/workflows/swift.yml`, steps "Docs gate" and "Instruction
-gate"). The first checks the docs' links and recorded command outputs; the second checks that `.claude/rules` and
-`.claude/skills` cite files and scripts that exist:
+gate"), and validates its manifest ([Manifests](#manifests)). The first checks the docs' links and recorded command
+outputs; the second checks that `.claude/rules` and `.claude/skills` cite files and scripts that exist:
 
 ```bash
 python3 .claude/skills/update-docs/scripts/check.py check-docs docs README.md AGENTS.md --captures docs/.onboard-captures --coverage docs/.onboard-coverage.json
@@ -72,8 +72,9 @@ Without the data directory, the tests that need it print a "NOT VERIFIED" banner
 
 ## Manifests
 
-These need the Claude Code CLI. `.github/workflows/brand-creator.yml` runs `claude plugin validate plugins/brand-creator --strict`
-when the CLI can be installed; the other plugins and the marketplace file are validated by hand in the release steps ([Release a plugin](release.md)).
+These need the Claude Code CLI. In CI, each plugin's workflow runs `claude plugin validate plugins/<name> --strict` and
+`marketplace.yml` validates the marketplace file, on the CLI version each workflow pins (`CLAUDE_CODE_VERSION`); a CLI
+that cannot be installed fails the job. The release steps validate them again with your own CLI ([Release a plugin](release.md)).
 
 ```bash
 $ claude plugin validate . --strict

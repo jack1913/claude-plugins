@@ -57,3 +57,10 @@ Rejected:
 - CI never reads the rulesets on GitHub, so a change made in the web interface goes unnoticed. Compare them with the files,
   and spot a tag ruleset no file describes, with `check-workflows.py --live` ([Release a plugin](../internals/release.md)).
 - A new plugin needs its ruleset file and its ruleset on GitHub ([Add a plugin](../internals/add-a-plugin.md)).
+
+## Update 2026-10-25
+
+Each release-tag ruleset now also forbids moving or deleting a tag, and `.github/rulesets/` also holds `main-branch.json`,
+the branch ruleset of `main`, which requires no check ([ADR-0006](ADR-0006-main-and-release-tags-cannot-be-rewritten.md)).
+"Every ruleset requires the `docs` check" above means every release-tag ruleset. `check-workflows.py` checks
+`main-branch.json` like the tag rulesets, and `--live` reports any ruleset that no file describes, not only a tag ruleset.

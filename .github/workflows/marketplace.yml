@@ -24,15 +24,30 @@ on:
 permissions:
   contents: read
 
+env:
+  # the Claude Code CLI that validates the marketplace file: the version brand-creator.yml pins (CLAUDE_CODE_VERSION)
+  CLAUDE_CODE_VERSION: "2.1.302"
+
 jobs:
   # named after the workflow, as every workflow's verdict is (.github/scripts/check-workflows.py)
   marketplace:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
       - name: Every marketplace entry has its plugin folder, and every folder is listed
         run: python3 .github/scripts/check-marketplace.py
-      - name: Every workflow runs on main and pull requests, never on tags, with a pinned runner, a read-only token and one verdict job; every plugin has its release-tag ruleset
+      - name: Every workflow runs on main and pull requests, never on tags, with a pinned runner, a timeout, a read-only token and one verdict job; every plugin and main have their ruleset
         run: python3 .github/scripts/check-workflows.py
       - name: The workflow and ruleset check catches each rule broken on purpose
         run: python3 .github/scripts/check-workflows.py --self-test
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+      # a CLI that cannot be installed fails the job: an unvalidated manifest must not pass the verdict
+      - name: Install the Claude Code CLI
+        run: |
+          npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+          claude --version
+      - name: claude plugin validate --strict (the marketplace file)
+        run: claude plugin validate "$GITHUB_WORKSPACE" --strict

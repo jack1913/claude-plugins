@@ -20,7 +20,8 @@ Add an entry to `.claude-plugin/marketplace.json` with `"source": "./plugins/<na
 
 Add `.github/workflows/<name>.yml` that runs the plugin's tests, triggered on `push` to `main` only (so a tag push runs
 nothing), `pull_request` and `workflow_dispatch`, with the same `paths:` filter on both (`plugins/<name>/**` and the
-workflow file), a pinned runner image such as `ubuntu-24.04` and `permissions: contents: read`. Name its job `<name>`:
+workflow file), a pinned runner image such as `ubuntu-24.04`, `timeout-minutes` on every job, `permissions: contents: read`
+and a `claude plugin validate --strict` step for the plugin on the pinned CLI (`CLAUDE_CODE_VERSION`). Name its job `<name>`:
 that job is the workflow's verdict, the check its release tags need. A workflow of several jobs adds that job last; it
 needs every other job, runs `if: ${{ always() }}` and copies its steps word for word from
 `.github/workflows/brand-creator.yml`, where they fail unless every job it needs succeeded. Copy an existing

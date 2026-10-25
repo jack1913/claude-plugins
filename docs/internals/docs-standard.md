@@ -216,7 +216,7 @@ or one of its configs:
 | `.github/scripts/check-docs-standard.py` | its docstring | Skill and agent frontmatter, `plugin.json` fields and the marketplace entry shape (§5); changelog shape and version (§6); ADR status (§7); `AGENTS.md` pointers that no longer exist; commands pages that miss a skill |
 | markdownlint-cli2 | `.markdownlint-cli2.yaml` | Heading order, fence languages, bare URLs, list and heading spacing, a missing first heading |
 | lychee, offline | `lychee.toml` | Broken relative links and anchors |
-| `.github/scripts/check-workflows.py` | its docstring | Not a docs check: the workflows' verdict jobs and the release-tag rulesets. It runs here because every release-tag ruleset requires this job ([ADR-0005](../adr/ADR-0005-release-tags-need-a-passing-ci-verdict.md)) |
+| `.github/scripts/check-workflows.py` | its docstring | Not a docs check: the workflows' verdict jobs and the rulesets. It runs here because every release-tag ruleset requires this job ([ADR-0005](../adr/ADR-0005-release-tags-need-a-passing-ci-verdict.md)) |
 
 Run them locally from the repo root:
 

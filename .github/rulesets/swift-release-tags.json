@@ -28,6 +28,12 @@
           }
         ]
       }
+    },
+    {
+      "type": "deletion"
+    },
+    {
+      "type": "update"
     }
   ]
 }

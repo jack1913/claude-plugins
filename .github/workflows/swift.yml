@@ -1,4 +1,4 @@
-# The swift plugin's checks that need no network, no Xcode and no model calls.
+# The swift plugin's checks that need no Xcode and no model calls, and no network beyond installing the pinned Claude Code CLI.
 # Not run here, on purpose: `maintenance/check-apis.py --strict` fetches Apple's documentation indexes and fails whenever Apple's data
 # moves away from the skills' recorded claims (a manual gate), and `claude plugin eval` is billed.
 name: swift
@@ -23,10 +23,15 @@ defaults:
   run:
     working-directory: plugins/swift
 
+env:
+  # the Claude Code CLI that validates the manifest: the version brand-creator.yml pins (CLAUDE_CODE_VERSION)
+  CLAUDE_CODE_VERSION: "2.1.302"
+
 jobs:
   # named after the workflow: its check is the verdict a release tag swift--v* needs (.github/rulesets/)
   swift:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
       - name: Unit tests (the apicheck package, the upstream-diff script, the recorder, the review scorer)
@@ -35,3 +40,13 @@ jobs:
         run: python3 .claude/skills/update-docs/scripts/check.py check-docs docs README.md AGENTS.md --captures docs/.onboard-captures --coverage docs/.onboard-coverage.json
       - name: Instruction gate (check-instructions)
         run: python3 .claude/skills/update-rules/scripts/check.py check-instructions .claude/rules .claude/skills --repo-root .
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+      # a CLI that cannot be installed fails the job: an unvalidated manifest must not pass the verdict
+      - name: Install the Claude Code CLI
+        run: |
+          npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+          claude --version
+      - name: claude plugin validate --strict
+        run: claude plugin validate "$GITHUB_WORKSPACE/plugins/swift" --strict

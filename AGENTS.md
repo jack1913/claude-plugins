@@ -13,7 +13,7 @@ brand-creator, swift), each one self-contained and versioned on its own.
 | `plugins/<name>/` | One plugin: its own `.claude-plugin/plugin.json`, docs and version, and its own tests and changelog (batbelt: tests in the root `tests/`) |
 | `.github/workflows/` | One workflow per plugin, plus `marketplace.yml` and `docs.yml` (the docs standard) |
 | `.github/scripts/` | Helpers the workflows call |
-| `.github/rulesets/` | One release-tag ruleset per plugin: the source of the tag rulesets on GitHub |
+| `.github/rulesets/` | One release-tag ruleset per plugin and one for `main`: the source of the rulesets on GitHub |
 | `tests/` | batbelt's tests (the other plugins keep theirs in their own folder) |
 | `docs/manual/` | Consumer documentation for the marketplace only — choose, install, one card per plugin, troubleshooting, glossary (`docs/internals/docs-standard.md`) |
 | `docs/internals/` | Contributors only — layout, tests, adding a plugin, release, the docs standard |
@@ -28,8 +28,10 @@ brand-creator, swift), each one self-contained and versioned on its own.
 | --- | --- |
 | Plugins listed in the marketplace | `.claude-plugin/marketplace.json` (`plugins[]`) |
 | What the marketplace check enforces | `.github/scripts/check-marketplace.py` (module docstring) |
-| What the workflow check enforces (triggers, filters, runners, permissions, cancellation, verdict jobs, release-tag rulesets) | `.github/scripts/check-workflows.py` (module docstring) |
-| Which checks a release tag needs (the tag rulesets on GitHub) | `.github/rulesets/<name>-release-tags.json`; compare with GitHub: `python3 .github/scripts/check-workflows.py --live` |
+| What the workflow check enforces (triggers, filters, runners, job timeouts, permissions, cancellation, verdict jobs, rulesets) | `.github/scripts/check-workflows.py` (module docstring) |
+| Which checks a release tag needs, and what protects tags and `main` (the rulesets on GitHub) | `.github/rulesets/<name>-release-tags.json`, `.github/rulesets/main-branch.json`; compare with GitHub: `python3 .github/scripts/check-workflows.py --live` |
+| What GitHub refuses on tags and `main` (moving or deleting a release tag, deleting or force-pushing `main`) | `docs/adr/ADR-0006-main-and-release-tags-cannot-be-rewritten.md` |
+| Secret scanning, push protection and Dependabot alerts: what is on, and how an alert is handled | `docs/adr/ADR-0007-secret-scanning-and-dependabot-alerts.md` |
 | A plugin's version (its only home) | `plugins/<name>/.claude-plugin/plugin.json` (`version`) |
 | How each plugin is tested in CI | `.github/workflows/<name>.yml` (`run:` lines) |
 | What the docs check enforces | `.github/scripts/check-docs-standard.py` (module docstring), `.markdownlint-cli2.yaml`, `lychee.toml` |
@@ -53,7 +55,7 @@ unscoped rule taxes every session. Keep this table in step with `.claude/rules/`
 
 | When you need... | Where to look |
 | --- | --- |
-| CI workflow shape: push on main only, matching `paths:` filters, pinned runners, read-only token, one verdict job named after the workflow (`.github/workflows/*.yml`, `.github/rulesets/*.json`) | `.claude/rules/ci-workflow-per-plugin.md` |
+| CI workflow shape: push on main only, matching `paths:` filters, pinned runners, job timeouts, read-only token, one verdict job named after the workflow (`.github/workflows/*.yml`, `.github/rulesets/*.json`) | `.claude/rules/ci-workflow-per-plugin.md` |
 
 ### Skills
 
@@ -75,12 +77,14 @@ invoked, so reference material belongs here rather than in a rule.
   `python3 .github/scripts/check-workflows.py`,
   `claude plugin validate . --strict` and `claude plugin validate plugins/<name> --strict`. Write the new workflow by
   copying an existing one: `push` on `main` only, `pull_request` and `workflow_dispatch`, the same `paths:` list on
-  both, a pinned runner, `permissions: contents: read` and a verdict job named `<name>`; then its release-tag ruleset
+  both, a pinned runner, `timeout-minutes` on every job, `permissions: contents: read`, a `claude plugin validate --strict`
+  step and a verdict job named `<name>`; then its release-tag ruleset
   (`.claude/rules/ci-workflow-per-plugin.md` owns this; a `paths:` rule fires on Read,
   not on creating a file, so this line carries it).
 - Release tags are `<name>--vX.Y.Z`, made with `claude plugin tag plugins/<name>` from the repo root, never `git tag`,
   and only once every CI run of the release commit on `main` has passed (a tag push runs no CI; `docs/internals/release.md`).
-  GitHub refuses the tag until the checks `<name>` and `docs` passed on its commit (the tag rulesets, ADR-0005).
+  GitHub refuses the tag until the checks `<name>` and `docs` passed on its commit (the tag rulesets, ADR-0005), and once
+  pushed a tag can be neither deleted nor moved (ADR-0006).
 - Docs describe implemented state, and follow `docs/internals/docs-standard.md` (layout, voice, skill descriptions,
   changelogs, ADRs) — in every plugin too.
 - `docs/archive/**` is frozen — never edited.

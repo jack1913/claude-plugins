@@ -2,7 +2,7 @@
 paths:
   - ".github/workflows/*.yml"
   - ".github/rulesets/*.json"
-description: "CI workflows: one per plugin plus marketplace.yml and docs.yml; push on main only + pull_request + workflow_dispatch, identical paths filters, pinned runners, read-only token, main runs never cancelled, one verdict job named after the workflow, one release-tag ruleset per plugin"
+description: "CI workflows: one per plugin plus marketplace.yml and docs.yml; push on main only + pull_request + workflow_dispatch, identical paths filters, pinned runners, a timeout on every job, read-only token, main runs never cancelled, one verdict job named after the workflow, manifests validated with the pinned CLI, one release-tag ruleset per plugin and one for main"
 ---
 
 # CI workflows
@@ -18,6 +18,13 @@ description: "CI workflows: one per plugin plus marketplace.yml and docs.yml; pu
 - Every workflow declares `permissions: contents: read` at the top level, and no job sets
   its own permissions; jobs run on pinned images (`ubuntu-24.04`, `macos-26`), never a
   label with `latest`.
+- Every job sets `timeout-minutes`, a whole number from 1 to 60 or a matrix value: GitHub's
+  default is six hours, and a hung job holds its verdict, and every release tag that needs it,
+  that long. A job that calls a reusable workflow cannot set one, so no job calls one.
+- Each plugin's workflow validates its plugin with `claude plugin validate --strict`, and
+  `marketplace.yml` the marketplace file, on the Claude Code CLI pinned in the workflow's
+  `CLAUDE_CODE_VERSION` (the same version in every workflow); a CLI that cannot be installed
+  fails the job.
 - A run on `main` is never cancelled or replaced: `concurrency` is top-level only, its
   `group` holds `github.sha` (one group per commit), and `cancel-in-progress` is `false` or
   `${{ github.event_name == 'pull_request' }}`.
@@ -32,23 +39,29 @@ description: "CI workflows: one per plugin plus marketplace.yml and docs.yml; pu
   several jobs it needs every other job, runs `if: ${{ always() }}`, and its steps are exactly
   `VERDICT_STEPS` of `check-workflows.py` (they fail unless every job it needs succeeded). No
   other job's check carries a workflow's name. `docs.yml` runs `check-workflows.py`: every
-  ruleset requires `docs`, so the verdicts are checked on every commit a tag can point to.
+  release-tag ruleset requires `docs`, so the verdicts are checked on every commit a tag can
+  point to.
 - Every plugin has `.github/rulesets/<name>-release-tags.json`, exactly what
   `check-workflows.py --ruleset <name>` prints: a tag `<name>--v*` needs the checks `<name>` and
-  `docs` from GitHub Actions. GitHub keeps its own copy; changing a file means changing that
-  copy with `gh api` too (`docs/internals/release.md`, "The tag rulesets").
+  `docs` from GitHub Actions, and can be neither deleted nor moved once pushed.
+  `.github/rulesets/main-branch.json` (`--ruleset main`) keeps `main` from being deleted or
+  force-pushed. GitHub keeps its own copy; changing a file means changing that copy with
+  `gh api` too (`docs/internals/release.md`, "The tag rulesets").
 
 `.github/scripts/check-workflows.py` enforces the triggers, the filters a plugin's workflow
-needs, the permissions, the runners, the concurrency groups, the cancellation and the verdict
-job of every workflow, `.yaml` files included, and the ruleset files; `marketplace.yml`
-runs it on any change under `.github/workflows/` or `.github/rulesets/`, with `--self-test`.
-It does not check batbelt's extra filters, the docs.yml filter, the requirements files, the uv
-version, or the rulesets on GitHub (`--live` compares those by hand, and reports a tag ruleset
-no file describes). Why:
+needs, the permissions, the runners, the job timeouts, the concurrency groups, the
+cancellation and the verdict job of every workflow, `.yaml` files included, and the ruleset
+files; `marketplace.yml` runs it on any change under `.github/workflows/` or
+`.github/rulesets/`, with `--self-test`. It does not check batbelt's extra filters, the
+docs.yml filter, the validate steps or the CLI pin, the requirements files, the uv version,
+or the rulesets on GitHub (`--live` compares those by hand, and reports a ruleset no file
+describes). Why the triggers, verdicts and rulesets:
 `docs/adr/ADR-0004-ci-runs-on-main-and-pull-requests-never-on-tags.md`,
-`docs/adr/ADR-0005-release-tags-need-a-passing-ci-verdict.md`.
+`docs/adr/ADR-0005-release-tags-need-a-passing-ci-verdict.md`,
+`docs/adr/ADR-0006-main-and-release-tags-cannot-be-rewritten.md`. The timeouts and the
+validate steps have no decision record: their reasons are in the bullets above.
 
 Re-derive:
-`python3 .github/scripts/check-workflows.py` (5 workflows and 3 release-tag rulesets checked, 0 errors);
+`python3 .github/scripts/check-workflows.py` (5 workflows and 4 rulesets checked, 0 errors);
 `python3 .github/scripts/check-workflows.py --self-test` (every rule broken on purpose is caught);
-`python3 .github/scripts/check-workflows.py --live` (3 release-tag rulesets on GitHub compared with their files, 0 errors).
+`python3 .github/scripts/check-workflows.py --live` (4 rulesets on GitHub compared with their files, 0 errors).

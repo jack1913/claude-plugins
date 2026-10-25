@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""Check the shape of every workflow in .github/workflows/ and every release-tag ruleset in .github/rulesets/. Standard library
-only; run from the repository root.
+"""Check the shape of every workflow in .github/workflows/ and every ruleset in .github/rulesets/. Standard library only; run
+from the repository root.
 
     python3 .github/scripts/check-workflows.py                     check the workflows and rulesets as they are
     python3 .github/scripts/check-workflows.py --self-test         break each rule in a copy, and fail unless the check catches it
     python3 .github/scripts/check-workflows.py --ruleset <plugin>  print the release-tag ruleset that plugin needs (its file's content)
+    python3 .github/scripts/check-workflows.py --ruleset main      print the branch ruleset main needs (main-branch.json's content)
     python3 .github/scripts/check-workflows.py --live              compare the rulesets on GitHub with the files (needs gh, signed in;
                                                                    CI never runs it, so a change made on GitHub shows up only here)
 
-The rule is .claude/rules/ci-workflow-per-plugin.md; why: docs/adr/ADR-0004-ci-runs-on-main-and-pull-requests-never-on-tags.md
-and docs/adr/ADR-0005-release-tags-need-a-passing-ci-verdict.md.
+The rule is .claude/rules/ci-workflow-per-plugin.md; why: docs/adr/ADR-0004-ci-runs-on-main-and-pull-requests-never-on-tags.md,
+docs/adr/ADR-0005-release-tags-need-a-passing-ci-verdict.md and docs/adr/ADR-0006-main-and-release-tags-cannot-be-rewritten.md.
 Fails when:
   - the workflow files are not one <plugin>.yml per plugin under plugins/ plus marketplace.yml and docs.yml (a .yaml file
     is reported too: GitHub runs both extensions);
@@ -19,6 +20,9 @@ Fails when:
   - push and pull_request filter on different paths, or a plugin's workflow does not filter on plugins/<name>/** and its own file;
   - the top-level permissions are not contents: read, or a job sets its own permissions;
   - a job runs on a floating runner image (any runs-on that says latest), or on one this check cannot read;
+  - a job sets no timeout-minutes, or one that is neither a whole number of minutes from 1 to 60 nor a matrix value
+    (GitHub's default is six hours, and a hung job holds its verdict, and every release tag that needs it, that long; a job
+    that calls a reusable workflow cannot set one, so no job may call one);
   - a run on main can be cancelled or replaced: the concurrency block must be top-level, its group must hold github.sha
     (one group per commit on main), and cancel-in-progress must be false or ${{ github.event_name == 'pull_request' }};
   - a workflow has no job named after it (its verdict: for a plugin's workflow and docs.yml, the check a release-tag ruleset
@@ -26,12 +30,14 @@ Fails when:
     required check), or, in a workflow of more than one job, it does not need every other job, does not run
     if: ${{ always() }}, or its steps are not exactly VERDICT_STEPS (which fail unless every job it needs succeeded);
   - another job's check carries a workflow's name (a ruleset requiring that check could read the wrong job);
-  - docs.yml does not run this check: every ruleset requires its job, so this is what checks the verdicts on every commit a
-    release tag can point to;
-  - .github/rulesets/ does not hold exactly one <plugin>-release-tags.json per plugin, each equal to what --ruleset prints:
-    tags <plugin>--v* need the checks <plugin> and docs, from GitHub Actions, on the tagged commit; enforced, with no bypass.
-The reader understands only the YAML these keys use here (block mappings, block lists of scalars, quoted scalars); anything
-else in them is reported as unreadable, never passed.
+  - docs.yml does not run this check: every release-tag ruleset requires its job, so this is what checks the verdicts on
+    every commit a release tag can point to;
+  - .github/rulesets/ does not hold exactly one <plugin>-release-tags.json per plugin and main-branch.json, each equal to what
+    --ruleset prints: tags <plugin>--v* need the checks <plugin> and docs, from GitHub Actions, on the tagged commit, and are
+    never deleted or moved; main is never deleted or force-pushed; enforced, with no bypass; or a plugin is named main
+    (--ruleset main prints the branch ruleset).
+The reader understands only the YAML these keys use here (block mappings, block lists of scalars, quoted scalars that end on
+their own line); anything else in them is reported as unreadable, never passed.
 """
 import json
 import re
@@ -44,6 +50,8 @@ TRIGGERS = {"push", "pull_request", "workflow_dispatch"}
 KEY = re.compile(r"([A-Za-z_][\w-]*):(?:\s+(.*))?")
 ALWAYS = ("${{ always() }}", "always()")
 ACTIONS = 15368   # the GitHub Actions app: a check of the same name from any other source does not count
+TIMEOUT = re.compile(r"[1-9][0-9]*|\$\{\{ *matrix\.[\w-]+ *\}\}")   # a whole number of minutes, or a matrix value
+MAX_MINUTES = 60
 # The steps of a verdict that waits for other jobs, dedented to the job's keys: it fails unless every job it needs succeeded
 # (a failed, cancelled or skipped job is never green).
 VERDICT_STEPS = r"""steps:
@@ -97,6 +105,9 @@ def structure(text: str) -> list[str]:
         if body_above is not None and indent(line) > body_above:
             continue
         body_above = None
+        value = re.match(r"\s*(?:-\s+)?(?:[A-Za-z_][\w-]*:\s+)?(.*)$", line).group(1)
+        if value[:1] in ("'", '"') and (len(value) < 2 or value[-1] != value[0]):   # YAML would read the next lines into it
+            raise Unreadable(f"a quoted value goes on over more than one line at {line.strip()!r}: write it on one line")
         out.append(line)
         if re.search(r":\s*[|>][-+]?\d*$", line):
             body_above = indent(line)
@@ -157,7 +168,8 @@ def read(text: str) -> tuple[dict, list[str]]:
 
 
 def read_jobs(lines: list[str]) -> dict[str, dict]:
-    """{job id: the job's own name, needs and if, where it sets them}: needs as written (a scalar or a block list of job ids)."""
+    """{job id: the job's own name, needs, if and timeout-minutes, where it sets them}: needs as written (a scalar or a block
+    list of job ids)."""
     start = next((k for k, ln in enumerate(lines) if ln == "jobs:"), None)
     if start is None or start + 1 >= len(lines) or indent(lines[start + 1]) == 0:
         raise Unreadable("no top-level jobs: block with a job in it")
@@ -177,7 +189,7 @@ def read_jobs(lines: list[str]) -> dict[str, dict]:
             raise Unreadable(f"jobs: unexpected indentation at {ln.strip()!r}")
         else:
             key_ind = ind if key_ind is None else key_ind
-            if ind == key_ind and m and m.group(1) in ("name", "needs", "if"):
+            if ind == key_ind and m and m.group(1) in ("name", "needs", "if", "timeout-minutes"):
                 key, val = m.group(1), m.group(2)
                 deeper = i + 1 < len(lines) and indent(lines[i + 1]) > key_ind
                 if val and deeper:   # a plain scalar YAML folds on over the next lines: the value is not what this line says
@@ -299,11 +311,21 @@ def check_one(f: str, text: str, plugins: list[str], verdicts: set[str]) -> list
     if f == "docs.yml" and not DOCS_RUNS_CHECK.search("\n".join(strip_comment(ln) for ln in text.split("\n"))):
         errors.append(f"{f} does not run `python3 .github/scripts/check-workflows.py`: every release-tag ruleset requires its job, "
                       "so that step checks the verdicts on every commit a release tag can point to")
-    return errors + check_verdict(f, text, read_jobs(lines), verdicts)
+    jobs = read_jobs(lines)
+    for jid, job in sorted(jobs.items()):
+        minutes = job.get("timeout-minutes")
+        if minutes is None:
+            errors.append(f"{f}: job {jid} sets no timeout-minutes: GitHub's default is six hours, and a hung job holds its verdict, "
+                          "and every release tag that needs it, that long")
+        elif not TIMEOUT.fullmatch(minutes) or (minutes.isdigit() and int(minutes) > MAX_MINUTES):
+            errors.append(f"{f}: job {jid} timeout-minutes {minutes or repr(minutes)} must be a whole number of minutes from 1 to "
+                          f"{MAX_MINUTES}, or a matrix value")
+    return errors + check_verdict(f, text, jobs, verdicts)
 
 
 def release_ruleset(plugin: str) -> dict:
-    """The tag ruleset a plugin's releases need: a tag <plugin>--v* only on a commit where the plugin's verdict and docs passed."""
+    """The tag ruleset a plugin's releases need: a tag <plugin>--v* only on a commit where the plugin's verdict and docs passed,
+    and never deleted or moved once it is there."""
     return {
         "name": f"{plugin} release tags",
         "target": "tag",
@@ -314,8 +336,29 @@ def release_ruleset(plugin: str) -> dict:
             "strict_required_status_checks_policy": False,
             "do_not_enforce_on_create": False,
             "required_status_checks": [{"context": plugin, "integration_id": ACTIONS}, {"context": "docs", "integration_id": ACTIONS}],
-        }}],
+        }}, {"type": "deletion"}, {"type": "update"}],
     }
+
+
+MAIN = "main-branch.json"
+
+
+def main_ruleset() -> dict:
+    """The branch ruleset main needs: never deleted and never force-pushed. A push that only adds commits goes through, and
+    nothing else is required of it (ADR-0004: releases land by direct pushes)."""
+    return {
+        "name": "main branch",
+        "target": "branch",
+        "enforcement": "active",
+        "bypass_actors": [],
+        "conditions": {"ref_name": {"include": ["refs/heads/main"], "exclude": []}},
+        "rules": [{"type": "deletion"}, {"type": "non_fast_forward"}],
+    }
+
+
+def rulesets_needed(plugins: list[str]) -> dict[str, tuple[str, dict]]:
+    """{file name in .github/rulesets/: (what --ruleset takes to print it, the ruleset)}: each plugin's release tags, and main."""
+    return {f"{p}-release-tags.json": (p, release_ruleset(p)) for p in plugins} | {MAIN: ("main", main_ruleset())}
 
 
 def first_difference(got, want, at: str = "") -> str:
@@ -336,20 +379,22 @@ def first_difference(got, want, at: str = "") -> str:
 
 
 def check_rulesets(rulesets: dict[str, str], plugins: list[str]) -> list[str]:
-    """Every problem with the release-tag rulesets ({file name: text}) of a repository whose plugins are `plugins`."""
-    expected = {f"{p}-release-tags.json": p for p in plugins}
-    errors = [f".github/rulesets/{f} is not a plugin's release-tag ruleset (<plugin>-release-tags.json)" for f in sorted(set(rulesets) - set(expected))]
-    for f, p in sorted(expected.items()):
+    """Every problem with the rulesets ({file name: text}) of a repository whose plugins are `plugins`."""
+    expected = rulesets_needed(plugins)
+    errors = [f".github/rulesets/{f} is not a plugin's release-tag ruleset (<plugin>-release-tags.json) or {MAIN}"
+              for f in sorted(set(rulesets) - set(expected))]
+    for f, (arg, want) in sorted(expected.items()):
         if f not in rulesets:
-            errors.append(f"plugins/{p} has no release-tag ruleset .github/rulesets/{f} (write it with --ruleset {p})")
+            owner = "main has no branch ruleset" if f == MAIN else f"plugins/{arg} has no release-tag ruleset"
+            errors.append(f"{owner} .github/rulesets/{f} (write it with --ruleset {arg})")
             continue
         try:
             got = json.loads(rulesets[f])
         except ValueError as e:
             errors.append(f".github/rulesets/{f} is not JSON: {e}")
             continue
-        if got != release_ruleset(p):
-            errors.append(f".github/rulesets/{f} is not the ruleset {p} needs: {first_difference(got, release_ruleset(p))} (print it with --ruleset {p})")
+        if got != want:
+            errors.append(f".github/rulesets/{f} is not the ruleset {arg} needs: {first_difference(got, want)} (print it with --ruleset {arg})")
     return errors
 
 
@@ -360,6 +405,7 @@ def check(workflows: dict[str, str], plugins: list[str], rulesets: dict[str, str
     expected = {f"{p}.yml" for p in plugins} | {"marketplace.yml", "docs.yml"}
     errors += [f"{f} is not a plugin's workflow, marketplace.yml or docs.yml" for f in sorted(set(yml) - expected)]
     errors += [f"plugins/{p} has no workflow .github/workflows/{p}.yml" for p in sorted(plugins) if f"{p}.yml" not in yml]
+    errors += ["plugins/main: no plugin may be named main: --ruleset main prints main's branch ruleset"] if "main" in plugins else []
     verdicts = {f.removesuffix(".yml") for f in yml}
     for f, text in sorted(yml.items()):
         try:
@@ -406,8 +452,22 @@ MUTATIONS = [
     ("a verdict skipped after a failure", "brand-creator.yml", "    if: ${{ always() }}\n", "", "job brand-creator must run if:"),
     ("a verdict with a name of its own", "docs.yml", "\n  docs:\n", "\n  docs:\n    name: check\n", "job docs sets name: check"),
     ("another job's check carries a verdict's name", "brand-creator.yml", "\n  validate:\n", "\n  validate:\n    name: docs\n", "the verdict of docs.yml"),
+    ("a job without a timeout", "swift.yml", "    timeout-minutes: 10\n", "", "job swift sets no timeout-minutes"),
+    ("a matrix job without a timeout", "brand-creator.yml", "    timeout-minutes: ${{ matrix.job-minutes }}\n", "", "job linux-suite sets no timeout-minutes"),
+    ("a timeout on a step, not on the job", "swift.yml", "    timeout-minutes: 10\n    steps:\n      - uses: actions/checkout@v5\n",
+     "    steps:\n      - uses: actions/checkout@v5\n        timeout-minutes: 10\n", "job swift sets no timeout-minutes"),
+    ("a timeout as long as GitHub's default", "swift.yml", "    timeout-minutes: 10\n", "    timeout-minutes: 360\n", "timeout-minutes 360 must be"),
+    ("a timeout with no value", "docs.yml", "    timeout-minutes: 10\n", "    timeout-minutes: null\n", "timeout-minutes null must be"),
+    ("a quoted value folded over two lines", "swift.yml", JOB, JOB + "    env:\n      X: \"a\n    timeout-minutes: 10\"\n",
+     "a quoted value goes on over more than one line"),
     ("a plugin without a release-tag ruleset", None, "swift-release-tags.json", None, "plugins/swift has no release-tag ruleset"),
-    ("a stray ruleset", None, "main-branch.json", "{}\n", "main-branch.json is not a plugin's release-tag ruleset"),
+    ("main without its branch ruleset", None, MAIN, None, "main has no branch ruleset"),
+    ("a stray ruleset", None, "stray.json", "{}\n", "stray.json is not a plugin's release-tag ruleset"),
+    ("a release tag that can be deleted", "swift-release-tags.json", '"type": "deletion"', '"type": "creation"', "rules.1.type is \"creation\""),
+    ("a release tag that can be moved", "batbelt-release-tags.json", '"type": "update"', '"type": "creation"', "rules.2.type is \"creation\""),
+    ("a main that can be force-pushed", MAIN, '"type": "non_fast_forward"', '"type": "deletion"', "rules.1.type is \"deletion\""),
+    ("a main that an admin may rewrite", MAIN, '"bypass_actors": []',
+     '"bypass_actors": [{"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always"}]', "main-branch.json is not the ruleset main needs"),
     ("a ruleset that is not JSON", "batbelt-release-tags.json", '"target": "tag",', '"target": "tag"', "batbelt-release-tags.json is not JSON"),
     ("a ruleset that requires another check", "brand-creator-release-tags.json", '"context": "brand-creator"', '"context": "linux"', "required_status_checks.0.context is \"linux\""),
     ("a ruleset that lets an admin bypass it", "batbelt-release-tags.json", '"bypass_actors": []',
@@ -452,14 +512,18 @@ def self_test() -> int:
         got = check(wf, plugins, rs)
         if not any(words in e for e in got):
             missed.append(f"{what}: not caught (errors: {got or 'none'})")
+    got = check(workflows, plugins + ["main"], rulesets)   # the one rule a file change cannot break: a plugin's name
+    if not any("no plugin may be named main" in e for e in got):
+        missed.append(f"a plugin named main: not caught (errors: {got or 'none'})")
     for m in missed:
         print("SELF-TEST FAILED:", m, file=sys.stderr)
-    print(f"self-test: {len(MUTATIONS) - len(missed)} of {len(MUTATIONS)} broken rules caught")
+    total = len(MUTATIONS) + 1
+    print(f"self-test: {total - len(missed)} of {total} broken rules caught")
     return 1 if missed else 0
 
 
 def live() -> int:
-    """Every plugin's ruleset on GitHub, compared with its file: 0 when all match, 1 when one differs or is missing, 3 when gh cannot ask."""
+    """Every ruleset on GitHub, compared with its file: 0 when all match, 1 when one differs or is missing, 3 when gh cannot ask."""
     import subprocess
 
     def gh(*args: str):
@@ -476,12 +540,13 @@ def live() -> int:
     try:
         listed = [r for page in gh("--paginate", "--slurp", "repos/{owner}/{repo}/rulesets") for r in page]
         have = {r["name"]: r["id"] for r in listed}
-        expected = {release_ruleset(p)["name"] for p in plugins}
-        for r in listed:   # a tag ruleset no file describes can refuse tags while every file matches
-            if r.get("target") == "tag" and r["name"] not in expected:
-                errors.append(f"GitHub has a tag ruleset {r['name']!r} (id {r['id']}, {r.get('enforcement')}) that no file describes")
-        for p in plugins:
-            f, want = f".github/rulesets/{p}-release-tags.json", release_ruleset(p)
+        needed = rulesets_needed(plugins)
+        expected = {want["name"] for _, want in needed.values()}
+        for r in listed:   # a ruleset no file describes can refuse tags or pushes while every file matches
+            if r["name"] not in expected:
+                errors.append(f"GitHub has a {r.get('target')} ruleset {r['name']!r} (id {r['id']}, {r.get('enforcement')}) that no file describes")
+        for name, (_, want) in sorted(needed.items()):
+            f = f".github/rulesets/{name}"
             if want["name"] not in have:
                 errors.append(f"GitHub has no ruleset {want['name']!r}: create it with gh api --method POST 'repos/{{owner}}/{{repo}}/rulesets' --input {f}")
                 continue
@@ -495,7 +560,7 @@ def live() -> int:
         return 3
     for e in errors:
         print("ERROR:", e, file=sys.stderr)
-    print(f"{len(plugins)} release-tag rulesets on GitHub compared with their files, {len(errors)} errors")
+    print(f"{len(needed)} rulesets on GitHub compared with their files, {len(errors)} errors")
     return 1 if errors else 0
 
 
@@ -507,10 +572,12 @@ def main() -> int:
         return live()
     if len(args) == 2 and args[0] == "--ruleset":
         _, plugins, _ = repo()
-        if args[1] not in plugins:
-            print(f"--ruleset: {args[1]} is not a plugin under plugins/ ({', '.join(plugins)})", file=sys.stderr)
+        found = [want for arg, want in rulesets_needed(plugins).values() if arg == args[1]]
+        if len(found) != 1:
+            print(f"--ruleset: {args[1]} is neither main nor a plugin under plugins/ ({', '.join(plugins)})" if not found else
+                  "--ruleset main: a plugin is named main, so main's branch ruleset cannot be told from its release tags", file=sys.stderr)
             return 2
-        print(json.dumps(release_ruleset(args[1]), indent=2))
+        print(json.dumps(found[0], indent=2))
         return 0
     if args:
         print(__doc__, file=sys.stderr)
@@ -519,7 +586,7 @@ def main() -> int:
     errors = check(workflows, plugins, rulesets)
     for e in errors:
         print("ERROR:", e, file=sys.stderr)
-    print(f"{len(workflows)} workflows and {len(rulesets)} release-tag rulesets checked, {len(errors)} errors")
+    print(f"{len(workflows)} workflows and {len(rulesets)} rulesets checked, {len(errors)} errors")
     return 1 if errors else 0
 
 
