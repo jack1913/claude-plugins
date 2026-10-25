@@ -25,7 +25,7 @@ proven.
 | [E-mail signature in real mail clients](#the-e-mail-signature-in-real-mail-clients) | never run | |
 | [A real Linux desktop session](#a-real-linux-desktop-session) | never run | |
 | [Windows](#windows) | never run | |
-| [CI first run](#ci-first-run) | 2026-10-25, run 40154228151: the earlier layout passed; the macOS halves and the verdict have not run yet | |
+| [CI first run](#ci-first-run) | 2026-10-25, runs 40170278108 (push) and 40171295112 (by hand) on commit b621a96 | every job passed, the two macOS smoke halves and the `brand-creator` verdict included |
 
 ## Behaviour evals (`claude plugin eval`)
 
@@ -273,5 +273,6 @@ job must run (not skip) `claude plugin validate --strict`, the macos (pytest) jo
 `BRAND_CREATOR_REQUIRE_ALL=1`, each macOS smoke job must print the `SMOKE PASSED` line of its half, and the `brand-creator`
 verdict must pass. Record the run URL and the result.
 
-**Last run:** 2026-10-25, run 40154228151 (commit 24a09e1), in the earlier layout (one macOS job, a `linux` gate): every
-job passed. The two macOS smoke jobs and the `brand-creator` verdict have not run yet.
+**Last run:** 2026-10-25, runs 40170278108 (push) and 40171295112 (by hand) on commit b621a96: every job passed and
+printed its line (`LINUX RUN OK`, each half's `SMOKE PASSED (part ...)`, `Validation passed`), and the verdict read
+every job as success.
