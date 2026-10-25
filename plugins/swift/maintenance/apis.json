@@ -1278,6 +1278,9 @@
     "Apple names that are no standalone index entry (@NSManaged attribute, nested notification name)": [
       "NSManaged",
       "NSSystemTimeZoneDidChange"
+    ],
+    "file names in prose (SKILL.md in the reference indexes)": [
+      "SKILL"
     ]
   }
 }
