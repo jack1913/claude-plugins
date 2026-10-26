@@ -1,0 +1,13 @@
+[
+  {
+    "pid": 13968,
+    "id": "573b7648",
+    "cwd": "C:\\work\\repo",
+    "kind": "background",
+    "startedAt": 1793030241624,
+    "sessionId": "573b7648-7be7-4e89-9619-b87dca263534",
+    "name": "puppet-probe",
+    "status": "idle",
+    "state": "done"
+  }
+]

@@ -1,0 +1,5 @@
+backgrounded · 573b7648 · puppet-probe
+  claude agents             list sessions
+  claude attach 573b7648    open in this terminal
+  claude logs 573b7648      show recent output
+  claude stop 573b7648      stop this session

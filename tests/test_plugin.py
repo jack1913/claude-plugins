@@ -11,7 +11,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 MARKETPLACE = ROOT / ".claude-plugin" / "marketplace.json"
 BATBELT = ROOT / "plugins" / "batbelt"
 SKILLS = BATBELT / "skills"
-EXPECTED_SKILLS = {"grill-me", "prove-it", "onboard-repo"}
+EXPECTED_SKILLS = {"grill-me", "prove-it", "onboard-repo", "puppet-master"}
 
 
 def _frontmatter(path):
@@ -26,7 +26,7 @@ def _skill_files():
     return sorted(SKILLS.rglob("SKILL.md"))
 
 
-def test_the_three_skills_are_present():
+def test_the_four_skills_are_present():
     assert {p.name for p in SKILLS.iterdir() if p.is_dir()} == EXPECTED_SKILLS
     for name in EXPECTED_SKILLS:
         assert (SKILLS / name / "SKILL.md").is_file()

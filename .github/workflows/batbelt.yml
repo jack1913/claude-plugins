@@ -34,11 +34,12 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           version: "0.12.11"
-      - name: Tests
-        run: uv run --no-project --with-requirements tests/requirements.txt python -m pytest tests -q
+      # before the tests: tests/test_puppet_master.py runs puppet-master's node:test suite
       - uses: actions/setup-node@v5
         with:
           node-version: "24"
+      - name: Tests
+        run: uv run --no-project --with-requirements tests/requirements.txt python -m pytest tests -q
       # a CLI that cannot be installed fails the job: an unvalidated manifest must not pass the verdict
       - name: Install the Claude Code CLI
         run: |
