@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A `puppet-master` skill: one Claude session starts background worker sessions, one job each, relays their questions to you one at a time, compacts a worker only between tasks once it is measured at 30% of its context or more, and closes it when its job is done. It needs Node.js 20 or newer and a setting of your own first. See [Run background workers](docs/manual/use/run-background-workers.md).
+
 ## [0.2.1] - 2026-10-20
 
 ### Added

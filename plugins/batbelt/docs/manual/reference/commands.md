@@ -8,6 +8,7 @@ Everything batbelt adds to Claude Code. "You only" means it runs only when you t
 | --- | --- | --- | --- |
 | `/batbelt:grill-me` | you or Claude | Interviews you about a plan or design, one question at a time with a suggested answer, until every decision holds up | — |
 | `/batbelt:prove-it` | you or Claude | Checks business, legal and market claims against real sources and writes an assumption register | — |
+| `/batbelt:puppet-master` | you or Claude | Runs background worker sessions from your session, one job each, compacting a worker only between tasks and closing it when its job is done | — |
 | `/batbelt:onboard-repo` | you only | Sets up a repository so Claude works well in it | `[--sync] [--check] [--no-review] [--resume] [--unattended] [--with update-deps] [--without update-deps]` |
 
 ## grill-me
@@ -21,6 +22,12 @@ Say "grill me", "grill this plan" or "stress-test my design", or type the comman
 Type the command, or ask "is this actually true?" or "verify the claims in this business case". Say "spec this change" to get a change spec as well as the register. It takes no arguments: it asks for the sources, the reference date and the file location. How-to: [Prove a claim](../use/prove-a-claim.md).
 
 > /batbelt:prove-it
+
+## puppet-master
+
+Ask Claude to start a background worker for a job, or type the command. It takes no arguments: say the job, the folder and whether the worker may commit. It needs Node.js 20 or newer and some setup of your own first. How-to: [Run background workers](../use/run-background-workers.md).
+
+> /batbelt:puppet-master
 
 ## onboard-repo
 

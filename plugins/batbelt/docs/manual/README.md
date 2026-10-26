@@ -7,6 +7,7 @@ How to use batbelt. New here? Start with the [plugin README](../../README.md).
 - [Grill a plan](use/grill-a-plan.md): get questioned until every decision holds up
 - [Prove a claim](use/prove-a-claim.md): check a number, a legal rule or a market claim against real sources
 - [Set up a repository](use/set-up-a-repository.md): make a repository work well with Claude
+- [Run background workers](use/run-background-workers.md): let one session start, compact and close other sessions, one job each
 
 ## Look it up
 

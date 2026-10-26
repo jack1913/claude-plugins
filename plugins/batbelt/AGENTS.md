@@ -1,6 +1,6 @@
 # AGENTS.md — batbelt plugin (pointer index)
 
-batbelt is a Claude Code plugin in `plugins/batbelt/` of the monorepo `jack1913/claude-plugins`. It ships three skills: `grill-me`, `prove-it` and `onboard-repo`. Paths below are relative to this folder, except the tests, workflow and docs standard rows, which are from the repository root.
+batbelt is a Claude Code plugin in `plugins/batbelt/` of the monorepo `jack1913/claude-plugins`. It ships four skills: `grill-me`, `prove-it`, `onboard-repo` and `puppet-master`. Paths below are relative to this folder, except the tests, workflow and docs standard rows, which are from the repository root.
 
 No `CLAUDE.md` at this folder's root: `claude plugin validate --strict` rejects one.
 
@@ -16,13 +16,16 @@ No `CLAUDE.md` at this folder's root: `claude plugin validate --strict` rejects 
 | onboard-repo long sections, indexed | `skills/onboard-repo/references/_index.md` |
 | onboard-repo helper scripts | `skills/onboard-repo/scripts/` |
 | Files onboard-repo stamps into other repositories | `skills/onboard-repo/templates/` |
+| `puppet-master` | `skills/puppet-master/SKILL.md` |
+| puppet-master's worker brief template | `skills/puppet-master/worker-brief.md` |
+| puppet-master's helper (Node, built-ins only) | `skills/puppet-master/scripts/puppet.mjs` |
 | Licence | `LICENSE` |
 | Changelog | `CHANGELOG.md` |
 | Docs folders | `docs/README.md` |
 | Manual index | `docs/manual/README.md` |
 | Every command and argument | `docs/manual/reference/commands.md` |
 | How each skill works | `docs/internals/README.md` |
-| Tests (in the root `tests/`, not here) | `tests/test_plugin.py`, `tests/test_onboard_repo.py`, `tests/test_permission_plan.py`, `tests/test_review_fixes.py` |
+| Tests (in the root `tests/`, not here) | `tests/test_plugin.py`, `tests/test_onboard_repo.py`, `tests/test_permission_plan.py`, `tests/test_review_fixes.py`, `tests/test_puppet_master.py` (runs `tests/puppet_master/*.test.mjs`; needs `node` 20+) |
 | CI workflow | `.github/workflows/batbelt.yml` |
 | Docs standard | `docs/internals/docs-standard.md` |
 

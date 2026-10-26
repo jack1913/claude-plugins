@@ -14,7 +14,7 @@ Plugins for Claude Code: make a brand, write better Swift, and think a plan thro
 
 - [brand-creator](use/brand-creator.md): a logo, colours and every file your brand needs
 - [swift](use/swift.md): SwiftUI, concurrency and tests the Apple-native way, plus screen reviews
-- [batbelt](use/batbelt.md): grill a plan, prove a claim, set up a repository
+- [batbelt](use/batbelt.md): grill a plan, prove a claim, set up a repository, run background workers
 
 ## Look it up
 

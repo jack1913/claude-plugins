@@ -30,7 +30,8 @@ python3 .github/scripts/check-workflows.py --self-test
 
 ## batbelt
 
-From the repository root (its tests live in `tests/`). A pass ends with a line like `N passed in Ts`:
+From the repository root (its tests live in `tests/`). `tests/test_puppet_master.py` runs puppet-master's `node:test`
+suite, so `node` 20 or newer must be on `PATH`; without it that test fails. A pass ends with a line like `N passed in Ts`:
 
 ```bash
 uv run --no-project --with-requirements tests/requirements.txt python -m pytest tests -q

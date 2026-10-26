@@ -12,6 +12,7 @@ Find what you want to do; the plugin next to it is the one to install.
 | Stress-test a plan before you build it | [batbelt](../use/batbelt.md) |
 | Check a number, a legal rule or a market claim against real sources | [batbelt](../use/batbelt.md) |
 | Set up a repository so Claude works well in it | [batbelt](../use/batbelt.md) |
+| Run background Claude sessions from one session, one job each | [batbelt](../use/batbelt.md) |
 
 Then [install it](install-a-plugin.md). You can install more than one.
 

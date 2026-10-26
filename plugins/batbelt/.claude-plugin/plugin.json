@@ -2,7 +2,7 @@
   "name": "batbelt",
   "displayName": "batbelt",
   "version": "0.2.1",
-  "description": "Grill a plan, prove a claim against real sources, and set up a repository for Claude.",
+  "description": "Grill a plan, prove a claim against real sources, set up a repository for Claude, and run background workers.",
   "author": {
     "name": "Jacek Pytlik"
   },
@@ -15,6 +15,7 @@
     "fact-checking",
     "assumptions",
     "onboarding",
-    "repository-setup"
+    "repository-setup",
+    "background-sessions"
   ]
 }

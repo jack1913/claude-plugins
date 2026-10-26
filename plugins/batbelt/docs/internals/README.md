@@ -8,6 +8,7 @@ Notes for people who change batbelt. For using it, read the [manual](../manual/R
 | [onboard-repo: agent configuration](onboard-repo-agent-config.md) | Permissions, `.gitignore`, rules, the Copilot port and rule mining |
 | [onboard-repo: docs and gates](onboard-repo-docs.md) | The docs tiers, the `check-docs` gate, the coverage record and ADR mining |
 | [prove-it](prove-it.md) | The evidence workflow: intake, state, research limits, status values |
+| [puppet-master](puppet-master.md) | The master's rules, the verified CLI mechanics, measuring, the worker registry and failure handling |
 | [grill-me](grill-me.md) | The interview skill and why it is one skill |
 
 ## Where things are
@@ -15,6 +16,7 @@ Notes for people who change batbelt. For using it, read the [manual](../manual/R
 | What | Where |
 | --- | --- |
 | The skills | [`skills/`](../../skills/) |
+| puppet-master's helper | [`skills/puppet-master/scripts/puppet.mjs`](../../skills/puppet-master/scripts/puppet.mjs) |
 | onboard-repo's helper scripts | [`skills/onboard-repo/scripts/`](../../skills/onboard-repo/scripts/) |
 | Long sections of the onboard-repo procedure | [`skills/onboard-repo/references/`](../../skills/onboard-repo/references/_index.md) |
 | Files onboard-repo stamps into other repositories | [`skills/onboard-repo/templates/`](../../skills/onboard-repo/templates/) |
@@ -33,6 +35,7 @@ uv run --no-project --with-requirements tests/requirements.txt python -m pytest 
 - `tests/test_onboard_repo.py` checks onboard-repo's helpers and what its procedure says.
 - `tests/test_permission_plan.py` checks the permission plans onboard-repo proposes.
 - `tests/test_review_fixes.py` pins defects found by running the skill end to end.
+- `tests/test_puppet_master.py` runs puppet-master's Node suite, `tests/puppet_master/*.test.mjs`. It needs `node` 20 or newer on `PATH`; without it the test fails.
 
 ## Ground rules
 

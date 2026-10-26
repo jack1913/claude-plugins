@@ -35,7 +35,7 @@ brand-creator, swift), each one self-contained and versioned on its own.
 | A plugin's version (its only home) | `plugins/<name>/.claude-plugin/plugin.json` (`version`) |
 | How each plugin is tested in CI | `.github/workflows/<name>.yml` (`run:` lines) |
 | What the docs check enforces | `.github/scripts/check-docs-standard.py` (module docstring), `.markdownlint-cli2.yaml`, `lychee.toml` |
-| batbelt's tests | `tests/test_plugin.py`, `tests/test_onboard_repo.py`, `tests/test_permission_plan.py` |
+| batbelt's tests | `tests/test_plugin.py`, `tests/test_onboard_repo.py`, `tests/test_permission_plan.py`, `tests/test_review_fixes.py`, `tests/test_puppet_master.py` (the Node suite in `tests/puppet_master/`) |
 | onboard-repo (source of truth for the stamped skills below) | `plugins/batbelt/skills/onboard-repo/` |
 | Working on swift | `plugins/swift/AGENTS.md` (it has its own `.claude/` skills, rules and settings) |
 | Working on brand-creator | `plugins/brand-creator/AGENTS.md` (script contract: `plugins/brand-creator/scripts/CONTRACT.md`; decisions: `plugins/brand-creator/docs/adr/README.md`, archived log: `plugins/brand-creator/docs/archive/decisions-log.md`) |
