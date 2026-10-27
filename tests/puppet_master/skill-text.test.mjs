@@ -32,6 +32,13 @@ test("the body covers every subcommand, the window variable and the thresholds",
   assert.ok(skill.includes("50%"));
 });
 
+test("on start the master asks the user before using sessions that are already open", () => {
+  const skill = read("SKILL.md");
+  assert.match(skill, /## On start/);
+  assert.ok(skill.includes("ListAgents"), "SKILL.md does not tell the master to list open sessions");
+  assert.match(skill, /ask the\s+user\s+whether\s+you\s+may\s+use\s+them/);
+});
+
 test("the worker brief carries every placeholder", () => {
   const brief = read("worker-brief.md");
   for (const p of ["{{job}}", "{{commit_rules}}", "{{master_name}}"]) {
