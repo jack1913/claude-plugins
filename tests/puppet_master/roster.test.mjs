@@ -275,3 +275,25 @@ test("an old-format record counts as an editing background worker", () => {
   assert.equal(isEditing({ id: w.id, sessionId: w.sessionId, cwd: REPO, checkout: REPO }, [w]), true);
   assert.equal(isEditing({ id: w.id, sessionId: w.sessionId, cwd: REPO, checkout: REPO }, []), false);
 });
+
+test("spawn keeps a changed record: the name is still listed under a new session id", async () => {
+  const fresh = background("w9", 9);
+  const t = setup([interactive("u1", 1)]);
+  const run = t.deps.run;
+  t.deps.run = (cmd, args, opts) => {
+    if (args[0] === "--bg") {
+      t.deps.agents.push(fresh);
+      return { code: 0, stdout: `backgrounded · ${fresh.id} · w9\n`, stderr: "" };
+    }
+    return run(cmd, args, opts);
+  };
+  try {
+    adoptSession(t.deps, "u1");
+    t.deps.agents[0] = { ...t.deps.agents[0], sessionId: "cccccccc-0000-4000-8000-000000000000" };
+    assert.equal(await main(["spawn", "w9", REPO, t.brief("job")], t.deps), 0);
+    assert.ok(t.readRegistry().workers.u1, "spawn must not prune a changed record");
+    assert.doesNotMatch(t.out.join("\n"), /pruned/);
+  } finally {
+    t.cleanup();
+  }
+});

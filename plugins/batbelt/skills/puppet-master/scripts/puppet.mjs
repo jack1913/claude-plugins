@@ -10,7 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { addFinding, decide, headline, markShipped, summarize } from "./analyst.mjs";
+import { addFinding, decide, headline, markShipped, summarize, unreviewedReport } from "./analyst.mjs";
 import { harvest, resolveLogsDir } from "./harvest.mjs";
 
 export class PuppetError extends Error {
@@ -501,8 +501,9 @@ export function spawnWorker(deps, name, cwd, briefFile, { job } = {}) {
         `worker "${other}" (id ${rec.id ?? rec.sessionId}) is already editing ${rec.checkout}; one editing worker per checkout — close it or use another checkout`,
       );
     }
-    // A live session that is clean, done or the analyst stays in the roster.
-    if (isLive(agents, rec)) continue;
+    // A live session that is clean, done or the analyst stays in the roster, and so does one
+    // whose name is listed under a new session id: the user decides whether it was cleared.
+    if (isLive(agents, rec) || agents.some((a) => a.name === other)) continue;
     deps.out(`pruned stale record ${other} (resume: ${resumeHint(rec.cwd, rec.sessionId)})`);
     queueHarvest(reg, other, rec.sessionId);
     delete reg.workers[other];
@@ -659,6 +660,7 @@ const USAGE = [
   "  cycle <worker> <focus> [--next <brief-file>]",
   "  close <worker>",
   "  harvest [--master <session>] [--logs <dir>] [--plugin-data <dir>]",
+  "  logs [--logs <dir>] [--plugin-data <dir>]",
   "  finding --tag <tag> --target <target> --evidence <id[,id]> --note <text> [--logs ...]",
   "  summary [--day YYYY-MM-DD] [--json] [--logs ...]",
   "  decide <proposal> approve|reject|defer --tag <tag> --target <target> --hypothesis <text> [--logs ...]",
@@ -821,7 +823,18 @@ function cmdHarvest(deps, positional, flags) {
     saveRegistry(deps, reg);
   }
   const missing = r.missing.length > 0 ? `; no transcript: ${r.missing.join(", ")}` : "";
-  deps.out(`harvested ${r.events} events from ${r.sessions} sessions (${r.lines} new lines) into ${dir}${missing}`);
+  const restarted = r.restarted.length > 0 ? `; restarted from the top (transcript shrank): ${r.restarted.join(", ")}` : "";
+  deps.out(`harvested ${r.events} events from ${r.sessions} sessions (${r.lines} new lines) into ${dir}${missing}${restarted}`);
+  return 0;
+}
+
+// The logs folder, and the newest report of an earlier day the user has not reviewed.
+function cmdLogs(deps, positional, flags) {
+  wantPositional(positional, 0, "logs");
+  const dir = logsDirFor(deps, flags);
+  deps.out(dir);
+  const report = unreviewedReport(deps, { logsDir: dir });
+  if (report) deps.out(`unreviewed report: ${report}`);
   return 0;
 }
 
@@ -925,6 +938,7 @@ const COMMANDS = {
   cycle: cmdCycle,
   close: cmdClose,
   harvest: cmdHarvest,
+  logs: cmdLogs,
   finding: cmdFinding,
   summary: cmdSummary,
   decide: cmdDecide,

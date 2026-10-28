@@ -138,16 +138,20 @@ function dayFolders(deps, logsDir) {
   return names.filter((n) => DAY_RE.test(n)).sort();
 }
 
+function readStats(deps, dir) {
+  try {
+    return JSON.parse(deps.fs.readFileSync(path.join(dir, "harvest-stats.json"), "utf8"));
+  } catch (e) {
+    if (e.code === "ENOENT") return { runs: 0, sessions: [], lines: 0, events: 0 };
+    throw new PuppetError(`cannot read ${dir}/harvest-stats.json: ${e.message}`);
+  }
+}
+
 const mean = (xs) => (xs.length === 0 ? null : xs.reduce((a, b) => a + b, 0) / xs.length);
 
 export function summarize(deps, { logsDir, day = dayOf(deps.now()) }) {
   const dir = path.join(logsDir, day);
-  let stats = { runs: 0, sessions: [], lines: 0, events: 0 };
-  try {
-    stats = JSON.parse(deps.fs.readFileSync(path.join(dir, "harvest-stats.json"), "utf8"));
-  } catch (e) {
-    if (e.code !== "ENOENT") throw new PuppetError(`cannot read ${dir}/harvest-stats.json: ${e.message}`);
-  }
+  const stats = readStats(deps, dir);
   const events = readLines(deps, path.join(dir, "events.jsonl"));
   const eventsByKind = {};
   for (const e of events) eventsByKind[e.kind] = (eventsByKind[e.kind] ?? 0) + 1;
@@ -157,9 +161,9 @@ export function summarize(deps, { logsDir, day = dayOf(deps.now()) }) {
   const findingsByTag = {};
   for (const f of findings) findingsByTag[f.tag] = (findingsByTag[f.tag] ?? 0) + 1;
 
-  // Days that harvested anything: the denominators for before/after.
+  // Days that read any transcript line, events or not: the denominators for before/after.
   const days = dayFolders(deps, logsDir)
-    .filter((d) => readLines(deps, path.join(logsDir, d, "events.jsonl")).length > 0)
+    .filter((d) => readStats(deps, path.join(logsDir, d)).lines > 0 || readLines(deps, path.join(logsDir, d, "events.jsonl")).length > 0)
     .map((d) => ({
       day: d,
       tags: readLines(deps, path.join(logsDir, d, "findings.jsonl"))
@@ -201,8 +205,28 @@ export function summarize(deps, { logsDir, day = dayOf(deps.now()) }) {
 // The report's first line says how much was read, so "no friction" cannot hide "read
 // nothing".
 export function headline(s) {
-  if (s.events === 0) {
+  if (s.lines === 0 && s.events === 0) {
     return "read nothing today: no transcript lines were harvested, so this report has no evidence either way";
   }
   return `read ${s.sessions} sessions, ${s.lines} transcript lines, ${s.events} events; ${s.findings} findings`;
+}
+
+// The newest report of a day before today whose last line is not `Reviewed: <date>`, so a
+// skipped review is not hidden by a later one; null when there is none. Today's report is
+// still being written.
+export function unreviewedReport(deps, { logsDir }) {
+  const today = dayOf(deps.now());
+  for (const day of dayFolders(deps, logsDir).filter((d) => d < today).reverse()) {
+    const p = path.join(logsDir, day, "report.md");
+    let text;
+    try {
+      text = deps.fs.readFileSync(p, "utf8");
+    } catch (e) {
+      if (e.code === "ENOENT") continue;
+      throw new PuppetError(`cannot read ${p}: ${e.message}`);
+    }
+    const last = text.trimEnd().split(/\r?\n/).at(-1) ?? "";
+    if (!last.startsWith("Reviewed:")) return p;
+  }
+  return null;
 }

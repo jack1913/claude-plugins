@@ -189,3 +189,55 @@ test("TAGS is the closed list from the design", () => {
     "other",
   ]);
 });
+
+test("summary headline counts a day that read lines but found no events", () => {
+  const t = setup();
+  try {
+    t.stats("2026-10-27", { runs: 1, sessions: ["u1"], lines: 120, events: 0 });
+    assert.equal(headline(summarize(t.deps, { logsDir: t.logs })), "read 1 sessions, 120 transcript lines, 0 events; 0 findings");
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("a day that read lines but found no events counts as a zero day after a ship", () => {
+  const t = setup(at(25));
+  try {
+    t.events("2026-10-25", [ev("s:1", "user-turn")]);
+    finding(t);
+    t.useDay(26);
+    decide(t.deps, { logsDir: t.logs, proposalId: "P-1", decision: "approve", tag: "user-correction", target: "SKILL.md", hypothesis: "h" });
+    markShipped(t.deps, { logsDir: t.logs, proposalId: "P-1", sha: "abc1234" });
+    t.stats("2026-10-26", { runs: 1, sessions: ["u1"], lines: 50, events: 0 });
+    const [p] = summarize(t.deps, { logsDir: t.logs }).decisions.shipped;
+    assert.equal(p.perDayBefore, 1);
+    assert.equal(p.perDayAfter, 0);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("cli: logs prints the folder and the newest earlier report not yet reviewed", async () => {
+  const t = setup(at(28));
+  const report = (day, text) => {
+    fs.mkdirSync(path.join(t.logs, day), { recursive: true });
+    fs.writeFileSync(path.join(t.logs, day, "report.md"), text);
+  };
+  try {
+    const logs = ["--logs", t.logs];
+    assert.equal(await main(["logs", ...logs], t.deps), 0);
+    assert.deepEqual(t.out, [t.logs]);
+    report("2026-10-25", "# 25\n");
+    report("2026-10-26", "# 26\n\nReviewed: 2026-10-27\n");
+    report("2026-10-28", "# today\n");
+    t.out.length = 0;
+    assert.equal(await main(["logs", ...logs], t.deps), 0);
+    assert.deepEqual(t.out, [t.logs, `unreviewed report: ${path.join(t.logs, "2026-10-25", "report.md")}`]);
+    report("2026-10-27", "# 27\n");
+    t.out.length = 0;
+    assert.equal(await main(["logs", ...logs], t.deps), 0);
+    assert.equal(t.out[1], `unreviewed report: ${path.join(t.logs, "2026-10-27", "report.md")}`);
+  } finally {
+    t.cleanup();
+  }
+});

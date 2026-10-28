@@ -32,7 +32,7 @@ test("the body covers every helper command, the logs flags and the thresholds", 
   const skill = read("SKILL.md");
   const words = [
     "measure", "list", "spawn", "cycle", "close", "adopt", "assign", "finish", "pick", "harvest",
-    "finding", "summary", "decide", "shipped", "--window", "--next", "--job", "--role analyst",
+    "finding", "summary", "decide", "shipped", "logs", "--window", "--next", "--job", "--role analyst",
     "--logs", "--plugin-data", "${user_config.puppet_logs_dir}", "${CLAUDE_PLUGIN_DATA}",
     "PUPPET_CONTEXT_WINDOW", "PUPPET_CLAUDE_BIN", "PUPPET_LOGS_DIR", "30%", "50%",
   ];
@@ -75,6 +75,16 @@ test("repository work is a job for a session, and relays quote the user verbatim
   assert.match(skill, /verbatim/);
   assert.match(skill, /my\s+reading/);
   assert.match(skill, /`pick`[\s\S]{0,200}`spawn`/);
+});
+
+test("the Briefs section says to fill {{master_name}} in both briefs", () => {
+  const briefs = section(read("SKILL.md"), "Briefs");
+  assert.match(briefs, /\{\{master_name\}\}[^\n]*your own session name/);
+});
+
+test("on start the master finds an unreviewed report with puppet logs", () => {
+  const start = section(read("SKILL.md"), "On start");
+  assert.match(start, /`puppet logs LOGS`/);
 });
 
 test("the worker brief carries every placeholder", () => {

@@ -133,7 +133,7 @@ automatically, and the report says how much it read.
   counts only if it is set and has no `${` in it. On 2.1.312 an unset option reaches the skill text as the literal
   `${user_config.puppet_logs_dir}`, while `${CLAUDE_PLUGIN_DATA}` is filled in.
 - **Layout:** `<logs>/offsets.json` (where each transcript was last read, across days),
-  `<logs>/decisions.jsonl`, and one folder per local day holding `events.jsonl`, `harvest-stats.json`,
+  `<logs>/decisions.jsonl`, `<logs>/harvest.lock` while a harvest runs, and one folder per local day holding `events.jsonl`, `harvest-stats.json`,
   `findings.jsonl` and the analyst's `report.md`.
 - **`harvest`** is deterministic. For every roster session, live or not, every session that left the roster since the
   last harvest (closed, dropped as `gone`, or re-adopted under a new session id: the registry's `pendingHarvest`,
@@ -141,21 +141,29 @@ automatically, and the report says how much it read.
   ten kinds: `user-turn`, `message-in`, `message-out`, `helper-error`,
   `command-failed`, `manual-cli`, `cli-unknown`, `permission-denied`, `compact-manual` and `compact-auto`. Each event
   has an id `<first 8 of sessionId>:<line>` (with `.2`, `.3` when one line yields several), a timestamp and an excerpt
-  of at most 300 characters. A last line that does not parse is being written: it is not consumed.
+  of at most 300 characters. A last line that does not parse is being written: it is not consumed. A transcript with
+  fewer lines than its stored offset was replaced, so it is read again from the top and the one-line log names it.
+  One harvest runs at a time: a second one is refused while `harvest.lock` exists, and a lock older than two minutes
+  was left by a crash and is taken over. A crash between appending the events and writing the offsets can still log
+  that run's events twice.
+- **`logs`** prints the logs folder and the newest report of an earlier day whose last line is not `Reviewed: <date>`.
+  The master runs it on start, so finding the folder never needs a harvest.
 - **`finding`** records a tag from the closed list, a target (`SKILL.md`, `worker-brief.md`, `puppet.mjs`, `docs`)
   and evidence ids that must exist among the day's events. A target `instrument:<file>` names the analyst's own
   brief or scripts: it is flagged to the user and never proposed.
-- **`summary`** starts with a headline of sessions, lines, events and findings. With no events, the headline says
-  nothing was read, so an empty day cannot pass for a clean one.
+- **`summary`** starts with a headline of sessions, lines, events and findings. With no lines read, the headline says
+  nothing was read, so an empty day cannot pass for a clean one; lines read with no events is a clean day.
 - **`decide`** and **`shipped`** append rows to `decisions.jsonl`, folded by proposal id. For a shipped proposal,
-  `summary` gives the mean count of its tag per day before and after the ship day, over days that harvested anything.
+  `summary` gives the mean count of its tag per day before and after the ship day, over days that read any transcript line.
 
 ### Redaction
 
 Users paste tokens into sessions. Before an excerpt or a note is written, any text that matches a JWT, an Atlassian
 token, a GitHub token, an `sk-` key, a `KEY=value` with a secret-like key, a private-key header or a run of 40 or more
 base64 characters is replaced whole with `[redacted]`, before truncation. A full 40-character commit SHA is redacted
-too. A harvest of the 2026-10-26 and 2026-10-27 coordinator transcripts (262 events) wrote none of the tokens pasted
+too. Three near-misses are kept: an upper-case `KEY=value` needs an upper-case key, a lower-case one needs the exact
+word (`token`, `secret`, `password`, `passwd`, `api_key`) and a value holding a letter, so `tokens: 218034` stays; and a
+long run of one-case words joined by underscores, such as a test name, is an identifier. A harvest of the 2026-10-26 and 2026-10-27 coordinator transcripts (262 events) wrote none of the tokens pasted
 in them.
 
 ## Failure handling

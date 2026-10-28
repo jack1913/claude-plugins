@@ -11,7 +11,7 @@ decision.
 
 `puppet <command>` below is short for `node "<skill dir>/scripts/puppet.mjs" <command>`. `LOGS` is
 short for `--logs '${user_config.puppet_logs_dir}' --plugin-data '${CLAUDE_PLUGIN_DATA}'`; pass it to
-`harvest`, `finding`, `summary`, `decide` and `shipped`, in single quotes exactly as written: an unset
+`harvest`, `logs`, `finding`, `summary`, `decide` and `shipped`, in single quotes exactly as written: an unset
 option arrives as its literal placeholder, which Bash refuses inside double quotes.
 
 ## On start
@@ -27,13 +27,14 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
    `puppet adopt puppet-analyst --role analyst`. The analyst never gets a job.
 4. `puppet adopt <session>` every other session the user named. `adopt` records each as `clean` (no
    turns yet) or `unknown` (it already did something).
-5. If the newest `<logs>/<day>/report.md` from an earlier day has no `Reviewed:` line at its end,
-   offer to review it first (see Wrap-up). `harvest` prints the logs folder.
+5. Run `puppet logs LOGS`. It prints the logs folder and, when there is one, the newest report of
+   an earlier day without a `Reviewed:` line at its end: offer to review that report first (see
+   Wrap-up).
 
 ## Rules
 
 1. **Housekeeping only.** On your own you may `adopt`, `assign`, `finish`, `pick`, `spawn`,
-   `cycle`, `close` and `harvest`, each with a one-line log to the user. Commits (unless the user
+   `cycle`, `close`, `harvest` and `logs`, each with a one-line log to the user. Commits (unless the user
    pre-authorized them for this job), pushes, PR posts, approvals, live or external writes and
    anything destructive go to the user.
 2. **Sessions do the work.** Anything that changes a repository (merge, checkout, stash, branch
@@ -101,6 +102,7 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
   today.
 - The analyst's brief is `analyst-brief.md`. Fill `{{helper}}` with the full
   `node "<skill dir>/scripts/puppet.mjs"` and `{{logs_args}}` with `LOGS` written out.
+- In both briefs, fill `{{master_name}}` with your own session name, the one `ListAgents` shows.
 
 ## Wrap-up
 
@@ -150,7 +152,8 @@ printed line as your one-line log.
 | `spawn <name> <cwd> <brief file> [--job <label>]` | `claude --bg` with the brief | `spawned <name> id=<id> in <checkout>` |
 | `cycle <worker> <focus> [--next <brief file>]` | background only: stop, headless `/compact <focus>`, verify, restart | `cycled <name>: <before>→<after> tokens (p1%→p2%), resumed id=<id>` |
 | `close <worker>` | background only: stop, `claude rm`; the transcript stays resumable | `closed <name> (resume: cd "<cwd>" && claude --resume <sessionId>)` |
-| `harvest --master <your name> LOGS` | the analyst's: new transcript events, secrets blanked | `harvested <n> events from <s> sessions (<l> new lines) into <logs>` |
+| `harvest --master <your name> LOGS` | the analyst's: new transcript events, secrets blanked; one harvest at a time | `harvested <n> events from <s> sessions (<l> new lines) into <logs>`, then any session with no transcript or read again from the top |
+| `logs LOGS` | the logs folder and the newest earlier report not yet reviewed | `<logs>`, then `unreviewed report: <path>` when there is one |
 | `finding --tag --target --evidence --note LOGS` | the analyst's: one finding with harvested evidence | `F-<n> <tag> → <target>` |
 | `summary [--day YYYY-MM-DD] LOGS` | the day's counts, flagged items and proposals | a headline that says how much was read, then counts |
 | `decide <proposal> approve\|reject\|defer --tag --target --hypothesis LOGS` | logs the user's decision | `<proposal> <decision> (<tag> → <target>)` |

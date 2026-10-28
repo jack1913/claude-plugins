@@ -36,13 +36,27 @@ const SECRET_PATTERNS = [
   /ATATT[\w=-]{20,}/, // Atlassian API token
   /\bgh[pousr]_[A-Za-z0-9]{20,}|github_pat_\w{20,}/,
   /\bsk-[A-Za-z0-9_-]{20,}/,
-  /\b[A-Z0-9_]*(TOKEN|SECRET|PASSWORD|API_?KEY|PRIVATE_KEY)[A-Z0-9_]*\s*[=:]\s*\S{6,}/i,
+  /\b[A-Z0-9_]*(TOKEN|SECRET|PASSWORD|API_?KEY|PRIVATE_KEY)[A-Z0-9_]*\s*[=:]\s*\S{6,}/,
+  // The lower-case form names the word exactly, and its value holds a letter: "tokens: 218034"
+  // is a count, not a secret.
+  /\b(token|secret|password|passwd|api_?key)\s*[=:]\s*["']?(?=[^\s"']*[A-Za-z])[^\s"']{6,}/i,
   /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
-  /[A-Za-z0-9+=_]{40,}/, // a long base64 run (a full 40-hex SHA goes too)
 ];
 
+// A long base64 run (a full 40-hex SHA goes too), unless it is an identifier: words of one
+// case joined by underscores, like a test name or an environment variable.
+const LONG_RUN = /[A-Za-z0-9+=_]{40,}/g;
+const WORD = /^([a-z]+|[A-Z]+|[A-Z]?[a-z]+|\d+)$/;
+
+function isIdentifier(run) {
+  const parts = run.split("_");
+  return parts.length >= 3 && parts.every((p) => p === "" || WORD.test(p));
+}
+
 export function redact(text) {
-  return SECRET_PATTERNS.some((re) => re.test(text)) ? "[redacted]" : text;
+  if (SECRET_PATTERNS.some((re) => re.test(text))) return "[redacted]";
+  for (const [run] of text.matchAll(LONG_RUN)) if (!isIdentifier(run)) return "[redacted]";
+  return text;
 }
 
 // --- events ---------------------------------------------------------------------------
@@ -194,12 +208,52 @@ function writeJson(deps, p, value) {
   deps.fs.renameSync(`${p}.tmp`, p);
 }
 
+// One harvest at a time per logs folder: the master and the analyst may both run one, and
+// two at once would append the same events twice. A lock older than a harvest can take was
+// left by a crash and is taken over.
+const STALE_LOCK_MS = 2 * 60 * 1000;
+
+function takeLock(deps, logsDir) {
+  const lock = path.join(logsDir, "harvest.lock");
+  deps.fs.mkdirSync(logsDir, { recursive: true });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      deps.fs.writeFileSync(lock, `${process.pid} ${deps.now().toISOString()}\n`, { flag: "wx" });
+      return lock;
+    } catch (e) {
+      if (e.code !== "EEXIST") throw new PuppetError(`cannot create ${lock}: ${e.message}`);
+    }
+    let age;
+    try {
+      age = Date.now() - deps.fs.statSync(lock).mtimeMs;
+    } catch (e) {
+      if (e.code === "ENOENT") continue;
+      throw new PuppetError(`cannot read ${lock}: ${e.message}`);
+    }
+    if (age < STALE_LOCK_MS) {
+      throw new PuppetError(`another harvest is running (${lock}); run it again in a moment`);
+    }
+    deps.fs.rmSync(lock, { force: true });
+  }
+  throw new PuppetError(`cannot take ${lock}; another harvest keeps taking it`);
+}
+
 export function harvest(deps, { logsDir, sessions }) {
+  const lock = takeLock(deps, logsDir);
+  try {
+    return harvestLocked(deps, { logsDir, sessions });
+  } finally {
+    deps.fs.rmSync(lock, { force: true });
+  }
+}
+
+function harvestLocked(deps, { logsDir, sessions }) {
   const day = dayOf(deps.now());
   const projects = path.join(configDir(deps.env), "projects");
   const offsetsPath = path.join(logsDir, "offsets.json");
   const offsets = readJson(deps, offsetsPath, {});
   const missing = [];
+  const restarted = [];
   const read = [];
   let lines = 0;
   const events = [];
@@ -209,8 +263,14 @@ export function harvest(deps, { logsDir, sessions }) {
       missing.push(s.name);
       continue;
     }
-    const from = offsets[s.sessionId] ?? 0;
-    const r = extractEvents(deps.fs.readFileSync(file, "utf8"), {
+    const text = deps.fs.readFileSync(file, "utf8");
+    let from = offsets[s.sessionId] ?? 0;
+    // Fewer lines than already read: the file was replaced, so read it again from the top.
+    if (from > text.split(/\r?\n/).length) {
+      restarted.push(s.name);
+      from = 0;
+    }
+    const r = extractEvents(text, {
       sessionId: s.sessionId,
       session: s.name,
       fromLine: from,
@@ -234,5 +294,5 @@ export function harvest(deps, { logsDir, sessions }) {
     lines: stats.lines + lines,
     events: stats.events + events.length,
   });
-  return { sessions: read.length, missing, lines, events: events.length, day };
+  return { sessions: read.length, missing, restarted, lines, events: events.length, day };
 }

@@ -131,7 +131,7 @@ test("harvest appends events, advances offsets and adds to the day's stats", () 
   const t = harvestSetup();
   try {
     const r = harvest(t.deps, { logsDir: t.logs, sessions: [{ name: "u1", sessionId: SID }] });
-    assert.deepEqual(r, { sessions: 1, missing: [], lines: 23, events: 10, day: DAY });
+    assert.deepEqual(r, { sessions: 1, missing: [], restarted: [], lines: 23, events: 10, day: DAY });
     assert.equal(readJsonl(path.join(t.logs, DAY, "events.jsonl")).length, 10);
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(t.logs, "offsets.json"), "utf8")), { [SID]: 23 });
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(t.logs, DAY, "harvest-stats.json"), "utf8")), {
@@ -252,6 +252,83 @@ test("re-adopting a cleared window still harvests its old transcript", async () 
     assert.equal(await main(["adopt", "u1"], t.deps), 0);
     assert.equal(t.readRegistry().workers.u1.sessionId, u1.sessionId);
     assert.match(await t.harvest(), /^harvested 10 events from 1 sessions .*; no transcript: u1$/);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("redact keeps a token count, a long snake_case id and a hyphenated plan name", () => {
+  const plain = [
+    "compacted: tokens: 218034 before",
+    "FAILED tests/test_onboard_repo.py::test_find_predecessors_survives_broken_entries",
+    "MAX_CONTEXT_TOKENS_FOR_THE_DEFAULT_WINDOW_SETTING is documented",
+  ];
+  for (const s of plain) assert.equal(redact(s), s);
+});
+
+test("redact still blanks a lower-case password, a full SHA and a mixed-case base64 run", () => {
+  const secrets = [
+    "password: hunter2go",
+    "commit 3f9c2a7b1e4d5c6a8b9f0e1d2c3b4a5f6e7d8c9b",
+    "key Zm9vYmFyQmF6UXV4MTIzNDU2Nzg5MGFiY2RlZmdoaWo=",
+  ];
+  for (const s of secrets) assert.equal(redact(s), "[redacted]", s);
+});
+
+test("harvest restarts a transcript that shrank below its offset, and says so", () => {
+  const t = harvestSetup();
+  try {
+    harvest(t.deps, { logsDir: t.logs, sessions: [{ name: "u1", sessionId: SID }] });
+    const lines = fixture("transcript-harvest.jsonl").split(/\r?\n/).filter(Boolean);
+    t.writeTranscript(SID, `${lines.slice(0, 4).join("\n")}\n`);
+    const r = harvest(t.deps, { logsDir: t.logs, sessions: [{ name: "u1", sessionId: SID }] });
+    assert.deepEqual(r.restarted, ["u1"]);
+    assert.equal(r.lines, 4);
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(t.logs, "offsets.json"), "utf8")), { [SID]: 4 });
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("harvest refuses while another harvest holds the lock, and takes over a stale one", () => {
+  const t = harvestSetup();
+  const lock = path.join(t.logs, "harvest.lock");
+  const sessions = [{ name: "u1", sessionId: SID }];
+  try {
+    fs.mkdirSync(t.logs, { recursive: true });
+    fs.writeFileSync(lock, "other");
+    assert.throws(() => harvest(t.deps, { logsDir: t.logs, sessions }), /another harvest is running/);
+    assert.equal(fs.existsSync(path.join(t.logs, DAY, "events.jsonl")), false);
+    const old = new Date(Date.now() - 10 * 60 * 1000);
+    fs.utimesSync(lock, old, old);
+    assert.equal(harvest(t.deps, { logsDir: t.logs, sessions }).events, 10);
+    assert.equal(fs.existsSync(lock), false);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("a failed harvest leaves no lock behind", () => {
+  const t = harvestSetup();
+  try {
+    t.writeTranscript(SID, "{oops\n{}\n");
+    assert.throws(() => harvest(t.deps, { logsDir: t.logs, sessions: [{ name: "u1", sessionId: SID }] }), /not valid JSON/);
+    assert.equal(fs.existsSync(path.join(t.logs, "harvest.lock")), false);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("cli: harvest names a transcript it restarted from the top", async () => {
+  const u1 = agent("u1", 1, { kind: "interactive", id: undefined, state: undefined, status: "idle" });
+  const t = rosterHarvestSetup([u1], {
+    u1: { sessionId: u1.sessionId, cwd: u1.cwd, checkout: u1.cwd, kind: "interactive", role: "worker", job: null, jobState: "clean" },
+  });
+  try {
+    t.writeTranscript(u1.sessionId, fixture("transcript-harvest.jsonl"));
+    await t.harvest();
+    t.writeTranscript(u1.sessionId, `${fixture("transcript-harvest.jsonl").split(/\r?\n/)[0]}\n`);
+    assert.match(await t.harvest(), /; restarted from the top \(transcript shrank\): u1$/);
   } finally {
     t.cleanup();
   }
