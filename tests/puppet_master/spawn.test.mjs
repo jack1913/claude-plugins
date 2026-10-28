@@ -43,6 +43,10 @@ test("parseBgId reads the captured --bg output", () => {
   assert.throws(() => parseBgId("something else"), PuppetError);
 });
 
+test("parseBgId reads the id from coloured --bg output", () => {
+  assert.equal(parseBgId(fixture("bg-stdout-color.txt")), CAPTURED_ID);
+});
+
 test("launches claude --bg --name with the brief verbatim", async () => {
   const t = spawnSetup();
   try {

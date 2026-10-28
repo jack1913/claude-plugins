@@ -8,7 +8,7 @@ Notes for people who change batbelt. For using it, read the [manual](../manual/R
 | [onboard-repo: agent configuration](onboard-repo-agent-config.md) | Permissions, `.gitignore`, rules, the Copilot port and rule mining |
 | [onboard-repo: docs and gates](onboard-repo-docs.md) | The docs tiers, the `check-docs` gate, the coverage record and ADR mining |
 | [prove-it](prove-it.md) | The evidence workflow: intake, state, research limits, status values |
-| [puppet-master](puppet-master.md) | The master's rules, the verified CLI mechanics, measuring, the worker registry and failure handling |
+| [puppet-master](puppet-master.md) | The master's rules, the verified CLI mechanics, measuring, the roster, the analyst and its logs, and failure handling |
 | [grill-me](grill-me.md) | The interview skill and why it is one skill |
 
 ## Where things are
@@ -16,7 +16,7 @@ Notes for people who change batbelt. For using it, read the [manual](../manual/R
 | What | Where |
 | --- | --- |
 | The skills | [`skills/`](../../skills/) |
-| puppet-master's helper | [`skills/puppet-master/scripts/puppet.mjs`](../../skills/puppet-master/scripts/puppet.mjs) |
+| puppet-master's helper | [`skills/puppet-master/scripts/`](../../skills/puppet-master/scripts/puppet.mjs): `puppet.mjs`, `harvest.mjs`, `analyst.mjs` |
 | onboard-repo's helper scripts | [`skills/onboard-repo/scripts/`](../../skills/onboard-repo/scripts/) |
 | Long sections of the onboard-repo procedure | [`skills/onboard-repo/references/`](../../skills/onboard-repo/references/_index.md) |
 | Files onboard-repo stamps into other repositories | [`skills/onboard-repo/templates/`](../../skills/onboard-repo/templates/) |

@@ -18,7 +18,9 @@ No `CLAUDE.md` at this folder's root: `claude plugin validate --strict` rejects 
 | Files onboard-repo stamps into other repositories | `skills/onboard-repo/templates/` |
 | `puppet-master` | `skills/puppet-master/SKILL.md` |
 | puppet-master's worker brief template | `skills/puppet-master/worker-brief.md` |
-| puppet-master's helper (Node, built-ins only) | `skills/puppet-master/scripts/puppet.mjs` |
+| puppet-master's analyst brief template (its tags must equal `TAGS` in `analyst.mjs`) | `skills/puppet-master/analyst-brief.md` |
+| puppet-master's helper (Node, built-ins only) | `skills/puppet-master/scripts/puppet.mjs`, with `harvest.mjs` (logs folder, redaction, events) and `analyst.mjs` (findings, summary, decisions) |
+| puppet-master's logs-folder option | `.claude-plugin/plugin.json` (`userConfig.puppet_logs_dir`) |
 | Licence | `LICENSE` |
 | Changelog | `CHANGELOG.md` |
 | Docs folders | `docs/README.md` |

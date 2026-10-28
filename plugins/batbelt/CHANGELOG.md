@@ -9,7 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- A `puppet-master` skill: one Claude session starts background worker sessions, one job each, relays their questions to you one at a time, compacts a worker only between tasks once it is measured at 30% of its context or more, and closes it when its job is done. On start it asks whether it may also hand jobs to the Claude sessions you already have open. It needs Node.js 20 or newer and a setting of your own first. See [Run background workers](docs/manual/use/run-background-workers.md).
+- A `puppet-master` skill: one Claude session hands your jobs to the Claude sessions you already have open, and starts a background worker only when none of them is free. Each session gets one job. The master relays their questions to you one at a time, quoting your own words, and gets a session compacted only between tasks once it is measured at 30% of its context or more: a background worker by itself, your own window by giving you a `/compact` line to paste. It closes background workers when their jobs are done. It needs Node.js 20 or newer and a setting of your own first. See [Run background workers](docs/manual/use/run-background-workers.md).
+- `puppet-master` keeps one session as an analyst. It reads the day's transcripts of the sessions you named, records what went wrong with evidence, with anything that looks like a secret blanked, and at the end of the day proposes changes for you to approve, reject or defer. It never changes the plugin itself.
+- A batbelt option, `puppet_logs_dir`: where the analyst keeps its logs. Leave it empty to use the plugin's data folder.
 
 ## [0.2.1] - 2026-10-20
 

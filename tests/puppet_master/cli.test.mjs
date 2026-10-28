@@ -63,10 +63,46 @@ test("list measures each worker and fails if a row fails", async () => {
   const t = makeDeps({ agents: [agent("w1", 1), agent("w2", 2)] });
   try {
     t.writeTranscript(t.deps.agents[0].sessionId, fixture("transcript-usage-sum.jsonl"));
+    t.writeTranscript(t.deps.agents[1].sessionId, fixture("transcript-partial-middle.jsonl"));
     assert.equal(await main(["list", "--window", "1000000"], t.deps), 1);
     const rows = t.out.join("\n");
     assert.match(rows, /^w1 {2}85545 {2}8\.6%/m);
-    assert.match(rows, /^w2 {2}\? {2}\(no transcript\)$/m);
+    assert.match(rows, /^w2 {2}\? {2}\(transcript line \d+ is not valid JSON\)$/m);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("measure reports a session with no transcript yet as fresh, not an error", async () => {
+  const t = makeDeps({ agents: [agent("w1", 1)] });
+  try {
+    assert.equal(await main(["measure", "w1"], t.deps), 0);
+    assert.match(t.out[0], /^w1 {2}0 {2}0% {2}fresh {2}\(no turns yet\)$/);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("measure reports a session whose transcript has only a user turn as fresh", async () => {
+  const t = makeDeps({ agents: [agent("w1", 1)] });
+  try {
+    t.writeTranscript(t.deps.agents[0].sessionId, fixture("transcript-no-usage.jsonl"));
+    assert.equal(await main(["measure", "w1", "--json"], t.deps), 0);
+    const r = JSON.parse(t.out[0]);
+    assert.equal(r.tokens, 0);
+    assert.equal(r.state, "fresh");
+    assert.equal(r.tokenSource, "none");
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("list shows a worker with no transcript yet as fresh and succeeds", async () => {
+  const t = makeDeps({ agents: [agent("w1", 1), agent("w2", 2)] });
+  try {
+    t.writeTranscript(t.deps.agents[0].sessionId, fixture("transcript-usage-sum.jsonl"));
+    assert.equal(await main(["list", "--window", "1000000"], t.deps), 0);
+    assert.match(t.out.join("\n"), /^w2 {2}0 {2}0% {2}fresh {2}\(no turns yet\)$/m);
   } finally {
     t.cleanup();
   }

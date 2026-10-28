@@ -8,7 +8,7 @@ Everything batbelt adds to Claude Code. "You only" means it runs only when you t
 | --- | --- | --- | --- |
 | `/batbelt:grill-me` | you or Claude | Interviews you about a plan or design, one question at a time with a suggested answer, until every decision holds up | — |
 | `/batbelt:prove-it` | you or Claude | Checks business, legal and market claims against real sources and writes an assumption register | — |
-| `/batbelt:puppet-master` | you or Claude | Runs background worker sessions from your session, one job each, compacting a worker only between tasks and closing it when its job is done | — |
+| `/batbelt:puppet-master` | you or Claude | Hands jobs to your open sessions, and to background workers when none is free, one job each; compacts only between tasks; an analyst session proposes improvements at the end of the day | — |
 | `/batbelt:onboard-repo` | you only | Sets up a repository so Claude works well in it | `[--sync] [--check] [--no-review] [--resume] [--unattended] [--with update-deps] [--without update-deps]` |
 
 ## grill-me
@@ -25,7 +25,7 @@ Type the command, or ask "is this actually true?" or "verify the claims in this 
 
 ## puppet-master
 
-Ask Claude to start a background worker for a job, or type the command. It takes no arguments: say the job, the folder and whether the worker may commit. It needs Node.js 20 or newer and some setup of your own first. How-to: [Run background workers](../use/run-background-workers.md).
+Type the command in the session you want as the master, or ask Claude to hand a job to your sessions. It takes no arguments: it asks which open sessions it may use, then you say each job, its folder and whether it may commit. Say "wrap up" at the end of the day for the analyst's report. It needs Node.js 20 or newer and some setup of your own first; its one option, the logs folder, is asked when you enable batbelt. How-to: [Run background workers](../use/run-background-workers.md).
 
 > /batbelt:puppet-master
 

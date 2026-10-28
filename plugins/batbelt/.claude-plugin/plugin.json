@@ -17,5 +17,13 @@
     "onboarding",
     "repository-setup",
     "background-sessions"
-  ]
+  ],
+  "userConfig": {
+    "puppet_logs_dir": {
+      "type": "directory",
+      "title": "puppet-master logs folder",
+      "description": "Where the puppet-master analyst keeps its daily findings, reports and your decisions. Leave empty to use the plugin's data folder.",
+      "required": false
+    }
+  }
 }

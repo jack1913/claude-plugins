@@ -10,6 +10,9 @@ import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { addFinding, decide, headline, markShipped, summarize } from "./analyst.mjs";
+import { harvest, resolveLogsDir } from "./harvest.mjs";
+
 export class PuppetError extends Error {
   constructor(message, exitCode = 1) {
     super(message);
@@ -55,24 +58,32 @@ export function transcriptTokens(text) {
         (u.cache_creation_input_tokens ?? 0);
       boundary = null;
     } else if (e.type === "system" && e.subtype === "compact_boundary") {
+      // An automatic compaction writes its boundary without postTokens; the size is
+      // only known once the session's next turn records a usage.
       const post = e.compactMetadata?.postTokens;
-      if (typeof post !== "number") {
-        throw new PuppetError("transcript has a compact_boundary without a numeric postTokens");
-      }
-      boundary = post;
+      boundary =
+        typeof post === "number"
+          ? post
+          : new PuppetError(
+              `just compacted (${e.compactMetadata?.trigger ?? "unknown"}); its size is known after its next turn`,
+            );
     }
   }
+  if (boundary instanceof PuppetError) throw boundary;
   if (boundary !== null) return { tokens: boundary, source: "compact_boundary" };
   if (usage !== null) return { tokens: usage, source: "usage" };
-  throw new PuppetError("transcript has no assistant usage and no compact boundary");
+  const e = new PuppetError("transcript has no assistant usage and no compact boundary");
+  e.code = "no-usage";
+  throw e;
 }
 
-export function findTranscript(projectsDir, sessionId) {
+export function findTranscript(projectsDir, sessionId, { optional = false } = {}) {
   const hits = [];
   let dirs;
   try {
     dirs = fs.readdirSync(projectsDir, { withFileTypes: true });
   } catch (e) {
+    if (optional && e.code === "ENOENT") return null;
     throw new PuppetError(`cannot read ${projectsDir}: ${e.message}`);
   }
   for (const d of dirs) {
@@ -81,6 +92,7 @@ export function findTranscript(projectsDir, sessionId) {
     if (fs.existsSync(p)) hits.push(p);
   }
   if (hits.length === 0) {
+    if (optional) return null;
     throw new PuppetError(`no transcript for session ${sessionId} under ${projectsDir}`);
   }
   if (hits.length > 1) {
@@ -226,14 +238,36 @@ function projectsDir(deps) {
   return path.join(configDir(deps.env), "projects");
 }
 
-function measureAgent(deps, agent, record, { window } = {}) {
+// A session with no transcript yet, or no assistant turn yet, is fresh: 0 tokens, and
+// no window is needed to say so.
+function freshMeasure(agent) {
+  return {
+    name: agent.name,
+    id: agent.id,
+    tokens: 0,
+    percent: 0,
+    window: null,
+    windowSource: null,
+    state: "fresh",
+    tokenSource: "none",
+  };
+}
+
+export function measureAgent(deps, agent, record, { window } = {}) {
+  const file = findTranscript(projectsDir(deps), agent.sessionId, { optional: true });
+  if (file === null) return freshMeasure(agent);
+  let t;
+  try {
+    t = transcriptTokens(deps.fs.readFileSync(file, "utf8"));
+  } catch (e) {
+    if (e instanceof PuppetError && e.code === "no-usage") return freshMeasure(agent);
+    throw e;
+  }
   const w = resolveWindow({
     flag: window,
     recorded: record?.window,
     env: deps.env.PUPPET_CONTEXT_WINDOW,
   });
-  const file = findTranscript(projectsDir(deps), agent.sessionId);
-  const t = transcriptTokens(deps.fs.readFileSync(file, "utf8"));
   return {
     name: agent.name,
     id: agent.id,
@@ -253,6 +287,7 @@ export function measureWorker(deps, key, { window } = {}) {
 }
 
 function measureLine(m) {
+  if (m.state === "fresh") return `${m.name}  0  0%  fresh  (no turns yet)`;
   return `${m.name}  ${m.tokens}  ${m.percent}%  ${m.state}  (window ${m.window} from ${m.windowSource})`;
 }
 
@@ -266,9 +301,10 @@ function pathApi(deps) {
   return (deps.platform ?? process.platform) === "win32" ? path.win32 : path.posix;
 }
 
-// `claude --bg` prints "backgrounded · <id> · <name>" followed by hint lines.
+// `claude --bg` prints "backgrounded · <id> · <name>" followed by hint lines; on 2.1.312
+// the id and the hints come wrapped in ANSI colour codes.
 export function parseBgId(stdout) {
-  const m = /\bbackgrounded\b[^0-9a-f\n]*([0-9a-f]{6,})\b/.exec(stdout);
+  const m = /\bbackgrounded\b[^0-9a-f\n]*([0-9a-f]{6,})\b/.exec(stdout.replace(/\x1b\[[0-9;]*m/g, ""));
   if (!m) throw new PuppetError(`cannot find a session id in claude --bg output: ${stdout.trim()}`);
   return m[1];
 }
@@ -294,6 +330,145 @@ function isLive(agents, rec) {
   return agents.some((a) => (rec.id && a.id === rec.id) || a.sessionId === rec.sessionId);
 }
 
+// --- the roster: every session in the master's care, opened by the user or spawned -----
+
+// A record written before the roster existed is a spawned worker holding its job.
+function normalize(rec) {
+  return { kind: "background", role: "worker", job: null, jobState: "active", ...rec };
+}
+
+// An active job edits its checkout. So may a session adopted as `unknown` (it worked
+// before the master knew it) while it is not idle: the lock cannot assume otherwise.
+// A session leaving the roster (closed, gone, or re-adopted under a new session id) may
+// still have transcript lines the analyst has not read: the next harvest reads them once.
+function queueHarvest(reg, name, sessionId) {
+  if (!sessionId) return;
+  reg.pendingHarvest = reg.pendingHarvest ?? [];
+  if (!reg.pendingHarvest.some((p) => p.sessionId === sessionId)) reg.pendingHarvest.push({ name, sessionId });
+}
+
+export function isEditing(rec, agents) {
+  const r = normalize(rec);
+  if (r.role === "analyst") return false;
+  const live = agents.find((a) => (r.id && a.id === r.id) || a.sessionId === r.sessionId);
+  if (!live) return false;
+  if (r.jobState === "active") return true;
+  return r.jobState === "unknown" && !IDLE_STATES.has(workerState(live));
+}
+
+// No transcript, or no assistant turn yet: nothing has happened in this context.
+function isFresh(deps, agent) {
+  const file = findTranscript(projectsDir(deps), agent.sessionId, { optional: true });
+  if (file === null) return true;
+  try {
+    transcriptTokens(deps.fs.readFileSync(file, "utf8"));
+    return false;
+  } catch (e) {
+    if (e instanceof PuppetError && e.code === "no-usage") return true;
+    if (e instanceof PuppetError) return false;
+    throw e;
+  }
+}
+
+const ROLES = new Set(["worker", "analyst"]);
+
+export function adoptSession(deps, key, { role = "worker" } = {}) {
+  if (!ROLES.has(role)) throw new PuppetError(`--role must be worker or analyst, got "${role}"`, 2);
+  const agents = listAgents(deps);
+  const agent = findWorker(agents, key);
+  const reg = loadRegistry(deps);
+  if (role === "analyst") {
+    for (const [other, rec] of Object.entries(reg.workers)) {
+      if (other !== agent.name && normalize(rec).role === "analyst" && isLive(agents, rec)) {
+        throw new PuppetError(`${other} is already the analyst`);
+      }
+    }
+  }
+  const before = reg.workers[agent.name];
+  if (before && before.sessionId !== agent.sessionId) queueHarvest(reg, agent.name, before.sessionId);
+  const rec = {
+    ...(agent.id ? { id: agent.id } : {}),
+    sessionId: agent.sessionId,
+    cwd: pathApi(deps).resolve(agent.cwd),
+    checkout: checkoutOf(deps, agent.cwd),
+    kind: agent.kind ?? "background",
+    role,
+    job: null,
+    jobState: isFresh(deps, agent) ? "clean" : "unknown",
+    ...(reg.workers[agent.name]?.window ? { window: reg.workers[agent.name].window } : {}),
+  };
+  reg.workers[agent.name] = rec;
+  saveRegistry(deps, reg);
+  return { name: agent.name, ...rec };
+}
+
+// The roster record of a listed session, refusing one the user cleared or restarted.
+function rosterRecord(agents, reg, key) {
+  const agent = findWorker(agents, key);
+  const rec = reg.workers[agent.name];
+  if (!rec) throw new PuppetError(`${agent.name} is not in the roster; adopt it first`);
+  if (rec.sessionId !== agent.sessionId) {
+    throw new PuppetError(
+      `${agent.name} has a new session id (cleared or restarted?); ask the user, then adopt it again`,
+    );
+  }
+  return { agent, rec: normalize(rec) };
+}
+
+export function assignJob(deps, key, label) {
+  if (!label || !label.trim()) throw new PuppetError("assign needs a job label", 2);
+  const agents = listAgents(deps);
+  const reg = loadRegistry(deps);
+  const { agent, rec } = rosterRecord(agents, reg, key);
+  if (rec.role === "analyst") throw new PuppetError(`${agent.name} is the analyst; the analyst takes no jobs`);
+  if (rec.jobState !== "clean") {
+    const did = rec.jobState === "active" ? `holds "${rec.job}"` : rec.job ? `did "${rec.job}"` : "did other work";
+    throw new PuppetError(
+      `one job per context: ${agent.name} already ${did}; use a clean session or spawn one`,
+    );
+  }
+  const key2 = checkoutKey(deps, rec.checkout);
+  for (const [other, o] of Object.entries(reg.workers)) {
+    if (other === agent.name || checkoutKey(deps, o.checkout) !== key2) continue;
+    if (isEditing(o, agents)) {
+      throw new PuppetError(`${other} is already editing ${o.checkout}; one editing session per checkout`);
+    }
+  }
+  const next = { ...rec, job: label, jobState: "active", jobStartedAt: deps.now().toISOString() };
+  reg.workers[agent.name] = next;
+  saveRegistry(deps, reg);
+  return { name: agent.name, ...next };
+}
+
+export function finishJob(deps, key) {
+  const agents = listAgents(deps);
+  const reg = loadRegistry(deps);
+  const { agent, rec } = rosterRecord(agents, reg, key);
+  if (rec.jobState !== "active") throw new PuppetError(`${agent.name} has no active job`);
+  const next = { ...rec, jobState: "done" };
+  reg.workers[agent.name] = next;
+  saveRegistry(deps, reg);
+  return { name: agent.name, ...next };
+}
+
+// A clean worker session in the cwd's checkout, the user's own windows first; null when
+// there is none, or when another session is already editing that checkout.
+export function pickSession(deps, cwd) {
+  const key = checkoutKey(deps, checkoutOf(deps, cwd));
+  const agents = listAgents(deps);
+  const reg = loadRegistry(deps);
+  const here = Object.entries(reg.workers).filter(([, r]) => checkoutKey(deps, r.checkout) === key);
+  if (here.some(([, r]) => isEditing(r, agents))) return null;
+  const clean = here
+    .map(([name, r]) => ({ name, record: normalize(r) }))
+    .filter(({ name, record }) => {
+      const a = agents.find((x) => x.name === name);
+      return a && a.sessionId === record.sessionId && record.role === "worker" && record.jobState === "clean";
+    })
+    .sort((a, b) => (a.record.kind === "interactive" ? 0 : 1) - (b.record.kind === "interactive" ? 0 : 1));
+  return clean[0] ?? null;
+}
+
 function readBrief(deps, briefFile) {
   let text;
   try {
@@ -308,7 +483,7 @@ function readBrief(deps, briefFile) {
   return text;
 }
 
-export function spawnWorker(deps, name, cwd, briefFile) {
+export function spawnWorker(deps, name, cwd, briefFile, { job } = {}) {
   if (!NAME_RE.test(name)) throw new PuppetError(`worker name "${name}" must match [A-Za-z0-9._-]+`, 2);
   const brief = readBrief(deps, briefFile);
   const agents = listAgents(deps);
@@ -321,19 +496,32 @@ export function spawnWorker(deps, name, cwd, briefFile) {
   const reg = loadRegistry(deps);
   for (const [other, rec] of Object.entries(reg.workers)) {
     if (checkoutKey(deps, rec.checkout) !== key) continue;
-    if (isLive(agents, rec)) {
+    if (isEditing(rec, agents)) {
       throw new PuppetError(
-        `worker "${other}" (id ${rec.id}) is already editing ${rec.checkout}; one editing worker per checkout — close it or use another checkout`,
+        `worker "${other}" (id ${rec.id ?? rec.sessionId}) is already editing ${rec.checkout}; one editing worker per checkout — close it or use another checkout`,
       );
     }
+    // A live session that is clean, done or the analyst stays in the roster.
+    if (isLive(agents, rec)) continue;
     deps.out(`pruned stale record ${other} (resume: ${resumeHint(rec.cwd, rec.sessionId)})`);
+    queueHarvest(reg, other, rec.sessionId);
     delete reg.workers[other];
   }
   const r = claudeOk(deps, ["--bg", "--name", name, brief], { cwd });
   const id = parseBgId(r.stdout);
   const started = listAgents(deps).find((a) => a.id === id);
   if (!started) throw new PuppetError(`started ${name} as ${id}, but claude agents does not list it`);
-  reg.workers[name] = { id, sessionId: started.sessionId, cwd: pathApi(deps).resolve(cwd), checkout };
+  reg.workers[name] = {
+    id,
+    sessionId: started.sessionId,
+    cwd: pathApi(deps).resolve(cwd),
+    checkout,
+    kind: "background",
+    role: "worker",
+    job: job ?? name,
+    jobState: "active",
+    jobStartedAt: deps.now().toISOString(),
+  };
   saveRegistry(deps, reg);
   return { name, id, sessionId: started.sessionId, checkout };
 }
@@ -451,10 +639,9 @@ export function closeWorker(deps, key) {
     if (!(e instanceof PuppetError)) throw e;
     throw new PuppetError(`${name} is stopped but NOT removed (id ${id}; resume: ${resume}): ${e.message}`);
   }
-  if (reg.workers[name]) {
-    delete reg.workers[name];
-    saveRegistry(deps, reg);
-  }
+  queueHarvest(reg, name, sessionId);
+  delete reg.workers[name];
+  saveRegistry(deps, reg);
   return { name, sessionId, resume };
 }
 
@@ -464,12 +651,36 @@ const USAGE = [
   "usage: puppet.mjs <command> ...",
   "  measure <worker> [--window N] [--json]",
   "  list [--window N] [--json]",
-  "  spawn <name> <cwd> <brief-file>",
+  "  adopt <session> [--role worker|analyst]",
+  "  assign <session> <job>",
+  "  finish <session>",
+  "  pick <cwd>",
+  "  spawn <name> <cwd> <brief-file> [--job <label>]",
   "  cycle <worker> <focus> [--next <brief-file>]",
   "  close <worker>",
+  "  harvest [--master <session>] [--logs <dir>] [--plugin-data <dir>]",
+  "  finding --tag <tag> --target <target> --evidence <id[,id]> --note <text> [--logs ...]",
+  "  summary [--day YYYY-MM-DD] [--json] [--logs ...]",
+  "  decide <proposal> approve|reject|defer --tag <tag> --target <target> --hypothesis <text> [--logs ...]",
+  "  shipped <proposal> <sha> [--logs ...]",
 ].join("\n");
 
-const FLAGS = { "--window": true, "--json": false, "--next": true };
+const FLAGS = {
+  "--window": true,
+  "--json": false,
+  "--next": true,
+  "--role": true,
+  "--job": true,
+  "--logs": true,
+  "--plugin-data": true,
+  "--master": true,
+  "--tag": true,
+  "--target": true,
+  "--evidence": true,
+  "--note": true,
+  "--hypothesis": true,
+  "--day": true,
+};
 
 function parseArgs(args) {
   const positional = [];
@@ -510,40 +721,179 @@ function cmdList(deps, positional, flags) {
   const reg = loadRegistry(deps);
   const rows = [];
   let failed = false;
-  const seen = new Set();
-  for (const a of agents.filter((x) => x.kind === "background")) {
-    seen.add(a.name);
+  const measure = (a, rec, extra) => {
     try {
-      rows.push(measureAgent(deps, a, reg.workers[a.name], { window: flags.window }));
+      rows.push({ ...measureAgent(deps, a, rec, { window: flags.window }), ...extra });
     } catch (e) {
       if (!(e instanceof PuppetError)) throw e;
       failed = true;
-      const why = e.message.startsWith("no transcript") ? "no transcript" : e.message;
-      rows.push({ name: a.name, id: a.id, error: why });
+      rows.push({ name: a.name, id: a.id, error: e.message });
+    }
+  };
+  // Every roster session, whoever opened it. One that is no longer listed has exited or was
+  // stopped: report how to resume it, then drop the record (the transcript stays). One
+  // listed under a new session id was cleared or restarted: keep the record, and say so.
+  let pruned = false;
+  const managed = new Set();
+  for (const [name, raw] of Object.entries(reg.workers)) {
+    const rec = normalize(raw);
+    const live = agents.find((a) => (rec.id && a.id === rec.id) || a.sessionId === rec.sessionId);
+    if (live) {
+      managed.add(live.sessionId);
+      measure(live, raw, { kind: rec.kind, role: rec.role, job: rec.job, jobState: rec.jobState, roster: true });
+    } else if (agents.some((a) => a.name === name)) {
+      managed.add(agents.find((a) => a.name === name).sessionId);
+      rows.push({ name, id: rec.id, changed: true, sessionId: rec.sessionId });
+    } else {
+      rows.push({ name, id: rec.id, state: "gone", sessionId: rec.sessionId, cwd: rec.cwd });
+      queueHarvest(reg, name, rec.sessionId);
+      delete reg.workers[name];
+      pruned = true;
     }
   }
-  // A recorded worker that is no longer listed has exited or was stopped: report how to
-  // resume it, then drop the record (the transcript stays, so nothing is lost).
-  let pruned = false;
-  for (const [name, rec] of Object.entries(reg.workers)) {
-    if (seen.has(name)) continue;
-    rows.push({ name, id: rec.id, state: "gone", sessionId: rec.sessionId, cwd: rec.cwd });
-    delete reg.workers[name];
-    pruned = true;
+  // Background sessions nobody adopted are still listed, so none goes unnoticed.
+  for (const a of agents.filter((x) => x.kind === "background" && !managed.has(x.sessionId))) {
+    measure(a, undefined, {});
   }
   if (pruned) saveRegistry(deps, reg);
   for (const r of rows) {
     if (flags.json) deps.out(JSON.stringify(r));
     else if (r.error) deps.out(`${r.name}  ?  (${r.error})`);
+    else if (r.changed) deps.out(`${r.name}  changed  (new session id: ask the user whether it was cleared)`);
     else if (r.state === "gone") deps.out(`${r.name}  gone  (resume: ${resumeHint(r.cwd, r.sessionId)})`);
+    else if (r.roster) deps.out(`${measureLine(r)}  ${r.kind} ${r.role} ${r.jobState}${r.job ? ` ${r.job}` : ""}`);
     else deps.out(measureLine(r));
   }
   return failed ? 1 : 0;
 }
 
-function cmdSpawn(deps, positional) {
+function cmdAdopt(deps, positional, flags) {
+  wantPositional(positional, 1, "adopt");
+  const r = adoptSession(deps, positional[0], { role: flags.role ?? "worker" });
+  deps.out(`adopted ${r.name} (${r.kind}, ${r.role}, ${r.jobState}) in ${r.checkout}`);
+  return 0;
+}
+
+function cmdAssign(deps, positional) {
+  wantPositional(positional, 2, "assign");
+  const r = assignJob(deps, positional[0], positional[1]);
+  deps.out(`assigned ${r.name}: ${r.job}`);
+  return 0;
+}
+
+function cmdFinish(deps, positional) {
+  wantPositional(positional, 1, "finish");
+  const r = finishJob(deps, positional[0]);
+  deps.out(`finished ${r.name}: ${r.job}`);
+  return 0;
+}
+
+export function logsDirFor(deps, flags) {
+  return resolveLogsDir({
+    flag: flags.logs,
+    env: deps.env,
+    pluginData: flags["plugin-data"],
+    configDir: configDir(deps.env),
+  }).dir;
+}
+
+// The sessions the analyst reads: every roster session (a transcript stays on disk whether
+// or not its session is live), every session that left the roster since the last
+// harvest, and the master when named.
+function cmdHarvest(deps, positional, flags) {
+  wantPositional(positional, 0, "harvest");
+  const agents = listAgents(deps);
+  const reg = loadRegistry(deps);
+  const sessions = [];
+  const add = (name, sessionId) => {
+    if (!sessions.some((s) => s.sessionId === sessionId)) sessions.push({ name, sessionId });
+  };
+  for (const [name, r] of Object.entries(reg.workers)) add(name, r.sessionId);
+  for (const p of reg.pendingHarvest ?? []) add(p.name, p.sessionId);
+  if (flags.master) {
+    const m = findWorker(agents, flags.master);
+    add(m.name, m.sessionId);
+  }
+  const dir = logsDirFor(deps, flags);
+  const r = harvest(deps, { logsDir: dir, sessions });
+  if ((reg.pendingHarvest ?? []).length > 0) {
+    reg.pendingHarvest = [];
+    saveRegistry(deps, reg);
+  }
+  const missing = r.missing.length > 0 ? `; no transcript: ${r.missing.join(", ")}` : "";
+  deps.out(`harvested ${r.events} events from ${r.sessions} sessions (${r.lines} new lines) into ${dir}${missing}`);
+  return 0;
+}
+
+function cmdFinding(deps, positional, flags) {
+  wantPositional(positional, 0, "finding");
+  const evidence = (flags.evidence ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const f = addFinding(deps, {
+    logsDir: logsDirFor(deps, flags),
+    tag: flags.tag,
+    target: flags.target,
+    evidence,
+    note: flags.note,
+  });
+  deps.out(`${f.id} ${f.tag} → ${f.target}`);
+  return 0;
+}
+
+const counts = (o) =>
+  Object.entries(o)
+    .map(([k, n]) => `${k} ${n}`)
+    .join(", ") || "none";
+
+function cmdSummary(deps, positional, flags) {
+  wantPositional(positional, 0, "summary");
+  const s = summarize(deps, { logsDir: logsDirFor(deps, flags), ...(flags.day ? { day: flags.day } : {}) });
+  if (flags.json) {
+    deps.out(JSON.stringify({ headline: headline(s), ...s }));
+    return 0;
+  }
+  deps.out(headline(s));
+  deps.out(`events: ${counts(s.eventsByKind)}`);
+  deps.out(`findings: ${counts(s.findingsByTag)}`);
+  for (const f of s.flagged) deps.out(`flagged for you: ${f.id} ${f.tag} → ${f.target}: ${f.note}`);
+  for (const p of s.decisions.pendingShip) deps.out(`approved, not shipped: ${p.proposalId} (${p.tag} → ${p.target})`);
+  for (const p of s.decisions.shipped) {
+    deps.out(`shipped: ${p.proposalId} ${p.tag} per day ${p.perDayBefore ?? "?"} before → ${p.perDayAfter ?? "?"} after`);
+  }
+  return 0;
+}
+
+function cmdDecide(deps, positional, flags) {
+  wantPositional(positional, 2, "decide");
+  const d = decide(deps, {
+    logsDir: logsDirFor(deps, flags),
+    proposalId: positional[0],
+    decision: positional[1],
+    tag: flags.tag,
+    target: flags.target,
+    hypothesis: flags.hypothesis,
+  });
+  deps.out(`${d.proposalId} ${d.decision} (${d.tag} → ${d.target})`);
+  return 0;
+}
+
+function cmdShipped(deps, positional, flags) {
+  wantPositional(positional, 2, "shipped");
+  const r = markShipped(deps, { logsDir: logsDirFor(deps, flags), proposalId: positional[0], sha: positional[1] });
+  deps.out(`${r.proposalId} shipped as ${r.changeSha}`);
+  return 0;
+}
+
+function cmdPick(deps, positional) {
+  wantPositional(positional, 1, "pick");
+  const hit = pickSession(deps, positional[0]);
+  if (!hit) throw new PuppetError(`no clean session for ${checkoutOf(deps, positional[0])}; spawn one`);
+  deps.out(hit.name);
+  return 0;
+}
+
+function cmdSpawn(deps, positional, flags) {
   wantPositional(positional, 3, "spawn");
-  const w = spawnWorker(deps, ...positional);
+  const w = spawnWorker(deps, ...positional, { job: flags.job });
   deps.out(`spawned ${w.name} id=${w.id} in ${w.checkout}`);
   return 0;
 }
@@ -564,7 +914,22 @@ function cmdClose(deps, positional) {
   return 0;
 }
 
-const COMMANDS = { measure: cmdMeasure, list: cmdList, spawn: cmdSpawn, cycle: cmdCycle, close: cmdClose };
+const COMMANDS = {
+  measure: cmdMeasure,
+  list: cmdList,
+  adopt: cmdAdopt,
+  assign: cmdAssign,
+  finish: cmdFinish,
+  pick: cmdPick,
+  spawn: cmdSpawn,
+  cycle: cmdCycle,
+  close: cmdClose,
+  harvest: cmdHarvest,
+  finding: cmdFinding,
+  summary: cmdSummary,
+  decide: cmdDecide,
+  shipped: cmdShipped,
+};
 
 export async function main(argv, deps) {
   try {

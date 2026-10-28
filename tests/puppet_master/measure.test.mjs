@@ -107,9 +107,22 @@ test("percent rounds to one decimal", () => {
   assert.equal(percent(85545, 1000000), 8.6);
 });
 
-test("a compact boundary without postTokens is an error", () => {
+test("a compact_boundary without postTokens says the size is known after the next turn", () => {
+  // An automatic compaction writes its boundary without postTokens (seen 2026-10-26).
   const text =
     fixture("transcript-usage-sum.jsonl") +
-    '{"type":"system","subtype":"compact_boundary","isSidechain":false,"compactMetadata":{"trigger":"manual"}}\n';
-  assert.throws(() => transcriptTokens(text), (e) => e instanceof PuppetError && /postTokens/.test(e.message));
+    '{"type":"system","subtype":"compact_boundary","isSidechain":false,"compactMetadata":{"trigger":"auto","preTokens":218034}}\n';
+  assert.throws(
+    () => transcriptTokens(text),
+    (e) => e instanceof PuppetError && /just compacted \(auto\); its size is known after its next turn/.test(e.message),
+  );
+});
+
+test("findTranscript with optional returns null when there is none", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "puppet-find-"));
+  try {
+    assert.equal(findTranscript(dir, "11111111-2222-3333-4444-555555555555", { optional: true }), null);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
