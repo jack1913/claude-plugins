@@ -6,6 +6,9 @@ relays its questions, measures its context, gets it compacted at a clean task bo
 their jobs are done. One more session, the **analyst**, watches the day and proposes changes to the skill at its end.
 The master does housekeeping only; the user makes every decision.
 
+The skill sets `disable-model-invocation: true`, so it runs only when typed as `/batbelt:puppet-master`: a request that
+sounds like coordinating sessions never starts it.
+
 ## Files
 
 - [`skills/puppet-master/SKILL.md`](../../skills/puppet-master/SKILL.md) holds the master's start-up, rules, relay

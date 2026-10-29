@@ -8,7 +8,7 @@ Everything batbelt adds to Claude Code. "You only" means it runs only when you t
 | --- | --- | --- | --- |
 | `/batbelt:grill-me` | you or Claude | Interviews you about a plan or design, one question at a time with a suggested answer, until every decision holds up | — |
 | `/batbelt:prove-it` | you or Claude | Checks business, legal and market claims against real sources and writes an assumption register | — |
-| `/batbelt:puppet-master` | you or Claude | Hands jobs to your open sessions, and to background workers when none is free, one job each; compacts only between tasks; an analyst session proposes improvements at the end of the day | — |
+| `/batbelt:puppet-master` | you only | Hands jobs to your open sessions, and to background workers when none is free, one job each; compacts only between tasks; an analyst session proposes improvements at the end of the day | — |
 | `/batbelt:onboard-repo` | you only | Sets up a repository so Claude works well in it | `[--sync] [--check] [--no-review] [--resume] [--unattended] [--with update-deps] [--without update-deps]` |
 
 ## grill-me

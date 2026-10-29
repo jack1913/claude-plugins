@@ -1,6 +1,7 @@
 ---
 name: puppet-master
-description: Coordinates Claude Code sessions from one interactive session. It hands each job to the user's own open sessions first and to a background worker only when none is free, one job per session, measures context and compacts only at task boundaries, and keeps one analyst session that collects friction and proposes changes to this skill at the end of the day. Use when running a coordinator over several sessions, handing a job to a session, relaying a session's question to the user, deciding whether a session should be compacted, restarted or closed, or wrapping up the day. Not for subagents inside one session, or for several sessions editing one checkout.
+description: Coordinates Claude Code sessions from one interactive session. It hands each job to the user's own open sessions first and to a background worker only when none is free, one job per session, measures context and compacts only at task boundaries, and keeps one analyst session that collects friction and proposes changes to this skill at the end of the day. Use when running a coordinator over several sessions, handing a job to a session, relaying a session's question to the user, deciding whether a session should be compacted, restarted or closed, or wrapping up the day. Runs only when typed as /batbelt:puppet-master. Not for subagents inside one session, or for several sessions editing one checkout.
+disable-model-invocation: true
 ---
 
 # puppet-master

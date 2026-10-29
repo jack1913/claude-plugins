@@ -32,13 +32,13 @@ def test_the_four_skills_are_present():
         assert (SKILLS / name / "SKILL.md").is_file()
 
 
-def test_only_onboard_repo_is_typed_only():
-    # grill-me starts when the user says "grill me"; onboard-repo writes into a repository, so it
-    # runs only when typed.
+def test_onboard_repo_and_puppet_master_are_typed_only():
+    # grill-me starts when the user says "grill me"; onboard-repo writes into a repository and
+    # puppet-master drives other sessions, so they run only when typed.
     typed_only = {
         name for name in EXPECTED_SKILLS if _frontmatter(SKILLS / name / "SKILL.md").get("disable-model-invocation")
     }
-    assert typed_only == {"onboard-repo"}
+    assert typed_only == {"onboard-repo", "puppet-master"}
 
 
 def test_grilling_was_merged_into_grill_me():
