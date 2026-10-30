@@ -95,7 +95,12 @@ one-line "(rule)" items that the owner approves at G4.
    when the motion round is approved, or by `brand-creator motion --off`, before G4; in Quick, at G4.
 7. **Type and units.** A type scale in px or rem as DTCG dimensions (`{value, unit}`). A minimum label size the book
    will hold itself to. Hairline and frame units for strokes and padding. A focus ring that passes the UI gate on both
-   grounds.
+   grounds. For a brand with a site or an app the starter also carries layout slots: spacing steps `space.1` to
+   `space.8` (4 to 64 px), corner radius `radius.sm`, `md`, `lg` and `pill`, the content width `layout.container` and the
+   gap `layout.gutter`, the breakpoints `breakpoint.sm`, `md`, `lg` and `xl`, and line height and letter spacing as plain
+   numbers: `leading.display`, `leading.body`, `tracking.display` and `tracking.body` (tracking in em, so
+   `letter-spacing: calc(var(--tracking-display) * 1em)`). Like the curves, they are proposals until G4: the owner
+   approves or changes them with the layout rule, and a brand with no site or app can delete the groups it does not use.
 
 ## The motion round (Standard and Full)
 
@@ -159,6 +164,7 @@ code. For example:
 - (rule) reduced motion: nothing moves; durations `motion.quick` 160 / `base` 320 / `slow` 640 ms, `stagger` 120 ms; curves `easing.standard`, `enter` and `exit` (when `motion/motion.json` says on; in Quick, only when something moves)
 - (rule) interactive brand pieces stay within 6 kB of script, gzipped (proposal; only when the brand ships code)
 - (rule) accent and danger stay distinct (a `distinct` pair)
+- (rule) layout: space steps `space.1`-`space.8`, radius `radius.*`, container `layout.container`, gutter `layout.gutter`, breakpoints `breakpoint.*`, display line height `leading.display` and tracking `tracking.display` (proposal; when the brand has a site or an app)
 
 In Quick, record the motion answer, on or off, in `motion/motion.json` now (off needs the owner's reason, in the owner's
 words: `brand-creator motion --off "<reason>"` writes it). In Standard and Full it is there already, and `check` fails

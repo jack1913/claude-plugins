@@ -6,7 +6,7 @@ import subprocess
 import sys
 
 import pytest
-from helpers import android_sdk, bc, failing, make_project, install_fixture, mutate, mutate_json, report
+from helpers import ROOT, android_sdk, bc, failing, make_project, install_fixture, mutate, mutate_json, report
 
 pytestmark = pytest.mark.requires_setup
 
@@ -199,6 +199,34 @@ def test_independent_round_trip_of_the_motion_outputs(proj):
     tj = json.loads((out / "tokens.json").read_text())
     assert tj["motion"]["curves"] == {f"easing.{k}": c for k, c in MOTION_CURVES.items()}
     assert tj["motion"]["durations_ms"] == {"duration.fast": 150, "motion.base": 320, "motion.slow": 640}
+
+
+def test_the_starter_tokens_build_with_their_layout_slots(tmp_path):
+    """The three starter files, copied as they are, build: the layout slots (spacing, radius, container, gutter, breakpoints, line height,
+    tracking) reach tokens.css and tokens.json (`other`) and no other output; tracking is a number in em."""
+    p = make_project(tmp_path)
+    (p / "tokens").mkdir(exist_ok=True)
+    for f in (ROOT / "templates" / "tokens").glob("*.tokens.json"):
+        shutil.copy2(f, p / "tokens" / f.name)
+    assert len(list((p / "tokens").glob("*.tokens.json"))) == 3
+    r = tokens(p)
+    assert r.returncode == 0, r.stdout + r.stderr
+    out = p / "assets" / "tokens"
+    css = (out / "tokens.css").read_text()
+    for decl in ("--space-1: 4px;", "--space-8: 64px;", "--radius-pill: 999px;", "--layout-container: 1200px;", "--layout-gutter: 24px;",
+                 "--breakpoint-sm: 640px;", "--breakpoint-xl: 1280px;", "--leading-display: 1.1;", "--leading-body: 1.5;",
+                 "--tracking-display: -0.01;", "--tracking-body: 0;"):
+        assert decl in css, decl
+    other = json.loads((out / "tokens.json").read_text())["other"]
+    assert {k: other[k] for k in ("space.1", "radius.md", "layout.container", "breakpoint.lg", "leading.display", "tracking.display")} == {
+        "space.1": "4px", "radius.md": "8px", "layout.container": "1200px", "breakpoint.lg": "1024px", "leading.display": "1.1",
+        "tracking.display": "-0.01"}
+    assert not any(k.split(".")[0] in ("space", "radius", "layout", "breakpoint", "leading", "tracking")
+                   for k in json.loads((out / "tokens.json").read_text())["motion"]["durations_ms"])     # none of them is a duration
+    for f in (out / "swift").glob("*.swift"):       # a dimension or number token reaches CSS and tokens.json only
+        assert not any(w in f.read_text().lower() for w in ("breakpoint", "leading", "tracking", "radius")), f
+    for f in (out / "android" / "values").glob("*.xml"):
+        assert not any(w in f.read_text() for w in ("brand_space", "brand_radius", "brand_leading", "brand_tracking")), f
 
 
 @pytest.mark.requires_aapt2

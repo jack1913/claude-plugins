@@ -187,6 +187,150 @@
       "$value": 700
     }
   },
+  "space": {
+    "$type": "dimension",
+    "$description": "Spacing steps 1 to 8. These are proposals until G4: the owner approves or changes them with the layout rules.",
+    "1": {
+      "$value": {
+        "value": 4,
+        "unit": "px"
+      }
+    },
+    "2": {
+      "$value": {
+        "value": 8,
+        "unit": "px"
+      }
+    },
+    "3": {
+      "$value": {
+        "value": 12,
+        "unit": "px"
+      }
+    },
+    "4": {
+      "$value": {
+        "value": 16,
+        "unit": "px"
+      }
+    },
+    "5": {
+      "$value": {
+        "value": 24,
+        "unit": "px"
+      }
+    },
+    "6": {
+      "$value": {
+        "value": 32,
+        "unit": "px"
+      }
+    },
+    "7": {
+      "$value": {
+        "value": 48,
+        "unit": "px"
+      }
+    },
+    "8": {
+      "$value": {
+        "value": 64,
+        "unit": "px"
+      }
+    }
+  },
+  "radius": {
+    "$type": "dimension",
+    "$description": "Corner radius steps; pill is a full round. These are proposals until G4: the owner approves or changes them with the layout rules.",
+    "sm": {
+      "$value": {
+        "value": 4,
+        "unit": "px"
+      }
+    },
+    "md": {
+      "$value": {
+        "value": 8,
+        "unit": "px"
+      }
+    },
+    "lg": {
+      "$value": {
+        "value": 16,
+        "unit": "px"
+      }
+    },
+    "pill": {
+      "$value": {
+        "value": 999,
+        "unit": "px"
+      }
+    }
+  },
+  "layout": {
+    "$type": "dimension",
+    "$description": "Content width and the gap between columns. These are proposals until G4: the owner approves or changes them with the layout rules.",
+    "container": {
+      "$value": {
+        "value": 1200,
+        "unit": "px"
+      }
+    },
+    "gutter": {
+      "$value": {
+        "value": 24,
+        "unit": "px"
+      }
+    }
+  },
+  "breakpoint": {
+    "$type": "dimension",
+    "$description": "Viewport widths where the layout changes. These are proposals until G4: the owner approves or changes them with the layout rules.",
+    "sm": {
+      "$value": {
+        "value": 640,
+        "unit": "px"
+      }
+    },
+    "md": {
+      "$value": {
+        "value": 768,
+        "unit": "px"
+      }
+    },
+    "lg": {
+      "$value": {
+        "value": 1024,
+        "unit": "px"
+      }
+    },
+    "xl": {
+      "$value": {
+        "value": 1280,
+        "unit": "px"
+      }
+    }
+  },
+  "leading": {
+    "$type": "number",
+    "$description": "Line height as a unitless multiple of the font size. These are proposals until G4: the owner approves or changes them with the type rules.",
+    "display": {
+      "$value": 1.1
+    },
+    "body": {
+      "$value": 1.5
+    }
+  },
+  "tracking": {
+    "$type": "number",
+    "$description": "Letter spacing in em: letter-spacing: calc(var(--tracking-display) * 1em). These are proposals until G4: the owner approves or changes them with the type rules.",
+    "display": {
+      "$value": -0.01
+    },
+    "body": {
+      "$value": 0
+    }
+  },
   "motion": {
     "$type": "duration",
     "$description": "Named durations; reduced motion means none of them run.",

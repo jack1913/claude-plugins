@@ -390,6 +390,12 @@ def test_token_templates_carry_both_schemes_and_computed_hex():
     assert light["$extensions"]["brand-creator"]["pairs"]
     for group in ("size", "font", "weight", "motion", "easing"):
         assert group in prim, group
+    # layout slots: six groups of proposals until G4 (tracking says it is in em)
+    for group in ("space", "radius", "layout", "breakpoint", "leading", "tracking"):
+        assert group in prim and "proposals until G4" in prim[group]["$description"], group
+    assert all(prim[g]["$type"] == "dimension" for g in ("space", "radius", "layout", "breakpoint"))
+    assert all(prim[g]["$type"] == "number" for g in ("leading", "tracking"))
+    assert "letter-spacing: calc(var(--tracking-display) * 1em)" in prim["tracking"]["$description"]
     # curves are tokens now: three proposals until G4, and the motion group no longer says they are only named in the book
     easing = prim["easing"]
     assert easing["$type"] == "cubicBezier" and {k: v["$value"] for k, v in easing.items() if not k.startswith("$")} == {

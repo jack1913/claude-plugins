@@ -226,6 +226,12 @@ DTCG 2025.10 is a Final Community Group Report. It is not a W3C Standard and not
   `y1` and `y2` unrestricted (a curve may overshoot); a duration is at most 2147483647 ms, the largest integer Android keeps. A group named `easing` gives `--easing-*`. A reference (`"{easing.standard}"`) resolves like any
   other. Anything else fails the build (exit 1, report row `motion-tokens`), names the token path and writes nothing. The starter tokens carry three
   curve proposals, `easing.standard` `[0.2, 0, 0, 1]`, `easing.enter` `[0, 0, 0, 1]` and `easing.exit` `[0.3, 0, 1, 1]`, which stay proposals until G4.
+- Layout slots in the starter tokens (`templates/tokens/primitives.tokens.json`; proposals until G4, each group's `$description` says so): `space.1` to
+  `space.8` (4, 8, 12, 16, 24, 32, 48, 64 px), `radius.sm`, `md`, `lg`, `pill` (4, 8, 16, 999 px), `layout.container` (1200 px) and `layout.gutter` (24 px),
+  `breakpoint.sm`, `md`, `lg`, `xl` (640, 768, 1024, 1280 px), all `"$type": "dimension"` with `{"value", "unit": "px"}`; and `leading.display` (1.1), `leading.body`
+  (1.5), `tracking.display` (-0.01) and `tracking.body` (0), `"$type": "number"` (tracking is in em, as DTCG 2025.10 dimensions are px or rem only:
+  `letter-spacing: calc(var(--tracking-display) * 1em)`). `dimension` and `number` tokens reach `tokens.css` (`--space-1: 4px;`, `--leading-display: 1.1;`) and
+  `tokens.json` under `other` only (`"space.1": "4px"`); they are not durations or curves and have no Swift or Android output.
 - Outputs of the motion tokens, written only when the sources have a duration or a curve (a project with neither gets no motion file and no `motion`
   entry in `tokens.json`, and its other outputs are byte for byte what they were):
   - `tokens.css`: `--<path>: 320ms;` and `--<path>: cubic-bezier(x1, y1, x2, y2);` with the other non-colour primitives (an alias is `var(--other)`).

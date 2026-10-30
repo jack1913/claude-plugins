@@ -19,6 +19,10 @@ stage, and why, is in the [archive](docs/archive/README.md).
   a near miss (`reflex-unargued`, one warning per pattern). All of these only warn in this release and become
   failures in the next one. The report now lists `FACTS.md` and `brief/BRIEF.md`, so a changed fact makes the lint
   stale.
+- The starter tokens carry layout slots, as proposals until the owner approves the system rules: spacing steps 1 to 8
+  (4 to 64 px), corner radius (small, medium, large, pill), the content width and the gutter, four breakpoints, and line
+  height and letter spacing as plain numbers (letter spacing in em). They are built into `tokens.css` and `tokens.json` like
+  the other tokens, and the system-rules step offers one layout rule for a brand with a site or an app.
 
 ### Changed
 
