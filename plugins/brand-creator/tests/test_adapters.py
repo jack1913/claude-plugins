@@ -774,3 +774,174 @@ def test_the_pinned_design_md_format_accepts_sizes_and_weights(pack):
     rep = json.loads((pack / "assets" / "_checks" / "adapters.json").read_text())
     assert not [x for x in rep["results"] if x["id"].startswith("design-md:lint") and x["status"] == "fail"]
     assert "fontSize: 14px" in (pack / "DESIGN.md").read_text() and "fontWeight: 700" in (pack / "DESIGN.md").read_text()
+
+
+# ---------------------------------------------------------------- text grounds: the action of each ground, with its on-action text
+
+GROUND = {"ground": "color.bg", "text": "color.text", "action": "color.accent", "on-action": "color.on-accent", "focus": "color.focus", "border": "color.border"}
+
+
+def add_grounds(p: Path, named="2026-10-30 text sits on the page colour", block=True) -> None:
+    """Acme gets the two roles an action needs (the text on the accent, the focus ring) in light and dark, and (unless [block] is False) one text ground,
+    `color.bg`, with its five roles, built into the tokens."""
+    def light(d):
+        d["color"]["on-accent"] = {"$value": "{color.paper}"}
+        d["color"]["focus"] = {"$value": "{color.teal}"}
+        if block:
+            d.setdefault("$extensions", {}).setdefault("brand-creator", {})["grounds"] = {"named_by_owner": named, "list": [dict(GROUND)]}
+
+    def dark(d):
+        d["color"]["on-accent"] = {"$value": "{color.night}"}
+        d["color"]["focus"] = {"$value": "{color.teal-bright}"}
+    mutate_json(p / "tokens" / "semantic.light.tokens.json", light)
+    mutate_json(p / "tokens" / "semantic.dark.tokens.json", dark)
+    r = bc("tokens", project=p)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def component(text: str, name: str) -> dict[str, str]:
+    """The properties of one `components` entry of the frontmatter."""
+    block = re.search(rf"^  {re.escape(name)}:\n((?:    .*\n)+)", FM_RE.match(text).group(1) + "\n", re.M)
+    return dict(re.match(r"^    ([A-Za-z]+): (.*)$", ln).groups() for ln in block.group(1).splitlines()) if block else {}
+
+
+def set_ground(p: Path, **change) -> None:
+    """Change the roles of the one ground of the project (None leaves a role out) and build the tokens again."""
+    def edit(d):
+        ground = d["$extensions"]["brand-creator"]["grounds"]["list"][0]
+        for role_name, token in change.items():
+            if token is None:
+                ground.pop(role_name.replace("_", "-"), None)
+            else:
+                ground[role_name.replace("_", "-")] = token
+    mutate_json(p / "tokens" / "semantic.light.tokens.json", edit)
+    r = bc("tokens", project=p)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_grounds_give_each_text_ground_its_action_component_and_table(pack):
+    add_grounds(pack)
+    generate(pack)
+    design, brand = (pack / "DESIGN.md").read_text(), (pack / "BRAND.md").read_text()
+    skill = (pack / ".claude" / "skills" / "acme-brand" / "SKILL.md").read_text()
+    assert component(design, "action-on-bg") == {"backgroundColor": '"{colors.accent}"', "textColor": '"{colors.on-accent}"'}
+    assert component(design, "action-on-bg-dark") == {"backgroundColor": '"{colors.accent-dark}"', "textColor": '"{colors.on-accent-dark}"'}
+    assert component(design, "text-on-bg") and component(design, "text-on-bg-dark")                       # the entries of the text pairs stay
+    c = colours(design)
+    assert c["on-accent"] == "#f9f7ee" and c["on-accent-dark"] == "#0e141d"                               # what the entries point at is defined
+    refs = re.findall(r'"\{colors\.([a-z-]+)\}"', design)
+    assert refs and all(ref in c for ref in refs)
+    assert "The colours text sits on: `bg`. Named by the owner: 2026-10-30 text sits on the page colour." in design
+    assert "`action-on-<ground>` is the action colour of a ground with its on-action text" in design and "give no colour" not in design
+    heads = re.findall(r"^## (.+)$", design, re.M)
+    assert [h for h in heads if h != "Motion"] == [h for h in CANON if h in heads]                         # the sections keep the spec's order
+    rows = ["| bg #f9f7ee | light | text #0d1b2d | accent #007d71 | on-accent #f9f7ee | focus #007d71 | border #4b596c |",
+            "| bg #0e141d | dark | text #f0eee7 | accent #4cd7c8 | on-accent #0e141d | focus #4cd7c8 | border #a7b2c1 |"]
+    for text in (brand, skill):
+        block = section(text, "### Grounds", "\n##")
+        assert "| ground | mode | text | action | on-action | focus | border |" in block and "Named by the owner: 2026-10-30 text sits on the page colour." in block
+        assert all(r in block for r in rows) and "missing: ask the owner" not in block.split("is not defined")[1]
+        assert text.index("| on-accent | #f9f7ee | #0e141d |") < text.index("### Grounds")                 # after the colour table
+    assert brand.index("### Grounds") < brand.index("### Type") and skill.index("### Grounds") < skill.index("Text and component pairs")
+    assert section(skill, "## Colour", "\n## ").count("### Grounds") == 1                                  # in the applied skill it is part of the colour section, no new heading level of its own
+    # the starter's proposal is not the owner's naming, and the files say so while the table still lists what the tokens hold
+    mutate_json(pack / "tokens" / "semantic.light.tokens.json", lambda d: d["$extensions"]["brand-creator"]["grounds"].__setitem__("named_by_owner", ""))
+    assert bc("tokens", project=pack).returncode == 0
+    generate(pack)
+    for name in ("BRAND.md", "DESIGN.md", ".claude/skills/acme-brand/SKILL.md"):
+        text = (pack / name).read_text()
+        assert "Not named by the owner yet: these grounds are a proposal." in text and "Named by the owner" not in text, name
+
+
+def test_a_role_the_tokens_give_no_colour_is_left_out_and_named_never_invented(pack):
+    """A ground without its on-action text gets no action entry at all; one whose on-action text has a light colour only gets the light entry; a ground without
+    a focus ring still gets both entries. The files say which ground lacks what, and the table says "missing: ask the owner" where the tokens give nothing."""
+    add_grounds(pack)
+    set_ground(pack, on_action=None)
+    generate(pack)
+    design, brand = (pack / "DESIGN.md").read_text(), (pack / "BRAND.md").read_text()
+    skill = (pack / ".claude" / "skills" / "acme-brand" / "SKILL.md").read_text()
+    assert "action-on" not in design and "## Components" in design                                          # nothing invented for the entry; the section stays to say why
+    assert "The tokens give no colour for the following, so nothing is written for it. Ask the owner; do not guess:\n\n- bg in light: no on-action\n- bg in dark: no on-action\n" in design
+    for text in (brand, skill):
+        assert "| bg #f9f7ee | light | text #0d1b2d | accent #007d71 | missing: ask the owner | focus #007d71 | border #4b596c |" in text
+        assert "| bg #0e141d | dark | text #f0eee7 | accent #4cd7c8 | missing: ask the owner | focus #4cd7c8 | border #a7b2c1 |" in text
+    set_ground(pack, on_action="color.on-accent")                                                           # the role is back, but built tokens that hold no dark colour for it (a null)
+    mutate_json(pack / "assets" / "tokens" / "tokens.json", lambda d: d["grounds"]["list"][0]["modes"]["dark"].__setitem__("on-action", None))
+    generate(pack)
+    design, brand = (pack / "DESIGN.md").read_text(), (pack / "BRAND.md").read_text()
+    assert component(design, "action-on-bg") and not component(design, "action-on-bg-dark") and "{colors.on-accent-dark}" not in design
+    assert "- bg in dark: no on-action\n" in design and "bg in light" not in design
+    assert "| bg #0e141d | dark | text #f0eee7 | accent #4cd7c8 | missing: ask the owner | focus #4cd7c8 | border #a7b2c1 |" in brand
+    set_ground(pack, focus=None)                                                                            # a missing focus ring does not take the action entries with it
+    generate(pack)
+    design = (pack / "DESIGN.md").read_text()
+    assert component(design, "action-on-bg") and component(design, "action-on-bg-dark")
+    assert "- bg in light: no focus\n- bg in dark: no focus\n" in design
+
+
+def test_a_ground_listed_twice_and_a_pair_already_named_so_keep_their_component_names_apart(pack):
+    """A colour role called `action` in a text pair on `bg` already makes the component `action-on-bg`; the grounds entries take the next free names, and a
+    ground listed twice gets two entries. No key of `components` is repeated, because YAML would take a repeated key for a second definition."""
+    add_grounds(pack)
+
+    def light(d):
+        d["color"]["action"] = {"$value": "{color.teal}"}
+        block = d["$extensions"]["brand-creator"]
+        block["pairs"].append({"fg": "color.action", "bg": "color.bg", "kind": "ui-text", "min": 4.5})
+        block["grounds"]["list"].append(dict(block["grounds"]["list"][0]))
+    mutate_json(pack / "tokens" / "semantic.light.tokens.json", light)
+    mutate_json(pack / "tokens" / "semantic.dark.tokens.json", lambda d: d["color"].__setitem__("action", {"$value": "{color.teal-bright}"}))
+    r = bc("tokens", project=pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    generate(pack)
+    design = (pack / "DESIGN.md").read_text()
+    names = re.findall(r"^  ([a-z0-9-]+):$", FM_RE.match(design).group(1).split("\ncomponents:\n", 1)[1], re.M)
+    assert len(names) == len(set(names)) and [n for n in names if n.startswith("action-on-bg")] == [
+        "action-on-bg", "action-on-bg-dark", "action-on-bg-2", "action-on-bg-2-dark", "action-on-bg-3", "action-on-bg-3-dark"]
+    assert component(design, "action-on-bg") == {"backgroundColor": '"{colors.bg}"', "textColor": '"{colors.action}"'}            # the pair keeps its name
+    for name in ("action-on-bg-2", "action-on-bg-3"):
+        assert component(design, name) == {"backgroundColor": '"{colors.accent}"', "textColor": '"{colors.on-accent}"'}
+
+
+def test_without_grounds_the_adapter_files_do_not_change(pack, tmp_path):
+    """Acme as built has no grounds: none of the three files mentions them. The same project with grounds differs by exactly the grounds lines."""
+    bare = tmp_path / "bare"
+    shutil.copytree(pack, bare)
+    add_grounds(pack)
+    add_grounds(bare, block=False)
+    assert "grounds" not in json.loads((bare / "assets" / "tokens" / "tokens.json").read_text())
+    generate(pack)
+    generate(bare)
+    for name in ("BRAND.md", "DESIGN.md", ".claude/skills/acme-brand/SKILL.md"):
+        without = (bare / name).read_text()
+        assert "Grounds" not in without and "action-on" not in without and "text sits on" not in without, name
+    brand, design = (pack / "BRAND.md").read_text(), (pack / "DESIGN.md").read_text()
+    skill = (pack / ".claude" / "skills" / "acme-brand" / "SKILL.md").read_text()
+    assert re.sub(r"### Grounds\n.*?(?=### Type)", "", brand, flags=re.S) == (bare / "BRAND.md").read_text()
+    assert re.sub(r"\n\n### Grounds\n.*?(?=\n\nText and component pairs)", "", skill, flags=re.S) == (bare / ".claude" / "skills" / "acme-brand" / "SKILL.md").read_text()
+    stripped = re.sub(r"  action-on-bg(?:-dark)?:\n(?:    .*\n)+", "", design)
+    stripped = re.sub(r"The colours text sits on: .*\n\n|`action-on-<ground>` is .*\n\n", "", stripped)
+    assert stripped == (bare / "DESIGN.md").read_text()
+    assert brand != (bare / "BRAND.md").read_text() and skill != (bare / ".claude" / "skills" / "acme-brand" / "SKILL.md").read_text()      # the strip changed something
+
+
+def test_a_grounds_block_of_the_wrong_shape_stops_the_adapters_and_writes_nothing(pack):
+    add_grounds(pack)
+    tj = pack / "assets" / "tokens" / "tokens.json"
+    mutate_json(tj, lambda d: d["grounds"].__setitem__("list", [{"ground": "color.bg"}]))
+    r = bc("adapters", "--brand-md", "--design-md", project=pack)
+    assert r.returncode == 2 and "grounds must be" in r.stderr and "brand-creator tokens" in r.stderr
+    assert not (pack / "BRAND.md").exists() and not (pack / "DESIGN.md").exists()
+    assert bc("applied-skill", "--yes", project=pack).returncode == 2 and not (pack / ".claude" / "skills" / "acme-brand").exists()
+
+
+@pytest.mark.requires_design_lint
+def test_the_pinned_design_md_format_accepts_the_action_components(pack):
+    add_grounds(pack)
+    r = bc("adapters", "--design-md", "--primary", "accent", project=pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert row(pack, "design-md:lint", "adapters")["status"] == "pass"
+    rep = json.loads((pack / "assets" / "_checks" / "adapters.json").read_text())
+    assert not [x for x in rep["results"] if x["id"].startswith("design-md:lint") and x["status"] == "fail"]
+    assert "action-on-bg-dark:" in (pack / "DESIGN.md").read_text()

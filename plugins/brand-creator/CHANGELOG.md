@@ -42,6 +42,13 @@ stage, and why, is in the [archive](docs/archive/README.md).
   `tokens/primitives.tokens.json` that is still the starter's proposal, and lists them. Keep a value by listing its path
   under `starter-kept` in the primitives, with the date and the owner's words, or change it. It only warns; it never
   fails the check.
+- `DESIGN.md`, `BRAND.md` and the brand's applied skill now carry the grounds that text sits on, when the tokens list
+  them. `DESIGN.md` gets a component for the action on each ground (`action-on-<ground>`, with a `-dark` twin), pairing
+  the action colour with the text on it. `BRAND.md` (under Visual) and the applied skill (under Colour) get a Grounds
+  table with the text, action, text on the action, focus ring and border of each ground, in light and dark. A colour the
+  tokens do not give is left out and shown as "missing: ask the owner", never filled in, and the files say whether the
+  owner named the grounds or they are still a proposal. A project with no grounds gets the same files as before. Run
+  `adapters` and `applied-skill` again to update files you already have.
 
 ### Changed
 

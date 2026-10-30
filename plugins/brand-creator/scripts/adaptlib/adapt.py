@@ -6,6 +6,7 @@ library only. No clock and no random numbers: the same inputs give the same byte
 """
 from __future__ import annotations
 
+import datetime
 import hashlib
 import json
 import math
@@ -179,6 +180,80 @@ def layout_lines(doc: dict) -> list[str]:
     return [f"- {t.key}: `{t.value}`" for kind in ("spacing", "rounded", "layout") for t in lt[kind]]
 
 
+GROUND_ROLES = ("text", "action", "on-action", "focus", "border")
+GROUND_MISSING = "missing: ask the owner"
+
+
+def grounds_of(doc: dict) -> tuple[str, list[dict]]:
+    """The text grounds of tokens.json (`grounds`, written by `brand-creator tokens`) as (named_by_owner, entries); an entry is {ground, roles, modes}. ("", []) when the
+    tokens hold none, so that a project without them keeps its files as they were. A block of another shape stops the run (exit 2): nothing is written from half of it."""
+    g = doc.get("grounds")
+    if g is None:
+        return "", []
+    ok = (isinstance(g, dict) and isinstance(g.get("named_by_owner"), str) and isinstance(g.get("list"), list)
+          and all(isinstance(e, dict) and isinstance(e.get("ground"), str) and isinstance(e.get("roles"), dict) and isinstance(e.get("modes"), dict)
+                  and all(isinstance(e["modes"].get(m), dict) for m in ("light", "dark")) for e in g["list"]))
+    if not ok:
+        fail(EXIT_USAGE, 'assets/tokens/tokens.json: grounds must be {"named_by_owner": "...", "list": [{"ground": ..., "roles": {...}, "modes": {"light": {...}, "dark": {...}}}]}; '
+                         "run `brand-creator tokens` again")
+    return g["named_by_owner"], g["list"]
+
+
+def ground_colours(doc: dict, e: dict, mode: str) -> dict[str, str | None]:
+    """The ground and its five roles in one mode, as the semantic token each one is, or None for a role the tokens give no colour in that mode (left out, null,
+    or a name that is no colour token): None is never filled in."""
+    names = {"ground": e["ground"], **{r: e["roles"].get(r) for r in GROUND_ROLES}}
+    return {r: n if isinstance(n, str) and e["modes"][mode].get(r) is not None and n in doc["modes"][mode] else None for r, n in names.items()}
+
+
+def owner_named(text: str) -> bool:
+    """True when `text` is a real YYYY-MM-DD date followed by the owner's words (the rule `contrast` holds `named_by_owner` to)."""
+    text = text.strip()
+    m = re.match(r"(\d{4}-\d{2}-\d{2})(?!\d)", text)
+    if m is None or not text[10:].strip():
+        return False
+    try:
+        datetime.date.fromisoformat(m.group(1))
+    except ValueError:
+        return False
+    return True
+
+
+def named_sentence(named: str) -> str:
+    if owner_named(named):
+        return f"Named by the owner: {' '.join(named.split())}."
+    return "Not named by the owner yet: these grounds are a proposal. Ask which colours text sits on; do not guess."
+
+
+def ground_gaps(doc: dict, entries: list[dict]) -> list[str]:
+    """One bullet per ground and mode that lacks a colour, naming what is missing."""
+    out = []
+    for e in entries:
+        for mode in ("light", "dark"):
+            got = ground_colours(doc, e, mode)
+            missing = [("ground colour" if r == "ground" else r) for r in ("ground", *GROUND_ROLES) if got[r] is None]
+            if missing:
+                out.append(f"- {role(e['ground'])} in {mode}: no {', '.join(missing)}")
+    return out
+
+
+def grounds_lines(doc: dict) -> list[str]:
+    """The `### Grounds` block of BRAND.md and of the applied skill's colour section: one row per ground and mode, a cell being the role and its colour, or
+    "missing: ask the owner" where the tokens give none. [] when the tokens hold no grounds."""
+    named, entries = grounds_of(doc)
+    if not entries:
+        return []
+    L = ["### Grounds", "", "The colours text sits on, each with the colours that go with it, from `grounds` of the built design tokens. " + named_sentence(named)
+         + f" A colour shown as \"{GROUND_MISSING}\" is not defined: do not choose one.", "",
+         "| ground | mode | text | action | on-action | focus | border |", "|---|---|---|---|---|---|---|"]
+    for e in entries:
+        for mode in ("light", "dark"):
+            got = ground_colours(doc, e, mode)
+            cells = [f"{role(got[r])} {mode_hex(doc, mode, got[r])}" if got[r] else GROUND_MISSING for r in ("ground", *GROUND_ROLES)]
+            L.append(f"| {cells[0]} | {mode} | " + " | ".join(cells[1:]) + " |")
+    return L
+
+
 def bezier(c: list) -> str:
     """A curve as tokens.css writes it: cubic-bezier(0.2, 0, 0, 1), the numbers as plain decimals (1 and not 1.0, 0.0000001 and not 1e-07)."""
     def num(n) -> str:
@@ -283,6 +358,9 @@ def brand_md(project: Path, *, bm_type: str | None = None, bm_arch: str | None =
         L += ["Never use (the FORBIDDEN list of the brief and research/cliches.md):", ""] + [f"- {t}" for t in v["forbidden"]] + [""]
     L += ["## Visual", "", "### Colour", "", "Values come from the built design tokens (`assets/tokens/tokens.json`); the DTCG sources in `tokens/` are the truth.", ""]
     L += colour_table(doc) + [""]
+    grounds = grounds_lines(doc)
+    if grounds:
+        L += grounds + [""]
     L += ["### Type", ""] + type_lines(doc, "The tokens define no font family.") + [""]
     layout = layout_lines(doc)
     if layout:
@@ -364,6 +442,20 @@ def design_md(project: Path, *, primary: str | None = None) -> str:
     for p in doc.get("pairs", []):
         if p.get("kind") == "ui-text":
             comps.append((f"{role(p['fg'])}-on-{role(p['bg'])}", role(p["fg"]), role(p["bg"]), p["fg"] in dark and p["bg"] in dark))
+    pair_comps = len(comps)
+    named, entries = grounds_of(doc)
+    used = {n for c in comps for n in (c[0], c[0] + "-dark")}
+    for e in entries:   # the action of each ground with its on-action text: a role the tokens give no colour in a mode is left out of it, never filled in
+        in_light, in_dark = ground_colours(doc, e, "light"), ground_colours(doc, e, "dark")
+        if not (in_light["action"] and in_light["on-action"]):
+            continue
+        name = base = f"action-on-{role(e['ground'])}"
+        n = 2
+        while name in used or name + "-dark" in used:   # a ground listed twice, or a pair already named so
+            name, n = f"{base}-{n}", n + 1
+        used |= {name, name + "-dark"}
+        comps.append((name, role(in_light["on-action"]), role(in_light["action"]), bool(in_dark["action"] and in_dark["on-action"])))
+    gaps = ground_gaps(doc, entries)
     if comps:
         L.append("components:")
         for name, fg, bg, has_dark in comps:
@@ -389,8 +481,17 @@ def design_md(project: Path, *, primary: str | None = None) -> str:
             L += ["Spacing steps come from the " + (", ".join(groups[:-1]) + " and " + groups[-1] if len(groups) > 1 else groups[0]) + " tokens.", ""]
         if rounded or lt["layout"]:
             L += [f"- {t.key}: {t.value}" for t in rounded + lt["layout"]] + [""]
-    if comps:
-        L += ["## Components", "", "One entry per text pair that must meet WCAG AA 4.5:1, in light and dark.", ""]
+    if comps or gaps:
+        L += ["## Components", ""]
+        if pair_comps:
+            L += ["One entry per text pair that must meet WCAG AA 4.5:1, in light and dark.", ""]
+        if entries:
+            names = ", ".join(f"`{role(g)}`" for g in dict.fromkeys(e["ground"] for e in entries))
+            L += [f"The colours text sits on: {names}. " + named_sentence(named), ""]
+            if len(comps) > pair_comps:
+                L += ["`action-on-<ground>` is the action colour of a ground with its on-action text, in light and dark (`-dark`).", ""]
+            if gaps:
+                L += ["The tokens give no colour for the following, so nothing is written for it. Ask the owner; do not guess:", ""] + gaps + [""]
     motion = motion_lines(project, doc)
     if motion:   # prose only: the pinned format keeps a section it does not know (it has no motion tokens), so no frontmatter key is invented for it
         L += ["## Motion", ""] + motion + [""]
@@ -426,6 +527,7 @@ def applied_skill_md(project: Path, template: str) -> str:
              else [band_line(b) for b in rules.get("bands", [])])
     lines = motion_lines(project, doc)
     motion = "\n".join(["## Motion", "", *lines]) if lines else ""
+    grounds = grounds_lines(doc)
     values = layout_lines(doc)
     layout = "\n".join(["## Layout", "", "Spacing, corner radius and layout values from the built design tokens. A value that is not listed is not defined: ask the owner.", "",
                          *values]) if values else ""
@@ -437,7 +539,7 @@ def applied_skill_md(project: Path, template: str) -> str:
         "description": (f"Applies the {v['name']} brand (colours, type, mark rules, claims) when making slides, documents, pages, posts or any other "
                         f"material for {v['name']}. Use it whenever {v['name']} material is created or reviewed."),
         "status": f"Edition {v['edition'] or 'not set'}: {state}{' on ' + date if date else ''}.",
-        "colours": "\n".join(colour_table(doc)),
+        "colours": "\n".join(colour_table(doc) + ([""] + grounds if grounds else [])),   # the grounds table follows the colour table, under the same heading
         "pairs": "\n".join(pair_table(doc)),
         "type": "\n".join(type_lines(doc, "The tokens define no font family: ask the owner before choosing one.")),
         "layout": layout,

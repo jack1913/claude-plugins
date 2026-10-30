@@ -6,8 +6,8 @@
 """brand-creator adapters: BRAND.md and DESIGN.md, generated views of the brand for agents, opt-in at gate G5.
 
   adapters --brand-md     BRAND.md: Strategy, Voice, Visual and Governance sections with `type` and `architecture` frontmatter
-  adapters --design-md    DESIGN.md: YAML tokens (colors with `-dark` variants, typography, spacing, components from the text pairs) and the
-                          section prose; then linted with the pinned @google/design.md when `brand-creator setup` installed it
+  adapters --design-md    DESIGN.md: YAML tokens (colors with `-dark` variants, typography, spacing, components from the text pairs and the action on each text
+                          ground) and the section prose; then linted with the pinned @google/design.md when `brand-creator setup` installed it
 
 Both are written at the project root from the built tokens (assets/tokens/tokens.json), BRAND-STATE.md and FACTS.md, and motion/motion.json when it
 exists (the motion section: durations, curves, the signature move, the rules, or why nothing moves); the DTCG sources stay the truth, and nothing is

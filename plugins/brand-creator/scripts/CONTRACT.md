@@ -1301,7 +1301,7 @@ then Strategy (the facts, the canonical direction), Voice (only `voice` and `ton
 (colour roles in light and dark, type families with the sizes, weights, line height and tracking the tokens define, the spacing, radius and layout values, the mark files, the G4 rules, motion) and Governance (naming and renames, claims and verbatim legal facts,
 the accessibility commitments with the computed ratios, approval). Contact and postal-address facts are left out. DESIGN.md: frontmatter `version: alpha`, `name`,
 `colors` (the light roles, `-dark` variants, `primary` when `--primary` names a role), `typography` (families, sizes, weights, line height and tracking), `spacing`, `rounded`, `components` (one entry per
-`ui-text` pair, light and dark, as `{colors.x}` references), then the sections in the spec's order that have content. A role whose colour is see-through
+`ui-text` pair, light and dark, as `{colors.x}` references, and the action of each text ground, below), then the sections in the spec's order that have content. A role whose colour is see-through
 (alpha under 1 in `tokens.json`) is written `#rrggbbaa`, lower case, as `tokens.css` writes it, wherever a role is listed (BRAND.md, DESIGN.md `colors`, the applied
 skill); an opaque role stays `#rrggbb`. The pinned DESIGN.md format lists `#RRGGBBAA` as a colour, and its lint passes it. The report `adapters` records the sha256 of
 each output and `adapter_state_sha` (a hash of what the adapters read from BRAND-STATE.md and FACTS.md). DESIGN.md is linted with `@google/design.md` (the version
@@ -1324,6 +1324,17 @@ radius (`radius.sm` and `dimension.radius-sm` are `sm`). The DESIGN.md prose lis
 spacing steps come from and the radius, container, gutter and breakpoint values. BRAND.md `### Type` and the applied skill's `## Type` list the same, one bullet per token path; BRAND.md
 `### Layout` and the applied skill's `## Layout` list the spacing, radius and layout values, and are left out when there are none.
 
+Text grounds are read from `grounds` of `tokens.json` (see Token sources; absent, nothing changes and the three files are byte for byte what they were). DESIGN.md `components` gains
+`action-on-<ground>` for each listed ground (`<ground>` is the role name without `color.`): `backgroundColor` the action role and `textColor` the on-action role, as `{colors.x}`
+references, and an `action-on-<ground>-dark` twin when both roles have a colour in dark. A name already taken (a ground listed twice, a `ui-text` pair that makes the same name) takes
+`-2`, `-3`, so that no key repeats. A role the tokens give no colour for (`null`: left out of the block, or a name that is no semantic colour token) is left out and never filled in:
+a ground without its action or on-action in light has no entry, without one in dark no `-dark` twin. DESIGN.md `## Components` then also names the grounds and says whether the owner
+named them (`named_by_owner` starts with a real `YYYY-MM-DD` date and has words after it, the rule `contrast` holds it to) or they are the starter's proposal, and lists under "The tokens
+give no colour for the following" each ground and mode with the roles it lacks (`ground colour`, text, action, on-action, focus, border). BRAND.md `### Grounds` (after `### Colour`) and
+the applied skill (a `### Grounds` block appended to the `{{colours}}` fill, so under its `## Colour`; no new placeholder) hold the same block, a sentence on who named the grounds and one
+table, a row per ground and mode: ground, mode, text, action, on-action, focus, border. A cell is the role name and its colour as the colour table prints it (`#rrggbbaa` when see-through), or "missing: ask the
+owner". A `grounds` block of another shape in `tokens.json` stops `adapters` and `applied-skill` (exit 2) before anything is written.
+
 Motion is the same text in BRAND.md (`### Motion`), DESIGN.md (`## Motion`, prose between Components and Do's and Don'ts: the pinned format keeps a section it does
 not name, so no frontmatter key is invented) and the applied skill (`## Motion`): every duration token (by its type, the paths under `tokens.json`
 `motion.durations_ms`) and any other token of the `duration` and `motion` groups (`motion.distance`), each as `tokens.css` writes it and in name order (a
@@ -1336,7 +1347,7 @@ the `adapters` and `applied-skill` reports, and the state hash covers it: a chan
 ### applied-skill
 
 `applied-skill --yes [--plan] [--replace]` writes `.claude/skills/<slug>-brand/SKILL.md` into the project from `templates/applied-skill/SKILL.md`: colours (light and
-dark) and the contrast pairs with their ratios, type families with the sizes, weights, line height and tracking the tokens define (`{{type}}`), the spacing, radius and layout values
+dark) with the table of text grounds when the tokens list any (above), and the contrast pairs with their ratios, type families with the sizes, weights, line height and tracking the tokens define (`{{type}}`), the spacing, radius and layout values
 (the optional `## Layout` section, through the template's `{{layout}}`: a whole section or nothing, as for motion, and left out when the tokens hold none), the mark files (relative to the skill), the small-size rule (from `qa/rules.json`, or the plugin's
 proposal, said so), motion (the section above, through the template's `{{motion}}`: a whole section or nothing, so a brand without motion gets the file it always
 had), what is never done, the G4 rules, the facts that may be claimed (contact facts left out). It needs G5 and `--yes` (without it: the plan on stdout, a
