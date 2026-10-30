@@ -19,6 +19,12 @@ stage, and why, is in the [archive](docs/archive/README.md).
   a near miss (`reflex-unargued`, one warning per pattern). All of these only warn in this release and become
   failures in the next one. The report now lists `FACTS.md` and `brief/BRIEF.md`, so a changed fact makes the lint
   stale.
+- `board-lint` warns when two directions of a pick board look alike in colour (`directions:divergence`). It reads the
+  paper, ink and accent each direction carries in its `style` attribute (`--d-paper`, `--d-ink`, `--d-accent`, as
+  `#rgb` or `#rrggbb`) and names every pair whose paper and ink are both within 0.04, and whose accents are within
+  0.06, of each other (distance in OKLab). A board that passes names the smallest distance of each colour; with fewer
+  than two readable directions the row says it did not measure. The two limits are a practice proposal, said in the
+  row, and the row only warns: it does not become a failure.
 
 ### Changed
 

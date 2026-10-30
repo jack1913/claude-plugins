@@ -336,6 +336,17 @@ direction, `direction:<name>:<suffix>`; both become failures in the next release
 | `reflex-seen` | warn (else pass) | the judge ran and the direction has no non-empty `data-field="reflex-seen"`, or its list names no pattern and does not say `none seen` (a list that is only its label, `judge saw:`, is no answer); `none seen` is an answer |
 | `reflex-unargued` | warn, once per pattern (else one pass) | a pattern on the list is neither a hit nor a near miss of the reflex line (compared by `norm`: casefolded, a trailing parenthetical dropped); the detail names it and says to argue it as a hit, or to say why it is a near miss. No row without a list, or without a reflex line (that is its own failure) |
 
+Colour divergence (pick boards). Each `direction` carries its light-mode colours in its own `style` attribute: `--d-paper`, `--d-ink` and `--d-accent`, each
+`#rgb` or `#rrggbb` (the board templates and the Acme example write them so). A direction that does not carry all three as such values is not measured. The rule
+is in `scripts/boardlib/divergence.py` (`read_colours`, `oklab`, `distance`, `row`), outside `scripts/lib/`. One row, never a failure:
+
+| row | status | when |
+|---|---|---|
+| `directions:divergence` | warn (else pass; info when fewer than two directions carry all three) | two directions whose paper and ink are both within 0.04 and whose accents are within 0.06 of each other, as OKLab distance (Euclidean in L, a, b; L from 0 to 1): "they look alike in colour". The detail names each such pair with its three distances. The pass names, for each of paper, ink and accent, the smallest distance between two directions and which two. The info row says `not measured` and how many directions could be read |
+
+The two thresholds are a practice proposal, not a measured rule (a just-noticeable difference is about 0.02), and the detail of the row says so in every status.
+A refine board, a style board and a motion board have no such row.
+
 Style board (`data-board="style"`, round 0) vocabulary. It has its own required set; the pick-board sections above do not
 apply to it except where named here:
 
