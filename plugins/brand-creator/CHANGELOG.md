@@ -19,6 +19,10 @@ stage, and why, is in the [archive](docs/archive/README.md).
   a near miss (`reflex-unargued`, one warning per pattern). All of these only warn in this release and become
   failures in the next one. The report now lists `FACTS.md` and `brief/BRIEF.md`, so a changed fact makes the lint
   stale.
+- `brand-creator shot --out DIR` can now write the shots into the project's own `specimens/` folder, at any depth (for
+  example `--out specimens/hero`), so page shots you want to keep can sit beside the brand. Any other folder inside the
+  project is still refused (exit 2: `--out must be outside the project, or under specimens/`); a folder outside the
+  project works as before.
 
 ### Changed
 

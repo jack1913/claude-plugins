@@ -19,7 +19,7 @@ import path from "node:path";
 import http from "node:http";
 import { parseArgs } from "node:util";
 import {
-  EXIT, die, mainGuard, dataDir, readSetup, loadDep, findProject, confine, outsideProject, scratchDir, rel,
+  EXIT, die, mainGuard, dataDir, readSetup, loadDep, findProject, confine, outsideProject, outsideOrSpecimens, scratchDir, rel,
   Report, forbiddenTerms, writeIfChanged, sha256, readStateTop, missingSharedLibs, findHeadlessShell, proofReportTool, pixelArt, motionProofKind,
 } from "./lib/_common.mjs";
 
@@ -34,7 +34,7 @@ const USAGE = `usage:
   render.mjs pdf <page.html> --out FILE.pdf --label TEXT [--project DIR] [--format A4|Letter] [--scheme light|dark] [--label-px N] [--timeout MS]
   render.mjs pdf <page.html> --out FILE.pdf --size-mm WxH [--bleed-mm N] [--measure FILE.json] [--project DIR] [--scheme light|dark] [--timeout MS]
   render.mjs selftest
-shots are written outside the project (default: <data>/scratch/...); the report goes to <project>/assets/_checks/shot.json.
+shots are written outside the project (default: <data>/scratch/...) or, with --out, under <project>/specimens/ (shots kept as specimens); the report goes to <project>/assets/_checks/shot.json.
 shot loads lazy images first, pauses --wait MS after load (default 300), then waits for running animations and transitions to end
 (at most ${ANIMATION_CAP_MS / 1000} s; one that repeats forever is shot where it is, and the report says so).
 shot --motion writes one report per proof file: <project>/assets/_checks/motion/<slug>-<hash6>.json. frames writes its stills inside the project, into
@@ -227,7 +227,7 @@ async function cmdShot(argv) {
   if (!(sliceH >= 200) || sliceH * dsf >= 16384) die(EXIT.USAGE, `--slice ${values.slice} css px at dsf ${dsf} gives ${sliceH * dsf} px; slices must stay under 16384 px (the Chromium texture limit)`);
   const pageFile = positionals[0];
   const name = values.name || rel(project, confine(project, pageFile, "page")).replace(/\.[a-z]+$/i, "").replace(/[^A-Za-z0-9._-]+/g, "-");
-  const outDir = values.out ? outsideProject(project, values.out, "--out") : scratchDir(project, path.join("shots", name));
+  const outDir = values.out ? outsideOrSpecimens(project, values.out, "--out") : scratchDir(project, path.join("shots", name));
   fs.mkdirSync(outDir, { recursive: true });
   let terms;
   if (values["forbidden-file"]) {

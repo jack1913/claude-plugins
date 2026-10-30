@@ -155,6 +155,13 @@ export function outsideProject(project, p, what = "path") {
   if (isInside(root, abs)) die(EXIT.USAGE, `${what} ${p} must be outside the project (scratch output); use the data dir or a temp folder`);
   return abs;
 }
+/** Like outsideProject, but a folder under <project>/specimens/ (any depth) is allowed too: page shots the owner keeps as specimens. */
+export function outsideOrSpecimens(project, p, what = "path") {
+  const root = fs.realpathSync(project);
+  const abs = realLenient(p);
+  if (isInside(root, abs) && !isInside(path.join(root, "specimens"), abs)) die(EXIT.USAGE, `${what} ${p} must be outside the project, or under specimens/`);
+  return abs;
+}
 export const rel = (project, p) => path.relative(fs.realpathSync(project), p).split(path.sep).join("/");
 
 export function scratchDir(project, name) {

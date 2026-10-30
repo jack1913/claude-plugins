@@ -31,7 +31,8 @@ project
                           moves, once (--json for data). Standard and Full decide it before G4: the motion round, or --off
 
 checks and renders
-  shot <page.html>        four-view page shots (1440/390 x light/dark) with an overflow/console/network report
+  shot <page.html>        four-view page shots (1440/390 x light/dark) with an overflow/console/network report; --out DIR keeps them outside the
+                          project or under specimens/ (the project's own folder for shots kept as specimens)
   shot --motion <proof>   motion proof: named states against the still, a page's animations seeked through (layout shift, whole pixels, edges at
                           phone widths, rest frame compared in the page itself), reduced motion; one report per proof file
   card <card.html>        render an HTML card to a PNG (OG, repo social, README header)

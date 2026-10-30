@@ -49,7 +49,10 @@ is ever written under the plugin root (it changes on every update).
 Every command takes `--project DIR`, or walks up from the cwd to the first folder holding `BRAND-STATE.md`. When there
 is none it exits 2 with: `no brand project found; pass --project`. All writes are confined to the project directory
 (a path that resolves outside it, including through symlinks, exits 2). Scratch output (page shots) goes outside the
-project, under `<data>/scratch/<slug>-<hash>/`, and `--out` for shots must point outside the project.
+project, under `<data>/scratch/<slug>-<hash>/`. `shot --out DIR` may point outside the project or into `<project>/specimens/` (any depth, the folder itself
+included), the one folder of the project where shots may be kept; anywhere else in the project it exits 2 with `--out must be outside the project, or under
+specimens/` (a symlink is followed first, so a link out of `specimens/` into the rest of the project is refused too). A relative `--out` is read from the current
+folder, as before. The report's `out_dir` records the folder the slices were written to.
 
 ## Reports
 
@@ -134,6 +137,7 @@ fontTools, Brotli and skia-pathops (`outline_glyphs.py`, `fontcheck.py`), Pillow
   assets/fonts/                    the brand's font files (read by fontcheck)
   assets/manifest.json             artefacts written by emitters (put-on-byte-change)
   assets/_checks/                  JSON reports, the logo sheet and the guide overlay
+  specimens/<name>/                page shots kept as specimens (shot --out specimens/<name>); any depth, the only project folder `shot --out` may write
   qa/rules.json                    owner thresholds and size bands (see QA gates); optional, proposals apply without it
   qa/print.json                    owner thresholds of print-check (see Print); optional, stated defaults apply without it
   qa/states.json  qa/idempotence.json   state sets for states-check; the byte-difference allowlist for verify-idempotent
