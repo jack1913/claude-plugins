@@ -913,14 +913,35 @@ def test_a_report_without_a_sampling_row_is_not_compared(proj):
     doc["results"] = [x for x in doc["results"] if not x["id"].endswith(":sampling")]
     f.write_text(json.dumps(doc, indent=2) + "\n")
     lint(proj)
-    assert rows(proj)["motion:timelines"]["status"] == "info" and "motion:proof says why): Glide" in detail(proj, "motion:timelines")
+    assert failed(proj) == [], "the report is current and a verdict: motion:proof has nothing to say, so the row must not send the owner there"
+    got = rows(proj)["motion:timelines"]
+    assert got["status"] == "info" and "not compared (the report has no sampling row with a length and a number of animations): Glide" in got["detail"], got
+    assert "motion:proof says why" not in got["detail"], got
     retime(proj, "Glide", 900, 1)
     f = report_of(proj, 2, "Glide")
     doc = json.loads(f.read_text())
     next(x for x in doc["results"] if x["id"].endswith(":sampling"))["length_ms"] = "long"
     f.write_text(json.dumps(doc, indent=2) + "\n")
     lint(proj)
-    assert rows(proj)["motion:timelines"]["status"] == "info" and "motion:proof says why): Glide" in detail(proj, "motion:timelines")
+    got = rows(proj)["motion:timelines"]
+    assert got["status"] == "info" and "not compared (the report has no sampling row with a length and a number of animations): Glide" in got["detail"], got
+    assert "motion:proof says why" not in got["detail"], got
+
+
+@pytest.mark.parametrize("measured, why", [
+    ({"length_ms": 320, "animations": 1, "real_time": True}, "the report sampled the motion in real time, which gives no length"),   # a requestAnimationFrame move: the length is not known
+    ({"length_ms": 0, "animations": 0}, "the report found no animation to measure"),                                                   # no Web Animation: `shot --motion` writes a length of 0
+])
+def test_two_variants_whose_timeline_was_not_measured_are_not_compared_and_do_not_look_alike(proj, measured, why):
+    """A sampling row of a move that is real time, or that has no animation, measured no timeline: two such variants are not compared, as when the report is missing ("not compared, never a guess")."""
+    make_round(proj)
+    for name in ("Settle", "Bounce"):                                                          # both get the very same row, which would be a pair that looks alike if it were read
+        mutate_json(report_of(proj, 2, name), lambda d: next(x for x in d["results"] if x["id"].endswith(":sampling")).update(measured))
+    r = lint(proj)
+    assert r.returncode == 0 and failed(proj) == [], r.stdout
+    got = rows(proj)["motion:timelines"]
+    assert got["status"] == "info" and "look alike" not in got["detail"], got
+    assert f"not compared ({why}): Settle, Bounce" in got["detail"] and "1 of 3 variant(s)" in got["detail"], got
 
 
 def test_a_later_motion_board_with_one_variant_has_nothing_to_compare(proj):

@@ -28,6 +28,7 @@ FIRST_COUNT = 3   # the first motion board of a project shows exactly this many 
 FIELDS = (("what-it-is", "What it is"), ("cost", "Cost"), ("degrades-to", "Degrades to"))
 TIMELINE_NEAR = 0.05      # motion:timelines: two lengths within this share of the longer one, or within TIMELINE_NEAR_MS, are one length (a practice proposal; the row says so)
 TIMELINE_NEAR_MS = 20
+UNSEEN_REPORT = "no current motion report with a sampling row; motion:proof says why"   # motion:timelines: why a variant with a missing, stale or unreadable report is not compared
 FOLDER_NAME = re.compile(r"[A-Za-z0-9_-]+")   # the name is also the folder rounds/rN/<name>/ and the case folder frames/<name>/ (`frames` keeps only these characters)
 
 
@@ -375,17 +376,24 @@ def number(x) -> bool:
     return isinstance(x, (int, float)) and not isinstance(x, bool) and x >= 0
 
 
-def timeline(project: Path, v: Variant) -> tuple[float, int] | None:
-    """(the length in ms, the number of animations) the variant's current motion report gives in its `sampling` row, as `shot --motion` wrote them (render.mjs: length_ms, animations); None when the report is
-    missing, stale (_common.stale_inputs, as everywhere on this board), or has no such row: motion:proof says which."""
+def timeline(project: Path, v: Variant) -> tuple[tuple[float, int] | None, str]:
+    """The variant's timeline and "", or None and why it is not compared. The timeline is (the length in ms, the number of animations) of the `sampling` row of its current motion report, as `shot --motion` wrote it
+    (render.mjs: length_ms, animations). Not compared, never a guess, when: the report is missing or stale (_common.stale_inputs, as everywhere on this board; motion:proof says which); it has no such row, or no number
+    in it; the row says `real_time` (a requestAnimationFrame move: its length is not known); or it found no animation (`animations` 0, written with a length of 0: two such variants would look alike, and nothing was measured)."""
     if not (project / v.report).is_file():
-        return None
+        return None, UNSEEN_REPORT
     doc, stale = read_report(project, v.report, v.proof)
-    rows = doc.get("results") if doc and not stale and isinstance(doc.get("results"), list) else []
+    if doc is None or stale:
+        return None, UNSEEN_REPORT
+    rows = doc.get("results") if isinstance(doc.get("results"), list) else []
     row = next((r for r in rows if isinstance(r, dict) and r.get("id") == f"motion:{v.name}:sampling"), None)
     if row is None or not number(row.get("length_ms")) or not number(row.get("animations")):
-        return None
-    return row["length_ms"], int(row["animations"])
+        return None, "the report has no sampling row with a length and a number of animations"
+    if row.get("real_time") is True:
+        return None, "the report sampled the motion in real time, which gives no length"
+    if int(row["animations"]) == 0:
+        return None, "the report found no animation to measure"
+    return (row["length_ms"], int(row["animations"])), ""
 
 
 def same_length(a: float, b: float) -> bool:
@@ -399,12 +407,18 @@ def shown_ms(ms: float) -> str:
 
 def timeline_row(rep: Report, project: Path, variants: list[Variant]) -> None:
     """motion:timelines (a warning): two variants whose lengths are within 5 % (or 20 ms) of each other and which run the same number of animations are one move tried twice; three variants should try three moves.
-    Read from each variant's current motion report (the `sampling` row). A variant without a current report is not compared (motion:proof says so): the row then cannot pass, it is info, unless the variants that were
-    compared already show a pair that looks alike (a warning). The thresholds are a practice proposal, said in the row."""
+    Read from each variant's current motion report (the `sampling` row). A variant that has no timeline to read is not compared, and the row says why (`timeline`): the row then cannot pass, it is info, unless
+    the variants that were compared already show a pair that looks alike (a warning). The thresholds are a practice proposal, said in the row."""
     label = "the variants try different moves (their timelines differ)"
-    got = {v.name: t for v in variants if (t := timeline(project, v))}
-    missing = [v.name for v in variants if v.name not in got]
-    unseen = f"; not compared (no current motion report with a sampling row; motion:proof says why): {', '.join(missing)}" if missing else ""
+    got, why_not = {}, {}
+    for v in variants:
+        t, why = timeline(project, v)
+        if t is not None:
+            got[v.name] = t
+        else:
+            why_not.setdefault(why, []).append(v.name)
+    missing = [n for names in why_not.values() for n in names]
+    unseen = "".join(f"; not compared ({why}): {', '.join(names)}" for why, names in why_not.items())
     if not variants:
         rep.add("motion:timelines", "info", label, detail="not compared: there is no variant card to look at (motion:variants says why)")
         return
@@ -416,7 +430,7 @@ def timeline_row(rep: Report, project: Path, variants: list[Variant]) -> None:
         rep.add("motion:timelines", "warn", label, detail="they look alike in time: " + "; ".join(f"{a} and {b} ({fact(a)} against {fact(b)})" for a, b in alike)
                 + f". Three variants should try three moves: change the length or the number of animations of one of each pair, or drop one ({rule}){unseen}")
     elif missing:
-        rep.add("motion:timelines", "info", label, detail=f"not all compared: {len(got)} of {len(variants)} variant(s) have a current motion report with a sampling row"
+        rep.add("motion:timelines", "info", label, detail=f"not all compared: {len(got)} of {len(variants)} variant(s) have a timeline to compare"
                 + (f" ({'; '.join(fact(n) for n in names)}; none of them alike)" if len(got) > 1 else "") + unseen)
     elif len(got) < 2:
         rep.add("motion:timelines", "info", label, detail=f"nothing to compare: {len(got)} variant on this board ({fact(names[0])})")
