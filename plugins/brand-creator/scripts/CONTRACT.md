@@ -809,6 +809,41 @@ that repeats forever is counted and shot where it is. Each view records `lazy_im
     is running when the proof first sees it fails), `reduced:raf` (no `requestAnimationFrame` call in the last 500 ms of the watch),
     `reduced:listeners` (no `pointermove`, `mousemove`, `touchmove`, `wheel`, `scroll`, `deviceorientation` or `devicemotion` listener,
     script-registered or inline), `cls:reduced`, and `reduced:rest=static` (compared in place as above).
+- `component` (it proves how a component answers a hover, a press and the keyboard, for one line of G4): `page`, `selector` (the component's
+  element), `rule` (a non-empty string: the G4 line the case proves; the report keeps it in `cases`, next to the case's `name` and `type`) and the optional keys `states` (different values from `hover`, `active` and `focus-visible`; default
+  `["hover", "active"]`), `widths` (different whole numbers from 200 to 4000; default `[390, 1440]`) and `settle_ms` (default 300: how long the page is
+  given after load). A missing or blank `page`, `selector` or `rule`, a bad value and any other key are a usage error (exit 2), raised before a browser
+  starts; a `selector` that matches nothing is exit 2 as for a page case. There is no still: a component case compares no rest frame with a drawing. The
+  page is loaded at each width (900 high), once with motion on and once with `prefers-reduced-motion: reduce` emulated, and the animations the page
+  starts on load are finished before the first state. For each state the element is put into it with the real input: `hover` moves the pointer onto the
+  element; `active` hovers it and then presses the mouse button (the button is let go over the element, and the click it ends in is cancelled, so no
+  handler of the page runs and no link is followed); `focus-visible` presses a key and focuses the element, as the keyboard does. The row says so when
+  the element does not match the state afterwards (another element covers it, it is hidden at that width, it cannot take focus). The Web Animations
+  the input starts on the element or inside it (CSS transitions, CSS animations, `element.animate()`; a pseudo-element's included) are paused where
+  they begin and stepped through the sample points of a page case (see `sampling` above), never waited for; the others the state starts elsewhere on the
+  page stay where they began, and the row says how many. The state is then left (the pointer moved to a corner the element is not in; the button let
+  go; the element blurred) and what that starts is stepped through the same way. Rows, in the order of the report, for each state:
+  - `shift:<state>:<width>` (one per width): the **layout box** of the element and of every element after it, at its own level and at each level above
+    it (what moves when the element grows), stays within 0.5 css px of where it was at rest, in position and in size, at every sample point of entering
+    and of leaving; and no animation on the element or inside it is of a layout property (the list of `cls:normal`). The element's own `transform`,
+    `translate`, `rotate` and `scale` are taken out of its box (a lift or a press by transform moves nothing), as long as they only move and scale it; an
+    element they rotate, skew, flip or take into 3D is not measured while they do, and the row names it (the elements after it still are; with nothing
+    left to measure the row is "not verified"). A failure names the box, how it moved or resized, how far and where in the motion
+    (`button#b grew wider by 16 px (entering, at 100% = 160 ms)`); a state the element cannot be put into fails the row with the reason.
+  - `tokens:<state>`: every duration and every easing of the animations the state starts on the element or inside it, on entering and on leaving, at every
+    width, is a motion token of the built `assets/tokens/tokens.json` (`motion.durations_ms`; `motion.curves`, a named easing or `linear` compared as its
+    four numbers). A transition's easing is its timing function, a CSS animation's is that of each interval between its keyframes, a script animation's
+    both. Delays are not checked. The row names what is no token and the tokens there are. With no animation on the state it passes and says so. Without
+    built tokens it is "not verified" (`skipped`) and names `brand-creator tokens`; the file is an input of the report, so a changed token makes it stale.
+  - `reduced:<state>`: under reduced motion the state change starts no transition or animation on the element or inside it, on entering or on leaving, at any
+    width (an animation that ended before the proof looked at it is still seen, from the browser's `transitionrun` and `animationstart` events). The row says
+    how many there were at normal motion. A shorter animation is still an animation: it fails.
+  - `rest:<state>`: after the state is left and its animations finished, the element and the elements after it are where they were before the state (0.5 css
+    px), and the element no longer matches the state; a page that leaves a state behind fails here.
+  - `page:errors` (only when it fails): the page did not load cleanly at the first width (a console or page error, a request to anything but the local
+    server).
+  The rows of a state, a width or a mode the element could not be put into are "not verified" except the `shift` row, which fails and says why. Like the
+  other cases it needs `brand-creator setup`; `frames` skips it (an info row), and the book lists its checks under `Case N`.
 - **One report per proof file**: `assets/_checks/motion/<slug>-<hash6>.json` (tool name `motion/<slug>-<hash6>`, the slug is the proof's
   file stem, the hash the first six hex of the sha256 of its project-relative posix path, as the disk spells it (on macOS `MOTION/PROOF.JSON`
   is `motion/proof.json`, and has its report); `motion_report_tool` in `_common.py` and
@@ -824,7 +859,7 @@ that repeats forever is counted and shot where it is. Each view records `lazy_im
 
 ### Frames (`frames <proof.json> [--case NAME] [--count N | --at 0,25,50,75,100]`)
 
-For each page case of a proof (or the named one; a states case is skipped with an info row, or a usage error when named) the page is seeked as
+For each page case of a proof (or the named one; a states or component case is skipped with an info row, or a usage error when named) the page is seeked as
 above and the mark element's box (its box at rest, rounded outward to whole pixels) is screenshotted at device scale 2 on the page's own
 background, at each point: by default five, 0, 25, 50, 75 and 100 percent of the motion's length; `--count N` spreads N points evenly (1 to
 100), `--at` names percentages (0 to 100, in the order given). Written into the project, for a gated proof (a proof of the project: the only stills the book replays) in `motion/frames/<case>/`, and for a

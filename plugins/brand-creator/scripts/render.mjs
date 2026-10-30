@@ -345,7 +345,7 @@ async function cmdCard(argv) {
 
 
 // ---------------------------------------------------------------- motion proof (shot --motion <proof.json>) and frames
-// proof.json: {"schema": 1, "cases": [ {type: "states", ...} | {type: "page", ...} ]}. See scripts/CONTRACT.md "Motion proof".
+// proof.json: {"schema": 1, "cases": [ {type: "states", ...} | {type: "page", ...} | {type: "component", ...} ]}. See scripts/CONTRACT.md "Motion proof".
 //  states: an animated mark file = the complete still, its moving part in <g data-motion> whose children <g data-state="name">
 //          are the named states (the stored file shows "rest"). Each state is rendered at dsf 1 and 2 (inline SVG screenshot and
 //          <img> drawn on a canvas); rest must equal the static SVG, a state with an "expected" file must equal it, and every
@@ -360,6 +360,7 @@ async function cmdCard(argv) {
 //          (prefers-reduced-motion: reduce): no running animation, no requestAnimationFrame loop, no motion listener, CLS = 0, rest frame =
 //          static SVG. A control: the normal pass must show motion, else the reduced result is vacuous.
 //  frames: the same seeking, to write stills of the mark (motion/frames/<case>/), see cmdFrames.
+//  component: the states (hover, press, keyboard focus) of one component of a page, see componentCase below.
 const MOTION_EVENTS = ["pointermove", "mousemove", "touchmove", "wheel", "scroll", "deviceorientation", "devicemotion"];
 const SAMPLE_STEPS = 32;          // the motion is stepped through at 0 and at every 1/32 of its length, plus every keyframe offset
 const MAX_SAMPLE_POINTS = 400;    // keyframe points past this are thinned (a finite animation of hundreds of iterations), and the row says so
@@ -1201,6 +1202,350 @@ async function pageCase(browser, project, server, c, report, inputs, scratch) {
   await R.ctx.close();
 }
 
+// ---------------------------------------------------------------- component motion proof (case type "component")
+// A component case proves the states of one component on a page (hover, press, keyboard focus) for one line of G4 (`rule`); it needs no mark and no still.
+// For each width and state the element is put into the state with the real input (the pointer, the mouse button, the keyboard), the transitions and animations
+// the change starts on the element and inside it are paused and stepped through their sample points as a page case's are (never waited for), the state is
+// left, and what that starts is stepped through too. Rows (see scripts/CONTRACT.md "Motion proof"): shift:<state>:<width>, tokens:<state>, reduced:<state>, rest:<state>.
+const COMPONENT_STATES = ["hover", "active", "focus-visible"];
+const COMPONENT_WIDTHS = [390, 1440];
+const COMPONENT_HEIGHT = 900;
+const COMPONENT_KEYS = ["name", "type", "page", "selector", "rule", "states", "widths", "settle_ms"];
+const COMPONENT_ACT_MS = 3000;   // how long Playwright waits for the element to be visible and to take the pointer
+const MAX_WATCHED = 400;         // the boxes watched for a shift: the element and what follows it
+
+/** The keys of a component case, checked: a bad one is a usage error, raised before a browser is started. -> {states, widths, settle}. */
+function componentOptions(c) {
+  const bad = (m) => die(EXIT.USAGE, `motion case ${c.name}: ${m}`);
+  for (const k of Object.keys(c)) if (!COMPONENT_KEYS.includes(k)) bad(`unknown key "${k}" (a component case takes ${COMPONENT_KEYS.join(", ")})`);
+  for (const k of ["page", "selector", "rule"]) {
+    if (typeof c[k] !== "string" || !c[k].trim()) bad(`a component case needs "${k}" as a non-empty string` + (k === "rule" ? " (the G4 line it proves)" : k === "selector" ? " (the component's element)" : ""));
+  }
+  const states = c.states ?? ["hover", "active"];
+  if (!Array.isArray(states) || !states.length || states.some((s) => !COMPONENT_STATES.includes(s)) || new Set(states).size !== states.length) {
+    bad(`"states" must be a list of different states from ${COMPONENT_STATES.join(", ")}`);
+  }
+  const widths = c.widths ?? COMPONENT_WIDTHS;
+  if (!Array.isArray(widths) || !widths.length || widths.some((w) => !Number.isInteger(w) || w < 200 || w > 4000) || new Set(widths).size !== widths.length) {
+    bad('"widths" must be a list of different whole numbers from 200 to 4000 (css px)');
+  }
+  const settle = c.settle_ms ?? 300;
+  if (typeof settle !== "number" || !Number.isFinite(settle) || settle < 0) bad('"settle_ms" must be a number of 0 or more');
+  return { states, widths, settle };
+}
+
+/** The motion tokens of the built tokens: {durations: [[path, ms]], curves: [[path, [x1, y1, x2, y2]]]}, or {why} when they cannot be read. */
+function componentTokens(project, inputs) {
+  const file = path.join(project, "assets", "tokens", "tokens.json");
+  if (!fs.existsSync(file)) return { why: "assets/tokens/tokens.json is not built: run `brand-creator tokens`" };
+  inputs.push(file);
+  let doc;
+  try { doc = JSON.parse(fs.readFileSync(file, "utf8")); } catch (e) { return { why: `assets/tokens/tokens.json cannot be read (${e.message}): run \`brand-creator tokens\`` }; }
+  const m = doc && typeof doc === "object" ? doc.motion ?? {} : {};
+  return { durations: Object.entries(m.durations_ms ?? {}), curves: Object.entries(m.curves ?? {}) };
+}
+
+/** An easing as four numbers (a named one as CSS defines it; linear as 0, 0, 1, 1), or null for one that is not a cubic-bezier (steps, linear()). */
+function bezierOf(s) {
+  const e = String(s ?? "").trim();
+  if (e === "linear") return [0, 0, 1, 1];
+  if (NAMED_EASINGS[e]) return NAMED_EASINGS[e];
+  const v = /^cubic-bezier\(([^)]*)\)$/.exec(e)?.[1].split(",").map(Number);
+  return v && v.length === 4 && v.every(Number.isFinite) ? v : null;
+}
+/** The easings that shape a component animation: a transition's is its timing function; a CSS animation's is that of each interval between two keyframes
+ *  (the effect's own is the default linear); one a script made has both (a keyframe left at its default linear is not one the author chose). */
+function easingsOf(a) {
+  const between = a.keyframes.slice(0, -1).map((k) => k.e);
+  return a.kind === "transition" ? [a.easing] : a.kind === "animation" ? between : [a.easing, ...between.filter((e) => e !== "linear")];
+}
+const ms3 = (x) => Math.round(x * 1000) / 1000;
+const animationWho = (a, names) => `${a.kind === "transition" ? "transition of" : a.kind === "animation" ? "animation" : "script animation"}${a.kind === "script" && names.every((n) => n === "animation") ? "" : ` ${names.join(", ")}`}${a.where ? ` on ${a.where}` : ""}`;
+/** The animations of a state change against the motion tokens. -> {bad: what is no token, used: the tokens that were used}. */
+function tokenProblems(items, tok) {
+  const near = (a, b) => Math.abs(a - b) < 1e-6, groups = new Map(), bad = [], used = new Set();
+  for (const a of items) {   // a transition of `all` is one transition per property, all alike: said once
+    const eases = easingsOf(a), key = JSON.stringify([a.kind, a.where, a.duration, eases]);
+    if (!groups.has(key)) groups.set(key, { a, eases, names: [] });
+    if (!groups.get(key).names.includes(a.name)) groups.get(key).names.push(a.name);
+  }
+  const durList = tok.durations.map(([k, ms]) => `${k} ${ms} ms`).join(", ") || "the built tokens hold none";
+  const curveList = tok.curves.map(([k, v]) => `${k} cubic-bezier(${v.join(", ")})`).join(", ") || "the built tokens hold none";
+  for (const { a, eases, names } of groups.values()) {
+    const who = animationWho(a, names), d = tok.durations.find(([, ms]) => near(ms, a.duration));
+    if (d) used.add(`${d[0]} (${d[1]} ms)`); else bad.push(`${who} lasts ${ms3(a.duration)} ms, which is no motion duration token (${durList})`);
+    for (const e of eases) {
+      const b = bezierOf(e), cur = b && tok.curves.find(([, v]) => v.length === 4 && v.every((x, i) => near(x, b[i])));
+      if (cur) used.add(`${cur[0]} (${e})`); else bad.push(`${who} eases with ${e}, which is no curve token (${curveList})`);
+    }
+  }
+  return { bad: [...new Set(bad)], used: [...used] };
+}
+
+/** In the page, once per pass: the helpers of a component pass, kept in window.__bc.cmp. Everything here is serialised into the page by page.evaluate, so nothing may
+ *  use anything of this module. The boxes watched are the element and every element after it at its own level and at each level above it (what moves when it grows);
+ *  each is read as its layout box (document coordinates), with the element's own transform taken out, so that a lift or a press by transform moves nothing. */
+function inPageCmpInstall({ el, max }) {
+  const bc = window.__bc, EPS = 0.5, cmp = (bc.cmp = { el, list: [], phase: [], rest: [], events: [] });
+  const name = (e) => {
+    const cls = (e.getAttribute("class") || "").trim().split(/\s+/).filter(Boolean).slice(0, 2);
+    return e.tagName.toLowerCase() + (e.id ? "#" + e.id : cls.length ? "." + cls.join(".") : "");
+  };
+  const watch = [el];
+  for (let n = el; n && n !== document.body && n !== document.documentElement; n = n.parentElement) {
+    for (let s = n.nextElementSibling; s && watch.length < max; s = s.nextElementSibling) if (!/^(SCRIPT|STYLE|LINK|META|TEMPLATE|NOSCRIPT)$/.test(s.tagName)) watch.push(s);
+  }
+  cmp.names = watch.map(name);
+  // how an element is drawn moved: its translate, rotate and scale properties, then its transform (CSS Transforms 2); null when it cannot be read
+  const ownMatrix = (e, cs) => {
+    let fns = "";
+    if (cs.translate && cs.translate !== "none") {
+      const [x, y = "0px", z = "0px"] = cs.translate.split(" "), ref = [e.offsetWidth, e.offsetHeight];
+      const len = (v, k) => (v.endsWith("%") ? (parseFloat(v) / 100) * ref[k] : parseFloat(v));
+      fns += `translate3d(${len(x, 0)}px, ${len(y, 1)}px, ${parseFloat(z) || 0}px) `;
+    }
+    if (cs.rotate && cs.rotate !== "none") {
+      const w = cs.rotate.split(" "), axis = { x: "1, 0, 0", y: "0, 1, 0", z: "0, 0, 1" };
+      fns += w.length === 1 ? `rotate(${w[0]}) ` : w.length === 2 ? `rotate3d(${axis[w[0]]}, ${w[1]}) ` : `rotate3d(${w.slice(0, 3).join(", ")}, ${w[3]}) `;
+    }
+    if (cs.scale && cs.scale !== "none") { const w = cs.scale.split(" "); fns += w.length === 3 ? `scale3d(${w.join(", ")}) ` : `scale(${w.join(", ")}) `; }
+    if (cs.transform && cs.transform !== "none") fns += cs.transform;
+    try { return new DOMMatrix(fns.trim() || undefined); } catch { return null; }
+  };
+  // [x, y, width, height] of the layout box in the document; null when the element's transform rotates, skews, flips or works in 3D (the box cannot be told from the drawn one)
+  const rect = (e) => {
+    const r = e.getBoundingClientRect(), x = r.left + scrollX, y = r.top + scrollY;
+    if (e instanceof SVGElement) return [x, y, r.width, r.height];
+    const cs = getComputedStyle(e), m = ownMatrix(e, cs);
+    if (!m) return null;
+    if (m.isIdentity) return [x, y, r.width, r.height];
+    if (!m.is2D || Math.abs(m.b) > 1e-9 || Math.abs(m.c) > 1e-9 || m.a <= 0 || m.d <= 0) return null;
+    const [ox, oy] = cs.transformOrigin.split(" ").map(parseFloat);   // x' = x + ox (1 - a) + e for the left edge of a box that is only scaled and moved
+    return [x - ox * (1 - m.a) - m.e, y - oy * (1 - m.d) - m.f, r.width / m.a, r.height / m.d];
+  };
+  const measure = () => watch.map(rect);
+  const WHAT = [["moved left", "moved right"], ["moved up", "moved down"], ["got narrower", "grew wider"], ["got shorter", "grew taller"]];
+  const diffs = (now, into, at) => {
+    now.forEach((b, j) => {
+      const r0 = cmp.rest[j];
+      if (!b || !r0) return;
+      for (let k = 0; k < 4; k++) { const d = b[k] - r0[k]; if (Math.abs(d) > EPS && (!into[j] || Math.abs(d) > Math.abs(into[j].d))) into[j] = { k, d, at }; }
+    });
+  };
+  const said = (into) => into.map((w, j) => w && { who: cmp.names[j], what: WHAT[w.k][w.d > 0 ? 1 : 0], px: Math.round(Math.abs(w.d) * 10) / 10, at: w.at }).filter(Boolean);
+  /** The boxes as they are now are the rest to compare with. -> the names of the boxes watched, and which of them (by place) cannot be read. */
+  cmp.baseline = () => { cmp.rest = measure(); return { names: cmp.names, unread: cmp.rest.flatMap((b, j) => (b ? [] : [j])) }; };
+  /** Set the animations of this phase to each point and say, for each box, the largest change from its rest box (more than half a pixel), and which boxes could not be read. */
+  cmp.sample = (points) => {
+    const worst = [], unread = new Set();
+    for (let i = 0; i < points.length; i++) {
+      for (const s of cmp.phase) if (s.seekable) s.a.currentTime = s.infinite ? Math.min(points[i], s.delay + s.duration) : points[i];
+      const now = measure();
+      now.forEach((b, j) => { if (!b) unread.add(j); });
+      diffs(now, worst, i);
+    }
+    return { moved: said(worst), unread: [...unread] };
+  };
+  /** The boxes now against the rest: what has not come back. */
+  cmp.deviation = () => { const w = []; diffs(measure(), w, 0); return said(w); };
+  // every Web Animation the page has that has not been adopted yet is paused where it is; the ones on the element or inside it are this phase's
+  const adoptNew = () => {
+    const have = new Set(cmp.list.map((s) => s.a)), fresh = [];
+    for (const a of document.getAnimations()) {
+      if (have.has(a) || !a.effect || typeof a.effect.getComputedTiming !== "function") continue;
+      const t = a.effect.getComputedTiming(), target = a.effect.target || null, pseudo = a.effect.pseudoElement || null;
+      const seekable = a.timeline === document.timeline && typeof t.endTime === "number";
+      const infinite = seekable && (t.iterations === Infinity || t.endTime === Infinity);
+      a.pause();
+      const kfs = typeof a.effect.getKeyframes === "function" ? a.effect.getKeyframes() : [];
+      const s = {
+        a, seekable, infinite, inside: !!target && el.contains(target), kind: a instanceof CSSTransition ? "transition" : a instanceof CSSAnimation ? "animation" : "script",
+        name: a.transitionProperty || a.animationName || a.id || "animation", where: target ? name(target) + (pseudo || "") : "",
+        delay: seekable ? t.delay : 0, duration: Number(t.duration) || 0, iterations: seekable && !infinite ? t.iterations : null, direction: t.direction,
+        end: seekable && !infinite ? t.endTime : null, easing: t.easing, keyframes: kfs.map((k) => ({ o: k.computedOffset, e: k.easing })),
+        props: [...new Set(kfs.flatMap((k) => Object.keys(k).filter((p) => !["offset", "computedOffset", "easing", "composite"].includes(p))))],
+      };
+      cmp.list.push(s); fresh.push(s);
+    }
+    return fresh;
+  };
+  const plain = (s) => ({ kind: s.kind, name: s.name, where: s.where, seekable: s.seekable, infinite: s.infinite, delay: s.delay, duration: s.duration, iterations: s.iterations,
+    direction: s.direction, end: s.end, easing: s.easing, keyframes: s.keyframes, props: s.props });
+  /** After the input of a phase: pause what it started. -> what is on the element or inside it, and how many are elsewhere (those stay where they began). */
+  cmp.adopt = () => {
+    const fresh = adoptNew();
+    cmp.phase = fresh.filter((s) => s.inside);
+    return { items: cmp.phase.map(plain), elsewhere: fresh.length - cmp.phase.length };
+  };
+  /** The end of this phase: finish what has an end, let two frames render. -> what refused to finish. */
+  cmp.finish = async () => {
+    const stuck = [];
+    for (const s of cmp.phase) if (s.seekable && !s.infinite) { try { s.a.finish(); } catch (e) { stuck.push(`${s.name}: ${e.name}`); } }
+    await bc.frame(); await bc.frame();
+    return stuck;
+  };
+  /** The start of a pass: what the page began on load is finished (an infinite one stays paused), so that the rest is the page as it stays. */
+  cmp.begin = async () => {
+    for (const s of adoptNew()) if (s.seekable && !s.infinite) { try { s.a.finish(); } catch {} }
+    await bc.frame(); await bc.frame();
+  };
+  // an animation that began and ended between two looks is still seen: the events of the element and what is inside it
+  for (const type of ["transitionrun", "animationstart"]) {
+    document.addEventListener(type, (e) => { if (e.target instanceof Node && el.contains(e.target)) cmp.events.push((e.propertyName || e.animationName || type) + (e.pseudoElement || "")); }, true);
+  }
+  // a press is let go over the element: the click it ends in must not run the page's handler or follow a link
+  for (const type of ["click", "auxclick", "dragstart"]) {
+    window.addEventListener(type, (e) => { if (e.target instanceof Node && el.contains(e.target)) { e.preventDefault(); e.stopImmediatePropagation(); } }, true);
+  }
+  return watch.length;
+}
+
+/** The first line of an error, with what Playwright says stands in the way, in plain words. */
+function whyNot(e) {
+  const lines = String(e?.message ?? e).replace(/\x1b\[[\d;]*m/g, "").split("\n"), hit = lines.find((l) => /intercepts pointer events|not visible|not stable|not enabled|not focusable/.test(l));
+  return lines[0].replace(/^[\w.]+: /, "") + (hit ? ` (${hit.trim().replace(/^-\s*/, "")})` : "");
+}
+
+/** One phase of a state: the input that changes it, then what the input started on the element and inside it, paused and stepped through its sample points,
+ *  then finished. -> {failed} when the input could not be given. */
+async function componentPhase(page, c, label, input) {
+  try { await input(); } catch (e) { return { label, failed: whyNot(e) }; }
+  const got = await stepped(c, page.evaluate(() => window.__bc.cmp.adopt()));
+  const plan = samplePoints(got.items);
+  const sampled = await stepped(c, page.evaluate((pts) => window.__bc.cmp.sample(pts), plan.points.map((p) => p.ms)));
+  const stuck = await stepped(c, page.evaluate(() => window.__bc.cmp.finish()));
+  return { label, items: got.items, elsewhere: got.elsewhere, plan, moved: sampled.moved.map((m) => ({ ...m, point: plan.points[m.at] })), unread: sampled.unread, stuck };
+}
+
+/** The element into a state and out of it, with the real input, from rest. -> {entered, why, left, phases, rest (boxes that did not come back), watched, unread}. */
+async function componentState(page, el, c, state) {
+  const out = { state, entered: false, left: true, why: "", phases: [], rest: [], names: [], unread: [] };
+  const matches = (sel) => page.evaluate((s) => window.__bc.cmp.el.matches(s), sel);
+  const hover = () => el.hover({ timeout: COMPONENT_ACT_MS });
+  const away = async () => {   // the pointer to a corner of the page the element is not in
+    const at = await page.evaluate(() => {
+      const r = window.__bc.cmp.el.getBoundingClientRect();
+      return [[1, 1], [innerWidth - 2, 1], [1, innerHeight - 2], [innerWidth - 2, innerHeight - 2]].find(([x, y]) => x < r.left || x > r.right || y < r.top || y > r.bottom) ?? null;
+    });
+    if (at) await page.mouse.move(at[0], at[1]);
+  };
+  const how = {
+    hover: { into: [hover], match: ":hover", back: away },
+    active: { into: [hover, () => page.mouse.down()], match: ":active", back: async () => { await page.mouse.up(); await away(); } },
+    "focus-visible": {
+      into: [async () => {   // a key first, so that the focus a script gives is a keyboard focus (:focus-visible)
+        await page.keyboard.press("Shift");
+        if (!(await page.evaluate(() => { const e = window.__bc.cmp.el; e.focus(); return document.activeElement === e; }))) throw new Error("the element cannot take focus (a button, a link, an input or an element with a tabindex can)");
+      }],
+      match: ":focus-visible", back: () => page.evaluate(() => window.__bc.cmp.el.blur()),
+    },
+  }[state];
+  const base = await stepped(c, page.evaluate(() => window.__bc.cmp.baseline()));
+  out.names = base.names; out.unread = base.unread;
+  for (const input of how.into) {
+    const p = await componentPhase(page, c, "entering", input);
+    if (p.failed) { out.why = p.failed; break; }
+    out.phases.push(p);
+  }
+  if (!out.why) {
+    out.entered = await matches(how.match);
+    if (!out.entered) out.why = `the element does not match :${state} once the input is given (it is covered by another element, disabled, or cannot take focus)`;
+  }
+  const back = await componentPhase(page, c, "leaving", how.back);
+  if (back.failed) out.why ||= `could not leave the state: ${back.failed}`; else out.phases.push(back);
+  out.left = !(await matches(how.match));
+  if (out.entered) out.rest = await stepped(c, page.evaluate(() => window.__bc.cmp.deviation()));
+  out.events = await page.evaluate(() => window.__bc.cmp.events.splice(0));
+  return out;
+}
+
+async function componentCase(browser, project, server, c, report, inputs) {
+  const o = componentOptions(c), id = (s) => `motion:${c.name}:${s}`;
+  const { abs, url } = pageUrl(project, server.origin, c.page); inputs.push(abs);
+  const tok = componentTokens(project, inputs);
+  const runs = { normal: Object.fromEntries(o.states.map((s) => [s, []])), reduced: Object.fromEntries(o.states.map((s) => [s, []])) };
+  for (const mode of ["normal", "reduced"]) {
+    for (const w of o.widths) {
+      const P = await openPage(browser, server, url, { width: w, height: COMPONENT_HEIGHT, reduced: mode === "reduced" });
+      const el = await markElement(P.page, c);
+      await P.page.waitForTimeout(o.settle);
+      await el.scrollIntoViewIfNeeded({ timeout: COMPONENT_ACT_MS }).catch(() => {});   // an element that cannot be shown is said by the state rows
+      await stepped(c, P.page.evaluate(inPageCmpInstall, { el, max: MAX_WATCHED }));
+      await stepped(c, P.page.evaluate(() => window.__bc.cmp.begin()));
+      for (const state of o.states) runs[mode][state].push({ ...(await componentState(P.page, el, c, state)), width: w });
+      if (mode === "normal" && w === o.widths[0] && (P.seen.errors.length || P.seen.nonLocal.length)) {
+        report.add(id("page:errors"), "fail", "page loads cleanly", { detail: [...P.seen.errors, ...P.seen.nonLocal].slice(0, 3).join(" | ") });
+      }
+      await P.ctx.close();
+    }
+  }
+  const at = (m) => `${m.label}, at ${m.point.pct}% = ${m.point.ms} ms`;
+  const kebab = (p) => p.replace(/[A-Z]/g, (m) => "-" + m.toLowerCase());
+  for (const state of o.states) {
+    const N = runs.normal[state], R = runs.reduced[state], entered = N.filter((r) => r.entered), items = entered.flatMap((r) => r.phases.flatMap((p) => p.items));
+    // ---- shift: nothing moves or resizes, at any point of entering and leaving
+    for (const r of N) {
+      const w = r.width, label = `${state}: nothing moves or resizes at ${w} px`, sid = id(`shift:${state}:${w}`);
+      if (!r.entered) { report.add(sid, "fail", label, { detail: `the element could not be put into :${state} at ${w} px: ${r.why}`, width: w, state }); continue; }
+      const all = r.phases.flatMap((p) => p.items), elsewhere = r.phases.reduce((n, p) => n + p.elsewhere, 0), stuck = r.phases.flatMap((p) => p.stuck);
+      const layout = [...new Set(all.flatMap((a) => a.props.filter((p) => LAYOUT_PROPS.test(p)).map((p) => `${kebab(p)} (${a.kind} on ${a.where || "the page"})`)))];
+      const moved = r.phases.flatMap((p) => p.moved.map((m) => ({ ...m, label: p.label }))).sort((a, b) => b.px - a.px);
+      const lines = [
+        ...moved.slice(0, 4).map((m) => `${m.who} ${m.what} by ${m.px} px (${at(m)})`), ...(moved.length > 4 ? [`and ${moved.length - 4} more`] : []),
+        ...(layout.length ? [`animates a layout property: ${layout.slice(0, 4).join(", ")}${layout.length > 4 ? ` and ${layout.length - 4} more` : ""}; it moves the page around it as it runs`] : []),
+        ...(stuck.length ? [`could not be finished: ${stuck.join(", ")}`] : []),
+      ];
+      const unread = [...new Set([...r.unread, ...r.phases.flatMap((p) => p.unread)])].map((j) => r.names[j]), watched = r.names.length;
+      const unmeasured = unread.length >= watched, steps = r.phases.map((p) => `${p.plan.points.length} sample point(s) over ${p.plan.length} ms ${p.label}`).join(", ");
+      report.add(sid, lines.length ? "fail" : unmeasured ? "skipped" : "pass", label, {
+        detail: lines.length ? lines.join("; ")
+          : (unmeasured ? `not verified: no box could be read, because the transform of ${unread.join(", ")} rotates or skews it; ` : "")
+            + `${steps}; the element${watched > 1 ? ` and the ${watched - 1} element(s) after it` : ""} stayed within 0.5 css px of where ${watched > 1 ? "they were" : "it was"}`
+            + (unread.length && !unmeasured ? `; not measured while its transform rotates or skews it: ${unread.join(", ")}` : "")
+            + (elsewhere ? `; ${elsewhere} animation(s) elsewhere on the page that the state started stay where they began` : ""),
+        width: w, state, sample_points: r.phases.map((p) => p.plan.points.length), length_ms: r.phases.map((p) => p.plan.length), watched, layout_properties: layout,
+        moved: moved.slice(0, 8).map(({ who, what, px, label: phase }) => ({ who, what, px, phase })),
+      });
+    }
+    // ---- tokens: every duration and easing of the state change is a motion token
+    if (!entered.length) report.add(id(`tokens:${state}`), "skipped", `${state}: durations and easings are motion tokens`, { detail: `not verified: the element could not be put into :${state} (see the shift rows)` });
+    else if (!items.length) report.add(id(`tokens:${state}`), "pass", `${state}: durations and easings are motion tokens`, { detail: `no transition or animation starts on the element or inside it when :${state} is entered or left, so there is no duration or easing to compare`, animations: 0 });
+    else if (tok.why) report.add(id(`tokens:${state}`), "skipped", `${state}: durations and easings are motion tokens`, { detail: `not verified: ${tok.why}`, animations: items.length });
+    else {
+      const t = tokenProblems(items, tok);
+      report.add(id(`tokens:${state}`), t.bad.length ? "fail" : "pass", `${state}: durations and easings are motion tokens`, {
+        detail: t.bad.length ? t.bad.slice(0, 4).join("; ") + (t.bad.length > 4 ? `; and ${t.bad.length - 4} more` : "")
+          : `${items.length} animation(s) on the state change; every duration and easing is a motion token: ${t.used.join(", ")}`,
+        animations: items.length, not_tokens: t.bad,
+      });
+    }
+    // ---- reduced: under prefers-reduced-motion nothing animates on the state change
+    const rOk = R.filter((r) => r.entered);
+    if (!rOk.length) report.add(id(`reduced:${state}`), "skipped", `${state}: no animation under reduced motion`, { detail: `not verified: the element could not be put into :${state} with reduced motion on (see the shift rows)` });
+    else {
+      const ran = rOk.flatMap((r) => {
+        const items = r.phases.flatMap((p) => p.items), named = new Set(items.map((a) => a.name));
+        return [...new Set([...items.map((a) => animationWho(a, [a.name])), ...r.events.filter((n) => !named.has(n)).map((n) => `a transition or animation ${n}`)])].map((n) => `${n} (${r.width} px)`);
+      });
+      const seen = Math.max(0, ...entered.map((r) => r.phases.reduce((n, p) => n + p.items.length, 0)));
+      report.add(id(`reduced:${state}`), ran.length ? "fail" : "pass", `${state}: no animation under reduced motion`, {
+        detail: ran.length ? `prefers-reduced-motion: reduce emulated; the state change starts ${ran.slice(0, 4).join(", ")}${ran.length > 4 ? ` and ${ran.length - 4} more` : ""}`
+          : `prefers-reduced-motion: reduce emulated; no transition or animation on entering or leaving :${state} (${seen} at normal motion)`,
+        animations: ran.length, normal_animations: seen,
+      });
+    }
+    // ---- rest: the box after leaving the state is the box before it
+    if (!entered.length) report.add(id(`rest:${state}`), "skipped", `${state}: the box comes back`, { detail: `not verified: the element could not be put into :${state} (see the shift rows)` });
+    else {
+      const off = entered.flatMap((r) => [...r.rest.map((m) => `${m.who} ${m.what} by ${m.px} px at ${r.width} px`), ...(r.left ? [] : [`the element still matches :${state} at ${r.width} px`]), ...(r.why ? [`${r.why} (${r.width} px)`] : [])]);
+      report.add(id(`rest:${state}`), off.length ? "fail" : "pass", `${state}: the box comes back`, {
+        detail: off.length ? `after leaving :${state}: ${off.slice(0, 4).join("; ")}${off.length > 4 ? `; and ${off.length - 4} more` : ""}`
+          : `after leaving :${state} the element and what follows it are where they were (within 0.5 css px) at ${entered.map((r) => r.width).join(", ")} px`,
+      });
+    }
+  }
+}
+
 /** Read and check a proof file (used before any browser starts). */
 function readProof(project, arg) {
   const specFile = confine(project, arg, "proof.json");
@@ -1212,8 +1557,9 @@ function readProof(project, arg) {
   for (const c of spec.cases) {
     if (!c.name || names.has(c.name)) die(EXIT.USAGE, `every motion case needs a unique name (${c.name ?? "missing"})`);
     names.add(c.name);
-    if (!["states", "page"].includes(c.type)) die(EXIT.USAGE, `motion case ${c.name}: type must be "states" or "page"`);
+    if (!["states", "page", "component"].includes(c.type)) die(EXIT.USAGE, `motion case ${c.name}: type must be "states", "page" or "component"`);
     if (c.type === "page") pageOptions(c);
+    if (c.type === "component") componentOptions(c);
   }
   // the proof's path as the disk spells it (macOS takes MOTION/PROOF.JSON for motion/proof.json): its report is named after it, so one file has one name
   const specRel = path.relative(fs.realpathSync.native(project), fs.realpathSync.native(specFile)).split(path.sep).join("/");
@@ -1228,12 +1574,13 @@ async function cmdMotion(values, positionals) {
   const report = new Report(proofReportTool(specRel), project, inputs);   // one report per proof file: assets/_checks/motion/<slug>-<hash6>.json
   const browser = await launch();
   const server = await startServer(project);
-  report.extra = { proof: specRel, cases: spec.cases.map((c) => ({ name: c.name, type: c.type })), engine: "Chromium (Playwright)" };
+  report.extra = { proof: specRel, cases: spec.cases.map((c) => ({ name: c.name, type: c.type, ...(c.type === "component" ? { rule: c.rule } : {}) })), engine: "Chromium (Playwright)" };
   let diff = null;
   const scratch = async () => (diff ??= await scratchPage(browser));
   try {
     for (const c of spec.cases) {
       if (c.type === "states") await statesCase(browser, project, c, report, inputs);
+      else if (c.type === "component") await componentCase(browser, project, server, c, report, inputs);
       else await pageCase(browser, project, server, c, report, inputs, scratch);
     }
   } finally {
@@ -1372,7 +1719,7 @@ async function cmdFrames(argv) {
   if (values.case !== undefined) {
     const named = spec.cases.find((c) => c.name === values.case);
     if (!named) die(EXIT.USAGE, `no case called ${values.case} in ${positionals[0]} (it has: ${spec.cases.map((c) => c.name).join(", ")})`);
-    if (named.type !== "page") die(EXIT.USAGE, `case ${values.case} is a states case; frames works on page cases`);
+    if (named.type !== "page") die(EXIT.USAGE, `case ${values.case} is a ${named.type} case; frames works on page cases`);
     picked = [named];
   }
   if (!picked.length) die(EXIT.USAGE, `${positionals[0]} has no page case: frames needs a page that moves the mark`);
@@ -1406,7 +1753,7 @@ async function cmdFrames(argv) {
     const diff = await scratchPage(browser);
     for (const c of spec.cases) {
       if (picked.includes(c)) await framesCase(browser, server, project, c, slugs[picked.indexOf(c)], base, pcts, specRel, report, inputs, diff);
-      else if (values.case === undefined) report.add(`frames:${c.name}`, "info", "frames of the mark's motion", { detail: "a states case has no page to seek; frames works on page cases" });
+      else if (values.case === undefined) report.add(`frames:${c.name}`, "info", "frames of the mark's motion", { detail: `a ${c.type} case has no page to seek; frames works on page cases` });
     }
   } finally {
     await browser.close();
