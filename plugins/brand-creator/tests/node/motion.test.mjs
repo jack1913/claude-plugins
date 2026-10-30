@@ -499,3 +499,86 @@ test("a component case cannot judge durations without the built tokens: that row
   assert.equal(row.status, "skipped"); assert.match(row.detail, /not verified: assets\/tokens\/tokens\.json is not built: run `brand-creator tokens`/);
   assert.deepEqual(failing(p, name), []);
 });
+
+test("a width the element cannot be put into under reduced motion makes the reduced row not verified, never a pass", (t) => {
+  if (needSetup(t)) return;
+  const p = motionProject();
+  withMotionTokens(p);
+  // under reduced motion below 1000 px an overlay covers the button, and the button keeps its transition there; at 1440 px it has none
+  const tr = "transition:background-color var(--motion-quick) var(--easing-standard)";
+  const page = buttonPage(p, "reduced-covered", {
+    css: `.btn{${tr}}.btn:hover{background:#007d71}@media (prefers-reduced-motion:reduce){.btn{transition:none}}`
+      + `@media (prefers-reduced-motion:reduce) and (max-width:999px){.btn{${tr}}.row{position:relative}.cover{position:absolute;inset:0}}`,
+    after: '<div class="cover"></div>',
+  });
+  const name = writeProof(p, [component(page, { states: ["hover"] })]);
+  const r = run(p, name);
+  assert.equal(r.status, 3, r.stdout + r.stderr); // not verified: no failing row, and no pass
+  const rows = byId(p, name);
+  assert.equal(rows["motion:btn:reduced:hover"].status, "skipped");
+  assert.match(rows["motion:btn:reduced:hover"].detail, /^not verified: the element could not be put into :hover under reduced motion at 390 px: .*<div class="cover"><\/div> intercepts pointer events/);
+  assert.match(rows["motion:btn:reduced:hover"].detail, /; no transition or animation on entering or leaving :hover at 1440 px /); // what was judged is said as well
+  assert.doesNotMatch(rows["motion:btn:reduced:hover"].detail, /could not be put into[^;]*1440/); // 1440 px could be, and is not named as a width it could not
+  assert.equal(rep(p, name).status, "not-verified");
+  assert.deepEqual(failing(p, name), []);
+  // the normal pass could be put into the state at both widths: its rows judged both and say nothing of a missing width
+  for (const s of ["tokens", "rest"]) assert.doesNotMatch(rows[`motion:btn:${s}:hover`].detail, /only/);
+});
+
+test("a width the element cannot be put into under reduced motion does not hide an animation found at another width", (t) => {
+  if (needSetup(t)) return;
+  const p = motionProject();
+  withMotionTokens(p);
+  const tr = "transition:background-color var(--motion-quick) var(--easing-standard)";
+  const page = buttonPage(p, "reduced-mixed", {
+    css: `.btn{${tr}}.btn:hover{background:#007d71}@media (prefers-reduced-motion:reduce) and (max-width:999px){.row{position:relative}.cover{position:absolute;inset:0}}`,
+    after: '<div class="cover"></div>',
+  });
+  const name = writeProof(p, [component(page, { states: ["hover"] })]);
+  assert.equal(run(p, name).status, 1);
+  assert.deepEqual(failing(p, name), ["motion:btn:reduced:hover"]); // 1440 px animates under reduced motion: that is a finding, and 390 px is said beside it
+  const d = byId(p, name)["motion:btn:reduced:hover"].detail;
+  assert.match(d, /starts transition of background-color on button#b \(1440 px\)/); assert.match(d, /not verified under reduced motion at 390 px: .*intercepts pointer events/);
+});
+
+test("the tokens and rest rows name the widths they judged when the element could not be put into the state at another", (t) => {
+  if (needSetup(t)) return;
+  const p = motionProject();
+  withMotionTokens(p);
+  const tr = "transition:background-color var(--motion-quick) var(--easing-standard)";
+  const page = buttonPage(p, "normal-covered", {
+    css: `.btn{${tr}}.btn:hover{background:#007d71}@media (prefers-reduced-motion:reduce){.btn{transition:none}}@media (max-width:999px){.row{position:relative}.cover{position:absolute;inset:0}}`,
+    after: '<div class="cover"></div>',
+  });
+  const name = writeProof(p, [component(page, { states: ["hover"] })]);
+  assert.equal(run(p, name).status, 1);
+  assert.deepEqual(failing(p, name), ["motion:btn:shift:hover:390"]); // the width it could not be put into fails its shift row, as before
+  const rows = byId(p, name);
+  for (const s of ["tokens", "rest"]) {
+    assert.equal(rows[`motion:btn:${s}:hover`].status, "pass", s);
+    assert.match(rows[`motion:btn:${s}:hover`].detail, /judged at 1440 px only: the element could not be put into :hover at 390 px \(see the shift rows\)/, s);
+  }
+  assert.equal(rows["motion:btn:reduced:hover"].status, "skipped"); // reduced motion at 390 px is covered as well, and says which width and why
+  assert.match(rows["motion:btn:reduced:hover"].detail, /at 390 px: /);
+});
+
+test("an element that fills the view is left with the pointer taken out of the view, and the rest row says so", (t) => {
+  if (needSetup(t)) return;
+  const p = motionProject();
+  withMotionTokens(p);
+  // the link is the whole view: no corner of it is outside the element, so the pointer has no corner to go to
+  const tr = "transition:background-color var(--motion-quick) var(--easing-standard)";
+  const page = buttonPage(p, "whole-view", {
+    css: `.row{padding:0;display:block}.btn{display:block;box-sizing:border-box;width:100vw;height:100vh;padding:0;${tr}}.btn:hover{background:#007d71}.btn:active{background:#005f56}@media (prefers-reduced-motion:reduce){.btn{transition:none}}`,
+    button: '<a class="btn" id="b" href="nowhere.html">Go</a>', after: "",
+  });
+  const name = writeProof(p, [component(page, { widths: [390] })]); // hover, then press: the press must not start with the pointer still on the element
+  const r = run(p, name);
+  assert.equal(r.status, 0, r.stdout + r.stderr); // not a failure of the page: it is the pointer that had nowhere to go
+  const rows = byId(p, name);
+  for (const s of ["hover", "active"]) {
+    assert.equal(rows[`motion:btn:rest:${s}`].status, "pass", s);
+    assert.match(rows[`motion:btn:rest:${s}`].detail, /at 390 px the pointer left the view, because no corner of it is outside the element/, s); // said, not done in silence
+    assert.match(rows[`motion:btn:tokens:${s}`].detail, /^[1-9]\d* animation\(s\) on the state change; every duration and easing is a motion token/, s); // each state was entered from rest: its transition ran
+  }
+});

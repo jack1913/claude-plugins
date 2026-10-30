@@ -1417,17 +1417,18 @@ async function componentPhase(page, c, label, input) {
   return { label, items: got.items, elsewhere: got.elsewhere, plan, moved: sampled.moved.map((m) => ({ ...m, point: plan.points[m.at] })), unread: sampled.unread, stuck };
 }
 
-/** The element into a state and out of it, with the real input, from rest. -> {entered, why, left, phases, rest (boxes that did not come back), watched, unread}. */
+/** The element into a state and out of it, with the real input, from rest. -> {entered, why, left, viewExit (the pointer had to leave the view: no corner of it is outside the element), phases, rest (boxes that did not come back), watched, unread}. */
 async function componentState(page, el, c, state) {
-  const out = { state, entered: false, left: true, why: "", phases: [], rest: [], names: [], unread: [] };
+  const out = { state, entered: false, left: true, viewExit: false, why: "", phases: [], rest: [], names: [], unread: [] };
   const matches = (sel) => page.evaluate((s) => window.__bc.cmp.el.matches(s), sel);
   const hover = () => el.hover({ timeout: COMPONENT_ACT_MS });
-  const away = async () => {   // the pointer to a corner of the page the element is not in
+  const away = async () => {   // the pointer to a corner of the view the element is not in; with none (the element fills the view), out of the view, which hovers nothing
     const at = await page.evaluate(() => {
       const r = window.__bc.cmp.el.getBoundingClientRect();
       return [[1, 1], [innerWidth - 2, 1], [1, innerHeight - 2], [innerWidth - 2, innerHeight - 2]].find(([x, y]) => x < r.left || x > r.right || y < r.top || y > r.bottom) ?? null;
     });
-    if (at) await page.mouse.move(at[0], at[1]);
+    if (!at) out.viewExit = true;   // said in the rest row
+    await page.mouse.move(...(at ?? [-1, -1]));
   };
   const how = {
     hover: { into: [hover], match: ":hover", back: away },
@@ -1483,6 +1484,9 @@ async function componentCase(browser, project, server, c, report, inputs) {
   const kebab = (p) => p.replace(/[A-Z]/g, (m) => "-" + m.toLowerCase());
   for (const state of o.states) {
     const N = runs.normal[state], R = runs.reduced[state], entered = N.filter((r) => r.entered), items = entered.flatMap((r) => r.phases.flatMap((p) => p.items));
+    const px = (rs) => rs.map((r) => r.width).join(", ") + " px";
+    // a row that judges the widths the element could be put into says so, naming the widths it could not (their shift rows fail with the reason)
+    const only = entered.length < N.length ? `judged at ${px(entered)} only: the element could not be put into :${state} at ${px(N.filter((r) => !r.entered))} (see the shift rows)` : "";
     // ---- shift: nothing moves or resizes, at any point of entering and leaving
     for (const r of N) {
       const w = r.width, label = `${state}: nothing moves or resizes at ${w} px`, sid = id(`shift:${state}:${w}`);
@@ -1509,27 +1513,30 @@ async function componentCase(browser, project, server, c, report, inputs) {
     }
     // ---- tokens: every duration and easing of the state change is a motion token
     if (!entered.length) report.add(id(`tokens:${state}`), "skipped", `${state}: durations and easings are motion tokens`, { detail: `not verified: the element could not be put into :${state} (see the shift rows)` });
-    else if (!items.length) report.add(id(`tokens:${state}`), "pass", `${state}: durations and easings are motion tokens`, { detail: `no transition or animation starts on the element or inside it when :${state} is entered or left, so there is no duration or easing to compare`, animations: 0 });
+    else if (!items.length) report.add(id(`tokens:${state}`), "pass", `${state}: durations and easings are motion tokens`, { detail: `no transition or animation starts on the element or inside it when :${state} is entered or left, so there is no duration or easing to compare` + (only && `; ${only}`), animations: 0 });
     else if (tok.why) report.add(id(`tokens:${state}`), "skipped", `${state}: durations and easings are motion tokens`, { detail: `not verified: ${tok.why}`, animations: items.length });
     else {
       const t = tokenProblems(items, tok);
       report.add(id(`tokens:${state}`), t.bad.length ? "fail" : "pass", `${state}: durations and easings are motion tokens`, {
-        detail: t.bad.length ? t.bad.slice(0, 4).join("; ") + (t.bad.length > 4 ? `; and ${t.bad.length - 4} more` : "")
-          : `${items.length} animation(s) on the state change; every duration and easing is a motion token: ${t.used.join(", ")}`,
+        detail: (t.bad.length ? t.bad.slice(0, 4).join("; ") + (t.bad.length > 4 ? `; and ${t.bad.length - 4} more` : "")
+          : `${items.length} animation(s) on the state change; every duration and easing is a motion token: ${t.used.join(", ")}`) + (only && `; ${only}`),
         animations: items.length, not_tokens: t.bad,
       });
     }
-    // ---- reduced: under prefers-reduced-motion nothing animates on the state change
-    const rOk = R.filter((r) => r.entered);
-    if (!rOk.length) report.add(id(`reduced:${state}`), "skipped", `${state}: no animation under reduced motion`, { detail: `not verified: the element could not be put into :${state} with reduced motion on (see the shift rows)` });
+    // ---- reduced: under prefers-reduced-motion nothing animates on the state change; a width the element could not be put into is not judged, and is said
+    const rOk = R.filter((r) => r.entered), rNot = R.filter((r) => !r.entered);
+    const notIn = rNot.map((r) => `at ${r.width} px: ${r.why}`).join("; ");
+    if (!rOk.length) report.add(id(`reduced:${state}`), "skipped", `${state}: no animation under reduced motion`, { detail: `not verified: the element could not be put into :${state} under reduced motion ${notIn}` });
     else {
       const ran = rOk.flatMap((r) => {
         const items = r.phases.flatMap((p) => p.items), named = new Set(items.map((a) => a.name));
         return [...new Set([...items.map((a) => animationWho(a, [a.name])), ...r.events.filter((n) => !named.has(n)).map((n) => `a transition or animation ${n}`)])].map((n) => `${n} (${r.width} px)`);
       });
       const seen = Math.max(0, ...entered.map((r) => r.phases.reduce((n, p) => n + p.items.length, 0)));
-      report.add(id(`reduced:${state}`), ran.length ? "fail" : "pass", `${state}: no animation under reduced motion`, {
-        detail: ran.length ? `prefers-reduced-motion: reduce emulated; the state change starts ${ran.slice(0, 4).join(", ")}${ran.length > 4 ? ` and ${ran.length - 4} more` : ""}`
+      const unjudged = rNot.length ? `; not verified under reduced motion ${notIn}` : "";   // an animation found is a finding whatever the other widths gave; with none found, a width not judged leaves the row not verified
+      report.add(id(`reduced:${state}`), ran.length ? "fail" : rNot.length ? "skipped" : "pass", `${state}: no animation under reduced motion`, {
+        detail: ran.length ? `prefers-reduced-motion: reduce emulated; the state change starts ${ran.slice(0, 4).join(", ")}${ran.length > 4 ? ` and ${ran.length - 4} more` : ""}${unjudged}`
+          : rNot.length ? `not verified: the element could not be put into :${state} under reduced motion ${notIn}; no transition or animation on entering or leaving :${state} at ${px(rOk)} (${seen} at normal motion)`
           : `prefers-reduced-motion: reduce emulated; no transition or animation on entering or leaving :${state} (${seen} at normal motion)`,
         animations: ran.length, normal_animations: seen,
       });
@@ -1538,9 +1545,11 @@ async function componentCase(browser, project, server, c, report, inputs) {
     if (!entered.length) report.add(id(`rest:${state}`), "skipped", `${state}: the box comes back`, { detail: `not verified: the element could not be put into :${state} (see the shift rows)` });
     else {
       const off = entered.flatMap((r) => [...r.rest.map((m) => `${m.who} ${m.what} by ${m.px} px at ${r.width} px`), ...(r.left ? [] : [`the element still matches :${state} at ${r.width} px`]), ...(r.why ? [`${r.why} (${r.width} px)`] : [])]);
+      const exit = entered.filter((r) => r.viewExit);   // no corner of the view is outside the element: the pointer left the view itself
       report.add(id(`rest:${state}`), off.length ? "fail" : "pass", `${state}: the box comes back`, {
-        detail: off.length ? `after leaving :${state}: ${off.slice(0, 4).join("; ")}${off.length > 4 ? `; and ${off.length - 4} more` : ""}`
-          : `after leaving :${state} the element and what follows it are where they were (within 0.5 css px) at ${entered.map((r) => r.width).join(", ")} px`,
+        detail: (off.length ? `after leaving :${state}: ${off.slice(0, 4).join("; ")}${off.length > 4 ? `; and ${off.length - 4} more` : ""}`
+          : `after leaving :${state} the element and what follows it are where they were (within 0.5 css px)${only ? "" : ` at ${px(entered)}`}`)
+          + (only && `; ${only}`) + (exit.length ? `; at ${px(exit)} the pointer left the view, because no corner of it is outside the element` : ""),
       });
     }
   }

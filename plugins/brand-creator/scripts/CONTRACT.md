@@ -50,8 +50,8 @@ Every command takes `--project DIR`, or walks up from the cwd to the first folde
 is none it exits 2 with: `no brand project found; pass --project`. All writes are confined to the project directory
 (a path that resolves outside it, including through symlinks, exits 2). Scratch output (page shots) goes outside the
 project, under `<data>/scratch/<slug>-<hash>/`. `shot --out DIR` may point outside the project or into `<project>/specimens/` (any depth, the folder itself
-included), the one folder of the project where shots may be kept; anywhere else in the project it exits 2 with `--out must be outside the project, or under
-specimens/` (a symlink is followed first, so a link out of `specimens/` into the rest of the project is refused too). A relative `--out` is read from the current
+included), the one folder of the project where shots may be kept; anywhere else in the project it exits 2 with `--out <DIR> must be outside the project, or under
+specimens/` (`<DIR>` is the folder as typed; a symlink is followed first, so a link out of `specimens/` into the rest of the project is refused too). A relative `--out` is read from the current
 folder, as before. The report's `out_dir` records the folder the slices were written to.
 
 ## Reports
@@ -809,7 +809,7 @@ that repeats forever is counted and shot where it is. Each view records `lazy_im
     is running when the proof first sees it fails), `reduced:raf` (no `requestAnimationFrame` call in the last 500 ms of the watch),
     `reduced:listeners` (no `pointermove`, `mousemove`, `touchmove`, `wheel`, `scroll`, `deviceorientation` or `devicemotion` listener,
     script-registered or inline), `cls:reduced`, and `reduced:rest=static` (compared in place as above).
-- `component` (it proves how a component answers a hover, a press and the keyboard, for one line of G4): `page`, `selector` (the component's
+- `component` (it proves how a component answers a hover, a press and, when the case lists `focus-visible`, the keyboard, for one line of G4): `page`, `selector` (the component's
   element), `rule` (a non-empty string: the G4 line the case proves; the report keeps it in `cases`, next to the case's `name` and `type`) and the optional keys `states` (different values from `hover`, `active` and `focus-visible`; default
   `["hover", "active"]`), `widths` (different whole numbers from 200 to 4000; default `[390, 1440]`) and `settle_ms` (default 300: how long the page is
   given after load). A missing or blank `page`, `selector` or `rule`, a bad value and any other key are a usage error (exit 2), raised before a browser
@@ -821,8 +821,10 @@ that repeats forever is counted and shot where it is. Each view records `lazy_im
   the element does not match the state afterwards (another element covers it, it is hidden at that width, it cannot take focus). The Web Animations
   the input starts on the element or inside it (CSS transitions, CSS animations, `element.animate()`; a pseudo-element's included) are paused where
   they begin and stepped through the sample points of a page case (see `sampling` above), never waited for; the others the state starts elsewhere on the
-  page stay where they began, and the row says how many. The state is then left (the pointer moved to a corner the element is not in; the button let
-  go; the element blurred) and what that starts is stepped through the same way. Rows, in the order of the report, for each state:
+  page stay where they began, and the row says how many. The state is then left (the pointer moved to a corner of the view the element is not in, or out of the view when the element fills it, which hovers
+  nothing, and the `rest` row says so; the button let go; the element blurred) and what that starts is stepped through the same way. A report
+  starts with `page:errors` only when it fails (the page did not load cleanly at the first width: a console or page error, a request to anything but
+  the local server); it is no row of a state. Then come the rows of each state, in the order of the report:
   - `shift:<state>:<width>` (one per width): the **layout box** of the element and of every element after it, at its own level and at each level above
     it (what moves when the element grows), stays within 0.5 css px of where it was at rest, in position and in size, at every sample point of entering
     and of leaving; and no animation on the element or inside it is of a layout property (the list of `cls:normal`). The element's own `transform`,
@@ -835,15 +837,20 @@ that repeats forever is counted and shot where it is. Each view records `lazy_im
     four numbers). A transition's easing is its timing function, a CSS animation's is that of each interval between its keyframes, a script animation's
     both. Delays are not checked. The row names what is no token and the tokens there are. With no animation on the state it passes and says so. Without
     built tokens it is "not verified" (`skipped`) and names `brand-creator tokens`; the file is an input of the report, so a changed token makes it stale.
+    It judges the widths the element could be put into the state at (the normal-motion run); when that is not every width, the row says `judged at
+    1440 px only` and names the others, whose `shift` rows fail with the reason.
   - `reduced:<state>`: under reduced motion the state change starts no transition or animation on the element or inside it, on entering or on leaving, at any
     width (an animation that ended before the proof looked at it is still seen, from the browser's `transitionrun` and `animationstart` events). The row says
-    how many there were at normal motion. A shorter animation is still an animation: it fails.
+    how many there were at normal motion. A shorter animation is still an animation: it fails. The reduced-motion run has no `shift` row of its own, so a width the
+    element could not be put into under reduced motion (another element covers it there, it is hidden there) is never left out in silence: when no animation was
+    found at the other widths the row is "not verified" (`skipped`) and names each such width and why (`under reduced motion at 390 px: <reason>`), and when one
+    was found it fails and names the width it could not judge beside it.
   - `rest:<state>`: after the state is left and its animations finished, the element and the elements after it are where they were before the state (0.5 css
-    px), and the element no longer matches the state; a page that leaves a state behind fails here.
-  - `page:errors` (only when it fails): the page did not load cleanly at the first width (a console or page error, a request to anything but the local
-    server).
-  The rows of a state, a width or a mode the element could not be put into are "not verified" except the `shift` row, which fails and says why. Like the
-  other cases it needs `brand-creator setup`; `frames` skips it (an info row), and the book lists its checks under `Case N`.
+    px), and the element no longer matches the state; a page that leaves a state behind fails here. Like `tokens` it judges the widths the element
+    could be put into the state at, and says `judged at … only` when that is not all of them. When no corner of the view is outside the element (it fills
+    the view) the pointer is moved out of the view, and the row names the widths where that happened.
+  A state the element could not be put into at a width, in the normal-motion run, fails that width's `shift` row with the reason; the `tokens` and `rest` rows
+  judge the other widths, and are "not verified" when there is none. Like the other cases it needs `brand-creator setup`; `frames` skips it (an info row), and the book lists its checks under `Case N`.
 - **One report per proof file**: `assets/_checks/motion/<slug>-<hash6>.json` (tool name `motion/<slug>-<hash6>`, the slug is the proof's
   file stem, the hash the first six hex of the sha256 of its project-relative posix path, as the disk spells it (on macOS `MOTION/PROOF.JSON`
   is `motion/proof.json`, and has its report); `motion_report_tool` in `_common.py` and
