@@ -211,6 +211,12 @@ words: `brand-creator motion --off "<reason>"` writes it). In Standard and Full 
   stills of the motion into `motion/frames/` for the book, whose Motion chapter replays them (`frames motion/proof.json
   --count 25` before `book`: fewer than 9 stills jump); the variants of a motion round keep theirs beside each proof, in
   `rounds/r<N>/<variant>/frames/<variant>/` (`frames` refuses a proof inside `history/` or in a round before the latest).
+- `shot --motion` on a component case (script): the states of one component of a page (hover and press, and keyboard focus when the
+  case lists it), each put into the state with the real input at 390 and 1440 px, and the case's `rule` naming the G4 line it proves. The component and
+  what follows it neither move nor resize while the state is entered or left (a lift or a press by `transform` is fine, a
+  change of padding, border or size is not), every duration and easing the state starts is one of the motion tokens, none is
+  started under reduced motion, and the box is where it was once the state is left. A state the element cannot be put
+  into fails (under reduced motion it is named as not verified), and without built tokens the token row is not verified.
 - `check --cascade` (script): no current file still holds an old value.
 - Prose: this file and the G4 "(rule)" list. Touch scrolling, audio and the script budget are not measured; they are
   listed in [09-qa](09-qa.md) as judgement items.

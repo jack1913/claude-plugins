@@ -31,6 +31,21 @@ stage, and why, is in the [archive](docs/archive/README.md).
   moves. A variant whose motion report is missing or out of date is not compared (the proof row says why), and the row
   then reports instead of passing. The two limits are a practice proposal, said in the row, and the row only warns: it
   does not become a failure.
+- `brand-creator shot --out DIR` can now write the shots into the project's own `specimens/` folder, at any depth (for
+  example `--out specimens/hero`), so page shots you want to keep can sit beside the brand. Any other folder inside the
+  project is still refused (exit 2: `--out <DIR> must be outside the project, or under specimens/`, with the folder you
+  typed in place of `<DIR>`); a folder outside the project works as before.
+- A motion proof can now check how a component answers its states, not only how a mark moves. A `component` case in the proof
+  names a page, the component's element and the line of the motion rules it proves (`rule`), and `brand-creator shot
+  --motion` hovers it and presses it (and focuses it with the keyboard when the case lists `focus-visible` in `states`),
+  at 390 and 1440 px. It fails when the element, or anything after it, moves or resizes by more than half a pixel at any
+  point of entering or leaving the state (a lift or a press done with `transform` is fine; padding, a border or a size
+  change is not), when a duration or an easing of the state change is not one of the brand's motion tokens, when the
+  element or anything inside it animates under reduced motion, or when the box is not back where it was once the state is
+  left. A component that another element covers, that is hidden at a width or that cannot take focus fails with the
+  reason. A width it could not be put into under reduced motion is never skipped in silence: the reduced-motion row names
+  the width and why, and is not verified (it fails instead when an animation was found at another width). Without built
+  tokens the token row says it is not verified.
 
 ### Changed
 
