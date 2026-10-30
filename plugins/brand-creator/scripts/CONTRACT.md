@@ -1272,9 +1272,9 @@ of those files, including the text of an adoption row's `change`, is searched li
 tokens (`assets/tokens/tokens.json`), BRAND-STATE.md and FACTS.md. BRAND.md: frontmatter `type` and `architecture` (standalone: master, independent; family-member:
 master, endorsed; product-in-family: product, endorsed; these pairings are brand-creator's reading, not something the format defines, so they can be overridden),
 then Strategy (the facts, the canonical direction), Voice (only `voice` and `tone` facts and the FORBIDDEN list; "no voice facts are recorded" otherwise), Visual
-(colour roles in light and dark, type families, the mark files, the G4 rules, motion) and Governance (naming and renames, claims and verbatim legal facts,
+(colour roles in light and dark, type families with the sizes, weights, line height and tracking the tokens define, the spacing, radius and layout values, the mark files, the G4 rules, motion) and Governance (naming and renames, claims and verbatim legal facts,
 the accessibility commitments with the computed ratios, approval). Contact and postal-address facts are left out. DESIGN.md: frontmatter `version: alpha`, `name`,
-`colors` (the light roles, `-dark` variants, `primary` when `--primary` names a role), `typography` (families only), `spacing`, `components` (one entry per
+`colors` (the light roles, `-dark` variants, `primary` when `--primary` names a role), `typography` (families, sizes, weights, line height and tracking), `spacing`, `rounded`, `components` (one entry per
 `ui-text` pair, light and dark, as `{colors.x}` references), then the sections in the spec's order that have content. A role whose colour is see-through
 (alpha under 1 in `tokens.json`) is written `#rrggbbaa`, lower case, as `tokens.css` writes it, wherever a role is listed (BRAND.md, DESIGN.md `colors`, the applied
 skill); an opaque role stays `#rrggbb`. The pinned DESIGN.md format lists `#RRGGBBAA` as a colour, and its lint passes it. The report `adapters` records the sha256 of
@@ -1284,6 +1284,19 @@ is `fail`, other warnings are `warn`, and a missing package is `skipped`, so the
 that is not the bytes the report recorded (a hand edit) and treats a changed source as not verified. A hand-edited file is replaced only with `--replace`, which
 moves it to `removed-<date>[-n]/`. When `tools/inputs.json` exists, the adapters add `BRAND.md` and `DESIGN.md` to its globs (the pack then reads as stale until
 `staleness --write`), and `staleness --write` includes both whenever they exist.
+
+Type and layout values are read wherever `tokens.json` `other` holds them, by the name of the key (`adaptlib/adapt.py` `layout_tokens`; a leading `dimension.` is dropped
+first). By its first segment, or for a one-segment name by the word it starts with before a hyphen: `space`/`spacing` are spacing steps, `radius`/`rounded` corner radius, `weight`
+weights, `leading`/`line-height` line height, `tracking`/`letter-spacing` tracking, `layout`/`container`/`gutter`/`breakpoint` layout values; a name with a segment starting `text-`
+(`size.text-sm`) is a text size. Fonts, durations and curves are read as before; an alias (`var(--space-3)`) is read as the value it names; every group is in name order. Nothing is
+invented: a kind the tokens do not hold is not written, and a brand with no size and no weight keeps the sentence "The tokens define no sizes or weights." in DESIGN.md.
+DESIGN.md `typography` has one entry per `font.*` family; a `leading.<n>` or `tracking.<n>` joins the entry of the family of that name (`lineHeight`, `letterSpacing` in em: a plain
+number such as `-0.01` is written `-0.01em`) or, when no family has that name, makes an entry `<n>`; each size is an entry `text-<step>` (`fontSize`) and each weight an entry
+`weight-<name>` (`fontWeight`). A weight that is not a whole number, a size that is not a px, em or rem dimension, and a line height or tracking that is neither a number nor such a dimension stay in the
+prose and out of the frontmatter, because the format holds nothing else. `spacing` entries are named `space-<rest>` (`space.1` and `dimension.space-1` are `space-1`) and `rounded` entries after the
+radius (`radius.sm` and `dimension.radius-sm` are `sm`). The DESIGN.md prose lists them: `## Typography` the families, sizes, weights, line heights and tracking, `## Layout` the groups the
+spacing steps come from and the radius, container, gutter and breakpoint values. BRAND.md `### Type` and the applied skill's `## Type` list the same, one bullet per token path; BRAND.md
+`### Layout` and the applied skill's `## Layout` list the spacing, radius and layout values, and are left out when there are none.
 
 Motion is the same text in BRAND.md (`### Motion`), DESIGN.md (`## Motion`, prose between Components and Do's and Don'ts: the pinned format keeps a section it does
 not name, so no frontmatter key is invented) and the applied skill (`## Motion`): every duration token (by its type, the paths under `tokens.json`
@@ -1297,7 +1310,8 @@ the `adapters` and `applied-skill` reports, and the state hash covers it: a chan
 ### applied-skill
 
 `applied-skill --yes [--plan] [--replace]` writes `.claude/skills/<slug>-brand/SKILL.md` into the project from `templates/applied-skill/SKILL.md`: colours (light and
-dark) and the contrast pairs with their ratios, type families, the mark files (relative to the skill), the small-size rule (from `qa/rules.json`, or the plugin's
+dark) and the contrast pairs with their ratios, type families with the sizes, weights, line height and tracking the tokens define (`{{type}}`), the spacing, radius and layout values
+(the optional `## Layout` section, through the template's `{{layout}}`: a whole section or nothing, as for motion, and left out when the tokens hold none), the mark files (relative to the skill), the small-size rule (from `qa/rules.json`, or the plugin's
 proposal, said so), motion (the section above, through the template's `{{motion}}`: a whole section or nothing, so a brand without motion gets the file it always
 had), what is never done, the G4 rules, the facts that may be claimed (contact facts left out). It needs G5 and `--yes` (without it: the plan on stdout, a
 message on stderr, exit 2; `--plan` exits 0). The name is `<slug>-brand` (lower case, hyphens, at most 64 characters, no `claude` or `anthropic`). Gated by `check` like

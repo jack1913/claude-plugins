@@ -24,6 +24,8 @@ Text and component pairs, with the ratio each reaches (WCAG 2.2 AA; logos are ex
 
 {{type}}
 
+{{layout}}
+
 ## Mark
 
 {{mark}}

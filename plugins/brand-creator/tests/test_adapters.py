@@ -624,3 +624,153 @@ def test_text_with_braces_in_the_motion_spec_or_the_rules_is_written_as_it_is_an
     assert brand == design == skill and "- the dot moves like {{name}} says\n- no {{wobble}} ever\n- check {{facts}} first" in skill
     text = (pack / ".claude" / "skills" / "acme-brand" / "SKILL.md").read_text()
     assert "- (rule) say {{name}} in full, see {{facts}} (proposal)" in text and "acme-brand" not in text.split("## Rules", 1)[1].split("\n## ", 1)[0]
+
+
+# ---------------------------------------------------------------- type sizes, weights and layout values: read wherever the tokens hold them
+
+def add_type_and_layout(p: Path, extra=None) -> None:
+    """Sizes, weights, one radius and one spacing step in groups of their own, built into the tokens of the project (Acme has a font family, two
+    `dimension.space-*` steps and a duration, nothing else of the kind)."""
+    def px(n):
+        return {"$value": {"value": n, "unit": "px"}}
+
+    def groups(d):
+        d["size"] = {"$type": "dimension", "text-sm": px(14), "text-lg": px(20)}
+        d["weight"] = {"$type": "fontWeight", "regular": {"$value": 400}, "bold": {"$value": 700}}
+        d["radius"] = {"$type": "dimension", "sm": px(4)}
+        d["space"] = {"$type": "dimension", "3": px(12)}
+        if extra:
+            extra(d, px)
+    mutate_json(p / "tokens" / "primitives.tokens.json", groups)
+    r = bc("tokens", project=p)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def add_line_and_layout(d, px) -> None:
+    """Line height for the family and for a name of its own, tracking, the content width, the gutter and a breakpoint."""
+    d["leading"] = {"$type": "number", "sans": {"$value": 1.4}, "display": {"$value": 1.1}}
+    d["tracking"] = {"$type": "number", "display": {"$value": -0.01}}
+    d["layout"] = {"$type": "dimension", "container": px(1200), "gutter": px(24)}
+    d["breakpoint"] = {"$type": "dimension", "md": px(768)}
+
+
+def typography(text: str) -> dict[str, dict[str, str]]:
+    """The `typography` block of the frontmatter: entry -> {property: value}."""
+    block = re.search(r"^typography:\n((?:  .*\n)+)", FM_RE.match(text).group(1) + "\n", re.M).group(1)
+    out: dict[str, dict[str, str]] = {}
+    for ln in block.splitlines():
+        if m := re.match(r"^  ([a-z0-9-]+):$", ln):
+            out[m.group(1)] = {}
+        elif m := re.match(r"^    ([A-Za-z]+): (.*)$", ln):
+            out[next(reversed(out))][m.group(1)] = m.group(2)
+    return out
+
+
+def test_typography_carries_sizes_and_weights_wherever_they_live(pack):
+    add_type_and_layout(pack)
+    generate(pack)
+    design, brand = (pack / "DESIGN.md").read_text(), (pack / "BRAND.md").read_text()
+    skill = (pack / ".claude" / "skills" / "acme-brand" / "SKILL.md").read_text()
+    typo = typography(design)
+    assert typo["text-sm"] == {"fontSize": "14px"} and typo["text-lg"] == {"fontSize": "20px"}
+    assert typo["weight-regular"] == {"fontWeight": "400"} and typo["weight-bold"] == {"fontWeight": "700"}
+    assert list(typo)[0] == "sans" and set(typo["sans"]) == {"fontFamily"}             # the family comes first, and is only a family
+    fm = FM_RE.match(design).group(1)
+    assert "  space-1: 4px\n  space-2: 8px\n  space-3: 12px\n" in fm                  # dimension.space-1 and space.3 are one scale
+    assert "rounded:\n  sm: 4px\n" in fm
+    assert "Families only" not in design and "The tokens define no sizes or weights." not in design
+    assert "- size.text-sm: 14px" in design and "- weight.bold: 700" in design and "- radius.sm: 4px" in design
+    assert "Spacing steps come from the `dimension.space-*` and `space.*` tokens." in design
+    for text in (brand, skill):
+        for line in ("- size.text-sm: `14px`", "- size.text-lg: `20px`", "- weight.regular: `400`", "- weight.bold: `700`", "- radius.sm: `4px`",
+                     "- space.3: `12px`", "- dimension.space-1: `4px`"):
+            assert line in text, line
+    assert section(brand, "### Type", "\n### ").splitlines()[0].startswith("- sans: `") and "### Layout" in brand
+    assert skill.index("## Type") < skill.index("- size.text-sm") < skill.index("## Layout") < skill.index("- radius.sm") < skill.index("## Mark")
+
+
+def test_line_height_and_tracking_join_the_family_of_their_name_or_stand_alone_and_layout_values_are_listed(pack):
+    add_type_and_layout(pack, add_line_and_layout)
+    generate(pack)
+    design, brand = (pack / "DESIGN.md").read_text(), (pack / "BRAND.md").read_text()
+    skill = (pack / ".claude" / "skills" / "acme-brand" / "SKILL.md").read_text()
+    typo = typography(design)
+    assert list(typo["sans"]) == ["fontFamily", "lineHeight"] and typo["sans"]["lineHeight"] == "1.4"          # leading.sans joins font.sans
+    assert typo["display"] == {"lineHeight": "1.1", "letterSpacing": "-0.01em"}                               # no family called display: an entry of its own
+    for text in (brand, skill):
+        assert "- leading.display: `1.1`" in text and "- leading.sans: `1.4`" in text and "- tracking.display: `-0.01em`" in text
+        assert "- layout.container: `1200px`" in text and "- layout.gutter: `24px`" in text and "- breakpoint.md: `768px`" in text
+    layout = section(design, "## Layout")
+    assert "- radius.sm: 4px" in layout and "- layout.container: 1200px" in layout and "- breakpoint.md: 768px" in layout
+    assert "container" not in FM_RE.match(design).group(1)                                                       # the format has no key for them: prose only
+
+
+def test_without_spacing_radius_or_layout_values_the_layout_section_is_left_out_everywhere(pack):
+    mutate_json(pack / "tokens" / "primitives.tokens.json", lambda d: d.pop("dimension"))
+    assert bc("tokens", project=pack).returncode == 0
+    generate(pack)
+    design, brand = (pack / "DESIGN.md").read_text(), (pack / "BRAND.md").read_text()
+    skill = (pack / ".claude" / "skills" / "acme-brand" / "SKILL.md").read_text()
+    assert "Layout" not in design and "spacing:" not in design and "rounded:" not in design
+    assert "### Layout" not in brand and "## Layout" not in skill and "{{" not in skill
+    assert "## Type\n\n- sans: `" in skill and "\n\n## Mark\n" in skill                                          # the line of the section goes with its blank line
+
+
+def test_no_size_weight_or_layout_value_is_invented(pack):
+    generate(pack)
+    design, brand = (pack / "DESIGN.md").read_text(), (pack / "BRAND.md").read_text()
+    skill = (pack / ".claude" / "skills" / "acme-brand" / "SKILL.md").read_text()
+    for prop in ("fontSize", "fontWeight", "lineHeight", "letterSpacing", "rounded:"):
+        assert prop not in design, prop
+    assert set(typography(design)) == {"sans"} and "The tokens define no sizes or weights." in design and "Families only" not in design
+    for text, type_head, layout_head in ((brand, "### Type", "### Layout"), (skill, "## Type", "## Layout")):
+        type_lines = [ln for ln in section(text, type_head, "\n##").splitlines() if ln]
+        layout_lines = [ln for ln in section(text, layout_head, "\n##").splitlines() if ln.startswith("- ")]
+        assert type_lines and all(ln.startswith("- sans: `") for ln in type_lines)                                 # the family, and nothing else of type
+        assert layout_lines == ["- dimension.space-1: `4px`", "- dimension.space-2: `8px`"]                      # the two steps the tokens hold, and nothing else
+
+
+def test_layout_tokens_are_classified_by_name_and_an_alias_is_followed(pack):
+    import adapt
+    other = {"font.sans": "x", "dimension.space-1": "4px", "space.2": "8px", "spacing.big": "var(--space-2)", "dimension.radius-card": "6px", "radius.sm": "4px",
+             "rounded.lg": "12px", "size.text-sm": "14px", "dimension.text-lg": "20px", "weight.bold": "700", "line-height.body": "1.5",
+             "letter-spacing.wide": "0.05em", "leading.display": "1.1", "tracking.display": "-0.01", "layout.container": "1200px", "dimension.gutter-lg": "32px",
+             "breakpoint.md": "768px", "size.hairline": "1px", "dimension.line-height-tight": "1.2", "motion.base": "320ms", "duration.fast": "150ms",
+             "timing.text-slow": "640ms", "easing.standard": "cubic-bezier(0.2, 0, 0, 1)"}
+    doc = {"other": other, "motion": {"durations_ms": {"duration.fast": 150, "motion.base": 320, "timing.text-slow": 640}, "curves": {"easing.standard": [0.2, 0, 0, 1]}}}
+    got = {kind: [(t.key, t.rest, t.value) for t in toks] for kind, toks in adapt.layout_tokens(doc).items()}
+    assert got == {
+        "spacing": [("dimension.space-1", "1", "4px"), ("space.2", "2", "8px"), ("spacing.big", "big", "8px")],       # the alias is the value it names
+        "rounded": [("dimension.radius-card", "card", "6px"), ("radius.sm", "sm", "4px"), ("rounded.lg", "lg", "12px")],
+        "layout": [("breakpoint.md", "md", "768px"), ("dimension.gutter-lg", "lg", "32px"), ("layout.container", "container", "1200px")],
+        "sizes": [("size.text-sm", "text-sm", "14px"), ("dimension.text-lg", "text-lg", "20px")],                      # in name order; size.hairline is no text size, timing.text-slow a duration
+        "weights": [("weight.bold", "bold", "700")],
+        "leading": [("leading.display", "display", "1.1"), ("dimension.line-height-tight", "tight", "1.2"), ("line-height.body", "body", "1.5")],
+        "tracking": [("letter-spacing.wide", "wide", "0.05em"), ("tracking.display", "display", "-0.01")]}
+
+
+def test_a_value_the_format_cannot_hold_stays_in_the_prose_and_out_of_the_frontmatter(pack, monkeypatch):
+    """A weight that is a keyword and a size that is no px, em or rem dimension are listed as the tokens hold them, but get no frontmatter entry: the pinned
+    format wants a number and a dimension, and nothing is converted or guessed."""
+    import adapt
+    doc = json.loads((pack / "assets" / "tokens" / "tokens.json").read_text())
+    doc["other"].update({"weight.heavy": "bold", "weight.regular": "400", "size.text-fluid": "clamp(1rem, 2vw, 2rem)", "size.text-sm": "14px", "tracking.loose": "0.05em"})
+    monkeypatch.setattr(adapt.bookdata, "tokens", lambda project: (doc, pack / "assets" / "tokens" / "tokens.json"))
+    design = adapt.design_md(pack)
+    typo = typography(design)
+    assert "weight-heavy" not in typo and "text-fluid" not in typo
+    assert typo["weight-regular"] == {"fontWeight": "400"} and typo["text-sm"] == {"fontSize": "14px"} and typo["loose"] == {"letterSpacing": "0.05em"}
+    assert "- weight.heavy: bold" in design and "- size.text-fluid: clamp(1rem, 2vw, 2rem)" in design
+
+
+@pytest.mark.requires_design_lint
+def test_the_pinned_design_md_format_accepts_sizes_and_weights(pack):
+    """The pinned lint finds no error in a DESIGN.md with sizes, weights, line heights, tracking, spacing and radius: typography entries with no family
+    (`text-sm`, `weight-bold`, `display`) are accepted."""
+    add_type_and_layout(pack, add_line_and_layout)
+    r = bc("adapters", "--design-md", "--primary", "accent", project=pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert row(pack, "design-md:lint", "adapters")["status"] == "pass"
+    rep = json.loads((pack / "assets" / "_checks" / "adapters.json").read_text())
+    assert not [x for x in rep["results"] if x["id"].startswith("design-md:lint") and x["status"] == "fail"]
+    assert "fontSize: 14px" in (pack / "DESIGN.md").read_text() and "fontWeight: 700" in (pack / "DESIGN.md").read_text()

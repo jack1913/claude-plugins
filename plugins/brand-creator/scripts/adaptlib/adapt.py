@@ -12,6 +12,7 @@ import math
 import re
 from decimal import Decimal
 from pathlib import Path
+from typing import NamedTuple
 
 import bookdata
 import motionspec
@@ -103,6 +104,79 @@ def pairs(doc: dict) -> list[dict]:
 
 def fonts(doc: dict) -> list[tuple[str, str]]:
     return [(k[5:], str(v)) for k, v in doc.get("other", {}).items() if k.startswith("font.")]
+
+
+# the first word of a token's name -> what the token is. space.1, spacing.1 and (a one-segment name) dimension.space-1 are all spacing.
+LAYOUT_WORDS = {"space": "spacing", "spacing": "spacing", "radius": "rounded", "rounded": "rounded", "weight": "weights", "leading": "leading",
+                "line-height": "leading", "tracking": "tracking", "letter-spacing": "tracking", "layout": "layout", "container": "layout",
+                "gutter": "layout", "breakpoint": "layout"}
+LAYOUT_KINDS = ("spacing", "rounded", "layout", "sizes", "weights", "leading", "tracking")
+DIMENSION = re.compile(r"-?\d*\.?\d+(px|rem|em)")
+NUMBER = re.compile(r"-?\d*\.?\d+")
+
+
+class LayoutToken(NamedTuple):
+    key: str      # the path in tokens.json `other`: space.1, dimension.space-1, size.text-sm
+    rest: str     # the name after the group word, no dots: 1, card, text-sm, display ("" for a token that is only the group word)
+    value: str    # as tokens.css writes it, an alias followed to its end
+    group: str    # how the spacing steps are named in prose: `space.*` or `dimension.space-*`
+
+
+def layout_tokens(doc: dict) -> dict[str, list[LayoutToken]]:
+    """The size, weight, spacing, radius, line-height, tracking and layout tokens of tokens.json `other`, classified by name (the key without a leading
+    `dimension.`): by its first segment (for a one-segment name, by the word it starts with before a hyphen) space/spacing = spacing, radius/rounded = rounded,
+    weight = weights, leading/line-height = leading, tracking/letter-spacing = tracking, layout/container/gutter/breakpoint = layout; any segment starting
+    `text-` (size.text-sm) = sizes. Fonts, durations and curves are read elsewhere. Every kind is in the answer, in name order; nothing is invented, a
+    kind the tokens do not hold is an empty list."""
+    other = doc.get("other", {}) or {}
+    mo = doc.get("motion") or {}
+    elsewhere = set(mo.get("durations_ms", {})) | set(mo.get("curves", {}))
+    by_var = {k.replace(".", "-"): str(v) for k, v in other.items()}
+
+    def value(v) -> str:   # an alias (var(--space-3)) is the value of the token it names
+        v = str(v)
+        for _ in range(8):
+            m = re.fullmatch(r"var\(--([^)]+)\)", v)
+            if not m or m.group(1) not in by_var:
+                break
+            v = by_var[m.group(1)]
+        return v
+
+    out: dict[str, list[LayoutToken]] = {kind: [] for kind in LAYOUT_KINDS}
+    for key, v in sorted(other.items(), key=lambda kv: (kv[0].removeprefix("dimension."), kv[0])):
+        if key.startswith(("font.", "duration.", "motion.")) or key in elsewhere:
+            continue
+        name = key.removeprefix("dimension.")
+        segs = name.split(".")
+        word = next((w for w in LAYOUT_WORDS if segs[0] == w or (len(segs) == 1 and segs[0].startswith(w + "-"))), None)
+        if word:
+            rest = "-".join(segs[1:]) if len(segs) > 1 else segs[0][len(word):].lstrip("-")
+            sep = "." if len(segs) > 1 else "-"
+            out[LAYOUT_WORDS[word]].append(LayoutToken(key, rest, value(v), ("dimension." if key.startswith("dimension.") else "") + word + sep + "*"))
+        elif (i := next((n for n, s in enumerate(segs) if s.startswith("text-")), None)) is not None:
+            out["sizes"].append(LayoutToken(key, "-".join(segs[i:]), value(v), ""))
+    return out
+
+
+def tracking_value(v: str) -> str:
+    """Tracking is a plain number in em (DTCG dimensions are px or rem only): -0.01 is -0.01em; a value with a unit is as it is."""
+    return v + "em" if NUMBER.fullmatch(v) else v
+
+
+def type_lines(doc: dict, no_family: str) -> list[str]:
+    """The families, then every size, weight, line height and tracking the tokens define, as markdown bullets of the token's own path. [no_family] stands for the
+    families when there are none."""
+    fs, lt = fonts(doc), layout_tokens(doc)
+    more = [f"- {t.key}: `{tracking_value(t.value) if kind == 'tracking' else t.value}`" for kind in ("sizes", "weights", "leading", "tracking") for t in lt[kind]]
+    if fs:
+        return [f"- {k}: `{val}`" for k, val in fs] + more
+    return [no_family] + ([""] + more if more else [])
+
+
+def layout_lines(doc: dict) -> list[str]:
+    """The spacing steps, the corner radius and the layout values (container, gutter, breakpoints) the tokens define, as markdown bullets of the token's own path."""
+    lt = layout_tokens(doc)
+    return [f"- {t.key}: `{t.value}`" for kind in ("spacing", "rounded", "layout") for t in lt[kind]]
 
 
 def bezier(c: list) -> str:
@@ -209,10 +283,10 @@ def brand_md(project: Path, *, bm_type: str | None = None, bm_arch: str | None =
         L += ["Never use (the FORBIDDEN list of the brief and research/cliches.md):", ""] + [f"- {t}" for t in v["forbidden"]] + [""]
     L += ["## Visual", "", "### Colour", "", "Values come from the built design tokens (`assets/tokens/tokens.json`); the DTCG sources in `tokens/` are the truth.", ""]
     L += colour_table(doc) + [""]
-    fs = fonts(doc)
-    L += ["### Type", ""]
-    L += [f"- {k}: `{val}`" for k, val in fs] if fs else ["The tokens define no font family."]
-    L += [""]
+    L += ["### Type", ""] + type_lines(doc, "The tokens define no font family.") + [""]
+    layout = layout_lines(doc)
+    if layout:
+        L += ["### Layout", ""] + layout + [""]
     logos = logo_paths(project)
     L += ["### Mark", ""]
     L += [f"- `{p}`" for p in logos] if logos else ["No mark file exists yet under `assets/logo/`."]
@@ -259,20 +333,33 @@ def design_md(project: Path, *, primary: str | None = None) -> str:
     for k in roles:
         if k in dark:
             L.append(f"  {role(k)}-dark: {yq(mode_hex(doc, 'dark', k))}")
-    fs = fonts(doc)
-    if fs:
+    fs, lt = fonts(doc), layout_tokens(doc)
+    # one entry per family (its line height and tracking join the entry of the same name, or stand in an entry of their own), one per size, one per weight;
+    # a value the format cannot hold (a weight that is no number, a size that is no px, em or rem dimension) is left out here and stays in the prose
+    typo: dict[str, dict[str, str]] = {k: {"fontFamily": yq(val)} for k, val in fs}
+    for t in lt["leading"]:
+        if NUMBER.fullmatch(t.value) or DIMENSION.fullmatch(t.value):
+            typo.setdefault(t.rest or "leading", {})["lineHeight"] = t.value
+    for t in lt["tracking"]:
+        if NUMBER.fullmatch(t.value) or DIMENSION.fullmatch(t.value):
+            typo.setdefault(t.rest or "tracking", {})["letterSpacing"] = tracking_value(t.value)
+    for t in lt["sizes"]:
+        if DIMENSION.fullmatch(t.value):
+            typo.setdefault(t.rest, {})["fontSize"] = t.value
+    for t in lt["weights"]:
+        if re.fullmatch(r"\d+", t.value):
+            typo.setdefault(f"weight-{t.rest}" if t.rest else "weight", {})["fontWeight"] = t.value
+    if typo:
         L.append("typography:")
-        for k, val in fs:
-            L += [f"  {k}:", f"    fontFamily: {yq(val)}"]
-    dims = {k[10:]: str(val) for k, val in doc.get("other", {}).items() if k.startswith("dimension.")}
-    spacing = {k: val for k, val in dims.items() if k.startswith("space")}
-    rounded = {k: val for k, val in dims.items() if k.startswith(("radius", "rounded"))}
+        for name, props in typo.items():
+            L += [f"  {name}:"] + [f"    {prop}: {val}" for prop, val in props.items()]
+    spacing, rounded = lt["spacing"], lt["rounded"]
     if spacing:
         L.append("spacing:")
-        L += [f"  {k}: {val}" for k, val in sorted(spacing.items())]
+        L += [f"  {f'space-{t.rest}' if t.rest else 'space'}: {t.value}" for t in spacing]
     if rounded:
         L.append("rounded:")
-        L += [f"  {re.sub(r'^(radius|rounded)-?', '', k) or k}: {val}" for k, val in sorted(rounded.items())]
+        L += [f"  {t.rest or t.key}: {t.value}" for t in rounded]
     comps = []
     for p in doc.get("pairs", []):
         if p.get("kind") == "ui-text":
@@ -289,10 +376,19 @@ def design_md(project: Path, *, primary: str | None = None) -> str:
     if v["register"]:
         L += [f"Register: {v['register']}.", ""]
     L += ["## Colors", "", f"{len(roles)} roles, each with a light and a dark value (`-dark`). Contrast pairs are checked by `brand-creator contrast`:", ""] + pair_table(doc) + [""]
-    if fs:
-        L += ["## Typography", "", "Families only: the tokens define no sizes or weights.", ""] + [f"- {k}: {val}" for k, val in fs] + [""]
-    if spacing:
-        L += ["## Layout", "", "Spacing steps come from the `dimension.space-*` tokens.", ""]
+    if fs or any(lt[kind] for kind in ("sizes", "weights", "leading", "tracking")):
+        L += ["## Typography", ""]
+        if not (lt["sizes"] or lt["weights"]):
+            L += ["The tokens define no sizes or weights.", ""]
+        L += [f"- {k}: {val}" for k, val in fs]
+        L += [f"- {t.key}: {tracking_value(t.value) if kind == 'tracking' else t.value}" for kind in ("sizes", "weights", "leading", "tracking") for t in lt[kind]] + [""]
+    if spacing or rounded or lt["layout"]:
+        L += ["## Layout", ""]
+        if spacing:
+            groups = [f"`{g}`" for g in sorted({t.group for t in spacing})]
+            L += ["Spacing steps come from the " + (", ".join(groups[:-1]) + " and " + groups[-1] if len(groups) > 1 else groups[0]) + " tokens.", ""]
+        if rounded or lt["layout"]:
+            L += [f"- {t.key}: {t.value}" for t in rounded + lt["layout"]] + [""]
     if comps:
         L += ["## Components", "", "One entry per text pair that must meet WCAG AA 4.5:1, in light and dark.", ""]
     motion = motion_lines(project, doc)
@@ -323,7 +419,6 @@ def applied_skill_md(project: Path, template: str) -> str:
     rules, src = qa_rules.load(project)
     ds = rules["downscale"]
     logos = logo_paths(project)
-    fs = fonts(doc)
     def band_line(b: dict, who: str = "") -> str:
         return f"- {who}{b.get('name', 'band')}: {'up to ' + str(b['max_px']) + ' px' if b.get('max_px') else 'larger sizes'} uses `{b.get('drawing', '')}`"
 
@@ -331,6 +426,9 @@ def applied_skill_md(project: Path, template: str) -> str:
              else [band_line(b) for b in rules.get("bands", [])])
     lines = motion_lines(project, doc)
     motion = "\n".join(["## Motion", "", *lines]) if lines else ""
+    values = layout_lines(doc)
+    layout = "\n".join(["## Layout", "", "Spacing, corner radius and layout values from the built design tokens. A value that is not listed is not defined: ask the owner.", "",
+                         *values]) if values else ""
     never = ["Do not stretch, squash or rotate the mark.", "Do not recolour the mark outside the palette's roles, or put it on its own colour.",
              "Do not crowd the mark: keep its clear space free."] + [f"Never write: {t}." for t in v["forbidden"]]
     fill = {
@@ -341,7 +439,8 @@ def applied_skill_md(project: Path, template: str) -> str:
         "status": f"Edition {v['edition'] or 'not set'}: {state}{' on ' + date if date else ''}.",
         "colours": "\n".join(colour_table(doc)),
         "pairs": "\n".join(pair_table(doc)),
-        "type": "\n".join([f"- {k}: `{val}`" for k, val in fs] if fs else ["The tokens define no font family: ask the owner before choosing one."]),
+        "type": "\n".join(type_lines(doc, "The tokens define no font family: ask the owner before choosing one.")),
+        "layout": layout,
         "mark": "\n".join([f"- `../../../{p}`" for p in logos] if logos else ["No mark file exists yet under `assets/logo/`."]),
         "small": f"At {ds['accent_rule_max_size']} px and below the accent must hold a solid {ds['accent_min_px']} x {ds['accent_min_px']} px square "
                  f"({'qa/rules.json' if 'downscale.accent_min_px' in rules['_from_file'] else 'the plugin proposal until qa/rules.json sets it'}).\n\n" + ("\n".join(sizes) if sizes else ""),
@@ -353,6 +452,8 @@ def applied_skill_md(project: Path, template: str) -> str:
     }
     if not motion:   # a whole section or nothing: with no motion its line goes, and the blank line after it
         template = template.replace("{{motion}}\n\n", "")
+    if not layout:   # the same for the layout section
+        template = template.replace("{{layout}}\n\n", "")
     left = sorted({m for m in re.findall(r"\{\{([a-z-]+)\}\}", template) if m not in fill})
     if left:
         fail(EXIT_USAGE, f"the applied-skill template has placeholders this version does not know: {', '.join('{{' + m + '}}' for m in left)}")

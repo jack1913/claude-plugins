@@ -47,6 +47,18 @@ stage, and why, is in the [archive](docs/archive/README.md).
   when it exists, so a changed list makes the lint stale. The example board of Acme, the Quick smoke's bakery board and
   the board templates use the new line.
 
+### Fixed
+
+- The files written for other tools and agents now carry the type sizes, weights, line height and letter spacing, the
+  spacing steps and the corner radius that the tokens define, wherever the tokens name them (`size.text-*`, `weight.*`,
+  `space.*`, `radius.*`, `leading.*`, `tracking.*`, `layout.*`, `breakpoint.*`, or the older `dimension.space-*`). Before,
+  `DESIGN.md` said "Families only: the tokens define no sizes or weights" whatever the tokens held, and spacing and
+  radius were read from `dimension.*` tokens only. `DESIGN.md` now has them in its type, spacing and rounded entries and
+  in its Typography and Layout sections; `BRAND.md` lists them under Type and a new Layout block; the brand's applied skill
+  lists them under Type and a new Layout section. A value the tokens do not hold is still not invented, and a brand with
+  no sizes or weights keeps the sentence saying so. Run `adapters` and `applied-skill` again to update files you
+  already have.
+
 ## [0.4.2] - 2026-10-24
 
 ### Fixed
