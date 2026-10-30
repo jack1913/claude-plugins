@@ -234,6 +234,17 @@ DTCG 2025.10 is a Final Community Group Report. It is not a W3C Standard and not
   "#f3f5f8", "text": "#16181d", "action": "#375587", "on-action": "#f3f5f8", "focus": "#375587", "border": "#565b63"}, "dark": {...}}}]}`: `roles` keeps
   the names as written (`null` for a role left out), `modes` holds the six-digit hex of each in that mode (`null` when it did not resolve). Without the
   block, `tokens.json` and every other output are byte for byte what they were, and the report has no `grounds` row.
+- Text-ground checks: `contrast` reads `grounds` of `tokens.json` (nothing when the key is absent but the one `grounds:named` row) and writes the section
+  `grounds`. Every row is a pass or a warning that says it is a failure from the next release; the report's status and the exit code never change because of
+  them. `grounds:named` warns when `tokens.json` has no `grounds` ("ask the owner which colours text sits on; record them in `grounds` with the date and their
+  words; never guess"), when `named_by_owner` does not start with a real `YYYY-MM-DD` date (the starter's `""`: "a proposal, not named by the owner"), when it is only
+  a date, and when `list` is empty; it passes naming the owner's words. A ground listed more than once keeps its rows apart by `#2`, `#3` after its id. For each ground and mode:
+  `grounds:<mode>:<ground>:roles` warns naming the role (or `ground`) that has no colour (left out, `null`, or a name that is no semantic colour token), and
+  the rows that need that colour are then not written, never invented; `grounds:<mode>:<ground>:<role>` is the WCAG 2.2 ratio of `text` on the ground (4.5:1),
+  `action` against the ground (3:1), `on-action` on the action (4.5:1), `focus` against the ground (3:1) and `border` against the ground (3:1), with `ratio`,
+  `required`, `fg`, `bg`, `ground`, `mode` and `role`. With `--cvd`, `cvd:<mode>:grounds:<ground>:<action|focus>` holds the action and the focus ring to the
+  colour-vision distance of the shared rule (`qa/rules.json` `cvd.min_delta_e`), in the fields of the other `cvd:` rows, in the same section; a missing colour is
+  said once, in the roles row. A `tokens.json` whose `grounds` has the wrong shape is a usage error (exit 2). The proposal in the starter is judged like the owner's grounds.
 - Emitters need the semantic tokens `color.bg` and `color.text`; `color.muted` and `color.accent` are used when present.
 - Motion tokens (primitives only: a semantic file carries colours only). A duration is `"$type": "duration"` with `{"value": 320, "unit": "ms"}`
   (`unit` is `ms` or `s`; the older `"320ms"` string is read too): a number of 0 or more that comes to whole milliseconds, because Android keeps a

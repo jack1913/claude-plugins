@@ -31,6 +31,13 @@ stage, and why, is in the [archive](docs/archive/README.md).
   the owner does; nothing is guessed. `brand-creator tokens` checks that block when it is there and writes it into `tokens.json`
   (`grounds`) with every colour resolved in light and dark. A block of the wrong shape fails the build and writes
   nothing; a role that names no colour token is a warning. A project without the block builds exactly as before.
+- `brand-creator contrast` checks the colours that text sits on. For each ground listed under `grounds` it wants a colour for
+  the text, the action (a button or link), the text on the action, the focus ring and the border, in light and dark, and
+  holds them to their floor: text 4.5:1 on the ground, the action, the focus ring and the border 3:1 against it, the text
+  on the action 4.5:1. With `--cvd` the action and the focus ring must also stay tellable apart from the ground for
+  colour-blind viewers. It warns, too, until the owner has named the grounds (a date and their words in
+  `named_by_owner`; the starter's proposal has none), and says to ask the owner and never to guess. All of these are
+  warnings in this release and do not change the result or the exit code; they become failures in the next release.
 - Once the system rules are approved, `check` warns about every colour, size, spacing or motion value in
   `tokens/primitives.tokens.json` that is still the starter's proposal, and lists them. Keep a value by listing its path
   under `starter-kept` in the primitives, with the date and the owner's words, or change it. It only warns; it never

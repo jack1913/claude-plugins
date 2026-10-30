@@ -111,6 +111,37 @@ def test_the_deficiency_list_and_threshold_come_from_the_project(acme):
     assert r.returncode == 2 and "unknown" in r.stderr and "protan" in r.stderr
 
 
+GROUNDS = {"ground": "color.success", "text": "color.text", "action": "color.danger", "on-action": "color.bg", "focus": "color.text", "border": "color.border"}
+
+
+def grounds_cvd(proj):
+    return {r["id"]: r for r in report(proj, "contrast")["results"] if r["id"].startswith("cvd:") and ":grounds:" in r["id"]}
+
+
+def test_a_ground_action_that_collapses_for_some_viewers_warns(acme):
+    """A red action on a green ground of the same lightness: normal vision tells them apart, a red-green deficiency does not. The row warns (a failure from the
+    next release) and the report still passes; blue on orange stays apart, and the focus ring, here the dark text colour, is judged on its own row."""
+    add_roles(acme, RED_GREEN, [])
+    mutate_json(acme / "tokens/semantic.light.tokens.json", lambda d: d["$extensions"]["brand-creator"].__setitem__(
+        "grounds", {"named_by_owner": "2026-10-30 text sits on the success colour", "list": [GROUNDS]}))
+    assert bc("tokens", project=acme).returncode == 0
+    r = bc("contrast", "--cvd", project=acme)
+    assert r.returncode == 0, r.stdout
+    rows = grounds_cvd(acme)
+    assert set(rows) == {f"cvd:{m}:grounds:color.success:{role}" for m in ("light", "dark") for role in ("action", "focus")}
+    row = rows["cvd:light:grounds:color.success:action"]
+    assert row["status"] == "warn" and row["section"] == "grounds" and row["worst"]["deficiency"] in ("protan", "deutan") and row["worst"]["delta_e"] < 10
+    assert row["delta_e_normal"] > 30 and row["delta_e_simulated"]["tritan/brettel"] > 10       # the failure is specific to red-green vision
+    assert "failure from the next release" in row["detail"] and "non-colour cue" in row["detail"] and "[WARN] cvd:light:grounds:color.success:action" in r.stdout
+    assert rows["cvd:dark:grounds:color.success:action"]["status"] == "warn"
+    assert rows["cvd:light:grounds:color.success:focus"]["status"] == "pass"                        # the text colour keeps its distance from this green
+    assert report(acme, "contrast")["status"] == "pass"
+    assert "cvd:light:grounds:color.success:action" not in failing(report(acme, "contrast"))
+    add_roles(acme, BLUE_ORANGE, [])                                                             # the same grounds block, now blue and orange: apart for everyone
+    assert bc("contrast", "--cvd", project=acme).returncode == 0
+    assert grounds_cvd(acme)["cvd:light:grounds:color.success:action"]["status"] == "pass"
+
+
 def test_without_the_flag_no_simulation_runs(acme):
     bc("contrast", project=acme)
     assert cvd(acme) == {} and "cvd" not in report(acme, "contrast")

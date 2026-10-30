@@ -244,7 +244,8 @@ def test_the_starter_tokens_pass_contrast_with_the_text_on_accent_and_focus_pair
     for mode in ("light", "dark"):
         for pair in ("color.on-accent/color.accent", "color.focus/color.bg"):
             assert rows[f"{mode}:{pair}"]["status"] == "pass", (mode, pair)
-    assert not [x for x in rep["results"] if x["status"] in ("fail", "warn")]
+    assert [x["id"] for x in rep["results"] if x["status"] in ("fail", "warn")] == ["grounds:named"]   # the proposal for the grounds is the one thing to say
+    assert all(x["status"] == "pass" for x in rep["results"] if x["id"].startswith("grounds:") and x["id"] != "grounds:named")
     grounds = json.loads((p / "assets" / "tokens" / "tokens.json").read_text())["grounds"]
     assert grounds["named_by_owner"] == "" and grounds["list"][0]["ground"] == "color.bg"
 
@@ -353,12 +354,14 @@ def test_contrast_passes_and_reports_four_kinds_of_result(proj):
     assert r.returncode == 0, r.stdout
     rep = report(proj, "contrast")
     sections = {x["section"] for x in rep["results"]}
-    assert sections == {"wcag-ui", "brand-rule", "touching-pairs"}
+    assert sections == {"wcag-ui", "brand-rule", "touching-pairs", "grounds"}      # the fixture names no grounds: the one grounds row is a warning, below
+    assert [(x["id"], x["status"]) for x in rep["results"] if x["section"] == "grounds"] == [("grounds:named", "warn")]
     labels = {x["label"] for x in rep["results"] if x["section"] == "brand-rule"}
     assert all("brand rule (logos WCAG-exempt)" in lab for lab in labels)
-    assert all(x["apca_lc"] is not None and x["apca_advisory"] for x in rep["results"] if x["section"] != "touching-pairs")
+    pair_rows = [x for x in rep["results"] if x["section"] in ("wcag-ui", "brand-rule")]
+    assert all(x["apca_lc"] is not None and x["apca_advisory"] for x in pair_rows)
     assert any("WCAG 3" in n for n in rep["notes"]) and "advisory" in " ".join(rep["notes"])
-    assert {x["id"].split(":")[0] for x in rep["results"] if x["section"] != "touching-pairs"} == {"light", "dark"}
+    assert {x["id"].split(":")[0] for x in pair_rows} == {"light", "dark"}
 
 
 def test_low_contrast_ui_pair_fails_the_gate(proj):
@@ -410,6 +413,145 @@ def test_dark_mode_is_checked_too(proj):
     r = contrast(proj)
     assert r.returncode == 1
     assert "dark:color.text/color.bg" in failing(report(proj, "contrast"))
+
+
+# ---------------------------------------------------------------- text grounds (warnings in this release)
+
+def starter_project(tmp_path):
+    """A project with the three starter token files, as they are shipped (they carry a proposal for the text grounds, named by nobody)."""
+    tmp_path.mkdir(exist_ok=True)
+    p = make_project(tmp_path)
+    (p / "tokens").mkdir(exist_ok=True)
+    for f in (ROOT / "templates" / "tokens").glob("*.tokens.json"):
+        shutil.copy2(f, p / "tokens" / f.name)
+    return p
+
+
+def grounds_rows(p):
+    return {x["id"]: x for x in report(p, "contrast")["results"] if x["id"].startswith("grounds:")}
+
+
+def set_grounds(d, **change):
+    """Change the keys of the starter's grounds block (or of its one ground, with `ground_`-less names), for mutate_json."""
+    ext = d["$extensions"]["brand-creator"]["grounds"]
+    for key, value in change.items():
+        if key == "named_by_owner":
+            ext[key] = value
+        elif value is None:
+            ext["list"][0].pop(key.replace("_", "-"), None)
+        else:
+            ext["list"][0][key.replace("_", "-")] = value
+
+
+def test_without_named_grounds_contrast_warns_and_still_passes(proj, tmp_path):
+    """A project that lists no grounds gets one warning that says what to ask; the starter's proposal is judged but warns that nobody named it;
+    a date with no words, and words with no date, are not naming either. None of it changes the status or the exit code."""
+    assert tokens(proj).returncode == 0
+    assert "grounds" not in json.loads((proj / "assets" / "tokens" / "tokens.json").read_text())
+    r = contrast(proj)
+    assert r.returncode == 0, r.stdout
+    rows = grounds_rows(proj)
+    assert list(rows) == ["grounds:named"] and rows["grounds:named"]["status"] == "warn"
+    detail = rows["grounds:named"]["detail"]
+    assert "which colours text sits on" in detail and "never guess" in detail and "failure from the next release" in detail
+    assert report(proj, "contrast")["status"] == "pass"
+
+    starter = starter_project(tmp_path / "starter")
+    assert tokens(starter).returncode == 0
+    r = contrast(starter, "--skip-marks")
+    assert r.returncode == 0, r.stdout
+    rows = grounds_rows(starter)
+    assert rows["grounds:named"]["status"] == "warn" and "a proposal, not named by the owner" in rows["grounds:named"]["detail"]
+    assert "[WARN] grounds:named" in r.stdout
+    assert {k: v["status"] for k, v in rows.items() if k != "grounds:named"} == {
+        f"grounds:{mode}:color.bg:{role}": "pass" for mode in ("light", "dark") for role in ("roles", "text", "action", "on-action", "focus", "border")}
+    assert report(starter, "contrast")["status"] == "pass"
+
+    for words in ("the page colour, as the owner said", "2026-10-30", "2026-13-45 the page colour", "20261030 the page colour"):
+        sem = starter / "tokens" / "semantic.light.tokens.json"
+        doc = json.loads(sem.read_text())
+        doc["$extensions"]["brand-creator"]["grounds"]["named_by_owner"] = words
+        sem.write_text(json.dumps(doc, indent=2) + "\n")
+        assert tokens(starter).returncode == 0
+        assert contrast(starter, "--skip-marks").returncode == 0
+        assert grounds_rows(starter)["grounds:named"]["status"] == "warn", words
+
+    sem = starter / "tokens" / "semantic.light.tokens.json"                     # named, but nothing listed: the owner's words name no ground
+    doc = json.loads(sem.read_text())
+    doc["$extensions"]["brand-creator"]["grounds"] = {"named_by_owner": "2026-10-30 text sits on the page colour", "list": []}
+    sem.write_text(json.dumps(doc, indent=2) + "\n")
+    assert tokens(starter).returncode == 0
+    assert contrast(starter, "--skip-marks").returncode == 0
+    rows = grounds_rows(starter)
+    assert list(rows) == ["grounds:named"] and rows["grounds:named"]["status"] == "warn" and "grounds.list holds none" in rows["grounds:named"]["detail"]
+
+
+def test_a_button_that_vanishes_into_its_dark_ground_warns_by_role(tmp_path):
+    """The action of a ground has the ground's own colour in dark: that role warns in dark, not in light, and `contrast` still exits 0."""
+    p = starter_project(tmp_path)
+    mutate_json(p / "tokens" / "semantic.light.tokens.json", lambda d: (
+        d["color"].__setitem__("button", {"$value": "{color.signal}"}),
+        set_grounds(d, named_by_owner="2026-10-30 text sits on the page", action="color.button")))
+    mutate_json(p / "tokens" / "semantic.dark.tokens.json", lambda d: d["color"].__setitem__("button", {"$value": "{color.night}"}))   # = the dark color.bg
+    assert tokens(p).returncode == 0
+    r = contrast(p, "--skip-marks")
+    assert r.returncode == 0, r.stdout
+    rows = grounds_rows(p)
+    row = rows["grounds:dark:color.bg:action"]
+    assert row["status"] == "warn" and row["ratio"] == 1.0 and row["required"] == 3.0 and row["fg"] == row["bg"]
+    assert "failure from the next release" in row["detail"] and "[WARN] grounds:dark:color.bg:action" in r.stdout
+    assert rows["grounds:light:color.bg:action"]["status"] == "pass"
+    assert rows["grounds:named"]["status"] == "pass" and report(p, "contrast")["status"] == "pass"
+    assert "grounds:dark:color.bg:action" not in failing(report(p, "contrast"))
+
+
+def test_a_ground_missing_a_role_warns_and_named_grounds_pass(tmp_path):
+    """A role left out, or one that names no colour token, makes the roles row of that ground warn and names it (the rows that need it are not
+    invented); with all five and the owner's words recorded, every grounds row passes."""
+    p = starter_project(tmp_path)
+    mutate_json(p / "tokens" / "semantic.light.tokens.json", lambda d: set_grounds(d, named_by_owner="2026-10-30 text sits on the page colour", focus=None))
+    assert tokens(p).returncode == 0
+    assert contrast(p, "--skip-marks").returncode == 0
+    rows = grounds_rows(p)
+    for mode in ("light", "dark"):
+        row = rows[f"grounds:{mode}:color.bg:roles"]
+        assert row["status"] == "warn" and row["missing"] == ["focus"] and "focus" in row["detail"] and "never guess" in row["detail"]
+        assert f"grounds:{mode}:color.bg:focus" not in rows          # nothing to judge, and nothing invented
+        assert rows[f"grounds:{mode}:color.bg:text"]["status"] == "pass"
+    assert rows["grounds:named"]["status"] == "pass" and "2026-10-30 text sits on the page colour" in rows["grounds:named"]["detail"]
+
+    mutate_json(p / "tokens" / "semantic.light.tokens.json", lambda d: set_grounds(d, focus="color.nope"))        # a name that is no token: null too
+    assert tokens(p).returncode == 0
+    assert contrast(p, "--skip-marks").returncode == 0
+    assert grounds_rows(p)["grounds:light:color.bg:roles"]["missing"] == ["focus"]
+
+    mutate_json(p / "tokens" / "semantic.light.tokens.json", lambda d: set_grounds(d, focus="color.focus"))
+    assert tokens(p).returncode == 0
+    r = contrast(p, "--skip-marks")
+    assert r.returncode == 0, r.stdout
+    rows = grounds_rows(p)
+    assert len(rows) == 1 + 2 * 6 and {x["status"] for x in rows.values()} == {"pass"}
+    assert not [x for x in report(p, "contrast")["results"] if x["status"] in ("warn", "fail")]
+
+
+def test_every_role_is_held_to_its_floor_and_a_ground_listed_twice_keeps_its_rows_apart(tmp_path):
+    """Text and on-action text at 4.5:1, action, focus and border at 3:1, each warning on its own row; two entries for one ground do not share ids."""
+    p = starter_project(tmp_path)
+
+    def weak(d):
+        set_grounds(d, named_by_owner="2026-10-30 text sits on the page colour", text="color.line", focus="color.line", border="color.line")
+        d["$extensions"]["brand-creator"]["grounds"]["list"].append({**d["$extensions"]["brand-creator"]["grounds"]["list"][0], "text": "color.text"})
+    mutate_json(p / "tokens" / "semantic.light.tokens.json", weak)
+    assert tokens(p).returncode == 0
+    r = contrast(p, "--skip-marks")
+    assert r.returncode == 0, r.stdout
+    rows = grounds_rows(p)
+    assert {role: rows[f"grounds:light:color.bg:{role}"]["status"] for role in ("text", "action", "on-action", "focus", "border")} == {
+        "text": "warn", "action": "pass", "on-action": "pass", "focus": "warn", "border": "warn"}
+    assert rows["grounds:light:color.bg:text"]["required"] == 4.5 and rows["grounds:light:color.bg:border"]["required"] == 3.0
+    assert rows["grounds:light:color.bg#2:text"]["status"] == "pass" and rows["grounds:dark:color.bg#2:roles"]["status"] == "pass"
+    ids = [x["id"] for x in report(p, "contrast")["results"]]
+    assert len(ids) == len(set(ids))
 
 
 # ---------------------------------------------------------------- touching pairs (review finding M1)
