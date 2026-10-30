@@ -41,6 +41,21 @@ def colours(text: str, section="colors") -> dict:
     return {m.group(1): m.group(2) for ln in block.splitlines() if (m := re.match(r'^  ([a-z-]+): "(#[0-9a-f]{6}(?:[0-9a-f]{2})?)"$', ln))}
 
 
+def repeated_keys(text: str) -> list[str]:
+    """The keys the frontmatter writes twice under one parent, as dotted paths. YAML takes a repeated key for an error: the pinned lint then reads nothing of the file."""
+    seen: set[tuple[str, ...]] = set()
+    again: list[str] = []
+    path: tuple[str, ...] = ()
+    for ln in FM_RE.match(text).group(1).splitlines():
+        m = re.match(r"^( *)([^\s:][^:]*):", ln)
+        if m:
+            path = path[:len(m.group(1)) // 2] + (m.group(2),)
+            if path in seen:
+                again.append(".".join(path))
+            seen.add(path)
+    return again
+
+
 def stub_data(tmp_path, answer: dict | None, version=PINNED) -> Path:
     """A data directory whose node_modules is the real one without @google/design.md, or with a stub in its place that prints `answer`."""
     real = data_dir()
@@ -776,6 +791,66 @@ def test_the_pinned_design_md_format_accepts_sizes_and_weights(pack):
     assert "fontSize: 14px" in (pack / "DESIGN.md").read_text() and "fontWeight: 700" in (pack / "DESIGN.md").read_text()
 
 
+def both_forms(d) -> None:
+    """For mutate_json on the primitives `add_type_and_layout` made: the older and the new form of one step, with one value (`space.1` = `dimension.space-1`,
+    `radius.sm` = `dimension.radius-sm`, `size.text-sm` = `dimension.text-sm`) and with two (`space.2`, `radius.lg`, `size.text-lg`, `leading.sans` against `line-height.sans`)."""
+    def px(n):
+        return {"$value": {"value": n, "unit": "px"}}
+    d["space"].update({"1": px(4), "2": px(10)})
+    d["dimension"].update({"radius-sm": px(4), "radius-lg": px(16), "text-sm": px(14), "text-lg": px(22)})
+    d["radius"]["lg"] = px(12)
+    d["leading"] = {"$type": "number", "sans": {"$value": 1.4}}
+    d["line-height"] = {"$type": "number", "sans": {"$value": 1.5}}
+
+
+def test_a_step_given_in_both_forms_is_one_entry_or_numbered_and_no_key_of_the_frontmatter_repeats(pack):
+    """`space.1` and `dimension.space-1` are both `space-1`, `radius.sm` and `dimension.radius-sm` both `sm`: one entry when the values agree, and when they differ the first
+    in name order keeps the name, the next is numbered and the prose says which token it is. A repeated key is invalid YAML, and the pinned lint then checks nothing."""
+    add_type_and_layout(pack)
+    mutate_json(pack / "tokens" / "primitives.tokens.json", both_forms)
+    assert bc("tokens", project=pack).returncode == 0
+    generate(pack)
+    design = (pack / "DESIGN.md").read_text()
+    assert repeated_keys(design) == []
+    fm = FM_RE.match(design).group(1)
+    assert "spacing:\n  space-1: 4px\n  space-2: 8px\n  space-2-2: 10px\n  space-3: 12px\n" in fm
+    assert "rounded:\n  lg: 16px\n  sm: 4px\n  lg-2: 12px\n" in fm
+    typo = typography(design)
+    assert typo["sans"] == {"fontFamily": typo["sans"]["fontFamily"], "lineHeight": "1.4"} and typo["sans-2"] == {"lineHeight": "1.5"}
+    assert typo["text-sm"] == {"fontSize": "14px"} and typo["text-lg"] == {"fontSize": "20px"} and typo["text-lg-2"] == {"fontSize": "22px"}
+    assert "`sans-2` is `line-height.sans`, `text-lg-2` is `dimension.text-lg`." in section(design, "## Typography")
+    assert "`space-2-2` is `space.2`, `lg-2` is `radius.lg`." in section(design, "## Layout")
+    for key in ("radius.lg: 12px", "dimension.radius-sm: 4px", "line-height.sans: 1.5", "dimension.text-lg: 22px"):     # every token is still listed, with its own value
+        assert f"- {key}" in design, key
+    for name in ("BRAND.md", ".claude/skills/acme-brand/SKILL.md"):
+        text = (pack / name).read_text()
+        for key in ("space.1: `4px`", "space.2: `10px`", "line-height.sans: `1.5`"):
+            assert f"- {key}" in text, (name, key)
+
+
+def test_a_project_with_each_step_once_gets_no_numbered_entry_and_no_sentence_about_one(pack):
+    add_type_and_layout(pack)
+    generate(pack)
+    design = (pack / "DESIGN.md").read_text()
+    assert repeated_keys(design) == [] and "Two tokens gave one entry name" not in design
+
+
+@pytest.mark.requires_design_lint
+def test_the_pinned_lint_reads_a_design_md_whose_steps_come_in_both_forms(pack):
+    """With a repeated key the lint cannot parse the frontmatter, reports one warning (`Map keys must be unique`) and nothing else, and the adapter used to pass it:
+    the lint now reads the file, which shows in its findings about the file's own tokens."""
+    add_type_and_layout(pack)
+    mutate_json(pack / "tokens" / "primitives.tokens.json", both_forms)
+    assert bc("tokens", project=pack).returncode == 0
+    r = bc("adapters", "--design-md", "--primary", "accent", project=pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    rep = json.loads((pack / "assets" / "_checks" / "adapters.json").read_text())
+    lint = [x for x in rep["results"] if x["id"].startswith("design-md:lint")]
+    assert lint and not [x for x in lint if x["status"] == "fail"]
+    assert not [x for x in lint if "unique" in x.get("detail", "")], lint
+    assert "design-md:lint:orphaned-tokens" in {x["id"] for x in lint}, lint          # a file the lint could not parse has no such finding
+
+
 # ---------------------------------------------------------------- text grounds: the action of each ground, with its on-action text
 
 GROUND = {"ground": "color.bg", "text": "color.text", "action": "color.accent", "on-action": "color.on-accent", "focus": "color.focus", "border": "color.border"}
@@ -878,6 +953,11 @@ def test_a_role_the_tokens_give_no_colour_is_left_out_and_named_never_invented(p
     design = (pack / "DESIGN.md").read_text()
     assert component(design, "action-on-bg") and component(design, "action-on-bg-dark")
     assert "- bg in light: no focus\n- bg in dark: no focus\n" in design
+    set_ground(pack, focus="color.focus")                                                                   # each mode on its own: no light on-action leaves the dark entry
+    mutate_json(pack / "assets" / "tokens" / "tokens.json", lambda d: d["grounds"]["list"][0]["modes"]["light"].__setitem__("on-action", None))
+    generate(pack)
+    design = (pack / "DESIGN.md").read_text()
+    assert not component(design, "action-on-bg") and component(design, "action-on-bg-dark") and "- bg in light: no on-action\n" in design
 
 
 def test_a_ground_listed_twice_and_a_pair_already_named_so_keep_their_component_names_apart(pack):
@@ -945,3 +1025,51 @@ def test_the_pinned_design_md_format_accepts_the_action_components(pack):
     rep = json.loads((pack / "assets" / "_checks" / "adapters.json").read_text())
     assert not [x for x in rep["results"] if x["id"].startswith("design-md:lint") and x["status"] == "fail"]
     assert "action-on-bg-dark:" in (pack / "DESIGN.md").read_text()
+
+
+def test_an_action_whose_text_is_under_4_5_to_1_gets_no_component_where_contrast_only_warns(pack):
+    """`contrast` warns this release about an on-action text under 4.5:1 on its action and exits 0; the pinned lint fails a component with that pair. So the component is
+    left out, per mode, and the prose says which pair and why: the adapters do not fail what `contrast` still lets through."""
+    add_grounds(pack)
+    set_ground(pack, on_action="color.muted")                                                               # slate on teal in light, fog on bright teal in dark
+    r = bc("contrast", "--skip-marks", project=pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    rows = {x["id"]: x for x in report(pack, "contrast")["results"]}
+    assert rows["grounds:light:color.bg:on-action"]["status"] == "warn" and rows["grounds:dark:color.bg:on-action"]["status"] == "warn"
+    generate(pack)
+    design = (pack / "DESIGN.md").read_text()
+    assert "action-on" not in design and component(design, "text-on-bg") and repeated_keys(design) == []
+    assert re.search(r"The text on the action is under 4\.5:1 for the following, so no component is written for it.*Ask the owner which colour to change; do not guess:\n\n"
+                     r"- bg in light: muted on accent is \d\.\d\d:1\n- bg in dark: muted on accent is \d\.\d\d:1\n", design, re.S)
+    assert "`action-on-<ground>` is the action colour" not in design                                        # nothing of that kind was written
+    # one mode misses: the light entry stays, the dark twin goes, and only dark is named
+    set_ground(pack, on_action="color.on-accent")
+    mutate_json(pack / "tokens" / "semantic.dark.tokens.json", lambda d: d["color"].__setitem__("on-accent", {"$value": "{color.fog}"}))
+    assert bc("tokens", project=pack).returncode == 0
+    generate(pack)
+    design = (pack / "DESIGN.md").read_text()
+    assert component(design, "action-on-bg") == {"backgroundColor": '"{colors.accent}"', "textColor": '"{colors.on-accent}"'} and not component(design, "action-on-bg-dark")
+    assert re.search(r"- bg in dark: on-accent on accent is \d\.\d\d:1\n", design) and "- bg in light:" not in design
+    # a pair that passes is written again
+    mutate_json(pack / "tokens" / "semantic.dark.tokens.json", lambda d: d["color"].__setitem__("on-accent", {"$value": "{color.night}"}))
+    assert bc("tokens", project=pack).returncode == 0
+    generate(pack)
+    design = (pack / "DESIGN.md").read_text()
+    assert component(design, "action-on-bg") and component(design, "action-on-bg-dark") and "is under 4.5:1" not in design
+
+
+@pytest.mark.requires_design_lint
+def test_an_action_under_4_5_to_1_does_not_make_the_adapters_fail_while_contrast_passes(pack):
+    """The report the owner met: a ground whose on-action is `color.muted` passes `contrast` with a warning, and `adapters --design-md` used to exit 1 on the lint's
+    contrast-ratio rule for `action-on-bg`. Now both exit 0, and the lint finds nothing to fail."""
+    add_grounds(pack)
+    mutate_json(pack / "tokens" / "semantic.light.tokens.json", lambda d: d["$extensions"]["brand-creator"]["grounds"]["list"][0].__setitem__("on-action", "color.muted"))
+    assert bc("tokens", project=pack).returncode == 0
+    r = bc("contrast", "--skip-marks", project=pack)
+    assert r.returncode == 0 and "[WARN] grounds:light:color.bg:on-action" in r.stdout, r.stdout + r.stderr
+    r = bc("adapters", "--design-md", "--primary", "accent", project=pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    rep = json.loads((pack / "assets" / "_checks" / "adapters.json").read_text())
+    assert rep["status"] == "pass" and row(pack, "design-md:lint", "adapters")["status"] == "pass"
+    assert not [x for x in rep["results"] if x["id"].startswith("design-md:lint") and x["status"] == "fail"]
+    assert "action-on-bg" not in (pack / "DESIGN.md").read_text()

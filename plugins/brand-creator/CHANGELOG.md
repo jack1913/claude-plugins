@@ -47,8 +47,10 @@ stage, and why, is in the [archive](docs/archive/README.md).
   the action colour with the text on it. `BRAND.md` (under Visual) and the applied skill (under Colour) get a Grounds
   table with the text, action, text on the action, focus ring and border of each ground, in light and dark. A colour the
   tokens do not give is left out and shown as "missing: ask the owner", never filled in, and the files say whether the
-  owner named the grounds or they are still a proposal. A project with no grounds gets the same files as before. Run
-  `adapters` and `applied-skill` again to update files you already have.
+  owner named the grounds or they are still a proposal. An action whose text is under 4.5:1 on it gets no component in
+  `DESIGN.md` (the format's own check fails a component like that, while `contrast` only warns about it in this release):
+  `DESIGN.md` names the ground and the pair instead, and the component comes back once the colours pass. A project with
+  no grounds gets the same files as before. Run `adapters` and `applied-skill` again to update files you already have.
 
 ### Changed
 
@@ -78,8 +80,11 @@ stage, and why, is in the [archive](docs/archive/README.md).
   radius were read from `dimension.*` tokens only. `DESIGN.md` now has them in its type, spacing and rounded entries and
   in its Typography and Layout sections; `BRAND.md` lists them under Type and a new Layout block; the brand's applied skill
   lists them under Type and a new Layout section. A value the tokens do not hold is still not invented, and a brand with
-  no sizes or weights keeps the sentence saying so. Run `adapters` and `applied-skill` again to update files you
-  already have.
+  no sizes or weights keeps the sentence saying so. When the tokens give one step in the older and the new form
+  (`space.1` with `dimension.space-1`, `radius.sm` with `dimension.radius-sm`, `leading.sans` with `line-height.sans`),
+  `DESIGN.md` has one entry for it, or numbers the second when their values differ and says which token it is, so that no
+  key is written twice (a repeated key is not valid YAML and the format's check cannot read the file). Run `adapters`
+  and `applied-skill` again to update files you already have.
 
 ## [0.4.2] - 2026-10-24
 

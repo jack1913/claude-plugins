@@ -444,8 +444,8 @@ def set_grounds(d, **change):
 
 
 def test_without_named_grounds_contrast_warns_and_still_passes(proj, tmp_path):
-    """A project that lists no grounds gets one warning that says what to ask; the starter's proposal is judged but warns that nobody named it;
-    a date with no words, and words with no date, are not naming either. None of it changes the status or the exit code."""
+    """A project that lists no grounds gets one warning that says what to ask; the starter's proposal, as shipped, is judged but warns that nobody named it. Neither
+    changes the status or the exit code. (What counts as naming is the next test, which breaks the starter on purpose.)"""
     assert tokens(proj).returncode == 0
     assert "grounds" not in json.loads((proj / "assets" / "tokens" / "tokens.json").read_text())
     r = contrast(proj)
@@ -467,19 +467,18 @@ def test_without_named_grounds_contrast_warns_and_still_passes(proj, tmp_path):
         f"grounds:{mode}:color.bg:{role}": "pass" for mode in ("light", "dark") for role in ("roles", "text", "action", "on-action", "focus", "border")}
     assert report(starter, "contrast")["status"] == "pass"
 
+
+def test_a_date_with_no_words_or_words_with_no_date_or_a_list_of_no_ground_is_not_naming(tmp_path):
+    """Each way the owner's naming can be wrong, written into the starter on purpose: the words with no date, a date with no words, a date that is no calendar day, a date
+    in the wrong shape, and a naming that lists no ground. `grounds:named` warns every time and `contrast` still exits 0."""
+    starter = starter_project(tmp_path)
+    sem = starter / "tokens" / "semantic.light.tokens.json"
     for words in ("the page colour, as the owner said", "2026-10-30", "2026-13-45 the page colour", "20261030 the page colour"):
-        sem = starter / "tokens" / "semantic.light.tokens.json"
-        doc = json.loads(sem.read_text())
-        doc["$extensions"]["brand-creator"]["grounds"]["named_by_owner"] = words
-        sem.write_text(json.dumps(doc, indent=2) + "\n")
+        mutate_json(sem, lambda d: set_grounds(d, named_by_owner=words))
         assert tokens(starter).returncode == 0
         assert contrast(starter, "--skip-marks").returncode == 0
         assert grounds_rows(starter)["grounds:named"]["status"] == "warn", words
-
-    sem = starter / "tokens" / "semantic.light.tokens.json"                     # named, but nothing listed: the owner's words name no ground
-    doc = json.loads(sem.read_text())
-    doc["$extensions"]["brand-creator"]["grounds"] = {"named_by_owner": "2026-10-30 text sits on the page colour", "list": []}
-    sem.write_text(json.dumps(doc, indent=2) + "\n")
+    mutate_json(sem, lambda d: d["$extensions"]["brand-creator"].__setitem__("grounds", {"named_by_owner": "2026-10-30 text sits on the page colour", "list": []}))
     assert tokens(starter).returncode == 0
     assert contrast(starter, "--skip-marks").returncode == 0
     rows = grounds_rows(starter)

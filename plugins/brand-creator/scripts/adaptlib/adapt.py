@@ -180,8 +180,38 @@ def layout_lines(doc: dict) -> list[str]:
     return [f"- {t.key}: `{t.value}`" for kind in ("spacing", "rounded", "layout") for t in lt[kind]]
 
 
+def one_each(items: list[tuple[str, str, str, str]]) -> tuple[list[tuple[str, str, str]], list[tuple[str, str]]]:
+    """The frontmatter entries of (name, property, value, token path) tuples, in order, so that no entry repeats a property: YAML takes a repeated key for an error, and
+    the pinned lint then checks nothing. Two tokens that give one name one property with the same value (`space.1` and `dimension.space-1`) are one entry; with
+    different values the first keeps the name and the next takes `<name>-2`, `-3`, a name no token has of its own. Returns the entries as (name, property, value) and,
+    for each one that was numbered, (its name, the token path), so that the prose can say which token it is."""
+    taken = {name for name, *_ in items}
+    held: dict[tuple[str, str], str] = {}
+    entries, numbered = [], []
+    for name, prop, value, key in items:
+        cand, n = name, 1
+        while held.get((cand, prop), value) != value:
+            n += 1
+            cand = f"{name}-{n}"
+            while cand in taken:
+                n, cand = n + 1, f"{name}-{n + 1}"
+        if (cand, prop) not in held:
+            held[(cand, prop)] = value
+            entries.append((cand, prop, value))
+            if cand != name:
+                numbered.append((cand, key))
+    return entries, numbered
+
+
+def numbered_sentence(numbered: list[tuple[str, str]]) -> str:
+    """The sentence that says which token each numbered frontmatter entry is."""
+    return ("Two tokens gave one entry name different values: the frontmatter keeps the first under the name and numbers the next. "
+            + ", ".join(f"`{name}` is `{key}`" for name, key in numbered) + ".")
+
+
 GROUND_ROLES = ("text", "action", "on-action", "focus", "border")
 GROUND_MISSING = "missing: ask the owner"
+ON_ACTION_MIN = 4.5   # WCAG AA for text: what `contrast` holds the on-action text to, and what the pinned lint's contrast-ratio rule asks of a component
 
 
 def grounds_of(doc: dict) -> tuple[str, list[dict]]:
@@ -414,53 +444,63 @@ def design_md(project: Path, *, primary: str | None = None) -> str:
     fs, lt = fonts(doc), layout_tokens(doc)
     # one entry per family (its line height and tracking join the entry of the same name, or stand in an entry of their own), one per size, one per weight;
     # a value the format cannot hold (a weight that is no number, a size that is no px, em or rem dimension) is left out here and stays in the prose
-    typo: dict[str, dict[str, str]] = {k: {"fontFamily": yq(val)} for k, val in fs}
-    for t in lt["leading"]:
-        if NUMBER.fullmatch(t.value) or DIMENSION.fullmatch(t.value):
-            typo.setdefault(t.rest or "leading", {})["lineHeight"] = t.value
-    for t in lt["tracking"]:
-        if NUMBER.fullmatch(t.value) or DIMENSION.fullmatch(t.value):
-            typo.setdefault(t.rest or "tracking", {})["letterSpacing"] = tracking_value(t.value)
-    for t in lt["sizes"]:
-        if DIMENSION.fullmatch(t.value):
-            typo.setdefault(t.rest, {})["fontSize"] = t.value
-    for t in lt["weights"]:
-        if re.fullmatch(r"\d+", t.value):
-            typo.setdefault(f"weight-{t.rest}" if t.rest else "weight", {})["fontWeight"] = t.value
+    items = [(k, "fontFamily", yq(val), f"font.{k}") for k, val in fs]
+    items += [(t.rest or "leading", "lineHeight", t.value, t.key) for t in lt["leading"] if NUMBER.fullmatch(t.value) or DIMENSION.fullmatch(t.value)]
+    items += [(t.rest or "tracking", "letterSpacing", tracking_value(t.value), t.key) for t in lt["tracking"] if NUMBER.fullmatch(t.value) or DIMENSION.fullmatch(t.value)]
+    items += [(t.rest, "fontSize", t.value, t.key) for t in lt["sizes"] if DIMENSION.fullmatch(t.value)]
+    items += [(f"weight-{t.rest}" if t.rest else "weight", "fontWeight", t.value, t.key) for t in lt["weights"] if re.fullmatch(r"\d+", t.value)]
+    typo_entries, typo_numbered = one_each(items)   # a name that two tokens give one property is one entry, or the later one is numbered: a repeated key is not YAML
+    typo: dict[str, dict[str, str]] = {}
+    for name, prop, value in typo_entries:
+        typo.setdefault(name, {})[prop] = value
     if typo:
         L.append("typography:")
         for name, props in typo.items():
             L += [f"  {name}:"] + [f"    {prop}: {val}" for prop, val in props.items()]
     spacing, rounded = lt["spacing"], lt["rounded"]
+    space_entries, space_numbered = one_each([(f"space-{t.rest}" if t.rest else "space", "", t.value, t.key) for t in spacing])
+    round_entries, round_numbered = one_each([(t.rest or t.key, "", t.value, t.key) for t in rounded])
     if spacing:
         L.append("spacing:")
-        L += [f"  {f'space-{t.rest}' if t.rest else 'space'}: {t.value}" for t in spacing]
+        L += [f"  {name}: {value}" for name, _, value in space_entries]
     if rounded:
         L.append("rounded:")
-        L += [f"  {t.rest or t.key}: {t.value}" for t in rounded]
-    comps = []
+        L += [f"  {name}: {value}" for name, _, value in round_entries]
+    comps = []   # (name, text role, background role, has a light entry, has a dark entry)
     for p in doc.get("pairs", []):
         if p.get("kind") == "ui-text":
-            comps.append((f"{role(p['fg'])}-on-{role(p['bg'])}", role(p["fg"]), role(p["bg"]), p["fg"] in dark and p["bg"] in dark))
+            comps.append((f"{role(p['fg'])}-on-{role(p['bg'])}", role(p["fg"]), role(p["bg"]), True, p["fg"] in dark and p["bg"] in dark))
     pair_comps = len(comps)
     named, entries = grounds_of(doc)
     used = {n for c in comps for n in (c[0], c[0] + "-dark")}
+    weak = []
     for e in entries:   # the action of each ground with its on-action text: a role the tokens give no colour in a mode is left out of it, never filled in
-        in_light, in_dark = ground_colours(doc, e, "light"), ground_colours(doc, e, "dark")
-        if not (in_light["action"] and in_light["on-action"]):
+        usable = {}
+        for mode in ("light", "dark"):
+            got = ground_colours(doc, e, mode)
+            if not (got["action"] and got["on-action"]):
+                continue
+            ratio = wcag_ratio(e["modes"][mode]["on-action"], e["modes"][mode]["action"])
+            if ratio < ON_ACTION_MIN:   # the pinned lint fails a component under 4.5:1 where `contrast` only warns this release: the entry is left out, the prose says so
+                weak.append(f"- {role(e['ground'])} in {mode}: {role(got['on-action'])} on {role(got['action'])} is {ratio:.2f}:1")
+            else:
+                usable[mode] = got
+        if not usable:
             continue
         name = base = f"action-on-{role(e['ground'])}"
         n = 2
         while name in used or name + "-dark" in used:   # a ground listed twice, or a pair already named so
             name, n = f"{base}-{n}", n + 1
         used |= {name, name + "-dark"}
-        comps.append((name, role(in_light["on-action"]), role(in_light["action"]), bool(in_dark["action"] and in_dark["on-action"])))
+        got = usable.get("light") or usable["dark"]
+        comps.append((name, role(got["on-action"]), role(got["action"]), "light" in usable, "dark" in usable))
     gaps = ground_gaps(doc, entries)
     if comps:
         L.append("components:")
-        for name, fg, bg, has_dark in comps:
-            L += [f"  {name}:", f"    backgroundColor: \"{{colors.{bg}}}\"", f"    textColor: \"{{colors.{fg}}}\""]
-            if has_dark:
+        for name, fg, bg, in_light, in_dark in comps:
+            if in_light:
+                L += [f"  {name}:", f"    backgroundColor: \"{{colors.{bg}}}\"", f"    textColor: \"{{colors.{fg}}}\""]
+            if in_dark:
                 L += [f"  {name}-dark:", f"    backgroundColor: \"{{colors.{bg}-dark}}\"", f"    textColor: \"{{colors.{fg}-dark}}\""]
     L += ["---", f"<!-- {GENERATED} -->", "", f"# {v['name']}", "", "## Overview", "",
           f"{v['name']} design tokens, edition {v['edition'] or 'not set'} ({state}{' ' + date if date else ''}). The DTCG sources in `tokens/` are the truth; "
@@ -474,14 +514,18 @@ def design_md(project: Path, *, primary: str | None = None) -> str:
             L += ["The tokens define no sizes or weights.", ""]
         L += [f"- {k}: {val}" for k, val in fs]
         L += [f"- {t.key}: {tracking_value(t.value) if kind == 'tracking' else t.value}" for kind in ("sizes", "weights", "leading", "tracking") for t in lt[kind]] + [""]
+        if typo_numbered:
+            L += [numbered_sentence(typo_numbered), ""]
     if spacing or rounded or lt["layout"]:
         L += ["## Layout", ""]
         if spacing:
             groups = [f"`{g}`" for g in sorted({t.group for t in spacing})]
             L += ["Spacing steps come from the " + (", ".join(groups[:-1]) + " and " + groups[-1] if len(groups) > 1 else groups[0]) + " tokens.", ""]
+        if space_numbered or round_numbered:
+            L += [numbered_sentence(space_numbered + round_numbered), ""]
         if rounded or lt["layout"]:
             L += [f"- {t.key}: {t.value}" for t in rounded + lt["layout"]] + [""]
-    if comps or gaps:
+    if comps or gaps or weak:
         L += ["## Components", ""]
         if pair_comps:
             L += ["One entry per text pair that must meet WCAG AA 4.5:1, in light and dark.", ""]
@@ -492,6 +536,10 @@ def design_md(project: Path, *, primary: str | None = None) -> str:
                 L += ["`action-on-<ground>` is the action colour of a ground with its on-action text, in light and dark (`-dark`).", ""]
             if gaps:
                 L += ["The tokens give no colour for the following, so nothing is written for it. Ask the owner; do not guess:", ""] + gaps + [""]
+            if weak:
+                L += [f"The text on the action is under {ON_ACTION_MIN:g}:1 for the following, so no component is written for it: the format's lint fails a component under "
+                      f"{ON_ACTION_MIN:g}:1, and `brand-creator contrast` warns about it now and fails it from the next release. Ask the owner which colour to change; do not guess:",
+                      ""] + weak + [""]
     motion = motion_lines(project, doc)
     if motion:   # prose only: the pinned format keeps a section it does not know (it has no motion tokens), so no frontmatter key is invented for it
         L += ["## Motion", ""] + motion + [""]

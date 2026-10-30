@@ -242,6 +242,17 @@ def test_qa_phase_lists_every_check_command_and_cites_real_deliberate_break_test
         assert kind in text, kind
 
 
+def test_the_grounds_question_is_asked_of_every_brand():
+    """`contrast` warns `grounds:named` for every project and means to fail it from the next release, so 07-tokens (technique 8 and the Gate) asks "Which colours does text
+    sit on?" of every brand at G4, not only of one with a site or an app."""
+    flat = " ".join((REFS / "phases" / "07-tokens.md").read_text(encoding="utf-8").split())
+    asked = [m.start() for m in re.finditer(r'"Which colours does text sit on\?"', flat)]
+    assert len(asked) >= 2, "technique 8 and the Gate both ask the question"
+    for at in asked:
+        assert "site or an app" not in flat[max(0, at - 45):at], flat[max(0, at - 45):at + 40]     # the words that lead into the question
+    assert 'For every brand, ask the plain question "Which colours does text sit on?"' in flat
+
+
 def test_the_book_phase_does_not_ask_for_a_reduced_motion_view_of_the_book_because_no_command_offers_one():
     """10-book asks an agent to read the Motion chapter under reduced motion only through the row and the browser test that prove it: `shot` has no such view."""
     text = (REFS / "phases" / "10-book.md").read_text(encoding="utf-8")

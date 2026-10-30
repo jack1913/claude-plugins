@@ -177,7 +177,7 @@ code. For example:
 - (rule) accent and danger stay distinct (a `distinct` pair)
 - (rule) layout: space steps `space.1`-`space.8`, radius `radius.*`, container `layout.container`, gutter `layout.gutter`, breakpoints `breakpoint.*`, display line height `leading.display` and tracking `tracking.display` (proposal; when the brand has a site or an app)
 
-For a brand with a site or an app, ask the plain question "Which colours does text sit on?" (a page, a card, a band, a dark
+For every brand, ask the plain question "Which colours does text sit on?" (a page, a card, a band, a dark
 panel) before the plan and record the answer in the owner's words, with the date, as `named_by_owner` of `grounds` (technique 8);
 until then `contrast` warns, and the model never names the grounds itself.
 

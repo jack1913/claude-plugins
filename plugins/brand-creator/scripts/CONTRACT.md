@@ -1320,7 +1320,11 @@ DESIGN.md `typography` has one entry per `font.*` family; a `leading.<n>` or `tr
 number such as `-0.01` is written `-0.01em`) or, when no family has that name, makes an entry `<n>`; each size is an entry `text-<step>` (`fontSize`) and each weight an entry
 `weight-<name>` (`fontWeight`). A weight that is not a whole number, a size that is not a px, em or rem dimension, and a line height or tracking that is neither a number nor such a dimension stay in the
 prose and out of the frontmatter, because the format holds nothing else. `spacing` entries are named `space-<rest>` (`space.1` and `dimension.space-1` are `space-1`) and `rounded` entries after the
-radius (`radius.sm` and `dimension.radius-sm` are `sm`). The DESIGN.md prose lists them: `## Typography` the families, sizes, weights, line heights and tracking, `## Layout` the groups the
+radius (`radius.sm` and `dimension.radius-sm` are `sm`). No key of the frontmatter is written twice (`adaptlib/adapt.py` `one_each`): YAML takes a repeated key for an error, and the pinned lint then
+reads nothing of the file and passes it. When two tokens give one name (`space.1` with `dimension.space-1`, `radius.sm` with `dimension.radius-sm`) or one property of one `typography` entry
+(`leading.sans` with `line-height.sans`, `size.text-sm` with `dimension.text-sm`) the same value, they make one entry; with different values the first in name order keeps the name and the next
+is numbered `<name>-2`, `-3` (a name no token has of its own), and the prose (`## Typography`, `## Layout`) says which token it is: "`space-2-2` is `space.2`". Every token is still listed in
+the prose with its own value. The DESIGN.md prose lists them: `## Typography` the families, sizes, weights, line heights and tracking, `## Layout` the groups the
 spacing steps come from and the radius, container, gutter and breakpoint values. BRAND.md `### Type` and the applied skill's `## Type` list the same, one bullet per token path; BRAND.md
 `### Layout` and the applied skill's `## Layout` list the spacing, radius and layout values, and are left out when there are none.
 
@@ -1328,7 +1332,10 @@ Text grounds are read from `grounds` of `tokens.json` (see Token sources; absent
 `action-on-<ground>` for each listed ground (`<ground>` is the role name without `color.`): `backgroundColor` the action role and `textColor` the on-action role, as `{colors.x}`
 references, and an `action-on-<ground>-dark` twin when both roles have a colour in dark. A name already taken (a ground listed twice, a `ui-text` pair that makes the same name) takes
 `-2`, `-3`, so that no key repeats. A role the tokens give no colour for (`null`: left out of the block, or a name that is no semantic colour token) is left out and never filled in:
-a ground without its action or on-action in light has no entry, without one in dark no `-dark` twin. DESIGN.md `## Components` then also names the grounds and says whether the owner
+a ground without its action or on-action in a mode has no entry for that mode (`action-on-<ground>` for light, the `-dark` twin for dark). An entry is also left out for a mode in which the
+on-action text is under 4.5:1 on the action (the ratio of `grounds:<mode>:<ground>:on-action` in `contrast`): the lint of the pinned format fails a component with such a pair (`contrast-ratio`), while
+`contrast` only warns about it in this release and exits 0, and `adapters --design-md` must not exit 1 for a pair that `contrast` passes. The other mode keeps its entry, and `## Components` lists
+each ground, mode, pair and ratio under "The text on the action is under 4.5:1"; once the colours pass, the entry is written. DESIGN.md `## Components` then also names the grounds and says whether the owner
 named them (`named_by_owner` starts with a real `YYYY-MM-DD` date and has words after it, the rule `contrast` holds it to) or they are the starter's proposal, and lists under "The tokens
 give no colour for the following" each ground and mode with the roles it lacks (`ground colour`, text, action, on-action, focus, border). BRAND.md `### Grounds` (after `### Colour`) and
 the applied skill (a `### Grounds` block appended to the `{{colours}}` fill, so under its `## Colour`; no new placeholder) hold the same block, a sentence on who named the grounds and one
