@@ -23,6 +23,14 @@ stage, and why, is in the [archive](docs/archive/README.md).
   (4 to 64 px), corner radius (small, medium, large, pill), the content width and the gutter, four breakpoints, and line
   height and letter spacing as plain numbers (letter spacing in em). They are built into `tokens.css` and `tokens.json` like
   the other tokens, and the system-rules step offers one layout rule for a brand with a site or an app.
+- The starter tokens carry the two colours every interface needs besides the accent: the text on the accent
+  (`color.on-accent`) and the focus ring (`color.focus`), in light and dark, each with its contrast pair (text on the
+  accent at 4.5:1, the focus ring against the ground at 3:1). They also list, as a proposal, which colours text sits on:
+  `color.bg`, with the colour of its text, its action, the text on the action, its focus ring and its border, under
+  `grounds` in `tokens/semantic.light.tokens.json`. The line that records the owner naming the grounds stays empty until
+  the owner does; nothing is guessed. `brand-creator tokens` checks that block when it is there and writes it into `tokens.json`
+  (`grounds`) with every colour resolved in light and dark. A block of the wrong shape fails the build and writes
+  nothing; a role that names no colour token is a warning. A project without the block builds exactly as before.
 - Once the system rules are approved, `check` warns about every colour, size, spacing or motion value in
   `tokens/primitives.tokens.json` that is still the starter's proposal, and lists them. Keep a value by listing its path
   under `starter-kept` in the primitives, with the date and the owner's words, or change it. It only warns; it never

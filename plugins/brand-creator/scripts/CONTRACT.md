@@ -219,6 +219,21 @@ DTCG 2025.10 is a Final Community Group Report. It is not a W3C Standard and not
   each other (a brand accent and a danger colour, two state colours): `{"distinct": [{"a": "color.accent", "b": "color.danger",
   "label": "..."}]}`. `tokens` resolves them in light and dark into `tokens.json` (an unknown role fails); `contrast --cvd` holds them
   to the colour-vision distance. A miss the owner accepts goes in `tokens/exceptions.json` like a touching-pair miss.
+- Text grounds: `$extensions["brand-creator"].grounds` of `semantic.light.tokens.json` lists the colours text sits on, each with its five roles:
+  `{"grounds": {"named_by_owner": "<YYYY-MM-DD> <the owner's words>", "list": [{"ground": "color.bg", "text": "color.text", "action": "color.accent",
+  "on-action": "color.on-accent", "focus": "color.focus", "border": "color.border"}]}}`. Every value is the name of a semantic colour token. `named_by_owner`
+  is the date and the owner's words naming the grounds and stays `""` while nobody has: the model never guesses which colours text sits on. The starter
+  carries the roles `color.on-accent` (light `{color.paper}`, dark `{color.night}`) and `color.focus` (light `{color.signal}`, dark `{color.signal-bright}`),
+  the pairs `color.on-accent`/`color.accent` (`ui-text`, 4.5) and `color.focus`/`color.bg` (`ui-component`, 3), and a proposal for `color.bg` with
+  `named_by_owner` empty. `tokens` checks the block only when it is present: `grounds` an object with a string `named_by_owner` and a `list` of objects
+  with a string `ground`, and each of the five roles a string or left out. A block of the wrong shape is a failing `grounds` row (exit 1) that
+  names every problem and writes nothing, as for a pair that names an unknown token. A name that is no semantic colour token (the ground included) is a
+  `grounds` warning that names it, and resolves as `null`; a role left out is `null` and `tokens` says nothing, because `contrast` is the check that
+  asks for all five. `tokens.json` then gains a last key `grounds`: `{"named_by_owner": "...", "list": [{"ground": "color.bg", "roles": {"text":
+  "color.text", "action": "color.accent", "on-action": "color.on-accent", "focus": "color.focus", "border": "color.border"}, "modes": {"light": {"ground":
+  "#f3f5f8", "text": "#16181d", "action": "#375587", "on-action": "#f3f5f8", "focus": "#375587", "border": "#565b63"}, "dark": {...}}}]}`: `roles` keeps
+  the names as written (`null` for a role left out), `modes` holds the six-digit hex of each in that mode (`null` when it did not resolve). Without the
+  block, `tokens.json` and every other output are byte for byte what they were, and the report has no `grounds` row.
 - Emitters need the semantic tokens `color.bg` and `color.text`; `color.muted` and `color.accent` are used when present.
 - Motion tokens (primitives only: a semantic file carries colours only). A duration is `"$type": "duration"` with `{"value": 320, "unit": "ms"}`
   (`unit` is `ms` or `s`; the older `"320ms"` string is read too): a number of 0 or more that comes to whole milliseconds, because Android keeps a

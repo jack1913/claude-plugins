@@ -229,6 +229,26 @@ def test_the_starter_tokens_build_with_their_layout_slots(tmp_path):
         assert not any(w in f.read_text() for w in ("brand_space", "brand_radius", "brand_leading", "brand_tracking")), f
 
 
+def test_the_starter_tokens_pass_contrast_with_the_text_on_accent_and_focus_pairs(tmp_path):
+    """The three starter files, copied as they are, pass `contrast` in both schemes, and that includes the two pairs for text on the accent
+    and for the focus ring; the tokens report carries the starter's proposal for the text grounds (named by nobody yet)."""
+    p = make_project(tmp_path)
+    (p / "tokens").mkdir(exist_ok=True)
+    for f in (ROOT / "templates" / "tokens").glob("*.tokens.json"):
+        shutil.copy2(f, p / "tokens" / f.name)
+    assert tokens(p).returncode == 0
+    r = contrast(p, "--skip-marks")                       # the starter has no logo artwork to check
+    assert r.returncode == 0, r.stdout + r.stderr
+    rep = report(p, "contrast")
+    rows = {x["id"]: x for x in rep["results"]}
+    for mode in ("light", "dark"):
+        for pair in ("color.on-accent/color.accent", "color.focus/color.bg"):
+            assert rows[f"{mode}:{pair}"]["status"] == "pass", (mode, pair)
+    assert not [x for x in rep["results"] if x["status"] in ("fail", "warn")]
+    grounds = json.loads((p / "assets" / "tokens" / "tokens.json").read_text())["grounds"]
+    assert grounds["named_by_owner"] == "" and grounds["list"][0]["ground"] == "color.bg"
+
+
 def test_a_starter_kept_entry_in_the_primitives_changes_no_output(tmp_path):
     """The owner's record of the starter values they kept (`check` reads it from G4 on) sits in $extensions of the primitives: the build skips it, and every output is
     byte for byte what it was."""

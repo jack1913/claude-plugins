@@ -388,6 +388,16 @@ def test_token_templates_carry_both_schemes_and_computed_hex():
     droles = {k for k in dark["color"] if not k.startswith("$")}
     assert lroles == droles and {"bg", "text", "muted", "accent"} <= lroles
     assert light["$extensions"]["brand-creator"]["pairs"]
+    # text grounds: the roles for text on the accent and the focus ring in both schemes, their two pairs, and a proposal for color.bg the owner has not named yet
+    assert {"on-accent", "focus"} <= lroles and {"on-accent", "focus"} <= droles
+    assert (light["color"]["on-accent"]["$value"], dark["color"]["on-accent"]["$value"]) == ("{color.paper}", "{color.night}")
+    assert (light["color"]["focus"]["$value"], dark["color"]["focus"]["$value"]) == ("{color.signal}", "{color.signal-bright}")
+    pairs = {(pr["fg"], pr["bg"]): (pr["kind"], pr["min"]) for pr in light["$extensions"]["brand-creator"]["pairs"]}
+    assert pairs[("color.on-accent", "color.accent")] == ("ui-text", 4.5) and pairs[("color.focus", "color.bg")] == ("ui-component", 3)
+    grounds = light["$extensions"]["brand-creator"]["grounds"]
+    assert grounds["named_by_owner"] == "" and len(grounds["list"]) == 1 and grounds["list"][0]["ground"] == "color.bg"
+    assert grounds["list"][0] == {"ground": "color.bg", "text": "color.text", "action": "color.accent", "on-action": "color.on-accent",
+                                  "focus": "color.focus", "border": "color.border"}
     for group in ("size", "font", "weight", "motion", "easing"):
         assert group in prim, group
     # layout slots: six groups of proposals until G4 (tracking says it is in em)
