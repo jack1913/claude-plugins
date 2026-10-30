@@ -169,7 +169,10 @@ code. For example:
 In Quick, record the motion answer, on or off, in `motion/motion.json` now (off needs the owner's reason, in the owner's
 words: `brand-creator motion --off "<reason>"` writes it). In Standard and Full it is there already, and `check` fails
 `motion:decided` once G4 is recorded without it. Then record the G4 plan with
-`... state --project <dir> --record G4 "<plan> GO"`. Any later change to a rule or token follows the cascade (`check --cascade "<old value>"`).
+`... state --project <dir> --record G4 "<plan> GO"`. Once G4 is recorded, `check` warns (`tokens:starter`) about each token of
+`tokens/primitives.tokens.json` that still holds the starter's value: the owner keeps it, by listing its path in
+`$extensions["brand-creator"]["starter-kept"]` with the date and their words, or changes it.
+Any later change to a rule or token follows the cascade (`check --cascade "<old value>"`).
 
 ## Pitfalls
 

@@ -805,3 +805,90 @@ def test_a_motion_json_of_an_earlier_version_is_still_gated_with_a_warning_to_ru
     r = bc("check", project=proj)
     res = {x["id"]: x for x in report(proj, "check")["results"]}
     assert r.returncode == 0 and res["report:motion"]["status"] == "pass" and res["qa:motion"]["status"] == "pass" and res["report:motion:legacy"]["status"] == "warn"
+
+
+# ================================================================ tokens:starter in `check`, from G4 on
+
+STARTER = ROOT / "templates" / "tokens" / "primitives.tokens.json"
+PRIMITIVES = "tokens/primitives.tokens.json"
+
+
+def starter_leaves(node=None) -> int:
+    """How many tokens the plugin's starter primitives hold (a node with $value is one token; a key starting with $ is no group)."""
+    node = json.loads(STARTER.read_text()) if node is None else node
+    return 1 if "$value" in node else sum(starter_leaves(v) for k, v in node.items() if not k.startswith("$") and isinstance(v, dict))
+
+
+def with_starter(proj: Path, g4: bool = True) -> Path:
+    """The starter primitives copied into the project as the owner would start from them; G4 recorded unless told not to."""
+    (proj / "tokens").mkdir(exist_ok=True)
+    shutil.copy2(STARTER, proj / PRIMITIVES)
+    if g4:
+        assert bc("state", "--record", "G4", "the owner approved the system rules", project=proj).returncode == 0
+    return proj / PRIMITIVES
+
+
+def starter_row(proj: Path) -> dict | None:
+    r = bc("check", project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr   # a warning at most: never a failure, never exit 2
+    return next((x for x in report(proj, "check")["results"] if x["id"] == "tokens:starter"), None)
+
+
+def test_at_g4_check_warns_about_starter_values_still_in_place(proj):
+    with_starter(proj, g4=False)
+    assert starter_row(proj) is None                                  # before G4 the primitives are still proposals: no row
+    assert bc("state", "--record", "G4", "the owner approved the system rules", project=proj).returncode == 0
+    row = starter_row(proj)
+    n = starter_leaves()
+    assert n > 40 and row["status"] == "warn" and row["left"] and len(row["left"]) == n and row["kept"] == []
+    assert "motion.base" in row["left"] and "motion.base" in row["detail"] and f"({n})" in row["detail"]
+    assert "still the starter's proposal" in row["detail"] and "starter-kept" in row["detail"] and "the date and their words" in row["detail"]
+    (proj / PRIMITIVES).unlink()
+    assert starter_row(proj) is None                                  # nothing to compare: no row either
+
+
+def test_a_changed_or_kept_starter_value_is_no_longer_listed(proj):
+    path = with_starter(proj)
+    before = starter_row(proj)
+    assert {"motion.base", "motion.quick", "color.paper"} <= set(before["left"])
+    mutate_json(path, lambda d: d["motion"]["base"].__setitem__("$value", {"value": 400, "unit": "ms"}))
+    row = starter_row(proj)
+    assert "motion.base" not in row["left"] and "motion.base" not in row["detail"] and len(row["left"]) == len(before["left"]) - 1
+    assert row["status"] == "warn" and "motion.quick" in row["left"]
+    kept = {"decided": "2026-10-30 keep the quick duration as it is", "paths": ["motion.quick"]}
+    mutate_json(path, lambda d: d.setdefault("$extensions", {}).setdefault("brand-creator", {}).__setitem__("starter-kept", kept))
+    row = starter_row(proj)
+    assert "motion.quick" not in row["left"] and row["kept"] == ["motion.quick"] and len(row["left"]) == len(before["left"]) - 2
+    assert "kept by the owner (2026-10-30 keep the quick duration as it is): motion.quick (1)" in row["detail"]
+    left = row["left"]
+
+    def keep_all_that_is_left(d):                                   # every value left is the owner's decision now: the row passes and names what was kept
+        d["$extensions"]["brand-creator"]["starter-kept"]["paths"] = left + ["motion.quick"]
+    mutate_json(path, keep_all_that_is_left)
+    row = starter_row(proj)
+    assert row["status"] == "pass" and row["left"] == [] and len(row["kept"]) == len(before["left"]) - 1 and "kept by the owner" in row["detail"]
+    mutate_json(path, lambda d: d["motion"]["quick"].__setitem__("$value", {"value": 200, "unit": "ms"}))   # a kept value the owner changed later is just changed
+    row = starter_row(proj)
+    assert row["status"] == "pass" and "motion.quick" not in row["kept"]
+
+
+@pytest.mark.parametrize("entry, why", [
+    ({"paths": ["motion.quick"]}, "decided is not a date"),
+    ({"decided": "keep it", "paths": ["motion.quick"]}, "decided is not a date"),
+    ({"decided": "2026-10-30", "paths": ["motion.quick"]}, "decided is not a date"),               # a date and no words of the owner
+    ({"decided": "2026-13-45 keep it", "paths": ["motion.quick"]}, "decided is not a date"),        # not a day of the calendar
+    ({"decided": "2026-10-30 keep it"}, "paths is not a list"),
+    ({"decided": "2026-10-30 keep it", "paths": "motion.quick"}, "paths is not a list"),
+    ({"decided": "2026-10-30 keep it", "paths": [7]}, "paths is not a list"),
+    ("motion.quick", "it is no object"),
+])
+def test_a_starter_kept_without_a_dated_decision_or_a_list_of_paths_warns_and_keeps_nothing(proj, entry, why):
+    path = with_starter(proj)
+    mutate_json(path, lambda d: d.setdefault("$extensions", {}).setdefault("brand-creator", {}).__setitem__("starter-kept", entry))
+    row = starter_row(proj)
+    assert row["status"] == "warn" and f"starter-kept in {PRIMITIVES} is wrong (" in row["detail"] and why in row["detail"]
+    assert row["kept"] == [] and "motion.quick" in row["left"]        # a wrong entry keeps nothing
+    only = {"motion": {"$type": "duration", "base": {"$value": {"value": 999, "unit": "ms"}}}, "$extensions": {"brand-creator": {"starter-kept": entry}}}
+    mutate_json(path, lambda d: (d.clear(), d.update(only)))          # no starter value left at all: the wrong entry is still said
+    row = starter_row(proj)
+    assert row["status"] == "warn" and row["left"] == [] and "starter-kept" in row["detail"] and why in row["detail"]

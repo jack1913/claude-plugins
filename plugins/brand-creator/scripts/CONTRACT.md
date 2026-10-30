@@ -965,6 +965,14 @@ section), a passing contrast report without colour-vision rows (one `contrast` w
 (`report:contrast:cvd`, naming `contrast --cvd`). Slots off the band rule, platform-spec rows stamped stale or U, and
 `tools/inputs.json` differences are gated or warned as described above.
 
+Once G4 is recorded and `tokens/primitives.tokens.json` exists, `check` compares every token of it with the same path in the plugin's starter, `templates/tokens/primitives.tokens.json`
+(`$value`, as canonical JSON; a key starting with `$` is not a group), and the row `tokens:starter` warns: "still the starter's proposal: <paths> (N); ask the owner to keep them (list them in
+`$extensions["brand-creator"]["starter-kept"]` of tokens/primitives.tokens.json with the date and their words) or change them". The row's `left` lists those paths and `kept` the ones the owner kept. The owner keeps
+a value by listing its path in `{"decided": "<YYYY-MM-DD> <the owner's words>", "paths": ["motion.quick", ...]}` under `starter-kept`; a path listed there is kept only while its value is still the starter's, and the row passes
+("kept by the owner (<decided>): <paths> (N)") when every starter value left is kept. A `starter-kept` that is no object, whose `decided` is not a calendar date followed by words, or whose `paths` is not a list of
+strings, keeps nothing and the same row warns and says what is wrong. Before G4, or with no primitives file, there is no row; the row is never a failure and never an exit 2 (an unreadable primitives file is a warning that it was
+not compared; the `tokens` build is what fails it). `brand-creator tokens` skips `$extensions` of the primitives, so the entry changes no output.
+
 ## Brand book
 
 `brand-creator book`, `book-lint`, `book-pdf`, `patch` and `collapse` (scripts `book.py`, `book_lint.py`, `book_pdf.py`, `patch.py`,

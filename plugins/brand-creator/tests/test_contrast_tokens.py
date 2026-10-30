@@ -229,6 +229,23 @@ def test_the_starter_tokens_build_with_their_layout_slots(tmp_path):
         assert not any(w in f.read_text() for w in ("brand_space", "brand_radius", "brand_leading", "brand_tracking")), f
 
 
+def test_a_starter_kept_entry_in_the_primitives_changes_no_output(tmp_path):
+    """The owner's record of the starter values they kept (`check` reads it from G4 on) sits in $extensions of the primitives: the build skips it, and every output is
+    byte for byte what it was."""
+    p = make_project(tmp_path)
+    (p / "tokens").mkdir(exist_ok=True)
+    for f in (ROOT / "templates" / "tokens").glob("*.tokens.json"):
+        shutil.copy2(f, p / "tokens" / f.name)
+    assert tokens(p).returncode == 0
+    out = p / "assets" / "tokens"
+    before = {f.relative_to(out): f.read_bytes() for f in out.rglob("*") if f.is_file()}
+    kept = {"decided": "2026-10-30 keep the quick duration as it is", "paths": ["motion.quick"]}
+    mutate_json(p / "tokens" / "primitives.tokens.json", lambda d: d.__setitem__("$extensions", {"brand-creator": {"starter-kept": kept}}))
+    r = tokens(p)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert {f.relative_to(out): f.read_bytes() for f in out.rglob("*") if f.is_file()} == before and "--tracking-display: -0.01;" in (out / "tokens.css").read_text()
+
+
 @pytest.mark.requires_aapt2
 def test_aapt2_compiles_and_links_the_android_motion_files(proj, tmp_path):
     """The XML parser above reads the values back; aapt2, the Android build's own resource compiler, says they are valid resources for minSdk 21 (an

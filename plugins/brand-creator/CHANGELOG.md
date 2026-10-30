@@ -23,6 +23,10 @@ stage, and why, is in the [archive](docs/archive/README.md).
   (4 to 64 px), corner radius (small, medium, large, pill), the content width and the gutter, four breakpoints, and line
   height and letter spacing as plain numbers (letter spacing in em). They are built into `tokens.css` and `tokens.json` like
   the other tokens, and the system-rules step offers one layout rule for a brand with a site or an app.
+- Once the system rules are approved, `check` warns about every colour, size, spacing or motion value in
+  `tokens/primitives.tokens.json` that is still the starter's proposal, and lists them. Keep a value by listing its path
+  under `starter-kept` in the primitives, with the date and the owner's words, or change it. It only warns; it never
+  fails the check.
 
 ### Changed
 
