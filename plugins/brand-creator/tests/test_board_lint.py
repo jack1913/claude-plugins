@@ -4,7 +4,7 @@ import shutil
 from pathlib import Path
 
 import pytest
-from helpers import ROOT, bc, failing, fill_style_board, make_project, install_fixture, make_r2_board, mutate, report
+from helpers import FIXTURES, ROOT, bc, failing, fill_style_board, make_project, install_fixture, make_r2_board, mutate, report
 
 
 @pytest.fixture
@@ -22,7 +22,7 @@ def test_fixture_round_1_passes(proj):
     r = lint(proj)
     assert r.returncode == 0, r.stdout
     rep = report(proj, "board-lint")
-    assert rep["tool"] == "board-lint" and rep["status"] == "pass" and rep["inputs"][0]["path"] == "rounds/r1/board.html"
+    assert rep["tool"] == "board-lint" and rep["status"] == "pass" and "rounds/r1/board.html" in [i["path"] for i in rep["inputs"]]
     assert len(rep["inputs_sha"]) == 64
 
 
@@ -214,9 +214,237 @@ def test_questions_must_be_numbered_with_lettered_options(proj):
 
 def test_pick_board_directions_need_a_reflex_result(proj):
     board = proj / "rounds" / "r1" / "board.html"
-    mutate(board, '<p class="reflex" data-field="reflex">Reflex test: one hit', '<p class="reflex">Reflex test: one hit')
+    mutate(board, '<p class="reflex" data-field="reflex">hit: type-geometric-rounded-friendly', '<p class="reflex">hit: type-geometric-rounded-friendly')
     r = lint(proj)
     assert r.returncode == 1 and "direction:Lantern:reflex" in failing(report(proj, "board-lint")), r.stdout
+
+
+# The reflex line (scripts/boardlib/reflex.py): two failures now (the count, the shared hit), two warnings that become failures in the next release (the format, the ids).
+LANTERN_LINE = ('data-field="reflex">hit: type-geometric-rounded-friendly | the rounded face appears only in the wordmark, to echo a lamp for small workshops; '
+                'body text stays a plain sans</p>')
+COMPASS_LINE = 'data-field="reflex">no hits. near miss: device-product-silhouette (it is not a tool outline)</p>'
+KEYSTONE_LINE = 'data-field="reflex">no hits. near miss: palette-navy-gold-trust (cobalt is not navy and there is no gold)</p>'
+
+
+def rows(proj):
+    return {r["id"]: r for r in report(proj, "board-lint")["results"]}
+
+
+def rows_of(proj, row_id):
+    """Every row of that id, in order (a row such as reflex-unargued is written once per pattern)."""
+    return [r for r in report(proj, "board-lint")["results"] if r["id"] == row_id]
+
+
+def acme_facts(proj):
+    """The facts and the brief of the Acme example, where a reflex argument has to be grounded in them."""
+    shutil.copy2(FIXTURES / "FACTS.md", proj / "FACTS.md")
+    (proj / "brief").mkdir(exist_ok=True)
+    shutil.copy2(FIXTURES / "brief" / "BRIEF.md", proj / "brief" / "BRIEF.md")
+
+
+def test_two_reflex_hits_in_one_direction_fail_the_count(proj):
+    board = proj / "rounds" / "r1" / "board.html"
+    assert lint(proj).returncode == 0
+    assert rows(proj)["direction:Lantern:reflex-count"]["status"] == "pass"
+    mutate(board, 'data-field="reflex">hit: type-geometric-rounded-friendly | ',
+           'data-field="reflex">hit: palette-neon-on-black | the shop window carries a neon sign for small workshops. hit: type-geometric-rounded-friendly | ')
+    r = lint(proj)
+    assert r.returncode == 1, r.stdout
+    assert failing(report(proj, "board-lint")) == ["direction:Lantern:reflex-count"]
+    row = rows(proj)["direction:Lantern:reflex-count"]
+    assert "2 hits" in row["detail"] and "palette-neon-on-black" in row["detail"] and "replace a part before showing it" in row["detail"]
+    assert rows(proj)["direction:Compass:reflex-count"]["status"] == "pass"   # the count is per direction
+
+
+def test_one_hit_in_every_direction_fails_as_not_divergent(proj):
+    board = proj / "rounds" / "r1" / "board.html"
+    assert lint(proj).returncode == 0
+    assert rows(proj)["directions:reflex-shared"]["status"] == "pass"
+    mutate(board, COMPASS_LINE, 'data-field="reflex">hit: Type-Geometric-Rounded-Friendly | rounded letters, for small workshops</p>')
+    mutate(board, KEYSTONE_LINE, 'data-field="reflex">hit: type-geometric-rounded-friendly (again) | a rounded face on the tool tags of small workshops</p>')
+    r = lint(proj)
+    assert r.returncode == 1, r.stdout
+    assert failing(report(proj, "board-lint")) == ["directions:reflex-shared"]   # no direction has two hits: only the board fails
+    assert "type-geometric-rounded-friendly" in rows(proj)["directions:reflex-shared"]["detail"] and "not divergent" in rows(proj)["directions:reflex-shared"]["detail"]
+
+
+def test_a_free_text_reflex_line_warns_and_the_board_still_passes(proj):
+    board = proj / "rounds" / "r1" / "board.html"
+    mutate(board, LANTERN_LINE, 'data-field="reflex">Reflex test: one hit, type-geometric-rounded-friendly. Argued: the rounded face appears only in the wordmark.</p>')
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    rep = report(proj, "board-lint")
+    assert rep["status"] == "pass" and failing(rep) == []
+    row = rows(proj)["direction:Lantern:reflex-format"]
+    assert row["status"] == "warn" and "free text" in row["detail"] and "hit: <id> | <argument>" in row["detail"]
+    assert row["detail"].endswith("a failure from the next release")
+    assert rows(proj)["direction:Lantern:reflex"]["status"] == "pass"   # the line is there; only its format is wrong
+    assert rows(proj)["direction:Compass:reflex-format"]["status"] == "pass"
+
+
+def test_a_hit_that_names_no_known_pattern_warns_until_cliches_lists_it(proj):
+    acme_facts(proj)   # the argument is grounded in them, so the ids row is the only warning
+    board = proj / "rounds" / "r1" / "board.html"
+    mutate(board, 'data-field="reflex">hit: type-geometric-rounded-friendly | ', 'data-field="reflex">hit: wheat-sheaf | ')
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    row = rows(proj)["direction:Lantern:reflex-ids"]
+    assert row["status"] == "warn" and "wheat-sheaf" in row["detail"] and "the project has no research/cliches.md" in row["detail"]
+    assert row["detail"].endswith("a failure from the next release")
+    assert "research/cliches.md" not in [i["path"] for i in report(proj, "board-lint")["inputs"]]
+    cliches = proj / "research" / "cliches.md"
+    cliches.parent.mkdir(exist_ok=True)
+    cliches.write_text("# Acme: category clichés\n\n## Avoid unless argued\n\n- palette-like things\n\n## Forbidden\n", encoding="utf-8")
+    assert lint(proj).returncode == 0
+    row = rows(proj)["direction:Lantern:reflex-ids"]
+    assert row["status"] == "warn" and "the project has no research/cliches.md" not in row["detail"]   # the file is there, the item is not
+    cliches.write_text("# Acme: category clichés\n\n## Avoid unless argued\n\n- wheat-sheaf (a sheaf, an ear)\n\n## Forbidden\n", encoding="utf-8")
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    row = rows(proj)["direction:Lantern:reflex-ids"]
+    assert row["status"] == "pass" and "(cliches)" in row["detail"]
+    assert "research/cliches.md" in [i["path"] for i in report(proj, "board-lint")["inputs"]]   # a changed list makes the lint stale
+    assert not [i for i, x in rows(proj).items() if x["status"] == "warn"]
+
+
+def test_a_near_miss_is_not_counted_as_a_hit(proj):
+    acme_facts(proj)
+    board = proj / "rounds" / "r1" / "board.html"
+    text = board.read_text(encoding="utf-8")
+    one_hit_one_miss = ('data-field="reflex">hit: type-geometric-rounded-friendly | the rounded face appears only in the wordmark, to echo a lamp for small workshops. '
+                        'near miss: palette-navy-gold-trust (cobalt is not navy and there is no gold)</p>')
+    miss_of_the_same_pattern = 'data-field="reflex">no hits. near miss: type-geometric-rounded-friendly (the face is square, never rounded)</p>'
+    for old, new in ((LANTERN_LINE, one_hit_one_miss), (COMPASS_LINE, miss_of_the_same_pattern), (KEYSTONE_LINE, miss_of_the_same_pattern)):
+        assert old in text
+        text = text.replace(old, new)
+    board.write_text(text, encoding="utf-8")
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    got = rows(proj)
+    assert got["direction:Lantern:reflex-count"]["status"] == "pass" and "1 hit" in got["direction:Lantern:reflex-count"]["detail"]
+    assert got["directions:reflex-shared"]["status"] == "pass"   # two near misses of the pattern the third hits are no shared hit
+    assert not [i for i, x in got.items() if x["status"] in ("warn", "fail")]
+
+
+def test_an_argument_that_shares_no_word_with_the_facts_or_the_brief_warns(proj):
+    board = proj / "rounds" / "r1" / "board.html"
+    # a project as `brand-creator new` leaves it: FACTS.md and brief/BRIEF.md are the templates with the name in the title line, so there is nothing to check
+    assert "# Acme: facts" in (proj / "FACTS.md").read_text(encoding="utf-8") and "# Acme: brief" in (proj / "brief" / "BRIEF.md").read_text(encoding="utf-8")
+    assert lint(proj).returncode == 0
+    row = rows(proj)["direction:Lantern:reflex-grounded"]
+    assert row["status"] == "warn" and row["detail"].startswith("NOT verified") and row["detail"].endswith("a failure from the next release")
+    mutate(board, "the rounded face appears only in the wordmark, to echo a lamp for small workshops; body text stays a plain sans", "because Acme likes it")
+    assert lint(proj).returncode == 0
+    row = rows(proj)["direction:Lantern:reflex-grounded"]
+    assert row["status"] == "warn" and row["detail"].startswith("NOT verified")   # the brand's name alone grounds nothing
+    mutate(board, "because Acme likes it", "the rounded face appears only in the wordmark, to echo a lamp for small workshops; body text stays a plain sans")
+    acme_facts(proj)
+    assert lint(proj).returncode == 0
+    row = rows(proj)["direction:Lantern:reflex-grounded"]
+    assert row["status"] == "pass" and "type-geometric-rounded-friendly shares" in row["detail"] and "workshops" in row["detail"] and "small" in row["detail"]
+    assert "direction:Compass:reflex-grounded" not in rows(proj) and "direction:Keystone:reflex-grounded" not in rows(proj)   # no hit, no row
+    assert {"FACTS.md", "brief/BRIEF.md"} <= {i["path"] for i in report(proj, "board-lint")["inputs"]}   # a changed fact or brief makes the lint stale
+    # an argument made of words that are nowhere in the owner's material
+    mutate(board, "the rounded face appears only in the wordmark, to echo a lamp for small workshops; body text stays a plain sans", "the rounded face is friendly and modern")
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout   # a warning now, a failure from the next release
+    rep = report(proj, "board-lint")
+    assert rep["status"] == "pass" and failing(rep) == []
+    row = rows(proj)["direction:Lantern:reflex-grounded"]
+    assert row["status"] == "warn" and "'type-geometric-rounded-friendly'" in row["detail"] and "shares no word with FACTS.md or brief/BRIEF.md" in row["detail"]
+    assert "name the fact, place or craft" in row["detail"] and row["detail"].endswith("a failure from the next release")
+    assert rows(proj)["direction:Lantern:reflex-count"]["status"] == "pass" and rows(proj)["direction:Lantern:reflex-ids"]["status"] == "pass"
+    # a word of the facts alone is enough, with the brief gone
+    mutate(board, "the rounded face is friendly and modern", "the rounded face is friendly, like the spare parts")
+    (proj / "brief" / "BRIEF.md").unlink()
+    assert lint(proj).returncode == 0
+    row = rows(proj)["direction:Lantern:reflex-grounded"]
+    assert row["status"] == "pass" and "parts" in row["detail"] and "spare" in row["detail"]
+    assert "brief/BRIEF.md" not in {i["path"] for i in report(proj, "board-lint")["inputs"]}
+    # neither file: nothing to check against, said and not passed
+    (proj / "FACTS.md").unlink()
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    row = rows(proj)["direction:Lantern:reflex-grounded"]
+    assert row["status"] == "warn" and row["detail"].startswith("NOT verified") and row["detail"].endswith("a failure from the next release")
+    assert "direction:Compass:reflex-grounded" not in rows(proj)
+
+
+def test_a_polish_argument_is_grounded_on_a_polish_fact(proj):
+    board = proj / "rounds" / "r1" / "board.html"
+    (proj / "FACTS.md").write_text(
+        "# Piekarnia: fakty\n\n| fact | value | source | confirmed |\n|---|---|---|---|\n"
+        "| pieczenie | chleb żytni na zakwasie pieczemy codziennie o świcie | owner, intake | 2026-10-17 |\n", encoding="utf-8")
+    text = board.read_text(encoding="utf-8")
+    line = 'data-field="reflex">hit: type-geometric-rounded-friendly | okrągła litera przypomina bochen, bo piekarnia piecze Chleb ŻYTNI codziennie o s\u0301wicie</p>'
+    assert LANTERN_LINE in text
+    board.write_text(text.replace(LANTERN_LINE, line), encoding="utf-8")   # one letter is typed as base letter plus accent
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    row = rows(proj)["direction:Lantern:reflex-grounded"]
+    assert row["status"] == "pass", row
+    for word in ("chleb", "żytni", "codziennie", "świcie"):   # casefolded, diacritics kept
+        assert word in row["detail"], row["detail"]
+    assert not [i for i, x in rows(proj).items() if x["status"] in ("warn", "fail")]
+
+
+JUDGE_PANELS = ('<div class="views"><div class="panel" data-field="judge-view"><p>The judge prefers Compass.</p></div>'
+                '<div class="panel" data-field="lead-view"><p>I prefer Compass.</p></div>'
+                '<div class="panel" data-field="middle-option"><p>Compass with the Lantern dot.</p></div></div>')
+
+
+def test_with_the_judge_a_direction_needs_the_judge_list_and_an_unargued_pattern_warns(proj):
+    board = proj / "rounds" / "r1" / "board.html"
+    acme_facts(proj)
+    # the judge did not run: a list beside the reflex line is not looked at, and the page needs none
+    assert lint(proj).returncode == 0
+    assert not [i for i in rows(proj) if i.endswith(":reflex-seen") or i.endswith(":reflex-unargued")]
+    mutate(board, '<section class="block" id="call" data-section="my-call">', '<section class="block" id="call" data-section="my-call" data-judge="ran">')
+    mutate(board, '</p>\n  </section>\n\n  <section class="block" id="questions"', f'</p>\n    {JUDGE_PANELS}\n  </section>\n\n  <section class="block" id="questions"')
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout   # the judge ran and listed nothing beside the lines: warnings, never a failure
+    assert failing(report(proj, "board-lint")) == []
+    for name in ("Compass", "Lantern", "Keystone"):
+        row = rows(proj)[f"direction:{name}:reflex-seen"]
+        assert row["status"] == "warn" and 'data-field="reflex-seen"' in row["detail"] and row["detail"].endswith("a failure from the next release")
+        assert f"direction:{name}:reflex-unargued" not in rows(proj)   # no list, nothing to compare
+    # a list that is only its label, or only empty items, is no answer: "none seen" has to be said
+    label_only = '<p class="reflex-seen" data-field="reflex-seen">judge saw:</p>'
+    empty_items = '<ul data-field="reflex-seen"><li> </li><li>.</li></ul>'
+    mutate(board, COMPASS_LINE + "\n", COMPASS_LINE + f"\n        {label_only}\n")
+    mutate(board, KEYSTONE_LINE + "\n", KEYSTONE_LINE + f"\n        {empty_items}\n")
+    assert lint(proj).returncode == 0
+    got = rows(proj)
+    for name in ("Compass", "Keystone"):
+        row = got[f"direction:{name}:reflex-seen"]
+        assert row["status"] == "warn" and 'does not say "none seen"' in row["detail"] and row["detail"].endswith("a failure from the next release")
+        assert f"direction:{name}:reflex-unargued" not in got   # no answer, nothing to compare
+    # a list for each direction; the judge saw two patterns in Lantern that its line does not mention, and Keystone's near miss
+    mutate(board, label_only, '<p class="reflex-seen" data-field="reflex-seen">judge saw: none seen</p>')
+    mutate(board, empty_items, '<ul data-field="reflex-seen"><li>Palette-Navy-Gold-Trust (its blue ground)</li></ul>')
+    mutate(board, LANTERN_LINE + "\n", LANTERN_LINE + '\n        <p class="reflex-seen" data-field="reflex-seen">judge saw: type-geometric-rounded-friendly; palette-neon-on-black; layout-bento-grid.</p>\n')
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    got = rows(proj)
+    assert [got[f"direction:{n}:reflex-seen"]["status"] for n in ("Compass", "Lantern", "Keystone")] == ["pass"] * 3
+    assert got["direction:Compass:reflex-seen"]["detail"] == "none seen"
+    assert got["direction:Compass:reflex-unargued"]["status"] == "pass" and got["direction:Keystone:reflex-unargued"]["status"] == "pass"   # norm: case and parenthetical
+    unargued = rows_of(proj, "direction:Lantern:reflex-unargued")
+    assert [x["status"] for x in unargued] == ["warn", "warn"]   # once per pattern; the one the line hits is not among them
+    assert "'palette-neon-on-black'" in unargued[0]["detail"] and "'layout-bento-grid'" in unargued[1]["detail"]
+    for x in unargued:
+        assert "argue it as a hit, or say why it is a near miss" in x["detail"] and x["detail"].endswith("a failure from the next release")
+    # naming one as a near miss clears its warning and only its warning
+    mutate(board, "plain sans</p>", "plain sans. near miss: palette-neon-on-black (the lamp is warm, not a tube)</p>")
+    assert lint(proj).returncode == 0
+    unargued = rows_of(proj, "direction:Lantern:reflex-unargued")
+    assert [x["status"] for x in unargued] == ["warn"] and "'layout-bento-grid'" in unargued[0]["detail"]
+    assert rows(proj)["direction:Lantern:reflex-count"]["status"] == "pass"   # a near miss is no hit
+    mutate(board, "plain sans. near miss:", "plain sans. near miss: layout-bento-grid (the cards are not a grid). near miss:")
+    assert lint(proj).returncode == 0
+    unargued = rows_of(proj, "direction:Lantern:reflex-unargued")
+    assert [x["status"] for x in unargued] == ["pass"]
+    assert not [i for i, x in rows(proj).items() if x["status"] in ("warn", "fail")]
 
 
 def test_refine_board_does_not_need_a_reflex_result(proj):

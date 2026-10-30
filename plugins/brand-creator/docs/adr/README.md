@@ -11,5 +11,8 @@ Why brand-creator works the way it does, one decision per file. Decisions made b
 | [ADR-0003](ADR-0003-logo-masters-are-vector.md) | Logo masters are vector; rasters are for exploring | accepted |
 | [ADR-0004](ADR-0004-marks-are-drawn-on-a-design-engine.md) | Marks are drawn on a design engine; Claude-drawn SVG only on the owner's yes | accepted |
 | [ADR-0005](ADR-0005-motion-is-part-of-standard-and-full.md) | Motion is part of Standard and Full: a motion round, or the owner records that nothing moves | accepted |
+| [ADR-0006](ADR-0006-reflex-test-checked-beyond-presence.md) | The reflex test is checked beyond presence: a format, two failures, and warnings that become failures | accepted |
+| [ADR-0007](ADR-0007-brand-side-of-the-web.md) | brand-creator owns the brand side of the web; production sites are built in product repositories | accepted |
+| [ADR-0008](ADR-0008-text-grounds-carry-complete-roles.md) | Every ground that carries text has five roles in both themes, named by the owner | accepted |
 
 New records follow [ADR-TEMPLATE.md](ADR-TEMPLATE.md).

@@ -355,6 +355,14 @@ def test_ai_defaults_is_a_generic_reflex_list():
     for i in d["items"]:
         assert set(i) == {"id", "kind", "pattern", "why_reflex", "argue_with"} and all(i.values()), i
     assert not re.search(r"#[0-9a-fA-F]{3,8}\b", json.dumps(d)), "patterns are described in words, never as colour values"
+    # version 2: four patterns of a real brand's site, and the one-line hit format board-lint parses
+    assert d["version"] >= 2
+    new = {"palette-pale-ground-timid-accent", "type-first-answer-display-face", "device-texture-as-identity",
+           "layout-stock-product-page"}
+    assert new <= set(ids), new - set(ids)
+    first_answer = next(i for i in d["items"] if i["id"] == "type-first-answer-display-face")
+    assert "as of 2026-10" in first_answer["pattern"], "the faces a generator names first are dated"
+    assert "hit: <id> | <argument>" in " ".join(d["how_to_use"])
 
 
 def test_templates_are_self_contained_and_avoid_the_ai_default_cluster():

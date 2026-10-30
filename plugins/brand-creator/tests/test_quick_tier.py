@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from helpers import ROOT, bc, make_project
+from helpers import ROOT, bc, make_project, report
 
 QUESTION = "--renderer=resvg|pillow choice"
 SMOKE = ROOT / "tests" / "smoke"
@@ -105,7 +105,7 @@ def test_quick_smoke_reads_only_files_that_exist():
     for rel in set(re.findall(r'"\$FIX[/"]([A-Za-z0-9_./*-]*)', text)):
         if rel and "*" not in rel:
             assert (BAKERY / rel).exists(), rel
-    for f in ("brief.md", "facts.md", "board.html", "tools/loaf_mark.py", "tokens/exceptions.json", "tokens/primitives.tokens.json",
+    for f in ("brief.md", "facts.md", "board.html", "research/cliches.md", "tools/loaf_mark.py", "tokens/exceptions.json", "tokens/primitives.tokens.json",
               "tokens/semantic.light.tokens.json", "tokens/semantic.dark.tokens.json"):
         assert (BAKERY / f).is_file(), f
 
@@ -115,10 +115,19 @@ def test_the_bakery_board_passes_board_lint(tmp_path):
     p = make_project(tmp_path, slug="marlow-lane", name="Marlow Lane Bakery")
     (p / "rounds" / "r1").mkdir(parents=True)
     shutil.copy2(BAKERY / "board.html", p / "rounds" / "r1" / "board.html")
+    (p / "research").mkdir()
+    shutil.copy2(BAKERY / "research" / "cliches.md", p / "research" / "cliches.md")   # the third direction's hit names an item of it
+    shutil.copy2(BAKERY / "facts.md", p / "FACTS.md")   # and its argument shares a word with the facts and the brief
+    shutil.copy2(BAKERY / "brief.md", p / "brief" / "BRIEF.md")
     assert bc("state", "--record", "G1s", "skipped by owner", project=p).returncode == 0  # round 1 waits for the style pick
     r = bc("board-lint", "rounds/r1/board.html", project=p)
     assert r.returncode == 0, r.stdout + r.stderr
     assert "board-lint: PASS" in r.stdout
+    rows = {x["id"]: x for x in report(p, "board-lint")["results"]}
+    assert rows["direction:Rye:reflex-ids"]["status"] == "pass" and "(cliches)" in rows["direction:Rye:reflex-ids"]["detail"]
+    assert rows["direction:Rye:reflex-grounded"]["status"] == "pass" and "sourdough" in rows["direction:Rye:reflex-grounded"]["detail"]
+    assert not [i for i, x in rows.items() if i.startswith("direction:") and ":reflex" in i and x["status"] == "warn"]   # no reflex warning
+    assert "research/cliches.md" in [i["path"] for i in report(p, "board-lint")["inputs"]]
 
 
 def test_the_bakery_fixtures_are_not_software_and_carry_no_personal_data():

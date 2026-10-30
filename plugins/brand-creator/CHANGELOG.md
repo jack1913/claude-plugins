@@ -6,6 +6,39 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+### Added
+
+- `board-lint` checks that the argument of a reflex hit is the brand's own. The argument has to share a word with
+  `FACTS.md` or `brief/BRIEF.md` (`reflex-grounded`; words of four letters or more, in any language, taken only from
+  what the owner wrote, not from the templates: the brand's name in the title line counts for nothing); a hit argued
+  with nothing of the brand warns, asking for the fact, place or craft that earns it, and a project with neither file
+  filled in is reported as not verified. When the judge ran, each direction also carries the judge's list of the
+  patterns it saw beside its reflex line (`data-field="reflex-seen"`; the board templates have the line in a comment
+  to uncomment), and `board-lint` warns about a direction without it, or with a list that names no pattern and does
+  not say "none seen" (`reflex-seen`), and about a pattern on the list that the reflex line neither hits nor names as
+  a near miss (`reflex-unargued`, one warning per pattern). All of these only warn in this release and become
+  failures in the next one. The report now lists `FACTS.md` and `brief/BRIEF.md`, so a changed fact makes the lint
+  stale.
+
+### Changed
+
+- The list of generic first-idea patterns every direction is tested against has four new patterns, found in a real
+  brand's site: a pale ground with one timid accent, the display faces a generator names first (dated 2026-10), a
+  texture standing in for the idea (film grain, a stamp or badge, an engraving, a halftone) and the stock product page
+  (a label over every heading, a hero with two buttons, three equal tiles, an FAQ and a closing call-to-action band). It
+  also states the line each direction writes, `hit: <id> | <argument>`, and that layout patterns are judged on the
+  direction's own homepage frame, never on the board's chrome.
+- `board-lint` now checks the reflex line of each direction on a pick board, not only that it is there. The line is
+  `no hits`, or one `hit: <id> | <argument>` per hit, where the id is a pattern of the reflex list or an item of the
+  project's `research/cliches.md` under "Avoid unless argued"; `near miss: <id> (why)` records a pattern that looks
+  close and is never counted. Two hits in one direction now fail (`reflex-count`: replace a part before showing it), and
+  so does one hit that every direction shares (`directions:reflex-shared`: the directions are not divergent). Two
+  checks only warn in this release and become failures in the next one: a line that is not in the format
+  (`reflex-format`, which includes the free text earlier boards used) and a hit that names no known pattern
+  (`reflex-ids`; the row says when the project has no `research/cliches.md`). The report lists `research/cliches.md`
+  when it exists, so a changed list makes the lint stale. The example board of Acme, the Quick smoke's bakery board and
+  the board templates use the new line.
+
 ## [0.4.2] - 2026-10-24
 
 ### Fixed

@@ -39,7 +39,7 @@ ignored). Delete optional blocks you do not use rather than leaving them empty.
 | `today` | an incumbent exists | "0 Today": the current mark or site as variant 0, judged by the same criteria |
 | `strategy-core` | round 1 | the 7 fields of [strategy-core.md](strategy-core.md), drafted by you, for reaction |
 | `positioning-map` | round 1 and `reset_rounds` | two named axes, the category norm, every direction placed (`data-direction`), at least one far (`data-far="true"` on the direction); in resets also where the failed round sat (`data-field="failed-round"`) |
-| `direction` (repeat) | always; 3-5 on pick boards | word name (`data-name`, 3+ letters, identical in chat), no letter by default (an optional `data-letter` only when the owner asks; `board-lint` warns when it equals an option letter of a question that does not list the directions), one emotional register per direction (`data-register`), the idea, the reflex result |
+| `direction` (repeat) | always; 3-5 on pick boards | word name (`data-name`, 3+ letters, identical in chat), no letter by default (an optional `data-letter` only when the owner asks; `board-lint` warns when it equals an option letter of a question that does not list the directions), one emotional register per direction (`data-register`), the idea, the reflex result (one line: `no hits`, or one `hit: <id> \| <argument>` per hit) |
 | `hardest-surface` | always | every direction on the one surface most likely to break it (from BRIEF or INVENTORY.md) |
 | `weak-points` | round 2+ | honest weak points, measured where possible |
 | `losers` | round 2+ | each losing candidate (`data-section="loser"`) with a one-line reason |
@@ -149,7 +149,12 @@ On the round page, every direction shows at least:
 - type specimen with the audience's diacritics (the glyph set from G0), a pangram;
 - two or three sample lines in the brand voice, one of them for a moment when something goes wrong, in the brand's own world:
   an error page for software, "sold out today" or "closed for a holiday" for a shop, "running late" for a practice;
-- the reflex test result against [ai-defaults.json](ai-defaults.json): "no hits", or each hit with its argument;
+- the reflex test result against [ai-defaults.json](ai-defaults.json) and the project's `research/cliches.md` ("Avoid
+  unless argued"), as one line: `no hits`, or one `hit: <id> | <argument>` per hit, the argument naming something of this
+  brand from FACTS.md or the brief. A pattern that looks close and is not one goes in as `near miss: <id> (why)`; it is
+  recorded and never counted. `board-lint` fails a direction with two hits and a board whose directions all hit one
+  pattern, and warns about a line that is not in this format, a hit that names no known pattern and an argument that
+  shares no word with FACTS.md or the brief (warnings that become failures in the next release);
 - in family modes: what it keeps from the family layer, what it owns, why it is not a sibling.
 
 A deep board (`templates/board.html`) adds: a real hero with the owner's copy, homepage at desktop and mobile width,
@@ -198,7 +203,11 @@ dock mock at real size, light and dark.
 When a judge ran, My call shows the judge view, your view and a middle option side by side: set `data-judge="ran"` on the
 `my-call` section and fill the template's three panels (`data-field="judge-view"`, `"lead-view"`, `"middle-option"`). The lint
 checks the panels only when `data-judge="ran"` is set, so a judge result folded in as a plain paragraph passes it unseen;
-never do that.
+never do that. The judge also lists, for each direction, the ai-defaults ids and `research/cliches.md` items it sees:
+put that list beside the direction's reflex line as `data-field="reflex-seen"` (`judge saw: <id>; <id>`, or `judge saw:
+none seen`; the templates carry the line in a comment to uncomment). With `data-judge="ran"` the lint warns about a
+direction with no list (a list that is only its label, with no pattern and no `none seen`, is none), and about a pattern on the list that the reflex line neither hits nor names as a near miss: argue
+it as a hit, or say why it is a near miss. Both warnings become failures in the next release.
 
 ## First icon round checklist
 

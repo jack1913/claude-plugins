@@ -293,7 +293,7 @@ masters were NOT measured; a round with no masters gets an info row.
 | `today` | `incumbent` in BRAND-STATE is not `none` | the incumbent as variant 0 |
 | `positioning-map` | round 1 and rounds in `reset_rounds` | must contain an element `data-direction="<name>"` for every direction; at least one direction has `data-far="true"`; in reset rounds also a non-empty `data-field="failed-round"` showing where the failed round sat |
 | `strategy-core` | round 1 | shown for reaction |
-| `direction` (repeat) | always; at least 3 on pick boards, 1 otherwise | `data-name` (a word of 3+ letters, unique, identical on the board and in chat), optional `data-letter` (one unique capital; off by default, and `question:N:letters` warns when a letter equals an option letter of a question that does not list the directions), `data-register` (required on pick boards, unique per direction: one per emotional register), optional `data-far="true"`, a non-empty child `data-field="idea"`, and on pick boards a non-empty `data-field="reflex"` (the reflex test against `references/ai-defaults.json`: "no hits" or each hit with its argument) |
+| `direction` (repeat) | always; at least 3 on pick boards, 1 otherwise | `data-name` (a word of 3+ letters, unique, identical on the board and in chat), optional `data-letter` (one unique capital; off by default, and `question:N:letters` warns when a letter equals an option letter of a question that does not list the directions), `data-register` (required on pick boards, unique per direction: one per emotional register), optional `data-far="true"`, a non-empty child `data-field="idea"`, and on pick boards a non-empty `data-field="reflex"` (the reflex test against `references/ai-defaults.json` and the project's `research/cliches.md`: `no hits`, or one `hit: <id> \| <argument>` per hit; see Reflex test below) |
 | `hardest-surface` | always | the one surface where the mark is most likely to fail |
 | `weak-points` | round 2 and later (a motion board: from its second) | |
 | `losers` | round 2 and later | contains `data-section="loser"` items, each with a one-line (max 200 characters) `data-field="reason"` |
@@ -301,6 +301,40 @@ masters were NOT measured; a round with no masters gets an info row.
 | `my-call` | always | children `data-field="recommendation"` and `data-field="critique"`; with `data-judge="ran"` also `judge-view`, `lead-view`, `middle-option` |
 | `questions` | always | contains `data-section="question"` items with `data-n` = 1, 2, 3 ... in order; each holds at least two options `data-option="a"`, `"b"` ... in order, exactly one with `data-recommended="true"` (none or several fail `question:N:options`); a question that lists the directions carries `data-lists="directions"` in the template and shows their names |
 | `reply` | always | how to answer: "Answer with a direction name, or question number plus option (1a)" and one sentence |
+
+Reflex test (pick boards). The `data-field="reflex"` line of each direction is one parseable line: `no hits`, or one `hit: <id> | <argument>` per hit, and
+optionally `near miss: <id> (<why>)` for a pattern that looks close and is not one (recorded, never counted); an optional leading `Reflex test:` is allowed.
+`<id>` is an id of `references/ai-defaults.json` or an item of the project's `research/cliches.md` under "Avoid unless argued" (compared by casefolded name,
+a trailing parenthetical dropped). The rules are in `scripts/boardlib/reflex.py` (`parse`, `line_rows`, `shared_hit`), outside `scripts/lib/`, so another board can
+reuse them with its own cliché file. Five rows, the first four per direction as `direction:<name>:<suffix>`:
+
+| row | status | when |
+|---|---|---|
+| `reflex-format` | warn (else pass) | the line is not in the format: free text, a `hit:` with no `\|` or no argument, text before the first marker, `no hits` together with a hit; the detail quotes the problems and the format |
+| `reflex-ids` | warn (else pass) | a hit names neither an id of `ai-defaults.json` nor an item of `research/cliches.md`; the detail says when the project has no `research/cliches.md` |
+| `reflex-count` | **fail** (else pass) | two or more hits in one direction: replace a part before showing it |
+| `reflex-grounded` | warn (else pass; no row for a line with no hit) | the argument of a hit shares no word with the owner's own material (the detail names the hit and asks for the fact, place or craft that earns it); the pass names the shared words. With neither `FACTS.md` nor `brief/BRIEF.md` holding a word of the owner's own (missing, or still the templates; the title line with the brand's name filled in, as `brand-creator new` writes it, is still the template) the argument is checked against nothing: the warning says `NOT verified` |
+| `directions:reflex-shared` | **fail** (else pass; info with fewer than two directions that have a reflex line) | every direction hits the same name: the directions are not divergent |
+
+Grounding is a floor, not a judgement of the argument's quality. The words are runs of Unicode letters (digits and `_` excluded), casefolded, four letters or
+more, with no stop list of any language and no stemming. They are taken from the lines of `FACTS.md` and `brief/BRIEF.md` that are the owner's own: lines that
+are not lines of the plugin's `templates/FACTS.md` and `templates/BRIEF.md` (verbatim, or with a `{{...}}` placeholder filled in: the title line
+`# Acme: facts` is a template line, so the brand's name alone is no ground word), minus the words of those templates' prose (the lines that do not start with
+`|`). A hit's argument is grounded when it shares at least one such word; nothing else is read.
+
+A warning says "a failure from the next release": the three warnings become failures in the next release, so a board passes now that fails then.
+`research/cliches.md`, `FACTS.md` and `brief/BRIEF.md` are inputs of the report when they exist (a changed list, fact or brief makes the lint stale). A refine
+board has no reflex line and none of these rows.
+
+The judge's list (pick boards, only when `my-call` has `data-judge="ran"`). A judge lists, for each direction, the ids of `references/ai-defaults.json` and the
+items of `research/cliches.md` it sees, before it reads the argument; the lead puts that list beside the reflex line as `data-field="reflex-seen"` (a paragraph
+`judge saw: <id>; <id>` or `judge saw: none seen`, or a list with one `li` per pattern; the templates carry it in a comment to uncomment). Two warnings per
+direction, `direction:<name>:<suffix>`; both become failures in the next release. Without `data-judge="ran"` the list is not looked at and neither row exists.
+
+| row | status | when |
+|---|---|---|
+| `reflex-seen` | warn (else pass) | the judge ran and the direction has no non-empty `data-field="reflex-seen"`, or its list names no pattern and does not say `none seen` (a list that is only its label, `judge saw:`, is no answer); `none seen` is an answer |
+| `reflex-unargued` | warn, once per pattern (else one pass) | a pattern on the list is neither a hit nor a near miss of the reflex line (compared by `norm`: casefolded, a trailing parenthetical dropped); the detail names it and says to argue it as a hit, or to say why it is a near miss. No row without a list, or without a reflex line (that is its own failure) |
 
 Style board (`data-board="style"`, round 0) vocabulary. It has its own required set; the pick-board sections above do not
 apply to it except where named here:

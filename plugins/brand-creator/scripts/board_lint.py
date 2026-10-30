@@ -12,6 +12,11 @@ on BRAND-STATE.md (incumbent, reset_rounds, tier, architecture, inventory, gates
 listed in reset_rounds; motion: a round from 2 on, after G3, that tries the signature move as variants; see scripts/CONTRACT.md).
 A motion board is no pick, style, reset or rejected round: it has its own rows (motion:g3, motion:off, motion:variants, motion:files, motion:proof,
 motion:stills, motion:fields; boardlib/motionboard.py), the kept masters are not measured on it, and the style gate never counts it.
+A pick board also gets, for each direction, direction:<name>:reflex-format|reflex-ids|reflex-count|reflex-grounded and, across directions,
+directions:reflex-shared (the rules are in boardlib/reflex.py): two hits in one direction, or one hit that every direction shares, fail; a free-text line,
+an unknown id or an argument that shares no word with FACTS.md or brief/BRIEF.md warns. When the my-call section says data-judge="ran", each direction
+also needs the judge's list beside its reflex line (data-field="reflex-seen", listing patterns or saying "none seen": direction:<name>:reflex-seen), and a pattern on that list that the reflex
+line neither hits nor names as a near miss warns (direction:<name>:reflex-unargued, one warning per pattern).
 Every kind of board also gets page:votes: the vote of each card (<fieldset data-vote="<name>">) is a radio group of its own, its radios named vote-<name>
 (two cards that share a radio name are one group, and a vote on one clears the vote on the other).
 Exit 1 lists every missing or empty requirement.
@@ -34,8 +39,13 @@ import svgtools  # noqa: E402
 from boardpage import (DATA_IMAGE, FILL, GENERIC_NAME, KINDS, MIN_TERRITORIES, PLACEHOLDER, WORD_NAME, Node, declared_round,  # noqa: E402
                        is_style_board, page_kind, parse_dom, read_page, sections, territory_count)
 import motionboard  # noqa: E402
+import reflex  # noqa: E402
 from _color import parse_hex, wcag_ratio  # noqa: E402
 from marks import ground_contacts, ground_target, outline_width, tokens_ground  # noqa: E402
+
+
+SEEN_LABEL = "the judge's list sits beside the reflex line"   # labels of the rows a judged pick board earns per direction
+UNARGUED_LABEL = "every pattern the judge saw is a hit or a near miss of the reflex line"
 
 
 def srcset_urls(value: str) -> list[str]:
@@ -467,12 +477,60 @@ def main() -> int:
     need("reply", True, "how to answer: a name or letter and one sentence")
     q_items = list(qs.find_all(data_section="question")) if qs is not None else []
 
+    def check_judge_list(d: Node, label: str, parsed: reflex.Parsed | None) -> None:
+        """The judge ran: the direction carries the judge's list (data-field="reflex-seen") beside its reflex line, and every pattern on it is argued there,
+        as a hit or as a near miss. Warnings only. Without a reflex line (its own failure) there is nothing to compare the list with."""
+        lists = [n for n in d.find_all(data_field="reflex-seen") if n.nonempty()]
+        if not lists:
+            rep.add(f"direction:{label}:reflex-seen", "warn", SEEN_LABEL,
+                    detail=f'the judge ran, but this direction has no non-empty data-field="reflex-seen": put the ai-defaults ids and research/cliches.md items '
+                           f'the judge listed for it beside the reflex line, or "none seen"; a warning now, {reflex.NEXT_RELEASE}')
+            return
+        node = lists[0]
+        texts = [li.text() for li in node.walk() if li.tag == "li"] or [node.text()]
+        seen = reflex.parse_seen(texts)
+        if not seen and not reflex.says_none_seen(texts):   # only the label, or empty items: no answer
+            rep.add(f"direction:{label}:reflex-seen", "warn", SEEN_LABEL,
+                    detail=f'the judge ran, but this direction\'s data-field="reflex-seen" lists no pattern and does not say "none seen": put the ai-defaults ids '
+                           f'and research/cliches.md items the judge listed for it, or "none seen"; a warning now, {reflex.NEXT_RELEASE}')
+            return
+        rep.add(f"direction:{label}:reflex-seen", "pass", SEEN_LABEL, detail=f"{len(seen)} pattern(s): {', '.join(seen)}" if seen else "none seen")
+        if parsed is None:
+            return
+        argued = {reflex.norm(e.name) for e in parsed.entries}
+        unargued = [i for i in seen if reflex.norm(i) not in argued]
+        for item in unargued:
+            rep.add(f"direction:{label}:reflex-unargued", "warn", UNARGUED_LABEL,
+                    detail=f"the judge saw {item!r} and the reflex line neither hits it nor names it as a near miss: argue it as a hit, or say why it is a "
+                           f"near miss ('near miss: {item} (why)'); a warning now, {reflex.NEXT_RELEASE}")
+        if not unargued:
+            rep.add(f"direction:{label}:reflex-unargued", "pass", UNARGUED_LABEL,
+                    detail="every pattern the judge listed is a hit or a near miss of the line" if seen else "the judge listed nothing")
+
     # ---- directions
     dirs = sections(root, "direction")
     min_dirs = a.min_directions or (3 if kind == "pick" else 1)
     rep.add("directions:count", "pass" if len(dirs) >= min_dirs else "fail", "enough directions",
             detail=f"{len(dirs)} found, need at least {min_dirs}")
     names, letters, registers = [], [], []
+    reflex_ids: list[str] = []
+    reflex_cliches: list[str] = []
+    reflex_sources = reflex.SOURCES
+    reflex_lines: list[reflex.Parsed] = []   # the parsed reflex line of each direction that has one
+    reflex_ground: set[str] = set()
+    judge_ran = False
+    if kind == "pick":
+        reflex_ids = reflex.ai_default_ids()
+        cliche_file = project / "research" / "cliches.md"
+        reflex_cliches = reflex.cliche_items(project)
+        if cliche_file.is_file():
+            rep.inputs.append(cliche_file)   # a changed cliché list changes what a hit may name, so the lint goes stale
+        else:
+            reflex_sources = "ai-defaults.json (the project has no research/cliches.md, so no cliché of its category can be named)"
+        reflex_ground = reflex.ground_words(project)
+        rep.inputs.extend(f for f in (project / "FACTS.md", project / "brief" / "BRIEF.md") if f.is_file())   # a changed fact changes what an argument shares
+        calls = [n for n in sections(root, "my-call") if n.nonempty()]
+        judge_ran = bool(calls) and calls[0].attrs.get("data-judge") == "ran"   # the section check_my_call reads
     for i, d in enumerate(dirs, 1):
         nm = d.attrs.get("data-name", "").strip()
         label = nm or f"#{i}"
@@ -499,7 +557,25 @@ def main() -> int:
             registers.append(reg)
         field(d, "idea", True, f"direction:{label}")
         if kind == "pick":
-            field(d, "reflex", True, f"direction:{label}")  # reflex test against references/ai-defaults.json
+            parsed: reflex.Parsed | None = None
+            if field(d, "reflex", True, f"direction:{label}"):   # reflex test against references/ai-defaults.json and research/cliches.md
+                line = next(n for n in d.find_all(data_field="reflex") if n.nonempty())
+                parsed = reflex.parse(line.text())
+                reflex_lines.append(parsed)
+                for suffix, status, detail in reflex.line_rows(parsed, reflex_ids, reflex_cliches, ground=reflex_ground, sources=reflex_sources):
+                    rep.add(f"direction:{label}:{suffix}", status, reflex.LABELS[suffix], detail=detail)
+            if judge_ran:
+                check_judge_list(d, label, parsed)
+    if kind == "pick":
+        shared = reflex.shared_hit(reflex_lines)
+        shared_label = "the directions do not all hit one pattern"
+        if len(reflex_lines) < 2:
+            rep.add("directions:reflex-shared", "info", "not required here", detail=f"{len(reflex_lines)} direction(s) with a reflex line; two are needed to compare them")
+        elif shared:
+            rep.add("directions:reflex-shared", "fail", shared_label,
+                    detail=f"every direction hits {shared!r}: they are not divergent, so replace one of them")
+        else:
+            rep.add("directions:reflex-shared", "pass", shared_label, detail=f"{len(reflex_lines)} reflex lines, no pattern hit by all")
     if letters and q_items:
         # A direction letter that is also an option letter of a question that does not list the directions makes
         # "B" ambiguous in a phone reply ("B" the direction, or option b of question 2).

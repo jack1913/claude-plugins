@@ -1,11 +1,12 @@
 {
   "$description": "Generic reflex list for the P3 reflex test. Every direction is checked against these patterns; a hit is allowed only with an argument written on the board (data-field=\"reflex\"). Patterns are described in words, never as exact colour values.",
-  "version": 1,
+  "version": 2,
   "how_to_use": [
-    "For each direction, list the ids it hits, or write 'no hits'.",
-    "For each hit, write one line on why this brand earns it (a fact from FACTS.md, a place, a craft, a regulator rule). 'It looks good' is not an argument.",
-    "Two or more hits in one direction: replace a part before showing it.",
-    "If every direction hits the same id, the round is not divergent."
+    "For each direction, write 'no hits', or one line per hit: 'hit: <id> | <argument>', where <id> is an id below or an item of research/cliches.md 'Avoid unless argued'. 'near miss: <id> (<why>)' records a pattern that looks close but is not one; it is not a hit.",
+    "Each argument names a fact, a place, a craft or a rule of this brand from FACTS.md or brief/BRIEF.md, and shares a word with it. 'It looks good' is not an argument.",
+    "Two or more hits in one direction: replace a part before showing it (board-lint fails it).",
+    "The same id hit in every direction: the round is not divergent (board-lint fails it).",
+    "Judge layout items on the direction's own homepage frame of the deep board, never on the board's chrome."
   ],
   "items": [
     {"id": "palette-cream-serif-terracotta", "kind": "palette", "pattern": "warm cream background, a classic serif display face and a terracotta or burnt-orange accent", "why_reflex": "the default 'tasteful' look generated models reach for", "argue_with": "a material or place the brand actually comes from"},
@@ -14,9 +15,11 @@
     {"id": "palette-navy-gold-trust", "kind": "palette", "pattern": "navy with gold or brass for trust, finance or law", "why_reflex": "category cliché for institutions", "argue_with": "a heritage the brand can prove"},
     {"id": "palette-teal-coral-startup", "kind": "palette", "pattern": "teal or mint with a coral accent on white", "why_reflex": "generic friendly-startup palette", "argue_with": "a role split the system actually needs"},
     {"id": "palette-green-leaf-eco", "kind": "palette", "pattern": "mid green with leaves for anything sustainable or natural", "why_reflex": "category cliché", "argue_with": "a specific plant, place or material"},
+    {"id": "palette-pale-ground-timid-accent", "kind": "palette", "pattern": "a near-white or pale grey ground with one low-chroma accent used only on links or one small detail, so the identity reads as no colour at all", "why_reflex": "the safe look where no colour was committed to", "argue_with": "a measured reason the colour must stay out of the way (a reading product, a regulator's neutral) and an accent that does a named job"},
     {"id": "type-default-grotesk-everywhere", "kind": "type", "pattern": "one default UI grotesk for display, body and wordmark with no customisation", "why_reflex": "no decision was made", "argue_with": "a measured reason (glyph coverage, small sizes) and a customised wordmark"},
     {"id": "type-geometric-rounded-friendly", "kind": "type", "pattern": "rounded geometric sans in lowercase to signal 'friendly'", "why_reflex": "default friendliness signal", "argue_with": "the audience and the voice lines"},
     {"id": "type-serif-display-sans-body", "kind": "type", "pattern": "high-contrast serif headlines over a neutral sans body, 'editorial' by default", "why_reflex": "default premium signal", "argue_with": "a publishing or craft heritage"},
+    {"id": "type-first-answer-display-face", "kind": "type", "pattern": "the display faces a generator names first (as of 2026-10: Fraunces, Playfair Display, DM Serif Display, Space Grotesk), used with no reason of the brand's own", "why_reflex": "the first answer, not a choice: the face was never set against others", "argue_with": "a reason from the voice lines, a heritage or the audience's language, and at least two other faces tried on the same words"},
     {"id": "device-lightbulb-idea", "kind": "device", "pattern": "a lightbulb, spark or brain for ideas or intelligence", "why_reflex": "literal metaphor", "argue_with": "rarely arguable"},
     {"id": "device-globe-swoosh", "kind": "device", "pattern": "a globe, orbit or swoosh for reach or movement", "why_reflex": "literal metaphor", "argue_with": "rarely arguable"},
     {"id": "device-network-nodes", "kind": "device", "pattern": "connected dots, hexagons or a node graph for technology or community", "why_reflex": "generic tech metaphor", "argue_with": "the product literally is a network and the mark says something specific about it"},
@@ -25,9 +28,11 @@
     {"id": "device-scales-columns-law", "kind": "device", "pattern": "scales, columns, gavels or laurels for legal and public services", "why_reflex": "category cliché", "argue_with": "a regulator requirement or a specific local building"},
     {"id": "device-product-silhouette", "kind": "device", "pattern": "a literal outline of the product (a tooth, a cup, a camera, a house)", "why_reflex": "says the category, not the brand", "argue_with": "a twist that makes it ownable"},
     {"id": "device-abstract-blob", "kind": "device", "pattern": "a soft gradient blob or organic shape with no construction", "why_reflex": "cannot be redrawn or defended", "argue_with": "a construction rule that can be measured"},
+    {"id": "device-texture-as-identity", "kind": "device", "pattern": "a texture standing in for the idea: film grain, a rubber stamp or badge, an engraving or a halftone screen", "why_reflex": "atmosphere without a decision; it cannot be redrawn at 16 px", "argue_with": "a craft or process the brand really uses, and a mark that still works without the texture"},
     {"id": "layout-gradient-hero", "kind": "layout", "pattern": "centred headline over a gradient or mesh background with two buttons", "why_reflex": "default landing page", "argue_with": "the real content needs nothing else"},
     {"id": "layout-glass-cards", "kind": "layout", "pattern": "frosted glass cards, heavy blur and soft glow", "why_reflex": "trend default", "argue_with": "rarely arguable for an identity"},
     {"id": "layout-bento-grid", "kind": "layout", "pattern": "a bento grid of rounded tiles as the main layout idea", "why_reflex": "trend default", "argue_with": "the content really is a set of equal features"},
+    {"id": "layout-stock-product-page", "kind": "layout", "pattern": "a small label over every heading (an eyebrow) and the stock section order: a hero with two buttons, three equal steps or feature tiles, an FAQ and a closing call-to-action band", "why_reflex": "the template every generated product page follows; the content is fitted to it", "argue_with": "a visitor's job that really needs that order, shown on the direction's own homepage frame"},
     {"id": "copy-hype-verbs", "kind": "copy", "pattern": "empower, elevate, unlock, seamless, revolutionary, cutting-edge, next-generation", "why_reflex": "says nothing checkable", "argue_with": "replace with a fact from FACTS.md"},
     {"id": "copy-partner-in", "kind": "copy", "pattern": "'your trusted partner in ...' or 'we are passionate about ...'", "why_reflex": "interchangeable with any competitor", "argue_with": "the onliness line from the strategy core"},
     {"id": "archetype-only", "kind": "strategy", "pattern": "a direction defined only by a brand archetype name", "why_reflex": "a label, not a strategy", "argue_with": "an idea and a visual philosophy of its own"}
