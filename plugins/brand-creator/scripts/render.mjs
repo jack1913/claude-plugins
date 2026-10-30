@@ -13,6 +13,8 @@
 //   render.mjs pdf <page.html>  the page as a PDF (print media, RGB), with a label on its first page; book_pdf.py finishes the file
 //   render.mjs pdf <page.html> --size-mm WxH [--measure FILE.json]  print stationery: exact page size in mm, no margins, no label on the
 //                               page, and the geometry of every text, image and rule measured in the same render (emitters/print.py)
+//   render.mjs page-measure --request FILE --out FILE  the measuring half of `brand-creator page-check`: one page opened at each width and colour scheme, the raw facts
+//                               written to --out (page_check.py judges them)
 // Needs `brand-creator setup` (Playwright in <data>/node_modules, Chromium build recorded in <data>/setup.json).
 import fs from "node:fs";
 import path from "node:path";
@@ -22,6 +24,8 @@ import {
   EXIT, die, mainGuard, dataDir, readSetup, loadDep, findProject, confine, outsideProject, scratchDir, rel,
   Report, forbiddenTerms, writeIfChanged, sha256, readStateTop, missingSharedLibs, findHeadlessShell, proofReportTool, pixelArt, motionProofKind,
 } from "./lib/_common.mjs";
+import { isLoopbackUrl } from "./lib/_common.mjs";
+import { collect } from "./pagelib/page_measure.mjs";
 
 const ANIMATION_CAP_MS = 15000;   // shot waits at most this long for running animations and transitions to end
 
@@ -33,6 +37,7 @@ const USAGE = `usage:
   render.mjs fonts --text TEXT (--font-file FILE | --family NAME) [--json]
   render.mjs pdf <page.html> --out FILE.pdf --label TEXT [--project DIR] [--format A4|Letter] [--scheme light|dark] [--label-px N] [--timeout MS]
   render.mjs pdf <page.html> --out FILE.pdf --size-mm WxH [--bleed-mm N] [--measure FILE.json] [--project DIR] [--scheme light|dark] [--timeout MS]
+  render.mjs page-measure --request FILE.json --out FILE.json [--project DIR]
   render.mjs selftest
 shots are written outside the project (default: <data>/scratch/...); the report goes to <project>/assets/_checks/shot.json.
 shot loads lazy images first, pauses --wait MS after load (default 300), then waits for running animations and transitions to end
@@ -120,17 +125,35 @@ function pageUrl(project, origin, file) {
   return { abs, url: origin + "/" + rel(project, abs).split("/").map(encodeURIComponent).join("/") };
 }
 
-/** Attach request/console collectors; non-local requests are recorded and aborted (a board never needs the network). */
-async function instrument(context, origin) {
+/** Attach request/console collectors; non-local requests are recorded and aborted (a board never needs the network).
+ *  `ownRedirects: true` (page-measure) answers every request to `origin` itself, so a redirect to another origin is stopped too (see answerWithoutLeaving),
+ *  and takes the WebSockets of the page in hand too (see stopForeignSockets). */
+async function instrument(context, origin, { ownRedirects = false } = {}) {
   const seen = { nonLocal: [], failedLocal: [], local: 0, errors: [], warnings: [] };
   await context.route("**/*", (route) => {
     const u = route.request().url();
     if (u.startsWith("data:") || u.startsWith("blob:") || u.startsWith("about:")) return route.continue();
-    if (u.startsWith(origin + "/")) { seen.local++; return route.continue(); }
+    if (u.startsWith(origin + "/")) { seen.local++; return ownRedirects ? answerWithoutLeaving(route, origin, seen) : route.continue(); }
     seen.nonLocal.push(u.slice(0, 160));
     return route.abort("blockedbyclient");
   });
+  if (ownRedirects) await stopForeignSockets(context, origin, seen);
   return seen;
+}
+/** A route does not see a WebSocket, so the page's own are handled here. One to the page's own origin goes through (a dev server's hot reload); one to any other origin is
+ *  recorded as a request to another origin and closed before it connects, so that server hears nothing. A WebSocket opened inside a worker is out of reach of this:
+ *  it connects, to any host the machine can reach.
+ *  Chromium takes a page whose document this script answered itself (route.fulfill) for a public one, because the answer has no address of its own, and its Local Network
+ *  Access check then blocks every WebSocket the page opens to this machine, its own origin included, with a console error (net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS).
+ *  The page's own origin is granted that permission, which is what a page served from this machine has anyway. */
+async function stopForeignSockets(context, origin, seen) {
+  await context.grantPermissions(["local-network-access"], { origin });
+  await context.routeWebSocket(() => true, (ws) => {
+    const u = ws.url();
+    if (u.replace(/^ws/, "http").startsWith(origin + "/")) { ws.connectToServer(); return; }
+    seen.nonLocal.push(u.slice(0, 160));
+    return ws.close({ code: 1008, reason: "page-check runs offline" });
+  });
 }
 function watch(page, seen, origin) {
   page.on("pageerror", (e) => seen.errors.push("pageerror: " + String(e.message || e).split("\n")[0]));
@@ -1671,6 +1694,160 @@ async function cmdPdf(argv) {
   return EXIT.PASS;
 }
 
+// ---------------------------------------------------------------- page-measure
+// The measuring half of `brand-creator page-check` (scripts/page_check.py writes the request and judges what this writes). The request is
+// {schema: 1, root, page, url, widths, schemes, selectors, dsf}: `root` (the project, or a folder inside <data>/scratch/) with the `page` inside it, served by the
+// local server, or a `url` on this machine. One browser context per width and colour scheme; a request to another origin, a redirect to one included, is recorded and aborted. The answer is
+// {schema: 1, chromium, target, views: [{width, scheme, viewport, lang, height, errors, non_local, failed_local, resources, served, animations, ...collectors}]},
+// written outside the project. A view that cannot be rendered has {width, scheme, viewport, error} instead. Facts only: no verdict, and exit 0 whatever the page does.
+const PAGE_VIEWPORT_HEIGHT = { 360: 800, 390: 844, 768: 1024, 1024: 768, 1440: 900, 1920: 1080 };   // css px; any other width gets 900
+const PAGE_TIMEOUT_MS = 60000;
+const PAGE_SETTLE_MS = 100;
+const PAGE_MAX_REDIRECTS = 10;   // a chain longer than this is stopped (Chromium itself allows 20)
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+
+/** Answer one request to the page's own origin without letting a redirect take the browser elsewhere. Chromium asks a route handler about the first URL of a
+ *  redirect chain only, so `route.continue()` would follow a hop to another origin unseen (and the other server would be asked). Here the answer is fetched without
+ *  following redirects and the chain is walked hop by hop first (each hop with GET, whatever the first method was): a hop that leaves the origin is recorded as a request to
+ *  another origin and the request is aborted, so nothing reaches the other server. A chain that stays home is answered with its first response and the browser
+ *  follows it, so a hop of it is asked twice (here and by the browser). */
+async function answerWithoutLeaving(route, origin, seen) {
+  try {
+    const first = await route.fetch({ maxRedirects: 0, timeout: PAGE_TIMEOUT_MS });
+    let response = first;
+    for (let hop = 0; REDIRECT_STATUSES.has(response.status()) && response.headers()["location"]; hop++) {
+      let next;
+      try { next = new URL(response.headers()["location"], response.url()).href; } catch { break; }   // a Location no parser reads is a hop no browser follows
+      if (!next.startsWith(origin + "/")) {
+        seen.nonLocal.push(next.slice(0, 160));
+        return await route.abort("blockedbyclient");
+      }
+      if (hop >= PAGE_MAX_REDIRECTS) {
+        seen.failedLocal.push(`redirect chain of more than ${PAGE_MAX_REDIRECTS} hops from ${route.request().url().slice(origin.length, origin.length + 120)}`);
+        return await route.abort("failed");
+      }
+      response = await route.fetch({ url: next, method: "GET", maxRedirects: 0, timeout: PAGE_TIMEOUT_MS });
+    }
+    return await route.fulfill({ response: first });
+  } catch {
+    await route.abort("failed").catch(() => {});   // the server did not answer, or the page was closed meanwhile: the browser reports it as a failed load
+  }
+}
+
+function insideDir(root, p) {
+  const r = path.relative(root, p);
+  return r === "" || (!r.startsWith("..") && !path.isAbsolute(r));
+}
+
+function readPageRequest(project, file) {
+  let req;
+  try { req = JSON.parse(fs.readFileSync(file, "utf8")); } catch (e) { die(EXIT.USAGE, `--request ${file}: cannot read the request (${e.message})`); }
+  if (!req || typeof req !== "object" || req.schema !== 1) die(EXIT.USAGE, `--request ${file}: needs {"schema": 1, ...}`);
+  const bad = (what) => die(EXIT.USAGE, `--request ${file}: ${what}`);
+  if (Boolean(req.root) === Boolean(req.url)) bad("give either root with page, or url, not both and not neither");
+  if (!Array.isArray(req.widths) || !req.widths.length || req.widths.some((w) => !Number.isInteger(w) || w < 200 || w > 4000) || new Set(req.widths).size !== req.widths.length) {
+    bad("widths must be a list of different whole numbers from 200 to 4000");
+  }
+  if (!Array.isArray(req.schemes) || !req.schemes.length || req.schemes.some((s) => !["light", "dark"].includes(s)) || new Set(req.schemes).size !== req.schemes.length) {
+    bad("schemes must be a list of light and dark");
+  }
+  req.selectors = req.selectors ?? [];
+  if (!Array.isArray(req.selectors) || req.selectors.some((s) => typeof s !== "string")) bad("selectors must be a list of CSS selectors");
+  req.dsf = req.dsf ?? 1;
+  if (![1, 2, 3].includes(req.dsf)) bad("dsf must be 1, 2 or 3");
+  if (req.url) {
+    if (typeof req.url !== "string" || !isLoopbackUrl(req.url)) die(EXIT.USAGE, `page-measure opens only a page on this machine (http or https on localhost, 127.0.0.1 or [::1]), not ${JSON.stringify(req.url)}`);
+    req.openUrl = new URL(req.url).href;
+    return req;
+  }
+  if (typeof req.root !== "string" || typeof req.page !== "string" || !req.page) bad("root needs a page inside it");
+  let root;
+  try { root = fs.realpathSync(req.root); } catch { die(EXIT.USAGE, `--request ${file}: root ${req.root} does not exist`); }
+  let scratch = null;
+  try { scratch = fs.realpathSync(path.join(dataDir(), "scratch")); } catch { /* no scratch folder yet: only the project can be the root */ }
+  if (root !== fs.realpathSync(project) && !(scratch && root !== scratch && insideDir(scratch, root))) {
+    die(EXIT.USAGE, `--request ${file}: root ${req.root} must be the project or a folder inside the data folder's scratch area`);
+  }
+  let abs;
+  try { abs = fs.realpathSync(path.join(root, req.page)); } catch { die(EXIT.USAGE, `page not found: ${req.page}`); }
+  if (!insideDir(root, abs) || fs.statSync(abs).isDirectory()) die(EXIT.USAGE, `page not found in ${req.root}: ${req.page}`);
+  req.rootReal = root;
+  req.pageRel = path.relative(root, abs).split(path.sep).join("/");
+  return req;
+}
+
+async function measureView(browser, req, width, scheme) {
+  const viewport = { width, height: PAGE_VIEWPORT_HEIGHT[width] ?? 900 };
+  const server = req.rootReal ? await startServer(req.rootReal) : null;
+  const origin = server ? server.origin : new URL(req.openUrl).origin;
+  const url = server ? origin + "/" + req.pageRel.split("/").map(encodeURIComponent).join("/") : req.openUrl;
+  let ctx, seen;
+  try {
+    // no service worker: it could ask other origins in ways a route does not see
+    ctx = await browser.newContext({ viewport, colorScheme: scheme, deviceScaleFactor: req.dsf, serviceWorkers: "block" });
+    seen = await instrument(ctx, origin, { ownRedirects: true });
+    const page = await ctx.newPage();
+    watch(page, seen, origin);
+    // a hop of a redirect chain is not routed: one that was followed to another origin (the chain changed between the check and the browser's own follow) is not stopped, so it fails the view
+    const escaped = [];
+    page.on("request", (r) => { if (r.redirectedFrom() && !r.url().startsWith(origin + "/")) escaped.push(r.url().slice(0, 160)); });
+    // Image and SVG bodies are hashed as they arrive, so a mark can be compared byte for byte with the file it should be.
+    const resources = {}, hashing = [];
+    page.on("response", (r) => {
+      const type = (r.headers()["content-type"] || "").split(";")[0].trim().toLowerCase();
+      if (!r.url().startsWith(origin + "/") || !type.startsWith("image/")) return;
+      hashing.push(r.body().then((b) => { resources[r.url().slice(origin.length)] = { sha256: sha256(b), content_type: type }; }, () => {}));
+    });
+    await withTimeout(page.goto(url, { waitUntil: "load", timeout: PAGE_TIMEOUT_MS }), PAGE_TIMEOUT_MS + 5000, `loading ${url}`);
+    await withTimeout(page.evaluate(() => document.fonts.ready), PAGE_TIMEOUT_MS, "fonts.ready");
+    await withTimeout(page.evaluate(async () => {   // lazy images below the fold load first, as shot does, so they are drawn and measured
+      const imgs = [...document.images].filter((i) => i.loading === "lazy");
+      for (const i of imgs) i.loading = "eager";
+      await Promise.all(imgs.map((i) => (i.complete ? null : new Promise((r) => { i.addEventListener("load", r, { once: true }); i.addEventListener("error", r, { once: true }); }))));
+    }), PAGE_TIMEOUT_MS, "lazy images");
+    await page.waitForTimeout(PAGE_SETTLE_MS);
+    const animations = await waitAnimations(page);
+    await Promise.all(hashing);
+    if (escaped.length) throw new Error(`a redirect led to another origin and was not stopped (${escaped[0]})`);
+    if (!page.url().startsWith(origin + "/")) throw new Error(`the page ended on ${page.url().slice(0, 160)}, not on ${origin}`);
+    const base = await page.evaluate(() => ({ lang: document.documentElement.lang || "", height: document.documentElement.scrollHeight }));
+    const collected = await collect(page, req);
+    return {
+      width, scheme, viewport, ...base, errors: seen.errors, non_local: seen.nonLocal, failed_local: seen.failedLocal,
+      resources: Object.fromEntries(Object.entries(resources).sort(([a], [b]) => (a < b ? -1 : 1))),
+      served: server ? server.served().sort() : [], animations, ...collected,
+    };
+  } catch (e) {
+    const stopped = seen?.nonLocal.length ? ` (a request to another origin was stopped: ${seen.nonLocal[0]})` : "";
+    return { width, scheme, viewport, error: String(e.message).split("\n")[0] + stopped };
+  } finally {
+    if (ctx) await ctx.close();
+    if (server) await server.close();
+  }
+}
+
+async function cmdPageMeasure(argv) {
+  const { values, positionals } = parse(argv, { request: { type: "string" }, out: { type: "string" }, project: { type: "string" } });
+  if (positionals.length) die(EXIT.USAGE, "page-measure takes no page: it is named in the request\n" + USAGE);
+  if (!values.request || !values.out) die(EXIT.USAGE, "page-measure needs --request FILE.json and --out FILE.json\n" + USAGE);
+  const project = findProject(values.project);
+  const out = outsideProject(project, values.out, "--out");
+  const req = readPageRequest(project, values.request);
+  const browser = await launch();   // a missing setup fails before anything is opened
+  const views = [];
+  try {
+    for (const width of req.widths) for (const scheme of req.schemes) views.push(await measureView(browser, req, width, scheme));
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    fs.writeFileSync(out, JSON.stringify({
+      schema: 1, chromium: browser.version(), target: { kind: req.url ? "url" : "page", page: req.url ? null : req.pageRel, url: req.url ?? null }, views,
+    }, null, 1) + "\n");
+  } finally {
+    await browser.close();
+  }
+  console.log(`page-measure: ${views.filter((v) => !v.error).length} of ${views.length} view(s) measured -> ${out}`);
+  return EXIT.PASS;
+}
+
 // ---------------------------------------------------------------- selftest
 async function cmdSelftest() {
   const browser = await launch();
@@ -1695,6 +1872,7 @@ mainGuard(async () => {
     case "fonts": return cmdFonts(rest);
     case "pdf": return cmdPdf(rest);
     case "frames": return cmdFrames(rest);
+    case "page-measure": return cmdPageMeasure(rest);
     case undefined: case "-h": case "--help": console.log(USAGE); return cmd ? EXIT.PASS : EXIT.USAGE;
     default: return die(EXIT.USAGE, `unknown command ${cmd}\n${USAGE}`);
   }
