@@ -196,7 +196,8 @@ words: `brand-creator motion --off "<reason>"` writes it). In Standard and Full 
   records that nothing moves once, never over an answer. `state` prints the same line.
 - `board-lint` on a motion board (script): `motion:g3`, `motion:off`, `motion:variants`, `motion:files`, `motion:proof`,
   `motion:stills` and `motion:fields`: each variant's folder, page, proof, report and stills, and that the strip on its card
-  is the file `frames.json` lists ([board-contract](../board-contract.md)).
+  is the file `frames.json` lists ([board-contract](../board-contract.md)); and `motion:timelines`, a warning when two
+  variants run one timeline (the same length within 5 % or 20 ms, the same number of animations).
 - `contrast` (script): the UI pairs gate on WCAG 2.2 AA; the brand-rule pairs and the touching pairs from the raster gate
   on the owner's targets; an exception needs a reason and is reported when it matches nothing. Artwork with gradients is
   "not verified", never a pass.

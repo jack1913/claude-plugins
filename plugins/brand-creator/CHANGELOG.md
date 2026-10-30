@@ -25,6 +25,12 @@ stage, and why, is in the [archive](docs/archive/README.md).
   0.06, of each other (distance in OKLab). A board that passes names the smallest distance of each colour; with fewer
   than two readable directions the row says it did not measure. The two limits are a practice proposal, said in the
   row, and the row only warns: it does not become a failure.
+- `board-lint` warns when two variants of a motion board try the same move (`motion:timelines`). It reads the length and
+  the number of animations that `shot --motion` found for each variant and names every pair that runs the same number of
+  animations with lengths within 5 % of the longer one, or within 20 ms, of each other: three variants should try three
+  moves. A variant whose motion report is missing or out of date is not compared (the proof row says why), and the row
+  then reports instead of passing. The two limits are a practice proposal, said in the row, and the row only warns: it
+  does not become a failure.
 
 ### Changed
 

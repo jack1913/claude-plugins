@@ -11,7 +11,7 @@ on BRAND-STATE.md (incumbent, reset_rounds, tier, architecture, inventory, gates
 (pick: round 1 or a round listed in reset_rounds; refine: the later rounds; style: the style research page of round 0, or of a round
 listed in reset_rounds; motion: a round from 2 on, after G3, that tries the signature move as variants; see scripts/CONTRACT.md).
 A motion board is no pick, style, reset or rejected round: it has its own rows (motion:g3, motion:off, motion:variants, motion:files, motion:proof,
-motion:stills, motion:fields; boardlib/motionboard.py), the kept masters are not measured on it, and the style gate never counts it.
+motion:stills, motion:fields, and the warning motion:timelines; boardlib/motionboard.py), the kept masters are not measured on it, and the style gate never counts it.
 A pick board also gets, for each direction, direction:<name>:reflex-format|reflex-ids|reflex-count|reflex-grounded and, across directions,
 directions:reflex-shared (the rules are in boardlib/reflex.py): two hits in one direction, or one hit that every direction shares, fail; a free-text line,
 an unknown id or an argument that shares no word with FACTS.md or brief/BRIEF.md warns. When the my-call section says data-judge="ran", each direction

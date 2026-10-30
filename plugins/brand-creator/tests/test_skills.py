@@ -1146,7 +1146,8 @@ def test_the_manual_explains_the_drawing_step_on_one_task_page_and_in_costs_and_
 # ---- motion is part of Standard and Full (ADR-0005): the decision before G4, the motion round, the motion board
 
 PHASES = REFS / "phases"
-MOTION_ROWS = ("motion:g3", "motion:off", "motion:variants", "motion:files", "motion:proof", "motion:stills", "motion:fields")   # written by hand: the rows a motion board's lint can write
+MOTION_ROWS = ("motion:g3", "motion:off", "motion:variants", "motion:files", "motion:proof", "motion:stills", "motion:fields")   # written by hand: the rows the motion release (0.4.0) added to a motion board's lint; its changelog section names each
+MOTION_BOARD_ROWS = MOTION_ROWS + ("motion:timelines",)   # and every row the lint can write today (motion:timelines, a warning, came after 0.4.0)
 INTERNAL_CODE = re.compile(r"\b(?:G\d[a-z]?|P\d{1,2}s?|ADR-\d+)\b")   # gate, phase and decision numbers: never on a user page
 
 
@@ -1284,7 +1285,7 @@ def test_the_tokens_phase_has_the_motion_round_and_the_motion_rules_are_quick_on
                    "`motion:proof` (the report of any other proof never counts, a try-out's included, and a failing one fails the row); from G3 to G4 an undecided motion is an info row. Quick has neither row."):
         assert needle in flat, needle
     enforcement = flat[flat.index("## Enforcement"):]
-    for row in MOTION_ROWS:
+    for row in MOTION_BOARD_ROWS:
         assert f"`{row}`" in enforcement, row
     line = next(ln for ln in raw.splitlines() if ln.startswith("- (rule) reduced motion"))
     assert "easing.standard" in line and "`enter`" in line and "`exit`" in line and "`motion.quick`" in line
@@ -1325,7 +1326,7 @@ def test_the_phase_files_and_references_carry_the_motion_round():
 
 def test_the_board_contract_describes_the_motion_board_the_variant_card_and_every_row_the_lint_writes():
     src = (ROOT / "scripts" / "boardlib" / "motionboard.py").read_text(encoding="utf-8")
-    assert sorted(set(re.findall(r'"(motion:[a-z0-9]+)"', src))) == sorted(MOTION_ROWS), "the lint writes a row the docs do not know, or the docs name one it never writes"
+    assert sorted(set(re.findall(r'"(motion:[a-z0-9]+)"', src))) == sorted(MOTION_BOARD_ROWS), "the lint writes a row the docs do not know, or the docs name one it never writes"
     raw = (REFS / "board-contract.md").read_text(encoding="utf-8")
     assert "- [Motion board (a round after G3)](#motion-board-a-round-after-g3)" in raw and "## Motion board (a round after G3)" in raw
     assert raw.index("## Style board (round 0)") < raw.index("## Motion board (a round after G3)") < raw.index("## Per-direction cells")
@@ -1345,7 +1346,7 @@ def test_the_board_contract_describes_the_motion_board_the_variant_card_and_ever
                    "stale one names `brand-creator shot --motion rounds/r<N>/<name>/proof.json`", "are the files `frames.json` lists, by sha256",
                    "Taking a proof or its stills again after the lint makes the lint report stale: lint again, and shoot the board last."):
         assert needle in section, needle
-    for row in MOTION_ROWS:
+    for row in MOTION_BOARD_ROWS:
         assert f"`{row}`" in section, row
 
 
@@ -1353,7 +1354,7 @@ def test_the_contract_and_the_qa_phase_name_every_motion_row_and_the_motion_deci
     contract = _flat(ROOT / "scripts" / "CONTRACT.md")
     board = contract[contract.index("### The motion board"):contract.index("## Hook guard")]
     qa = _flat(PHASES / "09-qa.md")
-    for row in MOTION_ROWS:
+    for row in MOTION_BOARD_ROWS:
         assert f"`{row}`" in board and f"`{row}`" in qa, row
     assert "and `motion`, the decision of `brand-creator motion` (see The motion decision)." in contract
     for needle in ("### The motion decision (`brand-creator motion [--json] [--off \"<reason>\"]`)", "`state --json` has it as `\"motion\"`"):
