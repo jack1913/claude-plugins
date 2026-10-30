@@ -12,6 +12,7 @@ keys are refused (a typo must not silently fall back to the default).
      "guides":    {"tolerance_px": 1.5},
      "family":    {"tile_share_tolerance": 0.05},
      "favicon":   {"drawing": "assets/logo/favicon.svg"},
+     "page":      {"widths": [360, 390, 768, 1024, 1440, 1920], "display_min_px": 20, "clear_space": 0.25, "rules": []},
      "bands":     [{"name": "small", "max_px": 32, "drawing": "assets/logo/grid-mark.svg"},
                    {"name": "large", "drawing": "assets/logo/mark.svg"}]}
 
@@ -53,6 +54,12 @@ DEFAULTS: dict = {
     "guides": {"tolerance_px": 1.5},
     "family": {"tile_share_tolerance": 0.05},
     "favicon": {"drawing": ""},        # icon.svg's drawing; empty = the band rule's drawing for a browser tab (the smallest favicon layer)
+    "page": {                          # page-check: the widths it renders at, the display face's smallest size, the clear space round the mark, the brand's own rules
+        "widths": [360, 390, 768, 1024, 1440, 1920],   # css px, each a whole number from PAGE_WIDTH_MIN to PAGE_WIDTH_MAX
+        "display_min_px": 20,          # a text set in the display face is at least this many px
+        "clear_space": 0.25,           # free space round the mark, as a share of the mark's rendered height
+        "rules": [],                   # brand rules the owner added from the generic tells (a list; its entries are validated where they are used)
+    },
     "bands": [],
     "marks": {},                       # several marks, each with its own bands (see the docstring); empty = one mark
 }
@@ -126,6 +133,21 @@ def validate_marks(marks) -> dict[str, dict]:
     return out
 
 
+PAGE_WIDTH_MIN, PAGE_WIDTH_MAX = 200, 4000
+
+
+def validate_page_widths(widths, where: str = f"{RULES_FILE}: page.widths") -> list[int]:
+    """The widths page-check renders at: a non-empty list of whole numbers from PAGE_WIDTH_MIN to PAGE_WIDTH_MAX css px, none twice (exit 2 otherwise)."""
+    if not isinstance(widths, list) or not widths:
+        fail(EXIT_USAGE, f"{where} must be a non-empty list of widths")
+    for w in widths:
+        if not isinstance(w, int) or isinstance(w, bool) or not PAGE_WIDTH_MIN <= w <= PAGE_WIDTH_MAX:
+            fail(EXIT_USAGE, f"{where}: {w!r} is not a whole number from {PAGE_WIDTH_MIN} to {PAGE_WIDTH_MAX}")
+    if len(set(widths)) != len(widths):
+        fail(EXIT_USAGE, f"{where}: a width is listed twice")
+    return list(widths)
+
+
 def validate_exemptions(items) -> list[dict]:
     """downscale.exemptions: each a miss the owner accepts for one master at a size and below, with the reason in words."""
     if not isinstance(items, list):
@@ -147,6 +169,9 @@ def validate_exemptions(items) -> list[dict]:
             fail(EXIT_USAGE, f"{where}.reason must say why the owner accepts the miss")
         out.append({"source": posixpath.normpath(src.strip().replace("\\", "/")), "max_px": mx, "reason": why.strip()})
     return out
+
+
+KEY_VALIDATORS = {("downscale", "exemptions"): validate_exemptions, ("page", "widths"): validate_page_widths}   # keys whose value is checked beyond its type
 
 
 def load(project: Path) -> tuple[dict, str]:
@@ -179,7 +204,7 @@ def load(project: Path) -> tuple[dict, str]:
             if k not in DEFAULTS[sec]:
                 fail(EXIT_USAGE, f"{RULES_FILE}: unknown key {sec}.{k} (known: {', '.join(DEFAULTS[sec])})")
             _check(sec, k, v, DEFAULTS[sec][k])
-            rules[sec][k] = validate_exemptions(v) if (sec, k) == ("downscale", "exemptions") else v
+            rules[sec][k] = KEY_VALIDATORS.get((sec, k), lambda x: x)(v)
             rules["_from_file"].append(f"{sec}.{k}")
     if rules["marks"] and (rules["bands"] or rules["favicon"]["drawing"]):
         fail(EXIT_USAGE, f"{RULES_FILE}: with marks, each mark names its own bands and favicon; move the top-level bands and favicon.drawing into the marks")

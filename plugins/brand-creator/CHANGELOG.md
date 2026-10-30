@@ -8,6 +8,19 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ### Added
 
+- `page-check` opens one page at several widths (360, 390, 768, 1024, 1440 and 1920 px unless `qa/rules.json` or
+  `--widths` says otherwise) in the light and the dark colour scheme, and reports how it loads: a page or console
+  error, a file of its own that does not load, or a request to another website fails that view's row
+  (`page:load:<width>-<scheme>`). Every request to another website is stopped, a redirect to one and a WebSocket the
+  page opens included, so the check runs offline (one exception: a WebSocket opened inside a worker is not stopped; a
+  page's own WebSocket to the machine it is served from, a dev server's hot reload, goes through); a page that sends
+  the browser to another website is not measured, and its row fails. Name a page
+  of the project, `--from DIR <page>` for a built site anywhere (the folder is copied into the data folder and only
+  read; `.git`, `node_modules` and symlinks are left out, and more than 5000 files or 200 MB is refused), or `--url`
+  for a page already served on this machine (`localhost`, `127.0.0.1` or `[::1]`, written like that; any other host,
+  `127.1` included, is refused, and on such a page a file that comes from another website is a warning). One report per
+  page, in `assets/_checks/page-check/`. `qa/rules.json` accepts a `page` section with `widths`, `display_min_px`,
+  `clear_space` and `rules`; a value of the wrong type, or a width outside 200 to 4000, is refused.
 - `board-lint` checks that the argument of a reflex hit is the brand's own. The argument has to share a word with
   `FACTS.md` or `brief/BRIEF.md` (`reflex-grounded`; words of four letters or more, in any language, taken only from
   what the owner wrote, not from the templates: the brand's name in the title line counts for nothing); a hit argued
@@ -81,6 +94,8 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ### Changed
 
+- A pack recorded with `staleness --write` reads as stale after this update (the scripts it hashes changed); rebuild
+  it.
 - The list of generic first-idea patterns every direction is tested against has four new patterns, found in a real
   brand's site: a pale ground with one timid accent, the display faces a generator names first (dated 2026-10), a
   texture standing in for the idea (film grain, a stamp or badge, an engraving, a halftone) and the stock product page

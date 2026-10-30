@@ -188,6 +188,18 @@ export function today() {
   return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}`;
 }
 
+/** The one loopback rule: true only for an `http:` or `https:` URL with no user name or password whose host, as written, is `localhost`, `127.0.0.1` or `[::1]`
+ *  (any letter case). The host is the text in the URL, not what a parser turns it into: `127.1`, `0x7f000001`, `2130706433`, `[0:0:0:0:0:0:0:1]` and `%6cocalhost`
+ *  are refused although a browser would go to this machine. Anything with whitespace, a control character or a backslash is refused outright (parsers disagree
+ *  on those). Twin of is_loopback_url in scripts/pagelib/pagecheck.py (a test pins both to one table of cases). */
+export function isLoopbackUrl(url) {
+  if (typeof url !== "string" || /[\s\u0000-\u001f\u007f\\]/.test(url)) return false;
+  const authority = /^https?:\/\/([^/?#@]*)(?:[/?#]|$)/i.exec(url);   // "@" in it would be a user name: refused
+  if (!authority || !["localhost", "127.0.0.1", "[::1]"].includes(authority[1].replace(/:\d*$/, "").toLowerCase())) return false;
+  try { new URL(url); } catch { return false; }   // a port that is no number, or out of range
+  return true;
+}
+
 export const sha256 = (buf) => crypto.createHash("sha256").update(buf).digest("hex");
 export const sha256File = (p) => sha256(fs.readFileSync(p));
 

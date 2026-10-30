@@ -19,6 +19,7 @@ once; a script that does not use them is wrong, not special.
 - [Platform specs and emitters](#platform-specs-and-emitters)
 - [Name screening](#name-screening)
 - [QA gates and mark tooling](#qa-gates-and-mark-tooling)
+- [Page check](#page-check)
 - [Brand book](#brand-book)
 - [Print, press kit and social posts](#print-press-kit-and-social-posts)
 - [Adoption, cascade, adapters, applied skill and launch](#adoption-cascade-adapters-applied-skill-and-launch)
@@ -73,7 +74,7 @@ exit code) before it exits, so the previous passing report cannot survive a fail
 recorded once. `brand-creator check` reads these reports, recomputes each
 report's `inputs` hashes, and treats a stale report (inputs changed since) as not verified. Tool names: `tokens`,
 `contrast`, `logo-sheet`, `board-lint`, `shot`, `emit-web`, `emit-social`, `emit-apple`, `emit-windows`, `emit-linux`, `emit-tray`, `emit-tauri`, `emit-wallet`, `emit-developer`, `check`, `names`, `downscale`, `states`, `family`, `fontcheck`,
-`motion/<slug>-<hash6>` (from `shot --motion`, one per proof file; see Motion proof) and `frames/<slug>-<hash6>` (from `frames`), `idempotence` (from `verify-idempotent`), `staleness`, `book`, `book-lint`, `book-pdf`, `print-check`, `adoption`, `adapters`, `applied-skill`, `launch-todo`, and one `emit-<target>` per emitter (with several marks, `emit-<target>/<mark>` and `logo-sheet/<mark>` per mark)
+`motion/<slug>-<hash6>` (from `shot --motion`, one per proof file; see Motion proof) and `frames/<slug>-<hash6>` (from `frames`), `page-check/<slug>-<hash6>` (from `page-check`, one per page; see Page check), `idempotence` (from `verify-idempotent`), `staleness`, `book`, `book-lint`, `book-pdf`, `print-check`, `adoption`, `adapters`, `applied-skill`, `launch-todo`, and one `emit-<target>` per emitter (with several marks, `emit-<target>/<mark>` and `logo-sheet/<mark>` per mark)
 (`emit-web`, `emit-social`, `emit-apple`, `emit-windows`, `emit-linux`, `emit-tray`, `emit-tauri`, `emit-wallet`, `emit-developer`, `emit-print`, `emit-presskit`). The renderer in use is stored in the report and
 printed on every run.
 
@@ -646,6 +647,7 @@ the numbers in `scripts/lib/qa_rules.py` are the agent's proposals, printed as p
  "guides":    {"tolerance_px": 1.5},
  "family":    {"tile_share_tolerance": 0.05},
  "favicon":   {"drawing": "assets/logo/favicon.svg"},
+ "page":      {"widths": [360, 390, 768, 1024, 1440, 1920], "display_min_px": 20, "clear_space": 0.25, "rules": []},
  "bands":     [{"name": "small", "max_px": 32, "drawing": "assets/logo/grid-mark.svg"}, {"name": "large", "drawing": "assets/logo/mark.svg"}]}
 ```
 
@@ -653,6 +655,7 @@ the numbers in `scripts/lib/qa_rules.py` are the agent's proposals, printed as p
 project (exit 2 otherwise) and pure vector (exit 1 otherwise), and so must its `-dark.svg` when there is one.
 
 An unknown section or key, a value of the wrong type or a number at or below 0 exits 2: a typo never falls back to the proposal.
+`page` is read by `page-check` (see Page check); `page.widths` is a non-empty list of different whole numbers from 200 to 4000, and `page.rules` is a list.
 **Size bands:** `qa_rules.pick_band(bands, size_px)` is the one function that names the drawing for a body size (first band whose
 `max_px` covers it; every band but the last has a `max_px`, and the last has none: it covers every larger size, and a last band
 with one exits 2). `Manifest.put_slot()` records the band a slot used; a slot that uses another
@@ -1056,6 +1059,75 @@ a value by listing its path in `{"decided": "<YYYY-MM-DD> <the owner's words>", 
 ("kept by the owner (<decided>): <paths> (N)") when every starter value left is kept. A `starter-kept` that is no object, whose `decided` is not a calendar date followed by words, or whose `paths` is not a list of
 strings, keeps nothing and the same row warns and says what is wrong. Before G4, or with no primitives file, there is no row; the row is never a failure and never an exit 2 (an unreadable primitives file is a warning that it was
 not compared; the `tokens` build is what fails it). `brand-creator tokens` skips `$extensions` of the primitives, so the entry changes no output.
+
+## Page check
+
+`brand-creator page-check` (`scripts/page_check.py`) opens one rendered page in Chromium at each width in each colour scheme, offline, and reports what it
+finds. The browser only measures (`render.mjs page-measure`, with the in-page collectors of `scripts/pagelib/page_measure.mjs`, the one Chromium driver); the
+judging is Python (`scripts/pagelib/pagecheck.py`) against the built tokens, `FACTS.md` and the `page` block of `qa/rules.json`.
+
+```text
+brand-creator page-check <page.html> [--project DIR] [--widths 360,390,...] [--schemes light,dark]
+brand-creator page-check --from DIR <page.html> [--project DIR] ...
+brand-creator page-check --url http://localhost:<port>/<path> [--project DIR] ...
+```
+
+- **Targets.** A page of the project (a path inside it). `--from DIR <page>`: a built site anywhere, the page written relative to DIR; DIR is copied into a new run
+  folder `<data>/scratch/<project>/page-check/<hash6>/<n>/` (`n` is one more than the highest run folder there; `.git`, `node_modules` and symlinks are not
+  copied) and the copy is served, so the site is only read. `--url`: a page already served on this machine, `http` or `https` on `localhost`, `127.0.0.1` or
+  `[::1]` and nothing else, the host written as one of the three (`127.1` or `2130706433` reach this machine and are refused all the same: both functions of the loopback
+  rule read the host as written); a remote URL is a usage error (a remote page is built locally and given with `--from`).
+- **Exit codes.** 2, with nothing written: no target, two target forms, a page that does not exist or is not a file inside the project (or inside DIR), a `--from`
+  that is not a folder or holds more than 5000 files or 200 MB (the files and bytes that would be copied), a `--url` that is not a loopback URL, a width that is
+  not a whole number from 200 to 4000 or listed twice, a scheme other than `light` or `dark`, a bad `qa/rules.json` `page` block. 3: `assets/tokens/tokens.json`
+  missing (`brand-creator tokens`), `node` missing, `render.mjs` exiting 3 (setup missing, Chromium cannot start), or no view measured. 1: a row failed. 0: pass,
+  warnings allowed.
+- **Widths and schemes.** `--widths`, else `qa/rules.json` `page.widths`, else 360, 390, 768, 1024, 1440, 1920 css px; `--schemes`, else `light,dark`. One browser context per
+  width and scheme, with the viewport height 800 at 360, 844 at 390, 1024 at 768, 768 at 1024, 900 at 1440, 1080 at 1920 and 900 at any other width; device scale 1; service workers
+  blocked.
+- **The request.** `page_check.py` writes `<data>/scratch/<project>/page-check/<slug>-<hash6>/request.json` and runs
+  `node scripts/render.mjs page-measure --request <request.json> --out <measures.json> --project <project>`:
+
+  ```json
+  {"schema": 1, "root": "<the project, or a run folder of --from>", "page": "pages/index.html", "url": null,
+   "widths": [390, 1440], "schemes": ["light", "dark"], "selectors": [], "dsf": 1}
+  ```
+
+  Either `root` with `page` (served by the local server) or `url`, never both (exit 2). `root` must be the project or a folder inside `<data>/scratch/`; `page`
+  must stay inside it; a `url` that is not a loopback URL is refused with exit 2 whatever `page_check.py` did (the second gate). `--out` must be outside the project.
+- **The measurements** (`measures.json`, outside the project): `{"schema": 1, "chromium": "<version>", "target": {"kind", "page", "url"}, "views": [...]}`. A view is
+  `{width, scheme, viewport: {width, height}, lang, height, errors, non_local, failed_local, resources, served, animations, ...collectors}`. `errors` are page and
+  console errors; `non_local` the requests to another origin, which are recorded and aborted (a WebSocket: closed before it connects); `failed_local` the answers of 400 and above from the page's own origin;
+  `resources` maps the path of every image and SVG file the page loaded from its own origin (the URL with its query, without its origin, which is left out because its
+  port changes with every view) to `{sha256, content_type}` (the bytes of the response, so a mark can be compared byte for byte with its file); `served` the files the local server answered
+  (empty for `--url`); `animations` what the settle step waited for or left running. A view that could not be rendered is `{width, scheme, viewport, error}`. The collectors add `document` (title, scroll and client width, scroll height) and `selectors`
+  (for each selector the request names: how many elements match and the first visible boxes). The facts are never a verdict.
+- **Redirects.** Chromium asks the route handler about the first URL of a redirect chain only, so `render.mjs` answers every request to the page's own origin itself:
+  the answer is fetched without following redirects and the chain is walked hop by hop (GET) before the browser is given the first response. A hop to another origin is
+  recorded in `non_local` and the request is aborted, so the other server is never asked; a chain of more than 10 hops is stopped and recorded in `failed_local`. A page
+  that sends the browser to another origin (a redirect, a refresh, a script) cannot be measured: the navigation is aborted and the view is `{error}`, with `--url` too.
+  Two checks stay behind: a redirect hop that went to another origin all the same (the server answered differently the second time) and a page that ends on another
+  origin make the view `{error}` ("not stopped", "ended on"). One limit: the answer is fetched in full, so a response from the page's own origin that never ends (an
+  event stream, a long poll) never reaches the page; the request waits up to 60 s and then fails.
+- **WebSockets.** A route does not see a WebSocket, so `render.mjs` takes the page's own in hand: one to the page's own origin goes through (a dev server's hot reload);
+  one to any other origin is recorded in `non_local` and closed before it connects, so that server hears nothing. A document `render.mjs` answers itself is taken by Chromium
+  for a public one, and its local-network check would block even the page's own socket to this machine (`net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS`, a console error
+  that fails every view), so the page's own origin is granted the `local-network-access` permission. One exception: a WebSocket opened inside a worker is not intercepted,
+  and connects to any host the machine can reach.
+- **The report.** Tool `page-check/<slug>-<hash6>` (`assets/_checks/page-check/<slug>-<hash6>.json`), one per page: the slug is the page's file stem (for a URL, the stem of the last
+  segment of its path), else `page`, and the hash is the first six hex of the sha256 of the ident, which is the project-relative posix path of a project page,
+  `from:<real DIR>/<page>`, or `url:<URL>`. Inputs: `assets/tokens/tokens.json`, `qa/rules.json`, `FACTS.md` and `BRAND-STATE.md` (when they exist) and, for a
+  project page, the page and every project file the browser was served (`tokens.css` included), so a change to one makes the report stale; a `--from` or `--url`
+  report lists the brand's files only. The report holds these keys at its top level: `target` (`{"kind": "project"|"from"|"url", "page", "from", "url"}`), `widths`,
+  `schemes` and `measures` (the path of the measurements). `check` does not gate page-check reports.
+- **Rows.** `page:target` (info): what was checked, the widths, schemes, Chromium version and where the thresholds came from. `page:load:<width>-<scheme>`: fails on a
+  page or console error, an answer of 400 and above from the page's own origin, or (a project page or a built site) a request to another origin; with `--url` a request
+  to another origin is a warning ("aborted: page-check runs offline"). A view that cannot be rendered fails its row. When no view was measured the row `page:load` is
+  `skipped` and the exit code is 3. With `--url` only a file the page loads from another origin is a warning; a page that is itself sent to another origin fails its row.
+- **For other tools.** `scripts/pagelib/pagecheck.py` imports only the standard library and `scripts/lib`; a tool puts `scripts/pagelib` on `sys.path` and calls
+  `report_tool(ident)` (the report name above) and `is_loopback_url(url)` (the one loopback rule; `isLoopbackUrl(url)` in `scripts/lib/_common.mjs` is its twin and
+  a test pins both to one table of cases, the forms a parser turns into 127.0.0.1 among them). Each family of rows is a function `(rep, measures, ctx)` listed in `pagecheck.ROW_CHECKS`; a family adds its keys to the
+  report through `ctx.extra`.
 
 ## Brand book
 
