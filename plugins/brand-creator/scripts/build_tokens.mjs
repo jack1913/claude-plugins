@@ -11,6 +11,8 @@
 // Pairs for contrast checks live in semantic.light.tokens.json under $extensions["brand-creator"].pairs.
 // Targets for the colours that touch in the logo artwork live next to them, under $extensions["brand-creator"].touching
 // (passed through to tokens.json; `brand-creator contrast` reads them).
+// The colours text sits on live there too, under $extensions["brand-creator"].grounds: {named_by_owner, list: [{ground, text, action, on-action,
+// focus, border}]}, each a semantic colour token name. They are resolved in light and dark into tokens.json "grounds" (only when the block is present).
 // Outputs in <project>/assets/tokens/: tokens.css, tokens.json, swift/BrandColors.swift,
 //   android/values/colors.xml, android/values-night/colors.xml, Colors.xcassets/**/Contents.json; and, only when the sources
 //   have a duration or a curve: swift/BrandMotion.swift, android/values/motion.xml (durations), android/interpolator/brand_*.xml (curves)
@@ -173,6 +175,40 @@ export function checkCurve(v, where = "cubicBezier") {
   }
   if (v[0] < 0 || v[0] > 1 || v[2] < 0 || v[2] > 1) throw new Error(`${where}: x1 and x2 must be within 0 and 1, got x1 ${v[0]} and x2 ${v[2]}`);
   return [...v];
+}
+
+// ---------------------------------------------------------------- text grounds
+const GROUND_ROLES = ["text", "action", "on-action", "focus", "border"];
+
+/** $extensions["brand-creator"].grounds -> { problems, unknown, grounds }. `problems` are shape errors (grounds is then null and the build fails); `unknown` names a role
+ *  that is not a semantic colour token (resolved as null, a warning). L and D map a semantic token path to its resolved colour in light and dark. A role left out or
+ *  empty is null without a note: `contrast` is the one that warns about a missing role. Roles keep the names as written; modes hold the hex of each. */
+export function resolveGrounds(def, L, D) {
+  const problems = [], unknown = [];
+  if (!def || typeof def !== "object" || Array.isArray(def)) return { problems: ['grounds must be an object {"named_by_owner": "...", "list": [...]}'], unknown, grounds: null };
+  if (typeof def.named_by_owner !== "string") problems.push('grounds.named_by_owner must be a string (the date and the owner\'s words; "" until the owner names the grounds)');
+  if (!Array.isArray(def.list)) problems.push("grounds.list must be an array with one object per ground");
+  else {
+    def.list.forEach((g, i) => {
+      if (!g || typeof g !== "object" || Array.isArray(g)) { problems.push(`grounds.list[${i}] must be an object {ground, text, action, on-action, focus, border}`); return; }
+      if (typeof g.ground !== "string" || g.ground === "") problems.push(`grounds.list[${i}].ground must be a semantic colour token name such as "color.bg"`);
+      for (const r of GROUND_ROLES) if (g[r] != null && typeof g[r] !== "string") problems.push(`grounds.list[${i}].${r} must be a semantic colour token name (a string), got ${JSON.stringify(g[r])}`);
+    });
+  }
+  if (problems.length) return { problems, unknown, grounds: null };
+  const list = def.list.map((g) => {
+    const roles = Object.fromEntries(GROUND_ROLES.map((r) => [r, g[r] || null]));
+    const modes = {};
+    for (const [mode, map] of [["light", L], ["dark", D]]) {
+      const at = (name) => (name === null ? null : map.get(name)?.hex ?? null);
+      modes[mode] = { ground: at(g.ground), ...Object.fromEntries(GROUND_ROLES.map((r) => [r, at(roles[r])])) };
+    }
+    for (const [role, name] of [["ground", g.ground], ...GROUND_ROLES.map((r) => [r, roles[r]])]) {
+      if (name !== null && !L.has(name) && !D.has(name)) unknown.push(`${g.ground} ${role}: ${name}`);
+    }
+    return { ground: g.ground, roles, modes };
+  });
+  return { problems, unknown, grounds: { named_by_owner: def.named_by_owner, list } };
 }
 
 // ---------------------------------------------------------------- formatters
@@ -594,7 +630,18 @@ async function build(project, { fixHex }) {
     distinct.push(entry);
   }
   report.add("pairs", bad.length ? "fail" : "pass", "contrast pairs resolve", { detail: bad.length ? bad.join("; ") : `${pairs.length} pair(s), APCA Lc computed with colorjs.io (advisory only)` });
-  if (bad.length) return { report, outputs: null };
+  // text grounds ($extensions["brand-creator"].grounds): a block of the wrong shape fails and writes nothing; a role that is no semantic colour token warns and is null
+  const ext = docs.light.$extensions?.[EXT];
+  let grounds = null, groundsFail = false;
+  if (ext && typeof ext === "object" && Object.hasOwn(ext, "grounds")) {
+    const g = resolveGrounds(ext.grounds, L, D);
+    grounds = g.grounds;
+    groundsFail = g.problems.length > 0;
+    if (groundsFail) report.add("grounds", "fail", "text grounds have the right shape", { detail: g.problems.join("; ") });
+    else if (g.unknown.length) report.add("grounds", "warn", "ground roles resolve", { detail: `not a semantic colour token, so null (a ground needs all five roles): ${g.unknown.join("; ")}` });
+    else report.add("grounds", "pass", "ground roles resolve", { detail: `${grounds.list.length} ground(s) resolved in light and dark` });
+  }
+  if (bad.length || groundsFail) return { report, outputs: null };
 
   // 4. emit
   const out = {};
@@ -612,6 +659,7 @@ async function build(project, { fixHex }) {
     pairs,
     touching: docs.light.$extensions?.[EXT]?.touching ?? null,
     ...(distinct.length ? { distinct } : {}),
+    ...(grounds ? { grounds } : {}),
   }, null, 2) + "\n";
   out["swift/BrandColors.swift"] = formatSwift({ prims, light: L });
   if (durations.length || curves.length) out["swift/BrandMotion.swift"] = formatSwiftMotion({ durations, curves });

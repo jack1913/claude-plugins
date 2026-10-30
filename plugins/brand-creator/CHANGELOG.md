@@ -46,6 +46,38 @@ stage, and why, is in the [archive](docs/archive/README.md).
   reason. A width it could not be put into under reduced motion is never skipped in silence: the reduced-motion row names
   the width and why, and is not verified (it fails instead when an animation was found at another width). Without built
   tokens the token row says it is not verified.
+- The starter tokens carry layout slots, as proposals until the owner approves the system rules: spacing steps 1 to 8
+  (4 to 64 px), corner radius (small, medium, large, pill), the content width and the gutter, four breakpoints, and line
+  height and letter spacing as plain numbers (letter spacing in em). They are built into `tokens.css` and `tokens.json` like
+  the other tokens, and the system-rules step offers one layout rule for a brand with a site or an app.
+- The starter tokens carry the two colours every interface needs besides the accent: the text on the accent
+  (`color.on-accent`) and the focus ring (`color.focus`), in light and dark, each with its contrast pair (text on the
+  accent at 4.5:1, the focus ring against the ground at 3:1). They also list, as a proposal, which colours text sits on:
+  `color.bg`, with the colour of its text, its action, the text on the action, its focus ring and its border, under
+  `grounds` in `tokens/semantic.light.tokens.json`. The line that records the owner naming the grounds stays empty until
+  the owner does; nothing is guessed. `brand-creator tokens` checks that block when it is there and writes it into `tokens.json`
+  (`grounds`) with every colour resolved in light and dark. A block of the wrong shape fails the build and writes
+  nothing; a role that names no colour token is a warning. A project without the block builds exactly as before.
+- `brand-creator contrast` checks the colours that text sits on. For each ground listed under `grounds` it wants a colour for
+  the text, the action (a button or link), the text on the action, the focus ring and the border, in light and dark, and
+  holds them to their floor: text 4.5:1 on the ground, the action, the focus ring and the border 3:1 against it, the text
+  on the action 4.5:1. With `--cvd` the action and the focus ring must also stay tellable apart from the ground for
+  colour-blind viewers. It warns, too, until the owner has named the grounds (a date and their words in
+  `named_by_owner`; the starter's proposal has none), and says to ask the owner and never to guess. All of these are
+  warnings in this release and do not change the result or the exit code; they become failures in the next release.
+- Once the system rules are approved, `check` warns about every colour, size, spacing or motion value in
+  `tokens/primitives.tokens.json` that is still the starter's proposal, and lists them. Keep a value by listing its path
+  under `starter-kept` in the primitives, with the date and the owner's words, or change it. It only warns; it never
+  fails the check.
+- `DESIGN.md`, `BRAND.md` and the brand's applied skill now carry the grounds that text sits on, when the tokens list
+  them. `DESIGN.md` gets a component for the action on each ground (`action-on-<ground>`, with a `-dark` twin), pairing
+  the action colour with the text on it. `BRAND.md` (under Visual) and the applied skill (under Colour) get a Grounds
+  table with the text, action, text on the action, focus ring and border of each ground, in light and dark. A colour the
+  tokens do not give is left out and shown as "missing: ask the owner", never filled in, and the files say whether the
+  owner named the grounds or they are still a proposal. An action whose text is under 4.5:1 on it gets no component in
+  `DESIGN.md` (the format's own check fails a component like that, while `contrast` only warns about it in this release):
+  `DESIGN.md` names the ground and the pair instead, and the component comes back once the colours pass. A project with
+  no grounds gets the same files as before. Run `adapters` and `applied-skill` again to update files you already have.
 
 ### Changed
 
@@ -71,6 +103,21 @@ stage, and why, is in the [archive](docs/archive/README.md).
   patterns are judged on the direction's own homepage frame, never on the board's chrome, and an empty list is an
   answer. The lead puts each list beside the direction's reflex line (`data-field="reflex-seen"`), where `board-lint`
   compares it with what the direction declared.
+
+### Fixed
+
+- The files written for other tools and agents now carry the type sizes, weights, line height and letter spacing, the
+  spacing steps and the corner radius that the tokens define, wherever the tokens name them (`size.text-*`, `weight.*`,
+  `space.*`, `radius.*`, `leading.*`, `tracking.*`, `layout.*`, `breakpoint.*`, or the older `dimension.space-*`). Before,
+  `DESIGN.md` said "Families only: the tokens define no sizes or weights" whatever the tokens held, and spacing and
+  radius were read from `dimension.*` tokens only. `DESIGN.md` now has them in its type, spacing and rounded entries and
+  in its Typography and Layout sections; `BRAND.md` lists them under Type and a new Layout block; the brand's applied skill
+  lists them under Type and a new Layout section. A value the tokens do not hold is still not invented, and a brand with
+  no sizes or weights keeps the sentence saying so. When the tokens give one step in the older and the new form
+  (`space.1` with `dimension.space-1`, `radius.sm` with `dimension.radius-sm`, `leading.sans` with `line-height.sans`),
+  `DESIGN.md` has one entry for it, or numbers the second when their values differ and says which token it is, so that no
+  key is written twice (a repeated key is not valid YAML and the format's check cannot read the file). Run `adapters`
+  and `applied-skill` again to update files you already have.
 
 ## [0.4.2] - 2026-10-24
 

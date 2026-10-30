@@ -39,10 +39,14 @@
     report of motion/proof.json, the proof of the approved move (motion:proof; the report of any other proof never counts, a try-out's and the one report of an earlier version included, and a
     current failing one fails the row). A current report that says not-verified is quoted, in its own row and in motion:proof:
     up to three of the rows it could not verify, and what to do about them (motionboard.unverified_why, the words board-lint uses for a variant). From G3 to G4 an undecided motion is an info row. Quick decides it at G4: no row
+  * Once G4 is recorded, tokens/primitives.tokens.json is compared with the plugin's starter (templates/tokens/primitives.tokens.json): a token still holding the starter's value
+    is a `tokens:starter` warning, never a failure, unless the owner kept it in $extensions["brand-creator"]["starter-kept"] (a dated decision and a list of paths). Before G4: no row
 A check that cannot be established is "not verified" (exit 3), never "pass". A failing gate is exit 1.
 """
 import json
+import re
 import sys
+from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
@@ -51,7 +55,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "booklib"))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "adaptlib"))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "boardlib"))
 from _common import (Parser, Report, add_project_arg, downscale_report_tool, find_project, gate_recorded, latest_round, main_guard, motion_proof_kind,  # noqa: E402
-                     read_state, rel, sha256_file, stale_inputs, verify_history)
+                     plugin_root, read_state, rel, sha256_file, stale_inputs, verify_history)
 from manifest import band_problems, load_artefacts, verify as verify_manifest  # noqa: E402
 import qa_rules  # noqa: E402
 import tierb  # noqa: E402
@@ -65,6 +69,8 @@ import motionboard  # noqa: E402
 from _common import EXIT_CANNOT, EXIT_USAGE, CliError, fail  # noqa: E402
 
 APPROVED_PROOF = "motion/proof.json"   # the proof of the approved move: finish.sh proves it, and frames takes the stills the book replays of it
+PRIMITIVES = "tokens/primitives.tokens.json"   # compared with the plugin's starter once G4 is recorded (tokens:starter)
+KEPT_DATE = re.compile(r"^(\d{4}-\d{2}-\d{2})\s+\S")   # starter-kept `decided`: a calendar date, then the owner's words
 EMITTERS = ("web", "social", "apple", "windows", "linux", "tray", "tauri", "wallet", "developer", "android", "chrome-ext", "msix", "profiles", "print", "presskit")   # each writes assets/_checks/emit-<name>.json
 # manifest `qa` value -> (report tool, the command that writes it)
 QA_GATES = {
@@ -220,6 +226,80 @@ def motion_decision_rows(project: Path, rep: Report, gated: list[dict]) -> None:
         rep.add("motion:proof", "skipped", label, detail=f"not verified: the motion report of {APPROVED_PROOF} is {doc.get('status')!r}, not a verdict ({quoted}): {how}")
     else:   # no report of it, or a stale one
         rep.add("motion:proof", "skipped", label, detail=f"not verified: run `{cmd}`")
+
+
+def token_leaves(node, path: tuple = ()) -> dict[str, str]:
+    """{dotted path: the token's $value as canonical JSON} for every token of a DTCG document, in document order. A node that holds $value is a token; a key starting with $ is not a group."""
+    if not isinstance(node, dict):
+        return {}
+    if "$value" in node:
+        return {".".join(path): json.dumps(node["$value"], sort_keys=True, separators=(",", ":"))}
+    leaves: dict[str, str] = {}
+    for k, v in node.items():
+        if not k.startswith("$"):
+            leaves.update(token_leaves(v, (*path, k)))
+    return leaves
+
+
+def starter_kept(doc: dict) -> tuple[list[str], str, str | None]:
+    """-> (the token paths the owner kept, the owner's recorded words, what is wrong with the entry or None) from $extensions["brand-creator"]["starter-kept"] of the primitives:
+    {"decided": "<YYYY-MM-DD> <the owner's words>", "paths": ["motion.quick", ...]}. An entry that is wrong keeps nothing."""
+    ext = doc.get("$extensions")
+    ext = ext.get("brand-creator") if isinstance(ext, dict) else None
+    if not isinstance(ext, dict) or "starter-kept" not in ext:
+        return [], "", None
+    entry = ext["starter-kept"]
+    if not isinstance(entry, dict):
+        return [], "", "it is no object {\"decided\": \"<YYYY-MM-DD> <the owner's words>\", \"paths\": [...]}"
+    wrong = []
+    decided, paths = entry.get("decided"), entry.get("paths")
+    found = KEPT_DATE.match(decided) if isinstance(decided, str) else None
+    try:
+        if found:
+            date.fromisoformat(found.group(1))
+    except ValueError:
+        found = None
+    if not found:
+        wrong.append("decided is not a date YYYY-MM-DD followed by the owner's words")
+    if not (isinstance(paths, list) and all(isinstance(p, str) and p for p in paths)):
+        wrong.append("paths is not a list of token paths such as \"motion.quick\"")
+    if wrong:
+        return [], "", "; ".join(wrong)
+    return paths, decided.strip(), None
+
+
+def starter_rows(project: Path, rep: Report) -> None:
+    """tokens:starter. Once G4 is recorded and tokens/primitives.tokens.json exists, every token that still holds the plugin's starter value (templates/tokens/primitives.tokens.json,
+    compared as canonical JSON) is a proposal nobody decided: a warning, never a failure. The owner keeps a value by listing its path in $extensions["brand-creator"]["starter-kept"] of
+    the primitives. Before G4 there is no row."""
+    f = project / PRIMITIVES
+    if not gate_recorded(project, "G4") or not f.is_file():
+        return
+    label = "the primitives are the owner's, not the starter's"
+    try:
+        doc = json.loads(f.read_text(encoding="utf-8"))
+        if not isinstance(doc, dict):
+            raise ValueError("it is no JSON object")
+    except (OSError, ValueError) as e:
+        rep.add("tokens:starter", "warn", label, detail=f"{PRIMITIVES} cannot be read as tokens ({e}), so it is not compared with the starter")
+        return
+    mine = token_leaves(doc)
+    same = [p for p, v in token_leaves(json.loads((plugin_root() / "templates" / "tokens" / "primitives.tokens.json").read_text(encoding="utf-8"))).items() if mine.get(p) == v]
+    kept_paths, words, wrong = starter_kept(doc)
+    left = [p for p in same if p not in kept_paths]
+    kept = [p for p in same if p in kept_paths]
+    say = []
+    if wrong:
+        say.append(f"starter-kept in {PRIMITIVES} is wrong ({wrong}), so it keeps nothing")
+    if left:
+        say.append(f"still the starter's proposal: {', '.join(left)} ({len(left)}); ask the owner to keep them (list them in $extensions[\"brand-creator\"][\"starter-kept\"] of {PRIMITIVES} "
+                   "with the date and their words) or change them")
+    if kept:
+        say.append(f"kept by the owner ({words}): {', '.join(kept)} ({len(kept)})")
+    if wrong or left:
+        rep.add("tokens:starter", "warn", label, detail="; ".join(say), left=left, kept=kept)
+    else:
+        rep.add("tokens:starter", "pass", label, detail="; ".join(say) or "every token differs from the starter's value", left=left, kept=kept)
 
 
 def main() -> int:
@@ -396,6 +476,7 @@ def main() -> int:
             rep.add("motion:spec", "skipped" if unbuilt else "fail", "motion/motion.json is valid", detail=("not verified: " if unbuilt else "") + e.message)
     motion_decision_rows(project, rep, gated)   # the report of an earlier version is in motion_passing (qa:motion), never among these
     adapt_gates.rows(project, rep)
+    starter_rows(project, rep)   # tokens:starter, from G4 on
     bprobs = band_problems(project)
     if any("band" in a_ or "layer_bands" in a_ for a_ in arts):
         rep.add("manifest:bands", "fail" if bprobs else "pass", "slots follow the size-band rule (or carry an exemption)",

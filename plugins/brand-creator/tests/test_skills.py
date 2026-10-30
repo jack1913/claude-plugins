@@ -242,6 +242,17 @@ def test_qa_phase_lists_every_check_command_and_cites_real_deliberate_break_test
         assert kind in text, kind
 
 
+def test_the_grounds_question_is_asked_of_every_brand():
+    """`contrast` warns `grounds:named` for every project and means to fail it from the next release, so 07-tokens (technique 8 and the Gate) asks "Which colours does text
+    sit on?" of every brand at G4, not only of one with a site or an app."""
+    flat = " ".join((REFS / "phases" / "07-tokens.md").read_text(encoding="utf-8").split())
+    asked = [m.start() for m in re.finditer(r'"Which colours does text sit on\?"', flat)]
+    assert len(asked) >= 2, "technique 8 and the Gate both ask the question"
+    for at in asked:
+        assert "site or an app" not in flat[max(0, at - 45):at], flat[max(0, at - 45):at + 40]     # the words that lead into the question
+    assert 'For every brand, ask the plain question "Which colours does text sit on?"' in flat
+
+
 def test_the_book_phase_does_not_ask_for_a_reduced_motion_view_of_the_book_because_no_command_offers_one():
     """10-book asks an agent to read the Motion chapter under reduced motion only through the row and the browser test that prove it: `shot` has no such view."""
     text = (REFS / "phases" / "10-book.md").read_text(encoding="utf-8")
@@ -388,8 +399,24 @@ def test_token_templates_carry_both_schemes_and_computed_hex():
     droles = {k for k in dark["color"] if not k.startswith("$")}
     assert lroles == droles and {"bg", "text", "muted", "accent"} <= lroles
     assert light["$extensions"]["brand-creator"]["pairs"]
+    # text grounds: the roles for text on the accent and the focus ring in both schemes, their two pairs, and a proposal for color.bg the owner has not named yet
+    assert {"on-accent", "focus"} <= lroles and {"on-accent", "focus"} <= droles
+    assert (light["color"]["on-accent"]["$value"], dark["color"]["on-accent"]["$value"]) == ("{color.paper}", "{color.night}")
+    assert (light["color"]["focus"]["$value"], dark["color"]["focus"]["$value"]) == ("{color.signal}", "{color.signal-bright}")
+    pairs = {(pr["fg"], pr["bg"]): (pr["kind"], pr["min"]) for pr in light["$extensions"]["brand-creator"]["pairs"]}
+    assert pairs[("color.on-accent", "color.accent")] == ("ui-text", 4.5) and pairs[("color.focus", "color.bg")] == ("ui-component", 3)
+    grounds = light["$extensions"]["brand-creator"]["grounds"]
+    assert grounds["named_by_owner"] == "" and len(grounds["list"]) == 1 and grounds["list"][0]["ground"] == "color.bg"
+    assert grounds["list"][0] == {"ground": "color.bg", "text": "color.text", "action": "color.accent", "on-action": "color.on-accent",
+                                  "focus": "color.focus", "border": "color.border"}
     for group in ("size", "font", "weight", "motion", "easing"):
         assert group in prim, group
+    # layout slots: six groups of proposals until G4 (tracking says it is in em)
+    for group in ("space", "radius", "layout", "breakpoint", "leading", "tracking"):
+        assert group in prim and "proposals until G4" in prim[group]["$description"], group
+    assert all(prim[g]["$type"] == "dimension" for g in ("space", "radius", "layout", "breakpoint"))
+    assert all(prim[g]["$type"] == "number" for g in ("leading", "tracking"))
+    assert "letter-spacing: calc(var(--tracking-display) * 1em)" in prim["tracking"]["$description"]
     # curves are tokens now: three proposals until G4, and the motion group no longer says they are only named in the book
     easing = prim["easing"]
     assert easing["$type"] == "cubicBezier" and {k: v["$value"] for k, v in easing.items() if not k.startswith("$")} == {

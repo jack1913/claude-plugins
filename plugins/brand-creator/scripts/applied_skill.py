@@ -5,7 +5,7 @@
 # ///
 """brand-creator applied-skill: a small per-brand skill written into the project's own .claude/skills/<slug>-brand/, only with --yes.
 
-The skill carries what an agent needs to apply the brand: colours with their contrast ratios, type, the mark files and the small-size rule,
+The skill carries what an agent needs to apply the brand: colours with their contrast ratios and the grounds text sits on, type, the mark files and the small-size rule,
 motion (the duration and curve tokens, and motion/motion.json: the signature move and the rules) when the brand has any, what is never done, the
 owner's G4 rules and the facts that may be claimed. It is generated from the built tokens, BRAND-STATE.md, FACTS.md and motion/motion.json
 (templates/applied-skill/SKILL.md fills it), so it never holds a second copy that can drift. Opt-in at gate G5: it needs G5 recorded and the

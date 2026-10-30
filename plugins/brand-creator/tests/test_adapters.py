@@ -41,6 +41,21 @@ def colours(text: str, section="colors") -> dict:
     return {m.group(1): m.group(2) for ln in block.splitlines() if (m := re.match(r'^  ([a-z-]+): "(#[0-9a-f]{6}(?:[0-9a-f]{2})?)"$', ln))}
 
 
+def repeated_keys(text: str) -> list[str]:
+    """The keys the frontmatter writes twice under one parent, as dotted paths. YAML takes a repeated key for an error: the pinned lint then reads nothing of the file."""
+    seen: set[tuple[str, ...]] = set()
+    again: list[str] = []
+    path: tuple[str, ...] = ()
+    for ln in FM_RE.match(text).group(1).splitlines():
+        m = re.match(r"^( *)([^\s:][^:]*):", ln)
+        if m:
+            path = path[:len(m.group(1)) // 2] + (m.group(2),)
+            if path in seen:
+                again.append(".".join(path))
+            seen.add(path)
+    return again
+
+
 def stub_data(tmp_path, answer: dict | None, version=PINNED) -> Path:
     """A data directory whose node_modules is the real one without @google/design.md, or with a stub in its place that prints `answer`."""
     real = data_dir()
@@ -624,3 +639,437 @@ def test_text_with_braces_in_the_motion_spec_or_the_rules_is_written_as_it_is_an
     assert brand == design == skill and "- the dot moves like {{name}} says\n- no {{wobble}} ever\n- check {{facts}} first" in skill
     text = (pack / ".claude" / "skills" / "acme-brand" / "SKILL.md").read_text()
     assert "- (rule) say {{name}} in full, see {{facts}} (proposal)" in text and "acme-brand" not in text.split("## Rules", 1)[1].split("\n## ", 1)[0]
+
+
+# ---------------------------------------------------------------- type sizes, weights and layout values: read wherever the tokens hold them
+
+def add_type_and_layout(p: Path, extra=None) -> None:
+    """Sizes, weights, one radius and one spacing step in groups of their own, built into the tokens of the project (Acme has a font family, two
+    `dimension.space-*` steps and a duration, nothing else of the kind)."""
+    def px(n):
+        return {"$value": {"value": n, "unit": "px"}}
+
+    def groups(d):
+        d["size"] = {"$type": "dimension", "text-sm": px(14), "text-lg": px(20)}
+        d["weight"] = {"$type": "fontWeight", "regular": {"$value": 400}, "bold": {"$value": 700}}
+        d["radius"] = {"$type": "dimension", "sm": px(4)}
+        d["space"] = {"$type": "dimension", "3": px(12)}
+        if extra:
+            extra(d, px)
+    mutate_json(p / "tokens" / "primitives.tokens.json", groups)
+    r = bc("tokens", project=p)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def add_line_and_layout(d, px) -> None:
+    """Line height for the family and for a name of its own, tracking, the content width, the gutter and a breakpoint."""
+    d["leading"] = {"$type": "number", "sans": {"$value": 1.4}, "display": {"$value": 1.1}}
+    d["tracking"] = {"$type": "number", "display": {"$value": -0.01}}
+    d["layout"] = {"$type": "dimension", "container": px(1200), "gutter": px(24)}
+    d["breakpoint"] = {"$type": "dimension", "md": px(768)}
+
+
+def typography(text: str) -> dict[str, dict[str, str]]:
+    """The `typography` block of the frontmatter: entry -> {property: value}."""
+    block = re.search(r"^typography:\n((?:  .*\n)+)", FM_RE.match(text).group(1) + "\n", re.M).group(1)
+    out: dict[str, dict[str, str]] = {}
+    for ln in block.splitlines():
+        if m := re.match(r"^  ([a-z0-9-]+):$", ln):
+            out[m.group(1)] = {}
+        elif m := re.match(r"^    ([A-Za-z]+): (.*)$", ln):
+            out[next(reversed(out))][m.group(1)] = m.group(2)
+    return out
+
+
+def test_typography_carries_sizes_and_weights_wherever_they_live(pack):
+    add_type_and_layout(pack)
+    generate(pack)
+    design, brand = (pack / "DESIGN.md").read_text(), (pack / "BRAND.md").read_text()
+    skill = (pack / ".claude" / "skills" / "acme-brand" / "SKILL.md").read_text()
+    typo = typography(design)
+    assert typo["text-sm"] == {"fontSize": "14px"} and typo["text-lg"] == {"fontSize": "20px"}
+    assert typo["weight-regular"] == {"fontWeight": "400"} and typo["weight-bold"] == {"fontWeight": "700"}
+    assert list(typo)[0] == "sans" and set(typo["sans"]) == {"fontFamily"}             # the family comes first, and is only a family
+    fm = FM_RE.match(design).group(1)
+    assert "  space-1: 4px\n  space-2: 8px\n  space-3: 12px\n" in fm                  # dimension.space-1 and space.3 are one scale
+    assert "rounded:\n  sm: 4px\n" in fm
+    assert "Families only" not in design and "The tokens define no sizes or weights." not in design
+    assert "- size.text-sm: 14px" in design and "- weight.bold: 700" in design and "- radius.sm: 4px" in design
+    assert "Spacing steps come from the `dimension.space-*` and `space.*` tokens." in design
+    for text in (brand, skill):
+        for line in ("- size.text-sm: `14px`", "- size.text-lg: `20px`", "- weight.regular: `400`", "- weight.bold: `700`", "- radius.sm: `4px`",
+                     "- space.3: `12px`", "- dimension.space-1: `4px`"):
+            assert line in text, line
+    assert section(brand, "### Type", "\n### ").splitlines()[0].startswith("- sans: `") and "### Layout" in brand
+    assert skill.index("## Type") < skill.index("- size.text-sm") < skill.index("## Layout") < skill.index("- radius.sm") < skill.index("## Mark")
+
+
+def test_line_height_and_tracking_join_the_family_of_their_name_or_stand_alone_and_layout_values_are_listed(pack):
+    add_type_and_layout(pack, add_line_and_layout)
+    generate(pack)
+    design, brand = (pack / "DESIGN.md").read_text(), (pack / "BRAND.md").read_text()
+    skill = (pack / ".claude" / "skills" / "acme-brand" / "SKILL.md").read_text()
+    typo = typography(design)
+    assert list(typo["sans"]) == ["fontFamily", "lineHeight"] and typo["sans"]["lineHeight"] == "1.4"          # leading.sans joins font.sans
+    assert typo["display"] == {"lineHeight": "1.1", "letterSpacing": "-0.01em"}                               # no family called display: an entry of its own
+    for text in (brand, skill):
+        assert "- leading.display: `1.1`" in text and "- leading.sans: `1.4`" in text and "- tracking.display: `-0.01em`" in text
+        assert "- layout.container: `1200px`" in text and "- layout.gutter: `24px`" in text and "- breakpoint.md: `768px`" in text
+    layout = section(design, "## Layout")
+    assert "- radius.sm: 4px" in layout and "- layout.container: 1200px" in layout and "- breakpoint.md: 768px" in layout
+    assert "container" not in FM_RE.match(design).group(1)                                                       # the format has no key for them: prose only
+
+
+def test_without_spacing_radius_or_layout_values_the_layout_section_is_left_out_everywhere(pack):
+    mutate_json(pack / "tokens" / "primitives.tokens.json", lambda d: d.pop("dimension"))
+    assert bc("tokens", project=pack).returncode == 0
+    generate(pack)
+    design, brand = (pack / "DESIGN.md").read_text(), (pack / "BRAND.md").read_text()
+    skill = (pack / ".claude" / "skills" / "acme-brand" / "SKILL.md").read_text()
+    assert "Layout" not in design and "spacing:" not in design and "rounded:" not in design
+    assert "### Layout" not in brand and "## Layout" not in skill and "{{" not in skill
+    assert "## Type\n\n- sans: `" in skill and "\n\n## Mark\n" in skill                                          # the line of the section goes with its blank line
+
+
+def test_no_size_weight_or_layout_value_is_invented(pack):
+    generate(pack)
+    design, brand = (pack / "DESIGN.md").read_text(), (pack / "BRAND.md").read_text()
+    skill = (pack / ".claude" / "skills" / "acme-brand" / "SKILL.md").read_text()
+    for prop in ("fontSize", "fontWeight", "lineHeight", "letterSpacing", "rounded:"):
+        assert prop not in design, prop
+    assert set(typography(design)) == {"sans"} and "The tokens define no sizes or weights." in design and "Families only" not in design
+    for text, type_head, layout_head in ((brand, "### Type", "### Layout"), (skill, "## Type", "## Layout")):
+        type_lines = [ln for ln in section(text, type_head, "\n##").splitlines() if ln]
+        layout_lines = [ln for ln in section(text, layout_head, "\n##").splitlines() if ln.startswith("- ")]
+        assert type_lines and all(ln.startswith("- sans: `") for ln in type_lines)                                 # the family, and nothing else of type
+        assert layout_lines == ["- dimension.space-1: `4px`", "- dimension.space-2: `8px`"]                      # the two steps the tokens hold, and nothing else
+
+
+def test_layout_tokens_are_classified_by_name_and_an_alias_is_followed(pack):
+    import adapt
+    other = {"font.sans": "x", "dimension.space-1": "4px", "space.2": "8px", "spacing.big": "var(--space-2)", "dimension.radius-card": "6px", "radius.sm": "4px",
+             "rounded.lg": "12px", "size.text-sm": "14px", "dimension.text-lg": "20px", "weight.bold": "700", "line-height.body": "1.5",
+             "letter-spacing.wide": "0.05em", "leading.display": "1.1", "tracking.display": "-0.01", "layout.container": "1200px", "dimension.gutter-lg": "32px",
+             "breakpoint.md": "768px", "size.hairline": "1px", "dimension.line-height-tight": "1.2", "motion.base": "320ms", "duration.fast": "150ms",
+             "timing.text-slow": "640ms", "easing.standard": "cubic-bezier(0.2, 0, 0, 1)"}
+    doc = {"other": other, "motion": {"durations_ms": {"duration.fast": 150, "motion.base": 320, "timing.text-slow": 640}, "curves": {"easing.standard": [0.2, 0, 0, 1]}}}
+    got = {kind: [(t.key, t.rest, t.value) for t in toks] for kind, toks in adapt.layout_tokens(doc).items()}
+    assert got == {
+        "spacing": [("dimension.space-1", "1", "4px"), ("space.2", "2", "8px"), ("spacing.big", "big", "8px")],       # the alias is the value it names
+        "rounded": [("dimension.radius-card", "card", "6px"), ("radius.sm", "sm", "4px"), ("rounded.lg", "lg", "12px")],
+        "layout": [("breakpoint.md", "md", "768px"), ("dimension.gutter-lg", "lg", "32px"), ("layout.container", "container", "1200px")],
+        "sizes": [("size.text-sm", "text-sm", "14px"), ("dimension.text-lg", "text-lg", "20px")],                      # in name order; size.hairline is no text size, timing.text-slow a duration
+        "weights": [("weight.bold", "bold", "700")],
+        "leading": [("leading.display", "display", "1.1"), ("dimension.line-height-tight", "tight", "1.2"), ("line-height.body", "body", "1.5")],
+        "tracking": [("letter-spacing.wide", "wide", "0.05em"), ("tracking.display", "display", "-0.01")]}
+
+
+def test_a_value_the_format_cannot_hold_stays_in_the_prose_and_out_of_the_frontmatter(pack, monkeypatch):
+    """A weight that is a keyword and a size that is no px, em or rem dimension are listed as the tokens hold them, but get no frontmatter entry: the pinned
+    format wants a number and a dimension, and nothing is converted or guessed."""
+    import adapt
+    doc = json.loads((pack / "assets" / "tokens" / "tokens.json").read_text())
+    doc["other"].update({"weight.heavy": "bold", "weight.regular": "400", "size.text-fluid": "clamp(1rem, 2vw, 2rem)", "size.text-sm": "14px", "tracking.loose": "0.05em"})
+    monkeypatch.setattr(adapt.bookdata, "tokens", lambda project: (doc, pack / "assets" / "tokens" / "tokens.json"))
+    design = adapt.design_md(pack)
+    typo = typography(design)
+    assert "weight-heavy" not in typo and "text-fluid" not in typo
+    assert typo["weight-regular"] == {"fontWeight": "400"} and typo["text-sm"] == {"fontSize": "14px"} and typo["loose"] == {"letterSpacing": "0.05em"}
+    assert "- weight.heavy: bold" in design and "- size.text-fluid: clamp(1rem, 2vw, 2rem)" in design
+
+
+@pytest.mark.requires_design_lint
+def test_the_pinned_design_md_format_accepts_sizes_and_weights(pack):
+    """The pinned lint finds no error in a DESIGN.md with sizes, weights, line heights, tracking, spacing and radius: typography entries with no family
+    (`text-sm`, `weight-bold`, `display`) are accepted."""
+    add_type_and_layout(pack, add_line_and_layout)
+    r = bc("adapters", "--design-md", "--primary", "accent", project=pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert row(pack, "design-md:lint", "adapters")["status"] == "pass"
+    rep = json.loads((pack / "assets" / "_checks" / "adapters.json").read_text())
+    assert not [x for x in rep["results"] if x["id"].startswith("design-md:lint") and x["status"] == "fail"]
+    assert "fontSize: 14px" in (pack / "DESIGN.md").read_text() and "fontWeight: 700" in (pack / "DESIGN.md").read_text()
+
+
+def both_forms(d) -> None:
+    """For mutate_json on the primitives `add_type_and_layout` made: the older and the new form of one step, with one value (`space.1` = `dimension.space-1`,
+    `radius.sm` = `dimension.radius-sm`, `size.text-sm` = `dimension.text-sm`) and with two (`space.2`, `radius.lg`, `size.text-lg`, `leading.sans` against `line-height.sans`)."""
+    def px(n):
+        return {"$value": {"value": n, "unit": "px"}}
+    d["space"].update({"1": px(4), "2": px(10)})
+    d["dimension"].update({"radius-sm": px(4), "radius-lg": px(16), "text-sm": px(14), "text-lg": px(22)})
+    d["radius"]["lg"] = px(12)
+    d["leading"] = {"$type": "number", "sans": {"$value": 1.4}}
+    d["line-height"] = {"$type": "number", "sans": {"$value": 1.5}}
+
+
+def test_a_step_given_in_both_forms_is_one_entry_or_numbered_and_no_key_of_the_frontmatter_repeats(pack):
+    """`space.1` and `dimension.space-1` are both `space-1`, `radius.sm` and `dimension.radius-sm` both `sm`: one entry when the values agree, and when they differ the first
+    in name order keeps the name, the next is numbered and the prose says which token it is. A repeated key is invalid YAML, and the pinned lint then checks nothing."""
+    add_type_and_layout(pack)
+    mutate_json(pack / "tokens" / "primitives.tokens.json", both_forms)
+    assert bc("tokens", project=pack).returncode == 0
+    generate(pack)
+    design = (pack / "DESIGN.md").read_text()
+    assert repeated_keys(design) == []
+    fm = FM_RE.match(design).group(1)
+    assert "spacing:\n  space-1: 4px\n  space-2: 8px\n  space-2-2: 10px\n  space-3: 12px\n" in fm
+    assert "rounded:\n  lg: 16px\n  sm: 4px\n  lg-2: 12px\n" in fm
+    typo = typography(design)
+    assert typo["sans"] == {"fontFamily": typo["sans"]["fontFamily"], "lineHeight": "1.4"} and typo["sans-2"] == {"lineHeight": "1.5"}
+    assert typo["text-sm"] == {"fontSize": "14px"} and typo["text-lg"] == {"fontSize": "20px"} and typo["text-lg-2"] == {"fontSize": "22px"}
+    assert "`sans-2` is `line-height.sans`, `text-lg-2` is `dimension.text-lg`." in section(design, "## Typography")
+    assert "`space-2-2` is `space.2`, `lg-2` is `radius.lg`." in section(design, "## Layout")
+    for key in ("radius.lg: 12px", "dimension.radius-sm: 4px", "line-height.sans: 1.5", "dimension.text-lg: 22px"):     # every token is still listed, with its own value
+        assert f"- {key}" in design, key
+    for name in ("BRAND.md", ".claude/skills/acme-brand/SKILL.md"):
+        text = (pack / name).read_text()
+        for key in ("space.1: `4px`", "space.2: `10px`", "line-height.sans: `1.5`"):
+            assert f"- {key}" in text, (name, key)
+
+
+def test_a_project_with_each_step_once_gets_no_numbered_entry_and_no_sentence_about_one(pack):
+    add_type_and_layout(pack)
+    generate(pack)
+    design = (pack / "DESIGN.md").read_text()
+    assert repeated_keys(design) == [] and "Two tokens gave one entry name" not in design
+
+
+@pytest.mark.requires_design_lint
+def test_the_pinned_lint_reads_a_design_md_whose_steps_come_in_both_forms(pack):
+    """With a repeated key the lint cannot parse the frontmatter, reports one warning (`Map keys must be unique`) and nothing else, and the adapter used to pass it:
+    the lint now reads the file, which shows in its findings about the file's own tokens."""
+    add_type_and_layout(pack)
+    mutate_json(pack / "tokens" / "primitives.tokens.json", both_forms)
+    assert bc("tokens", project=pack).returncode == 0
+    r = bc("adapters", "--design-md", "--primary", "accent", project=pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    rep = json.loads((pack / "assets" / "_checks" / "adapters.json").read_text())
+    lint = [x for x in rep["results"] if x["id"].startswith("design-md:lint")]
+    assert lint and not [x for x in lint if x["status"] == "fail"]
+    assert not [x for x in lint if "unique" in x.get("detail", "")], lint
+    assert "design-md:lint:orphaned-tokens" in {x["id"] for x in lint}, lint          # a file the lint could not parse has no such finding
+
+
+# ---------------------------------------------------------------- text grounds: the action of each ground, with its on-action text
+
+GROUND = {"ground": "color.bg", "text": "color.text", "action": "color.accent", "on-action": "color.on-accent", "focus": "color.focus", "border": "color.border"}
+
+
+def add_grounds(p: Path, named="2026-10-30 text sits on the page colour", block=True) -> None:
+    """Acme gets the two roles an action needs (the text on the accent, the focus ring) in light and dark, and (unless [block] is False) one text ground,
+    `color.bg`, with its five roles, built into the tokens."""
+    def light(d):
+        d["color"]["on-accent"] = {"$value": "{color.paper}"}
+        d["color"]["focus"] = {"$value": "{color.teal}"}
+        if block:
+            d.setdefault("$extensions", {}).setdefault("brand-creator", {})["grounds"] = {"named_by_owner": named, "list": [dict(GROUND)]}
+
+    def dark(d):
+        d["color"]["on-accent"] = {"$value": "{color.night}"}
+        d["color"]["focus"] = {"$value": "{color.teal-bright}"}
+    mutate_json(p / "tokens" / "semantic.light.tokens.json", light)
+    mutate_json(p / "tokens" / "semantic.dark.tokens.json", dark)
+    r = bc("tokens", project=p)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def component(text: str, name: str) -> dict[str, str]:
+    """The properties of one `components` entry of the frontmatter."""
+    block = re.search(rf"^  {re.escape(name)}:\n((?:    .*\n)+)", FM_RE.match(text).group(1) + "\n", re.M)
+    return dict(re.match(r"^    ([A-Za-z]+): (.*)$", ln).groups() for ln in block.group(1).splitlines()) if block else {}
+
+
+def set_ground(p: Path, **change) -> None:
+    """Change the roles of the one ground of the project (None leaves a role out) and build the tokens again."""
+    def edit(d):
+        ground = d["$extensions"]["brand-creator"]["grounds"]["list"][0]
+        for role_name, token in change.items():
+            if token is None:
+                ground.pop(role_name.replace("_", "-"), None)
+            else:
+                ground[role_name.replace("_", "-")] = token
+    mutate_json(p / "tokens" / "semantic.light.tokens.json", edit)
+    r = bc("tokens", project=p)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_grounds_give_each_text_ground_its_action_component_and_table(pack):
+    add_grounds(pack)
+    generate(pack)
+    design, brand = (pack / "DESIGN.md").read_text(), (pack / "BRAND.md").read_text()
+    skill = (pack / ".claude" / "skills" / "acme-brand" / "SKILL.md").read_text()
+    assert component(design, "action-on-bg") == {"backgroundColor": '"{colors.accent}"', "textColor": '"{colors.on-accent}"'}
+    assert component(design, "action-on-bg-dark") == {"backgroundColor": '"{colors.accent-dark}"', "textColor": '"{colors.on-accent-dark}"'}
+    assert component(design, "text-on-bg") and component(design, "text-on-bg-dark")                       # the entries of the text pairs stay
+    c = colours(design)
+    assert c["on-accent"] == "#f9f7ee" and c["on-accent-dark"] == "#0e141d"                               # what the entries point at is defined
+    refs = re.findall(r'"\{colors\.([a-z-]+)\}"', design)
+    assert refs and all(ref in c for ref in refs)
+    assert "The colours text sits on: `bg`. Named by the owner: 2026-10-30 text sits on the page colour." in design
+    assert "`action-on-<ground>` is the action colour of a ground with its on-action text" in design and "give no colour" not in design
+    heads = re.findall(r"^## (.+)$", design, re.M)
+    assert [h for h in heads if h != "Motion"] == [h for h in CANON if h in heads]                         # the sections keep the spec's order
+    rows = ["| bg #f9f7ee | light | text #0d1b2d | accent #007d71 | on-accent #f9f7ee | focus #007d71 | border #4b596c |",
+            "| bg #0e141d | dark | text #f0eee7 | accent #4cd7c8 | on-accent #0e141d | focus #4cd7c8 | border #a7b2c1 |"]
+    for text in (brand, skill):
+        block = section(text, "### Grounds", "\n##")
+        assert "| ground | mode | text | action | on-action | focus | border |" in block and "Named by the owner: 2026-10-30 text sits on the page colour." in block
+        assert all(r in block for r in rows) and "missing: ask the owner" not in block.split("is not defined")[1]
+        assert text.index("| on-accent | #f9f7ee | #0e141d |") < text.index("### Grounds")                 # after the colour table
+    assert brand.index("### Grounds") < brand.index("### Type") and skill.index("### Grounds") < skill.index("Text and component pairs")
+    assert section(skill, "## Colour", "\n## ").count("### Grounds") == 1                                  # in the applied skill it is part of the colour section, no new heading level of its own
+    # the starter's proposal is not the owner's naming, and the files say so while the table still lists what the tokens hold
+    mutate_json(pack / "tokens" / "semantic.light.tokens.json", lambda d: d["$extensions"]["brand-creator"]["grounds"].__setitem__("named_by_owner", ""))
+    assert bc("tokens", project=pack).returncode == 0
+    generate(pack)
+    for name in ("BRAND.md", "DESIGN.md", ".claude/skills/acme-brand/SKILL.md"):
+        text = (pack / name).read_text()
+        assert "Not named by the owner yet: these grounds are a proposal." in text and "Named by the owner" not in text, name
+
+
+def test_a_role_the_tokens_give_no_colour_is_left_out_and_named_never_invented(pack):
+    """A ground without its on-action text gets no action entry at all; one whose on-action text has a light colour only gets the light entry; a ground without
+    a focus ring still gets both entries. The files say which ground lacks what, and the table says "missing: ask the owner" where the tokens give nothing."""
+    add_grounds(pack)
+    set_ground(pack, on_action=None)
+    generate(pack)
+    design, brand = (pack / "DESIGN.md").read_text(), (pack / "BRAND.md").read_text()
+    skill = (pack / ".claude" / "skills" / "acme-brand" / "SKILL.md").read_text()
+    assert "action-on" not in design and "## Components" in design                                          # nothing invented for the entry; the section stays to say why
+    assert "The tokens give no colour for the following, so nothing is written for it. Ask the owner; do not guess:\n\n- bg in light: no on-action\n- bg in dark: no on-action\n" in design
+    for text in (brand, skill):
+        assert "| bg #f9f7ee | light | text #0d1b2d | accent #007d71 | missing: ask the owner | focus #007d71 | border #4b596c |" in text
+        assert "| bg #0e141d | dark | text #f0eee7 | accent #4cd7c8 | missing: ask the owner | focus #4cd7c8 | border #a7b2c1 |" in text
+    set_ground(pack, on_action="color.on-accent")                                                           # the role is back, but built tokens that hold no dark colour for it (a null)
+    mutate_json(pack / "assets" / "tokens" / "tokens.json", lambda d: d["grounds"]["list"][0]["modes"]["dark"].__setitem__("on-action", None))
+    generate(pack)
+    design, brand = (pack / "DESIGN.md").read_text(), (pack / "BRAND.md").read_text()
+    assert component(design, "action-on-bg") and not component(design, "action-on-bg-dark") and "{colors.on-accent-dark}" not in design
+    assert "- bg in dark: no on-action\n" in design and "bg in light" not in design
+    assert "| bg #0e141d | dark | text #f0eee7 | accent #4cd7c8 | missing: ask the owner | focus #4cd7c8 | border #a7b2c1 |" in brand
+    set_ground(pack, focus=None)                                                                            # a missing focus ring does not take the action entries with it
+    generate(pack)
+    design = (pack / "DESIGN.md").read_text()
+    assert component(design, "action-on-bg") and component(design, "action-on-bg-dark")
+    assert "- bg in light: no focus\n- bg in dark: no focus\n" in design
+    set_ground(pack, focus="color.focus")                                                                   # each mode on its own: no light on-action leaves the dark entry
+    mutate_json(pack / "assets" / "tokens" / "tokens.json", lambda d: d["grounds"]["list"][0]["modes"]["light"].__setitem__("on-action", None))
+    generate(pack)
+    design = (pack / "DESIGN.md").read_text()
+    assert not component(design, "action-on-bg") and component(design, "action-on-bg-dark") and "- bg in light: no on-action\n" in design
+
+
+def test_a_ground_listed_twice_and_a_pair_already_named_so_keep_their_component_names_apart(pack):
+    """A colour role called `action` in a text pair on `bg` already makes the component `action-on-bg`; the grounds entries take the next free names, and a
+    ground listed twice gets two entries. No key of `components` is repeated, because YAML would take a repeated key for a second definition."""
+    add_grounds(pack)
+
+    def light(d):
+        d["color"]["action"] = {"$value": "{color.teal}"}
+        block = d["$extensions"]["brand-creator"]
+        block["pairs"].append({"fg": "color.action", "bg": "color.bg", "kind": "ui-text", "min": 4.5})
+        block["grounds"]["list"].append(dict(block["grounds"]["list"][0]))
+    mutate_json(pack / "tokens" / "semantic.light.tokens.json", light)
+    mutate_json(pack / "tokens" / "semantic.dark.tokens.json", lambda d: d["color"].__setitem__("action", {"$value": "{color.teal-bright}"}))
+    r = bc("tokens", project=pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    generate(pack)
+    design = (pack / "DESIGN.md").read_text()
+    names = re.findall(r"^  ([a-z0-9-]+):$", FM_RE.match(design).group(1).split("\ncomponents:\n", 1)[1], re.M)
+    assert len(names) == len(set(names)) and [n for n in names if n.startswith("action-on-bg")] == [
+        "action-on-bg", "action-on-bg-dark", "action-on-bg-2", "action-on-bg-2-dark", "action-on-bg-3", "action-on-bg-3-dark"]
+    assert component(design, "action-on-bg") == {"backgroundColor": '"{colors.bg}"', "textColor": '"{colors.action}"'}            # the pair keeps its name
+    for name in ("action-on-bg-2", "action-on-bg-3"):
+        assert component(design, name) == {"backgroundColor": '"{colors.accent}"', "textColor": '"{colors.on-accent}"'}
+
+
+def test_without_grounds_the_adapter_files_do_not_change(pack, tmp_path):
+    """Acme as built has no grounds: none of the three files mentions them. The same project with grounds differs by exactly the grounds lines."""
+    bare = tmp_path / "bare"
+    shutil.copytree(pack, bare)
+    add_grounds(pack)
+    add_grounds(bare, block=False)
+    assert "grounds" not in json.loads((bare / "assets" / "tokens" / "tokens.json").read_text())
+    generate(pack)
+    generate(bare)
+    for name in ("BRAND.md", "DESIGN.md", ".claude/skills/acme-brand/SKILL.md"):
+        without = (bare / name).read_text()
+        assert "Grounds" not in without and "action-on" not in without and "text sits on" not in without, name
+    brand, design = (pack / "BRAND.md").read_text(), (pack / "DESIGN.md").read_text()
+    skill = (pack / ".claude" / "skills" / "acme-brand" / "SKILL.md").read_text()
+    assert re.sub(r"### Grounds\n.*?(?=### Type)", "", brand, flags=re.S) == (bare / "BRAND.md").read_text()
+    assert re.sub(r"\n\n### Grounds\n.*?(?=\n\nText and component pairs)", "", skill, flags=re.S) == (bare / ".claude" / "skills" / "acme-brand" / "SKILL.md").read_text()
+    stripped = re.sub(r"  action-on-bg(?:-dark)?:\n(?:    .*\n)+", "", design)
+    stripped = re.sub(r"The colours text sits on: .*\n\n|`action-on-<ground>` is .*\n\n", "", stripped)
+    assert stripped == (bare / "DESIGN.md").read_text()
+    assert brand != (bare / "BRAND.md").read_text() and skill != (bare / ".claude" / "skills" / "acme-brand" / "SKILL.md").read_text()      # the strip changed something
+
+
+def test_a_grounds_block_of_the_wrong_shape_stops_the_adapters_and_writes_nothing(pack):
+    add_grounds(pack)
+    tj = pack / "assets" / "tokens" / "tokens.json"
+    mutate_json(tj, lambda d: d["grounds"].__setitem__("list", [{"ground": "color.bg"}]))
+    r = bc("adapters", "--brand-md", "--design-md", project=pack)
+    assert r.returncode == 2 and "grounds must be" in r.stderr and "brand-creator tokens" in r.stderr
+    assert not (pack / "BRAND.md").exists() and not (pack / "DESIGN.md").exists()
+    assert bc("applied-skill", "--yes", project=pack).returncode == 2 and not (pack / ".claude" / "skills" / "acme-brand").exists()
+
+
+@pytest.mark.requires_design_lint
+def test_the_pinned_design_md_format_accepts_the_action_components(pack):
+    add_grounds(pack)
+    r = bc("adapters", "--design-md", "--primary", "accent", project=pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert row(pack, "design-md:lint", "adapters")["status"] == "pass"
+    rep = json.loads((pack / "assets" / "_checks" / "adapters.json").read_text())
+    assert not [x for x in rep["results"] if x["id"].startswith("design-md:lint") and x["status"] == "fail"]
+    assert "action-on-bg-dark:" in (pack / "DESIGN.md").read_text()
+
+
+def test_an_action_whose_text_is_under_4_5_to_1_gets_no_component_where_contrast_only_warns(pack):
+    """`contrast` warns this release about an on-action text under 4.5:1 on its action and exits 0; the pinned lint fails a component with that pair. So the component is
+    left out, per mode, and the prose says which pair and why: the adapters do not fail what `contrast` still lets through."""
+    add_grounds(pack)
+    set_ground(pack, on_action="color.muted")                                                               # slate on teal in light, fog on bright teal in dark
+    r = bc("contrast", "--skip-marks", project=pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    rows = {x["id"]: x for x in report(pack, "contrast")["results"]}
+    assert rows["grounds:light:color.bg:on-action"]["status"] == "warn" and rows["grounds:dark:color.bg:on-action"]["status"] == "warn"
+    generate(pack)
+    design = (pack / "DESIGN.md").read_text()
+    assert "action-on" not in design and component(design, "text-on-bg") and repeated_keys(design) == []
+    assert re.search(r"The text on the action is under 4\.5:1 for the following, so no component is written for it.*Ask the owner which colour to change; do not guess:\n\n"
+                     r"- bg in light: muted on accent is \d\.\d\d:1\n- bg in dark: muted on accent is \d\.\d\d:1\n", design, re.S)
+    assert "`action-on-<ground>` is the action colour" not in design                                        # nothing of that kind was written
+    # one mode misses: the light entry stays, the dark twin goes, and only dark is named
+    set_ground(pack, on_action="color.on-accent")
+    mutate_json(pack / "tokens" / "semantic.dark.tokens.json", lambda d: d["color"].__setitem__("on-accent", {"$value": "{color.fog}"}))
+    assert bc("tokens", project=pack).returncode == 0
+    generate(pack)
+    design = (pack / "DESIGN.md").read_text()
+    assert component(design, "action-on-bg") == {"backgroundColor": '"{colors.accent}"', "textColor": '"{colors.on-accent}"'} and not component(design, "action-on-bg-dark")
+    assert re.search(r"- bg in dark: on-accent on accent is \d\.\d\d:1\n", design) and "- bg in light:" not in design
+    # a pair that passes is written again
+    mutate_json(pack / "tokens" / "semantic.dark.tokens.json", lambda d: d["color"].__setitem__("on-accent", {"$value": "{color.night}"}))
+    assert bc("tokens", project=pack).returncode == 0
+    generate(pack)
+    design = (pack / "DESIGN.md").read_text()
+    assert component(design, "action-on-bg") and component(design, "action-on-bg-dark") and "is under 4.5:1" not in design
+
+
+@pytest.mark.requires_design_lint
+def test_an_action_under_4_5_to_1_does_not_make_the_adapters_fail_while_contrast_passes(pack):
+    """The report the owner met: a ground whose on-action is `color.muted` passes `contrast` with a warning, and `adapters --design-md` used to exit 1 on the lint's
+    contrast-ratio rule for `action-on-bg`. Now both exit 0, and the lint finds nothing to fail."""
+    add_grounds(pack)
+    mutate_json(pack / "tokens" / "semantic.light.tokens.json", lambda d: d["$extensions"]["brand-creator"]["grounds"]["list"][0].__setitem__("on-action", "color.muted"))
+    assert bc("tokens", project=pack).returncode == 0
+    r = bc("contrast", "--skip-marks", project=pack)
+    assert r.returncode == 0 and "[WARN] grounds:light:color.bg:on-action" in r.stdout, r.stdout + r.stderr
+    r = bc("adapters", "--design-md", "--primary", "accent", project=pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    rep = json.loads((pack / "assets" / "_checks" / "adapters.json").read_text())
+    assert rep["status"] == "pass" and row(pack, "design-md:lint", "adapters")["status"] == "pass"
+    assert not [x for x in rep["results"] if x["id"].startswith("design-md:lint") and x["status"] == "fail"]
+    assert "action-on-bg" not in (pack / "DESIGN.md").read_text()

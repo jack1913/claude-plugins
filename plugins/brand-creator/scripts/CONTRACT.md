@@ -223,6 +223,32 @@ DTCG 2025.10 is a Final Community Group Report. It is not a W3C Standard and not
   each other (a brand accent and a danger colour, two state colours): `{"distinct": [{"a": "color.accent", "b": "color.danger",
   "label": "..."}]}`. `tokens` resolves them in light and dark into `tokens.json` (an unknown role fails); `contrast --cvd` holds them
   to the colour-vision distance. A miss the owner accepts goes in `tokens/exceptions.json` like a touching-pair miss.
+- Text grounds: `$extensions["brand-creator"].grounds` of `semantic.light.tokens.json` lists the colours text sits on, each with its five roles:
+  `{"grounds": {"named_by_owner": "<YYYY-MM-DD> <the owner's words>", "list": [{"ground": "color.bg", "text": "color.text", "action": "color.accent",
+  "on-action": "color.on-accent", "focus": "color.focus", "border": "color.border"}]}}`. Every value is the name of a semantic colour token. `named_by_owner`
+  is the date and the owner's words naming the grounds and stays `""` while nobody has: the model never guesses which colours text sits on. The starter
+  carries the roles `color.on-accent` (light `{color.paper}`, dark `{color.night}`) and `color.focus` (light `{color.signal}`, dark `{color.signal-bright}`),
+  the pairs `color.on-accent`/`color.accent` (`ui-text`, 4.5) and `color.focus`/`color.bg` (`ui-component`, 3), and a proposal for `color.bg` with
+  `named_by_owner` empty. `tokens` checks the block only when it is present: `grounds` an object with a string `named_by_owner` and a `list` of objects
+  with a string `ground`, and each of the five roles a string or left out. A block of the wrong shape is a failing `grounds` row (exit 1) that
+  names every problem and writes nothing, as for a pair that names an unknown token. A name that is no semantic colour token (the ground included) is a
+  `grounds` warning that names it, and resolves as `null`; a role left out is `null` and `tokens` says nothing, because `contrast` is the check that
+  asks for all five. `tokens.json` then gains a last key `grounds`: `{"named_by_owner": "...", "list": [{"ground": "color.bg", "roles": {"text":
+  "color.text", "action": "color.accent", "on-action": "color.on-accent", "focus": "color.focus", "border": "color.border"}, "modes": {"light": {"ground":
+  "#f3f5f8", "text": "#16181d", "action": "#375587", "on-action": "#f3f5f8", "focus": "#375587", "border": "#565b63"}, "dark": {...}}}]}`: `roles` keeps
+  the names as written (`null` for a role left out), `modes` holds the six-digit hex of each in that mode (`null` when it did not resolve). Without the
+  block, `tokens.json` and every other output are byte for byte what they were, and the report has no `grounds` row.
+- Text-ground checks: `contrast` reads `grounds` of `tokens.json` (nothing when the key is absent but the one `grounds:named` row) and writes the section
+  `grounds`. Every row is a pass or a warning that says it is a failure from the next release; the report's status and the exit code never change because of
+  them. `grounds:named` warns when `tokens.json` has no `grounds` ("ask the owner which colours text sits on; record them in `grounds` with the date and their
+  words; never guess"), when `named_by_owner` does not start with a real `YYYY-MM-DD` date (the starter's `""`: "a proposal, not named by the owner"), when it is only
+  a date, and when `list` is empty; it passes naming the owner's words. A ground listed more than once keeps its rows apart by `#2`, `#3` after its id. For each ground and mode:
+  `grounds:<mode>:<ground>:roles` warns naming the role (or `ground`) that has no colour (left out, `null`, or a name that is no semantic colour token), and
+  the rows that need that colour are then not written, never invented; `grounds:<mode>:<ground>:<role>` is the WCAG 2.2 ratio of `text` on the ground (4.5:1),
+  `action` against the ground (3:1), `on-action` on the action (4.5:1), `focus` against the ground (3:1) and `border` against the ground (3:1), with `ratio`,
+  `required`, `fg`, `bg`, `ground`, `mode` and `role`. With `--cvd`, `cvd:<mode>:grounds:<ground>:<action|focus>` holds the action and the focus ring to the
+  colour-vision distance of the shared rule (`qa/rules.json` `cvd.min_delta_e`), in the fields of the other `cvd:` rows, in the same section; a missing colour is
+  said once, in the roles row. A `tokens.json` whose `grounds` has the wrong shape is a usage error (exit 2). The proposal in the starter is judged like the owner's grounds.
 - Emitters need the semantic tokens `color.bg` and `color.text`; `color.muted` and `color.accent` are used when present.
 - Motion tokens (primitives only: a semantic file carries colours only). A duration is `"$type": "duration"` with `{"value": 320, "unit": "ms"}`
   (`unit` is `ms` or `s`; the older `"320ms"` string is read too): a number of 0 or more that comes to whole milliseconds, because Android keeps a
@@ -230,6 +256,12 @@ DTCG 2025.10 is a Final Community Group Report. It is not a W3C Standard and not
   `y1` and `y2` unrestricted (a curve may overshoot); a duration is at most 2147483647 ms, the largest integer Android keeps. A group named `easing` gives `--easing-*`. A reference (`"{easing.standard}"`) resolves like any
   other. Anything else fails the build (exit 1, report row `motion-tokens`), names the token path and writes nothing. The starter tokens carry three
   curve proposals, `easing.standard` `[0.2, 0, 0, 1]`, `easing.enter` `[0, 0, 0, 1]` and `easing.exit` `[0.3, 0, 1, 1]`, which stay proposals until G4.
+- Layout slots in the starter tokens (`templates/tokens/primitives.tokens.json`; proposals until G4, each group's `$description` says so): `space.1` to
+  `space.8` (4, 8, 12, 16, 24, 32, 48, 64 px), `radius.sm`, `md`, `lg`, `pill` (4, 8, 16, 999 px), `layout.container` (1200 px) and `layout.gutter` (24 px),
+  `breakpoint.sm`, `md`, `lg`, `xl` (640, 768, 1024, 1280 px), all `"$type": "dimension"` with `{"value", "unit": "px"}`; and `leading.display` (1.1), `leading.body`
+  (1.5), `tracking.display` (-0.01) and `tracking.body` (0), `"$type": "number"` (tracking is in em, as DTCG 2025.10 dimensions are px or rem only:
+  `letter-spacing: calc(var(--tracking-display) * 1em)`). `dimension` and `number` tokens reach `tokens.css` (`--space-1: 4px;`, `--leading-display: 1.1;`) and
+  `tokens.json` under `other` only (`"space.1": "4px"`); they are not durations or curves and have no Swift or Android output.
 - Outputs of the motion tokens, written only when the sources have a duration or a curve (a project with neither gets no motion file and no `motion`
   entry in `tokens.json`, and its other outputs are byte for byte what they were):
   - `tokens.css`: `--<path>: 320ms;` and `--<path>: cubic-bezier(x1, y1, x2, y2);` with the other non-colour primitives (an alias is `var(--other)`).
@@ -1017,6 +1049,14 @@ section), a passing contrast report without colour-vision rows (one `contrast` w
 (`report:contrast:cvd`, naming `contrast --cvd`). Slots off the band rule, platform-spec rows stamped stale or U, and
 `tools/inputs.json` differences are gated or warned as described above.
 
+Once G4 is recorded and `tokens/primitives.tokens.json` exists, `check` compares every token of it with the same path in the plugin's starter, `templates/tokens/primitives.tokens.json`
+(`$value`, as canonical JSON; a key starting with `$` is not a group), and the row `tokens:starter` warns: "still the starter's proposal: <paths> (N); ask the owner to keep them (list them in
+`$extensions["brand-creator"]["starter-kept"]` of tokens/primitives.tokens.json with the date and their words) or change them". The row's `left` lists those paths and `kept` the ones the owner kept. The owner keeps
+a value by listing its path in `{"decided": "<YYYY-MM-DD> <the owner's words>", "paths": ["motion.quick", ...]}` under `starter-kept`; a path listed there is kept only while its value is still the starter's, and the row passes
+("kept by the owner (<decided>): <paths> (N)") when every starter value left is kept. A `starter-kept` that is no object, whose `decided` is not a calendar date followed by words, or whose `paths` is not a list of
+strings, keeps nothing and the same row warns and says what is wrong. Before G4, or with no primitives file, there is no row; the row is never a failure and never an exit 2 (an unreadable primitives file is a warning that it was
+not compared; the `tokens` build is what fails it). `brand-creator tokens` skips `$extensions` of the primitives, so the entry changes no output.
+
 ## Brand book
 
 `brand-creator book`, `book-lint`, `book-pdf`, `patch` and `collapse` (scripts `book.py`, `book_lint.py`, `book_pdf.py`, `patch.py`,
@@ -1316,10 +1356,10 @@ of those files, including the text of an adoption row's `change`, is searched li
 tokens (`assets/tokens/tokens.json`), BRAND-STATE.md and FACTS.md. BRAND.md: frontmatter `type` and `architecture` (standalone: master, independent; family-member:
 master, endorsed; product-in-family: product, endorsed; these pairings are brand-creator's reading, not something the format defines, so they can be overridden),
 then Strategy (the facts, the canonical direction), Voice (only `voice` and `tone` facts and the FORBIDDEN list; "no voice facts are recorded" otherwise), Visual
-(colour roles in light and dark, type families, the mark files, the G4 rules, motion) and Governance (naming and renames, claims and verbatim legal facts,
+(colour roles in light and dark, type families with the sizes, weights, line height and tracking the tokens define, the spacing, radius and layout values, the mark files, the G4 rules, motion) and Governance (naming and renames, claims and verbatim legal facts,
 the accessibility commitments with the computed ratios, approval). Contact and postal-address facts are left out. DESIGN.md: frontmatter `version: alpha`, `name`,
-`colors` (the light roles, `-dark` variants, `primary` when `--primary` names a role), `typography` (families only), `spacing`, `components` (one entry per
-`ui-text` pair, light and dark, as `{colors.x}` references), then the sections in the spec's order that have content. A role whose colour is see-through
+`colors` (the light roles, `-dark` variants, `primary` when `--primary` names a role), `typography` (families, sizes, weights, line height and tracking), `spacing`, `rounded`, `components` (one entry per
+`ui-text` pair, light and dark, as `{colors.x}` references, and the action of each text ground, below), then the sections in the spec's order that have content. A role whose colour is see-through
 (alpha under 1 in `tokens.json`) is written `#rrggbbaa`, lower case, as `tokens.css` writes it, wherever a role is listed (BRAND.md, DESIGN.md `colors`, the applied
 skill); an opaque role stays `#rrggbb`. The pinned DESIGN.md format lists `#RRGGBBAA` as a colour, and its lint passes it. The report `adapters` records the sha256 of
 each output and `adapter_state_sha` (a hash of what the adapters read from BRAND-STATE.md and FACTS.md). DESIGN.md is linted with `@google/design.md` (the version
@@ -1328,6 +1368,37 @@ is `fail`, other warnings are `warn`, and a missing package is `skipped`, so the
 that is not the bytes the report recorded (a hand edit) and treats a changed source as not verified. A hand-edited file is replaced only with `--replace`, which
 moves it to `removed-<date>[-n]/`. When `tools/inputs.json` exists, the adapters add `BRAND.md` and `DESIGN.md` to its globs (the pack then reads as stale until
 `staleness --write`), and `staleness --write` includes both whenever they exist.
+
+Type and layout values are read wherever `tokens.json` `other` holds them, by the name of the key (`adaptlib/adapt.py` `layout_tokens`; a leading `dimension.` is dropped
+first). By its first segment, or for a one-segment name by the word it starts with before a hyphen: `space`/`spacing` are spacing steps, `radius`/`rounded` corner radius, `weight`
+weights, `leading`/`line-height` line height, `tracking`/`letter-spacing` tracking, `layout`/`container`/`gutter`/`breakpoint` layout values; a name with a segment starting `text-`
+(`size.text-sm`) is a text size. Fonts, durations and curves are read as before; an alias (`var(--space-3)`) is read as the value it names; every group is in name order. Nothing is
+invented: a kind the tokens do not hold is not written, and a brand with no size and no weight keeps the sentence "The tokens define no sizes or weights." in DESIGN.md.
+DESIGN.md `typography` has one entry per `font.*` family; a `leading.<n>` or `tracking.<n>` joins the entry of the family of that name (`lineHeight`, `letterSpacing` in em: a plain
+number such as `-0.01` is written `-0.01em`) or, when no family has that name, makes an entry `<n>`; each size is an entry `text-<step>` (`fontSize`) and each weight an entry
+`weight-<name>` (`fontWeight`). A weight that is not a whole number, a size that is not a px, em or rem dimension, and a line height or tracking that is neither a number nor such a dimension stay in the
+prose and out of the frontmatter, because the format holds nothing else. `spacing` entries are named `space-<rest>` (`space.1` and `dimension.space-1` are `space-1`) and `rounded` entries after the
+radius (`radius.sm` and `dimension.radius-sm` are `sm`). No key of the frontmatter is written twice (`adaptlib/adapt.py` `one_each`): YAML takes a repeated key for an error, and the pinned lint then
+reads nothing of the file and passes it. When two tokens give one name (`space.1` with `dimension.space-1`, `radius.sm` with `dimension.radius-sm`) or one property of one `typography` entry
+(`leading.sans` with `line-height.sans`, `size.text-sm` with `dimension.text-sm`) the same value, they make one entry; with different values the first in name order keeps the name and the next
+is numbered `<name>-2`, `-3` (a name no token has of its own), and the prose (`## Typography`, `## Layout`) says which token it is: "`space-2-2` is `space.2`". Every token is still listed in
+the prose with its own value. The DESIGN.md prose lists them: `## Typography` the families, sizes, weights, line heights and tracking, `## Layout` the groups the
+spacing steps come from and the radius, container, gutter and breakpoint values. BRAND.md `### Type` and the applied skill's `## Type` list the same, one bullet per token path; BRAND.md
+`### Layout` and the applied skill's `## Layout` list the spacing, radius and layout values, and are left out when there are none.
+
+Text grounds are read from `grounds` of `tokens.json` (see Token sources; absent, nothing changes and the three files are byte for byte what they were). DESIGN.md `components` gains
+`action-on-<ground>` for each listed ground (`<ground>` is the role name without `color.`): `backgroundColor` the action role and `textColor` the on-action role, as `{colors.x}`
+references, and an `action-on-<ground>-dark` twin when both roles have a colour in dark. A name already taken (a ground listed twice, a `ui-text` pair that makes the same name) takes
+`-2`, `-3`, so that no key repeats. A role the tokens give no colour for (`null`: left out of the block, or a name that is no semantic colour token) is left out and never filled in:
+a ground without its action or on-action in a mode has no entry for that mode (`action-on-<ground>` for light, the `-dark` twin for dark). An entry is also left out for a mode in which the
+on-action text is under 4.5:1 on the action (the ratio of `grounds:<mode>:<ground>:on-action` in `contrast`): the lint of the pinned format fails a component with such a pair (`contrast-ratio`), while
+`contrast` only warns about it in this release and exits 0, and `adapters --design-md` must not exit 1 for a pair that `contrast` passes. The other mode keeps its entry, and `## Components` lists
+each ground, mode, pair and ratio under "The text on the action is under 4.5:1"; once the colours pass, the entry is written. DESIGN.md `## Components` then also names the grounds and says whether the owner
+named them (`named_by_owner` starts with a real `YYYY-MM-DD` date and has words after it, the rule `contrast` holds it to) or they are the starter's proposal, and lists under "The tokens
+give no colour for the following" each ground and mode with the roles it lacks (`ground colour`, text, action, on-action, focus, border). BRAND.md `### Grounds` (after `### Colour`) and
+the applied skill (a `### Grounds` block appended to the `{{colours}}` fill, so under its `## Colour`; no new placeholder) hold the same block, a sentence on who named the grounds and one
+table, a row per ground and mode: ground, mode, text, action, on-action, focus, border. A cell is the role name and its colour as the colour table prints it (`#rrggbbaa` when see-through), or "missing: ask the
+owner". A `grounds` block of another shape in `tokens.json` stops `adapters` and `applied-skill` (exit 2) before anything is written.
 
 Motion is the same text in BRAND.md (`### Motion`), DESIGN.md (`## Motion`, prose between Components and Do's and Don'ts: the pinned format keeps a section it does
 not name, so no frontmatter key is invented) and the applied skill (`## Motion`): every duration token (by its type, the paths under `tokens.json`
@@ -1341,7 +1412,8 @@ the `adapters` and `applied-skill` reports, and the state hash covers it: a chan
 ### applied-skill
 
 `applied-skill --yes [--plan] [--replace]` writes `.claude/skills/<slug>-brand/SKILL.md` into the project from `templates/applied-skill/SKILL.md`: colours (light and
-dark) and the contrast pairs with their ratios, type families, the mark files (relative to the skill), the small-size rule (from `qa/rules.json`, or the plugin's
+dark) with the table of text grounds when the tokens list any (above), and the contrast pairs with their ratios, type families with the sizes, weights, line height and tracking the tokens define (`{{type}}`), the spacing, radius and layout values
+(the optional `## Layout` section, through the template's `{{layout}}`: a whole section or nothing, as for motion, and left out when the tokens hold none), the mark files (relative to the skill), the small-size rule (from `qa/rules.json`, or the plugin's
 proposal, said so), motion (the section above, through the template's `{{motion}}`: a whole section or nothing, so a brand without motion gets the file it always
 had), what is never done, the G4 rules, the facts that may be claimed (contact facts left out). It needs G5 and `--yes` (without it: the plan on stdout, a
 message on stderr, exit 2; `--plan` exits 0). The name is `<slug>-brand` (lower case, hyphens, at most 64 characters, no `claude` or `anthropic`). Gated by `check` like

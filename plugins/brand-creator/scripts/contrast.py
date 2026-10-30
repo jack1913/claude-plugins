@@ -28,9 +28,16 @@ its reason; an exception that matches nothing, or a pair that passes anyway, is 
      and tritanopia with ColorAide (MIT): Brettel 1997 and Vienot 1999 for protan and deutan, Brettel for tritan (Vienot's
      method covers the two red-green cases only). The simulated colours must stay at least cvd.min_delta_e apart in
      CIEDE2000 (qa/rules.json; the proposal is 10 and is printed as a proposal for the owner to set at G4).
-Exit 1 when any pair misses its target and is not excepted; exit 3 when the logo SVG is missing (skip it explicitly
-with --skip-marks, which is printed).
+  6. Text grounds (section `grounds`, warnings in this release, each saying it is a failure from the next one): every ground
+     that carries text (`grounds` of tokens.json, from $extensions["brand-creator"].grounds) needs all five roles in light and
+     dark (text, action, on-action, focus, border), with text at 4.5:1 on the ground, the action and the focus ring and the border
+     at 3:1 against it, and the on-action text at 4.5:1 on the action. `grounds:named` warns until the owner has named the grounds
+     (a date and their words); with --cvd the action and the focus ring must also stay the colour-vision distance (item 5) from
+     the ground (`cvd:<mode>:grounds:<ground>:<role>`).
+Exit 1 when any pair misses its target and is not excepted (the text-grounds rows never change the status or the exit code);
+exit 3 when the logo SVG is missing (skip it explicitly with --skip-marks, which is printed).
 """
+import datetime
 import json
 import re
 import sys
@@ -203,6 +210,97 @@ def report_stale_exceptions(rep: Report, exceptions: list[dict], cvd: bool) -> N
                             else f"{what} matches no {where}: the exception is stale, remove it"))
 
 
+# ---------------------------------------------------------------- text grounds
+GROUND_ROLES = ("text", "action", "on-action", "focus", "border")
+# role, what it is held against ("ground", or another role of the same ground), WCAG floor, WCAG criterion
+GROUND_TARGETS = (
+    ("text", "ground", 4.5, "WCAG 2.2 AA 1.4.3 (text)"),
+    ("action", "ground", 3.0, "WCAG 2.2 AA 1.4.11 (non-text)"),
+    ("on-action", "action", 4.5, "WCAG 2.2 AA 1.4.3 (text)"),
+    ("focus", "ground", 3.0, "WCAG 2.2 AA 1.4.11 (non-text)"),
+    ("border", "ground", 3.0, "WCAG 2.2 AA 1.4.11 (non-text)"),
+)
+GROUNDS_LABEL = "text grounds, complete roles"
+NEXT_RELEASE = "this is a warning now and a failure from the next release"
+
+
+def ground_entries(tj: dict) -> list[tuple[str, str, str, dict]]:
+    """The grounds of tokens.json as (id, ground token, mode, {ground, text, action, on-action, focus, border -> hex or None}), light then dark of
+    each ground. A ground named twice gets `#2`, `#3` after its id, so that no two rows share one. [] when tokens.json has no `grounds`."""
+    g = tj.get("grounds")
+    if g is None:
+        return []
+    ok = (isinstance(g, dict) and isinstance(g.get("named_by_owner"), str) and isinstance(g.get("list"), list)
+          and all(isinstance(e, dict) and isinstance(e.get("ground"), str) and isinstance(e.get("modes"), dict)
+                  and all(isinstance(e["modes"].get(m), dict) for m in ("light", "dark")) for e in g["list"]))
+    if not ok:
+        fail(EXIT_USAGE, 'tokens.json: grounds must be {"named_by_owner": "...", "list": [{"ground": ..., "modes": {"light": {...}, "dark": {...}}}]}; '
+                         "run `brand-creator tokens` again")
+    out, count = [], {}
+    for e in g["list"]:
+        count[e["ground"]] = n = count.get(e["ground"], 0) + 1
+        gid = e["ground"] if n == 1 else f"{e['ground']}#{n}"
+        out += [(gid, e["ground"], mode, e["modes"][mode]) for mode in ("light", "dark")]
+    return out
+
+
+def starts_with_date(text: str) -> bool:
+    """True when `text` starts with a real calendar date written YYYY-MM-DD."""
+    m = re.match(r"(\d{4}-\d{2}-\d{2})(?!\d)", text)
+    if m is None:
+        return False
+    try:
+        datetime.date.fromisoformat(m.group(1))
+    except ValueError:
+        return False
+    return True
+
+
+def check_grounds(rep: Report, tj: dict) -> None:
+    """Section `grounds`: `grounds:named`, then per ground and mode `grounds:<mode>:<ground>:roles` and one row per role that has what it is held
+    against. Every row is a pass or a warning: the status and the exit code of the report do not change in this release."""
+    g = tj.get("grounds")
+    if g is None:
+        rep.add("grounds:named", "warn", GROUNDS_LABEL, section="grounds",
+                detail=f"tokens.json has no grounds: ask the owner which colours text sits on, record them in `grounds` with the date and their words, "
+                       f"never guess; {NEXT_RELEASE}")
+        return
+    ground_entries(tj)                                    # the shape is checked once, whichever rows follow
+    named = g["named_by_owner"].strip()
+    if not starts_with_date(named):
+        rep.add("grounds:named", "warn", GROUNDS_LABEL, section="grounds", named_by_owner=False,
+                detail=("grounds.named_by_owner is empty: " if not named else f"grounds.named_by_owner {named!r} does not start with a YYYY-MM-DD date: ")
+                       + f"these grounds are a proposal, not named by the owner. Ask the owner which colours text sits on and record the date "
+                         f"and their words; never guess; {NEXT_RELEASE}")
+    elif not named[10:].strip():
+        rep.add("grounds:named", "warn", GROUNDS_LABEL, section="grounds", named_by_owner=False,
+                detail=f"grounds.named_by_owner is only the date {named[:10]}: record the owner's words too; {NEXT_RELEASE}")
+    elif not g["list"]:
+        rep.add("grounds:named", "warn", GROUNDS_LABEL, section="grounds", named_by_owner=True,
+                detail=f"the owner named the grounds ({named}) but grounds.list holds none: list each colour text sits on; {NEXT_RELEASE}")
+    else:
+        rep.add("grounds:named", "pass", GROUNDS_LABEL, section="grounds", named_by_owner=True, detail=f"named by the owner: {named}")
+    for gid, name, mode, m in ground_entries(tj):
+        missing = [r for r in ("ground",) + GROUND_ROLES if not m.get(r)]
+        if missing:
+            rep.add(f"grounds:{mode}:{gid}:roles", "warn", GROUNDS_LABEL, section="grounds", ground=name, mode=mode, missing=missing,
+                    detail=f"{name} in {mode}: no colour for {', '.join(missing)}. A ground needs a text, action, on-action, focus and border colour: "
+                           f"ask the owner, never guess; {NEXT_RELEASE}")
+        else:
+            rep.add(f"grounds:{mode}:{gid}:roles", "pass", GROUNDS_LABEL, section="grounds", ground=name, mode=mode, missing=[],
+                    detail=f"{name} in {mode}: all five roles have a colour")
+        for role, against, minimum, wcag in GROUND_TARGETS:
+            fg, bg = m.get(role), m.get(against)
+            if not (fg and bg):
+                continue                                  # a missing role is said once, in the roles row
+            ratio = wcag_ratio(fg, bg)
+            ok = ratio >= minimum
+            on = "the ground" if against == "ground" else "the action"
+            rep.add(f"grounds:{mode}:{gid}:{role}", "pass" if ok else "warn", f"{GROUNDS_LABEL} ({wcag})", section="grounds", ground=name, mode=mode,
+                    role=role, ratio=round(ratio, 2), required=minimum, fg=fg, bg=bg,
+                    detail=f"{role} {fg} on {on} {bg} ({name}, {mode}): {ratio:.2f}:1 (need {minimum:g}:1)" + ("" if ok else f"; {NEXT_RELEASE}"))
+
+
 CVD_METHODS = {"protan": ("brettel", "vienot"), "deutan": ("brettel", "vienot"), "tritan": ("brettel",)}
 CVD_LABEL = "colour-vision simulation (ColorAide): simulated colours stay distinguishable (CIEDE2000)"
 
@@ -244,6 +342,17 @@ def check_cvd(rep: Report, tj: dict, rules: dict, rules_src: str, exceptions: li
     def sim(hexv: str, kind: str, method: str) -> Color:
         return Color(hexv).filter(kind, method=method).convert("srgb").fit()
 
+    def measure(fg: str, bg: str) -> tuple[tuple, dict, float]:
+        """(the lowest simulated distance as (delta_e, deficiency, method), every simulated distance by deficiency/method, the normal-vision distance)."""
+        worst, by = None, {}
+        for kind in kinds:
+            for method in CVD_METHODS[kind]:
+                de = sim(fg, kind, method).delta_e(sim(bg, kind, method), method="2000")
+                by[f"{kind}/{method}"] = round(de, 1)
+                if worst is None or de < worst[0]:
+                    worst = (de, kind, method)
+        return worst, by, Color(fg).delta_e(Color(bg), method="2000")
+
     rep.extra["cvd"] = {"threshold_delta_e": thr, "threshold_source": rules_src, "metric": "CIEDE2000",
                         "methods": {k: list(CVD_METHODS[k]) for k in kinds}, "library": "ColorAide (MIT)"}
     own = "cvd.min_delta_e" in rules["_from_file"]
@@ -252,15 +361,7 @@ def check_cvd(rep: Report, tj: dict, rules: dict, rules_src: str, exceptions: li
     pairs = cvd_pairs(tj)
     for pr in pairs:
         for mode, (fg, bg) in pr["modes"].items():
-            worst = None
-            by = {}
-            for kind in kinds:
-                for method in CVD_METHODS[kind]:
-                    de = sim(fg, kind, method).delta_e(sim(bg, kind, method), method="2000")
-                    by[f"{kind}/{method}"] = round(de, 1)
-                    if worst is None or de < worst[0]:
-                        worst = (de, kind, method)
-            normal = Color(fg).delta_e(Color(bg), method="2000")
+            worst, by, normal = measure(fg, bg)
             ok = worst[0] >= thr
             hit = None
             if not ok:  # an owner-accepted miss of the same pair (tokens/exceptions.json) is a warning that carries its reason
@@ -277,6 +378,19 @@ def check_cvd(rep: Report, tj: dict, rules: dict, rules_src: str, exceptions: li
                     detail=detail, section="cvd", pair=pr["id"], mode=mode, fg=fg, bg=bg, delta_e_normal=round(normal, 1), delta_e_simulated=by,
                     worst={"deficiency": worst[1], "method": worst[2], "delta_e": round(worst[0], 1)}, required=thr,
                     **({"exception": hit["reason"]} if hit else {}))
+    for gid, name, mode, m in ground_entries(tj):         # the action and the focus ring against their ground: a warning in this release
+        for role in ("action", "focus"):
+            if not (m.get(role) and m.get("ground")):
+                continue                                  # a missing role is said once, in the grounds:<mode>:<ground>:roles row
+            fg, bg = m[role], m["ground"]
+            worst, by, normal = measure(fg, bg)
+            ok = worst[0] >= thr
+            rep.add(f"cvd:{mode}:grounds:{gid}:{role}", "pass" if ok else "warn", f"{GROUNDS_LABEL}, {CVD_LABEL}", section="grounds", ground=name, mode=mode,
+                    role=role, fg=fg, bg=bg, delta_e_normal=round(normal, 1), delta_e_simulated=by,
+                    worst={"deficiency": worst[1], "method": worst[2], "delta_e": round(worst[0], 1)}, required=thr,
+                    detail=f"{role} {fg} / ground {bg} ({name}, {mode}): lowest simulated distance {worst[0]:.1f} ({worst[1]}, {worst[2]}) vs threshold {thr:g}; "
+                           f"normal vision {normal:.1f}" + ("" if ok else f"  the {role} collapses into its ground for some viewers: change one of them or "
+                                                                          f"add a non-colour cue; {NEXT_RELEASE}"))
 
 
 def main() -> int:
@@ -339,6 +453,7 @@ def main() -> int:
                     apca_lc=lc, apca_advisory=True,
                     detail=f"{ratio:.2f}:1 (need {minimum:g}:1)  fg {m['fg_hex']} on {m['bg_hex']}"
                            + (f"  APCA Lc {lc} (advisory)" if lc is not None else "  APCA not computed"))
+    check_grounds(rep, doc)
     if a.skip_marks:
         rep.add("touching:skipped-on-purpose", "info", TOUCH_LABEL, section="touching-pairs", detail="--skip-marks: the pairs that touch in the logo artwork were not checked")
         evaluated = False

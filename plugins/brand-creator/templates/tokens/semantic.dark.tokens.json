@@ -17,6 +17,12 @@
     "accent": {
       "$value": "{color.signal-bright}"
     },
+    "on-accent": {
+      "$value": "{color.night}"
+    },
+    "focus": {
+      "$value": "{color.signal-bright}"
+    },
     "mark": {
       "$value": "{color.chalk}"
     },

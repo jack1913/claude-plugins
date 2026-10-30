@@ -95,7 +95,23 @@ one-line "(rule)" items that the owner approves at G4.
    when the motion round is approved, or by `brand-creator motion --off`, before G4; in Quick, at G4.
 7. **Type and units.** A type scale in px or rem as DTCG dimensions (`{value, unit}`). A minimum label size the book
    will hold itself to. Hairline and frame units for strokes and padding. A focus ring that passes the UI gate on both
-   grounds.
+   grounds. For a brand with a site or an app the starter also carries layout slots: spacing steps `space.1` to
+   `space.8` (4 to 64 px), corner radius `radius.sm`, `md`, `lg` and `pill`, the content width `layout.container` and the
+   gap `layout.gutter`, the breakpoints `breakpoint.sm`, `md`, `lg` and `xl`, and line height and letter spacing as plain
+   numbers: `leading.display`, `leading.body`, `tracking.display` and `tracking.body` (tracking in em, so
+   `letter-spacing: calc(var(--tracking-display) * 1em)`). Like the curves, they are proposals until G4: the owner
+   approves or changes them with the layout rule, and a brand with no site or app can delete the groups it does not use.
+8. **Text grounds.** Text does not sit on one colour only: the page, a card, a band, a footer, a dark panel. The
+   owner names which colours text sits on, and each of them gets five roles in light and dark: the text on it, its action
+   (a button or link colour), the text on that action, the focus ring and the border. They are `grounds` in
+   `tokens/semantic.light.tokens.json` (`$extensions["brand-creator"]`, with `named_by_owner`: the date and the owner's words;
+   shape and checks in `scripts/CONTRACT.md`), built into `tokens.json`. The starter carries a proposal for `color.bg` with
+   `named_by_owner` empty. Never guess the grounds, and never write a date and words the owner did not say: `contrast` warns
+   (`grounds:named`) until they are recorded, then holds each role to its floor (text 4.5:1, the action, focus ring and border
+   3:1 against the ground, the text on the action 4.5:1) and, with `--cvd`, keeps the action and the focus ring tellable
+   apart from the ground. These are warnings in this release and failures from the next. A missing role is not filled in
+   with a colour that merely passes: ask. At G4 the plain question is "Which colours does text sit on?" (a page, a card, a band,
+   a dark panel); record the answer in the owner's words, with the date, in `named_by_owner`.
 
 ## The motion round (Standard and Full)
 
@@ -159,11 +175,19 @@ code. For example:
 - (rule) reduced motion: nothing moves; durations `motion.quick` 160 / `base` 320 / `slow` 640 ms, `stagger` 120 ms; curves `easing.standard`, `enter` and `exit` (when `motion/motion.json` says on; in Quick, only when something moves)
 - (rule) interactive brand pieces stay within 6 kB of script, gzipped (proposal; only when the brand ships code)
 - (rule) accent and danger stay distinct (a `distinct` pair)
+- (rule) layout: space steps `space.1`-`space.8`, radius `radius.*`, container `layout.container`, gutter `layout.gutter`, breakpoints `breakpoint.*`, display line height `leading.display` and tracking `tracking.display` (proposal; when the brand has a site or an app)
+
+For every brand, ask the plain question "Which colours does text sit on?" (a page, a card, a band, a dark
+panel) before the plan and record the answer in the owner's words, with the date, as `named_by_owner` of `grounds` (technique 8);
+until then `contrast` warns, and the model never names the grounds itself.
 
 In Quick, record the motion answer, on or off, in `motion/motion.json` now (off needs the owner's reason, in the owner's
 words: `brand-creator motion --off "<reason>"` writes it). In Standard and Full it is there already, and `check` fails
 `motion:decided` once G4 is recorded without it. Then record the G4 plan with
-`... state --project <dir> --record G4 "<plan> GO"`. Any later change to a rule or token follows the cascade (`check --cascade "<old value>"`).
+`... state --project <dir> --record G4 "<plan> GO"`. Once G4 is recorded, `check` warns (`tokens:starter`) about each token of
+`tokens/primitives.tokens.json` that still holds the starter's value: the owner keeps it, by listing its path in
+`$extensions["brand-creator"]["starter-kept"]` with the date and their words, or changes it.
+Any later change to a rule or token follows the cascade (`check --cascade "<old value>"`).
 
 ## Pitfalls
 
@@ -201,7 +225,8 @@ words: `brand-creator motion --off "<reason>"` writes it). In Standard and Full 
 - `contrast` (script): the UI pairs gate on WCAG 2.2 AA; the brand-rule pairs and the touching pairs from the raster gate
   on the owner's targets; an exception needs a reason and is reported when it matches nothing. Artwork with gradients is
   "not verified", never a pass.
-- `contrast --cvd` (script): ΔE2000 under each deficiency, the threshold from `qa/rules.json`, the method named per row.
+- `contrast --cvd` (script): ΔE2000 under each deficiency, the threshold from `qa/rules.json`, the method named per row. For each text ground, the action and the focus ring against the ground too.
+- `contrast` text grounds (script): `grounds:named` and, per ground and mode, a complete set of roles and each role against its floor. Warnings in this release, failures from the next.
 - `shot --motion` (script): a page's motion is seeked, not waited for: no infinite animation, layout shift 0 and no animated
   layout property (move the mark with `transform` and `opacity`), whole pixels for a pixel mark (a vector mark may ease), at
   360 and 390 px nothing past an edge and no sideways scroll, the rest frame equal to the still in the page itself (a
