@@ -24,6 +24,8 @@ def test_fixture_round_1_passes(proj):
     rep = report(proj, "board-lint")
     assert rep["tool"] == "board-lint" and rep["status"] == "pass" and "rounds/r1/board.html" in [i["path"] for i in rep["inputs"]]
     assert len(rep["inputs_sha"]) == 64
+    row = next(x for x in rep["results"] if x["id"] == "directions:divergence")   # the three Acme directions are drawn in colours of their own
+    assert row["status"] == "pass" and "3 directions compared" in row["detail"] and "practice proposal" in row["detail"], row
 
 
 @pytest.mark.parametrize("section", ["strategy-core", "positioning-map", "hardest-surface", "none-of-these", "my-call", "questions", "reply"])
@@ -445,6 +447,72 @@ def test_with_the_judge_a_direction_needs_the_judge_list_and_an_unargued_pattern
     unargued = rows_of(proj, "direction:Lantern:reflex-unargued")
     assert [x["status"] for x in unargued] == ["pass"]
     assert not [i for i, x in rows(proj).items() if x["status"] in ("warn", "fail")]
+
+
+# Colour divergence (scripts/boardlib/divergence.py): the light-mode colours each direction carries in its style attribute. A warning only.
+COMPASS_COLOURS = "--d-paper:#f9f7ee;--d-ink:#0d1b2d;--d-accent:#007d71;"
+LANTERN_COLOURS = "--d-paper:#f7f1ec;--d-ink:#2b2118;--d-accent:#c27a12;"
+
+
+def test_two_directions_with_the_same_colours_warn_as_alike(proj):
+    board = proj / "rounds" / "r1" / "board.html"
+    assert lint(proj).returncode == 0
+    assert rows(proj)["directions:divergence"]["status"] == "pass"
+    # Lantern takes Compass's ink and accent and a paper a hair off Compass's: they look alike in colour, and Keystone still stands apart
+    mutate(board, LANTERN_COLOURS, "--d-paper:#f9f6ee;--d-ink:#0d1b2d;--d-accent:#017d71;")
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout   # a warning, never a failure
+    rep = report(proj, "board-lint")
+    assert rep["status"] == "pass" and failing(rep) == []
+    row = rows(proj)["directions:divergence"]
+    assert row["status"] == "warn", row
+    assert "'Compass' and 'Lantern' look alike in colour" in row["detail"] and "Keystone" not in row["detail"]
+    assert "paper 0.003" in row["detail"] and "ink 0.000" in row["detail"] and "accent 0.000" in row["detail"]
+    assert "within 0.04" in row["detail"] and "within 0.06" in row["detail"] and "practice proposal" in row["detail"]
+    # Keystone joins them: three pairs are named
+    mutate(board, "--d-paper:#ffffff;--d-ink:#121212;--d-accent:#2747c9;", COMPASS_COLOURS)
+    assert lint(proj).returncode == 0
+    row = rows(proj)["directions:divergence"]
+    assert row["status"] == "warn" and row["detail"].count("look alike in colour") == 3, row
+
+
+def test_directions_count_as_alike_only_when_paper_ink_and_accent_are_all_close(proj):
+    board = proj / "rounds" / "r1" / "board.html"
+    # the same paper and ink as Compass, but an accent of its own (a teal against an amber): not alike
+    mutate(board, LANTERN_COLOURS, "--d-paper:#f9f7ee;--d-ink:#0d1b2d;--d-accent:#c27a12;")
+    assert lint(proj).returncode == 0
+    assert rows(proj)["directions:divergence"]["status"] == "pass"
+    # the same accent and ink, but a paper far off (cream against white-blue): not alike
+    mutate(board, "--d-paper:#f9f7ee;--d-ink:#0d1b2d;--d-accent:#c27a12;", "--d-paper:#cfe3f5;--d-ink:#0d1b2d;--d-accent:#007d71;")
+    assert lint(proj).returncode == 0
+    assert rows(proj)["directions:divergence"]["status"] == "pass"
+    # a repeated property (the last wins, as in CSS) and another property that only starts like one (--d-paper-dark) do not confuse the reading
+    mutate(board, "--d-paper:#cfe3f5;--d-ink:#0d1b2d;--d-accent:#007d71;",
+           "--d-paper:#000;--d-paper-dark:#f9f7ee;--d-paper:#f9f7ee;--d-ink:#0d1b2d;--d-accent:#007d71;")
+    assert lint(proj).returncode == 0
+    row = rows(proj)["directions:divergence"]
+    assert row["status"] == "warn" and "'Compass' and 'Lantern' look alike" in row["detail"], row
+
+
+def test_a_direction_whose_colours_cannot_be_read_is_not_measured_and_two_are_needed(proj):
+    board = proj / "rounds" / "r1" / "board.html"
+    # a colour that is not #rgb or #rrggbb (here rgb()) leaves that direction out; Compass and Keystone are still compared
+    mutate(board, "--d-ink:#2b2118;", "--d-ink:rgb(43 33 24);")
+    assert lint(proj).returncode == 0
+    row = rows(proj)["directions:divergence"]
+    assert row["status"] == "pass" and "2 directions compared" in row["detail"], row
+    # with only one direction left to measure the row is information, not a pass
+    mutate(board, "--d-accent:#2747c9;", "--d-accent:blue;")
+    assert lint(proj).returncode == 0
+    row = rows(proj)["directions:divergence"]
+    assert row["status"] == "info" and row["detail"].startswith("not measured: 1 of 3 direction(s)"), row
+    assert failing(report(proj, "board-lint")) == []
+
+
+def test_the_colour_divergence_is_a_pick_board_row_only(proj):
+    make_r2_board(proj)
+    assert lint(proj, "rounds/r2/board.html").returncode == 0
+    assert "directions:divergence" not in rows(proj)
 
 
 def test_refine_board_does_not_need_a_reflex_result(proj):

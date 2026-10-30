@@ -38,14 +38,28 @@ def report_of(p: Path, rnd: int, name: str) -> Path:
     return p / "assets" / "_checks" / (motion_report_tool(proof_of(rnd, name)) + ".json")
 
 
-def motion_report(p: Path, proof: str, status: str = "pass", page: str | None = None, loaded: tuple[str, ...] = ()) -> Path:
-    """The report `shot --motion` writes for a proof, made by hand: its inputs are the proof, the page and every file the page loaded (`loaded`: a stylesheet, tokens.css, a script)."""
+# the timeline each variant of a finished round has in its hand-made motion report (the `sampling` row: length_ms, animations), as (length in ms, number of animations): three different moves
+TIMELINES = {"Settle": (320, 1), "Bounce": (640, 2), "Glide": (900, 1)}
+
+
+def timeline_of(proof: str) -> tuple[int, int]:
+    """The (length_ms, animations) the report of `proof` (rounds/rN/<name>/proof.json) gets by default: the table above, else a length of the name's own."""
+    name = Path(proof).parent.name
+    return TIMELINES.get(name) or (200 + int(sha(name.encode())[:4], 16) % 3000, 1)
+
+
+def motion_report(p: Path, proof: str, status: str = "pass", page: str | None = None, loaded: tuple[str, ...] = (), timeline: tuple[int, int] | None = None) -> Path:
+    """The report `shot --motion` writes for a proof, made by hand: its inputs are the proof, the page and every file the page loaded (`loaded`: a stylesheet, tokens.css, a script), and its `sampling` row
+    (render.mjs) has the length and the number of animations of the variant's timeline (`timeline`, else `timeline_of`)."""
     from _common import motion_report_tool, sha256_file
+    length_ms, animations = timeline or timeline_of(proof)
     f = p / "assets" / "_checks" / (motion_report_tool(proof) + ".json")
     f.parent.mkdir(parents=True, exist_ok=True)
     inputs = [{"path": x, "sha256": sha256_file(p / x)} for x in (proof, page, *loaded) if x and (p / x).is_file()]
     f.write_text(json.dumps({"tool": motion_report_tool(proof), "version": "0", "inputs_sha": "0" * 64, "inputs": inputs, "renderer": "x", "proof": proof, "status": status,
-                             "results": [{"id": "motion:case:control", "status": "fail" if status == "fail" else "pass", "label": "control", "detail": "x"}]}, indent=2) + "\n")
+                             "results": [{"id": "motion:case:control", "status": "fail" if status == "fail" else "pass", "label": "control", "detail": "x"},
+                                         {"id": f"motion:{Path(proof).parent.name}:sampling", "status": "info", "label": "how the motion is sampled", "detail": "x",
+                                          "animations": animations, "length_ms": length_ms, "real_time": False}]}, indent=2) + "\n")
     return f
 
 
@@ -165,8 +179,8 @@ def test_the_template_as_it_is_fails_until_filled_and_filled_in_it_is_a_motion_b
     r = lint(proj)
     assert r.returncode == 0, r.stdout
     got = rows(proj)
-    for rid in ("page:data-board", "motion:g3", "motion:off", "motion:variants", "motion:files", "motion:proof", "motion:stills", "motion:fields", "section:hardest-surface", "section:my-call",
-                "section:questions", "section:reply"):
+    for rid in ("page:data-board", "motion:g3", "motion:off", "motion:variants", "motion:files", "motion:proof", "motion:stills", "motion:fields", "motion:timelines", "section:hardest-surface",
+                "section:my-call", "section:questions", "section:reply"):
         assert got[rid]["status"] == "pass", (rid, got[rid])
     assert "Settle, Bounce, Glide" in got["motion:variants"]["detail"] and got["page:data-board"]["detail"] == "motion"
     assert [got[k]["status"] for k in ("section:what-changed", "section:weak-points")] == ["info", "info"]      # not asked of the first motion board
@@ -817,6 +831,105 @@ def test_a_field_belongs_to_its_own_card(proj):
     page.write_text(text[:cut] + 'data-x="cost"' + text[cut + len('data-field="cost"'):])
     r = lint(proj)
     assert r.returncode == 1 and "Bounce: Cost is missing or empty" in detail(proj, "motion:fields") and "Settle: Cost" not in detail(proj, "motion:fields")
+
+
+# ---------------------------------------------------------------- motion:timelines
+
+def retime(p: Path, name: str, length_ms: int, animations: int) -> None:
+    """The motion report of a variant made again with another timeline, as `shot --motion` makes it after a change to the move (the same inputs: the proof and the page)."""
+    motion_report(p, proof_of(2, name), "pass", f"rounds/r2/{name}/index.html", timeline=(length_ms, animations))
+
+
+def test_two_variants_with_one_timeline_warn(proj):
+    """Three variants should try three moves: two whose motion reports show one length and one number of animations are one move tried twice. A warning: the board still passes."""
+    make_round(proj)
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    got = rows(proj)["motion:timelines"]
+    assert got["status"] == "pass" and "3 variant(s) compared, no two share a timeline" in got["detail"], got
+    assert "Settle 320 ms, 1 animation(s)" in got["detail"] and "Bounce 640 ms, 2 animation(s)" in got["detail"] and "Glide 900 ms, 1 animation(s)" in got["detail"]
+    assert "practice proposal" in got["detail"]
+    mutate_json(report_of(proj, 2, "Bounce"), lambda d: next(x for x in d["results"] if x["id"] == "motion:Bounce:sampling").update(length_ms=320, animations=1))   # variant B's timeline is variant A's
+    r = lint(proj)
+    assert r.returncode == 0 and failed(proj) == [], r.stdout                                  # a warning, never a failure
+    got = rows(proj)["motion:timelines"]
+    assert got["status"] == "warn" and got["detail"].startswith("they look alike in time: Settle and Bounce (Settle 320 ms, 1 animation(s) against Bounce 320 ms, 1 animation(s))"), got
+    assert "Glide" not in got["detail"].split(". Three variants")[0] and "Three variants should try three moves" in got["detail"] and "practice proposal" in got["detail"]
+    mutate_json(report_of(proj, 2, "Glide"), lambda d: next(x for x in d["results"] if x["id"] == "motion:Glide:sampling").update(length_ms=320, animations=1))   # and the third one too
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    got = rows(proj)["motion:timelines"]
+    assert got["status"] == "warn", got
+    for pair in ("Settle and Bounce", "Settle and Glide", "Bounce and Glide"):
+        assert pair in got["detail"], (pair, got["detail"])
+
+
+@pytest.mark.parametrize("settle, bounce, status", [
+    ((320, 1), (335, 1), "warn"),        # 15 ms apart: within 20 ms
+    ((320, 1), (340, 1), "warn"),        # exactly 20 ms apart
+    ((320, 1), (341, 1), "pass"),        # 21 ms apart, and more than 5 % of 341 (17.05 ms)
+    ((2000, 1), (2100, 1), "warn"),      # 100 ms apart: exactly 5 % of the longer one
+    ((2000, 1), (2106, 1), "pass"),      # 106 ms apart: more than 5 % of 2106 (105.3 ms)
+    ((320, 1), (320, 2), "pass"),        # one length, another number of animations: another move
+    ((320, 3), (320, 3), "warn"),        # the very same timeline
+])
+def test_timelines_alike_are_lengths_within_five_percent_or_twenty_ms_and_the_same_number_of_animations(proj, settle, bounce, status):
+    make_round(proj)
+    retime(proj, "Settle", *settle)
+    retime(proj, "Bounce", *bounce)
+    r = lint(proj)
+    assert r.returncode == 0 and failed(proj) == [], r.stdout
+    got = rows(proj)["motion:timelines"]
+    assert got["status"] == status, got
+    assert ("Settle and Bounce" in got["detail"]) == (status == "warn"), got["detail"]
+
+
+def test_a_variant_without_a_current_motion_report_is_not_compared_and_the_row_cannot_pass(proj):
+    """info, not pass: a row that passes says every variant was compared. motion:proof says why a report is missing or stale. The rest are still compared: a pair alike among them still warns."""
+    make_round(proj)
+    page = proj / "rounds" / "r2" / "Bounce" / "index.html"
+    report_of(proj, 2, "Bounce").unlink()                                                      # no report of the proof at all
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["motion:proof"], r.stdout
+    got = rows(proj)["motion:timelines"]
+    assert got["status"] == "info" and "2 of 3 variant(s)" in got["detail"] and "not compared (no current motion report with a sampling row; motion:proof says why): Bounce" in got["detail"], got
+    assert "Settle 320 ms" in got["detail"] and "Glide 900 ms" in got["detail"] and "Bounce 640" not in got["detail"]
+    motion_report(proj, proof_of(2, "Bounce"), "pass", "rounds/r2/Bounce/index.html")          # the report is back ...
+    page.write_text(page.read_text() + "<!-- changed after the report -->\n")                 # ... and stale: the page changed since it was made
+    r = lint(proj)
+    assert r.returncode == 1 and "motion:proof" in failed(proj), r.stdout
+    assert rows(proj)["motion:timelines"]["status"] == "info" and "motion:proof says why): Bounce" in detail(proj, "motion:timelines")
+    retime(proj, "Glide", 320, 1)                                                              # Settle and Glide look alike: the warning does not wait for the third report
+    lint(proj)
+    got = rows(proj)["motion:timelines"]
+    assert got["status"] == "warn" and "Settle and Glide" in got["detail"] and "motion:proof says why): Bounce" in got["detail"], got
+
+
+def test_a_report_without_a_sampling_row_is_not_compared(proj):
+    """A report that lacks the `sampling` row (or a number in it) tells nothing of the timeline: not compared, never a guess."""
+    make_round(proj)
+    f = report_of(proj, 2, "Glide")
+    doc = json.loads(f.read_text())
+    doc["results"] = [x for x in doc["results"] if not x["id"].endswith(":sampling")]
+    f.write_text(json.dumps(doc, indent=2) + "\n")
+    lint(proj)
+    assert rows(proj)["motion:timelines"]["status"] == "info" and "motion:proof says why): Glide" in detail(proj, "motion:timelines")
+    retime(proj, "Glide", 900, 1)
+    f = report_of(proj, 2, "Glide")
+    doc = json.loads(f.read_text())
+    next(x for x in doc["results"] if x["id"].endswith(":sampling"))["length_ms"] = "long"
+    f.write_text(json.dumps(doc, indent=2) + "\n")
+    lint(proj)
+    assert rows(proj)["motion:timelines"]["status"] == "info" and "motion:proof says why): Glide" in detail(proj, "motion:timelines")
+
+
+def test_a_later_motion_board_with_one_variant_has_nothing_to_compare(proj):
+    make_round(proj)                                                                           # round 2 is the first motion board, so round 3 may show one variant
+    make_round(proj, 3, ("Settle",), first=False)
+    r = lint(proj, "rounds/r3/board.html")
+    assert r.returncode == 0, r.stdout
+    got = rows(proj)["motion:timelines"]
+    assert got["status"] == "info" and got["detail"].startswith("nothing to compare: 1 variant on this board"), got
 
 
 # ---------------------------------------------------------------- the report and `check`

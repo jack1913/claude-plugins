@@ -19,6 +19,18 @@ stage, and why, is in the [archive](docs/archive/README.md).
   a near miss (`reflex-unargued`, one warning per pattern). All of these only warn in this release and become
   failures in the next one. The report now lists `FACTS.md` and `brief/BRIEF.md`, so a changed fact makes the lint
   stale.
+- `board-lint` warns when two directions of a pick board look alike in colour (`directions:divergence`). It reads the
+  paper, ink and accent each direction carries in its `style` attribute (`--d-paper`, `--d-ink`, `--d-accent`, as
+  `#rgb` or `#rrggbb`) and names every pair whose paper and ink are both within 0.04, and whose accents are within
+  0.06, of each other (distance in OKLab). A board that passes names the smallest distance of each colour; with fewer
+  than two readable directions the row says it did not measure. The two limits are a practice proposal, said in the
+  row, and the row only warns: it does not become a failure.
+- `board-lint` warns when two variants of a motion board try the same move (`motion:timelines`). It reads the length and
+  the number of animations that `shot --motion` found for each variant and names every pair that runs the same number of
+  animations with lengths within 5 % of the longer one, or within 20 ms, of each other: three variants should try three
+  moves. A variant whose motion report is missing or out of date is not compared (the proof row says why), and the row
+  then reports instead of passing. The two limits are a practice proposal, said in the row, and the row only warns: it
+  does not become a failure.
 
 ### Changed
 
@@ -38,6 +50,12 @@ stage, and why, is in the [archive](docs/archive/README.md).
   (`reflex-ids`; the row says when the project has no `research/cliches.md`). The report lists `research/cliches.md`
   when it exists, so a changed list makes the lint stale. The example board of Acme, the Quick smoke's bakery board and
   the board templates use the new line.
+- The judge of a direction round (the opt-in `directions` workflow) now lists the reflex patterns it sees. Before it
+  reads any argument, it names, for each direction, every pattern of the reflex list and every "Avoid unless argued"
+  item of the project's `research/cliches.md` that it sees on that direction's board, with where it saw it; layout
+  patterns are judged on the direction's own homepage frame, never on the board's chrome, and an empty list is an
+  answer. The lead puts each list beside the direction's reflex line (`data-field="reflex-seen"`), where `board-lint`
+  compares it with what the direction declared.
 
 ## [0.4.2] - 2026-10-24
 

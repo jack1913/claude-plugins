@@ -11,12 +11,14 @@ on BRAND-STATE.md (incumbent, reset_rounds, tier, architecture, inventory, gates
 (pick: round 1 or a round listed in reset_rounds; refine: the later rounds; style: the style research page of round 0, or of a round
 listed in reset_rounds; motion: a round from 2 on, after G3, that tries the signature move as variants; see scripts/CONTRACT.md).
 A motion board is no pick, style, reset or rejected round: it has its own rows (motion:g3, motion:off, motion:variants, motion:files, motion:proof,
-motion:stills, motion:fields; boardlib/motionboard.py), the kept masters are not measured on it, and the style gate never counts it.
+motion:stills, motion:fields, and the warning motion:timelines; boardlib/motionboard.py), the kept masters are not measured on it, and the style gate never counts it.
 A pick board also gets, for each direction, direction:<name>:reflex-format|reflex-ids|reflex-count|reflex-grounded and, across directions,
 directions:reflex-shared (the rules are in boardlib/reflex.py): two hits in one direction, or one hit that every direction shares, fail; a free-text line,
 an unknown id or an argument that shares no word with FACTS.md or brief/BRIEF.md warns. When the my-call section says data-judge="ran", each direction
 also needs the judge's list beside its reflex line (data-field="reflex-seen", listing patterns or saying "none seen": direction:<name>:reflex-seen), and a pattern on that list that the reflex
 line neither hits nor names as a near miss warns (direction:<name>:reflex-unargued, one warning per pattern).
+A pick board also gets directions:divergence (boardlib/divergence.py): from each direction's style attribute (--d-paper, --d-ink, --d-accent as #rgb or #rrggbb), a warning
+names each pair of directions whose paper and ink are both within 0.04 and whose accents are within 0.06 OKLab distance ("they look alike in colour"); it never fails.
 Every kind of board also gets page:votes: the vote of each card (<fieldset data-vote="<name>">) is a radio group of its own, its radios named vote-<name>
 (two cards that share a radio name are one group, and a vote on one clears the vote on the other).
 Exit 1 lists every missing or empty requirement.
@@ -38,6 +40,7 @@ from _common import (EXIT_USAGE, CliError, Parser, Report, add_project_arg, conf
 import svgtools  # noqa: E402
 from boardpage import (DATA_IMAGE, FILL, GENERIC_NAME, KINDS, MIN_TERRITORIES, PLACEHOLDER, WORD_NAME, Node, declared_round,  # noqa: E402
                        is_style_board, page_kind, parse_dom, read_page, sections, territory_count)
+import divergence  # noqa: E402
 import motionboard  # noqa: E402
 import reflex  # noqa: E402
 from _color import parse_hex, wcag_ratio  # noqa: E402
@@ -518,6 +521,7 @@ def main() -> int:
     reflex_sources = reflex.SOURCES
     reflex_lines: list[reflex.Parsed] = []   # the parsed reflex line of each direction that has one
     reflex_ground: set[str] = set()
+    direction_styles: list[tuple[str, str]] = []   # (name, style attribute) of each direction, for the colour divergence row
     judge_ran = False
     if kind == "pick":
         reflex_ids = reflex.ai_default_ids()
@@ -557,6 +561,7 @@ def main() -> int:
             registers.append(reg)
         field(d, "idea", True, f"direction:{label}")
         if kind == "pick":
+            direction_styles.append((label, d.attrs.get("style", "")))
             parsed: reflex.Parsed | None = None
             if field(d, "reflex", True, f"direction:{label}"):   # reflex test against references/ai-defaults.json and research/cliches.md
                 line = next(n for n in d.find_all(data_field="reflex") if n.nonempty())
@@ -576,6 +581,8 @@ def main() -> int:
                     detail=f"every direction hits {shared!r}: they are not divergent, so replace one of them")
         else:
             rep.add("directions:reflex-shared", "pass", shared_label, detail=f"{len(reflex_lines)} reflex lines, no pattern hit by all")
+        status, detail = divergence.row(direction_styles)   # the colours the directions are drawn in: a warning, never a failure
+        rep.add("directions:divergence", status, divergence.LABEL, detail=detail)
     if letters and q_items:
         # A direction letter that is also an option letter of a question that does not list the directions makes
         # "B" ambiguous in a phone reply ("B" the direction, or option b of question 2).

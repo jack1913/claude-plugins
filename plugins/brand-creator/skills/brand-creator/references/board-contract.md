@@ -134,7 +134,9 @@ line equals its status; a missing or stale one names `brand-creator shot --motio
 that is not a verdict quotes the rows it could not verify, and for a move driven by `requestAnimationFrame`, which
 stays not verified, says to write it as CSS animations, transitions or `element.animate()`),
 `motion:stills` (a current passing `frames` report of each proof, so the stills are of the page as it is now, and the strip
-and the reduced still on the card are the files `frames.json` lists, by sha256) and `motion:fields` (the three fields).
+and the reduced still on the card are the files `frames.json` lists, by sha256), `motion:fields` (the three fields) and
+`motion:timelines` (a warning, never a failure: two variants whose current motion reports show one length, within 5 % or 20 ms,
+and the same number of animations are one move tried twice, and three variants should try three moves).
 Taking a proof or its stills again after the lint makes the lint report stale: lint again, and shoot the board last.
 
 ## Per-direction cells
