@@ -38,6 +38,12 @@ stage, and why, is in the [archive](docs/archive/README.md).
   (`reflex-ids`; the row says when the project has no `research/cliches.md`). The report lists `research/cliches.md`
   when it exists, so a changed list makes the lint stale. The example board of Acme, the Quick smoke's bakery board and
   the board templates use the new line.
+- The judge of a direction round (the opt-in `directions` workflow) now lists the reflex patterns it sees. Before it
+  reads any argument, it names, for each direction, every pattern of the reflex list and every "Avoid unless argued"
+  item of the project's `research/cliches.md` that it sees on that direction's board, with where it saw it; layout
+  patterns are judged on the direction's own homepage frame, never on the board's chrome, and an empty list is an
+  answer. The lead puts each list beside the direction's reflex line (`data-field="reflex-seen"`), where `board-lint`
+  compares it with what the direction declared.
 
 ## [0.4.2] - 2026-10-24
 

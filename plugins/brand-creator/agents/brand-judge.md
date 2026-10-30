@@ -24,6 +24,11 @@ RULES: work under the round/project dir only; never edit adoption targets before
   weakness and its fix. Score the current round against the previous round and the best so far on the same rubric.
 - **Rank** the candidates, say which one you would take forward and what you would graft from the others. Grafts are
   advice before the owner's pick only; after a pick you deepen the picked direction, never blend.
+- **Reflex list** (direction boards, when the prompt asks for `reflex_seen`): for each direction, before you read any
+  argument, list every pattern of `ai-defaults.json` and every "Avoid unless argued" item of the project's
+  `research/cliches.md` (when it has one) that you see in its board: the id or the cliché's words, its source and where
+  you saw it. Judge layout patterns on the direction's own homepage frame, never on the board's chrome. An empty list is
+  an answer.
 - **Findings from lenses**: challenge each one; keep it only if it is right, matters for this brand and does not
   conflict with the approved rules or an owner decision. Sort survivors into A (before launch), B (soon), C
   (optional), plus owner-only decisions, each with a recommendation. List up to five strengths that must not change.

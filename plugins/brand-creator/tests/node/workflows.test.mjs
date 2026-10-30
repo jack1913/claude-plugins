@@ -283,6 +283,29 @@ test("R6-1: the designer's snapshot ignores the shot report it writes itself, an
   assert.doesNotMatch(judge.prompt, /see assets\/_checks\/shot\.json/, "the shared report is overwritten by the last designer");
 });
 
+test("the judge lists the reflex patterns it sees per direction, and the lead is told where they go", async () => {
+  const r = await run("directions", fixture("directions"));
+  assert.equal(r.error, null);
+  const judge = r.calls.find((x) => x.agentType === "brand-creator:brand-judge");
+  assert.ok(judge.schema.required.includes("reflex_seen"));
+  const seen = judge.schema.properties.reflex_seen.items;
+  assert.deepEqual([...seen.required], ["key", "items"]); // the schema comes out of the workflow sandbox: copy it into this realm first
+  assert.deepEqual([...seen.properties.items.items.required], ["id", "source", "where"]);
+  assert.deepEqual([...seen.properties.items.items.properties.source.enum], ["ai-defaults", "cliches"]);
+  const line = judge.prompt.split("\n").find((l) => l.startsWith("REFLEX LIST:"));
+  assert.ok(line, "the judge prompt has a REFLEX LIST line");
+  assert.ok(line.includes("/PLUGIN/skills/brand-creator/references/ai-defaults.json"), line);
+  assert.ok(line.includes("/PROJECT/research/cliches.md"), line);
+  assert.match(line, /before you read any argument/);
+  assert.match(line, /never on the board's chrome/);
+  assert.match(line, /An empty list is an answer/);
+  const lines = judge.prompt.split("\n");
+  assert.ok(lines.indexOf(line) < lines.indexOf(RULES), "the reflex line sits before RULES");
+  assert.deepEqual(r.result.judge.reflex_seen.map((e) => Object.keys(e).sort().join()), ["items,key"]);
+  assert.match(r.result.next, /judge\.reflex_seen beside each direction's reflex line \(data-field="reflex-seen"\)/);
+  assert.match(agents["brand-judge"].body, /\*\*Reflex list\*\*/);
+});
+
 test("R6-2: fix mode says the branch exists, expects the dirty tree and uses its own snapshot name; apply still creates", async () => {
   const base = fixture("adopt");
   const apply = await run("adopt", base);
