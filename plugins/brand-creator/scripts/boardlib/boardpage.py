@@ -6,7 +6,8 @@ are both read from that one element, never one from each. A style board counts f
 g1s_round) only when it declares data-board="style" and the round of its own folder, and holds at least MIN_TERRITORIES named territory
 sections with content, so a stub page that only says "style", or a copy that still declares the round it came from, unlocks nothing
 (scripts/CONTRACT.md, "Board contract"). A website references board counts the same way (is_site_refs_board: data-board="site-refs", its own round and at least
-MIN_GROUPS named groups with content). This folder is outside scripts/lib/ so that a change here does not make every pack stale.
+MIN_GROUPS named groups with content). A picture that must show itself without the network, a mark's thumbnail on a style board or a site's screenshot on a references board, is held to one rule
+(thumb_problems). This folder is outside scripts/lib/ so that a change here does not make every pack stale.
 """
 from __future__ import annotations
 
@@ -167,3 +168,31 @@ def is_site_refs_board(root: Node | None, folder_round: int) -> bool:
     data-board="site-refs" and that round, and holds at least MIN_GROUPS groups that count."""
     return (root is not None and page_kind(root) == "site-refs" and declared_round(root) == folder_round
             and group_count(root) >= MIN_GROUPS)
+
+
+def thumb_problems(im: Node, field: str = "thumb", subject: str = "the thumbnail", says: str = "the owner of the mark and where the image is from",
+                   template_tail: "re.Pattern[str] | None" = None) -> list[str]:
+    """What is wrong with a picture that must show itself without the network, as sentences ([] when it is sound): the element is an <img>, its src is an inlined data:image/ URI,
+    it has no srcset, it has alt text, and it sits in a <figure> with a non-empty <figcaption> (the words of the caption are the author's). A mark's thumbnail on a style board
+    (data-field="thumb": the caption names the owner of the mark) and a site's screenshot on a website references board (data-field="shot": it names whose site it is and when it
+    was captured) are held to this one rule. template_tail is words the template itself writes after the author's, which are no caption (a site's screenshot: " · shown for private research"): they are
+    dropped before the caption is tested, so a caption that kept only them is empty. The style board does not pass it."""
+    src, alt = im.attrs.get("src", "").strip(), im.attrs.get("alt", "").strip()
+    problems = []
+    if im.tag != "img":
+        problems.append(f'data-field="{field}" belongs on an <img>, not on <{im.tag}>')
+    if not DATA_IMAGE.match(src):
+        problems.append('src must be an inlined data:image/... URI (no network): ' + (f"got {src[:40]!r}" if src else "src is missing"))
+    if im.attrs.get("srcset", "").strip():
+        problems.append("srcset is not allowed (it would ask the network for another file)")
+    if not alt:
+        problems.append("alt text is missing or empty")
+    fig = im.parent
+    while fig is not None and fig.tag != "figure":
+        fig = fig.parent
+    if fig is None:
+        problems.append(f"{subject} is not inside a <figure>: its <figcaption> names {says}")
+    elif not any((t := (template_tail.sub("", c.text()) if template_tail is not None else c.text()).strip()) and not PLACEHOLDER.match(t)
+                 for c in fig.walk() if c.tag == "figcaption"):
+        problems.append(f"its <figure> has no non-empty <figcaption>: name {says}")
+    return problems
