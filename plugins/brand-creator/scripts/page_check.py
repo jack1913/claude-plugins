@@ -18,7 +18,7 @@ one per page. The rows are `page:target` and, per view, `page:load:<width>-<sche
 Per colour scheme it also reports `page:colours:<scheme>` (every colour the page paints is a semantic colour of that theme) and `page:pairs:<scheme>` (every text colour on its
 ground is a declared pair, or is measured against WCAG), `page:motion` (every duration and easing is a motion token) and `page:claims` (outside a `data-sample`, every number and
 status word is backed by FACTS.md); `page:samples` lists the labelled samples, and the report holds the same list as `samples`.
-`page:mark-file`, `page:mark-band` and `page:mark-clear-space` judge the brand mark (`data-brand-mark`, or an image named or byte for byte like a logo file): it is a logo file of
+`page:mark-file`, `page:mark-band` and `page:mark-clear-space` judge the brand mark (`data-brand-mark`, an image named `logo`, `logo-…` or `logo_…`, or an image byte for byte like a logo file): it is a logo file of
 the project, the drawing its size calls for, and has its clear space.
 Each entry of qa/rules.json `page.rules` is a brand rule of the owner's and gives `page:rule:<id>` (one mark per screen, a button says at most three words, the words around an accent): it fails once
 the "(rule)" line it is tied to (`g4`) is recorded at G4, and before that only warns.

@@ -100,7 +100,8 @@ number.
 
 Phone numbers, postal codes and street numbers are still claims. Each one needs a fact in `FACTS.md`, or a sample label.
 
-To have your logo judged, mark it with `data-brand-mark` on its `img` or inline `svg`, or give its file a name such as `logo.svg`.
+To have your logo judged, mark it with `data-brand-mark` on its `img` or inline `svg`, or give its file a name such as `logo.svg`
+(`logo-dark.svg` and `logo_white.png` work too). A file such as `partner-logo.svg` is not taken for your logo.
 
 ## Turn a warning into a brand rule
 

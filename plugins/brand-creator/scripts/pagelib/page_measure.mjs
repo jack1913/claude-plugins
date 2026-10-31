@@ -532,8 +532,9 @@ const IMAGE_CAP = 300;          // other images reported per view: the judge may
 const SVG_MARKUP_CAP = 60000;   // characters of an inline SVG mark kept for the judge to compare with the logo drawings
 const DATA_URL_CAP = 5 * 1024 * 1024;   // a data: image larger than this is not hashed
 
-/** The brand mark on the page and what stands next to it, in one walk. A mark is an element with `data-brand-mark`, or an image whose file name says it is one: `logo`, `favicon`,
- *  `wordmark` or `lockup` anywhere in the name, or `mark` as a word (`site-mark.svg`, `siteMark.png`; not `bookmark.png` or `marketing.jpg`). The images are `img` (what the
+/** The brand mark on the page and what stands next to it, in one walk. A mark is an element with `data-brand-mark`, or an image whose file name says it is the logo: the name (without its
+ *  extension) is `logo` or starts with `logo-` or `logo_` (`logo.svg`, `logo-dark.png`; not `partner-logo.svg`, `ikona-logowanie.svg` or `logos.png`, which only hold the word). The
+ *  third way to be a mark, an image whose bytes equal a logo file of the project, is the judge's (`pagecheck.identified_marks`). The images are `img` (what the
  *  browser chose to show, `currentSrc`, so the `source` of a `picture` is covered), an SVG `image`, a CSS `background-image` of an element and of its `::before` and `::after`.
  *  `data-brand-mark` on an element that is none of them stands for the images inside it. `marks` holds the marked and the named ones, `images` the other visible images (a judge may
  *  find one is a logo file by its bytes, which only the node side saw). An entry is {sel, kind, url, own, declared, named, marked, visible, rect, nearest_px, nearest_sel, nearest_text}
@@ -550,15 +551,11 @@ async function markFacts(page) {
     const here = location.origin;
 
     const stemOf = (u) => {
-      try { return decodeURIComponent(new URL(u).pathname.split("/").pop() || "").replace(/\.[A-Za-z0-9]{1,5}$/, ""); } catch { return ""; }
+      try { return decodeURIComponent(new URL(u, document.baseURI).pathname.split("/").pop() || "").replace(/\.[A-Za-z0-9]{1,5}$/, ""); } catch { return ""; }
     };
-    const named = (u) => {
-      const stem = stemOf(u);
-      if (!stem) return false;
-      if (/logo|favicon|wordmark|lockup/i.test(stem)) return true;
-      const words = stem.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase().split(/[^a-z]+/);
-      return words.includes("mark") || words.includes("marks");
-    };
+    // a file is named like the logo when its stem is `logo` or starts with `logo-` or `logo_` (`logo.svg`, `logo-dark.png`, `logo_white.svg`), in any case; a word that merely holds
+    // it (`partner-logo.svg`, `ikona-logowanie.svg`, `logos.png`) is not, and a data: URL has no file name at all
+    const named = (u) => !/^data:/i.test(u) && /^logo(?:[-_]|$)/i.test(stemOf(u));
     const place = (u) => {   // -> {url, own, data?}: where an image lives, as the key of `resources` when it is the page's own
       if (!u) return { url: null, own: false };
       if (/^data:/i.test(u)) return { url: u.slice(0, 80), own: false, data: u };

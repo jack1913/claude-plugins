@@ -1497,10 +1497,10 @@ def mark_rows_of(rep: dict) -> dict[str, dict]:
 @pytest.mark.requires_setup
 @pytest.mark.requires_node
 def test_a_mark_that_is_not_a_master_byte_for_byte_fails(acme):
-    copy = acme / "pages" / "mark-copy.svg"   # a copy of the master the page uses, named like a mark
+    copy = acme / "pages" / "logo-copy.svg"   # a copy of the master the page uses, named like the logo
     copy.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(acme / "assets" / "logo" / "mark.svg", copy)
-    write_page(acme, mark_page('<img class="mark" src="mark-copy.svg" width="48" height="48" alt="Acme">'))
+    write_page(acme, mark_page('<img class="mark" src="logo-copy.svg" width="48" height="48" alt="Acme">'))
     r, rep = check_page(acme, "--schemes", "light")
     assert r.returncode == 0, r.stdout + r.stderr
     ok = mark_rows_of(rep)
@@ -1510,8 +1510,51 @@ def test_a_mark_that_is_not_a_master_byte_for_byte_fails(acme):
     r, rep = check_page(acme, "--schemes", "light")
     assert r.returncode == 1, r.stdout + r.stderr
     bad = mark_rows_of(rep)["page:mark-file"]
-    assert bad["status"] == "fail" and "none of the logo files of the project" in bad["detail"] and "/pages/mark-copy.svg" in bad["detail"], bad
+    assert bad["status"] == "fail" and "none of the logo files of the project" in bad["detail"] and "/pages/logo-copy.svg" in bad["detail"], bad
     assert [(o["selector"], o["kind"], o["found_by"], o["width"], o["scheme"]) for o in bad["offenders"]] == [("body > header > img.mark", "img", "name", 390, "light")]
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_only_a_file_named_logo_or_a_marked_element_is_a_mark_not_a_name_that_holds_the_word(acme):
+    """logo.svg and data-brand-mark make a mark; partner-logo.svg and ikona-logowanie.svg, other drawings whose names only hold the word, do not."""
+    pages = acme / "pages"
+    pages.mkdir(exist_ok=True)
+    master = acme / "assets" / "logo" / "mark.svg"
+    for name in ("logo.svg", "brand.svg"):
+        shutil.copyfile(master, pages / name)                      # the master, under a name that says logo and under one that does not
+    other = DOT.replace('r="3"', 'r="2"')                            # a drawing that is none of the logo files: a partner's logo, a login icon
+    for name in ("partner-logo.svg", "ikona-logowanie.svg"):
+        (pages / name).write_text(other, encoding="utf-8")
+    both = '<img src="partner-logo.svg" width="24" height="24" alt="Partner"><img src="ikona-logowanie.svg" width="24" height="24" alt="Log in">'
+
+    def run(html: str) -> tuple[dict, dict]:
+        write_page(acme, mark_page(html))
+        r, rep = check_page(acme, "--schemes", "light")
+        return rep, mark_rows_of(rep)["page:mark-file"]
+
+    # the page with the real logo (the master named logo.svg) and the two other drawings: one mark, and the row passes
+    rep, row = run('<img class="mark" src="logo.svg" width="48" height="48" alt="Acme">' + both)
+    assert row["status"] == "pass" and row["marks_checked"] == 1 and row["files"] == ["assets/logo/mark.svg"], row
+    (v,) = json.loads(Path(rep["measures"]).read_text(encoding="utf-8"))["views"]
+    assert [m["url"] for m in v["marks"]] == ["/pages/logo.svg"] and {i["url"] for i in v["images"]} == {"/pages/partner-logo.svg", "/pages/ikona-logowanie.svg"}
+    # the copy named logo.svg is changed by one byte: it is a mark by its name and fails; the two other drawings are still no marks and are not named
+    mutate(pages / "logo.svg", "#007d71", "#007d72")
+    rep, row = run('<img class="mark" src="logo.svg" width="48" height="48" alt="Acme">' + both)
+    assert row["status"] == "fail" and [(o["url"], o["found_by"]) for o in row["offenders"]] == [("/pages/logo.svg", "name")], row
+    assert "partner-logo" not in row["detail"] and "ikona-logowanie" not in row["detail"], row
+    # only the two other drawings: no mark on the page, so nothing fails and the row is the info row
+    rep, row = run(both)
+    assert row["status"] == "info" and "no brand mark is shown" in row["detail"], row
+    # data-brand-mark makes a mark of an image with any name: the master under the name brand.svg passes, one byte changed fails, whatever its name
+    rep, row = run('<img class="mark" data-brand-mark src="brand.svg" width="48" height="48" alt="Acme">' + both)
+    assert row["status"] == "pass" and row["marks_checked"] == 1, row
+    mutate(pages / "brand.svg", "#007d71", "#007d72")
+    rep, row = run('<img class="mark" data-brand-mark src="brand.svg" width="48" height="48" alt="Acme">' + both)
+    assert row["status"] == "fail" and [(o["url"], o["found_by"]) for o in row["offenders"]] == [("/pages/brand.svg", "attribute")], row
+    # the same file without the attribute and without a name that says logo is only an image
+    rep, row = run('<img class="mark" src="brand.svg" width="48" height="48" alt="Acme">' + both)
+    assert row["status"] == "info", row
 
 
 @pytest.mark.requires_setup
@@ -1563,7 +1606,7 @@ def test_the_mark_at_24_px_must_be_the_small_band_drawing(acme):
     dark_only = run(img("grid-mark-dark.svg", 24), "--schemes", "light")
     assert dark_only["page:mark-band"]["status"] == "pass"
     measures = json.loads(Path(report(acme, pagecheck.report_tool("pages/index.html"))["measures"]).read_text(encoding="utf-8"))
-    assert measures["views"][0]["marks"][0]["kind"] == "img"
+    assert measures["views"][0]["marks"] == [] and measures["views"][0]["images"][0]["kind"] == "img"   # no name says logo: the judge found the mark by its bytes
     # a wordmark is not a drawing of a band: the band row says so and nothing fails
     word = run(img("wordmark.svg", 24))
     assert word["page:mark-file"]["status"] == "pass" and word["page:mark-band"]["status"] == "info" and "in no band" in word["page:mark-band"]["detail"]
@@ -1648,36 +1691,41 @@ def test_the_marks_collector_finds_marks_by_attribute_and_by_name_and_measures_t
     pages = acme / "pages"
     pages.mkdir(exist_ok=True)
     dot = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8" width="8" height="8"><circle cx="4" cy="4" r="3" fill="#007d71"/></svg>\n'
-    for name in ("site-logo", "bookmark", "marketing-hero", "siteMark", "lockup", "wordmark-x", "plain", "hidden-logo", "near", "diagonal", "awayfromit"):
+    for name in ("logo", "logo-bg", "logo_pseudo", "logo-hidden", "logo-svgimage", "partner-logo", "ikona-logowanie", "logos", "bookmark", "marketing-hero", "siteMark", "lockup", "wordmark-x",
+                 "plain", "near", "diagonal", "awayfromit"):
         (pages / f"{name}.svg").write_text(dot.replace("r=\"3\"", f'r="{3 + len(name) % 3}"'), encoding="utf-8")   # different bytes for each, none a logo file
-    body = """<img id="a" src="site-logo.svg" width="40" height="40" alt="" style="position: absolute; left: 100px; top: 600px">
+    body = """<img id="a" src="logo.svg" width="40" height="40" alt="" style="position: absolute; left: 100px; top: 600px">
 <img src="near.svg" width="10" height="10" alt="" style="position: absolute; left: 150px; top: 600px">
 <img src="diagonal.svg" width="10" height="10" alt="" style="position: absolute; left: 148px; top: 642px">
 <img src="awayfromit.svg" width="10" height="10" alt="" style="position: absolute; left: 100px; top: 800px">
 <img src="bookmark.svg" width="12" height="12" alt=""><img src="marketing-hero.svg" width="12" height="12" alt=""><img src="siteMark.svg" width="12" height="12" alt="">
-<img src="hidden-logo.svg" width="12" height="12" alt="" style="display: none">
-<div class="bg" style="width: 20px; height: 20px; background: url(lockup.svg)"></div>
+<img src="partner-logo.svg" width="12" height="12" alt=""><img src="ikona-logowanie.svg" width="12" height="12" alt=""><img src="logos.svg" width="12" height="12" alt="">
+<img src="lockup.svg" width="12" height="12" alt=""><img src="wordmark-x.svg" width="12" height="12" alt="">
+<img src="logo-hidden.svg" width="12" height="12" alt="" style="display: none">
+<div class="bg" style="width: 20px; height: 20px; background: url(logo-bg.svg)"></div>
+<svg width="14" height="14" aria-hidden="true"><image href="logo-svgimage.svg" width="14" height="14"/></svg>
 <div class="pseudo"></div>
 <a href="#top" data-brand-mark><img src="plain.svg" width="16" height="16" alt=""></a>
 <div data-brand-mark>no image</div>"""
-    style = ".pseudo::before { content: ''; display: block; width: 12px; height: 12px; background: url(wordmark-x.svg); }\n"
+    style = ".pseudo::before { content: ''; display: block; width: 12px; height: 12px; background: url(logo_pseudo.svg); }\n"
     write_page(acme, PAGE.replace("</style>", style + "</style>").replace("</main>", body + "\n</main>"))
     r, rep = check_page(acme, "--schemes", "light")
     (v,) = json.loads(Path(rep["measures"]).read_text(encoding="utf-8"))["views"]
     got = {(m["kind"], m["url"]): m for m in v["marks"]}
-    assert set(got) == {("img", "/pages/site-logo.svg"), ("img", "/pages/siteMark.svg"), ("background", "/pages/lockup.svg"), ("background", "/pages/wordmark-x.svg"),
-                        ("img", "/pages/plain.svg"), ("other", None), ("img", "/pages/hidden-logo.svg")}, sorted(got, key=str)   # bookmark and marketing are images; the hidden logo is a mark that is not shown
-    hidden = got[("img", "/pages/hidden-logo.svg")]
+    assert set(got) == {("img", "/pages/logo.svg"), ("background", "/pages/logo-bg.svg"), ("background", "/pages/logo_pseudo.svg"), ("image", "/pages/logo-svgimage.svg"),
+                        ("img", "/pages/plain.svg"), ("other", None), ("img", "/pages/logo-hidden.svg")}, sorted(got, key=str)   # the hidden logo is a mark that is not shown
+    assert {i["url"] for i in v["images"]} >= {"/pages/partner-logo.svg", "/pages/ikona-logowanie.svg", "/pages/logos.svg", "/pages/siteMark.svg", "/pages/lockup.svg", "/pages/wordmark-x.svg"}   # a name that only holds the word, or says mark, wordmark or lockup, is an image
+    hidden = got[("img", "/pages/logo-hidden.svg")]
     assert hidden["visible"] is False and hidden["named"] and not hidden["marked"] and hidden["nearest_px"] is None   # it is reported as not shown, and no neighbour is looked for
-    assert {i["url"] for i in v["images"]} >= {"/pages/bookmark.svg", "/pages/marketing-hero.svg", "/pages/near.svg"} and "/pages/hidden-logo.svg" not in {i["url"] for i in v["images"]}
-    a = got[("img", "/pages/site-logo.svg")]
+    assert {i["url"] for i in v["images"]} >= {"/pages/bookmark.svg", "/pages/marketing-hero.svg", "/pages/near.svg"} and "/pages/logo-hidden.svg" not in {i["url"] for i in v["images"]}
+    a = got[("img", "/pages/logo.svg")]
     assert a["named"] and not a["marked"] and a["declared"] is None and a["visible"] and a["own"] is True
     assert a["rect"] == {"x": 100, "y": 600, "width": 40, "height": 40}
     assert (a["nearest_px"], a["nearest_sel"]) == (8, "body > main > img:nth-of-type(3)"), a   # the box 8 px right and 2 px under the corner, not the one 10 px to the right
     assert got[("img", "/pages/plain.svg")]["marked"] and got[("img", "/pages/plain.svg")]["declared"] == "" and got[("other", None)]["visible"]
-    pseudo = got[("background", "/pages/wordmark-x.svg")]
+    pseudo = got[("background", "/pages/logo_pseudo.svg")]
     assert pseudo["pseudo"] == "::before" and pseudo["rect"] is None and pseudo["height_px"] == 12
-    assert got[("background", "/pages/lockup.svg")]["rect"]["width"] == 20
+    assert got[("background", "/pages/logo-bg.svg")]["rect"]["width"] == 20 and got[("image", "/pages/logo-svgimage.svg")]["named"]   # a relative href of an SVG image is read against the page
 
 
 @pytest.mark.requires_setup
@@ -1685,9 +1733,9 @@ def test_the_marks_collector_finds_marks_by_attribute_and_by_name_and_measures_t
 def test_the_marks_collector_stops_at_its_caps_and_says_how_many_there_were(acme):
     pages = acme / "pages"
     pages.mkdir(exist_ok=True)
-    for name in ("site-logo", "plain"):
+    for name in ("logo", "plain"):
         (pages / f"{name}.svg").write_text(DOT, encoding="utf-8")   # not a logo file, so the marks fail the row and the row names the cut
-    body = "".join(f'<img src="site-logo.svg?{n}" width="4" height="4" alt="">' for n in range(105)) + "".join(f'<img src="plain.svg?{n}" width="4" height="4" alt="">' for n in range(305))
+    body = "".join(f'<img src="logo.svg?{n}" width="4" height="4" alt="">' for n in range(105)) + "".join(f'<img src="plain.svg?{n}" width="4" height="4" alt="">' for n in range(305))
     write_page(acme, PAGE.replace("</main>", body + "\n</main>"))
     r, rep = check_page(acme, "--schemes", "light")
     (v,) = json.loads(Path(rep["measures"]).read_text(encoding="utf-8"))["views"]
