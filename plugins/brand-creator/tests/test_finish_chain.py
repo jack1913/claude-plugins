@@ -69,7 +69,7 @@ def test_the_standard_chain_runs_profiles_print_posts_book_and_press_kit_in_orde
     out = r.stdout + r.stderr
     assert r.returncode == 0, out[-3000:]
     # the new steps, in the order the chain documents: emitters (profiles and print among them), print-check, the gates, then book, book-pdf and the press kit (the book reads the gates' reports)
-    in_order(out, ["tokens", "contrast", "emit web", "emit social", "emit profiles", "emit print", "print-check", "gates", "book", "book-pdf", "emit presskit"])
+    in_order(out, ["tokens", "contrast", "emit web", "emit social", "emit profiles", "emit print", "print-check", "gates", "book", "book-pdf", "emit presskit", "board-lint rounds/r1/board.html"])
     assert "check: PASS" in out and "unrecognized arguments" not in out
     # what each step made
     for f in ("assets/profiles/avatar-400.png", "assets/profiles/linkedin-banner-1584x396.png", "assets/social/posts/carousel-4x5-01.png", "assets/social/posts/post-1x1.png",
@@ -92,6 +92,15 @@ def test_the_standard_chain_runs_profiles_print_posts_book_and_press_kit_in_orde
     # the chain is what the owner runs again after every change: a second run must pass too (a book built before the gates would be stale by now)
     r2 = run(fin, tmp_path, TAGLINE=TAG, PRINT_REGION="EU", IMAGE_BASE_URL="https://img.example.com/brand", POST_FACTS="spare parts;repair guide;batch size")
     assert r2.returncode == 0 and "check: PASS" in r2.stdout + r2.stderr, (r2.stdout + r2.stderr)[-3000:]
+    # a fact edited after the last lint: board-lint lists FACTS.md as an input, so its report is stale until the chain lints the board again (check would be not verified)
+    linted = report(acme, "board-lint")["inputs_sha"]
+    mutate(acme / "FACTS.md", "| status | the online shop is in development |", "| status | the online shop is open |")
+    assert bc("check", project=acme).returncode != 0
+    lint_row = next(x for x in report(acme, "check")["results"] if x["id"] == "report:board-lint")
+    assert lint_row["status"] == "skipped" and "stale (FACTS.md changed)" in lint_row["detail"] and report(acme, "board-lint")["inputs_sha"] == linted, lint_row   # not verified until it is linted again
+    r3 = run(fin, tmp_path, TAGLINE=TAG, PRINT_REGION="EU", IMAGE_BASE_URL="https://img.example.com/brand", POST_FACTS="spare parts;repair guide;batch size")
+    assert r3.returncode == 0 and "check: PASS" in r3.stdout + r3.stderr, (r3.stdout + r3.stderr)[-3000:]
+    assert report(acme, "board-lint")["inputs_sha"] != linted, "the chain did not lint the board again after the fact changed"
 
 
 def test_a_brand_that_moves_takes_fresh_stills_before_the_book_in_the_chain(acme, tmp_path):
@@ -157,9 +166,9 @@ def test_the_template_names_every_step_the_cli_gates_by_tier():
     assert subprocess.run(["bash", "-n", str(ROOT / "templates/finish.sh.tpl")]).returncode == 0
     assert "TARGETS+=(profiles)" in body and "TARGETS+=(print)" in body and "TARGETS+=(android chrome-ext msix)" in body
     assert 'step "book";' in body and 'step "book-pdf";' in body and 'emit presskit' in body and "print-check" in body and "--posts" in body
-    # the emitters, then the gates (the book reads their reports), then the book, the book PDF and the press kit (it holds the PDF), then staleness and check
+    # the emitters, then the gates (the book reads their reports), then the book, the book PDF and the press kit (it holds the PDF), the lint of the latest board, then staleness and check
     order = [body.index(s) for s in ('for t in "${TARGETS[@]}"; do emit_one', 'step "gates"', 'verify-idempotent', 'step "motion"', 'step "shot --motion motion/proof.json"', 'step "frames motion/proof.json $FRAMES_ARGS"', 'step "book";', 'step "book-pdf";',
-                                     '"${BC[@]}" emit presskit', "staleness --write")]
+                                     '"${BC[@]}" emit presskit', 'step "board-lint $BOARD"', "staleness --write")]
     assert order == sorted(order)
     # nothing in the chain writes the owner's chapters
     assert '"${BC[@]}" book --init' not in body

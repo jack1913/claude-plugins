@@ -15,13 +15,21 @@ failures in the next release:
   judge when the judge ran, and a pattern the judge saw that the line neither hits nor names as a near miss. Two hits in
   one direction, and one hit that every direction shares, fail already.
 - The colours that text sits on (`contrast`): a project whose tokens list no grounds, grounds the owner has not named,
-  a ground with no colour for one of its text, action, text-on-action, focus ring or border roles, and a role under its
-  contrast floor (also in colour-blind simulation with `--cvd`). Ask the owner which colours text sits on and record the
-  date and their words; the model never guesses.
+  a ground with no colour for one of its text, action, text-on-action, focus ring or border roles, a role under its
+  contrast floor, and, with `--cvd`, an action or focus ring too close to its ground in colour-blind simulation (those
+  rows check colour distance, not a contrast floor). Ask the owner which colours text sits on and record the date and
+  their words; the model never guesses.
 
 Two more only ever warn and are not due to fail: `check` lists the values in `tokens/primitives.tokens.json` that are
 still the starter's proposal once the system rules are approved (keep one under `starter-kept`, or change it), and
 `board-lint` notes directions that look alike in colour and motion variants that try the same move.
+
+One change touches what already passes: the `board-lint` report of a pick board now lists `FACTS.md`,
+`brief/BRIEF.md` and `research/cliches.md` as inputs, so editing one of them makes that report stale and `check` says
+it is not verified until `board-lint` runs again. The `tools/finish.sh` of a new project (`templates/finish.sh.tpl`)
+lints the board of the latest round again before `check`, so an edit of the facts or the brief is picked up; a
+`tools/finish.sh` you copied earlier has no such step, so add the block at its end, before `staleness --write`, or run
+`board-lint` yourself.
 
 ### Added
 

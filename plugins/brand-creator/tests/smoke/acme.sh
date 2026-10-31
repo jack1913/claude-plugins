@@ -460,6 +460,7 @@ ok "staleness recorded and current; specs-due lists the rows to recheck"
 
 step "check (every gate for the artefacts that exist)"
 # board-lint lists FACTS.md and the brief as inputs, and FACTS.md was replaced by the example's after the first lint (platform packs): lint the board again
+# (this check is run by hand; the chain of tools/finish.sh below lints the latest board itself before its own check, and its step is asserted there)
 "${BC[@]}" board-lint rounds/r1/board.html --project "$P" >/dev/null || die "the example board does not pass board-lint with the example's FACTS.md"
 "${BC[@]}" check --project "$P"
 
@@ -519,7 +520,7 @@ def at(name):
     i = [k for k, s in enumerate(steps) if s == name or s.startswith(name + " ")]
     assert i, (name, steps)
     return i[0]
-want = ["emit web", "emit social", "emit android", "emit chrome-ext", "emit msix", "emit profiles", "emit print", "print-check", "gates", "book", "book-pdf", "emit presskit"]
+want = ["emit web", "emit social", "emit android", "emit chrome-ext", "emit msix", "emit profiles", "emit print", "print-check", "gates", "book", "book-pdf", "emit presskit", "board-lint rounds/r1/board.html"]
 if sys.platform == "darwin":
     want.insert(want.index("emit android"), "emit apple")
 order = [at(n) for n in want]
@@ -532,7 +533,7 @@ if sys.platform == "darwin":
     assert (p / "assets/apple/watchos/Assets.xcassets/AppIcon.appiconset/AppIcon-watchOS-1024.png").is_file() and (p / "assets/apple/tvos/Assets.xcassets/Contents.json").is_file()
 print("   ok:", ", ".join(want))
 PY
-ok "finish.sh: generators, tokens, every emitter that applies (Tier B, profiles, print, posts), book, book-pdf, press kit, downscale gates, idempotence, staleness and check all ran from the template"
+ok "finish.sh: generators, tokens, every emitter that applies (Tier B, profiles, print, posts), book, book-pdf, press kit, downscale gates, idempotence, the lint of the latest board, staleness and check all ran from the template"
 fi
 if [ "$PART" = finish ]; then
   PASSED=1

@@ -2065,6 +2065,11 @@ case folder that holds another proof's stills; 3: it could not run) leaves no fa
 idempotence reports (a book built before them is stale once they are rewritten, and `check` says "not verified") and the kit holds `book.pdf`; the book's file list leaves the kit out. A value set for a step the tier does
 not allow (`PRINT_REGION` or `POST_FACTS` in Quick) stops the chain with exit 2 before any step runs. Every emit step except the press kit is in the idempotence run.
 
+**The last lint.** After the press kit, the chain lints the board of the latest round again (`board-lint rounds/rN/board.html` of the highest N, the board `check` looks for; when that round has no `board.html`, no step), then runs `staleness --write` and `check`. The lint report of a pick
+board lists `FACTS.md`, `brief/BRIEF.md` and `research/cliches.md` as inputs and `check` wants a report that is current for the latest round, so an edit of the facts or the brief since the last lint would otherwise turn `check` not verified. A lint that exits 1 or 3
+after it printed `report: <path>` goes on (`finish.sh: board-lint failed on <page> (see above); ...` or `finish.sh: board-lint could not verify <page> (see above); ...`), and `check` fails the report or says why; any other exit leaves no report of this board for
+`check` to gate, so the chain says `finish.sh: board-lint stopped with exit N ...` and stops with that exit code.
+
 ## Agents and workflows
 
 - `agents/*.md`: plugin agents, named `brand-creator:<file name>`. Frontmatter: `name`, `description` (starts with "Only for

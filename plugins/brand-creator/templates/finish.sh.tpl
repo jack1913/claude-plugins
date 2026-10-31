@@ -16,7 +16,9 @@
 #   7 the brand book when book/chapters/ exists (frames first, Standard and Full, when the brand moves: motion/motion.json says on and motion/proof.json has a page case,
 #     so that the Motion chapter replays fresh stills, with FRAMES_ARGS of block 2, and a line says whenever it takes none; a failure that writes a failing report (exit 1) does
 #     not stop the chain, exit 2 or 3 does; then book, book-pdf: they read the reports of steps 4 and 5), then the press kit (Standard and Full): the kit holds book.pdf
-#   8 staleness --write (records the inputs, the plugin version and the emitter code the pack was built from), then check
+#   8 board-lint on the board of the latest round (the report of a pick board lists FACTS.md and brief/BRIEF.md as inputs, and check wants a current one: an edit of the facts or the brief
+#     made since the last lint is picked up here; a failing or not-verified lint that wrote its report does not stop the chain, check gates it), then staleness --write
+#     (records the inputs, the plugin version and the emitter code the pack was built from), then check
 #
 # The chain sets BRAND_CREATOR_CHAIN=1. A generator that clears or rewrites a whole output folder calls
 # `require_chain()` (scripts/lib/_common.py) and refuses to run without it: run alone it would wipe files that later steps refill.
@@ -150,7 +152,7 @@ done <<< "$SOURCES"
 # Any other exit leaves no report to gate, so it stops the chain with that exit code: exit 2, and an exit 3 that did not write the report of the proof (Chromium cannot start). A motion/motion.json
 # that is not valid in itself stops it at once (exit 2, the message of `brand-creator motion`); one that is valid in itself but names a token that is not built does not, because `motion` reads the answer
 # from the document alone: `book` stops the chain on that token, or, with no book, `check` fails motion:spec. With no decision the chain goes on and says so: `check` fails motion:decided once G4 is recorded.
-wrote_report() {   # wrote_report <what shot --motion printed>: it printed the report it wrote ("report: <path>": the file is named after the proof as the disk spells its path, not always as typed here), and that file is there
+wrote_report() {   # wrote_report <what shot --motion or board-lint printed>: it printed the report it wrote ("report: <path>": the file is named after the proof as the disk spells its path, not always as typed here), and that file is there
   local f; f="$(printf '%s\n' "$1" | sed -n 's/^report: //p' | tail -n 1)"
   [ -n "$f" ] && [ -f "$f" ]
 }
@@ -219,5 +221,23 @@ case "$TIER" in
       for m in "${MARKS[@]}"; do step "emit presskit --mark $m"; "${BC[@]}" emit presskit --mark "$m" ${EMIT_ARGS[@]+"${EMIT_ARGS[@]}"}; done
     fi ;;
 esac
+# ---- the board of the latest round is linted again, as `check` wants a board-lint report that is current for it: the report of a pick board lists FACTS.md and brief/BRIEF.md among its inputs,
+# so an edit of the facts or the brief since the last lint would turn `check` not verified. The board is the one `check` looks for (rounds/rN/board.html of the highest N); when that round has no board.html, no step.
+# Like the motion proof: a lint that fails (exit 1) or cannot verify (exit 3) after it wrote its report goes on, `check` gates that report and says why; any other exit leaves no report
+# of this board to gate (a page that is not there, a round it cannot tell), so it stops the chain with that exit code.
+BOARD="$(python3 -c '
+import os, re
+ns = [int(m.group(1)) for d in (os.listdir("rounds") if os.path.isdir("rounds") else []) for m in [re.fullmatch(r"r(\d+)", d)] if m and os.path.isdir("rounds/" + d)]
+page = f"rounds/r{max(ns)}/board.html" if ns else ""
+print(page if page and os.path.isfile(page) else "")
+')"
+if [ -n "$BOARD" ]; then
+  step "board-lint $BOARD"
+  rc=0; LINT_OUT="$("${BC[@]}" board-lint "$BOARD")" || rc=$?
+  [ -z "$LINT_OUT" ] || printf '%s\n' "$LINT_OUT"
+  if [ "$rc" -eq 1 ] && wrote_report "$LINT_OUT"; then echo "finish.sh: board-lint failed on $BOARD (see above); the chain goes on and check fails the report" >&2
+  elif [ "$rc" -eq 3 ] && wrote_report "$LINT_OUT"; then echo "finish.sh: board-lint could not verify $BOARD (see above); the chain goes on and check says why" >&2
+  elif [ "$rc" -ne 0 ]; then echo "finish.sh: board-lint stopped with exit $rc (see above); check has no report of this board to gate, so the chain stops here" >&2; exit "$rc"; fi
+fi
 "${BC[@]}" staleness --write
 "${BC[@]}" check
