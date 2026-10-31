@@ -1175,6 +1175,39 @@ brand-creator page-check --url http://localhost:<port>/<path> [--project DIR] ..
   text painted by its own background, and an SVG text filled by a paint server (`fill_server`), is "NOT verified" in a warning. Texts alike in colours, ground and floor are one entry (`texts` counts them, `also` names
   up to six more selectors). The row holds `texts_checked`, `declared` and the lists `failing`, `undeclared` and `over_image` (up to 100 each). Not checked: whether the
   `kind` of a declared pair suits the size of the text (an accent declared only for large text, `ui-text-large`, passes at 14 px), APCA and colour vision.
+- **Mark facts.** Every view also holds `marks` and `images`, collected over the same shown elements. A mark is an element with `data-brand-mark`, or an image whose file name says
+  it is one: `logo`, `favicon`, `wordmark` or `lockup` anywhere in the name, or `mark` as a word (`site-mark.svg`, `siteMark.png`, `mark2x.png`; not `bookmark.png` or
+  `marketing.jpg`). The images are an `img` (what the browser chose to show, `currentSrc`, so the `source` of a `picture` is covered; `kind: "picture"` then), an SVG `image`, a CSS
+  `background-image` of an element and of its `::before` and `::after`, and an inline `<svg>` that has `data-brand-mark` (`kind: "inline-svg"`). **`data-brand-mark` convention:** put it
+  on the `<img>` or the inline `<svg>` of the brand mark; its value may name the logo file the mark shows (`data-brand-mark="assets/logo/mark.svg"`), or be empty. On any other
+  element it stands for the images inside it, and an element with none is reported as `kind: "other"`. `marks` holds the marked and the named ones, shown or not (`visible: false`, so a logo hidden at one width is known; up to 100 a view, `marks_total` says how
+  many there were when more; a mark over the cap is not measured), `images` the other visible images (up to 300; `images_total`): `pagecheck.identified_marks(view, hashes)` is the one place that decides what a
+  mark is, and it promotes an image of `images` whose bytes equal a logo file of the project (the node side hashed it, see `resources`). An entry is `{sel, kind, url, own, declared,
+  named, marked, visible, rect, nearest_px, nearest_sel, nearest_text}` plus `sha256` (a `data:` image, hashed in the page), `svg_markup` (an inline SVG serialised as XML, up to
+  60,000 characters, `svg_truncated: true` beyond) and `pseudo` with `height_px` (a pseudo-element has no box to read: `rect` is null and `height_px` is its computed height when that is a
+  length). `url` of a file of the page's own origin is its path with the query, the key of `resources`, and `own` is true; `declared` is the value of `data-brand-mark` (null when
+  the attribute is not on or above the element); `visible` says it is shown; `rect` is the box in page css px. `nearest_px` is the gap to the nearest other box that is shown: a line
+  of text, an `img`, a `canvas`, a `video` or an outer `svg`, none of them the mark, inside it or (a drawing) holding it; the text of an element that holds the mark counts. The gap is
+  the larger of the horizontal and the vertical distance between the two boxes (0 when they touch or overlap), because the clear space is a margin round the mark; null when nothing
+  else is on the page. Not measured: an inline `<svg>` that is a mark without `data-brand-mark` (and one that draws through `<use>` is compared as written: the drawing it points to is not followed, so it is "NOT verified" in a warning when it matches no logo file), an `<object>` or `<embed>`, `mask-image`, `border-image` and `list-style-image`, the box of
+  a pseudo-element, and the size a background is drawn at (`background-size`): a background mark is measured by its element's box.
+- **Mark rows.** Only a shown mark is judged (not `display: none`, hidden, transparent or off the page). `page:mark-file`, over all views: fails a mark whose bytes equal no file of
+  `assets/logo/` and no drawing `qa/rules.json` names (`bands`, `favicon.drawing`, `marks.<id>.bands` and `marks.<id>.favicon`, each with its `-dark.svg` twin). An inline SVG is
+  compared after canonicalisation (`pagecheck.canonical_svg`) with every SVG of that set, and the detail says so: namespaces and prefixes dropped, attributes sorted, white space
+  collapsed (so a space at the edge of a run of text is not told apart), comments and the `title`, `desc` and `metadata` elements left out, and on the root `<svg>` also `width`, `height`, `class`, `style`, `id`, `role`, `focusable`, `tabindex`,
+  `aria-*` and `data-*` (how a page sizes, styles and labels its copy); the `viewBox` and everything inside the root must be the same, in the same order, with the text that
+  follows a child element (`Ac<tspan>m</tspan>e`) as much a part of it as the text before. The root's `style` and `class` are not compared at all, and a recolour through them (or
+  through the page's CSS) is not caught here: `page:colours` still fails a colour that is no token colour, but not a swap to another token colour; the same colour as a `fill` attribute
+  on the root fails here. A `data-brand-mark` value names the file the mark shows: the mark must be that file or its twin,
+  and a name that is no logo file of the project fails. A mark whose bytes were not seen (its file is on another
+  origin, aborted, or was reached through a redirect), and an inline SVG that draws through `<use>` and matches no logo file, is "NOT verified" in a warning. With no logo file in the project the row is `skipped`; with no shown mark it is `info` and says
+  what counts as a mark, so a page with a logo the check cannot recognise is not passed in silence. `page:mark-band`, only for a page with a verified mark (`info` when `qa/rules.json` lists no
+  bands): fails a banded drawing (a file a band names, or its `-dark.svg` twin, in either theme, because a dark header on a light page shows the twin) that is not the drawing
+  `qa_rules.pick_band` names for the mark's rendered height, its box height rounded to a whole pixel; with `marks`, a mark is judged by the bands that name its file (a band's drawing is read as the project's path: `./assets/logo/x.svg` and a symlink are the file they lead to). A wordmark or a
+  lockup is in no band and is not judged (`info` when no mark on the page is a banded drawing); a mark whose box cannot be read is "NOT verified". `page:mark-clear-space`: fails a mark
+  with another box nearer than `page.clear_space` (0.25 until `qa/rules.json` sets it, and the row says it is a proposal) x its rendered height. The rows hold their offenders (up
+  to 100), each with where it was first seen. Once a view was measured the logo files are inputs of the report, whether or not a mark is shown (a logo is found by its bytes, so even "no mark shown" rests on them), so a changed
+  logo file makes it stale. `check` does not gate them.
 - **Writing a collector.** `page_measure.mjs` installs `window.__bcMeasure` for the length of one view (`collect` removes it again): `selector(el)`, `shown(el)` (`{shown, opacity}`),
   `walkable(el)`, `colour(css)` (`{r, g, b, a, hex}` or null), `canvas()`, `ground(el)` and `hex([r, g, b])`. A later collector calls them inside its own `page.evaluate`.
 - **For other tools.** `scripts/pagelib/pagecheck.py` imports only the standard library and `scripts/lib`; a tool puts `scripts/pagelib` on `sys.path` and calls

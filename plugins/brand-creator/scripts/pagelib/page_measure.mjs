@@ -307,12 +307,162 @@ async function roleColours(page, request) {
   return page.evaluate((css) => ({ role_colours: Object.fromEntries(css.map((c) => { const read = window.__bcMeasure.colour(c); return [c, read ? read.hex : null]; })) }), list);
 }
 
+const MARK_CAP = 100;           // marks (marked, or named like a logo) reported per view; the view says so when there were more
+const IMAGE_CAP = 300;          // other images reported per view: the judge may find one is a logo file by its bytes
+const SVG_MARKUP_CAP = 60000;   // characters of an inline SVG mark kept for the judge to compare with the logo drawings
+const DATA_URL_CAP = 5 * 1024 * 1024;   // a data: image larger than this is not hashed
+
+/** The brand mark on the page and what stands next to it, in one walk. A mark is an element with `data-brand-mark`, or an image whose file name says it is one: `logo`, `favicon`,
+ *  `wordmark` or `lockup` anywhere in the name, or `mark` as a word (`site-mark.svg`, `siteMark.png`; not `bookmark.png` or `marketing.jpg`). The images are `img` (what the
+ *  browser chose to show, `currentSrc`, so the `source` of a `picture` is covered), an SVG `image`, a CSS `background-image` of an element and of its `::before` and `::after`.
+ *  `data-brand-mark` on an element that is none of them stands for the images inside it. `marks` holds the marked and the named ones, `images` the other visible images (a judge may
+ *  find one is a logo file by its bytes, which only the node side saw). An entry is {sel, kind, url, own, declared, named, marked, visible, rect, nearest_px, nearest_sel, nearest_text}
+ *  plus `sha256` (a data: URL, hashed here; a file of the page's origin is hashed by render.mjs, see `resources`), `svg_markup` (an inline SVG mark, serialised as XML) and `pseudo`.
+ *  `kind` is img, picture, image, background, inline-svg or other (a marked element that shows no image). `url` of a file of the page's origin is its path with the query, the key
+ *  of `resources`; `declared` the value of `data-brand-mark` (null when the attribute is not there); `rect` the box in page css px (null for a pseudo-element, which has none to read;
+ *  `height_px` is then its computed height when that is a length). `nearest_px` is the gap to the nearest other box that is shown: a line of text, an `img`, `canvas`, `video` or an
+ *  outer `svg`, none of them the mark or inside it, and no `img`, `canvas`, `video` or `svg` that holds the mark. The gap is the larger of the horizontal and the vertical distance between the two
+ *  boxes (0 when they touch or overlap), because the clear space is a margin round the mark; null when nothing else is on the page. */
+async function markFacts(page) {
+  return page.evaluate(async ([markCap, imageCap, svgCap, dataCap]) => {
+    const H = window.__bcMeasure;
+    const round = (v) => Math.round(v * 100) / 100;
+    const here = location.origin;
+
+    const stemOf = (u) => {
+      try { return decodeURIComponent(new URL(u).pathname.split("/").pop() || "").replace(/\.[A-Za-z0-9]{1,5}$/, ""); } catch { return ""; }
+    };
+    const named = (u) => {
+      const stem = stemOf(u);
+      if (!stem) return false;
+      if (/logo|favicon|wordmark|lockup/i.test(stem)) return true;
+      const words = stem.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase().split(/[^a-z]+/);
+      return words.includes("mark") || words.includes("marks");
+    };
+    const place = (u) => {   // -> {url, own, data?}: where an image lives, as the key of `resources` when it is the page's own
+      if (!u) return { url: null, own: false };
+      if (/^data:/i.test(u)) return { url: u.slice(0, 80), own: false, data: u };
+      try {
+        const x = new URL(u, document.baseURI);
+        return x.origin === here ? { url: x.pathname + x.search, own: true } : { url: x.href.slice(0, 200), own: false };
+      } catch { return { url: String(u).slice(0, 200), own: false }; }
+    };
+    const dataBytes = (u) => {
+      const m = /^data:([^,]*),([\s\S]*)$/i.exec(u);
+      if (!m) return null;
+      try {
+        if (/;base64$/i.test(m[1])) return Uint8Array.from(atob(decodeURIComponent(m[2])), (c) => c.charCodeAt(0));
+        const out = [], enc = new TextEncoder(), body = m[2];
+        for (let i = 0; i < body.length;) {
+          if (body[i] === "%" && /^[0-9a-f]{2}$/i.test(body.slice(i + 1, i + 3))) { out.push(parseInt(body.slice(i + 1, i + 3), 16)); i += 3; continue; }
+          const cp = body.codePointAt(i);
+          out.push(...enc.encode(String.fromCodePoint(cp)));
+          i += cp > 0xffff ? 2 : 1;
+        }
+        return Uint8Array.from(out);
+      } catch { return null; }
+    };
+    const sha256 = async (u) => {
+      const bytes = dataBytes(u);
+      if (!bytes || bytes.length > dataCap || !(window.crypto && crypto.subtle)) return null;
+      return [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((b) => b.toString(16).padStart(2, "0")).join("");
+    };
+    const boxOf = (el, s) => {
+      const r = el.getBoundingClientRect();
+      const info = H.shown(el);
+      const visible = info.shown && info.opacity > 0 && s.visibility === "visible" && s.display !== "contents" && r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0;
+      return { r, visible };
+    };
+    const markedBy = (el) => el.closest("[data-brand-mark]");
+
+    const found = [];                // {el, kind, u, marked, pseudo?}
+    const markedWith = new Set();    // the marked elements that stand for at least one image
+    for (const el of document.querySelectorAll("*")) {
+      if (!H.walkable(el)) continue;
+      const s = getComputedStyle(el), marker = markedBy(el);
+      const add = (kind, u, extra = {}) => { found.push({ el, kind, u, marker, ...extra }); if (marker) markedWith.add(marker); };
+      if (el.localName === "img") add(el.parentElement && el.parentElement.localName === "picture" ? "picture" : "img", el.currentSrc || el.getAttribute("src") || null);
+      else if (el.localName === "svg" && !(el.parentElement instanceof SVGElement)) { if (marker) add("inline-svg", null); }
+      else if (el.localName === "image" && el instanceof SVGElement) add("image", el.href && el.href.baseVal ? el.href.baseVal : null);
+      if (!(el instanceof SVGElement) && H.shown(el).shown) {   // a background of an element that is not shown is not on the page (and a pseudo-element's style is the dear one to read)
+        for (const pseudo of ["", "::before", "::after"]) {
+          const ps = pseudo ? getComputedStyle(el, pseudo) : s;
+          if (pseudo && (ps.content === "none" || ps.content === "normal")) continue;
+          const urls = [...ps.backgroundImage.matchAll(/url\(\s*("([^"]*)"|'([^']*)'|([^)]*))\s*\)/g)].slice(0, 4).map((m) => m[2] ?? m[3] ?? m[4]);
+          for (const u of urls) add("background", u, pseudo ? { pseudo } : {});
+        }
+      }
+    }
+    for (const el of document.querySelectorAll("[data-brand-mark]")) {
+      if (H.walkable(el) && !markedWith.has(el)) found.push({ el, kind: "other", u: null, marker: el });
+    }
+
+    // the boxes a mark's neighbours are: lines of text and the images and SVG drawings of the page
+    const boxes = [];
+    const keep = (r) => r.width >= 1 && r.height >= 1 && r.right > 0 && r.bottom > 0;
+    const range = document.createRange();
+    const walker = document.createTreeWalker(document.documentElement, NodeFilter.SHOW_TEXT);
+    for (let n; (n = walker.nextNode());) {
+      const text = n.nodeValue.trim(), p = n.parentElement;
+      if (!text || !p || !H.walkable(p)) continue;
+      const info = H.shown(p);
+      if (!info.shown || info.opacity <= 0 || getComputedStyle(p).visibility !== "visible") continue;
+      range.selectNodeContents(n);
+      for (const r of range.getClientRects()) if (keep(r)) boxes.push({ el: p, node: n, r, text: text.slice(0, 40) });
+    }
+    for (const el of document.querySelectorAll("img, canvas, video, svg")) {
+      if (!H.walkable(el) || (el.localName === "svg" && el.parentElement instanceof SVGElement)) continue;
+      const { r, visible } = boxOf(el, getComputedStyle(el));
+      if (visible) boxes.push({ el, node: null, r, text: null });
+    }
+    const nearest = (el, r) => {
+      let best = null;
+      for (const b of boxes) {
+        const d = Math.max(Math.max(0, r.left - b.r.right, b.r.left - r.right), Math.max(0, r.top - b.r.bottom, b.r.top - r.bottom));
+        if (best && d >= best.d) continue;   // the cheap test first: only a box that would be nearer is asked whether it is the mark, inside it, or a drawing that holds it
+        if (b.el === el || el.contains(b.el) || (!b.node && b.el.contains(el))) continue;
+        best = { d, b };
+      }
+      return best ? { nearest_px: round(best.d), nearest_sel: H.selector(best.b.el), nearest_text: best.b.text } : { nearest_px: null, nearest_sel: null, nearest_text: null };
+    };
+
+    const marks = [], images = [];
+    let marksTotal = 0, imagesTotal = 0;
+    for (const f of found) {
+      const s = getComputedStyle(f.el), where = place(f.u), isNamed = Boolean(f.u) && named(f.u), marked = Boolean(f.marker);
+      if (!marked && !isNamed && !where.url) continue;
+      const box = f.pseudo ? { r: null, visible: boxOf(f.el, s).visible } : boxOf(f.el, s);
+      if (!marked && !isNamed && !box.visible) continue;   // an image that is not shown and says nothing of a logo is not on the page; a hidden mark (marked, or named like one) is still reported
+      const list = marked || isNamed ? marks : images;
+      if (list === marks) marksTotal++; else imagesTotal++;
+      if (list.length >= (list === marks ? markCap : imageCap)) continue;   // over the cap: neither measured nor hashed (the neighbour search below is the costly part)
+      const entry = {
+        sel: H.selector(f.el) + (f.pseudo || ""), kind: f.kind, url: where.url, own: where.own, declared: f.marker ? f.marker.getAttribute("data-brand-mark") : null,
+        named: isNamed, marked, visible: box.visible,
+        rect: box.r ? { x: round(box.r.x + scrollX), y: round(box.r.y + scrollY), width: round(box.r.width), height: round(box.r.height) } : null,
+        ...(f.pseudo ? { pseudo: f.pseudo, height_px: /px$/.test(getComputedStyle(f.el, f.pseudo).height) ? round(parseFloat(getComputedStyle(f.el, f.pseudo).height)) : null } : {}),
+      };
+      if (where.data) entry.sha256 = await sha256(where.data);
+      if (f.kind === "inline-svg") {
+        let markup = "";
+        try { markup = new XMLSerializer().serializeToString(f.el); } catch { /* an element the serializer refuses: no markup, and the judge says it could not compare */ }
+        entry.svg_markup = markup.slice(0, svgCap);
+        if (markup.length > svgCap) entry.svg_truncated = true;
+      }
+      Object.assign(entry, box.r && box.visible ? nearest(f.el, box.r) : { nearest_px: null, nearest_sel: null, nearest_text: null });
+      list.push(entry);
+    }
+    return { marks, images, ...(marksTotal > marks.length ? { marks_total: marksTotal } : {}), ...(imagesTotal > images.length ? { images_total: imagesTotal } : {}) };
+  }, [MARK_CAP, IMAGE_CAP, SVG_MARKUP_CAP, DATA_URL_CAP]);
+}
+
 const COLLECTORS = [
   async (page) => { await page.evaluate(installHelpers); return {}; },   // first: the helpers the collectors below call
   async (page) => ({ document: await documentFacts(page) }),
   async (page, request) => ({ selectors: await selectorBoxes(page, request.selectors || []) }),
   async (page) => colourFacts(page),
   async (page, request) => roleColours(page, request),
+  async (page) => markFacts(page),
 ];
 
 /** Run every collector on the settled page and merge their answers; the in-page helpers are taken out of the page again. */
