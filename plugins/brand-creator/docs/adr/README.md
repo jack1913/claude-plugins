@@ -14,5 +14,7 @@ Why brand-creator works the way it does, one decision per file. Decisions made b
 | [ADR-0006](ADR-0006-reflex-test-checked-beyond-presence.md) | The reflex test is checked beyond presence: a format, two failures, and warnings that become failures | accepted |
 | [ADR-0007](ADR-0007-brand-side-of-the-web.md) | brand-creator owns the brand side of the web; production sites are built in product repositories | accepted |
 | [ADR-0008](ADR-0008-text-grounds-carry-complete-roles.md) | Every ground that carries text has five roles in both themes, named by the owner | accepted |
+| [ADR-0009](ADR-0009-website-references-before-any-site-page.md) | Website references come before any site page: an online-research OK, a captured board and a recorded gate (G4w) | accepted |
+| [ADR-0010](ADR-0010-the-site-round-makes-reference-pages-not-templates.md) | The site round makes reference pages, not templates: hero first, a cold review, choices tagged rule or example, and a recorded gate (G4p) | accepted |
 
 New records follow [ADR-TEMPLATE.md](ADR-TEMPLATE.md).
