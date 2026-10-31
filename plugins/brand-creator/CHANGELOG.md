@@ -198,6 +198,12 @@ still the starter's proposal once the system rules are approved (keep one under 
   `research/site-refs/<name>/`: the first screen at both widths, the whole page and two small thumbnails. That form is the
   only one that reaches the internet. It refuses until you have answered the online-research question (`site_research`
   is `online` or `links-only`), and a site that does not load exits with 1 and writes nothing.
+- Website references (Standard and Full, when your brief lists a site): after the system rules,
+  `/brand-creator:round site-refs` asks once whether Claude may research sites online, asks for sites you like and
+  dislike, and shows four to six groups of real sites, each captured, with what to take and what to leave. Your pick is
+  recorded before any page of your site is built; you can skip it in your own words. `board-lint` checks the board:
+  a site in your brief, the system rules approved, your online-research answer, at least three site clichés, and four to
+  six groups of three or more sites, each with a link, its captured screenshot, what to take and what to avoid.
 
 ### Changed
 
