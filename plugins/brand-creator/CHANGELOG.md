@@ -230,6 +230,9 @@ lints the board of the latest round again before `check`, so an edit of the fact
   answer on online research to the approved pages. The manual index and the commands page link to it, "Choose a tier"
   and "What it makes" describe the new steps, and the glossary explains website references, reference page, cold review
   and layout reference.
+- `check` now checks the approved pages in `site/`: unchanged since approval, each checked against your brand rules, with
+  current stills. A project without approved pages gets no new row; a page you edited after approving it fails the
+  check and names the command that approves the pages again.
 
 ### Changed
 

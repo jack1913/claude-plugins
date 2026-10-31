@@ -1674,6 +1674,30 @@ The decision record of the approved pages (schema 1), written by `site approve`:
   edited after approval reads `changed since it was approved`) and `rewrite_urls(text, kind, project=, file_dir=, new_file_dir=, moves=, label=)`, the path rule above, which group 3 uses to carry a
   reference page into another folder. A tool that reads the approved pages reads the record through `load_site` and `validate_site`, never by a parsing of its own.
 
+### check and the approved pages
+
+`brand-creator check` gates the approved pages with three rows, `site:record`, `site:pages` and `site:stills`, **only when G4p is recorded or `site/site.json` exists**. A project with neither (every project
+made before the site round, and a site round not yet approved) gets no `site:` row, and a `site/` folder without `site/site.json` and without G4p is the owner's own and is not read.
+
+- `site:record`: G4p recorded and `site/site.json` there. G4p without the file fails (`G4p is recorded but site/site.json does not exist: run brand-creator site approve`), and so does the file without G4p
+  (`exists but G4p, the owner's approval of the pages, is not recorded`): nothing but `site approve` after G4p puts pages in `site/`. Then `sitedata.validate_site(project)` must find nothing: a record that is not
+  schema 1, a layout that is no reference and no `own:<word>`, a choice without a tag, a rule without where it was decided, a choice naming a page the record does not hold, and a page that is gone or whose sha256 is
+  not the one approved (`changed since it was approved ... run brand-creator site approve --replace from the round, or put the approved page back`). The row fails; it is "not verified" only when the layout file
+  of the plugin cannot be used (a damaged install).
+- `site:pages`: one row for the pages the record can name (an id and the path `site/<id>/index.html`, each once, whatever else is wrong with the record). Each needs the page-check report of that very page,
+  `assets/_checks/<tool>.json` with `tool = pagecheck.report_tool("site/<id>/index.html")` (`scripts/pagelib/pagecheck.py`, which `check` puts on `sys.path`; the name is never rebuilt by hand), current by
+  `check`'s rule (no file it was made from is gone or changed), with `target` a `project` target whose `page` is that path, the page among its `inputs`, and a verdict. A report whose status is `fail` fails the
+  row (`<id>: page-check/<slug>-<hash6> report is failing (<failing rows>)`); the row fails whatever the other pages say, and the pages that are not verified are named after it. A page with no report, a stale
+  report, one of another target or page, one that does not list the page, or one that is no verdict (`not-verified`, with up to three of its skipped rows quoted) makes the row "not verified" and names
+  `brand-creator page-check site/<id>/index.html`. A report that is no JSON, or no report, fails like any other report `check` reads.
+- `site:stills`: each page has `site/<id>/shots/capture.json` (`brand-creator capture site/<id>/index.html`) that is the capture of that page (`source.page`), current by the same rule with the page among its
+  `inputs`, and lists the four first-screen stills (`1440-light`, `1440-dark`, `390-light`, `390-dark`) by file and sha256 where the files in `shots/` have those bytes. Otherwise the row is "not verified" and
+  names `brand-creator capture site/<id>/index.html` (a capture is a record of the page, not a gate on it, so it never fails the row).
+
+`site approve` writes no report, so right after it `site:pages` and `site:stills` are "not verified" until `page-check` and `capture` have run on each page, which is what its output asks for. Recording G4p
+changes `BRAND-STATE.md`, which a page-check report lists among the files it was made from: run `page-check` on the approved pages after G4p. A page that `check` passes has not changed since approval, was checked against
+the brand rules as it is, and has stills of the page as it is.
+
 ## Brand book
 
 `brand-creator book`, `book-lint`, `book-pdf`, `patch` and `collapse` (scripts `book.py`, `book_lint.py`, `book_pdf.py`, `patch.py`,
