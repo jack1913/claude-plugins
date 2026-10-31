@@ -13,7 +13,11 @@ capture, and the caption says so). Every capture.json is an input of the lint re
 Whether the brief lists a site is read from the value after "Required surfaces:" in brief/BRIEF.md, against a list of English and Polish words (SITE_WORDS). A value wrapped in parentheses is the untouched
 line of the template ("(site, app icon, ...)"), the owner's own words not yet written, and does not count. A brief in another language is not recognised: the owner adds the word "site" to the line.
 
-The folder of boardlib is outside scripts/lib/, so a change here does not make every pack stale. Standard library only (plus _common, boardpage, motionboard, reflex, sitedata and `report_tool` of scripts/pagelib/pagecheck.py, the one rule that names the report of a page); no clock and no network. The reads are the board's project files: the named files, the capture records, the layout file, and the reports and the stills of each variant.
+Three more kinds of row close the card of a hero variant (reflex_rows, refs_rows, cold_rows). The reflex test of the card (data-field="reflex") is group 1's, read by boardlib/reflex.py against the ids of page-tells.json and ai-defaults.json and the items of research/site-cliches.md:
+site:<name>:reflex (the line is there: a card with no reflex line fails, as a direction does) and site:<name>:reflex-format|reflex-ids|reflex-count|reflex-grounded for each card, site:<name>:reflex-measured (a tell page-check measured that the line does not argue) and site:reflex-shared across the cards. site:refs holds each card's "Takes from" to what the owner picked in G4w (a group of the references
+board, or a site the owner liked, that the G4w record names before its "dislikes"). site:cold reads rounds/rN/<name>/cold-review.md: the verdict first, `by:`, the inputs it was made from with their sha256 (the four stills, brief/BRIEF.md and FACTS.md, each equal to the file now), at most five findings, and the card's cold line saying the same verdict.
+
+The folder of boardlib is outside scripts/lib/, so a change here does not make every pack stale. Standard library only (plus _common, boardpage, motionboard, reflex, sitedata and `report_tool` and `tell_ids` of scripts/pagelib/pagecheck.py, the rules that name the report of a page and the tells of page-tells.json); no clock and no network. The reads are the board's project files: the named files, the capture records, the layout file, and the reports, the stills and the cold review of each variant.
 """
 from __future__ import annotations
 
@@ -27,7 +31,7 @@ from urllib.parse import unquote, unquote_to_bytes, urlsplit, urlunsplit
 
 from _common import CliError, Report, confine, gate_recorded, list_rounds, read_state, rel, sha256_bytes, sha256_file, stale_inputs
 from boardpage import DATA_IMAGE, FILL, GENERIC_NAME, PLACEHOLDER, WORD_NAME, Node, is_site_refs_board, page_kind, page_marker, read_page, sections, thumb_problems
-from pagecheck import report_tool   # scripts/pagelib/pagecheck.py: the name of the report of one page, never a copy of the rule
+from pagecheck import report_tool, tell_ids   # scripts/pagelib/pagecheck.py: the name of the report of one page and the ids of its generic tells, never a copy of either
 import motionboard
 import reflex
 import sitedata
@@ -108,6 +112,7 @@ FOLDER_NAME = re.compile(r"[A-Za-z0-9_-]+")      # the name is also the folder r
 PAGE_ID = re.compile(r"[a-z][a-z0-9-]{1,31}")    # <body data-page>: the id the page gets in site/ (site/<id>/index.html)
 OWN_LAYOUT = re.compile(r"own:[a-z][a-z0-9-]*")  # a layout of the page's own: the references are not a menu of templates
 SKIPPED = "skipped by owner"        # what G4w says when the owner skipped the website references, in their own words
+DISLIKES = re.compile(r"\bdislikes?\b", re.I)   # "picked <groups>; likes <...>; dislikes <...>": what stands from the word dislikes on is what the owner turned away from, never a pick
 RECORD_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}\s*")   # `state --record` writes "<date> <decision>"
 FIELDS = (("what-it-is", "What it is"), ("from-refs", "Takes from"), ("cost", "Cost"))
 TELL_ROW = re.compile(r"^tell:([a-z0-9-]+)$")    # the row page-check gives a generic tell of skills/brand-creator/references/page-tells.json (pagecheck.tell_rows): a warning when it found one
@@ -489,15 +494,16 @@ def stills_problems(project: Path, page: Path, v: SiteVariant) -> list[str]:
     return out
 
 
-def proof_rows(rep: Report, project: Path, page: Path, variants: list[SiteVariant]) -> None:
+def proof_rows(rep: Report, project: Path, page: Path, variants: list[SiteVariant]) -> dict[str, dict]:
     """site:check, site:tells and site:stills for the variants of a hero board: each is one result for the whole board and names the variants it fails. Without a variant card they are not verified. site:tells
-    reads the report that site:check found current: a variant with no such report is not judged here (site:check says why), so a board with nothing else wrong in the tells is "not verified", never a pass."""
+    reads the report that site:check found current: a variant with no such report is not judged here (site:check says why), so a board with nothing else wrong in the tells is "not verified", never a pass.
+    -> the current page-check verdict of each variant that has one, by the variant's name (reflex_rows reads the tells in it)."""
     labels = (("site:check", "each variant's page-check is current and the card says what it found"), ("site:tells", "the card names every tell page-check found"),
               ("site:stills", "the stills on the cards are those `capture` took of the page as it is now"))
     if not variants:
         for rid, label in labels:
             rep.add(rid, "skipped", label, detail="not verified: there is no variant card to look at (site:variants says why)")
-        return
+        return {}
     checks = [check_problems(project, v) for v in variants]
     rep.add("site:check", "fail" if any(p for p, _ in checks) else "pass", labels[0][1],
             detail=shown([x for p, _ in checks for x in p]) if any(p for p, _ in checks) else "a current page-check verdict each, and the check line of each card says its status")
@@ -517,11 +523,261 @@ def proof_rows(rep: Report, project: Path, page: Path, variants: list[SiteVarian
     for v in variants:   # the report of the lint is stale as soon as one of these changes: `check` re-reads their hashes
         rep.inputs += [project / v.report, project / v.capture] + [project / v.shots / f"{view}.png" for view in VIEWS]
         rep.inputs += made_from(project, v.report) + made_from(project, v.capture) + listed_stills(project, v)   # the files the two records were made from (the page, tokens.css, a stylesheet, a script), and the stills by the names capture.json gives
+    return {v.name: doc for v, doc in judged}
+
+
+# ---------------------------------------------------------------- the reflex test, the references a card takes from, and the cold review
+
+FACTS_FILE = "FACTS.md"
+COLD_FILE = "cold-review.md"      # rounds/rN/<name>/cold-review.md: what a reader of the four stills, the brief and the facts alone said about the first screen
+MAX_FINDINGS = 5                  # a cold review gives at most this many findings, the costliest to the visitor first
+REFLEX_LABEL = "the card has a reflex line"   # site:<name>:reflex: the required field; group 1's row of a direction says "required field"
+REFLEX_SOURCES = "page-tells.json, ai-defaults.json or research/site-cliches.md"   # where the name of a hit may come from, as a reflex row says it
+NO_CLICHE_FILE = "page-tells.json and ai-defaults.json (the project has no research/site-cliches.md, so no cliché of the category's sites can be named)"
+COLD_VERDICT = re.compile(r"verdict[ \t]*:[ \t]*(ship|fix)", re.I)       # the first non-empty line of cold-review.md
+COLD_BY = re.compile(r"^by[ \t]*:[ \t]*\S", re.I | re.M)                  # "by: in-thread", or "by: agent"
+COLD_INPUTS = re.compile(r"inputs[ \t]*:", re.I)                          # the line that opens the list of what the review was made from
+COLD_ITEM = re.compile(r"[-*][ \t]+(\S+)[ \t]+sha256:([0-9a-f]{64})", re.I)   # "- <path> sha256:<hex>"
+COLD_FINDING = re.compile(r"\s*\d+[.)]\s+\S")                             # a numbered line is a finding
+
+
+def reflex_line(v: SiteVariant) -> str | None:
+    """The text of the card's reflex line (its first non-empty data-field="reflex"), or None when the card has none."""
+    lines = [n for n in v.card.find_all(data_field="reflex") if n.nonempty()]
+    return lines[0].text() if lines else None
+
+
+def measured_row(rep: Report, v: SiteVariant, parsed: reflex.Parsed | None, doc: dict | None) -> None:
+    """site:<name>:reflex-measured: every tell page-check measured on the page (a `tell:<id>` warning of its report) is argued on the reflex line, as a hit or as a near miss that names it. A warning, never a failure.
+    Without a current page-check verdict there is nothing to compare: not verified (site:check says why)."""
+    rid, label = f"site:{v.name}:reflex-measured", "every tell page-check measured is argued on the reflex line"
+    if doc is None:
+        rep.add(rid, "skipped", label, detail="not verified: no current page-check verdict to read the measured tells from (site:check says why)")
+        return
+    argued = {reflex.norm(e.name) for e in parsed.entries} if parsed is not None else set()
+    found = [tid for tid, _ in tells_found(doc)]
+    missing = [tid for tid in found if reflex.norm(tid) not in argued]
+    if missing:
+        rep.add(rid, "warn", label, detail=f"page-check found {', '.join(missing)}; argue {'it' if len(missing) == 1 else 'each'} on the card ('hit: <id> | <argument>', or 'near miss: <id> (<why>)') or change the page")
+    else:
+        rep.add(rid, "pass", label, detail=f"{len(found)} measured tell(s), each argued on the reflex line" if found else "page-check measured no tell")
+
+
+def ids_detail(parsed: reflex.Parsed, tells: list[str], ids: list[str], cliches: list[str]) -> str | None:
+    """The detail of a passing site:<name>:reflex-ids: each hit with where its name comes from. reflex.known gives the label "ai-defaults" to every id it is passed, and `ids` holds the tells of page-tells.json as
+    well as those of ai-defaults.json, so a tell would read "(ai-defaults)": it is relabelled "(page-tells)" here (reflex.py is group 1's and stays as it is). None when no hit is named."""
+    named = [e for e in reflex.hits(parsed) if reflex.norm(e.name)]
+    if not named:
+        return None
+    own = {reflex.norm(t) for t in tells}
+    return ", ".join(f"{e.name} ({'page-tells' if reflex.norm(e.name) in own else reflex.known(e.name, ids, cliches)})" for e in named)
+
+
+def reflex_rows(rep: Report, project: Path, variants: list[SiteVariant], verdicts: dict[str, dict]) -> None:
+    """The reflex test of each card (group 1's rules, boardlib/reflex.py). site:<name>:reflex is the required field, as `direction:<name>:reflex` is on a style board: a card whose reflex line is missing or empty fails, so
+    that deleting the line never gets round :reflex-count and site:reflex-shared. For each card with a reflex line, `reflex.line_rows` against the ids of page-tells.json and ai-defaults.json and the items of the project's
+    research/site-cliches.md gives site:<name>:reflex-format, :reflex-ids (a tell of page-tells.json is labelled page-tells; ids_detail), :reflex-count (two hits in one card fail) and :reflex-grounded (the warnings say
+    "a failure from the next release"). site:<name>:reflex-measured (measured_row) compares the line with what page-check measured. site:reflex-shared fails when every card hits one pattern, so the variants are not
+    divergent; it compares nothing for fewer than two cards, or when a card has no line (which has failed already). The cliché file, FACTS.md and the brief are inputs of the report, so a changed cliché or fact makes the lint stale."""
+    if not variants:
+        return
+    tells = tell_ids()
+    ids = tells + reflex.ai_default_ids()
+    cliche_file = Path(project) / CLICHES_FILE
+    cliches = reflex.cliche_items(project, rel=CLICHES_FILE)
+    sources = REFLEX_SOURCES if cliche_file.is_file() else NO_CLICHE_FILE
+    ground = reflex.ground_words(project)
+    rep.inputs.extend([cliche_file, Path(project) / FACTS_FILE, Path(project) / BRIEF_FILE])   # the report skips a file that is not there
+    lines: list[reflex.Parsed] = []
+    for v in variants:
+        text = reflex_line(v)
+        parsed = reflex.parse(text) if text is not None else None
+        if parsed is None:
+            rep.add(f"site:{v.name}:reflex", "fail", REFLEX_LABEL,
+                    detail=f'missing or empty: data-field="reflex" inside the card of {v.name}: write {reflex.FORMAT}; a card with no line cannot be held to the one-hit and the shared-pattern rules')
+        else:
+            rep.add(f"site:{v.name}:reflex", "pass", REFLEX_LABEL, detail="ok")
+            lines.append(parsed)
+            for suffix, status, detail in reflex.line_rows(parsed, ids, cliches, ground=ground, sources=sources):
+                if suffix == "reflex-ids" and status == "pass":
+                    detail = ids_detail(parsed, tells, ids, cliches) or detail
+                rep.add(f"site:{v.name}:{suffix}", status, reflex.LABELS[suffix], detail=detail)
+        measured_row(rep, v, parsed, verdicts.get(v.name))
+    label = "the variants do not all hit one pattern"
+    if len(lines) < 2 or len(lines) < len(variants):
+        rep.add("site:reflex-shared", "info", "not required here",
+                detail=f"{len(lines)} of {len(variants)} card(s) with a reflex line; two cards, each with a line, are needed to compare them")
+        return
+    shared = reflex.shared_hit(lines)
+    if shared:
+        rep.add("site:reflex-shared", "fail", label, detail=f"every variant hits {shared!r}: they are not divergent, so replace a part of one of them")
+    else:
+        rep.add("site:reflex-shared", "pass", label, detail=f"{len(lines)} reflex lines, no pattern hit by all")
+
+
+def whole(name: str) -> re.Pattern[str]:
+    """A name as a whole word, or whole words, in a text, whatever the letter case: not a part of a longer word."""
+    return re.compile(r"(?<![^\W_])" + r"\s+".join(re.escape(w) for w in name.split()) + r"(?![^\W_])", re.I)
+
+
+def reference_names(root: Node) -> list[str]:
+    """The names a pick can be recorded under on a website references board: the name of each group and, for each site the owner liked (data-like="like"), the text of its link and its host. A site the owner
+    disliked is not a name: the hero is never built from it."""
+    names = [g.attrs.get("data-name", "").strip() for g in sections(root, "group")]
+    section = next((n for n in sections(root, "owner-sites") if n.nonempty()), None)
+    for li in (top_items(section) if section is not None else []):
+        link = link_of(li)
+        if link is not None and li.attrs.get("data-like", "").strip() == "like":
+            try:
+                host = (urlsplit(link.attrs["href"].strip()).hostname or "").removeprefix("www.")
+            except ValueError:   # an address the standard library cannot split (a bracket with no end): the link text is still a name
+                host = ""
+            names += [re.sub(r"\s+", " ", link.text()).strip(), host]
+    return [n for n in dict.fromkeys(names) if n]
+
+
+def refs_rows(rep: Report, project: Path, rnd: int, variants: list[SiteVariant]) -> None:
+    """site:refs: the Takes from line of each card (data-field="from-refs") names a group of the references board, or a site the owner liked, that the G4w record names too (a whole word, whatever the letter
+    case): the hero is built from what the owner picked. The record is read up to the word "dislikes": a group or a site named after it is one the owner turned away from, and does not count as a pick. A skip in the
+    owner's words is an info row. Not verified without a G4w, a references board to read the names from, or a variant card."""
+    label = "each variant takes from what the owner picked (G4w)"
+    g4w = gate_recorded(project, "G4w")
+    if not variants:
+        rep.add("site:refs", "skipped", label, detail="not verified: there is no variant card to look at (site:variants says why)")
+        return
+    if not g4w:
+        rep.add("site:refs", "skipped", label, detail="not verified: G4w is not recorded, so there is no pick to take from (site:g4w says so)")
+        return
+    record = RECORD_DATE.sub("", g4w)
+    if record.lower().startswith(SKIPPED):
+        rep.add("site:refs", "info", label, detail=f"G4w: {g4w}: the owner skipped the website references, so there is no pick to take from")
+        return
+    found = references_board(project, rnd)
+    root = read_page(found[1]) if found is not None else None
+    if root is None:
+        rep.add("site:refs", "skipped", label, detail="not verified: no website references board before this round to read the group names from (site:g4w says why)")
+        return
+    names = reference_names(root)
+    wanted = DISLIKES.split(record, maxsplit=1)[0]
+    picked = [n for n in names if whole(n).search(wanted)]
+    where = f"the references board r{found[0]}"
+    if not picked:
+        rep.add("site:refs", "fail", label, detail=f"G4w ({g4w}) names none of the groups of {where} ({', '.join(g.attrs.get('data-name', '').strip() for g in sections(root, 'group')) or 'none'}) "
+                                                   "or the sites the owner liked (a name after the word dislikes is no pick): record the pick under their names (`brand-creator state --record G4w \"picked <groups>\"`)")
+        return
+    problems, used = [], []
+    for v in variants:
+        text = " ".join(n.text() for n in v.card.find_all(data_field="from-refs"))
+        hit = [n for n in picked if whole(n).search(text)]
+        used.append(f"{v.name}: {', '.join(hit)}")
+        if not hit:
+            problems.append(f"{v.name}: take from what the owner picked (G4w): the Takes from line names none of {', '.join(picked)}")
+    rep.add("site:refs", "fail" if problems else "pass", label, detail=shown(problems) if problems else "; ".join(used) + f" (G4w: {g4w})")
+
+
+def cold_inputs(lines: list[str]) -> tuple[list[tuple[str, str]] | None, list[str]]:
+    """The list under the `inputs:` line of a cold review: ([(path, sha256)], the list lines that are not `- <path> sha256:<hex>`), or (None, []) when there is no such line. The list is the lines that start with
+    `-` or `*` after it, up to the first line that does not; blank lines directly under the head are skipped."""
+    start = next((i for i, ln in enumerate(lines) if COLD_INPUTS.fullmatch(ln.strip())), None)
+    if start is None:
+        return None, []
+    listed, bad = [], []
+    for ln in lines[start + 1:]:
+        s = ln.strip()
+        if not s and not listed and not bad:
+            continue
+        if not s.startswith(("-", "*")):
+            break
+        m = COLD_ITEM.fullmatch(s)
+        if m:
+            listed.append((m.group(1), m.group(2).lower()))
+        else:
+            bad.append(one_line(s, 80))
+    return listed, bad
+
+
+def cold_problems(project: Path, v: SiteVariant, required: bool = True) -> tuple[list[str], str | None]:
+    """site:cold for one card -> (the problems, the verdict when the file gives one). rounds/rN/<name>/cold-review.md exists (`required`; a page card of the pages stage may go without, and then must not claim a verdict);
+    its first non-empty line is `verdict: ship` or `verdict: fix`; it has a `by:` line; its `inputs:` list is exactly the four stills of the variant, brief/BRIEF.md and FACTS.md, each `- <path> sha256:<hex>` equal to
+    the file now; it has at most five findings (numbered lines); the card's cold line (data-cold) says the same verdict. A `fix` shown as `fix` passes."""
+    path = f"{v.dir}/{COLD_FILE}"
+    cold_lines = [n for n in v.card.walk() if "data-cold" in n.attrs]
+    f = Path(project) / path
+    if not f.is_file():
+        if required:
+            return [f"{v.name}: no {path}: a cold review reads the four stills, {BRIEF_FILE} and {FACTS_FILE} only, and writes the verdict first (references/prompt-fragments.md, Review)"], None
+        return ([f'{v.name}: the card has a cold line (data-cold) but {path} does not exist'] if cold_lines else []), None
+    try:
+        text = f.read_text(encoding="utf-8-sig", errors="replace")   # a byte order mark before the verdict is not text
+    except OSError as e:
+        return [f"{v.name}: {path} cannot be read ({type(e).__name__}: {e})"], None
+    lines = text.splitlines()
+    problems: list[str] = []
+    first = next((ln.strip() for ln in lines if ln.strip()), "")
+    m = COLD_VERDICT.fullmatch(first)
+    verdict = m.group(1).lower() if m else None
+    if verdict is None:
+        problems.append(f"{v.name}: {path} must start with its verdict, `verdict: ship` or `verdict: fix`" + (f" (its first line is {one_line(first, 60)!r})" if first else " (the file is empty)"))
+    if not COLD_BY.search(text):
+        problems.append(f"{v.name}: {path} has no `by:` line (`by: in-thread`, or `by: agent` after the fleet gate)")
+    expected = [f"{v.shots}/{view}.png" for view in VIEWS] + [BRIEF_FILE, FACTS_FILE]
+    listed, bad = cold_inputs(lines)
+    if listed is None:
+        problems.append(f"{v.name}: {path} has no `inputs:` list: the four stills, {BRIEF_FILE} and {FACTS_FILE}, each `- <path> sha256:<hex>`")
+    else:
+        paths = [p for p, _ in listed]
+        said = []
+        if bad:
+            said.append(f"{len(bad)} line(s) are not `- <path> sha256:<hex>` ({'; '.join(bad[:2])})")
+        if [e for e in expected if e not in paths]:
+            said.append(f"it does not list {', '.join(e for e in expected if e not in paths)}")
+        if [p for p in dict.fromkeys(paths) if p not in expected]:
+            said.append(f"it lists {', '.join(p for p in dict.fromkeys(paths) if p not in expected)}, which a cold review does not read")
+        if len(paths) != len(set(paths)):
+            said.append("a file is listed twice")
+        if said:
+            problems.append(f"{v.name}: the inputs of {path} must be exactly the four stills of the variant, {BRIEF_FILE} and {FACTS_FILE} ({'; '.join(said)})")
+        changed = []
+        for p, sha in dict.fromkeys(listed):
+            if p in expected:
+                now = sha256_file(Path(project) / p) if (Path(project) / p).is_file() else None
+                if now != sha:
+                    changed.append(p + (" (missing)" if now is None else ""))
+        if changed:
+            what = "the page or its stills" if any(c.startswith(v.shots) for c in changed) else f"{BRIEF_FILE} or {FACTS_FILE}"
+            problems.append(f"{v.name}: {what} changed after the cold review: review again ({path} lists another sha256 for {', '.join(changed)})")
+    findings = [ln for ln in lines if COLD_FINDING.match(ln)]
+    if len(findings) > MAX_FINDINGS:
+        problems.append(f"{v.name}: {path} gives {len(findings)} findings, at most {MAX_FINDINGS}, the costliest to the visitor first")
+    if len(cold_lines) != 1:
+        problems.append(f'{v.name}: the card needs one cold line (data-cold="ship" or "fix"), it has {len(cold_lines)}')
+    else:
+        claimed = cold_lines[0].attrs["data-cold"].strip()
+        if claimed not in ("ship", "fix"):
+            problems.append(f'{v.name}: data-cold must be "ship" or "fix", got {claimed!r}')
+        elif verdict is not None and claimed != verdict:
+            problems.append(f'{v.name}: the card says data-cold="{claimed}" and {path} says verdict: {verdict}')
+    return problems, verdict
+
+
+def cold_rows(rep: Report, project: Path, variants: list[SiteVariant]) -> None:
+    """site:cold for the cards of a hero board (the cold review is required there): one result for the whole board, naming the variants it fails (cold_problems). The cold-review.md of each variant and
+    FACTS.md are inputs of the lint report, so a changed review or fact makes it stale."""
+    label = "each variant has a current cold review, and its card says the verdict"
+    if not variants:
+        rep.add("site:cold", "skipped", label, detail="not verified: there is no variant card to look at (site:variants says why)")
+        return
+    results = [(v, *cold_problems(project, v)) for v in variants]
+    problems = [x for _, found, _ in results for x in found]
+    rep.add("site:cold", "fail" if problems else "pass", label,
+            detail=shown(problems) if problems else "; ".join(f"{v.name}: {verdict}" for v, _, verdict in results))
+    rep.inputs += [Path(project) / v.dir / COLD_FILE for v in variants] + [Path(project) / FACTS_FILE]
 
 
 def variant_rows(rep: Report, project: Path, rnd: int, root: Node, page: Path, first: bool) -> None:
-    """site:variants, site:files, site:layout and site:fields for the cards of a hero board (the first hero board of a project, `first`, shows two or three), then site:check, site:tells and site:stills (proof_rows).
-    Each row is one result for the whole board and names the variants it fails. The lint report lists the index.html of each variant, its page-check report, its capture.json and its stills (and what those were made from) as inputs."""
+    """site:variants, site:files, site:layout and site:fields for the cards of a hero board (the first hero board of a project, `first`, shows two or three), then site:check, site:tells and site:stills (proof_rows),
+    the reflex rows (reflex_rows), site:refs and site:cold. Each row that is not about one card is one result for the whole board and names the variants it fails. The lint report lists the index.html of each variant, its
+    page-check report, its capture.json, its stills (and what those were made from) and its cold-review.md as inputs."""
     page_rel = rel(project, page)
     problems, named = name_problems(cards(root), first)
     lo, hi = FIRST_COUNT
@@ -544,7 +800,10 @@ def variant_rows(rep: Report, project: Path, rnd: int, root: Node, page: Path, f
             rep.add(rid, "warn", label, detail=shown(warnings))
         else:
             rep.add(rid, "fail" if found else "pass", label, detail=shown(found + (warnings if rid == "site:layout" else [])) if found else ok)
-    proof_rows(rep, project, page, variants)
+    verdicts = proof_rows(rep, project, page, variants)
+    reflex_rows(rep, project, variants, verdicts)
+    refs_rows(rep, project, rnd, variants)
+    cold_rows(rep, project, variants)
     for v in variants:   # the report of the lint is stale as soon as one of these changes: `check` re-reads their hashes
         rep.inputs.append(project / v.page)
 

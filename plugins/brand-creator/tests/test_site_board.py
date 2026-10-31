@@ -7,8 +7,8 @@ import shutil
 from pathlib import Path
 
 import pytest
-from helpers import (ROOT, bc, capture_record, failing, fill_site_board, fill_site_refs_board, fill_style_board, install_fixture, make_project, mutate, mutate_json, page_check_report,
-                     report)
+from helpers import (ROOT, bc, capture_record, cold_review_record, failing, fill_site_board, fill_site_refs_board, fill_style_board, install_fixture, make_project, mutate, mutate_json,
+                     page_check_report, report)
 
 import siteboard
 from boardpage import is_site_refs_board, page_kind, parse_dom
@@ -36,11 +36,12 @@ def settle(p: Path, rnd: int, name: str, status: str = "pass", tells: tuple[str,
 
 
 def make_variant(p: Path, rnd: int, name: str, layout: str = "walkthrough", page_id: str = "start") -> Path:
-    """The folder of a variant: its page, and the page-check report and the stills that belong to the page as written."""
+    """The folder of a variant: its page, the page-check report and the stills that belong to the page as written, and the cold review of those stills."""
     page = p / "rounds" / f"r{rnd}" / name / "index.html"
     page.parent.mkdir(parents=True, exist_ok=True)
     page.write_text(page_text(name, layout, page_id), encoding="utf-8")
     settle(p, rnd, name)
+    cold_review_record(p, f"rounds/r{rnd}/{name}/index.html")
     return page
 
 
@@ -752,7 +753,7 @@ def test_stills_must_be_the_captured_bytes(proj):
     still = shots_of(proj, "Ledger") / "390-dark.png"
     still.write_bytes(b"not the picture capture took")
     r = lint(proj)
-    assert r.returncode == 1 and failed(proj) == ["site:stills"], r.stdout
+    assert r.returncode == 1 and failed(proj) == ["site:stills", "site:cold"], r.stdout                  # the cold review was made from the stills that were there: it is stale as well
     why = detail(proj, "site:stills")
     assert ("Ledger: rounds/r2/Ledger/shots/390-dark.png is not the 390-dark still rounds/r2/Ledger/shots/capture.json lists (its sha256 differs): "
             "run `brand-creator capture rounds/r2/Ledger/index.html`") in why and "Ledger: the 390-dark picture the card shows is not the one" in why and "Atlas" not in why, why
@@ -851,3 +852,444 @@ def test_the_lint_report_lists_the_page_check_reports_the_captures_and_the_still
     still.write_bytes(before)
     page_check_report(proj, page_of("Ledger"), "fail")
     assert stale_inputs(proj, doc) == [check_report_of(proj, "Ledger").relative_to(proj).as_posix() + " changed"]
+
+
+# ---------------------------------------------------------------- site:cold: the cold review of each hero
+
+def cold_of(p: Path, name: str, rnd: int = 2) -> Path:
+    return p / "rounds" / f"r{rnd}" / name / "cold-review.md"
+
+
+def test_a_hero_without_a_cold_review_fails(proj):
+    cold_of(proj, "Atlas").unlink()
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:cold"], r.stdout
+    why = detail(proj, "site:cold")
+    assert "Atlas: no rounds/r2/Atlas/cold-review.md: a cold review reads the four stills, brief/BRIEF.md and FACTS.md only, and writes the verdict first" in why and "Ledger" not in why, why
+    cold_review_record(proj, page_of("Atlas"))
+    assert lint(proj).returncode == 0 and detail(proj, "site:cold") == "Ledger: ship; Atlas: ship"
+
+
+def test_a_cold_review_must_start_with_its_verdict(proj):
+    review = cold_of(proj, "Atlas")
+    review.write_text("", encoding="utf-8")
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:cold"], r.stdout
+    assert "Atlas: rounds/r2/Atlas/cold-review.md must start with its verdict, `verdict: ship` or `verdict: fix` (the file is empty)" in detail(proj, "site:cold")
+    cold_review_record(proj, page_of("Atlas"))
+    mutate(review, "verdict: ship", "Verdict was ship")
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:cold"], r.stdout
+    assert "must start with its verdict, `verdict: ship` or `verdict: fix` (its first line is 'Verdict was ship')" in detail(proj, "site:cold")
+    mutate(review, "Verdict was ship", "verdict: maybe")
+    assert lint(proj).returncode == 1 and "(its first line is 'verdict: maybe')" in detail(proj, "site:cold")
+    mutate(review, "verdict: maybe", "# Cold review\n\nverdict: ship")                         # a heading above the verdict: the verdict is not first
+    assert lint(proj).returncode == 1 and "(its first line is '# Cold review')" in detail(proj, "site:cold")
+    mutate(review, "# Cold review\n\nverdict: ship", "\n\nVerdict: SHIP  ")                    # blank lines first, any letter case and a trailing space are fine
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    assert detail(proj, "site:cold") == "Ledger: ship; Atlas: ship"
+
+
+def test_a_cold_review_needs_a_by_line_and_at_most_five_findings(proj):
+    review = cold_of(proj, "Atlas")
+    mutate(review, "by: in-thread\n", "")
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:cold"], r.stdout
+    assert "Atlas: rounds/r2/Atlas/cold-review.md has no `by:` line (`by: in-thread`, or `by: agent` after the fleet gate)" in detail(proj, "site:cold")
+    cold_review_record(proj, page_of("Atlas"), findings=tuple(f"Finding {i}." for i in range(1, 6)))
+    assert lint(proj).returncode == 0, "five findings are the most a cold review gives"
+    cold_review_record(proj, page_of("Atlas"), findings=tuple(f"Finding {i}." for i in range(1, 7)))
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:cold"], r.stdout
+    assert "Atlas: rounds/r2/Atlas/cold-review.md gives 6 findings, at most 5, the costliest to the visitor first" in detail(proj, "site:cold")
+
+
+def test_a_cold_review_goes_stale_when_a_still_changes(proj):
+    still = shots_of(proj, "Ledger") / "1440-dark.png"
+    before = still.read_bytes()
+    still.write_bytes(before + b"x")
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:stills", "site:cold"], r.stdout
+    why = detail(proj, "site:cold")
+    assert ("Ledger: the page or its stills changed after the cold review: review again "
+            "(rounds/r2/Ledger/cold-review.md lists another sha256 for rounds/r2/Ledger/shots/1440-dark.png)") in why and "Atlas" not in why, why
+    still.write_bytes(before)                                                                  # the stills as the review read them: it stands again
+    assert lint(proj).returncode == 0
+    for name in ("FACTS.md", "brief/BRIEF.md"):
+        text = (proj / name).read_text(encoding="utf-8")
+        mutate(proj / name, text.splitlines()[0], text.splitlines()[0] + " (changed)")
+        r = lint(proj)
+        assert r.returncode == 1 and "site:cold" in failed(proj), (name, r.stdout)
+        assert f"brief/BRIEF.md or FACTS.md changed after the cold review: review again (rounds/r2/Ledger/cold-review.md lists another sha256 for {name})" in detail(proj, "site:cold")
+        for variant in NAMES:
+            cold_review_record(proj, page_of(variant))                                         # a new review of the new text
+        assert lint(proj).returncode == 0, name
+
+
+def test_a_cold_review_with_another_input_fails(proj):
+    from _common import sha256_file
+    review = cold_of(proj, "Atlas")
+    mutate(review, "inputs:\n", f"inputs:\n- rounds/r1/board.html sha256:{sha256_file(proj / 'rounds' / 'r1' / 'board.html')}\n")
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:cold"], r.stdout
+    assert ("Atlas: the inputs of rounds/r2/Atlas/cold-review.md must be exactly the four stills of the variant, brief/BRIEF.md and FACTS.md "
+            "(it lists rounds/r1/board.html, which a cold review does not read)") in detail(proj, "site:cold")
+    for left_out in ("FACTS.md", "rounds/r2/Atlas/shots/390-dark.png"):
+        cold_review_record(proj, page_of("Atlas"), leave_out=(left_out,))
+        r = lint(proj)
+        assert r.returncode == 1 and failed(proj) == ["site:cold"], r.stdout
+        assert f"(it does not list {left_out})" in detail(proj, "site:cold")
+    cold_review_record(proj, page_of("Atlas"))
+    mutate(review, "- FACTS.md sha256:", "- FACTS.md sha:")                                    # a list line that is not "- <path> sha256:<hex>"
+    r = lint(proj)
+    assert r.returncode == 1 and "1 line(s) are not `- <path> sha256:<hex>` (- FACTS.md sha:" in detail(proj, "site:cold"), r.stdout
+    cold_review_record(proj, page_of("Atlas"), add=("brief/BRIEF.md",))
+    r = lint(proj)
+    assert r.returncode == 1 and "(a file is listed twice)" in detail(proj, "site:cold"), r.stdout
+    mutate(review, "inputs:\n", "")                                                            # the head of the list is gone
+    r = lint(proj)
+    assert r.returncode == 1 and "has no `inputs:` list: the four stills, brief/BRIEF.md and FACTS.md, each `- <path> sha256:<hex>`" in detail(proj, "site:cold"), r.stdout
+
+
+def test_the_card_shows_the_cold_verdict(proj):
+    cold_review_record(proj, page_of("Atlas"), "fix", findings=("The headline says nothing that only this brand could say.",))
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:cold"], r.stdout
+    assert 'Atlas: the card says data-cold="ship" and rounds/r2/Atlas/cold-review.md says verdict: fix' in detail(proj, "site:cold")
+    board_of(proj).write_text(board_text(colds={"Atlas": "fix"}), encoding="utf-8")            # a fix shown as fix is honest
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    assert detail(proj, "site:cold") == "Ledger: ship; Atlas: fix"
+    mutate(board_of(proj), '<p class="cold" data-cold="fix">', '<p class="cold" data-cold="ship">')
+    r = lint(proj)
+    assert r.returncode == 1 and 'Atlas: the card says data-cold="ship"' in detail(proj, "site:cold"), r.stdout
+    mutate(board_of(proj), '<p class="cold" data-cold="ship">', '<p class="cold" data-cold="maybe">')       # the first card, Ledger
+    r = lint(proj)
+    assert r.returncode == 1 and 'Ledger: data-cold must be "ship" or "fix", got \'maybe\'' in detail(proj, "site:cold"), r.stdout
+    mutate(board_of(proj), '<p class="cold" data-cold="maybe">', '<p class="cold" data-removed="maybe">')
+    r = lint(proj)
+    assert r.returncode == 1 and 'Ledger: the card needs one cold line (data-cold="ship" or "fix"), it has 0' in detail(proj, "site:cold"), r.stdout
+
+
+def test_the_cold_review_of_a_page_card_may_be_left_out_but_a_card_may_not_claim_one(proj):
+    """The pages stage (group 2, G2-11) asks for a cold review only when the file exists: cold_problems(required=False) is that rule."""
+    card = siteboard.cards(parse_dom(board_of(proj).read_text(encoding="utf-8")))[0]
+    v = siteboard.SiteVariant(proj, 2, "Ledger", card)
+    cold_of(proj, "Ledger").unlink()
+    assert siteboard.cold_problems(proj, v, required=False) == (["Ledger: the card has a cold line (data-cold) but rounds/r2/Ledger/cold-review.md does not exist"], None)
+    assert siteboard.cold_problems(proj, v)[0][0].startswith("Ledger: no rounds/r2/Ledger/cold-review.md")
+    plain = siteboard.cards(parse_dom(board_text().replace("data-cold=", "data-note=")))[0]
+    assert siteboard.cold_problems(proj, siteboard.SiteVariant(proj, 2, "Ledger", plain), required=False) == ([], None)
+
+
+def test_without_a_variant_card_the_refs_and_cold_rows_are_not_verified_and_no_reflex_row_is_written(tmp_path):
+    p = build(tmp_path)
+    add_round(p, 3, (), first=False)
+    r = lint(p, "rounds/r3/board.html")
+    assert r.returncode == 1, r.stdout                                                         # site:variants fails: a later hero board shows 1 or more
+    got = rows(p)
+    for rid in ("site:refs", "site:cold"):
+        assert got[rid]["status"] == "skipped" and "there is no variant card to look at" in got[rid]["detail"], rid
+    assert not [x for x in got if "reflex" in x], "the reflex rows belong to cards"
+
+
+# ---------------------------------------------------------------- site:refs: the hero is built from what the owner picked
+
+def picked_project(tmp_path, record: str = "picked Ledger; likes none; dislikes none", **kw) -> Path:
+    """G4w names a pick: the references board is round 2 (groups Ledger, Atlas, Quay and Harbour, and two sites the owner named) and the hero board round 3."""
+    p = build(tmp_path, g4w=record, board=False)
+    add_references_board(p, 2)
+    add_round(p, 3, **kw)
+    return p
+
+
+def test_from_refs_must_name_a_picked_group(tmp_path):
+    p = picked_project(tmp_path)
+    r = lint(p, "rounds/r3/board.html")
+    assert r.returncode == 0, r.stdout
+    assert rows(p)["site:refs"]["status"] == "pass" and detail(p, "site:refs").startswith("Ledger: Ledger; Atlas: Ledger (G4w: ")
+    mutate(board_of(p, 3), "The Ledger group of the references board", "The Quay group of the references board")      # Ledger's card takes from a group the owner did not pick
+    r = lint(p, "rounds/r3/board.html")
+    assert r.returncode == 1 and "site:refs" in failed(p), r.stdout
+    why = detail(p, "site:refs")
+    assert "Ledger: take from what the owner picked (G4w): the Takes from line names none of Ledger" in why and "Atlas" not in why, why
+
+
+def test_the_picked_name_is_a_whole_word_in_any_letter_case(tmp_path):
+    p = picked_project(tmp_path)
+    mutate(board_of(p, 3), "The Ledger group", "The LEDGER group")
+    assert lint(p, "rounds/r3/board.html").returncode == 0, "letter case does not matter"
+    mutate(board_of(p, 3), "The LEDGER group of the references board", "The ledgerlike group of the references board")
+    r = lint(p, "rounds/r3/board.html")
+    assert r.returncode == 1 and "Ledger: take from what the owner picked (G4w)" in detail(p, "site:refs"), r.stdout   # a longer word is not the name
+
+
+def test_a_skip_in_the_owners_words_makes_site_refs_an_info_row(proj):
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    assert rows(proj)["site:refs"]["status"] == "info" and "the owner skipped the website references, so there is no pick to take from" in detail(proj, "site:refs")
+
+
+def test_a_g4w_that_names_no_group_leaves_nothing_to_take_from(tmp_path):
+    p = picked_project(tmp_path, "picked the third one; likes none; dislikes none")
+    r = lint(p, "rounds/r3/board.html")
+    assert r.returncode == 1 and "site:refs" in failed(p), r.stdout
+    why = detail(p, "site:refs")
+    assert "names none of the groups of the references board r2 (Ledger, Atlas, Quay, Harbour)" in why and 'state --record G4w "picked <groups>"' in why, why
+
+
+def test_a_site_the_owner_named_may_be_what_a_card_takes_from(tmp_path):
+    """The references board of the fixture has two sites the owner named, both at example.com: the host is a name a pick can be recorded under."""
+    p = picked_project(tmp_path, "picked Atlas; likes example.com; dislikes none",
+                       from_refs={"Ledger": "The structure of example.com, never its look.", "Atlas": "The Atlas group of the references board."})
+    r = lint(p, "rounds/r3/board.html")
+    assert r.returncode == 0, r.stdout
+    assert detail(p, "site:refs").startswith("Ledger: example.com; Atlas: Atlas (G4w: ")
+
+
+OWNER_SITE = "https://example.com/reference"     # where the fixture's references board links both sites the owner named
+
+
+def owner_site_head(p: Path, like: str) -> str:
+    """The text of the references board (round 2) up to the address of the site the owner `like`d or disliked: the old string of a mutate() that points that site elsewhere."""
+    return re.search(rf'<li data-like="{like}">.*?<a href="', board_of(p, 2).read_text(encoding="utf-8"), re.S).group(0)
+
+
+def test_a_site_or_group_the_owner_turned_away_from_is_no_pick(tmp_path):
+    """G4w reads "picked <groups>; likes <...>; dislikes <...>": a card that takes from a site the owner disliked, or from a group named after "dislikes", takes from nothing the owner picked."""
+    p = picked_project(tmp_path / "site", "picked Atlas; likes none; dislikes stripe.example",
+                       from_refs={"Ledger": "The structure of stripe.example, never its look.", "Atlas": "The Atlas group of the references board."})
+    head = owner_site_head(p, "dislike")
+    mutate(board_of(p, 2), head + OWNER_SITE, head + "https://stripe.example/")                # the site the owner disliked is stripe.example
+    r = lint(p, "rounds/r3/board.html")
+    assert r.returncode == 1 and "site:refs" in failed(p), r.stdout
+    why = detail(p, "site:refs")
+    assert why == "Ledger: take from what the owner picked (G4w): the Takes from line names none of Atlas", why   # stripe.example is not among the names a pick can be recorded under
+    q = picked_project(tmp_path / "group", "picked Atlas; likes none; dislikes Ledger", from_refs={"Atlas": "The Atlas group of the references board."})
+    r = lint(q, "rounds/r3/board.html")                                                       # Ledger's card takes from the Ledger group, which stands after "dislikes"
+    assert r.returncode == 1 and "Ledger: take from what the owner picked (G4w): the Takes from line names none of Atlas" in detail(q, "site:refs"), r.stdout
+    s = picked_project(tmp_path / "liked", "picked Atlas; likes stripe.example; dislikes none",
+                       from_refs={"Ledger": "The structure of stripe.example, never its look.", "Atlas": "The Atlas group of the references board."})
+    head = owner_site_head(s, "like")
+    mutate(board_of(s, 2), head + OWNER_SITE, head + "https://stripe.example/")                # the site the owner liked is stripe.example
+    assert lint(s, "rounds/r3/board.html").returncode == 0, "a site the owner liked is still a name to take from"
+    assert detail(s, "site:refs").startswith("Ledger: stripe.example; Atlas: Atlas (G4w: ")
+
+
+def test_site_refs_is_not_verified_when_g4w_is_missing_or_its_board_is_gone(tmp_path):
+    p = build(tmp_path, g4w=None)
+    r = lint(p)
+    assert r.returncode == 1 and rows(p)["site:refs"]["status"] == "skipped" and "G4w is not recorded" in detail(p, "site:refs"), r.stdout
+    q = picked_project(tmp_path / "gone")
+    board_of(q, 2).unlink()
+    (q / "rounds" / "r2").rmdir()
+    r = lint(q, "rounds/r3/board.html")
+    assert r.returncode == 1 and rows(q)["site:refs"]["status"] == "skipped" and "no website references board before this round" in detail(q, "site:refs"), r.stdout
+
+
+# ---------------------------------------------------------------- the reflex test of each card
+
+def rewrite_with(p: Path, rnd: int = 2, **kw) -> None:
+    board_of(p, rnd).write_text(board_text(rnd=rnd, **kw), encoding="utf-8")
+
+
+def test_a_filled_hero_board_has_a_passing_reflex_row_for_each_card(proj):
+    assert lint(proj).returncode == 0
+    got = rows(proj)
+    for name in NAMES:
+        for suffix in ("reflex-format", "reflex-ids", "reflex-count", "reflex-measured"):
+            assert got[f"site:{name}:{suffix}"]["status"] == "pass", (name, suffix)
+        assert f"site:{name}:reflex-grounded" not in got, "a card with no hit has nothing to ground"
+    assert got["site:Ledger:reflex-format"]["detail"] == "no hits" and got["site:reflex-shared"]["status"] == "pass"
+
+
+def test_a_reflex_hit_may_name_a_site_cliche(proj):
+    line = "hit: a full-width photo with a headline laid over it | the harbour photograph is the only picture the shop has"
+    rewrite_with(proj, reflex={"Ledger": line})
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    got = rows(proj)
+    assert got["site:Ledger:reflex-ids"]["status"] == "pass" and got["site:Ledger:reflex-ids"]["detail"].endswith("(cliches)")
+    assert got["site:Ledger:reflex-count"]["status"] == "pass" and got["site:Ledger:reflex-count"]["detail"] == "1 hit(s)"
+    assert got["site:Ledger:reflex-format"]["detail"] == "1 hit(s), 0 near miss(es)" and got["site:reflex-shared"]["status"] == "pass"
+
+
+@pytest.mark.parametrize("hit, source", [("layout-stock-product-page", "ai-defaults"), ("three-equal-tiles", "page-tells"), ("EYEBROW", "page-tells"), ("A Countdown That Restarts For Every Visitor", "cliches")])
+def test_a_reflex_hit_may_name_a_stock_layout_a_tell_or_a_cliche_in_any_letter_case(proj, hit, source):
+    """The detail says where the name comes from: a tell of page-tells.json is a page tell, not an ai-default (reflex.known labels every id it is given "ai-defaults")."""
+    rewrite_with(proj, reflex={"Atlas": f"hit: {hit} | the product page the shop had before"})
+    assert lint(proj).returncode == 0
+    assert rows(proj)["site:Atlas:reflex-ids"]["status"] == "pass" and detail(proj, "site:Atlas:reflex-ids") == f"{hit} ({source})"
+
+
+def test_an_unknown_reflex_id_follows_the_group_1_rule(proj):
+    mutate(board_of(proj), 'data-field="reflex">no hits</dd>', 'data-field="reflex">hit: palette-made-up | the harbour photograph</dd>')
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout                                                         # a warning now, a failure from the next release
+    row = rows(proj)["site:Ledger:reflex-ids"]
+    assert row["status"] == "warn" and "names no known pattern: 'palette-made-up'" in row["detail"] and "a failure from the next release" in row["detail"], row
+    assert "page-tells.json, ai-defaults.json or research/site-cliches.md" in row["detail"]
+    mutate(board_of(proj), "hit: palette-made-up | the harbour photograph", "one hit, eyebrow, argued in the hero")
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    row = rows(proj)["site:Ledger:reflex-format"]
+    assert row["status"] == "warn" and "free text" in row["detail"] and "a failure from the next release" in row["detail"], row
+
+
+def test_without_a_cliche_file_the_reflex_rows_say_no_site_cliche_can_be_named(proj):
+    (proj / "research" / "site-cliches.md").unlink()
+    rewrite_with(proj, reflex={"Ledger": "hit: a full-width photo with a headline laid over it | the harbour photograph"})
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    row = rows(proj)["site:Ledger:reflex-ids"]
+    assert row["status"] == "warn" and "the project has no research/site-cliches.md, so no cliché of the category's sites can be named" in row["detail"], row
+
+
+def test_a_hit_is_argued_with_a_word_of_the_owners_own_facts(proj):
+    facts = proj / "FACTS.md"
+    facts.write_text(facts.read_text(encoding="utf-8").rstrip("\n") + "\n| the harbour photograph is the only picture the shop owns | yes | owner, chat on 2026-10-01 | 2026-10-01 |\n", encoding="utf-8")
+    rewrite_with(proj, reflex={"Ledger": "hit: a full-width photo with a headline laid over it | the harbour photograph is the only picture", "Atlas": "hit: eyebrow | because designers like it"})
+    for name in NAMES:
+        cold_review_record(proj, page_of(name))                                                # FACTS.md is an input of every cold review
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    got = rows(proj)
+    assert got["site:Ledger:reflex-grounded"]["status"] == "pass" and "shares" in got["site:Ledger:reflex-grounded"]["detail"] and "harbour" in got["site:Ledger:reflex-grounded"]["detail"]
+    assert got["site:Atlas:reflex-grounded"]["status"] == "warn" and "shares no word with FACTS.md or brief/BRIEF.md" in got["site:Atlas:reflex-grounded"]["detail"]
+
+
+def test_two_reflex_hits_on_one_hero_fail_the_count(proj):
+    mutate(board_of(proj), 'data-field="reflex">no hits</dd>', 'data-field="reflex">hit: eyebrow | the kicker names the shop hit: three-equal-tiles | three plans of equal weight</dd>')
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:Ledger:reflex-count"], r.stdout
+    assert "2 hits in one direction (eyebrow, three-equal-tiles): replace a part before showing it" in detail(proj, "site:Ledger:reflex-count")
+    mutate(board_of(proj), "hit: three-equal-tiles | three plans of equal weight", "near miss: three-equal-tiles (the three plans differ in weight)")   # a near miss is no hit
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    assert detail(proj, "site:Ledger:reflex-count") == "1 hit(s)"
+
+
+def test_a_pattern_every_hero_hits_fails_the_shared_row(proj):
+    mutate(board_of(proj), 'data-field="reflex">no hits</dd>', 'data-field="reflex">hit: eyebrow | the kicker names the shop</dd>', count=2)
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:reflex-shared"], r.stdout
+    assert "every variant hits 'eyebrow': they are not divergent, so replace a part of one of them" in detail(proj, "site:reflex-shared")
+    mutate(board_of(proj), "hit: eyebrow | the kicker names the shop", "hit: three-equal-tiles | three plans of equal weight")     # Ledger moves on to another pattern
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    assert rows(proj)["site:reflex-shared"]["status"] == "pass"
+
+
+def test_one_card_has_nothing_to_share_a_pattern_with(tmp_path):
+    p = build(tmp_path)
+    add_round(p, 3, ("Ledger",), first=False)
+    r = lint(p, "rounds/r3/board.html")
+    assert r.returncode == 0, r.stdout
+    assert rows(p)["site:reflex-shared"]["status"] == "info" and "1 of 1 card(s) with a reflex line; two cards, each with a line, are needed to compare them" in detail(p, "site:reflex-shared")
+
+
+def test_a_card_without_a_reflex_line_fails_and_is_not_compared(proj):
+    mutate(board_of(proj), 'data-field="reflex"', 'data-removed="reflex"')
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:Ledger:reflex"], r.stdout            # the same required field as `direction:<name>:reflex` on a style board
+    got = rows(proj)
+    assert 'missing or empty: data-field="reflex" inside the card of Ledger' in got["site:Ledger:reflex"]["detail"]
+    assert got["site:Atlas:reflex"]["status"] == "pass" and got["site:Atlas:reflex"]["detail"] == "ok"
+    assert not [x for x in got if x.startswith("site:Ledger:reflex-") and x != "site:Ledger:reflex-measured"], "a card with no line has nothing to parse"
+    assert got["site:reflex-shared"]["status"] == "info" and "1 of 2 card(s) with a reflex line" in got["site:reflex-shared"]["detail"]
+
+
+def test_an_empty_reflex_line_fails_like_a_missing_one(proj):
+    mutate(board_of(proj), 'data-field="reflex">no hits</dd>', 'data-field="reflex">  </dd>')
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:Ledger:reflex"], r.stdout
+    assert "site:Ledger:reflex-count" not in rows(proj)
+
+
+def test_deleting_the_reflex_line_does_not_get_round_the_count_or_the_shared_pattern(tmp_path):
+    """Two hits fail the count; the same card with its line deleted must not exit better. Every card hitting one pattern fails the shared row; deleting the line of one of them must not exit better either."""
+    two_hits = "hit: eyebrow | the kicker names the shop hit: three-equal-tiles | three plans of equal weight"
+    p = build(tmp_path / "count")
+    mutate(board_of(p), 'data-field="reflex">no hits</dd>', f'data-field="reflex">{two_hits}</dd>')
+    assert lint(p).returncode == 1 and failed(p) == ["site:Ledger:reflex-count"]
+    mutate(board_of(p), 'data-field="reflex">' + two_hits, 'data-removed="reflex">' + two_hits)
+    assert lint(p).returncode == 1 and failed(p) == ["site:Ledger:reflex"]
+    q = build(tmp_path / "shared")
+    mutate(board_of(q), 'data-field="reflex">no hits</dd>', 'data-field="reflex">hit: eyebrow | the kicker names the shop</dd>', count=2)
+    assert lint(q).returncode == 1 and failed(q) == ["site:reflex-shared"]
+    mutate(board_of(q), 'data-field="reflex">hit: eyebrow | the kicker names the shop</dd>', 'data-removed="reflex">hit: eyebrow | the kicker names the shop</dd>')
+    assert lint(q).returncode == 1 and failed(q) == ["site:Ledger:reflex"]
+
+
+def test_a_measured_tell_missing_from_the_reflex_warns(proj):
+    settle(proj, 2, "Ledger", tells=("eyebrow", "three-equal-tiles"))
+    mutate(board_of(proj), "none found", "eyebrow: moved into the heading; three-equal-tiles: kept, argued in My call")   # site:tells is satisfied: the reflex line is still silent
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout                                                         # a warning, never a failure
+    row = rows(proj)["site:Ledger:reflex-measured"]
+    assert row["status"] == "warn" and "page-check found eyebrow, three-equal-tiles; argue each on the card" in row["detail"] and "or change the page" in row["detail"], row
+    assert rows(proj)["site:Atlas:reflex-measured"]["status"] == "pass" and detail(proj, "site:Atlas:reflex-measured") == "page-check measured no tell"
+    mutate(board_of(proj), 'data-field="reflex">no hits</dd>', 'data-field="reflex">hit: eyebrow | the kicker is the name of the shop. near miss: three-equal-tiles (the tiles differ in width)</dd>')
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    row = rows(proj)["site:Ledger:reflex-measured"]
+    assert row["status"] == "pass" and row["detail"] == "2 measured tell(s), each argued on the reflex line", row         # a hit and a near miss both argue a tell
+    mutate(board_of(proj), "near miss: three-equal-tiles (the tiles differ in width)", "near miss: another-pattern (not a tile)")
+    assert lint(proj).returncode == 0
+    row = rows(proj)["site:Ledger:reflex-measured"]
+    assert row["status"] == "warn" and "page-check found three-equal-tiles; argue it on the card" in row["detail"], row
+
+
+def test_the_measured_tells_are_not_verified_without_a_page_check_verdict(proj):
+    check_report_of(proj, "Atlas").unlink()
+    r = lint(proj)
+    assert r.returncode == 1 and "site:check" in failed(proj), r.stdout
+    row = rows(proj)["site:Atlas:reflex-measured"]
+    assert row["status"] == "skipped" and "no current page-check verdict to read the measured tells from (site:check says why)" in row["detail"], row
+    assert rows(proj)["site:Ledger:reflex-measured"]["status"] == "pass"
+
+
+# ---------------------------------------------------------------- the inputs, and the docs that name these rows
+
+def test_the_lint_report_lists_the_cold_reviews_the_facts_and_the_cliche_file_and_goes_stale_with_them(proj):
+    from _common import stale_inputs
+    assert lint(proj).returncode == 0
+    doc = report(proj, "board-lint")
+    paths = [i["path"] for i in doc["inputs"]]
+    for want in ("FACTS.md", "brief/BRIEF.md", "research/site-cliches.md", "rounds/r2/Ledger/cold-review.md", "rounds/r2/Atlas/cold-review.md"):
+        assert want in paths, (want, paths)
+    assert stale_inputs(proj, doc) == []
+    review = cold_of(proj, "Atlas")
+    review.write_text(review.read_text(encoding="utf-8") + "2. A second finding.\n", encoding="utf-8")
+    assert stale_inputs(proj, doc) == ["rounds/r2/Atlas/cold-review.md changed"]
+    cliches = proj / "research" / "site-cliches.md"
+    cliches.write_text(cliches.read_text(encoding="utf-8") + "- a chat bubble in the corner\n", encoding="utf-8")
+    assert "research/site-cliches.md changed" in stale_inputs(proj, doc)
+
+
+def test_the_contract_and_the_qa_phase_name_every_row_the_site_board_writes():
+    src = (ROOT / "scripts" / "boardlib" / "siteboard.py").read_text(encoding="utf-8")
+    written = sorted(set(re.findall(r'"(site:[a-z0-9]+(?:-[a-z0-9]+)*)"', src)))
+    assert {"site:refs", "site:cold", "site:reflex-shared", "site:check", "site:tells", "site:stills", "site:variants"} <= set(written), written
+    contract = (ROOT / "scripts" / "CONTRACT.md").read_text(encoding="utf-8")
+    qa = " ".join((ROOT / "skills" / "brand-creator" / "references" / "phases" / "09-qa.md").read_text(encoding="utf-8").split())
+    board = " ".join((ROOT / "skills" / "brand-creator" / "references" / "board-contract.md").read_text(encoding="utf-8").split())
+    for rid in written:
+        assert f"`{rid}`" in contract, f"CONTRACT.md does not name {rid}"
+        assert rid in qa, f"09-qa.md does not name {rid}"
+        assert rid in board, f"board-contract.md does not name {rid}"
+    for suffix in ("reflex-format", "reflex-ids", "reflex-count", "reflex-grounded", "reflex-measured"):
+        assert f"site:<name>:{suffix}" in contract and f"site:<name>:{suffix}" in qa and f"site:<name>:{suffix}" in board, suffix
+    assert "`site:<name>:reflex`" in contract and "`site:<name>:reflex`" in qa and "`site:<name>:reflex`" in board, "the row of the required reflex line"
+
+
+def test_the_prompt_fragment_describes_the_cold_review_of_a_site_hero():
+    text = " ".join((ROOT / "skills" / "brand-creator" / "references" / "prompt-fragments.md").read_text(encoding="utf-8").split())
+    for needle in ("A cold review of a site hero reads only the four stills of the variant, `brief/BRIEF.md` and `FACTS.md`, never the board, the references or the reasons",
+                   "`rounds/r<N>/<name>/cold-review.md`: `verdict: ship` or `verdict: fix` first, a `by:` line (`by: in-thread`; in-thread it is not blind, and an agent only after the fleet gate), "
+                   "an `inputs:` list with the sha256 of each file (`- <path> sha256:<hex>`), then up to five numbered findings, the one that costs the visitor most first, each short enough to sit on a single line",
+                   "does the first screen say what only this brand could say", "does any part read as a tell from `page-tells.json`",
+                   "A review judges what the page shows: where the page lacks something it would need (wording, a picture, a control), the finding notes that the owner would have to supply it, "
+                   "and does not fault the page for leaving it out."):
+        assert needle in text, needle

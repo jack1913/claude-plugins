@@ -217,6 +217,15 @@ Each variant brings its proof before the board is shown. Run `brand-creator page
 `site:tells` (every `tell:<id>` warning of that report is named by its id on the card's tells line, with what you will do about it) and `site:stills` (`shots/capture.json` is current and is the capture of this page, and the four stills on the card are the bytes it lists:
 the project's files by a relative path, or on a review copy `data:` URIs of the same bytes). A variant with no current report is not judged for its tells: `site:tells` is "not verified" then, and `site:check` says why. The lint report lists the reports, `capture.json`, the stills and the files they were made from among its inputs.
 
+Each hero also answers three more questions, and `board-lint` reads each answer. The reflex line of the card (`data-field="reflex"`) is written as on a style board's direction: `no hits`, or one `hit: <id> | <argument>` per hit, where the id is a tell of
+[page-tells.json](page-tells.json), an id of [ai-defaults.json](ai-defaults.json) (its layout items name the stock product page) or an item of `research/site-cliches.md`, and `near miss: <id> (<why>)` for a pattern that looks close and is not one.
+A card with no reflex line, or an empty one, fails `site:<name>:reflex` (the line is required, as on a style board's direction): deleting it is no way round the rows below. The rows are `site:<name>:reflex-format`, `site:<name>:reflex-ids` and `site:<name>:reflex-grounded` (warnings for now, "a failure from the next release"), `site:<name>:reflex-count` (two hits on one hero fail: replace a part before showing it) and
+`site:reflex-shared` (it fails when every hero hits one pattern, so the heroes are not divergent). `site:<name>:reflex-measured` warns when page-check measured a tell on the page (a `tell:<id>` warning of its report) that the reflex line neither
+hits nor names as a near miss: argue it on the card, or change the page. `site:refs` holds the Takes from line of each card to what the owner picked: it must name a group of the references board, or a site the owner liked, that the G4w record names too
+(a whole word, any letter case; what the record says after `dislikes` is not a pick); a skip in the owner's words makes it an info row. `site:cold` reads `rounds/r<N>/<name>/cold-review.md` of each hero: its first line is `verdict: ship` or `verdict: fix`, it has a `by:` line, its `inputs:` list is exactly the
+four stills, `brief/BRIEF.md` and `FACTS.md` with the sha256 each had when the review was made (the page, its stills, the brief or the facts changed since: review again), it has at most five findings, and the card's cold line (`data-cold`) says the same
+verdict. A `fix` shown as `fix` is honest and passes. The prompt for the review is in [prompt-fragments.md](prompt-fragments.md) (**Review**). The lint report lists `FACTS.md`, `research/site-cliches.md` and each `cold-review.md` among its inputs.
+
 ## Per-direction cells
 
 On the round page, every direction shows at least:
