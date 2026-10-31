@@ -20,6 +20,8 @@ ground is a declared pair, or is measured against WCAG), `page:motion` (every du
 status word is backed by FACTS.md); `page:samples` lists the labelled samples, and the report holds the same list as `samples`.
 `page:mark-file`, `page:mark-band` and `page:mark-clear-space` judge the brand mark (`data-brand-mark`, or an image named or byte for byte like a logo file): it is a logo file of
 the project, the drawing its size calls for, and has its clear space.
+Each entry of qa/rules.json `page.rules` is a brand rule of the owner's and gives `page:rule:<id>` (one mark per screen, a button says at most three words, the words around an accent): it fails once
+the "(rule)" line it is tied to (`g4`) is recorded at G4, and before that only warns.
 Over all views it reports `page:fonts` (every text is set in a family a `font.*` token names, and the browser drew it in that face) and `page:display-size` (no text in the
 `font.display` face is under `page.display_min_px`).
 
@@ -41,14 +43,16 @@ from _common import (EXIT_CANNOT, EXIT_USAGE, Parser, Report, add_project_arg, f
 RUN_TIMEOUT_S = 900   # six widths in two schemes, each loaded and settled
 
 
-def measure(project: Path, root: Path | None, target: pc.Target, widths: list[int], schemes: list[str], node: str, colours: list[str] = ()) -> tuple[dict, Path]:
+def measure(project: Path, root: Path | None, target: pc.Target, widths: list[int], schemes: list[str], node: str, colours: list[str] = (), page_rules: list[dict] = ()) -> tuple[dict, Path]:
     """Write the request, run `render.mjs page-measure` and read what it measured. -> (measures, path of the measures file). `colours` are the modern colour values
-    of the project's tokens (tokens.css) the browser is asked to render, so the judge knows what a role looks like on a page, not only its hex."""
+    of the project's tokens (tokens.css) the browser is asked to render, so the judge knows what a role looks like on a page, not only its hex. `page_rules` are the brand's own
+    rules (qa/rules.json page.rules): the selectors they name and the rules measured in the page's text go in the request."""
+    selectors, asks = pc.rule_request(list(page_rules))
     work = scratch_dir(project, pc.report_tool(target.ident))
     request, out = work / "request.json", work / "measures.json"
     out.unlink(missing_ok=True)   # a failed run must never be judged on the measurements of an earlier one
     request.write_text(json.dumps({"schema": 1, "root": str(root) if root else None, "page": target.page if root else None, "url": target.url,
-                                   "widths": widths, "schemes": schemes, "selectors": [], "colours": list(colours), "dsf": 1}, indent=2) + "\n", encoding="utf-8")
+                                   "widths": widths, "schemes": schemes, "selectors": selectors, "rules": asks, "colours": list(colours), "dsf": 1}, indent=2) + "\n", encoding="utf-8")
     cp = run([node, str(plugin_root() / "scripts" / "render.mjs"), "page-measure", "--request", str(request), "--out", str(out), "--project", str(project)],
              timeout=RUN_TIMEOUT_S, check=False)
     message = cp.stderr.decode("utf-8", "replace").strip().removeprefix("error: ")
@@ -85,7 +89,7 @@ def main() -> int:
 
     rep = Report(pc.report_tool(target.ident), project, pc.base_inputs(project, target), renderer="chromium")
     root = project if target.kind == "project" else pc.stage_from_copy(project, target) if target.kind == "from" else None
-    measures, measures_path = measure(project, root, target, widths, schemes, node, sorted(set(modern.values())))
+    measures, measures_path = measure(project, root, target, widths, schemes, node, sorted(set(modern.values())), rules["page"]["rules"])
     pc.judge(rep, measures, pc.Ctx(project, target, widths, schemes, rules, tokens, modern), measures_path)
     return rep.finish()
 

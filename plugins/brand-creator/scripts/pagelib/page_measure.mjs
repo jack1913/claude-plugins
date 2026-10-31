@@ -835,6 +835,89 @@ async function fontFacts(page) {
            font_usage: found.usage, ...(found.usage_total > found.usage.length ? { font_usage_total: found.usage_total } : {}) };
 }
 
+// ---------------------------------------------------------------- brand rules
+const RULE_ITEMS = 300;   // controls or accent elements reported per rule and view; the view says how many there were
+const CONTROLS = "button, [role=button], input[type=submit], input[type=button], input[type=reset]";
+
+/** The facts the brand rules of qa/rules.json `page.rules` need from the page's own text. `request.rules` lists the rules that are measured here, `[{id, kind, selector?}]`
+ *  (a rule of another kind is judged from facts the view already holds, or not measured); a request with none measures nothing. `rule_facts`: `{<id>: {kind, selector, matched,
+ *  shown, items, ...}}`, or `{kind, selector, error}` when the browser does not take the selector as CSS.
+ *  `max-words-per-control`: the shown controls (`button`, `[role=button]`, `input[type=submit|button|reset]`, and what the rule's `selector` matches) as `items`
+ *  `{sel, text (80 characters), words, via}`, the longest first (`matched` of them, `shown` of those with a box); `text` is the visible text (`innerText`; the value of an input), and
+ *  when a control shows none its accessible name (`aria-label`, `aria-labelledby`, the `alt` of an image or `<title>` of an SVG inside it, `title`): `via` says `text`, `name` or `none`.
+ *  `words-under-accent`: for each shown element the rule's `selector` matches, `items` `{sel, parent_sel, text, parent_text, own_words, parent_words, around_words}`: the words of its
+ *  parent's visible text, those of its own text, and the first minus the second (never below 0). A word is what Unicode word segmentation (`Intl.Segmenter`, UAX #29, in the language of the
+ *  closest `lang`) calls word-like: a number is one, a hyphenated compound is two, an arrow, a dot or a symbol is none. Nothing is judged here. */
+async function ruleFacts(page, request) {
+  const rules = (Array.isArray(request.rules) ? request.rules : []).filter((r) => r && (r.kind === "max-words-per-control" || r.kind === "words-under-accent"));
+  if (!rules.length) return {};
+  return page.evaluate(([list, cap, controls]) => {
+    const H = window.__bcMeasure;
+    const segmenters = new Map();
+    const segmenter = (lang) => {
+      if (!segmenters.has(lang)) {
+        let s;
+        try { s = new Intl.Segmenter(lang || undefined, { granularity: "word" }); } catch (e) { s = new Intl.Segmenter(undefined, { granularity: "word" }); }   // a lang the browser does not know
+        segmenters.set(lang, s);
+      }
+      return segmenters.get(lang);
+    };
+    const words = (text, lang) => { let n = 0; for (const seg of segmenter(lang).segment(text)) if (seg.isWordLike) n++; return n; };
+    const clean = (t) => String(t ?? "").replace(/\s+/g, " ").trim();
+    const langOf = (el) => { const e = el.closest("[lang]"); return e ? e.getAttribute("lang") : ""; };
+    const textOf = (el) => clean(el.innerText ?? el.textContent);
+    const boxed = (el) => {   // shown to a reader: not hidden or transparent, with a box on the page
+      if (!H.walkable(el)) return false;
+      const info = H.shown(el);
+      if (!info.shown || info.opacity <= 0) return false;
+      const s = getComputedStyle(el), r = el.getBoundingClientRect();
+      return s.visibility === "visible" && s.display !== "contents" && r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0;
+    };
+    const nameOf = (el) => {
+      const label = clean(el.getAttribute("aria-label"));
+      if (label) return label;
+      const by = clean((el.getAttribute("aria-labelledby") || "").split(/\s+/).map((id) => (document.getElementById(id) || {}).textContent || "").join(" "));
+      if (by) return by;
+      const img = el.querySelector("img[alt]"), svgTitle = el.querySelector("svg title");
+      return clean((img && img.getAttribute("alt")) || (svgTitle && svgTitle.textContent) || el.getAttribute("title"));
+    };
+    const out = {};
+    for (const rule of list) {
+      const facts = { kind: rule.kind, selector: rule.selector ?? null };
+      out[rule.id] = facts;
+      let els;
+      try {
+        if (rule.selector) document.querySelector(rule.selector);   // a selector the browser refuses is reported, not guessed at
+        els = [...document.querySelectorAll(rule.kind === "max-words-per-control" ? controls + (rule.selector ? ", " + rule.selector : "") : rule.selector)];
+      } catch (e) {
+        facts.error = String(e.message).split("\n")[0];
+        continue;
+      }
+      const items = [];
+      for (const el of els) {
+        if (!boxed(el)) continue;
+        const lang = langOf(el);
+        if (rule.kind === "max-words-per-control") {
+          const isInput = el.localName === "input";
+          let text = isInput ? clean(el.value) : textOf(el), via = text ? "text" : "none";
+          if (!text) { text = nameOf(el); via = text ? "name" : "none"; }
+          items.push({ sel: H.selector(el), text: text.slice(0, 80), words: words(text, lang), via });
+        } else {
+          const parent = el.parentElement, own = textOf(el), around = parent ? textOf(parent) : "";
+          const ownWords = words(own, lang), parentWords = words(around, lang);
+          items.push({ sel: H.selector(el), parent_sel: parent ? H.selector(parent) : null, text: own.slice(0, 80), parent_text: around.slice(0, 120),
+                       own_words: ownWords, parent_words: parentWords, around_words: Math.max(0, parentWords - ownWords) });
+        }
+      }
+      if (rule.kind === "max-words-per-control") items.sort((a, b) => b.words - a.words);   // stable: document order among equals, so a cut loses the shortest
+      facts.matched = els.length;
+      facts.shown = items.length;
+      facts.items = items.slice(0, cap);
+    }
+    return { rule_facts: out };
+  }, [rules, RULE_ITEMS, CONTROLS]);
+}
+
 const COLLECTORS = [
   async (page) => { await page.evaluate(installHelpers); return {}; },   // first: the helpers the collectors below call
   async (page) => ({ document: await documentFacts(page) }),
@@ -845,6 +928,7 @@ const COLLECTORS = [
   async (page) => claimFacts(page),
   async (page) => markFacts(page),
   async (page) => fontFacts(page),
+  async (page, request) => ruleFacts(page, request),
 ];
 
 /** Run every collector on the settled page and merge their answers; the in-page helpers are taken out of the page again. */

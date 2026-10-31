@@ -2048,3 +2048,348 @@ def test_a_face_that_lacks_a_character_the_text_uses_warns_and_does_not_fail(acm
     warned = row(rep, "page:fonts")
     assert warned["status"] == "warn" and "glyph(s) are drawn in another font" in warned["detail"] and warned["offenders"] == []
     assert [(o["family"], o["kind"]) for o in warned["partly"]] == [("Acme Sans", "partly-another-font")]
+
+
+# ---------------------------------------------------------------- the brand's own rules (qa/rules.json page.rules)
+
+ONE_MARK = {"id": "one-mark", "kind": "max-marks-per-view", "max": 1, "g4": "one mark per screen"}
+SHORT_BUTTONS = {"id": "short-buttons", "kind": "max-words-per-control", "max": 3, "g4": "a button says at most three words"}
+ACCENT_ROOM = {"id": "accent-room", "kind": "words-under-accent", "selector": "em.accent", "min": 2, "max": 6, "g4": "the accent has room"}
+
+
+def set_page_rules(p: Path, *rules: dict) -> None:
+    """qa/rules.json gets this list as page.rules (what else it holds stays)."""
+    f = p / "qa" / "rules.json"
+    doc = json.loads(f.read_text(encoding="utf-8"))
+    doc["page"] = {**doc.get("page", {}), "rules": list(rules)}
+    f.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
+
+
+def record_g4(p: Path, line: str = "(rule) one mark per screen") -> None:
+    """The owner approves the system rules at G4: the "(rule)" line is in BRAND-STATE.md Rules (G4) and the gate is recorded."""
+    mutate(p / "BRAND-STATE.md", "- (rule) (...)", f"- {line}")
+    r = bc("state", "--record", "G4", "system rules GO", project=p)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def rule_row(rep: dict, rid: str) -> dict:
+    return row(rep, f"page:rule:{rid}")
+
+
+def test_the_page_rules_of_qa_rules_are_validated_and_normalised(tmp_path):
+    """No browser: a good list loads with its strings stripped, a rule keeps only the keys of its kind, and the page block still takes the other keys beside it."""
+    p = make_project(tmp_path)
+    (p / "qa").mkdir()
+    rules = [{"id": "one-mark", "kind": "max-marks-per-view", "max": 1, "g4": "  one   mark per\tscreen "},
+             {"id": "short-buttons", "kind": "max-words-per-control", "max": 0, "g4": "g", "selector": " .cta "},
+             {"id": "calm-accent", "kind": "words-under-accent", "selector": "em", "min": 2, "g4": "g"},
+             {"id": "calm-accent-2", "kind": "words-under-accent", "selector": "b", "max": 4, "g4": "g"},
+             {"id": "no-eyebrow", "kind": "tell", "tell": "eyebrow", "g4": "g"}]
+    (p / "qa" / "rules.json").write_text(json.dumps({"schema": 1, "page": {"rules": rules, "clear_space": 0.5}}), encoding="utf-8")
+    loaded, source = qa_rules.load(p)
+    assert source == "qa/rules.json" and loaded["page"]["clear_space"] == 0.5 and "page.rules" in loaded["_from_file"]
+    assert loaded["page"]["rules"] == [{"id": "one-mark", "kind": "max-marks-per-view", "g4": "one mark per screen", "max": 1},
+                                       {"id": "short-buttons", "kind": "max-words-per-control", "g4": "g", "selector": ".cta", "max": 0},
+                                       {"id": "calm-accent", "kind": "words-under-accent", "g4": "g", "selector": "em", "min": 2},
+                                       {"id": "calm-accent-2", "kind": "words-under-accent", "g4": "g", "selector": "b", "max": 4},
+                                       {"id": "no-eyebrow", "kind": "tell", "g4": "g", "tell": "eyebrow"}]
+    assert qa_rules.load(make_project(tmp_path, slug="plain"))[0]["page"]["rules"] == []   # no rules: nothing is asked and no row is added
+
+
+def bad_rule_blocks() -> list:
+    ok = {"id": "one-mark", "kind": "max-marks-per-view", "max": 1, "g4": "one mark per screen"}
+    words = {"id": "short-buttons", "kind": "max-words-per-control", "max": 3, "g4": "g"}
+    accent = {"id": "accent", "kind": "words-under-accent", "selector": "em", "min": 1, "g4": "g"}
+    return [{"rules": [{**ok, "kind": "max-links-per-view"}]}, {"rules": [{**ok, "kind": 7}]},                  # an unknown kind
+            {"rules": [{**ok, "colour": "red"}]}, {"rules": [{**ok, "selector": "img"}]}, {"rules": [{**accent, "tell": "eyebrow"}]},   # a key the kind does not have
+            {"rules": [{k: v for k, v in ok.items() if k != "max"}]}, {"rules": [{k: v for k, v in accent.items() if k != "selector"}]},   # a key the kind needs
+            {"rules": [{k: v for k, v in accent.items() if k != "min"}]}, {"rules": [{"id": "t", "kind": "tell", "g4": "g"}]},
+            {"rules": [{k: v for k, v in ok.items() if k != "g4"}]}, {"rules": [{**ok, "g4": ""}]}, {"rules": [{**ok, "g4": "  "}]}, {"rules": [{**ok, "g4": 3}]},
+            {"rules": [{**ok, "id": "One Mark"}]}, {"rules": [{**ok, "id": ""}]}, {"rules": [{k: v for k, v in ok.items() if k != "id"}]}, {"rules": [ok, ok]},
+            {"rules": [{**ok, "max": -1}]}, {"rules": [{**ok, "max": 1.5}]}, {"rules": [{**ok, "max": True}]}, {"rules": [{**ok, "max": "1"}]},
+            {"rules": [{**accent, "max": 2, "min": 3}]}, {"rules": [{**words, "selector": ""}]}, {"rules": [{**words, "selector": 3}]}, {"rules": [{**words, "selector": "x" * 501}]},
+            {"rules": [{"id": "t", "kind": "tell", "tell": "", "g4": "g"}]}, {"rules": ["one mark"]}, {"rules": [None]}]
+
+
+@pytest.mark.parametrize("block", bad_rule_blocks())
+def test_an_unknown_rule_kind_or_key_is_a_usage_error(tmp_path, block):
+    p = make_project(tmp_path)
+    write_page(p)
+    (p / "qa").mkdir()
+    (p / "qa" / "rules.json").write_text(json.dumps({"schema": 1, "page": block}), encoding="utf-8")
+    r = bc("page-check", "pages/index.html", project=p)
+    assert r.returncode == 2 and "qa/rules.json" in r.stderr and "page.rules" in r.stderr, r.stderr
+    assert page_reports(p) == []   # refused before anything was opened or written
+
+
+def test_the_rules_ask_the_browser_only_for_what_they_need():
+    """No browser: the request names each selector once, in the order of the rules, and lists only the rules measured in the page's text; marks and tells need nothing."""
+    rules = [ONE_MARK, {**SHORT_BUTTONS, "selector": ".cta"}, ACCENT_ROOM, {"id": "second", "kind": "words-under-accent", "selector": ".cta", "min": 1, "g4": "g"},
+             {"id": "plain", "kind": "max-words-per-control", "max": 2, "g4": "g"}, {"id": "no-eyebrow", "kind": "tell", "tell": "eyebrow", "g4": "g"}]
+    selectors, asks = pagecheck.rule_request(rules)
+    assert selectors == [".cta", "em.accent"]
+    assert asks == [{"id": "short-buttons", "kind": "max-words-per-control", "selector": ".cta"}, {"id": "accent-room", "kind": "words-under-accent", "selector": "em.accent"},
+                    {"id": "second", "kind": "words-under-accent", "selector": ".cta"}, {"id": "plain", "kind": "max-words-per-control"}]
+    assert pagecheck.rule_request([]) == ([], []) and pagecheck.rule_request([ONE_MARK]) == ([], [])
+
+
+def judge_rules(p: Path, rules: list[dict], views: list[dict]) -> dict[str, dict]:
+    """rule_rows on constructed measurements: the page rules are `rules`, the views are as the browser would have measured them."""
+    loaded = qa_rules.load(p)[0]
+    loaded["page"]["rules"] = qa_rules.validate_page_rules(rules)
+    ctx = pagecheck.Ctx(p, pagecheck.Target("project", "pages/x.html", page="pages/x.html"), [390], ["light"], loaded, {})
+    rep = Report("page-check/x-000000", p)
+    pagecheck.rule_rows(rep, {"views": views}, ctx)
+    return {r["id"].removeprefix("page:rule:"): r for r in rep.results}
+
+
+def tall_view(marks: list[dict], height: int = 3000, vh: int = 800, **more) -> dict:
+    return {**view("light", marks=marks, images=[], resources={}, height=height, **more), "viewport": {"width": 390, "height": vh}}
+
+
+def at(y: float, h: float = 40, sel: str = "body > img") -> dict:
+    return mark_entry(sel=sel, height=h, rect={"x": 0, "y": y, "width": h, "height": h})
+
+
+def test_marks_are_counted_in_screens_one_viewport_high_stepped_by_half_a_viewport(tmp_path):
+    """No browser. Windows are 800 px high and start every 400 px; a mark is in the windows that hold the vertical middle of its box."""
+    assert pagecheck.mark_windows(3000, 800)[:3] == [(0.0, 800.0), (400.0, 1200.0), (800.0, 1600.0)] and pagecheck.mark_windows(3000, 800)[-1] == (2400.0, 3200.0)
+    assert pagecheck.mark_windows(500, 800) == [(0.0, 800.0)] and pagecheck.mark_windows(None, 800) == [(0.0, 800.0)] and pagecheck.mark_windows(800, 800) == [(0.0, 800.0)]
+    p = make_project(tmp_path)
+    count = lambda *ys, **kw: judge_rules(p, [ONE_MARK], [tall_view([at(y, sel=f"img:nth-of-type({i})") for i, y in enumerate(ys, 1)], **kw)])["one-mark"]["most_in_one_screen"]
+    assert count() == 0 and count(100) == 1
+    assert count(100, 700) == 2          # middles 120 and 720: both in the first window
+    assert count(100, 1000) == 1         # middles 120 and 1020: 900 apart, no window holds both
+    assert count(500, 1000) == 2         # middles 520 and 1020: the window from 400 to 1200
+    assert count(0, 400, 800) == 2       # middles 20, 420, 820: no 800 px window from a multiple of 400 holds all three
+    assert count(100, 1000, 2000, 2900) == 1 and count(2900, 2950, height=3000) == 2   # a mark at the very end of the page is in the last window
+    assert count(100, 160, 220, vh=800, height=300) == 3   # a page shorter than the screen is one screen
+    twin = at(100, sel="img.one")
+    assert judge_rules(p, [ONE_MARK], [tall_view([twin, {**twin, "kind": "img"}, {**at(100, sel="img.two"), "named": False, "marked": False}])])["one-mark"]["most_in_one_screen"] == 1   # the same box found twice, and an image that is no mark
+    hidden = judge_rules(p, [ONE_MARK], [tall_view([at(100), {**at(120, sel="img.hidden"), "visible": False}])])["one-mark"]
+    assert hidden["most_in_one_screen"] == 1 and hidden["status"] == "pass", hidden   # a mark that is not shown is not in a screen
+    pseudo = judge_rules(p, [ONE_MARK], [tall_view([at(100), mark_entry(sel="header::before", height=None, pseudo="::before", height_px=40)])])["one-mark"]
+    assert pseudo["status"] == "warn" and "NOT verified: header::before" in pseudo["detail"], pseudo   # a pseudo-element has no box to place: said, never counted
+
+
+def test_a_rule_is_tied_by_its_g4_words_in_a_recorded_rule_line(tmp_path):
+    """No browser. A broken rule fails only when G4 is recorded and one recorded "(rule)" line holds its g4 words (white space and letter case ignored)."""
+    p = make_project(tmp_path)
+    two = [tall_view([at(100, sel="img.a"), at(300, sel="img.b")])]
+    verdict = lambda: judge_rules(p, [ONE_MARK], two)["one-mark"]
+    w = verdict()   # BRAND-STATE.md has no G4 and no rule line
+    assert w["status"] == "warn" and w["tied"] is False and w["g4_line"] is None and "G4 is not recorded yet" in w["detail"] and "not a recorded G4 rule line yet" in w["detail"], w
+    assert "2 brand marks in one screen, the rule allows 1" in w["detail"] and w["most_in_one_screen"] == 2 and w["rule"]["g4"] == "one mark per screen"
+    mutate(p / "BRAND-STATE.md", "- (rule) (...)", "- (rule)  One MARK   per\tscreen, always")   # the line is written, the gate is not
+    assert verdict()["status"] == "warn" and "G4 is not recorded yet" in verdict()["detail"]
+    assert bc("state", "--record", "G4", "GO", project=p).returncode == 0
+    f = verdict()
+    assert f["status"] == "fail" and f["tied"] is True and f["g4_line"] == "(rule)  One MARK   per\tscreen, always" and "tied to the recorded G4 line" in f["detail"], f
+    ok = judge_rules(p, [ONE_MARK], [tall_view([at(100, sel="img.a"), at(1500, sel="img.b")])])["one-mark"]
+    assert ok["status"] == "pass" and "a recorded G4 rule" in ok["detail"] and ok["tied"] is True, ok
+    other = judge_rules(p, [{**ONE_MARK, "g4": "two marks are fine"}], two)["one-mark"]   # G4 is recorded, but no line holds these words
+    assert other["status"] == "warn" and other["tied"] is False and 'holds "two marks are fine"' in other["detail"] and "not a recorded G4 rule line yet" in other["detail"], other
+    (p / "BRAND-STATE.md").unlink()
+    gone = verdict()
+    assert gone["status"] == "warn" and "BRAND-STATE.md cannot be read" in gone["detail"], gone
+
+
+def test_a_tell_rule_is_info_until_the_tells_exist_and_a_run_that_measured_nothing_is_not_verified(tmp_path):
+    p = make_project(tmp_path)
+    rows = judge_rules(p, [{"id": "no-eyebrow", "kind": "tell", "tell": "eyebrow", "g4": "no eyebrow"}, ONE_MARK, SHORT_BUTTONS, ACCENT_ROOM], [])
+    assert rows["no-eyebrow"]["status"] == "info" and "available once the page tells exist" in rows["no-eyebrow"]["detail"] and "'eyebrow'" in rows["no-eyebrow"]["detail"]
+    assert {k: rows[k]["status"] for k in ("one-mark", "short-buttons", "accent-room")} == {"one-mark": "skipped", "short-buttons": "skipped", "accent-room": "skipped"}
+    assert all("not verified: no view was measured" in rows[k]["detail"] for k in ("one-mark", "short-buttons", "accent-room"))
+    failed_view = [{"width": 390, "scheme": "light", "viewport": {"width": 390, "height": 844}, "error": "could not load"}]
+    assert judge_rules(p, [ONE_MARK], failed_view)["one-mark"]["status"] == "skipped"
+
+
+def test_the_words_rules_judge_constructed_facts(tmp_path):
+    """No browser: the limit is exceeded only by more words than `max`; the accent window is min to max; the browser's complaint about a selector fails the row."""
+    p = make_project(tmp_path)
+    control = lambda words, text="x", sel="button": {"sel": sel, "text": text, "words": words, "via": "text"}
+    facts = lambda *items: {"kind": "max-words-per-control", "selector": None, "matched": len(items), "shown": len(items), "items": list(items)}
+    on = lambda rule_facts: [{**view("light"), "rule_facts": rule_facts}]
+    rows = judge_rules(p, [SHORT_BUTTONS], on({"short-buttons": facts(control(3), control(2))}))
+    assert rows["short-buttons"]["status"] == "pass" and rows["short-buttons"]["longest"] == 3 and rows["short-buttons"]["controls_checked"] == 2, rows
+    rows = judge_rules(p, [SHORT_BUTTONS], on({"short-buttons": facts(control(5, "Get your free quote now", "button.cta"), control(4, "Get a quote", "a.btn"), control(3))}))
+    bad = rows["short-buttons"]
+    assert bad["status"] == "warn" and [(o["selector"], o["words"]) for o in bad["offenders"]] == [("button.cta", 5), ("a.btn", 4)] and 'button.cta "Get your free quote now" says 5 words' in bad["detail"], bad
+    acc = lambda around: {"kind": "words-under-accent", "selector": "em", "matched": 1, "shown": 1, "items": [{"sel": "em", "parent_sel": "h1", "text": "x", "parent_text": "a b c", "own_words": 1,
+                                                                                                            "parent_words": around + 1, "around_words": around}]}
+    for around, status in ((1, "warn"), (2, "pass"), (6, "pass"), (7, "warn")):   # ACCENT_ROOM asks for 2 to 6 words around the accent
+        assert judge_rules(p, [ACCENT_ROOM], on({"accent-room": acc(around)}))["accent-room"]["status"] == status, around
+    assert "the rule asks for 2 to 6" in judge_rules(p, [ACCENT_ROOM], on({"accent-room": acc(7)}))["accent-room"]["detail"]
+    assert [pagecheck._bound({"min": lo, "max": hi}) for lo, hi in ((2, 6), (3, 3), (3, None), (None, 4), (0, 0))] == ["2 to 6", "exactly 3", "at least 3", "at most 4", "exactly 0"]
+    refused = {"accent-room": {"kind": "words-under-accent", "selector": "em[", "error": "'em[' is not a valid selector"}}
+    row_ = judge_rules(p, [{**ACCENT_ROOM, "selector": "em["}], on(refused))["accent-room"]
+    assert row_["status"] == "fail" and "not valid CSS" in row_["detail"] and "em[" in row_["detail"] and row_["tied"] is False, row_   # failed whether or not it is tied
+    none = judge_rules(p, [ACCENT_ROOM], on({"accent-room": {"kind": "words-under-accent", "selector": "em.accent", "matched": 0, "shown": 0, "items": []}}))["accent-room"]
+    assert none["status"] == "pass" and "matches no shown element" in none["detail"], none
+
+
+CONTROLS_STYLE = """  main { padding: 8px; }
+  button, input, .cta { display: inline-block; border: 0; margin: 4px; padding: 4px; font: inherit; color: var(--color-text); background: var(--color-bg); }
+"""
+
+
+def controls_page(body: str) -> str:
+    return PAGE.replace("</style>", CONTROLS_STYLE + "</style>").replace("<p><a href=\"#parts\">Spare parts</a></p>", body)
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_four_word_button_fails_a_three_word_rule(acme):
+    page = write_page(acme, controls_page("<p><button>Get a free quote</button> <button>Contact us</button></p>"))
+    set_page_rules(acme, SHORT_BUTTONS)
+    record_g4(acme, "(rule) a button says at most three words")
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 1, r.stdout + r.stderr
+    bad = rule_row(rep, "short-buttons")
+    assert bad["status"] == "fail" and bad["tied"] is True and bad["g4_line"] == "(rule) a button says at most three words", bad
+    assert [(o["selector"], o["text"], o["words"]) for o in bad["offenders"]] == [("body > main > p:nth-of-type(2) > button:nth-of-type(1)", "Get a free quote", 4)], bad
+    assert 'says 4 words' in bad["detail"] and bad["max"] == 3 and bad["longest"] == 4 and bad["controls_checked"] == 2
+    assert row(rep, "page:colours:light")["status"] == "pass" and row(rep, "page:fonts")["status"] == "pass"   # the page is otherwise the brand's: only the button is long
+    mutate(page, "Get a free quote", "Get a quote")
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 0, r.stdout + r.stderr
+    ok = rule_row(rep, "short-buttons")
+    assert ok["status"] == "pass" and ok["longest"] == 3 and "the longest says 3 word(s)" in ok["detail"] and ok["offenders"] == [], ok
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_two_marks_in_one_screen_fail_once_the_g4_line_is_recorded(acme):
+    page = write_page(acme, mark_page(img("mark.svg", 48) + img("mark.svg", 48), ".mark + .mark { margin-top: 20px; }\n"))
+    set_page_rules(acme, ONE_MARK)
+    r, rep = check_page(acme, "--schemes", "light")   # the rule is not yet a recorded G4 line: a warning, and the exit code stays 0
+    assert r.returncode == 0, r.stdout + r.stderr
+    w = rule_row(rep, "one-mark")
+    assert w["status"] == "warn" and w["tied"] is False and w["most_in_one_screen"] == 2 and "not a recorded G4 rule line yet" in w["detail"], w
+    record_g4(acme)
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 1, r.stdout + r.stderr
+    bad = rule_row(rep, "one-mark")
+    assert bad["status"] == "fail" and bad["tied"] is True and bad["g4_line"] == "(rule) one mark per screen" and bad["max"] == 1, bad
+    assert bad["screen"] == {"width": 390, "scheme": "light", "top": 0.0, "bottom": 844.0} and [m["y"] for m in bad["marks"]] == [0, 68], bad
+    assert "2 brand marks in one screen, the rule allows 1" in bad["detail"] and "body > header > img.mark:nth-of-type(1) (0 px down)" in bad["detail"], bad["detail"]
+    assert {k: v["status"] for k, v in mark_rows_of(rep).items()} == {"page:mark-file": "pass", "page:mark-band": "pass", "page:mark-clear-space": "pass"}   # the marks are right: there are two
+    mutate(page, "margin-top: 20px;", "margin-top: 1500px;")   # the second mark is a screen and a half further down
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 0, r.stdout + r.stderr
+    ok = rule_row(rep, "one-mark")
+    assert ok["status"] == "pass" and ok["most_in_one_screen"] == 1 and "a recorded G4 rule" in ok["detail"], ok
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_an_untied_rule_only_warns(acme):
+    write_page(acme, mark_page(img("mark.svg", 48) + img("mark.svg", 48), ".mark + .mark { margin-top: 20px; }\n"))
+    set_page_rules(acme, ONE_MARK)
+    record_g4(acme, "(rule) the accent is a fill, never text")   # G4 is recorded, but with another line: the rule is only a proposal
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 0, r.stdout + r.stderr
+    w = rule_row(rep, "one-mark")
+    assert w["status"] == "warn" and w["tied"] is False and w["g4_line"] is None and 'holds "one mark per screen"' in w["detail"] and "only a warning" in w["detail"], w
+    assert "G4 is not recorded" not in w["detail"]
+    assert rep["status"] == "pass"   # a warning does not fail the report
+    set_page_rules(acme, {**ONE_MARK, "g4": "the accent is a fill"})   # the words are in a recorded line now: the same break fails
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 1 and rule_row(rep, "one-mark")["status"] == "fail" and rep["status"] == "fail", r.stdout + r.stderr
+
+
+ACCENT_PAGE_BODY = """<h1>Build <em class="accent">faster</em> every day</h1>
+  <h2>Now <em class="accent">go</em></h2>
+  <p>Every tool has a published spare-parts list.</p>"""
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_words_under_an_accent_are_counted(acme):
+    write_page(acme, PAGE.replace("</style>", "  em.accent { font-style: normal; font-weight: 700; }\n</style>").replace(
+        "<h1>Acme hand tools</h1>\n  <p>Every tool has a published spare-parts list.</p>", ACCENT_PAGE_BODY))
+    record_g4(acme, "(rule) the accent has room")
+    set_page_rules(acme, ACCENT_ROOM)   # 2 to 6 words around an accent: "Build ... every day" has 3, "Now ..." has 1
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 1, r.stdout + r.stderr
+    bad = rule_row(rep, "accent-room")
+    assert bad["status"] == "fail" and bad["accents_checked"] == 2 and (bad["min"], bad["max"]) == (2, 6), bad
+    assert [(o["selector"], o["text"], o["own_words"], o["around_words"], o["parent_text"]) for o in bad["offenders"]] == [("body > main > h2 > em.accent", "go", 1, 1, "Now go")], bad
+    assert "has 1 word(s) around it in \"Now go\"" in bad["detail"] and "the rule asks for 2 to 6" in bad["detail"]
+    set_page_rules(acme, {**ACCENT_ROOM, "min": 1})
+    r, rep = check_page(acme, "--schemes", "light")
+    ok = rule_row(rep, "accent-room")
+    assert r.returncode == 0 and ok["status"] == "pass" and ok["accents_checked"] == 2 and "each with 1 to 6 word(s) around it" in ok["detail"], ok
+    set_page_rules(acme, {**ACCENT_ROOM, "min": 4, "max": 4})
+    r, rep = check_page(acme, "--schemes", "light")
+    bad = rule_row(rep, "accent-room")
+    assert r.returncode == 1 and sorted(o["around_words"] for o in bad["offenders"]) == [1, 3] and "exactly 4" in bad["detail"], bad
+    set_page_rules(acme, {**ACCENT_ROOM, "selector": "em.nothing"})
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 0 and "matches no shown element" in rule_row(rep, "accent-room")["detail"]
+
+
+CONTROL_KINDS = """<p><button>Buy now</button> <button aria-label="Open the main menu"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M0 2h16v2H0z" fill="currentColor"/></svg></button>
+  <input type="submit" value="Send it right now"> <a href="#parts" role="button" class="cta">&rarr; Next</a>
+  <button style="display: none">Hidden one two three four five</button> <button style="opacity: 0">Faded one two three four five</button>
+  <button>Sign-up and e-mail</button> <button><span>Two</span> <b>words</b></button> <button></button></p>
+  <div class="cta">Learn more about us here</div>"""
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_the_controls_collector_counts_the_visible_text_or_the_accessible_name(acme):
+    write_page(acme, controls_page(CONTROL_KINDS))
+    set_page_rules(acme, {**SHORT_BUTTONS, "max": 99, "selector": "div.cta"})
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 0, r.stdout + r.stderr
+    (v,) = json.loads(Path(rep["measures"]).read_text(encoding="utf-8"))["views"]
+    facts = v["rule_facts"]["short-buttons"]
+    assert facts["kind"] == "max-words-per-control" and facts["selector"] == "div.cta"
+    by = {(i["text"], i["via"]): i["words"] for i in facts["items"]}
+    assert by == {("Learn more about us here", "text"): 5,        # the rule's own selector
+                  ("Open the main menu", "name"): 4,              # an icon button is its aria-label
+                  ("Send it right now", "text"): 4,               # an input shows its value
+                  ("Sign-up and e-mail", "text"): 5,              # a hyphenated compound is two words (Unicode word segmentation)
+                  ("Buy now", "text"): 2, ("Two words", "text"): 2,
+                  ("→ Next", "text"): 1,                     # an arrow is no word
+                  ("", "none"): 0}, by
+    assert [i["words"] for i in facts["items"]] == sorted((i["words"] for i in facts["items"]), reverse=True)   # the longest first
+    assert facts["matched"] == 10 and facts["shown"] == 8   # the hidden and the transparent button have no words to count
+    assert not any("Hidden" in i["text"] or "Faded" in i["text"] for i in facts["items"])
+    assert v["selectors"]["div.cta"]["visible"] == 1   # the request's selectors are measured as boxes too
+    set_page_rules(acme)   # no rules: the browser is asked for none
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "rule_facts" not in json.loads(Path(rep["measures"]).read_text(encoding="utf-8"))["views"][0]
+    assert not [x for x in rep["results"] if x["id"].startswith("page:rule:")]
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_selector_the_browser_refuses_fails_its_row(acme):
+    write_page(acme, controls_page("<p><button>Buy now</button></p>"))
+    set_page_rules(acme, {**SHORT_BUTTONS, "selector": "button["})
+    r, rep = check_page(acme, "--schemes", "light")   # G4 is not recorded: it fails all the same, it cannot be judged
+    assert r.returncode == 1, r.stdout + r.stderr
+    bad = rule_row(rep, "short-buttons")
+    assert bad["status"] == "fail" and "not valid CSS" in bad["detail"] and "button[" in bad["detail"] and "qa/rules.json page.rules" in bad["detail"], bad
+    assert "error" in json.loads(Path(rep["measures"]).read_text(encoding="utf-8"))["views"][0]["selectors"]["button["]   # the box collector says so too
+
+
+@pytest.mark.requires_node
+def test_render_page_measure_refuses_a_rules_list_it_cannot_read(tmp_path):
+    """render.mjs holds the optional `rules` of a request to its shape (exit 2, before a browser is started), as it does every other key."""
+    p = make_project(tmp_path)
+    write_page(p)
+    data = tmp_path / "data"
+    (data / "scratch").mkdir(parents=True)
+    good = {"schema": 1, "root": str(p), "page": "pages/index.html", "url": None, "widths": [390], "schemes": ["light"], "selectors": [], "dsf": 1}
+    for i, rules in enumerate(["x", {"id": "a"}, [1], [{"id": "a"}], [{"id": 3, "kind": "tell"}], [{"id": "a", "kind": "tell", "selector": ""}], [{"id": "a", "kind": "tell", "selector": 3}],
+                               [{"id": f"r{n}", "kind": "tell"} for n in range(201)]]):
+        req = tmp_path / f"rules{i}.json"
+        req.write_text(json.dumps({**good, "rules": rules}), encoding="utf-8")
+        r = subprocess.run(["node", str(ROOT / "scripts/render.mjs"), "page-measure", "--request", str(req), "--out", str(tmp_path / "out.json"), "--project", str(p)],
+                           capture_output=True, text=True, env={**os.environ, "BRAND_CREATOR_DATA": str(data)})
+        assert r.returncode == 2 and "rules must be a list of up to 200 objects" in r.stderr, (rules, r.returncode, r.stderr)
+    assert not (tmp_path / "out.json").exists()

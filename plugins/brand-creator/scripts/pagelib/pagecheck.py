@@ -19,8 +19,11 @@ paints is a semantic colour of that theme) and `pair_rows` gives `page:pairs:<sc
 `motion_rows` gives `page:motion` (every duration and easing is a motion token), and `claim_rows` gives `page:claims` (every number and status word outside a `data-sample`
 is backed by FACTS.md) and `page:samples` (the before-publishing list, also the report's `samples`).
 
-Standard library plus scripts/lib (_color, _common, qa_rules) only, and scripts/booklib/bookdata.py (the FACTS.md table and the English status words, imported when the claims are
-judged). This folder is outside scripts/lib/, so a change here does not make every pack stale. The
+`rule_rows` gives `page:rule:<id>` for each brand rule of qa/rules.json `page.rules` (`rule_request` is what such rules ask of the browser): it fails when it is broken and its `g4` words are in a recorded
+"(rule)" line of BRAND-STATE.md Rules (G4), warns when it is broken and not yet tied, and passes when it holds.
+
+Standard library plus scripts/lib (_color, _common, qa_rules) only, and, imported when they are judged, scripts/booklib/bookdata.py (the FACTS.md table and the English status words, for the
+claims) and scripts/adaptlib/adapt.py (the recorded G4 rule lines, for the brand rules). This folder is outside scripts/lib/, so a change here does not make every pack stale. The
 only reads are the project's own files and, with --from, the folder it names (read only: it is copied, never written).
 """
 from __future__ import annotations
@@ -40,7 +43,7 @@ from urllib.parse import urlsplit
 
 import qa_rules
 from _color import parse_hex, wcag_ratio
-from _common import CliError, EXIT_CANNOT, EXIT_USAGE, Report, confine, fail, rel, scratch_dir
+from _common import CliError, EXIT_CANNOT, EXIT_USAGE, Report, confine, fail, gate_recorded, rel, scratch_dir
 
 REPORT_DIR = "page-check"
 SCHEMES = ("light", "dark")
@@ -720,6 +723,17 @@ def _bookdata():
     return bookdata
 
 
+def _adapt():
+    """scripts/adaptlib/adapt.py, whose `view(project)["rules"]` is the one reading of the recorded "(rule)" lines of BRAND-STATE.md Rules (G4). Imported when the brand rules are
+    judged, so this module stays importable with scripts/lib alone (adapt itself reads bookdata, which _bookdata puts on the path)."""
+    _bookdata()
+    folder = str(Path(__file__).resolve().parents[1] / "adaptlib")
+    if folder not in sys.path:
+        sys.path.append(folder)
+    import adapt
+    return adapt
+
+
 def fact_values(project: Path) -> list[str]:
     """The `value` cell of each row of the FACTS.md table, as written; a row labelled "(example ..." is the template's, never a fact."""
     rows = _bookdata().facts(project)
@@ -1328,8 +1342,212 @@ def display_size_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
         rep.add(rid, "pass", label, detail=f"every text in the display face {face} is {smallest:g} px or more; {basis}", **extra)
 
 
-# each (rep, measures, ctx); the later families of rows (rules, tells) are added here
-ROW_CHECKS = [load_rows, colour_rows, pair_rows, motion_rows, claim_rows, mark_rows, font_rows, display_size_rows]
+# ---------------------------------------------------------------- the brand's own rules
+
+MEASURED_RULES = ("max-words-per-control", "words-under-accent")   # kinds whose facts the browser collects from the page's text; max-marks-per-view reads the marks every view holds
+WINDOW_STEP = 0.5                         # screens are windows one viewport high, stepped by this share of a viewport
+
+
+def rule_request(page_rules: list[dict]) -> tuple[list[str], list[dict]]:
+    """What the brand rules (qa/rules.json page.rules, as qa_rules validated them) ask of the browser: -> (the CSS selectors they name, once each in the order of the rules, for the
+    request's `selectors`; one {id, kind, selector?} per rule that is measured in the page, for the request's `rules`). A rule of another kind asks for nothing."""
+    selectors: list[str] = []
+    asks: list[dict] = []
+    for r in page_rules:
+        if r["kind"] not in MEASURED_RULES:
+            continue
+        sel = r.get("selector")
+        if sel and sel not in selectors:
+            selectors.append(sel)
+        asks.append({"id": r["id"], "kind": r["kind"], **({"selector": sel} if sel else {})})
+    return selectors, asks
+
+
+def mark_windows(page_height, viewport_height) -> list[tuple[float, float]]:
+    """The screens a reader scrolls through: windows one viewport high, from the top of the page down in steps of half a viewport, the last one reaching the end of the page.
+    -> [(top, bottom)] in css px. A page no taller than the viewport is one window."""
+    vh = max(float(viewport_height or 0), 1.0)
+    height = float(page_height) if isinstance(page_height, (int, float)) else vh
+    tops, y = [0.0], 0.0
+    while y + vh < height:
+        y += vh * WINDOW_STEP
+        tops.append(y)
+    return [(t, t + vh) for t in tops]
+
+
+def _placed_marks(view: dict, hashes) -> tuple[list[dict], list[dict]]:
+    """The marks shown in one view: (those with a box on the page, one per place however many ways they were found; those with none to place, a pseudo-element's)."""
+    placed: dict[tuple, dict] = {}
+    loose: dict[str, dict] = {}
+    for m in identified_marks(view, hashes):
+        if not m.get("visible"):
+            continue
+        r = m.get("rect")
+        if not (isinstance(r, dict) and all(isinstance(r.get(k), (int, float)) for k in ("x", "y", "width", "height"))):
+            loose.setdefault(m["sel"], m)
+            continue
+        placed.setdefault((m["kind"], m.get("url"), hashlib.sha256(str(m.get("svg_markup")).encode()).hexdigest(), round(r["x"]), round(r["y"]), round(r["width"]), round(r["height"])), m)
+    return list(placed.values()), list(loose.values())
+
+
+def _marks_rule(rule: dict, measures: dict, ctx: Ctx) -> dict:
+    """max-marks-per-view: in the screens of mark_windows, the most identified brand marks (see `identified_marks`) in one; a mark is in a window when the vertical middle of its box is.
+    Read from the marks every view already holds, so it needs nothing of the browser. Marks of every width and scheme are counted view by view."""
+    views = [v for v in measures.get("views", []) if isinstance(v, dict) and not v.get("error") and "marks" in v]
+    if not views:
+        return {"skipped": "no view was measured (see the page:load rows)"}
+    hashes = set(logo_files(ctx.project, ctx.rules).values())
+    most: dict | None = None
+    loose: dict[str, dict] = {}
+    cut = []
+    for v in views:
+        placed, unplaced = _placed_marks(v, hashes)
+        loose.update({m["sel"]: m for m in unplaced})
+        if v.get("marks_total") or v.get("images_total"):
+            cut.append(f"{v.get('marks_total', 0)} marks and {v.get('images_total', 0)} other images over the caps at {v.get('width')} px")
+        for top, bottom in mark_windows(v.get("height"), (v.get("viewport") or {}).get("height")):
+            inside = [m for m in placed if top <= m["rect"]["y"] + m["rect"]["height"] / 2 <= bottom]
+            if most is None or len(inside) > most["count"]:
+                most = {"count": len(inside), "width": v.get("width"), "scheme": v.get("scheme"), "top": top, "bottom": bottom,
+                        "marks": [{"selector": m["sel"], "kind": m["kind"], "y": round(m["rect"]["y"], 1), "height": round(m["rect"]["height"], 1)} for m in inside]}
+    assert most is not None
+    notes = [f"NOT verified: {sel}: its box cannot be placed on the page (a pseudo-element)" for sel in sorted(loose)]
+    if cut:
+        notes.append("NOT verified beyond the first marks and images of a view: " + _names(cut, 2))
+    limit = rule["max"]
+    where = f"at {most['width']} px {most['scheme']}, {most['top']:g} to {most['bottom']:g} px down the page"
+    extra = {"max": limit, "most_in_one_screen": most["count"], "screen": {k: most[k] for k in ("width", "scheme", "top", "bottom")}, "marks": most["marks"]}
+    if most["count"] > limit:
+        names = _names([f"{m['selector']} ({m['y']:g} px down)" for m in most["marks"]], NAMED)
+        return {"problems": [f"{most['count']} brand marks in one screen, the rule allows {limit}: {names}; first seen {where}"], "notes": notes, "extra": extra}
+    seen = "no brand mark is shown on this page" if not most["count"] and not notes else f"at most {most['count']} brand mark(s) in one screen ({where})"
+    return {"summary": f"{seen}; the rule allows {limit}", "notes": notes, "extra": extra}
+
+
+def _facts_of(rule: dict, measures: dict) -> tuple[list[tuple[dict, dict]], str | None]:
+    """The facts the browser collected for one rule, one per rendered view that holds them: -> ([(view, facts)], the browser's complaint about the rule's selector, or None)."""
+    found = [(v, v["rule_facts"][rule["id"]]) for v in measures.get("views", [])
+             if isinstance(v, dict) and not v.get("error") and isinstance(v.get("rule_facts"), dict) and isinstance(v["rule_facts"].get(rule["id"]), dict)]
+    complaint = next((f["error"] for _, f in found if f.get("error")), None)
+    return found, complaint
+
+
+def _words_rule(rule: dict, measures: dict, ctx: Ctx) -> dict:
+    """max-words-per-control: no `button`, `[role=button]`, `input[type=submit|button|reset]` (nor element of the rule's `selector`) says more than `max` words (visible text, else the accessible name)."""
+    found, complaint = _facts_of(rule, measures)
+    if complaint:
+        return {"error": complaint}
+    if not found:
+        return {"skipped": "no view was measured (see the page:load rows)"}
+    limit = rule["max"]
+    over: dict[tuple, dict] = {}
+    checked = longest = 0
+    for v, facts in found:
+        checked = max(checked, int(facts.get("shown") or 0))
+        for it in facts.get("items", []):
+            longest = max(longest, int(it["words"]))
+            if it["words"] > limit:
+                over.setdefault((it["sel"], it["text"]), {"selector": it["sel"], "text": it["text"], "words": it["words"], "via": it.get("via"), "width": v.get("width"), "scheme": v.get("scheme")})
+    extra = {"max": limit, "controls_checked": checked, "longest": longest, "offenders": list(over.values())[:100]}
+    if over:
+        items = [f"{o['selector']} \"{o['text']}\" says {o['words']} words; first seen at {o['width']} px {o['scheme']}" for o in over.values()]
+        return {"problems": [f"{len(over)} control(s) say more than {limit} word(s): " + _names(items, NAMED)], "extra": extra}
+    what = "control" + ("" if checked == 1 else "s")
+    return {"summary": (f"{checked} {what} on the page, the longest says {longest} word(s); the rule allows {limit}" if checked
+                        else f"no shown control matches on this page; the rule allows {limit} word(s)"), "extra": extra}
+
+
+def _bound(rule: dict) -> str:
+    lo, hi = rule.get("min"), rule.get("max")
+    return f"{lo} to {hi}" if lo is not None and hi is not None and lo != hi else f"exactly {lo}" if lo is not None and lo == hi else f"at least {lo}" if lo is not None else f"at most {hi}"
+
+
+def _accent_rule(rule: dict, measures: dict, ctx: Ctx) -> dict:
+    """words-under-accent: for each element the rule's `selector` matches, the words of its parent's visible text minus its own are within `min` and `max`."""
+    found, complaint = _facts_of(rule, measures)
+    if complaint:
+        return {"error": complaint}
+    if not found:
+        return {"skipped": "no view was measured (see the page:load rows)"}
+    lo, hi = rule.get("min"), rule.get("max")
+    off: dict[tuple, dict] = {}
+    seen: dict[tuple, dict] = {}
+    for v, facts in found:
+        for it in facts.get("items", []):
+            around = int(it["around_words"])
+            seen.setdefault((it["sel"], it["text"], around), it)
+            if (lo is not None and around < lo) or (hi is not None and around > hi):
+                off.setdefault((it["sel"], it["text"], around), {"selector": it["sel"], "text": it["text"], "parent": it.get("parent_sel"), "parent_text": it.get("parent_text"),
+                                                               "own_words": it.get("own_words"), "around_words": around, "width": v.get("width"), "scheme": v.get("scheme")})
+    extra = {"min": lo, "max": hi, "accents_checked": len(seen), "offenders": list(off.values())[:100]}
+    if off:
+        items = [f"{o['selector']} \"{o['text']}\" has {o['around_words']} word(s) around it in \"{o['parent_text']}\"; first seen at {o['width']} px {o['scheme']}" for o in off.values()]
+        return {"problems": [f"{len(off)} accent(s) with the wrong number of words around them, the rule asks for {_bound(rule)}: " + _names(items, NAMED)], "extra": extra}
+    return {"summary": (f"{len(seen)} element(s) match {rule['selector']}, each with {_bound(rule)} word(s) around it" if seen
+                        else f"{rule['selector']} matches no shown element on this page"), "extra": extra}
+
+
+def _g4_state(project: Path) -> dict:
+    """What the rules are tied to: whether G4 is recorded and the recorded "(rule)" lines of BRAND-STATE.md "Rules (G4)" (`adapt.view(project)["rules"]`, the list the adapters
+    read). `error` when BRAND-STATE.md cannot be read."""
+    try:
+        recorded = bool(gate_recorded(project, "G4"))
+        return {"recorded": recorded, "lines": _adapt().view(project)["rules"] if recorded else [], "error": None}
+    except (CliError, OSError) as e:
+        return {"recorded": False, "lines": [], "error": getattr(e, "message", None) or str(e)}
+
+
+def _squash(text: str) -> str:
+    return " ".join(str(text).split()).casefold()
+
+
+def _tie(g4: dict, text: str) -> tuple[str | None, str]:
+    """-> (the recorded G4 rule line that holds the rule's `g4` words, white space collapsed and case ignored, or None; why there is none)."""
+    if g4["error"]:
+        return None, f"BRAND-STATE.md cannot be read ({g4['error']}), so the rule is not a recorded G4 rule line yet"
+    if not g4["recorded"]:
+        return None, f"G4 is not recorded yet, so \"{text}\" is not a recorded G4 rule line yet"
+    line = next((ln for ln in g4["lines"] if _squash(text) in _squash(ln)), None)
+    return line, "" if line else f"no \"(rule)\" line of BRAND-STATE.md Rules (G4) holds \"{text}\": it is not a recorded G4 rule line yet"
+
+
+def rule_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
+    """page:rule:<id>, one per entry of qa/rules.json page.rules: the brand's own rules for pages, each tied by its `g4` words to a "(rule)" line of BRAND-STATE.md Rules (G4).
+    A broken rule fails when its `g4` words are in a recorded G4 rule line (G4 recorded) and only warns before that ("not a recorded G4 rule line yet"), so a proposal never fails a page;
+    a rule that holds passes. Kinds: max-marks-per-view, max-words-per-control, words-under-accent; a `tell` rule is an info row until the generic tells exist. A selector the browser
+    does not take as CSS fails its row whether or not the rule is tied: it cannot be judged. Something that could not be measured is "NOT verified", a warning."""
+    rules = ctx.rules.get("page", {}).get("rules") or []
+    if not rules:
+        return
+    g4 = _g4_state(ctx.project)
+    judges = {"max-marks-per-view": _marks_rule, "max-words-per-control": _words_rule, "words-under-accent": _accent_rule}
+    for rule in rules:
+        rid, label = f"page:rule:{rule['id']}", f"brand rule: {rule['g4']}"
+        if rule["kind"] not in judges:
+            rep.add(rid, "info", label, detail=f"the tell {rule['tell']!r} is available once the page tells exist: this rule is not measured yet", rule=rule)
+            continue
+        res = judges[rule["kind"]](rule, measures, ctx)
+        line, why = _tie(g4, rule["g4"])
+        base = {"rule": rule, "tied": line is not None, "g4_line": line, **res.get("extra", {})}
+        if "skipped" in res:
+            rep.add(rid, "skipped", label, detail="not verified: " + res["skipped"], **base)
+        elif "error" in res:
+            rep.add(rid, "fail", label, detail=f"the selector {rule.get('selector')!r} is not valid CSS ({res['error']}): fix it in qa/rules.json page.rules", **base)
+        elif res.get("problems"):
+            if line:
+                rep.add(rid, "fail", label, detail="; ".join(res["problems"] + res.get("notes", [])) + f"; the rule is tied to the recorded G4 line \"{line}\"", **base)
+            else:
+                rep.add(rid, "warn", label, detail="; ".join(res["problems"] + res.get("notes", [])) + f"; only a warning: {why}", **base)
+        else:
+            standing = f"a recorded G4 rule: \"{line}\"" if line else "not a recorded G4 rule line yet, so a break would only warn"
+            if res.get("notes"):
+                rep.add(rid, "warn", label, detail="; ".join([res["summary"]] + res["notes"]) + f"; {standing}", **base)
+            else:
+                rep.add(rid, "pass", label, detail=f"{res['summary']}; {standing}", **base)
+
+
+# each (rep, measures, ctx); the later families of rows (tells) are added here
+ROW_CHECKS = [load_rows, colour_rows, pair_rows, motion_rows, claim_rows, mark_rows, font_rows, display_size_rows, rule_rows]
 
 
 def judge(rep: Report, measures: dict, ctx: Ctx, measures_path: Path) -> None:

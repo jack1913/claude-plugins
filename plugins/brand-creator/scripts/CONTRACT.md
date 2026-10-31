@@ -656,6 +656,10 @@ project (exit 2 otherwise) and pure vector (exit 1 otherwise), and so must its `
 
 An unknown section or key, a value of the wrong type or a number at or below 0 exits 2: a typo never falls back to the proposal.
 `page` is read by `page-check` (see Page check); `page.widths` is a non-empty list of different whole numbers from 200 to 4000, and `page.rules` is a list.
+`page.rules` holds the brand's own rules for pages (see "Brand rules" under Page check). Each entry is `{"id": "one-mark", "kind": "max-marks-per-view", "max": 1, "g4": "one mark per screen"}`: `id`
+(a lower-case slug, unique), `kind`, `g4` (a non-empty string of at most 500 characters: the words of a recorded "(rule)" line) and the keys of its kind. `max-marks-per-view`: `max`.
+`max-words-per-control`: `max` and, optionally, `selector`. `words-under-accent`: `selector` and `min`, `max` or both. `tell`: `tell`, a non-empty string. `max` and `min` are whole numbers, 0 or more, and
+`min` is not above `max`. An unknown kind, a key the kind does not have, a missing key, a repeated `id` or a value of the wrong type exits 2 (`qa_rules.validate_page_rules`).
 **Size bands:** `qa_rules.pick_band(bands, size_px)` is the one function that names the drawing for a body size (first band whose
 `max_px` covers it; every band but the last has a `max_px`, and the last has none: it covers every larger size, and a last band
 with one exits 2). `Manifest.put_slot()` records the band a slot used; a slot that uses another
@@ -1292,6 +1296,33 @@ brand-creator page-check --url http://localhost:<port>/<path> [--project DIR] ..
   Pass when every text in the face is at least that size, or when the page sets none in it. Info: no `font.display` token, or a display face that is also the first family of
   another font token (the body face), whose text cannot be told from body text, so no size is held to it. The row holds `display_face`, `minimum_px`, `proposal`,
   `smallest_px` and `small`.
+- **Brand rules.** `qa/rules.json` `page.rules` (validated as above) are the owner's own rules for pages. Each is tied by its `g4` words to a "(rule)" line of BRAND-STATE.md "Rules (G4)": the system
+  rules the owner approves at G4 stay the one place a rule is decided, and a page rule only enforces one of them. Three kinds are measured:
+  - `max-marks-per-view` (`max`): the most identified brand marks (the marks `page:mark-file` judges: `data-brand-mark`, an image named like a logo, or an image with the bytes of a logo file; only a shown
+    mark) in one screen, over every width and scheme. A screen is a window one viewport high; the windows start at the top of the page and every half a viewport down, the last one reaching the end of the
+    page. A mark is in a window when the vertical middle of its box is, and one box found two ways counts once. It needs nothing from the browser beyond the marks every view holds. Not seen: a mark
+    that is `position: fixed` or `sticky` is placed where it is at rest at the top of the page, and two marks more than half a viewport apart are in one window only if a window starts between them; a
+    pseudo-element mark has no box to place and is reported "NOT verified".
+  - `max-words-per-control` (`max`, optional `selector`): no shown control says more words than `max`. A control is a `button`, a `[role=button]`, an `input[type=submit]`, `[type=button]` or `[type=reset]`,
+    or an element the rule's `selector` matches. Its words are those of its visible text (`innerText`; the value of an input) and, when it shows none, of its accessible name (`aria-label`,
+    `aria-labelledby`, the `alt` of an image or `<title>` of an SVG inside it, `title`).
+  - `words-under-accent` (`selector`, `min` and/or `max`): for each shown element the `selector` matches, the words of its parent's visible text minus the words of its own are within `min` and `max`.
+  - A word is what Unicode word segmentation (`Intl.Segmenter`, UAX #29, in the language of the closest `lang`, the browser's own when it does not know that one) calls word-like: a number is one word, an apostrophe inside a word does not split it, a
+    hyphen does (`e-mail` is two), and an arrow, a dot or a symbol is none. A `tell` rule names a generic tell; until the tells exist its row is info.
+- **Rule facts.** `page_check.py` sends the selectors the rules name, once each and in the order of the rules, in the request's `selectors` (so every view also holds their `selectors` boxes), and one
+  `{id, kind, selector?}` per rule measured in the page's text in `rules` (an optional list of up to 200; `render.mjs` refuses anything else with exit 2). A request with no rule asks for nothing and the
+  views hold no `rule_facts`. Otherwise every view also holds `rule_facts`: `{<id>: {kind, selector, matched, shown, items}}`, or `{kind, selector, error}` when the browser does not take the selector as CSS.
+  For `max-words-per-control`, `items` are `{sel, text (80 characters), words, via}` (`via`: `text`, `name` or `none`), the longest first and at most 300, `matched` the elements found and `shown` those
+  with a box; a control that is `display: none`, cut to nothing, `visibility: hidden` or fully transparent has no words to count and is left out. For `words-under-accent`, `items` are `{sel, parent_sel, text,
+  parent_text, own_words, parent_words, around_words}` in document order, at most 300. Nothing is judged in the browser.
+- **Rule rows.** `page:rule:<id>`, one per entry of `page.rules` in its order, none when there are none. A rule that holds passes, and its detail says whether it is a recorded G4 rule. A rule that is broken
+  fails when G4 is recorded in BRAND-STATE.md and one recorded "(rule)" line (`adapt.view(project)["rules"]`, the list the adapters read: a "(rule)" bullet of "Rules (G4)", the template's `(...)` placeholder
+  left out) holds the rule's `g4` words, white space collapsed and letter case ignored. Before that it warns and says "not a recorded G4 rule line yet": G4 not recorded, no line with those words, or
+  BRAND-STATE.md unreadable. So a proposal never fails a page; the owner's approval does. The row holds `rule` (the entry), `tied`, `g4_line` (the line or null) and, per kind, `max` (and `min`),
+  `most_in_one_screen`, `screen` (`{width, scheme, top, bottom}`) and `marks` for marks; `controls_checked`, `longest` and `offenders` for controls; `accents_checked` and `offenders` for accents. A
+  selector the browser does not take as CSS fails the row whether or not it is tied (the rule cannot be judged), and says so; a selector that matches nothing passes and says so. A rule that
+  could not be measured (no view rendered, a mark with no box) is `skipped` or "NOT verified" in a warning, never a pass. The rows read `BRAND-STATE.md`, which is already an input of the report. The
+  judging imports `scripts/adaptlib/adapt.py` (next to `pagelib`) only when a project has page rules.
 - **Writing a collector.** `page_measure.mjs` installs `window.__bcMeasure` for the length of one view (`collect` removes it again): `selector(el)`, `shown(el)` (`{shown, opacity}`),
   `walkable(el)`, `colour(css)` (`{r, g, b, a, hex}` or null), `canvas()`, `ground(el)` and `hex([r, g, b])`. A later collector calls them inside its own `page.evaluate`.
 - **For other tools.** `scripts/pagelib/pagecheck.py` imports only the standard library and `scripts/lib`, and the claims rows also load `scripts/booklib/bookdata.py` (the FACTS.md table and the English status words), found next to the module; a tool puts `scripts/pagelib` on `sys.path` and calls

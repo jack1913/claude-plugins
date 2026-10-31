@@ -132,6 +132,15 @@ stage, and why, is in the [archive](docs/archive/README.md).
   no text set in it may be smaller than `page.display_min_px` in `qa/rules.json` (`page:display-size`); 20 px is a
   proposal until you set it, and the row says so. A brand with no display face gets an info row instead, and so does
   one whose display face is also its body face.
+- `page-check` can hold a page to your own brand rules. List them in `qa/rules.json` under `page.rules`: one mark per
+  screen (`max-marks-per-view`), a button says at most three words (`max-words-per-control`, for buttons, inputs of type
+  submit, button or reset, and anything a `selector` you give matches), or a number of words around an accent
+  (`words-under-accent`, with `min`, `max` or both). Each rule carries a `g4` text and is tied to the system rule you
+  approved: the page fails (`page:rule:<id>`) only once a "(rule)" line holding those words is in `BRAND-STATE.md`
+  and you have approved the system rules; until then a page that breaks the rule only gets a warning that says the rule
+  is not an approved system rule yet. A word is what Unicode word segmentation counts, in the page's language: a
+  hyphenated compound is two and an arrow is none. A selector the browser cannot read fails its row. An unknown kind or
+  key, a missing `g4` or a repeated `id` is refused before the page is opened.
 
 ### Changed
 

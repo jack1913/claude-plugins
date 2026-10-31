@@ -176,6 +176,13 @@ code. For example:
 - (rule) interactive brand pieces stay within 6 kB of script, gzipped (proposal; only when the brand ships code)
 - (rule) accent and danger stay distinct (a `distinct` pair)
 - (rule) layout: space steps `space.1`-`space.8`, radius `radius.*`, container `layout.container`, gutter `layout.gutter`, breakpoints `breakpoint.*`, display line height `leading.display` and tracking `tracking.display` (proposal; when the brand has a site or an app)
+- (rule) one mark per screen (when the brand has a site or an app; `page-check` can enforce it)
+- (rule) a button says at most three words (when the brand has a site or an app; `page-check` can enforce it)
+
+A rule about pages can be typed so that `page-check` enforces it: add an entry to `qa/rules.json` `page.rules` whose `g4` holds the words of the "(rule)" line, for example
+`{"id": "one-mark", "kind": "max-marks-per-view", "max": 1, "g4": "one mark per screen"}` or
+`{"id": "short-buttons", "kind": "max-words-per-control", "max": 3, "g4": "a button says at most three words"}` (the kinds and keys are in `scripts/CONTRACT.md`, "Brand rules"). A page that
+breaks the rule fails the check only once that line is recorded at G4; until then the check warns, so a proposal never fails a page.
 
 For every brand, ask the plain question "Which colours does text sit on?" (a page, a card, a band, a dark
 panel) before the plan and record the answer in the owner's words, with the date, as `named_by_owner` of `grounds` (technique 8);

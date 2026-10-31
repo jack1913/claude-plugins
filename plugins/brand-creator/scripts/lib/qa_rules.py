@@ -28,6 +28,13 @@ bands; the top-level bands and favicon.drawing then stay empty, and every tool t
 The last band's drawing is the mark's main drawing. name (default: the id) is what cards say when there is no drawn lettering,
 accent a token role for the cards' accent and for the accent `downscale` measures on its drawings and its packs' files (default:
 color.accent on cards, downscale.accent_colour in downscale), tagline a FACTS.md label whose value goes under the name.
+
+page.rules are the brand's own rules for pages (`brand-creator page-check`), each tied by `g4` to a "(rule)" line of BRAND-STATE.md "Rules (G4)":
+
+    "rules": [{"id": "one-mark", "kind": "max-marks-per-view", "max": 1, "g4": "one mark per screen"},
+              {"id": "short-buttons", "kind": "max-words-per-control", "max": 3, "g4": "a button says at most three words"},
+              {"id": "calm-accent", "kind": "words-under-accent", "selector": ".accent", "min": 2, "max": 6, "g4": "the accent marks one phrase"},
+              {"id": "no-eyebrow", "kind": "tell", "tell": "eyebrow", "g4": "no eyebrow over a heading"}]
 """
 from __future__ import annotations
 
@@ -133,6 +140,69 @@ def validate_marks(marks) -> dict[str, dict]:
     return out
 
 
+PAGE_RULE_ID = MARK_ID                  # a page rule's id names its row (page:rule:<id>): lower-case letters and digits joined by hyphens
+PAGE_RULE_KINDS = {                     # kind -> (required keys, optional keys), besides id, kind and g4
+    "max-marks-per-view": ({"max"}, set()),
+    "max-words-per-control": ({"max"}, {"selector"}),
+    "words-under-accent": ({"selector"}, {"min", "max"}),   # and at least one of min and max
+    "tell": ({"tell"}, set()),
+}
+PAGE_RULE_TEXT_MAX = 500                # a selector, a tell id or a G4 line is a line, not a document
+
+
+def validate_page_rules(rules, where: str = f"{RULES_FILE}: page.rules") -> list[dict]:
+    """page.rules: the brand's own rules for pages, each tied to the system-rules line the owner approved (`g4`). -> the rules with their strings stripped; exit 2 otherwise.
+    Every rule has `id` (unique, lower-case slug), `kind` (PAGE_RULE_KINDS) and `g4` (a non-empty string: words of a recorded "(rule)" line of BRAND-STATE.md "Rules (G4)"),
+    and the keys of its kind: `max` (a whole number, 0 or more) for max-marks-per-view and max-words-per-control; `selector` (a CSS selector; optional for controls) for
+    max-words-per-control and words-under-accent; `min` and/or `max` for words-under-accent; `tell` (the id of a generic tell) for tell. Any other key is refused."""
+    if not isinstance(rules, list):
+        fail(EXIT_USAGE, f"{where} must be a list")
+    out, seen = [], set()
+    for i, r in enumerate(rules):
+        at = f"{where}[{i}]"
+        if not isinstance(r, dict):
+            fail(EXIT_USAGE, f"{at} must be an object with id, kind and g4")
+        rid, kind = r.get("id"), r.get("kind")
+        if not (isinstance(rid, str) and PAGE_RULE_ID.fullmatch(rid)):
+            fail(EXIT_USAGE, f"{at}.id must be a lower-case slug (letters and digits joined by hyphens: it names the row page:rule:<id>), got {rid!r}")
+        if rid in seen:
+            fail(EXIT_USAGE, f"{at}.id {rid!r} is used twice")
+        seen.add(rid)
+        at = f"{where}[{i}] ({rid})"
+        if not isinstance(kind, str) or kind not in PAGE_RULE_KINDS:
+            fail(EXIT_USAGE, f"{at}.kind must be one of {', '.join(PAGE_RULE_KINDS)}, got {kind!r}")
+        required, optional = PAGE_RULE_KINDS[kind]
+        extra = set(r) - {"id", "kind", "g4"} - required - optional
+        if extra:
+            fail(EXIT_USAGE, f"{at} has unknown keys {sorted(extra)} for a rule of kind {kind} (known: {', '.join(sorted({'id', 'kind', 'g4'} | required | optional))})")
+        missing = sorted(k for k in required if k not in r)
+        if missing:
+            fail(EXIT_USAGE, f"{at} needs {', '.join(missing)} (a rule of kind {kind})")
+        entry = {"id": rid, "kind": kind}
+        for key in ("g4", "selector", "tell"):
+            if key in r:
+                v = r[key]
+                if not (isinstance(v, str) and v.strip()) or len(v) > PAGE_RULE_TEXT_MAX:
+                    fail(EXIT_USAGE, f"{at}.{key} must be a non-empty string of at most {PAGE_RULE_TEXT_MAX} characters"
+                         + (" (the words of the \"(rule)\" line the owner approved at G4)" if key == "g4" else ""))
+                entry[key] = " ".join(v.split()) if key == "g4" else v.strip()
+        if "g4" not in r:
+            fail(EXIT_USAGE, f"{at} needs g4: the words of the \"(rule)\" line of BRAND-STATE.md the owner approved at G4, which this rule enforces")
+        for key in ("min", "max"):
+            if key in r:
+                v = r[key]
+                if not isinstance(v, int) or isinstance(v, bool) or v < 0:
+                    fail(EXIT_USAGE, f"{at}.{key} must be a whole number, 0 or more, got {v!r}")
+                entry[key] = v
+        if kind == "words-under-accent":
+            if "min" not in r and "max" not in r:
+                fail(EXIT_USAGE, f"{at} needs min, max or both (the words around the accent)")
+            if "min" in r and "max" in r and r["min"] > r["max"]:
+                fail(EXIT_USAGE, f"{at}: min {r['min']} is above max {r['max']}")
+        out.append(entry)
+    return out
+
+
 PAGE_WIDTH_MIN, PAGE_WIDTH_MAX = 200, 4000
 
 
@@ -171,7 +241,8 @@ def validate_exemptions(items) -> list[dict]:
     return out
 
 
-KEY_VALIDATORS = {("downscale", "exemptions"): validate_exemptions, ("page", "widths"): validate_page_widths}   # keys whose value is checked beyond its type
+KEY_VALIDATORS = {("downscale", "exemptions"): validate_exemptions, ("page", "widths"): validate_page_widths,
+                  ("page", "rules"): validate_page_rules}   # keys whose value is checked beyond its type
 
 
 def load(project: Path) -> tuple[dict, str]:
