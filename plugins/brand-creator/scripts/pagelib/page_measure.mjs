@@ -419,9 +419,13 @@ async function motionFacts(page) {
       }
     };
     const applies = (m) => /hover|pointer/i.test(m.mediaText) || matchMedia(m.mediaText).matches;   // the input of the measuring browser says nothing of the page's
+    const nestedDeclarations = typeof CSSNestedDeclarations === "function" ? CSSNestedDeclarations : null;   // Chromium 130 and later; before it, such declarations were part of the parent rule's own
     const visit = (rules, parent) => {
       for (const r of rules) {
-        if (typeof r.selectorText === "string" && r.style) {
+        if (nestedDeclarations && r instanceof nestedDeclarations) {
+          // the declarations written after a nested rule (or inside a nested @media or @supports) are a rule of their own with no selector: the parent rule's selector is theirs
+          if (parent && stateTest.test(parent)) readState(r, parent);
+        } else if (typeof r.selectorText === "string" && r.style) {
           const wrap = (x) => (x.includes(",") ? `:is(${x})` : x);
           const sel = !parent ? r.selectorText : r.selectorText.includes("&") ? r.selectorText.replace(/&/g, wrap(parent)) : `${wrap(parent)} ${r.selectorText}`;   // a nested rule
           if (stateTest.test(sel)) readState(r, sel);

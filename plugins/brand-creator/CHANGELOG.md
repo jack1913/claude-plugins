@@ -33,7 +33,8 @@ still the starter's proposal once the system rules are approved (keep one under 
   page's own WebSocket to the machine it is served from, a dev server's hot reload, goes through); a page that sends
   the browser to another website is not measured, and its row fails. Name a page
   of the project, `--from DIR <page>` for a built site anywhere (the folder is copied into the data folder and only
-  read; `.git`, `node_modules` and symlinks are left out, and more than 5000 files or 200 MB is refused), or `--url`
+  read; `.git`, `node_modules` and symlinks are left out, more than 5000 files or 200 MB is refused, and each check keeps
+  its copy until you delete it: the manual says where), or `--url`
   for a page already served on this machine (`localhost`, `127.0.0.1` or `[::1]`, written like that; any other host,
   `127.1` included, is refused, and on such a page a file that comes from another website is a warning). One report per
   page, in `assets/_checks/page-check/`. `qa/rules.json` accepts a `page` section with `widths`, `display_min_px`,
@@ -119,7 +120,7 @@ still the starter's proposal once the system rules are approved (keep one under 
 - `page-check` now checks the motion and the claims of a page. Every duration and easing the page declares or runs
   (transitions, animations and a script's animations, `::before` and `::after` included) has to be one of the brand's
   motion tokens, and so has the motion a style sheet declares for a state (`:hover`, `:focus`, `:active` and the like,
-  read from the rule without hovering, `var()` resolved, nested rules, `@media` and `@layer` included): a duration that
+  read from the rule without hovering, `var()` resolved, nested rules, a declaration written after a nested rule, `@media` and `@layer` included): a duration that
   equals no token, or an easing that no curve token equals, fails `page:motion` (`ease` and `linear` count only when a
   token holds their curve), and a page that moves while the brand has no motion tokens fails and says so. A style sheet
   the browser would not let it read is reported as not verified. Numbers and status words on the page have to come from
@@ -161,7 +162,8 @@ still the starter's proposal once the system rules are approved (keep one under 
   (`words-under-accent`, with `min`, `max` or both). Each rule carries a `g4` text and is tied to the system rule you
   approved: the page fails (`page:rule:<id>`) only once a "(rule)" line holding those words is in `BRAND-STATE.md`
   and you have approved the system rules; until then a page that breaks the rule only gets a warning that says the rule
-  is not an approved system rule yet. A word is what Unicode word segmentation counts, in the page's language: a
+  is not an approved system rule yet. The `g4` text has to be the whole "(rule)" line or at least two content words of it, written as whole words:
+  one word such as `mark`, or `rule`, ties nothing, and the row says the text is too short. A word is what Unicode word segmentation counts, in the page's language: a
   hyphenated compound is two and an arrow is none. A selector the browser cannot read fails its row. An unknown kind or
   key, a missing `g4` or a repeated `id` is refused before the page is opened.
 - `page-check` warns about generic patterns that make a page read as a template, in English and Polish (`tell:<name>`

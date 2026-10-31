@@ -1082,7 +1082,7 @@ brand-creator page-check --url http://localhost:<port>/<path> [--project DIR] ..
 
 - **Targets.** A page of the project (a path inside it). `--from DIR <page>`: a built site anywhere, the page written relative to DIR; DIR is copied into a new run
   folder `<data>/scratch/<project>/page-check/<hash6>/<n>/` (`n` is one more than the highest run folder there; `.git`, `node_modules` and symlinks are not
-  copied) and the copy is served, so the site is only read. `--url`: a page already served on this machine, `http` or `https` on `localhost`, `127.0.0.1` or
+  copied) and the copy is served, so the site is only read; every run keeps its folder and nothing prunes them (the manual tells the owner that old ones can be deleted). `--url`: a page already served on this machine, `http` or `https` on `localhost`, `127.0.0.1` or
   `[::1]` and nothing else, the host written as one of the three (`127.1` or `2130706433` reach this machine and are refused all the same: both functions of the loopback
   rule read the host as written); a remote URL is a usage error (a remote page is built locally and given with `--from`).
 - **Exit codes.** 2, with nothing written: no target, two target forms, a page that does not exist or is not a file inside the project (or inside DIR), a `--from`
@@ -1098,8 +1098,13 @@ brand-creator page-check --url http://localhost:<port>/<path> [--project DIR] ..
 
   ```json
   {"schema": 1, "root": "<the project, or a run folder of --from>", "page": "pages/index.html", "url": null,
-   "widths": [390, 1440], "schemes": ["light", "dark"], "selectors": [], "colours": ["oklch(0.52 0.12 185)"], "dsf": 1}
+   "widths": [390, 1440], "schemes": ["light", "dark"], "selectors": [], "rules": [{"id": "short-buttons", "kind": "max-words-per-control"}],
+   "colours": ["oklch(0.52 0.12 185)"], "dsf": 1}
   ```
+
+  `rules` (optional, default `[]`) are the brand rules whose facts the browser collects from the page's text (see "Brand rules"): `page_check.py` sends `{id, kind, selector?}` for each entry of `qa/rules.json`
+  `page.rules` of kind `max-words-per-control` or `words-under-accent`, with the rule's `selector` when it names one (`selectors` then holds it too, once); a rule of any other kind asks the browser for nothing. Up to 200
+  objects with a string `id` and `kind` and an optional non-empty string `selector`, else exit 2. The views then hold `rule_facts`.
 
   `colours` (optional) are CSS colours the browser is asked to render for the judge: `page_check.py` sends the modern values (`oklch()`, `oklab()`, `color()`) that
   `tokens.css` serves for the primitives. Up to 500 strings of up to 200 characters, else exit 2.
@@ -1190,7 +1195,7 @@ brand-creator page-check --url http://localhost:<port>/<path> [--project DIR] ..
   `animation` (`animation-name`, `-duration`, `-timing-function` likewise; `duration_ms: null` is `auto` on a scroll or view timeline; `auto` on a time-based animation, a name and no duration, is 0 and is not listed) or `script` (a Web Animation no CSS declared).
   `via` is `style` (declared on an element: its computed style at rest), `state` or `running` (found in `document.getAnimations()` at rest: a script's, or a CSS one the walks did not see declared; its easing is the effect's, or that of
   each interval between its keyframes). A `state` entry comes from a rule of a style sheet whose selector names `:hover`, `:active`, `:focus`, `:focus-visible`, `:focus-within`, `:checked`, `:target`, `:disabled`, `:open`, `:popover-open`,
-  `:modal`, `:fullscreen`, `:invalid`, `:user-invalid`, `:indeterminate` or `:placeholder-shown`, nested rules included (`sel` is the rule's selector, a nested one written out with its parent's; `count` is the number of rules with the same values).
+  `:modal`, `:fullscreen`, `:invalid`, `:user-invalid`, `:indeterminate` or `:placeholder-shown`, nested rules included, and the declarations written after a nested rule, which belong to the rule that holds it (`sel` is the rule's selector, a nested one written out with its parent's; `count` is the number of rules with the same values).
   The walk reads the document's style sheets, its `adoptedStyleSheets` and the sheets it `@import`s, and goes into `@layer`, `@container`, `@scope` and CSS nesting; an `@media` rule counts when it matches the view or asks about `hover` or `pointer`
   (the measuring browser's own input says nothing of the visitor's), an `@supports` rule when the browser supports its condition. The values are what the browser computes for the rule's declarations on a probe element that is not rendered, put
   inside the first element the rule styles when there is one, so `var()` and a custom property of that element resolve; the probe is taken out again, and a rule counts whether or not an element on the page matches it. A rule that sets only a duration or
@@ -1321,7 +1326,8 @@ brand-creator page-check --url http://localhost:<port>/<path> [--project DIR] ..
   parent_text, own_words, parent_words, around_words}` in document order, at most 300. Nothing is judged in the browser.
 - **Rule rows.** `page:rule:<id>`, one per entry of `page.rules` in its order, none when there are none. A rule that holds passes, and its detail says whether it is a recorded G4 rule. A rule that is broken
   fails when G4 is recorded in BRAND-STATE.md and one recorded "(rule)" line (`adapt.view(project)["rules"]`, the list the adapters read: a "(rule)" bullet of "Rules (G4)", the template's `(...)` placeholder
-  left out) holds the rule's `g4` words, white space collapsed and letter case ignored. Before that it warns and says "not a recorded G4 rule line yet": G4 not recorded, no line with those words, or
+  left out) holds the rule's `g4` words, white space collapsed and letter case ignored. The words must be a meaningful part of the line: the whole line (the "(rule)" marker may be left out) or a run of its whole words with at least two content words
+  (English and Polish function words such as `a`, `the`, `per`, `w` and `na` do not count; a piece of a longer word is not a word of the line), so `rule` (the marker of every line) or one word such as `mark` ties nothing and the row says the text is too short. When it is not tied the row warns and says "not a recorded G4 rule line yet": G4 not recorded, no line with those words, or
   BRAND-STATE.md unreadable. So a proposal never fails a page; the owner's approval does. The row holds `rule` (the entry), `tied`, `g4_line` (the line or null) and, per kind, `max` (and `min`),
   `most_in_one_screen`, `screen` (`{width, scheme, top, bottom}`) and `marks` for marks; `controls_checked`, `longest` and `offenders` for controls; `accents_checked` and `offenders` for accents. A
   selector the browser does not take as CSS fails the row whether or not it is tied (the rule cannot be judged), and says so; a selector that matches nothing passes and says so. A rule that
