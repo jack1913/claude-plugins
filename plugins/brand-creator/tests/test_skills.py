@@ -404,6 +404,83 @@ def test_page_tells_names_each_tell_with_its_keys_and_both_word_lists():
     assert skill.index("## Round mechanics") < skill.index("- [page-tells.json]"), "the bullet is below the top of SKILL.md, which has no room"
 
 
+LAYOUT_IDS = ["one-step", "walkthrough", "catalogue", "single-product", "long-read", "letter", "workbench", "index", "schedule", "place", "portfolio", "questions"]
+
+
+def test_page_layouts_are_structure_only_and_keyed_to_the_visitors_job():
+    """The layout references of the site round: 8-12 items, each keyed to what the visitor came to do, with the same seven keys, and no look in any of them (the rules are `sitedata.layout_problems`)."""
+    import sitedata
+    d = json.loads((REFS / "page-layouts.json").read_text(encoding="utf-8"))
+    assert set(d) == {"version", "$description", "how_to_use", "items"} and d["version"] == 1 and d["$description"]
+    assert 8 <= len(d["items"]) <= 12
+    ids = [i["id"] for i in d["items"]]
+    assert len(ids) == len(set(ids)) and all(re.fullmatch(r"[a-z][a-z0-9-]{2,31}", x) for x in ids), ids
+    assert ids == LAYOUT_IDS
+    for i in d["items"]:
+        assert set(i) == {"id", "job", "leads_with", "parts", "action", "ends_with", "not_for"}, i["id"]
+        assert 2 <= len(i["parts"]) <= 8 and all(isinstance(p, str) and p.strip() for p in i["parts"]), i["id"]
+        assert all(isinstance(i[k], str) and i[k].strip() for k in ("job", "leads_with", "action", "ends_with", "not_for")), i["id"]
+    assert sitedata.layout_problems(d) == []
+    how = " ".join(d["how_to_use"])
+    assert "data-layout" in how and "own:<word>" in how and "BRIEF.md" in how
+    assert not re.search(r"#[0-9a-fA-F]{3,8}\b", json.dumps(d)), "a layout names no colour value"
+    loaded = sitedata.load_layouts()
+    assert list(loaded) == ids and loaded["walkthrough"] == next(i for i in d["items"] if i["id"] == "walkthrough")
+    index = (REFS / "_index.md").read_text(encoding="utf-8")
+    assert "| [page-layouts.json](page-layouts.json) | Layout references for a site's pages, keyed to what the visitor came to do: structure only, never a look |" in index.splitlines()
+    skill = ORCH.read_text(encoding="utf-8")
+    bullet = "- [page-layouts.json](references/page-layouts.json): layout references for the site round, keyed to the visitor's job (structure only)."
+    assert bullet in skill[skill.index("## References"):]
+    assert skill.index("## Round mechanics") < skill.index(bullet), "the bullet is below the top of SKILL.md, which has no room"
+
+
+def test_the_layout_check_catches_a_look_value(tmp_path):
+    """Break a scratch copy of the layouts four ways (a number with a unit, a look word, a fourth key, the stock three-and-steps parts) and the check names each; the shipped file stays sound."""
+    import sitedata
+    from helpers import mutate_json
+    assert sitedata.layout_problems(json.loads((REFS / "page-layouts.json").read_text(encoding="utf-8"))) == []
+    breaks = {
+        "a number with a unit": (lambda d: d["items"][0].update(leads_with=d["items"][0]["leads_with"] + " at 24px"), "a number with a unit"),
+        "a hex colour": (lambda d: d["items"][1]["parts"].append("The stamp in #1a2b3c"), "a hex colour"),
+        "a look word": (lambda d: d["items"][2].update(action=d["items"][2]["action"] + " in the brand colour"), "a look word"),
+        "a fourth key": (lambda d: d["items"][3].update(look="calm"), "extra ['look']"),
+        "a missing key": (lambda d: d["items"][4].pop("not_for"), "missing ['not_for']"),
+        "the stock band": (lambda d: d["items"][5].update(parts=["Three tiles", "Steps to begin"]), "'three' and 'steps'"),
+        "too few items": (lambda d: d.update(items=d["items"][:7]), "7 items"),
+        "one part": (lambda d: d["items"][6].update(parts=["Only this"]), "parts is not a list"),
+        "a repeated id": (lambda d: d["items"][7].update(id="one-step"), "the id is used twice"),
+    }
+    for name, (fn, expected) in breaks.items():
+        scratch = tmp_path / f"{name.replace(' ', '-')}.json"
+        scratch.write_text((REFS / "page-layouts.json").read_text(encoding="utf-8"), encoding="utf-8")
+        mutate_json(scratch, fn)
+        problems = sitedata.layout_problems(json.loads(scratch.read_text(encoding="utf-8")))
+        assert problems and any(expected in p for p in problems), (name, problems)
+
+
+def test_loading_the_layouts_stops_with_exit_3_naming_the_file_when_it_cannot_be_used(tmp_path, monkeypatch):
+    """The file ships with the plugin, so a missing, unreadable or damaged one is an install problem: exit 3, the file named, never an empty list of layouts."""
+    import pytest
+    import sitedata
+    from _common import EXIT_CANNOT, CliError
+    folder = tmp_path / "plugin" / "skills" / "brand-creator" / "references"
+    folder.mkdir(parents=True)
+    monkeypatch.setattr(sitedata, "PLUGIN_ROOT", tmp_path / "plugin")
+    with pytest.raises(CliError) as gone:
+        sitedata.load_layouts()
+    assert gone.value.code == EXIT_CANNOT and sitedata.LAYOUTS_FILE in gone.value.message
+    (folder / "page-layouts.json").write_text("{not json", encoding="utf-8")
+    with pytest.raises(CliError) as broken:
+        sitedata.load_layouts()
+    assert broken.value.code == EXIT_CANNOT and sitedata.LAYOUTS_FILE in broken.value.message and "reinstall" in broken.value.message
+    real = json.loads((REFS / "page-layouts.json").read_text(encoding="utf-8"))
+    real["items"] = real["items"][:3]
+    (folder / "page-layouts.json").write_text(json.dumps(real), encoding="utf-8")
+    with pytest.raises(CliError) as short:
+        sitedata.load_layouts()
+    assert short.value.code == EXIT_CANNOT and "3 items" in short.value.message
+
+
 def test_templates_are_self_contained_and_avoid_the_ai_default_cluster():
     for name in ("round-page.html", "board.html", "review/index.html", "card.html", "style-board.html"):
         text = (ROOT / "templates" / name).read_text(encoding="utf-8")
