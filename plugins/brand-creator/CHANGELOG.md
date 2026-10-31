@@ -233,6 +233,11 @@ lints the board of the latest round again before `check`, so an edit of the fact
 - `check` now checks the approved pages in `site/`: unchanged since approval, each checked against your brand rules, with
   current stills. A project without approved pages gets no new row; a page you edited after approving it fails the
   check and names the command that approves the pages again.
+- An opt-in `site` chapter for the brand book (`book_chapters: [site]`) shows the approved pages of your site and
+  every choice on them as a rule or an example. Each page has its layout's job, its first screen at 1440 and 390 px
+  and a table of the choices on it, with where each rule was decided. It needs the pages approved (`site approve`)
+  and their stills (`capture site/<page>/index.html`); without the approved pages, or without a still, the book stops
+  and says what to run, and writes nothing. A book without the chapter is unchanged.
 
 ### Changed
 

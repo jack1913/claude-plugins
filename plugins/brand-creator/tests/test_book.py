@@ -977,3 +977,228 @@ def test_the_book_shows_each_proofs_motion_report_and_leaves_an_exploration_proo
     r = bc("book", project=proj)
     assert r.returncode == 0 and ">cls:normal<" not in (proj / "book.html").read_text()
     assert "no motion report" in r.stdout + r.stderr
+
+
+# ---------------------------------------------------------------- the opt-in site chapter: the approved pages of site/site.json
+
+def test_the_site_chapter_is_opt_in_and_stands_after_the_components(tmp_path):
+    assert "site" not in bookdata.chapters_for(tmp_path, view("standard")) and "site" not in bookdata.chapters_for(tmp_path, view("full"))
+    got = bookdata.chapters_for(tmp_path, view("standard", extra=["site", "components", "tone"]))
+    assert got == ["idea", "mark", "colour", "type", "tone", "components", "site", "use", "files", "proof", "donts", "changing", "history"]
+    assert bookdata.TITLES["site"] == "Site" and "site" in bookdata.OPT_IN
+    assert (ROOT / "templates/book/site.md").is_file()
+
+
+def _png(width: int, height: int, shade: int) -> bytes:
+    """A real grayscale PNG of one shade: the stills `capture` takes are not needed, a book only embeds their bytes."""
+    import struct
+    import zlib
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+    raw = b"".join(b"\x00" + bytes([shade]) * width for _ in range(height))
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 0, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
+
+
+SITE_PAGES = {"start": "walkthrough", "pricing": "own:price-board"}   # page id -> layout: an id of page-layouts.json, and a layout of the page's own
+
+
+def add_site(proj: Path, *, stills: bool = True) -> dict[str, bytes]:
+    """The approved pages of a site as `site approve` leaves them (two pages, three choices) and the stills `capture` writes beside them, by hand: no browser is needed.
+    -> the bytes of every still, by its path in the project."""
+    import hashlib
+    made: dict[str, bytes] = {}
+    pages = []
+    for n, (pid, layout) in enumerate(SITE_PAGES.items()):
+        page = proj / "site" / pid / "index.html"
+        page.parent.mkdir(parents=True)
+        page.write_text(f'<!doctype html><html lang="en"><head><meta charset="utf-8"><title>{pid}</title></head><body data-layout="{layout}" data-page="{pid}"><h1>{pid}</h1></body></html>\n', encoding="utf-8")
+        pages.append({"id": pid, "path": f"site/{pid}/index.html", "layout": layout, "sha256": hashlib.sha256(page.read_bytes()).hexdigest()})
+        for k, width in enumerate((1440, 390)):
+            if stills:
+                rel = f"site/{pid}/shots/{width}-light.png"
+                (proj / rel).parent.mkdir(parents=True, exist_ok=True)
+                made[rel] = _png(8 + width // 100, 6, 40 + 60 * n + 30 * k)
+                (proj / rel).write_bytes(made[rel])
+    choices = [{"id": "c1", "text": "The stamp appears once per view", "tag": "rule", "source": "DECISIONS.md 14", "pages": ["start", "pricing"]},
+               {"id": "c2", "text": "Pricing sits under the stages", "tag": "example", "pages": ["start"]},                       # an example needs no source
+               {"id": "c3", "text": "Links are underlined", "tag": "rule", "source": "BRAND-STATE.md, rules"}]                  # no pages: a choice of every page
+    (proj / "site" / "site.json").write_text(json.dumps({"schema": 1, "approved": "2026-10-17 approved start, pricing; rules c1 c3", "round": 3, "hero": "Ledger",
+                                                         "pages": pages, "choices": choices}, indent=2) + "\n", encoding="utf-8")
+    return made
+
+
+def site_book(proj: Path, chapters: str = "tone,site") -> None:
+    """Name the site chapter in BRAND-STATE, write its skeleton, fill it and build the book."""
+    assert bc("state", "--set", f"book_chapters={chapters}", project=proj).returncode == 0
+    r = bc("book", "--init", project=proj)
+    assert r.returncode == 0 and (proj / "book/chapters/site.md").is_file(), r.stdout + r.stderr
+    assert fill_markers(proj) == 2                      # the template asks for two paragraphs: what the pages are for, and how the real site is built
+    r = bc("book", project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def site_chapter(proj: Path) -> str:
+    html = (proj / "book.html").read_text()
+    start = html.index('<section class="ch" id="site"')
+    return html[start:html.index("</section>", start)]
+
+
+def cells(row_html: str) -> list[str]:
+    import html as htmllib
+    return [htmllib.unescape(re.sub(r"<[^>]+>", "", c)).strip() for c in re.findall(r"<td[^>]*>(.*?)</td>", row_html, re.S)]
+
+
+@setup
+@resvg
+def test_the_site_chapter_shows_the_approved_pages_and_tags_each_choice(proj):
+    import base64
+    import html as htmllib
+    import sitedata
+    stills = add_site(proj)
+    site_book(proj)
+    book = (proj / "book.html").read_text()
+    order = sections(book)
+    assert order[order.index("site") - 1] == "tone" and order[order.index("site") + 1] == "use"
+    ch = site_chapter(proj)
+    tags = [t for t in htmlscan.tags(ch) if not t.closing]
+    assert [t.attrs["data-site-page"] for t in tags if t.name == "h3" and "data-site-page" in t.attrs] == ["start", "pricing"]
+    # the job of the layout the page records, and "a layout of its own" for an own: layout
+    jobs = {t.attrs["data-site-layout"]: htmllib.unescape(htmlscan.visible_text(ch[t.start:htmlscan.element_end(ch, t)])).strip() for t in tags if "data-site-layout" in t.attrs}
+    assert jobs == {"walkthrough": sitedata.load_layouts()["walkthrough"]["job"], "own:price-board": "A layout of its own."}
+    # the two light stills of each page, as data: URIs of the very bytes of the files, with the alt text of the contract
+    imgs = [t for t in tags if t.name == "img"]
+    assert [t.attrs["alt"] for t in imgs] == [f"The {pid} page at {w} px, light" for pid in SITE_PAGES for w in (1440, 390)]
+    for t, rel in zip(imgs, stills):
+        assert t.attrs["src"].startswith("data:image/png;base64,") and base64.b64decode(t.attrs["src"].split(",", 1)[1]) == stills[rel], rel
+    assert [t.attrs["data-site-still"] for t in tags if "data-site-still" in t.attrs] == ["1440-light", "390-light"] * 2
+    # one table per page: the choices that name the page (or name none), in the order of the record, each as a rule or an example, and where a rule was decided
+    rows = [t for t in tags if t.name == "tr" and "data-choice" in t.attrs]
+    assert [(t.attrs["data-choice"], t.attrs["data-tag"]) for t in rows] == [("c1", "rule"), ("c2", "example"), ("c3", "rule"), ("c1", "rule"), ("c3", "rule")]
+    texts = [cells(ch[t.start:htmlscan.element_end(ch, t)]) for t in rows]
+    assert texts == [["The stamp appears once per view", "Rule", "DECISIONS.md 14"], ["Pricing sits under the stages", "Example", "-"], ["Links are underlined", "Rule", "BRAND-STATE.md, rules"],
+                     ["The stamp appears once per view", "Rule", "DECISIONS.md 14"], ["Links are underlined", "Rule", "BRAND-STATE.md, rules"]]
+    assert ch.count("<table") == 2 and "Choice</th>" in ch and "Rule or example</th>" in ch and "Where it was decided</th>" in ch
+    # the template's own headings are there, filled, and the book lints clean by its own rules
+    assert "Reference pages" in ch and "Building the real site" in ch and "[[fill" not in ch
+    assert bc("book-lint", "--self-consistency", project=proj).returncode == 0
+    assert bc("book", "--verify", project=proj).returncode == 0
+    # every file the chapter read is an input of the book report
+    inputs = {i["path"] for i in report(proj, "book")["inputs"]}
+    assert {"site/site.json", "book/chapters/site.md", *stills, *(f"site/{pid}/index.html" for pid in SITE_PAGES)} <= inputs, sorted(inputs)
+
+
+@setup
+@resvg
+def test_the_site_chapter_needs_the_approved_pages(proj):
+    want = "the site chapter needs the approved pages (site/site.json, from site approve): run the site round, or drop site from book_chapters"
+    before = (proj / "book.html").read_bytes()
+    assert bc("state", "--set", "book_chapters=tone,site", project=proj).returncode == 0
+    assert bc("book", "--init", project=proj).returncode == 0 and fill_markers(proj) == 2
+    r = bc("book", project=proj)                                                      # no site/site.json at all
+    assert r.returncode == 1 and want in r.stderr and "book/chapters/site.md" in r.stderr, r.stdout + r.stderr
+    assert (proj / "book.html").read_bytes() == before, "a book that cannot be built is not written"
+    add_site(proj)
+    # a page edited after it was approved is not the page the owner approved
+    page = proj / "site/start/index.html"
+    approved = page.read_text(encoding="utf-8")
+    page.write_text(approved.replace("<h1>start</h1>", "<h1>start, changed</h1>"), encoding="utf-8")
+    r = bc("book", project=proj)
+    assert r.returncode == 1 and want in r.stderr and "site/start/index.html changed since it was approved" in r.stderr, r.stdout + r.stderr
+    page.write_text(approved, encoding="utf-8")
+    # a rule with no word on where it was decided is no rule
+    record = proj / "site/site.json"
+    doc = json.loads(record.read_text(encoding="utf-8"))
+    doc["choices"][0]["source"] = ""
+    record.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
+    r = bc("book", project=proj)
+    assert r.returncode == 1 and want in r.stderr and "c1: a rule says where it was decided" in r.stderr, r.stdout + r.stderr
+    assert (proj / "book.html").read_bytes() == before
+    # the way out the message names: drop the chapter
+    assert bc("state", "--set", "book_chapters=tone", project=proj).returncode == 0
+    assert bc("book", project=proj).returncode == 0 and 'id="site"' not in (proj / "book.html").read_text()
+
+
+@setup
+@resvg
+def test_a_site_still_that_is_missing_stops_the_book_and_names_the_capture_command(proj):
+    add_site(proj)
+    (proj / "site/pricing/shots/390-light.png").unlink()
+    (proj / "site/start/shots/1440-light.png").unlink()
+    (proj / "site/start/shots/390-light.png").unlink()
+    before = (proj / "book.html").read_bytes()
+    assert bc("state", "--set", "book_chapters=tone,site", project=proj).returncode == 0
+    assert bc("book", "--init", project=proj).returncode == 0 and fill_markers(proj) == 2
+    r = bc("book", project=proj)
+    err = r.stdout + r.stderr
+    assert r.returncode == 1, err
+    assert "the site chapter needs the stills of the approved pages" in err and "book/chapters/site.md" in err
+    assert "site/pricing/shots/ has no 390-light.png" in err and "site/start/shots/ has no 1440-light.png and no 390-light.png" in err
+    assert "`brand-creator capture site/pricing/index.html`" in err and "`brand-creator capture site/start/index.html`" in err
+    assert (proj / "book.html").read_bytes() == before, "a book that cannot be built is not written"
+    bc("check", project=proj)
+    assert {x["id"]: x["status"] for x in report(proj, "check")["results"]}["report:book"] == "fail"      # the stop is on the book report: `check` never calls this book current
+    # taking the stills (here written by hand, as `capture` writes them) is the way out, and the book then shows every picture
+    for rel in ("site/pricing/shots/390-light.png", "site/start/shots/1440-light.png", "site/start/shots/390-light.png"):
+        (proj / rel).write_bytes(_png(9, 6, 77))
+    r = bc("book", project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert site_chapter(proj).count("<img") == 4 and bc("book", "--verify", project=proj).returncode == 0
+    bc("check", project=proj)
+    assert {x["id"]: x["status"] for x in report(proj, "check")["results"]}["report:book"] == "pass"
+    assert "site/pricing/shots/390-light.png" in {i["path"] for i in report(proj, "book")["inputs"]}
+
+
+@setup
+@resvg
+def test_a_page_with_no_choice_gets_a_sentence_instead_of_a_table(proj):
+    from helpers import mutate_json
+    add_site(proj)
+    mutate_json(proj / "site/site.json", lambda d: [d["choices"][0].update(pages=["start"]), d["choices"][2].update(pages=["start"])])   # nothing names the pricing page any more
+    site_book(proj)
+    ch = site_chapter(proj)
+    assert ch.count("<table") == 1 and ch.count("No choice is recorded for this page.") == 1
+    start, pricing = ch.index('data-site-page="start"'), ch.index('data-site-page="pricing"')
+    assert start < ch.index("<table") < pricing < ch.index("No choice is recorded for this page.")
+    assert [m for m in re.findall(r'data-choice="(\w+)"', ch)] == ["c1", "c2", "c3"]
+    assert bc("book-lint", "--self-consistency", project=proj).returncode == 0 and bc("book", "--verify", project=proj).returncode == 0
+
+
+@setup
+@resvg
+def test_the_site_block_in_another_chapter_without_the_site_chapter_does_not_say_to_drop_the_chapter(proj):
+    before = (proj / "book.html").read_bytes()
+    assert bc("state", "--set", "book_chapters=tone", project=proj).returncode == 0           # the fixture's tone chapter is written already
+    tone = proj / "book/chapters/tone.md"
+    tone.write_text(tone.read_text(encoding="utf-8").rstrip("\n") + "\n\n{{site}}\n", encoding="utf-8")
+    r = bc("book", project=proj)                                                     # no site/site.json, and `site` is no chapter of this book
+    err = r.stdout + r.stderr
+    assert r.returncode == 1 and "book/chapters/tone.md" in err and "{{site}} needs the approved pages (site/site.json, from site approve)" in err, err
+    assert "take {{site}} out of the chapter that holds it" in err and "drop site from book_chapters" not in err
+    assert (proj / "book.html").read_bytes() == before
+
+
+@setup
+@resvg
+def test_a_changed_site_still_makes_the_book_report_stale(proj):
+    from helpers import mutate_json
+    add_site(proj)
+    site_book(proj)
+
+    def check_rows():
+        bc("check", project=proj)
+        return {x["id"]: x for x in report(proj, "check")["results"]}
+    assert check_rows()["report:book"]["status"] == "pass"
+    # a still taken again is not the still the book shows
+    (proj / "site/start/shots/1440-light.png").write_bytes(_png(40, 6, 250))
+    row = check_rows()["report:book"]
+    assert row["status"] == "skipped" and "site/start/shots/1440-light.png changed" in row["detail"], row
+    assert bc("book", "--verify", project=proj).returncode == 1
+    assert bc("book", project=proj).returncode == 0 and check_rows()["report:book"]["status"] == "pass"
+    # so is a choice of the record changed after the book was built
+    mutate_json(proj / "site/site.json", lambda d: d["choices"][1].update(text="Pricing sits above the stages"))
+    row = check_rows()["report:book"]
+    assert row["status"] == "skipped" and "site/site.json changed" in row["detail"], row
+    r = bc("book", "--verify", project=proj)
+    assert r.returncode == 1 and "edited by hand" in r.stdout + r.stderr
+    assert bc("book", project=proj).returncode == 0 and "Pricing sits above the stages" in site_chapter(proj)
