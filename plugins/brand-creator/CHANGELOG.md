@@ -226,6 +226,10 @@ lints the board of the latest round again before `check`, so an edit of the fact
   refuses a page that loads from the internet or from outside your project, writes nothing when any page fails, and
   never deletes an earlier `site/` (`--replace` moves it to `removed-<date>/site/`). The approved pages are
   references for whoever builds your site, not templates to fill in.
+- A new how-to, "Get reference pages for your site", walks through the website references and the site round, from your
+  answer on online research to the approved pages. The manual index and the commands page link to it, "Choose a tier"
+  and "What it makes" describe the new steps, and the glossary explains website references, reference page, cold review
+  and layout reference.
 
 ### Changed
 

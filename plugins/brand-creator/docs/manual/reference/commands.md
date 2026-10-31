@@ -13,7 +13,7 @@ Claude can also start it when your request matches. [Glossary](glossary.md) expl
 | `/brand-creator:brand-book` | you or Claude | Builds, updates, reviews and exports the brand book | — |
 | `/brand-creator:setup` | you only | Installs the tools brand-creator needs, after showing what it will download and getting your yes | `[--force]` |
 | `/brand-creator:new` | you only | Starts a new brand project and asks up to three quick questions | `[slug]` |
-| `/brand-creator:round` | you only | Builds the next round of boards (the style board first, then directions, refinements and, in Standard and Full, a motion round) and stops for your decision | `[style\|pick\|refine\|motion\|site-refs\|site] [what this round should answer]` |
+| `/brand-creator:round` | you only | Builds the next round of boards (the style board first, then directions, refinements and, in Standard and Full, a motion round), or, when your brief lists a site, the website references and the pages of your site, and stops for your decision | `[style\|pick\|refine\|motion\|site-refs\|site] [what this round should answer]` |
 | `/brand-creator:status` | you only | Shows where the project stands and what comes next | — |
 | `/brand-creator:check` | you only | Runs every check that applies, and optionally searches for leftovers of old values or checks one page against your brand | `[--page <file-or-folder-page-or-localhost-url>] [<old value or phrase> ...]` |
 | `/brand-creator:review` | you only | Reviews the latest work and gives you one list to approve | `[board\|book\|pack\|all] [panel]` |
@@ -24,6 +24,7 @@ Each command has a how-to page:
 
 - [Start a brand](../use/start-a-brand.md): `brand-creator`, `new`, `status`, `setup`
 - [Pick and refine a direction](../use/pick-and-refine-a-direction.md): `round`, `motion`
+- [Get reference pages for your site](../use/get-reference-pages-for-your-site.md): `round site-refs`, `round site`
 - [Name your brand](../use/name-your-brand.md): `brand-naming`
 - [Make icons and images from your logo](../use/make-icons-and-images.md): `brand-assets`
 - [Make the brand book](../use/make-the-brand-book.md): `brand-book`
