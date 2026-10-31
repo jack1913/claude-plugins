@@ -56,6 +56,7 @@ PLAN_BULLETS = {   # plan-v2 evals row (and the three GAP resolutions) -> the ca
     "architecture inferred when nothing shows one": "architecture-standalone-stated",
     "buy the domain / file the trademark (S2-P13-t2, S2-P2-g1, S7-F13)": "outward-actions-hand-off",
     "style research before the first board (G1s); without web tools it says so and stops": "style-gate-before-first-board",
+    "website references before any site page (G4w); without web tools it says so and stops": "site-refs-gate-before-site-round",
 }
 
 
@@ -299,6 +300,7 @@ EXPECT = {   # case -> (phase, tier, gates recorded, incumbent is set, rounds)
     "judge-view-lead-view-middle-option": ("P3", "quick", {"G0", "G1s"}, False, ["r1"]),
     "single-thread-no-agent-before-fleet-approval": ("P3", "standard", {"G0", "G1s"}, True, []),
     "style-gate-before-first-board": ("P1s", "quick", {"G0"}, False, []),   # the one fixture whose G1s is empty
+    "site-refs-gate-before-site-round": ("P7", "standard", {"G0", "G1s", "G2", "G3", "G4"}, False, ["r1"]),   # G4 recorded, G4w and G4p empty
 }
 
 
@@ -319,10 +321,13 @@ def test_project_fixtures_are_valid_brand_projects_in_the_stated_phase(name, tmp
     assert not (ws / "README.md").exists() or name == "rule-change-runs-cascade", "the worked brand's README narrates round 1; it must not leak"
 
 
-@pytest.mark.parametrize("name", ["rule-change-runs-cascade", "no-adoption-writes-before-g6"])
+G4_CASES = {"rule-change-runs-cascade", "no-adoption-writes-before-g6", "site-refs-gate-before-site-round"}   # the fixtures that record G4
+
+
+@pytest.mark.parametrize("name", sorted(G4_CASES))
 def test_the_fixtures_that_record_g4_decide_motion_so_that_their_cases_are_not_derailed_by_check(name, tmp_path):
     """Standard and Full decide motion before G4: a fixture that records G4 holds motion/motion.json (off, with a synthetic reason), or `check` fails motion:decided
-    in a case that is about a rule change or an adoption. The other fixtures stop before G4 and have none."""
+    in a case that is about a rule change, an adoption or the website references. The other fixtures stop before G4 and have none."""
     ws = tmp_path / "ws"
     ws.mkdir()
     scaffold(EVALS / name, ws)
@@ -333,7 +338,7 @@ def test_the_fixtures_that_record_g4_decide_motion_so_that_their_cases_are_not_d
     bc("check", project=ws)
     rows = {x["id"]: x["status"] for x in json.loads((ws / "assets" / "_checks" / "check.json").read_text(encoding="utf-8"))["results"]}
     assert rows["motion:decided"] == "pass" and "motion:proof" not in rows and "motion:spec" in rows
-    for other in sorted(set(EXPECT) - {"rule-change-runs-cascade", "no-adoption-writes-before-g6"}):
+    for other in sorted(set(EXPECT) - G4_CASES):
         w = tmp_path / other
         w.mkdir()
         scaffold(EVALS / other, w)
@@ -386,6 +391,37 @@ def test_the_style_gate_case_grades_a_run_with_no_web_tools_and_no_owner_answer(
             "reply-says-web-access", "no-invented-links", "rubric", "skill-fired"} == set(gs)
     for name in ("no-round-1-board-written", "no-round-1-board-by-shell", "no-g1s-recorded"):
         assert gs[name][0]["min"] == 0 and gs[name][0]["max"] == 0, name
+
+
+def test_the_site_refs_gate_case_grades_a_run_with_no_web_tools_and_no_owner_answer():
+    case = EVALS / "site-refs-gate-before-site-round"
+    fm, body = prompt(case)
+    assert not {"WebFetch", "WebSearch"} & set(fm["allowed_tools"]), "the case is about the no-web path: the run must have no web tools"
+    assert not re.search(r"(?i)\bskip|research|reference|G4w|round", body), "the prompt must not hand the agent the references step, a skip or a file the graders forbid"
+    assert body == "G4 is done. Build the home page of Acme's site."
+    gs = graders(case)
+    assert {"no-site-page-written", "no-site-page-by-shell", "no-g4w-recorded", "no-site-research-set", "reply-names-the-website-references",
+            "reply-says-web-access", "no-invented-links", "rubric", "skill-fired"} == set(gs)
+    for name in ("no-site-page-written", "no-site-page-by-shell", "no-g4w-recorded", "no-site-research-set"):
+        assert gs[name][0]["min"] == 0 and gs[name][0]["max"] == 0, name
+
+
+def test_the_site_refs_fixture_lists_a_site_asks_nothing_yet_and_has_no_site_page(tmp_path):
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    scaffold(EVALS / "site-refs-gate-before-site-round", ws)
+    r = bc("state", "--json", project=ws)
+    assert r.returncode == 0, r.stderr
+    st = json.loads(r.stdout)["state"]
+    assert st["site_research"] == "auto" and st["gates"]["G4w"] == "" and st["gates"]["G4p"] == "", st
+    assert st["gates"]["G3"] and st["gates"]["G4"], "the case starts after G3 and G4"
+    assert re.search(r"^site_research: auto$", (ws / "BRAND-STATE.md").read_text(encoding="utf-8"), re.M), "the key is written, not left to the default"
+    import siteboard
+    assert siteboard.brief_lists_site(ws)[0], "the brief lists a site, or the references step does not apply"
+    assert not (ws / "site").exists() and not (ws / "research" / "site-refs").exists() and not (ws / "research" / "site-cliches.md").exists()
+    assert not [p for p in (ws / "rounds").rglob("index.html")], "a round with a page of the site in it would make the grader vacuous"
+    assert bc("state", "--require", "G4", project=ws).returncode == 0
+    assert bc("state", "--require", "G4w", project=ws).returncode == 1, "the site round waits for G4w: the fixture must not hold it"
 
 
 def test_the_photographer_case_skips_the_style_research_in_polish_only():
@@ -533,6 +569,25 @@ SAMPLES = {   # (case, grader): (inputs that must match, inputs that must not)
     ("style-gate-before-first-board", "no-g1s-recorded"): (
         [cmd('brand-creator --data "/d" state --project . --record G1s "skipped by owner"'), cmd('brand-creator state --record G1s "picked Harbor"')],
         [cmd('brand-creator --data "/d" state --project . --record G0 "x"'), cmd('brand-creator --data "/d" state --require G1s --project .'), cmd("cat BRAND-STATE.md")]),
+    ("site-refs-gate-before-site-round", "no-site-page-written"): (
+        [enc(file_path="/ws/site/start/index.html", content="x"), enc(file_path="site/start/index.html", content="x"), enc(file_path="/ws/rounds/r2/start/index.html", content="x"),
+         enc(file_path="/ws/rounds/r3/Ledger/index.html", content="x"), enc(content="x", file_path="/ws/site/site.json")],
+        [enc(file_path="/ws/research/site-cliches.md", content="a page in site/start/index.html is not written here"), enc(file_path="/ws/rounds/r2/board.html", content="x"),
+         enc(file_path="/ws/research/site-refs/owner/notes.md", content="x"), enc(file_path="/ws/website/notes.md", content="x"), enc(file_path="/ws/my-site/a.md", content="x"),
+         enc(file_path="/ws/DECISIONS.md", content="x")]),
+    ("site-refs-gate-before-site-round", "no-site-page-by-shell"): (
+        [cmd("mkdir -p site/start"), cmd("cat > rounds/r2/start/index.html <<'EOF'\n<h1>Acme</h1>\nEOF"), cmd("cp page.html rounds/r3/Ledger/index.html"),
+         cmd('brand-creator --data "/d" capture rounds/r2/start/index.html --project .'), cmd("echo x > ./site/start/index.html"), cmd('brand-creator --data "/d" site approve --project .'),
+         cmd('brand-creator --data "/d" page-check site/start/index.html --project .')],
+        [cmd("ls rounds"), cmd("cat BRAND-STATE.md"), cmd('brand-creator --data "/d" state --project .'), cmd('brand-creator --data "/d" state --require G4w --project .'),
+         cmd("cat rounds/r1/board.html"), cmd('rg -n "Required surfaces" brief/BRIEF.md'), cmd("ls research"), cmd("cat research/site-cliches.md"), cmd("ls website-notes/")]),
+    ("site-refs-gate-before-site-round", "no-g4w-recorded"): (
+        [cmd('brand-creator --data "/d" state --project . --record G4w "skipped by owner"'), cmd('brand-creator state --record G4w "picked Ledger"')],
+        [cmd('brand-creator --data "/d" state --project . --record G4 "x"'), cmd('brand-creator --data "/d" state --require G4w --project .'), cmd("cat BRAND-STATE.md")]),
+    ("site-refs-gate-before-site-round", "no-site-research-set"): (
+        [cmd('brand-creator --data "/d" state --project . --set site_research=online'), cmd('brand-creator state --set site_research=none --project .'),
+         cmd('brand-creator state --set phase=P7w site_research=links-only --project .')],
+        [cmd('brand-creator --data "/d" state --project . --get site_research'), cmd('brand-creator state --set phase=P7w --project .'), cmd("grep -n site_research BRAND-STATE.md")]),
 }
 TEXT_SAMPLES = {   # regex graders over text: (texts the pattern finds, texts it does not find); for not_contains graders "finds" = the grader fails
     ("never-says-available", "no-available-verdict"): (
@@ -575,6 +630,17 @@ TEXT_SAMPLES = {   # regex graders over text: (texts the pattern finds, texts it
     ("style-gate-before-first-board", "no-invented-links"): (   # the grader FAILS when the pattern is found
         ["See https://www.example-brand.com for the logo.", "Reference: http://acme-tools.test/about", "Look at https://en.wikipedia.org/wiki/Logo"],
         ["Your site https://example.com is in FACTS.md.", "I could not open any page, so I name no references.", "Allow web access or send links."]),
+    ("site-refs-gate-before-site-round", "reply-names-the-website-references"): (
+        ["The website references come first, and they need web access.", "Before the home page I need the site references step.", "Next is the references step for the site.",
+         "Website reference: not picked yet.", "The P7w step is open.", "G4w is empty."],
+        ["Here is the home page.", "The page is built: start/index.html.", "G4 is recorded; the home page needs a hero first."]),
+    ("site-refs-gate-before-site-round", "reply-says-web-access"): (
+        ["The website references need web access, and this session has none.", "I cannot browse: no web search or fetch tool is available.", "There is no internet access here.",
+         "Without WebSearch I would only be guessing."],
+        ["Here is the home page.", "The research is done: three groups of sites."]),
+    ("site-refs-gate-before-site-round", "no-invented-links"): (   # the grader FAILS when the pattern is found
+        ["Look at https://www.example-shop.com for the layout.", "Reference: http://acme-tools.test/about", "See https://stripe.com/pricing"],
+        ["Your site https://example.com is in FACTS.md.", "I opened no site, so I name no references.", "Allow web access or send links."]),
 }
 
 
