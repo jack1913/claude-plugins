@@ -307,12 +307,223 @@ async function roleColours(page, request) {
   return page.evaluate((css) => ({ role_colours: Object.fromEntries(css.map((c) => { const read = window.__bcMeasure.colour(c); return [c, read ? read.hex : null]; })) }), list);
 }
 
+const MOTION_CAP = 500;      // distinct motion declarations reported per view; the view says so when there were more
+const MOTION_ALSO = 4;       // further selectors named with a motion declaration
+// the pseudo-classes of a state the page is not in while it is measured: a rule that sets motion on one is read from the style sheet
+const MOTION_STATES = "hover|active|focus|focus-visible|focus-within|checked|target|disabled|open|popover-open|modal|fullscreen|invalid|user-invalid|indeterminate|placeholder-shown";
+
+/** Every duration and easing the page declares or runs. Two walks: over all elements (hidden ones too: a menu that is closed now animates when it opens), and over the style
+ *  sheets' rules for a state (a :hover, :focus or :active rule matches nothing while the page is measured, so its motion is not in any computed style).
+ *  `motion_decls`: one entry per distinct (source, name, duration, easing): {sel, source, name, duration_ms, easing, via, count, also, unset?}. `source` is `transition` (the
+ *  computed transition-property, -duration and -timing-function of an element or of its generated ::before and ::after, paired the way CSS cycles the lists; a duration of 0 is no
+ *  transition), `animation` (animation-name, -duration, -timing-function likewise; `duration_ms: null` is `auto` on a scroll or view timeline: on a time-based animation `auto` is 0
+ *  and nothing runs) or `script` (a Web Animation nobody declared in CSS). `via` is `style` (declared on an element at rest), `state` (declared by a style sheet rule whose selector
+ *  names a state: `sel` is the rule's selector, `count` the rules with the same values; the values are what the browser computes for the rule's declarations on a probe element that
+ *  is not rendered, so `var()` resolves; `unset` lists `duration` and `easing` when the rule leaves them to the rule at rest, and then they are absent) or `running` (found in
+ *  `document.getAnimations()`: a CSS one whose declaration was not found, or one a script made; its easings are those of the effect, or of each interval between its keyframes).
+ *  `motion_total` is the number of distinct entries when there were more than MOTION_CAP; `motion_unread` the style sheets the browser did not let the walk read (cross origin);
+ *  `motion_smil` the number of SVG SMIL animation elements (animate, animateTransform, animateMotion), which are not read. */
+async function motionFacts(page) {
+  return page.evaluate(([cap, alsoCap, states]) => {
+    const H = window.__bcMeasure;
+    const found = new Map();
+    const round3 = (v) => Math.round(v * 1000) / 1000;
+    const split = (v) => {   // a computed list on its top-level commas: "cubic-bezier(0.2, 0, 0, 1), ease" is two items
+      const out = [];
+      let depth = 0, cur = "";
+      for (const ch of String(v)) {
+        if (ch === "(") depth++;
+        else if (ch === ")") depth--;
+        if (ch === "," && depth === 0) { out.push(cur.trim()); cur = ""; } else cur += ch;
+      }
+      out.push(cur.trim());
+      return out.filter((x) => x !== "");
+    };
+    const toMs = (t) => {
+      const m = /^(-?\d*\.?\d+(?:e[+-]?\d+)?)(ms|s)$/i.exec(String(t).trim());
+      return m ? round3(parseFloat(m[1]) * (m[2].toLowerCase() === "s" ? 1000 : 1)) : null;   // "auto" and anything else is null
+    };
+    // `ms` and `easing` are undefined when a state rule does not set them
+    const keyOf = (source, name, ms, easing) => JSON.stringify([source, name, ms === undefined ? "unset" : ms, easing === undefined ? "unset" : easing]);
+    const whereOf = (w) => w.label ?? (H.selector(w.el) + w.pseudo);
+    const add = (w, source, name, ms, easing, via) => {
+      const key = keyOf(source, name, ms, easing);
+      const e = found.get(key);
+      if (e) {
+        if (via === "state" && e.via !== "state") return;   // a state that says what the rule at rest says is not a second declaration
+        e.count++;
+        if (e.els.length <= alsoCap) e.els.push(w);
+        return;
+      }
+      const unset = [...(ms === undefined ? ["duration"] : []), ...(easing === undefined ? ["easing"] : [])];
+      found.set(key, { source, name, duration_ms: ms, easing, via, unset, count: 1, els: [w] });
+    };
+    /** The declarations in a computed style. `has` is null for an element (every property is its own), or the set of longhands a state rule declares. */
+    const declared = (w, s, has, via) => {
+      const set = (prop) => has === null || has.has(prop);
+      const at = (list, i) => (list.length ? list[i % list.length] : undefined);   // the lists of one property are cycled over the longest
+      const props = split(s.transitionProperty), durs = split(s.transitionDuration).map(toMs), eases = split(s.transitionTimingFunction);
+      const [hp, hd, he] = [set("transition-property"), set("transition-duration"), set("transition-timing-function")];
+      const tn = has === null ? props.length : Math.max(hp ? props.length : 0, hd ? durs.length : 0, he ? eases.length : 0);
+      for (let i = 0; i < tn; i++) {
+        const name = hp ? at(props, i) ?? "" : "";
+        const ms = hd ? at(durs, i) : undefined, easing = he ? at(eases, i) : undefined;
+        if (name === "none" || ms === null || ms === 0 || (ms === undefined && easing === undefined)) continue;   // a state rule that only names the property sets no motion
+        add(w, "transition", name, ms, easing, via);
+      }
+      const names = split(s.animationName), aDurs = split(s.animationDuration).map(toMs), aEases = split(s.animationTimingFunction), lines = split(s.animationTimeline ?? "");
+      const [hn, ha, hae, hl] = [set("animation-name"), set("animation-duration"), set("animation-timing-function"), set("animation-timeline")];
+      const an = has === null ? names.length : Math.max(hn ? names.length : 0, ha ? aDurs.length : 0, hae ? aEases.length : 0);
+      for (let i = 0; i < an; i++) {
+        const name = hn ? at(names, i) ?? "" : "";
+        let ms = ha ? at(aDurs, i) : undefined;
+        const easing = hae ? at(aEases, i) : undefined;
+        // `auto` is a duration only on a scroll or view timeline; on a time-based animation it is 0. A state rule that sets no timeline cannot say which: it stays `auto`.
+        if (ms === null && hl && (at(lines, i) ?? "auto") === "auto") ms = 0;
+        if (name === "none" || ms === 0 || (ms === undefined && easing === undefined)) continue;
+        add(w, "animation", name, ms, easing, via);
+      }
+    };
+
+    for (const el of document.querySelectorAll("*")) {
+      if (!H.walkable(el)) continue;
+      for (const pseudo of ["", "::before", "::after"]) {
+        const s = getComputedStyle(el, pseudo || null);
+        if (pseudo && (s.content === "none" || s.content === "normal" || s.content === "")) continue;   // a pseudo-element with no content is not generated
+        declared({ el, pseudo }, s, null, "style");
+      }
+    }
+
+    // the style sheets' rules for a state; the browser computes what they declare on a probe that is not rendered (display: none starts no animation), put inside the first
+    // element the rule styles when there is one, so that a custom property of that element resolves
+    let unread = 0;
+    const stateG = new RegExp(`:(?:${states})(?![\\w-])`, "gi"), stateTest = new RegExp(`:(?:${states})(?![\\w-])`, "i"), pseudoElement = /::?(?:before|after|first-line|first-letter|marker|placeholder|selection|backdrop)(?![\w-])/gi;
+    const hostOf = (sel) => {
+      let flat = sel.replace(stateG, "").replace(pseudoElement, "").trim();
+      if (flat === "" || /[\s>+~(,]$/.test(flat)) flat += "*";
+      try { return document.querySelector(flat); } catch (e) { return null; }
+    };
+    const probe = document.createElement("div");
+    const readState = (rule, sel) => {
+      const has = new Set([...rule.style]);
+      if (![...has].some((n) => /^(?:transition|animation)(?:-|$)/.test(n))) return;
+      probe.style.cssText = rule.style.cssText;
+      probe.style.setProperty("display", "none", "important");
+      try {
+        (hostOf(sel) || document.body).appendChild(probe);
+        let s = getComputedStyle(probe);
+        if (!s.transitionDuration) { document.body.appendChild(probe); s = getComputedStyle(probe); }   // a host that cannot hold a child computes nothing
+        declared({ label: sel }, s, has, "state");
+      } finally {
+        probe.remove();
+      }
+    };
+    const applies = (m) => /hover|pointer/i.test(m.mediaText) || matchMedia(m.mediaText).matches;   // the input of the measuring browser says nothing of the page's
+    const visit = (rules, parent) => {
+      for (const r of rules) {
+        if (typeof r.selectorText === "string" && r.style) {
+          const wrap = (x) => (x.includes(",") ? `:is(${x})` : x);
+          const sel = !parent ? r.selectorText : r.selectorText.includes("&") ? r.selectorText.replace(/&/g, wrap(parent)) : `${wrap(parent)} ${r.selectorText}`;   // a nested rule
+          if (stateTest.test(sel)) readState(r, sel);
+          if (r.cssRules && r.cssRules.length) visit(r.cssRules, sel);
+        } else if (r instanceof CSSImportRule) {
+          if (!r.media.length || applies(r.media)) visitSheet(r.styleSheet);
+        } else if (r.cssRules) {
+          if (r instanceof CSSMediaRule && !applies(r.media)) continue;
+          if (r instanceof CSSSupportsRule && !CSS.supports(r.conditionText)) continue;
+          visit(r.cssRules, parent);   // @layer, @container, @scope ... : read whatever the condition
+        }
+      }
+    };
+    const visitSheet = (sheet) => {
+      if (!sheet || sheet.disabled || (sheet.media && sheet.media.length && !applies(sheet.media))) return;
+      let rules;
+      try { rules = sheet.cssRules; } catch (e) { unread++; return; }   // a sheet from another origin
+      if (rules) visit(rules, "");
+    };
+    for (const sheet of [...document.styleSheets, ...(document.adoptedStyleSheets || [])]) visitSheet(sheet);
+
+    // what is running now, or fills forwards: a script's animation, and a CSS one the walks above did not see declared
+    const scrollDriven = (a) => typeof ScrollTimeline === "function" && a.timeline instanceof ScrollTimeline;   // a view timeline is one too
+    for (const a of document.getAnimations()) {
+      const eff = a.effect;
+      if (!eff || typeof eff.getTiming !== "function" || !eff.target) continue;
+      const t = eff.getTiming(), pseudo = eff.pseudoElement || "";
+      const source = a instanceof CSSTransition ? "transition" : a instanceof CSSAnimation ? "animation" : "script";
+      const name = (source === "transition" ? a.transitionProperty : source === "animation" ? a.animationName : "") || "";
+      const ms = typeof t.duration === "number" ? round3(t.duration) : null;
+      if (ms === 0 || (ms === null && !scrollDriven(a))) continue;   // `auto` on a time-based animation is 0: a filled animation that has no duration does not move
+      const between = (typeof eff.getKeyframes === "function" ? eff.getKeyframes() : []).slice(0, -1).map((k) => k.easing);   // the easing of an interval is its first keyframe's
+      const eases = source === "transition" ? [t.easing] : source === "animation" ? between : [t.easing, ...between.filter((e) => e !== "linear")];
+      for (const easing of new Set(eases.length ? eases : [t.easing])) {
+        if (!found.has(keyOf(source, name, ms, easing))) add({ el: eff.target, pseudo }, source, name, ms, easing, "running");
+      }
+    }
+    const all = [...found.values()];
+    const motion_decls = all.slice(0, cap).map((e) => ({
+      sel: whereOf(e.els[0]), source: e.source, name: e.name,
+      ...(e.duration_ms === undefined ? {} : { duration_ms: e.duration_ms }), ...(e.easing === undefined ? {} : { easing: e.easing }),
+      via: e.via, count: e.count, also: e.els.slice(1).map(whereOf), ...(e.unset.length ? { unset: e.unset } : {}),
+    }));
+    return { motion_decls, ...(all.length > cap ? { motion_total: all.length } : {}), motion_unread: unread, motion_smil: document.querySelectorAll("animate, animateTransform, animateMotion").length };
+  }, [MOTION_CAP, MOTION_ALSO, MOTION_STATES]);
+}
+
+const CLAIM_RUNS = 3000;     // runs of text reported per view; the view says so when there were more
+const CLAIM_CHARS = 4000;    // characters kept of one run
+const SAMPLE_CAP = 200;      // [data-sample] elements reported per view
+
+/** What a claims check reads. `claim_text`: the visible text of the page in runs, {sel, text, sample_label, lang}: a run is the text of one block (the nearest ancestor that is
+ *  not inline: inline and inline-block boxes are part of their block's text, so "€<b>5</b>" reads "€5" and a <br> is a break), cut where a [data-sample] begins or ends, so a
+ *  labelled sample is a run of its own. `sample_label` is the value of the closest [data-sample] (`null` outside one, `""` when it is empty), `lang` the closest `lang` ("" none;
+ *  the document's own is in the view). Elements that are not shown (display: none, a closed <details>, cut to nothing) are left out, a fully transparent one is not: a block that fades in
+ *  is still content. Attributes (alt, title, aria-label, placeholder) and pseudo-elements are not read. `claim_text_total` is set when there were more runs than CLAIM_RUNS.
+ *  `samples`: every shown [data-sample] element, {sel, label, text (200 characters)}. */
+async function claimFacts(page) {
+  return page.evaluate(([runCap, charCap, sampleCap]) => {
+    const H = window.__bcMeasure;
+    const INLINE = new Set(["inline", "inline-block", "contents", "ruby", "ruby-base", "ruby-text"]);
+    const runs = new Map(), ids = new Map();
+    const idOf = (el) => { if (!ids.has(el)) ids.set(el, ids.size); return ids.get(el); };
+    const add = (container, label, lang, text) => {
+      const key = `${idOf(container)}|${label}|${lang}`;
+      let run = runs.get(key);
+      if (!run) { run = { container, label, lang, text: "" }; runs.set(key, run); }
+      if (run.text.length < charCap) run.text += text;
+    };
+    const walk = (node, container, label, lang) => {
+      for (const child of node.childNodes) {
+        if (child.nodeType === 3) { add(container, label, lang, child.nodeValue); continue; }
+        if (child.nodeType !== 1 || !H.walkable(child) || !H.shown(child).shown) continue;
+        if (child.localName === "br") { add(container, label, lang, "\n"); continue; }
+        const s = getComputedStyle(child);
+        walk(child, INLINE.has(s.display) ? container : child,
+             child.hasAttribute("data-sample") ? child.getAttribute("data-sample") : label,
+             child.hasAttribute("lang") ? child.getAttribute("lang") : lang);
+      }
+    };
+    if (document.body) walk(document.body, document.body, null, document.body.hasAttribute("lang") ? document.body.getAttribute("lang") : "");
+    const all = [...runs.values()].map((r) => ({ ...r, text: r.text.replace(/[ \t\r\n\f]+/g, " ").trim() })).filter((r) => r.text);
+    const claim_text = all.slice(0, runCap).map((r) => ({ sel: H.selector(r.container), text: r.text.slice(0, charCap), sample_label: r.label, lang: r.lang }));
+    const samples = [];
+    for (const el of document.querySelectorAll("[data-sample]")) {
+      if (!H.walkable(el) || !H.shown(el).shown) continue;
+      const text = String(el.innerText ?? el.textContent ?? "").replace(/\s+/g, " ").trim();
+      samples.push({ sel: H.selector(el), label: el.getAttribute("data-sample"), text: text.slice(0, 200) });
+      if (samples.length >= sampleCap) break;
+    }
+    return { claim_text, ...(all.length > runCap ? { claim_text_total: all.length } : {}), samples };
+  }, [CLAIM_RUNS, CLAIM_CHARS, SAMPLE_CAP]);
+}
+
 const COLLECTORS = [
   async (page) => { await page.evaluate(installHelpers); return {}; },   // first: the helpers the collectors below call
   async (page) => ({ document: await documentFacts(page) }),
   async (page, request) => ({ selectors: await selectorBoxes(page, request.selectors || []) }),
   async (page) => colourFacts(page),
   async (page, request) => roleColours(page, request),
+  async (page) => motionFacts(page),
+  async (page) => claimFacts(page),
 ];
 
 /** Run every collector on the settled page and merge their answers; the in-page helpers are taken out of the page again. */
