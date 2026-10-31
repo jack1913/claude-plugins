@@ -1618,6 +1618,62 @@ first file is written, so a page or a site that does not load leaves nothing beh
   screenshot`, and nothing is written. Exit 3 when Chromium is missing.
 - It never captures a page behind a login: the phase file says so, and the tool cannot tell.
 
+### site approve
+
+`brand-creator site approve [--round N] [--replace] [--project DIR]` (`scripts/site_pages.py`: the subcommand is `site`, and the script is never `site.py`, which would shadow the standard
+library's `site` module wherever `scripts/` is on `sys.path`) puts the pages the owner approved into `site/`. It writes no report in `assets/_checks/`: the record is `site/site.json`
+(below). Approved pages are references for whoever builds the real site, never fill-in templates.
+
+- Refused, in this order, before anything is written:
+  1. exit 1 when G4p is not recorded (`site approve needs the owner's approval of the pages (G4p) recorded first`, with the `state --record G4p` command);
+  2. exit 2 when `rounds/r<N>/board.html` (`N` is `--round`, else the latest round) does not exist, or is not a `data-board="site"` page at `data-site-stage="pages"`;
+  3. exit 1 unless `assets/_checks/board-lint.json` is the lint of that very board, current and `pass` (`lint the pages board first: brand-creator board-lint rounds/r<N>/board.html`).
+     Current is `check`'s rule: no file the lint was made from is gone or changed. A page-check report lists `BRAND-STATE.md` among the files it was made from and the lint lists
+     theirs, so recording G4p makes the lint stale when a page was checked before it. The message then names `page-check` for each page and the lint; both have to be run again;
+  4. exit 1 when `site/` exists and `--replace` is not given (`site/ holds approved pages already`).
+- **Pages.** One page per page card of the board (`data-site-page`); each needs its folder `rounds/r<N>/<id>/`, its `index.html` and a `data-layout` on `<body>`. The folder is copied into
+  `site/<id>/` except `shots/` and `cold-review.md` at the top of it (`capture` writes `shots/` again beside the approved page) and `.DS_Store`. A symbolic link anywhere in a page folder exits 2.
+- **Paths.** In each `.html` and `.css` file (UTF-8; any other file is copied byte for byte) a relative URL is read in `src`, `href`, `poster`, `xlink:href`, `srcset` and `imagesrcset` (every URL in the
+  list), the `data` of an `<object>`, and `url()` and `@import` in a `<style>` element, a `style` attribute and a `.css` file. One that resolves to a file of the project outside the page's
+  folder is written again so that it leads to the same file from `site/<id>/` (`../../../assets/tokens/tokens.css` becomes `../../assets/tokens/tokens.css`); one that leads into the folder of another
+  page of the board leads to where that page goes (`../pricing/index.html` stays); one inside the page's own folder, `#...`, an empty value, `data:`, `mailto:` and `tel:` stay as written, and so do the
+  query and the fragment of a path. Not read: the text of a `<script>`, a comment, `action`, `content` and `data-*` attributes, a URL a script builds, and a bare string in `image-set()`.
+  - exit 1 on an `http(s)://`, `ftp(s)://`, `ws(s)://` or `//` address, on any other scheme, and on a path starting with `/`: `a reference page needs no network`;
+  - exit 1 on a URL whose file does not exist; exit 2 on a URL that resolves outside the project, or through a link to a place outside it.
+  Every problem is listed with its file and line, up to twelve, and nothing is written when there is one (exit 2 when any of them is exit 2, else 1).
+- **Writing.** The pages and `site.json` are written into a staging folder in the project and then take the place of `site/`, so a failure leaves no half-written `site/`. With `--replace`, an existing
+  `site/` is first moved to `removed-<date>/site/` (`removed-<date>-2/site/` when that folder has a `site/` already): it is never deleted, and it is put back when the new pages fail.
+- It prints what it wrote and, per page, `brand-creator capture site/<id>/index.html` and `brand-creator page-check site/<id>/index.html`, then `brand-creator check`.
+  The approved copy has no `shots/` until `capture` is run on it.
+
+### site/site.json
+
+The decision record of the approved pages (schema 1), written by `site approve`:
+
+```json
+{
+  "schema": 1,
+  "approved": "2026-11-04 approved start, pricing; rules c1 c3",
+  "round": 9,
+  "hero": "Ledger",
+  "pages": [{"id": "start", "path": "site/start/index.html", "layout": "walkthrough", "sha256": "<hex>"}],
+  "choices": [
+    {"id": "c1", "text": "The stamp appears once per view", "tag": "rule", "source": "DECISIONS.md 14", "pages": ["start", "pricing"]},
+    {"id": "c2", "text": "Pricing sits under the stages", "tag": "example", "source": "", "pages": ["start"]}
+  ]
+}
+```
+
+- `approved` is the G4p record as `state` holds it, `round` the round of the pages board, `hero` its `data-hero`. A page's `id` matches `^[a-z][a-z0-9-]{1,31}$` and is the folder `site/<id>/`
+  (the home page is `start`); `layout` is the `data-layout` of the page, an id of `page-layouts.json` or `own:<word>`; `sha256` is the hash of the `index.html` that was written, after its paths were
+  rewritten.
+- `choices` come from the choices section of the board, in its order: `id` is `c<number>`, `tag` is `rule` or `example`, a `rule` has a non-empty `source` (the words of the decision it cites, found in
+  `BRAND-STATE.md`, `DECISIONS.md` or `decisions/*.md` when the board was linted), `pages` names page ids of the record (the board's `data-pages`, else every page).
+- `scripts/boardlib/sitedata.py` is the one reading: `load_site(project)` (the record as written; exit 1 when the file is missing or is not a JSON object), `validate_site(project) -> list[str]` (sentences, `[]`
+  when sound: schema 1, the keys above, page ids and paths, a known layout, choices tagged and rules sourced, `pages` of a choice known, and each page file present with the sha256 the record holds; a page
+  edited after approval reads `changed since it was approved`) and `rewrite_urls(text, kind, project=, file_dir=, new_file_dir=, moves=, label=)`, the path rule above, which group 3 uses to carry a
+  reference page into another folder. A tool that reads the approved pages reads the record through `load_site` and `validate_site`, never by a parsing of its own.
+
 ## Brand book
 
 `brand-creator book`, `book-lint`, `book-pdf`, `patch` and `collapse` (scripts `book.py`, `book_lint.py`, `book_pdf.py`, `patch.py`,

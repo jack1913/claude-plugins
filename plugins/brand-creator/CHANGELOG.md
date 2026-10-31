@@ -220,6 +220,12 @@ lints the board of the latest round again before `check`, so an edit of the fact
   two or three heroes on the first board, and for each hero or page a page check and four captured views of the page as
   it is now. A hero's cold review has to match those views too. The other pages follow a hero you picked, every choice
   is tagged as a rule or an example, and a rule says where you decided it.
+- `brand-creator site approve` copies the approved pages of the site round into `site/`, with their paths fixed, and
+  writes `site/site.json`: each page, its layout, and every choice marked as a brand rule (with where it was decided)
+  or an example. It needs the pages approved (G4p recorded) and the pages board linted since its last change. It
+  refuses a page that loads from the internet or from outside your project, writes nothing when any page fails, and
+  never deletes an earlier `site/` (`--replace` moves it to `removed-<date>/site/`). The approved pages are
+  references for whoever builds your site, not templates to fill in.
 
 ### Changed
 
