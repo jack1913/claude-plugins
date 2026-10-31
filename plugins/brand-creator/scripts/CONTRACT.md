@@ -1079,7 +1079,7 @@ brand-creator page-check --url http://localhost:<port>/<path> [--project DIR] ..
   rule read the host as written); a remote URL is a usage error (a remote page is built locally and given with `--from`).
 - **Exit codes.** 2, with nothing written: no target, two target forms, a page that does not exist or is not a file inside the project (or inside DIR), a `--from`
   that is not a folder or holds more than 5000 files or 200 MB (the files and bytes that would be copied), a `--url` that is not a loopback URL, a width that is
-  not a whole number from 200 to 4000 or listed twice, a scheme other than `light` or `dark`, a bad `qa/rules.json` `page` block. 3: `assets/tokens/tokens.json`
+  not a whole number from 200 to 4000 or listed twice, a scheme other than `light` or `dark`, a bad `qa/rules.json` `page` block. 3: `assets/tokens/tokens.json` or `assets/tokens/tokens.css`
   missing (`brand-creator tokens`), `node` missing, `render.mjs` exiting 3 (setup missing, Chromium cannot start), or no view measured. 1: a row failed. 0: pass,
   warnings allowed.
 - **Widths and schemes.** `--widths`, else `qa/rules.json` `page.widths`, else 360, 390, 768, 1024, 1440, 1920 css px; `--schemes`, else `light,dark`. One browser context per
@@ -1090,8 +1090,11 @@ brand-creator page-check --url http://localhost:<port>/<path> [--project DIR] ..
 
   ```json
   {"schema": 1, "root": "<the project, or a run folder of --from>", "page": "pages/index.html", "url": null,
-   "widths": [390, 1440], "schemes": ["light", "dark"], "selectors": [], "dsf": 1}
+   "widths": [390, 1440], "schemes": ["light", "dark"], "selectors": [], "colours": ["oklch(0.52 0.12 185)"], "dsf": 1}
   ```
+
+  `colours` (optional) are CSS colours the browser is asked to render for the judge: `page_check.py` sends the modern values (`oklch()`, `oklab()`, `color()`) that
+  `tokens.css` serves for the primitives. Up to 500 strings of up to 200 characters, else exit 2.
 
   Either `root` with `page` (served by the local server) or `url`, never both (exit 2). `root` must be the project or a folder inside `<data>/scratch/`; `page`
   must stay inside it; a `url` that is not a loopback URL is refused with exit 2 whatever `page_check.py` did (the second gate). `--out` must be outside the project.
@@ -1116,7 +1119,7 @@ brand-creator page-check --url http://localhost:<port>/<path> [--project DIR] ..
   and connects to any host the machine can reach.
 - **The report.** Tool `page-check/<slug>-<hash6>` (`assets/_checks/page-check/<slug>-<hash6>.json`), one per page: the slug is the page's file stem (for a URL, the stem of the last
   segment of its path), else `page`, and the hash is the first six hex of the sha256 of the ident, which is the project-relative posix path of a project page,
-  `from:<real DIR>/<page>`, or `url:<URL>`. Inputs: `assets/tokens/tokens.json`, `qa/rules.json`, `FACTS.md` and `BRAND-STATE.md` (when they exist) and, for a
+  `from:<real DIR>/<page>`, or `url:<URL>`. Inputs: `assets/tokens/tokens.json`, `assets/tokens/tokens.css`, `qa/rules.json`, `FACTS.md` and `BRAND-STATE.md` (when they exist) and, for a
   project page, the page and every project file the browser was served (`tokens.css` included), so a change to one makes the report stale; a `--from` or `--url`
   report lists the brand's files only. The report holds these keys at its top level: `target` (`{"kind": "project"|"from"|"url", "page", "from", "url"}`), `widths`,
   `schemes` and `measures` (the path of the measurements). `check` does not gate page-check reports.
@@ -1124,6 +1127,56 @@ brand-creator page-check --url http://localhost:<port>/<path> [--project DIR] ..
   page or console error, an answer of 400 and above from the page's own origin, or (a project page or a built site) a request to another origin; with `--url` a request
   to another origin is a warning ("aborted: page-check runs offline"). A view that cannot be rendered fails its row. When no view was measured the row `page:load` is
   `skipped` and the exit code is 3. With `--url` only a file the page loads from another origin is a warning; a page that is itself sent to another origin fails its row.
+- **Colour and text facts.** Every view of the measurements also holds `colours` and `texts`, collected over the elements that are shown: not `display: none` (nor inside
+  one), not `content-visibility: hidden`, not the content of a closed `<details>` (the summary is shown), not cut to nothing (the visually hidden pattern for screen
+  readers: `clip: rect(0 0 0 0)`, `clip-path: inset(50%)`, or `overflow: hidden` on a box 1 css px by 1 or less, or under 1 css px on the cut axis, such as a collapsed
+  accordion; a hairline 1 css px high is still shown), not `visibility: hidden`, not fully transparent through `opacity`, and with a box that is not wholly above or left of the
+  page's origin (it cannot be scrolled to). `script`, `style`, `template`, `option` and the contents of an SVG definition (`defs`, `symbol`, `clipPath`, a gradient, a
+  pattern, a marker) are skipped. `colours` has one entry per distinct property, colour and alpha, `{sel, prop, hex, alpha, count, also}`: `sel` is the short selector of the first
+  element (tag, id or the first two classes, `:nth-of-type`, at most four levels), `count` the number of elements and `also` the selectors of up to four more. The properties are
+  `color` (an element with text of its own, an input's value or placeholder included), `background-color` (alpha above 0), `border-color` (all four sides alike) or
+  `border-<side>-color` (a side with a width and a style other than none), `outline-color` (a drawn outline whose style is neither `none` nor `auto`),
+  `text-decoration-color` (a line is drawn), `-webkit-text-fill-color` (when it differs from `color`) and `fill` and `stroke` of inline SVG shapes (`none` and a paint
+  server, `url(#...)`, are not colours; a fill or stroke opacity of 0 paints nothing and is not read; a horizontal or vertical `line` or `path` has a box of no height
+  or no width and is still read, for its stroke only: a `line` and a shape without an area have no fill; a `path` or `polyline` whose fill covers no point of a 24 by 24 grid
+  over its box, a straight diagonal stroke, has no fill either, so its default black is not read). A computed colour in any form (`rgb()`, `oklch()`, `lab()`, `color()`) is read as sRGB `#rrggbb` plus the alpha from its text. `texts` has one
+  entry per element with text of its own (an SVG `<text>` filled by a paint server, `url(#...)`, has `fg: null` and `fill_server: true`), `{sel, text (200 characters), fg, fg_alpha, opacity, ground, ground_kind, ground_sel, font_size_px, font_weight, font_family, rect,
+  sample_label, lang}`: `fg` is the colour the glyphs are painted in (`null` and `fill_clear: true` when `-webkit-text-fill-color` is transparent, so the background paints them),
+  `opacity` the product of the element's and its ancestors' opacities, `ground` what the text sits on and `ground_kind` is `colour` or `image`. The ground is the first
+  ancestor-or-self with a background colour of alpha above 0; a see-through one is composited over what is behind it (`ground_layered: true`), a background image or gradient on
+  the way makes it `image` (and `ground` null), and with nothing behind it the ground is the browser's canvas colour for the scheme (`ground_sel` is `(canvas)`).
+  `sample_label` is the `data-sample` of the closest element that has one (`null` outside one; `""` when it is empty), `lang` the closest `lang`. Limits: pseudo-elements,
+  iframes and shadow roots are not measured; the colours inside a gradient, a box or text shadow and `accent-color` are not read; a view holds at most 4000 texts, and
+  `texts_total` says how many there were when it held more; `colours_unreadable` lists a colour the browser gave in a form that could not be read.
+  An element and everything inside it is skipped when it is cut to nothing, an absolutely positioned descendant that is placed elsewhere included; the content of a closed
+  `<details>` is skipped unless the page makes it visible (`checkVisibility()` is what is asked), and a fill thinner than a cell of the 24 by 24 grid is not seen.
+  Also not read: an icon sprite (`<svg><use href="#id">`: `use` is not a shape and the contents of a `symbol` are skipped, so the sprite's colours are never checked);
+  the ground of an SVG `<text>` is the first background colour among its ancestors (the `<svg>` element's own included), never the SVG shape it is drawn on, and its `fill-opacity` is not applied to `fg`; the
+  `text-decoration-color` of an element whose text sits in a child element (`<a><span>...</span></a>`) is not read.
+- **Colour rows.** `page:colours:<scheme>`, one per scheme over all widths. Fails when a colour the page paints is not the colour of a semantic role of that scheme in
+  `tokens.json` `modes.<scheme>`: an opaque colour must equal an opaque role, a see-through colour (alpha under 1) a see-through role of the same colour and alpha (within
+  0.01). A role is two colours, and a page colour that is either one is the role: the `hex` of `tokens.json` (what a page that uses the hex fallback paints) and the
+  colour this browser renders for the role's modern value in `tokens.css`. The two differ when a token lies outside sRGB: `tokens.css` serves the real `oklch()` value,
+  which the browser clips channel by channel, while the `hex` was gamut-mapped by chroma reduction (an `oklch(0.7 0.25 30)` is `#ff412d` in the browser and `#ff5843` in
+  the hex: 23 units apart; the token build accepts such a token). The rendered colour is a fact of every view, `role_colours`: `{<css value>: "#rrggbb" | null}` for each of
+  the request's `colours`, drawn on the same canvas as the colours of the page (`null`: the browser could not read it). The judge takes the value of a role from
+  `tokens.css` through the `ref` of the role in `tokens.json`; a role with no modern value, or a view with no `role_colours`, is judged by the hex alone. Colours count as
+  equal when no channel differs by more than 2 of 255: that absorbs a hand-typed copy of a token (a hex, or an `oklch()` with fewer digits) a unit or two off; a page made of
+  the tokens matches exactly, in either form. The detail names up to six offenders, each with the selector, the property, the colour, the nearest role of the same kind with
+  its OKLab distance (to the nearer of the role's two colours), and the first width it was seen at; the row holds them all in `offenders` and the number of distinct colours in `colours_seen`. Pass: the number of distinct
+  colours, each a semantic colour of the theme. A colour that could not be read makes a pass a warning. `skipped` (not verified, exit 3 unless another row failed) when
+  `tokens.json` holds no semantic colours for the scheme or no view of the scheme was measured (the `page:load` rows say why).
+- **Pair rows.** `page:pairs:<scheme>`, one per scheme over all widths, judges each text's colour on its ground. A text whose colour and ground equal the two colours of a `pairs`
+  entry of `tokens.json` in that scheme (the direction counts) passes, whatever the entry's `kind` and `min`: `contrast` is the check of the pair itself. Each of the two
+  colours of an entry is its hex or the colour the browser renders for the role the entry names (`fg`, `bg`), as for the colour rows, so a pair of a token outside sRGB is
+  still declared. Any other pair is
+  measured: a ratio under 4.5:1 (3:1 for text of 24 px and up, or of 18.66 px and up at weight 700 or more) fails, a ratio above it warns "declare them in pairs". A see-through
+  text colour, or text in an element that is faded through `opacity`, is measured as painted (composited over its ground) and is never a declared pair. Text over an image or gradient,
+  text painted by its own background, and an SVG text filled by a paint server (`fill_server`), is "NOT verified" in a warning. Texts alike in colours, ground and floor are one entry (`texts` counts them, `also` names
+  up to six more selectors). The row holds `texts_checked`, `declared` and the lists `failing`, `undeclared` and `over_image` (up to 100 each). Not checked: whether the
+  `kind` of a declared pair suits the size of the text (an accent declared only for large text, `ui-text-large`, passes at 14 px), APCA and colour vision.
+- **Writing a collector.** `page_measure.mjs` installs `window.__bcMeasure` for the length of one view (`collect` removes it again): `selector(el)`, `shown(el)` (`{shown, opacity}`),
+  `walkable(el)`, `colour(css)` (`{r, g, b, a, hex}` or null), `canvas()`, `ground(el)` and `hex([r, g, b])`. A later collector calls them inside its own `page.evaluate`.
 - **For other tools.** `scripts/pagelib/pagecheck.py` imports only the standard library and `scripts/lib`; a tool puts `scripts/pagelib` on `sys.path` and calls
   `report_tool(ident)` (the report name above) and `is_loopback_url(url)` (the one loopback rule; `isLoopbackUrl(url)` in `scripts/lib/_common.mjs` is its twin and
   a test pins both to one table of cases, the forms a parser turns into 127.0.0.1 among them). Each family of rows is a function `(rep, measures, ctx)` listed in `pagecheck.ROW_CHECKS`; a family adds its keys to the

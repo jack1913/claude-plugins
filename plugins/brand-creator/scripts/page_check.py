@@ -15,6 +15,8 @@ It is opened in Chromium at each width (default 360, 390, 768, 1024, 1440 and 19
 scheme, with every request to another origin aborted. The browser only measures (`render.mjs page-measure`); the judging is here and in
 scripts/pagelib/pagecheck.py, against the built tokens and the `page` block of qa/rules.json. The report is assets/_checks/page-check/<slug>-<hash6>.json,
 one per page. The rows are `page:target` and, per view, `page:load:<width>-<scheme>` (the page and console errors, failed requests and requests to another origin).
+Per colour scheme it also reports `page:colours:<scheme>` (every colour the page paints is a semantic colour of that theme) and `page:pairs:<scheme>` (every text colour on its
+ground is a declared pair, or is measured against WCAG).
 
 Exit 0 pass (warnings allowed), 1 a row failed, 2 usage error (no target, two targets, a page that does not exist, a remote URL, a bad width or scheme, a
 --from folder of more than 5000 files or 200 MB, a bad qa/rules.json page block), 3 cannot run (no built tokens, no node, Chromium missing or no view measured).
@@ -34,13 +36,14 @@ from _common import (EXIT_CANNOT, EXIT_USAGE, Parser, Report, add_project_arg, f
 RUN_TIMEOUT_S = 900   # six widths in two schemes, each loaded and settled
 
 
-def measure(project: Path, root: Path | None, target: pc.Target, widths: list[int], schemes: list[str], node: str) -> tuple[dict, Path]:
-    """Write the request, run `render.mjs page-measure` and read what it measured. -> (measures, path of the measures file)."""
+def measure(project: Path, root: Path | None, target: pc.Target, widths: list[int], schemes: list[str], node: str, colours: list[str] = ()) -> tuple[dict, Path]:
+    """Write the request, run `render.mjs page-measure` and read what it measured. -> (measures, path of the measures file). `colours` are the modern colour values
+    of the project's tokens (tokens.css) the browser is asked to render, so the judge knows what a role looks like on a page, not only its hex."""
     work = scratch_dir(project, pc.report_tool(target.ident))
     request, out = work / "request.json", work / "measures.json"
     out.unlink(missing_ok=True)   # a failed run must never be judged on the measurements of an earlier one
     request.write_text(json.dumps({"schema": 1, "root": str(root) if root else None, "page": target.page if root else None, "url": target.url,
-                                   "widths": widths, "schemes": schemes, "selectors": [], "dsf": 1}, indent=2) + "\n", encoding="utf-8")
+                                   "widths": widths, "schemes": schemes, "selectors": [], "colours": list(colours), "dsf": 1}, indent=2) + "\n", encoding="utf-8")
     cp = run([node, str(plugin_root() / "scripts" / "render.mjs"), "page-measure", "--request", str(request), "--out", str(out), "--project", str(project)],
              timeout=RUN_TIMEOUT_S, check=False)
     message = cp.stderr.decode("utf-8", "replace").strip().removeprefix("error: ")
@@ -72,12 +75,13 @@ def main() -> int:
     schemes = pc.parse_schemes(a.schemes) if a.schemes is not None else list(pc.SCHEMES)
     target = pc.resolve_target(project, a.page, a.from_dir, a.url)
     tokens = pc.load_tokens(project)   # exit 3: nothing to judge against
+    modern = pc.load_modern(project)   # exit 3 likewise: what the browser paints for a token comes from tokens.css
     node = which_or_cannot("node", "Install Node 22 or newer. Run: brand-creator prereq --for quick")
 
     rep = Report(pc.report_tool(target.ident), project, pc.base_inputs(project, target), renderer="chromium")
     root = project if target.kind == "project" else pc.stage_from_copy(project, target) if target.kind == "from" else None
-    measures, measures_path = measure(project, root, target, widths, schemes, node)
-    pc.judge(rep, measures, pc.Ctx(project, target, widths, schemes, rules, tokens), measures_path)
+    measures, measures_path = measure(project, root, target, widths, schemes, node, sorted(set(modern.values())))
+    pc.judge(rep, measures, pc.Ctx(project, target, widths, schemes, rules, tokens, modern), measures_path)
     return rep.finish()
 
 

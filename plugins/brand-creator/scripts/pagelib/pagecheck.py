@@ -10,9 +10,10 @@ version):
   is_loopback_url(url)    the one loopback rule: http or https on localhost, 127.0.0.1 or [::1], and nothing else.
 
 Each family of rows is a function `(rep, measures, ctx)` listed in ROW_CHECKS; a later check (colours, fonts, marks, claims ...) adds its function to
-the list and reads the same Ctx. The rows of the first one, `load_rows`, are `page:load:<width>-<scheme>`.
+the list and reads the same Ctx. The rows of the first one, `load_rows`, are `page:load:<width>-<scheme>`; `colour_rows` gives `page:colours:<scheme>` (every colour the page
+paints is a semantic colour of that theme) and `pair_rows` gives `page:pairs:<scheme>` (every text colour on its ground is a declared pair, or measured against WCAG).
 
-Standard library plus scripts/lib (_common, qa_rules) only. This folder is outside scripts/lib/, so a change here does not make every pack stale. The
+Standard library plus scripts/lib (_color, _common, qa_rules) only. This folder is outside scripts/lib/, so a change here does not make every pack stale. The
 only reads are the project's own files and, with --from, the folder it names (read only: it is copied, never written).
 """
 from __future__ import annotations
@@ -27,6 +28,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 import qa_rules
+from _color import parse_hex, wcag_ratio
 from _common import CliError, EXIT_CANNOT, EXIT_USAGE, Report, confine, fail, rel, scratch_dir
 
 REPORT_DIR = "page-check"
@@ -36,7 +38,16 @@ FROM_MAX_FILES = 5000
 FROM_MAX_BYTES = 200 * 1024 * 1024
 FROM_SKIPPED = (".git", "node_modules")   # never copied, never counted
 TOKENS_FILE = "assets/tokens/tokens.json"
+TOKENS_CSS = "assets/tokens/tokens.css"
 SHOWN = 3                                 # how many items of a list a row's detail names
+NAMED = 6                                 # how many offenders a colour or pair row names
+RGB_TOLERANCE = 2                         # two colours are the same colour when no channel (of 255) differs by more. Not what makes a token outside sRGB match: that is
+                                          # the colour the browser renders for it (`role_colours` in the measurements), which can be far from tokens.json's hex. This absorbs a hand-typed copy of a
+                                          # token (a hex, or an oklch() with fewer digits) a unit or two off; two units is under what the eye tells apart (OKLab distance about 0.005)
+ALPHA_TOLERANCE = 0.01                    # two see-through colours are the same when their alphas are this close
+SEE_THROUGH = 0.999                       # an alpha under this is see-through
+LARGE_PX, LARGE_BOLD_PX, BOLD = 24.0, 18.66, 700   # WCAG "large text": 24 px and up, or 18.66 px (14 pt) and up at weight 700 or more
+FLOOR_TEXT, FLOOR_LARGE = 4.5, 3.0        # WCAG contrast an undeclared text pair needs
 
 
 # ---------------------------------------------------------------- shared helpers
@@ -205,6 +216,7 @@ class Ctx:
     schemes: list[str]
     rules: dict                   # qa/rules.json with the proposals filled in (qa_rules.load)
     tokens: dict                  # assets/tokens/tokens.json
+    modern: dict = field(default_factory=dict)   # assets/tokens/tokens.css: custom property -> the oklch(), oklab() or color() value tokens.css serves for a primitive
     extra: dict = field(default_factory=dict)   # what a row family adds to the report at its top level
 
 
@@ -221,9 +233,24 @@ def load_tokens(project: Path) -> dict:
     return doc
 
 
+MODERN_VALUE = re.compile(r"(--[\w-]+)\s*:\s*((?:oklch|oklab|color)\([^;{}]*\))\s*;")
+
+
+def load_modern(project: Path) -> dict[str, str]:
+    """The modern colour value tokens.css serves for each primitive (inside its `@supports (color: oklch(0 0 0))` block), by custom property: {"--color-teal":
+    "oklch(0.52 0.12 185)"}. A browser that has the syntax paints this value and clips it to sRGB channel by channel, while tokens.json holds the hex that the token
+    build gamut-mapped (chroma reduction); for a token outside sRGB the two differ. {} for tokens that are all hex. Exit 3 when tokens.css is missing or unreadable."""
+    f = project / TOKENS_CSS
+    try:
+        css = f.read_text(encoding="utf-8")
+    except OSError as e:
+        fail(EXIT_CANNOT, f"{TOKENS_CSS} cannot be read ({e}): run `brand-creator tokens` first (page-check compares the colours with what the browser renders for it)")
+    return {m.group(1): " ".join(m.group(2).split()) for m in MODERN_VALUE.finditer(css)}
+
+
 def base_inputs(project: Path, target: Target) -> list[Path]:
-    """The files every page check stands on: the built tokens, the rules, the facts and the state of the project, and the page (a project target)."""
-    files = [project / TOKENS_FILE, project / qa_rules.RULES_FILE, project / "FACTS.md", project / "BRAND-STATE.md"]
+    """The files every page check stands on: the built tokens (json and css), the rules, the facts and the state of the project, and the page (a project target)."""
+    files = [project / TOKENS_FILE, project / TOKENS_CSS, project / qa_rules.RULES_FILE, project / "FACTS.md", project / "BRAND-STATE.md"]
     if target.kind == "project" and target.file:
         files.append(target.file)
     return files
@@ -282,7 +309,234 @@ def load_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
                                                   f"{len(v.get('resources', {}))} image file(s), no page or console error, no failed or outside request", **extra)
 
 
-ROW_CHECKS = [load_rows]   # each (rep, measures, ctx); the later families of rows (colours, fonts, marks, motion, claims, rules, tells) are added here
+# ---------------------------------------------------------------- colours and pairs
+
+def oklab(rgb) -> tuple[float, float, float]:
+    """sRGB (0 to 255) to OKLab (Ottosson's matrices): white is (1, 0, 0), black (0, 0, 0)."""
+    lin = [((v / 255.0) / 12.92 if v / 255.0 <= 0.04045 else (((v / 255.0) + 0.055) / 1.055) ** 2.4) for v in rgb]
+    r, g, b = lin
+    l_ = (0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b) ** (1 / 3)
+    m_ = (0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b) ** (1 / 3)
+    s_ = (0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b) ** (1 / 3)
+    return (0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_,
+            1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_,
+            0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_)
+
+
+def oklab_distance(a, b) -> float:
+    return sum((x - y) ** 2 for x, y in zip(oklab(a), oklab(b))) ** 0.5
+
+
+def same_rgb(a, b) -> bool:
+    return all(abs(x - y) <= RGB_TOLERANCE for x, y in zip(a, b))
+
+
+def composite(fg, alpha: float, ground) -> tuple[int, int, int]:
+    """`fg` painted at `alpha` over `ground`, both (r, g, b)."""
+    return tuple(round(f * alpha + g * (1 - alpha)) for f, g in zip(fg, ground))
+
+
+@dataclass(frozen=True)
+class Role:
+    name: str
+    rgb: tuple[int, int, int]          # tokens.json hex: what a page that uses the hex fallback paints
+    alpha: float
+    rendered: tuple[int, int, int] | None = None   # what the browser paints for the role's modern value (oklch() ...), when that is not the hex: a token outside sRGB is clipped, not gamut-mapped
+
+    @property
+    def shades(self) -> list[tuple[int, int, int]]:
+        """Every colour that is this role on a page: the hex of tokens.json, and the colour the browser renders for the role's modern value."""
+        return [self.rgb] + ([self.rendered] if self.rendered else [])
+
+    def is_colour(self, rgb) -> bool:
+        return any(same_rgb(rgb, c) for c in self.shades)
+
+    def distance(self, rgb) -> float:
+        return min(oklab_distance(rgb, c) for c in self.shades)
+
+
+def rendered_colours(measures: dict, scheme: str) -> dict[str, str]:
+    """The `role_colours` the browser measured for one scheme: the modern css value of a primitive -> the #rrggbb it paints (a value it could not read is left out)."""
+    out: dict[str, str] = {}
+    for v in scheme_views(measures, scheme, "role_colours"):
+        out.update({css: hex_ for css, hex_ in v["role_colours"].items() if isinstance(hex_, str)})
+    return out
+
+
+def roles_of(tokens: dict, scheme: str, modern: dict | None = None, rendered: dict | None = None) -> list[Role]:
+    """The semantic colours of one theme from tokens.json `modes.<scheme>`; [] when the file holds none. A role that points at a primitive tokens.css serves in a
+    modern form (`modern`: custom property -> css value) also carries the colour the browser rendered for that value (`rendered`: css value -> #rrggbb)."""
+    out = []
+    for name, v in sorted(((tokens.get("modes") or {}).get(scheme) or {}).items()):
+        try:
+            rgb = parse_hex(v["hex"])
+            css = (modern or {}).get("--" + str(v.get("ref") or "").replace(".", "-"))
+            shown = parse_hex(rendered[css]) if css and css in (rendered or {}) else None
+            out.append(Role(name, rgb, float(v.get("alpha", 1)), shown if shown and shown != rgb else None))
+        except (KeyError, TypeError, ValueError):
+            continue
+    return out
+
+
+def declared_pairs(tokens: dict, scheme: str, roles: list[Role] | None = None) -> list[tuple[str, str, list, list]]:
+    """tokens.json `pairs` in one theme: (fg name, bg name, fg colours, bg colours). A pair is a text colour on a ground the brand has declared; the direction counts.
+    A colour is the hex of the pair and, when `roles` carry one, the colour the browser renders for the role the pair names."""
+    by_name = {r.name: r for r in roles or []}
+    out = []
+    for p in tokens.get("pairs") or []:
+        m = ((p.get("modes") or {}).get(scheme) or {}) if isinstance(p, dict) else {}
+        try:
+            fg, bg = str(p.get("fg")), str(p.get("bg"))
+            out.append((fg, bg, [parse_hex(m["fg_hex"])] + ([by_name[fg].rendered] if by_name.get(fg) and by_name[fg].rendered else []),
+                        [parse_hex(m["bg_hex"])] + ([by_name[bg].rendered] if by_name.get(bg) and by_name[bg].rendered else [])))
+        except (KeyError, TypeError, ValueError):
+            continue
+    return out
+
+
+def scheme_views(measures: dict, scheme: str, key: str) -> list[dict]:
+    """The views of one colour scheme that were rendered and hold the facts `key`, in the order they were measured."""
+    return [v for v in measures.get("views", []) if isinstance(v, dict) and v.get("scheme") == scheme and not v.get("error") and key in v]
+
+
+def _shown(hex_: str, alpha: float = 1.0) -> str:
+    return hex_ if alpha >= SEE_THROUGH else f"{hex_} at alpha {alpha:g}"
+
+
+def colour_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
+    """page:colours:<scheme>: every colour the page paints in that theme (text, backgrounds, borders, outlines, text decoration lines, SVG fill and stroke) is the
+    colour of a semantic role of the theme in tokens.json: an opaque colour is the hex of an opaque role, a see-through one a see-through role (same colour and
+    alpha). A role is two colours: the hex of tokens.json (what a page that uses the hex fallback paints) and the colour this browser renders for the role's modern
+    value in tokens.css (`role_colours`; for a token outside sRGB the browser clips channel by channel, so it is not the gamut-mapped hex); a page colour that is either
+    is the role. Up to six offenders are named: where, which property, the colour, the nearest role and its OKLab distance, and the first width it was seen at. Colours
+    differing by up to two units per channel (RGB_TOLERANCE) are the same: a hand-typed copy of a token, not a token outside sRGB."""
+    for scheme in ctx.schemes:
+        rid, label = f"page:colours:{scheme}", f"{scheme} theme colours"
+        views, roles = scheme_views(measures, scheme, "colours"), roles_of(ctx.tokens, scheme, ctx.modern, rendered_colours(measures, scheme))
+        if not roles:
+            rep.add(rid, "skipped", label, detail=f"not verified: {TOKENS_FILE} holds no semantic colours for the {scheme} theme; run `brand-creator tokens` again")
+            continue
+        if not views:
+            rep.add(rid, "skipped", label, detail=f"not verified: no {scheme} view was measured (see the page:load rows)")
+            continue
+        offenders: dict[tuple, dict] = {}
+        distinct, unreadable = set(), set()
+        for v in views:
+            unreadable.update(v.get("colours_unreadable", []))
+            for c in v["colours"]:
+                rgb, alpha = parse_hex(c["hex"]), float(c["alpha"])
+                distinct.add((c["hex"], alpha))
+                see_through = alpha < SEE_THROUGH
+                pool = [r for r in roles if (r.alpha < SEE_THROUGH) == see_through]
+                if any(r.is_colour(rgb) and (not see_through or abs(alpha - r.alpha) <= ALPHA_TOLERANCE) for r in pool):
+                    continue
+                key = (c["sel"], c["prop"], c["hex"], alpha)
+                if key in offenders:
+                    continue
+                near = min(pool, key=lambda r: r.distance(rgb)) if pool else None
+                nearest = min(near.shades, key=lambda x: oklab_distance(rgb, x)) if near else None   # the hex, or the colour the browser renders, whichever is closer
+                offenders[key] = {"selector": c["sel"], "property": c["prop"], "colour": c["hex"], "alpha": alpha, "elements": c.get("count", 1), "also": c.get("also", []),
+                                  "width": v.get("width"), "nearest_role": near.name if near else None, "nearest_hex": "#%02x%02x%02x" % nearest if near else None,
+                                  "distance": round(oklab_distance(rgb, nearest), 3) if near else None, "see_through": see_through}
+        notes = [f"NOT verified: {len(unreadable)} colour(s) the browser gave in a form that could not be read ({_names(sorted(unreadable), 2)})"] if unreadable else []
+        if offenders:
+            items = []
+            for o in offenders.values():
+                where = f"{o['selector']} {o['property']} {_shown(o['colour'], o['alpha'])}" + (f" ({o['elements']} elements)" if o["elements"] > 1 else "")
+                if o["nearest_role"]:
+                    near = f"nearest {'see-through ' if o['see_through'] else ''}role {o['nearest_role']} {o['nearest_hex']}, OKLab distance {o['distance']:.3f}"
+                else:
+                    near = "the theme has no see-through colour" if o["see_through"] else "the theme has no opaque colour"
+                items.append(f"{where}: {near}; first seen at {o['width']} px")
+            rep.add(rid, "fail", label, detail=f"{len(offenders)} colour(s) are not a semantic colour of the {scheme} theme: {_names(items, NAMED)}"
+                    + ("".join("; " + n for n in notes)), offenders=list(offenders.values()), colours_seen=len(distinct))
+        elif notes:
+            rep.add(rid, "warn", label, detail="; ".join(notes), colours_seen=len(distinct))
+        else:
+            rep.add(rid, "pass", label, detail=f"{len(distinct)} distinct colour(s) painted, each a semantic colour of the {scheme} theme", colours_seen=len(distinct))
+
+
+def _large(size_px: float, weight: int) -> bool:
+    return size_px >= LARGE_PX or (size_px >= LARGE_BOLD_PX and weight >= BOLD)
+
+
+def pair_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
+    """page:pairs:<scheme>: every text in that theme, its colour on what it sits on. A text whose colour and ground are a declared pair of tokens.json (the
+    direction counts) passes; an undeclared pair under the WCAG floor (4.5:1, or 3:1 for 24 px and up and for 18.66 px and up at weight 700 or more) fails, one
+    above it warns ("declare them in pairs"); a text over an image (a gradient too), painted by its own background or by an SVG paint server is "NOT verified". A
+    declared pair is matched by its hex and by the colour the browser renders for each of its two roles (a token outside sRGB is clipped by the browser, not
+    gamut-mapped as the hex was). A see-through text colour, or text in a faded element, is measured as painted (composited over its ground), so it is never a declared pair."""
+    for scheme in ctx.schemes:
+        rid, label = f"page:pairs:{scheme}", f"{scheme} theme text pairs"
+        views = scheme_views(measures, scheme, "texts")
+        if not views:
+            rep.add(rid, "skipped", label, detail=f"not verified: no {scheme} view was measured (see the page:load rows)")
+            continue
+        declared = declared_pairs(ctx.tokens, scheme, roles_of(ctx.tokens, scheme, ctx.modern, rendered_colours(measures, scheme)))
+        seen: set[tuple] = set()
+        failing: dict[tuple, dict] = {}
+        undeclared: dict[tuple, dict] = {}
+        over_image: dict[str, dict] = {}
+        total = declared_n = 0
+        truncated = []
+        for v in views:
+            if v.get("texts_total"):
+                truncated.append(f"{v['texts_total']} texts at {v.get('width')} px, {len(v['texts'])} measured")
+            for t in v["texts"]:
+                ident = (t["sel"], t.get("fg"), t.get("fg_alpha"), t.get("opacity"), t.get("ground"), t.get("ground_kind"), t.get("font_size_px"), t.get("font_weight"), t.get("fill_clear"),
+                         t.get("fill_server"))
+                if ident in seen:
+                    continue
+                seen.add(ident)
+                total += 1
+                at = {"selector": t["sel"], "text": t["text"][:40], "width": v.get("width"), "font_size_px": t.get("font_size_px"), "font_weight": t.get("font_weight")}
+                if t.get("fill_clear") or t.get("ground_kind") == "image" or not t.get("ground") or not t.get("fg"):
+                    why = ("painted by its own background (clipped to the text)" if t.get("fill_clear") else
+                           "painted by a gradient or pattern (an SVG paint server)" if t.get("fill_server") else "over an image")
+                    over_image.setdefault(t["sel"], {**at, "why": why})
+                    continue
+                fg, ground = parse_hex(t["fg"]), parse_hex(t["ground"])
+                alpha = float(t.get("fg_alpha", 1)) * float(t.get("opacity", 1))
+                if alpha >= SEE_THROUGH and any(any(same_rgb(fg, f) for f in fs) and any(same_rgb(ground, b) for b in bs) for _, _, fs, bs in declared):
+                    declared_n += 1
+                    continue
+                painted = composite(fg, alpha, ground) if alpha < SEE_THROUGH else fg
+                ratio = wcag_ratio(painted, ground)
+                large = _large(float(t.get("font_size_px") or 0), int(t.get("font_weight") or 400))
+                floor = FLOOR_LARGE if large else FLOOR_TEXT
+                key = (t["fg"], round(alpha, 3), t["ground"], large)
+                bucket = failing if ratio < floor else undeclared
+                if key not in bucket:
+                    bucket[key] = {**at, "fg": t["fg"], "ground": t["ground"], "painted": "#%02x%02x%02x" % painted, "ratio": round(ratio, 2), "floor": floor, "large": large,
+                                   "texts": 0, "also": []}
+                elif len(bucket[key]["also"]) < NAMED:
+                    bucket[key]["also"].append(t["sel"])
+                bucket[key]["texts"] += 1
+        parts = []
+        if failing:
+            parts.append(f"{len(failing)} text colour pair(s) under the WCAG floor and not declared in pairs: " + _names([
+                f"{o['selector']} \"{o['text']}\" {o['fg']} on {o['ground']}"
+                + (f" (painted {o['painted']})" if o["painted"] != o["fg"] else "") + f" is {o['ratio']}:1, needs {o['floor']:g}:1 for {'large' if o['large'] else 'normal'} text"
+                + (f", {o['texts']} texts" if o["texts"] > 1 else "") + f", first seen at {o['width']} px" for o in failing.values()], NAMED))
+        if undeclared:
+            parts.append(f"{len(undeclared)} undeclared text pair(s) pass the floor; declare them in pairs: " + _names([
+                f"{o['fg']} on {o['ground']} {o['ratio']}:1 ({o['selector']})" for o in undeclared.values()], NAMED))
+        if over_image:
+            parts.append(f"NOT verified: text over an image ({len(over_image)}): " + _names([f"{o['selector']} ({o['why']})" for o in over_image.values()], NAMED))
+        if truncated:
+            parts.append("NOT verified beyond the first texts of a view: " + _names(truncated, 2))
+        extra = {"texts_checked": total, "declared": declared_n, "failing": list(failing.values())[:100], "undeclared": list(undeclared.values())[:100],
+                 "over_image": list(over_image.values())[:100]}
+        if failing:
+            rep.add(rid, "fail", label, detail="; ".join(parts), **extra)
+        elif parts:
+            rep.add(rid, "warn", label, detail="; ".join(parts), **extra)
+        else:
+            rep.add(rid, "pass", label, detail=f"{total} text colour(s) checked, each a declared pair of the {scheme} theme", **extra)
+
+
+# each (rep, measures, ctx); the later families of rows (fonts, marks, motion, claims, rules, tells) are added here
+ROW_CHECKS = [load_rows, colour_rows, pair_rows]
 
 
 def judge(rep: Report, measures: dict, ctx: Ctx, measures_path: Path) -> None:

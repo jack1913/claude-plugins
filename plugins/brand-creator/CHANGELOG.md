@@ -91,6 +91,14 @@ stage, and why, is in the [archive](docs/archive/README.md).
   `DESIGN.md` (the format's own check fails a component like that, while `contrast` only warns about it in this release):
   `DESIGN.md` names the ground and the pair instead, and the component comes back once the colours pass. A project with
   no grounds gets the same files as before. Run `adapters` and `applied-skill` again to update files you already have.
+- `page-check` now checks the colours of a page against the brand, in the light and the dark theme separately. Every
+  colour the page paints (text, backgrounds, borders, outlines, underlines, and the fill and stroke of an inline SVG)
+  has to be a colour of the theme in the tokens: an opaque colour an opaque one, a see-through colour a see-through one
+  (`page:colours:<theme>`). The row names up to six that are not, with where they are, the nearest brand colour and how
+  far off it is, so a light background left in the dark theme fails the dark row only. Each text colour on the colour
+  behind it (`page:pairs:<theme>`) must be a declared pair, or measure at least 4.5:1 (3:1 for large text); a pair that
+  is not declared fails under that and warns when it passes ("declare them in pairs"), and text over an image or a
+  gradient is reported as not verified.
 
 ### Changed
 

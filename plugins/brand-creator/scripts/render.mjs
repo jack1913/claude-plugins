@@ -2052,7 +2052,7 @@ async function cmdPdf(argv) {
 
 // ---------------------------------------------------------------- page-measure
 // The measuring half of `brand-creator page-check` (scripts/page_check.py writes the request and judges what this writes). The request is
-// {schema: 1, root, page, url, widths, schemes, selectors, dsf}: `root` (the project, or a folder inside <data>/scratch/) with the `page` inside it, served by the
+// {schema: 1, root, page, url, widths, schemes, selectors, colours, dsf}: `root` (the project, or a folder inside <data>/scratch/) with the `page` inside it, served by the
 // local server, or a `url` on this machine. One browser context per width and colour scheme; a request to another origin, a redirect to one included, is recorded and aborted. The answer is
 // {schema: 1, chromium, target, views: [{width, scheme, viewport, lang, height, errors, non_local, failed_local, resources, served, animations, ...collectors}]},
 // written outside the project. A view that cannot be rendered has {width, scheme, viewport, error} instead. Facts only: no verdict, and exit 0 whatever the page does.
@@ -2109,6 +2109,8 @@ function readPageRequest(project, file) {
   }
   req.selectors = req.selectors ?? [];
   if (!Array.isArray(req.selectors) || req.selectors.some((s) => typeof s !== "string")) bad("selectors must be a list of CSS selectors");
+  req.colours = req.colours ?? [];   // CSS colours the browser renders for the judge (the modern values of the project's tokens): each a short string
+  if (!Array.isArray(req.colours) || req.colours.length > 500 || req.colours.some((c) => typeof c !== "string" || !c || c.length > 200)) bad("colours must be a list of up to 500 CSS colours");
   req.dsf = req.dsf ?? 1;
   if (![1, 2, 3].includes(req.dsf)) bad("dsf must be 1, 2 or 3");
   if (req.url) {
