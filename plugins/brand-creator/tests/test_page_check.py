@@ -8,6 +8,7 @@ import hashlib
 import http.server
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -2194,14 +2195,14 @@ def test_a_rule_is_tied_by_its_g4_words_in_a_recorded_rule_line(tmp_path):
     assert gone["status"] == "warn" and "BRAND-STATE.md cannot be read" in gone["detail"], gone
 
 
-def test_a_tell_rule_is_info_until_the_tells_exist_and_a_run_that_measured_nothing_is_not_verified(tmp_path):
+def test_a_run_that_measured_nothing_is_not_verified_for_every_kind_of_rule(tmp_path):
     p = make_project(tmp_path)
     rows = judge_rules(p, [{"id": "no-eyebrow", "kind": "tell", "tell": "eyebrow", "g4": "no eyebrow"}, ONE_MARK, SHORT_BUTTONS, ACCENT_ROOM], [])
-    assert rows["no-eyebrow"]["status"] == "info" and "available once the page tells exist" in rows["no-eyebrow"]["detail"] and "'eyebrow'" in rows["no-eyebrow"]["detail"]
-    assert {k: rows[k]["status"] for k in ("one-mark", "short-buttons", "accent-room")} == {"one-mark": "skipped", "short-buttons": "skipped", "accent-room": "skipped"}
-    assert all("not verified: no view was measured" in rows[k]["detail"] for k in ("one-mark", "short-buttons", "accent-room"))
+    assert {k: rows[k]["status"] for k in ("no-eyebrow", "one-mark", "short-buttons", "accent-room")} == dict.fromkeys(("no-eyebrow", "one-mark", "short-buttons", "accent-room"), "skipped")
+    assert all("not verified: no view was measured" in rows[k]["detail"] for k in ("no-eyebrow", "one-mark", "short-buttons", "accent-room"))
     failed_view = [{"width": 390, "scheme": "light", "viewport": {"width": 390, "height": 844}, "error": "could not load"}]
     assert judge_rules(p, [ONE_MARK], failed_view)["one-mark"]["status"] == "skipped"
+    assert judge_rules(p, [{"id": "no-eyebrow", "kind": "tell", "tell": "eyebrow", "g4": "no eyebrow"}], failed_view)["no-eyebrow"]["status"] == "skipped"
 
 
 def test_the_words_rules_judge_constructed_facts(tmp_path):
@@ -2393,3 +2394,418 @@ def test_render_page_measure_refuses_a_rules_list_it_cannot_read(tmp_path):
                            capture_output=True, text=True, env={**os.environ, "BRAND_CREATOR_DATA": str(data)})
         assert r.returncode == 2 and "rules must be a list of up to 200 objects" in r.stderr, (rules, r.returncode, r.stderr)
     assert not (tmp_path / "out.json").exists()
+
+
+# ---------------------------------------------------------------- the generic tells (warnings)
+
+TELL_IDS = ["eyebrow", "arrow-glued", "middot-run", "stock-second-action", "hero-text-budget", "styled-div-mock", "three-equal-tiles"]
+LONG_HERO = ("Every Acme tool is forged in one workshop, tested by the people who use it every day, and sold with a published list of its spare parts so that a worn "
+             "handle or a bent blade is a small repair and never a reason to buy the whole tool again.")   # more than 45 words
+
+
+def tells_page(lang: str = "en", second: str = "Learn more", hero_text: str = LONG_HERO) -> str:
+    """One page that shows all seven tells, and the stock order of a product page: hero, three tiles, a box made of boxes, an FAQ, a closing band."""
+    mock = "<i></i>" * 8
+    style = """  nav, section, .mock { display: block; margin: 0; }
+  .eyebrow { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; }
+  .tiles { display: flex; gap: 16px; }
+  .tile { flex: 1 1 0; padding: 8px; }
+  .mock { width: 300px; height: 200px; }
+  .mock i { display: block; height: 12px; margin: 4px; border: 1px solid var(--color-text); }
+"""
+    return PAGE.replace('lang="en"', f'lang="{lang}"').replace("</style>", style + "</style>").replace(
+        PAGE[PAGE.index("<main>"):PAGE.index("</main>") + len("</main>")], f"""<nav><a href="#a">Products</a> <a href="#b">Pricing</a></nav>
+<main>
+<section class="hero">
+  <p class="eyebrow">Spare parts</p>
+  <h1>Acme hand tools</h1>
+  <p>{hero_text}</p>
+  <p class="actions"><a class="go" href="#start">Start now →</a> <a class="second" href="#how">{second}</a></p>
+  <p class="meta">Free shipping · Free returns · Lifetime spares</p>
+</section>
+<section class="tiles">
+  <div class="tile"><h2>Hammers</h2><p>Forged.</p></div>
+  <div class="tile"><h2>Saws</h2><p>Sharp.</p></div>
+  <div class="tile"><h2>Planes</h2><p>True.</p></div>
+</section>
+<div class="mock">{mock}</div>
+<section class="faq"><h2>FAQ</h2><details><summary>Can I repair a tool?</summary><p>Yes, with the spare-parts list.</p></details></section>
+<section class="closing"><h2>Ready to order?</h2><p><a href="#order">Order a tool</a></p></section>
+</main>""")
+
+
+def tell_row(rep: dict, tid: str) -> dict:
+    return row(rep, f"tell:{tid}")
+
+
+def leaf(selector: str, levels: int = 2) -> str:
+    """The last levels of a selector the check wrote, without its :nth-of-type counts: `section.hero > p.eyebrow`."""
+    return " > ".join(re.sub(r":nth-of-type\(\d+\)", "", selector).split(" > ")[-levels:])
+
+
+def tell_view(width: int = 1440, scheme: str = "light", lang: str = "en", **facts) -> dict:
+    """A view as the browser would have measured it, with the candidates of the tells; what is not given is empty."""
+    base = {"viewport": {"width": width, "height": 900}, "eyebrow": [], "arrows": [], "separators": [], "hero": {"found": False}, "boxes": [], "tiles": [], "headings": [], "details": [],
+            "last_band": None}
+    return {"width": width, "scheme": scheme, "lang": lang, "viewport": {"width": width, "height": 900}, "tell_facts": {**base, **facts}}
+
+
+def found_tells(*views: dict) -> dict:
+    return pagecheck.find_tells({"views": list(views)}, pagecheck.load_tells())
+
+
+def tell_rows_of(p: Path, views: list[dict], *rules: dict) -> dict[str, dict]:
+    """tell_rows on constructed measurements; `rules` are page rules (a tell the owner adopted has no tell: row)."""
+    loaded = qa_rules.load(p)[0]
+    loaded["page"]["rules"] = qa_rules.validate_page_rules(list(rules))
+    ctx = pagecheck.Ctx(p, pagecheck.Target("project", "pages/x.html", page="pages/x.html"), [1440], ["light"], loaded, {})
+    rep = Report("page-check/x-000000", p)
+    pagecheck.tell_rows(rep, {"views": views}, ctx)
+    return {r["id"]: r for r in rep.results}
+
+
+def test_the_tells_file_names_the_tells_the_page_check_knows():
+    cfg = pagecheck.load_tells()
+    assert pagecheck.tell_ids() == TELL_IDS and cfg["languages"] == ["en", "pl"] and [n["id"] for n in cfg["notes"]] == ["stock-anatomy"]
+
+
+def test_the_tell_thresholds_are_applied_to_what_the_browser_collected():
+    """No browser: each number of page-tells.json decides at its edge, on the candidates the collector reports."""
+    eb = lambda **k: {"sel": "p.k", "text": "NEW", "words": 4, "uppercase": True, "letter_spacing_em": 0, "font_size_px": 12, "heading_sel": "h1", "heading_tag": "h1", "heading_font_size_px": 32, **k}
+    hits = lambda tid, *views: found_tells(*views)["hits"][tid]
+    assert len(hits("eyebrow", tell_view(eyebrow=[eb()]))) == 1                                              # 4 words, in capitals, smaller than the heading
+    assert not hits("eyebrow", tell_view(eyebrow=[eb(words=5)]))                                             # 5 words is a sentence
+    assert len(hits("eyebrow", tell_view(eyebrow=[eb(uppercase=False, letter_spacing_em=0.05)]))) == 1       # not in capitals, but tracked wide
+    assert not hits("eyebrow", tell_view(eyebrow=[eb(uppercase=False, letter_spacing_em=0.049)]))
+    assert not hits("eyebrow", tell_view(eyebrow=[eb(font_size_px=32)]))                                     # not smaller than the heading
+    ar = lambda gap: {"sel": "a.go", "label": "Go →", "edge": "end", "glyph": "→", "gap_chars": gap}
+    assert [len(hits("arrow-glued", tell_view(arrows=[ar(g)]))) for g in (0, 1, 2)] == [1, 1, 0]
+    sep = lambda n, via="text": {"sel": "p.meta", "text": "a · b · c", "count": n, "via": via}
+    assert [len(hits("middot-run", tell_view(separators=[sep(n)]))) for n in (1, 2, 3)] == [0, 1, 1]
+    assert len(hits("middot-run", tell_view(separators=[sep(2), sep(2, "pseudo")]))) == 2                    # the same element, text and pseudo-elements: two ways to see it
+    hero = lambda words, **k: {"found": True, "sel": "section.hero", "h1_sel": "h1", "top": 0, "words": words, "viewport_height": 900, "lang": "en", "actions": [], **k}
+    assert [len(hits("hero-text-budget", tell_view(hero=hero(n)))) for n in (45, 46)] == [0, 1]
+    act = lambda label, lang="en": {"sel": f"a.{label[:3]}", "label": label, "lang": lang}
+    second = lambda label, lang="en", page_lang="en": hits("stock-second-action", tell_view(lang=page_lang, hero=hero(10, actions=[act("Start now"), act(label, lang)])))
+    assert len(second("Learn more")) == 1 and len(second("LEARN MORE →")) == 1 and len(second("  Learn   more…")) == 1     # letter case, arrows, dots and white space do not hide it
+    assert not second("Get a quote") and not second("Learn more about our tools")                            # only the stock label itself
+    assert len(second("Dowiedz się więcej", "pl", "pl")) == 1 and len(second("Zobacz, jak to działa", "pl", "pl")) == 1 and not second("Learn more", "pl", "pl")
+    assert not hits("stock-second-action", tell_view(hero=hero(10, actions=[act("Learn more")])))             # one action is not a second action
+    assert not hits("stock-second-action", tell_view(hero=hero(10, actions=[act("Learn more"), act("Start now")])))   # it is the second one that counts
+    box = lambda **k: {"id": 1, "parent": None, "sel": "div.mock", "width": 240, "height": 160, "styled": 8, "media": 0, "labelled": False, **k}
+    assert len(hits("styled-div-mock", tell_view(boxes=[box()]))) == 1
+    for off in ({"width": 239}, {"height": 159}, {"styled": 7}, {"media": 1}, {"labelled": True}):
+        assert not hits("styled-div-mock", tell_view(boxes=[box(**off)])), off
+    inner = box(id=2, parent=1, sel="div.mock > div.screen", styled=9)
+    assert [h["selector"] for h in hits("styled-div-mock", tell_view(boxes=[box(styled=20), inner]))] == ["div.mock > div.screen"]   # the innermost box, not the page round it
+    assert [h["selector"] for h in hits("styled-div-mock", tell_view(boxes=[box(styled=20, media=1), inner]))] == ["div.mock > div.screen"]
+    assert [h["selector"] for h in hits("styled-div-mock", tell_view(boxes=[box(styled=20), box(id=2, parent=1, sel="div.screen", styled=3)]))] == ["div.mock"]   # a part with too few is not it
+
+    def tiles(widths=(300, 300, 300), heights=(100, 100, 100), tops=(0, 0, 0), lefts=(0, 316, 632)) -> list[dict]:
+        return [{"sel": "section.tiles", "tiles": [{"sel": f"div:nth-of-type({i + 1})", "left": lefts[i], "top": tops[i], "width": widths[i], "height": heights[i]} for i in range(3)]}]
+    tile_hits = lambda width=1440, **k: hits("three-equal-tiles", tell_view(width=width, tiles=tiles(**k)))
+    assert len(tile_hits()) == 1 and len(tile_hits(widths=(300, 301, 302))) == 1 and not tile_hits(widths=(300, 301, 303))      # widths within 2 px
+    assert len(tile_hits(heights=(100, 80, 90))) == 1 and not tile_hits(heights=(100, 79, 90))                                  # the shorter at least 0.8 of the taller
+    assert len(tile_hits(width=1024)) == 1 and not tile_hits(width=1023)                                                          # a phone shows them stacked
+    assert not tile_hits(tops=(0, 120, 240), lefts=(0, 0, 0)) and not tile_hits(lefts=(0, 250, 500))                             # stacked, or overlapping, is not a row
+    assert len(found_tells(tell_view(width=390, eyebrow=[eb()]), tell_view(width=1440, eyebrow=[eb()]))["hits"]["eyebrow"]) == 1   # the same place in two views is one hit ...
+    assert found_tells(tell_view(width=390, eyebrow=[eb()]), tell_view(width=1440, eyebrow=[eb()]))["hits"]["eyebrow"][0]["widths"] == [390, 1440]   # ... seen at both
+
+
+def test_the_stock_order_is_a_note_only_when_every_piece_is_there_in_order():
+    hero = {"found": True, "sel": "section.hero", "h1_sel": "h1", "top": 0, "words": 10, "viewport_height": 900, "lang": "en", "actions": []}
+    tiles = [{"sel": "section.tiles", "tiles": [{"sel": f"div:nth-of-type({i})", "left": 316 * (i - 1), "top": 500, "width": 300, "height": 100} for i in (1, 2, 3)]}]
+    band = lambda **k: {"sel": "section.closing", "top": 1400, "words": 8, "headings": 1, "actions": 1, **k}
+    view = lambda width=1440, **k: tell_view(width=width, **{"hero": hero, "tiles": tiles, "details": [{"sel": "details", "top": 900}], "last_band": band(), **k})
+    got = found_tells(view())["anatomy"]
+    assert got == {"view": "1440-light", "hero": 0, "tiles": 500, "faq": 900, "closing_band": 1400}, got
+    assert found_tells(view(headings=[{"sel": "h2", "text": "Najczęstsze pytania", "top": 900}], details=[]))["anatomy"]["faq"] == 900   # a heading that is a word of the list does as an FAQ ...
+    assert found_tells(view(headings=[{"sel": "h2", "text": "Pricing", "top": 900}], details=[]))["anatomy"] is None   # ... another heading does not
+    assert found_tells(view(width=390))["anatomy"] is None                                                           # no row of tiles on a phone
+    assert found_tells(view(details=[{"sel": "d", "top": 400}]))["anatomy"] is None                                  # the FAQ must come after the tiles
+    for off in ({"top": 800}, {"words": 41}, {"headings": 0}, {"actions": 0}):
+        assert found_tells(view(last_band=band(**off)))["anatomy"] is None, off                                      # a closing band: after the FAQ, short, a heading and an action
+    assert found_tells(view(hero={**hero, "top": 600}))["anatomy"] is None                                           # the hero is first
+
+
+def test_the_tell_rows_warn_never_fail_and_a_tell_the_owner_adopted_has_one_row_only(tmp_path):
+    """No browser: a hit is a warning that names the place and the widths and says why; nothing found passes; no view is not verified; a page language without a list is not verified."""
+    p = make_project(tmp_path)
+    eb = {"sel": "p.eyebrow", "text": "SPARE PARTS", "words": 2, "uppercase": True, "letter_spacing_em": 0.12, "font_size_px": 12, "heading_sel": "h1", "heading_tag": "h1", "heading_font_size_px": 32}
+    rows = tell_rows_of(p, [tell_view(width=390, eyebrow=[eb]), tell_view(width=1440, eyebrow=[eb])])
+    assert [r for r in rows if r.startswith("tell:")] == [f"tell:{t}" for t in TELL_IDS] and "note:stock-anatomy" not in rows
+    e = rows["tell:eyebrow"]
+    assert e["status"] == "warn" and e["tell"] == "eyebrow" and e["hits"][0]["selector"] == "p.eyebrow" and e["hits"][0]["widths"] == [390, 1440], e
+    assert "1 found: p.eyebrow" in e["detail"] and "SPARE PARTS" in e["detail"] and "390, 1440 px" in e["detail"] and pagecheck.load_tells()["tells"][0]["why"] in e["detail"], e["detail"]
+    assert {k: r["status"] for k, r in rows.items() if k != "tell:eyebrow"} == {f"tell:{t}": "pass" for t in TELL_IDS if t != "eyebrow"}
+    assert all(r["detail"] == "none found in 2 view(s)" and r["hits"] == [] for k, r in rows.items() if k != "tell:eyebrow")
+    many = [{**eb, "sel": f"p.k{n}"} for n in range(9)]
+    assert "and 3 more" in tell_rows_of(p, [tell_view(eyebrow=many)])["tell:eyebrow"]["detail"] and len(tell_rows_of(p, [tell_view(eyebrow=many)])["tell:eyebrow"]["hits"]) == 9   # six are named, all are kept
+    none = tell_rows_of(p, [])
+    assert {r["status"] for r in none.values()} == {"skipped"} and all("not verified: no view was measured" in r["detail"] for r in none.values())
+    bad = [{"width": 390, "scheme": "light", "error": "could not load"}]
+    assert {r["status"] for r in tell_rows_of(p, bad).values()} == {"skipped"}
+    german = tell_rows_of(p, [tell_view(lang="de")])
+    assert german["tell:stock-second-action"]["status"] == "warn" and "NOT verified: no word list for de" in german["tell:stock-second-action"]["detail"]
+    assert {r["status"] for k, r in german.items() if k != "tell:stock-second-action"} == {"pass"}
+    nolang = tell_rows_of(p, [tell_view(lang="")])["tell:stock-second-action"]
+    assert nolang["status"] == "warn" and "an unknown language (the page sets no lang)" in nolang["detail"], nolang
+    assert tell_rows_of(p, [tell_view(lang="en-GB")])["tell:stock-second-action"]["status"] == "pass" and tell_rows_of(p, [tell_view(lang="pl-PL")])["tell:stock-second-action"]["status"] == "pass"
+    cut = tell_view()
+    cut["tell_facts"]["truncated"] = True
+    for tid in ("middot-run", "styled-div-mock", "three-equal-tiles"):
+        assert tell_rows_of(p, [cut])[f"tell:{tid}"]["status"] == "warn" and "NOT verified beyond the first elements" in tell_rows_of(p, [cut])[f"tell:{tid}"]["detail"], tid
+    assert tell_rows_of(p, [cut])["tell:eyebrow"]["status"] == "pass"
+    adopted = tell_rows_of(p, [tell_view(eyebrow=[eb])], {"id": "no-eyebrow", "kind": "tell", "tell": "eyebrow", "g4": "no eyebrow over a heading"})
+    assert "tell:eyebrow" not in adopted and len([k for k in adopted if k.startswith("tell:")]) == 6   # the rule's page:rule:no-eyebrow row speaks for it
+
+
+def test_a_tell_rule_is_judged_like_the_other_rules(tmp_path):
+    """No browser: a hit of an adopted tell warns until the rule is tied to a recorded G4 line and fails after; none found passes."""
+    p = make_project(tmp_path)
+    eb = {"sel": "p.eyebrow", "text": "SPARE PARTS", "words": 2, "uppercase": True, "letter_spacing_em": 0.12, "font_size_px": 12, "heading_sel": "h1", "heading_tag": "h1", "heading_font_size_px": 32}
+    rule = {"id": "no-eyebrow", "kind": "tell", "tell": "eyebrow", "g4": "no eyebrow over a heading"}
+    seen, clean = [tell_view(eyebrow=[eb])], [tell_view()]
+    w = judge_rules(p, [rule], seen)["no-eyebrow"]
+    assert w["status"] == "warn" and w["tied"] is False and w["tell"] == "eyebrow" and w["hits"][0]["selector"] == "p.eyebrow" and "not a recorded G4 rule line yet" in w["detail"], w
+    assert "1 found of the tell \"An eyebrow over a heading\": p.eyebrow" in w["detail"], w["detail"]
+    ok = judge_rules(p, [rule], clean)["no-eyebrow"]
+    assert ok["status"] == "pass" and ok["hits"] == [] and "none found of the tell" in ok["detail"] and "not a recorded G4 rule line yet" in ok["detail"], ok
+    mutate(p / "BRAND-STATE.md", "- (rule) (...)", "- (rule) No eyebrow over a heading, ever")
+    assert bc("state", "--record", "G4", "GO", project=p).returncode == 0
+    f = judge_rules(p, [rule], seen)["no-eyebrow"]
+    assert f["status"] == "fail" and f["tied"] is True and "tied to the recorded G4 line" in f["detail"], f
+    assert judge_rules(p, [rule], clean)["no-eyebrow"]["status"] == "pass"
+    german = judge_rules(p, [{**rule, "id": "no-stock", "tell": "stock-second-action"}], [tell_view(lang="de")])["no-stock"]   # a rule on a tell that needs a word list
+    assert german["status"] == "warn" and "NOT verified: no word list for de" in german["detail"], german
+
+
+def test_a_rule_that_names_no_tell_is_a_usage_error_before_a_page_is_opened(tmp_path):
+    p = make_project(tmp_path)
+    write_page(p)
+    (p / "qa").mkdir()
+    rules = [{"id": "no-sparkle", "kind": "tell", "tell": "sparkle", "g4": "no sparkle"}]
+    (p / "qa" / "rules.json").write_text(json.dumps({"schema": 1, "page": {"rules": rules}}), encoding="utf-8")
+    r = bc("page-check", "pages/index.html", project=p)
+    assert r.returncode == 2 and "qa/rules.json" in r.stderr and "page.rules" in r.stderr and "'sparkle' is not a generic tell" in r.stderr and all(t in r.stderr for t in TELL_IDS), r.stderr
+    assert page_reports(p) == []
+    with pytest.raises(CliError) as e:
+        pagecheck.check_tell_rules(qa_rules.validate_page_rules(rules))
+    assert e.value.code == 2
+    pagecheck.check_tell_rules(qa_rules.validate_page_rules([{**rules[0], "tell": "eyebrow"}, {"id": "x", "kind": "max-marks-per-view", "max": 1, "g4": "g"}]))   # a known tell, and a rule of another kind, pass
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_each_tell_is_found_on_a_page_built_to_show_it(acme):
+    write_page(acme, tells_page())
+    r = bc("page-check", "pages/index.html", "--widths", "390,1440", "--schemes", "light", project=acme)
+    assert r.returncode == 0, r.stdout + r.stderr   # tells warn, they never fail a page
+    rep = report(acme, pagecheck.report_tool("pages/index.html"))
+    assert rep["status"] == "pass" and [x["id"] for x in rep["results"] if x["id"].startswith("tell:")] == [f"tell:{t}" for t in TELL_IDS]
+    assert {tid: tell_row(rep, tid)["status"] for tid in TELL_IDS} == dict.fromkeys(TELL_IDS, "warn")
+    for tid in TELL_IDS:
+        assert tell_row(rep, tid)["hits"] and tell_row(rep, tid)["tell"] == tid and "1 found" in tell_row(rep, tid)["detail"], tell_row(rep, tid)
+    hit = lambda tid: tell_row(rep, tid)["hits"][0]
+    assert leaf(hit("eyebrow")["selector"]) == "section.hero > p.eyebrow" and hit("eyebrow")["widths"] == [390, 1440] and "SPARE PARTS" in hit("eyebrow")["text"]   # as the reader sees it, in capitals
+    assert leaf(hit("arrow-glued")["selector"], 3) == "section.hero > p.actions > a.go" and "Start now →" in hit("arrow-glued")["text"] and hit("arrow-glued")["widths"] == [390, 1440]
+    assert leaf(hit("middot-run")["selector"]) == "section.hero > p.meta" and "2 separating dots" in hit("middot-run")["text"]
+    assert leaf(hit("stock-second-action")["selector"], 3) == "section.hero > p.actions > a.second" and "Learn more" in hit("stock-second-action")["text"]
+    assert leaf(hit("hero-text-budget")["selector"], 1) == "section.hero" and hit("hero-text-budget")["widths"] == [390, 1440]
+    assert leaf(hit("styled-div-mock")["selector"]) == "main > div.mock" and "8 styled boxes" in hit("styled-div-mock")["text"] and hit("styled-div-mock")["widths"] == [390, 1440]
+    assert leaf(hit("three-equal-tiles")["selector"]) == "main > section.tiles" and hit("three-equal-tiles")["widths"] == [1440]   # at 390 px they are not shown as a row of three
+    note = row(rep, "note:stock-anatomy")
+    assert note["status"] == "info" and note["anatomy"]["view"] == "1440-light" and note["anatomy"]["hero"] < note["anatomy"]["tiles"] < note["anatomy"]["faq"] < note["anatomy"]["closing_band"], note
+    assert row(rep, "page:colours:light")["status"] == "pass" and row(rep, "page:fonts")["status"] == "pass"   # the page is otherwise the brand's: only the patterns warn
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_page_with_none_of_the_patterns_passes_every_tell_row(acme):
+    write_page(acme)
+    r, rep = check_page(acme)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert rep["status"] == "pass"
+    assert {tid: tell_row(rep, tid)["status"] for tid in TELL_IDS} == dict.fromkeys(TELL_IDS, "pass") and all("none found in 2 view(s)" in tell_row(rep, t)["detail"] for t in TELL_IDS)
+    assert not [x for x in rep["results"] if x["id"] == "note:stock-anatomy"]
+    v = json.loads(Path(rep["measures"]).read_text(encoding="utf-8"))["views"][0]["tell_facts"]
+    assert v["hero"]["found"] and v["hero"]["words"] == 13 and v["hero"]["actions"][0]["label"] == "Spare parts" and not v["eyebrow"] and not v["arrows"] and not v["separators"] and not v["boxes"] and not v["tiles"]
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_bulleted_list_a_spaced_arrow_and_a_hidden_child_are_not_what_the_tells_look_for(acme):
+    """A tell is judged on what a reader sees: a list with a marker on each line is no run of dots between items, an arrow set apart by drawn spaces is not glued, and a
+    <template> beside three tiles is no fourth tile. A tell adopted as a tied rule would otherwise fail an ordinary page; an inline breadcrumb still fails it."""
+    page = write_page(acme)
+    mutate(page, "</style>", """  ul.ticks, ol.crumbs { list-style: none; padding: 0; }
+  ul.ticks li::before { content: "•"; margin-right: 6px; }
+  ol.crumbs { display: flex; } ol.crumbs li + li::before { content: "·"; margin: 0 4px; }
+  .trio { display: flex; } .trio > div { flex: 1 1 0; }
+</style>""")
+    mutate(page, "</main>", """<ul class="ticks"><li>Forged steel heads</li><li>Spare parts listed</li><li>Repairs by post</li></ul>
+  <p class="brk">• Forged steel heads<br>• Spare parts listed<br>• Repairs by post</p>
+  <p><a href="#s">Spare parts&nbsp;&nbsp;&nbsp;&nbsp;→</a></p>
+  <div class="trio"><div><h2>One</h2></div><div><h2>Two</h2></div><div><h2>Three</h2></div><template><div><h2>Not shown</h2></div></template></div>
+</main>""")
+    r = bc("page-check", "pages/index.html", "--widths", "1440", "--schemes", "light", project=acme)
+    assert r.returncode == 0, r.stdout + r.stderr
+    rep = report(acme, pagecheck.report_tool("pages/index.html"))
+    assert tell_row(rep, "middot-run")["status"] == "pass" and tell_row(rep, "arrow-glued")["status"] == "pass", [tell_row(rep, t) for t in ("middot-run", "arrow-glued")]
+    assert tell_row(rep, "three-equal-tiles")["status"] == "warn" and leaf(tell_row(rep, "three-equal-tiles")["hits"][0]["selector"]) == "main > div.trio"
+    set_page_rules(acme, {"id": "no-dots", "kind": "tell", "tell": "middot-run", "g4": "no run of dots between items"})
+    record_g4(acme, "(rule) no run of dots between items")
+    r = bc("page-check", "pages/index.html", "--widths", "1440", "--schemes", "light", project=acme)
+    assert r.returncode == 0, r.stdout + r.stderr   # tied rules, and the page holds to them
+    rep = report(acme, pagecheck.report_tool("pages/index.html"))
+    assert rule_row(rep, "no-dots")["status"] == "pass" and rule_row(rep, "no-dots")["tied"] is True
+    mutate(page, "</main>", '<ol class="crumbs"><li>Home</li><li>Tools</li><li>Saws</li></ol>\n</main>')   # a breadcrumb of dots in one row is the pattern
+    r = bc("page-check", "pages/index.html", "--widths", "1440", "--schemes", "light", project=acme)
+    assert r.returncode == 1, r.stdout + r.stderr
+    rep = report(acme, pagecheck.report_tool("pages/index.html"))
+    bad = rule_row(rep, "no-dots")
+    assert bad["status"] == "fail" and [leaf(h["selector"], 1) for h in bad["hits"]] == ["ol.crumbs"] and "2 separating dots between its children" in bad["hits"][0]["text"], bad
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_page_in_german_says_its_stock_labels_are_not_verified(acme):
+    write_page(acme, tells_page(lang="de", second="Mehr erfahren"))
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 0, r.stdout + r.stderr
+    stock = tell_row(rep, "stock-second-action")
+    assert stock["status"] == "warn" and "NOT verified: no word list for de" in stock["detail"] and stock["hits"] == [], stock
+    assert tell_row(rep, "eyebrow")["status"] == "warn" and tell_row(rep, "arrow-glued")["status"] == "warn"   # the tells that need no word list are still found
+    write_page(acme, tells_page(lang="pl", second="Dowiedz się więcej"), "pages/pl.html")
+    r, rep = check_page(acme, "--schemes", "light", page="pages/pl.html")
+    assert tell_row(rep, "stock-second-action")["status"] == "warn" and "Dowiedz się więcej" in tell_row(rep, "stock-second-action")["detail"] and "NOT verified" not in tell_row(rep, "stock-second-action")["detail"]
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_an_eyebrow_over_a_heading_warns_and_an_adopted_eyebrow_rule_fails(acme):
+    page = write_page(acme)
+    mutate(page, "</style>", "  .eyebrow { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; }\n</style>")
+    mutate(page, "<h1>", '<p class="eyebrow">New release</p>\n  <h1>')
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 0, r.stdout + r.stderr   # a tell is a warning
+    e = tell_row(rep, "eyebrow")
+    assert e["status"] == "warn" and leaf(e["hits"][0]["selector"]) == "main > p.eyebrow" and "NEW RELEASE" in e["hits"][0]["text"] and rep["status"] == "pass", e
+    set_page_rules(acme, {"id": "no-eyebrow", "kind": "tell", "tell": "eyebrow", "g4": "no eyebrow over a heading"})
+    r, rep = check_page(acme, "--schemes", "light")   # adopted, but G4 is not recorded: still a warning, now on the rule's row
+    assert r.returncode == 0, r.stdout + r.stderr
+    w = rule_row(rep, "no-eyebrow")
+    assert w["status"] == "warn" and w["tied"] is False and leaf(w["hits"][0]["selector"]) == "main > p.eyebrow" and "not a recorded G4 rule line yet" in w["detail"], w
+    assert not [x for x in rep["results"] if x["id"] == "tell:eyebrow"]   # the rule speaks for the tell
+    record_g4(acme, "(rule) no eyebrow over a heading")
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 1, r.stdout + r.stderr
+    bad = rule_row(rep, "no-eyebrow")
+    assert bad["status"] == "fail" and bad["tied"] is True and bad["g4_line"] == "(rule) no eyebrow over a heading" and "NEW RELEASE" in bad["detail"], bad
+    mutate(page, '<p class="eyebrow">New release</p>\n  ', "")
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 0, r.stdout + r.stderr
+    ok = rule_row(rep, "no-eyebrow")
+    assert ok["status"] == "pass" and ok["hits"] == [] and "a recorded G4 rule" in ok["detail"], ok
+
+
+SOCIAL_FILL = {"lang": "en", "name": "Acme", "width": "1080", "height": "1080", "bg": "var(--color-bg)", "fg": "var(--color-text)", "muted": "var(--color-text)", "accent": "var(--color-accent)",
+               "regulated_attr": "", "mark": "", "counter": "1 / 5", "kicker": "Spare parts", "headline": "Every tool has a published spare-parts list."}
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_the_social_post_kicker_is_reported_as_an_eyebrow(acme):
+    """The plugin's own social post (templates/social/post-1x1.html) has a small, uppercase, tracked label above its headline: by the tell it is an eyebrow. It is reported and left as it is."""
+    template = (ROOT / "templates" / "social" / "post-1x1.html").read_text(encoding="utf-8")
+    html = template
+    for key, value in SOCIAL_FILL.items():
+        html = html.replace("{{" + key + "}}", value)
+    assert "{{" not in html
+    html = html.replace('<meta charset="utf-8">', '<meta charset="utf-8"><link rel="stylesheet" href="../assets/tokens/tokens.css">')
+    write_page(acme, html, "pages/post.html")
+    r, rep = check_page(acme, "--schemes", "light", page="pages/post.html")
+    e = tell_row(rep, "eyebrow")
+    assert e["status"] == "warn" and [leaf(h["selector"]) for h in e["hits"]] == ["main > p.kicker"] and "SPARE PARTS" in e["hits"][0]["text"] and "in capitals" in e["hits"][0]["text"], e
+    assert (ROOT / "templates" / "social" / "post-1x1.html").read_text(encoding="utf-8") == template   # nothing was changed
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_the_tells_collector_reports_the_candidates_a_page_shows(acme):
+    style = """  .rule { height: 4px; background: var(--color-accent); }
+  .lbl { margin: 0; font-size: 11px; letter-spacing: 0.1em; }
+  .wrap > span { text-transform: uppercase; }
+  ul.dots { list-style: none; padding: 0; display: flex; }
+  ul.dots li + li::before { content: "·"; margin: 0 4px; }
+  ul.ticks { list-style: none; padding: 0; }
+  ul.ticks li::before { content: "•"; margin-right: 6px; }
+  .arrow::after { content: " ›"; }
+  .boxes { width: 300px; }
+  .boxes div { border: 1px solid var(--color-text); height: 10px; margin: 2px; }
+  .trio { display: flex; } .trio > div { flex: 1 1 0; }
+"""
+    body = """<nav><a href="#n1">Home →</a> <a href="#n2">About</a></nav>
+<main>
+<section class="hero">
+  <h1>Collector page</h1>
+  <nav class="inner"><a href="#q">Inner menu</a></nav>
+  <p class="lbl">Seen from the shop</p><div class="rule"></div><h2>After a rule</h2>
+  <p class="lbl">Not before</p><img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" alt="" width="20" height="20"><h2>After an image</h2>
+  <h2>Heading</h2><h3>After a heading</h3>
+  <ul class="menu"><li>Menu</li></ul><h3>After a list</h3>
+  <div class="wrap"><span>Inside a wrapper</span></div><h3>Wrapped label</h3>
+  <p>Three words here <a class="plain" href="#p">link</a></p>
+  <p><a class="next" href="#x">Next</a> <a class="nudge" href="#y">Go -&gt;</a> <a class="icon" href="#z">→</a> <a class="after arrow" href="#w">Read</a> <button class="far">Back  ←</button></p>
+</section>
+<ul class="dots"><li>A</li><li>B</li><li>C</li></ul>
+<p class="inline">One · <b>two</b> · three · four</p>
+<p class="single">Only · one</p>
+<ul class="ticks"><li>Forged steel heads</li><li>Spare parts listed</li><li>Repairs by post</li></ul>
+<p class="brk">• Forged steel heads<br>• Spare parts listed<br>• Repairs by post</p>
+<p class="mixed">• Forged steel · spare parts<br>• Repairs by post</p>
+<article class="blocky">Intro • <div>• Item</div>• Tail</article>
+<p class="spaced"><a class="gap" href="#g">Spare parts&nbsp;&nbsp;&nbsp;&nbsp;→</a> <a class="glue" href="#h">Repairs&nbsp;→</a></p>
+<div class="boxes">""" + "<div></div>" * 8 + """</div>
+<div class="boxes"><div></div><div></div><div></div><table><tr><td style="border:1px solid">a</td><td style="border:1px solid">b</td></tr></table>
+<input style="border:1px solid"><input style="border:1px solid"><input style="border:1px solid"><input style="border:1px solid"><input style="border:1px solid"></div>
+<div data-sample="a mock screen"><div class="boxes">""" + "<div></div>" * 8 + """</div></div>
+<div class="trio"><div><h3>One</h3></div><div><h3>Two</h3></div><div><h3>Three</h3></div><template><div><h3>Not shown</h3></div></template></div>
+<div class="trio"><div><h3>One</h3></div><div>No heading</div><div><h3>Three</h3></div></div>
+<div class="trio"><div><h3>One</h3></div><div><h3>Two</h3></div><div><h3>Three</h3></div><div><h3>Four</h3></div></div>
+</main>"""
+    write_page(acme, PAGE.replace("</style>", style + "</style>").replace(PAGE[PAGE.index("<main>"):PAGE.index("</main>") + len("</main>")], body))
+    bc("page-check", "pages/index.html", "--widths", "1440", "--schemes", "light", project=acme)   # the report is what is read; other rows of this odd page may fail
+    rep = report(acme, pagecheck.report_tool("pages/index.html"))
+    (v,) = json.loads(Path(rep["measures"]).read_text(encoding="utf-8"))["views"]
+    f = v["tell_facts"]
+    assert f["viewport"] == {"width": 1440, "height": 900} and "truncated" not in f
+    texts = {e["text"].lower(): e for e in f["eyebrow"]}
+    assert set(texts) == {"seen from the shop", "inside a wrapper"}, sorted(texts)      # not "Not before" (an image sits between), not a heading before a heading, not a list
+    shop = texts["seen from the shop"]
+    assert (shop["words"], shop["uppercase"], shop["letter_spacing_em"], shop["font_size_px"], shop["heading_tag"], shop["heading_font_size_px"]) == (4, False, 0.1, 11, "h2", 24)   # the empty rule box is looked past
+    wrapped = texts["inside a wrapper"]
+    assert wrapped["uppercase"] is True and wrapped["sel"].endswith("div.wrap:nth-of-type(2)") and wrapped["heading_tag"] == "h3"   # a wrapper's text is styled by the span inside it
+    arrows = {a["label"]: a for a in f["arrows"]}
+    assert set(arrows) == {"Home →", "Go ->", "Read ›", "Back ←", "Spare parts →", "Repairs →"}, sorted(arrows)       # "Next" has no arrow, and "→" alone is an icon button
+    assert (arrows["Home →"]["edge"], arrows["Home →"]["gap_chars"], arrows["Home →"]["glyph"]) == ("end", 1, "→")
+    assert (arrows["Go ->"]["edge"], arrows["Go ->"]["glyph"]) == ("end", "->") and arrows["Read ›"]["gap_chars"] == 1 and arrows["Back ←"]["gap_chars"] == 1   # the ::after content is part of the label, white space collapses
+    assert (arrows["Spare parts →"]["gap_chars"], arrows["Repairs →"]["gap_chars"]) == (4, 1)   # four no-break spaces are drawn, so the gap is 4; one is a gap of 1
+    seps = {(s["sel"].split(" > ")[-1].split(":")[0], s["via"]): s["count"] for s in f["separators"]}
+    assert seps == {("p.inline", "text"): 3, ("p.single", "text"): 1, ("p.mixed", "text"): 1, ("ul.dots", "pseudo"): 2}, seps   # a child element stands in the text as one unit
+    # not candidates: a stacked list marked by ::before (ul.ticks), dots that start a line after a <br> (p.brk), dots at the edge of a line next to a block child (article.blocky); a marker that starts a line
+    # is not counted where the same line also holds a separator (p.mixed: one)
+    hero = f["hero"]
+    assert hero["found"] and hero["sel"] == "body > main > section.hero" and hero["h1_sel"].endswith("h1") and hero["lang"] == "en"
+    assert [a["label"] for a in hero["actions"]] == ["link", "Next", "Go ->", "→", "Read ›", "Back ←"]   # the nav inside the hero is not an action, the first six are kept
+    assert hero["words"] == 35, hero["words"]                                           # the nav's words are not counted
+    mocks = [b for b in f["boxes"] if b["styled"] == 8 and b["width"] == 300]
+    assert [(m["labelled"], m["media"]) for m in mocks] == [(False, 0), (True, 0)], f["boxes"]   # eight bordered boxes; the same inside a labelled sample
+    assert not [b for b in f["boxes"] if b["sel"].endswith("div.boxes:nth-of-type(2)")]          # three bordered boxes: inputs and table cells do not count
+    main = next(b for b in f["boxes"] if b["sel"] == "body > main")
+    assert main["media"] == 1 and main["styled"] >= 16 and main["parent"] is None and all(b["parent"] is not None for b in f["boxes"] if b is not main)
+    assert [t["sel"].endswith("div.trio:nth-of-type(4)") for t in f["tiles"]] == [True]          # exactly three shown children, each with a heading (the <template> in the first row is no tile; four, or one with no heading, is no row)
+    tiles = f["tiles"][0]["tiles"]
+    assert len({t["width"] for t in tiles}) == 1 and tiles[0]["left"] < tiles[1]["left"] < tiles[2]["left"] and len({t["top"] for t in tiles}) == 1
+    assert [h["text"] for h in f["headings"]][:4] == ["Collector page", "After a rule", "After an image", "Heading"] and f["details"] == []
+    assert f["last_band"]["sel"].endswith("div.trio:nth-of-type(6)") and f["last_band"]["headings"] == 4 and f["last_band"]["actions"] == 0

@@ -354,5 +354,6 @@ Full file contract: `${CLAUDE_PLUGIN_ROOT}/scripts/CONTRACT.md`. Templates: `${C
 - [prompt-fragments.md](references/prompt-fragments.md): the prompt skeleton for designer, judge and reviewer passes.
 - [fleet.md](references/fleet.md): the opt-in workflows and agents, the fleet gate in full, model ceiling, the refine loop, resume.
 - [ai-defaults.json](references/ai-defaults.json): the reflex list every direction is tested against.
+- [page-tells.json](references/page-tells.json): the generic page tells the page check warns about (English and Polish).
 - [platform-specs.md](references/platform-specs.md): every platform size the emitters use, with source, date and status V, R or U (generated from `scripts/emitters/platform-specs.json`; never edited by hand).
 - [examples/acme/README.md](references/examples/acme/README.md): a synthetic worked brand (state, decisions, round 1 page, map).

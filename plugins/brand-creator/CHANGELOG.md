@@ -141,6 +141,18 @@ stage, and why, is in the [archive](docs/archive/README.md).
   is not an approved system rule yet. A word is what Unicode word segmentation counts, in the page's language: a
   hyphenated compound is two and an arrow is none. A selector the browser cannot read fails its row. An unknown kind or
   key, a missing `g4` or a repeated `id` is refused before the page is opened.
+- `page-check` warns about generic patterns that make a page read as a template, in English and Polish (`tell:<name>`
+  rows): a small label in capitals over a heading (an eyebrow), an arrow glued to a link or button label, a line of
+  items joined by middle dots (a bulleted list is not one), a stock label such as "Learn more" or "Dowiedz się więcej"
+  on the hero's second action, more than 45 words in the hero's first screen, a mock-up built from many styled boxes
+  with no image, and a row of three equal tiles. Each warning names where the pattern is and at which widths; none of
+  them ever fails a page. A page in another language is reported as not verified for the stock labels, and a page that
+  follows the stock order of a product page (hero, three tiles, FAQ, closing band) gets a note. To hold your pages to
+  one of the patterns, add a rule of kind `tell` to `page.rules` (`{"id": "no-eyebrow", "kind": "tell", "tell":
+  "eyebrow", "g4": "no eyebrow over a heading"}`): it is then tied to your approved system rule like the other page
+  rules, and a name that is not one of the patterns is refused before the page is opened. The social post template
+  that ships with the plugin has a small capital label above its headline; that counts as an eyebrow, and it is
+  reported, not changed.
 
 ### Changed
 

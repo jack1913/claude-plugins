@@ -376,6 +376,34 @@ def test_ai_defaults_is_a_generic_reflex_list():
     assert "hit: <id> | <argument>" in " ".join(d["how_to_use"])
 
 
+def test_page_tells_names_each_tell_with_its_keys_and_both_word_lists():
+    """The generic page tells `page-check` warns about: every tell says what it is, why, how it is measured and with which numbers; a tell with a word list has it in each language."""
+    d = json.loads((REFS / "page-tells.json").read_text(encoding="utf-8"))
+    assert d["version"] == 1 and d["$description"] and d["languages"] == ["en", "pl"]
+    assert [t["id"] for t in d["tells"]] == ["eyebrow", "arrow-glued", "middot-run", "stock-second-action", "hero-text-budget", "styled-div-mock", "three-equal-tiles"]
+    required = {"id", "name", "what", "why", "measure"}
+    for t in d["tells"]:
+        assert required <= set(t) and set(t) <= required | {"threshold", "words"}, t["id"]
+        assert all(isinstance(t[k], str) and t[k].strip() for k in required), t["id"]
+        assert re.fullmatch(r"[a-z]+(?:-[a-z]+)*", t["id"]), t["id"]
+        if "threshold" in t:
+            assert t["threshold"] and all(isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0 for v in t["threshold"].values()), t["id"]
+        if "words" in t:
+            assert set(t["words"]) == set(d["languages"]), t["id"]
+            for lang, words in t["words"].items():
+                assert len(words) >= 10 and len(words) == len({w.casefold() for w in words}) and all(isinstance(w, str) and w.strip() for w in words), (t["id"], lang)
+    assert {t["id"] for t in d["tells"] if "words" in t} == {"stock-second-action"}
+    (note,) = d["notes"]
+    assert note["id"] == "stock-anatomy" and note["what"] and note["measure"] and set(note["words"]) == set(d["languages"]) and note["threshold"]["cta_max_words"] > 0
+    assert not re.search(r"#[0-9a-fA-F]{3,8}\b", json.dumps(d)), "patterns are described in words, never as colour values"
+    index = (REFS / "_index.md").read_text(encoding="utf-8")
+    assert any(ln.startswith("| [page-tells.json](page-tells.json) | ") for ln in index.splitlines())
+    skill = ORCH.read_text(encoding="utf-8")
+    refs = skill[skill.index("## References"):]
+    assert "- [page-tells.json](references/page-tells.json): the generic page tells the page check warns about (English and Polish)." in refs
+    assert skill.index("## Round mechanics") < skill.index("- [page-tells.json]"), "the bullet is below the top of SKILL.md, which has no room"
+
+
 def test_templates_are_self_contained_and_avoid_the_ai_default_cluster():
     for name in ("round-page.html", "board.html", "review/index.html", "card.html", "style-board.html"):
         text = (ROOT / "templates" / name).read_text(encoding="utf-8")

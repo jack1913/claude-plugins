@@ -918,6 +918,285 @@ async function ruleFacts(page, request) {
   }, [rules, RULE_ITEMS, CONTROLS]);
 }
 
+// ---------------------------------------------------------------- generic tells
+// The candidates for the generic tells of skills/brand-creator/references/page-tells.json. Each list is what the browser can SEE; pagecheck.py applies the thresholds of that file
+// (words, letter spacing, sizes, counts) and the word lists, so a threshold has one home. The floors below only bound how much a view reports.
+const TELL = {
+  elements: 8000,        // elements walked for separators and boxes; the view says so when the page had more
+  eyebrowWords: 12,      // a label of more words than this is no eyebrow candidate (the tell asks for at most 4)
+  list: 100,             // arrow candidates, separator runs, headings and details reported per view
+  headings: 60,          // headings looked at for an eyebrow
+  heroActions: 6,        // actions of the hero reported
+  boxFloor: [120, 80, 4],   // a box is a mock-up candidate from this width, height and number of styled descendants (the tell asks for 240 x 160 and 8)
+  boxes: 200,
+  tileGroups: 40,
+};
+
+/** What the generic tells need, in one pass over the visible page; nothing is judged here. `tell_facts`:
+ *  `eyebrow`: [{sel, text (80), words, uppercase, letter_spacing_em, font_size_px, heading_sel, heading_tag, heading_font_size_px}]: for every shown h1-h3 the text element directly
+ *  before it (an empty box between them, a rule or a spacer, is looked past; an image or an icon is not), when it has 1-12 words and no heading in it and is not a nav, header, footer, list, table or form. `uppercase` is text-transform
+ *  uppercase, small caps or text typed in capitals; `letter_spacing_em` the computed letter spacing over the font size.
+ *  `arrows`: [{sel, label (80), edge ("start" or "end"), glyph, gap_chars}]: shown links, buttons and submit inputs whose label (the content of ::before and ::after included) starts or
+ *  ends with an arrow, a chevron, a double angle, -> or => next to other text; `gap_chars` is the number of white space characters between them: a run of spaces, tabs and line breaks is one (the browser
+ *  collapses it), a no-break or an em space is each one (the browser draws every one of them).
+ *  `separators`: [{sel, text (80), count, via}]: elements whose own text holds middle dots or bullets with text on both sides on one line (`via: "text"`; a child element is one unit, a <br> or a block child
+ *  ends the line, so a dot that starts a line is a list marker and is not counted), and parents whose children carry a ::before or ::after that is a single dot (`via: "pseudo"`, `count` the children
+ *  that do and have a sibling beside them in one row; a stacked list with a marker on each item separates nothing).
+ *  `hero`: {found, sel, h1_sel, top, words, viewport_height, lang, actions: [{sel, label (80), lang}]}: the first shown h1 and the nearest section, header, [role=banner] or element
+ *  named hero around it (else its parent); `words` are the words of its text, outside a nav, that are in the first screen (the top of the page to the viewport height); `actions` are its
+ *  shown links, buttons and submit inputs with a label, outside a nav and in the first screen, in document order.
+ *  `boxes`: [{id, parent, sel, width, height, styled, media, labelled}]: shown boxes of at least the floor above, `parent` the id of the nearest box above that is also in the list; `styled` is the
+ *  number of shown descendants with a background colour or image or a border (not form controls, table parts or rules), `media` the images, svg, canvas, video and picture inside, `labelled`
+ *  whether the box or an ancestor has a non-empty data-sample.
+ *  `tiles`: [{sel, tiles: [{sel, left, top, width, height}]}]: elements with exactly three shown element children (a <template>, a <script> or a hidden child is not counted) that each hold a shown heading.
+ *  `headings`: [{sel, text (60), top}] (h1-h6) and `details`: [{sel, top}] (a details element with a summary); `last_band`: the last block of the main content {sel, top, words, headings, actions}.
+ *  `viewport` is {width, height}; `truncated` is true when more than TELL.elements elements were on the page. */
+async function tellFacts(page) {
+  return page.evaluate((K) => {
+    const H = window.__bcMeasure;
+    const round = (v) => Math.round(v * 100) / 100;
+    const clean = (t) => String(t ?? "").replace(/\s+/g, " ").trim();
+    const px = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
+    const vh = window.innerHeight, vw = window.innerWidth;
+    const top = (r) => round(r.top + window.scrollY);
+    const langOf = (el) => { const e = el.closest("[lang]"); return e ? e.getAttribute("lang") : ""; };
+    const segmenters = new Map();
+    const segmenter = (lang) => {
+      if (!segmenters.has(lang)) {
+        let s;
+        try { s = new Intl.Segmenter(lang || undefined, { granularity: "word" }); } catch (e) { s = new Intl.Segmenter(undefined, { granularity: "word" }); }
+        segmenters.set(lang, s);
+      }
+      return segmenters.get(lang);
+    };
+    const words = (text, lang) => { let n = 0; for (const seg of segmenter(lang).segment(text)) if (seg.isWordLike) n++; return n; };
+    const boxed = (el) => {   // shown to a reader: not hidden or transparent, with a box
+      if (!H.walkable(el)) return false;
+      const info = H.shown(el);
+      if (!info.shown || info.opacity <= 0) return false;
+      const s = getComputedStyle(el), r = el.getBoundingClientRect();
+      return s.visibility === "visible" && s.display !== "contents" && r.width > 0 && r.height > 0;
+    };
+    const textOf = (el) => clean(el.innerText ?? el.textContent);
+    const HEADING = "h1, h2, h3, h4, h5, h6, [role=heading]";
+    const CONTROLS = "a[href], button, [role=button], input[type=submit], input[type=button]";
+    const MEDIA = "img, svg, picture, canvas, video";
+    const NOT_A_LABEL = "nav, header, footer, ul, ol, dl, table, form, [role=navigation]";   // a menu, a list or a form before a heading is not a label over it
+    const pseudoText = (el, which) => {
+      const c = getComputedStyle(el, which).content;
+      const m = /^"((?:[^"\\]|\\.)*)"$/s.exec(c) || /^'((?:[^'\\]|\\.)*)'$/s.exec(c);
+      return m ? m[1].replace(/\\(.)/gs, "$1") : "";
+    };
+    const labelOf = (el) => {   // what a control shows: its text (the value of an input) with the content of its ::before and ::after
+      const own = el.localName === "input" ? el.value : (el.innerText ?? el.textContent);
+      return clean(pseudoText(el, "::before") + clean(own) + pseudoText(el, "::after"));
+    };
+    const collapsible = (t) => String(t ?? "").replace(/[ \t\n\r\f]+/g, " ").trim();   // what the browser collapses; a no-break space or an em space is drawn, so it stays
+    const spacedLabelOf = (el) => {   // the label with its no-break and em spaces kept, to measure the gap an arrow is set apart by
+      const own = el.localName === "input" ? el.value : (el.innerText ?? el.textContent);
+      return collapsible(pseudoText(el, "::before") + own + pseudoText(el, "::after"));
+    };
+    const all = [...document.body.querySelectorAll("*")];
+    const truncated = all.length > K.elements;
+    const els = truncated ? all.slice(0, K.elements) : all;
+
+    // eyebrow: the text element directly before a heading
+    const before = (h) => {
+      for (let p = h.previousElementSibling; p; p = p.previousElementSibling) {
+        if (!H.walkable(p) || !H.shown(p).shown) continue;
+        if (textOf(p)) return p;
+        if (p.matches(MEDIA) || p.querySelector(MEDIA)) return null;   // an image or an icon is in between
+      }
+      return null;   // only empty boxes (a rule, a spacer) or nothing
+    };
+    const styleSource = (el) => {   // a wrapper's text is styled by the element that holds it
+      let cur = el;
+      for (let i = 0; i < 4; i++) {
+        const kids = [...cur.children].filter((c) => H.walkable(c) && H.shown(c).shown && textOf(c));
+        const ownText = [...cur.childNodes].some((n) => n.nodeType === 3 && n.nodeValue.trim());
+        if (ownText || kids.length !== 1) break;
+        cur = kids[0];
+      }
+      return cur;
+    };
+    const eyebrow = [];
+    for (const h of document.querySelectorAll("h1, h2, h3")) {
+      if (eyebrow.length >= K.headings) break;
+      if (!boxed(h)) continue;
+      const prev = before(h);
+      if (!prev || prev.matches(HEADING) || prev.querySelector(HEADING) || prev.matches(NOT_A_LABEL) || prev.closest("nav, [role=navigation]")) continue;
+      const text = textOf(prev), n = words(text, langOf(prev));
+      if (n < 1 || n > K.eyebrowWords) continue;
+      const s = getComputedStyle(styleSource(prev)), size = px(s.fontSize);
+      const caps = s.textTransform === "uppercase" || s.fontVariantCaps === "small-caps" || s.fontVariantCaps === "all-small-caps"
+        || (/\p{L}/u.test(text) && text === text.toUpperCase() && text !== text.toLowerCase());
+      eyebrow.push({ sel: H.selector(prev), text: text.slice(0, 80), words: n, uppercase: caps, letter_spacing_em: round(s.letterSpacing === "normal" || !size ? 0 : px(s.letterSpacing) / size),
+                     font_size_px: round(size), heading_sel: H.selector(h), heading_tag: h.localName, heading_font_size_px: round(px(getComputedStyle(h).fontSize)) });
+    }
+
+    // arrows glued to a label
+    const ARROW = "(?:[→←↗↘↖↙⟶⟵⟹⟸⇒⇐⇢➔➜➝➞➡↦›»‹«]|->|=>)";
+    const lead = new RegExp(`^(${ARROW})(\\s*)(?=\\S)`, "u"), trail = new RegExp(`(?<=\\S)(\\s*)(${ARROW})$`, "u");
+    const arrows = [];
+    for (const el of document.querySelectorAll(CONTROLS)) {
+      if (arrows.length >= K.list) break;
+      if (!boxed(el)) continue;
+      const label = labelOf(el), spaced = spacedLabelOf(el);
+      if (!/[\p{L}\p{N}]/u.test(label)) continue;   // an arrow alone is an icon button, not a label with an arrow glued to it
+      const a = lead.exec(spaced), z = trail.exec(spaced);
+      if (a) arrows.push({ sel: H.selector(el), label: label.slice(0, 80), edge: "start", glyph: a[1], gap_chars: a[2].length });
+      else if (z) arrows.push({ sel: H.selector(el), label: label.slice(0, 80), edge: "end", glyph: z[2], gap_chars: z[1].length });
+    }
+
+    // middle dots between items
+    const DOTS = "·•‧∙⋅●";
+    const isDot = (c) => DOTS.includes(c);
+    const BREAK = "\u0002";   // a <br> or a block child ends a line; a line break in the source is no more than white space
+    const separators = [];
+    const pseudoParents = new Map();
+    for (const el of els) {
+      if (!H.walkable(el) || !H.shown(el).shown) continue;
+      const flowing = !/flex|grid/.test(getComputedStyle(el).display);   // in a flex or grid container the children are items side by side, not lines
+      let own = "";
+      for (const n of el.childNodes) {
+        if (n.nodeType === 3) own += n.nodeValue;
+        else if (n.nodeType === 1 && H.walkable(n) && H.shown(n).shown) {
+          const inline = n.localName !== "br" && (!flowing || /^(inline|contents|ruby)/.test(getComputedStyle(n).display));
+          own += inline ? "\u0001" : BREAK;   // an inline child element stands in the text as one unit
+        }
+      }
+      let count = 0;
+      for (const line of own.split(BREAK)) {   // a dot that starts a line is a marker (a bulleted list), not a separator: text must be on both sides of it in its line
+        for (let i = 0; i < line.length; i++) if (isDot(line[i]) && line.slice(0, i).trim() && line.slice(i + 1).trim()) count++;
+      }
+      if (count && separators.length < K.list) separators.push({ sel: H.selector(el), text: textOf(el).slice(0, 80), count, via: "text" });
+      if (el.parentElement) {
+        for (const which of ["::before", "::after"]) {
+          const t = pseudoText(el, which).trim();
+          if (t.length === 1 && isDot(t) && boxed(el)) pseudoParents.set(el.parentElement, (pseudoParents.get(el.parentElement) || new Set()).add(el));
+        }
+      }
+    }
+    const beside = (a, b) => a.top < b.bottom - 1 && b.top < a.bottom - 1 && (a.right <= b.left + 1 || b.right <= a.left + 1);   // two boxes in one row
+    for (const [parent, kids] of pseudoParents) {
+      if (separators.length >= K.list * 2) break;
+      const rects = new Map([...parent.children].filter(boxed).map((c) => [c, c.getBoundingClientRect()]));
+      const count = [...kids].filter((k) => rects.has(k) && [...rects].some(([c, r]) => c !== k && beside(rects.get(k), r))).length;   // a stacked list separates nothing
+      if (count) separators.push({ sel: H.selector(parent), text: textOf(parent).slice(0, 80), count, via: "pseudo" });
+    }
+
+    // the hero: the block that holds the first h1
+    const inNav = (el) => Boolean(el.closest("nav, [role=navigation]"));
+    const hero = { found: false };
+    const h1 = [...document.querySelectorAll("h1")].find(boxed);
+    if (h1) {
+      let box = h1.parentElement && h1.parentElement.closest("section, header, [role=banner], [class*=hero i], [id*=hero i]");
+      if (!box || box === document.body || box === document.documentElement) box = h1.parentElement || h1;
+      const shownText = (node) => {
+        const p = node.parentElement;
+        if (!p || !H.walkable(p) || inNav(p) || p.closest("script, style, noscript, template")) return false;
+        const info = H.shown(p);
+        return info.shown && info.opacity > 0 && getComputedStyle(p).visibility === "visible";
+      };
+      let inScreen = 0;
+      const range = document.createRange();
+      const walker = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        if (!n.nodeValue.trim() || !shownText(n)) continue;
+        range.selectNodeContents(n);
+        const r = range.getBoundingClientRect();
+        if (r.width <= 0 && r.height <= 0) continue;
+        const lang = langOf(n.parentElement);
+        if (top(r) >= vh) continue;
+        if (r.bottom + window.scrollY <= vh) { inScreen += words(n.nodeValue, lang); continue; }
+        for (const seg of segmenter(lang).segment(n.nodeValue)) {   // a text that runs over the fold: count the words above it
+          if (!seg.isWordLike) continue;
+          range.setStart(n, seg.index);
+          range.setEnd(n, seg.index + seg.segment.length);
+          const wr = range.getBoundingClientRect();
+          if (wr.top + window.scrollY < vh) inScreen++;
+        }
+      }
+      const actions = [];
+      for (const el of box.querySelectorAll(CONTROLS)) {
+        if (actions.length >= K.heroActions) break;
+        if (!boxed(el) || inNav(el) || top(el.getBoundingClientRect()) >= vh) continue;
+        const label = labelOf(el) || clean(el.getAttribute("aria-label"));
+        if (label) actions.push({ sel: H.selector(el), label: label.slice(0, 80), lang: langOf(el) });
+      }
+      Object.assign(hero, { found: true, sel: H.selector(box), h1_sel: H.selector(h1), top: top(box.getBoundingClientRect()), words: inScreen, viewport_height: vh, lang: langOf(h1), actions });
+    }
+
+    // boxes built from styled boxes: one walk, counting from the leaves up
+    const NOT_STYLED = new Set(["input", "select", "textarea", "button", "option", "hr", "table", "thead", "tbody", "tfoot", "tr", "td", "th", "caption", "colgroup", "col"]);
+    const MEDIA_TAGS = new Set(["img", "svg", "picture", "canvas", "video"]);
+    const styledBox = (el, s) => {
+      if (NOT_STYLED.has(el.localName)) return false;
+      const bg = H.colour(s.backgroundColor);
+      if ((bg && bg.a > 0) || s.backgroundImage !== "none") return true;
+      for (const side of ["Top", "Right", "Bottom", "Left"]) {
+        const style = s[`border${side}Style`];
+        if (px(s[`border${side}Width`]) > 0 && style !== "none" && style !== "hidden") { const c = H.colour(s[`border${side}Color`]); if (c && c.a > 0) return true; }
+      }
+      return false;
+    };
+    const boxes = [];
+    let walked = 0, nextId = 0;
+    const walk = (el, nearest) => {   // -> {styled, media} counted inside el, el itself included
+      if (!H.walkable(el) || walked++ > K.elements) return { styled: 0, media: 0 };
+      if (MEDIA_TAGS.has(el.localName)) return { styled: 0, media: boxed(el) ? 1 : 0 };
+      if (!H.shown(el).shown) return { styled: 0, media: 0 };
+      const s = getComputedStyle(el), r = el.getBoundingClientRect();
+      const has = s.display !== "contents" && r.width > 0 && r.height > 0 && s.visibility === "visible";
+      const big = has && r.width >= K.boxFloor[0] && r.height >= K.boxFloor[1];
+      const me = big ? { id: nextId++, parent: nearest ? nearest.id : null, sel: H.selector(el), width: round(r.width), height: round(r.height), el } : null;
+      let styled = 0, media = 0;
+      for (const c of el.children) { const got = walk(c, me || nearest); styled += got.styled; media += got.media; }
+      if (me && styled >= K.boxFloor[2] && boxes.length < K.boxes) {
+        const sample = el.closest("[data-sample]");
+        boxes.push({ id: me.id, parent: me.parent, sel: me.sel, width: me.width, height: me.height, styled, media, labelled: Boolean(sample && sample.getAttribute("data-sample").trim()) });
+      }
+      return { styled: styled + (has && styledBox(el, s) ? 1 : 0), media };
+    };
+    for (const c of document.body.children) walk(c, null);
+    boxes.sort((a, b) => a.id - b.id);
+
+    // a row of three
+    const tiles = [];
+    for (const parent of els) {
+      if (tiles.length >= K.tileGroups) break;
+      if (parent.children.length < 3 || !boxed(parent)) continue;
+      const kids = [...parent.children].filter(boxed);   // a <template>, a <script> or a hidden child is no tile
+      if (kids.length !== 3 || !kids.every((k) => [...k.querySelectorAll(HEADING)].some(boxed))) continue;
+      tiles.push({ sel: H.selector(parent), tiles: kids.map((k) => { const r = k.getBoundingClientRect(); return { sel: H.selector(k), left: round(r.left + window.scrollX), top: top(r), width: round(r.width), height: round(r.height) }; }) });
+    }
+
+    // where the pieces of a stock page would be
+    const headings = [];
+    for (const h of document.querySelectorAll(HEADING)) {
+      if (headings.length >= K.list) break;
+      if (boxed(h)) headings.push({ sel: H.selector(h), text: textOf(h).slice(0, 60), top: top(h.getBoundingClientRect()) });
+    }
+    const details = [];
+    for (const d of document.querySelectorAll("details")) {
+      if (details.length >= K.list) break;
+      if (boxed(d) && [...d.children].some((c) => c.localName === "summary")) details.push({ sel: H.selector(d), top: top(d.getBoundingClientRect()) });
+    }
+    let root = document.querySelector("main") || document.body, band = null;
+    for (let depth = 0; depth < 4; depth++) {   // a wrapper round the sections is looked into
+      const kids = [...root.children].filter((c) => boxed(c) && !c.matches("script, style, noscript, template"));
+      if (depth < 3 && kids.length === 1 && !kids[0].matches("section, article, header, footer, aside")) { root = kids[0]; continue; }
+      band = [...kids].reverse().find((c) => !c.matches("footer, header, nav, aside, [role=contentinfo], [role=banner], [role=navigation]")) || null;
+      break;
+    }
+    const last_band = band ? { sel: H.selector(band), top: top(band.getBoundingClientRect()), words: words(textOf(band), langOf(band)),
+                                headings: [...band.querySelectorAll(HEADING)].filter(boxed).length + (band.matches(HEADING) ? 1 : 0),
+                                actions: [...band.querySelectorAll(CONTROLS)].filter(boxed).length } : null;
+
+    return { tell_facts: { viewport: { width: vw, height: vh }, eyebrow, arrows, separators, hero, boxes, tiles, headings, details, last_band, ...(truncated ? { truncated: true } : {}) } };
+  }, TELL);
+}
+
 const COLLECTORS = [
   async (page) => { await page.evaluate(installHelpers); return {}; },   // first: the helpers the collectors below call
   async (page) => ({ document: await documentFacts(page) }),
@@ -929,6 +1208,7 @@ const COLLECTORS = [
   async (page) => markFacts(page),
   async (page) => fontFacts(page),
   async (page, request) => ruleFacts(page, request),
+  async (page) => tellFacts(page),
 ];
 
 /** Run every collector on the settled page and merge their answers; the in-page helpers are taken out of the page again. */

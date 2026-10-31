@@ -1083,7 +1083,7 @@ brand-creator page-check --url http://localhost:<port>/<path> [--project DIR] ..
   rule read the host as written); a remote URL is a usage error (a remote page is built locally and given with `--from`).
 - **Exit codes.** 2, with nothing written: no target, two target forms, a page that does not exist or is not a file inside the project (or inside DIR), a `--from`
   that is not a folder or holds more than 5000 files or 200 MB (the files and bytes that would be copied), a `--url` that is not a loopback URL, a width that is
-  not a whole number from 200 to 4000 or listed twice, a scheme other than `light` or `dark`, a bad `qa/rules.json` `page` block. 3: `assets/tokens/tokens.json` or `assets/tokens/tokens.css`
+  not a whole number from 200 to 4000 or listed twice, a scheme other than `light` or `dark`, a bad `qa/rules.json` `page` block, a `tell` rule that names no generic tell. 3: `assets/tokens/tokens.json` or `assets/tokens/tokens.css`
   missing (`brand-creator tokens`), `node` missing, `render.mjs` exiting 3 (setup missing, Chromium cannot start), or no view measured. 1: a row failed. 0: pass,
   warnings allowed.
 - **Widths and schemes.** `--widths`, else `qa/rules.json` `page.widths`, else 360, 390, 768, 1024, 1440, 1920 css px; `--schemes`, else `light,dark`. One browser context per
@@ -1308,7 +1308,7 @@ brand-creator page-check --url http://localhost:<port>/<path> [--project DIR] ..
     `aria-labelledby`, the `alt` of an image or `<title>` of an SVG inside it, `title`).
   - `words-under-accent` (`selector`, `min` and/or `max`): for each shown element the `selector` matches, the words of its parent's visible text minus the words of its own are within `min` and `max`.
   - A word is what Unicode word segmentation (`Intl.Segmenter`, UAX #29, in the language of the closest `lang`, the browser's own when it does not know that one) calls word-like: a number is one word, an apostrophe inside a word does not split it, a
-    hyphen does (`e-mail` is two), and an arrow, a dot or a symbol is none. A `tell` rule names a generic tell; until the tells exist its row is info.
+    hyphen does (`e-mail` is two), and an arrow, a dot or a symbol is none. A `tell` rule names one of the generic tells below; its row is judged from the same candidates (see "Tell rows").
 - **Rule facts.** `page_check.py` sends the selectors the rules name, once each and in the order of the rules, in the request's `selectors` (so every view also holds their `selectors` boxes), and one
   `{id, kind, selector?}` per rule measured in the page's text in `rules` (an optional list of up to 200; `render.mjs` refuses anything else with exit 2). A request with no rule asks for nothing and the
   views hold no `rule_facts`. Otherwise every view also holds `rule_facts`: `{<id>: {kind, selector, matched, shown, items}}`, or `{kind, selector, error}` when the browser does not take the selector as CSS.
@@ -1323,6 +1323,39 @@ brand-creator page-check --url http://localhost:<port>/<path> [--project DIR] ..
   selector the browser does not take as CSS fails the row whether or not it is tied (the rule cannot be judged), and says so; a selector that matches nothing passes and says so. A rule that
   could not be measured (no view rendered, a mark with no box) is `skipped` or "NOT verified" in a warning, never a pass. The rows read `BRAND-STATE.md`, which is already an input of the report. The
   judging imports `scripts/adaptlib/adapt.py` (next to `pagelib`) only when a project has page rules.
+- **Generic tells.** `skills/brand-creator/references/page-tells.json` (`{"$description", "version": 1, "languages": ["en", "pl"], "tells": [...], "notes": [...]}`) lists the patterns that read as a template whatever
+  the brand. A tell is `{id, name, what, why, measure}` plus, where it has them, `threshold` (the numbers) and `words` (a list per language of `languages`). The browser reports candidates and
+  `pagecheck.find_tells` applies the numbers and the lists, so a number has one home. A tell is a warning, never a failure, until the owner adopts it as a brand rule.
+  - `eyebrow`: the text element directly before an `h1`, `h2` or `h3` (an empty box between them, such as a rule, is looked past; an image or an icon is not) with at most 4 words (`max_words`), in capitals (`text-transform:
+    uppercase`, small caps, or typed in capitals) or letter-spaced `min_letter_spacing_em` (0.05 em) or more, and set smaller than the heading.
+  - `arrow-glued`: a shown link, button or submit input whose label (its text, with the content of its `::before` and `::after`) starts or ends with an arrow, a chevron, a double angle, `->` or `=>`
+    next to other text, with at most `max_gap_chars` (1) white space characters between them. A run of spaces, tabs and line breaks is one character (the browser collapses it); a no-break space or an em space is
+    counted each, so `Spare parts&nbsp;&nbsp;&nbsp;&nbsp;→` has a gap of 4 and is not glued. An arrow alone is an icon button. A gap made with margin or a flex gap is not seen.
+  - `middot-run`: an element whose own text holds `min_separators` (2) or more middle dots or bullets (`· • ‧ ∙ ⋅ ●`) with text on both sides on the same line (an inline child element stands in the text as one
+    unit; a `<br>` and a block child end the line, so a dot that starts a line is a list marker and is not counted), or a parent whose children carry that many `::before` or `::after` that are one dot and sit side by
+    side in one row (a child with a sibling beside it, overlapping in height; a stacked list with a marker on every item is not a run, an inline breadcrumb or a flex row is).
+  - `stock-second-action`: the second action (link, button or submit input with a label, outside a `nav`, in the first screen) of the hero, the nearest `section`, `header`, `[role=banner]` or element named
+    hero around the first `h1`, else the `h1`'s parent. Its label, case, arrows, punctuation and white space ignored, is a word of the list for its language (`en` or `pl`, the closest `lang`).
+  - `hero-text-budget`: the hero shows more than `max_words` (45) words in the first screen (the top of the page to the viewport height); a `nav` and text below the fold are not counted.
+  - `styled-div-mock`: the innermost shown box of `min_width_px` x `min_height_px` (240 x 160) css px or more with `min_styled_descendants` (8) or more shown descendants that have a background colour or
+    image or a border (form controls, table parts and rules are not counted), no `img`, `svg`, `canvas`, `video` or `picture` inside, and no non-empty `data-sample` on it or an ancestor.
+  - `three-equal-tiles`: in a view of `min_viewport_px` (1024) or more, an element with exactly three shown element children (a `<template>`, a `<script>` or a hidden child is not counted), side by side in one row, widths within `width_tolerance_px` (2), the shorter at
+    least `min_height_ratio` (0.8) of the taller, each holding a shown heading.
+  - Note `stock-anatomy` (info): in one view, from the top of the page down, the hero, a `three-equal-tiles` row, an FAQ (a `details` with a `summary`, or a heading that is a word of the note's lists) and a
+    closing band (the last block of `main`, or of the body without one: a heading, an action and at most `cta_max_words` (40) words).
+- **Tell facts.** Every view holds `tell_facts` from `page_measure.mjs`, whatever the rules: `viewport`; `eyebrow` (`{sel, text, words, uppercase, letter_spacing_em, font_size_px, heading_sel, heading_tag,
+  heading_font_size_px}`, the candidates of 1 to 12 words); `arrows` (`{sel, label, edge, glyph, gap_chars}`, `gap_chars` as counted above); `separators` (`{sel, text, count, via}`, `via` is `text` or `pseudo`); `hero` (`{found, sel, h1_sel, top,
+  words, viewport_height, lang, actions: [{sel, label, lang}]}`, at most 6 actions); `boxes` (`{id, parent, sel, width, height, styled, media, labelled}` for boxes of 120 x 80 css px with 4 styled
+  descendants or more, `parent` the id of the nearest box above that is in the list, at most 200); `tiles` (`{sel, tiles: [{sel, left, top, width, height}]}`, at most 40); `headings`, `details` and
+  `last_band` (where the pieces of a stock page are). The lists are capped (60 eyebrow candidates, 100 arrows, headings and details, 200 separators); `truncated` is true when the page has more than 8000 elements, which the walks over every element (`middot-run`,
+  `styled-div-mock`, `three-equal-tiles`) stop at. Nothing is judged in the browser.
+- **Tell rows.** `tell:<id>`, one per tell of the file in its order, none for a tell a brand rule has adopted. The thresholds are applied to every view and a place seen in several views is one hit with its `widths`.
+  Pass: "none found in N view(s)". Warn: "N found: <selector>: <what was seen> (at <widths> px)" (up to six named; the row's `hits` keeps up to 100 as `{selector, text, widths}`) and the tell's `why`. Skipped:
+  no view was measured. `tell:stock-second-action` also warns "NOT verified: no word list for <lang>" when the page's `lang`, or the closest `lang` of its second action, is not in `languages` (a page that sets
+  no `lang` too); the other tells need no word list. `middot-run`, `styled-div-mock` and `three-equal-tiles` warn "NOT verified beyond the first elements of a view" when a view was cut at 8000 elements.
+  `note:stock-anatomy` (info, with `anatomy`: `{view, hero, tiles, faq, closing_band}`, the tops in css px) appears only when one view shows the stock order. A `page.rules` entry of kind `tell` (`tell` is an id of the file;
+  any other id exits 2 before a page is opened) gives `page:rule:<id>` in place of `tell:<tell>`: the same hits, a warning while the rule is not tied to a recorded G4 line and a failure after, a pass when none are
+  found; the row holds `tell` and `hits`. `pagecheck.load_tells()`, `tell_ids()` and `check_tell_rules(rules)` are the readers other tools import; the file ships with the plugin (exit 3 if it cannot be read).
 - **Writing a collector.** `page_measure.mjs` installs `window.__bcMeasure` for the length of one view (`collect` removes it again): `selector(el)`, `shown(el)` (`{shown, opacity}`),
   `walkable(el)`, `colour(css)` (`{r, g, b, a, hex}` or null), `canvas()`, `ground(el)` and `hex([r, g, b])`. A later collector calls them inside its own `page.evaluate`.
 - **For other tools.** `scripts/pagelib/pagecheck.py` imports only the standard library and `scripts/lib`, and the claims rows also load `scripts/booklib/bookdata.py` (the FACTS.md table and the English status words), found next to the module; a tool puts `scripts/pagelib` on `sys.path` and calls

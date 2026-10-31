@@ -22,11 +22,14 @@ status word is backed by FACTS.md); `page:samples` lists the labelled samples, a
 the project, the drawing its size calls for, and has its clear space.
 Each entry of qa/rules.json `page.rules` is a brand rule of the owner's and gives `page:rule:<id>` (one mark per screen, a button says at most three words, the words around an accent): it fails once
 the "(rule)" line it is tied to (`g4`) is recorded at G4, and before that only warns.
+Generic tells (skills/brand-creator/references/page-tells.json) give `tell:<id>`, a warning that names where the pattern is (an eyebrow over a heading, an arrow glued to a label, a run of middle
+dots, a stock label on the hero's second action, too much text in the hero, a mock-up built of styled boxes, three equal tiles in a row); a tell the owner adopts as a rule of kind `tell` is judged by its
+`page:rule:<id>` row instead. `note:stock-anatomy` is an info row for a page in the stock order.
 Over all views it reports `page:fonts` (every text is set in a family a `font.*` token names, and the browser drew it in that face) and `page:display-size` (no text in the
 `font.display` face is under `page.display_min_px`).
 
 Exit 0 pass (warnings allowed), 1 a row failed, 2 usage error (no target, two targets, a page that does not exist, a remote URL, a bad width or scheme, a
---from folder of more than 5000 files or 200 MB, a bad qa/rules.json page block), 3 cannot run (no built tokens, no node, Chromium missing or no view measured).
+--from folder of more than 5000 files or 200 MB, a bad qa/rules.json page block, a `tell` rule that names no tell), 3 cannot run (no built tokens, no node, Chromium missing or no view measured).
 """
 import json
 import sys
@@ -82,6 +85,7 @@ def main() -> int:
     rules, _ = qa_rules.load(project)
     widths = pc.parse_widths(a.widths) if a.widths is not None else rules["page"]["widths"]   # an empty --widths is a usage error, not the default
     schemes = pc.parse_schemes(a.schemes) if a.schemes is not None else list(pc.SCHEMES)
+    pc.check_tell_rules(rules["page"]["rules"])   # exit 2 for a rule that names no generic tell, before anything is opened
     target = pc.resolve_target(project, a.page, a.from_dir, a.url)
     tokens = pc.load_tokens(project)   # exit 3: nothing to judge against
     modern = pc.load_modern(project)   # exit 3 likewise: what the browser paints for a token comes from tokens.css

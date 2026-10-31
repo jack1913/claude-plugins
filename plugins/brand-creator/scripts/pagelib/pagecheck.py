@@ -22,6 +22,10 @@ is backed by FACTS.md) and `page:samples` (the before-publishing list, also the 
 `rule_rows` gives `page:rule:<id>` for each brand rule of qa/rules.json `page.rules` (`rule_request` is what such rules ask of the browser): it fails when it is broken and its `g4` words are in a recorded
 "(rule)" line of BRAND-STATE.md Rules (G4), warns when it is broken and not yet tied, and passes when it holds.
 
+`tell_rows` gives `tell:<id>` for each generic tell of skills/brand-creator/references/page-tells.json (an eyebrow over a heading, an arrow glued to a label, a run of middle dots, a stock label on
+the hero's second action, a hero with too much text, a mock-up built of styled boxes, three equal tiles in a row): a warning that names the hits, never a failure, until the owner adopts the tell
+as a brand rule (kind `tell` in qa/rules.json page.rules, which gives `page:rule:<id>` in its place), and `note:stock-anatomy`. `check_tell_rules` refuses a rule that names no tell.
+
 Standard library plus scripts/lib (_color, _common, qa_rules) only, and, imported when they are judged, scripts/booklib/bookdata.py (the FACTS.md table and the English status words, for the
 claims) and scripts/adaptlib/adapt.py (the recorded G4 rule lines, for the brand rules). This folder is outside scripts/lib/, so a change here does not make every pack stale. The
 only reads are the project's own files and, with --from, the folder it names (read only: it is copied, never written).
@@ -43,7 +47,7 @@ from urllib.parse import urlsplit
 
 import qa_rules
 from _color import parse_hex, wcag_ratio
-from _common import CliError, EXIT_CANNOT, EXIT_USAGE, Report, confine, fail, gate_recorded, rel, scratch_dir
+from _common import CliError, EXIT_CANNOT, EXIT_USAGE, Report, confine, fail, gate_recorded, plugin_root, rel, scratch_dir
 
 REPORT_DIR = "page-check"
 SCHEMES = ("light", "dark")
@@ -1514,18 +1518,16 @@ def _tie(g4: dict, text: str) -> tuple[str | None, str]:
 def rule_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
     """page:rule:<id>, one per entry of qa/rules.json page.rules: the brand's own rules for pages, each tied by its `g4` words to a "(rule)" line of BRAND-STATE.md Rules (G4).
     A broken rule fails when its `g4` words are in a recorded G4 rule line (G4 recorded) and only warns before that ("not a recorded G4 rule line yet"), so a proposal never fails a page;
-    a rule that holds passes. Kinds: max-marks-per-view, max-words-per-control, words-under-accent; a `tell` rule is an info row until the generic tells exist. A selector the browser
+    a rule that holds passes. Kinds: max-marks-per-view, max-words-per-control, words-under-accent and tell (a generic tell of page-tells.json is not found on the page). A selector the browser
     does not take as CSS fails its row whether or not the rule is tied: it cannot be judged. Something that could not be measured is "NOT verified", a warning."""
     rules = ctx.rules.get("page", {}).get("rules") or []
     if not rules:
         return
     g4 = _g4_state(ctx.project)
-    judges = {"max-marks-per-view": _marks_rule, "max-words-per-control": _words_rule, "words-under-accent": _accent_rule}
+    check_tell_rules(rules)
+    judges = {"max-marks-per-view": _marks_rule, "max-words-per-control": _words_rule, "words-under-accent": _accent_rule, "tell": _tell_rule}
     for rule in rules:
         rid, label = f"page:rule:{rule['id']}", f"brand rule: {rule['g4']}"
-        if rule["kind"] not in judges:
-            rep.add(rid, "info", label, detail=f"the tell {rule['tell']!r} is available once the page tells exist: this rule is not measured yet", rule=rule)
-            continue
         res = judges[rule["kind"]](rule, measures, ctx)
         line, why = _tie(g4, rule["g4"])
         base = {"rule": rule, "tied": line is not None, "g4_line": line, **res.get("extra", {})}
@@ -1546,8 +1548,194 @@ def rule_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
                 rep.add(rid, "pass", label, detail=f"{res['summary']}; {standing}", **base)
 
 
-# each (rep, measures, ctx); the later families of rows (tells) are added here
-ROW_CHECKS = [load_rows, colour_rows, pair_rows, motion_rows, claim_rows, mark_rows, font_rows, display_size_rows, rule_rows]
+# ---------------------------------------------------------------- the generic tells
+
+TELLS_FILE = "skills/brand-creator/references/page-tells.json"
+TELLS_CAP = 100                           # hits one tell row keeps in its `hits`
+ELEMENT_CAP_NOTE = "NOT verified beyond the first elements of a view (the page has more than the check walks)"
+TELL_NEEDS_WALK = ("middot-run", "styled-div-mock", "three-equal-tiles")   # the tells found by walking every element, which stops at a cap
+EPSILON = 1e-6
+
+
+def load_tells() -> dict:
+    """skills/brand-creator/references/page-tells.json: the generic tells (`tells`), the languages their word lists cover (`languages`) and the notes (`notes`). Exit 3 when the file
+    cannot be read: it ships with the plugin, so a damaged install is the only way."""
+    f = plugin_root() / TELLS_FILE
+    try:
+        doc = json.loads(f.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        fail(EXIT_CANNOT, f"{TELLS_FILE} cannot be read ({e}): reinstall the plugin")
+    tells = doc.get("tells") if isinstance(doc, dict) else None
+    if not (isinstance(tells, list) and tells and all(isinstance(t, dict) and isinstance(t.get("id"), str) for t in tells) and isinstance(doc.get("languages"), list)):
+        fail(EXIT_CANNOT, f"{TELLS_FILE} is not a list of tells: reinstall the plugin")
+    return doc
+
+
+def tell_ids() -> list[str]:
+    return [t["id"] for t in load_tells()["tells"]]
+
+
+def check_tell_rules(page_rules: list[dict]) -> None:
+    """A `tell` rule of qa/rules.json page.rules must name a tell of page-tells.json: exit 2 otherwise, before a page is opened."""
+    known = tell_ids()
+    for r in page_rules:
+        if r.get("kind") == "tell" and r.get("tell") not in known:
+            fail(EXIT_USAGE, f"{qa_rules.RULES_FILE}: page.rules ({r.get('id')}): {r.get('tell')!r} is not a generic tell (the tells are {', '.join(known)})")
+
+
+def label_key(text: str) -> str:
+    """A label as the stock lists are compared: letter case ignored, arrows, punctuation and runs of white space reduced to one space."""
+    return " ".join(re.sub(r"[\W_]+", " ", str(text).casefold()).split())
+
+
+def _widths(widths: list) -> str:
+    seen = sorted(set(w for w in widths if isinstance(w, (int, float))))
+    return ", ".join(f"{w:g}" for w in seen[:NAMED]) + (f" and {len(seen) - NAMED} more" if len(seen) > NAMED else "") + " px"
+
+
+def find_tells(measures: dict, cfg: dict) -> dict:
+    """Apply the thresholds and word lists of page-tells.json to the candidates each view holds (`tell_facts`, see page_measure.mjs). -> {"views": the number of views judged,
+    "hits": {tell id: [hit]} (a hit is {selector, text, widths}, the same place in other views merged), "unverified": {tell id: [reason]}, "anatomy": {...} or None}."""
+    th = {t["id"]: t.get("threshold") or {} for t in cfg["tells"]}
+    stock = {t["id"]: t.get("words") or {} for t in cfg["tells"]}
+    note = next((n for n in cfg.get("notes", []) if n.get("id") == "stock-anatomy"), {})
+    languages = [str(x) for x in cfg["languages"]]
+    views = [v for v in measures.get("views", []) if isinstance(v, dict) and not v.get("error") and isinstance(v.get("tell_facts"), dict)]
+    merged: dict[tuple, dict] = {}
+    unverified: dict[str, list[str]] = {t["id"]: [] for t in cfg["tells"]}
+    stock_langs: set[str] = set()
+    anatomy = None
+
+    def add(tid: str, key, view: dict, selector: str, text: str) -> None:
+        h = merged.setdefault((tid, key), {"selector": selector, "text": text, "widths": []})
+        if view.get("width") not in h["widths"]:
+            h["widths"].append(view.get("width"))
+
+    for v in views:
+        f, width = v["tell_facts"], v.get("width") or 0
+        t = th["eyebrow"]
+        for c in f.get("eyebrow", []):
+            if c["words"] <= t["max_words"] and (c["uppercase"] or c["letter_spacing_em"] >= t["min_letter_spacing_em"] - EPSILON) and c["font_size_px"] < c["heading_font_size_px"]:
+                how = "in capitals" if c["uppercase"] else f"letter-spaced {c['letter_spacing_em']:g} em"
+                add("eyebrow", (c["sel"], c["text"]), v, c["sel"], f"\"{c['text']}\", {how}, {c['font_size_px']:g} px over the {c['heading_tag']} {c['heading_sel']} at {c['heading_font_size_px']:g} px")
+        t = th["arrow-glued"]
+        for c in f.get("arrows", []):
+            if c["gap_chars"] <= t["max_gap_chars"]:
+                add("arrow-glued", (c["sel"], c["label"]), v, c["sel"], f"\"{c['label']}\" has {c['glyph']} at its {c['edge']}")
+        t = th["middot-run"]
+        for c in f.get("separators", []):
+            if c["count"] >= t["min_separators"]:
+                add("middot-run", (c["sel"], c["via"]), v, c["sel"], f"{c['count']} separating dots" + (" in its text: " + f"\"{c['text']}\"" if c["via"] == "text" else " between its children"))
+        hero = f.get("hero") or {}
+        t = th["hero-text-budget"]
+        if hero.get("found") and hero["words"] > t["max_words"]:
+            add("hero-text-budget", hero["sel"], v, hero["sel"], f"{hero['words']} words in the first screen (at most {t['max_words']})")
+        actions = hero.get("actions") or []
+        page_lang = _primary_language(v.get("lang") or "")
+        if page_lang not in languages:
+            stock_langs.add(page_lang)
+        if len(actions) > 1:
+            a = actions[1]
+            lang = _primary_language(a.get("lang") or v.get("lang") or "")
+            if lang not in languages:
+                stock_langs.add(lang)
+            elif label_key(a["label"]) in {label_key(w) for w in stock.get("stock-second-action", {}).get(lang, [])}:
+                add("stock-second-action", a["sel"], v, a["sel"], f"the second action of the hero says \"{a['label']}\"")
+        t = th["styled-div-mock"]
+        boxes = f.get("boxes", [])
+        parent = {b["id"]: b.get("parent") for b in boxes}
+        meets = {b["id"]: b for b in boxes if b["width"] >= t["min_width_px"] and b["height"] >= t["min_height_px"] and b["styled"] >= t["min_styled_descendants"]
+                 and b["media"] == 0 and not b["labelled"]}
+        outer = set()
+        for i in meets:
+            p = parent.get(i)
+            while p is not None and p not in outer:
+                outer.add(p)
+                p = parent.get(p)
+        for i, b in meets.items():
+            if i not in outer:
+                add("styled-div-mock", b["sel"], v, b["sel"], f"a box of {b['width']:g} x {b['height']:g} px made of {b['styled']} styled boxes, with no image")
+        t = th["three-equal-tiles"]
+        rows = []
+        if width >= t["min_viewport_px"]:
+            for g in f.get("tiles", []):
+                ts = sorted(g["tiles"], key=lambda x: x["left"])
+                tol = t["width_tolerance_px"]
+                in_row = all(ts[i + 1]["left"] >= ts[i]["left"] + ts[i]["width"] - tol for i in range(2)) and max(x["top"] for x in ts) < min(x["top"] + x["height"] for x in ts)
+                widths, heights = [x["width"] for x in ts], [x["height"] for x in ts]
+                if in_row and max(widths) - min(widths) <= tol + EPSILON and max(heights) > 0 and min(heights) / max(heights) >= t["min_height_ratio"] - EPSILON:
+                    rows.append((min(x["top"] for x in ts), g))
+                    add("three-equal-tiles", g["sel"], v, g["sel"], f"three tiles of {widths[0]:g} px side by side, each with a heading")
+        if f.get("truncated"):
+            for tid in TELL_NEEDS_WALK:
+                if ELEMENT_CAP_NOTE not in unverified[tid]:
+                    unverified[tid].append(ELEMENT_CAP_NOTE)
+        if anatomy is None and hero.get("found") and rows and f.get("last_band"):
+            tiles_top = min(r[0] for r in rows)
+            faq_words = {label_key(w) for ws in (note.get("words") or {}).values() for w in ws}
+            faq = [d["top"] for d in f.get("details", [])] + [h["top"] for h in f.get("headings", [])
+                                                              if any(label_key(h["text"]) == w or label_key(h["text"]).startswith(w + " ") for w in faq_words)]
+            band, limit = f["last_band"], (note.get("threshold") or {}).get("cta_max_words", 40)
+            if faq and band["headings"] >= 1 and band["actions"] >= 1 and band["words"] <= limit:
+                faq_top = min(x for x in faq if x > tiles_top) if any(x > tiles_top for x in faq) else None
+                if faq_top is not None and hero["top"] < tiles_top < faq_top < band["top"]:
+                    anatomy = {"view": f"{v.get('width')}-{v.get('scheme')}", "hero": hero["top"], "tiles": tiles_top, "faq": faq_top, "closing_band": band["top"]}
+    if stock_langs:
+        shown = ", ".join(sorted(k or "an unknown language (the page sets no lang)" for k in stock_langs))
+        unverified["stock-second-action"].append(f"NOT verified: no word list for {shown} (only {' and '.join(languages)} are listed)")
+    hits: dict[str, list[dict]] = {t["id"]: [] for t in cfg["tells"]}
+    for (tid, _), h in merged.items():
+        hits[tid].append(h)
+    return {"views": len(views), "hits": hits, "unverified": unverified, "anatomy": anatomy}
+
+
+def _hit_line(h: dict) -> str:
+    return f"{h['selector']}: {h['text']} (at {_widths(h['widths'])})"
+
+
+def _tell_rule(rule: dict, measures: dict, ctx: Ctx) -> dict:
+    """kind `tell`: the generic tell the rule names is not found on the page. Judged from the same candidates and thresholds as tell:<id>; the rule decides whether a hit warns or fails."""
+    cfg = load_tells()
+    found = find_tells(measures, cfg)
+    if not found["views"]:
+        return {"skipped": "no view was measured (see the page:load rows)"}
+    t = next(x for x in cfg["tells"] if x["id"] == rule["tell"])
+    hits, notes = found["hits"][t["id"]], found["unverified"][t["id"]]
+    extra = {"tell": t["id"], "hits": hits[:TELLS_CAP]}
+    if hits:
+        return {"problems": [f"{len(hits)} found of the tell \"{t['name']}\": " + _names([_hit_line(h) for h in hits], NAMED)], "notes": notes, "extra": extra}
+    return {"summary": f"none found of the tell \"{t['name']}\" in {found['views']} view(s)", "notes": notes, "extra": extra}
+
+
+def tell_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
+    """tell:<id>, one per generic tell of page-tells.json that no brand rule has adopted: a warning naming up to six hits (selector, what was seen, the widths) or a pass, never a failure.
+    A page in a language the word lists do not cover warns "NOT verified" on tell:stock-second-action. A tell the owner adopted in qa/rules.json page.rules is judged by its page:rule:<id> row
+    instead. note:stock-anatomy (info) says when one view shows a hero, three equal tiles, an FAQ and a closing call-to-action band in that order."""
+    cfg = load_tells()
+    adopted = {r["tell"] for r in ctx.rules.get("page", {}).get("rules", []) if r["kind"] == "tell"}
+    found = find_tells(measures, cfg)
+    for t in cfg["tells"]:
+        if t["id"] in adopted:
+            continue
+        rid, label = f"tell:{t['id']}", t["name"]
+        hits, notes = found["hits"][t["id"]], found["unverified"][t["id"]]
+        if not found["views"]:
+            rep.add(rid, "skipped", label, detail="not verified: no view was measured (see the page:load rows)", tell=t["id"])
+        elif hits:
+            rep.add(rid, "warn", label, detail="; ".join([f"{len(hits)} found: " + _names([_hit_line(h) for h in hits], NAMED), t["why"]] + notes), tell=t["id"], hits=hits[:TELLS_CAP])
+        elif notes:
+            rep.add(rid, "warn", label, detail="; ".join(notes), tell=t["id"], hits=[])
+        else:
+            rep.add(rid, "pass", label, detail=f"none found in {found['views']} view(s)", tell=t["id"], hits=[])
+    if found["anatomy"]:
+        a = found["anatomy"]
+        rep.add("note:stock-anatomy", "info", "the page follows the stock order of a product page",
+                detail=f"at {a['view']} the page has a hero, three equal tiles, an FAQ and a closing call-to-action band, in that order, from the top of the page down; this is a note on the shape of the page, not a fault",
+                anatomy=a)
+
+
+# each (rep, measures, ctx); a later family of rows is added here
+ROW_CHECKS = [load_rows, colour_rows, pair_rows, motion_rows, claim_rows, mark_rows, font_rows, display_size_rows, tell_rows, rule_rows]
 
 
 def judge(rep: Report, measures: dict, ctx: Ctx, measures_path: Path) -> None:
