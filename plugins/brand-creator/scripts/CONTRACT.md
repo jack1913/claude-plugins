@@ -182,7 +182,7 @@ product-in-family), mark_source (generated|authored-vector|existing), language (
 codes of the brand's own text, for example `pl` or `pl,en`; read by fontcheck, never defaulted from `language`), renderer, review_surface, review_url,
 site_research (auto|online|links-only|none: the owner's answer to online research for website references; `capture --url` needs online or links-only),
 incumbent (none or a line), inventory (path or "none (no target repo)"), edition (whole number, the brand book's), approved_edition (the edition G5 approved; `state --record G5` writes it), book_chapters (extra
-chapters: tone, photography, components), canonical_direction, reset_rounds ([4, 5]: the style board run again after a full rejection,
+chapters: tone, photography, components, site), canonical_direction, reset_rounds ([4, 5]: the style board run again after a full rejection,
 then the pick board), g1s_round, fixes_per_area (map), gates (G0 G1 G1s G2 G2b G3 G4 G4w G4p G5 G6 G7)`. A recorded gate reads `"<date> <decision>"`;
 empty means not recorded. `brand-creator state --record G3 "<decision>"` writes it, `state --require G3` exits 1 when missing.
 `G4w` is the website references pick (or `skipped by owner`) and `G4p` the site's reference pages approved; `state` prints the gates in the
@@ -1693,7 +1693,7 @@ facts); `check` treats a report whose view changed as not verified. A change to 
 **Chapters.** Registry order, selected from `tier`, `architecture`, the project's files and `book_chapters`: quick `idea, mark, colour,
 files, changing` (plus `wordmark` when `assets/logo` has a wordmark or lockup); standard adds `motion` (when `motion/proof.json`,
 `motion/SPEC.md` or `motion/motion.json`, on or off, exists), `type`, `use`, `proof`, `donts`, `history`; full adds `adoption` and `launch`; `endorsement` and `family` in the
-family modes; `tone`, `photography`, `components` only when named in `book_chapters`. Each chapter is `book/chapters/<id>.md`
+family modes; `tone`, `photography`, `components`, `site` only when named in `book_chapters`. Each chapter is `book/chapters/<id>.md`
 (`<id>.<lang>.md` for each language when `content_languages` has several; every language is required). `book --init` copies the skeletons
 from `templates/book/` and never overwrites; `[[fill: ...]]` left in a chapter fails the build.
 
@@ -1703,12 +1703,27 @@ links. Raw HTML is escaped. Anything else is an error with the line number. Comp
 `{{mark-sizes}}` (the drawing the size band rule picks, rendered at exactly the size on light and dark, the enlarged copy being the same
 pixels, plus the downscale reports' accent measurements), `{{colours}}`, `{{contrast}}` (WCAG ratios computed from the tokens), `{{type}}`,
 `{{motion}}`, `{{tokens}}`, `{{files}}` (one row per manifest row and source artwork file with `data-path` and `data-sha`; a row marked `superseded` carries a note saying so), `{{checks}}`,
-`{{decided}}`, `{{history}}`, `{{edition-log}}`, `{{donts}}` (five misuse drawings of the mark), `{{facts}}`. Inline: `{{count:NAME}}`
+`{{decided}}`, `{{history}}`, `{{edition-log}}`, `{{donts}}` (five misuse drawings of the mark), `{{facts}}`, `{{site}}` (the approved pages, below). Inline: `{{count:NAME}}`
 (`files, slots, colours, pairs, roles, sizes, artwork, emitters, chapters`), `{{fact:LABEL}}` (a FACTS.md row's value), `{{edition}}`,
 `{{name}}`, `{{approved}}`. `::: variant GROUP NAME` and `::: switcher GROUP` fences are open choices (see `collapse`). Settings in
 `book/book.json` (unknown keys are exit 2): `min_label_px` (default 12, stated in the book), `sizes`, `fonts` (`{family, file, weight, style}`,
 embedded as data URIs), `labels` (`{lang: {English label: translation}}`; a label with no translation is shown in English and warned),
 `output`, `lint` (`history_chapter, forbidden, scratch, round, status_words, count_nouns, allow_external_links, files_exclude`).
+
+**The site chapter.** Opt-in (`book_chapters: [site]`), Standard and Full; it sits after `components` and before `use`. `{{site}}` shows the approved pages of the site round (`site/site.json`, written by
+`site approve`, see "site/site.json"). It reads the record with `sitedata.validate_site` (`scripts/boardlib/sitedata.py`), the reading `check` shares, and stops the book with exit 1 and
+`the site chapter needs the approved pages (site/site.json, from site approve): run the site round, or drop site from book_chapters` when `site/site.json` is missing, when the record is not sound, or when
+a page file is gone or is not the one the record holds (that message then ends with the first problems, in parentheses), and with exit 1 and `the site chapter needs the stills of the approved pages: site/<id>/shots/ has no
+<file>` (one clause for each page that lacks a still, then the `brand-creator capture site/<id>/index.html` that takes them) when a still is missing; nothing is written. When `{{site}}` stands in a chapter of the book while `site` is not in `book_chapters`, the
+message begins `{{site}}` instead of `the site chapter` and ends with `take {{site}} out of the chapter that holds it`. For each page of the record, in record order: an
+`<h3 data-site-page="<id>">` with the page id; a `<p data-site-layout="<layout>">` with the `job` sentence of its layout in `page-layouts.json`, or `A layout of its own.` for an `own:<word>` layout; the
+1440 and 390 px light stills `site/<id>/shots/1440-light.png` and `390-light.png` (written by `capture site/<id>/index.html`) as `<figure class="pic" data-site-still="<view>">` with the picture as a `data:` URI
+and the alt text `The <id> page at 1440 px, light` (390 for the other; the alt is a label of `book/book.json` `labels`, written with `{id}` and `{px}` where the page id and the width go); and one table with
+the columns `Choice`, `Rule or example` and `Where it was decided`, one row (`data-choice`, `data-tag`) for each choice that names the page in `pages` or has no `pages`, in record order, the third
+cell the choice's `source` (`-` when it has none). A page whose choices are none gets the sentence `No choice is recorded for this page.` (a label of `book/book.json` `labels`) instead of the table. A still that is not there stops the build, as above:
+a book built without a picture would stay current for `check` when the still is taken later. The inputs of the `book` report are `site/site.json`, each page file and each still shown, so a page, a record or a still
+that changes makes the report stale. `templates/book/site.md` holds the owner's prose: what the pages are for (references for whoever builds the real site; a rule is the brand's, an example may
+change) and how the real site is built (in the product repositories, from the tokens and the rules). A book without `site` in `book_chapters` is byte for byte what it was.
 
 **The motion chapter.** `{{motion}}` shows `motion/motion.json` ("Motion spec") and the project's tokens. With the spec `"on"`: the signature move
 (`Signature move: <name>.` and its description, then `Shown in:` as a list), the replay (below), a parts table (`Part`, `Description`), a timeline table

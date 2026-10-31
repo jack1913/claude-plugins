@@ -17,6 +17,7 @@ import bookdata
 import bookmd
 import motionspec
 import qa_rules
+import sitedata
 import svgtools
 from _color import wcag_ratio
 from _common import EXIT_FAIL, EXIT_USAGE, confine, fail, motion_proof_kind, rasterise_svg, sha256_file
@@ -151,11 +152,12 @@ MIN_STILLS = 9   # a replay of fewer stills jumps: the build says so
 SLOWER = "4\u00d7 slower"   # the label of the box that plays a replay at a quarter of the speed (the multiplication sign, not an x)
 MOTION_GROUPS = ("duration.", "easing.", "motion.")   # the token groups of the motion chapter's token table
 COVER_ART_W, COVER_ART_H = 320, 96   # the box of the cover's art: a mark is 96 px tall, a wide drawing at most 320 px wide
+SITE_VIEWS = (1440, 390)             # the stills of site/<id>/shots/ the site chapter shows, as `capture` names them: <width>-light.png
 
 
 class BookBuild:
     BLOCK = {"marks", "mark-sizes", "colours", "contrast", "type", "motion", "tokens", "files", "checks", "decided", "history",
-             "edition-log", "donts", "facts"}
+             "edition-log", "donts", "facts", "site"}
     INLINE = {"count", "fact", "edition", "name", "approved"}
 
     def __init__(self, project: Path, *, renderer: str = "resvg", allow_variants: bool = False):
@@ -942,6 +944,52 @@ class BookBuild:
         if not rows:
             self.warn("facts", "FACTS.md has no rows; the facts block is empty")
         return self.table([self.T(lang, "Fact"), self.T(lang, "Value"), self.T(lang, "Source"), self.T(lang, "Confirmed")], rows)
+
+    def b_site(self, arg: str, lang: str) -> str:
+        """The approved pages of site/site.json (scripts/CONTRACT.md, "Brand book"): for each page its id, the job of its layout, its 1440 and 390 px light stills and a table of the choices
+        on it. The record and the page files are read by sitedata.validate_site, the reading `check` shares: a record that is missing or does not hold stops the book (exit 1), and so does a page
+        with no still (a book built without one would stay "current" to `check` when the still is taken later)."""
+        # `site` is a chapter of this book (book_chapters) or only the block {{site}} in another chapter: the hint names the way out that exists
+        what, way_out = ("the site chapter", "drop site from book_chapters") if "site" in self.chapter_ids else ("{{site}}", "take {{site}} out of the chapter that holds it")
+        problems = sitedata.validate_site(self.project)
+        if problems:
+            shown = "; ".join(problems[:3]) + (f"; and {len(problems) - 3} more" if len(problems) > 3 else "")
+            found = f" ({shown})" if (self.project / sitedata.SITE_FILE).is_file() else ""
+            fail(EXIT_FAIL, f"{what} needs the approved pages (site/site.json, from site approve): run the site round, or {way_out}{found}")
+        doc = sitedata.load_site(self.project)
+        layouts = sitedata.load_layouts()
+        stills = {page["id"]: [(width, self.project / sitedata.SITE_DIR / page["id"] / "shots" / f"{width}-light.png") for width in SITE_VIEWS] for page in doc["pages"]}
+        gone = {pid: [p.name for _, p in views if not p.is_file()] for pid, views in stills.items()}
+        gone = {pid: names for pid, names in gone.items() if names}
+        if gone:   # a book that quietly shows a page without its picture would still be "current" to `check` once the still appears: stop, write nothing
+            fail(EXIT_FAIL, f"{what} needs the stills of the approved pages: " + "; ".join(f"site/{pid}/shots/ has no {' and no '.join(names)}" for pid, names in gone.items())
+                 + ". Take them with " + " and ".join(f"`brand-creator capture site/{pid}/index.html`" for pid in gone) + ", then build the book again")
+        self.add_input(self.project / sitedata.SITE_FILE)
+        head = [self.T(lang, "Choice"), self.T(lang, "Rule or example"), self.T(lang, "Where it was decided")]
+        alt_label = self.T(lang, "The {id} page at {px} px, light")
+        out = []
+        for page in doc["pages"]:
+            pid = page["id"]
+            self.add_input(self.project / page["path"])
+            layout = page["layout"]
+            job = layouts[layout]["job"] if layout in layouts else self.T(lang, "A layout of its own.")
+            out.append(f'<h3 data-site-page="{esc(pid)}">{esc(pid)}</h3>')
+            out.append(f'<p data-site-layout="{esc(layout)}">{esc(job)}</p>')
+            for width, still in stills[pid]:
+                self.add_input(still)
+                alt = alt_label.replace("{id}", pid).replace("{px}", str(width))
+                out.append(f'<figure class="pic" data-site-still="{width}-light"><img src="{self.data_uri(still, "image/png")}" alt="{esc(alt)}"><figcaption>{esc(alt)}</figcaption></figure>')
+            mine = [c for c in doc["choices"] if "pages" not in c or pid in c["pages"]]
+            if not mine:
+                out.append(f"<p>{esc(self.T(lang, 'No choice is recorded for this page.'))}</p>")
+                continue
+            rows = []
+            for c in mine:
+                source = c.get("source", "").strip()
+                rows.append(([esc(c["text"]), f'<span class="st">{esc(self.T(lang, "Rule" if c["tag"] == "rule" else "Example"))}</span>', esc(source) if source else "-"],
+                             {"data-choice": c["id"], "data-tag": c["tag"]}))
+            out.append(self.table(head, rows))
+        return "\n".join(out)
 
     def b_donts(self, arg: str, lang: str) -> str:
         rules = self.marks_rules()

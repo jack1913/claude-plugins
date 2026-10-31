@@ -43,6 +43,9 @@ RULES: work under the round/project dir only; never edit adoption targets before
 
 Quick tier: a short guide (idea, mark, colour, files, changing). Standard and Full: the chapters the tier, the
 architecture and `book_chapters` select (`scripts/CONTRACT.md`, "Brand book").
+The opt-in `site` chapter (`book_chapters: [site]`) shows the approved pages of `site/site.json` and tags every choice
+on them as a rule or an example; it needs the site round done (`site approve`, then `capture site/<page>/index.html`
+for the stills).
 
 ## Running the tools
 

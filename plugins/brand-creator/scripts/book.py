@@ -7,8 +7,9 @@
 
   book                    build book.html (self-contained: fonts and images inline, no script, no network, light and dark) from the
                           tokens, assets/manifest.json, BRAND-STATE.md, FACTS.md, motion/motion.json and the stills in motion/frames/
-                          (the motion chapter's replay), the contrast and downscale reports and book/chapters/*.md; lint it (book-lint,
-                          with --self-consistency); write it only when it lints clean
+                          (the motion chapter's replay), site/site.json and the stills of its pages (the opt-in site chapter), the contrast
+                          and downscale reports and book/chapters/*.md; lint it (book-lint, with --self-consistency); write it only when
+                          it lints clean
   book --init             copy the skeleton of every chapter this book needs from templates/book/ into book/chapters/ (never overwrites)
   book --verify           rebuild in memory and compare with the book on disk (a hand edit or a stale book fails)
   book --allow-variants   build with choice scaffolding still open, for a review (book-lint still fails it until `collapse`)
@@ -22,6 +23,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "booklib"))
+sys.path.insert(0, str(Path(__file__).resolve().parent / "boardlib"))   # bookgen reads the approved pages with boardlib/sitedata.py
 import bookdata  # noqa: E402
 import bookgen  # noqa: E402
 import booklint  # noqa: E402

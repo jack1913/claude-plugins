@@ -226,6 +226,11 @@ lints the board of the latest round again before `check`, so an edit of the fact
   refuses a page that loads from the internet or from outside your project, writes nothing when any page fails, and
   never deletes an earlier `site/` (`--replace` moves it to `removed-<date>/site/`). The approved pages are
   references for whoever builds your site, not templates to fill in.
+- An opt-in `site` chapter for the brand book (`book_chapters: [site]`) shows the approved pages of your site and
+  every choice on them as a rule or an example. Each page has its layout's job, its first screen at 1440 and 390 px
+  and a table of the choices on it, with where each rule was decided. It needs the pages approved (`site approve`)
+  and their stills (`capture site/<page>/index.html`); without the approved pages, or without a still, the book stops
+  and says what to run, and writes nothing. A book without the chapter is unchanged.
 
 ### Changed
 

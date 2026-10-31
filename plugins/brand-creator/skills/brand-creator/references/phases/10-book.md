@@ -30,6 +30,9 @@ runs the same self-review.
   once it is decided: it shows the signature move, the timeline and the rules, or `Nothing moves` with the owner's reason and no replay.
   When the brand moves, also the stills in `motion/frames/` that `brand-creator frames` writes (the chapter replays them).
 - BRAND-STATE.md: tier, architecture, `mark_source`, `content_languages`, `edition`, the Directions table, the Rules section, gates.
+- `site/site.json` and the stills in `site/<page>/shots/`, when `book_chapters` names `site`: the Site chapter shows
+  each approved page and tags every choice as a rule or an example. It needs the site round done (`site approve`,
+  then `capture site/<page>/index.html` for the stills); without the record or a still the book stops.
 - FACTS.md: every claim in the book's own words is a row there, or it is not written.
 - `book/chapters/*.md` (generated mode) or `book.html` (authored-vector mode).
 
