@@ -247,6 +247,9 @@ lints the board of the latest round again before `check`, so an edit of the fact
   patterns are judged on the direction's own homepage frame, never on the board's chrome, and an empty list is an
   answer. The lead puts each list beside the direction's reflex line (`data-field="reflex-seen"`), where `board-lint`
   compares it with what the direction declared.
+- brand-creator's description now includes the brand's website references and reference pages, and still leaves building
+  production websites to other tools. `/brand-creator:check` says in its description that, with `--page`, it checks a
+  page built anywhere against the brand.
 
 ### Fixed
 

@@ -94,7 +94,7 @@ def test_orchestrator_frontmatter():
     fm, _ = frontmatter(ORCH)
     assert "disable-model-invocation" not in fm  # the one model-invocable skill in this stage
     assert fm["description"].startswith("Starts or continues a brand-identity project")
-    assert "not for building web pages" in fm["description"]
+    assert "not for building production websites" in fm["description"] and "website references" in fm["description"]
     for trig in ("księga znaku", "identyfikacja wizualna", "zaprojektuj logo", "nowa marka", "rebranding", "logo dla firmy",
                  "BRAND-STATE.md", "buy the domain", "file the trademark", "fold in a judge report", "accent minimum", "Etsy",
                  "shop", "podcast", "brand guidelines", "brand book"):
@@ -566,6 +566,11 @@ def test_trigger_evals_cover_english_polish_and_near_misses():
     for word in ("blurry on retina", "navbar", "chart", "landing page", "tailwind design system", "slide deck theme", "to rgb",
                  "taken"):
         assert word in bc_neg, f"brand-creator negatives miss the plan's near miss: {word}"
+    # the site steps: references and reference pages trigger the orchestrator (English and Polish), a production build does not
+    for q in ("pick references for the brand's website", "Build the reference pages for our site", "pokaż strony, które dobrze robią to"):
+        assert any(q in c["query"] and c["should_trigger"] for c in d["brand-creator"]), q
+    for q in ("Build the production website in Next.js from our brand kit", "Code the pricing page in our React app with the brand tokens"):
+        assert any(q in c["query"] and not c["should_trigger"] for c in d["brand-creator"]), q
     bn = d["brand-naming"]
     assert any(re.search(r"is the name \w+ (already )?taken", c["query"], re.I) and c["should_trigger"] for c in bn)
     assert any("czy nazwa" in c["query"] and c["should_trigger"] for c in bn)
@@ -783,6 +788,35 @@ def test_orchestrator_stays_under_the_line_limit_and_its_top_under_the_character
     assert len(text.splitlines()) < 500, f"SKILL.md has {len(text.splitlines())} lines; the standard is under 500 (docs-standard section 5)"
     top = text[: text.index("## Round mechanics")]
     assert len(top) < 20000, f"the top of SKILL.md is {len(top)} characters; only the top survives compaction, the limit is 20000"
+
+
+def test_the_phase_map_points_at_the_website_steps():
+    """(f) The phase map has one row for P7w and P7p whose links resolve, the layout and the commands table carry the new paths and
+    commands, and the top stays within the budget that leaves room for the next addition."""
+    text = ORCH.read_text(encoding="utf-8")
+    top = text[: text.index("## Round mechanics")]
+    assert len(top) <= 19850, f"the top of SKILL.md is {len(top)} characters; the budget for the website steps is 19850"
+    row = next((ln for ln in top.splitlines() if ln.startswith("| P7w, P7p |")), None)
+    assert row, "the phase map has no P7w, P7p row"
+    assert top.index("| P7 |") < top.index(row) < top.index("| P8 |"), "the row sits between P7 and P8"
+    assert "G4w, G4p" in row and "only when BRIEF lists a site" in row and row.rstrip().endswith("| S, F |"), row
+    links = re.findall(r"\]\(([^)#]+)\)", row)
+    assert links == ["references/phases/07w-website-references.md", "references/phases/07p-site-round.md"], links
+    for link in links:
+        assert (ORCH.parent / link).is_file(), link
+    below = text[text.index("## Round mechanics"):]
+    layout = below[below.index("## Project layout"):below.index("## Commands by phase")]
+    for needle in ("research/site-refs/<name>/ (captures)", "research/site-cliches.md", "site/<page>/  site/site.json (approved reference pages)"):
+        assert needle in layout, needle
+    commands = " ".join(below[below.index("## Commands by phase"):below.index("## References")].split())
+    assert ("| website references and the site round (S, F; only when BRIEF lists a site) | `capture --url <url> --name <name>`, "
+            "`capture <page>`, `site approve` ([07w](references/phases/07w-website-references.md), "
+            "[07p](references/phases/07p-site-round.md)) |") in commands
+    # the Review surface kept what the owner's choices rest on
+    flat = " ".join(top[top.index("## Review surface"):].split())
+    for needle in ("`state --set review_surface=artifact|local`", "never ask again", "local marked (Recommended)", "`review/index.html`", "`review_url`",
+                   "Round 0's page is a copy of the style board."):
+        assert needle in flat, needle
 
 
 def test_the_round_wrapper_builds_round_0_from_the_style_board_and_checks_the_gate_before_any_pick_board():

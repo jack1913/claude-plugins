@@ -1,6 +1,6 @@
 ---
 name: check
-description: Runs every check that applies to the current brand project (boards, contrast, logo sheet, files, book, print, adoption and the history record) and, given old names or colours, searches the whole project for leftovers. Reports each failing row with its fix. Runs only when typed as /brand-creator:check.
+description: Runs every check that applies to the current brand project (boards, contrast, logo sheet, files, book, print, adoption and the history record) and, given old names or colours, searches the whole project for leftovers. With --page, checks a page built anywhere against the brand instead. Reports each failing row with its fix. Runs only when typed as /brand-creator:check.
 argument-hint: "[--page <file-or-folder-page-or-localhost-url>] [<old value or phrase> ...]"
 disable-model-invocation: true
 allowed-tools: Bash(brand-creator *)
