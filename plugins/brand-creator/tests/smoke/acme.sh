@@ -459,6 +459,8 @@ ok "the whole emit chain (web, social and every platform pack) is byte-identical
 ok "staleness recorded and current; specs-due lists the rows to recheck"
 
 step "check (every gate for the artefacts that exist)"
+# board-lint lists FACTS.md and the brief as inputs, and FACTS.md was replaced by the example's after the first lint (platform packs): lint the board again
+"${BC[@]}" board-lint rounds/r1/board.html --project "$P" >/dev/null || die "the example board does not pass board-lint with the example's FACTS.md"
 "${BC[@]}" check --project "$P"
 
 step "freeze the approved round, then check again"

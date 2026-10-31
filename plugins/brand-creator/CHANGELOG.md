@@ -6,6 +6,23 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+This release adds checks that can warn on a project you already have. A warning changes neither a result nor an exit
+code, and nothing that passed before fails because of a warning. Settle these now, because the first two groups become
+failures in the next release:
+
+- The reflex line of each direction on a pick board (`board-lint`): a line that is not in the format, a hit that names
+  no known pattern, an argument that shares no word with `FACTS.md` or the brief, a direction with no list from the
+  judge when the judge ran, and a pattern the judge saw that the line neither hits nor names as a near miss. Two hits in
+  one direction, and one hit that every direction shares, fail already.
+- The colours that text sits on (`contrast`): a project whose tokens list no grounds, grounds the owner has not named,
+  a ground with no colour for one of its text, action, text-on-action, focus ring or border roles, and a role under its
+  contrast floor (also in colour-blind simulation with `--cvd`). Ask the owner which colours text sits on and record the
+  date and their words; the model never guesses.
+
+Two more only ever warn and are not due to fail: `check` lists the values in `tokens/primitives.tokens.json` that are
+still the starter's proposal once the system rules are approved (keep one under `starter-kept`, or change it), and
+`board-lint` notes directions that look alike in colour and motion variants that try the same move.
+
 ### Added
 
 - `page-check` opens one page at several widths (360, 390, 768, 1024, 1440 and 1920 px unless `qa/rules.json` or
