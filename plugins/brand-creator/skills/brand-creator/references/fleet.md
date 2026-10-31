@@ -12,6 +12,7 @@ optional speed-up for Standard and Full projects, used only after the fleet gate
 - [The agents](#the-agents)
 - [Orchestration rules](#orchestration-rules)
 - [The refine loop (main thread, one reviewer call)](#the-refine-loop-main-thread-one-reviewer-call)
+- [The cold review of a site hero (main thread, one reviewer call per variant)](#the-cold-review-of-a-site-hero-main-thread-one-reviewer-call-per-variant)
 - [A fleet without a workflow](#a-fleet-without-a-workflow)
 - [Resume](#resume)
 
@@ -140,6 +141,18 @@ Refinement (P5) is not a workflow. It runs in this thread, with at most one suba
    no-decision fixes and "Decisions for you". Without the yes, you do that review yourself, honestly.
 3. You fix the no-decision items (or argue against them in one line), then show the board with "What changed" and
    "Weak points" and the decisions; the owner decides at G3.
+
+## The cold review of a site hero (main thread, one reviewer call per variant)
+
+The site round ([07p-site-round](phases/07p-site-round.md)) has each hero variant read cold. It is not a workflow. In the
+thread it costs nothing but is not blind (the session that built the page reads it, and `cold-review.md` says `by:
+in-thread`), so an agent is the opt-in upgrade, only after the fleet gate: the count is one
+`brand-creator:brand-reviewer` call per hero variant (2 or 3 on the first hero board), the model is the reviewer's tier
+capped at the session model with the per-call `model`, and each call reads four pictures and two files. Each call gets the
+cold-review fragment of [prompt-fragments.md](prompt-fragments.md) and the six paths (the variant's four stills,
+`brief/BRIEF.md`, `FACTS.md`) and nothing else: not the board, the references or your reasons. The reviewer reports and
+never writes, so you write `rounds/r<N>/<name>/cold-review.md` from its reply, the verdict first and `by: agent`, with the
+sha256 of each input.
 
 ## A fleet without a workflow
 
