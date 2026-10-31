@@ -16,7 +16,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
-from helpers import ROOT, bc, install_fixture, make_project, mutate, mutate_json, path_without, report
+from helpers import ROOT, TEST_FONT, bc, install_fixture, make_project, mutate, mutate_json, path_without, report
 
 sys.path.insert(0, str(ROOT / "scripts" / "pagelib"))
 import pagecheck  # noqa: E402
@@ -32,7 +32,7 @@ PAGE = """<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="../assets/tokens/tokens.css">
 <style>
-  body { margin: 0; background: var(--color-bg); color: var(--color-text); }
+  body { margin: 0; background: var(--color-bg); color: var(--color-text); font-family: var(--font-sans); }
   a { color: var(--color-accent); }
 </style>
 </head>
@@ -48,11 +48,11 @@ PAGE = """<!doctype html>
 SITE_PAGE = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>Built site</title>
 <style>
-  body { background: #f9f7ee; color: #0d1b2d; }
+  body { background: #f9f7ee; color: #0d1b2d; font-family: ui-sans-serif, system-ui, sans-serif; }
   @media (prefers-color-scheme: dark) { body { background: #0e141d; color: #f0eee7; } }
 </style></head>
 <body><img src="img/dot.svg" width="32" height="32" alt=""><p>A built page, nothing else.</p></body></html>
-"""   # the Acme colours written out: a built site elsewhere does not link the project's tokens.css
+"""   # the Acme colours and font stack written out: a built site elsewhere does not link the project's tokens.css
 DOT = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8" width="8" height="8"><circle cx="4" cy="4" r="3" fill="#007d71"/></svg>\n'
 
 
@@ -351,8 +351,9 @@ def test_a_clean_page_passes_and_its_report_is_named_after_the_page(acme):
     ids = [x["id"] for x in rep["results"]]
     assert ids[:5] == ["page:target", "page:load:390-light", "page:load:390-dark", "page:load:1440-light", "page:load:1440-dark"]
     assert ids[5:9] == ["page:colours:light", "page:colours:dark", "page:pairs:light", "page:pairs:dark"]
-    assert all(x["status"] == "pass" for x in rep["results"][1:] if x["id"] != "page:mark-file") and row(rep, "page:target")["status"] == "info"
+    assert all(x["status"] == "pass" for x in rep["results"][1:] if x["id"] not in ("page:mark-file", "page:display-size")) and row(rep, "page:target")["status"] == "info"
     assert row(rep, "page:mark-file")["status"] == "info" and "no brand mark is shown" in row(rep, "page:mark-file")["detail"]   # a page without a mark says so
+    assert row(rep, "page:display-size")["status"] == "info" and "no font.display token" in row(rep, "page:display-size")["detail"]   # Acme has no display face
     paths = {i["path"] for i in rep["inputs"]}
     assert {"assets/tokens/tokens.json", "assets/tokens/tokens.css", "pages/index.html", "FACTS.md", "BRAND-STATE.md", "qa/rules.json"} <= paths
     measures = json.loads(Path(rep["measures"]).read_text(encoding="utf-8"))
@@ -1712,3 +1713,338 @@ def test_logo_files_are_the_logo_folder_and_the_drawings_the_rules_name_with_the
     assert {"elsewhere/tool-a.svg", "elsewhere/tool-a-dark.svg"} <= set(files) and "assets/logo/leak.svg" not in files
     (tmp_path / "b").mkdir()
     assert pagecheck.logo_files(make_project(tmp_path / "b", slug="bare"), qa_rules.DEFAULTS) == {}
+
+
+# ---------------------------------------------------------------- fonts and the display face
+
+BRAND_FONT = '@font-face { font-family: "Acme Sans"; src: url(fonts/TestFont-subset.ttf); }'
+FONT_PAGE = PAGE.replace("</style>", f"  {BRAND_FONT}\n</style>")   # the clean page, with the brand's face declared (the token stack names "Acme Sans" in the tests that use it)
+DISPLAY_PAGE = PAGE.replace("</style>", """  @font-face { font-family: "Acme Display"; src: url(fonts/TestFont-subset.ttf); }
+  h1 { font-family: var(--font-display); font-size: 32px; }
+</style>""")
+
+
+def use_font_tokens(p: Path, **stacks: list[str]) -> None:
+    """Set font.<name> tokens in the project's token sources (a name that exists is replaced, a new one added) and build them again."""
+    mutate_json(p / "tokens" / "primitives.tokens.json", lambda d: d["font"].update({name: {"$value": stack} for name, stack in stacks.items()}))
+    r = bc("tokens", project=p)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def install_test_font(p: Path) -> None:
+    (p / "pages" / "fonts").mkdir(parents=True, exist_ok=True)
+    (p / "pages" / "fonts" / TEST_FONT.name).write_bytes(TEST_FONT.read_bytes())
+    (p / "pages" / "fonts" / "broken.woff2").write_bytes(b"this is not a font file " * 20)   # answered with 200, and no browser can read it
+
+
+def usage(family: str, weight: int = 400, style: str = "normal", sel: str = "body > p", min_px: float = 16, platform=None, **more) -> dict:
+    return {"family": family, "weight": weight, "style": style, "stack": f'"{family}", sans-serif', "count": 1, "sel": sel, "min_px": min_px, "min_sel": sel, "min_text": "Text",
+            "platform": platform, **more}
+
+
+def font_view(*entries: dict, faces=(), **more) -> dict:
+    return view(font_usage=list(entries), font_faces=list(faces), **more)
+
+
+def web(glyphs: int = 10) -> dict:
+    return {"family": "Inter", "postscript": "Inter-Regular", "custom": True, "glyphs": glyphs}
+
+
+def system(name: str = "Times", glyphs: int = 10) -> dict:
+    return {"family": name, "postscript": name, "custom": False, "glyphs": glyphs}
+
+
+FONT_TOKENS = {"other": {"font.sans": '"Acme Sans", system-ui, sans-serif', "font.mono": "ui-monospace, monospace", "font.display": '"Acme Display", serif',
+                         "dimension.space-1": "4px"}}
+
+
+def font_ctx(tmp_path: Path, tokens: dict = FONT_TOKENS, rules=None) -> pagecheck.Ctx:
+    return pagecheck.Ctx(tmp_path, pagecheck.Target("project", "pages/x.html", page="pages/x.html"), [390], ["light"], rules or qa_rules.DEFAULTS, tokens)
+
+
+def font_row(tmp_path: Path, measures: dict, tokens: dict = FONT_TOKENS, which=pagecheck.font_rows, rules=None) -> dict:
+    rep = Report("page-check/x-000000", tmp_path)
+    which(rep, measures, font_ctx(tmp_path, tokens, rules))
+    (got,) = rep.results
+    return got
+
+
+def test_the_font_tokens_are_read_with_their_aliases_and_without_sizes():
+    """No browser: every `font.*` stack of tokens.json `other`, quotes taken off; an alias is followed; a token that holds a size is no stack."""
+    assert pagecheck.split_families("\"Acme Sans\", 'Noto  Serif', system-ui,  ,sans-serif") == ["Acme Sans", "Noto Serif", "system-ui", "sans-serif"]
+    stacks = pagecheck.font_stacks({"other": {"font.body": "var(--font-sans)", "font.sans": "Inter, sans-serif", "font.size.base": "16px", "font.loop": "var(--font-loop)",
+                                              "duration.fast": "150ms", "font.weight": 400}})
+    assert stacks == {"font.body": ["Inter", "sans-serif"], "font.sans": ["Inter", "sans-serif"], "font.loop": ["var(--font-loop)"]}   # an alias that points at itself stays as written
+    assert pagecheck.font_stacks({"other": {"duration.fast": "150ms"}}) == {} and pagecheck.font_stacks({}) == {}
+
+
+def test_the_fonts_row_judges_constructed_measurements(tmp_path):
+    """No browser: the three outcomes of page:fonts and what is never a pass."""
+    loaded = [{"family": "Acme Sans", "weight": "normal", "style": "normal", "status": "loaded"}]
+    good = font_view(usage("Acme Sans", platform=[web()]), usage("ui-monospace", sel="body > code", platform=[system("SF Mono")]),
+                     usage("serif", sel="body > i", platform=[system()]), faces=loaded)
+    got = font_row(tmp_path, {"views": [good]})
+    assert got["status"] == "pass" and got["offenders"] == [] and "3 font(s)" in got["detail"], got
+    # a family no token stack names fails; a generic one passes only when a stack writes it (monospace is in font.mono, cursive is in none)
+    bad = font_row(tmp_path, {"views": [font_view(usage("Georgia", sel="body > h1", platform=[system("Georgia")]), usage("cursive", sel="body > b", platform=[system()]),
+                                                  usage("monospace", sel="body > code", platform=[system("Menlo")]))]})
+    assert bad["status"] == "fail" and [(o["family"], o["kind"]) for o in bad["offenders"]] == [("Georgia", "not-named"), ("cursive", "not-named")]
+    assert 'body > h1 is set in "Georgia", which no font token names' in bad["detail"] and "Acme Sans" in bad["detail"]
+    # a declared face that did not load, a declared face nothing covers, a name with no @font-face that is not installed, and an installed font of that name
+    broken = [{"family": "Acme Sans", "weight": "normal", "style": "normal", "status": "error"}]
+    err = font_row(tmp_path, {"views": [font_view(usage("Acme Sans", platform=[system()]), faces=broken)]})
+    assert err["status"] == "fail" and err["offenders"][0]["kind"] == "not-loaded" and "its font file did not load (status error)" in err["detail"] and "Times" in err["detail"]
+    idle = font_row(tmp_path, {"views": [font_view(usage("Acme Sans", platform=[system()]), faces=[{**broken[0], "status": "unloaded"}])]})
+    assert idle["status"] == "fail" and "none of its @font-face rules covers this text (status unloaded)" in idle["detail"]
+    tokens = {"other": {"font.sans": "Georgia, serif"}}
+    absent = font_row(tmp_path, {"views": [font_view(usage("Georgia", platform=[system("DejaVu Serif")]))]}, tokens)
+    assert absent["status"] == "fail" and "declares no @font-face for it and it is not installed on this machine" in absent["detail"]
+    installed = font_row(tmp_path, {"views": [font_view(usage("Georgia", platform=[system("Georgia")]))]}, tokens)
+    assert installed["status"] == "pass"
+    # part of the glyphs in another font: a warning with the counts; a debugger that could not answer: NOT verified, never a pass
+    partly = font_row(tmp_path, {"views": [font_view(usage("Acme Sans", platform=[web(35), system("Helvetica", 3)]), faces=loaded)]})
+    assert partly["status"] == "warn" and "3 of 38 glyph(s) are drawn in another font" in partly["detail"] and partly["partly"][0]["kind"] == "partly-another-font"
+    for platform, why in ((None, "could not say which font was used (target closed)"), ([], "reported no font")):
+        silent = font_row(tmp_path, {"views": [font_view(usage("Acme Sans", platform=platform, platform_error="target closed"), faces=loaded)]})
+        assert silent["status"] == "warn" and "NOT verified" in silent["detail"] and why in silent["detail"], silent
+    # a later view that breaks what an earlier one passed is still caught, and an entry cut off at the cap is said so
+    later = font_row(tmp_path, {"views": [font_view(usage("Acme Sans", platform=[web()]), faces=loaded), font_view(usage("Acme Sans", platform=[system()]), faces=broken, width=1440)]})
+    assert later["status"] == "fail" and later["offenders"][0]["width"] == 1440
+    cut = font_row(tmp_path, {"views": [font_view(usage("Acme Sans", platform=[web()]), faces=loaded, font_usage_total=75)]})
+    assert cut["status"] == "warn" and "NOT verified beyond the first fonts of a view" in cut["detail"]
+    # nothing to judge against, or nothing measured, is not verified
+    assert font_row(tmp_path, {"views": [good]}, {"other": {"duration.fast": "150ms"}})["status"] == "skipped"
+    assert font_row(tmp_path, {"views": []})["status"] == "skipped" and font_row(tmp_path, {"views": [view(error="x")]})["status"] == "skipped"
+
+
+def test_a_web_font_the_browser_fell_back_to_is_not_the_familys_own_face(tmp_path):
+    """No browser: a web font in the answer is a family's own only when the page declares that family and one of its faces loaded. A face in error, or a family the
+    page never declares, whose text the browser drew in ANOTHER web font of the page (the body face its stack falls to) is not drawn."""
+    tokens = {"other": {"font.sans": '"Acme Sans", system-ui, sans-serif', "font.display": '"Acme Display", "Acme Sans", serif'}}
+    sans = {"family": "Acme Sans", "weight": "normal", "style": "normal", "status": "loaded"}
+    display = {**sans, "family": "Acme Display"}
+    h1 = lambda **kw: usage("Acme Display", weight=700, sel="body > h1", platform=[web()], **kw)   # the answer for the heading: only the fallback web font
+    ok = font_row(tmp_path, {"views": [font_view(h1(), usage("Acme Sans", platform=[web()]), faces=[sans, display])]}, tokens)
+    assert ok["status"] == "pass", ok   # the control: both faces loaded
+    broken = font_row(tmp_path, {"views": [font_view(h1(), usage("Acme Sans", platform=[web()]), faces=[sans, {**display, "status": "error"}])]}, tokens)
+    assert broken["status"] == "fail" and [(o["family"], o["kind"], o["faces"]) for o in broken["offenders"]] == [("Acme Display", "not-loaded", ["error"])], broken
+    assert 'body > h1 is set in "Acme Display" (weight 700): its font file did not load (status error); Chromium used Inter (web font) 10 glyph(s)' in broken["detail"]
+    undeclared = font_row(tmp_path, {"views": [font_view(h1(), usage("Acme Sans", platform=[web()]), faces=[sans])]}, tokens)
+    assert undeclared["status"] == "fail" and "declares no @font-face for it and it is not installed on this machine" in undeclared["detail"] and "Inter (web font)" in undeclared["detail"]
+    idle = font_row(tmp_path, {"views": [font_view(h1(), usage("Acme Sans", platform=[web()]), faces=[sans, {**display, "status": "unloaded"}])]}, tokens)
+    assert idle["status"] == "fail" and "none of its @font-face rules covers this text (status unloaded)" in idle["detail"]
+    # an installed font of that name is its own whatever the page declares
+    named = font_row(tmp_path, {"views": [font_view(usage("Acme Display", platform=[system("Acme Display")]), faces=[{**display, "status": "error"}])]}, tokens)
+    assert named["status"] == "pass"
+
+
+def test_a_system_face_the_page_does_not_declare_is_looked_for_and_never_waved_through(tmp_path):
+    """No browser: Roboto, Noto Sans and the like are also brand web fonts. Not declared by the page, they pass only where an installed font of that name is what the browser
+    drew; where it drew something else the row says NOT verified (a warning: the stack is meant to fall through, so it is not a failure). The generic families and the
+    operating-system aliases have no font of that name to look for and are the browser's own."""
+    tokens = {"other": {"font.sans": 'Roboto, "Helvetica Neue", -apple-system, system-ui, sans-serif'}}
+    got = lambda family, platform, faces=(): font_row(tmp_path, {"views": [font_view(usage(family, platform=platform), faces=list(faces))]}, tokens)
+    here = got("Roboto", [system("Roboto")])
+    assert here["status"] == "pass", here   # installed under that name
+    missing = got("Roboto", [system("Times")])
+    assert missing["status"] == "warn" and missing["offenders"] == []
+    assert 'NOT verified: 1 font(s): "Roboto" (body > p): a system face the page does not declare and this machine does not have; Chromium used Times 10 glyph(s)' in missing["detail"]
+    other_web_font = got("Roboto", [web()])
+    assert other_web_font["status"] == "warn" and "Chromium used Inter (web font) 10 glyph(s)" in other_web_font["detail"]   # a page that forgot its @font-face
+    assert got("Helvetica Neue", [system("Helvetica Neue")])["status"] == "pass" and got("Helvetica Neue", [system("Times")])["status"] == "warn"
+    assert got("-apple-system", [system("Times")])["status"] == "pass" and got("system-ui", [system("Times")])["status"] == "pass"
+    # declared by the page it is a web font like any other: it must have loaded
+    face = {"family": "Roboto", "weight": "normal", "style": "normal", "status": "error"}
+    assert got("Roboto", [web()], [face])["status"] == "fail"
+    assert got("Roboto", [web()], [{**face, "status": "loaded"}])["status"] == "pass"
+
+
+def test_the_display_size_row_judges_constructed_measurements(tmp_path):
+    """No browser: the minimum applies to the display face, says when it is a proposal, and is an info row when there is no face to tell from body text."""
+    row_of = lambda *entries, **kw: font_row(tmp_path, {"views": [font_view(*entries)]}, which=pagecheck.display_size_rows, **kw)
+    small, big = usage("Acme Display", sel="body > h1", min_px=14, weight=700), usage("Acme Display", sel="body > h2", min_px=24)
+    got = row_of(small, big)
+    assert got["status"] == "fail" and got["small"][0]["selector"] == "body > h1" and got["small"][0]["font_size_px"] == 14 and got["smallest_px"] == 14
+    assert "under 20 px" in got["detail"] and "a proposal" in got["detail"] and got["proposal"] is True
+    assert row_of(big)["status"] == "pass" and "24 px or more" in row_of(big)["detail"]
+    assert row_of(usage("Acme Display", min_px=19.99))["status"] == "fail" and row_of(usage("Acme Display", min_px=20))["status"] == "pass"   # 20 is allowed
+    assert row_of(usage("Acme Sans", min_px=11))["status"] == "pass" and "no text on the page is set in the display face" in row_of(usage("Acme Sans", min_px=11))["detail"]
+    owned = {**qa_rules.DEFAULTS, "page": {**qa_rules.DEFAULTS["page"], "display_min_px": 12}, "_from_file": ["page.display_min_px"]}
+    set_by_owner = row_of(small, rules=owned)
+    assert set_by_owner["status"] == "pass" and "a proposal" not in set_by_owner["detail"] and "qa/rules.json page.display_min_px" in set_by_owner["detail"] and set_by_owner["proposal"] is False
+    assert row_of(small, rules={**owned, "page": {**owned["page"], "display_min_px": 15}})["status"] == "fail"
+    none = font_row(tmp_path, {"views": [font_view(small)]}, {"other": {"font.sans": "Inter, sans-serif"}}, pagecheck.display_size_rows)
+    assert none["status"] == "info" and "no font.display token" in none["detail"]
+    same = font_row(tmp_path, {"views": [font_view(small)]}, {"other": {"font.sans": "Inter, sans-serif", "font.display": "Inter, sans-serif"}}, pagecheck.display_size_rows)
+    assert same["status"] == "info" and "also the first family of font.sans" in same["detail"]
+    assert font_row(tmp_path, {"views": []}, which=pagecheck.display_size_rows)["status"] == "skipped"
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_family_the_tokens_do_not_name_fails(acme):
+    page = write_page(acme)
+    r, rep = check_page(acme)   # the control: the page sets its text in the brand's stack
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert row(rep, "page:fonts")["status"] == "pass"
+    mutate(page, "font-family: var(--font-sans);", "font-family: Georgia, serif;")
+    r, rep = check_page(acme)
+    assert r.returncode == 1, r.stdout + r.stderr
+    bad = row(rep, "page:fonts")
+    assert bad["status"] == "fail" and {(o["family"], o["kind"]) for o in bad["offenders"]} == {("Georgia", "not-named")}
+    assert {o["weight"] for o in bad["offenders"]} == {400, 700} and all(o["selector"].startswith("body") for o in bad["offenders"])
+    assert 'is set in "Georgia", which no font token names' in bad["detail"] and "ui-sans-serif" in bad["detail"]
+    # a generic family counts only when a stack names it: the Acme stack names sans-serif and system-ui, not monospace
+    mutate(page, "font-family: Georgia, serif;", "font-family: monospace;")
+    r, rep = check_page(acme)
+    assert r.returncode == 1 and {o["family"] for o in row(rep, "page:fonts")["offenders"]} == {"monospace"}, r.stdout + r.stderr
+    assert row(rep, "page:load:390-light")["status"] == "pass" and row(rep, "page:colours:light")["status"] == "pass"
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_token_family_whose_file_does_not_load_fails(acme):
+    use_font_tokens(acme, sans=["Acme Sans", "system-ui", "sans-serif"])
+    install_test_font(acme)
+    page = write_page(acme, FONT_PAGE)
+    r, rep = check_page(acme)   # the control: the face loads and is what the browser drew
+    assert r.returncode == 0, r.stdout + r.stderr
+    ok = row(rep, "page:fonts")
+    assert ok["status"] == "pass" and {f["family"] for f in ok["fonts"]} == {"Acme Sans"} and all(any(p["custom"] for p in f["platform"]) for f in ok["fonts"]), ok
+    measures = json.loads(Path(rep["measures"]).read_text(encoding="utf-8"))
+    assert [(f["family"], f["status"]) for f in measures["views"][0]["font_faces"]] == [("Acme Sans", "loaded")]
+    # the break: the face points at a file that answers and is no font; the browser reports the face as in error and draws the text in its fallback
+    mutate(page, "url(fonts/TestFont-subset.ttf)", "url(fonts/broken.woff2)")
+    r, rep = check_page(acme)
+    assert r.returncode == 1, r.stdout + r.stderr
+    bad = row(rep, "page:fonts")
+    assert bad["status"] == "fail" and {o["kind"] for o in bad["offenders"]} == {"not-loaded"} and all(o["faces"] == ["error"] for o in bad["offenders"])
+    assert 'is set in "Acme Sans"' in bad["detail"] and "its font file did not load (status error)" in bad["detail"] and "Chromium used" in bad["detail"]
+    assert not any(p["custom"] for o in bad["offenders"] for p in o["platform"])
+    assert row(rep, "page:load:390-light")["status"] == "pass"   # the file was served: only the fonts row sees that nothing could be read from it
+    # and a page that declares no face at all, for a family that is not installed
+    mutate(page, '@font-face { font-family: "Acme Sans"; src: url(fonts/broken.woff2); }', "")
+    r, rep = check_page(acme)
+    assert r.returncode == 1 and "declares no @font-face for it and it is not installed on this machine" in row(rep, "page:fonts")["detail"], r.stdout + r.stderr
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_display_face_that_fails_is_not_passed_by_the_body_web_font_its_stack_falls_to(acme):
+    """The stack is `"Acme Display", "Acme Sans", serif`. When Acme Display does not load the browser draws the heading in Acme Sans, which IS a loaded web font of the page:
+    the heading must still fail, because it is not drawn in the display face."""
+    use_font_tokens(acme, sans=["Acme Sans", "system-ui", "sans-serif"], display=["Acme Display", "Acme Sans", "serif"])
+    install_test_font(acme)
+    page = write_page(acme, DISPLAY_PAGE.replace("</style>", f"  {BRAND_FONT}\n</style>"))
+    r, rep = check_page(acme)   # the control: both faces load
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert row(rep, "page:fonts")["status"] == "pass"
+    # the break: the display face points at a file that is no font
+    mutate(page, '@font-face { font-family: "Acme Display"; src: url(fonts/TestFont-subset.ttf); }', '@font-face { font-family: "Acme Display"; src: url(fonts/broken.woff2); }')
+    r, rep = check_page(acme)
+    assert r.returncode == 1, r.stdout + r.stderr
+    bad = row(rep, "page:fonts")
+    assert bad["status"] == "fail", bad
+    assert [(o["family"], o["kind"], o["faces"]) for o in bad["offenders"]] == [("Acme Display", "not-loaded", ["error"])]
+    (offender,) = bad["offenders"]
+    assert offender["platform"] and all(p["custom"] for p in offender["platform"])   # what Chromium drew the heading in: the body web font, which is why it used to pass
+    assert 'is set in "Acme Display" (weight 700): its font file did not load (status error)' in bad["detail"] and "(web font)" in bad["detail"]
+    # and a page that never declares the display face at all, with the same fallback
+    mutate(page, '@font-face { font-family: "Acme Display"; src: url(fonts/broken.woff2); }', "")
+    r, rep = check_page(acme)
+    assert r.returncode == 1 and "declares no @font-face for it and it is not installed on this machine" in row(rep, "page:fonts")["detail"], r.stdout + r.stderr
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_inline_text_in_another_font_is_not_charged_to_the_paragraph_around_it(acme):
+    """`code` inside a paragraph is set in the mono stack. The debugger answers for an element and everything in it, so without taking the code off, the paragraph looked as if
+    a few of its own glyphs were drawn in another font. The paragraph is the only text in the body face, so it is the probe whatever it holds."""
+    use_font_tokens(acme, sans=["Acme Sans", "system-ui", "sans-serif"], mono=["ui-monospace", "monospace"])
+    install_test_font(acme)
+    text = "Install the widget with <code>npm i widget</code> and then run it."
+    body = "  <h1>Acme hand tools</h1>\n  <p>Every tool has a published spare-parts list.</p>\n  <p><a href=\"#parts\">Spare parts</a></p>\n"
+    assert body in FONT_PAGE
+    write_page(acme, FONT_PAGE.replace("</style>", "  code { font-family: var(--font-mono); }\n</style>").replace(body, f"  <p>{text}</p>\n"))
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 0, r.stdout + r.stderr
+    fonts = row(rep, "page:fonts")
+    assert fonts["status"] == "pass" and fonts["partly"] == [], fonts
+    (v,) = json.loads(Path(rep["measures"]).read_text(encoding="utf-8"))["views"]
+    sans = next(u for u in v["font_usage"] if u["family"] == "Acme Sans")
+    assert sans["sel"] == "body > main > p" and sans["inline_other"] == 1
+    own = len("Install the widget with  and then run it.")   # 41 glyphs, 12 more with the code; a space that ends a wrapped line at 390 px is not drawn, so one less is the same text
+    assert own - 1 <= sum(p["glyphs"] for p in sans["platform"]) <= own and all(p["custom"] for p in sans["platform"])
+    assert {u["family"] for u in v["font_usage"]} == {"Acme Sans", "ui-monospace"}
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_display_text_under_the_minimum_fails_and_a_brand_with_no_display_face_gets_an_info_row(acme):
+    page = write_page(acme)
+    r, rep = check_page(acme)
+    assert r.returncode == 0, r.stdout + r.stderr
+    info = row(rep, "page:display-size")
+    assert info["status"] == "info" and "no font.display token" in info["detail"]   # Acme has no display face
+    use_font_tokens(acme, sans=["Acme Sans", "system-ui", "sans-serif"], display=["Acme Display", "serif"])
+    install_test_font(acme)
+    page = write_page(acme, DISPLAY_PAGE.replace("</style>", f"  {BRAND_FONT}\n</style>"))
+    r, rep = check_page(acme)   # the heading is 32 px in the display face
+    assert r.returncode == 0, r.stdout + r.stderr
+    ok = row(rep, "page:display-size")
+    assert ok["status"] == "pass" and ok["display_face"] == "Acme Display" and ok["smallest_px"] == 32 and "32 px or more" in ok["detail"]
+    assert "a proposal" in ok["detail"] and ok["proposal"] is True and row(rep, "page:fonts")["status"] == "pass"
+    mutate(page, "font-size: 32px;", "font-size: 14px;")
+    r, rep = check_page(acme)
+    assert r.returncode == 1, r.stdout + r.stderr
+    bad = row(rep, "page:display-size")
+    assert bad["status"] == "fail" and [(o["selector"], o["font_size_px"]) for o in bad["small"]] == [("body > main > h1", 14)] and "under 20 px" in bad["detail"]
+    assert row(rep, "page:fonts")["status"] == "pass"   # the face is the brand's and is drawn; only its size is wrong
+    mutate_json(acme / "qa" / "rules.json", lambda d: d.__setitem__("page", {"display_min_px": 12}))   # the owner sets the minimum: no longer a proposal
+    r, rep = check_page(acme)
+    assert r.returncode == 0, r.stdout + r.stderr
+    kept = row(rep, "page:display-size")
+    assert kept["status"] == "pass" and kept["proposal"] is False and "a proposal" not in kept["detail"] and kept["minimum_px"] == 12
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_the_fonts_collector_reports_the_faces_and_what_chromium_used(acme):
+    """The facts: every FontFace with its status, and for each (first family, weight, style) of a shown text the platform font the browser drew it in. Hidden text is not
+    a font in use, and an entry holds the smallest size of its elements (tests/node/pagefonts.test.mjs proves the probe mark is taken off again)."""
+    use_font_tokens(acme, sans=["Acme Sans", "system-ui", "sans-serif"])
+    install_test_font(acme)
+    page = write_page(acme, FONT_PAGE.replace("</style>", """  @font-face { font-family: "Broken Face"; src: url(fonts/broken.woff2); }
+  @font-face { font-family: "Unused Face"; src: url(fonts/TestFont-subset.ttf); }
+  .broken { font-family: "Broken Face", serif; font-size: 15px; } .broken-small { font-family: "Broken Face", serif; font-size: 11px; }
+  .gone { display: none; font-family: "Hidden Family"; } .fade { opacity: 0; font-family: "Faded Family"; }
+</style>""").replace("</main>", """<p class="broken">Broken face</p><p class="broken-small">Broken face, small</p><p class="gone">hidden</p><p class="fade">faded</p>
+</main>"""))
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 1, r.stdout + r.stderr   # Broken Face is no token's family
+    measures = json.loads(Path(rep["measures"]).read_text(encoding="utf-8"))
+    (v,) = measures["views"]
+    assert {f["family"]: f["status"] for f in v["font_faces"]} == {"Acme Sans": "loaded", "Broken Face": "error", "Unused Face": "unloaded"}
+    by = {(u["family"], u["weight"]): u for u in v["font_usage"]}
+    assert not {fam for fam, _ in by} & {"Hidden Family", "Faded Family"}
+    assert {fam for fam, _ in by} == {"Acme Sans", "Broken Face"} and by[("Acme Sans", 700)]["sel"] == "body > main > h1"
+    assert any(p["custom"] for p in by[("Acme Sans", 400)]["platform"]) and all(set(p) == {"family", "postscript", "custom", "glyphs"} for p in by[("Acme Sans", 400)]["platform"])
+    broken = by[("Broken Face", 400)]
+    assert broken["count"] == 2 and broken["min_px"] == 11 and "p.broken-small" in broken["min_sel"] and broken["stack"].startswith('"Broken Face"')
+    assert not any(p["custom"] for p in broken["platform"]) and "platform_error" not in broken
+    assert v["font_usage"][0]["family"] == "Acme Sans"   # document order
+    assert "font_usage_total" not in v and "font_faces_total" not in v
+    assert not any("probe" in u for u in v["font_usage"])
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_face_that_lacks_a_character_the_text_uses_warns_and_does_not_fail(acme):
+    use_font_tokens(acme, sans=["Acme Sans", "system-ui", "sans-serif"])
+    install_test_font(acme)
+    write_page(acme, FONT_PAGE.replace("<h1>Acme hand tools</h1>", "<h1>Acme hand tools \u0436</h1>"))   # a Cyrillic letter the Latin face does not hold: the browser draws it in another font
+    r, rep = check_page(acme)
+    assert r.returncode == 0, r.stdout + r.stderr
+    warned = row(rep, "page:fonts")
+    assert warned["status"] == "warn" and "glyph(s) are drawn in another font" in warned["detail"] and warned["offenders"] == []
+    assert [(o["family"], o["kind"]) for o in warned["partly"]] == [("Acme Sans", "partly-another-font")]

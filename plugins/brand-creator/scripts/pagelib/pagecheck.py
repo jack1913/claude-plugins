@@ -13,6 +13,8 @@ Each family of rows is a function `(rep, measures, ctx)` listed in ROW_CHECKS; a
 the list and reads the same Ctx. The rows of the first one, `load_rows`, are `page:load:<width>-<scheme>`; `colour_rows` gives `page:colours:<scheme>` (every colour the page
 paints is a semantic colour of that theme) and `pair_rows` gives `page:pairs:<scheme>` (every text colour on its ground is a declared pair, or measured against WCAG).
 `mark_rows` gives `page:mark-file`, `page:mark-band` and `page:mark-clear-space` (the brand mark on the page is a logo file of the project, the drawing its size calls for, and has its clear space).
+`font_rows` gives `page:fonts` (every text is set in a family a `font.*` token names, and the browser drew it in that face) and `display_size_rows` gives `page:display-size`
+(the display face is never set under `page.display_min_px`).
 
 `motion_rows` gives `page:motion` (every duration and easing is a motion token), and `claim_rows` gives `page:claims` (every number and status word outside a `data-sample`
 is backed by FACTS.md) and `page:samples` (the before-publishing list, also the report's `samples`).
@@ -1114,8 +1116,220 @@ def mark_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
     _clear_space_row(rep, shown, ctx)
 
 
-# each (rep, measures, ctx); the later families of rows (fonts, rules, tells) are added here
-ROW_CHECKS = [load_rows, colour_rows, pair_rows, motion_rows, claim_rows, mark_rows]
+# ---------------------------------------------------------------- fonts
+
+GENERIC_FAMILIES = frozenset({"serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui", "ui-serif", "ui-sans-serif", "ui-monospace", "ui-rounded", "math",
+                              "emoji", "fangsong"})   # the CSS generic families: the browser's own choice, nothing for a page to load
+BROWSER_ALIASES = frozenset({"-apple-system", "blinkmacsystemfont"})   # names the browser resolves to the operating system's interface font: no font of that name exists to look for
+BROWSER_FAMILIES = GENERIC_FAMILIES | BROWSER_ALIASES                # the browser's own choice: a token stack may name them, a page is not asked to load them, and nothing is checked
+SYSTEM_FAMILIES = frozenset({"segoe ui", "roboto", "cantarell", "ubuntu", "noto sans", "helvetica neue", "helvetica", "arial"})
+# the interface and web-safe faces some operating systems ship under these names (several are also common brand web fonts): a token stack may name them and a page need not
+# declare them, but they are looked for, and where this machine has none the row says NOT verified instead of passing
+FONT_DISPLAY = "font.display"
+FONT_ALIAS = re.compile(r"var\(\s*(--[\w-]+)\s*\)")
+FONT_NOT_A_FAMILY = re.compile(r"[\d.]+(?:px|rem|em|%|ms|s)?")   # a font.* token that holds a size or a number is no family
+FONT_NAMED = 6                            # how many token families a detail names
+DISPLAY_EPSILON = 0.005                   # the measured size is rounded to two decimals: 19.99 is under 20, 20 is not
+
+
+def split_families(css: str) -> list[str]:
+    """A CSS font-family list -> its families, quotes taken off and white space collapsed: `"Acme Sans", system-ui` -> ["Acme Sans", "system-ui"]."""
+    out, cur, quote = [], "", None
+    for ch in str(css):
+        if quote:
+            if ch == quote:
+                quote = None
+            else:
+                cur += ch
+        elif ch in "\"'":
+            quote = ch
+        elif ch == ",":
+            out.append(cur)
+            cur = ""
+        else:
+            cur += ch
+    out.append(cur)
+    return [" ".join(f.split()) for f in out if f.strip()]
+
+
+def family_key(name: str) -> str:
+    """How two family names are compared: white space collapsed, case folded."""
+    return " ".join(str(name).split()).casefold()
+
+
+def font_stacks(tokens: dict) -> dict[str, list[str]]:
+    """The font families the brand names: tokens.json `other` keys starting `font.` -> the families of each stack, as written. An alias (`var(--font-sans)`) is followed;
+    a token that holds a size or a number is no stack. {} when the tokens name no font."""
+    other = tokens.get("other") if isinstance(tokens.get("other"), dict) else {}
+    by_var = {"--" + k.replace(".", "-"): v for k, v in other.items() if isinstance(v, str)}
+
+    def resolve(value: str, depth: int = 0) -> str:
+        m = FONT_ALIAS.fullmatch(value.strip())
+        return resolve(by_var[m.group(1)], depth + 1) if m and m.group(1) in by_var and depth < 8 else value
+
+    out = {}
+    for key, value in sorted(other.items()):
+        if key.startswith("font.") and isinstance(value, str):
+            names = [n for n in split_families(resolve(value)) if not FONT_NOT_A_FAMILY.fullmatch(n)]
+            if names:
+                out[key] = names
+    return out
+
+
+def _rendered_views(measures: dict, key: str) -> list[dict]:
+    """Every rendered view (any width, any scheme) that holds the facts `key`, in the order they were measured."""
+    return [v for v in measures.get("views", []) if isinstance(v, dict) and not v.get("error") and key in v]
+
+
+def _platform_names(platform: list) -> str:
+    return ", ".join(f"{p.get('family')}{' (web font)' if p.get('custom') else ''} {p.get('glyphs')} glyph(s)" for p in platform) or "no font"
+
+
+def font_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
+    """page:fonts: the families the page sets its text in are the brand's, and the browser really used them. Over all widths and both schemes, every distinct (first
+    family, weight, style) of the computed `font-family` of a shown text is judged once:
+      * its first family must be named in some `font.*` token stack (names compared without quotes and case); a generic family (`sans-serif`, `system-ui` ...) or a
+        browser alias (BROWSER_FAMILIES) counts only when a stack names it: fail "not named by the tokens";
+      * a family the page declares with @font-face (`font_faces`), or any named family that is not generic or an alias, must be what Chromium drew the text in: the platform
+        font of the probe element (CDP) is an installed font of that name, or a web font of the page AND the page declares that family with at least one face `loaded` (a web
+        font drawn for a family that is not declared, or whose faces all failed or never loaded, is another family's fallback, not this one's face). Fail when the browser used
+        none of it: the face did not load (status error), the page declares none and the font is not installed here, or no face covers the text. A text part of whose glyphs
+        are drawn in another font (the face lacks a character the text uses) is a warning, with the glyph counts;
+      * a system face (SYSTEM_FAMILIES) the page does not declare is looked for the same way (an installed font of that name); where this machine has none it is "NOT
+        verified" in a warning, naming what Chromium used, never a pass and never a failure (the stack is meant to fall through to the next family).
+    A debugger that could not answer is "NOT verified" in a warning, never a pass. The probe is one element per entry (the collector keeps what is inside it that is set in
+    another font out of its answer): a fallback glyph elsewhere is not seen."""
+    rid, label = "page:fonts", "fonts of the page"
+    stacks = font_stacks(ctx.tokens)
+    if not stacks:
+        rep.add(rid, "skipped", label, detail=f"not verified: {TOKENS_FILE} names no font family (no font.* token), so the families of the page cannot be judged; "
+                                              "add them to the token sources and run `brand-creator tokens` again")
+        return
+    views = _rendered_views(measures, "font_usage")
+    if not views:
+        rep.add(rid, "skipped", label, detail="not verified: no view was measured (see the page:load rows)")
+        return
+    named = {family_key(f): f for names in stacks.values() for f in names}
+    offenders: dict[tuple, dict] = {}
+    warned: dict[tuple, dict] = {}
+    unverified: dict[tuple, str] = {}
+    checked: dict[tuple, dict] = {}
+    truncated = []
+    for v in views:
+        if v.get("font_usage_total"):
+            truncated.append(f"{v['font_usage_total']} fonts at {v.get('width')} px {v.get('scheme')}, {len(v['font_usage'])} measured")
+        faces = [f for f in v.get("font_faces", []) if isinstance(f, dict)]
+        for u in v["font_usage"]:
+            name, fam = u.get("family") or "", family_key(u.get("family", ""))
+            ident = (fam, u.get("weight"), u.get("style"))
+            at = {"family": name, "weight": u.get("weight"), "style": u.get("style"), "selector": u.get("sel"), "stack": u.get("stack"), "width": v.get("width"),
+                  "scheme": v.get("scheme"), "elements": u.get("count", 1)}
+            checked.setdefault(ident, {**at, "platform": u.get("platform")})
+            if fam not in named:
+                offenders.setdefault(ident, {**at, "kind": "not-named", "why": f"{u.get('sel')} is set in \"{name}\", which no font token names "
+                                                                              f"(the tokens name {', '.join(list(named.values())[:FONT_NAMED])}{' and more' if len(named) > FONT_NAMED else ''})"})
+                continue
+            declared = [f for f in faces if family_key(f.get("family", "")) == fam]
+            if not declared and fam in BROWSER_FAMILIES:
+                continue   # named by a token, drawn in the browser's own font
+            platform = u.get("platform")
+            if not platform:
+                unverified.setdefault(ident, f"\"{name}\" ({u.get('sel')}): " + (f"the browser's debugger could not say which font was used ({u.get('platform_error')})"
+                                                                              if platform is None else "the browser reported no font for the text"))
+                continue
+            drawable = any(f.get("status") == "loaded" for f in declared)   # a web font in the answer is this family's own only when one of its faces loaded
+            mine = [p for p in platform if (p.get("custom") and drawable) or family_key(p.get("family", "")) == fam]   # its web font, or an installed font of that name
+            others = [p for p in platform if p not in mine]
+            statuses = sorted({str(f.get("status")) for f in declared})
+            if not mine and not declared and fam in SYSTEM_FAMILIES:
+                unverified.setdefault(ident, f"\"{name}\" ({u.get('sel')}): a system face the page does not declare and this machine does not have; "
+                                             f"Chromium used {_platform_names(platform)}")
+                continue
+            if not mine:
+                reason = ("the page declares no @font-face for it and it is not installed on this machine" if not declared else
+                          f"its font file did not load (status {', '.join(statuses)})" if "error" in statuses and "loaded" not in statuses else
+                          f"none of its @font-face rules covers this text (status {', '.join(statuses)})")
+                offenders.setdefault(ident, {**at, "kind": "not-loaded", "faces": statuses, "platform": platform,
+                                             "why": f"{u.get('sel')} is set in \"{name}\" (weight {u.get('weight')}): {reason}; Chromium used {_platform_names(platform)}"})
+            elif others:
+                total, away = (sum(int(p.get("glyphs") or 0) for p in group) for group in (platform, others))
+                warned.setdefault(ident, {**at, "kind": "partly-another-font", "platform": platform,
+                                          "why": f"{u.get('sel')} (\"{name}\", weight {u.get('weight')}): {away} of {total} glyph(s) are drawn in another font, "
+                                                 f"so the face lacks a character the text uses ({_platform_names(others)})"})
+    parts = []
+    if offenders:
+        parts.append(f"{len(offenders)} font(s) are not the brand's or not drawn: " + _names([o["why"] for o in offenders.values()], NAMED))
+    if warned:
+        parts.append(f"{len(warned)} font(s) are partly drawn in another font: " + _names([o["why"] for o in warned.values()], NAMED))
+    if unverified:
+        parts.append(f"NOT verified: {len(unverified)} font(s): " + _names(list(unverified.values()), NAMED))
+    if truncated:
+        parts.append("NOT verified beyond the first fonts of a view: " + _names(truncated, 2))
+    extra = {"fonts": [{k: c[k] for k in ("family", "weight", "style", "selector", "elements", "platform")} for c in list(checked.values())[:100]],
+             "offenders": list(offenders.values())[:100], "partly": list(warned.values())[:100], "token_families": list(named.values())}
+    if offenders:
+        rep.add(rid, "fail", label, detail="; ".join(parts), **extra)
+    elif parts:
+        rep.add(rid, "warn", label, detail="; ".join(parts), **extra)
+    else:
+        rep.add(rid, "pass", label, detail=f"{len(checked)} font(s) set on the page ({_names(sorted({c['family'] or '(none)' for c in checked.values()}), NAMED)}), "
+                                           "each named by a font token and drawn by its own face, an installed font of that name or the browser's own font", **extra)
+
+
+def display_size_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
+    """page:display-size: a text set in the first family of the `font.display` token is at least `page.display_min_px` css px (qa/rules.json; 20 is the proposal, and the
+    detail says so until the project sets it). Without a `font.display` token the row is info. A display face that is also the first family of another font token (the body
+    face) cannot be told apart from body text, so no size is held to it: info, never a silent pass."""
+    rid, label = "page:display-size", "display face minimum size"
+    stacks = font_stacks(ctx.tokens)
+    display = stacks.get(FONT_DISPLAY)
+    if not display:
+        rep.add(rid, "info", label, detail=f"this brand has no {FONT_DISPLAY} token, so there is no display face whose size is checked")
+        return
+    face = display[0]
+    twin = next((k for k, names in sorted(stacks.items()) if k != FONT_DISPLAY and family_key(names[0]) == family_key(face)), None)
+    if twin:
+        rep.add(rid, "info", label, detail=f"the display face ({face}) is also the first family of {twin}: text set in it cannot be told from body text, so no minimum size is checked")
+        return
+    views = _rendered_views(measures, "font_usage")
+    if not views:
+        rep.add(rid, "skipped", label, detail="not verified: no view was measured (see the page:load rows)")
+        return
+    minimum = float(ctx.rules["page"]["display_min_px"])
+    proposal = "page.display_min_px" not in (ctx.rules.get("_from_file") or [])
+    basis = f"minimum {minimum:g} px" + (" (a proposal: set page.display_min_px in qa/rules.json to keep or change it)" if proposal else " (qa/rules.json page.display_min_px)")
+    small: dict[tuple, dict] = {}
+    seen = set()
+    smallest = None
+    truncated = []
+    for v in views:
+        if v.get("font_usage_total"):
+            truncated.append(f"{v['font_usage_total']} fonts at {v.get('width')} px {v.get('scheme')}, {len(v['font_usage'])} measured")
+        for u in v["font_usage"]:
+            if family_key(u.get("family", "")) != family_key(face):
+                continue
+            px = float(u.get("min_px") or 0)
+            seen.add((u.get("weight"), u.get("style")))
+            smallest = px if smallest is None else min(smallest, px)
+            if px < minimum - DISPLAY_EPSILON:
+                small.setdefault((u.get("min_sel"), px), {"selector": u.get("min_sel"), "text": u.get("min_text"), "font_size_px": px, "weight": u.get("weight"),
+                                                          "width": v.get("width"), "scheme": v.get("scheme")})
+    extra = {"display_face": face, "minimum_px": minimum, "proposal": proposal, "smallest_px": smallest}
+    notes = [f"NOT verified beyond the first fonts of a view: {_names(truncated, 2)}"] if truncated else []
+    if small:
+        rep.add(rid, "fail", label, detail=f"{len(small)} text(s) in the display face {face} are under {minimum:g} px: " + _names([
+            f"{o['selector']} \"{o['text']}\" is {o['font_size_px']:g} px at {o['width']} px {o['scheme']}" for o in small.values()], NAMED) + f"; {basis}"
+            + "".join("; " + n for n in notes), small=list(small.values())[:100], **extra)
+    elif notes:
+        rep.add(rid, "warn", label, detail="; ".join(notes), **extra)
+    elif smallest is None:
+        rep.add(rid, "pass", label, detail=f"no text on the page is set in the display face {face}; {basis}", **extra)
+    else:
+        rep.add(rid, "pass", label, detail=f"every text in the display face {face} is {smallest:g} px or more; {basis}", **extra)
+
+
+# each (rep, measures, ctx); the later families of rows (rules, tells) are added here
+ROW_CHECKS = [load_rows, colour_rows, pair_rows, motion_rows, claim_rows, mark_rows, font_rows, display_size_rows]
 
 
 def judge(rep: Report, measures: dict, ctx: Ctx, measures_path: Path) -> None:

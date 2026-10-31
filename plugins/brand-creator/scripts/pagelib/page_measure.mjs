@@ -665,6 +665,176 @@ async function markFacts(page) {
   }, [MARK_CAP, IMAGE_CAP, SVG_MARKUP_CAP, DATA_URL_CAP]);
 }
 
+// ---------------------------------------------------------------- fonts
+const FONT_KEYS = 60;    // distinct (first family, weight, style) reported per view; the view says so when there were more
+const FONT_FACES = 200;  // @font-face rules (FontFace objects of document.fonts) reported per view
+const FONT_PROBE = "data-bc-font-probe";
+const FONT_INLINE = 12;  // inline elements in another font that one probe can have taken off its answer; a probe with more is not asked
+
+/** The fonts of the page. `font_faces`: every FontFace of document.fonts, `{family, weight, style, stretch, unicode_range, status}` (status: unloaded, loading, loaded or
+ *  error; the page is measured after fonts.ready, so a face its text needs is loaded or in error). `font_usage`: one entry per distinct (first family, weight, style) of the
+ *  computed `font-family` of the shown elements with text of their own (an input's value or placeholder counts), in document order: `{family, weight, style, stack, count,
+ *  sel, min_px, min_sel, min_text, platform}`. `family` is the first family of the computed stack, quotes taken off; `min_px` is the smallest computed font size of any element
+ *  in the entry, on `min_sel`. `sel` is the one element asked what Chromium really used. CDP `CSS.getPlatformFontsForNode` answers for the element AND everything inside it, so the
+ *  probe is the element of the entry with the fewest inline elements inside it that draw text of their own in another (family, weight, style) (none, if the page has such a
+ *  one), then the one whose text holds the most different characters, the first on a tie; a text area is the last choice, because the debugger has no answer for it. When the
+ *  probe still holds such inline elements, the fonts of each (asked the same way) are taken off its answer, glyph for glyph: `inline_other` says how many. `platform` is that
+ *  answer, as `render.mjs fonts` asks it: `[{family, postscript, custom, glyphs}]` (`custom` for a web font, an @font-face; `family` is the name inside the font file, which
+ *  can differ from the one the CSS gives it); `platform_error` replaces it when CDP could not answer, and when it cannot be asked for this probe (a text area; more than
+ *  FONT_INLINE inline elements in another font; one of them `display: contents`, which has no box of its own to be asked about). Nothing is judged here. `font_usage_total` is
+ *  set when there were more entries than FONT_KEYS. */
+async function fontFacts(page) {
+  const found = await page.evaluate(([keyCap, faceCap, probe, inlineCap]) => {
+    const H = window.__bcMeasure;
+    /** The families of a font-family list, quotes taken off: `"Acme Sans", system-ui` -> ["Acme Sans", "system-ui"]. */
+    const families = (css) => {
+      const out = []; let cur = "", quote = null;
+      for (const ch of String(css)) {
+        if (quote) { if (ch === quote) quote = null; else cur += ch; } else if (ch === '"' || ch === "'") quote = ch;
+        else if (ch === ",") { out.push(cur.trim()); cur = ""; } else cur += ch;
+      }
+      if (cur.trim() || out.length) out.push(cur.trim());
+      return out.filter(Boolean);
+    };
+    const unquote = (s) => String(s).trim().replace(/^(["'])(.*)\1$/, "$2");
+    const faces = [...document.fonts].map((f) => ({ family: unquote(f.family), weight: f.weight, style: f.style, stretch: f.stretch, unicode_range: f.unicodeRange, status: f.status }));
+    const ownText = (el) => {
+      if (el.localName === "input" || el.localName === "textarea") {
+        const type = (el.getAttribute("type") || "text").toLowerCase();
+        if (el.localName === "input" && ["hidden", "checkbox", "radio", "range", "color", "file", "image"].includes(type)) return "";
+        return String((type === "password" ? "" : el.value) || el.placeholder || "").replace(/\s+/g, " ").trim();
+      }
+      let t = "";
+      for (const n of el.childNodes) if (n.nodeType === 3) t += n.nodeValue;
+      return t.replace(/\s+/g, " ").trim();
+    };
+    const hasBox = (el) => {   // the text is laid out: a box of at least 2 by 2 css px that is not wholly above or left of the page's origin
+      if (el.localName === "input" || el.localName === "textarea") { const r = el.getBoundingClientRect(); return r.width >= 2 && r.height >= 2 && r.right > 0 && r.bottom > 0; }
+      const range = document.createRange();
+      for (const n of el.childNodes) {
+        if (n.nodeType !== 3 || !n.nodeValue.trim()) continue;
+        range.selectNodeContents(n);
+        for (const r of range.getClientRects()) if (r.width >= 2 && r.height >= 2 && r.right > 0 && r.bottom > 0) return true;
+      }
+      return false;
+    };
+    const laidOut = (el) => {   // the text is drawn at all (a hidden one too: the debugger counts it), unlike hasBox, which wants a box a reader can see
+      if (el.localName === "input" || el.localName === "textarea") return el.getClientRects().length > 0;
+      const range = document.createRange();
+      for (const n of el.childNodes) {
+        if (n.nodeType !== 3 || !n.nodeValue.trim()) continue;
+        range.selectNodeContents(n);
+        if (range.getClientRects().length) return true;
+      }
+      return false;
+    };
+    const fontOf = (s) => {
+      const family = families(s.fontFamily)[0] || "", weight = parseInt(s.fontWeight, 10) || 400, style = s.fontStyle;
+      return { family, weight, style, key: `${family}\u0000${weight}\u0000${style}` };
+    };
+    /** The outermost elements inside `root` that draw text of their own in another (family, weight, style) than `key`; what they hold is theirs. `blind`: one of them is
+     *  `display: contents`, which has no box of its own for the debugger to be asked about. */
+    const foreignIn = (root, key) => {
+      const out = []; let blind = false;
+      const walk = (parent) => {
+        for (const c of parent.children) {
+          const s = getComputedStyle(c);
+          if (s.display === "none") continue;
+          if (ownText(c) && fontOf(s).key !== key && laidOut(c)) { out.push(c); blind = blind || s.display === "contents"; } else walk(c);
+        }
+      };
+      walk(root);
+      return { out, blind };
+    };
+    const groups = new Map();
+    for (const el of document.querySelectorAll("*")) {
+      if (!H.walkable(el)) continue;
+      const info = H.shown(el);
+      if (!info.shown || info.opacity <= 0) continue;
+      const s = getComputedStyle(el);
+      if (s.display === "contents" || s.visibility !== "visible") continue;
+      const text = ownText(el);
+      if (!text || !hasBox(el)) continue;
+      const { family, weight, style, key } = fontOf(s), px = parseFloat(s.fontSize), score = new Set(text).size;
+      const g = groups.get(key);
+      if (!g) groups.set(key, { family, weight, style, stack: s.fontFamily.slice(0, 300), key, members: [{ el, score }], min_px: px, min_el: el, min_text: text });
+      else {
+        g.members.push({ el, score });
+        if (px < g.min_px) { g.min_px = px; g.min_el = el; g.min_text = text; }
+      }
+    }
+    /** The element of a group to ask the debugger about: no inline element in another font inside it (else the fewest), no text area (else it), then the most different
+     *  characters, the first of them on a tie. */
+    const pickProbe = (g) => {
+      let best = null;
+      for (const m of [...g.members].sort((a, b) => b.score - a.score)) {   // stable: document order among equals
+        const { out, blind } = foreignIn(m.el, g.key), opaque = m.el.localName === "textarea";
+        const bad = (opaque ? 1e6 : 0) + (blind ? 1e5 : 0) + (out.length > inlineCap ? 1e4 : 0) + out.length;
+        if (!best || bad < best.bad) best = { el: m.el, out, blind, opaque, bad };
+        if (!bad) break;
+      }
+      return best;
+    };
+    const entries = [...groups.values()];
+    const usage = entries.slice(0, keyCap).map((g, i) => {
+      const pick = pickProbe(g), u = { family: g.family, weight: g.weight, style: g.style, stack: g.stack, count: g.members.length, sel: H.selector(pick.el),
+                                       min_px: Math.round(g.min_px * 100) / 100, min_sel: H.selector(g.min_el), min_text: g.min_text.slice(0, 40), probe: i };
+      if (pick.opaque) u.platform_error = "the browser's debugger has no answer for the text of a text area";
+      else if (pick.blind) u.platform_error = "an element inside it is display: contents and set in another font, which the debugger cannot be asked about on its own";
+      else if (pick.out.length > inlineCap) u.platform_error = `${pick.out.length} elements inside it are set in other fonts (more than ${inlineCap})`;
+      else {
+        // marked for the CDP step, taken off again in fontFacts; one element can be the probe of one entry and inside the probe of another, so a mark is one word of a list
+        const mark = (el, word) => el.setAttribute(probe, ((el.getAttribute(probe) || "") + " " + word).trim());
+        mark(pick.el, String(i));
+        pick.out.forEach((c, j) => mark(c, `${i}.${j}`));
+        if (pick.out.length) u.inline_other = pick.out.length;
+      }
+      return u;
+    });
+    return { faces: faces.slice(0, faceCap), faces_total: faces.length, usage, usage_total: entries.length };
+  }, [FONT_KEYS, FONT_FACES, FONT_PROBE, FONT_INLINE]);
+
+  if (found.usage.length) {
+    let cdp = null;
+    try {
+      cdp = await page.context().newCDPSession(page);   // a debugger that cannot be reached is a fact the judge reports as not verified, not a view that fails
+      await cdp.send("DOM.enable");
+      await cdp.send("CSS.enable");
+      const { root } = await cdp.send("DOM.getDocument");
+      const ask = async (mark) => {
+        const { nodeId } = await cdp.send("DOM.querySelector", { nodeId: root.nodeId, selector: `[${FONT_PROBE}~="${mark}"]` });
+        if (!nodeId) throw new Error("the element could not be found by the browser's debugger");
+        const { fonts } = await cdp.send("CSS.getPlatformFontsForNode", { nodeId });
+        return fonts.map((f) => ({ family: f.familyName, postscript: f.postScriptName, custom: Boolean(f.isCustomFont), glyphs: f.glyphCount }));
+      };
+      for (const u of found.usage) {
+        if (u.platform_error) continue;   // decided in the page: this probe cannot be asked
+        try {
+          let platform = await ask(u.probe);
+          // the answer holds the glyphs of everything inside the probe: take off those of the inline elements set in another font, which are not this entry's text
+          for (let j = 0; j < (u.inline_other || 0); j++) {
+            for (const m of await ask(`${u.probe}.${j}`)) {
+              const f = platform.find((p) => p.family === m.family && p.postscript === m.postscript && p.custom === m.custom);
+              if (f) f.glyphs -= m.glyphs;
+            }
+          }
+          u.platform = platform.filter((p) => p.glyphs > 0);
+        } catch (e) {
+          u.platform_error = String(e.message).split("\n")[0];
+        }
+      }
+    } catch (e) {
+      for (const u of found.usage) if (!u.platform) u.platform_error = u.platform_error || String(e.message).split("\n")[0];
+    } finally {
+      if (cdp) await cdp.detach().catch(() => {});
+      await page.evaluate((probe) => document.querySelectorAll(`[${probe}]`).forEach((e) => e.removeAttribute(probe)), FONT_PROBE).catch(() => {});
+    }
+  }
+  for (const u of found.usage) delete u.probe;
+  return { font_faces: found.faces, ...(found.faces_total > found.faces.length ? { font_faces_total: found.faces_total } : {}),
+           font_usage: found.usage, ...(found.usage_total > found.usage.length ? { font_usage_total: found.usage_total } : {}) };
+}
+
 const COLLECTORS = [
   async (page) => { await page.evaluate(installHelpers); return {}; },   // first: the helpers the collectors below call
   async (page) => ({ document: await documentFacts(page) }),
@@ -674,6 +844,7 @@ const COLLECTORS = [
   async (page) => motionFacts(page),
   async (page) => claimFacts(page),
   async (page) => markFacts(page),
+  async (page) => fontFacts(page),
 ];
 
 /** Run every collector on the settled page and merge their answers; the in-page helpers are taken out of the page again. */

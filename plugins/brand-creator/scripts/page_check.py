@@ -20,6 +20,8 @@ ground is a declared pair, or is measured against WCAG), `page:motion` (every du
 status word is backed by FACTS.md); `page:samples` lists the labelled samples, and the report holds the same list as `samples`.
 `page:mark-file`, `page:mark-band` and `page:mark-clear-space` judge the brand mark (`data-brand-mark`, or an image named or byte for byte like a logo file): it is a logo file of
 the project, the drawing its size calls for, and has its clear space.
+Over all views it reports `page:fonts` (every text is set in a family a `font.*` token names, and the browser drew it in that face) and `page:display-size` (no text in the
+`font.display` face is under `page.display_min_px`).
 
 Exit 0 pass (warnings allowed), 1 a row failed, 2 usage error (no target, two targets, a page that does not exist, a remote URL, a bad width or scheme, a
 --from folder of more than 5000 files or 200 MB, a bad qa/rules.json page block), 3 cannot run (no built tokens, no node, Chromium missing or no view measured).
