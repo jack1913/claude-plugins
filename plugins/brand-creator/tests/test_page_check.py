@@ -871,3 +871,412 @@ def test_a_token_outside_srgb_is_the_colour_the_browser_paints_and_an_off_token_
     r, rep = check_page(acme)
     assert r.returncode == 1, r.stdout + r.stderr
     assert all(row(rep, f"page:colours:{s}")["status"] == "fail" for s in ("light", "dark"))
+
+
+# ---------------------------------------------------------------- motion, claims and the before-publishing list
+
+STANDARD_CURVE = "cubic-bezier(0.2, 0, 0, 1)"
+
+
+def add_motion_tokens(p: Path) -> None:
+    """The golden Acme holds duration.fast (150 ms) and no curve: add easing.standard and build again, so a page can be made of motion tokens (--easing-standard)."""
+    mutate_json(p / "tokens" / "primitives.tokens.json", lambda d: d.__setitem__("easing", {"$type": "cubicBezier", "standard": {"$value": [0.2, 0, 0, 1]}}))
+    r = bc("tokens", project=p)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def add_fact(p: Path, label: str, value: str) -> None:
+    """A confirmed row of FACTS.md (after the template's example row)."""
+    f = p / "FACTS.md"
+    f.write_text(f.read_text(encoding="utf-8").replace("| YYYY-MM-DD |\n", f"| YYYY-MM-DD |\n| {label} | {value} | owner, intake | 2026-10-17 |\n", 1), encoding="utf-8")
+    assert f"| {label} |" in f.read_text(encoding="utf-8")
+
+
+def write_facts(folder: Path, *rows: tuple[str, str]) -> None:
+    lines = ["# Acme: facts", "", "| fact | value | source | confirmed |", "|---|---|---|---|"] + [f"| {k} | {v} | owner, intake | 2026-10-17 |" for k, v in rows]
+    (folder / "FACTS.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def decl(duration=150, easing=STANDARD_CURVE, source="transition", name="color", sel="body > a", **more) -> dict:
+    return {"sel": sel, "source": source, "name": name, "duration_ms": duration, "easing": easing, "via": "style", "count": 1, "also": [], **more}
+
+
+def motion_row(tmp_path: Path, tokens: dict, *decls: dict, **view_facts) -> dict:
+    rep = Report("page-check/x-000000", tmp_path)
+    pagecheck.motion_rows(rep, {"views": [view(motion_decls=list(decls), **view_facts)]}, synthetic_ctx(tmp_path, tokens))
+    (got,) = rep.results
+    return got
+
+
+def with_motion(curves: dict, durations: dict | None = None) -> dict:
+    return {**TOKENS, "motion": {"durations_ms": durations if durations is not None else {"duration.fast": 150, "duration.base": 320}, "curves": curves}}
+
+
+def claim_run(text: str, sel: str = "body > p", label=None, lang: str = "") -> dict:
+    return {"sel": sel, "text": text, "sample_label": label, "lang": lang}
+
+
+def claims(tmp_path: Path, runs: list, samples=(), lang: str = "en") -> tuple[dict, list[dict], pagecheck.Ctx]:
+    """page:claims on constructed measurements: the row, every row, and the Ctx (its `extra` holds the samples)."""
+    rep = Report("page-check/x-000000", tmp_path)
+    ctx = synthetic_ctx(tmp_path, TOKENS)
+    pagecheck.claim_rows(rep, {"views": [view(lang=lang, claim_text=list(runs), samples=list(samples))]}, ctx)
+    return rep.results[0], rep.results, ctx
+
+
+# ---- no browser
+
+
+def test_numbers_in_finds_the_claims_and_leaves_step_labels_and_identifiers_alone():
+    found = lambda text, **kw: [n["text"] for n in pagecheck.numbers_in(text, **kw)]
+    assert found("Tools are made in batches of 200") == ["200"]
+    assert found("Step 3 of 4, page 1") == [] and found("Step 3 of 4", every=True) == ["3", "4"]   # a bare single digit is a label, unless every number is wanted
+    assert found("5% off, 9 zł, $5, €5, 4K, 5m, 12 tys., 7 PLN") == ["5%", "9 zł", "$5", "€5", "4K", "5m", "12 tys.", "7 PLN"]   # a single digit next to a sign or a unit is a claim
+    assert found("9 €, 5€, 7 $, 3 £, PLN 5, PLN5, EUR 9, USD 4, gbp 2, CHF 8") == ["9 €", "5€", "7 $", "3 £", "PLN 5", "PLN5", "EUR 9", "USD 4", "gbp 2", "CHF 8"]   # a sign after the number, a code before it
+    assert found("Only 9 € today, 5 euros, PLNs 5, 5 EURO") == ["9 €"]                                                              # a word that only starts like a currency is not one
+    assert found("mp3, A4, v1.2.3, 3rd, 3 steps, 3 minutes") == []                                                                  # written against letters, or not a unit
+    assert found("2026-10-17, 24/7, 1.5x") == ["2026", "10", "17", "24", "1.5x"]                                                     # a digit run of two or more; 1.5 has two digits
+    assert [canon for canon in (pagecheck.canonical_number(x) for x in ("1 200", "1 200", "1,200", "1.200", "1200"))] == ["1200"] * 5
+    assert [pagecheck.canonical_number(x) for x in ("12,5", "12.50", "12.5", "0,500", "0.500")] == ["12.5", "12.5", "12.5", "0.5", "0.5"]
+    assert [pagecheck.canonical_number(x) for x in ("100.000,50", "1.200,5", "1,200.50", "1.200.300,5", "1 200,50", "100 000,50")] == ["100000.5", "1200.5", "1200.5", "1200300.5", "1200.5", "100000.5"]   # the last separator is the decimal point
+
+
+def test_a_number_backed_by_facts_passes(tmp_path):
+    write_facts(tmp_path, ("batch size", "tools are made in batches of 200"), ("spare part", "a spare part costs 12,50 zł"), ("owners", "1 200 owners; 5% return"),
+                ("status", "the online shop is in development"), ("(example) repair", "a decoy of 999 that is the template's"), ("full set", "the full set costs 100 000,50 zł"))
+    runs = [claim_run("Tools are made in batches of 200."), claim_run("A spare part costs 12.5 zł", "body > b"), claim_run("1,200 owners, 5% return, step 3 of 4", "body > i"),
+            claim_run("The online shop is in development", "body > u"), claim_run("The full set costs 100.000,50 zł", "body > s")]   # dot thousands and a decimal comma, the fact has a space
+    got, results, ctx = claims(tmp_path, runs)
+    assert [(r["id"], r["status"]) for r in results] == [("page:claims", "pass")], got["detail"]   # no sample: no page:samples row
+    assert got["claims_checked"] == {"texts": 5, "numbers": 5, "status_words": 1} and ctx.extra["samples"] == []
+    euro = claims(tmp_path, [claim_run("Only 9 € today, or 7 € per month, PLN 6 net")])[0]   # a price in euros or zloty is a claim, a single digit too
+    assert euro["status"] == "fail" and [o["number"] for o in euro["unbacked_numbers"]] == ["9 €", "7 €", "PLN 6"], euro["detail"]   # (PLN 5 would be backed by the fact "5% return": numbers are compared as numbers)
+    off = [claim_run("Tools are made in batches of 2000."), claim_run("Only 20 left", "body > b"), claim_run("It is 999 here", "body > i")]   # 2000, 20 and the template's decoy are no fact
+    bad, _, _ = claims(tmp_path, off)
+    assert bad["status"] == "fail" and [o["number"] for o in bad["unbacked_numbers"]] == ["2000", "20", "999"]
+    assert 'data-sample="<label>"' in bad["detail"] and "\"Tools are made in batches of 2000.\"" in bad["detail"]
+    nothing = tmp_path / "empty"
+    nothing.mkdir()
+    rep = Report("page-check/x-000000", nothing)   # no FACTS.md at all backs nothing
+    pagecheck.claim_rows(rep, {"views": [view(lang="en", claim_text=[claim_run("Batches of 200")], samples=[])]}, synthetic_ctx(nothing, TOKENS))
+    assert rep.results[0]["status"] == "fail"
+
+
+def test_a_number_is_counted_once_however_many_views_show_it(tmp_path):
+    write_facts(tmp_path, ("batch size", "200 per batch"))
+    rep = Report("page-check/x-000000", tmp_path)
+    runs = [claim_run("Batches of 200, now available"), claim_run("Only 20 left", "body > b")]
+    views = [view(scheme=scheme, width=width, lang="en", claim_text=list(runs), samples=[]) for width in (390, 1280) for scheme in ("light", "dark")]
+    views[3]["claim_text"] = runs + [claim_run("Wide screens: 45 pieces", "body > i")]   # text that only one view shows is counted too
+    pagecheck.claim_rows(rep, {"views": views}, synthetic_ctx(tmp_path, TOKENS, ("light", "dark")))
+    got = rep.results[0]
+    assert got["claims_checked"] == {"texts": 3, "numbers": 3, "status_words": 1} and got["languages"] == {"en": 3}, got
+    assert [(o["number"], o["width"]) for o in got["unbacked_numbers"]] == [("20", 390), ("45", 1280)]   # the first view that shows it is named
+    passing = Report("page-check/x-000000", tmp_path)
+    write_facts(tmp_path, ("batch size", "200 per batch, 20 per box, available"))
+    pagecheck.claim_rows(passing, {"views": [view(scheme=s, width=w, lang="en", claim_text=list(runs[:2]), samples=[]) for w in (390, 1280) for s in ("light", "dark")]}, synthetic_ctx(tmp_path, TOKENS))
+    assert passing.results[0]["status"] == "pass" and passing.results[0]["detail"].startswith("2 number(s) and 1 status word(s)"), passing.results[0]["detail"]
+
+
+def test_a_status_word_needs_a_facts_value_that_says_so(tmp_path):
+    write_facts(tmp_path, ("status", "the online shop is in development"))
+    got, _, _ = claims(tmp_path, [claim_run("The online shop is in development."), claim_run("Now AVAILABLE!", "body > b"), claim_run("Launching soon: coming soon", "body > i")])
+    assert got["status"] == "fail" and sorted(o["word"] for o in got["unbacked_status_words"]) == ["available", "coming soon", "launching"]   # whole words, any letter case
+    assert "no FACTS.md value contains" in got["detail"]
+    got, _, _ = claims(tmp_path, [claim_run("The unavailable shop is relaunching")])   # a status word inside another word is not one
+    assert got["status"] == "pass"
+
+
+def test_status_words_in_another_language_are_not_verified(tmp_path):
+    write_facts(tmp_path, ("batch size", "200 per batch"), ("sklep", "sklep jest w przygotowaniu"))
+    german = claims(tmp_path, [claim_run("Jetzt verfügbar: 200 Stück pro Charge")], lang="de")[0]
+    assert german["status"] == "warn" and "status words NOT verified for de" in german["detail"] and german["languages"] == {"de": 1}
+    broken = claims(tmp_path, [claim_run("Jetzt 300 Stück pro Charge")], lang="de")[0]
+    assert broken["status"] == "fail" and "300" in broken["detail"] and "status words NOT verified for de" in broken["detail"]   # the numbers are still checked
+    mixed = claims(tmp_path, [claim_run("Hello 200", "body > p"), claim_run("Bonjour 200", "body > b", lang="fr-CA")])[0]   # the closest lang of a block wins over the document's
+    assert mixed["status"] == "warn" and mixed["languages"] == {"en": 1, "fr": 1} and "NOT verified for fr (" in mixed["detail"] and "for en" not in mixed["detail"]   # fr-CA is fr
+    unknown = claims(tmp_path, [claim_run("Hello 200")], lang="")[0]   # a page that sets no lang: it cannot be told, and it says so
+    assert unknown["status"] == "warn" and "an unknown language (the page sets no lang)" in unknown["detail"]
+    polish = claims(tmp_path, [claim_run("Już wkrótce w sprzedaży"), claim_run("Sklep jest w przygotowaniu", "body > b")], lang="pl")[0]   # Polish words are listed: one is backed, one is not
+    assert polish["status"] == "fail" and [o["word"] for o in polish["unbacked_status_words"]] == ["wkrótce"] and "NOT verified" not in polish["detail"]
+
+
+def test_a_labelled_sample_is_listed_and_an_empty_label_is_not_a_sample(tmp_path):
+    write_facts(tmp_path, ("batch size", "200 per batch"))
+    runs = [claim_run("Now only 49 zł, available", "body > p > span", label="Price"), claim_run("Spare parts 200", "body > p"), claim_run("Hidden 77", "body > div", label="")]
+    samples = [{"sel": "body > p > span", "label": "Price", "text": "Now only 49 zł, available"}, {"sel": "body > div", "label": " ", "text": "Hidden 77"}]
+    got, results, ctx = claims(tmp_path, runs, samples)
+    assert [(r["id"], r["status"]) for r in results] == [("page:claims", "fail"), ("page:samples", "info")]
+    assert [o["number"] for o in got["unbacked_numbers"]] == ["77"] and "label the sample" in got["detail"] and got["unlabelled_samples"][0]["selector"] == "body > div"   # an empty label labels nothing
+    assert ctx.extra["samples"] == [{"label": "Price", "text": "Now only 49 zł, available", "selector": "body > p > span", "view": "390-light"}] == results[1]["samples"]
+    assert "Price (Now only 49 zł, available) in body > p > span, 390-light" in results[1]["detail"] and "before the page is published" in results[1]["detail"]
+
+
+def test_a_view_that_measured_no_text_or_motion_is_not_verified_and_never_a_pass(tmp_path):
+    for check, row_id in ((pagecheck.claim_rows, "page:claims"), (pagecheck.motion_rows, "page:motion")):
+        for measures in ({"views": []}, {"views": [view()]}, {"views": [{"width": 390, "scheme": "light", "viewport": {"width": 390, "height": 844}, "error": "timed out"}]}):
+            rep = Report("page-check/x-000000", tmp_path)
+            ctx = synthetic_ctx(tmp_path, TOKENS)
+            check(rep, measures, ctx)
+            assert [(r["id"], r["status"]) for r in rep.results] == [(row_id, "skipped")] and rep.exit_code() == 3
+            assert "not verified" in rep.results[0]["detail"]
+            if check is pagecheck.claim_rows:
+                assert ctx.extra["samples"] == []   # the key is always there: group 3 reads it
+
+
+def test_a_keyword_easing_is_a_curve_only_when_a_token_holds_its_curve(tmp_path):
+    standard = {"easing.standard": [0.2, 0, 0, 1]}
+    assert motion_row(tmp_path, with_motion(standard), decl())["status"] == "pass"                                                   # cubic-bezier equal to the token, 150 ms is a token
+    got = motion_row(tmp_path, with_motion(standard), decl(easing="ease"), decl(easing="linear", sel="body > b"), decl(easing="steps(4)", sel="body > i"))
+    assert got["status"] == "fail" and [o["easing"] for o in got["offenders"]] == ["ease", "linear", "steps(4)"] and "no curve token (easing.standard cubic-bezier(0.2, 0, 0, 1))" in got["detail"]
+    held = with_motion({**standard, "easing.ease": [0.25, 0.1, 0.25, 1], "easing.flat": [0, 0, 1, 1]})   # a token that equals the keyword's curve makes it a token
+    assert motion_row(tmp_path, held, decl(easing="ease"), decl(easing="linear", sel="body > b"))["status"] == "pass"
+    assert motion_row(tmp_path, held, decl(easing="steps(4, end)"))["status"] == "fail"                                              # steps() is no curve, whatever the tokens hold
+    got = motion_row(tmp_path, with_motion(standard), decl(duration=151.0), decl(duration=0.5, sel="body > b"), decl(duration=320.0, sel="body > i"))
+    assert got["status"] == "fail" and [o["duration_ms"] for o in got["offenders"]] == [151.0, 0.5] and "no motion duration token (duration.fast 150 ms, duration.base 320 ms)" in got["detail"]
+    assert got["used"] == ["duration.base (320 ms)", "easing.standard (cubic-bezier(0.2, 0, 0, 1))"]
+    nothing = Report("page-check/x-000000", tmp_path)   # a malformed motion block names no token
+    pagecheck.motion_rows(nothing, {"views": [view(motion_decls=[decl()])]}, synthetic_ctx(tmp_path, {**TOKENS, "motion": {"durations_ms": {"a": "fast"}, "curves": {"b": [0, 1]}}}))
+    assert nothing.results[0]["status"] == "fail" and "no motion tokens" in nothing.results[0]["detail"]
+
+
+def test_a_page_that_moves_while_the_brand_has_no_motion_tokens_fails_and_says_so(tmp_path):
+    for tokens in (TOKENS, with_motion({}, {})):
+        got = motion_row(tmp_path, tokens, decl(source="animation", name="spin", duration=2000, easing="linear", sel="body > svg"), decl())
+        assert got["status"] == "fail" and "the page moves" in got["detail"] and "no motion tokens" in got["detail"] and "animation spin on body > svg" in got["detail"], got["detail"]
+        calm = motion_row(tmp_path, tokens)   # a page that does not move needs none
+        assert calm["status"] == "pass" and "no transition or animation" in calm["detail"]
+
+
+def test_a_scroll_driven_animation_and_smil_are_not_verified_and_only_warn(tmp_path):
+    tokens = with_motion({"easing.standard": [0.2, 0, 0, 1]})
+    got = motion_row(tmp_path, tokens, decl(), decl(source="animation", name="grow", duration=None, sel="body > i"))   # duration "auto": a scroll or view timeline
+    assert got["status"] == "warn" and "run on a scroll or view timeline and have no duration" in got["detail"] and got["durations_checked"] == 1
+    got = motion_row(tmp_path, tokens, decl(), motion_smil=2)
+    assert got["status"] == "warn" and "2 SVG SMIL animation element(s)" in got["detail"]
+    assert motion_row(tmp_path, tokens, decl(duration=151), motion_smil=2)["status"] == "fail"   # a real offender still fails
+
+
+def test_a_state_rule_that_sets_only_a_duration_or_only_an_easing_is_checked_for_that_part_alone(tmp_path):
+    tokens = with_motion({"easing.standard": [0.2, 0, 0, 1]})
+    only_duration = lambda ms, **kw: decl(duration=ms, easing=None, name="", sel="a:hover", via="state", unset=["easing"], **kw)   # a:hover { transition-duration: ... }
+    only_easing = lambda e, **kw: decl(duration=None, easing=e, name="", sel="b:hover", via="state", unset=["duration"], **kw)      # b:hover { transition-timing-function: ... }
+    assert motion_row(tmp_path, tokens, only_duration(150), only_easing(STANDARD_CURVE))["status"] == "pass"   # the other half is the base rule's, which is read at rest
+    got = motion_row(tmp_path, tokens, only_duration(999), only_easing("ease-in"))
+    assert got["status"] == "fail" and [o["problems"] for o in got["offenders"]] == [[got["offenders"][0]["problems"][0]], [got["offenders"][1]["problems"][0]]]
+    assert "lasts 999 ms" in got["offenders"][0]["problems"][0] and "eases with" not in got["offenders"][0]["problems"][0]   # a half that was not set is not a failure
+    assert "eases with ease-in" in got["offenders"][1]["problems"][0] and "lasts" not in got["offenders"][1]["problems"][0]
+    assert "transition on a:hover" in got["detail"] and "transition on b:hover" in got["detail"] and got["durations_checked"] == 1
+    scroll = motion_row(tmp_path, tokens, only_easing(STANDARD_CURVE))   # no duration set is not a scroll-driven animation
+    assert scroll["status"] == "pass" and "scroll or view" not in scroll["detail"]
+    several = motion_row(tmp_path, tokens, only_duration(999, count=3))
+    assert "(3 rules)" in several["detail"]                                                                      # a state is a rule, not an element
+    assert "(3 elements)" in motion_row(tmp_path, tokens, decl(duration=999, count=3))["detail"]
+
+
+def test_a_stylesheet_the_walk_could_not_read_is_not_verified_and_never_a_pass(tmp_path):
+    tokens = with_motion({"easing.standard": [0.2, 0, 0, 1]})
+    got = motion_row(tmp_path, tokens, motion_unread=2)
+    assert got["status"] == "warn" and "NOT verified: 2 stylesheet(s) could not be read" in got["detail"] and "hover" in got["detail"], got["detail"]
+    got = motion_row(tmp_path, tokens, decl(duration=999), motion_unread=1)
+    assert got["status"] == "fail" and "NOT verified: 1 stylesheet(s)" in got["detail"]
+
+
+# ---- with a browser
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_motion_declared_on_a_state_is_read_without_hovering_it(acme):
+    add_motion_tokens(acme)
+    page = write_page(acme)
+    page.write_text(PAGE.replace("</style>", """  a { transition: color var(--duration-fast) var(--easing-standard); }
+  a:hover { transition: color 999ms ease; }
+  h1:hover { animation: pulse 777ms ease-in; }
+  @keyframes pulse { from { opacity: 1 } to { opacity: .5 } }
+</style>"""), encoding="utf-8")
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 1, r.stdout + r.stderr
+    bad = row(rep, "page:motion")
+    assert bad["status"] == "fail", bad
+    found = {(o["selector"], o["source"], o["name"], o["duration_ms"], o["easing"], o["via"]) for o in bad["offenders"]}
+    assert ("a:hover", "transition", "color", 999, "ease", "state") in found and ("h1:hover", "animation", "pulse", 777, "ease-in", "state") in found, bad["offenders"]
+    assert "transition of color on a:hover lasts 999 ms" in bad["detail"] and "animation pulse on h1:hover lasts 777 ms" in bad["detail"] and "eases with ease-in" in bad["detail"]
+    page.write_text(PAGE.replace("</style>", """  a { transition: color var(--duration-fast) var(--easing-standard); }
+  a:hover, a:focus-visible { transition: color var(--duration-fast) var(--easing-standard); }
+  h1:hover { animation: pulse var(--duration-fast) var(--easing-standard); }
+  @keyframes pulse { from { opacity: 1 } to { opacity: .5 } }
+</style>"""), encoding="utf-8")
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 0, r.stdout + r.stderr
+    ok = row(rep, "page:motion")
+    assert ok["status"] == "pass" and ok["used"] == ["duration.fast (150 ms)", f"easing.standard ({STANDARD_CURVE})"], ok
+    assert {(d["selector"], d["via"]) for d in ok["declarations"]} == {("body > main > p:nth-of-type(2) > a", "style"), ("h1:hover", "state")}   # the same declaration as a rest rule is listed once
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_state_rule_is_read_wherever_the_stylesheet_keeps_it(acme):
+    add_motion_tokens(acme)
+    page = write_page(acme)
+    page.write_text(PAGE.replace("</style>", """  .card { --slow: 888ms; }
+  .card:hover { transition-duration: var(--slow); }
+  .box { color: red; &:hover { transition: opacity 444ms var(--easing-standard); } & .inner:focus-visible { animation: pulse 333ms var(--easing-standard); } }
+  @media (hover: hover) { .m:hover { transition: color 222ms var(--easing-standard); } }
+  @media (prefers-reduced-motion: reduce) { .reduced:hover { transition: color 111ms var(--easing-standard); } }
+  @media print { .printed:hover { transition: color 112ms var(--easing-standard); } }
+  @supports (display: grid) { .s:active { transition: color 555ms var(--easing-standard); } }
+  @supports (not-a-property: nope) { .t:active { transition: color 556ms var(--easing-standard); } }
+  @layer base { .l:focus { transition: color 666ms var(--easing-standard); } }
+  .quiet:hover { color: red; } .calm:hover { transition: none; animation: none; } .instant:hover { transition: color 0s; }
+  @keyframes pulse { from { opacity: 1 } to { opacity: .5 } }
+</style>""").replace("</main>", """<div class="card"><i>c</i></div><script>
+  const sheet = new CSSStyleSheet(); sheet.replaceSync(".adopted:hover { transition: color 777ms var(--easing-standard); }");
+  document.adoptedStyleSheets = [sheet];
+</script></main>"""), encoding="utf-8")
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 1, r.stdout + r.stderr
+    bad = row(rep, "page:motion")
+    got = {(o["selector"], o["source"], o["duration_ms"]) for o in bad["offenders"]}
+    assert got == {(".card:hover", "transition", 888), (".box:hover", "transition", 444), (".box .inner:focus-visible", "animation", 333), (".m:hover", "transition", 222),
+                   (".s:active", "transition", 555), (".l:focus", "transition", 666), (".adopted:hover", "transition", 777)}, sorted(got)   # not print, reduced motion, an unsupported @supports, none, 0s
+    card = next(o for o in bad["offenders"] if o["selector"] == ".card:hover")
+    assert card["problems"] and all("eases with" not in x for x in card["problems"]), card   # only the duration was set: the custom property of .card resolved
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_duration_that_is_not_a_token_fails_and_a_token_duration_passes(acme):
+    add_motion_tokens(acme)
+    page = write_page(acme)
+    mutate(page, "a { color: var(--color-accent); }", "a { color: var(--color-accent); transition: color var(--duration-fast) var(--easing-standard); }")
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 0, r.stdout + r.stderr
+    ok = row(rep, "page:motion")
+    assert ok["status"] == "pass" and ok["used"] == ["duration.fast (150 ms)", f"easing.standard ({STANDARD_CURVE})"], ok
+    assert [(d["source"], d["name"], d["duration_ms"], d["easing"]) for d in ok["declarations"]] == [("transition", "color", 150, STANDARD_CURVE)]
+    mutate(page, "var(--duration-fast)", "200ms")   # a duration nobody defined
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 1, r.stdout + r.stderr
+    bad = row(rep, "page:motion")
+    assert bad["status"] == "fail" and [(o["name"], o["duration_ms"]) for o in bad["offenders"]] == [("color", 200)]
+    assert "lasts 200 ms, which is no motion duration token (duration.fast 150 ms)" in bad["detail"] and "eases with" not in bad["detail"] and bad["offenders"][0]["selector"].endswith(" > a")
+    mutate(page, "200ms var(--easing-standard)", "var(--duration-fast) ease-in")   # a token duration with a keyword no token equals
+    r, rep = check_page(acme, "--schemes", "light")
+    bad = row(rep, "page:motion")
+    assert r.returncode == 1 and bad["status"] == "fail" and "eases with ease-in, which is no curve token (easing.standard cubic-bezier(0.2, 0, 0, 1))" in bad["detail"] and "lasts" not in bad["detail"]
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_an_unbacked_number_fails_and_the_same_number_in_a_labelled_sample_is_listed_before_publishing(acme):
+    add_fact(acme, "batch size", "tools are made in batches of 200")
+    page = write_page(acme)
+    mutate(page, "</main>", "<p>Tools are made in batches of 200.</p>\n</main>")
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert row(rep, "page:claims")["status"] == "pass" and rep["samples"] == [] and not any(x["id"] == "page:samples" for x in rep["results"])   # backed by a fact; no sample, no row
+    mutate(page, "batches of 200", "batches of 300")
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 1, r.stdout + r.stderr
+    bad = row(rep, "page:claims")
+    assert bad["status"] == "fail" and [(o["number"], o["width"]) for o in bad["unbacked_numbers"]] == [("300", 390)] and "Tools are made in batches of 300." in bad["detail"]
+    assert bad["unbacked_numbers"][0]["selector"].endswith(" > p:nth-of-type(3)") and "data-sample" in bad["detail"]
+    mutate(page, "<p>Tools are made in batches of 300.", '<p data-sample="Batch size">Tools are made in batches of 300.')   # labelled: sample content, not a claim
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert row(rep, "page:claims")["status"] == "pass"
+    samples = row(rep, "page:samples")
+    assert samples["status"] == "info" and "Batch size (Tools are made in batches of 300.)" in samples["detail"] and "390-light" in samples["detail"]
+    assert rep["samples"] == samples["samples"] == [{"label": "Batch size", "text": "Tools are made in batches of 300.", "selector": "body > main > p:nth-of-type(3)", "view": "390-light"}]
+    both = check_page(acme)[1]   # both themes: the sample is one entry, seen first in the light view
+    assert both["samples"] == rep["samples"]
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_an_empty_sample_label_fails(acme):
+    page = write_page(acme)
+    mutate(page, "<p>Every tool has", '<p data-sample="">Every tool has')
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 1, r.stdout + r.stderr
+    bad = row(rep, "page:claims")
+    assert bad["status"] == "fail" and "label the sample" in bad["detail"] and [o["selector"] for o in bad["unlabelled_samples"]] == ["body > main > p:nth-of-type(1)"]
+    assert rep["samples"] == [] and not any(x["id"] == "page:samples" for x in rep["results"])   # an empty label lists nothing
+    mutate(page, 'data-sample=""', 'data-sample="Tagline"')
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 0 and row(rep, "page:claims")["status"] == "pass" and [s["label"] for s in rep["samples"]] == ["Tagline"], r.stdout + r.stderr
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_page_with_no_motion_and_no_unbacked_claim_passes_both_rows(acme):
+    write_page(acme)
+    r, rep = check_page(acme)
+    assert r.returncode == 0, r.stdout + r.stderr
+    ids = [x["id"] for x in rep["results"]]
+    assert "page:motion" in ids and "page:claims" in ids and ids.index("page:motion") < ids.index("page:claims") and "page:samples" not in ids
+    motion = row(rep, "page:motion")
+    assert motion["status"] == "pass" and motion["declarations"] == [] and "no transition or animation" in motion["detail"]
+    claims_row = row(rep, "page:claims")
+    assert claims_row["status"] == "pass" and claims_row["languages"] == {"en": claims_row["languages"]["en"]} and claims_row["unbacked_numbers"] == []
+    assert rep["samples"] == []
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_the_motion_and_claims_collectors_read_what_is_declared_what_runs_and_what_a_block_says(acme):
+    page = write_page(acme)
+    page.write_text(PAGE.replace("</style>", """  .menu { display: none; transition: opacity 300ms ease-in-out; }
+  .btn { transition: transform, opacity; transition-duration: 150ms; }
+  .pair { transition: color 1s, background-color 2s linear, outline-color 0s; }
+  .pulse::after { content: ""; animation: pulse 1.5s cubic-bezier(0.2, 0, 0, 1) infinite; }
+  .quiet::before { transition: opacity 400ms; }
+  .none { animation: none; transition: none; }
+  .scroll { animation: grow linear both; animation-timeline: scroll(); }
+  .nodur { animation: pulse both; } .nodur2 { animation-name: grow; animation-fill-mode: forwards; }
+  @keyframes pulse { from { opacity: 1 } to { opacity: .5 } } @keyframes grow { from { scale: 1 } to { scale: 2 } }
+  .ghost { opacity: 0; } .gone { display: none; } .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>""").replace("</main>", """<div class="menu">Menu</div><button class="btn">Go</button><p class="pair">Pair</p><p class="pulse">Pulse</p><p class="quiet">Quiet</p>
+<p class="none">None</p><p class="scroll">Scroll</p><p class="nodur">No duration</p><p class="nodur2">No duration either</p>
+<p class="blk">&euro;<b>5</b> for <i>2</i> items<br>9 pieces and 40 <span class="tag">%</span></p>
+<p data-sample="Deal">Save 20% today</p>
+<p data-sample="Outer">outer <span data-sample="">inner 88</span> <span>after 66</span></p>
+<p class="ghost">Faded 55</p><p class="gone">Gone 99</p><p class="sr">Cut 98</p><details><summary>More</summary><p>Closed 97</p></details>
+<div lang="pl">Już wkrótce</div><p>Step 3 of 4</p>
+<select><option>Only 99 left</option></select><input value="Price 49 zł"><input type="submit" value="Buy 48 zł">
+<script>document.querySelector("h1").animate([{ opacity: .9 }, { opacity: 1 }], { duration: 7000, iterations: Infinity, easing: "linear" });</script>
+</main>"""), encoding="utf-8")
+    rep = check_page(acme, "--schemes", "light")[1]
+    (v,) = json.loads(Path(rep["measures"]).read_text(encoding="utf-8"))["views"]
+    decls = {(d["source"], d["name"], d["duration_ms"], d["easing"], d["via"]): d for d in v["motion_decls"]}
+    assert ("transition", "opacity", 300, "ease-in-out", "style") in decls and "div.menu" in decls[("transition", "opacity", 300, "ease-in-out", "style")]["sel"]   # display: none still moves when it opens
+    assert {("transition", "transform", 150, "ease", "style"), ("transition", "opacity", 150, "ease", "style")} <= set(decls)                                              # a list of one duration is cycled over the properties
+    assert {("transition", "color", 1000, "ease", "style"), ("transition", "background-color", 2000, "linear", "style")} <= set(decls)
+    assert not any(k[0] == "transition" and k[2] == 0 for k in decls) and not any(k[1] == "outline-color" for k in decls)                                                  # a duration of 0 is no motion
+    pulse = decls[("animation", "pulse", 1500, STANDARD_CURVE, "style")]
+    assert "p.pulse" in pulse["sel"] and pulse["sel"].endswith("::after")                                                                                                                         # a generated pseudo-element
+    assert not any("p.quiet" in d["sel"] for d in v["motion_decls"]) and not any(d["name"] == "none" for d in v["motion_decls"])                              # no content, no pseudo-element; none is none
+    assert sum(1 for k in decls if k[:2] == ("animation", "pulse")) == 1                                                                                                    # the running CSS animation is the declared one, once
+    assert ("script", "", 7000, "linear", "running") in decls and decls[("script", "", 7000, "linear", "running")]["sel"].endswith("h1")                                  # a script's, found while it runs
+    assert "p.scroll" in decls[("animation", "grow", None, "linear", "style")]["sel"]                                                                               # animation-duration: auto
+    assert not any("nodur" in d["sel"] for d in v["motion_decls"]) and sum(1 for k in decls if k[2] is None) == 1                                                          # a name and no duration on a time-based animation lasts 0: nothing moves, nothing to verify
+    assert v["motion_smil"] == 0
+    block = next(t for t in v["claim_text"] if "p.blk" in t["sel"] and t["sample_label"] is None)
+    assert block["text"] == "€5 for 2 items 9 pieces and 40 %"                                                                                                              # inline elements join their block; <br> is a break
+    assert next(t for t in v["claim_text"] if t["sample_label"] == "Deal")["text"] == "Save 20% today"
+    outer = [t["text"] for t in v["claim_text"] if t["sample_label"] == "Outer"]
+    inner = [t["text"] for t in v["claim_text"] if t["sample_label"] == ""]
+    assert outer == ["outer after 66"] and inner == ["inner 88"]                                                                              # a sample's text is a run of its own
+    texts = " | ".join(t["text"] for t in v["claim_text"])
+    assert "Faded 55" in texts                                                                                                                                              # opacity 0 is still content
+    assert not any(w in texts for w in ("Gone 99", "Cut 98", "Closed 97")) and "More" in texts                                                                              # display: none, cut to nothing, a closed <details>
+    assert not any(w in texts for w in ("Only 99 left", "Price 49", "Buy 48")) and "No duration" in texts                                                                   # the text of an <option> and the value of an <input> are not read
+    assert next(t for t in v["claim_text"] if t["text"] == "Już wkrótce")["lang"] == "pl" and next(t for t in v["claim_text"] if t["text"] == "Step 3 of 4")["lang"] == ""
+    assert [(s["label"], s["text"]) for s in v["samples"]] == [("Deal", "Save 20% today"), ("Outer", "outer inner 88 after 66"), ("", "inner 88")]
+    # the judge, on these facts: the unlabelled numbers and the Polish status word are named, the samples and 3 of 4 are not
+    claims_row = row(rep, "page:claims")
+    assert claims_row["status"] == "fail" and sorted(o["number"] for o in claims_row["unbacked_numbers"]) == ["40 %", "55", "88", "€5"]                                       # 88: an empty label labels nothing
+    assert "20%" not in claims_row["detail"] and "after 66" not in claims_row["detail"] and "Step 3" not in claims_row["detail"]
+    assert [o["word"] for o in claims_row["unbacked_status_words"]] == ["wkrótce"] and "NOT verified" not in claims_row["detail"] and claims_row["languages"].keys() == {"en", "pl"}
+    assert [o["selector"] for o in claims_row["unlabelled_samples"]] == [next(s["sel"] for s in v["samples"] if s["label"] == "")]

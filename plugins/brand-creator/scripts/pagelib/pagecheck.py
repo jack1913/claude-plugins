@@ -13,16 +13,22 @@ Each family of rows is a function `(rep, measures, ctx)` listed in ROW_CHECKS; a
 the list and reads the same Ctx. The rows of the first one, `load_rows`, are `page:load:<width>-<scheme>`; `colour_rows` gives `page:colours:<scheme>` (every colour the page
 paints is a semantic colour of that theme) and `pair_rows` gives `page:pairs:<scheme>` (every text colour on its ground is a declared pair, or measured against WCAG).
 
-Standard library plus scripts/lib (_color, _common, qa_rules) only. This folder is outside scripts/lib/, so a change here does not make every pack stale. The
+`motion_rows` gives `page:motion` (every duration and easing is a motion token), and `claim_rows` gives `page:claims` (every number and status word outside a `data-sample`
+is backed by FACTS.md) and `page:samples` (the before-publishing list, also the report's `samples`).
+
+Standard library plus scripts/lib (_color, _common, qa_rules) only, and scripts/booklib/bookdata.py (the FACTS.md table and the English status words, imported when the claims are
+judged). This folder is outside scripts/lib/, so a change here does not make every pack stale. The
 only reads are the project's own files and, with --from, the folder it names (read only: it is copied, never written).
 """
 from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -535,8 +541,278 @@ def pair_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
             rep.add(rid, "pass", label, detail=f"{total} text colour(s) checked, each a declared pair of the {scheme} theme", **extra)
 
 
-# each (rep, measures, ctx); the later families of rows (fonts, marks, motion, claims, rules, tells) are added here
-ROW_CHECKS = [load_rows, colour_rows, pair_rows]
+# ---------------------------------------------------------------- motion
+
+DURATION_TOLERANCE_MS = 0.001             # a duration equals a token's when they differ by less than this
+CURVE_TOLERANCE = 1e-5                    # a cubic-bezier equals a token's when no number differs by more (a browser prints six digits)
+# the keywords as CSS defines them; a keyword counts as a curve token only when a token holds the same four numbers
+NAMED_CURVES = {"linear": (0.0, 0.0, 1.0, 1.0), "ease": (0.25, 0.1, 0.25, 1.0), "ease-in": (0.42, 0.0, 1.0, 1.0), "ease-out": (0.0, 0.0, 0.58, 1.0),
+                "ease-in-out": (0.42, 0.0, 0.58, 1.0)}
+CUBIC_BEZIER = re.compile(r"^cubic-bezier\(([^()]*)\)$")
+
+
+def bezier_of(easing) -> tuple[float, float, float, float] | None:
+    """An easing as its four cubic-bezier numbers: a keyword as CSS defines it (linear is 0, 0, 1, 1), or `cubic-bezier(a, b, c, d)`; None for anything else (steps(),
+    step-start, linear(...)), which no curve token can equal."""
+    e = str(easing or "").strip().lower()
+    if e in NAMED_CURVES:
+        return NAMED_CURVES[e]
+    m = CUBIC_BEZIER.match(e)
+    if not m:
+        return None
+    try:
+        nums = [float(x) for x in m.group(1).split(",")]
+    except ValueError:
+        return None
+    return tuple(nums) if len(nums) == 4 and all(math.isfinite(x) for x in nums) else None   # type: ignore[return-value]
+
+
+def motion_tokens(tokens: dict) -> tuple[list[tuple[str, float]], list[tuple[str, tuple]]]:
+    """The motion tokens of tokens.json: ([(name, ms)], [(name, (x1, y1, x2, y2))]). An entry that is not a number, or not four numbers, is not a token."""
+    m = tokens.get("motion") if isinstance(tokens.get("motion"), dict) else {}
+    numeric = lambda x: isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
+    durations = [(str(k), float(v)) for k, v in (m.get("durations_ms") or {}).items() if numeric(v)]
+    curves = [(str(k), tuple(float(x) for x in v)) for k, v in (m.get("curves") or {}).items() if isinstance(v, list) and len(v) == 4 and all(numeric(x) for x in v)]
+    return durations, curves
+
+
+def _who(d: dict) -> str:
+    name = d.get("name") or ""
+    kind = {"transition": "transition of" if name else "transition", "animation": "animation", "script": "script animation"}.get(d.get("source"), "motion")
+    return f"{kind}{' ' + name if name and d.get('source') != 'script' else ''} on {d.get('selector')}"
+
+
+def _ms(v: float) -> str:
+    return f"{v:g} ms"
+
+
+def motion_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
+    """page:motion: every duration and easing the page declares or runs is a motion token of tokens.json (`motion.durations_ms`, `motion.curves`). The facts are the
+    computed transition and animation properties of every element at rest, what the style sheets declare for a state (:hover, :focus, :active ... : read from the rule, so a
+    hover state counts without being hovered; a rule that sets only a duration or only an easing is judged on that part, `unset` names the other) and the Web Animations
+    running at rest. A duration fails unless it equals a duration token; an easing fails unless it is a cubic-bezier equal to a curve token (the keywords `ease`, `ease-in`,
+    `ease-out`, `ease-in-out` and `linear` count only when a token holds their curve; steps() and linear() never do). A page that moves while the brand has no motion tokens
+    at all fails and says so. A scroll-driven animation has no duration, a style sheet the browser would not let the walk read hides its states, and an SVG SMIL animation is
+    not read: all three are NOT verified and only warn."""
+    rid, label = "page:motion", "motion uses the brand's motion tokens"
+    views = [v for v in measures.get("views", []) if isinstance(v, dict) and not v.get("error") and "motion_decls" in v]
+    if not views:
+        rep.add(rid, "skipped", label, detail="not verified: no view was measured (see the page:load rows)")
+        return
+    durations, curves = motion_tokens(ctx.tokens)
+    merged: dict[tuple, dict] = {}
+    smil = unread = 0
+    truncated = []
+    for v in views:
+        smil = max(smil, int(v.get("motion_smil") or 0))
+        unread = max(unread, int(v.get("motion_unread") or 0))
+        if v.get("motion_total"):
+            truncated.append(f"{v['motion_total']} distinct declarations at {v.get('width')} px, {len(v['motion_decls'])} measured")
+        for d in v["motion_decls"]:
+            unset = [x for x in d.get("unset") or [] if x in ("duration", "easing")]   # the parts of a state rule that it leaves to the rule at rest
+            key = (d.get("source"), d.get("name"), d.get("duration_ms"), d.get("easing"), tuple(unset))
+            if key not in merged:
+                merged[key] = {"selector": d.get("sel"), "source": d.get("source"), "name": d.get("name"), "duration_ms": d.get("duration_ms"), "easing": d.get("easing"),
+                               "via": d.get("via"), "unset": unset, "elements": d.get("count", 1), "also": d.get("also", []), "width": v.get("width"), "scheme": v.get("scheme")}
+    found = list(merged.values())
+    notes = []
+    if smil:
+        notes.append(f"NOT verified: {smil} SVG SMIL animation element(s) (animate, animateTransform, animateMotion) are not read")
+    if unread:
+        notes.append(f"NOT verified: {unread} stylesheet(s) could not be read, so a hover, focus or other state it declares is not seen")
+    if truncated:
+        notes.append("NOT verified beyond the first declarations of a view: " + _names(truncated, 2))
+    scroll = [d for d in found if d["duration_ms"] is None and "duration" not in d["unset"]]
+    if scroll:
+        notes.append(f"NOT verified: {len(scroll)} animation(s) run on a scroll or view timeline and have no duration ({_names([_who(d) for d in scroll], 2)})")
+    extra = {"declarations": found[:100], "durations_checked": sum(1 for d in found if d["duration_ms"] is not None and "duration" not in d["unset"])}
+    if not found:
+        detail = "no transition or animation is declared or running" + ("; " + "; ".join(notes) if notes else "")
+        rep.add(rid, "warn" if notes else "pass", label, detail=detail, **extra)
+        return
+    if not durations and not curves:
+        rep.add(rid, "fail", label, detail=f"the page moves ({len(found)} transition or animation declaration(s): {_names([_who(d) for d in found], NAMED)}) while the brand has no motion tokens: "
+                                           "define the durations and curves in the tokens first, then use them" + "".join("; " + n for n in notes), **extra)
+        return
+    duration_list = ", ".join(f"{k} {_ms(ms)}" for k, ms in durations) or "the built tokens hold none"
+    curve_list = ", ".join(f"{k} cubic-bezier({', '.join(f'{x:g}' for x in c)})" for k, c in curves) or "the built tokens hold none"
+    bad, used = [], []
+    for d in found:
+        problems = []
+        ms = d["duration_ms"]
+        if ms is not None and "duration" not in d["unset"]:
+            token = next(((k, v) for k, v in durations if abs(v - ms) < DURATION_TOLERANCE_MS), None)
+            if token:
+                used.append(f"{token[0]} ({_ms(token[1])})")
+            else:
+                problems.append(f"lasts {_ms(ms)}, which is no motion duration token ({duration_list})")
+        if "easing" not in d["unset"]:
+            b = bezier_of(d["easing"])
+            curve = next(((k, c) for k, c in curves if b and all(abs(x - y) < CURVE_TOLERANCE for x, y in zip(b, c))), None) if b else None
+            if curve:
+                used.append(f"{curve[0]} ({d['easing']})")
+            else:
+                problems.append(f"eases with {d['easing']}, which is no curve token ({curve_list})")
+        if problems:
+            bad.append({**d, "problems": problems})
+    used = sorted(set(used))
+    extra["offenders"], extra["used"] = bad[:100], used
+    if bad:
+        items = [f"{_who(o)} {' and '.join(o['problems'])}" + (f" ({o['elements']} {'rules' if o['via'] == 'state' else 'elements'})" if o["elements"] > 1 else "") + f", first seen at {o['width']} px" for o in bad]
+        rep.add(rid, "fail", label, detail=f"{len(bad)} of {len(found)} transition or animation declaration(s) are not made of motion tokens: {_names(items, NAMED)}"
+                + "".join("; " + n for n in notes), **extra)
+    else:
+        detail = f"{len(found)} transition or animation declaration(s), each duration and easing a motion token" + (f" (used: {_names(used, 4)})" if used else "")
+        rep.add(rid, "warn" if notes else "pass", label, detail=detail + "".join("; " + n for n in notes), **extra)
+
+
+# ---------------------------------------------------------------- claims and samples
+
+# Status words that need a FACTS.md value that says so. English: book-lint's list (scripts/booklib/bookdata.py, LINT_DEFAULTS["status_words"]), one definition. Polish: here.
+STATUS_WORDS_PL = ("wkrótce", "dostępne", "dostępny", "dostępna", "w przygotowaniu", "w budowie", "premiera", "przedsprzedaż", "nowość")
+CLAIM_LANGUAGES = ("en", "pl")            # the languages whose status words are listed; any other page language is "NOT verified"
+CURRENCY_CODES = r"pln|eur|usd|gbp|chf"          # a code before the number (PLN 5) or after it (5 PLN)
+UNITS_SPACED = r"%|‰|€|\$|£|zł|" + CURRENCY_CODES + r"|mln|mld|tys\.?|km|kg|mm|cm|ml|min|ms|px|gb|mb|kb|tb"   # may follow a number after a space
+UNITS_GLUED = r"k|m|g|l|h|s|x|×"          # single letters: a unit only when written right against the number (4K, 5m), never "3 s..."
+NUMBER = re.compile(r"(?<![\w.,])(?P<pre>(?:[€$£]|(?:" + CURRENCY_CODES + r")(?![a-z]))\s?)?(?P<num>\d+(?:[   ]\d{3})*(?:[.,]\d+)*)(?P<post>\s?(?:" + UNITS_SPACED + ")|(?:" + UNITS_GLUED + "))?(?!\\w)", re.I)
+CONTEXT_CHARS = 30                        # characters of text kept each side of a claim in a row's detail
+
+
+def canonical_number(raw: str) -> str:
+    """A number as one comparable string: white space (a no-break space too) dropped, `,` read as the decimal point, `1.200` and `1,200` as thousands (not after a
+    leading 0), trailing zeros of a decimal dropped. 12,5 and 12.50 are 12.5; 1 200, 1.200 and 1,200 are 1200. With both signs the last one is the decimal point and the
+    other marks thousands: 100.000,50 and 100,000.50 are 100000.5."""
+    s = re.sub(r"[\s\u00a0\u202f]", "", raw)
+    if "." in s and "," in s:
+        at = max(s.rfind("."), s.rfind(","))
+        s = re.sub(r"[.,]", "", s[:at]) + "." + s[at + 1:]
+    else:
+        s = s.replace(",", ".")
+        if re.fullmatch(r"\d{1,3}(?:\.\d{3})+", s) and not s.startswith("0"):
+            s = s.replace(".", "")
+    return s.rstrip("0").rstrip(".") if "." in s else s
+
+
+def numbers_in(text: str, every: bool = False) -> list[dict]:
+    """The numbers of a text that are claims: a number of two digits or more (`1.5` has two), or one next to a percent sign, a currency sign or code (before the number or
+    after it, with or without a space), or a unit (`5%`, `$5`, `9 €`, `PLN 5`, `9 zł`, `4K`). A bare single digit (a step label, "1 of 3") is not a claim, unless `every` is set (the numbers a FACTS.md value holds are all of them). A digit written
+    against letters (mp3, A4, 3rd) or in a dotted version (v1.2.3) is not read. -> [{text, number (canonical), at}], `text` as written with its sign or unit."""
+    out = []
+    for m in NUMBER.finditer(text):
+        digits = sum(c.isdigit() for c in m.group("num"))
+        if every or digits >= 2 or m.group("pre") or m.group("post"):
+            out.append({"text": m.group(0).strip(), "number": canonical_number(m.group("num")), "at": m.start()})
+    return out
+
+
+def _bookdata():
+    """scripts/booklib/bookdata.py, the FACTS.md table reader and the English status words that book-lint uses. Imported when the claims are judged, so this module
+    stays importable with scripts/lib alone."""
+    folder = str(Path(__file__).resolve().parents[1] / "booklib")
+    if folder not in sys.path:
+        sys.path.append(folder)
+    import bookdata
+    return bookdata
+
+
+def fact_values(project: Path) -> list[str]:
+    """The `value` cell of each row of the FACTS.md table, as written; a row labelled "(example ..." is the template's, never a fact."""
+    rows = _bookdata().facts(project)
+    return [r.get("value", "") for r in rows if r.get("value") and not r.get("fact", "").strip().lower().startswith("(example")]
+
+
+def _context(text: str, at: int, length: int) -> str:
+    return ("…" if at > CONTEXT_CHARS else "") + text[max(0, at - CONTEXT_CHARS):at + length + CONTEXT_CHARS].strip() + ("…" if at + length + CONTEXT_CHARS < len(text) else "")
+
+
+def _primary_language(lang: str) -> str:
+    return (lang or "").strip().lower().split("-")[0]
+
+
+def claim_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
+    """page:claims: outside a labelled sample, every claim on the page is backed by a FACTS.md value. A claim is a number (see numbers_in) that no value of FACTS.md holds as
+    a number, or a status word (English and Polish) that no value contains; the check reads the visible text of each block and skips the text of an element inside a non-empty
+    `data-sample`. A `data-sample` with no label fails ("label the sample"). A block of text that several views show is judged and counted once, and named at the first view that has it. A page language other than English or Polish (the closest `lang`, else the document's) has no list of
+    status words: the row warns "NOT verified". page:samples (info, only when the page has labelled samples): each sample with its label, an excerpt, its selector and the first
+    view it was seen in: the before-publishing list, also written to the report as `samples`."""
+    ctx.extra["samples"] = []
+    rid, label = "page:claims", "claims are backed by FACTS.md or labelled as samples"
+    views = [v for v in measures.get("views", []) if isinstance(v, dict) and not v.get("error") and "claim_text" in v]
+    if not views:
+        rep.add(rid, "skipped", label, detail="not verified: no view was measured (see the page:load rows)")
+        return
+    facts = fact_values(ctx.project)
+    backing_numbers = {n["number"] for value in facts for n in numbers_in(value, every=True)}
+    backing_text = "\n".join(facts).lower()
+    english = list(_bookdata().LINT_DEFAULTS["status_words"])
+    unbacked_numbers: dict[tuple, dict] = {}
+    unbacked_status: dict[tuple, dict] = {}
+    unlabelled: dict[str, dict] = {}
+    samples: dict[tuple, dict] = {}
+    languages: dict[str, int] = {}
+    seen_runs: set[tuple] = set()          # the same block of text in another view says the same: judged and counted once, named at the first view that has it
+    runs_checked = numbers_checked = status_checked = 0
+    truncated = []
+    for v in views:
+        view_id = f"{v.get('width')}-{v.get('scheme')}"
+        if v.get("claim_text_total"):
+            truncated.append(f"{v['claim_text_total']} blocks of text at {v.get('width')} px, {len(v['claim_text'])} measured")
+        for s in v.get("samples", []):
+            key = (s.get("sel"), s.get("label"))
+            if not str(s.get("label") or "").strip():
+                unlabelled.setdefault(s.get("sel"), {"selector": s.get("sel"), "text": s.get("text", "")[:60], "width": v.get("width")})
+            elif key not in samples:
+                samples[key] = {"label": s["label"].strip(), "text": s.get("text", ""), "selector": s.get("sel"), "view": view_id}
+        for run in v["claim_text"]:
+            if str(run.get("sample_label") or "").strip():
+                continue   # inside a labelled sample: not a claim, it is on the before-publishing list
+            text, lang = run["text"], _primary_language(run.get("lang") or v.get("lang") or "")
+            if (run["sel"], text, lang) in seen_runs:
+                continue
+            seen_runs.add((run["sel"], text, lang))
+            languages[lang] = languages.get(lang, 0) + 1
+            runs_checked += 1
+            for n in numbers_in(text):
+                numbers_checked += 1
+                if n["number"] not in backing_numbers:
+                    unbacked_numbers.setdefault((n["number"], run["sel"]), {"number": n["text"], "selector": run["sel"], "context": _context(text, n["at"], len(n["text"])), "width": v.get("width")})
+            for word in english + (list(STATUS_WORDS_PL) if lang == "pl" else []):
+                for m in re.finditer(r"(?<!\w)" + re.escape(word) + r"(?!\w)", text, re.I):
+                    status_checked += 1
+                    if word.lower() not in backing_text:
+                        unbacked_status.setdefault((word, run["sel"]), {"word": word, "selector": run["sel"], "context": _context(text, m.start(), len(word)), "width": v.get("width")})
+    ctx.extra["samples"] = list(samples.values())
+    parts = []
+    if unbacked_numbers:
+        parts.append(f"{len(unbacked_numbers)} number(s) no FACTS.md value holds: " + _names([f"{o['number']} in {o['selector']} (\"{o['context']}\")" for o in unbacked_numbers.values()], NAMED)
+                     + "; add the fact to FACTS.md (owner-confirmed) or mark the text data-sample=\"<label>\"")
+    if unbacked_status:
+        parts.append(f"{len(unbacked_status)} status word(s) no FACTS.md value contains: " + _names([f"'{o['word']}' in {o['selector']} (\"{o['context']}\")" for o in unbacked_status.values()], NAMED)
+                     + "; add the fact to FACTS.md (owner-confirmed) or remove the claim")
+    if unlabelled:
+        parts.append(f"{len(unlabelled)} data-sample with no label: label the sample (data-sample=\"<what it stands for>\"): " + _names([o["selector"] for o in unlabelled.values()], NAMED))
+    unverified = sorted(k for k in languages if k not in CLAIM_LANGUAGES)
+    notes = []
+    if unverified:
+        notes.append("status words NOT verified for " + ", ".join(k or "an unknown language (the page sets no lang)" for k in unverified)
+                     + " (only English and Polish are listed); numbers were checked")
+    if truncated:
+        notes.append("NOT verified beyond the first blocks of text of a view: " + _names(truncated, 2))
+    extra = {"claims_checked": {"texts": runs_checked, "numbers": numbers_checked, "status_words": status_checked}, "unbacked_numbers": list(unbacked_numbers.values())[:100],
+             "unbacked_status_words": list(unbacked_status.values())[:100], "unlabelled_samples": list(unlabelled.values())[:100], "languages": languages}
+    if parts:
+        rep.add(rid, "fail", label, detail="; ".join(parts + notes), **extra)
+    elif notes:
+        rep.add(rid, "warn", label, detail="; ".join(notes), **extra)
+    else:
+        rep.add(rid, "pass", label, detail=f"{numbers_checked} number(s) and {status_checked} status word(s) outside labelled samples, each backed by a FACTS.md value", **extra)
+    if samples:
+        rep.add("page:samples", "info", "before publishing: sample content on the page", detail=f"{len(samples)} labelled sample(s) pass as samples and must be replaced with real content before the page is published: "
+                + _names([f"{s['label']} ({s['text'][:40] or 'no text'}) in {s['selector']}, {s['view']}" for s in samples.values()], NAMED), samples=list(samples.values()))
+
+
+# each (rep, measures, ctx); the later families of rows (fonts, marks, rules, tells) are added here
+ROW_CHECKS = [load_rows, colour_rows, pair_rows, motion_rows, claim_rows]
 
 
 def judge(rep: Report, measures: dict, ctx: Ctx, measures_path: Path) -> None:

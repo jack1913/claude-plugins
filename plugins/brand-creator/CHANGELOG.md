@@ -99,6 +99,19 @@ stage, and why, is in the [archive](docs/archive/README.md).
   behind it (`page:pairs:<theme>`) must be a declared pair, or measure at least 4.5:1 (3:1 for large text); a pair that
   is not declared fails under that and warns when it passes ("declare them in pairs"), and text over an image or a
   gradient is reported as not verified.
+- `page-check` now checks the motion and the claims of a page. Every duration and easing the page declares or runs
+  (transitions, animations and a script's animations, `::before` and `::after` included) has to be one of the brand's
+  motion tokens, and so has the motion a style sheet declares for a state (`:hover`, `:focus`, `:active` and the like,
+  read from the rule without hovering, `var()` resolved, nested rules, `@media` and `@layer` included): a duration that
+  equals no token, or an easing that no curve token equals, fails `page:motion` (`ease` and `linear` count only when a
+  token holds their curve), and a page that moves while the brand has no motion tokens fails and says so. A style sheet
+  the browser would not let it read is reported as not verified. Numbers and status words on the page have to come from
+  `FACTS.md`: outside a labelled sample, a number no fact holds (a single digit next to `%`, a currency sign or code
+  counts, `9 €` and `PLN 5` too), or a status word (English and Polish, such as "available" or "wkrótce") no fact
+  contains, fails `page:claims`. Mark sample content with `data-sample="<what it
+  stands for>"`: it is not a claim, it is listed in `page:samples` as what to replace before publishing, and the
+  report keeps the list as `samples`; a `data-sample` with no label fails. A page in another language than English or
+  Polish gets a warning that its status words are not verified (its numbers are still checked).
 
 ### Changed
 
