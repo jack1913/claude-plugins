@@ -136,8 +136,9 @@ still the starter's proposal once the system rules are approved (keep one under 
   2024–2026") is not a claim, and neither is the code of an error page: a "404" on a page whose title or main heading
   holds "404". A phone number, a postal code and a street number are still claims and need a fact or a sample label.
 - `page-check` now checks the brand mark on a page. Put `data-brand-mark` on the mark's `<img>` or inline `<svg>` (the
-  value may name the logo file, `data-brand-mark="assets/logo/mark.svg"`); an image whose file name says logo, favicon,
-  wordmark, lockup or mark, and any image that is byte for byte a file of `assets/logo/`, is taken for the mark too. The
+  value may name the logo file, `data-brand-mark="assets/logo/mark.svg"`); an image whose file is named `logo`, or starts
+  with `logo-` or `logo_` (`logo.svg`, `logo-dark.png`; `partner-logo.svg` is not), and any image that is byte for byte a
+  file of `assets/logo/`, is taken for the mark too. The
   mark has to be a logo file of the project (`page:mark-file`: the same bytes, or for an inline SVG the same drawing,
   whatever the order of its attributes, its spaces, its title or the size and label it is given); it has to be the
   drawing your size bands name for the height it is shown at, or that drawing's `-dark.svg` twin (`page:mark-band`);
