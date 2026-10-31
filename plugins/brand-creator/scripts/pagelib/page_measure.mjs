@@ -952,9 +952,12 @@ const TELL = {
  *  `hero`: {found, sel, h1_sel, top, words, viewport_height, lang, actions: [{sel, label (80), lang}]}: the first shown h1 and the nearest section, header, [role=banner] or element
  *  named hero around it (else its parent); `words` are the words of its text, outside a nav, that are in the first screen (the top of the page to the viewport height); `actions` are its
  *  shown links, buttons and submit inputs with a label, outside a nav and in the first screen, in document order.
- *  `boxes`: [{id, parent, sel, width, height, styled, media, labelled}]: shown boxes of at least the floor above, `parent` the id of the nearest box above that is also in the list; `styled` is the
- *  number of shown descendants with a background colour or image or a border (not form controls, table parts or rules), `media` the images, svg, canvas, video and picture inside, `labelled`
- *  whether the box or an ancestor has a non-empty data-sample.
+ *  `boxes`: [{id, parent, sel, width, height, styled, in_lists, lists, media_px, headings, h1, labelled}]: shown boxes of at least the floor above, `parent` the id of the nearest box above that is also in the list; `styled` is the
+ *  number of shown descendants with a background colour or image or a border (not form controls, table parts or rules); `in_lists` how many of those sit in the items of a list (a li of a ul or ol, the li and
+ *  everything in it; the items of the outermost list in the box) and `lists` how many such lists there are, so that a list can be counted as one box; `media_px` the largest side in css px of the shown media
+ *  inside, by element name ({"svg": 24, "img": 600}; img, svg, canvas, video and picture, a picture measured by the img it draws; {} for none): which of them is only an icon is for pagecheck.py to
+ *  say; `headings` the shown headings (h1 to h6, [role=heading]) inside and `h1` the shown h1 among them, which tell a section of the page from a drawing; `labelled` whether the box or an ancestor has
+ *  a non-empty data-sample.
  *  `tiles`: [{sel, tiles: [{sel, left, top, width, height}]}]: elements with exactly three shown element children (a <template>, a <script> or a hidden child is not counted) that each hold a shown heading.
  *  `headings`: [{sel, text (60), top}] (h1-h6) and `details`: [{sel, top}] (a details element with a summary); `last_band`: the last block of the main content {sel, top, words, headings, actions}.
  *  `viewport` is {width, height}; `truncated` is true when more than TELL.elements elements were on the page. */
@@ -1149,21 +1152,39 @@ async function tellFacts(page) {
     };
     const boxes = [];
     let walked = 0, nextId = 0;
-    const walk = (el, nearest) => {   // -> {styled, media} counted inside el, el itself included
-      if (!H.walkable(el) || walked++ > K.elements) return { styled: 0, media: 0 };
-      if (MEDIA_TAGS.has(el.localName)) return { styled: 0, media: boxed(el) ? 1 : 0 };
-      if (!H.shown(el).shown) return { styled: 0, media: 0 };
+    const nothing = () => ({ styled: 0, media: {}, inLists: 0, lists: 0, headings: 0, h1: 0 });
+    const walk = (el, nearest) => {   // -> {styled, media: {element name: largest side}, inLists, lists, headings, h1} counted inside el, el itself included
+      if (!H.walkable(el) || walked++ > K.elements) return nothing();
+      if (MEDIA_TAGS.has(el.localName)) {
+        const drawn = el.localName === "picture" ? el.querySelector("img") : el;   // a picture is as big as the img it draws: its own box is the line round it
+        if (!drawn || !boxed(drawn)) return nothing();
+        const m = drawn.getBoundingClientRect();
+        return { ...nothing(), media: { [el.localName]: round(Math.max(m.width, m.height)) } };
+      }
+      if (!H.shown(el).shown) return nothing();
       const s = getComputedStyle(el), r = el.getBoundingClientRect();
       const has = s.display !== "contents" && r.width > 0 && r.height > 0 && s.visibility === "visible";
       const big = has && r.width >= K.boxFloor[0] && r.height >= K.boxFloor[1];
       const me = big ? { id: nextId++, parent: nearest ? nearest.id : null, sel: H.selector(el), width: round(r.width), height: round(r.height), el } : null;
-      let styled = 0, media = 0;
-      for (const c of el.children) { const got = walk(c, me || nearest); styled += got.styled; media += got.media; }
+      const isList = el.localName === "ul" || el.localName === "ol";
+      let styled = 0, inLists = 0, lists = 0, items = 0, headings = has && el.matches(HEADING) ? 1 : 0, h1 = has && el.localName === "h1" ? 1 : 0;
+      const media = {};
+      for (const c of el.children) {
+        const got = walk(c, me || nearest);
+        styled += got.styled;
+        headings += got.headings;
+        h1 += got.h1;
+        for (const [name, side] of Object.entries(got.media)) media[name] = Math.max(media[name] ?? 0, side);
+        if (isList && c.localName === "li") items += got.styled;   // an item and all it holds is the list's; a list inside it is part of it
+        else { inLists += got.inLists; lists += got.lists; }
+      }
+      if (items) { inLists += items; lists += 1; }
       if (me && styled >= K.boxFloor[2] && boxes.length < K.boxes) {
         const sample = el.closest("[data-sample]");
-        boxes.push({ id: me.id, parent: me.parent, sel: me.sel, width: me.width, height: me.height, styled, media, labelled: Boolean(sample && sample.getAttribute("data-sample").trim()) });
+        boxes.push({ id: me.id, parent: me.parent, sel: me.sel, width: me.width, height: me.height, styled, in_lists: inLists, lists, media_px: media, headings, h1,
+                     labelled: Boolean(sample && sample.getAttribute("data-sample").trim()) });
       }
-      return { styled: styled + (has && styledBox(el, s) ? 1 : 0), media };
+      return { styled: styled + (has && styledBox(el, s) ? 1 : 0), media, inLists, lists, headings, h1 };
     };
     for (const c of document.body.children) walk(c, null);
     boxes.sort((a, b) => a.id - b.id);

@@ -2649,14 +2649,32 @@ def test_the_tell_thresholds_are_applied_to_what_the_browser_collected():
     assert len(second("Dowiedz się więcej", "pl", "pl")) == 1 and len(second("Zobacz, jak to działa", "pl", "pl")) == 1 and not second("Learn more", "pl", "pl")
     assert not hits("stock-second-action", tell_view(hero=hero(10, actions=[act("Learn more")])))             # one action is not a second action
     assert not hits("stock-second-action", tell_view(hero=hero(10, actions=[act("Learn more"), act("Start now")])))   # it is the second one that counts
-    box = lambda **k: {"id": 1, "parent": None, "sel": "div.mock", "width": 240, "height": 160, "styled": 8, "media": 0, "labelled": False, **k}
+    box = lambda **k: {"id": 1, "parent": None, "sel": "div.mock", "width": 240, "height": 160, "styled": 8, "in_lists": 0, "lists": 0, "media_px": {}, "headings": 0, "h1": 0, "labelled": False, **k}
     assert len(hits("styled-div-mock", tell_view(boxes=[box()]))) == 1
-    for off in ({"width": 239}, {"height": 159}, {"styled": 7}, {"media": 1}, {"labelled": True}):
+    for off in ({"width": 239}, {"height": 159}, {"styled": 7}, {"media_px": {"img": 600}}, {"labelled": True}):
         assert not hits("styled-div-mock", tell_view(boxes=[box(**off)])), off
     inner = box(id=2, parent=1, sel="div.mock > div.screen", styled=9)
     assert [h["selector"] for h in hits("styled-div-mock", tell_view(boxes=[box(styled=20), inner]))] == ["div.mock > div.screen"]   # the innermost box, not the page round it
-    assert [h["selector"] for h in hits("styled-div-mock", tell_view(boxes=[box(styled=20, media=1), inner]))] == ["div.mock > div.screen"]
+    assert [h["selector"] for h in hits("styled-div-mock", tell_view(boxes=[box(styled=20, media_px={"img": 600}), inner]))] == ["div.mock > div.screen"]
     assert [h["selector"] for h in hits("styled-div-mock", tell_view(boxes=[box(styled=20), box(id=2, parent=1, sel="div.screen", styled=3)]))] == ["div.mock"]   # a part with too few is not it
+    assert next(t for t in pagecheck.load_tells()["tells"] if t["id"] == "styled-div-mock")["threshold"]["max_icon_px"] == 48
+    mock_with = lambda **media: len(hits("styled-div-mock", tell_view(boxes=[box(media_px=media)])))
+    assert [mock_with(svg=24), mock_with(img=24), mock_with(svg=48, img=48), mock_with(svg=24, img=16)] == [1, 1, 1, 1]       # an img or svg of 48 x 48 px or less is an icon: it does not exempt the box
+    assert [mock_with(svg=48.5), mock_with(img=49), mock_with(img=600), mock_with(svg=24, img=600)] == [0, 0, 0, 0]          # a larger one is a picture (the larger side counts)
+    assert [mock_with(canvas=20), mock_with(video=20), mock_with(canvas=20, svg=24)] == [0, 0, 0]                              # a canvas or video exempts at any size
+    assert [mock_with(picture=20), mock_with(picture=48, svg=24), mock_with(picture=20, img=24)] == [1, 1, 1]                  # a picture is as big as its img: a small one is an icon too
+    assert [mock_with(picture=49), mock_with(picture=600), mock_with(picture=600, svg=24)] == [0, 0, 0]
+    section = lambda **k: len(hits("styled-div-mock", tell_view(boxes=[box(**k)])))
+    assert [section(h1=1, headings=1), section(h1=1, headings=7), section(headings=2), section(headings=9)] == [0, 0, 0, 0]   # a box with the h1, or with more than one heading, is a section of the page
+    assert [section(headings=1), section(headings=0)] == [1, 1]                                                                 # one heading is a drawing's title
+    assert [h["selector"] for h in hits("styled-div-mock", tell_view(boxes=[box(styled=20, h1=1, headings=3), inner]))] == ["div.mock > div.screen"]   # the page is not judged, the drawing in it is
+    assert [h["selector"] for h in hits("styled-div-mock", tell_view(boxes=[box(styled=20, h1=1, headings=3), box(id=3, parent=1, sel="div.mock > div.band", styled=20, headings=2), inner]))] == ["div.mock > div.screen"]
+    with pytest.raises(KeyError):   # a collector that left a field out is an error, not a box with no media and no lists
+        found_tells(tell_view(boxes=[{k: v for k, v in box().items() if k != "media_px"}]))
+    listed = lambda **k: len(hits("styled-div-mock", tell_view(boxes=[box(**k)])))
+    assert [listed(styled=10, in_lists=10, lists=1), listed(styled=40, in_lists=40, lists=1), listed(styled=8, in_lists=8, lists=1)] == [0, 0, 0]   # the items of one list, and all they hold, are one box
+    assert [listed(styled=15, in_lists=8, lists=1), listed(styled=14, in_lists=8, lists=1), listed(styled=10, in_lists=6, lists=2)] == [1, 0, 0]       # seven others and the list make eight; two lists are two boxes
+    assert listed(styled=20, in_lists=12, lists=4) == 1 and not listed(styled=10, in_lists=6, lists=3)                                             # several lists count one each
 
     def tiles(widths=(300, 300, 300), heights=(100, 100, 100), tops=(0, 0, 0), lefts=(0, 316, 632)) -> list[dict]:
         return [{"sel": "section.tiles", "tiles": [{"sel": f"div:nth-of-type({i + 1})", "left": lefts[i], "top": tops[i], "width": widths[i], "height": heights[i]} for i in range(3)]}]
@@ -2667,6 +2685,105 @@ def test_the_tell_thresholds_are_applied_to_what_the_browser_collected():
     assert not tile_hits(tops=(0, 120, 240), lefts=(0, 0, 0)) and not tile_hits(lefts=(0, 250, 500))                             # stacked, or overlapping, is not a row
     assert len(found_tells(tell_view(width=390, eyebrow=[eb()]), tell_view(width=1440, eyebrow=[eb()]))["hits"]["eyebrow"]) == 1   # the same place in two views is one hit ...
     assert found_tells(tell_view(width=390, eyebrow=[eb()]), tell_view(width=1440, eyebrow=[eb()]))["hits"]["eyebrow"][0]["widths"] == [390, 1440]   # ... seen at both
+
+
+ICON = '<svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8"/></svg>'
+PIXEL = '<img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" alt="" width="600" height="120">'   # a picture that is 600 css px wide, as the page draws it
+SMALL_PIXEL = PIXEL.replace('width="600" height="120"', 'width="20" height="20"')                # the same file drawn at 20 x 20 css px: an icon
+MOCK_STYLE = """  .shot { width: 640px; height: 300px; margin: 0; border: 1px solid var(--color-text); }
+  .shot .head { background: var(--color-accent); height: 24px; }
+  .shot .row { border-bottom: 1px solid var(--color-text); height: 20px; }
+  .shot .amt { background: var(--color-accent); }
+  .shot svg { vertical-align: middle; fill: var(--color-text); }
+  .shot ul { list-style: none; margin: 0; padding: 0; }
+  .shot li { background: var(--color-bg); border: 1px solid var(--color-text); height: 20px; }
+  .btn { display: inline-block; padding: 8px 16px; background: var(--color-accent); color: var(--color-bg); }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .card { border: 1px solid var(--color-text); padding: 12px; }
+  .band { display: block; background: var(--color-accent); padding: 24px; }
+"""
+
+
+def page_with_main(main: str) -> str:
+    """The test page with `main` as its main content and the styles of the styled-div-mock fixtures."""
+    return PAGE.replace("</style>", MOCK_STYLE + "</style>").replace(PAGE[PAGE.index("<main>"):PAGE.index("</main>") + len("</main>")], f"<main>\n{main}\n</main>")
+
+
+def mock_page(inside: str, panel: str = "figure") -> str:
+    """A page whose one drawn thing is `inside`, in a box of 640 x 300 css px: the styled-div-mock tell looks at it."""
+    return page_with_main(f'<h1>Acme hand tools</h1>\n<{panel} class="shot">{inside}</{panel}>')
+
+
+def mock_tell(p: Path, page: str) -> dict:
+    """The `tell:styled-div-mock` row of `page` at 1440 px, light."""
+    write_page(p, page)
+    r = bc("page-check", "pages/index.html", "--widths", "1440", "--schemes", "light", project=p)
+    assert r.returncode in (0, 1), r.stdout + r.stderr   # the amounts of a drawn panel are not in FACTS.md: other rows may fail, the tell row is what is read
+    return tell_row(report(p, pagecheck.report_tool("pages/index.html")), "styled-div-mock")
+
+
+APP_ROWS = "".join(f'<div class="row">{ICON} Rent {n} <span class="amt">-{n}0.00</span></div>' for n in range(1, 7))
+APP_PANEL = f'<div class="head">{ICON} Account</div>{APP_ROWS}'                              # a header, six rows of amounts, seven small svg icons: 13 styled boxes
+CHECKLIST = "<ul>" + "".join(f"<li>Step {n} of the repair</li>" for n in range(1, 11)) + "</ul>"   # ten items, each with a background and a border
+TIMELINE = "<ol>" + "".join(f'<li><span class="amt">{n}</span><div class="row">Stage {n}</div></li>' for n in range(1, 6)) + "</ol>"   # each item holds two more styled boxes
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_drawn_app_panel_with_small_icons_is_a_mock_up_and_a_styled_list_or_a_real_picture_is_not(acme):
+    """The browser end to end: small svg icons do not exempt a drawn app screen, the items of one list are one box, and a picture larger than an icon still exempts."""
+    mock_row = lambda inside, panel="figure": mock_tell(acme, mock_page(inside, panel))
+    drawn = mock_row(APP_PANEL)
+    assert drawn["status"] == "warn" and [leaf(h["selector"]) for h in drawn["hits"]] == ["main > figure.shot"] and "13 styled boxes" in drawn["hits"][0]["text"], drawn   # seven icons of 20 px
+    assert mock_row(APP_PANEL + PIXEL)["status"] == "pass"                                      # the same panel with a real 600 px picture in it
+    assert mock_row(APP_PANEL.replace(ICON, ICON.replace('"20"', '"48"')))["status"] == "warn"   # an icon of 48 x 48 px is still an icon
+    assert mock_row(APP_PANEL.replace(ICON, ICON.replace('"20"', '"49"')))["status"] == "pass"   # one of 49 px is a picture
+    assert mock_row(APP_PANEL + '<canvas width="20" height="20"></canvas>')["status"] == "pass"   # a canvas exempts at any size
+    assert mock_row(APP_PANEL + f"<picture>{SMALL_PIXEL}</picture>")["status"] == "warn"         # a picture is as big as its img: 20 px is an icon, bare or in a picture
+    assert mock_row(APP_PANEL + f'<picture><source srcset="x.webp" type="image/webp">{PIXEL}</picture>')["status"] == "pass"   # one of 600 px is a picture
+    assert mock_row(CHECKLIST)["status"] == "pass"                                              # ten items with a background and a border (a ul in the box) ...
+    assert mock_row(f"<div>{CHECKLIST}</div>")["status"] == "pass"                              # ... or in a box round it
+    assert mock_row(TIMELINE)["status"] == "pass"                                               # five items, three styled boxes each: still one list
+    two = mock_row(CHECKLIST + CHECKLIST.replace("ul", "ol"))
+    assert two["status"] == "pass"                                                              # two lists are two boxes
+    assert mock_row(APP_ROWS + CHECKLIST)["status"] == "warn"                                   # six rows of amounts, their icons and chips are 12 boxes, beside the list
+
+
+CARD = f'<div class="card">{ICON.replace("20", "24")} <p>Spare parts, listed</p></div>'     # a bordered card with a 24 px svg icon
+LANDING = f'''<section class="hero"><h1>Acme hand tools</h1><p><a class="btn" href="#a">Start now</a> <a class="btn" href="#b">Price list</a></p></section>
+<div class="grid">{CARD * 6}</div>
+<div class="band"><p>Ready to order?</p></div>'''   # two buttons, six cards with an icon each and a band: ten styled boxes in the main, no picture over 24 px
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_page_of_cards_with_icons_is_not_a_mock_up_but_a_panel_drawn_in_it_is(acme):
+    """The icons are not pictures, so the box round them must not be taken for a drawing: the page, or a band of it, holds an h1 or several headings."""
+    one = mock_tell(acme, page_with_main(LANDING))
+    assert one["status"] == "pass" and not one.get("hits"), one                                     # main holds the h1 (and 10 styled boxes): the page is not a mock-up
+    assert mock_tell(acme, page_with_main(LANDING.replace("<h1>Acme hand tools</h1>", "<p>Acme hand tools</p>")))["status"] == "warn"   # the same, without any heading: nothing says it is a page
+    bands = lambda cards: page_with_main(f'<h1>Acme hand tools</h1>\n<div class="band"><div class="grid">{cards}</div></div>')
+    assert mock_tell(acme, bands(CARD.replace("<p>", "<h3>").replace("</p>", "</h3>") * 9))["status"] == "pass"   # a band of nine cards, a heading and an icon in each
+    assert mock_tell(acme, bands(CARD * 9))["status"] == "warn"                                 # nine cards with no heading: a box of boxes, as before
+    drawn = mock_tell(acme, page_with_main(LANDING + f'\n<figure class="shot">{APP_PANEL}</figure>'))
+    assert drawn["status"] == "warn" and [leaf(h["selector"]) for h in drawn["hits"]] == ["main > figure.shot"], drawn   # the panel, and not the page it is in
+    assert mock_tell(acme, page_with_main(LANDING + f'\n<figure class="shot">{APP_PANEL + PIXEL}</figure>'))["status"] == "pass"
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_the_collector_counts_a_list_as_one_and_reports_the_size_of_the_media(acme):
+    write_page(acme, mock_page(APP_PANEL + PIXEL + CHECKLIST + TIMELINE + f"<picture>{SMALL_PIXEL}</picture><h2>Recent</h2>"))
+    bc("page-check", "pages/index.html", "--widths", "1440", "--schemes", "light", project=acme)
+    rep = report(acme, pagecheck.report_tool("pages/index.html"))
+    (v,) = json.loads(Path(rep["measures"]).read_text(encoding="utf-8"))["views"]
+    boxes = {leaf(b["sel"], 1): b for b in v["tell_facts"]["boxes"]}
+    shot = boxes["figure.shot"]
+    # the panel: header, six rows and six chips (13); the checklist: ten items (10); the timeline: five items of three (15); two lists in the items of which 25 boxes sit
+    assert shot["styled"] == 13 + 10 + 15 and shot["lists"] == 2 and shot["in_lists"] == 25, shot
+    assert shot["media_px"] == {"svg": 20, "img": 600, "picture": 20}, shot                     # a picture as big as the img it draws
+    assert (shot["headings"], shot["h1"]) == (1, 0) and (boxes["main"]["headings"], boxes["main"]["h1"]) == (2, 1), (shot, boxes["main"])   # the h2 in the panel, and the h1 beside it
+    assert boxes["ul"]["styled"] == 10 and boxes["ul"]["in_lists"] == 10 and boxes["ul"]["lists"] == 1 and boxes["ul"]["media_px"] == {}
 
 
 def test_the_stock_order_is_a_note_only_when_every_piece_is_there_in_order():
@@ -2957,10 +3074,10 @@ def test_the_tells_collector_reports_the_candidates_a_page_shows(acme):
     assert [a["label"] for a in hero["actions"]] == ["link", "Next", "Go ->", "→", "Read ›", "Back ←"]   # the nav inside the hero is not an action, the first six are kept
     assert hero["words"] == 35, hero["words"]                                           # the nav's words are not counted
     mocks = [b for b in f["boxes"] if b["styled"] == 8 and b["width"] == 300]
-    assert [(m["labelled"], m["media"]) for m in mocks] == [(False, 0), (True, 0)], f["boxes"]   # eight bordered boxes; the same inside a labelled sample
+    assert [(m["labelled"], m["media_px"], m["in_lists"], m["lists"]) for m in mocks] == [(False, {}, 0, 0), (True, {}, 0, 0)], f["boxes"]   # eight bordered boxes; the same inside a labelled sample
     assert not [b for b in f["boxes"] if b["sel"].endswith("div.boxes:nth-of-type(2)")]          # three bordered boxes: inputs and table cells do not count
     main = next(b for b in f["boxes"] if b["sel"] == "body > main")
-    assert main["media"] == 1 and main["styled"] >= 16 and main["parent"] is None and all(b["parent"] is not None for b in f["boxes"] if b is not main)
+    assert main["media_px"] == {"img": 20} and main["styled"] >= 16 and main["parent"] is None and all(b["parent"] is not None for b in f["boxes"] if b is not main)
     assert [t["sel"].endswith("div.trio:nth-of-type(4)") for t in f["tiles"]] == [True]          # exactly three shown children, each with a heading (the <template> in the first row is no tile; four, or one with no heading, is no row)
     tiles = f["tiles"][0]["tiles"]
     assert len({t["width"] for t in tiles}) == 1 and tiles[0]["left"] < tiles[1]["left"] < tiles[2]["left"] and len({t["top"] for t in tiles}) == 1

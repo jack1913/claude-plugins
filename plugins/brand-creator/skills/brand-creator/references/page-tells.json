@@ -59,8 +59,8 @@
       "name": "A product mock-up made of styled boxes",
       "what": "A large box that stands in for a screenshot or a diagram and is built from many small boxes with a background or border.",
       "why": "A drawn imitation of an interface says what the product could look like and cannot be read, searched or kept true; a real screenshot or none is more honest.",
-      "measure": "The innermost box of threshold.min_width_px by threshold.min_height_px css px or more that holds threshold.min_styled_descendants or more shown descendants with a background or a border (form controls, table cells and rules are not counted), no img, svg, canvas, video or picture, and no data-sample label on it or an ancestor.",
-      "threshold": {"min_width_px": 240, "min_height_px": 160, "min_styled_descendants": 8}
+      "measure": "The innermost box of threshold.min_width_px by threshold.min_height_px css px or more that holds threshold.min_styled_descendants or more shown descendants with a background or a border (form controls, table cells and rules are not counted; the items of one list, the li of a ul or ol with everything in them, count as one box, so a styled checklist or timeline is not a mock-up), no img, svg or picture larger than threshold.max_icon_px css px on either side (a smaller one is an icon and does not count), no canvas or video, no data-sample label on it or an ancestor, and it is not a section of the page: a box that holds an h1, or more than threshold.max_headings headings, is the page or a band of it and is not judged.",
+      "threshold": {"min_width_px": 240, "min_height_px": 160, "min_styled_descendants": 8, "max_icon_px": 48, "max_headings": 1}
     },
     {
       "id": "three-equal-tiles",

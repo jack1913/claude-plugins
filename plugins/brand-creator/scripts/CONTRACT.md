@@ -1379,15 +1379,21 @@ brand-creator page-check --url http://localhost:<port>/<path> [--project DIR] ..
     hero around the first `h1`, else the `h1`'s parent. Its label, case, arrows, punctuation and white space ignored, is a word of the list for its language (`en` or `pl`, the closest `lang`).
   - `hero-text-budget`: the hero shows more than `max_words` (45) words in the first screen (the top of the page to the viewport height); a `nav` and text below the fold are not counted.
   - `styled-div-mock`: the innermost shown box of `min_width_px` x `min_height_px` (240 x 160) css px or more with `min_styled_descendants` (8) or more shown descendants that have a background colour or
-    image or a border (form controls, table parts and rules are not counted), no `img`, `svg`, `canvas`, `video` or `picture` inside, and no non-empty `data-sample` on it or an ancestor.
+    image or a border (form controls, table parts and rules are not counted), no `img`, `svg` or `picture` inside with a side over `max_icon_px` (48) css px (a smaller one is an icon and does not exempt
+    the box; a `picture` is as big as the `img` it draws), no `canvas` or `video`, and no non-empty `data-sample` on it or an ancestor. The items of one list, the `li` of a `ul` or `ol` with everything in them,
+    count as one box: a styled checklist or timeline is not a mock-up (the outermost list in the box counts, a list inside one of its items is part of it; two lists are two boxes). A box that holds an `h1`,
+    or more than `max_headings` (1) headings (`h1` to `h6`, `[role=heading]`), is a section of the page, not a drawing in it, and is not judged: the whole page, or a band of cards with icons, is not a mock-up,
+    while a figure drawn as a panel with a header, rows and small svg icons, with no heading or one, is.
   - `three-equal-tiles`: in a view of `min_viewport_px` (1024) or more, an element with exactly three shown element children (a `<template>`, a `<script>` or a hidden child is not counted), side by side in one row, widths within `width_tolerance_px` (2), the shorter at
     least `min_height_ratio` (0.8) of the taller, each holding a shown heading.
   - Note `stock-anatomy` (info): in one view, from the top of the page down, the hero, a `three-equal-tiles` row, an FAQ (a `details` with a `summary`, or a heading that is a word of the note's lists) and a
     closing band (the last block of `main`, or of the body without one: a heading, an action and at most `cta_max_words` (40) words).
 - **Tell facts.** Every view holds `tell_facts` from `page_measure.mjs`, whatever the rules: `viewport`; `eyebrow` (`{sel, text, words, uppercase, letter_spacing_em, font_size_px, heading_sel, heading_tag,
   heading_font_size_px}`, the candidates of 1 to 12 words); `arrows` (`{sel, label, edge, glyph, gap_chars}`, `gap_chars` as counted above); `separators` (`{sel, text, count, via}`, `via` is `text` or `pseudo`); `hero` (`{found, sel, h1_sel, top,
-  words, viewport_height, lang, actions: [{sel, label, lang}]}`, at most 6 actions); `boxes` (`{id, parent, sel, width, height, styled, media, labelled}` for boxes of 120 x 80 css px with 4 styled
-  descendants or more, `parent` the id of the nearest box above that is in the list, at most 200); `tiles` (`{sel, tiles: [{sel, left, top, width, height}]}`, at most 40); `headings`, `details` and
+  words, viewport_height, lang, actions: [{sel, label, lang}]}`, at most 6 actions); `boxes` (`{id, parent, sel, width, height, styled, in_lists, lists, media_px, headings, h1, labelled}` for boxes of 120 x 80 css px with 4 styled
+  descendants or more, `parent` the id of the nearest box above that is in the list, at most 200; `in_lists` of the `styled` sit in the items of `lists` lists, which the tell counts one box each; `media_px` is the
+  largest side in css px of the shown media inside by element name, `{"svg": 24, "img": 600}` or `{}` (a `picture` by the `img` it draws), and `page-tells.json` says which are icons; `headings` is the number of shown
+  headings inside and `h1` the number of shown `h1` among them); `tiles` (`{sel, tiles: [{sel, left, top, width, height}]}`, at most 40); `headings`, `details` and
   `last_band` (where the pieces of a stock page are). The lists are capped (60 eyebrow candidates, 100 arrows, headings and details, 200 separators); `truncated` is true when the page has more than 8000 elements, which the walks over every element (`middot-run`,
   `styled-div-mock`, `three-equal-tiles`) stop at. Nothing is judged in the browser.
 - **Tell rows.** `tell:<id>`, one per tell of the file in its order, none for a tell a brand rule has adopted. The thresholds are applied to every view and a place seen in several views is one hit with its `widths`.

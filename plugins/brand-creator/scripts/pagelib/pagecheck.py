@@ -1692,8 +1692,14 @@ def find_tells(measures: dict, cfg: dict) -> dict:
         t = th["styled-div-mock"]
         boxes = f.get("boxes", [])
         parent = {b["id"]: b.get("parent") for b in boxes}
-        meets = {b["id"]: b for b in boxes if b["width"] >= t["min_width_px"] and b["height"] >= t["min_height_px"] and b["styled"] >= t["min_styled_descendants"]
-                 and b["media"] == 0 and not b["labelled"]}
+        meets = {}
+        for b in boxes:
+            media = b["media_px"]
+            pictured = any(n in media for n in ("canvas", "video")) or any(media.get(n, 0) > t["max_icon_px"] for n in ("img", "svg", "picture"))   # an img, svg or picture this small is an icon
+            section = b["h1"] > 0 or b["headings"] > t["max_headings"]   # the page, or a band of it, and not a drawing in it
+            styled = b["styled"] - b["in_lists"] + b["lists"]   # the items of a list, and all they hold, are one box
+            if b["width"] >= t["min_width_px"] and b["height"] >= t["min_height_px"] and styled >= t["min_styled_descendants"] and not (pictured or section or b["labelled"]):
+                meets[b["id"]] = {**b, "styled": styled}
         outer = set()
         for i in meets:
             p = parent.get(i)
@@ -1702,7 +1708,7 @@ def find_tells(measures: dict, cfg: dict) -> dict:
                 p = parent.get(p)
         for i, b in meets.items():
             if i not in outer:
-                add("styled-div-mock", b["sel"], v, b["sel"], f"a box of {b['width']:g} x {b['height']:g} px made of {b['styled']} styled boxes, with no image")
+                add("styled-div-mock", b["sel"], v, b["sel"], f"a box of {b['width']:g} x {b['height']:g} px made of {b['styled']} styled boxes, with no image over {t['max_icon_px']:g} px")
         t = th["three-equal-tiles"]
         rows = []
         if width >= t["min_viewport_px"]:
