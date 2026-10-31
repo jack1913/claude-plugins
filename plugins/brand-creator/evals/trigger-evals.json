@@ -192,6 +192,26 @@
     {
       "query": "napisz hasło reklamowe do tego posta",
       "should_trigger": false
+    },
+    {
+      "query": "(inside a folder with BRAND-STATE.md) Show me sites that do what ours should do, so we can pick references for the brand's website",
+      "should_trigger": true
+    },
+    {
+      "query": "(inside a folder with BRAND-STATE.md) Build the reference pages for our site before the developers start",
+      "should_trigger": true
+    },
+    {
+      "query": "(w folderze z BRAND-STATE.md) pokaż strony, które dobrze robią to, co nasza ma robić, żebyśmy wybrali wzorce",
+      "should_trigger": true
+    },
+    {
+      "query": "Build the production website in Next.js from our brand kit",
+      "should_trigger": false
+    },
+    {
+      "query": "Code the pricing page in our React app with the brand tokens",
+      "should_trigger": false
     }
   ],
   "brand-naming": [

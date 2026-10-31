@@ -9,7 +9,7 @@ proven.
 | Check | Last run | Result |
 |---|---|---|
 | [Behaviour evals](#behaviour-evals-claude-plugin-eval) | 2026-10-18, sonnet, one run per case, no baseline | first pass 8 of 17 (0.76); final sweep 15 of 17; the two failures fixed, one re-run alone and passed, one re-graded offline; full suite not re-run since |
-| [Trigger evals](#trigger-evals-for-the-skill-descriptions) | 2026-10-21, Haiku 5.5 and Sonnet 5.5, one run per query, one worker; brand-book re-run the same day after its listing text changed | sonnet passes 127 of 128 queries, haiku 120 of 128; precision 1.00 except brand-book on haiku (0.94) |
+| [Trigger evals](#trigger-evals-for-the-skill-descriptions) | 2026-10-21, Haiku 5.5 and Sonnet 5.5, one run per query, one worker; brand-book re-run the same day after its listing text changed | sonnet passes 127 of 128 queries, haiku 120 of 128; precision 1.00 except brand-book on haiku (0.94); the brand-creator description changed after this run, so brand-creator needs a re-run |
 | [Workflow trials](#workflow-trials) | 2026-10-18, all four workflows on sonnet | run; the fixes they found are in the 0.1.0 code (directions judge on unbuilt boards, adopt row-list syntax) |
 | [Linux run in Docker](#linux-run-in-docker) | 2026-10-18, Debian 13 image | suite and Acme smoke passed with only the macOS-only skips |
 | [Anonymisation denylist](#anonymisation-denylist) | author's own suite runs, last 2026-10-25 | private to the author; cannot run for anyone else, CI skips it |
@@ -81,6 +81,12 @@ the lockup clean-up and still fires on the Polish query. Fourteen held-out queri
 did not see the new text, passed 14 of 14 on Sonnet (13 with the old text) and 11 of 14 on Haiku (9): Haiku missed a clean-up
 after choosing an accent colour, a tone of voice chapter rewrite in Polish and a new history chapter. They were added to the
 eval set afterwards, so brand-book now has 41 queries; the next run covers them all.
+
+**Changed since this run.** The `brand-creator` description changed after the run above: it now names the brand's website
+references and reference pages and says it is not for building production websites. Three positives (two English, one
+Polish) and two negatives about the site steps were added to `evals/trigger-evals.json`, so brand-creator now has 53
+queries. None of them has run, and the 48 above ran against the old text. The next run covers all 53 with the new
+description. The `check` description also gained `--page`; `check` is typed by the owner, so it has negatives only.
 
 ## Workflow trials
 
