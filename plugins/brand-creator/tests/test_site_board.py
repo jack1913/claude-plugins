@@ -499,16 +499,6 @@ def test_the_stage_is_read_from_the_element_that_declares_the_kind(proj):
     assert r.returncode == 1 and "page:site-stage" in failed(proj), r.stdout
 
 
-def test_the_pages_stage_is_not_read_yet_and_the_lint_says_so(tmp_path):
-    p = build(tmp_path)
-    add_round(p, 3, stage="pages")
-    r = lint(p, "rounds/r3/board.html")
-    assert r.returncode == 3, r.stdout                                                         # exit 3: not verified, never a pass
-    got = rows(p)
-    assert got["page:site-stage"]["detail"] == "pages" and got["site:pages-stage"]["status"] == "skipped" and "does not read the pages stage yet" in got["site:pages-stage"]["detail"]
-    assert "site:variants" not in got and got["section:what-changed"]["status"] == "info", "the first board of the pages stage needs no What changed, whatever stage came before"
-
-
 def test_a_board_is_the_first_of_its_own_stage(tmp_path):
     p = build(tmp_path)
     add_round(p, 3, stage="pages")
@@ -1293,3 +1283,458 @@ def test_the_prompt_fragment_describes_the_cold_review_of_a_site_hero():
                    "A review judges what the page shows: where the page lacks something it would need (wording, a picture, a control), the finding notes that the owner would have to supply it, "
                    "and does not fault the page for leaving it out."):
         assert needle in text, needle
+
+
+# ---------------------------------------------------------------- the pages stage: the other pages, built from the hero the owner picked, and the choices they make
+
+DECISIONS_TEXT = ("# Acme: decisions\n\nOne entry per decision the owner made, newest last.\n\n## 2026-10-20: One stamp per view\n\n- Gate: G4\n"
+                  "- Decided: the stamp appears once per view, never twice on a screen.\n- Why: the owner's taste.\n")   # the rule c1 of the filler quotes its first words
+PAGES = ("start", "pricing")
+
+
+def make_page(p: Path, rnd: int, pid: str, layout: str = "walkthrough", cold: str | None = None) -> Path:
+    """The folder of a page of the pages stage: rounds/r<N>/<id>/index.html (<body data-layout data-page=<id>>), the page-check report and the stills of the page as written, and, for a `cold` verdict, its cold review."""
+    page = p / "rounds" / f"r{rnd}" / pid / "index.html"
+    page.parent.mkdir(parents=True, exist_ok=True)
+    page.write_text(page_text(pid, layout, pid), encoding="utf-8")
+    settle(p, rnd, pid)
+    if cold:
+        cold_review_record(p, f"rounds/r{rnd}/{pid}/index.html", cold)
+    return page
+
+
+def add_pages(p: Path, rnd: int = 3, pages=PAGES, *, first: bool = True, colds: dict | None = None, **kw) -> Path:
+    """A pages board in round `rnd`, with a folder, a page, a report and stills for each page id (a cold review only for a page in `colds`, which the card then shows)."""
+    for pid in pages:
+        make_page(p, rnd, pid, cold=(colds or {}).get(pid))
+    board = p / "rounds" / f"r{rnd}" / "board.html"
+    board.parent.mkdir(parents=True, exist_ok=True)
+    board.write_text(board_text(rnd=rnd, first=first, stage="pages", pages=pages, colds=colds, **kw), encoding="utf-8")
+    return board
+
+
+def pages_project(tmp_path, pages=PAGES, **kw) -> Path:
+    """The project of the hero test (G4w skipped; r2 the hero board with Ledger and Atlas) with the owner's decision in DECISIONS.md and a pages board in r3 built from the hero Ledger."""
+    p = build(tmp_path)
+    (p / "DECISIONS.md").write_text(DECISIONS_TEXT, encoding="utf-8")
+    add_pages(p, 3, pages, **kw)
+    return p
+
+
+def lint3(p: Path, *extra):
+    return lint(p, "rounds/r3/board.html", *extra)
+
+
+def test_a_filled_pages_board_passes(tmp_path):
+    p = pages_project(tmp_path)
+    r = lint3(p)
+    assert r.returncode == 0, r.stdout
+    got = rows(p)
+    for rid in ("page:data-board", "page:unfilled", "page:votes", "page:site-stage", "site:tier", "site:brief", "site:g4", "site:g4w", "site:hero-first", "site:pages", "site:files", "site:layout", "site:fields", "site:check", "site:tells",
+                "site:stills", "site:choices", "section:choices", "section:hardest-surface", "section:my-call", "section:questions", "section:reply", "question:1:options", "question:2:options"):
+        assert got[rid]["status"] == "pass", (rid, got[rid])
+    assert got["page:data-board"]["detail"] == "site" and got["page:site-stage"]["detail"] == "pages"
+    assert "data-hero='Ledger': a variant card of the hero board r2" in got["site:hero-first"]["detail"] and "2 page(s): start, pricing" in got["site:pages"]["detail"]
+    assert got["site:choices"]["detail"] == "2 choice(s): 1 rule(s), each found in DECISIONS.md; 1 example(s)"
+    assert got["site:cold"]["status"] == "info" and "optional on the pages" in got["site:cold"]["detail"]
+    assert got["section:what-changed"]["status"] == "info" and got["section:weak-points"]["status"] == "info", "the first board of the pages stage needs no What changed, whatever stage came before"
+    assert "site:pages-stage" not in got, "the pages stage is read now"
+    assert not [x for x in got if x in ("site:variants", "site:refs", "site:reflex-shared") or ":reflex" in x or x.startswith(("direction", "map:", "masters", "project:", "motion:", "site-refs:", "groups:"))], "the hero's rows are not the pages'"
+
+
+def test_the_pages_stage_is_read_from_the_template_comments_a_hero_board_never_carries(proj):
+    """A hero board has no choices row and no pages row: the pages blocks wait in comments of the template, and a hero board has none of the attributes that name a page, a hero or a choice."""
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    got = rows(proj)
+    assert not [x for x in got if x in ("site:hero-first", "site:pages", "site:choices", "section:choices")], "no pages-stage row on a hero board"
+    page = re.sub(r"<!--.*?-->|<script>.*?</script>", "", board_of(proj).read_text(encoding="utf-8"), flags=re.S)
+    assert "data-site-page" not in page and "data-hero" not in page and "data-choice" not in page
+
+
+def test_the_template_holds_the_pages_stage_in_three_comments():
+    src = TEMPLATE.read_text(encoding="utf-8")
+    comments = re.findall(r"<!-- PAGES STAGE, the (choices|pages|questions) \(data-site-stage=\"pages\"\):.*?-->", src, re.S)
+    assert comments == ["choices", "pages", "questions"], comments
+    for needle in ('data-hero="<name of the variant the owner picked>"', '<article class="page" data-site-page=', 'id="pages"', 'data-choice="c1" data-tag="rule" data-source=', 'data-choice="c2" data-tag="example" data-source=""',
+                   'data-site-page="[[fill: page id]]">', 'data-field="from-refs">[[fill: OPTIONAL', '.page[hidden]{display:none}', '[data-site-variant],[data-site-page]', 'name="q2" value="a">a. Yes, as tagged'):
+        assert needle in src, needle
+    live = re.sub(r"<!--.*?-->|<script>.*?</script>", "", src, flags=re.S)
+    assert "data-site-page" not in live and "data-choice" not in live and "data-hero" not in live, "nothing of the pages stage is live in the template as it is"
+    assert src.index("</section>\n\n  <!-- PAGES STAGE, the choices") > src.index('id="reply"'), "the three comments come after the live sections, so the first mention of anything in a filled board is the live one"
+    page = fill_site_board(src, stage="pages", rnd=3, hero="Atlas", pages=("start", "faq", "contact"))
+    live = re.sub(r"<!--.*?-->", "", page, flags=re.S)
+    assert live.count('<article class="page" data-site-page=') == 3 and 'data-board="site" data-site-stage="pages" data-hero="Atlas"' in page and 'data-lists="variants"' not in live
+    assert "[[fill:" not in live
+
+
+def test_a_pages_board_needs_an_earlier_hero_board(tmp_path):
+    p = build(tmp_path, board=False)
+    (p / "DECISIONS.md").write_text(DECISIONS_TEXT, encoding="utf-8")
+    add_pages(p, 2)
+    r = lint(p)
+    assert r.returncode == 1 and "site:hero-first" in failed(p), r.stdout
+    assert "hero first: show the hero variants and record the owner's pick before the other pages" in detail(p, "site:hero-first") and "no round before r2 holds a site board" in detail(p, "site:hero-first")
+    add_round(p, 3)                                                                              # a hero board that comes later is no hero that was picked before
+    r = lint(p)
+    assert r.returncode == 1 and "site:hero-first" in failed(p), r.stdout
+    pages_before = pages_project(tmp_path / "other")                                              # a hero board before, and the same pages board: passes
+    assert lint3(pages_before).returncode == 0
+
+
+def test_an_earlier_pages_board_is_no_hero_board(tmp_path):
+    p = build(tmp_path, board=False)
+    (p / "DECISIONS.md").write_text(DECISIONS_TEXT, encoding="utf-8")
+    add_pages(p, 2)
+    add_pages(p, 3)
+    r = lint3(p)
+    assert r.returncode == 1 and "site:hero-first" in failed(p) and "no round before r3 holds a site board" in detail(p, "site:hero-first"), r.stdout
+
+
+def test_data_hero_must_name_a_hero_variant(tmp_path):
+    p = pages_project(tmp_path)
+    mutate(board_of(p, 3), 'data-hero="Ledger"', 'data-hero="Quay"')
+    r = lint3(p)
+    assert r.returncode == 1 and "site:hero-first" in failed(p), r.stdout
+    why = detail(p, "site:hero-first")
+    assert "hero first: show the hero variants and record the owner's pick before the other pages" in why and "data-hero='Quay' is no variant card of the hero board(s) before this round: r2 (Ledger, Atlas)" in why, why
+    mutate(board_of(p, 3), 'data-hero="Quay"', 'data-hero="ledger"')
+    r = lint3(p)
+    assert r.returncode == 1 and "(the card is spelt 'Ledger': letter case counts)" in detail(p, "site:hero-first"), r.stdout
+    mutate(board_of(p, 3), ' data-hero="ledger"', "")
+    r = lint3(p)
+    assert r.returncode == 1 and "the <body> of this board names no hero" in detail(p, "site:hero-first") and 'data-hero="<the variant the owner picked>"' in detail(p, "site:hero-first"), r.stdout
+    mutate(board_of(p, 3), '<body data-round="3" data-board="site" data-site-stage="pages">', '<body data-round="3" data-board="site" data-site-stage="pages" data-hero="Atlas">')   # any variant card of the hero board is a hero the owner may have picked
+    assert lint3(p).returncode == 0 and "data-hero='Atlas'" in detail(p, "site:hero-first")
+
+
+def test_data_hero_is_read_from_the_element_that_declares_the_kind(tmp_path):
+    """data-hero on another element than the one that declares data-board is no hero."""
+    p = pages_project(tmp_path)
+    mutate(board_of(p, 3), '<body data-round="3" data-board="site" data-site-stage="pages" data-hero="Ledger">', '<body data-round="3" data-board="site" data-site-stage="pages"><div data-hero="Ledger"></div>')
+    r = lint3(p)
+    assert r.returncode == 1 and "the <body> of this board names no hero" in detail(p, "site:hero-first"), r.stdout
+
+
+def test_the_hero_is_found_on_the_latest_hero_board_that_has_it(tmp_path):
+    p = build(tmp_path)                                                                          # r2: Ledger and Atlas
+    (p / "DECISIONS.md").write_text(DECISIONS_TEXT, encoding="utf-8")
+    add_round(p, 3, ("Harbour",), first=False)                                                   # r3: the refine loop on the picked hero, under a new name
+    add_pages(p, 4, hero="Harbour")
+    assert lint(p, "rounds/r4/board.html").returncode == 0 and "the hero board r3" in detail(p, "site:hero-first")
+    mutate(board_of(p, 4), 'data-hero="Harbour"', 'data-hero="Ledger"')
+    assert lint(p, "rounds/r4/board.html").returncode == 0 and "the hero board r2" in detail(p, "site:hero-first")
+    assert "rounds/r2/board.html" in [i["path"] for i in report(p, "board-lint")["inputs"]], "the hero board the pick stands on is an input of the lint"
+
+
+def test_a_pages_board_needs_a_page_card(tmp_path):
+    p = pages_project(tmp_path)
+    mutate(board_of(p, 3), '<article class="page" data-site-page=', '<article class="page" data-removed=', count=2)
+    r = lint3(p)
+    assert r.returncode == 1 and "site:pages" in failed(p), r.stdout
+    assert 'no page card found: one element with data-site-page="<id>"' in detail(p, "site:pages")
+    got = rows(p)
+    for rid in ("site:files", "site:layout", "site:fields", "site:check", "site:tells", "site:stills", "site:cold"):
+        assert got[rid]["status"] == "skipped" and "there is no page card to look at (site:pages says why)" in got[rid]["detail"], rid
+
+
+def test_a_page_id_is_a_page_id_and_unique(tmp_path):
+    p = pages_project(tmp_path)
+    mutate(board_of(p, 3), 'data-site-page="pricing"', 'data-site-page="Pricing"')
+    r = lint3(p)
+    assert r.returncode == 1 and "site:pages" in failed(p), r.stdout
+    assert "Pricing: data-site-page must be a page id (lowercase letters, digits and -, 2 to 32 characters, starting with a letter: start, pricing)" in detail(p, "site:pages")
+    mutate(board_of(p, 3), 'data-site-page="Pricing"', 'data-site-page="start"')
+    r = lint3(p)
+    assert r.returncode == 1 and "start: duplicate page id" in detail(p, "site:pages"), r.stdout
+
+
+def test_a_page_card_spelt_unlike_its_page_id_fails(tmp_path):
+    p = pages_project(tmp_path)
+    mutate(p / "rounds" / "r3" / "pricing" / "index.html", 'data-page="pricing"', 'data-page="prices"')
+    settle(p, 3, "pricing")                                                                      # checked and captured again: only the id is wrong
+    r = lint3(p)
+    assert r.returncode == 1 and failed(p) == ["site:pages"], r.stdout
+    why = detail(p, "site:pages")
+    assert "pricing: the card says data-site-page='pricing' and rounds/r3/pricing/index.html says data-page='prices'" in why and "start" not in why, why
+    mutate(p / "rounds" / "r3" / "pricing" / "index.html", 'data-page="prices"', 'data-page="pricing"')
+    settle(p, 3, "pricing")
+    assert lint3(p).returncode == 0
+
+
+def test_a_page_card_spelt_unlike_its_folder_fails(tmp_path):
+    p = pages_project(tmp_path)
+    (p / "rounds" / "r3" / "pricing").rename(p / "rounds" / "r3" / "pricing-old")
+    r = lint3(p)
+    assert r.returncode == 1 and "site:files" in failed(p), r.stdout
+    assert "pricing: rounds/r3/pricing/ does not exist (one folder per page: index.html" in detail(p, "site:files")
+    (p / "rounds" / "r3" / "pricing-old" / "index.html").rename(p / "rounds" / "r3" / "pricing-old" / "home.html")
+    (p / "rounds" / "r3" / "pricing-old").rename(p / "rounds" / "r3" / "pricing")
+    r = lint3(p)
+    assert r.returncode == 1 and "pricing: rounds/r3/pricing/index.html is missing (the page, built from the hero the owner picked)" in detail(p, "site:files"), r.stdout
+
+
+def test_a_page_declares_its_layout_and_the_card_says_the_same(tmp_path):
+    p = pages_project(tmp_path)
+    mutate(p / "rounds" / "r3" / "start" / "index.html", 'data-layout="walkthrough"', 'data-layout="brochure"')
+    settle(p, 3, "start")
+    r = lint3(p)
+    assert r.returncode == 1 and failed(p) == ["site:layout"], r.stdout
+    assert "start: data-layout 'brochure' is no id of page-layouts.json" in detail(p, "site:layout")
+    mutate(p / "rounds" / "r3" / "start" / "index.html", 'data-layout="brochure"', 'data-layout="own:atlas"')
+    settle(p, 3, "start")
+    mutate(board_of(p, 3), 'data-layout="walkthrough"', 'data-layout="own:atlas"', count=2)      # both cards say it: the page of start says its own too, the page of pricing says walkthrough
+    r = lint3(p)
+    assert r.returncode == 1 and "pricing: the card says data-layout 'own:atlas' and the page says 'walkthrough'" in detail(p, "site:layout"), r.stdout
+
+
+def test_takes_from_and_the_cold_review_are_optional_on_a_page(tmp_path):
+    p = pages_project(tmp_path, from_refs={"pricing": None})
+    page = re.sub(r"<!--.*?-->", "", board_of(p, 3).read_text(encoding="utf-8"), flags=re.S)
+    assert page.count('data-field="from-refs"') == 1 and '<p class="cold"' not in page
+    r = lint3(p)
+    assert r.returncode == 0, r.stdout
+    assert rows(p)["site:fields"]["status"] == "pass" and detail(p, "site:fields") == "What it is and Cost are filled in on every card (and Takes from where a card has the line)"
+
+
+def test_a_takes_from_line_that_is_there_is_filled_in_and_what_it_is_and_cost_are_not_optional(tmp_path):
+    p = pages_project(tmp_path)
+    mutate(board_of(p, 3), '<dd data-field="from-refs">The structure and the rhythm of the hero, never the look of a reference.</dd>', '<dd data-field="from-refs"></dd>', count=2)
+    r = lint3(p)
+    assert r.returncode == 1 and "site:fields" in failed(p), r.stdout
+    assert "start: Takes from is missing or empty" in detail(p, "site:fields") and "pricing: Takes from is missing or empty" in detail(p, "site:fields")
+    mutate(board_of(p, 3), '<dd data-field="cost">Filled in for the test fixture.</dd>', '<dd data-field="cost"></dd>')       # the first card has lost the line of the cost, whatever else it holds
+    r = lint3(p)
+    assert r.returncode == 1 and "start: Cost is missing or empty" in detail(p, "site:fields"), r.stdout
+
+
+def test_the_proof_rows_apply_to_a_page_card(tmp_path):
+    p = pages_project(tmp_path)
+    mutate(p / "rounds" / "r3" / "pricing" / "index.html", "<h1>pricing</h1>", "<h1>pricing, longer</h1>")
+    r = lint3(p)
+    assert r.returncode == 1 and {"site:check", "site:stills"} <= set(failed(p)), r.stdout
+    assert "pricing: the page-check report is stale (rounds/r3/pricing/index.html changed): run `brand-creator page-check rounds/r3/pricing/index.html`" in detail(p, "site:check")
+    assert "pricing: rounds/r3/pricing/shots/capture.json is stale" in detail(p, "site:stills") and "start" not in detail(p, "site:check")
+    settle(p, 3, "pricing")
+    assert lint3(p).returncode == 0
+
+
+def test_a_tell_page_check_found_on_a_page_is_named_on_its_card(tmp_path):
+    p = pages_project(tmp_path)
+    settle(p, 3, "start", tells=("eyebrow",))
+    r = lint3(p)
+    assert r.returncode == 1 and failed(p) == ["site:tells"], r.stdout
+    assert "start: the card does not name eyebrow (" in detail(p, "site:tells") and "show every tell page-check found, with what you will do about it" in detail(p, "site:tells")
+    mutate(board_of(p, 3), "none found", "eyebrow: moved into the heading", count=1)
+    assert lint3(p).returncode == 0 and detail(p, "site:tells") == "1 tell(s) found by page-check, each named on its card"
+
+
+def test_a_page_card_shows_the_captured_stills_and_a_check_line_like_a_hero(tmp_path):
+    p = pages_project(tmp_path)
+    mutate_json(p / "rounds" / "r3" / "start" / "shots" / "capture.json", lambda d: d["views"][0].__setitem__("sha256", "0" * 64))
+    r = lint3(p)
+    assert r.returncode == 1 and failed(p) == ["site:stills"] and "start: the 1440-light picture the card shows is not the one" in detail(p, "site:stills"), r.stdout
+    capture_record(p, "rounds/r3/start/index.html")
+    settle(p, 3, "pricing", "fail")
+    r = lint3(p)
+    assert r.returncode == 1 and failed(p) == ["site:check"] and 'pricing: the card says data-check="pass" and the page-check report says fail' in detail(p, "site:check"), r.stdout
+
+
+def test_a_page_with_a_cold_review_is_held_to_it(tmp_path):
+    p = pages_project(tmp_path, colds={"start": "fix"})
+    r = lint3(p)
+    assert r.returncode == 0, r.stdout
+    assert rows(p)["site:cold"]["status"] == "pass" and detail(p, "site:cold") == "start: fix", "a page that has no review is not named"
+    mutate(board_of(p, 3), '<p class="cold" data-cold="fix">', '<p class="cold" data-cold="ship">')
+    r = lint3(p)
+    assert r.returncode == 1 and 'start: the card says data-cold="ship" and rounds/r3/start/cold-review.md says verdict: fix' in detail(p, "site:cold"), r.stdout
+    mutate(board_of(p, 3), '<p class="cold" data-cold="ship">', '<p class="cold" data-cold="fix">')
+    mutate(p / "rounds" / "r3" / "start" / "cold-review.md", "verdict: fix", "it is fine")
+    r = lint3(p)
+    assert r.returncode == 1 and "start: rounds/r3/start/cold-review.md must start with its verdict" in detail(p, "site:cold"), r.stdout
+
+
+def test_a_page_card_may_not_claim_a_cold_review_it_has_not_got(tmp_path):
+    p = pages_project(tmp_path, colds={"start": "ship"})
+    (p / "rounds" / "r3" / "start" / "cold-review.md").unlink()
+    r = lint3(p)
+    assert r.returncode == 1 and failed(p) == ["site:cold"], r.stdout
+    assert "start: the card has a cold line (data-cold) but rounds/r3/start/cold-review.md does not exist" in detail(p, "site:cold")
+
+
+def test_a_cold_review_that_a_page_has_goes_stale_with_the_facts(tmp_path):
+    p = pages_project(tmp_path, colds={"pricing": "ship"})
+    text = (p / "FACTS.md").read_text(encoding="utf-8")
+    mutate(p / "FACTS.md", text.splitlines()[0], text.splitlines()[0] + " (changed)")
+    r = lint3(p)
+    assert r.returncode == 1 and failed(p) == ["site:cold"], r.stdout
+    assert "pricing: brief/BRIEF.md or FACTS.md changed after the cold review: review again (rounds/r3/pricing/cold-review.md lists another sha256 for FACTS.md)" in detail(p, "site:cold")
+
+
+# ---------------------------------------------------------------- site:choices: every choice is a rule (and says where) or an example
+
+def test_the_choices_section_is_required_at_the_pages_stage(tmp_path):
+    p = pages_project(tmp_path)
+    mutate(board_of(p, 3), 'data-section="choices"', 'data-removed="choices"')
+    r = lint3(p)
+    assert r.returncode == 1 and failed(p) == ["section:choices"], r.stdout
+    assert "missing: no element with data-section=\"choices\"" in detail(p, "section:choices")
+    assert rows(p)["site:choices"]["status"] == "pass", "the items are read wherever they are: the section row says the section is gone"
+
+
+def test_a_pages_board_needs_at_least_one_choice(tmp_path):
+    p = pages_project(tmp_path)
+    mutate(board_of(p, 3), "data-choice=", "data-removed=", count=2)
+    r = lint3(p)
+    assert r.returncode == 1 and "site:choices" in failed(p), r.stdout
+    assert 'no choice found: one element with data-choice="c1", data-tag and data-source' in detail(p, "site:choices")
+
+
+def test_a_choice_without_a_tag_fails(tmp_path):
+    p = pages_project(tmp_path)
+    mutate(board_of(p, 3), ' data-tag="example"', "")
+    r = lint3(p)
+    assert r.returncode == 1 and failed(p) == ["site:choices"], r.stdout
+    assert 'c2: data-tag must be "rule" or "example" (it has none)' in detail(p, "site:choices") and "c1" not in detail(p, "site:choices")
+    mutate(board_of(p, 3), 'data-choice="c2"', 'data-choice="c2" data-tag="maybe"')
+    r = lint3(p)
+    assert r.returncode == 1 and 'c2: data-tag must be "rule" or "example", got \'maybe\'' in detail(p, "site:choices"), r.stdout
+
+
+def test_a_rule_must_cite_where_it_was_decided(tmp_path):
+    p = pages_project(tmp_path)
+    mutate(board_of(p, 3), 'data-source="the stamp appears once per view"', 'data-source="the stamp appears twice per view"')
+    r = lint3(p)
+    assert r.returncode == 1 and failed(p) == ["site:choices"], r.stdout
+    why = detail(p, "site:choices")
+    assert "c1: a rule says where it was decided: record the owner's decision in DECISIONS.md, then cite it" in why and "is not in BRAND-STATE.md, DECISIONS.md or decisions/*.md" in why, why
+    mutate(board_of(p, 3), 'data-source="the stamp appears twice per view"', 'data-source=""')
+    r = lint3(p)
+    assert r.returncode == 1 and "c1: a rule says where it was decided: record the owner's decision in DECISIONS.md, then cite it (data-source is empty)" in detail(p, "site:choices"), r.stdout
+    mutate(board_of(p, 3), 'data-source=""', 'data-source="the"', count=1)
+    r = lint3(p)
+    assert r.returncode == 1 and "data-source 'the' is too short to point at a line" in detail(p, "site:choices"), r.stdout
+
+
+def test_a_rule_without_any_decision_file_has_no_place_to_be_found(tmp_path):
+    p = pages_project(tmp_path)
+    (p / "DECISIONS.md").unlink()
+    r = lint3(p)
+    assert r.returncode == 1 and failed(p) == ["site:choices"] and "c1: a rule says where it was decided" in detail(p, "site:choices"), r.stdout
+
+
+def test_a_rule_may_cite_brand_state_decisions_or_a_decision_record_in_any_letter_case_and_spacing(tmp_path):
+    p = pages_project(tmp_path, choices=(("c1", "rule", "A", "THE   Stamp\nappears ONCE per view", "start"), ("c2", "rule", "B", "approved system rules (test)", "start"),
+                                         ("c3", "rule", "C", "Pricing sits under the stages", "pricing")))
+    (p / "decisions").mkdir()
+    (p / "decisions" / "ADR-0001-pricing.md").write_text("# Pricing\n\nDecided: pricing sits under\nthe stages, always.\n", encoding="utf-8")
+    r = lint3(p)
+    assert r.returncode == 0, r.stdout
+    assert detail(p, "site:choices") == "3 choice(s): 3 rule(s), each found in DECISIONS.md, BRAND-STATE.md, decisions/ADR-0001-pricing.md; 0 example(s)"
+    inputs = [i["path"] for i in report(p, "board-lint")["inputs"]]
+    assert "DECISIONS.md" in inputs and "decisions/ADR-0001-pricing.md" in inputs, inputs   # BRAND-STATE.md is searched but not added here: a real page-check report lists it, and that makes it an input
+
+
+def test_brand_state_is_an_input_of_the_pages_lint_through_the_page_check_reports_and_recording_a_gate_makes_it_stale(tmp_path):
+    """A real page-check report lists BRAND-STATE.md, qa/rules.json and FACTS.md (pagecheck.base_inputs), so the lint, which adds the files its page-check reports were made from, depends on BRAND-STATE.md too:
+    `state --record` makes the lint report stale, and with it the report of every page. The choices only search the file; they do not add it."""
+    from _common import stale_inputs
+    p = pages_project(tmp_path)
+    for pid in PAGES:
+        page_check_report(p, f"rounds/r3/{pid}/index.html", also=("BRAND-STATE.md", "FACTS.md"))
+    assert lint3(p).returncode == 0
+    doc = report(p, "board-lint")
+    assert "BRAND-STATE.md" in [i["path"] for i in doc["inputs"]]
+    assert stale_inputs(p, doc) == []
+    state = p / "BRAND-STATE.md"
+    state.write_text(state.read_text(encoding="utf-8") + "\n", encoding="utf-8")                   # what `state --record G4p` does to the file
+    assert stale_inputs(p, doc) == ["BRAND-STATE.md changed"]
+    r = lint3(p)
+    assert r.returncode == 1 and "site:check" in failed(p), r.stdout
+
+
+def test_an_example_needs_no_source(tmp_path):
+    p = build(tmp_path)
+    (p / "DECISIONS.md").unlink()                                                                # no decision is written down anywhere but BRAND-STATE.md
+    add_pages(p, 3, choices=(("c1", "example", "Pricing sits under the stages", "", "start"), ("c2", "example", "The stamp is small", "anything at all", None)))
+    r = lint3(p)
+    assert r.returncode == 0, r.stdout
+    assert detail(p, "site:choices") == "2 choice(s): 0 rule(s); 2 example(s)"
+
+
+def test_a_choice_is_c_and_a_number_and_unique_and_has_text(tmp_path):
+    p = pages_project(tmp_path)
+    mutate(board_of(p, 3), 'data-choice="c1"', 'data-choice="choice1"')
+    r = lint3(p)
+    assert r.returncode == 1 and "choice1: data-choice must be c1, c2 ... (the letter c and a number)" in detail(p, "site:choices"), r.stdout
+    mutate(board_of(p, 3), 'data-choice="choice1"', 'data-choice="c2"')
+    r = lint3(p)
+    assert r.returncode == 1 and "c2: duplicate choice id" in detail(p, "site:choices"), r.stdout
+    mutate(board_of(p, 3), 'data-choice="c2"', 'data-choice="c1"', count=1)
+    mutate(board_of(p, 3), ">Pricing sits under the stages</li>", "></li>")
+    r = lint3(p)
+    assert r.returncode == 1 and "c2: the choice has no text" in detail(p, "site:choices"), r.stdout
+
+
+def test_a_choice_names_only_pages_on_the_board(tmp_path):
+    p = pages_project(tmp_path)
+    mutate(board_of(p, 3), 'data-pages="start pricing"', 'data-pages="start pricng"')
+    r = lint3(p)
+    assert r.returncode == 1 and failed(p) == ["site:choices"], r.stdout
+    assert "c1: data-pages names pricng, which is no page card of this board (the pages: start, pricing)" in detail(p, "site:choices")
+    mutate(board_of(p, 3), 'data-pages="start pricng"', 'data-pages=""')
+    r = lint3(p)
+    assert r.returncode == 1 and "c1: data-pages is empty: name page ids of this board, or leave the attribute out for every page" in detail(p, "site:choices"), r.stdout
+
+
+def test_data_pages_may_be_separated_by_commas_or_left_out(tmp_path):
+    p = build(tmp_path)
+    (p / "DECISIONS.md").write_text(DECISIONS_TEXT, encoding="utf-8")
+    add_pages(p, 3, choices=(("c1", "rule", "The stamp appears once per view", "the stamp appears once per view", "start, pricing"), ("c2", "example", "Pricing sits under the stages", "", None)))
+    assert lint3(p).returncode == 0, lint3(p).stdout
+
+
+def test_the_lint_report_lists_the_decisions_the_hero_board_and_each_page_and_goes_stale_with_them(tmp_path):
+    from _common import stale_inputs
+    p = pages_project(tmp_path)
+    assert lint3(p).returncode == 0
+    doc = report(p, "board-lint")
+    paths = [i["path"] for i in doc["inputs"]]
+    for want in ("DECISIONS.md", "brief/BRIEF.md", "rounds/r3/board.html", "rounds/r2/board.html", "rounds/r3/start/index.html", "rounds/r3/pricing/index.html", "rounds/r3/start/shots/capture.json"):
+        assert want in paths, (want, paths)
+    assert stale_inputs(p, doc) == []
+    (p / "DECISIONS.md").write_text(DECISIONS_TEXT + "\n- Amended: the stamp appears once per view, twice on the 404.\n", encoding="utf-8")
+    assert stale_inputs(p, doc) == ["DECISIONS.md changed"], "a changed decision makes the lint stale"
+    (p / "DECISIONS.md").write_text(DECISIONS_TEXT, encoding="utf-8")
+    (p / "rounds" / "r2" / "board.html").write_text((p / "rounds" / "r2" / "board.html").read_text(encoding="utf-8") + "<!-- changed -->\n", encoding="utf-8")
+    assert stale_inputs(p, doc) == ["rounds/r2/board.html changed"], "the hero board the pick stands on is an input"
+
+
+def test_a_later_pages_board_needs_what_changed_and_weak_points(tmp_path):
+    p = pages_project(tmp_path)
+    add_pages(p, 4, first=False)
+    assert lint(p, "rounds/r4/board.html").returncode == 0, lint(p, "rounds/r4/board.html").stdout
+    assert rows(p)["section:what-changed"]["status"] == "pass" and rows(p)["section:weak-points"]["status"] == "pass"
+    mutate(board_of(p, 4), 'data-section="weak-points"', 'data-removed="weak-points"')
+    r = lint(p, "rounds/r4/board.html")
+    assert r.returncode == 1 and "section:weak-points" in failed(p), r.stdout
+
+
+def test_the_questions_of_a_pages_board_follow_the_rules_of_every_board(tmp_path):
+    p = pages_project(tmp_path)
+    mutate(board_of(p, 3), '<li data-option="a" data-recommended="true"><label><input type="radio" name="q2"', '<li data-option="a"><label><input type="radio" name="q2"')
+    r = lint3(p)
+    assert r.returncode == 1 and "question:2:options" in failed(p), r.stdout
+
+
+def test_min_directions_is_not_used_on_a_pages_board(tmp_path):
+    p = pages_project(tmp_path)
+    assert lint3(p, "--min-directions", "3").returncode == 0
+    assert rows(p)["directions:count"]["status"] == "info" and "not used" in detail(p, "directions:count")
+
+
+def test_a_pages_board_waits_for_the_gates_of_the_site_round(tmp_path):
+    p = pages_project(tmp_path)
+    mutate(p / "BRAND-STATE.md", "tier: standard", "tier: quick")
+    r = lint3(p)
+    assert r.returncode == 1 and "site:tier" in failed(p), r.stdout

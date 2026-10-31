@@ -379,12 +379,17 @@ SITE_FROM_REFS = "The Ledger group of the references board: its structure and it
 
 
 def fill_site_board(template: str, names: tuple[str, ...] = ("Ledger", "Atlas"), *, rnd: int = 2, first: bool = True, stage: str = "hero", checks: dict | None = None,
-                    colds: dict | None = None, layouts: dict | None = None, from_refs: dict | None = None, reflex: dict | None = None, brand: str = "Acme") -> str:
+                    colds: dict | None = None, layouts: dict | None = None, from_refs: dict | None = None, reflex: dict | None = None, brand: str = "Acme",
+                    pages: tuple[str, ...] = ("start", "pricing"), hero: str = "Ledger", choices: tuple | None = None) -> str:
     """The site board template as a finished page that must pass board-lint: the variant article repeated once per name and every [[fill: ...]] marker outside an HTML comment replaced with stand-in
     text. `first` is the first board of its stage, which does without the two blocks a later one needs (What changed, Weak points); `stage` is the data-site-stage; `checks` maps a variant name to the
     check line of its card (pass or fail, default pass), `colds` to its cold line (ship or fix, default ship), `layouts` to its layout id (default walkthrough), `from_refs` to its Takes from line
-    (default SITE_FROM_REFS) and `reflex` to its reflex line (default "no hits"). The folders, the stills, the reports and the cold reviews of the variants are the test's to make."""
+    (default SITE_FROM_REFS) and `reflex` to its reflex line (default "no hits"). The folders, the stills, the reports and the cold reviews of the variants are the test's to make.
+    At the pages stage (`stage` "pages") the page cards, the choices and the questions of the pages come from the three comments of the template (see fill_site_pages_board): `pages` are the page ids, `hero`
+    the data-hero, `choices` the choice items; `names` is not used."""
     import re
+    if stage == "pages":
+        return fill_site_pages_board(template, pages, rnd=rnd, first=first, hero=hero, checks=checks, colds=colds, layouts=layouts, from_refs=from_refs, choices=choices, brand=brand)
     m = re.search(r'      <article class="variant".*?</article>\n', template, re.S)
     assert m, "the template has no variant article"
     block = m.group(0)
@@ -402,6 +407,13 @@ def fill_site_board(template: str, names: tuple[str, ...] = ("Ledger", "Atlas"),
     for word, name in zip(("one", "two", "three"), names):
         page = page.replace(f"[[fill: Name {word}]]", name)
     page = page.replace('data-board="site" data-site-stage="hero"', f'data-board="site" data-site-stage="{stage}"', 1)
+    return _finish_site_board(page, first=first, rnd=rnd, brand=brand)
+
+
+def _finish_site_board(page: str, *, first: bool, rnd: int, brand: str) -> str:
+    """The tail of fill_site_board and fill_site_pages_board: the first board of a stage drops What changed and Weak points (and their entries of the table of contents), then every [[fill: ...]] marker
+    outside an HTML comment becomes stand-in text."""
+    import re
     if first:   # the first board of a stage has no earlier board to say what changed since
         for sid in ("what-changed", "weak-points"):
             page, n = re.subn(r'  <!-- OPTIONAL \(required from the second site board of a stage; delete in the first one\) -->\n  <section class="block(?: n)?" id="[a-z]+" data-section="%s">.*?</section>\n\n' % sid, "", page, flags=re.S)
@@ -425,17 +437,68 @@ def fill_site_board(template: str, names: tuple[str, ...] = ("Ledger", "Atlas"),
     return "".join(out)
 
 
+SITE_CHOICES = (("c1", "rule", "The stamp appears once per view", "the stamp appears once per view", "start pricing"),
+                ("c2", "example", "Pricing sits under the stages", "", "start"))   # (id, tag, text, data-source, data-pages): the first rule is the line DECISIONS.md of the test projects holds
+
+
+def fill_site_pages_board(template: str, pages: tuple[str, ...] = ("start", "pricing"), *, rnd: int = 3, first: bool = True, hero: str = "Ledger", checks: dict | None = None,
+                          colds: dict | None = None, layouts: dict | None = None, from_refs: dict | None = None, choices: tuple | None = None, brand: str = "Acme") -> str:
+    """The site board template at the pages stage as a finished page that must pass board-lint: the "variants" section becomes the pages section of the template's second comment (one article per id of
+    `pages`), the choices section of its first comment goes in before My call, the questions of its third comment replace question 1, and <body> says data-site-stage="pages" and data-hero. `checks` maps a
+    page id to its check line (pass or fail, default pass); `layouts` to its layout id (default walkthrough); `colds` to its cold line (ship or fix): a page not in `colds` has no cold line (it is optional on
+    a page); `from_refs` to its Takes from line (default the hero's structure; None leaves the line out); `choices` is a tuple of (id, tag, text, data-source, data-pages or None) like SITE_CHOICES. The folders,
+    the stills, the reports and the cold reviews of the pages are the test's to make."""
+    import re
+    got_choices = re.search(r'  <!-- PAGES STAGE, the choices .*?\n(  <section class="block n" id="choices".*?  </section>)\n  -->\n', template, re.S)
+    got_pages = re.search(r'  <!-- PAGES STAGE, the pages .*?\n(  <section class="block n" id="pages".*?  </section>)\n  -->\n', template, re.S)
+    got_questions = re.search(r'  <!-- PAGES STAGE, the questions .*?\n(      <li data-section="question" data-n="1">.*?</ol></li>)\n  -->\n', template, re.S)
+    assert got_choices and got_pages and got_questions, "the template has no three PAGES STAGE comments"
+    block = re.search(r'      <article class="page".*?</article>\n', got_pages.group(1), re.S)
+    assert block, "the pages comment has no page article"
+
+    def card(b: str, pid: str) -> str:
+        b = b.replace("[[fill: page id]]", pid).replace('data-check="[[fill: pass or fail]]"', f'data-check="{(checks or {}).get(pid, "pass")}"').replace("[[fill: layout id]]", (layouts or {}).get(pid, "walkthrough"))
+        text = (from_refs or {}).get(pid, "The structure and the rhythm of the hero, never the look of a reference.")
+        if text is None:
+            b, n = re.subn(r'          <dt>Takes from</dt><dd data-field="from-refs">.*?</dd>\n', "", b)
+            assert n == 1
+        else:
+            b = re.sub(r'(data-field="from-refs">)\[\[fill:[^\]]*\]\]', lambda mm: mm.group(1) + text, b)
+        if pid in (colds or {}):
+            b = b.replace('data-cold="[[fill: ship or fix]]"', f'data-cold="{colds[pid]}"').replace("<b>[[fill: ship or fix]]</b>", f"<b>{colds[pid]}</b>")
+            b = re.sub(r"\[\[fill: OPTIONAL: its first finding[^\]]*\]\]", "The first screen says what only this brand could say.", b)
+        else:
+            b, n = re.subn(r'        <p class="cold" data-cold=.*?</p>\n', "", b)
+            assert n == 1
+        return b
+
+    section = got_pages.group(1).replace(block.group(0), "".join(card(block.group(0), pid) for pid in pages)) + "\n"
+    items = "".join(f'      <li data-choice="{c}" data-tag="{t}" data-source="{src}"' + (f' data-pages="{pg}"' if pg is not None else "") + f">{text}</li>\n"
+                    for c, t, text, src, pg in (choices if choices is not None else SITE_CHOICES))
+    chosen, n = re.subn(r"    <ul>\n.*?    </ul>\n", lambda mm: "    <ul>\n" + items + "    </ul>\n", got_choices.group(1) + "\n", flags=re.S)
+    assert n == 1
+    page, n = re.subn(r'  <section class="block n" id="variants">.*?</section>\n', lambda mm: section, template, count=1, flags=re.S)
+    assert n == 1, "the template has no variants section"
+    page = page.replace('<li><a href="#variants">Heroes</a></li>', '<li><a href="#pages">Pages</a></li>', 1).replace("<li><a href=\"#call\">My call</a></li>", '<li><a href="#choices">Choices</a></li><li><a href="#call">My call</a></li>', 1)
+    page, n = re.subn(r"(  <!-- With a judge: add data-judge)", lambda mm: chosen + "\n" + mm.group(1), page, count=1)
+    assert n == 1
+    page, n = re.subn(r'      <li data-section="question" data-n="1" data-lists="variants">.*?</ol></li>\n', lambda mm: got_questions.group(1) + "\n", page, count=1, flags=re.S)
+    assert n == 1, "the template has no hero question"
+    page = page.replace('data-board="site" data-site-stage="hero"', f'data-board="site" data-site-stage="pages" data-hero="{hero}"', 1)
+    return _finish_site_board(page, first=first, rnd=rnd, brand=brand)
+
+
 SITE_VIEWS = (("1440-light", 1440, 900, "light"), ("1440-dark", 1440, 900, "dark"), ("390-light", 390, 844, "light"), ("390-dark", 390, 844, "dark"))   # the four first screens `capture <page>` takes
 
 
-def page_check_report(p: Path, page: str, status: str = "pass", tells: tuple[str, ...] = ()) -> Path:
+def page_check_report(p: Path, page: str, status: str = "pass", tells: tuple[str, ...] = (), also: tuple[str, ...] = ()) -> Path:
     """The report `brand-creator page-check <page>` writes for a page of the project, made by hand so that no browser is needed: group 1's Report class under group 1's name for it
-    (pagecheck.report_tool), its inputs the page and the built tokens' stylesheet, `target` at the top level as page_check.py puts it, one tell:<id> row for each tell of page-tells.json (a
+    (pagecheck.report_tool), its inputs the page and the built tokens' stylesheet (and the project files named in `also`: a real report lists BRAND-STATE.md, qa/rules.json and FACTS.md too), `target` at the top level as page_check.py puts it, one tell:<id> row for each tell of page-tells.json (a
     warning for each id in `tells`, a pass for the others) and, for status "fail", a failing page:load row, for "not-verified" a skipped one. -> the report's path."""
     import _common
     import pagecheck
     assert status in ("pass", "fail", "not-verified"), status
-    rep = _common.Report(pagecheck.report_tool(page), p, [p / page, p / "assets" / "tokens" / "tokens.css"], renderer="chromium")
+    rep = _common.Report(pagecheck.report_tool(page), p, [p / page, p / "assets" / "tokens" / "tokens.css", *(p / f for f in also)], renderer="chromium")
     rep.add("page:target", "info", "what was checked", detail=f"project page {page}; widths 390; schemes light")
     if status == "fail":
         rep.add("page:load:390-light", "fail", "the page loads without an error", detail="a request to another origin was stopped: https://example.invalid/x.png")

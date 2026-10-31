@@ -12,6 +12,7 @@ machine-checked part (the `data-section` and `data-field` vocabulary) is defined
 - [Motion board (a round after G3)](#motion-board-a-round-after-g3)
 - [Website references board (after G4)](#website-references-board-after-g4)
 - [Site board (a round after G4w)](#site-board-a-round-after-g4w)
+- [Site board, pages stage (after the owner picked a hero)](#site-board-pages-stage-after-the-owner-picked-a-hero)
 - [Per-direction cells](#per-direction-cells)
 - [Territory card (round 2+ and resets)](#territory-card-round-2-and-resets)
 - [Generation prompts](#generation-prompts)
@@ -204,12 +205,12 @@ One folder per variant of the hero stage, `rounds/r<N>/<name>/`, made before the
 The card, an element with `data-site-variant="<name>"` (a word, never a label such as "Variant 2", also the name of the folder), holds the four stills of the first screen (`<img data-field="still" data-view="1440-light|1440-dark|390-light|390-dark">`),
 the live link (`<a data-field="live" href="<name>/index.html">`), a check line (`data-check="pass|fail"` and its text), `data-field="what-it-is"`, `"from-refs"` (the group of the references board, or the owner's site, the structure is taken from:
 never their look) and `"cost"`, the tells found and the reflex line (`data-field="tells"`, `"reflex"`), the layout line (`data-field="layout"` with the `data-layout` the page declares), a cold line (`data-cold="ship|fix"`) and a vote (`<fieldset data-vote="<name>">`).
-There is no `positioning-map`, `strategy-core`, `today`, `losers`, `none-of-these` or `direction` section. A commented-out `choices` section waits in the template for the pages stage.
+There is no `positioning-map`, `strategy-core`, `today`, `losers`, `none-of-these` or `direction` section. The pages stage has its own cards and a `choices` section (see "Site board, pages stage" below).
 
 `board-lint` gives these rows: `site:tier` (Standard or Full), `site:brief` (the brief lists a site), `site:g4` (G4 is recorded), `site:g4w` (the pick, or the skip, is recorded; a pick has its references board), `site:variants` (2 or 3 variants on the
 first hero board, a word for each name), `site:files` (each variant's folder, spelt as the card spells it, letter case included; its `index.html`; the `<body>` declaring `data-layout` and `data-page`; the live link), `site:layout` (the page's layout is a
 layout reference, or `own:<word>` with a warning, and the card says the same), `site:fields` (What it is, Takes from and Cost are filled in), the section rows and `page:data-board`, which fails a site board in round 0 or 1 or in a round listed in
-`reset_rounds`. At the pages stage the lint does not read the page cards, the picked hero or the choices yet: `site:pages-stage` is "not verified" (exit 3). The lint report lists `brief/BRIEF.md`, the references board G4w stands on and the
+`reset_rounds`. The pages stage is read by its own rows (see "Site board, pages stage" below). The lint report lists `brief/BRIEF.md`, the references board G4w stands on and the
 `index.html` of each variant among its inputs, so a changed file makes it stale.
 
 Each variant brings its proof before the board is shown. Run `brand-creator page-check rounds/r<N>/<name>/index.html` and `brand-creator capture rounds/r<N>/<name>/index.html` on the page as it is, then write the card from what they found; a change to the page, to `tokens.css` or to a file the page loads makes both stale.
@@ -225,6 +226,26 @@ hits nor names as a near miss: argue it on the card, or change the page. `site:r
 (a whole word, any letter case; what the record says after `dislikes` is not a pick); a skip in the owner's words makes it an info row. `site:cold` reads `rounds/r<N>/<name>/cold-review.md` of each hero: its first line is `verdict: ship` or `verdict: fix`, it has a `by:` line, its `inputs:` list is exactly the
 four stills, `brief/BRIEF.md` and `FACTS.md` with the sha256 each had when the review was made (the page, its stills, the brief or the facts changed since: review again), it has at most five findings, and the card's cold line (`data-cold`) says the same
 verdict. A `fix` shown as `fix` is honest and passes. The prompt for the review is in [prompt-fragments.md](prompt-fragments.md) (**Review**). The lint report lists `FACTS.md`, `research/site-cliches.md` and each `cold-review.md` among its inputs.
+
+## Site board, pages stage (after the owner picked a hero)
+
+`<body data-round="N" data-board="site" data-site-stage="pages" data-hero="<name>">`, the same template with the three comments at its end put to use: the pages section in place of the variants, the choices section after Weak points, and two questions in place of "Which hero goes forward?".
+`data-hero` is the name of the variant card, on a hero board of an earlier round, that the owner picked (or combined into a new variant): hero first. The gates, the sections and the vote groups are those of the hero stage.
+
+One folder per page, `rounds/r<N>/<id>/`, made before the board, with the files of a variant's folder (`index.html` declaring `data-layout` and `data-page`, `shots/` from `brand-creator capture`, and `cold-review.md` if the page was read cold). The page id is lowercase letters, digits and `-`
+(2 to 32 characters, starting with a letter: `start` for the home page, `pricing`), and the same in three places: the folder, the card's `data-site-page` and `<body data-page>`.
+
+| Section or card | When | What it holds |
+|---|---|---|
+| one card per page (`data-site-page="<id>"`) | always, at least one | the four stills, the live link, the check line, What it is, Cost, the tells line, the layout line and a vote, as a variant's card; Takes from and the cold line are optional; no reflex line |
+| `choices` | always | every structural and visual choice the pages make, one `<li data-choice="c1" data-tag="rule\|example" data-source="..." data-pages="start pricing">` each |
+
+A **rule** is a choice the owner decided and the brand keeps: its `data-source` quotes, word for word, the line of `BRAND-STATE.md`, `DECISIONS.md` or `decisions/*.md` where they decided it, so write the decision down first. An **example** may change and needs no source. The questions ask the owner to approve the pages and to confirm the tags.
+`data-pages` names the pages a choice applies to (all of them, when the attribute is left out). The board is written in the owner's language like every board.
+
+`board-lint` gives these rows on top of the gates and the sections: `site:hero-first` (a hero board came before, and `data-hero` names one of its variant cards), `site:pages` (at least one page card; its id is a page id, unique, and the same as the page's `data-page`), the rows of the hero cards that fit a page (`site:files`, `site:layout`, `site:fields` with Takes from only where the card has the line,
+`site:check`, `site:tells`, `site:stills`; `site:cold` only for a page that has a cold review) and `site:choices` (an id `c1`, `c2` ..., unique; some text; a tag; a rule's source found in `BRAND-STATE.md`, `DECISIONS.md` or `decisions/*.md`; `data-pages` naming only pages of this board), and `section:choices`.
+There are no reflex rows and no `site:refs` on a page: the hero carried them. The lint report lists the hero board, `DECISIONS.md`, `decisions/*.md` and each page's `index.html` among its inputs.
 
 ## Per-direction cells
 
