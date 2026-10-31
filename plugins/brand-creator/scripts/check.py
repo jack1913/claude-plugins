@@ -340,9 +340,7 @@ def site_check_state(project: Path, page: str) -> tuple[str, str]:
     if not any(isinstance(r, dict) and r.get("path") == page for r in doc.get("inputs", [])):
         return "skipped", f"not verified: {tool} report does not list {page} among the files it was made from, so a change to the page would not show; re-run `{cmd}`"
     if st == "skipped":   # current and no verdict: say which rows it could not verify, as board-lint does of a variant
-        rows = [r for r in (doc.get("results") if isinstance(doc.get("results"), list) else []) if isinstance(r, dict) and r.get("status") == "skipped"]
-        said = " | ".join(f"{r.get('id')}: {siteboard.one_line(r.get('detail', ''))}" for r in rows[:3]) + (f" | and {len(rows) - 3} more" if len(rows) > 3 else "")
-        return "skipped", f"not verified: {tool} report status is {doc.get('status')!r}, not a verdict ({said or 'it lists no row that is not verified'}); change the page or the setup as the rows say, then run `{cmd}`"
+        return "skipped", f"not verified: {tool} report status is {doc.get('status')!r}, not a verdict ({siteboard.unverified_said(doc)}); change the page or the setup as the rows say, then run `{cmd}`"
     return st, detail
 
 

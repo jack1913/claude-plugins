@@ -374,6 +374,14 @@ def target_words(target) -> str:
     return f"{target.get('kind')} {target.get('page') or target.get('url') or target.get('from')}"
 
 
+def unverified_said(doc: dict) -> str:
+    """For a page-check report that is no verdict: up to three of its not-verified rows (`<id>: <detail>`, each on one line), or that it lists none. One wording for board-lint (the report of a variant's
+    page) and `check` (the report of an approved page in site/)."""
+    rows = [r for r in (doc.get("results") if isinstance(doc.get("results"), list) else []) if isinstance(r, dict) and r.get("status") == "skipped"]
+    said = " | ".join(f"{r.get('id')}: {one_line(r.get('detail', ''))}" for r in rows[:3]) + (f" | and {len(rows) - 3} more" if len(rows) > 3 else "")
+    return said or "it lists no row that is not verified"
+
+
 def check_problems(project: Path, v: SiteVariant) -> tuple[list[str], dict | None]:
     """site:check for one variant -> (the problems, the report when it is a current verdict, else None). The report of its page (`brand-creator page-check <page>`, found by the page's path) is there, it is the
     report of this very page of the project, it is current, and it is a verdict (pass or fail); the check line of the card (data-check) says that status and has text. A failing check shown as `fail` is honest and passes."""
@@ -391,9 +399,7 @@ def check_problems(project: Path, v: SiteVariant) -> tuple[list[str], dict | Non
         if stale:
             problems.append(f"{v.name}: the page-check report is stale ({shown(stale, 3)}): run `{cmd}`")
         elif doc.get("status") not in ("pass", "fail"):
-            rows = [r for r in (doc.get("results") if isinstance(doc.get("results"), list) else []) if isinstance(r, dict) and r.get("status") == "skipped"]
-            said = " | ".join(f"{r.get('id')}: {one_line(r.get('detail', ''))}" for r in rows[:3]) + (f" | and {len(rows) - 3} more" if len(rows) > 3 else "")
-            problems.append(f"{v.name}: the page-check report is {doc.get('status')!r}, not a verdict ({said or 'it lists no row that is not verified'}): change the page or the setup as the rows say, then run `{cmd}`")
+            problems.append(f"{v.name}: the page-check report is {doc.get('status')!r}, not a verdict ({unverified_said(doc)}): change the page or the setup as the rows say, then run `{cmd}`")
         else:
             verdict, status = doc, doc["status"]
     lines = [n for n in v.card.walk() if "data-check" in n.attrs]
