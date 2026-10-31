@@ -12,6 +12,9 @@ on BRAND-STATE.md (incumbent, reset_rounds, tier, architecture, inventory, gates
 listed in reset_rounds; motion: a round from 2 on, after G3, that tries the signature move as variants; see scripts/CONTRACT.md).
 A motion board is no pick, style, reset or rejected round: it has its own rows (motion:g3, motion:off, motion:variants, motion:files, motion:proof,
 motion:stills, motion:fields, and the warning motion:timelines; boardlib/motionboard.py), the kept masters are not measured on it, and the style gate never counts it.
+A website references board (site-refs: a round from 2 on, in the Standard and Full tiers, after G4, when brief/BRIEF.md lists a site) is no pick, style, reset or rejected round either, and the style gate never counts it. It has the rows
+site-refs:tier, site-refs:brief, site-refs:g4, site-refs:research and site-refs:cliches-file (boardlib/siteboard.py), the sections visitor-job, norm, owner-sites, site-cliches, none-of-these, my-call, questions and reply,
+and groups:count (4 to 6 groups of sites: fewer fails, more warns).
 A pick board also gets, for each direction, direction:<name>:reflex-format|reflex-ids|reflex-count|reflex-grounded and, across directions,
 directions:reflex-shared (the rules are in boardlib/reflex.py): two hits in one direction, or one hit that every direction shares, fail; a free-text line,
 an unknown id or an argument that shares no word with FACTS.md or brief/BRIEF.md warns. When the my-call section says data-judge="ran", each direction
@@ -38,11 +41,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "marklib"))
 from _common import (EXIT_USAGE, CliError, Parser, Report, add_project_arg, confine, fail, find_project, gate_recorded,  # noqa: E402
                      list_rounds, main_guard, read_state, rel)
 import svgtools  # noqa: E402
-from boardpage import (DATA_IMAGE, FILL, GENERIC_NAME, KINDS, MIN_TERRITORIES, PLACEHOLDER, WORD_NAME, Node, declared_round,  # noqa: E402
-                       is_style_board, page_kind, parse_dom, read_page, sections, territory_count)
+from boardpage import (DATA_IMAGE, FILL, GENERIC_NAME, KINDS, MIN_GROUPS, MIN_TERRITORIES, PLACEHOLDER, WORD_NAME, Node, declared_round,  # noqa: E402
+                       group_count, is_style_board, page_kind, parse_dom, read_page, sections, territory_count)
 import divergence  # noqa: E402
 import motionboard  # noqa: E402
 import reflex  # noqa: E402
+import siteboard  # noqa: E402
 from _color import parse_hex, wcag_ratio  # noqa: E402
 from marks import ground_contacts, ground_target, outline_width, tokens_ground  # noqa: E402
 
@@ -120,7 +124,7 @@ def style_rearmed(project: Path, rnd: int, reset_rounds: list[int], g1s_round: i
     asks. G1s must have been recorded when that round or a later style board was on disk (g1s_round, written by `state --record G1s`).
     Returns (ok, detail)."""
     pages = {n: read_page(path / "board.html") for n, path in list_rounds(project) if n < rnd}
-    pages = {n: root for n, root in pages.items() if page_kind(root) != "motion"}   # a motion round is not a round the owner rejected, and no style board lies in it
+    pages = {n: root for n, root in pages.items() if page_kind(root) not in ("motion", "site-refs")}   # a motion round or a website references round is not a round the owner rejected, and no style board lies in it
     last = max((n for n, root in pages.items() if page_kind(root) != "style"), default=-1)
     declared = [n for n, root in pages.items() if page_kind(root) == "style" and n > last and n in reset_rounds]
     styles = [n for n in declared if is_style_board(pages[n], n)]
@@ -270,8 +274,12 @@ def main() -> int:
     style_round = rnd == 0 or rnd in reset_rounds   # the style research runs before round 1, and again after a full rejection
     kind = page_kind(root)
     if kind not in KINDS:
-        rep.add("page:data-board", "fail", "page declares its kind", detail='<body data-board="pick|refine|style|motion"> is missing or invalid')
+        rep.add("page:data-board", "fail", "page declares its kind", detail='<body data-board="pick|refine|style|motion|site-refs"> is missing or invalid')
         kind = "pick" if map_round else "refine"
+    elif kind == "site-refs" and (rnd < 2 or rnd in reset_rounds):
+        rep.add("page:data-board", "fail", "page declares its kind",
+                detail=("a website references board is a round of its own from round 2 on (round 0 is the style board, round 1 the first pick board)" if rnd < 2 else
+                        f"round {rnd} is listed in reset_rounds: a style board or a pick board belongs there; a website references board is a round of its own from round 2 on"))
     elif kind == "motion" and (rnd < 2 or rnd in reset_rounds):
         rep.add("page:data-board", "fail", "page declares its kind",
                 detail=("a motion board is round 2 or later (round 0 is the style board, round 1 the first pick board)" if rnd < 2 else
@@ -447,8 +455,31 @@ def main() -> int:
         need("reply", True, "how to answer: a variant name or letter and one sentence")
         motionboard.variant_rows(rep, project, rnd, root, page, first)
 
+    def check_site_refs(rnd: int) -> None:
+        """A website references board (data-board="site-refs"): the gates of the site work (boardlib/siteboard.py), the sections every board has, the sections of its own, and 4 to 6 groups of sites.
+        No map, no directions, no kept masters; the group rows (the references of each group) come with the page rules of the groups."""
+        siteboard.refs_gate_rows(rep, project)
+        if a.min_directions:
+            rep.add("directions:count", "info", "not required here", detail="a website references board shows groups of sites, not directions; --min-directions is not used")
+        need("visitor-job", True, "who visits, the job they came to do and the one action that serves it")
+        need("norm", True, "what most sites in the category do")
+        need("owner-sites", True, "the sites the owner likes and dislikes, or one line saying they named none")
+        need("site-cliches", True, "the category's site clichés")
+        need("none-of-these", True, "the way out: none of these, research again")
+        check_my_call()
+        check_questions(need("questions", True, "numbered questions with lettered options, answerable by number from a phone"))
+        need("reply", True, "how to answer: a group name or letter and one sentence")
+        counted = group_count(root)   # named, with content: the same count as is_site_refs_board's
+        rep.add("groups:count", "fail" if counted < MIN_GROUPS else "warn" if counted > 6 else "pass", "enough groups of sites",
+                detail=(f"{counted} found with a name and content, need at least {MIN_GROUPS} (and 6 at most is the aim)" if counted < MIN_GROUPS else
+                        f"{counted} found with a name and content: more than 6 is a menu, not a choice; cut to the 6 that differ most in how they serve the job" if counted > 6 else
+                        f"{counted} found with a name and content"))
+
     if kind == "style":
         check_style(rnd)
+        return rep.finish()
+    if kind == "site-refs":
+        check_site_refs(rnd)
         return rep.finish()
     if kind == "motion":
         check_motion(rnd)

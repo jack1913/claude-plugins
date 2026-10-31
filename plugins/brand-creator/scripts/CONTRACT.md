@@ -119,6 +119,7 @@ fontTools, Brotli and skia-pathops (`outline_glyphs.py`, `fontcheck.py`), Pillow
   BRAND-STATE.md  FACTS.md  brief/BRIEF.md
   research/research.md  research/YYYY-MM-DD-<topic>.md  research/positioning-map.md   P1 output (templates/research.md)
   research/cliches.md              (optional; "Forbidden" bullets feed the FORBIDDEN count in shots; templates/cliches.md)
+  research/site-cliches.md         (the website references: the category's site clichés under "Avoid unless argued", no Forbidden section; templates/site-cliches.md)
   research/names/<date>-check.md  research/names/<date>-verdict.md  research/names/raw/<date>/run-<n>/   P2 (names, brand-naming)
   INVENTORY.md                     P1c surface inventory (templates/INVENTORY.md); board-lint needs it in Full / product-in-family
   rounds/r0/board.html             round 0: the style board (P1s, from templates/style-board.html); no mark is drawn in it
@@ -127,6 +128,7 @@ fontTools, Brotli and skia-pathops (`outline_glyphs.py`, `fontcheck.py`), Pillow
                                    exported from them, and where they came from (templates/SOURCE.md; drawing-engines.md)
   rounds/r<N>/<variant>/           a motion round (data-board="motion", templates/motion-board.html; see Board contract): one folder per variant with index.html (the move where it
                                    will be seen), proof.json (a page case named <variant>) and frames/<variant>/ (the stills `frames` took of it)
+  rounds/r<N>/board.html           a website references round (data-board="site-refs", templates/site-refs-board.html; see Board contract): groups of real sites, from round 2 on
   brief/canvas-round-<N>.md        the drawing brief of round N (templates/canvas-brief.md)
   .design/<slug>/                  the use-llm design canvas, when the drawing session starts in the project folder
   research/YYYY-MM-DD-style.md  research/style-thumbs/   P1s notes behind the style board and the reference marks it shows as thumbnails
@@ -305,7 +307,7 @@ carry them; a required section that is missing, empty or a placeholder (`TODO`, 
 `[[fill: ...]]` left anywhere in text or attribute values fail the page (`page:unfilled`); HTML comments are ignored,
 so optional blocks can wait in comments.
 
-Page: `<body data-round="N" data-board="pick|refine|style|motion">`. `data-round` must equal the folder `rounds/rN/` (catches a copied
+Page: `<body data-round="N" data-board="pick|refine|style|motion|site-refs">`. `data-round` must equal the folder `rounds/rN/` (catches a copied
 page that was not updated). Round 1 must be a `pick` board. Round 0 is always the style board (`data-board="style"`,
 `rounds/r0/board.html`, from `templates/style-board.html`), and a round listed in `reset_rounds` holds either a style board or a
 pick board: after a full rejection the style research runs again on a new style board (required, never skipped), and the round after
@@ -493,6 +495,41 @@ not used (an info row says so). Each row is one result for the whole board and n
 `page:data-board` also fails a motion board in round 0 or 1 or in a round listed in `reset_rounds`. The `inputs` of the lint report are the page, `motion/motion.json` when it exists (`motion:off` reads it, so an answer changed after the lint makes the report stale) and, of each variant, `proof.json`, `index.html`, `frames.json`, the strip, the reduced still, the motion report and the frames report, and every file those two reports were made from (their own `inputs`:
 the files the page loaded, such as a stylesheet, `tokens.css` or a script, where the move may live), so `check` calls the report stale ("not verified") as soon
 as one of them changes: take the stills and the proofs first, lint, and shoot the board last (`shot` writes `assets/_checks/shot.json` for one page, and `check` wants the one of `rounds/r<latest>/board.html`).
+
+### The website references board (`data-board="site-refs"`)
+
+A website references round shows the owner groups of real sites to learn from, before any page of the site is built. It runs in the Standard and Full tiers, after G4, and only when `brief/BRIEF.md` lists a site; the owner's
+pick of a group is gate G4w. It is a round from 2 on: `rounds/rN/board.html`, from `templates/site-refs-board.html` (built on the frame of `templates/style-board.html`: the same tokens, header, theme switch, questions and reply).
+A website references board is no pick, style, reset or rejected round: the map and the style-round logic, `reset_rounds`, the kept masters and the style re-arming of a later pick board ignore it (the round "rejected" before a reset is never a
+references round), and a references board in round 0 or 1, or in a round listed in `reset_rounds`, fails `page:data-board` ("a website references board is a round of its own from round 2 on"). Its rows are in
+`scripts/boardlib/siteboard.py` (outside `scripts/lib/`, like `boardpage.py`), which also reads the brief; `boardpage.py` counts the groups (`is_site_refs_board`: the page declares `site-refs` and the round of its own folder, and holds at least four named
+groups with content, as a style board is counted by its territories).
+
+| `data-section` | required | notes |
+|---|---|---|
+| `visitor-job` | yes | who visits, the job they came to do, the one action that serves it; non-empty |
+| `norm` | yes | what most sites in the category do; non-empty |
+| `owner-sites` | yes | the sites the owner likes and dislikes (the template gives each an `<li data-like="like\|dislike">` with a link and `data-field="why"`), or one line saying the owner named none; non-empty |
+| `group` (repeat) | 4 to 6 (`groups:count`) | `data-name` (a word) and content beyond a heading: a group without a name or without content is not counted; the template gives each group a `data-field="idea"`, a `data-field="references"` list of three sites (a link, a screenshot `<img data-field="shot">`, `data-field="take"`, `data-field="avoid"`) and a vote |
+| `site-cliches` | yes | the category's site clichés, as in `research/site-cliches.md`; non-empty |
+| `none-of-these` | yes | the way out: research again |
+| `my-call` | yes | `data-field="recommendation"` and `data-field="critique"` (and the judge panels when `data-judge="ran"`) |
+| `questions` | yes | the same rules as every board; question 1 (which groups) is multi-pick: checkboxes in a question marked `data-multi="true"`, and the reply lists every ticked group |
+| `reply` | yes | |
+
+Hardest surface, directions, the positioning map, the strategy core, reflex lines, the incumbent "Today" and the kept masters are not asked of a references board; `--min-directions` is not used (an info row `directions:count` says so). The
+`[[fill: ...]]` marker rule and `page:votes` apply as on every board (a group's vote is `<fieldset data-vote="<name>">`, its radios named `vote-<name>`).
+
+| row | fails when |
+|---|---|
+| `site-refs:tier` | the tier is not `standard` or `full` ("the site work is Standard and Full") |
+| `site-refs:brief` | `brief/BRIEF.md` does not list a site on its `Required surfaces:` line (the first such line, in any letter case, the label bold or not). The value is read against a word list in English and Polish: `site`, `website`, `microsite`, `web page`, `landing page`, `www`, `strona` (with its endings, never `strong`) and `witryna` (with its endings). A value wrapped in parentheses is the untouched line of the template, "(site, app icon, ...)", and does not count; a brief in another language needs the word `site` on that line. The detail names the line it read |
+| `site-refs:g4` | G4 is not recorded ("website references come after the system rules (G4)") |
+| `site-refs:research` | `site_research` in `BRAND-STATE.md` is `auto` or missing: the owner has not answered the online-research question (`state --set site_research=online\|links-only\|none`); each of the three answers passes, `none` included (the owner sends screenshots) |
+| `site-refs:cliches-file` | `research/site-cliches.md` is missing, or holds fewer than three bullets under `## Avoid unless argued` that are not a placeholder such as `(...)` |
+| `groups:count` | fewer than four groups count (a warning, never a failure, above six: "more than 6 is a menu, not a choice") |
+
+The `inputs` of the lint report are the page, `brief/BRIEF.md` and `research/site-cliches.md` when they exist, so a changed brief or cliché list makes the report stale.
 
 ## Hook guard
 
