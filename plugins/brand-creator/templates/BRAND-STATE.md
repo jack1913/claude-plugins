@@ -12,6 +12,7 @@ content_languages: ""          # language set code(s) the brand's own text is wr
 renderer: resvg                # off macOS, after the owner agrees: resvg (opted in YYYY-MM-DD)
 review_surface: auto           # auto (not answered yet: boards stay local until the owner answers the one upload question) | artifact | local
 review_url: ""                 # the one stable review page (Artifact URL or local path)
+site_research: auto            # online research for website references: auto (not asked yet) | online | links-only | none
 incumbent: none                # none, or one line about today's mark or site; a set value makes the "today" board section required
 inventory: ""                  # path to INVENTORY.md, or: none (no target repo). Required before the first board in the Full tier or product-in-family.
 edition: 1                     # the brand book's edition (a whole number); a new edition needs a new G5 approval
@@ -29,6 +30,8 @@ gates:                         # date + decision, written by: brand-creator stat
   G2b: ""                      # reset or recover decision (only when used)
   G3: ""                       # refined approval (the approved round is frozen)
   G4: ""                       # system rules
+  G4w: ""                      # website references pick (or "skipped by owner"); the site round waits for it
+  G4p: ""                      # the site's reference pages approved (site approve needs it)
   G5: ""                       # pack and book
   G6: ""                       # adoption
   G7: ""                       # outward actions

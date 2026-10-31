@@ -956,7 +956,8 @@ def test_the_0_3_0_changelog_tells_the_last_fixes_and_what_an_older_project_sees
 
 def test_stale_pointers_name_the_style_step_in_the_contract_the_tier_page_and_the_state_template():
     contract = _flat(ROOT / "scripts" / "CONTRACT.md")
-    assert "gates (G0 G1 G1s G2 G2b G3 G4 G5 G6 G7)" in contract and "gates (G0 G1 G2 G2b" not in contract
+    assert "gates (G0 G1 G1s G2 G2b G3 G4 G4w G4p G5 G6 G7)" in contract and "gates (G0 G1 G2 G2b" not in contract
+    assert "site_research (auto|online|links-only|none: the owner's answer to online research for website references;" in contract
     assert "rounds/r0/board.html" in contract and "research/style-thumbs/" in contract
     # the state key, the lint rules and what the image rule checks, said exactly
     for needle in ("`state --record G1s` also writes `g1s_round`: the highest round number whose `rounds/rN/board.html` is a style board at that moment",

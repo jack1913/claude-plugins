@@ -18,7 +18,7 @@ def test_new_scaffolds_a_project(tmp_path):
     st = _common.State(p / "BRAND-STATE.md").data()
     assert st["slug"] == "acme" and st["tier"] == "standard" and st["name"] == 'Acme "Quoted" Co'
     assert st["phase"] == "P0" and st["architecture"] == "standalone"
-    assert list(st["gates"]) == ["G0", "G1", "G1s", "G2", "G2b", "G3", "G4", "G5", "G6", "G7"]
+    assert list(st["gates"]) == ["G0", "G1", "G1s", "G2", "G2b", "G3", "G4", "G4w", "G4p", "G5", "G6", "G7"]
     assert all(v == "" for v in st["gates"].values())
     text = (p / "BRAND-STATE.md").read_text()
     assert "{{" not in text and "## Collaboration" in text and "## Directions" in text
@@ -392,6 +392,72 @@ def test_state_set_accepts_every_documented_value(tmp_path):
             r = bc("state", "--set", f"{key}={v}", project=p)
             assert r.returncode == 0, (key, v, r.stderr)
             assert bc("state", "--get", key, project=p).stdout.strip() == v
+
+
+# ---- the site work's two gates (G4w website references, G4p the site's reference pages) and the site_research answer
+
+def test_state_records_and_requires_the_website_gates(tmp_path):
+    p = make_project(tmp_path)
+    r = bc("state", "--require", "G4p", project=p)
+    assert r.returncode == 1 and "G4p" in r.stderr and "--record" in r.stderr, r.stderr
+    assert bc("state", "--require", "G4w", project=p).returncode == 1
+    r = bc("state", "--record", "G4w", "skipped by owner", project=p)
+    assert r.returncode == 0 and "recorded G4w: 2026-10-17 skipped by owner" in r.stdout, r.stdout + r.stderr
+    r = bc("state", "--require", "G4w", project=p)
+    assert r.returncode == 0 and "G4w: recorded (2026-10-17 skipped by owner)" in r.stdout, r.stdout + r.stderr
+    assert bc("state", "--require", "G4p", project=p).returncode == 1                       # recording one gate leaves the other open
+    out = bc("state", project=p).stdout
+    assert "gates: G0 -  G1 -  G1s -  G2 -  G2b -  G3 -  G4 -  G4w recorded  G4p -  G5 -  G6 -  G7 -" in out, out
+    assert "  G4w: 2026-10-17 skipped by owner" in out
+    assert bc("state", "--record", "G4p", "approved start, pricing", project=p).returncode == 0
+    out = bc("state", project=p).stdout
+    assert "G4 -  G4w recorded  G4p recorded  G5 -" in out
+    assert out.index("  G4w: ") < out.index("  G4p: ")                                         # the detail lines keep the gate order too
+    gates = json.loads(bc("state", "--json", project=p).stdout)["state"]["gates"]
+    assert list(gates) == ["G0", "G1", "G1s", "G2", "G2b", "G3", "G4", "G4w", "G4p", "G5", "G6", "G7"]
+    assert gates["G4p"] == "2026-10-17 approved start, pricing"
+    r = bc("state", "--record", "G4x", "nope", project=p)
+    assert r.returncode == 2 and "G4w, G4p" in r.stderr, r.stderr                           # the refusal lists the gates in order
+    assert bc("state", "--set", "gates.G4w=x", project=p).returncode == 2                   # a gate is only written by --record
+
+
+def test_site_research_takes_only_its_four_answers(tmp_path):
+    p = make_project(tmp_path)
+    assert re.match(r"site_research: auto(\s+#.*)?$", _state_line(p, "site_research")), _state_line(p, "site_research")   # the template starts at "not asked"
+    for answer in ("online", "links-only", "none", "auto"):
+        r = bc("state", "--set", f"site_research={answer}", project=p)
+        assert r.returncode == 0, (answer, r.stderr)
+        assert bc("state", "--get", "site_research", project=p).stdout.strip() == answer
+    assert bc("state", "--set", "site_research=links-only", project=p).returncode == 0
+    before = (p / "BRAND-STATE.md").read_bytes()
+    for bad in ("yes", "offline", "Online", "links_only", ""):
+        r = bc("state", "--set", f"site_research={bad}", project=p)
+        assert r.returncode == 2, (bad, r.stdout, r.stderr)
+        assert "site_research must be one of auto | online | links-only | none" in r.stderr, r.stderr
+        assert (p / "BRAND-STATE.md").read_bytes() == before                                 # nothing written
+    r = bc("state", "--set", "tier=full", "--set", "site_research=yes", project=p)           # one bad value refuses the whole call
+    assert r.returncode == 2 and (p / "BRAND-STATE.md").read_bytes() == before
+
+
+def test_an_older_project_without_the_website_gates_gets_them_on_record(tmp_path):
+    p = make_project(tmp_path)
+    state = p / "BRAND-STATE.md"
+    text = state.read_text(encoding="utf-8")
+    for gate in ("G4w", "G4p"):                                                              # a project made before the site work: no such lines
+        mutate(state, re.search(rf"(?m)^  {gate}:.*\n", text).group(0), "")
+    mutate(state, re.search(r"(?m)^site_research:.*\n", text).group(0), "")
+    assert "G4w" not in state.read_text(encoding="utf-8") and "site_research" not in state.read_text(encoding="utf-8")
+    out = bc("state", project=p)
+    assert out.returncode == 0 and "G4 -  G4w -  G4p -  G5 -" in out.stdout, out.stdout + out.stderr   # it still reads, both gates open
+    assert bc("state", "--require", "G4w", project=p).returncode == 1
+    assert bc("state", "--get", "site_research", project=p).returncode == 1
+    assert bc("state", "--record", "G4w", "skipped by owner", project=p).returncode == 0
+    assert bc("state", "--record", "G4p", "approved start", project=p).returncode == 0
+    assert bc("state", "--set", "site_research=online", project=p).returncode == 0
+    data = _common.State(state).data()
+    assert data["gates"]["G4w"] == "2026-10-17 skipped by owner" and data["gates"]["G4p"] == "2026-10-17 approved start", data["gates"]
+    assert data["site_research"] == "online" and data["gates"]["G3"] == "" and data["gates"]["G5"] == ""
+    assert "G4 -  G4w recorded  G4p recorded  G5 -" in bc("state", project=p).stdout
 
 
 def test_state_set_is_all_or_nothing_when_one_value_is_bad(tmp_path):
