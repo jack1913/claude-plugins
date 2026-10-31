@@ -112,6 +112,15 @@ stage, and why, is in the [archive](docs/archive/README.md).
   stands for>"`: it is not a claim, it is listed in `page:samples` as what to replace before publishing, and the
   report keeps the list as `samples`; a `data-sample` with no label fails. A page in another language than English or
   Polish gets a warning that its status words are not verified (its numbers are still checked).
+- `page-check` now checks the brand mark on a page. Put `data-brand-mark` on the mark's `<img>` or inline `<svg>` (the
+  value may name the logo file, `data-brand-mark="assets/logo/mark.svg"`); an image whose file name says logo, favicon,
+  wordmark, lockup or mark, and any image that is byte for byte a file of `assets/logo/`, is taken for the mark too. The
+  mark has to be a logo file of the project (`page:mark-file`: the same bytes, or for an inline SVG the same drawing,
+  whatever the order of its attributes, its spaces, its title or the size and label it is given); it has to be the
+  drawing your size bands name for the height it is shown at, or that drawing's `-dark.svg` twin (`page:mark-band`);
+  and nothing may stand nearer to it than a quarter of its height (`page:mark-clear-space`; `page.clear_space` in
+  `qa/rules.json` changes the share). A page with no mark gets an info row that says what counts as one, and an inline
+  `<svg>` that draws through `<use>` is reported as not verified, not failed.
 
 ### Changed
 

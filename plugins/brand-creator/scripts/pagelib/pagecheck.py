@@ -12,6 +12,7 @@ version):
 Each family of rows is a function `(rep, measures, ctx)` listed in ROW_CHECKS; a later check (colours, fonts, marks, claims ...) adds its function to
 the list and reads the same Ctx. The rows of the first one, `load_rows`, are `page:load:<width>-<scheme>`; `colour_rows` gives `page:colours:<scheme>` (every colour the page
 paints is a semantic colour of that theme) and `pair_rows` gives `page:pairs:<scheme>` (every text colour on its ground is a declared pair, or measured against WCAG).
+`mark_rows` gives `page:mark-file`, `page:mark-band` and `page:mark-clear-space` (the brand mark on the page is a logo file of the project, the drawing its size calls for, and has its clear space).
 
 `motion_rows` gives `page:motion` (every duration and easing is a motion token), and `claim_rows` gives `page:claims` (every number and status word outside a `data-sample`
 is backed by FACTS.md) and `page:samples` (the before-publishing list, also the report's `samples`).
@@ -26,9 +27,11 @@ import hashlib
 import json
 import math
 import os
+import posixpath
 import re
 import shutil
 import sys
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -811,8 +814,308 @@ def claim_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
                 + _names([f"{s['label']} ({s['text'][:40] or 'no text'}) in {s['selector']}, {s['view']}" for s in samples.values()], NAMED), samples=list(samples.values()))
 
 
-# each (rep, measures, ctx); the later families of rows (fonts, marks, rules, tells) are added here
-ROW_CHECKS = [load_rows, colour_rows, pair_rows, motion_rows, claim_rows]
+# ---------------------------------------------------------------- the mark
+
+LOGO_DIR = "assets/logo"
+LOGO_FILE_MAX = 50 * 1024 * 1024          # a logo file larger than this is not hashed
+SVG_ROOT_LOOSE = frozenset({"width", "height", "class", "style", "id", "role", "focusable", "tabindex"})   # on the root <svg> of an inline mark: how the page sizes, styles and labels it
+SVG_NOT_DRAWN = frozenset({"title", "desc", "metadata"})   # children of an SVG that draw nothing: the accessible name and the file's own notes
+
+
+def _local(name: str) -> str:
+    return name.rsplit("}", 1)[-1]
+
+
+def _canon(el, root: bool = False) -> tuple:
+    attrs = sorted((_local(k), " ".join(str(v).split())) for k, v in el.attrib.items()
+                   if not (root and (_local(k) in SVG_ROOT_LOOSE or _local(k).startswith(("aria-", "data-")))))
+    text, kids = el.text or "", []   # [drawing of a child, the text that follows it]: `Ac<tspan>m</tspan>e` and `Ac<tspan>m</tspan>ZZZ` are two wordmarks
+    for c in el:
+        if isinstance(c.tag, str) and _local(c.tag) not in SVG_NOT_DRAWN:
+            kids.append([_canon(c), c.tail or ""])
+        elif kids:   # a child that draws nothing: the text after it still follows the text before it
+            kids[-1][1] += c.tail or ""
+        else:
+            text += c.tail or ""
+    return (_local(el.tag), tuple(attrs), " ".join(text.split()), tuple((k, " ".join(t.split())) for k, t in kids))
+
+
+def canonical_svg(text) -> tuple | None:
+    """An SVG as what it draws, so that two files that draw the same thing are equal: namespaces and prefixes dropped (`xlink:href` is `href`), attributes sorted, white space
+    collapsed in attribute values and text, comments and the `title`, `desc` and `metadata` elements left out; on the root `<svg>` also `width`, `height`, `class`, `style`, `id`,
+    `role`, `focusable`, `tabindex`, `aria-*` and `data-*` (how a page sizes, styles and labels its copy). `viewBox` and everything inside the root stay. None when the text is not
+    an SVG document this can read (not XML, a DOCTYPE with entities, nested too deep)."""
+    if not isinstance(text, str) or "<!ENTITY" in text:
+        return None
+    try:
+        root = ET.fromstring(re.sub(r"^\s*<\?xml[^>]*\?>", "", text.lstrip("﻿")).strip())
+        return _canon(root, True) if _local(root.tag) == "svg" else None
+    except (ET.ParseError, RecursionError, ValueError):
+        return None
+
+
+def twin_of(path: str) -> str:
+    """The other theme's drawing of a file: `mark.svg` <-> `mark-dark.svg`; any other file is its own twin."""
+    if path.endswith("-dark.svg"):
+        return path[:-len("-dark.svg")] + ".svg"
+    return path[:-len(".svg")] + "-dark.svg" if path.endswith(".svg") else path
+
+
+def _uses_use(canon: tuple) -> bool:
+    """Whether a canonical SVG draws through a `<use>` anywhere (it points at a drawing this does not follow)."""
+    return canon[0] == "use" or any(_uses_use(kid) for kid, _ in canon[3])
+
+
+def project_keys(project: Path, path: str) -> list[str]:
+    """The keys of `logo_files` that a project-relative path written in qa/rules.json (or in `data-brand-mark`) stands for: the file and its `-dark.svg` twin, each as `logo_files` keys
+    it (`./` and `..` folded away, a symlink followed). A path that leads out of the project stands for nothing."""
+    f = project / path.strip()
+    keys = []
+    for name in (f.name, posixpath.basename(twin_of(f.name))):
+        try:
+            keys.append(rel(project, f.with_name(name)))
+        except (ValueError, OSError):
+            continue
+    return keys
+
+
+def logo_files(project: Path, rules: dict) -> dict[str, str]:
+    """Every file the mark on a page may be: all of assets/logo/ and the drawings qa/rules.json names (bands, favicon, marks), each with its `-dark.svg` twin. -> {project-relative
+    posix path: sha256}. A file that leads out of the project through a symlink, or is over LOGO_FILE_MAX, is left out."""
+    named = [b["drawing"] for b in rules.get("bands", [])] + [(rules.get("favicon") or {}).get("drawing", "")]
+    for m in (rules.get("marks") or {}).values():
+        named += [b["drawing"] for b in m["bands"]] + [m.get("favicon", "")]
+    paths = set(p for p in (project / LOGO_DIR).rglob("*") if p.is_file()) if (project / LOGO_DIR).is_dir() else set()
+    for d in named:
+        if isinstance(d, str) and d.strip():
+            f = project / d.strip()
+            paths.update([f, f.with_name(posixpath.basename(twin_of(f.name)))])
+    out: dict[str, str] = {}
+    for f in sorted(paths):
+        try:
+            if f.is_file() and _inside(project, f) and f.stat().st_size <= LOGO_FILE_MAX:
+                out[rel(project, f)] = hashlib.sha256(f.read_bytes()).hexdigest()
+        except OSError:
+            continue
+    return out
+
+
+def identified_marks(view: dict, logo_hashes) -> list[dict]:
+    """The marks of one measured view: what the page marks (`data-brand-mark`), what is named like a logo, and any other image whose bytes are a logo file of the project. Each is the
+    collector's entry plus `by` (attribute, name or bytes) and `sha256` (the bytes seen: render.mjs hashed a file of the page's own origin, the collector a data: URL; None when
+    they were not seen). Every rule about marks reads them from here."""
+    resources = view.get("resources") or {}
+    out = []
+    for e in list(view.get("marks") or []) + list(view.get("images") or []):
+        if not isinstance(e, dict):
+            continue
+        sha = e.get("sha256") or ((resources.get(e.get("url")) or {}).get("sha256") if e.get("own") else None)
+        by = "attribute" if e.get("marked") else "name" if e.get("named") else "bytes" if sha and sha in logo_hashes else None
+        if by:
+            out.append({**e, "sha256": sha, "by": by})
+    return out
+
+
+def _neighbour(o: dict) -> str:
+    """What stands too near a mark, for a message: its selector and, for a line of text, the words."""
+    return (o.get("nearest") or "a box") + (' "%s"' % o["nearest_text"] if o.get("nearest_text") else "")
+
+
+def _h(mark: dict) -> float | None:
+    """The mark's rendered height in css px: its box, else (a pseudo-element) its computed height."""
+    r = mark.get("rect")
+    h = r.get("height") if isinstance(r, dict) else mark.get("height_px")
+    return float(h) if isinstance(h, (int, float)) and h > 0 else None
+
+
+def _clear_space_row(rep: Report, shown: list, ctx: Ctx) -> None:
+    """page:mark-clear-space: nothing nearer to a shown mark than `page.clear_space` x its rendered height (a share of its box; the gap is the larger of the horizontal and the
+    vertical distance to the nearest other text line, image or SVG, so the free space is a margin round the mark)."""
+    share = float(ctx.rules["page"]["clear_space"])
+    proposed = "page.clear_space" not in ctx.rules.get("_from_file", [])
+    near: dict[tuple, dict] = {}
+    cleared: dict[tuple, dict] = {}
+    unmeasured: dict[str, dict] = {}
+    for v, m in shown:
+        height = _h(m)
+        at = {"selector": m["sel"], "width": v.get("width"), "scheme": v.get("scheme")}
+        if height is None or m.get("rect") is None:
+            unmeasured.setdefault(m["sel"], {**at, "why": "its box cannot be measured (a pseudo-element)"})
+            continue
+        need = round(share * height, 2)
+        o = {**at, "height_px": round(height, 2), "needs_px": need, "nearest_px": m.get("nearest_px"), "nearest": m.get("nearest_sel"), "nearest_text": m.get("nearest_text")}
+        cleared.setdefault((m["sel"], round(height)), o)
+        if m.get("nearest_px") is not None and round(m["nearest_px"], 2) < need:
+            near.setdefault((m["sel"], m.get("nearest_sel"), round(m["nearest_px"])), o)
+    rule = f"{share:g} x the mark's rendered height" + (" (a proposal until qa/rules.json sets page.clear_space)" if proposed else "")
+    extra = {"checked": len(cleared), "clear_space": share, "proposal": proposed, "offenders": list(near.values())[:100], "unverified": list(unmeasured.values())[:100]}
+    if near:
+        rep.add("page:mark-clear-space", "fail", "free space round the mark", detail=f"{len(near)} mark(s) have something nearer than the clear space, {rule}: " + _names([
+            f"{o['selector']} ({o['height_px']:g} px high) has {_neighbour(o)} {o['nearest_px']:g} px away, needs "
+            f"{o['needs_px']:g} px; first seen at {o['width']} px {o['scheme']}" for o in near.values()], NAMED), **extra)
+    elif unmeasured:
+        rep.add("page:mark-clear-space", "warn", "free space round the mark", detail="NOT verified: " + _names([f"{o['selector']}: {o['why']}" for o in unmeasured.values()], NAMED), **extra)
+    else:
+        rep.add("page:mark-clear-space", "pass", "free space round the mark", detail=f"{len(cleared)} mark(s) have the clear space, {rule}: nothing is nearer", **extra)
+
+
+def mark_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
+    """page:mark-file, page:mark-band and page:mark-clear-space: the brand mark on the page.
+
+    A mark is an element with `data-brand-mark`, an image whose file name says it is one (`logo`, `favicon`, `wordmark`, `lockup`, or `mark` as a word), or any image whose bytes are
+    a file of assets/logo/ (see `identified_marks`). Only a mark that is shown is judged.
+    `page:mark-file` fails a mark that is none of the logo files of the project (assets/logo/ and the drawings named in qa/rules.json bands, favicon and marks, with their -dark.svg
+    twins): the bytes of a file, or an inline SVG after canonicalisation (`canonical_svg`). `data-brand-mark="<file>"` also names the file it shows (or its twin).
+    `page:mark-band` fails a banded drawing (one a band of qa/rules.json names, or its twin) that is not the drawing `qa_rules.pick_band` names for the mark's rendered height; a wordmark
+    or lockup is in no band and is not judged. `page:mark-clear-space` fails a mark with another box nearer than `page.clear_space` x its rendered height."""
+    masters = logo_files(ctx.project, ctx.rules)
+    views = [v for v in measures.get("views", []) if isinstance(v, dict) and not v.get("error") and "marks" in v]
+    if not views:
+        rep.add("page:mark-file", "skipped", "the brand mark", detail="not verified: no view was measured (see the page:load rows)")
+        return
+    rep.inputs.extend(ctx.project / p for p in masters)   # a change to a logo file makes the report stale: even "no mark shown" may rest on a logo's bytes
+    hashes = set(masters.values())
+    found = [(v, m) for v in views for m in identified_marks(v, hashes)]
+    shown = [(v, m) for v, m in found if m.get("visible")]
+    cut = [f"{v['marks_total']} marks at {v.get('width')} px, {len(v['marks'])} measured" for v in views if v.get("marks_total")]
+    cut += [f"{v['images_total']} images at {v.get('width')} px, {len(v['images'])} looked at for a logo file's bytes" for v in views if v.get("images_total")]
+    truncated = f"NOT verified beyond the first marks and images of a view: {_names(cut, 2)}" if cut else ""
+    if not shown:
+        hidden = f"; {len({(m['sel'], m.get('url')) for _, m in found})} marked or named mark(s) are not shown in any view" if found else ""
+        rep.add("page:mark-file", "info", "the brand mark", detail="no brand mark is shown on this page: a mark is an element with data-brand-mark, an image whose file name says logo, "
+                "mark, wordmark, lockup or favicon, or an image whose bytes are a logo file of the project" + hidden + ("; " + truncated if truncated else ""))
+        return
+    if not masters:
+        why = f"not verified: the project has no logo files ({LOGO_DIR}/) to compare the mark with"
+        rep.add("page:mark-file", "skipped", "the brand mark is a logo file", detail=why)
+        rep.add("page:mark-band", "skipped", "the drawing for the mark's size", detail=why)
+        _clear_space_row(rep, shown, ctx)
+        return
+    canon: dict[str, tuple | None] = {}
+
+    def drawn(path: str) -> tuple | None:
+        if path not in canon:
+            try:
+                canon[path] = canonical_svg((ctx.project / path).read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError):
+                canon[path] = None
+        return canon[path]
+
+    def key(m: dict) -> tuple:
+        return (m["kind"], m["sel"], m.get("url"), m.get("sha256"), hashlib.sha256(str(m.get("svg_markup")).encode()).hexdigest())
+
+    def files_of(m: dict) -> tuple[list[str] | None, str]:
+        """-> (the logo files this mark is, why not). None: it could not be compared."""
+        if m["kind"] == "inline-svg":
+            c = canonical_svg(m.get("svg_markup"))
+            if c is None or m.get("svg_truncated"):
+                return None, "the inline SVG could not be read for a comparison" + (" (too long)" if m.get("svg_truncated") else "")
+            same = [p for p in masters if p.endswith(".svg") and drawn(p) == c]
+            if not same and _uses_use(c):
+                return None, "the inline SVG draws through <use> and the drawing it points to is not followed, so it could not be compared"
+            return same, "this inline SVG draws none of the logo drawings of the project (compared after canonicalisation)"
+        if not m.get("url"):
+            return [], "the mark shows no file"
+        if not m.get("sha256"):
+            return None, ("its file is on another origin (aborted: page-check runs offline)" if not m.get("own")
+                          else "the bytes of its file were not seen (it did not load, or it was reached through a redirect)")
+        return [p for p, sha in masters.items() if sha == m["sha256"]], "the bytes of this file are none of the logo files of the project"
+
+    verdict: dict[tuple, tuple[list[str] | None, str]] = {}
+    problems: list[dict] = []
+    unverified: list[dict] = []
+    ok: dict[tuple, list[str]] = {}
+    for v, m in shown:
+        k = key(m)
+        if k in verdict:
+            continue
+        at = {"selector": m["sel"], "kind": m["kind"], "url": m.get("url"), "found_by": m["by"], "width": v.get("width"), "scheme": v.get("scheme")}
+        if m["kind"] == "other":
+            verdict[k] = ([], "")
+            problems.append({**at, "why": "data-brand-mark is on an element that shows no image: put it on the img or svg of the mark"})
+            continue
+        files, why = verdict[k] = files_of(m)
+        if files is None:
+            unverified.append({**at, "why": why})
+        elif not files:
+            problems.append({**at, "why": why})
+        else:
+            declared = m.get("declared")
+            if declared and declared.strip():
+                want = posixpath.normpath(declared.strip().lstrip("/"))
+                kin = set(project_keys(ctx.project, want))
+                if not kin & set(masters):
+                    problems.append({**at, "why": f"data-brand-mark names {want}, which is not a logo file of the project"})
+                    continue
+                if not kin & set(files):
+                    problems.append({**at, "why": f"data-brand-mark names {want}, but this mark is {', '.join(files[:2])}"})
+                    continue
+            ok[k] = files
+    seen_files = sorted({f for fs in ok.values() for f in fs})
+    items = [f"{o['selector']} ({o['kind']}{' ' + o['url'] if o['url'] else ''}): {o['why']}; first seen at {o['width']} px {o['scheme']}" for o in problems]
+    notes = [f"NOT verified: {o['selector']}: {o['why']}" for o in unverified] + ([truncated] if truncated else [])
+    extra = {"marks_checked": len({key(m) for _, m in shown}), "files": seen_files, "offenders": problems[:100], "unverified": unverified[:100]}
+    if problems:
+        rep.add("page:mark-file", "fail", "the brand mark is a logo file", detail=f"{len(problems)} mark(s) are not a logo file of the project: {_names(items, NAMED)}"
+                + "".join("; " + n for n in notes[:2]), **extra)
+    elif notes:
+        done = f"{len(ok)} mark(s) are logo files of the project ({_names(seen_files, NAMED)}); " if ok else ""
+        rep.add("page:mark-file", "warn", "the brand mark is a logo file", detail=done + _names(notes, NAMED), **extra)
+    else:
+        kinds = sorted({m["kind"] for _, m in shown})
+        rep.add("page:mark-file", "pass", "the brand mark is a logo file", detail=f"{extra['marks_checked']} mark(s) ({', '.join(kinds)}), each a logo file of the project: "
+                f"{_names(seen_files, NAMED)}" + ("; an inline SVG was compared after canonicalisation" if "inline-svg" in kinds else ""), **extra)
+
+    # the band rule: each mark that is a banded drawing is the drawing its rendered height calls for
+    sets = [(m["bands"], mid) for mid, m in (ctx.rules.get("marks") or {}).items()] or ([(ctx.rules["bands"], None)] if ctx.rules.get("bands") else [])
+    if not sets:
+        rep.add("page:mark-band", "info", "the drawing for the mark's size", detail="qa/rules.json lists no size bands (bands, or marks.<id>.bands): the drawing for a size is not checked")
+    else:
+        banded_by = {k: i for i, (bands, _) in enumerate(sets) for b in bands for k in project_keys(ctx.project, b["drawing"])}   # as written in qa/rules.json: `./a/b.svg`, a symlink
+        checked: dict[tuple, dict] = {}
+        wrong: dict[tuple, dict] = {}
+        loose: dict[str, dict] = {}
+        skipped = set()
+        for v, m in shown:
+            files = (verdict.get(key(m)) or (None, ""))[0]
+            if not files or key(m) not in ok:
+                continue
+            of = sorted({banded_by[f] for f in files if f in banded_by})
+            if not of:
+                skipped.add(m["sel"])
+                continue
+            height = _h(m)
+            at = {"selector": m["sel"], "files": files, "width": v.get("width"), "scheme": v.get("scheme")}
+            if height is None:
+                loose.setdefault(m["sel"], {**at, "why": "its box cannot be measured"})
+                continue
+            px = int(height + 0.5)
+            bands, mid = sets[of[0]]
+            band = qa_rules.pick_band(bands, px)
+            want = project_keys(ctx.project, band["drawing"])
+            row_ = {**at, "height_px": px, "band": band["name"], "drawing": (want or [band["drawing"]])[0], **({"mark": mid} if mid else {})}
+            checked.setdefault((m["sel"], px, tuple(files)), row_)
+            if not set(want) & set(files):
+                wrong.setdefault((m["sel"], px, tuple(files)), row_)
+        extra = {"checked": len(checked), "not_banded": sorted(skipped), "offenders": list(wrong.values())[:100], "unverified": list(loose.values())[:100]}
+        if wrong:
+            rep.add("page:mark-band", "fail", "the drawing for the mark's size", detail=f"{len(wrong)} mark(s) are not the drawing the size bands call for: " + _names([
+                f"{o['selector']} is {o['files'][0]} at {o['height_px']} px, band {o['band']} is {o['drawing']} (or its -dark.svg twin); first seen at {o['width']} px {o['scheme']}"
+                for o in wrong.values()], NAMED), **extra)
+        elif loose:
+            rep.add("page:mark-band", "warn", "the drawing for the mark's size", detail="NOT verified: " + _names([f"{o['selector']}: {o['why']}" for o in loose.values()], NAMED), **extra)
+        elif checked:
+            rep.add("page:mark-band", "pass", "the drawing for the mark's size", detail=f"{len(checked)} mark(s) at their rendered height are the drawing the bands name: " + _names([
+                f"{o['files'][0]} at {o['height_px']} px (band {o['band']})" for o in checked.values()], NAMED), **extra)
+        else:
+            rep.add("page:mark-band", "info", "the drawing for the mark's size", detail="no mark on this page is a drawing of a size band (a wordmark or a lockup is in no band, and a mark that is "
+                    "not a logo file is judged by page:mark-file)", **extra)
+
+    _clear_space_row(rep, shown, ctx)
+
+
+# each (rep, measures, ctx); the later families of rows (fonts, rules, tells) are added here
+ROW_CHECKS = [load_rows, colour_rows, pair_rows, motion_rows, claim_rows, mark_rows]
 
 
 def judge(rep: Report, measures: dict, ctx: Ctx, measures_path: Path) -> None:

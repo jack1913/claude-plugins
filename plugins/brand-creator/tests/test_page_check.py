@@ -8,6 +8,7 @@ import hashlib
 import http.server
 import json
 import os
+import shutil
 import subprocess
 import sys
 import threading
@@ -15,7 +16,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
-from helpers import ROOT, bc, make_project, mutate, mutate_json, path_without, report
+from helpers import ROOT, bc, install_fixture, make_project, mutate, mutate_json, path_without, report
 
 sys.path.insert(0, str(ROOT / "scripts" / "pagelib"))
 import pagecheck  # noqa: E402
@@ -350,7 +351,8 @@ def test_a_clean_page_passes_and_its_report_is_named_after_the_page(acme):
     ids = [x["id"] for x in rep["results"]]
     assert ids[:5] == ["page:target", "page:load:390-light", "page:load:390-dark", "page:load:1440-light", "page:load:1440-dark"]
     assert ids[5:9] == ["page:colours:light", "page:colours:dark", "page:pairs:light", "page:pairs:dark"]
-    assert all(x["status"] == "pass" for x in rep["results"][1:]) and row(rep, "page:target")["status"] == "info"
+    assert all(x["status"] == "pass" for x in rep["results"][1:] if x["id"] != "page:mark-file") and row(rep, "page:target")["status"] == "info"
+    assert row(rep, "page:mark-file")["status"] == "info" and "no brand mark is shown" in row(rep, "page:mark-file")["detail"]   # a page without a mark says so
     paths = {i["path"] for i in rep["inputs"]}
     assert {"assets/tokens/tokens.json", "assets/tokens/tokens.css", "pages/index.html", "FACTS.md", "BRAND-STATE.md", "qa/rules.json"} <= paths
     measures = json.loads(Path(rep["measures"]).read_text(encoding="utf-8"))
@@ -425,7 +427,8 @@ def test_from_checks_a_copy_and_never_writes_where_the_site_is(acme, tmp_path):
     assert tree(acme) - before_project == {f"assets/_checks/{tool}.json"}          # the project gained the report and nothing else
     rep = report(acme, tool)
     assert rep["target"] == {"kind": "from", "page": "index.html", "from": str(site.resolve()), "url": None}
-    assert {i["path"] for i in rep["inputs"]} == {"assets/tokens/tokens.json", "assets/tokens/tokens.css", "qa/rules.json", "FACTS.md", "BRAND-STATE.md"}   # a site elsewhere is not a project file;
+    assert {i["path"] for i in rep["inputs"]} == {"assets/tokens/tokens.json", "assets/tokens/tokens.css", "qa/rules.json", "FACTS.md", "BRAND-STATE.md"} | set(
+        pagecheck.logo_files(acme, qa_rules.load(acme)[0]))   # a site elsewhere is not a project file (the logo files are: a mark is judged against them);
     # tokens.css is read for the colours the browser renders for the tokens
     h = tool.rsplit("-", 1)[1]
     copies = list((Path(os.environ["BRAND_CREATOR_DATA"]) / "scratch").glob(f"*/page-check/{h}/1"))
@@ -1280,3 +1283,432 @@ def test_the_motion_and_claims_collectors_read_what_is_declared_what_runs_and_wh
     assert "20%" not in claims_row["detail"] and "after 66" not in claims_row["detail"] and "Step 3" not in claims_row["detail"]
     assert [o["word"] for o in claims_row["unbacked_status_words"]] == ["wkrótce"] and "NOT verified" not in claims_row["detail"] and claims_row["languages"].keys() == {"en", "pl"}
     assert [o["selector"] for o in claims_row["unlabelled_samples"]] == [next(s["sel"] for s in v["samples"] if s["label"] == "")]
+
+
+# ---------------------------------------------------------------- the mark
+
+MARK_STYLE = """  header { margin: 0; }
+  .mark { display: block; margin: 0 0 16px 0; }
+  main h1 { margin: 0; }
+"""
+
+
+def mark_page(mark_html: str, style: str = "") -> str:
+    """The Acme page with a mark in a header above the main text: the mark has a block box and 16 px of its own free space below it."""
+    return PAGE.replace("</style>", MARK_STYLE + style + "</style>").replace("<main>", "<header>" + mark_html + "</header>\n<main>")
+
+
+def img(name: str, size: int = 48, extra: str = "") -> str:
+    return f'<img class="mark" src="../assets/logo/{name}" width="{size}" height="{size}" alt="Acme"{extra}>'
+
+
+def logo_hash(p: Path, name: str) -> str:
+    return hashlib.sha256((p / "assets" / "logo" / name).read_bytes()).hexdigest()
+
+
+def mark_rows_of(rep: dict) -> dict[str, dict]:
+    return {x["id"]: x for x in rep["results"] if x["id"].startswith("page:mark-")}
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_mark_that_is_not_a_master_byte_for_byte_fails(acme):
+    copy = acme / "pages" / "mark-copy.svg"   # a copy of the master the page uses, named like a mark
+    copy.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(acme / "assets" / "logo" / "mark.svg", copy)
+    write_page(acme, mark_page('<img class="mark" src="mark-copy.svg" width="48" height="48" alt="Acme">'))
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 0, r.stdout + r.stderr
+    ok = mark_rows_of(rep)
+    assert [x["status"] for x in ok.values()] == ["pass", "pass", "pass"], ok
+    assert ok["page:mark-file"]["files"] == ["assets/logo/mark.svg"] and "assets/logo/mark.svg" in ok["page:mark-file"]["detail"]
+    mutate(copy, "#007d71", "#007d72")   # one byte of the copy
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 1, r.stdout + r.stderr
+    bad = mark_rows_of(rep)["page:mark-file"]
+    assert bad["status"] == "fail" and "none of the logo files of the project" in bad["detail"] and "/pages/mark-copy.svg" in bad["detail"], bad
+    assert [(o["selector"], o["kind"], o["found_by"], o["width"], o["scheme"]) for o in bad["offenders"]] == [("body > header > img.mark", "img", "name", 390, "light")]
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_the_report_goes_stale_when_a_logo_file_changes(acme):
+    """A mark is judged against assets/logo/: a changed logo file, one the page never loads, makes the verdict stale."""
+    copy = acme / "pages" / "mark-copy.svg"
+    copy.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(acme / "assets" / "logo" / "mark.svg", copy)
+    write_page(acme, mark_page('<img class="mark" src="mark-copy.svg" width="48" height="48" alt="Acme">'))
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert {"assets/logo/mark.svg", "assets/logo/grid-mark.svg", "assets/logo/wordmark.svg"} <= {i["path"] for i in rep["inputs"]} and stale_inputs(acme, rep) == []
+    mutate(acme / "assets" / "logo" / "wordmark.svg", "<svg", "<svg data-edited=\"1\"")
+    assert stale_inputs(acme, rep) == ["assets/logo/wordmark.svg changed"]
+    # a page with no mark: "no brand mark is shown" may rest on a logo's bytes (an image is a mark by being one), so a changed logo file makes that verdict stale too
+    write_page(acme)
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 0 and mark_rows_of(rep)["page:mark-file"]["status"] == "info", r.stdout + r.stderr
+    assert {"assets/logo/mark.svg", "assets/logo/grid-mark.svg", "assets/logo/wordmark.svg"} <= {i["path"] for i in rep["inputs"]} and stale_inputs(acme, rep) == []
+    mutate(acme / "assets" / "logo" / "mark.svg", "<svg", "<svg data-edited=\"1\"")
+    assert stale_inputs(acme, rep) == ["assets/logo/mark.svg changed"]
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_the_mark_at_24_px_must_be_the_small_band_drawing(acme):
+    """Acme's bands: 32 px and below is grid-mark.svg, above it mark.svg. The twin counts in either theme; a wordmark is in no band."""
+    def run(html: str, *args: str) -> dict[str, dict]:
+        write_page(acme, mark_page(html))
+        return mark_rows_of(check_page(acme, *args)[1])
+
+    wrong = run(img("mark.svg", 24))
+    assert wrong["page:mark-file"]["status"] == "pass"   # it is a logo file ...
+    band = wrong["page:mark-band"]
+    assert band["status"] == "fail" and "assets/logo/mark.svg at 24 px, band small is assets/logo/grid-mark.svg" in band["detail"], band   # ... but not the drawing for 24 px
+    assert [(o["height_px"], o["band"], o["drawing"]) for o in band["offenders"]] == [(24, "small", "assets/logo/grid-mark.svg")]
+    right = run(img("grid-mark.svg", 24))
+    assert right["page:mark-band"]["status"] == "pass" and "grid-mark.svg at 24 px (band small)" in right["page:mark-band"]["detail"]
+    too_small = run(img("grid-mark.svg", 48))   # the coarse grid mark is for the small sizes only
+    assert too_small["page:mark-band"]["status"] == "fail" and "band large is assets/logo/mark.svg" in too_small["page:mark-band"]["detail"]
+    assert run(img("mark.svg", 48))["page:mark-band"]["status"] == "pass" and run(img("mark.svg", 33))["page:mark-band"]["status"] == "pass"
+    assert run(img("grid-mark.svg", 32))["page:mark-band"]["status"] == "pass"   # 32 px is the edge of the small band
+    # the dark twin of the band's drawing is the drawing in the dark theme (and a dark header on a light page may show it too)
+    picture = ('<picture><source srcset="../assets/logo/grid-mark-dark.svg" media="(prefers-color-scheme: dark)">'
+               '<img class="mark" src="../assets/logo/grid-mark.svg" width="24" height="24" alt="Acme"></picture>')
+    both = run(picture)
+    assert both["page:mark-band"]["status"] == "pass" and both["page:mark-file"]["status"] == "pass", both
+    dark_only = run(img("grid-mark-dark.svg", 24), "--schemes", "light")
+    assert dark_only["page:mark-band"]["status"] == "pass"
+    measures = json.loads(Path(report(acme, pagecheck.report_tool("pages/index.html"))["measures"]).read_text(encoding="utf-8"))
+    assert measures["views"][0]["marks"][0]["kind"] == "img"
+    # a wordmark is not a drawing of a band: the band row says so and nothing fails
+    word = run(img("wordmark.svg", 24))
+    assert word["page:mark-file"]["status"] == "pass" and word["page:mark-band"]["status"] == "info" and "in no band" in word["page:mark-band"]["detail"]
+    # the same bands written as `./assets/logo/x.svg` are the same bands: the wrong drawing is not passed as 'not banded'
+    rules_file = acme / "qa" / "rules.json"
+    rules = json.loads(rules_file.read_text(encoding="utf-8"))
+    rules["bands"] = [{**b, "drawing": "./" + b["drawing"]} for b in rules["bands"]]
+    rules_file.write_text(json.dumps(rules, indent=2) + "\n", encoding="utf-8")
+    assert run(img("mark.svg", 24))["page:mark-band"]["status"] == "fail" and run(img("grid-mark.svg", 24))["page:mark-band"]["status"] == "pass"
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_text_inside_the_clear_space_fails(acme):
+    write_page(acme, mark_page(img("mark.svg", 48)))
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 0, r.stdout + r.stderr
+    ok = mark_rows_of(rep)["page:mark-clear-space"]   # 16 px of free space, and the proposal asks for 0.25 x 48 = 12
+    assert ok["status"] == "pass" and ok["proposal"] is True and "a proposal until qa/rules.json sets page.clear_space" in ok["detail"], ok
+    page = acme / "pages" / "index.html"
+    mutate(page, "margin: 0 0 16px 0;", "margin: 0 0 4px 0;")   # the text of the page now starts 4 px under the mark
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 1, r.stdout + r.stderr
+    bad = mark_rows_of(rep)["page:mark-clear-space"]
+    assert bad["status"] == "fail" and 'body > main > h1 "Acme hand tools"' in bad["detail"] and "px away, needs 12 px" in bad["detail"], bad
+    (o,) = bad["offenders"]
+    assert (o["selector"], o["nearest"], o["needs_px"], o["height_px"]) == ("body > header > img.mark", "body > main > h1", 12, 48) and 3 <= o["nearest_px"] <= 7, o   # 4 px and the text's own leading
+    assert mark_rows_of(rep)["page:mark-file"]["status"] == "pass"   # the file is right: only the space is not
+    mutate_json(acme / "qa" / "rules.json", lambda d: d.__setitem__("page", {"clear_space": 0.05}))   # the owner sets a smaller share: 2.4 px
+    r, rep = check_page(acme, "--schemes", "light")
+    ok = mark_rows_of(rep)["page:mark-clear-space"]
+    assert r.returncode == 0 and ok["status"] == "pass" and ok["proposal"] is False and "proposal" not in ok["detail"], ok
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_an_inline_svg_mark_is_compared_after_canonicalisation(acme):
+    """An inline mark (data-brand-mark) is the same drawing as a logo file when it differs only in the order of attributes, white space, its size and labels, and a title."""
+    inline = ('<svg data-brand-mark="assets/logo/mark.svg" class="mark" width="48" height="48" viewBox="0 0 64 64" aria-label="Acme home" xmlns="http://www.w3.org/2000/svg">\n'
+              '  <title>Acme home</title>\n  <path   fill="#0d1b2d"   d="M32 6 58 54H6Z" />\n  <circle r="9" cx="32"\n  cy="41" fill="#007d71"></circle>\n</svg>')
+
+    def run(html: str) -> dict[str, dict]:
+        write_page(acme, mark_page(html))
+        return mark_rows_of(check_page(acme, "--schemes", "light")[1])
+
+    ok = run(inline)
+    assert ok["page:mark-file"]["status"] == "pass" and ok["page:mark-file"]["files"] == ["assets/logo/mark.svg"], ok
+    assert "inline SVG was compared after canonicalisation" in ok["page:mark-file"]["detail"] and ok["page:mark-band"]["status"] == "pass"
+    for broken, why in ((inline.replace('fill="#007d71"', 'fill="#007d72"'), "draws none of the logo drawings"),   # one colour, one digit off
+                        (inline.replace('viewBox="0 0 64 64"', 'viewBox="0 0 65 64"'), "draws none of the logo drawings"),
+                        (inline.replace('r="9"', 'r="10"'), "draws none of the logo drawings"),
+                        (inline.replace("</svg>", '<rect width="1" height="1"/></svg>'), "draws none of the logo drawings"),
+                        (inline.replace('data-brand-mark="assets/logo/mark.svg"', 'data-brand-mark="assets/logo/wordmark.svg"'), "names assets/logo/wordmark.svg, but this mark is assets/logo/mark.svg"),
+                        (inline.replace('data-brand-mark="assets/logo/mark.svg"', 'data-brand-mark="assets/logo/nowhere.svg"'), "which is not a logo file of the project")):
+        got = run(broken)["page:mark-file"]
+        assert got["status"] == "fail" and why in got["detail"], (why, got)
+    assert run(inline.replace('data-brand-mark="assets/logo/mark.svg"', "data-brand-mark"))["page:mark-file"]["status"] == "pass"   # naming the file is optional
+    assert run(inline.replace('data-brand-mark="assets/logo/mark.svg"', 'data-brand-mark="assets/logo/mark-dark.svg"'))["page:mark-file"]["status"] == "pass"   # a file and its twin are one
+    assert run('<div data-brand-mark><p>Acme</p></div>')["page:mark-file"]["status"] == "fail"   # the attribute is on something that shows no image
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_an_image_with_the_bytes_of_a_logo_file_is_a_mark_whatever_it_is_called(acme):
+    pages = acme / "pages"
+    pages.mkdir(exist_ok=True)
+    shutil.copyfile(acme / "assets" / "logo" / "mark.svg", pages / "brand.svg")                                  # the master, under another name
+    (pages / "badge.svg").write_text((acme / "assets" / "logo" / "mark.svg").read_text(encoding="utf-8").replace("#007d71", "#007d72"), encoding="utf-8")   # not the master
+    write_page(acme, mark_page('<img class="mark" src="brand.svg" width="48" height="48" alt="Acme"><img src="badge.svg" width="48" height="48" alt="">'))
+    r, rep = check_page(acme, "--schemes", "light")
+    got = mark_rows_of(rep)
+    assert got["page:mark-file"]["status"] == "pass" and got["page:mark-file"]["marks_checked"] == 1, got   # brand.svg is the master, badge.svg is just an image
+    measures = json.loads(Path(rep["measures"]).read_text(encoding="utf-8"))
+    (v,) = measures["views"]
+    assert [m["url"] for m in v["marks"]] == [] and {i["url"] for i in v["images"]} == {"/pages/brand.svg", "/pages/badge.svg"}   # nothing in the names; the judge found brand.svg by its bytes
+    assert pagecheck.identified_marks(v, {logo_hash(acme, "mark.svg")})[0]["by"] == "bytes" and len(pagecheck.identified_marks(v, {logo_hash(acme, "mark.svg")})) == 1
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_the_marks_collector_finds_marks_by_attribute_and_by_name_and_measures_the_gap(acme):
+    pages = acme / "pages"
+    pages.mkdir(exist_ok=True)
+    dot = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8" width="8" height="8"><circle cx="4" cy="4" r="3" fill="#007d71"/></svg>\n'
+    for name in ("site-logo", "bookmark", "marketing-hero", "siteMark", "lockup", "wordmark-x", "plain", "hidden-logo", "near", "diagonal", "awayfromit"):
+        (pages / f"{name}.svg").write_text(dot.replace("r=\"3\"", f'r="{3 + len(name) % 3}"'), encoding="utf-8")   # different bytes for each, none a logo file
+    body = """<img id="a" src="site-logo.svg" width="40" height="40" alt="" style="position: absolute; left: 100px; top: 600px">
+<img src="near.svg" width="10" height="10" alt="" style="position: absolute; left: 150px; top: 600px">
+<img src="diagonal.svg" width="10" height="10" alt="" style="position: absolute; left: 148px; top: 642px">
+<img src="awayfromit.svg" width="10" height="10" alt="" style="position: absolute; left: 100px; top: 800px">
+<img src="bookmark.svg" width="12" height="12" alt=""><img src="marketing-hero.svg" width="12" height="12" alt=""><img src="siteMark.svg" width="12" height="12" alt="">
+<img src="hidden-logo.svg" width="12" height="12" alt="" style="display: none">
+<div class="bg" style="width: 20px; height: 20px; background: url(lockup.svg)"></div>
+<div class="pseudo"></div>
+<a href="#top" data-brand-mark><img src="plain.svg" width="16" height="16" alt=""></a>
+<div data-brand-mark>no image</div>"""
+    style = ".pseudo::before { content: ''; display: block; width: 12px; height: 12px; background: url(wordmark-x.svg); }\n"
+    write_page(acme, PAGE.replace("</style>", style + "</style>").replace("</main>", body + "\n</main>"))
+    r, rep = check_page(acme, "--schemes", "light")
+    (v,) = json.loads(Path(rep["measures"]).read_text(encoding="utf-8"))["views"]
+    got = {(m["kind"], m["url"]): m for m in v["marks"]}
+    assert set(got) == {("img", "/pages/site-logo.svg"), ("img", "/pages/siteMark.svg"), ("background", "/pages/lockup.svg"), ("background", "/pages/wordmark-x.svg"),
+                        ("img", "/pages/plain.svg"), ("other", None), ("img", "/pages/hidden-logo.svg")}, sorted(got, key=str)   # bookmark and marketing are images; the hidden logo is a mark that is not shown
+    hidden = got[("img", "/pages/hidden-logo.svg")]
+    assert hidden["visible"] is False and hidden["named"] and not hidden["marked"] and hidden["nearest_px"] is None   # it is reported as not shown, and no neighbour is looked for
+    assert {i["url"] for i in v["images"]} >= {"/pages/bookmark.svg", "/pages/marketing-hero.svg", "/pages/near.svg"} and "/pages/hidden-logo.svg" not in {i["url"] for i in v["images"]}
+    a = got[("img", "/pages/site-logo.svg")]
+    assert a["named"] and not a["marked"] and a["declared"] is None and a["visible"] and a["own"] is True
+    assert a["rect"] == {"x": 100, "y": 600, "width": 40, "height": 40}
+    assert (a["nearest_px"], a["nearest_sel"]) == (8, "body > main > img:nth-of-type(3)"), a   # the box 8 px right and 2 px under the corner, not the one 10 px to the right
+    assert got[("img", "/pages/plain.svg")]["marked"] and got[("img", "/pages/plain.svg")]["declared"] == "" and got[("other", None)]["visible"]
+    pseudo = got[("background", "/pages/wordmark-x.svg")]
+    assert pseudo["pseudo"] == "::before" and pseudo["rect"] is None and pseudo["height_px"] == 12
+    assert got[("background", "/pages/lockup.svg")]["rect"]["width"] == 20
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_the_marks_collector_stops_at_its_caps_and_says_how_many_there_were(acme):
+    pages = acme / "pages"
+    pages.mkdir(exist_ok=True)
+    for name in ("site-logo", "plain"):
+        (pages / f"{name}.svg").write_text(DOT, encoding="utf-8")   # not a logo file, so the marks fail the row and the row names the cut
+    body = "".join(f'<img src="site-logo.svg?{n}" width="4" height="4" alt="">' for n in range(105)) + "".join(f'<img src="plain.svg?{n}" width="4" height="4" alt="">' for n in range(305))
+    write_page(acme, PAGE.replace("</main>", body + "\n</main>"))
+    r, rep = check_page(acme, "--schemes", "light")
+    (v,) = json.loads(Path(rep["measures"]).read_text(encoding="utf-8"))["views"]
+    assert (len(v["marks"]), v["marks_total"], len(v["images"]), v["images_total"]) == (100, 105, 300, 305)
+    detail = mark_rows_of(rep)["page:mark-file"]["detail"]
+    assert "105 marks at 390 px, 100 measured" in detail and "305 images at 390 px, 300 looked at" in detail, detail
+
+
+# ---------------------------------------------------------------- the mark, no browser
+
+def mark_entry(sel: str = "body > header > img", url: str = "/assets/logo/mark.svg", height: float | None = 48, **more) -> dict:
+    """What the collector measures for a mark that is an `img` named like a logo."""
+    return {"sel": sel, "kind": "img", "url": url, "own": True, "declared": None, "named": True, "marked": False, "visible": True,
+            "rect": {"x": 0, "y": 0, "width": height, "height": height} if height else None, "nearest_px": None, "nearest_sel": None, "nearest_text": None, **more}
+
+
+def judge_marks(p: Path, entries: list[dict], names: tuple[str, ...] = ("mark.svg", "grid-mark.svg", "grid-mark-dark.svg", "mark-dark.svg", "wordmark.svg"), scheme: str = "light",
+                rules: dict | None = None, images: list | None = None, files: dict | None = None) -> dict[str, dict]:
+    """mark_rows on constructed measurements: the logo files of `names` were served from assets/logo/, `files` maps a path to the sha256 of some other file that was served."""
+    resources = {f"/assets/logo/{n}": {"sha256": logo_hash(p, n), "content_type": "image/svg+xml"} for n in names}
+    resources.update({path: {"sha256": sha, "content_type": "image/svg+xml"} for path, sha in (files or {}).items()})
+    ctx = pagecheck.Ctx(p, pagecheck.Target("project", "pages/x.html", page="pages/x.html"), [390], [scheme], rules or qa_rules.load(p)[0], {})
+    rep = Report("page-check/x-000000", p)
+    pagecheck.mark_rows(rep, {"views": [view(scheme, marks=entries, images=images or [], resources=resources)]}, ctx)
+    return {r["id"]: r for r in rep.results}
+
+
+@pytest.fixture
+def logo_project(tmp_path) -> Path:
+    p = make_project(tmp_path)
+    install_fixture(p, tokens=False, board=False)   # assets/logo/ and qa/rules.json of the Acme example: bands small (up to 32 px) grid-mark.svg, large mark.svg
+    return p
+
+
+def test_the_band_rule_names_the_drawing_for_the_rendered_height_and_counts_the_dark_twin(logo_project):
+    p = logo_project
+    status = lambda rows: (rows["page:mark-file"]["status"], rows["page:mark-band"]["status"])
+    assert status(judge_marks(p, [mark_entry(height=24)])) == ("pass", "fail")                       # mark.svg is the large drawing
+    assert status(judge_marks(p, [mark_entry(url="/assets/logo/grid-mark.svg", height=24)])) == ("pass", "pass")
+    assert status(judge_marks(p, [mark_entry(url="/assets/logo/grid-mark-dark.svg", height=24)], scheme="dark")) == ("pass", "pass")   # the twin counts in the dark theme ...
+    assert status(judge_marks(p, [mark_entry(url="/assets/logo/grid-mark-dark.svg", height=24)], scheme="light")) == ("pass", "pass")   # ... and on a dark header of a light page
+    assert status(judge_marks(p, [mark_entry(url="/assets/logo/mark-dark.svg", height=24)], scheme="dark")) == ("pass", "fail")
+    for h, url, band in ((32, "grid-mark.svg", "pass"), (32.4, "grid-mark.svg", "pass"), (32.6, "grid-mark.svg", "fail"), (33, "grid-mark.svg", "fail"),
+                         (32.6, "mark.svg", "pass"), (32, "mark.svg", "fail"), (4000, "mark.svg", "pass")):   # the height is rounded to a whole pixel, as the picker takes one
+        assert judge_marks(p, [mark_entry(url=f"/assets/logo/{url}", height=h)])["page:mark-band"]["status"] == band, (h, url)
+    word = judge_marks(p, [mark_entry(url="/assets/logo/wordmark.svg", height=24)])   # a wordmark is in no band
+    assert (word["page:mark-file"]["status"], word["page:mark-band"]["status"]) == ("pass", "info") and "in no band" in word["page:mark-band"]["detail"]
+    pseudo = judge_marks(p, [mark_entry(url="/assets/logo/mark.svg", height=None, pseudo="::before", height_px=24)])   # no box to read: the computed height decides
+    assert pseudo["page:mark-band"]["status"] == "fail" and pseudo["page:mark-clear-space"]["status"] == "warn" and "NOT verified" in pseudo["page:mark-clear-space"]["detail"]
+    unmeasured = judge_marks(p, [mark_entry(url="/assets/logo/mark.svg", height=None, pseudo="::before")])
+    assert unmeasured["page:mark-band"]["status"] == "warn" and "NOT verified" in unmeasured["page:mark-band"]["detail"]
+    no_bands = qa_rules.load(p)[0] | {"bands": []}
+    assert judge_marks(p, [mark_entry(height=24)], rules=no_bands)["page:mark-band"]["status"] == "info"
+
+
+def test_with_several_marks_each_is_judged_by_its_own_bands(logo_project):
+    p = logo_project
+    rules = qa_rules.load(p)[0] | {"bands": [], "marks": qa_rules.validate_marks({
+        "a": {"bands": [{"name": "small", "max_px": 16, "drawing": "assets/logo/grid-mark.svg"}, {"name": "large", "drawing": "assets/logo/mark.svg"}]},
+        "b": {"bands": [{"name": "all", "drawing": "assets/logo/wordmark.svg"}]}})}
+    band = lambda *entries: judge_marks(p, list(entries), rules=rules)["page:mark-band"]
+    assert band(mark_entry(url="/assets/logo/grid-mark.svg", height=16))["status"] == "pass"
+    assert band(mark_entry(url="/assets/logo/grid-mark.svg", height=17))["status"] == "fail"       # mark a: 17 px is its large band
+    assert band(mark_entry(url="/assets/logo/wordmark.svg", height=200))["status"] == "pass"       # mark b has one band for every size
+    assert band(mark_entry(url="/assets/logo/mark.svg", height=17), mark_entry(sel="body > p > img", url="/assets/logo/wordmark.svg", height=8))["status"] == "pass"
+
+
+def test_a_band_written_with_a_dot_slash_or_through_a_symlink_is_still_the_band(logo_project):
+    """qa/rules.json is read as written (`./assets/logo/x.svg`); the files of a page are keyed by their resolved path. The two must meet, or a wrong drawing passes as 'not banded'."""
+    p = logo_project
+    plain = qa_rules.load(p)[0]
+    dotted = plain | {"bands": [b | {"drawing": "./" + b["drawing"]} for b in plain["bands"]]}
+    assert [b["drawing"] for b in dotted["bands"]] == ["./assets/logo/grid-mark.svg", "./assets/logo/mark.svg"]
+    for rules in (plain, dotted):
+        assert judge_marks(p, [mark_entry(height=24)], rules=rules)["page:mark-band"]["status"] == "fail"   # mark.svg at 24 px is not the small drawing, written either way
+        bad = judge_marks(p, [mark_entry(height=24)], rules=rules)["page:mark-band"]
+        assert "band small is assets/logo/grid-mark.svg" in bad["detail"] and bad["offenders"][0]["drawing"] == "assets/logo/grid-mark.svg", bad   # named as the project path
+        assert judge_marks(p, [mark_entry(url="/assets/logo/grid-mark.svg", height=24)], rules=rules)["page:mark-band"]["status"] == "pass"   # the right drawing is not failed for the dot
+        assert judge_marks(p, [mark_entry(url="/assets/logo/grid-mark-dark.svg", height=24)], rules=rules, scheme="dark")["page:mark-band"]["status"] == "pass"
+        assert judge_marks(p, [mark_entry(height=48)], rules=rules)["page:mark-band"]["status"] == "pass"
+    many = plain | {"bands": [], "marks": qa_rules.validate_marks({"a": {"bands": [{"name": "small", "max_px": 16, "drawing": "./assets/logo/../logo/grid-mark.svg"},
+                                                                                      {"name": "large", "drawing": "assets//logo/mark.svg"}]}})}
+    assert judge_marks(p, [mark_entry(height=24)], rules=many)["page:mark-band"]["status"] == "pass"       # 24 px is the large band of mark a
+    assert judge_marks(p, [mark_entry(height=12)], rules=many)["page:mark-band"]["status"] == "fail"
+    # a logo file that is a symlink inside the project is keyed by what it points to: a band naming the link is the band of that file
+    (p / "assets" / "logo" / "large.svg").symlink_to("mark.svg")
+    linked = plain | {"bands": [plain["bands"][0] | {"drawing": "assets/logo/grid-mark.svg"}, plain["bands"][1] | {"drawing": "assets/logo/large.svg"}]}
+    assert judge_marks(p, [mark_entry(height=24)], rules=linked)["page:mark-band"]["status"] == "fail"
+    assert judge_marks(p, [mark_entry(height=48)], rules=linked)["page:mark-band"]["status"] == "pass"
+    named = judge_marks(p, [mark_entry(height=48, marked=True, declared="assets/logo/large.svg")], rules=linked)   # data-brand-mark names the link, the mark is the file it points to
+    assert named["page:mark-file"]["status"] == "pass", named
+    outside = plain | {"bands": [plain["bands"][0] | {"drawing": "../elsewhere/grid-mark.svg"}, plain["bands"][1]]}   # a drawing outside the project is no file of the project
+    assert judge_marks(p, [mark_entry(height=24)], rules=outside)["page:mark-band"]["status"] == "fail"       # mark.svg is still the large band's drawing, so 24 px is wrong
+    assert pagecheck.project_keys(p, "./assets/logo/../logo/mark.svg") == ["assets/logo/mark.svg", "assets/logo/mark-dark.svg"]
+    assert pagecheck.project_keys(p, "../elsewhere/mark.svg") == [] and pagecheck.project_keys(p, "/etc/mark.svg") == []
+
+
+def test_an_inline_svg_that_draws_through_use_is_not_verified_and_never_failed(logo_project):
+    """A `<use>` points at a drawing the check does not follow: it may be the right mark, so the row warns 'NOT verified' instead of failing it."""
+    p = logo_project
+    master = (p / "assets" / "logo" / "mark.svg").read_text(encoding="utf-8")
+    inline = lambda svg, **more: mark_entry(url=None, kind="inline-svg", marked=True, named=False, svg_markup=svg, **more)
+    via_use = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><g id="m"><circle cx="32" cy="41" r="9"/></g></defs><use href="#m"/></svg>'
+    got = judge_marks(p, [inline(via_use)])
+    assert got["page:mark-file"]["status"] == "warn" and "NOT verified" in got["page:mark-file"]["detail"] and "<use>" in got["page:mark-file"]["detail"], got["page:mark-file"]
+    assert got["page:mark-band"]["status"] == "info"    # nothing was verified as a banded drawing
+    nested = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><g><g><use href="sprite.svg#m"/></g></g></svg>'
+    assert judge_marks(p, [inline(nested)])["page:mark-file"]["status"] == "warn"
+    drawn = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="41" r="9"/></svg>'   # a different drawing, no <use>: still a fail
+    assert judge_marks(p, [inline(drawn)])["page:mark-file"]["status"] == "fail"
+    assert judge_marks(p, [inline(master, declared="")])["page:mark-file"]["status"] == "pass"        # the master itself, inline
+    assert judge_marks(p, [inline(via_use), inline(drawn, sel="body > p > svg")])["page:mark-file"]["status"] == "fail"   # a fail anywhere is not hidden behind a warning
+
+
+def test_a_mark_that_is_not_seen_a_declared_file_and_a_project_without_logo_files(logo_project, tmp_path):
+    p = logo_project
+    odd = mark_entry(url="/pages/elsewhere.svg", height=48)
+    rows = judge_marks(p, [odd], files={"/pages/elsewhere.svg": "ab" * 32})
+    assert rows["page:mark-file"]["status"] == "fail" and "none of the logo files of the project" in rows["page:mark-file"]["detail"]
+    other_site = mark_entry(url="https://cdn.example/logo.svg", own=False)
+    rows = judge_marks(p, [other_site])
+    assert rows["page:mark-file"]["status"] == "warn" and "NOT verified" in rows["page:mark-file"]["detail"] and "another origin" in rows["page:mark-file"]["detail"]
+    assert rows["page:mark-band"]["status"] == "info"   # nothing was verified as a banded drawing
+    nofile = judge_marks(p, [mark_entry(url=None)])
+    assert nofile["page:mark-file"]["status"] == "fail" and "shows no file" in nofile["page:mark-file"]["detail"]
+    rows = judge_marks(p, [mark_entry(marked=True, named=False, declared="assets/logo/wordmark.svg")])   # it says wordmark and is the mark
+    assert rows["page:mark-file"]["status"] == "fail" and "names assets/logo/wordmark.svg, but this mark is assets/logo/mark.svg" in rows["page:mark-file"]["detail"]
+    hidden = judge_marks(p, [mark_entry(visible=False)])   # a mark that is not shown is not judged; the row says so
+    assert list(hidden) == ["page:mark-file"] and hidden["page:mark-file"]["status"] == "info" and "1 marked or named" in hidden["page:mark-file"]["detail"]
+    (tmp_path / "e").mkdir()
+    empty = make_project(tmp_path / "e", slug="empty")   # a project with no logo files has nothing to compare with
+    rows = judge_marks(empty, [mark_entry(height=24, nearest_px=1, nearest_sel="body > p")], names=())
+    assert [rows[i]["status"] for i in ("page:mark-file", "page:mark-band", "page:mark-clear-space")] == ["skipped", "skipped", "fail"], rows   # the space needs no logo file
+    assert not [i for i in rows if i.startswith("page:mark") and rows[i]["status"] == "pass"]
+    bare = pagecheck.Ctx(p, pagecheck.Target("project", "pages/x.html", page="pages/x.html"), [390], ["light"], qa_rules.load(p)[0], {})
+    rep = Report("page-check/x-000000", p)
+    pagecheck.mark_rows(rep, {"views": [view(colours=[])]}, bare)   # measurements that hold no mark facts at all are not verified, never a pass
+    assert [(r["id"], r["status"]) for r in rep.results] == [("page:mark-file", "skipped")]
+
+
+def test_the_clear_space_is_a_share_of_the_marks_height_and_the_owner_can_change_it(logo_project):
+    p = logo_project
+    space = lambda px, height=40: judge_marks(p, [mark_entry(height=height, nearest_px=px, nearest_sel="body > p", nearest_text="Hello")])["page:mark-clear-space"]
+    assert space(9.99)["status"] == "fail" and space(10)["status"] == "pass" and space(0)["status"] == "fail"   # 0.25 x 40 px: the edge is clear
+    assert judge_marks(p, [mark_entry(height=40)])["page:mark-clear-space"]["status"] == "pass"                 # nothing else on the page
+    bad = space(4)
+    assert 'body > header > img (40 px high) has body > p "Hello" 4 px away, needs 10 px' in bad["detail"] and "a proposal" in bad["detail"], bad["detail"]
+    owner = qa_rules.load(p)[0]
+    owner["page"] = {**owner["page"], "clear_space": 0.05}
+    owner["_from_file"] = [*owner["_from_file"], "page.clear_space"]
+    rows = judge_marks(p, [mark_entry(height=40, nearest_px=4, nearest_sel="body > p")], rules=owner)
+    assert rows["page:mark-clear-space"]["status"] == "pass" and "0.05 x the mark's rendered height" in rows["page:mark-clear-space"]["detail"] and "proposal" not in rows["page:mark-clear-space"]["detail"]
+
+
+def test_the_canonical_form_of_an_svg_ignores_order_and_white_space_and_the_roots_size_but_not_the_drawing():
+    ns = 'xmlns="http://www.w3.org/2000/svg"'
+    base = f'<svg {ns} viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Acme mark"><path d="M32 6 58 54H6Z" fill="#0d1b2d"/><circle cx="32" cy="41" r="9" fill="#007d71"/></svg>'
+    same = [
+        f'<?xml version="1.0" encoding="UTF-8"?>\n<!-- a note -->\n<svg {ns}\n  height="24" width="24" viewBox="0 0 64   64" class="logo" style="display:block">\n<title>Home</title>\n'
+        '<path fill="#0d1b2d"\n d="M32  6 58 54H6Z"></path>\n<circle r="9" cy="41" cx="32" fill="#007d71" /></svg>',
+        f'<svg {ns} xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 64 64" data-brand-mark="x" id="m" focusable="false"><desc>d</desc>'
+        '<path d="M32 6 58 54H6Z" fill="#0d1b2d"/><circle cx="32" cy="41" r="9" fill="#007d71"/></svg>',
+        "﻿" + base,
+    ]
+    want = pagecheck.canonical_svg(base)
+    assert want is not None
+    for text in same:
+        assert pagecheck.canonical_svg(text) == want, text
+    differ = [base.replace("#007d71", "#007d72"), base.replace("0 0 64 64", "0 0 64 65"), base.replace("r=\"9\"", "r=\"8\""), base.replace("<circle", "<g><circle").replace("/></svg>", "/></g></svg>"),
+              base.replace("</svg>", "<path d=\"M0 0\"/></svg>"), base.replace('<path d="M32 6 58 54H6Z" fill="#0d1b2d"/><circle cx="32" cy="41" r="9" fill="#007d71"/>',
+                                                                              '<circle cx="32" cy="41" r="9" fill="#007d71"/><path d="M32 6 58 54H6Z" fill="#0d1b2d"/>'),   # drawn in another order
+              base.replace('<path ', '<path stroke="red" ')]
+    for text in differ:
+        assert pagecheck.canonical_svg(text) != want, text
+    # a wordmark drawn with live text: the letters that follow a child element are part of the drawing, not only the letters before it
+    word = f'<svg {ns} viewBox="0 0 64 16"><text x="0" y="12">Ac<tspan>m</tspan>e</text></svg>'
+    wanted = pagecheck.canonical_svg(word)
+    assert wanted is not None
+    for text in (word.replace("</tspan>e<", "</tspan>\n  e \n<"), word.replace(">Ac<", ">\nAc<"), word.replace("<text ", "<!-- c --><text ").replace("</tspan>", "</tspan><!-- c -->")):
+        assert pagecheck.canonical_svg(text) == wanted, text
+    for text in (word.replace("</tspan>e<", "</tspan>ZZZ<"), word.replace("</tspan>e<", "</tspan><"), word.replace("<tspan>m</tspan>e", "<tspan>m</tspan>"), word.replace(">Ac<", "><"),
+                 word.replace("<tspan>m</tspan>e", "e<tspan>m</tspan>"), word.replace("</tspan>e<", "</tspan>e</text><text>x<")):   # other letters, none, in another place, or in another element
+        assert pagecheck.canonical_svg(text) != wanted, text
+    titled = f'<svg {ns} viewBox="0 0 64 16"><text>Ac<title>t</title>me</text></svg>'   # the text after an element that draws nothing still follows the text before it
+    assert pagecheck.canonical_svg(titled) == pagecheck.canonical_svg(f'<svg {ns} viewBox="0 0 64 16"><text>Acme</text></svg>')
+    assert pagecheck.canonical_svg(titled.replace(">me<", ">ZZ<")) != pagecheck.canonical_svg(f'<svg {ns} viewBox="0 0 64 16"><text>Acme</text></svg>')
+    for text in ("", "not xml", "<svg", "<div/>", '<!DOCTYPE svg [<!ENTITY a "b">]><svg xmlns="http://www.w3.org/2000/svg">&a;</svg>', None):
+        assert pagecheck.canonical_svg(text) is None, text
+    assert pagecheck.twin_of("assets/logo/mark.svg") == "assets/logo/mark-dark.svg" and pagecheck.twin_of("assets/logo/mark-dark.svg") == "assets/logo/mark.svg"
+    assert pagecheck.twin_of("assets/logo/mark.png") == "assets/logo/mark.png"
+
+
+def test_logo_files_are_the_logo_folder_and_the_drawings_the_rules_name_with_their_twins(logo_project, tmp_path):
+    p = logo_project
+    files = pagecheck.logo_files(p, qa_rules.load(p)[0])
+    assert {"assets/logo/mark.svg", "assets/logo/mark-dark.svg", "assets/logo/grid-mark.svg", "assets/logo/grid-mark-master.png"} <= set(files)
+    assert files["assets/logo/mark.svg"] == logo_hash(p, "mark.svg")
+    (p / "elsewhere").mkdir()
+    (p / "elsewhere" / "tool-a.svg").write_text("<svg/>", encoding="utf-8")
+    (p / "elsewhere" / "tool-a-dark.svg").write_text("<svg/>", encoding="utf-8")
+    outside = tmp_path / "outside.svg"
+    outside.write_text("<svg/>", encoding="utf-8")
+    os.symlink(outside, p / "assets" / "logo" / "leak.svg")   # a link that leads out of the project is not a logo file
+    rules = qa_rules.load(p)[0] | {"bands": [], "marks": qa_rules.validate_marks({"a": {"bands": [{"name": "all", "drawing": "elsewhere/tool-a.svg"}]}})}
+    files = pagecheck.logo_files(p, rules)
+    assert {"elsewhere/tool-a.svg", "elsewhere/tool-a-dark.svg"} <= set(files) and "assets/logo/leak.svg" not in files
+    (tmp_path / "b").mkdir()
+    assert pagecheck.logo_files(make_project(tmp_path / "b", slug="bare"), qa_rules.DEFAULTS) == {}
