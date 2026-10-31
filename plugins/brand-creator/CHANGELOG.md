@@ -177,6 +177,10 @@ still the starter's proposal once the system rules are approved (keep one under 
   how-to, "Check a page against your brand", walks through it, including how to turn a warning into one of your brand
   rules; the commands page, the check page and the troubleshooting page link to it. The adoption step now says to run
   the page check on a product's pages once they are built.
+- `state` knows two more gates for the site work, G4w (website references) and G4p (the site's reference pages), and the
+  `site_research` answer (online research for website references): `auto` until you are asked, then `online`,
+  `links-only` or `none`; `state --set` refuses any other value and writes nothing. A project made before this update
+  gets the two gates the first time you record them.
 
 ### Changed
 

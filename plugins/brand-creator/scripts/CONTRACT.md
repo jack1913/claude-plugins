@@ -173,10 +173,14 @@ A `---` block of `key: value` lines, one level of nesting, trailing `# comments`
 Keys: `slug, name, created, plugin_version, tier (quick|standard|full), phase, architecture (standalone|family-member|
 product-in-family), mark_source (generated|authored-vector|existing), language (chat language), content_languages (language-set
 codes of the brand's own text, for example `pl` or `pl,en`; read by fontcheck, never defaulted from `language`), renderer, review_surface, review_url,
+site_research (auto|online|links-only|none: the owner's answer to online research for website references; `capture --url` needs online or links-only),
 incumbent (none or a line), inventory (path or "none (no target repo)"), edition (whole number, the brand book's), approved_edition (the edition G5 approved; `state --record G5` writes it), book_chapters (extra
 chapters: tone, photography, components), canonical_direction, reset_rounds ([4, 5]: the style board run again after a full rejection,
-then the pick board), g1s_round, fixes_per_area (map), gates (G0 G1 G1s G2 G2b G3 G4 G5 G6 G7)`. A recorded gate reads `"<date> <decision>"`;
+then the pick board), g1s_round, fixes_per_area (map), gates (G0 G1 G1s G2 G2b G3 G4 G4w G4p G5 G6 G7)`. A recorded gate reads `"<date> <decision>"`;
 empty means not recorded. `brand-creator state --record G3 "<decision>"` writes it, `state --require G3` exits 1 when missing.
+`G4w` is the website references pick (or `skipped by owner`) and `G4p` the site's reference pages approved; `state` prints the gates in the
+order above, `--record` and `--require` accept both, and a project made before them gets the key on its first `--record`.
+`state --set site_research=...` takes only its four answers: any other value exits 2, names them and writes nothing.
 `state --set KEY=VALUE` trims the spaces around the key and the value (`"reset_rounds =2,3"` is `reset_rounds`, checked as one), and a
 key that is not one word (letters, digits, `_` and `-`, dots between parts) exits 2 with nothing written.
 A list key (`reset_rounds`, `book_chapters`) is a flow list: `state --set reset_rounds=4,5` writes `reset_rounds: [4, 5]` (whole numbers
