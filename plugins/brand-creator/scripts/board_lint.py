@@ -21,6 +21,8 @@ A site board (site: a round from 2 on, in the Standard and Full tiers, after G4 
 round either, and the style gate never counts it. It has the rows site:tier, site:brief, site:g4 and site:g4w, and page:site-stage; the sections what-changed and weak-points (from the second board of a stage), hardest-surface, my-call,
 questions and reply; and, at the hero stage, one card per variant (site:variants, site:files, site:layout, site:fields; boardlib/siteboard.py) and the proof each brings: the page-check report of its page (site:check),
 the tells in it (site:tells) and the stills `capture` took (site:stills).
+At the pages stage the page cards are read instead (site:hero-first: data-hero names a variant card of an earlier hero board; site:pages: a page id each; the rows of a hero card that fit a page; site:cold only for a page that has a cold review)
+and the choices section is required: site:choices holds every choice to a tag, rule or example, and a rule to the line of BRAND-STATE.md, DECISIONS.md or decisions/*.md that says where the owner decided it.
 Each hero card also gets the reflex rows of group 1 (site:<name>:reflex, the required line, then :reflex-format|reflex-ids|reflex-count|reflex-grounded|reflex-measured, and across cards site:reflex-shared), site:refs (what the card takes from is what
 the owner picked in G4w) and site:cold (rounds/rN/<name>/cold-review.md: its verdict, its inputs with sha256, and the card saying the same); boardlib/siteboard.py.
 A pick board also gets, for each direction, direction:<name>:reflex-format|reflex-ids|reflex-count|reflex-grounded and, across directions,
@@ -479,7 +481,7 @@ def main() -> int:
     def check_site(rnd: int) -> None:
         """A site board (data-board="site"): the gates of the site round (boardlib/siteboard.py), the stage the page declares, the sections every board has, and at the hero stage one card per variant.
         The first board of a stage shows 2 or 3 variants and needs no What changed and Weak points; a later one (the refine loop on the picked or combined variant) shows 1 or more and needs both, as a refine
-        board does. No map, no directions, no kept masters. The pages stage (the page cards, the hero pick, the choices) is not read here yet: its row says so."""
+        board does. No map, no directions, no kept masters. At the pages stage (the page cards, the hero pick, the choices) the choices section is required too and boardlib/siteboard.py reads the cards (pages_rows)."""
         stage = siteboard.stage_of(root)
         if stage in siteboard.STAGES:
             rep.add("page:site-stage", "pass", "page declares its stage", detail=stage)
@@ -494,13 +496,15 @@ def main() -> int:
         need("what-changed", not first, "from the second site board of a stage: what changed since the review")
         need("hardest-surface", True, "the one view where the page is hardest to get right")
         need("weak-points", not first, "from the second site board of a stage: honest weak points")
+        if stage == "pages":
+            need("choices", True, "every structural and visual choice the pages make, tagged rule or example")
         check_my_call()
         check_questions(need("questions", True, "numbered questions with lettered options, answerable by number from a phone"))
-        need("reply", True, "how to answer: a variant name or letter and one sentence")
+        need("reply", True, "how to answer: a variant name or letter and one sentence" if stage != "pages" else "how to answer: a page id or the letter of an option and one sentence")
         if stage == "hero":
             siteboard.variant_rows(rep, project, rnd, root, page, first)
         elif stage == "pages":
-            rep.add("site:pages-stage", "skipped", "the pages stage is read", detail="not verified: this lint does not read the pages stage yet (the page cards, the picked hero, the choices)")
+            siteboard.pages_rows(rep, project, rnd, root, page)   # site:hero-first|pages|files|layout|fields|check|tells|stills|cold|choices
 
     if kind == "style":
         check_style(rnd)

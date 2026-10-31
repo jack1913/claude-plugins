@@ -575,7 +575,7 @@ One card per variant: an element with `data-site-variant="<name>"` (the `<articl
 The pictures are the project's own files by a relative path, read from the page's folder as a browser reads it, or, in the copy published on a review surface (`review/index.html`, linted with `--round N`), `data:` URIs of the same bytes. The first hero
 board of a project (no earlier round has a site board at the same stage) shows 2 or 3 variants and needs no What changed and Weak points (info rows); a later one, the refine loop on the picked or combined variant, shows 1 or more and needs both,
 as a refine board does from round 2. Hardest surface, My call, questions and reply are required as on every board; there is no `positioning-map`, `strategy-core`, `today`, `losers`, `none-of-these` or `direction` section, no `project:*` row and no
-`masters:*` row, and `--min-directions` is not used (an info row says so). A commented-out `choices` section waits in the template for the pages stage. Each row below is one result for the whole board and names the variants it fails:
+`masters:*` row, and `--min-directions` is not used (an info row says so). The pages stage is described after the rows (its page cards and choices). Each row below is one result for the whole board and names the variants it fails:
 
 | row | fails when |
 |---|---|
@@ -600,7 +600,6 @@ as a refine board does from round 2. Hardest surface, My call, questions and rep
 | `site:reflex-shared` | every card has a reflex line and one pattern (`reflex.shared_hit`) is hit by all of them: the heroes are not divergent. An info row ("not required here") with fewer than two cards, or when a card has no line (`site:<name>:reflex` has failed then) |
 | `site:refs` | G4w names a pick (not `skipped by owner`) and: it names none of the groups (`data-name`) of the references board, nor the text or the host of the link of a site the owner liked (`data-like="like"`; a disliked site is never a name) in its owner-sites section ("record the pick under their names"); or the `data-field="from-refs"` line of a card names none of those that the G4w record names (a whole word or whole words, any letter case): "take from what the owner picked (G4w)". The record is read up to the word `dislikes` (`picked <groups>; likes <...>; dislikes <...>`): a group or a site named after it is one the owner turned away from, and is no pick. An info row when G4w is `skipped by owner`; not verified (`skipped`) without a G4w, a references board to read the names from, or a variant card |
 | `site:cold` | a hero has no `rounds/rN/<name>/cold-review.md`; its first non-empty line is not `verdict: ship` or `verdict: fix` (letter case and spacing do not matter); it has no `by:` line; its `inputs:` list is missing, holds a line that is not `- <path> sha256:<hex>`, lists a file twice or is not exactly the four stills of the variant (`rounds/rN/<name>/shots/<view>.png`), `brief/BRIEF.md` and `FACTS.md`; one of those files is missing or has another sha256 than the review lists ("the page or its stills changed after the cold review: review again", or the brief or the facts); it has more than five findings (numbered lines); the card has not exactly one `data-cold`, its value is not `ship` or `fix`, or it differs from the verdict. A `fix` shown as `fix` is honest and passes |
-| `site:pages-stage` | never a failure. At the pages stage the page cards, the picked hero and the choices are not read yet: the row is "not verified" (`skipped`, exit 3), and the gates and sections above apply |
 
 The `inputs` of the lint report are the page, `brief/BRIEF.md` when it exists, the website references board that G4w stands on (when it names a pick) and the `index.html` of each variant, so `check` calls the report stale ("not verified") as soon as one of
 them changes.
@@ -627,6 +626,37 @@ inputs:
 
 The reader sees only those six files, never the board, the references or the reasons (the prompt is in `skills/brand-creator/references/prompt-fragments.md`, **Review**). `by:` is `in-thread` (not blind: the same session that built the page reads it) or `agent`, and an agent
 only after the fleet gate. The reflex, references and cold rows add to the inputs of the lint report: `FACTS.md`, `research/site-cliches.md` (when it exists) and the `cold-review.md` of each variant, so a changed fact, cliché or review makes it stale.
+
+### The site board, pages stage (`data-site-stage="pages"`)
+
+Once the owner picked a hero, the next site round shows the other pages. The same board, `templates/site-board.html`, with the three comments at its end put to use (the pages in place of the variants, the choices section, the two questions of the pages), and `<body data-round="N" data-board="site"
+data-site-stage="pages" data-hero="<name>">`. The gates, `page:site-stage`, the sections (What changed and Weak points from the second pages board, Hardest surface, My call, questions and reply) and `--min-directions` are those of the hero stage; a pages board is the first of its own stage whatever came before.
+One folder per page, `rounds/rN/<id>/`, made before the board, with the files of a variant's folder (`index.html` declaring `data-layout` and `data-page`, `shots/` from `brand-creator capture`; `cold-review.md` is optional). One card per page: an element with `data-site-page="<id>"` (the
+`<article class="page">` of the template). The id is a page id, the pattern of `data-page` (`^[a-z][a-z0-9-]{1,31}$`: lowercase letters, digits and `-`, starting with a letter), unique, and also the name of the folder and what `<body data-page>` declares. The card holds what a variant's card holds
+(four stills, the live link, the check line, What it is and Cost, the tells line, the layout line, the vote), except that **Takes from** (`data-field="from-refs"`) and the **cold line** (`data-cold`) are optional (a line that is there is filled in) and there is **no reflex line**: the hero carried the reflex test,
+and a page is built from the hero, not from the references.
+
+The choices section (`data-section="choices"`) lists every structural and visual choice the pages make, one `<li data-choice="c1" data-tag="rule|example" data-source="..." data-pages="start pricing">text</li>` each:
+
+| attribute | what it holds |
+|---|---|
+| `data-choice` | the choice's id: `c` and a number (`c1`, `c2`), unique on the board |
+| `data-tag` | `rule` (the owner decided it: it holds wherever the brand shows a site) or `example` (may change) |
+| `data-source` | for a rule, where the owner decided it: text quoted from a line of `BRAND-STATE.md`, `DECISIONS.md` or a record under `decisions/*.md` (found there in any letter case, with white space collapsed; at least six characters). For an example, nothing |
+| `data-pages` | optional: the page ids the choice applies to, separated by white space or commas, all of them on this board; left out, the choice applies to every page |
+
+The rows of the pages stage (the gates and the sections above apply as well):
+
+| row | fails when |
+|---|---|
+| `site:hero-first` | no round before this one holds a site board at the hero stage ("hero first: show the hero variants and record the owner's pick before the other pages"); the `<body>` that declares the kind has no `data-hero`; or `data-hero` is none of the variant cards (`data-site-variant`, spelt alike, letter case included) of a hero board in an earlier round (the latest board that holds the name is the one read; the detail lists the names it looked at). The hero board it found is an input of the lint report |
+| `site:pages` | no page card; a page card whose `data-site-page` is not a page id, or is used twice; a page whose `<body data-page>` is not its card's id. A page whose folder or `index.html` is missing is `site:files`' to say |
+| `site:files`, `site:layout`, `site:fields`, `site:check`, `site:tells`, `site:stills` | the rows of the hero stage (see above), one result each for the whole board, read for the page cards: the same folder, `index.html`, `<body>` declarations and live link (`rounds/rN/<id>/index.html`), the same layout line, the same page-check report and four stills; `site:fields` asks for What it is and Cost, and for Takes from only where a card has the line. Without a page card they are "not verified" (`skipped`, "there is no page card to look at (site:pages says why)") |
+| `site:cold` | as at the hero stage, but only for a page that has a `cold-review.md` (or a card that claims one, which fails: "the card has a cold line (`data-cold`) but ... does not exist"): the file is held to the rules of a hero's, and the card's cold line says its verdict. No page with a review is an info row ("not required here") |
+| `section:choices` | the page has no `data-section="choices"` element, or it is empty |
+| `site:choices` | no item with `data-choice`; an id that is not `c` and a number, or is used twice; an item with no text; `data-tag` missing or neither `rule` nor `example`; a rule whose `data-source` is empty, is shorter than six characters, or is found in none of `BRAND-STATE.md`, `DECISIONS.md` and `decisions/*.md` ("a rule says where it was decided: record the owner's decision in DECISIONS.md, then cite it"); a `data-pages` that is empty, or names an id that is no page card of this board |
+
+The `inputs` of the lint report add the `index.html` of each page, `DECISIONS.md` and `decisions/*.md` (a changed decision makes it stale; `BRAND-STATE.md` is searched for the choices but is not added for them: it is an input anyway through the page-check report of each page, so recording a gate makes this report stale, as above) and the rest the proof rows add (see above).
 
 ## Hook guard
 
