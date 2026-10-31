@@ -478,7 +478,8 @@ const SAMPLE_CAP = 200;      // [data-sample] elements reported per view
  *  labelled sample is a run of its own. `sample_label` is the value of the closest [data-sample] (`null` outside one, `""` when it is empty), `lang` the closest `lang` ("" none;
  *  the document's own is in the view). Elements that are not shown (display: none, a closed <details>, cut to nothing) are left out, a fully transparent one is not: a block that fades in
  *  is still content. Attributes (alt, title, aria-label, placeholder) and pseudo-elements are not read. `claim_text_total` is set when there were more runs than CLAIM_RUNS.
- *  `samples`: every shown [data-sample] element, {sel, label, text (200 characters)}. */
+ *  `samples`: every shown [data-sample] element, {sel, label, text (200 characters)}. `claim_h1` is the text of each shown <h1> (at most 20, 300 characters each): the claims
+ *  check reads it, and the document title (`document.title`), for one thing, the status code of an error page. Text inside a shadow root is not read (the walk follows child nodes). */
 async function claimFacts(page) {
   return page.evaluate(([runCap, charCap, sampleCap]) => {
     const H = window.__bcMeasure;
@@ -512,7 +513,13 @@ async function claimFacts(page) {
       samples.push({ sel: H.selector(el), label: el.getAttribute("data-sample"), text: text.slice(0, 200) });
       if (samples.length >= sampleCap) break;
     }
-    return { claim_text, ...(all.length > runCap ? { claim_text_total: all.length } : {}), samples };
+    const claim_h1 = [];
+    for (const el of document.querySelectorAll("h1")) {
+      if (!H.walkable(el) || !H.shown(el).shown) continue;
+      claim_h1.push(String(el.innerText ?? el.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 300));
+      if (claim_h1.length >= 20) break;
+    }
+    return { claim_text, ...(all.length > runCap ? { claim_text_total: all.length } : {}), samples, claim_h1 };
   }, [CLAIM_RUNS, CLAIM_CHARS, SAMPLE_CAP]);
 }
 

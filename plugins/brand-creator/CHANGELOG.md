@@ -129,6 +129,12 @@ still the starter's proposal once the system rules are approved (keep one under 
   stands for>"`: it is not a claim, it is listed in `page:samples` as what to replace before publishing, and the
   report keeps the list as `samples`; a `data-sample` with no label fails. A page in another language than English or
   Polish gets a warning that its status words are not verified (its numbers are still checked).
+- `page-check` reads numbers on a page more the way people write them. A date written with dots, such as "15.11.2026"
+  or "30.10", is its numbers, as "2026-11-15" is: the fact "premiera 2026-11-15" backs "Premiera 15.11.2026", and
+  "Wypłata 30.10" needs 30 and 10. Digits with spaces between thousands, such as "13 205,20 zł", are one number, but
+  "In 2026 200 tools" is the numbers 2026 and 200. A year after a copyright sign or the word ("© 2026", "Copyright
+  2024–2026") is not a claim, and neither is the code of an error page: a "404" on a page whose title or main heading
+  holds "404". A phone number, a postal code and a street number are still claims and need a fact or a sample label.
 - `page-check` now checks the brand mark on a page. Put `data-brand-mark` on the mark's `<img>` or inline `<svg>` (the
   value may name the logo file, `data-brand-mark="assets/logo/mark.svg"`); an image whose file name says logo, favicon,
   wordmark, lockup or mark, and any image that is byte for byte a file of `assets/logo/`, is taken for the mark too. The

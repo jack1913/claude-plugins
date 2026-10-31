@@ -1017,6 +1017,71 @@ def test_a_labelled_sample_is_listed_and_an_empty_label_is_not_a_sample(tmp_path
     assert "Price (Now only 49 zł, available) in body > p > span, 390-light" in results[1]["detail"] and "before the page is published" in results[1]["detail"]
 
 
+def claims_of_page(tmp_path: Path, runs: list, title: str = "", h1=(), lang: str = "en") -> dict:
+    """page:claims on constructed measurements of a page that has a title and headings: the row."""
+    rep = Report("page-check/x-000000", tmp_path)
+    pagecheck.claim_rows(rep, {"views": [view(lang=lang, claim_text=list(runs), samples=[], document={"title": title}, claim_h1=list(h1))]}, synthetic_ctx(tmp_path, TOKENS))
+    return rep.results[0]
+
+
+def test_numbers_in_reads_a_dotted_date_as_its_parts_and_a_space_group_only_as_thousands():
+    num = lambda text, **kw: [(n["text"], n["number"], n.get("parts")) for n in pagecheck.numbers_in(text, **kw)]
+    assert num("Premiera 15.11.2026") == [("15.11.2026", "15.11.2026", ["15", "11", "2026"])]                                       # dd.mm.yyyy: its parts, never a decimal
+    assert num("Wypłata 30.10") == [("30.10", "30.1", ["30", "10"])]                                                                 # dd.mm is also the decimal 30.1
+    assert num("Premiera 15.11.2026r., 5.11.2026 r.") == [("15.11.2026", "15.11.2026", ["15", "11", "2026"]), ("5.11.2026", "5.11.2026", ["5", "11", "2026"])]   # the Polish r. is no part of it
+    assert num("Ocena 4.5, 1.5, 12.50, 99.99, 4.5 kg, 1.12 zł, 2026-11-15") == [("4.5", "4.5", None), ("1.5", "1.5", None), ("12.50", "12.5", None), ("99.99", "99.99", None), ("4.5 kg", "4.5", None),
+                                                                             ("1.12 zł", "1.12", None), ("2026", "2026", None), ("11", "11", None), ("15", "15", None)]   # not a date: single digits, a month over 12, a unit
+    assert [(t, parts) for t, _, parts in num("32.11.2026, 15.13.2026, 15.11.1850")] == [("32.11.2026", None), ("15.13.2026", None), ("15.11.1850", None)]   # not a day, month or year of ours: a plain number
+    assert num("13 205,20 zł, 1 234 567, 12 000") == [("13 205,20 zł", "13205.2", None), ("1 234 567", "1234567", None), ("12 000", "12000", None)]
+    assert num("In 2026 200 tools, 10 2345, 1 2345") == [("2026", "2026", None), ("200", "200", None), ("10", "10", None), ("2345", "2345", None), ("2345", "2345", None)]   # a first group of four digits, or a later one that is not three
+    assert num("13\u00a0205,20 zł and 13\u202f205") == [("13\u00a0205,20 zł", "13205.2", None), ("13\u202f205", "13205", None)]                      # a no-break space groups too
+
+
+def test_a_dotted_date_is_backed_by_its_parts_like_the_iso_form(tmp_path):
+    write_facts(tmp_path, ("release", "premiera 2026-11-15"), ("payout", "wypłata 2026-10-30"), ("start", "start 2026-11-05"), ("rating", "rated 4.5 stars"))
+    runs = [claim_run("Premiera 15.11.2026", "body > a"), claim_run("Premiera 15.11", "body > b"), claim_run("Wypłata 30.10", "body > i"), claim_run("Wypłata 30.10.2026r.", "body > u"),
+            claim_run("Start 5.11.2026", "body > s"), claim_run("Start 05.11", "body > p"), claim_run("Ocena 4.5", "body > em")]   # a leading 0 on a day is the same day; 4.5 is a decimal and backed as one
+    got = claims_of_page(tmp_path, runs, lang="pl")
+    assert got["status"] == "pass" and got["claims_checked"]["numbers"] == 7, got["detail"]
+    off = claims_of_page(tmp_path, [claim_run("Premiera 16.11.2026", "body > a"), claim_run("Wypłata 31.10", "body > b"), claim_run("Premiera 15.12", "body > i"), claim_run("Ocena 4.6", "body > u")], lang="pl")
+    assert off["status"] == "fail" and [o["number"] for o in off["unbacked_numbers"]] == ["16.11.2026", "31.10", "15.12", "4.6"], off["detail"]   # 16, 31 and 12 are in no fact
+    write_facts(tmp_path, ("days", "ponad 30 dni"))
+    assert claims_of_page(tmp_path, [claim_run("Wypłata 30.10")], lang="pl")["status"] == "fail"       # 30 alone is not enough: the date needs 10 too
+    write_facts(tmp_path, ("days", "ponad 30 dni"), ("month", "miesiąc 10"))
+    assert claims_of_page(tmp_path, [claim_run("Wypłata 30.10")], lang="pl")["status"] == "pass"
+    write_facts(tmp_path, ("days", "ponad 30 dni"))
+    assert claims_of_page(tmp_path, [claim_run("Wypłata 30.1")], lang="pl")["status"] == "fail"        # the decimal reading is a number of its own: 30.1 is not 30 and 1
+
+
+def test_a_space_group_is_one_number_only_when_it_is_made_of_thousands(tmp_path):
+    write_facts(tmp_path, ("set", "the full set costs 13 205,20 zł"), ("year", "founded in 2026 with 200 tools"))
+    got = claims_of_page(tmp_path, [claim_run("Only 13 205,20 zł", "body > p"), claim_run("In 2026 200 tools", "body > b"), claim_run("Price 13\u00a0205,20 zł", "body > i")])
+    assert got["status"] == "pass" and got["claims_checked"]["numbers"] == 4, got["detail"]               # 13205.2, then 2026 and 200, then 13205.2 with a no-break space
+    off = claims_of_page(tmp_path, [claim_run("In 2026 300 tools", "body > b"), claim_run("Only 13 206,20 zł", "body > p")])
+    assert [o["number"] for o in off["unbacked_numbers"]] == ["300", "13 206,20 zł"], off["detail"]       # 2026 stays its own number: 300 alone is the claim
+
+
+def test_a_copyright_year_and_an_error_pages_status_code_are_no_claims(tmp_path):
+    write_facts(tmp_path, ("name", "Acme hand tools"))
+    footer = [claim_run("© 2026 Acme. All rights reserved.", "body > footer"), claim_run("Copyright 2024–2026 Acme", "body > footer > p"), claim_run("(C) 2025 Acme", "body > footer > b"),
+              claim_run("COPYRIGHT © 2024-2026", "body > footer > i"), claim_run("©2026", "body > footer > u")]
+    got = claims_of_page(tmp_path, footer)
+    assert got["status"] == "pass" and got["claims_checked"]["numbers"] == 0, got["detail"]
+    off = claims_of_page(tmp_path, [claim_run("Founded in 2026. © 2025 Acme", "body > p"), claim_run("Since 2024, copyright 2024", "body > b"), claim_run("Copyright holders: 2026 members", "body > i")])
+    assert [o["number"] for o in off["unbacked_numbers"]] == ["2026", "2024", "2026"] and [o["selector"] for o in off["unbacked_numbers"]] == ["body > p", "body > b", "body > i"], off["detail"]   # only a year right after the sign is not a claim
+    big = [claim_run("Błąd 404", "body > main > p"), claim_run("404", "body > main > div")]
+    assert claims_of_page(tmp_path, big, title="Błąd 404 | Acme", h1=["404"])["claims_checked"]["numbers"] == 0
+    assert claims_of_page(tmp_path, big, title="Błąd 404 | Acme")["status"] == "pass" and claims_of_page(tmp_path, big, title="Acme", h1=["Strony nie ma 404"])["status"] == "pass"   # the title alone, or the h1 alone
+    lonely = claims_of_page(tmp_path, big, title="Acme", h1=["Strona nie istnieje"])
+    assert lonely["status"] == "fail" and [o["number"] for o in lonely["unbacked_numbers"]] == ["404", "404"], lonely["detail"]    # a page that does not say it in its title or h1 is not an error page
+    other = [*big, claim_run("500 firms trust us", "body > main > b"), claim_run("Costs 404 zł", "body > main > i"), claim_run("Version 404.5", "body > main > u"),
+             claim_run("Tel. 600 123 456, 00-950 Warszawa, ul. Polna 12", "body > main > s")]
+    got = claims_of_page(tmp_path, other, title="Błąd 404 | Acme", h1=["404"])
+    assert [o["number"] for o in got["unbacked_numbers"]] == ["500", "404 zł", "404.5", "600 123 456", "00", "950", "12"], got["detail"]   # only that same bare number; phone, postal and street numbers are claims
+    not_error = claims_of_page(tmp_path, [claim_run("Total 200", "body > p"), claim_run("Hello 399", "body > b"), claim_run("Hello 600", "body > i")], title="Total 200 399 600", h1=["200 399 600"])
+    assert [o["number"] for o in not_error["unbacked_numbers"]] == ["200", "399", "600"], not_error["detail"]   # a status code is 400 to 599
+
+
 def test_a_view_that_measured_no_text_or_motion_is_not_verified_and_never_a_pass(tmp_path):
     for check, row_id in ((pagecheck.claim_rows, "page:claims"), (pagecheck.motion_rows, "page:motion")):
         for measures in ({"views": []}, {"views": [view()]}, {"views": [{"width": 390, "scheme": "light", "viewport": {"width": 390, "height": 844}, "error": "timed out"}]}):
@@ -1285,6 +1350,98 @@ def test_the_motion_and_claims_collectors_read_what_is_declared_what_runs_and_wh
     assert "20%" not in claims_row["detail"] and "after 66" not in claims_row["detail"] and "Step 3" not in claims_row["detail"]
     assert [o["word"] for o in claims_row["unbacked_status_words"]] == ["wkrótce"] and "NOT verified" not in claims_row["detail"] and claims_row["languages"].keys() == {"en", "pl"}
     assert [o["selector"] for o in claims_row["unlabelled_samples"]] == [next(s["sel"] for s in v["samples"] if s["label"] == "")]
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_dotted_date_on_a_page_needs_the_numbers_of_the_date_in_the_facts(acme):
+    add_fact(acme, "release", "premiera 2026-11-15")
+    page = write_page(acme)
+    mutate(page, '<html lang="en">', '<html lang="pl">')
+    mutate(page, "</main>", "<p>Premiera 15.11.2026</p>\n</main>")   # the ISO fact backs the dotted form
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert row(rep, "page:claims")["status"] == "pass" and row(rep, "page:claims")["claims_checked"]["numbers"] == 1
+    mutate(page, "Premiera 15.11.2026", "Premiera 16.11.2026")
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert [o["number"] for o in row(rep, "page:claims")["unbacked_numbers"]] == ["16.11.2026"]
+    mutate(page, "Premiera 16.11.2026", "Wypłata 30.10")   # no year: its two numbers, 30 and 10
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert [o["number"] for o in row(rep, "page:claims")["unbacked_numbers"]] == ["30.10"]
+    add_fact(acme, "payout", "wypłata w dniu 30")
+    assert check_page(acme, "--schemes", "light")[0].returncode == 1   # 10 is still missing
+    add_fact(acme, "payout month", "w miesiącu 10")
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 0 and row(rep, "page:claims")["status"] == "pass", r.stdout + r.stderr
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_digits_grouped_by_spaces_are_one_number_only_when_they_are_thousands(acme):
+    add_fact(acme, "set", "the full set costs 13 205,20 zł")
+    add_fact(acme, "year", "founded in 2026, with 200 tools")
+    page = write_page(acme)
+    mutate(page, "</main>", "<p>Only 13&nbsp;205,20 zł.</p><p>In 2026 200 tools.</p>\n</main>")
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert row(rep, "page:claims")["status"] == "pass" and row(rep, "page:claims")["claims_checked"]["numbers"] == 3
+    mutate(page, "In 2026 200 tools", "In 2026 300 tools")   # 2026 is a number of its own: only 300 is the claim
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert [o["number"] for o in row(rep, "page:claims")["unbacked_numbers"]] == ["300"]
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_copyright_year_is_no_claim_and_a_year_elsewhere_is(acme):
+    page = write_page(acme)
+    mutate(page, "</main>", "</main>\n<footer>&copy; 2026 Acme. Copyright 2024&ndash;2026 Acme. (c) 2025 Acme.</footer>")
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert row(rep, "page:claims")["status"] == "pass" and row(rep, "page:claims")["claims_checked"]["numbers"] == 0
+    mutate(page, "(c) 2025 Acme.", "Founded 2025.")
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert [o["number"] for o in row(rep, "page:claims")["unbacked_numbers"]] == ["2025"]
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_the_status_code_of_an_error_page_is_no_claim_but_other_numbers_on_it_are(acme):
+    page = write_page(acme)
+    mutate(page, "<title>Acme</title>", "<title>Błąd 404 | Acme</title>")
+    mutate(page, "<h1>Acme hand tools</h1>", "<h1>Nie znaleziono</h1>\n  <p>Błąd 404</p><div style=\"font-size: 8rem\">404</div>")   # the title holds the code, the h1 does not
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert row(rep, "page:claims")["status"] == "pass" and row(rep, "page:claims")["claims_checked"]["numbers"] == 0
+    mutate(page, "<title>Błąd 404 | Acme</title>", "<title>Acme</title>")   # neither the title nor the h1 holds it now: the page is not an error page
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert [o["number"] for o in row(rep, "page:claims")["unbacked_numbers"]] == ["404", "404"]
+    mutate(page, "<h1>Nie znaleziono</h1>", "<h1>404</h1>")   # the h1 alone holds it
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 0, r.stdout + r.stderr
+    mutate(page, "</main>", "<p>500 firms. Tel. 600 123 456, 00-950 Warszawa, ul. Polna 12.</p>\n</main>")   # another number is a claim, and so are a phone number, a postal code and a street number
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert [o["number"] for o in row(rep, "page:claims")["unbacked_numbers"]] == ["500", "600 123 456", "00", "950", "12"]
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_the_claims_collector_reads_the_title_and_the_h1_and_never_a_shadow_root(acme):
+    page = write_page(acme)
+    mutate(page, "</main>", """<div id="host"></div><p>Seen 321</p>
+<script>document.getElementById("host").attachShadow({ mode: "open" }).innerHTML = "<h1>Shadow 777</h1><p>Shadow 888</p>";</script>
+</main>""")
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 1, r.stdout + r.stderr
+    (v,) = json.loads(Path(rep["measures"]).read_text(encoding="utf-8"))["views"]
+    assert v["document"]["title"] == "Acme" and v["claim_h1"] == ["Acme hand tools"]   # the h1 inside the shadow root is not listed
+    assert "Seen 321" in " | ".join(t["text"] for t in v["claim_text"]) and not any("Shadow" in t["text"] for t in v["claim_text"])
+    assert [o["number"] for o in row(rep, "page:claims")["unbacked_numbers"]] == ["321"]   # 777 and 888 are not read
 
 
 # ---------------------------------------------------------------- the mark

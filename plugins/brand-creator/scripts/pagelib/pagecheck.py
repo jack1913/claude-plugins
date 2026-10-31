@@ -686,8 +686,16 @@ CLAIM_LANGUAGES = ("en", "pl")            # the languages whose status words are
 CURRENCY_CODES = r"pln|eur|usd|gbp|chf"          # a code before the number (PLN 5) or after it (5 PLN)
 UNITS_SPACED = r"%|‰|€|\$|£|zł|" + CURRENCY_CODES + r"|mln|mld|tys\.?|km|kg|mm|cm|ml|min|ms|px|gb|mb|kb|tb"   # may follow a number after a space
 UNITS_GLUED = r"k|m|g|l|h|s|x|×"          # single letters: a unit only when written right against the number (4K, 5m), never "3 s..."
-NUMBER = re.compile(r"(?<![\w.,])(?P<pre>(?:[€$£]|(?:" + CURRENCY_CODES + r")(?![a-z]))\s?)?(?P<num>\d+(?:[   ]\d{3})*(?:[.,]\d+)*)(?P<post>\s?(?:" + UNITS_SPACED + ")|(?:" + UNITS_GLUED + "))?(?!\\w)", re.I)
+NUMBER = re.compile(r"(?<![\w.,])(?P<pre>(?:[€$£]|(?:" + CURRENCY_CODES + r")(?![a-z]))\s?)?(?P<num>(?:\d{1,3}(?:[   ]\d{3})+|\d+)(?:[.,]\d+)*)(?P<post>\s?(?:" + UNITS_SPACED + ")|(?:" + UNITS_GLUED + "))?(?!\\w)", re.I)
 CONTEXT_CHARS = 30                        # characters of text kept each side of a claim in a row's detail
+# A dotted date is its numbers, the same as the ISO form: dd.mm.yyyy (the year 19xx or 20xx), or dd.mm, which is also a decimal (30.10) and so is read both ways. 1.5 (a single digit each) stays a decimal.
+DOTTED_DATE = re.compile(r"(?P<d>0?[1-9]|[12]\d|3[01])\.(?P<m>0?[1-9]|1[0-2])(?:\.(?P<y>(?:19|20)\d{2}))?")
+YEAR = re.compile(r"(?:19|20)\d{2}")
+# The text just before a year that makes it a copyright year: a (c) sign or the word, then the year, or a range of years ("(c) 2024-2026": the second year follows "2024-").
+COPYRIGHT_BEFORE = re.compile(r"(?:©|\(c\)|\bcopyright\b)\s*(?:(?:©|\(c\))\s*)?(?:(?:19|20)\d{2}\s*[-–—]\s*)?$", re.I)
+COPYRIGHT_LOOKBACK = 40                   # characters before a year that are looked at for the sign
+DATE_YEAR_R = re.compile(r"\.((?:19|20)\d{2})r(?!\w)")   # the Polish year written glued to the date: 15.11.2026r.
+STATUS_CODE = re.compile(r"[45]\d\d")      # a 4xx or 5xx status code of an error page
 
 
 def canonical_number(raw: str) -> str:
@@ -708,13 +716,41 @@ def canonical_number(raw: str) -> str:
 def numbers_in(text: str, every: bool = False) -> list[dict]:
     """The numbers of a text that are claims: a number of two digits or more (`1.5` has two), or one next to a percent sign, a currency sign or code (before the number or
     after it, with or without a space), or a unit (`5%`, `$5`, `9 €`, `PLN 5`, `9 zł`, `4K`). A bare single digit (a step label, "1 of 3") is not a claim, unless `every` is set (the numbers a FACTS.md value holds are all of them). A digit written
-    against letters (mp3, A4, 3rd) or in a dotted version (v1.2.3) is not read. -> [{text, number (canonical), at}], `text` as written with its sign or unit."""
+    against letters (mp3, A4, 3rd) or in a dotted version (v1.2.3) is not read. Digits grouped by spaces are one number only when the first group has 1 to 3 digits and each later group
+    exactly 3 (`13 205,20` is one number; `2026 200` is two). A year right after a copyright sign or the word (`© 2026`, `(c) 2026`, `Copyright 2024-2026`) is not a claim, unless `every` is set.
+    A dotted date (`15.11.2026`, `30.10`) is a date whose numbers are its parts, as the ISO form (`2026-11-15`) is: the entry holds `parts` (as written); `30.10` is also the decimal 30.1, so it
+    is backed by either reading, but `1.5` (one digit each) is a decimal only. -> [{text, number (canonical), at, bare, parts?}], `text` as written with its sign or unit, `bare` set when no
+    sign, code or unit is attached."""
     out = []
     for m in NUMBER.finditer(text):
-        digits = sum(c.isdigit() for c in m.group("num"))
-        if every or digits >= 2 or m.group("pre") or m.group("post"):
-            out.append({"text": m.group(0).strip(), "number": canonical_number(m.group("num")), "at": m.start()})
+        num, pre, post = m.group("num"), m.group("pre"), m.group("post")
+        if not (every or sum(c.isdigit() for c in num) >= 2 or pre or post):
+            continue
+        if not every and not (pre or post) and YEAR.fullmatch(num) and COPYRIGHT_BEFORE.search(text[max(0, m.start() - COPYRIGHT_LOOKBACK):m.start()]):
+            continue
+        entry = {"text": m.group(0).strip(), "number": canonical_number(num), "at": m.start(), "bare": not (pre or post)}
+        date = DOTTED_DATE.fullmatch(num) if entry["bare"] else None
+        if date and (date.group("y") or len(date.group("d")) > 1 or len(date.group("m")) > 1):
+            entry["parts"] = [g for g in (date.group("d"), date.group("m"), date.group("y")) if g]
+            glued = None if date.group("y") else DATE_YEAR_R.match(text, m.end())
+            if glued:
+                entry["parts"].append(glued.group(1))
+                entry["text"] += glued.group(0)[:-1]
+            if len(entry["parts"]) == 3:
+                entry["number"] = ".".join(entry["parts"])   # with a year it is no decimal: kept as written
+        out.append(entry)
     return out
+
+
+def status_codes(views: list[dict]) -> set[str]:
+    """The status codes of an error page: a bare 4xx or 5xx number that the `<title>` or an `<h1>` of the page holds (`document.title` and `claim_h1` of a view). A number on such a page that is
+    this same number is the page's status code, not a claim; any other number is judged as usual."""
+    codes = set()
+    for v in views:
+        for text in [(v.get("document") or {}).get("title"), *(v.get("claim_h1") or [])]:
+            if isinstance(text, str):
+                codes.update(n["number"] for n in numbers_in(text) if n["bare"] and STATUS_CODE.fullmatch(n["number"]))
+    return codes
 
 
 def _bookdata():
@@ -755,7 +791,7 @@ def _primary_language(lang: str) -> str:
 def claim_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
     """page:claims: outside a labelled sample, every claim on the page is backed by a FACTS.md value. A claim is a number (see numbers_in) that no value of FACTS.md holds as
     a number, or a status word (English and Polish) that no value contains; the check reads the visible text of each block and skips the text of an element inside a non-empty
-    `data-sample`. A `data-sample` with no label fails ("label the sample"). A block of text that several views show is judged and counted once, and named at the first view that has it. A page language other than English or Polish (the closest `lang`, else the document's) has no list of
+    `data-sample`. Not a claim: a copyright year, and the status code of an error page (see numbers_in and status_codes). A `data-sample` with no label fails ("label the sample"). A block of text that several views show is judged and counted once, and named at the first view that has it. A page language other than English or Polish (the closest `lang`, else the document's) has no list of
     status words: the row warns "NOT verified". page:samples (info, only when the page has labelled samples): each sample with its label, an excerpt, its selector and the first
     view it was seen in: the before-publishing list, also written to the report as `samples`."""
     ctx.extra["samples"] = []
@@ -765,7 +801,17 @@ def claim_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
         rep.add(rid, "skipped", label, detail="not verified: no view was measured (see the page:load rows)")
         return
     facts = fact_values(ctx.project)
-    backing_numbers = {n["number"] for value in facts for n in numbers_in(value, every=True)}
+    backing_numbers = set()
+    for value in facts:
+        for n in numbers_in(value, every=True):
+            backing_numbers.add(n["number"])
+            backing_numbers.update(n.get("parts", ()))
+    unpadded = {x.lstrip("0") or "0" for x in backing_numbers if x.isdigit()}      # 05 and 5 are one day or month
+    codes = status_codes(views)
+
+    def backed(n: dict) -> bool:
+        """A number is backed when a fact holds it; a dotted date also when a fact holds each of its parts (the day and month with or without a leading 0)."""
+        return n["number"] in backing_numbers or (bool(n.get("parts")) and all(x in backing_numbers or (x.lstrip("0") or "0") in unpadded for x in n["parts"]))
     backing_text = "\n".join(facts).lower()
     english = list(_bookdata().LINT_DEFAULTS["status_words"])
     unbacked_numbers: dict[tuple, dict] = {}
@@ -796,8 +842,10 @@ def claim_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
             languages[lang] = languages.get(lang, 0) + 1
             runs_checked += 1
             for n in numbers_in(text):
+                if n["bare"] and n["number"] in codes:
+                    continue   # the status code of an error page: its title or h1 holds the same number
                 numbers_checked += 1
-                if n["number"] not in backing_numbers:
+                if not backed(n):
                     unbacked_numbers.setdefault((n["number"], run["sel"]), {"number": n["text"], "selector": run["sel"], "context": _context(text, n["at"], len(n["text"])), "width": v.get("width")})
             for word in english + (list(STATUS_WORDS_PL) if lang == "pl" else []):
                 for m in re.finditer(r"(?<!\w)" + re.escape(word) + r"(?!\w)", text, re.I):
