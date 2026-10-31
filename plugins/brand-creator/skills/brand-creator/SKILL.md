@@ -321,6 +321,7 @@ Full file contract: `${CLAUDE_PLUGIN_ROOT}/scripts/CONTRACT.md`. Templates: `${C
 | BRAND.md, DESIGN.md and a per-brand skill (opt-in at G5) | `adapters --brand-md --design-md [--primary <role>]`; `applied-skill --yes` (without `--yes` it only prints the plan); both need G5 and are generated files ([10-book](references/phases/10-book.md)) |
 | launch checklist for the owner (P13; method in [13-launch](references/phases/13-launch.md)) | `launch-todo [--name <candidate>]` writes LAUNCH.md from local files; nothing outward is ever executed |
 | every gate that applies | `check --project <dir>` |
+| a page built anywhere, against the brand | `page-check <page>`, `page-check --from <dir> <page>`, `page-check --url http://localhost:<port>/<path>` |
 | name screening (P2, after the owner's privacy OK) | `names <name>... --project <dir> --profile <p> --region <CC> --plan`, then `--yes` |
 | freeze an approved round | `freeze r<N> --name approved-board --project <dir>` |
 

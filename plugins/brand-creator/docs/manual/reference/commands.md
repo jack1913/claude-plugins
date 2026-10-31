@@ -15,7 +15,7 @@ Claude can also start it when your request matches. [Glossary](glossary.md) expl
 | `/brand-creator:new` | you only | Starts a new brand project and asks up to three quick questions | `[slug]` |
 | `/brand-creator:round` | you only | Builds the next round of boards (the style board first, then directions, refinements and, in Standard and Full, a motion round) and stops for your decision | `[style\|pick\|refine\|motion] [what this round should answer]` |
 | `/brand-creator:status` | you only | Shows where the project stands and what comes next | — |
-| `/brand-creator:check` | you only | Runs every check that applies, and optionally searches for leftovers of old values | `[<old value or phrase> ...]` |
+| `/brand-creator:check` | you only | Runs every check that applies, and optionally searches for leftovers of old values or checks one page against your brand | `[--page <file-or-folder-page-or-localhost-url>] [<old value or phrase> ...]` |
 | `/brand-creator:review` | you only | Reviews the latest work and gives you one list to approve | `[board\|book\|pack\|all] [panel]` |
 | `/brand-creator:brand-adopt` | you only | Looks at where your brand belongs in your product repositories, and changes them only when you ask | `[survey\|apply\|review\|status] [repository label]` |
 | `/brand-creator:launch` | you only | Writes your launch checklist and hands it over one step at a time | `[--name <candidate>]` |
@@ -30,6 +30,7 @@ Each command has a how-to page:
 - [Apply the brand to your product](../use/apply-the-brand-to-your-product.md): `brand-adopt`
 - [Launch your brand](../use/launch-your-brand.md): `launch`
 - [Check your project](../use/check-your-project.md): `check`, `review`
+- [Check a page against your brand](../use/check-a-page.md): `check --page`
 
 ## Workflows
 
@@ -99,9 +100,12 @@ in motion/motion.json`.
 ## check
 
 > /brand-creator:check "Old Name"
+>
+> /brand-creator:check --page pages/index.html
 
 | Argument | What it does | Default |
 | --- | --- | --- |
+| `--page <page>` | Checks one page against your brand instead of the project: a page in your project, a page of a site built elsewhere on your computer, or a page your computer serves (`http://localhost:3000/`). A page on another website is refused. Ask for fewer widths in words, such as "only 390 and 1440" | Off: the project's checks run |
 | an old value or phrase | Also searches the whole project for leftovers of it. Repeat for each one | Off: only the checks run |
 
 ## review

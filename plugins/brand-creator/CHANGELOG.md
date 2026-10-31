@@ -153,6 +153,13 @@ stage, and why, is in the [archive](docs/archive/README.md).
   rules, and a name that is not one of the patterns is refused before the page is opened. The social post template
   that ships with the plugin has a small capital label above its headline; that counts as an eyebrow, and it is
   reported, not changed.
+- `/brand-creator:check` takes `--page` to check one page against your brand instead of the whole project: a page in
+  your project, a page of a site built elsewhere on your computer, or a page your computer serves (`localhost`,
+  `127.0.0.1` or `[::1]`; a page on another website is refused). Claude reports the failing rows with their fix, the
+  generic patterns as warnings, and the labelled samples as your list of what to replace before you publish. A new
+  how-to, "Check a page against your brand", walks through it, including how to turn a warning into one of your brand
+  rules; the commands page, the check page and the troubleshooting page link to it. The adoption step now says to run
+  the page check on a product's pages once they are built.
 
 ### Changed
 

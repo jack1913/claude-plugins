@@ -18,6 +18,7 @@ How to use brand-creator. New here? Start with the [plugin README](../../README.
 - [Apply the brand to your product](use/apply-the-brand-to-your-product.md): change your repositories, only when you say go
 - [Launch your brand](use/launch-your-brand.md): your checklist, one step at a time
 - [Check your project](use/check-your-project.md): checks, leftovers and a review
+- [Check a page against your brand](use/check-a-page.md): colours, fonts, logo, motion and claims on a page you built
 
 ## Look it up
 

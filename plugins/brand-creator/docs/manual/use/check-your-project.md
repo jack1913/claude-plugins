@@ -38,6 +38,15 @@ After you change a name, colour or rule, give the old value:
 Claude searches the whole project for it. Repeat the old value for each one. Add a parent brand's document with a path you
 name. Places on your adoption list only warn. Every other hit fails.
 
+## Check a page
+
+Built a page for your brand, in this project or elsewhere on your computer? Check it against your colours, fonts, logo,
+motion and claims:
+
+> /brand-creator:check --page pages/index.html
+
+The full steps are in [Check a page against your brand](check-a-page.md).
+
 ## Get a review
 
 > /brand-creator:review
@@ -70,5 +79,6 @@ More: [Troubleshooting](../reference/troubleshooting.md).
 
 ## Related
 
+- [Check a page against your brand](check-a-page.md)
 - [Agents and workflows](../reference/agents-and-workflows.md)
 - [Make the brand book](make-the-brand-book.md)

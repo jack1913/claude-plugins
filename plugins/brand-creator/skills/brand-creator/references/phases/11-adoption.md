@@ -59,6 +59,9 @@ corner. The agent surveys read only, lists, and changes nothing until the owner 
    publish configuration and say what the push triggers and what cannot be undone. Rows that act on a live service (renaming a
    repository, a hosted service or an app id, an upload, a DNS change, a store listing) need their own OK, apart from the apply
    ask; most are owner steps in LAUNCH.md.
+8. When a product's pages are built, run the page check on them: `page-check <page>`, `page-check --from <dir> <page>` or
+   `page-check --url http://localhost:<port>/<path>` (see [09-qa](09-qa.md)). It reports colours, type, the mark, motion and claims against
+   the brand, and warns about generic patterns; it changes nothing in the product.
 
 ### A parent site that shows the product
 
