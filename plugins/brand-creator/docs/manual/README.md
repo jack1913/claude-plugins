@@ -14,6 +14,7 @@ How to use brand-creator. New here? Start with the [plugin README](../../README.
 - [Get your marks drawn](use/get-your-marks-drawn.md): on a design canvas, with `/design`, or as SVG code only if you say yes
 - [Name your brand](use/name-your-brand.md): get name ideas, or check a name
 - [Make icons and images from your logo](use/make-icons-and-images.md): favicons, app icons and social images
+- [Get reference pages for your site](use/get-reference-pages-for-your-site.md): see how the best sites do the job, then pick a first screen and your pages
 - [Make the brand book](use/make-the-brand-book.md): one page of brand rules
 - [Apply the brand to your product](use/apply-the-brand-to-your-product.md): change your repositories, only when you say go
 - [Launch your brand](use/launch-your-brand.md): your checklist, one step at a time

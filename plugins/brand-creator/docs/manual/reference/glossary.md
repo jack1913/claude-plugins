@@ -12,6 +12,10 @@ Plain words for the terms brand-creator uses.
 | Board | One page that shows the directions (or the refined one) so you can compare them and answer. Claude checks it and photographs it at desktop and phone width, in light and dark |
 | Round | One pass of a board. Round 0 is the style research, round 1 shows the directions; later rounds refine your pick. In Standard and Full, a motion round shows three ways your logo could move. Finished rounds are locked |
 | Style board | The page you see before anything is drawn: how brands like yours look, and four to six styles with real examples to pick from |
+| Website references | The board you see before any page of your site is built: groups of real sites that do the same job for the same visitor, each with a screenshot, what to take from it and what to leave. You pick the groups to build from |
+| Reference page | A page of your site, built in your brand and approved, that shows whoever builds the real site what the brand decided and what was only an example. A reference, never a template to fill in |
+| Cold review | A read of a page by someone who does not know why it looks the way it does. It sees only the page's pictures, your brief and your facts, and gives its verdict ("ship" or "fix") before any reason. When Claude does it in the same conversation, the record says so |
+| Layout reference | A short recipe for how a page is organised for one visitor job: what leads, in what order, where the action sits and how it ends. Structure only, a starting point and never a template |
 | Gate | A point where Claude stops and waits for your decision, such as your pick or your OK on the finished files. Nothing continues until you answer |
 | Lock | A finished round is saved in `history/` with a checksum and then protected: nothing can change it quietly |
 | Mark | Your logo symbol. A lockup is the mark together with your name |

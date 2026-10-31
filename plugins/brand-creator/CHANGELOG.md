@@ -220,6 +220,10 @@ lints the board of the latest round again before `check`, so an edit of the fact
   two or three heroes on the first board, and for each hero or page a page check and four captured views of the page as
   it is now. A hero's cold review has to match those views too. The other pages follow a hero you picked, every choice
   is tagged as a rule or an example, and a rule says where you decided it.
+- A new how-to, "Get reference pages for your site", walks through the website references and the site round, from your
+  answer on online research to the approved pages. The manual index and the commands page link to it, "Choose a tier"
+  and "What it makes" describe the new steps, and the glossary explains website references, reference page, cold review
+  and layout reference.
 
 ### Changed
 

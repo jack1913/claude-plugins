@@ -50,6 +50,36 @@ words. In Standard and Full the file always exists once you have answered, and `
 the system rules. `brand-creator motion` shows the answer, and `brand-creator motion --off "<your reason>"` records that
 nothing moves. BRAND.md, DESIGN.md, the brand's own skill and the brand book repeat it.
 
+## Website references and reference pages (Standard and Full)
+
+Only when your brief lists a site. The steps are in [Get reference pages for your site](../use/get-reference-pages-for-your-site.md).
+
+- `capture <page>` photographs a page of your project: the first screen at 1440 and 390 pixels wide, in light and dark,
+  and the whole page at 1440. The pictures go in a `shots/` folder beside the page, with a `capture.json` that lists the
+  files the page loaded and anything that went wrong. A page in `history/` or in a round before the latest is refused.
+- `capture --url <address> --name <name>` photographs a real site into `research/site-refs/<name>/`: the first screen at
+  both widths, the whole page and two small thumbnails. It is the only form of `capture` that reaches the internet. It
+  refuses unless your answer to the online-research question allows it (online research, or only the sites you gave), and
+  a site that does not load writes nothing.
+- The website references board is an ordinary round. `board-lint` checks that your brief lists a site, that your
+  research answer is recorded, and that there are four to six groups of three or more sites, each with a link, a
+  screenshot, what to take and what to leave. A screenshot that matches none of the captures gets a warning, so you can
+  tell a picture you sent from one Claude took. Screenshots you send are kept in `research/site-refs/owner/`.
+- `research/site-cliches.md` lists the category's habits that sites follow by reflex. Every first screen is tested
+  against it. Notes with the addresses and the date each site was read are in `research/<date>-site-refs.md`.
+- The site round is two boards, also ordinary rounds. On the first, each version of the first screen has its own folder:
+  the page, its `shots/` and its `cold-review.md`. `page-check` leaves one report per page in `assets/_checks/page-check/`.
+  `board-lint` checks that the pictures are those of the page as it is now, that the cold review matches them, that
+  every version is checked against your brand rules, and that the pages board comes after a first screen you picked.
+- On the pages board every choice is tagged as a brand rule or an example. `board-lint` checks that a rule says where you
+  decided it, by finding the words in your decision files.
+- `site approve` copies the approved pages into `site/<page>/` and writes `site/site.json`: the pages, the layout each
+  used, a checksum of each, and the choices with their tags. `check` reads them back.
+- `skills/brand-creator/references/page-layouts.json` in the plugin holds the layout references, keyed to what the visitor
+  came to do. Every page you build records the one it used, or `own:` and a word when none fits.
+- In Standard and Full the brand book has an optional Site chapter that shows the approved pages and the tag on each
+  choice. Ask for it when you make the book.
+
 ## Web, social and profiles
 
 - `emit web`: favicons drawn per size (the browser tab gets your small drawing), PWA icons and a head snippet.
