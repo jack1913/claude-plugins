@@ -17,7 +17,8 @@ site-refs:tier, site-refs:brief, site-refs:g4, site-refs:research and site-refs:
 and groups:count (4 to 6 groups of sites: fewer fails, more warns).
 A site board (site: a round from 2 on, in the Standard and Full tiers, after G4 and the pick of website references G4w, when brief/BRIEF.md lists a site; data-site-stage="hero" or "pages") is no pick, style, reset or rejected
 round either, and the style gate never counts it. It has the rows site:tier, site:brief, site:g4 and site:g4w, and page:site-stage; the sections what-changed and weak-points (from the second board of a stage), hardest-surface, my-call,
-questions and reply; and, at the hero stage, one card per variant (site:variants, site:files, site:layout, site:fields; boardlib/siteboard.py).
+questions and reply; and, at the hero stage, one card per variant (site:variants, site:files, site:layout, site:fields; boardlib/siteboard.py) and the proof each brings: the page-check report of its page (site:check),
+the tells in it (site:tells) and the stills `capture` took (site:stills).
 A pick board also gets, for each direction, direction:<name>:reflex-format|reflex-ids|reflex-count|reflex-grounded and, across directions,
 directions:reflex-shared (the rules are in boardlib/reflex.py): two hits in one direction, or one hit that every direction shares, fail; a free-text line,
 an unknown id or an argument that shares no word with FACTS.md or brief/BRIEF.md warns. When the my-call section says data-judge="ran", each direction
@@ -41,6 +42,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "boardlib"))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "marklib"))
+sys.path.insert(0, str(Path(__file__).resolve().parent / "pagelib"))   # boardlib/siteboard.py names the page-check report of a page with pagelib/pagecheck.py
 from _common import (EXIT_USAGE, CliError, Parser, Report, add_project_arg, confine, fail, find_project, gate_recorded,  # noqa: E402
                      list_rounds, main_guard, read_state, rel)
 import svgtools  # noqa: E402

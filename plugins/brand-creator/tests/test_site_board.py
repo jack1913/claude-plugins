@@ -1,14 +1,18 @@
 """The site board (data-board="site"), hero stage: a round after G4w that shows two or three variants of the site's first screen, one folder and one card each (scripts/boardlib/siteboard.py,
-templates/site-board.html). Every row of the lint has a deliberate break here. The variants' pages are made by hand (a page that declares its layout and its id on <body>), so these tests need no
-browser."""
+templates/site-board.html). Every row of the lint has a deliberate break here. The variants' pages are made by hand (a page that declares its layout and its id on <body>), and so are the page-check
+report and the stills of each (helpers.page_check_report and helpers.capture_record write them in the shape of group 1's tools), so these tests need no browser."""
+import base64
 import re
+import shutil
 from pathlib import Path
 
 import pytest
-from helpers import ROOT, bc, failing, fill_site_board, fill_site_refs_board, fill_style_board, install_fixture, make_project, mutate, report
+from helpers import (ROOT, bc, capture_record, failing, fill_site_board, fill_site_refs_board, fill_style_board, install_fixture, make_project, mutate, mutate_json, page_check_report,
+                     report)
 
 import siteboard
 from boardpage import is_site_refs_board, page_kind, parse_dom
+from pagecheck import tell_ids
 
 TEMPLATE = ROOT / "templates" / "site-board.html"
 REFS_TEMPLATE = ROOT / "templates" / "site-refs-board.html"
@@ -24,10 +28,19 @@ def page_text(name: str, layout: str = "walkthrough", page_id: str = "start") ->
             f'<link rel="stylesheet" href="../../../assets/tokens/tokens.css"></head>\n<body data-layout="{layout}" data-page="{page_id}"><h1>{name}</h1></body></html>\n')
 
 
+def settle(p: Path, rnd: int, name: str, status: str = "pass", tells: tuple[str, ...] = ()) -> None:
+    """The page-check report and the stills of a variant's page as it is now: what `brand-creator page-check` and `brand-creator capture` leave behind after a change to the page."""
+    page = f"rounds/r{rnd}/{name}/index.html"
+    page_check_report(p, page, status, tells)
+    capture_record(p, page)
+
+
 def make_variant(p: Path, rnd: int, name: str, layout: str = "walkthrough", page_id: str = "start") -> Path:
+    """The folder of a variant: its page, and the page-check report and the stills that belong to the page as written."""
     page = p / "rounds" / f"r{rnd}" / name / "index.html"
     page.parent.mkdir(parents=True, exist_ok=True)
     page.write_text(page_text(name, layout, page_id), encoding="utf-8")
+    settle(p, rnd, name)
     return page
 
 
@@ -109,7 +122,7 @@ def test_a_filled_hero_board_passes(proj):
     r = lint(proj)
     assert r.returncode == 0, r.stdout
     got = rows(proj)
-    for rid in ("page:data-board", "page:unfilled", "page:votes", "page:site-stage", "site:tier", "site:brief", "site:g4", "site:g4w", "site:variants", "site:files", "site:layout", "site:fields",
+    for rid in ("page:data-board", "page:unfilled", "page:votes", "page:site-stage", "site:tier", "site:brief", "site:g4", "site:g4w", "site:variants", "site:files", "site:layout", "site:fields", "site:check", "site:tells", "site:stills",
                 "section:hardest-surface", "section:my-call", "section:questions", "section:reply"):
         assert got[rid]["status"] == "pass", (rid, got[rid])
     assert got["page:data-board"]["detail"] == "site" and got["page:site-stage"]["detail"] == "hero"
@@ -319,7 +332,7 @@ def test_a_variant_needs_its_folder_and_its_page(tmp_path):
     r = lint(p)
     assert r.returncode == 1 and "site:files" in failed(p), r.stdout
     assert "Atlas: rounds/r2/Atlas/index.html is missing" in detail(p, "site:files")
-    (p / "rounds" / "r2" / "Atlas").rmdir()
+    shutil.rmtree(p / "rounds" / "r2" / "Atlas")                                              # the stills of `capture` were in shots/
     r = lint(p)
     assert r.returncode == 1 and "Atlas: rounds/r2/Atlas/ does not exist" in detail(p, "site:files"), r.stdout
 
@@ -386,6 +399,7 @@ def test_an_unknown_layout_fails_and_an_own_layout_warns(proj):
     assert "Ledger: data-layout 'carousel' is no id of page-layouts.json" in why and "walkthrough" in why and "no own:<word>" in why, why
     mutate(page, 'data-layout="carousel"', 'data-layout="own:ledger"')
     mutate(board_of(proj), 'data-field="layout" data-layout="carousel"', 'data-field="layout" data-layout="own:ledger"')
+    settle(proj, 2, "Ledger")                                                                  # the page changed: check it and capture it again
     r = lint(proj)
     assert r.returncode == 0, r.stdout
     assert rows(proj)["site:layout"]["status"] == "warn" and "Ledger: a layout of its own (own:ledger): say on the card why none of the references fit" in detail(proj, "site:layout")
@@ -399,6 +413,7 @@ def test_every_layout_reference_of_the_plugin_passes_and_an_own_word_must_be_a_w
         mutate(page, f'data-layout="{previous}"', f'data-layout="{layout}"')
         mutate(board_of(proj), f'data-field="layout" data-layout="{previous}"', f'data-field="layout" data-layout="{layout}"')
         previous = layout
+        settle(proj, 2, "Ledger")
         assert lint(proj).returncode == 0 and rows(proj)["site:layout"]["status"] == "pass", layout
     mutate(page, f'data-layout="{previous}"', 'data-layout="own:"')
     mutate(board_of(proj), f'data-field="layout" data-layout="{previous}"', 'data-field="layout" data-layout="own:"')
@@ -569,3 +584,270 @@ def test_the_lint_report_lists_the_brief_and_each_variant_page_as_inputs_and_goe
     assert stale_inputs(proj, doc) == []
     (proj / "rounds" / "r2" / "Atlas" / "index.html").write_text(page_text("Atlas") + "<!-- changed -->\n", encoding="utf-8")
     assert stale_inputs(proj, doc), "a page changed after the lint makes the report stale"
+
+
+# ---------------------------------------------------------------- site:check, site:tells, site:stills: the proof each variant brings
+
+VIEWS = ("1440-light", "1440-dark", "390-light", "390-dark")
+
+
+def page_of(name: str, rnd: int = 2) -> str:
+    return f"rounds/r{rnd}/{name}/index.html"
+
+
+def check_report_of(p: Path, name: str, rnd: int = 2) -> Path:
+    from pagecheck import report_tool
+    return p / "assets" / "_checks" / (report_tool(page_of(name, rnd)) + ".json")
+
+
+def shots_of(p: Path, name: str, rnd: int = 2) -> Path:
+    return p / "rounds" / f"r{rnd}" / name / "shots"
+
+
+def inline_stills(text: str, p: Path, other: dict | None = None, rnd: int = 2) -> str:
+    """The copy of a board published on a review surface: every still by a relative path becomes a data: URI of the same file (of other bytes for the paths in `other`)."""
+    def data(m: "re.Match[str]") -> str:
+        raw = (other or {}).get(m.group(1)) or (p / "rounds" / f"r{rnd}" / m.group(1)).read_bytes()
+        return 'src="data:image/png;base64,' + base64.b64encode(raw).decode() + '"'
+    out, n = re.subn(r'src="([A-Za-z0-9_-]+/shots/[0-9a-z-]+\.png)"', data, text)
+    assert n >= 4, n
+    return out
+
+
+def test_a_variant_without_a_page_check_report_fails(proj):
+    check_report_of(proj, "Atlas").unlink()
+    r = lint(proj)
+    assert r.returncode == 1 and "site:check" in failed(proj), r.stdout
+    why = detail(proj, "site:check")
+    assert "Atlas: no page-check report of rounds/r2/Atlas/index.html: run `brand-creator page-check rounds/r2/Atlas/index.html`" in why and "Ledger" not in why, why
+    assert rows(proj)["site:tells"]["status"] == "skipped" and "no current page-check verdict to read the tells from for Atlas" in detail(proj, "site:tells")
+
+
+def test_the_report_of_a_page_is_found_by_the_pages_path(proj):
+    from pagecheck import report_tool
+    f = check_report_of(proj, "Ledger")
+    assert f.is_file() and f.relative_to(proj).as_posix().startswith("assets/_checks/page-check/index-")
+    assert f == proj / "assets" / "_checks" / (report_tool("rounds/r2/Ledger/index.html") + ".json")
+    assert report_tool("rounds/r2/Ledger/index.html") != report_tool("rounds/r2/Atlas/index.html") != report_tool("rounds/r3/Atlas/index.html")
+    assert report(proj, report_tool("rounds/r2/Ledger/index.html"))["target"] == {"kind": "project", "page": "rounds/r2/Ledger/index.html", "from": None, "url": None}
+
+
+def test_a_page_changed_after_its_page_check_fails(proj):
+    mutate(proj / page_of("Atlas"), "<h1>Atlas</h1>", "<h1>Atlas, longer</h1>")
+    r = lint(proj)
+    assert r.returncode == 1 and {"site:check", "site:stills"} <= set(failed(proj)), r.stdout
+    assert "Atlas: the page-check report is stale (rounds/r2/Atlas/index.html changed): run `brand-creator page-check rounds/r2/Atlas/index.html`" in detail(proj, "site:check")
+    page_check_report(proj, page_of("Atlas"))                                                  # checked again: the report is current, the stills are not
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:stills"], r.stdout
+    capture_record(proj, page_of("Atlas"))
+    assert lint(proj).returncode == 0
+
+
+def test_a_changed_tokens_stylesheet_makes_the_check_and_the_stills_stale(proj):
+    mutate(proj / "assets" / "tokens" / "tokens.css", "#16191d", "#16191e")
+    r = lint(proj)
+    assert r.returncode == 1 and {"site:check", "site:stills"} <= set(failed(proj)), r.stdout
+    assert "assets/tokens/tokens.css changed" in detail(proj, "site:check") and "assets/tokens/tokens.css changed" in detail(proj, "site:stills")
+
+
+def test_a_card_that_shows_pass_for_a_failing_check_fails(proj):
+    settle(proj, 2, "Atlas", "fail")
+    board_of(proj).write_text(board_text(checks={"Atlas": "fail"}), encoding="utf-8")
+    mutate(board_of(proj), '<p class="check" data-check="fail">', '<p class="check" data-check="pass">')
+    r = lint(proj)
+    assert r.returncode == 1 and "site:check" in failed(proj), r.stdout
+    assert 'Atlas: the card says data-check="pass" and the page-check report says fail' in detail(proj, "site:check")
+    mutate(board_of(proj), '<p class="check" data-check="pass">', '<p class="check" data-check="fail">')    # the first card (Ledger) says fail for a passing check
+    r = lint(proj)
+    assert r.returncode == 1 and 'Ledger: the card says data-check="fail" and the page-check report says pass' in detail(proj, "site:check"), r.stdout
+
+
+def test_a_failing_check_shown_as_fail_passes_the_row(proj):
+    settle(proj, 2, "Atlas", "fail")
+    board_of(proj).write_text(board_text(checks={"Atlas": "fail"}), encoding="utf-8")
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    assert rows(proj)["site:check"]["status"] == "pass"
+
+
+def test_a_report_that_is_no_verdict_fails_and_says_what_it_could_not_verify(proj):
+    settle(proj, 2, "Atlas", "not-verified")
+    r = lint(proj)
+    assert r.returncode == 1 and "site:check" in failed(proj), r.stdout
+    why = detail(proj, "site:check")
+    assert "Atlas: the page-check report is 'not-verified', not a verdict" in why and "page:load: not verified: no view was measured" in why and "run `brand-creator page-check rounds/r2/Atlas/index.html`" in why, why
+    assert rows(proj)["site:tells"]["status"] == "skipped"
+
+
+def test_a_check_line_needs_one_status_and_some_text(proj):
+    mutate(board_of(proj), '<p class="check" data-check="pass">Filled in for the test fixture.</p>', '<p class="check" data-check="pass"></p>')
+    r = lint(proj)
+    assert r.returncode == 1 and "Ledger: the check line has no text" in detail(proj, "site:check"), r.stdout
+    mutate(board_of(proj), '<p class="check" data-check="pass"></p>', '<p class="check" data-check="maybe">x</p>')
+    r = lint(proj)
+    assert r.returncode == 1 and "Ledger: data-check must be \"pass\" or \"fail\", got 'maybe'" in detail(proj, "site:check"), r.stdout
+    mutate(board_of(proj), '<p class="check" data-check="maybe">x</p>', "")
+    r = lint(proj)
+    assert r.returncode == 1 and "Ledger: the card needs one check line" in detail(proj, "site:check") and "it has 0" in detail(proj, "site:check"), r.stdout
+
+
+def test_a_report_of_another_page_is_no_report_of_this_one(proj):
+    f = check_report_of(proj, "Atlas")
+    mutate_json(f, lambda d: d["target"].__setitem__("page", page_of("Ledger")))
+    r = lint(proj)
+    assert r.returncode == 1 and "site:check" in failed(proj), r.stdout
+    assert "Atlas: the page-check report is stale (it is the report of project rounds/r2/Ledger/index.html, not of the project page rounds/r2/Atlas/index.html)" in detail(proj, "site:check")
+    mutate_json(f, lambda d: d.__setitem__("target", {"kind": "url", "page": None, "from": None, "url": "http://localhost:3000/start.html"}))
+    r = lint(proj)
+    assert r.returncode == 1 and "it is the report of url http://localhost:3000/start.html" in detail(proj, "site:check"), r.stdout
+
+
+def test_a_report_that_does_not_list_the_page_could_never_go_stale_and_fails(proj):
+    mutate_json(check_report_of(proj, "Atlas"), lambda d: d.__setitem__("inputs", [i for i in d["inputs"] if i["path"] != page_of("Atlas")]))
+    r = lint(proj)
+    assert r.returncode == 1 and "site:check" in failed(proj), r.stdout
+    assert "it does not list rounds/r2/Atlas/index.html among the files it was made from, so a change to the page would not show" in detail(proj, "site:check")
+
+
+def test_every_tell_page_check_found_is_named_on_the_card(proj):
+    settle(proj, 2, "Ledger", tells=("eyebrow", "three-equal-tiles"))
+    r = lint(proj)
+    assert r.returncode == 1 and "site:tells" in failed(proj), r.stdout
+    why = detail(proj, "site:tells")
+    assert "Ledger: the card does not name eyebrow (" in why and "three-equal-tiles (" in why and "show every tell page-check found, with what you will do about it" in why and "Atlas" not in why, why
+    assert "site:check" not in failed(proj), "a tell is a warning of the page, not a failure of the check"
+    mutate(board_of(proj), "none found", "eyebrow: moved into the heading; three-equal-tiles: kept, argued in My call")
+    assert lint(proj).returncode == 0, lint(proj).stdout
+    assert detail(proj, "site:tells") == "2 tell(s) found by page-check, each named on its card"
+    mutate(board_of(proj), "three-equal-tiles: kept", "three-equal-tiles-ish: kept")         # an id that is only the start of a longer word is not the id
+    r = lint(proj)
+    assert r.returncode == 1 and "Ledger: the card does not name three-equal-tiles (" in detail(proj, "site:tells") and "eyebrow (" not in detail(proj, "site:tells"), r.stdout
+
+
+@pytest.mark.parametrize("tid", tell_ids())
+def test_each_tell_of_page_tells_json_is_read_by_its_id(proj, tid):
+    settle(proj, 2, "Ledger", tells=(tid,))
+    r = lint(proj)
+    assert r.returncode == 1 and "site:tells" in failed(proj) and f"does not name {tid} (" in detail(proj, "site:tells"), r.stdout
+    mutate(board_of(proj), "none found", f"tell:{tid} will be fixed before the pages")
+    assert lint(proj).returncode == 0 and detail(proj, "site:tells") == "1 tell(s) found by page-check, each named on its card"
+
+
+def test_a_warning_of_the_report_that_is_no_tell_needs_no_mention(proj):
+    mutate_json(check_report_of(proj, "Ledger"), lambda d: d["results"].append({"id": "page:pairs:light", "status": "warn", "label": "text on its ground", "detail": "x"}))
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    assert detail(proj, "site:tells") == "page-check found no tell"
+
+
+def test_a_variant_without_a_capture_record_fails(proj):
+    (shots_of(proj, "Atlas") / "capture.json").unlink()
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:stills"], r.stdout
+    assert "Atlas: no rounds/r2/Atlas/shots/capture.json, so the stills are not those of the page: run `brand-creator capture rounds/r2/Atlas/index.html`" in detail(proj, "site:stills")
+
+
+def test_stills_must_be_the_captured_bytes(proj):
+    still = shots_of(proj, "Ledger") / "390-dark.png"
+    still.write_bytes(b"not the picture capture took")
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:stills"], r.stdout
+    why = detail(proj, "site:stills")
+    assert ("Ledger: rounds/r2/Ledger/shots/390-dark.png is not the 390-dark still rounds/r2/Ledger/shots/capture.json lists (its sha256 differs): "
+            "run `brand-creator capture rounds/r2/Ledger/index.html`") in why and "Ledger: the 390-dark picture the card shows is not the one" in why and "Atlas" not in why, why
+    capture_record(proj, page_of("Ledger"))                                                    # taken again
+    assert lint(proj).returncode == 0
+    capture = shots_of(proj, "Ledger") / "capture.json"
+    mutate_json(capture, lambda d: d["views"][0].__setitem__("sha256", "0" * 64))              # the record lists other bytes than the file and the card have
+    r = lint(proj)
+    assert r.returncode == 1 and "Ledger: the 1440-light picture the card shows is not the one" in detail(proj, "site:stills"), r.stdout
+    mutate_json(capture, lambda d: d["views"][0].__setitem__("sha256", "short"))
+    r = lint(proj)
+    assert r.returncode == 1 and "Ledger: rounds/r2/Ledger/shots/capture.json lists no 1440-light still with a sha256" in detail(proj, "site:stills"), r.stdout
+    mutate_json(capture, lambda d: d["views"].pop(0))
+    assert lint(proj).returncode == 1 and "lists no 1440-light still" in detail(proj, "site:stills")
+
+
+def test_stills_go_stale_when_the_page_changes(proj):
+    mutate(proj / page_of("Ledger"), "<h1>Ledger</h1>", "<h1>Ledger again</h1>")
+    page_check_report(proj, page_of("Ledger"))                                                 # the check is run again, the capture is not
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:stills"], r.stdout
+    assert "Ledger: rounds/r2/Ledger/shots/capture.json is stale (rounds/r2/Ledger/index.html changed): run `brand-creator capture rounds/r2/Ledger/index.html`" in detail(proj, "site:stills")
+
+
+def test_a_capture_of_another_page_fails(proj):
+    mutate_json(shots_of(proj, "Atlas") / "capture.json", lambda d: d["source"].__setitem__("page", page_of("Ledger")))
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:stills"], r.stdout
+    assert "Atlas: rounds/r2/Atlas/shots/capture.json is the capture of rounds/r2/Ledger/index.html, not of rounds/r2/Atlas/index.html (a folder copied from an earlier round)" in detail(proj, "site:stills")
+    mutate_json(shots_of(proj, "Atlas") / "capture.json", lambda d: d.__setitem__("source", {"url": "https://example.com/", "final_url": "https://example.com/"}))   # the capture of a real site
+    assert lint(proj).returncode == 1 and "is the capture of https://example.com/, not of" in detail(proj, "site:stills")
+
+
+def test_the_card_shows_exactly_one_still_per_view(proj):
+    mutate(board_of(proj), 'data-field="still" data-view="1440-dark"', 'data-field="still" data-view="1440-light"')
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:stills"], r.stdout
+    why = detail(proj, "site:stills")
+    assert 'Ledger: the card needs one <img data-field="still" data-view="1440-light">, it has 2' in why and 'Ledger: the card needs one <img data-field="still" data-view="1440-dark">, it has 0' in why, why
+    mutate(board_of(proj), 'data-field="still" data-view="390-dark"', 'data-field="still" data-view="tablet"')
+    assert lint(proj).returncode == 1 and "a still of the card has data-view 'tablet', the views are 1440-light, 1440-dark, 390-light, 390-dark" in detail(proj, "site:stills")
+
+
+@pytest.mark.parametrize("src, why", [("https://example.com/1440-light.png", "a site board shows the project's own file by a relative path, or a data: URI (nothing from the network)"),
+                                      ("../../../../outside.png", "which is outside the project"),
+                                      ("Ledger/shots/gone.png", "names rounds/r2/Ledger/shots/gone.png, which does not exist"),
+                                      ("data:image/png;base64,@@@", "is a data: URI that cannot be decoded")])
+def test_a_still_that_is_no_file_of_the_project_is_no_capture(proj, src, why):
+    mutate(board_of(proj), 'src="Ledger/shots/1440-light.png"', f'src="{src}"')
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:stills"], r.stdout
+    assert re.search(r"Ledger: the 1440-light picture (?:is|names) ", detail(proj, "site:stills")) and why in detail(proj, "site:stills")
+
+
+def test_the_review_copy_may_inline_the_same_stills(proj):
+    review = proj / "review" / "index.html"
+    review.parent.mkdir()
+    review.write_text(inline_stills(board_of(proj).read_text(encoding="utf-8"), proj), encoding="utf-8")
+    r = lint(proj, "review/index.html", "--round", "2")
+    assert r.returncode == 0, r.stdout
+    assert rows(proj)["site:stills"]["status"] == "pass" and rows(proj)["site:check"]["status"] == "pass"
+
+
+def test_a_review_copy_that_inlines_other_pictures_fails(proj):
+    review = proj / "review" / "index.html"
+    review.parent.mkdir()
+    review.write_text(inline_stills(board_of(proj).read_text(encoding="utf-8"), proj, other={"Atlas/shots/390-light.png": b"another picture"}), encoding="utf-8")
+    r = lint(proj, "review/index.html", "--round", "2")
+    assert r.returncode == 1 and failed(proj) == ["site:stills"], r.stdout
+    assert "Atlas: the 390-light picture the card shows is not the one rounds/r2/Atlas/shots/capture.json lists" in detail(proj, "site:stills")
+
+
+def test_without_a_variant_card_the_proof_rows_are_not_verified(tmp_path):
+    p = build(tmp_path)
+    add_round(p, 3, (), first=False)
+    r = lint(p, "rounds/r3/board.html")
+    assert r.returncode == 1, r.stdout                                                         # site:variants fails: a later hero board shows 1 or more
+    got = rows(p)
+    for rid in ("site:check", "site:tells", "site:stills"):
+        assert got[rid]["status"] == "skipped" and "there is no variant card to look at" in got[rid]["detail"], rid
+
+
+def test_the_lint_report_lists_the_page_check_reports_the_captures_and_the_stills_as_inputs_and_goes_stale_with_them(proj):
+    from _common import stale_inputs
+    assert lint(proj).returncode == 0
+    doc = report(proj, "board-lint")
+    paths = [i["path"] for i in doc["inputs"]]
+    for name in NAMES:
+        for want in (check_report_of(proj, name).relative_to(proj).as_posix(), f"rounds/r2/{name}/shots/capture.json", *(f"rounds/r2/{name}/shots/{v}.png" for v in VIEWS), "assets/tokens/tokens.css"):
+            assert want in paths, (want, paths)
+    assert stale_inputs(proj, doc) == []
+    still = shots_of(proj, "Atlas") / "390-light.png"
+    before = still.read_bytes()
+    still.write_bytes(before + b"x")
+    assert stale_inputs(proj, doc) == ["rounds/r2/Atlas/shots/390-light.png changed"]
+    still.write_bytes(before)
+    page_check_report(proj, page_of("Ledger"), "fail")
+    assert stale_inputs(proj, doc) == [check_report_of(proj, "Ledger").relative_to(proj).as_posix() + " changed"]
