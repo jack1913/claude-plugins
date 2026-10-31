@@ -168,7 +168,18 @@ private research page only, never reused in anything you build.
 
 `board-lint` gives these rows: `site-refs:tier` (Standard or Full), `site-refs:brief` (the brief lists a site), `site-refs:g4` (G4 is recorded), `site-refs:research` (the online-research answer is recorded; `none` counts),
 `site-refs:cliches-file` (three site clichés or more), the section rows, `groups:count` (4 to 6 groups: fewer fails, more warns) and `page:data-board`, which fails a references board in round 0 or 1 or in a round listed in
-`reset_rounds`. The lint report lists `brief/BRIEF.md` and `research/site-cliches.md` among its inputs, so a changed brief or cliché list makes it stale.
+`reset_rounds`. The lint report lists `brief/BRIEF.md`, `research/site-cliches.md` and every `research/site-refs/*/capture.json` among its inputs, so a changed brief or cliché list, or a capture made again, makes it stale.
+
+Each group and each reference gets rows of its own:
+
+- `group:<name>:name`: a word of three letters or more, not a label such as "Option 2", "Group B" or "Layout 3", not another group's name in other letters.
+- `group:<name>:idea`: how the group serves the visitor's job, not what it looks like.
+- `group:<name>:references`: three or more sites; each has a link (the first link of the item, http or https), an inlined screenshot with alt text and a caption (`<figure>` with `<figcaption>`; the template's ` · shown for private research` is not the caption), `data-field="take"` and `data-field="avoid"` with words in them (the `Take:` and `Avoid:` label of the template does not count, with or without its colon). The row names the reference that lacks one.
+- `group:<name>:layout`: only when the group has `data-layout`: an id of `page-layouts.json`, or `own:<word>` (a warning: say in the idea why none of the references fits).
+- `group:<name>:shot:<k>`, one per screenshot: a warning, never a failure, unless the picture is a thumbnail or a view listed in a `research/site-refs/<name>/capture.json` (written by `brand-creator capture --url <address> --name <name>`) of the address the reference links to.
+  A screenshot the owner sent has no capture and warns too; its caption says so.
+- `owner-sites:items`: each site the owner named is `like` or `dislike`, has a link or an inlined image, and says why in `data-field="why"`; one line saying the owner named none passes.
+- `images:inlined`: no picture on the board comes from the network.
 
 ## Site board (a round after G4w)
 

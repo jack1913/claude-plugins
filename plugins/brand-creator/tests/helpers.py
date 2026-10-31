@@ -327,6 +327,24 @@ def fill_motion_board(template: str, names: tuple[str, ...] = ("Settle", "Bounce
     return "".join(out)
 
 
+def write_site_capture(project: Path, name: str = "example", url: str = "https://example.com/reference", *, picture: str = STYLE_TINY_PNG, date: str = "2026-10-17",
+                       final_url: str | None = None) -> Path:
+    """research/site-refs/<name>/capture.json as `brand-creator capture --url` writes it (scripts/CONTRACT.md, "capture"), without the pictures: the sha256 of `picture` (a data: URI, the tiny PNG the
+    website references board filler inlines by default) is the one of the thumbnail the record lists, so a board that inlines `picture` for `url` is a capture of that address. The 1440 view carries other bytes."""
+    import base64
+    import hashlib
+    thumb = hashlib.sha256(base64.b64decode(picture.split(",", 1)[1])).hexdigest()
+    doc = {"schema": 1, "tool": "capture", "source": {"url": url, "final_url": final_url or url, "status": 200, "title": "Example"}, "date": date,
+           "views": [{"view": "1440", "width": 1440, "height": 900, "scheme": "light", "file": "1440.png", "sha256": hashlib.sha256(b"1440 of " + url.encode()).hexdigest()},
+                     {"view": "390", "width": 390, "height": 844, "scheme": "light", "file": "390.png", "sha256": hashlib.sha256(b"390 of " + url.encode()).hexdigest()}],
+           "full": {"file": "1440-full.png", "sha256": hashlib.sha256(b"full of " + url.encode()).hexdigest(), "height": 2725, "cut": False},
+           "thumbs": [{"file": "thumb-1440.jpg", "width": 480, "sha256": thumb}, {"file": "thumb-390.jpg", "width": 160, "sha256": hashlib.sha256(b"thumb 390 of " + url.encode()).hexdigest()}]}
+    out = project / "research" / "site-refs" / name / "capture.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
+    return out
+
+
 def fill_site_refs_board(template: str, names: tuple[str, ...] = ("Ledger", "Atlas", "Quay", "Harbour"), *, rnd: int = 2, brand: str = "Acme") -> str:
     """The website references board template as a finished page that must pass board-lint: the group article repeated once per name and every [[fill: ...]] marker outside an HTML
     comment replaced with stand-in text (a link, a date, a tiny inlined image where the marker asks for one). The three references of a group are the template's own."""

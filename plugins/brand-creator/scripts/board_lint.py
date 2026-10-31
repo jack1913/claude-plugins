@@ -14,7 +14,9 @@ A motion board is no pick, style, reset or rejected round: it has its own rows (
 motion:stills, motion:fields, and the warning motion:timelines; boardlib/motionboard.py), the kept masters are not measured on it, and the style gate never counts it.
 A website references board (site-refs: a round from 2 on, in the Standard and Full tiers, after G4, when brief/BRIEF.md lists a site) is no pick, style, reset or rejected round either, and the style gate never counts it. It has the rows
 site-refs:tier, site-refs:brief, site-refs:g4, site-refs:research and site-refs:cliches-file (boardlib/siteboard.py), the sections visitor-job, norm, owner-sites, site-cliches, none-of-these, my-call, questions and reply,
-and groups:count (4 to 6 groups of sites: fewer fails, more warns).
+and groups:count (4 to 6 groups of sites: fewer fails, more warns). Each group also gets group:<name>:name, :idea, :references (3 or more sites, each with a link, an inlined screenshot with alt text and a caption,
+what to take and what to avoid), :layout (when it names one: an id of page-layouts.json, or own:<word> with a warning) and, per reference, :shot:<k>: the screenshot must be a thumbnail or a view of a
+`capture --url` of the address it links (research/site-refs/*/capture.json, inputs of the report), else a warning. The page gets owner-sites:items (liked or disliked, a link or an image, why) and images:inlined (boardlib/siteboard.py).
 A site board (site: a round from 2 on, in the Standard and Full tiers, after G4 and the pick of website references G4w, when brief/BRIEF.md lists a site; data-site-stage="hero" or "pages") is no pick, style, reset or rejected
 round either, and the style gate never counts it. It has the rows site:tier, site:brief, site:g4 and site:g4w, and page:site-stage; the sections what-changed and weak-points (from the second board of a stage), hardest-surface, my-call,
 questions and reply; and, at the hero stage, one card per variant (site:variants, site:files, site:layout, site:fields; boardlib/siteboard.py) and the proof each brings: the page-check report of its page (site:check),
@@ -46,12 +48,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "pagelib"))   # boardli
 from _common import (EXIT_USAGE, CliError, Parser, Report, add_project_arg, confine, fail, find_project, gate_recorded,  # noqa: E402
                      list_rounds, main_guard, read_state, rel)
 import svgtools  # noqa: E402
-from boardpage import (DATA_IMAGE, FILL, GENERIC_NAME, KINDS, MIN_GROUPS, MIN_TERRITORIES, PLACEHOLDER, WORD_NAME, Node, declared_round,  # noqa: E402
+from boardpage import (DATA_IMAGE, FILL, GENERIC_NAME, KINDS, MIN_GROUPS, MIN_TERRITORIES, WORD_NAME, Node, declared_round,  # noqa: E402
                        group_count, is_style_board, page_kind, parse_dom, read_page, sections, territory_count)
 import divergence  # noqa: E402
 import motionboard  # noqa: E402
 import reflex  # noqa: E402
 import siteboard  # noqa: E402
+from boardpage import thumb_problems  # noqa: E402
 from _color import parse_hex, wcag_ratio  # noqa: E402
 from marks import ground_contacts, ground_target, outline_width, tokens_ground  # noqa: E402
 
@@ -368,28 +371,12 @@ def main() -> int:
     def check_thumb(im: Node, tid: str) -> None:
         """An optional thumbnail of a reference's real mark (data-field="thumb"): an <img> inlined as a data: image, so the picture
         needs no network, with alt text, in a <figure> with a non-empty <figcaption> (its words are the author's)."""
-        src, alt = im.attrs.get("src", "").strip(), im.attrs.get("alt", "").strip()
-        problems = []
-        if im.tag != "img":
-            problems.append(f'data-field="thumb" belongs on an <img>, not on <{im.tag}>')
-        if not DATA_IMAGE.match(src):
-            problems.append('src must be an inlined data:image/... URI (no network): ' + (f"got {src[:40]!r}" if src else "src is missing"))
-        if im.attrs.get("srcset", "").strip():
-            problems.append("srcset is not allowed (it would ask the network for another file)")
-        if not alt:
-            problems.append("alt text is missing or empty")
-        fig = im.parent
-        while fig is not None and fig.tag != "figure":
-            fig = fig.parent
-        if fig is None:
-            problems.append("the thumbnail is not inside a <figure>: its <figcaption> names the owner of the mark")
-        elif not any((t := c.text().strip()) and not PLACEHOLDER.match(t) for c in fig.walk() if c.tag == "figcaption"):
-            problems.append("its <figure> has no non-empty <figcaption>: name the owner of the mark and where the image is from")
+        problems = thumb_problems(im)   # the rule is boardpage's, shared with the screenshots of a website references board (boardlib/siteboard.py)
         rep.add(tid, "fail" if problems else "pass", "thumbnail is inlined (no network), has alt text and a caption",
                 detail="; ".join(problems) if problems else "data: image with alt text and a caption")
 
     def check_images() -> None:
-        """Every <img src> and every srcset (on <img> or <source>) of a style board is an inlined data:image/ URI, so no picture
+        """Every <img src> and every srcset (on <img> or <source>) of a style board or a website references board is an inlined data:image/ URI, so no picture
         needs the network. A thumbnail (data-field="thumb") is held to the same and to more by check_thumb, with a result of its own."""
         problems = []
         for n in root.walk():
@@ -466,7 +453,7 @@ def main() -> int:
 
     def check_site_refs(rnd: int) -> None:
         """A website references board (data-board="site-refs"): the gates of the site work (boardlib/siteboard.py), the sections every board has, the sections of its own, and 4 to 6 groups of sites.
-        No map, no directions, no kept masters; the group rows (the references of each group) come with the page rules of the groups."""
+        No map, no directions, no kept masters; after the sections and the count come the rows of the sites the owner named, of each group and of each reference (boardlib/siteboard.py), and images:inlined."""
         siteboard.refs_gate_rows(rep, project)
         if a.min_directions:
             rep.add("directions:count", "info", "not required here", detail="a website references board shows groups of sites, not directions; --min-directions is not used")
@@ -483,6 +470,9 @@ def main() -> int:
                 detail=(f"{counted} found with a name and content, need at least {MIN_GROUPS} (and 6 at most is the aim)" if counted < MIN_GROUPS else
                         f"{counted} found with a name and content: more than 6 is a menu, not a choice; cut to the 6 that differ most in how they serve the job" if counted > 6 else
                         f"{counted} found with a name and content"))
+        siteboard.owner_rows(rep, root)               # owner-sites:items
+        siteboard.group_rows(rep, project, page, root)   # group:<name>:name|idea|references|layout|shot:<k>, and the capture records the screenshots are compared with (inputs of this report)
+        check_images()                                # images:inlined: no picture on the board needs the network
 
     def check_site(rnd: int) -> None:
         """A site board (data-board="site"): the gates of the site round (boardlib/siteboard.py), the stage the page declares, the sections every board has, and at the hero stage one card per variant.
