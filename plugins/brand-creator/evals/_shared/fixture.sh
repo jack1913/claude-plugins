@@ -28,6 +28,7 @@ fx_write_state() {
   local tier="${ST_TIER:-quick}" phase="${ST_PHASE:-P3}" canonical="${ST_CANONICAL:-}" incumbent="${ST_INCUMBENT:-none}"
   local inventory="${ST_INVENTORY:-}" lang="${ST_LANG:-en}" content="${ST_CONTENT:-en}" name="${ST_NAME:-Acme}" slug="${ST_SLUG:-acme}"
   local g0="${ST_G0:-$FX_DATE $tier tier, generated mark, name decided}" g1s="${ST_G1S-$FX_DATE skipped by owner}" g2="${ST_G2:-}" g3="${ST_G3:-}" g4="${ST_G4:-}" g5="${ST_G5:-}" g6="${ST_G6:-}"
+  local g4w="${ST_G4W:-}" g4p="${ST_G4P:-}" site_research="${ST_SITE_RESEARCH:-auto}"
   local approved="${ST_APPROVED:-}"
   cat > BRAND-STATE.md <<STATE
 ---
@@ -47,6 +48,7 @@ book_chapters: []
 renderer: resvg
 review_surface: local
 review_url: ""
+site_research: $site_research
 incumbent: $incumbent
 inventory: "$inventory"
 canonical_direction: "$canonical"
@@ -60,6 +62,8 @@ gates:
   G2b: ""
   G3: "$g3"
   G4: "$g4"
+  G4w: "$g4w"
+  G4p: "$g4p"
   G5: "$g5"
   G6: "$g6"
   G7: ""
@@ -132,6 +136,18 @@ fx_before_style() {
   fx_copy_acme rounds assets tokens tools tray motion qa research
   ST_G1S="" ST_PHASE=P1s ST_DIRS='| (none yet) | | | | | | |' \
   ST_NOTES="G0 is done. No round yet: the style research (G1s) comes before any board of directions." fx_write_state
+}
+
+# A Standard project right after the system rules (G3 and G4 recorded): Acme's brief lists a site ("Required surfaces: website, ..."), the owner has not been
+# asked about online research (site_research: auto) and the website references pick (G4w) is empty, so the references come before any page of the site.
+# Like every fixture that records G4 it holds the motion decision (off). The state note names no step: the case is about what the skill makes the agent do.
+fx_before_site_refs() {
+  fx_copy_acme
+  fx_motion_off
+  ST_TIER=standard ST_PHASE=P7 ST_CANONICAL=Compass ST_G2="$FX_DATE picked Compass (A)" ST_G3="$FX_DATE approved the refined board" \
+  ST_G4="$FX_DATE system rules approved" \
+  ST_DIRS='| Compass | A | calm | DECIDED | steadiness | | 2026-10-17 |' \
+  ST_RULES='- (rule) accent at least 4×4 px at 32 px and below' ST_NOTES="G4 recorded." fx_write_state
 }
 
 # The owner's reply is bare: round 1 is on the board (labels 1-3) and a numbered chat list is open.

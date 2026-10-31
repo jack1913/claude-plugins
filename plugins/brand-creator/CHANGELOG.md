@@ -233,6 +233,9 @@ lints the board of the latest round again before `check`, so an edit of the fact
 - `check` now checks the approved pages in `site/`: unchanged since approval, each checked against your brand rules, with
   current stills. A project without approved pages gets no new row; a page you edited after approving it fails the
   check and names the command that approves the pages again.
+- A behaviour eval, `site-refs-gate-before-site-round`: on a Standard project with the system rules approved and a brief
+  that lists a site, "build the home page" writes no page of the site and records neither the website references pick
+  nor a skip, and without web tools Claude says the website references need web access and stops.
 
 ### Changed
 
