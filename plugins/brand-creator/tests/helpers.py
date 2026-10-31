@@ -20,6 +20,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "booklib"))
 sys.path.insert(0, str(ROOT / "scripts" / "boardlib"))
 sys.path.insert(0, str(ROOT / "scripts" / "printlib"))
 sys.path.insert(0, str(ROOT / "scripts" / "adaptlib"))
+sys.path.insert(0, str(ROOT / "scripts" / "pagelib"))
 
 
 # Off macOS there is no sips: a downscale of a PNG master names the explicit Pillow opt-in, an `emit tauri` its .icns writer.
@@ -399,3 +400,61 @@ def fill_site_board(template: str, names: tuple[str, ...] = ("Ledger", "Atlas"),
     for piece in re.split(r"(<!--.*?-->)", page, flags=re.S):      # markers inside HTML comments stay as the template wrote them
         out.append(piece if piece.startswith("<!--") else re.sub(r"\[\[fill:.*?\]\](?!\])", stand_in, piece, flags=re.S))
     return "".join(out)
+
+
+SITE_VIEWS = (("1440-light", 1440, 900, "light"), ("1440-dark", 1440, 900, "dark"), ("390-light", 390, 844, "light"), ("390-dark", 390, 844, "dark"))   # the four first screens `capture <page>` takes
+
+
+def page_check_report(p: Path, page: str, status: str = "pass", tells: tuple[str, ...] = ()) -> Path:
+    """The report `brand-creator page-check <page>` writes for a page of the project, made by hand so that no browser is needed: group 1's Report class under group 1's name for it
+    (pagecheck.report_tool), its inputs the page and the built tokens' stylesheet, `target` at the top level as page_check.py puts it, one tell:<id> row for each tell of page-tells.json (a
+    warning for each id in `tells`, a pass for the others) and, for status "fail", a failing page:load row, for "not-verified" a skipped one. -> the report's path."""
+    import _common
+    import pagecheck
+    assert status in ("pass", "fail", "not-verified"), status
+    rep = _common.Report(pagecheck.report_tool(page), p, [p / page, p / "assets" / "tokens" / "tokens.css"], renderer="chromium")
+    rep.add("page:target", "info", "what was checked", detail=f"project page {page}; widths 390; schemes light")
+    if status == "fail":
+        rep.add("page:load:390-light", "fail", "the page loads without an error", detail="a request to another origin was stopped: https://example.invalid/x.png")
+    elif status == "not-verified":
+        rep.add("page:load", "skipped", "the page loads without an error", detail="not verified: no view was measured")
+    known = [t["id"] for t in pagecheck.load_tells()["tells"]]
+    assert set(tells) <= set(known), (tells, known)
+    for t in pagecheck.load_tells()["tells"]:
+        if t["id"] in tells:
+            rep.add(f"tell:{t['id']}", "warn", t["name"], detail=f"1 found: {t['name']} (at 390 px)", tell=t["id"], hits=[{"selector": "h1", "text": "x", "widths": [390]}])
+        else:
+            rep.add(f"tell:{t['id']}", "pass", t["name"], detail="none found in 1 view(s)", tell=t["id"], hits=[])
+    assert rep.status == status, (rep.status, status)
+    rep.extra["target"] = {"kind": "project", "page": page, "from": None, "url": None}
+    out = rep.write()
+    _common._OPEN_REPORTS.remove(rep)   # written by hand, never finished: nothing of the test process is left open
+    return out
+
+
+def capture_record(p: Path, page: str) -> Path:
+    """The stills and the record `brand-creator capture <page>` writes beside a page (<the page's folder>/shots/), made by hand so that no browser is needed: the four first-screen stills and the full
+    one, each its own bytes, and capture.json in the shape scripts/CONTRACT.md gives it, its inputs the page and the built tokens' stylesheet. -> the path of capture.json."""
+    import hashlib
+    import json as _json
+
+    from _common import sha256_bytes, sha256_file
+    from px_lib import Img
+
+    def picture(name: str, h: int = 8) -> bytes:
+        return Img(8, h, "#" + hashlib.sha256(f"{page}|{name}".encode()).hexdigest()[:6]).png()
+
+    shots = (p / page).parent / "shots"
+    shots.mkdir(parents=True, exist_ok=True)
+    views = []
+    for view, width, height, scheme in SITE_VIEWS:
+        data = picture(view)
+        (shots / f"{view}.png").write_bytes(data)
+        views.append({"view": view, "width": width, "height": height, "scheme": scheme, "file": f"{view}.png", "sha256": sha256_bytes(data)})
+    full = picture("full", 16)
+    (shots / "1440-light-full.png").write_bytes(full)
+    inputs = [{"path": x, "sha256": sha256_file(p / x)} for x in sorted((page, "assets/tokens/tokens.css")) if (p / x).is_file()]
+    out = shots / "capture.json"
+    out.write_text(_json.dumps({"schema": 1, "tool": "capture", "source": {"page": page}, "date": "2026-10-17", "views": views,
+                                "full": {"file": "1440-light-full.png", "sha256": sha256_bytes(full), "height": 16, "cut": False}, "inputs": inputs, "problems": []}, indent=2) + "\n", encoding="utf-8")
+    return out

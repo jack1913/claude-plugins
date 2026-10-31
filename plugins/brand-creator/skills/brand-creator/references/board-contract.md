@@ -201,6 +201,11 @@ layout reference, or `own:<word>` with a warning, and the card says the same), `
 `reset_rounds`. At the pages stage the lint does not read the page cards, the picked hero or the choices yet: `site:pages-stage` is "not verified" (exit 3). The lint report lists `brief/BRIEF.md`, the references board G4w stands on and the
 `index.html` of each variant among its inputs, so a changed file makes it stale.
 
+Each variant brings its proof before the board is shown. Run `brand-creator page-check rounds/r<N>/<name>/index.html` and `brand-creator capture rounds/r<N>/<name>/index.html` on the page as it is, then write the card from what they found; a change to the page, to `tokens.css` or to a file the page loads makes both stale.
+`board-lint` gives three more rows for the cards: `site:check` (the page's page-check report is there, is the report of this page, is current and is a verdict, and the card's check line says its status: a failing check shown as `fail` is honest and passes),
+`site:tells` (every `tell:<id>` warning of that report is named by its id on the card's tells line, with what you will do about it) and `site:stills` (`shots/capture.json` is current and is the capture of this page, and the four stills on the card are the bytes it lists:
+the project's files by a relative path, or on a review copy `data:` URIs of the same bytes). A variant with no current report is not judged for its tells: `site:tells` is "not verified" then, and `site:check` says why. The lint report lists the reports, `capture.json`, the stills and the files they were made from among its inputs.
+
 ## Per-direction cells
 
 On the round page, every direction shows at least:
