@@ -577,3 +577,210 @@ def test_rewrite_urls_reads_the_forms_of_a_path_and_keeps_the_rest(tmp_path):
     new, problems = sitedata.rewrite_urls(css, "css", project=tmp_path, file_dir="rounds/r3/start/css", new_file_dir="site/start/css", moves=moves)
     assert problems == []
     assert new == css.replace("../../../../assets", "../../../assets"), new
+
+
+# ---------------------------------------------------------------- check gates the approved pages (site:record, site:pages, site:stills)
+# The page-check reports and the stills of the approved pages are made by hand in the shape of group 1's tools (helpers.page_check_report, helpers.capture_record), so these tests need no browser.
+
+import shutil
+
+from helpers import capture_record, report
+from pagecheck import report_tool
+
+SITE_ROWS = ("site:record", "site:pages", "site:stills")
+
+
+def approved(tmp_path: Path) -> Path:
+    """The pages of round 3 approved into site/ (G4p recorded, `site approve` run): no page-check report and no stills of them yet."""
+    p = ready(tmp_path)
+    assert approve(p).returncode == 0
+    return p
+
+
+def settle_site(p: Path, *pages: str) -> None:
+    """The page-check report and the stills `brand-creator page-check site/<id>/index.html` and `brand-creator capture site/<id>/index.html` leave behind (every page when none is named)."""
+    for pid in pages or PAGES:
+        page_check_report(p, f"site/{pid}/index.html", "pass")
+        capture_record(p, f"site/{pid}/index.html")
+
+
+def checked(tmp_path: Path) -> Path:
+    p = approved(tmp_path)
+    settle_site(p)
+    return p
+
+
+def run_check(p: Path):
+    """-> (the result of `brand-creator check`, the site:* rows of its report by id)."""
+    r = bc("check", project=p)
+    assert r.returncode in (0, 1, 3), (r.stdout, r.stderr)
+    return r, {x["id"]: x for x in report(p, "check")["results"] if x["id"].startswith("site:")}
+
+
+def test_check_passes_the_approved_pages_that_are_as_approved_checked_and_captured(tmp_path):
+    p = checked(tmp_path)
+    got = run_check(p)[1]
+    assert list(got) == list(SITE_ROWS), got
+    assert [got[x]["status"] for x in SITE_ROWS] == ["pass", "pass", "pass"], got
+    assert got["site:record"]["detail"] == "G4p is recorded; site/site.json is sound and each of its 2 page(s) is as approved (start, pricing)"
+    assert got["site:pages"]["detail"] == "2 page(s) have a current passing page-check report: start, pricing"
+    assert got["site:stills"]["detail"] == "2 page(s) have current stills: start, pricing"
+
+
+def test_check_fails_a_hand_edited_approved_page(tmp_path):
+    p = checked(tmp_path)
+    assert run_check(p)[1]["site:record"]["status"] == "pass"
+    page = p / "site" / "start" / "index.html"
+    kept = mutate(page, "<h1>start</h1>", "<h1>start, edited by hand</h1>")
+    r, got = run_check(p)
+    assert r.returncode == 1, (r.stdout, r.stderr)
+    assert got["site:record"]["status"] == "fail", got
+    assert "site/start/index.html changed since it was approved" in got["site:record"]["detail"] and "site approve --replace" in got["site:record"]["detail"] and "put the approved page back" in got["site:record"]["detail"]
+    assert "pricing" not in got["site:record"]["detail"], "only the page that changed is named"
+    # what was made from the page is not a verdict on the page as it is now: the page-check report and the stills of that page are stale, the other page's are not
+    for rid, cmd in (("site:pages", "page-check"), ("site:stills", "capture")):
+        assert got[rid]["status"] == "skipped" and got[rid]["detail"].startswith("not verified: start: "), (rid, got[rid])
+        assert f"brand-creator {cmd} site/start/index.html" in got[rid]["detail"] and "site/start/index.html changed" in got[rid]["detail"] and "pricing" not in got[rid]["detail"], got[rid]
+    page.write_text(kept, encoding="utf-8")                                                  # the approved page put back
+    assert [run_check(p)[1][x]["status"] for x in SITE_ROWS] == ["pass", "pass", "pass"]
+
+
+def test_check_fails_g4p_without_site_json(tmp_path):
+    p = ready(tmp_path)                                                                      # G4p recorded, `site approve` not run
+    r, got = run_check(p)
+    assert r.returncode == 1, (r.stdout, r.stderr)
+    assert list(got) == ["site:record"] and got["site:record"]["status"] == "fail", got      # there are no pages to judge
+    assert "G4p is recorded but site/site.json does not exist" in got["site:record"]["detail"] and "brand-creator site approve" in got["site:record"]["detail"]
+    assert approve(p).returncode == 0                                                        # approved: the row passes (the pages are not checked yet)
+    r, got = run_check(p)
+    assert got["site:record"]["status"] == "pass" and got["site:pages"]["status"] == "skipped" and got["site:stills"]["status"] == "skipped", got
+    # a record with no approval behind it is a failure too: nothing but `site approve` after G4p puts pages in site/
+    (tmp_path / "other").mkdir()
+    other = make_project(tmp_path / "other")
+    (other / "site").mkdir()
+    (other / "site" / "site.json").write_text("{}\n", encoding="utf-8")
+    r, got = run_check(other)
+    assert r.returncode == 1 and list(got) == ["site:record"] and got["site:record"]["status"] == "fail", (r.stdout, got)
+    assert "exists but G4p, the owner's approval of the pages, is not recorded" in got["site:record"]["detail"] and "state --record G4p" in got["site:record"]["detail"]
+
+
+def test_check_says_not_verified_without_a_page_check_of_each_site_page(tmp_path):
+    p = approved(tmp_path)
+    r, got = run_check(p)
+    assert got["site:record"]["status"] == "pass"
+    assert got["site:pages"]["status"] == "skipped" and got["site:pages"]["detail"].startswith("not verified: start: no page-check/"), got["site:pages"]
+    for pid in PAGES:
+        assert f"brand-creator page-check site/{pid}/index.html" in got["site:pages"]["detail"], got["site:pages"]
+        assert f"brand-creator capture site/{pid}/index.html" in got["site:stills"]["detail"], got["site:stills"]
+    assert got["site:stills"]["status"] == "skipped", got["site:stills"]
+    # one page checked: only the other one is named
+    page_check_report(p, "site/start/index.html", "pass")
+    got = run_check(p)[1]
+    assert got["site:pages"]["status"] == "skipped" and "brand-creator page-check site/pricing/index.html" in got["site:pages"]["detail"] and "site/start" not in got["site:pages"]["detail"], got["site:pages"]
+    # a report that is no verdict says which rows it could not verify
+    page_check_report(p, "site/pricing/index.html", "not-verified")
+    got = run_check(p)[1]
+    assert got["site:pages"]["status"] == "skipped" and "not a verdict" in got["site:pages"]["detail"] and "page:load: not verified: no view was measured" in got["site:pages"]["detail"], got["site:pages"]
+    assert "brand-creator page-check site/pricing/index.html" in got["site:pages"]["detail"]
+    # the report of another page is no report of this one
+    folder = p / "assets" / "_checks"
+    shutil.copy(folder / f"{report_tool('site/start/index.html')}.json", folder / f"{report_tool('site/pricing/index.html')}.json")
+    got = run_check(p)[1]
+    assert got["site:pages"]["status"] == "skipped" and "is the report of project site/start/index.html, not of the project page site/pricing/index.html" in got["site:pages"]["detail"], got["site:pages"]
+    # a report of a page that was not measured as a project page (a built site given with --from) is no report of it either
+    other = json.loads((folder / f"{report_tool('site/start/index.html')}.json").read_text(encoding="utf-8"))
+    other["target"] = {"kind": "from", "page": None, "from": "/somewhere/else", "url": None}
+    (folder / f"{report_tool('site/start/index.html')}.json").write_text(json.dumps(other), encoding="utf-8")
+    got = run_check(p)[1]
+    assert got["site:pages"]["status"] == "skipped" and "is the report of from /somewhere/else, not of the project page site/start/index.html" in got["site:pages"]["detail"], got["site:pages"]
+    page_check_report(p, "site/start/index.html", "pass")                                    # both checked: it passes
+    page_check_report(p, "site/pricing/index.html", "pass")
+    assert run_check(p)[1]["site:pages"]["status"] == "pass"
+    # the stills: one page captured, the other not; the capture of another page; a still that is gone; a still that is other bytes than the record lists
+    capture_record(p, "site/start/index.html")
+    got = run_check(p)[1]
+    assert got["site:stills"]["status"] == "skipped" and "no site/pricing/shots/capture.json; run `brand-creator capture site/pricing/index.html`" in got["site:stills"]["detail"] and "site/start" not in got["site:stills"]["detail"], got["site:stills"]
+    shutil.copytree(p / "site" / "start" / "shots", p / "site" / "pricing" / "shots")
+    got = run_check(p)[1]
+    assert "it is the capture of site/start/index.html, not of site/pricing/index.html" in got["site:stills"]["detail"] and got["site:stills"]["status"] == "skipped", got["site:stills"]
+    capture_record(p, "site/pricing/index.html")
+    assert run_check(p)[1]["site:stills"]["status"] == "pass"
+    (p / "site" / "pricing" / "shots" / "390-dark.png").unlink()
+    got = run_check(p)[1]
+    assert got["site:stills"]["status"] == "skipped" and "site/pricing/shots/390-dark.png (the 390-dark still) is not there" in got["site:stills"]["detail"], got["site:stills"]
+    capture_record(p, "site/pricing/index.html")
+    (p / "site" / "start" / "shots" / "1440-light.png").write_bytes(b"another picture")
+    got = run_check(p)[1]
+    assert got["site:stills"]["status"] == "skipped" and "site/start/shots/1440-light.png is not the 1440-light still site/start/shots/capture.json lists" in got["site:stills"]["detail"], got["site:stills"]
+    capture_record(p, "site/start/index.html")
+    (p / "site" / "start" / "shots" / "capture.json").write_text("{not json", encoding="utf-8")
+    got = run_check(p)[1]
+    assert got["site:stills"]["status"] == "skipped" and "site/start/shots/capture.json is unusable" in got["site:stills"]["detail"], got["site:stills"]
+    capture_record(p, "site/start/index.html")
+    assert [run_check(p)[1][x]["status"] for x in SITE_ROWS] == ["pass", "pass", "pass"]
+
+
+def test_check_fails_a_failing_page_check_of_a_site_page(tmp_path):
+    p = checked(tmp_path)
+    page_check_report(p, "site/pricing/index.html", "fail")
+    r, got = run_check(p)
+    assert r.returncode == 1, (r.stdout, r.stderr)
+    assert got["site:pages"]["status"] == "fail", got
+    assert got["site:pages"]["detail"].startswith("pricing: ") and "is failing (page:load:390-light)" in got["site:pages"]["detail"] and "start" not in got["site:pages"]["detail"], got["site:pages"]
+    assert got["site:record"]["status"] == "pass" and got["site:stills"]["status"] == "pass", "the page is as approved, with current stills: only its brand-rule check fails"
+    # a page that fails and a page that is not verified: the failure leads, the other is named after it
+    (p / "assets" / "_checks" / f"{report_tool('site/start/index.html')}.json").unlink()
+    got = run_check(p)[1]
+    assert got["site:pages"]["status"] == "fail" and got["site:pages"]["detail"].startswith("pricing: ") and "; not verified: start: no page-check/" in got["site:pages"]["detail"], got["site:pages"]
+    page_check_report(p, "site/pricing/index.html", "pass")
+    page_check_report(p, "site/start/index.html", "pass")
+    assert run_check(p)[1]["site:pages"]["status"] == "pass"
+
+
+def test_check_fails_a_rule_choice_without_a_source(tmp_path):
+    p = checked(tmp_path)
+    assert run_check(p)[1]["site:record"]["status"] == "pass"
+    record = p / "site" / "site.json"
+    mutate_json(record, lambda d: d["choices"][0].update(source=""))                         # c1 is a rule: it says where it was decided
+    r, got = run_check(p)
+    assert r.returncode == 1, (r.stdout, r.stderr)
+    assert got["site:record"]["status"] == "fail" and "c1: a rule says where it was decided" in got["site:record"]["detail"], got["site:record"]
+    assert got["site:pages"]["status"] == "pass" and got["site:stills"]["status"] == "pass", "the pages are untouched: the record is what fails"
+    mutate_json(record, lambda d: d["choices"][0].update(source="DECISIONS.md", tag="example"))   # an example needs no source
+    assert run_check(p)[1]["site:record"]["status"] == "pass"
+    mutate_json(record, lambda d: d["pages"][0].update(layout="no-such-layout"))
+    got = run_check(p)[1]
+    assert got["site:record"]["status"] == "fail" and "is no id of page-layouts.json" in got["site:record"]["detail"], got["site:record"]
+
+
+def test_check_says_not_verified_when_a_site_still_is_stale(tmp_path):
+    p = checked(tmp_path)
+    assert run_check(p)[1]["site:stills"]["status"] == "pass"
+    mutate(p / "assets" / "tokens" / "tokens.css", "#16191d", "#16191e")                     # a file the stills were taken from
+    r, got = run_check(p)
+    for pid in PAGES:
+        assert f"{pid}: site/{pid}/shots/capture.json is stale (assets/tokens/tokens.css changed); run `brand-creator capture site/{pid}/index.html`" in got["site:stills"]["detail"], got["site:stills"]
+    assert got["site:stills"]["status"] == "skipped" and got["site:stills"]["detail"].startswith("not verified: "), got["site:stills"]
+    assert got["site:pages"]["status"] == "skipped", "the page-check reports were made from the same stylesheet"
+    assert got["site:record"]["status"] == "pass", "the approved pages themselves did not change"
+    # a capture that does not list the page among its inputs could never go stale
+    settle_site(p)
+    capture = p / "site" / "start" / "shots" / "capture.json"
+    mutate_json(capture, lambda d: d.update(inputs=[i for i in d["inputs"] if i["path"] != "site/start/index.html"]))
+    got = run_check(p)[1]
+    assert got["site:stills"]["status"] == "skipped" and "it does not list site/start/index.html among the files it was made from" in got["site:stills"]["detail"], got["site:stills"]
+
+
+def test_check_has_no_site_rows_without_g4p_or_site(tmp_path):
+    p = make_project(tmp_path)
+    r, got = run_check(p)
+    assert got == {}, got
+    (p / "site").mkdir()                                                                     # a folder named site that holds no record is the owner's own
+    (p / "site" / "index.html").write_text(PAGE, encoding="utf-8")
+    r, got = run_check(p)
+    assert got == {}, got
+    # a project in the middle of the site round: the pages board exists, nothing is approved yet
+    (tmp_path / "other").mkdir()
+    mid = pages_project(tmp_path / "other")
+    assert lint3(mid).returncode == 0
+    assert run_check(mid)[1] == {}

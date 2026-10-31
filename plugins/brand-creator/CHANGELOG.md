@@ -226,6 +226,9 @@ lints the board of the latest round again before `check`, so an edit of the fact
   refuses a page that loads from the internet or from outside your project, writes nothing when any page fails, and
   never deletes an earlier `site/` (`--replace` moves it to `removed-<date>/site/`). The approved pages are
   references for whoever builds your site, not templates to fill in.
+- `check` now checks the approved pages in `site/`: unchanged since approval, each checked against your brand rules, with
+  current stills. A project without approved pages gets no new row; a page you edited after approving it fails the
+  check and names the command that approves the pages again.
 
 ### Changed
 
