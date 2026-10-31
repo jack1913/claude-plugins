@@ -212,6 +212,12 @@ lints the board of the latest round again before `check`, so an edit of the fact
   recorded before any page of your site is built; you can skip it in your own words. `board-lint` checks the board:
   a site in your brief, the system rules approved, your online-research answer, at least three site clichés, and four to
   six groups of three or more sites, each with a link, its captured screenshot, what to take and what to avoid.
+- `brand-creator site approve` copies the approved pages of the site round into `site/`, with their paths fixed, and
+  writes `site/site.json`: each page, its layout, and every choice marked as a brand rule (with where it was decided)
+  or an example. It needs the pages approved (G4p recorded) and the pages board linted since its last change. It
+  refuses a page that loads from the internet or from outside your project, writes nothing when any page fails, and
+  never deletes an earlier `site/` (`--replace` moves it to `removed-<date>/site/`). The approved pages are
+  references for whoever builds your site, not templates to fill in.
 
 ### Changed
 

@@ -29,6 +29,9 @@ project
   freeze <round> --name N copy an approved round to history/ with a banner and update history/MANIFEST.sha256
   motion                  the motion decision (motion/motion.json): on, off (nothing moves) or not decided; --off "<reason>" records that nothing
                           moves, once (--json for data). Standard and Full decide it before G4: the motion round, or --off
+  site approve            put the approved pages of the site round (a pages board, G4p recorded, linted since its last change) into site/ with their paths
+                          fixed, and write site/site.json: each page, its layout and every choice as a brand rule or an example; --round N, --replace
+                          (moves an existing site/ to removed-<date>/site/)
 
 checks and renders
   shot <page.html>        four-view page shots (1440/390 x light/dark) with an overflow/console/network report; --out DIR keeps them outside the
@@ -186,6 +189,7 @@ case "$sub" in
   state)      py_boot state.py "$@" ;;   # stdlib only: must work without uv (the status skill injects it)
   freeze)     py freeze.py "$@" ;;
   motion)     py motion.py "$@" ;;
+  site)       py site_pages.py "$@" ;;   # not site.py: a script of that name would shadow the standard library's site module wherever scripts/ is on sys.path
   shot)       js render.mjs shot "$@" ;;
   card)       js render.mjs card "$@" ;;
   frames)     js render.mjs frames "$@" ;;
