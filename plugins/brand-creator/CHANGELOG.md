@@ -212,6 +212,14 @@ lints the board of the latest round again before `check`, so an edit of the fact
   recorded before any page of your site is built; you can skip it in your own words. `board-lint` checks the board:
   a site in your brief, the system rules approved, your online-research answer, at least three site clichés, and four to
   six groups of three or more sites, each with a link, its captured screenshot, what to take and what to avoid.
+- The site round (Standard and Full, when your brief lists a site): `/brand-creator:round site` builds the first screen
+  of your home page in two or three ways from the references you picked, each checked against your brand rules, captured
+  in four views and read cold. You pick one; then the other pages follow, and you mark each choice on them as a brand rule
+  or just an example. The approved pages are references for whoever builds your site. `board-lint` checks the board: a
+  site in your brief, the system rules approved, your website references picked first (or skipped in your own words),
+  two or three heroes on the first board, and for each hero or page a page check and four captured views of the page as
+  it is now. A hero's cold review has to match those views too. The other pages follow a hero you picked, every choice
+  is tagged as a rule or an example, and a rule says where you decided it.
 
 ### Changed
 

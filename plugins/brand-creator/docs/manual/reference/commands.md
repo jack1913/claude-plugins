@@ -13,7 +13,7 @@ Claude can also start it when your request matches. [Glossary](glossary.md) expl
 | `/brand-creator:brand-book` | you or Claude | Builds, updates, reviews and exports the brand book | — |
 | `/brand-creator:setup` | you only | Installs the tools brand-creator needs, after showing what it will download and getting your yes | `[--force]` |
 | `/brand-creator:new` | you only | Starts a new brand project and asks up to three quick questions | `[slug]` |
-| `/brand-creator:round` | you only | Builds the next round of boards (the style board first, then directions, refinements and, in Standard and Full, a motion round) and stops for your decision | `[style\|pick\|refine\|motion\|site-refs] [what this round should answer]` |
+| `/brand-creator:round` | you only | Builds the next round of boards (the style board first, then directions, refinements and, in Standard and Full, a motion round) and stops for your decision | `[style\|pick\|refine\|motion\|site-refs\|site] [what this round should answer]` |
 | `/brand-creator:status` | you only | Shows where the project stands and what comes next | — |
 | `/brand-creator:check` | you only | Runs every check that applies, and optionally searches for leftovers of old values or checks one page against your brand | `[--page <file-or-folder-page-or-localhost-url>] [<old value or phrase> ...]` |
 | `/brand-creator:review` | you only | Reviews the latest work and gives you one list to approve | `[board\|book\|pack\|all] [panel]` |
@@ -80,7 +80,7 @@ Agents are helpers that workflows start. They never start on their own, and none
 
 | Argument | What it does | Default |
 | --- | --- | --- |
-| `style`, `pick`, `refine`, `motion` or `site-refs` | Which kind of board to build. `motion` is a round after you approve the design that tries your logo's move. `site-refs` shows groups of real websites to learn from, before any page of your site is built, when your brief lists a site | Worked out from your project |
+| `style`, `pick`, `refine`, `motion`, `site-refs` or `site` | Which kind of board to build. `motion` is a round after you approve the design that tries your logo's move. `site-refs` shows groups of real websites to learn from, before any page of your site is built, when your brief lists a site. `site` builds the first screen of your home page in two or three ways from the references you picked, then the other pages, when your brief lists a site | Worked out from your project |
 | text | The question this round should answer | Worked out from your project |
 
 ## motion
