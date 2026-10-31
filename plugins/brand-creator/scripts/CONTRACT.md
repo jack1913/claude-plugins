@@ -1175,6 +1175,47 @@ brand-creator page-check --url http://localhost:<port>/<path> [--project DIR] ..
   text painted by its own background, and an SVG text filled by a paint server (`fill_server`), is "NOT verified" in a warning. Texts alike in colours, ground and floor are one entry (`texts` counts them, `also` names
   up to six more selectors). The row holds `texts_checked`, `declared` and the lists `failing`, `undeclared` and `over_image` (up to 100 each). Not checked: whether the
   `kind` of a declared pair suits the size of the text (an accent declared only for large text, `ui-text-large`, passes at 14 px), APCA and colour vision.
+- **Font facts.** Every view also holds `font_faces` and `font_usage`, collected after `document.fonts.ready` over the shown elements of the colour facts (an input's value or
+  placeholder is a text; `display: contents`, `visibility: hidden` and what is not shown are not). `font_faces`: every `FontFace` of `document.fonts`,
+  `{family, weight, style, stretch, unicode_range, status}`, the family with its quotes taken off and the status `unloaded` (declared and not needed yet), `loading`,
+  `loaded` or `error` (at most 200; `font_faces_total` says how many there were). `font_usage`: one entry per distinct first family, weight and style of the computed
+  `font-family` of a text, in document order, `{family, weight, style, stack, count, sel, min_px, min_sel, min_text, platform}`. `family` is the first family of the computed
+  list with its quotes taken off (a comma inside quotes does not end it) and `stack` the whole computed list; `count` the elements; `min_px` the smallest computed font size
+  of the entry's elements, `min_sel` that element and `min_text` the start of its text. `sel` is the one element the browser is asked about, the probe. CDP
+  `CSS.getPlatformFontsForNode` answers for an element AND everything inside it (an inline `<code>` in a paragraph, a `<strong>`, a hidden span), so the probe is the element of
+  the entry with the fewest elements inside it that draw text of their own in another family, weight or style (none, where the page has one such element), then the one whose own
+  text holds the most different characters, the first on a tie; a text area comes last, because the debugger has no answer for one. When the probe still holds such elements,
+  the fonts of each (the outermost ones; what they hold is theirs) are asked the same way and taken off its answer, glyph for glyph, and `inline_other` says how many. `platform`
+  is that answer, as `render.mjs fonts` asks it: `[{family, postscript, custom, glyphs}]`, `custom` true for a web font (an `@font-face` of the page), `family` the name inside
+  the font file (it can differ from the name the CSS gives the face) and `glyphs` how many glyphs of the probe's own text were drawn in it. `platform_error` replaces `platform`
+  when the debugger could not answer, and when it cannot be asked for the probe: the entry's only element is a text area; the probe holds more than 12 elements in other fonts; one
+  of them is `display: contents`, which has no box of its own to ask about. The view does not fail. The elements are marked `data-bc-font-probe` while they are asked (a mark is
+  a word of a list: one element can be the probe of one entry and inside the probe of another), and the marks are taken off again whatever the debugger said. At most 60 entries
+  per view (`font_usage_total` says how many there were). Not measured: text in pseudo-elements, iframes and shadow roots, and a fallback glyph in an element that is not the
+  entry's probe.
+- **Font rows.** `page:fonts` (one row for all widths and both schemes) judges every view and reports each distinct first family, weight and style once, at the first width and scheme where
+  it went wrong (a later view that breaks what an earlier one passed is still caught). The families the brand names are those of every `font.*` stack in `tokens.json` `other` (quotes taken off, names compared
+  without case; `var(--font-x)` is followed; a `font.*` token that holds a size or number is no stack). Fails: (1) a first family no stack names, a generic family
+  (`serif`, `monospace`, `system-ui`, `ui-sans-serif` ...) included unless a stack writes it, so a page that sets no `font-family` and is drawn in the browser's default
+  fails; (2) a named family that the browser did not draw the text in. A family the page declares with `@font-face`, and any named family that is neither generic nor an alias,
+  must show in `platform` as an installed font of that name, or as a web font AND the page declares that family with at least one face `loaded`: a web font in the answer
+  for a family that is not declared, or whose faces all failed or never loaded, is the fallback of its stack (often the body face), not the family's own face. So a face that
+  did not load (`error`), a family the page does not declare and the machine does not have ("on this machine": the answer depends on the fonts installed where the check runs),
+  or faces that cover none of the text, fail the row whatever else the stack fell to, and the detail names what Chromium used instead. A generic family, or a browser alias
+  (`-apple-system`, `BlinkMacSystemFont`: the operating system's interface font, no font of that name exists), that a stack names and the page does not declare is the
+  browser's own font and is not asked for. A system face (`Segoe UI`, `Roboto`, `Cantarell`, `Ubuntu`, `Noto Sans`, `Helvetica Neue`, `Helvetica`, `Arial`: faces some
+  operating systems ship, several also brand web fonts) that a stack names and the page does not declare is asked for like any other family, but where this machine has no
+  installed font of that name the answer is "NOT verified" in a warning that names what Chromium used, never a pass and never a failure (the stack is meant to fall through to
+  its next family). Not checked: which face of a family the text needed (a family with one face `loaded` counts as drawn, so a bold face that failed while the regular one
+  loaded, with the text falling to another web font, is not told apart). A warning: a text of which only some glyphs are drawn in another font (the face lacks a character the text uses: `3 of 38 glyph(s)`; `fontcheck --lang` is the check of
+  coverage), a system face this machine does not have, a debugger that could not answer or reported no font, or a probe it cannot be asked about ("NOT verified"), and a view cut at 60 fonts. `skipped` (not verified, exit 3 unless another row failed) when the
+  tokens name no font family or no view was measured. Pass: the number of fonts and their families. The row holds `fonts` (family, weight, style, selector, elements, platform;
+  up to 100), `offenders` (each with `kind` `not-named` or `not-loaded`, and the `faces` statuses), `partly` and `token_families`.
+  `page:display-size` holds the text set in the first family of the `font.display` token to `qa/rules.json` `page.display_min_px` css px (the computed font size; 20 is the
+  proposal, and the detail says "a proposal" and the row `proposal: true` until the project sets the key): any text under it fails, naming up to six with the width and scheme.
+  Pass when every text in the face is at least that size, or when the page sets none in it. Info: no `font.display` token, or a display face that is also the first family of
+  another font token (the body face), whose text cannot be told from body text, so no size is held to it. The row holds `display_face`, `minimum_px`, `proposal`,
+  `smallest_px` and `small`.
 - **Writing a collector.** `page_measure.mjs` installs `window.__bcMeasure` for the length of one view (`collect` removes it again): `selector(el)`, `shown(el)` (`{shown, opacity}`),
   `walkable(el)`, `colour(css)` (`{r, g, b, a, hex}` or null), `canvas()`, `ground(el)` and `hex([r, g, b])`. A later collector calls them inside its own `page.evaluate`.
 - **For other tools.** `scripts/pagelib/pagecheck.py` imports only the standard library and `scripts/lib`; a tool puts `scripts/pagelib` on `sys.path` and calls

@@ -99,6 +99,17 @@ stage, and why, is in the [archive](docs/archive/README.md).
   behind it (`page:pairs:<theme>`) must be a declared pair, or measure at least 4.5:1 (3:1 for large text); a pair that
   is not declared fails under that and warns when it passes ("declare them in pairs"), and text over an image or a
   gradient is reported as not verified.
+- `page-check` now checks the fonts of a page (`page:fonts`). The family each text is set in has to be one that a font
+  token names; a generic family such as `monospace` counts only when a token's list writes it, so a page that sets no
+  font and falls back to the browser's default fails. A named family must also be what the browser really drew: a font
+  file that does not load, a family the page never declares and this machine does not have, or a face that covers none
+  of the text fails (also when its stack fell to another web font of the page), and a face that lacks only a few
+  characters of the text warns with the glyph counts. Text set inline in another font (`code` in a paragraph) is not
+  charged to the text around it, and a system face such as Roboto that the page does not declare and this machine does
+  not have is reported as not verified instead of passing. When the brand has a display face (a `font.display` token),
+  no text set in it may be smaller than `page.display_min_px` in `qa/rules.json` (`page:display-size`); 20 px is a
+  proposal until you set it, and the row says so. A brand with no display face gets an info row instead, and so does
+  one whose display face is also its body face.
 
 ### Changed
 

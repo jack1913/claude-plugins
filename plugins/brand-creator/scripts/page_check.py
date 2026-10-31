@@ -17,6 +17,8 @@ scripts/pagelib/pagecheck.py, against the built tokens and the `page` block of q
 one per page. The rows are `page:target` and, per view, `page:load:<width>-<scheme>` (the page and console errors, failed requests and requests to another origin).
 Per colour scheme it also reports `page:colours:<scheme>` (every colour the page paints is a semantic colour of that theme) and `page:pairs:<scheme>` (every text colour on its
 ground is a declared pair, or is measured against WCAG).
+Over all views it reports `page:fonts` (every text is set in a family a `font.*` token names, and the browser drew it in that face) and `page:display-size` (no text in the
+`font.display` face is under `page.display_min_px`).
 
 Exit 0 pass (warnings allowed), 1 a row failed, 2 usage error (no target, two targets, a page that does not exist, a remote URL, a bad width or scheme, a
 --from folder of more than 5000 files or 200 MB, a bad qa/rules.json page block), 3 cannot run (no built tokens, no node, Chromium missing or no view measured).
