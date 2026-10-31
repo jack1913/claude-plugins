@@ -1,0 +1,197 @@
+{
+  "version": 1,
+  "$description": "Layout references for a site's pages, keyed to what the visitor came to do. Structure only: which part leads, the order of the parts, where the action sits and how the page ends. Every look value of a page comes from the brand's tokens and its G4 rules, never from this file. A layout is a reference to start from, not a template to fill in.",
+  "how_to_use": [
+    "Start from the visitor's job, as brief/BRIEF.md and FACTS.md state it, and never from how a liked site looked. Pick the item whose `job` is the one this visitor came to do.",
+    "Take structure only: which part leads, the order of the parts, where the action sits and how the page ends. Every look value comes from the tokens and the G4 rules; nothing in this file sets one.",
+    "Record the choice on the page as `<body data-layout=\"<id>\">`. When no item fits the job, write `own:<word>` and give the reason on the page's card; the lint warns, so the references stay a starting point and never a menu.",
+    "A layout is a reference, not a template. Move, drop or merge parts when the material says so, and drop a part that has nothing real to hold instead of filling it.",
+    "Equal tiles in threes, a label over every heading and the stock hero, steps, questions and call-to-action band are tells, not layouts. page-tells.json names them and the page check warns about them."
+  ],
+  "items": [
+    {
+      "id": "one-step",
+      "job": "Join, subscribe or sign up when there is nothing to compare.",
+      "leads_with": "The one thing the visitor gets, stated in one sentence, with the form or button that gets it right beside it.",
+      "parts": [
+        "The offer in one plain sentence",
+        "The form or the button itself, in the first view",
+        "What happens right after they submit",
+        "The one fact that removes the last doubt, such as who sends it and how to leave"
+      ],
+      "action": "The action is the page: it sits in the first view and comes back once at the end only if the page scrolls.",
+      "ends_with": "A short line on what the visitor will receive and how to leave, with the sender's contact details.",
+      "not_for": "Anything the visitor has to compare, price or understand before committing."
+    },
+    {
+      "id": "walkthrough",
+      "job": "Understand how a service will run for them before handing it something important.",
+      "leads_with": "The outcome for the visitor in their own words, with the first stage already in view beneath it.",
+      "parts": [
+        "The outcome the visitor is after",
+        "The stages in the order the visitor lives them, each with the real artefact they will hold or see",
+        "The stage that carries the risk given the most room, and the routine ones given little",
+        "What the visitor does and what the provider does at each stage",
+        "The cost and the time, placed beside the stage they belong to",
+        "The questions the stages leave open"
+      ],
+      "action": "The action appears after the stage where the visitor has understood enough to start, and again at the end.",
+      "ends_with": "The last stage as the visitor will meet it, then how to begin and who they will deal with.",
+      "not_for": "Something bought in one click, or a tool the visitor can try at once."
+    },
+    {
+      "id": "catalogue",
+      "job": "Choose from a range and buy.",
+      "leads_with": "The range itself, with a way to narrow it down, rather than a statement about the shop.",
+      "parts": [
+        "The range, each item carrying what a buyer needs to compare",
+        "Ways to narrow or sort the range",
+        "One item opened out with its facts, its options and its price",
+        "Delivery, returns and payment, placed where the buyer decides",
+        "Help choosing for the buyer who does not know where to start"
+      ],
+      "action": "Buying sits on the item rather than on the list; the list exists to lead the buyer to an item.",
+      "ends_with": "Delivery, returns and how to reach a person, then the way back to the range.",
+      "not_for": "A single product, or a service the visitor cannot see on a shelf."
+    },
+    {
+      "id": "single-product",
+      "job": "Decide to buy one thing.",
+      "leads_with": "The product itself, shown in use, with its name and its price in the first view.",
+      "parts": [
+        "The product shown as the buyer will use it",
+        "What it does for them, in the order they ask",
+        "The facts checked before paying, such as what is in the box, what it fits and what it costs",
+        "Proof from people who already have it",
+        "Delivery, returns and warranty",
+        "The questions that stop a purchase"
+      ],
+      "action": "The buying action is in the first view and comes back wherever the page has just given the buyer a reason.",
+      "ends_with": "Delivery and returns, then the buying action once more.",
+      "not_for": "A range to choose from, or a service that needs explaining before it can be bought."
+    },
+    {
+      "id": "long-read",
+      "job": "Be persuaded by an argument or learn a subject.",
+      "leads_with": "The claim, or the question the whole page answers, in the author's own sentence.",
+      "parts": [
+        "The claim or the question",
+        "The argument in sections, each opening on its conclusion",
+        "The evidence beside the claim it supports, such as a figure, a quotation or a case",
+        "The point where the argument is weakest, said plainly",
+        "What follows if the reader agrees"
+      ],
+      "action": "One action comes after the argument, offered as the next thing to read or do, and nothing interrupts the reading before it.",
+      "ends_with": "What to do next with what they have read, and who wrote it.",
+      "not_for": "A visitor who came to do something rather than to read."
+    },
+    {
+      "id": "letter",
+      "job": "Trust a person or a small practice before getting in touch.",
+      "leads_with": "The person, by name, saying in their own words what they do and who for.",
+      "parts": [
+        "Who they are and who they work with",
+        "What they do, in the plain words a client would use",
+        "How they work, as a client meets it",
+        "One or two real examples, with names or places where those may be used",
+        "The facts a cautious visitor checks, such as qualifications, registration and how prices are set",
+        "How to reach them and how soon they reply"
+      ],
+      "action": "A way to get in touch that suits the visitor, a name with a number or an address, sits near the top and again at the end.",
+      "ends_with": "The contact details once more, with when the person answers.",
+      "not_for": "A business with many staff, a range to buy from or a product to try."
+    },
+    {
+      "id": "workbench",
+      "job": "Try a software tool.",
+      "leads_with": "The tool's real screen doing real work, not a picture of the idea.",
+      "parts": [
+        "The real screen in use, showing what it just produced",
+        "One task done from start to finish",
+        "The few things it does that others do not, each on a real screen",
+        "What it connects to and where the data lives",
+        "What it costs and what the free try includes",
+        "Documentation, support and what to do when it breaks"
+      ],
+      "action": "Starting is the action: signing up or opening the tool sits in the first view and comes back after the task has been shown.",
+      "ends_with": "How to start, what the first hour looks like and where to ask for help.",
+      "not_for": "Software the visitor will never touch themselves, or one that cannot be shown working."
+    },
+    {
+      "id": "index",
+      "job": "Find one item among many.",
+      "leads_with": "A way to search or filter the whole set, already working, with the first results beneath it.",
+      "parts": [
+        "Search and filters that answer the question the visitor brought",
+        "The results, each carrying the facts that tell the items apart",
+        "A clear state for no results, with a next move",
+        "One item opened out, with a way back to the same results",
+        "How the set is kept, what it includes and how current it is"
+      ],
+      "action": "Finding is the action: each result leads to its item, and contact or submission sits beside the item.",
+      "ends_with": "What the set covers and how often it changes, with how to add to it or correct it.",
+      "not_for": "A short range browsed in one look, or a visitor who does not yet know what they are looking for."
+    },
+    {
+      "id": "schedule",
+      "job": "Attend or book a time.",
+      "leads_with": "The next dates or free slots, with the place or the format, ready to take.",
+      "parts": [
+        "The next dates or free times, soonest first",
+        "What each one is and who it is for",
+        "The place or the link, and how to get there or join",
+        "What it costs and what the visitor needs to bring or know",
+        "How to cancel or move a booking",
+        "Who runs it"
+      ],
+      "action": "Booking sits on each date or slot and works without leaving the list.",
+      "ends_with": "The cancellation terms and who to ask, with the next dates again for a visitor none of them suited.",
+      "not_for": "Something with no fixed time, or a visitor who first has to be persuaded it is worth their time."
+    },
+    {
+      "id": "place",
+      "job": "Visit a physical place.",
+      "leads_with": "Whether the place is open today, with its hours and its address, answered at once.",
+      "parts": [
+        "Today's hours and the address",
+        "The route by each way people arrive, with a map that opens in the visitor's own app",
+        "What it is like inside, shown with real photographs of the place",
+        "What to know before coming, such as bookings, access, cost and what to bring",
+        "Contact for the questions the page does not answer"
+      ],
+      "action": "Getting there is the action: directions open in the visitor's own map, and a phone number or a booking sits beside them.",
+      "ends_with": "The address, the hours and the access once more, with a contact for a change of plan.",
+      "not_for": "A business the visitor deals with from home, or one with no fixed place."
+    },
+    {
+      "id": "portfolio",
+      "job": "Hire someone on the strength of their work.",
+      "leads_with": "The best work itself, with the client and the result named.",
+      "parts": [
+        "A few chosen pieces, each with the client, the problem and the result",
+        "One piece opened out: what was asked, what was done, what changed",
+        "Who did the work and how they work with a client",
+        "What they take on and what they turn down",
+        "Who will say so, as named clients or a reference the visitor can call"
+      ],
+      "action": "Getting in touch sits beside the work and again at the end, and says what to send first.",
+      "ends_with": "How to start a project with them, what to send and how soon they reply.",
+      "not_for": "Work that cannot be shown or described, or a visitor who wants a price list."
+    },
+    {
+      "id": "questions",
+      "job": "Decide when doubts about cost, risk or rules stand in the way.",
+      "leads_with": "The doubt that stops most people, asked in their words and answered in the first lines.",
+      "parts": [
+        "The questions in the order people drop out, each answered in full",
+        "The numbers behind each answer, such as what it costs, what is refunded and what is guaranteed",
+        "The rule or the clause each answer rests on, named and linked",
+        "Who to ask when the question is not here",
+        "The action, once the doubts are answered"
+      ],
+      "action": "The action waits until the doubts are answered and then sits directly after the answer that settles the last one.",
+      "ends_with": "Who to ask when a question is missing, and the action once more.",
+      "not_for": "A visitor with no doubts yet, or a page that lists questions nobody asked."
+    }
+  ]
+}
