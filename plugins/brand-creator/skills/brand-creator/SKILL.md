@@ -332,6 +332,7 @@ Full file contract: `${CLAUDE_PLUGIN_ROOT}/scripts/CONTRACT.md`. Templates: `${C
   [01s-style-research](references/phases/01s-style-research.md), [02-naming](references/phases/02-naming.md), [03-strategy-directions](references/phases/03-strategy-directions.md),
   [04-selection](references/phases/04-selection.md), [05-refinement](references/phases/05-refinement.md),
   [06-mark](references/phases/06-mark.md), [07-tokens](references/phases/07-tokens.md),
+  [07w-website-references](references/phases/07w-website-references.md),
   [08-assets](references/phases/08-assets.md), [09-qa](references/phases/09-qa.md),
   [10-book](references/phases/10-book.md), [11-adoption](references/phases/11-adoption.md),
   [12-history](references/phases/12-history.md), [13-launch](references/phases/13-launch.md).

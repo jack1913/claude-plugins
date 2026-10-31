@@ -163,8 +163,8 @@ def test_long_references_start_with_a_table_of_contents():
 
 
 def test_phase_files_exist_and_stubs_are_short():
-    full = {"00-intake", "01-research", "01s-style-research", "03-strategy-directions", "04-selection", "05-refinement", "06-mark", "07-tokens", "09-qa", "10-book",
-            "11-adoption", "12-history", "13-launch"}
+    full = {"00-intake", "01-research", "01s-style-research", "03-strategy-directions", "04-selection", "05-refinement", "06-mark", "07-tokens", "07w-website-references",
+            "09-qa", "10-book", "11-adoption", "12-history", "13-launch"}
     stubs: set = set()
     # the phase's single source is another skill
     pointers = {"02-naming": "../../../brand-naming/SKILL.md", "08-assets": "../../../brand-assets/SKILL.md"}
@@ -788,7 +788,7 @@ def test_orchestrator_stays_under_the_line_limit_and_its_top_under_the_character
 def test_the_round_wrapper_builds_round_0_from_the_style_board_and_checks_the_gate_before_any_pick_board():
     p = SKILLS / "round" / "SKILL.md"
     fm, body = frontmatter(p)
-    assert fm["argument-hint"] == "[style|pick|refine|motion] [what this round should answer]"
+    assert fm["argument-hint"] == "[style|pick|refine|motion|site-refs] [what this round should answer]"
     assert ": " not in fm["description"] and "style board" in fm["description"] and len(fm["description"]) <= 1024
     flat = " ".join(body.split())
     for needle in ("references/phases/01s-style-research.md", "templates/style-board.html", '`data-board="style"`', "round 0", "`rounds/r0/`",
@@ -847,6 +847,61 @@ def test_the_style_research_phase_has_a_no_web_path_thumbnail_rules_and_the_rese
                    "a thumbnail also needs alt text and a non-empty caption, and the words of the caption are yours"):
         assert needle in flat, needle
     assert "embed images fetched from it" not in flat, "the old rule against showing the references' images is gone"
+
+
+def test_the_website_references_phase_mirrors_the_style_step():
+    """P7w is the style step's twin for sites: the same stop without web access, a skip only in the owner's words, no invented reference, a recorded gate; it adds the online-research question."""
+    raw = (REFS / "phases" / "07w-website-references.md").read_text(encoding="utf-8")
+    flat = " ".join(raw.split())
+    heads = ("## Contents", "## Goal", "## Inputs", "## Outputs and paths", "## No web access", "## The online-research question", "## Techniques", "## Gate", "## Pitfalls", "## Enforcement")
+    positions = [raw.index(h) for h in heads]
+    assert positions == sorted(positions), "the sections of a phase file come in the plan's order"
+    for needle in ("## No web access", "say that the website references need web access, and stop", "never write a site, an address or a description from memory",
+                   "skipped by owner", "`state --set site_research=`", "`capture --url`", "`state --record G4w", "never skip it yourself",
+                   # when it runs, and when it is never offered
+                   "Standard and Full, after G4 and the motion round, and **only when the brief lists a site**", "Never offer it otherwise",
+                   # the question: asked once, three options, each recorded, the first recommended
+                   "you **never ask again**", "one AskUserQuestion item", "(a) **Research the best real sites for this kind of visitor, and capture the sites you name** (Recommended)",
+                   "`state --set site_research=online`", "`state --set site_research=links-only`", "`state --set site_research=none`",
+                   "No web: I will send screenshots, or skip the step", "`capture --url` refuses to fetch anything (exit 2) until `site_research` is `online` or `links-only`",
+                   # the board and what a reference is
+                   "4 to 6 **groups**", "never a look", "3 or more real sites", "**take** (structure, rhythm, how it serves the job)", "**avoid** (their look: colours, type, imagery, their words)",
+                   "`research/site-refs/owner/`", "`research/site-cliches.md`", "`research/YYYY-MM-DD-site-refs.md`", "/templates/site-refs-board.html`",
+                   "byte for byte", "**Never capture a page behind a login**", "never reuse it, or a part of it, in anything you build",
+                   # the gate
+                   '"none: research again"', "Restate the pick in one line", '"skip the references"', "The site round (`data-board=\"site\"`) waits for G4w", "`state --project <dir> --require G4w`"):
+        assert needle in flat, needle
+    # the question is asked before anything is captured, and the stop for no web access comes before the question
+    assert flat.index("## No web access") < flat.index("## The online-research question") < flat.index("## Techniques")
+    assert flat.index("you **never ask again**") < flat.index("**Capture each site, then show it.**")
+    # the layout references are linked, and the page names every lint row of the board
+    assert "](../page-layouts.json)" in raw
+    for row in ("site-refs:tier", "site-refs:brief", "site-refs:g4", "site-refs:research", "site-refs:cliches-file", "groups:count", "group:<name>:references",
+                "group:<name>:shot:<k>", "owner-sites:items", "images:inlined"):
+        assert row in raw, row
+    # SKILL.md and the index list it
+    assert "[07w-website-references](references/phases/07w-website-references.md)" in ORCH.read_text(encoding="utf-8")
+    assert "(phases/07w-website-references.md)" in (REFS / "_index.md").read_text(encoding="utf-8")
+
+
+def test_the_round_wrapper_builds_a_references_board_after_g4():
+    fm, body = frontmatter(SKILLS / "round" / "SKILL.md")
+    assert "website references board" in fm["description"] and ": " not in fm["description"] and len(fm["description"]) <= 1024
+    flat = " ".join(body.split())
+    for needle in ("`site-refs` (the website references board: a round after G4 in Standard and Full, only when the brief lists a site)",
+                   "`07w-website-references.md` (a website references board)",
+                   "A website references board is another: a new, empty folder (`mkdir rounds/r<N>`), not a copy.",
+                   "--require G4` (exit 1: the system rules are not approved yet; say so and stop)",
+                   "stop when the tier is Quick or `brief/BRIEF.md` lists no site under `Required surfaces:`",
+                   "`state --project <dir> --get site_research`: `auto` means the owner has not been asked yet, so ask the online-research question first",
+                   "templates/site-refs-board.html` (`data-board=\"site-refs\"`), once its sites are captured",
+                   "without web tools say so and stop, and never invent a site",
+                   "A website references board: copy it the same way (its pictures are already inlined).",
+                   '`state --record G4w "<decision>"` before any page of the site is built', "never on your own"):
+        assert needle in flat, needle
+    # the gate and the answer are checked before the board is built, and the board before it is linted
+    assert flat.index("--require G4` (exit 1") < flat.index("Build `rounds/r<N>/board.html`") < flat.index("Lint until exit 0")
+    assert flat.index("--get site_research") < flat.index("Build `rounds/r<N>/board.html`")
 
 
 def test_the_selection_phase_sends_a_full_rejection_through_the_style_research_again():
@@ -981,7 +1036,7 @@ def test_stale_pointers_name_the_style_step_in_the_contract_the_tier_page_and_th
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "style board" in readme
     commands = (ROOT / "docs" / "manual" / "reference" / "commands.md").read_text(encoding="utf-8")
-    assert "`[style\\|pick\\|refine\\|motion] [what this round should answer]`" in commands
+    assert "`[style\\|pick\\|refine\\|motion\\|site-refs] [what this round should answer]`" in commands
 
 
 # ---- the drawing engine step (ADR-0004): the use-llm design canvas, else Claude Code's /design, else Claude-drawn SVG on the owner's yes
@@ -1329,7 +1384,7 @@ def test_the_orchestrator_says_standard_and_full_decide_motion_before_g4_and_qui
 
 def test_the_round_wrapper_has_a_motion_kind_whose_variants_are_made_before_the_board():
     fm, body = frontmatter(SKILLS / "round" / "SKILL.md")
-    assert fm["argument-hint"] == "[style|pick|refine|motion] [what this round should answer]"
+    assert fm["argument-hint"] == "[style|pick|refine|motion|site-refs] [what this round should answer]"
     assert "motion board" in fm["description"] and ": " not in fm["description"] and len(fm["description"]) <= 1024
     flat = " ".join(body.split())
     for needle in ("`refine` and `motion` (a round after G3 that tries the signature move as variants; steps below, \"A motion round\")",
@@ -1622,9 +1677,9 @@ def test_the_manual_says_standard_and_full_settle_motion_and_shows_no_internal_c
                    "In Standard and Full the book always has a Motion chapter once motion is settled."):
         assert needle in book, needle
     commands = flat["reference/commands.md"]
-    for needle in ("`[style\\|pick\\|refine\\|motion] [what this round should answer]`", "in Standard and Full, a motion round)", ": `round`, `motion`",
+    for needle in ("`[style\\|pick\\|refine\\|motion\\|site-refs] [what this round should answer]`", "in Standard and Full, a motion round)", ": `round`, `motion`",
                    "Records, once, that nothing moves.", "`motion` is a round after you approve the design that tries your logo's move",
-                   "| `style`, `pick`, `refine` or `motion` | Which kind of board to build.", "## motion", "This is a `brand-creator` command, not a slash command",
+                   "| `style`, `pick`, `refine`, `motion` or `site-refs` | Which kind of board to build.", "## motion", "This is a `brand-creator` command, not a slash command",
                    "| `--off \"<reason>\"` | Records that nothing moves, with your reason in your own words. It never writes over an earlier answer",
                    "| `--json` | Prints the answer as data. Not together with `--off` |"):
         assert needle in commands, needle
