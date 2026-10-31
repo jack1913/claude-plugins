@@ -1216,6 +1216,31 @@ def test_a_state_rule_is_read_wherever_the_stylesheet_keeps_it(acme):
 
 @pytest.mark.requires_setup
 @pytest.mark.requires_node
+def test_a_declaration_written_after_a_nested_rule_in_a_state_rule_is_read(acme):
+    """Chromium keeps a declaration written after a nested rule apart from the rule's own (a nested-declarations rule with no selector): the rule's selector is its owner."""
+    add_motion_tokens(acme)
+    page = write_page(acme)
+    page.write_text(PAGE.replace("</style>", """  .box:hover { & span { color: red; } transition: color var(--duration-fast) var(--easing-standard); }
+  .tile { &:hover { & b { color: red; } animation: pulse var(--duration-fast) var(--easing-standard); } }
+  .card:hover { @media (min-width: 1px) { & i { color: red; } transition: opacity var(--duration-fast) var(--easing-standard); } }
+  @keyframes pulse { from { opacity: 1 } to { opacity: .5 } }
+</style>"""), encoding="utf-8")
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 0, r.stdout + r.stderr
+    ok = row(rep, "page:motion")
+    assert ok["status"] == "pass" and {(d["selector"], d["via"]) for d in ok["declarations"]} == {(".box:hover", "state"), (".tile:hover", "state"), (".card:hover", "state")}, ok
+    mutate(page, "color var(--duration-fast)", "color 999ms")   # the declaration after the nested rule, a duration nobody defined
+    mutate(page, "animation: pulse var(--duration-fast)", "animation: pulse 777ms")
+    mutate(page, "opacity var(--duration-fast)", "opacity 555ms")
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 1, r.stdout + r.stderr
+    bad = row(rep, "page:motion")
+    got = {(o["selector"], o["source"], o["duration_ms"]) for o in bad["offenders"]}
+    assert bad["status"] == "fail" and got == {(".box:hover", "transition", 999), (".tile:hover", "animation", 777), (".card:hover", "transition", 555)}, (bad["status"], sorted(got))
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
 def test_a_duration_that_is_not_a_token_fails_and_a_token_duration_passes(acme):
     add_motion_tokens(acme)
     page = write_page(acme)
@@ -2350,6 +2375,28 @@ def test_a_rule_is_tied_by_its_g4_words_in_a_recorded_rule_line(tmp_path):
     (p / "BRAND-STATE.md").unlink()
     gone = verdict()
     assert gone["status"] == "warn" and "BRAND-STATE.md cannot be read" in gone["detail"], gone
+
+
+def test_a_short_g4_text_ties_a_rule_to_a_recorded_line_only_as_the_whole_line(tmp_path):
+    """No browser. `rule`, `mark` or `per` are in some recorded "(rule)" line (the marker itself is "(rule)"), so they tie nothing: the g4 words need two content words of the line, or the whole line."""
+    p = make_project(tmp_path)
+    two = [tall_view([at(100, sel="img.a"), at(300, sel="img.b")])]
+    mutate(p / "BRAND-STATE.md", "- (rule) (...)", "- (rule) Smart directions only\n- (rule) No one marks the page twice\n- (rule) One mark per screen, always\n- (rule) Calm")
+    assert bc("state", "--record", "G4", "GO", project=p).returncode == 0
+    verdict = lambda g4: judge_rules(p, [{**ONE_MARK, "g4": g4}], two)["one-mark"]
+    for short in ("rule", "(rule)", "mark", "one", "per", "the mark", "a per", "calm always"):   # no content word, one, or two words that are not together in a line
+        w = verdict(short)
+        assert w["status"] == "warn" and w["tied"] is False and w["g4_line"] is None and "not a recorded G4 rule line yet" in w["detail"], (short, w)
+    assert "too short" in verdict("rule")["detail"] and "at least 2 content words" in verdict("rule")["detail"] and "holds" in verdict("calm always")["detail"]
+    for piece in ("art direction", "ne mark", "e mark per scr", "one marks per"):   # pieces of words, not words of a line: "smart directions", "no one marks", "mark per screen"
+        w = verdict(piece)
+        assert w["status"] == "warn" and w["tied"] is False and w["g4_line"] is None and "holds" in w["detail"], (piece, w)
+    for words, line in (("one mark", "(rule) One mark per screen, always"), ("mark PER screen", "(rule) One mark per screen, always"), ("(rule) one mark per screen, always", "(rule) One mark per screen, always"),
+                        ("Calm", "(rule) Calm"), ("(rule)  calm", "(rule) Calm")):   # two content words of a line, or a line whole (with or without its marker)
+        f = verdict(words)
+        assert f["status"] == "fail" and f["tied"] is True and f["g4_line"] == line, (words, f)
+    # the earlier line "no one marks the page twice" holds "one mark" only inside "marks": "one mark" ties the later line that holds it as words, and "no one marks" ties the earlier one
+    assert verdict("one mark")["g4_line"] == "(rule) One mark per screen, always" and verdict("no one marks")["g4_line"] == "(rule) No one marks the page twice"
 
 
 def test_a_run_that_measured_nothing_is_not_verified_for_every_kind_of_rule(tmp_path):

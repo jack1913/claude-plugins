@@ -15,6 +15,7 @@ What you see, and what to do.
 | A page check fails on a colour and names it | The page paints a colour that is not one of your colours for that theme. The row gives the nearest brand colour. Use the colour from your tokens, or change the token if the brand changed. Steps: [Check a page against your brand](../use/check-a-page.md) |
 | A page check says "page-check runs offline" and stops | The address is not on your computer. Only `localhost`, `127.0.0.1` and `[::1]` are checked. Build the site here and give its folder, or serve it locally |
 | A page check shows a font row "not verified" | The check could not tell which font the browser drew, for example a system font this computer does not have. Load the font with the page, then check again |
+| The plugin's data folder grows after you check built sites | Each check of a site built somewhere else keeps a copy of it, in `scratch/<your project>-<code>/page-check/<code>/<number>/` of the plugin's data folder, and nothing deletes them. Old ones can be deleted. Where they are and what to delete: [Old copies of a built site](../use/check-a-page.md#old-copies-of-a-built-site) |
 
 ## Related
 

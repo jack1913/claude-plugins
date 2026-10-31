@@ -1365,7 +1365,6 @@ def display_size_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
     proposal = "page.display_min_px" not in (ctx.rules.get("_from_file") or [])
     basis = f"minimum {minimum:g} px" + (" (a proposal: set page.display_min_px in qa/rules.json to keep or change it)" if proposal else " (qa/rules.json page.display_min_px)")
     small: dict[tuple, dict] = {}
-    seen = set()
     smallest = None
     truncated = []
     for v in views:
@@ -1375,7 +1374,6 @@ def display_size_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
             if family_key(u.get("family", "")) != family_key(face):
                 continue
             px = float(u.get("min_px") or 0)
-            seen.add((u.get("weight"), u.get("style")))
             smallest = px if smallest is None else min(smallest, px)
             if px < minimum - DISPLAY_EPSILON:
                 small.setdefault((u.get("min_sel"), px), {"selector": u.get("min_sel"), "text": u.get("min_text"), "font_size_px": px, "weight": u.get("weight"),
@@ -1553,14 +1551,37 @@ def _squash(text: str) -> str:
     return " ".join(str(text).split()).casefold()
 
 
+# function words that say nothing of what a rule is about (English and Polish, the languages of the plugin's word lists); negations are not here: "no" and "nie" are part of the rule
+TIE_STOP_WORDS = frozenset("a an the of to in on at by as is are be was were it its this that these those and or but for with per from if so "
+                           "i w z ze we na do od po za o u ku to ta te ten jest są być oraz lub albo ale dla że się".split())
+TIE_MIN_WORDS = 2                         # content words the g4 text needs when it is not a whole line
+
+
+def _tie_body(text: str) -> str:
+    """The words of a rule line without its "(rule)" marker, white space collapsed and case ignored."""
+    return re.sub(r"^\(rule\)\s*", "", _squash(text))
+
+
 def _tie(g4: dict, text: str) -> tuple[str | None, str]:
-    """-> (the recorded G4 rule line that holds the rule's `g4` words, white space collapsed and case ignored, or None; why there is none)."""
+    """-> (the recorded G4 rule line that holds the rule's `g4` words, white space collapsed and case ignored, or None; why there is none). The words are a meaningful part of the line:
+    the whole line (the "(rule)" marker may be left out) or at least TIE_MIN_WORDS content words, so "rule" (the marker of every line) or "mark" ties nothing."""
     if g4["error"]:
         return None, f"BRAND-STATE.md cannot be read ({g4['error']}), so the rule is not a recorded G4 rule line yet"
     if not g4["recorded"]:
         return None, f"G4 is not recorded yet, so \"{text}\" is not a recorded G4 rule line yet"
-    line = next((ln for ln in g4["lines"] if _squash(text) in _squash(ln)), None)
-    return line, "" if line else f"no \"(rule)\" line of BRAND-STATE.md Rules (G4) holds \"{text}\": it is not a recorded G4 rule line yet"
+    want = _tie_body(text)
+    content = [w for w in re.findall(r"\w+", want) if w not in TIE_STOP_WORDS]
+    bodies = [(ln, _tie_body(ln)) for ln in g4["lines"]]
+    line = next((ln for ln, body in bodies if want and want == body), None)
+    if line is None and len(content) >= TIE_MIN_WORDS:
+        whole_words = re.compile(rf"(?<!\w){re.escape(want)}(?!\w)")   # whole words of the line, not a piece of a longer word ("art direction" is not in "smart directions")
+        line = next((ln for ln, body in bodies if whole_words.search(body)), None)
+    if line:
+        return line, ""
+    if len(content) < TIE_MIN_WORDS:
+        return None, (f"\"{text}\" is too short to tie the rule to a line: write at least {TIE_MIN_WORDS} content words of the \"(rule)\" line of BRAND-STATE.md Rules (G4), or the whole line; "
+                      "it is not a recorded G4 rule line yet")
+    return None, f"no \"(rule)\" line of BRAND-STATE.md Rules (G4) holds \"{text}\": it is not a recorded G4 rule line yet"
 
 
 def rule_rows(rep: Report, measures: dict, ctx: Ctx) -> None:

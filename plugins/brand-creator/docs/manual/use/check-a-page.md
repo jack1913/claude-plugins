@@ -41,7 +41,8 @@ warning never fails the page. Stock labels are checked in English and Polish; on
 
    - A page in your project: give its path.
    - A site built somewhere else on your computer: give the page, and say where the site's folder is if Claude asks. The
-     folder is copied into a scratch area and only the copy is opened, so your site is never touched.
+     folder is copied into a scratch area and only the copy is opened, so your site is never touched. Every check keeps
+     its copy: see [Old copies of a built site](#old-copies-of-a-built-site).
    - A page your computer serves while you work on it: give its address, such as `http://localhost:3000/`. Only addresses
      on your own machine work (`localhost`, `127.0.0.1` or `[::1]`).
 
@@ -63,6 +64,17 @@ report: …/assets/_checks/page-check/index-6afd7f.json
 ```
 
 One report is kept per page, in `assets/_checks/page-check/`. Checking the same page again replaces its report.
+
+## Old copies of a built site
+
+Each time you check a site built somewhere else, Claude makes a new copy of its folder and opens that copy. Nothing
+deletes the copies, so they pile up. A page in your project makes no copy.
+
+- **Where they are:** in the plugin's data folder (on a normal install `~/.claude/plugins/data/brand-creator-jack1913/`),
+  under `scratch/<your project>-<code>/page-check/<code>/`. Each check has a numbered folder there: `1`, `2`, `3` and so
+  on, holding the copy of your site.
+- **What to do:** delete the numbered folders you no longer need, or the whole `page-check` folder under `scratch`. Your
+  site and your reports are not there, and the next check makes a new copy.
 
 ## Mark what is only a sample
 
