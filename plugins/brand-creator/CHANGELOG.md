@@ -188,6 +188,13 @@ still the starter's proposal once the system rules are approved (keep one under 
   `site_research` answer (online research for website references): `auto` until you are asked, then `online`,
   `links-only` or `none`; `state --set` refuses any other value and writes nothing. A project made before this update
   gets the two gates the first time you record them.
+- `brand-creator capture <page>` takes stills of a page of your project: the first screen at 1440 and 390 px wide, in the
+  light and the dark theme, and the whole page at 1440 px. They go beside the page in a `shots/` folder, with a
+  `capture.json` that lists the files the page loaded and anything that went wrong while it loaded. A page in `history/`
+  or in a round before the latest is refused. With `--url <address> --name <name>` it captures a real website into
+  `research/site-refs/<name>/`: the first screen at both widths, the whole page and two small thumbnails. That form is the
+  only one that reaches the internet. It refuses until you have answered the online-research question (`site_research`
+  is `online` or `links-only`), and a site that does not load exits with 1 and writes nothing.
 
 ### Changed
 

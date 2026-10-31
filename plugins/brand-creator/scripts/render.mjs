@@ -15,6 +15,10 @@
 //                               page, and the geometry of every text, image and rule measured in the same render (emitters/print.py)
 //   render.mjs page-measure --request FILE --out FILE  the measuring half of `brand-creator page-check`: one page opened at each width and colour scheme, the raw facts
 //                               written to --out (page_check.py judges them)
+//   render.mjs capture <page.html>  four first-screen stills (1440 and 390 wide, light and dark) and a full page of a page of the project, beside it in shots/, and capture.json
+//                               (what it loaded); a page in history/ or in a round before the latest is refused
+//   render.mjs capture --url URL --name NAME  stills and thumbnails of a real site into research/site-refs/NAME/: the only command that lets Chromium reach the network, and
+//                               only after the owner answered the online-research question (site_research)
 // Needs `brand-creator setup` (Playwright in <data>/node_modules, Chromium build recorded in <data>/setup.json).
 import fs from "node:fs";
 import path from "node:path";
@@ -22,7 +26,7 @@ import http from "node:http";
 import { parseArgs } from "node:util";
 import {
   EXIT, die, mainGuard, dataDir, readSetup, loadDep, findProject, confine, outsideProject, outsideOrSpecimens, scratchDir, rel,
-  Report, forbiddenTerms, writeIfChanged, sha256, readStateTop, missingSharedLibs, findHeadlessShell, proofReportTool, pixelArt, motionProofKind,
+  Report, forbiddenTerms, writeIfChanged, sha256, readStateTop, missingSharedLibs, findHeadlessShell, proofReportTool, pixelArt, motionProofKind, today,
 } from "./lib/_common.mjs";
 import { isLoopbackUrl } from "./lib/_common.mjs";
 import { collect } from "./pagelib/page_measure.mjs";
@@ -38,6 +42,8 @@ const USAGE = `usage:
   render.mjs pdf <page.html> --out FILE.pdf --label TEXT [--project DIR] [--format A4|Letter] [--scheme light|dark] [--label-px N] [--timeout MS]
   render.mjs pdf <page.html> --out FILE.pdf --size-mm WxH [--bleed-mm N] [--measure FILE.json] [--project DIR] [--scheme light|dark] [--timeout MS]
   render.mjs page-measure --request FILE.json --out FILE.json [--project DIR]
+  render.mjs capture <page.html> [--project DIR] [--wait MS] [--timeout MS]
+  render.mjs capture --url URL --name NAME [--project DIR] [--timeout MS]
   render.mjs selftest
 shots are written outside the project (default: <data>/scratch/...) or, with --out, under <project>/specimens/ (shots kept as specimens); the report goes to <project>/assets/_checks/shot.json.
 shot loads lazy images first, pauses --wait MS after load (default 300), then waits for running animations and transitions to end
@@ -45,7 +51,9 @@ shot loads lazy images first, pauses --wait MS after load (default 300), then wa
 shot --motion writes one report per proof file: <project>/assets/_checks/motion/<slug>-<hash6>.json. frames writes its stills inside the project, into
 motion/frames/<case>/ (a try-out proof, one in the latest round or a removed-*/ folder: <its folder>/frames/<case>/; a proof in history/ or in an earlier round is refused, those are read-only), each file only on a byte change, and its report to
 <project>/assets/_checks/frames/<slug>-<hash6>.json. Both reports take as inputs the proof, the pages and every project file the pages loaded (a stylesheet, tokens.css, a
-script, an image), so a change to one of them makes the report stale.`;
+script, an image), so a change to one of them makes the report stale.
+capture writes no report: its stills and capture.json go beside the page (<page folder>/shots/), or with --url into research/site-refs/NAME/; --url is refused until
+site_research in BRAND-STATE.md is online or links-only, and it is the only form that lets the browser reach the network.`;
 
 const MIME = {
   ".html": "text/html; charset=utf-8", ".htm": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8",
@@ -1718,12 +1726,12 @@ async function framesCase(browser, server, project, c, slug, base, pcts, specRel
   if (old.length) report.add(`${rid}:stale`, "warn", "frames left from an earlier run", { detail: `${old.join(", ")} in ${dir}/ are not part of this run (other points, or fewer); move them to removed-<date>/` });
 }
 
-/** Why the folder of a proof is not written to (null when it can be). history/ is frozen and every round before the latest is read-only: the guard keeps both from an edit, but it cannot see what a
- *  command writes, and `frames` writes its stills beside the proof. */
-function readOnlyWhy(project, specRel) {
+/** Why the folder of a proof or a page is not written to (null when it can be). history/ is frozen and every round before the latest is read-only: the guard keeps both from an edit, but it cannot
+ *  see what a command writes, and `frames` writes its stills beside the proof, `capture` beside the page. `words` is how the command says it (FRAMES_READ_ONLY, CAPTURE_READ_ONLY). */
+const FRAMES_READ_ONLY = { tail: "(frames writes its stills beside the proof)", how: "copy the proof and its page into the latest round and run frames there" };
+function readOnlyWhy(project, specRel, words = FRAMES_READ_ONLY) {
   const [top, round] = specRel.split("/");
-  const tail = "(frames writes its stills beside the proof)";
-  const how = "copy the proof and its page into the latest round and run frames there";
+  const { tail, how } = words;
   if (top === "history") return `${specRel} is inside history/, which is read-only ${tail}: take the stills before \`freeze\`, or ${how}`;
   if (top !== "rounds" || !/^r\d+$/.test(round ?? "")) return null;
   const dir = path.join(project, "rounds");
@@ -2209,6 +2217,232 @@ async function cmdPageMeasure(argv) {
   return EXIT.PASS;
 }
 
+// ---------------------------------------------------------------- capture
+// Stills, for two jobs (scripts/CONTRACT.md "capture"):
+//   capture <page.html>               a page of the project: four first-screen views (1440 x 900 and 390 x 844, light and dark) and a full page (1440, light), device scale 1, written beside
+//                                     the page in <page folder>/shots/ with capture.json (the stills' hashes, every project file the page loaded, what went wrong while it loaded). The browser
+//                                     reaches nothing but the project's own server: a request to another origin is recorded and aborted, as in shot.
+//   capture --url URL --name NAME     a real site, into research/site-refs/NAME/: the first screen at 1440 and at 390, a full page, two small JPEG thumbnails the references board inlines,
+//                                     and capture.json (the address, where it ended, its status and title). The only place where Chromium may reach the network, and only after the owner's
+//                                     answer to the online-research question (site_research is online or links-only). It never writes assets/_checks/.
+// Every refusal comes before the browser starts; every picture is taken before the first file is written, so a page or a site that does not load leaves nothing behind.
+const CAPTURE_VIEWS = [[1440, 900, "light"], [1440, 900, "dark"], [390, 844, "light"], [390, 844, "dark"]];   // a project page: width, height, colour scheme
+const CAPTURE_SITE_VIEWS = [[1440, 900], [390, 844]];                                                         // a real site: light only
+const CAPTURE_FULL_MAX = 12000;               // css px: a taller page is cut here, and capture.json says so (the Chromium texture limit is 16384)
+const CAPTURE_THUMBS = [["thumb-1440.jpg", 1440, 480], ["thumb-390.jpg", 390, 160]];   // file, the view it is made from, its width in px
+const CAPTURE_JPEG_QUALITY = 0.75;
+const CAPTURE_SITE_TIMEOUT_MS = 45000;
+const CAPTURE_SITE_SETTLE_MS = 1000;
+const CAPTURE_LAZY_CAP_MS = 10000;            // a real site's lazy images are given this long to load; the ones still missing are named in the output
+const CAPTURE_NAME = /^[a-z0-9][a-z0-9-]{1,40}$/;
+const CAPTURE_RESERVED_NAME = "owner";        // research/site-refs/owner/ holds the screenshots the owner sent: capture never writes there
+const CAPTURE_MAX_PROBLEMS = 40;
+const CAPTURE_READ_ONLY = { tail: "(capture writes its stills beside the page)", how: "copy the page into the latest round and capture it there" };
+
+const firstLine = (e) => String(e && e.message ? e.message : e).split("\n")[0].replace(/^page\.\w+: /, "");
+
+function wholeMs(value, flag, min) {
+  const n = Number(value);
+  if (value === "" || !Number.isInteger(n) || n < min) die(EXIT.USAGE, `${flag} needs a whole number of milliseconds, ${min} or more\n${USAGE}`);
+  return n;
+}
+
+/** The page is loaded: wait for its fonts, load its lazy images (a full page draws them), pause, then wait for the animations that end. `lazyCap` (a real site) stops waiting for
+ *  the images after that many ms; the number still missing is returned. */
+async function settleForStill(page, { timeout, waitMs, lazyCap = null }) {
+  await withTimeout(page.evaluate(() => document.fonts.ready), timeout, "fonts.ready");
+  const lazy = await withTimeout(page.evaluate(async (cap) => {
+    const imgs = [...document.images].filter((i) => i.loading === "lazy");
+    for (const i of imgs) i.loading = "eager";
+    const loaded = Promise.all(imgs.map((i) => (i.complete ? null : new Promise((r) => { i.addEventListener("load", r, { once: true }); i.addEventListener("error", r, { once: true }); }))));
+    if (cap !== null) await Promise.race([loaded, new Promise((r) => setTimeout(r, cap))]); else await loaded;
+    return { images: imgs.length, missing: imgs.filter((i) => !i.complete).length };
+  }, lazyCap), timeout, "lazy images");
+  await page.waitForTimeout(waitMs);
+  await waitAnimations(page);
+  return lazy;
+}
+
+/** A picture shrunk to `width` px in a blank page (a canvas, as pngDiff decodes pictures), as a JPEG on white. */
+async function jpegThumb(diff, png, width) {
+  const b64 = await diff.evaluate(async ([data, w, quality]) => {
+    const bmp = await createImageBitmap(await (await fetch("data:image/png;base64," + data)).blob());
+    const h = Math.round((bmp.height * w) / bmp.width);
+    const cv = new OffscreenCanvas(w, h), g = cv.getContext("2d");
+    g.fillStyle = "#fff"; g.fillRect(0, 0, w, h);
+    g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high";
+    g.drawImage(bmp, 0, 0, w, h);
+    const bytes = new Uint8Array(await (await cv.convertToBlob({ type: "image/jpeg", quality })).arrayBuffer());
+    let s = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return btoa(s);
+  }, [png.toString("base64"), width, CAPTURE_JPEG_QUALITY]);
+  return Buffer.from(b64, "base64");
+}
+
+/** capture.json of a page: rewritten only when a still, an input or a problem changed. A run that finds everything as it was leaves the file, its date included, byte for byte,
+ *  so a report that read it (board-lint) does not turn stale because someone ran capture again. */
+function writeCaptureRecord(file, doc) {
+  let old = null;
+  try { old = JSON.parse(fs.readFileSync(file, "utf8")); } catch { /* none yet, or not readable: written */ }
+  if (old && JSON.stringify({ ...old, date: null }) === JSON.stringify({ ...doc, date: null })) return false;
+  return writeIfChanged(file, JSON.stringify(doc, null, 2) + "\n");
+}
+
+async function cmdCapture(argv) {
+  const { values, positionals } = parse(argv, {
+    project: { type: "string" }, wait: { type: "string" }, timeout: { type: "string" }, url: { type: "string" }, name: { type: "string" },
+  });
+  const project = findProject(values.project);
+  if (values.url !== undefined) {
+    if (positionals.length) die(EXIT.USAGE, `capture --url takes no page: ${positionals[0]}\n${USAGE}`);
+    if (values.wait !== undefined) die(EXIT.USAGE, `--wait goes with a page of the project, not with --url\n${USAGE}`);
+    return captureSite(project, values);
+  }
+  if (values.name !== undefined) die(EXIT.USAGE, `--name goes with --url\n${USAGE}`);
+  if (positionals.length !== 1) die(EXIT.USAGE, `capture needs exactly one page, or --url and --name\n${USAGE}`);
+  return captureProjectPage(project, positionals[0], values);
+}
+
+async function captureProjectPage(project, pageFile, values) {
+  const timeout = wholeMs(values.timeout ?? "60000", "--timeout", 1000), waitMs = wholeMs(values.wait ?? "300", "--wait", 0);
+  const abs = checkPage(project, pageFile);
+  const root = fs.realpathSync.native(project);
+  const diskRel = (p) => path.relative(root, fs.realpathSync.native(p)).split(path.sep).join("/");   // as the disk spells it (macOS is case-insensitive): history/ and rounds/ are told apart by name
+  const pageRel = diskRel(abs);
+  const frozen = readOnlyWhy(project, pageRel, CAPTURE_READ_ONLY);   // before the browser starts, before anything is written
+  if (frozen) die(EXIT.USAGE, frozen);
+  const dir = path.posix.dirname(pageRel) === "." ? "shots" : `${path.posix.dirname(pageRel)}/shots`;
+  const browser = await launch();   // a missing setup fails before anything is opened
+  const server = await startServer(project);
+  const stills = [], problems = new Set();
+  let full = null;
+  try {
+    const { url } = pageUrl(project, server.origin, pageFile);
+    for (const [width, height, scheme] of CAPTURE_VIEWS) {
+      const ctx = await browser.newContext({ viewport: { width, height }, colorScheme: scheme, deviceScaleFactor: 1 });
+      const seen = await instrument(ctx, server.origin);
+      const page = await ctx.newPage();
+      watch(page, seen, server.origin);
+      try {
+        await withTimeout(page.goto(url, { waitUntil: "load", timeout }), timeout + 5000, `loading ${url}`);
+        await settleForStill(page, { timeout, waitMs });
+        stills.push({ view: `${width}-${scheme}`, width, height, scheme, file: `${width}-${scheme}.png`, png: await page.screenshot() });
+        if (width === 1440 && scheme === "light") {
+          const total = await page.evaluate(() => document.documentElement.scrollHeight);
+          const h = Math.min(total, CAPTURE_FULL_MAX);
+          full = { file: "1440-light-full.png", height: h, cut: total > CAPTURE_FULL_MAX, page_height: total,
+            png: await page.screenshot({ fullPage: true, clip: { x: 0, y: 0, width, height: h } }) };
+        }
+      } catch (e) {
+        die(EXIT.FAIL, `capture could not take ${pageRel} at ${width}px ${scheme}: ${firstLine(e)}; nothing was written`);
+      } finally {
+        await ctx.close();
+      }
+      for (const u of seen.nonLocal) problems.add(`non-local request: ${u}`);
+      for (const m of seen.errors) problems.add(m);
+      for (const f of seen.failedLocal) problems.add(`failed local request: ${f}`);
+    }
+  } finally {
+    await browser.close();
+    await server.close();
+  }
+  const shots = path.join(root, ...dir.split("/"));
+  const inside = (p) => { const r = path.relative(shots, fs.realpathSync.native(p)); return r === "" || (!r.startsWith("..") && !path.isAbsolute(r)); };
+  // the page and what its server answered, except the stills themselves (a page that shows its own stills would never be at rest)
+  const inputs = [...new Set([abs, ...server.served()].filter((p) => !inside(p)).map(diskRel))].sort()
+    .map((p) => ({ path: p, sha256: sha256(fs.readFileSync(path.join(root, p))) }));
+  const kept = [...problems].sort();
+  const doc = {
+    schema: 1, tool: "capture", source: { page: pageRel }, date: today(),
+    views: stills.map((s) => ({ view: s.view, width: s.width, height: s.height, scheme: s.scheme, file: s.file, sha256: sha256(s.png) })),
+    full: { file: full.file, sha256: sha256(full.png), height: full.height, cut: full.cut, ...(full.cut ? { page_height: full.page_height } : {}) },
+    inputs, problems: kept.slice(0, CAPTURE_MAX_PROBLEMS).concat(kept.length > CAPTURE_MAX_PROBLEMS ? [`${kept.length - CAPTURE_MAX_PROBLEMS} more`] : []),
+  };
+  const files = [...stills, full].map((s) => ({ file: s.file, buf: s.png }));
+  const written = files.filter((f) => writeIfChanged(confine(project, `${dir}/${f.file}`, "capture file"), f.buf)).length
+    + (writeCaptureRecord(confine(project, `${dir}/capture.json`, "capture file"), doc) ? 1 : 0);
+  console.log(`capture ${pageRel}: ${files.length} stills and capture.json in ${dir}/ (${written} of ${files.length + 1} file(s) written, the others unchanged)`
+    + (full.cut ? `; the full page is ${full.page_height} px tall and was cut at ${CAPTURE_FULL_MAX} px` : ""));
+  for (const p of doc.problems) console.log(`  problem while loading: ${p}`);
+  return EXIT.PASS;
+}
+
+async function captureSite(project, values) {
+  const refuse = (why) => die(EXIT.USAGE, why);
+  let address;
+  try { address = new URL(String(values.url)); } catch { refuse(`capture takes an http(s) address, not ${JSON.stringify(values.url)}`); }
+  if (!["http:", "https:"].includes(address.protocol)) refuse(`capture takes an http(s) address, not ${JSON.stringify(values.url)}`);
+  if (address.username || address.password) refuse("capture takes an address without a user name or password (the address is written into capture.json)");
+  const name = values.name;
+  if (name === undefined || !CAPTURE_NAME.test(name)) refuse(`capture --url needs --name made of lowercase letters, digits and hyphens (2 to 41 characters, starting with a letter or digit), not ${JSON.stringify(name ?? null)}`);
+  if (name === CAPTURE_RESERVED_NAME) refuse(`--name ${CAPTURE_RESERVED_NAME} is reserved: research/site-refs/${CAPTURE_RESERVED_NAME}/ holds the screenshots the owner sent, which a capture would overwrite; use another --name`);
+  const timeout = wholeMs(values.timeout ?? String(CAPTURE_SITE_TIMEOUT_MS), "--timeout", 1000);
+  const answer = readStateTop(project).site_research;
+  if (answer !== "online" && answer !== "links-only") {
+    refuse("capture --url needs the owner's answer to online research first: ask it (07w-website-references), then `brand-creator state --set site_research=online` (or links-only)");
+  }
+  const url = address.href, dir = `research/site-refs/${name}`;
+  const folder = confine(project, dir, "capture folder"), recordFile = confine(project, `${dir}/capture.json`, "capture file");
+  if (fs.existsSync(recordFile)) {
+    let held;
+    try { held = JSON.parse(fs.readFileSync(recordFile, "utf8"))?.source?.url; } catch (e) { refuse(`${dir}/capture.json cannot be read (${e.message}): move ${dir}/ to removed-<date>/ first`); }
+    if (held !== url) refuse(`${dir}/ already holds a capture of ${typeof held === "string" ? held : "another address"}: use another --name for ${url}`);
+  } else if (fs.existsSync(folder) && (!fs.statSync(folder).isDirectory() || fs.readdirSync(folder).length)) {
+    // files that no capture of ours wrote (the owner's own, say): taking a site into this folder would replace them
+    refuse(`${dir} exists and holds no capture.json, so what is there is not a capture of ours and would be overwritten: use another --name, or move ${dir}/ to removed-<date>/ first`);
+  }
+  const fail = (why) => die(EXIT.FAIL, `could not capture ${url}: ${String(why).replace(/\.$/, "")}; leave the reference out or ask the owner for a screenshot`);
+  const browser = await launch();   // a missing setup fails before anything is fetched
+  const taken = [];
+  let source = null, full = null, missing = 0;
+  try {
+    for (const [i, [width, height]] of CAPTURE_SITE_VIEWS.entries()) {
+      // a fresh context per view: no cookies or storage from an earlier visit, nothing saved to disk
+      const ctx = await browser.newContext({ viewport: { width, height }, colorScheme: "light", deviceScaleFactor: 1, acceptDownloads: false });
+      try {
+        const page = await ctx.newPage();
+        let response;
+        try { response = await withTimeout(page.goto(url, { waitUntil: "load", timeout }), timeout + 5000, `loading ${url}`); } catch (e) { fail(firstLine(e)); }
+        if (!response) fail("the browser got no answer");
+        if (response.status() >= 400) fail(`the site answered ${response.status()}`);
+        try {
+          missing += (await settleForStill(page, { timeout, waitMs: CAPTURE_SITE_SETTLE_MS, lazyCap: CAPTURE_LAZY_CAP_MS })).missing;
+          taken.push({ view: String(width), width, height, scheme: "light", file: `${width}.png`, png: await page.screenshot() });
+          if (i === 0) {
+            const total = await page.evaluate(() => document.documentElement.scrollHeight);
+            const h = Math.min(total, CAPTURE_FULL_MAX);
+            full = { file: `${width}-full.png`, height: h, cut: total > CAPTURE_FULL_MAX, page_height: total,
+              png: await page.screenshot({ fullPage: true, clip: { x: 0, y: 0, width, height: h } }) };
+            source = { url, final_url: page.url(), status: response.status(), title: String(await page.title()).slice(0, 120) };
+          }
+        } catch (e) { fail(firstLine(e)); }
+      } finally {
+        await ctx.close();
+      }
+    }
+    const diff = await scratchPage(browser);
+    const thumbs = [];
+    for (const [file, from, width] of CAPTURE_THUMBS) thumbs.push({ file, width, buf: await jpegThumb(diff, taken.find((s) => s.width === from).png, width) });
+    const doc = {
+      schema: 1, tool: "capture", source, date: today(),
+      views: taken.map((s) => ({ view: s.view, width: s.width, height: s.height, scheme: s.scheme, file: s.file, sha256: sha256(s.png) })),
+      full: { file: full.file, sha256: sha256(full.png), height: full.height, cut: full.cut, ...(full.cut ? { page_height: full.page_height } : {}) },
+      thumbs: thumbs.map((t) => ({ file: t.file, width: t.width, sha256: sha256(t.buf) })),
+    };
+    const files = [...taken.map((s) => ({ file: s.file, buf: s.png })), { file: full.file, buf: full.png }, ...thumbs.map((t) => ({ file: t.file, buf: t.buf }))];
+    const written = files.filter((f) => writeIfChanged(confine(project, `${dir}/${f.file}`, "capture file"), f.buf)).length
+      + (writeIfChanged(recordFile, JSON.stringify(doc, null, 2) + "\n") ? 1 : 0);
+    console.log(`capture ${url}: ${files.length} pictures and capture.json in ${dir}/ (${written} of ${files.length + 1} file(s) written, the others unchanged)`
+      + (source.final_url !== url ? `; the site led on to ${source.final_url}` : "")
+      + (full.cut ? `; the full page is ${full.page_height} px tall and was cut at ${CAPTURE_FULL_MAX} px` : "")
+      + (missing ? `; ${missing} lazy image(s) had not loaded after ${CAPTURE_LAZY_CAP_MS / 1000} s` : ""));
+  } finally {
+    await browser.close();
+  }
+  return EXIT.PASS;
+}
+
 // ---------------------------------------------------------------- selftest
 async function cmdSelftest() {
   const browser = await launch();
@@ -2234,6 +2468,7 @@ mainGuard(async () => {
     case "pdf": return cmdPdf(rest);
     case "frames": return cmdFrames(rest);
     case "page-measure": return cmdPageMeasure(rest);
+    case "capture": return cmdCapture(rest);
     case undefined: case "-h": case "--help": console.log(USAGE); return cmd ? EXIT.PASS : EXIT.USAGE;
     default: return die(EXIT.USAGE, `unknown command ${cmd}\n${USAGE}`);
   }

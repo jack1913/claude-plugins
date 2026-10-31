@@ -16,6 +16,7 @@ proven.
 | [Hook guard in subagents](#hook-guard-applies-to-subagent-tool-calls) | 2026-10-20, Claude Code 2.1.305, a haiku subagent, the 0.2.2 hook | passed: four calls blocked, the latest-round write allowed; `rm` not tried |
 | [Hook guard in the main thread](#hook-guard-in-a-real-main-thread-session) | 2026-10-20, Claude Code 2.1.305, the 0.2.2 hook | passed: four calls blocked, the latest-round write allowed; `rm` not tried |
 | [Live name screening](#live-name-screening) | never run as a release check | |
+| [Website capture of a real site](#website-capture-of-a-real-site) | never run | |
 | [Trademark deep link](#trademark-deep-link-opens-a-result-page) | never run | |
 | [Applied skill in a real session](#the-applied-skill-is-picked-up-by-a-real-session) | never run | |
 | [DESIGN.md and BRAND.md in a real agent](#designmd-and-brandmd-in-a-real-agent) | never run | |
@@ -241,6 +242,20 @@ registries and are deselected unless `BRAND_CREATOR_LIVE=1`.
 answer REGISTERED, NOT-FOUND or UNKNOWN with its control, and the memo must say "screening, not clearance".
 
 **Last run:** never as a release check.
+
+## Website capture of a real site
+
+**Why manual.** `brand-creator capture --url` is the one command that lets Chromium reach the network. The suite captures a server on this machine only and never
+visits a real website, so how real pages behave (cookie banners, redirects, slow or blocked pages, lazy images) is not checked.
+
+**Steps.** In a throwaway project, `brand-creator state --set site_research=online`, then
+`brand-creator capture --url <the address of a public page you may look at> --name <a word>`. Open `research/site-refs/<a word>/`: `1440.png` and `390.png` must show the
+page's first screen as a visitor sees it, `1440-full.png` the whole page, both thumbnails must be readable, and `capture.json` must name the address, where it ended,
+the status and the title. Then capture a page that answers 404 and one that never answers (`--timeout 5000`), each with a new `--name` (a name that already holds another
+address exits 2 before anything is fetched): each must exit 1, say `could not capture` with the address, and leave no folder behind. Last, set `site_research=auto` and try
+again: it must exit 2 and fetch nothing.
+
+**Last run:** never.
 
 ## Permission rule for the fallback form
 

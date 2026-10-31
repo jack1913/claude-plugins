@@ -20,6 +20,7 @@ once; a script that does not use them is wrong, not special.
 - [Name screening](#name-screening)
 - [QA gates and mark tooling](#qa-gates-and-mark-tooling)
 - [Page check](#page-check)
+- [Website references and reference pages](#website-references-and-reference-pages)
 - [Brand book](#brand-book)
 - [Print, press kit and social posts](#print-press-kit-and-social-posts)
 - [Adoption, cascade, adapters, applied skill and launch](#adoption-cascade-adapters-applied-skill-and-launch)
@@ -141,6 +142,9 @@ fontTools, Brotli and skia-pathops (`outline_glyphs.py`, `fontcheck.py`), Pillow
   assets/manifest.json             artefacts written by emitters (put-on-byte-change)
   assets/_checks/                  JSON reports, the logo sheet and the guide overlay
   specimens/<name>/                page shots kept as specimens (shot --out specimens/<name>); any depth, the only project folder `shot --out` may write
+  research/site-refs/<name>/       a real site's stills from `capture --url`: 1440.png 390.png 1440-full.png thumb-1440.jpg thumb-390.jpg capture.json (see capture)
+  research/site-refs/owner/        screenshots the owner sent (not captured; the board's caption says so; `capture --url --name owner` is refused)
+  <page folder>/shots/             a project page's stills from `capture <page>`: 1440-light.png 1440-dark.png 390-light.png 390-dark.png 1440-light-full.png capture.json
   qa/rules.json                    owner thresholds and size bands (see QA gates); optional, proposals apply without it
   qa/print.json                    owner thresholds of print-check (see Print); optional, stated defaults apply without it
   qa/states.json  qa/idempotence.json   state sets for states-check; the byte-difference allowlist for verify-idempotent
@@ -1409,6 +1413,80 @@ brand-creator page-check --url http://localhost:<port>/<path> [--project DIR] ..
   `report_tool(ident)` (the report name above) and `is_loopback_url(url)` (the one loopback rule; `isLoopbackUrl(url)` in `scripts/lib/_common.mjs` is its twin and
   a test pins both to one table of cases, the forms a parser turns into 127.0.0.1 among them). Each family of rows is a function `(rep, measures, ctx)` listed in `pagecheck.ROW_CHECKS`; a family adds its keys to the
   report through `ctx.extra`.
+
+## Website references and reference pages
+
+The tools of the two optional steps after G4 in Standard and Full: the website references and the site round. Each has its own heading.
+
+### capture
+
+`brand-creator capture <page.html>` and `brand-creator capture --url <url> --name <name>` (`render.mjs capture`) take stills. They write no report in
+`assets/_checks/`: the record is `capture.json` beside the stills. Every refusal below comes before the browser starts, and every picture is taken before the
+first file is written, so a page or a site that does not load leaves nothing behind.
+
+**A page of the project:** `capture <page.html> [--project DIR] [--wait MS] [--timeout MS]`.
+
+- The page is confined to the project (a path outside it exits 2). The stills go to `<the page's folder>/shots/`, which is fixed. A page under `history/`, and a
+  page in a round before the latest (`rounds/r<K>/` with `K` below the latest round), exit 2 with `<page> is inside ..., which is read-only (capture writes its
+  stills beside the page): copy the page into the latest round and capture it there`; `frames` refuses the same folders with its own wording.
+- The project is served by `render.mjs`'s own local server. A request to another origin is recorded in `problems` and aborted, as in `shot`. The page is waited for
+  as `shot` waits: `load`, `document.fonts.ready`, lazy images loaded first, `--wait` (default 300 ms), then the running animations that have an end (at most 15 s).
+  `--timeout` (default 60000 ms) bounds the load. A page whose animation never ends is captured where it is, so its stills may differ from run to run.
+- Written, each only when its bytes change (`writeIfChanged`), at device scale 1: `1440-light.png` and `1440-dark.png` (viewport 1440 x 900), `390-light.png` and
+  `390-dark.png` (390 x 844), the first screen only, and `1440-light-full.png` (the whole page at 1440, light, at most 12000 css px tall; a taller page is cut and
+  `capture.json` says so).
+- `shots/capture.json`:
+
+  ```json
+  {"schema": 1, "tool": "capture", "source": {"page": "rounds/r2/Ledger/index.html"}, "date": "2026-11-04",
+   "views": [{"view": "1440-light", "width": 1440, "height": 900, "scheme": "light", "file": "1440-light.png", "sha256": "<hex>"}],
+   "full": {"file": "1440-light-full.png", "sha256": "<hex>", "height": 2725, "cut": false},
+   "inputs": [{"path": "rounds/r2/Ledger/index.html", "sha256": "<hex>"}],
+   "problems": ["non-local request: https://example.invalid/x.png"]}
+  ```
+
+  `views` holds the four first screens in the order above; `full.height` is the picture's height, and a cut page adds `full.page_height` (its real height).
+  `inputs` are the page and every project file the server answered (a stylesheet, a script, an image, a font, `tokens.css`), as project paths, sorted, each with its
+  hash, so a still is detectably stale when one of them changes; files inside `shots/` itself are left out, so a page that loads one of its own stills still comes
+  to rest. `problems` are what went wrong while the page loaded (a request to another origin, a page or console error, a failed request of the page's own),
+  sorted, at most 40 and then `"<n> more"`: they are recorded, never gated (`page-check` gates the page).
+- `capture.json` is rewritten only when a still, an input or a problem changed. Otherwise the old file, its `date` included, stays byte for byte, so a run that
+  finds nothing new does not make a report that read it stale.
+- Exit 0 when written. Exit 1 when the page cannot be loaded or rendered (nothing is written). Exit 2 for a usage error, a page outside the project, a page in
+  `history/` or a round before the latest. Exit 3 when Chromium is missing.
+
+**A real site:** `capture --url <url> --name <name> [--project DIR] [--timeout MS]`. It takes no page and no `--wait`.
+
+- Refused with exit 2, in this order, before anything is fetched:
+  1. an address that does not parse or is not `http:` or `https:` (`capture takes an http(s) address`), or that holds a user name or password;
+  2. a `--name` that does not match `^[a-z0-9][a-z0-9-]{1,40}$`, or that is `owner` (reserved: `research/site-refs/owner/` holds the screenshots the owner sent, which a capture
+     would overwrite);
+  3. `site_research` in `BRAND-STATE.md` that is not `online` or `links-only`: the message says to ask the owner first, names the phase file
+     `07w-website-references` and gives the command `brand-creator state --set site_research=online` (or `links-only`);
+  4. a `research/site-refs/<name>/capture.json` that holds another address (`use another --name`) or cannot be read; or a `research/site-refs/<name>` that holds files (or is a
+     file) and has no `capture.json`: what is there was not written by a capture and is never overwritten (an empty folder is taken).
+
+  The same address again is taken again into the same folder.
+- **The only command that lets Chromium reach the network, and only with `--url`.** Nothing is blocked: a fresh browser context per view (no cookies or storage from
+  an earlier visit), `acceptDownloads: false`, default `--timeout` 45000 ms. The address is loaded at 1440 x 900 and again at 390 x 844 (light scheme); each load
+  waits for `load`, the fonts, the lazy images (at most 10 s; the output says how many were missing) and the animations that end, and pauses one second.
+- Written into `research/site-refs/<name>/`: `1440.png` (the first screen), `390.png`, `1440-full.png` (at most 12000 css px, cut and recorded as above),
+  `thumb-1440.jpg` (480 px wide) and `thumb-390.jpg` (160 px wide), JPEG at quality 0.75 on white, shrunk in a blank page with a canvas, and `capture.json`:
+
+  ```json
+  {"schema": 1, "tool": "capture",
+   "source": {"url": "<address>", "final_url": "<where it ended>", "status": 200, "title": "<document.title, at most 120 characters>"},
+   "date": "2026-11-04",
+   "views": [{"view": "1440", "width": 1440, "height": 900, "scheme": "light", "file": "1440.png", "sha256": "<hex>"}],
+   "full": {"file": "1440-full.png", "sha256": "<hex>", "height": 2725, "cut": false},
+   "thumbs": [{"file": "thumb-1440.jpg", "width": 480, "sha256": "<hex>"}, {"file": "thumb-390.jpg", "width": 160, "sha256": "<hex>"}]}
+  ```
+
+  The board inlines the thumbnails, and its provenance row matches their bytes with `thumbs[].sha256`. A record is rewritten when anything in it differs,
+  so a capture on a later day carries the later `date`.
+- An answer of 400 or more, a navigation error or a timeout exits 1 with `could not capture <url>: <why>; leave the reference out or ask the owner for a
+  screenshot`, and nothing is written. Exit 3 when Chromium is missing.
+- It never captures a page behind a login: the phase file says so, and the tool cannot tell.
 
 ## Brand book
 
