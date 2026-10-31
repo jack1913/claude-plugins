@@ -354,3 +354,48 @@ def fill_site_refs_board(template: str, names: tuple[str, ...] = ("Ledger", "Atl
     for piece in re.split(r"(<!--.*?-->)", page, flags=re.S):      # markers inside HTML comments stay as the template wrote them
         out.append(piece if piece.startswith("<!--") else re.sub(r"\[\[fill:.*?\]\](?!\])", stand_in, piece, flags=re.S))
     return "".join(out)
+
+
+def fill_site_board(template: str, names: tuple[str, ...] = ("Ledger", "Atlas"), *, rnd: int = 2, first: bool = True, stage: str = "hero", checks: dict | None = None,
+                    colds: dict | None = None, layouts: dict | None = None, brand: str = "Acme") -> str:
+    """The site board template as a finished page that must pass board-lint: the variant article repeated once per name and every [[fill: ...]] marker outside an HTML comment replaced with stand-in
+    text. `first` is the first board of its stage, which does without the two blocks a later one needs (What changed, Weak points); `stage` is the data-site-stage; `checks` maps a variant name to the
+    check line of its card (pass or fail, default pass), `colds` to its cold line (ship or fix, default ship) and `layouts` to its layout id (default walkthrough). The folders, the stills and the
+    reports of the variants are the test's to make."""
+    import re
+    m = re.search(r'      <article class="variant".*?</article>\n', template, re.S)
+    assert m, "the template has no variant article"
+    block = m.group(0)
+    marker = re.search(r"      <!-- \[\[fill: articles for variants two and three.*?-->\n", template, re.S)
+    assert marker, "the template has no 'articles for variants two and three' comment"
+
+    def named(b: str, name: str) -> str:
+        b = b.replace("[[fill: Name one]]", name).replace('data-check="[[fill: pass or fail]]"', f'data-check="{(checks or {}).get(name, "pass")}"')
+        b = b.replace("[[fill: layout id]]", (layouts or {}).get(name, "walkthrough"))
+        return re.sub(r"\[\[fill: ship or fix\]\]", (colds or {}).get(name, "ship"), b)
+
+    page = template.replace(block, named(block, names[0]) if names else "", 1).replace(marker.group(0), "".join(named(block, n) for n in names[1:]), 1)
+    for word, name in zip(("one", "two", "three"), names):
+        page = page.replace(f"[[fill: Name {word}]]", name)
+    page = page.replace('data-board="site" data-site-stage="hero"', f'data-board="site" data-site-stage="{stage}"', 1)
+    if first:   # the first board of a stage has no earlier board to say what changed since
+        for sid in ("what-changed", "weak-points"):
+            page, n = re.subn(r'  <!-- OPTIONAL \(required from the second site board of a stage; delete in the first one\) -->\n  <section class="block(?: n)?" id="[a-z]+" data-section="%s">.*?</section>\n\n' % sid, "", page, flags=re.S)
+            assert n == 1, sid
+        page, n = re.subn(r'      <li><a href="#(?:changed|weak)">[^<]*</a></li><!-- OPTIONAL: delete with its section below \(the first hero board\) -->\n', "", page)
+        assert n == 2, "the table of contents lists the two optional sections"
+
+    def stand_in(mm: "re.Match[str]") -> str:
+        s = mm.group(0)[len("[[fill:"):-2].strip()
+        if s.startswith("language code"):
+            return "en"
+        if s.startswith("no hits"):
+            return "no hits"
+        if s.startswith("every tell page-check found"):
+            return "none found"
+        return {"Brand": brand, "N": str(rnd), "YYYY-MM-DD": "2026-10-17", "by in-thread or by agent": "by in-thread"}.get(s, MOTION_STAND_IN)
+
+    out = []
+    for piece in re.split(r"(<!--.*?-->)", page, flags=re.S):      # markers inside HTML comments stay as the template wrote them
+        out.append(piece if piece.startswith("<!--") else re.sub(r"\[\[fill:.*?\]\](?!\])", stand_in, piece, flags=re.S))
+    return "".join(out)

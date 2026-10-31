@@ -11,6 +11,7 @@ machine-checked part (the `data-section` and `data-field` vocabulary) is defined
 - [Style board (round 0)](#style-board-round-0)
 - [Motion board (a round after G3)](#motion-board-a-round-after-g3)
 - [Website references board (after G4)](#website-references-board-after-g4)
+- [Site board (a round after G4w)](#site-board-a-round-after-g4w)
 - [Per-direction cells](#per-direction-cells)
 - [Territory card (round 2+ and resets)](#territory-card-round-2-and-resets)
 - [Generation prompts](#generation-prompts)
@@ -27,6 +28,7 @@ machine-checked part (the `data-section` and `data-field` vocabulary) is defined
 | `templates/style-board.html` | `rounds/r0/board.html` (after a full rejection also `rounds/r<N>/board.html` of a reset round) | `style` | the style research page before anything is drawn (P1s, every tier); linted; the owner's pick is gate G1s |
 | `templates/motion-board.html` | `rounds/r<N>/board.html` of a motion round | `motion` | the brand's signature move as variants, after G3 (Standard and Full: every brand unless nothing moves; Quick: when something moves); linted; below |
 | `templates/site-refs-board.html` | `rounds/r<N>/board.html` of a website references round | `site-refs` | groups of real sites to learn from, after G4 (Standard and Full, when the brief lists a site); linted; below |
+| `templates/site-board.html` | `rounds/r<N>/board.html` of a site round | `site` | the site's first screen as two or three variants, then the other pages, after the website references pick G4w (Standard and Full, when the brief lists a site); linted; below |
 | `templates/board.html` | `rounds/r<N>/<direction>/board.html` | `refine` | one direction in depth (Standard, Full); can serve as the round page of a one-direction refine round |
 | `templates/review/index.html` | `review/index.html` | same as the round | the stable review page, regenerated every round, published to one URL; for a style board (round 0) the page is a copy of the style board instead (`cp rounds/r0/board.html review/index.html`, then `board-lint review/index.html --round 0`) |
 
@@ -167,6 +169,37 @@ private research page only, never reused in anything you build.
 `board-lint` gives these rows: `site-refs:tier` (Standard or Full), `site-refs:brief` (the brief lists a site), `site-refs:g4` (G4 is recorded), `site-refs:research` (the online-research answer is recorded; `none` counts),
 `site-refs:cliches-file` (three site clichés or more), the section rows, `groups:count` (4 to 6 groups: fewer fails, more warns) and `page:data-board`, which fails a references board in round 0 or 1 or in a round listed in
 `reset_rounds`. The lint report lists `brief/BRIEF.md` and `research/site-cliches.md` among its inputs, so a changed brief or cliché list makes it stale.
+
+## Site board (a round after G4w)
+
+`<body data-round="N" data-board="site" data-site-stage="hero">`, from `templates/site-board.html`, built on the motion board's frame (the same tokens, header, hardest surface, My call, questions and reply), written in the owner's language.
+It is a round from 2 on, never a reset round, in the Standard and Full tiers only, after G4 and after the owner's pick of website references (G4w; or their skip, in their own words), and only when `brief/BRIEF.md` lists a site under
+`Required surfaces:`. It is no pick, style, reset or rejected round, so the map, the style gate and the kept masters do not apply to it. `data-site-stage` is `hero` (two or three variants of the home page's first screen) or `pages` (the other
+pages, once the owner picked a hero); a page with none, or another value, fails `page:site-stage`. A G4w that names a pick needs the website references board in an earlier round.
+
+One folder per variant of the hero stage, `rounds/r<N>/<name>/`, made before the page: `index.html`, the home page's first screen, built from the picked references and the tokens. Its `<body>` declares `data-layout` (an id of
+[page-layouts.json](page-layouts.json), or `own:<word>`) and `data-page` (`start` for the home page).
+
+| Section (`data-section`) | When | What it holds |
+|---|---|---|
+| `what-changed` | from the second board of a stage | "What changed since the review", the owner's numbered items first |
+| one card per variant | always: 2 or 3 on the project's first hero board, 1 or more on a later one | below |
+| `hardest-surface` | always | the one view where the page is hardest to get right (for example the 390 px phone in dark), and what the checks show there |
+| `weak-points` | from the second board of a stage | honest weak points, with a number where possible |
+| `my-call` | always | as on every board |
+| `questions` | always | as on every board; question 1 asks which hero goes forward and lists their names, one option combines two, one says none of these |
+| `reply` | always | how to answer: a variant name, or question number plus option |
+
+The card, an element with `data-site-variant="<name>"` (a word, never a label such as "Variant 2", also the name of the folder), holds the four stills of the first screen (`<img data-field="still" data-view="1440-light|1440-dark|390-light|390-dark">`),
+the live link (`<a data-field="live" href="<name>/index.html">`), a check line (`data-check="pass|fail"` and its text), `data-field="what-it-is"`, `"from-refs"` (the group of the references board, or the owner's site, the structure is taken from:
+never their look) and `"cost"`, the tells found and the reflex line (`data-field="tells"`, `"reflex"`), the layout line (`data-field="layout"` with the `data-layout` the page declares), a cold line (`data-cold="ship|fix"`) and a vote (`<fieldset data-vote="<name>">`).
+There is no `positioning-map`, `strategy-core`, `today`, `losers`, `none-of-these` or `direction` section. A commented-out `choices` section waits in the template for the pages stage.
+
+`board-lint` gives these rows: `site:tier` (Standard or Full), `site:brief` (the brief lists a site), `site:g4` (G4 is recorded), `site:g4w` (the pick, or the skip, is recorded; a pick has its references board), `site:variants` (2 or 3 variants on the
+first hero board, a word for each name), `site:files` (each variant's folder, spelt as the card spells it, letter case included; its `index.html`; the `<body>` declaring `data-layout` and `data-page`; the live link), `site:layout` (the page's layout is a
+layout reference, or `own:<word>` with a warning, and the card says the same), `site:fields` (What it is, Takes from and Cost are filled in), the section rows and `page:data-board`, which fails a site board in round 0 or 1 or in a round listed in
+`reset_rounds`. At the pages stage the lint does not read the page cards, the picked hero or the choices yet: `site:pages-stage` is "not verified" (exit 3). The lint report lists `brief/BRIEF.md`, the references board G4w stands on and the
+`index.html` of each variant among its inputs, so a changed file makes it stale.
 
 ## Per-direction cells
 

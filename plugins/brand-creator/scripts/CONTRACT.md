@@ -130,6 +130,7 @@ fontTools, Brotli and skia-pathops (`outline_glyphs.py`, `fontcheck.py`), Pillow
   rounds/r<N>/<variant>/           a motion round (data-board="motion", templates/motion-board.html; see Board contract): one folder per variant with index.html (the move where it
                                    will be seen), proof.json (a page case named <variant>) and frames/<variant>/ (the stills `frames` took of it)
   rounds/r<N>/board.html           a website references round (data-board="site-refs", templates/site-refs-board.html; see Board contract): groups of real sites, from round 2 on
+  rounds/r<N>/<variant>/index.html a site round at the hero stage (data-board="site", templates/site-board.html; see Board contract): one folder per variant of the home page's first screen, beside rounds/r<N>/board.html
   brief/canvas-round-<N>.md        the drawing brief of round N (templates/canvas-brief.md)
   .design/<slug>/                  the use-llm design canvas, when the drawing session starts in the project folder
   research/YYYY-MM-DD-style.md  research/style-thumbs/   P1s notes behind the style board and the reference marks it shows as thumbnails
@@ -311,7 +312,7 @@ carry them; a required section that is missing, empty or a placeholder (`TODO`, 
 `[[fill: ...]]` left anywhere in text or attribute values fail the page (`page:unfilled`); HTML comments are ignored,
 so optional blocks can wait in comments.
 
-Page: `<body data-round="N" data-board="pick|refine|style|motion|site-refs">`. `data-round` must equal the folder `rounds/rN/` (catches a copied
+Page: `<body data-round="N" data-board="pick|refine|style|motion|site-refs|site">`. `data-round` must equal the folder `rounds/rN/` (catches a copied
 page that was not updated). Round 1 must be a `pick` board. Round 0 is always the style board (`data-board="style"`,
 `rounds/r0/board.html`, from `templates/style-board.html`), and a round listed in `reset_rounds` holds either a style board or a
 pick board: after a full rejection the style research runs again on a new style board (required, never skipped), and the round after
@@ -534,6 +535,56 @@ Hardest surface, directions, the positioning map, the strategy core, reflex line
 | `groups:count` | fewer than four groups count (a warning, never a failure, above six: "more than 6 is a menu, not a choice") |
 
 The `inputs` of the lint report are the page, `brief/BRIEF.md` and `research/site-cliches.md` when they exist, so a changed brief or cliché list makes the report stale.
+
+### The site board (`data-board="site"`)
+
+The site round makes reference pages for the brand's site: the home page's first screen first, as two or three variants (the hero stage, `data-site-stage="hero"`), then the other pages (the pages stage, `data-site-stage="pages"`). It runs in
+the Standard and Full tiers, after G4 and after the owner's pick of website references (G4w, or their skip), and only when `brief/BRIEF.md` lists a site. It is a round from 2 on: `rounds/rN/board.html`, from `templates/site-board.html` (built on
+the frame of `templates/motion-board.html`: the same tokens, header, hardest surface, My call, questions and reply). A site board is no pick, style, reset or rejected round: the map and the style-round logic, `reset_rounds`, the kept masters and the
+style re-arming of a later pick board ignore it (the round "rejected" before a reset is never a site round), and a site board in round 0 or 1, or in a round listed in `reset_rounds`, fails `page:data-board` ("a site board is a round of its own
+from round 2 on"). The page declares its stage on the element that declares its kind, the `<body>`: a missing stage, or one that is not `hero` or `pages`, fails `page:site-stage`, and no variant row is read then. Its rows are in
+`scripts/boardlib/siteboard.py` (outside `scripts/lib/`, like `boardpage.py`).
+
+One folder per variant of the hero stage, `rounds/rN/<name>/`, made before the page:
+
+| in the folder | what it is |
+|---|---|
+| `index.html` | the home page's first screen, built from the picked references and the tokens. Its `<body>` declares `data-layout` (an id of `skills/brand-creator/references/page-layouts.json`, or `own:<word>`) and `data-page` (the page id: lowercase letters, digits and `-`, 2 to 32 characters, starting with a letter; `start` for the home page) |
+
+One card per variant: an element with `data-site-variant="<name>"` (the `<article class="variant">` of the template). The name is a word of 3 or more letters that is not a label ("Variant 2" and "Option B" fail: the rule of direction names), unique
+(capitals do not tell two apart), and also the name of the folder, so it keeps to letters, digits, `-` and `_`. Inside the card:
+
+| in the card | what it holds |
+|---|---|
+| `<img data-field="still" data-view="1440-light\|1440-dark\|390-light\|390-dark">` | the four stills of the first screen, `<name>/shots/<view>.png` |
+| `<a data-field="live" href="<name>/index.html">` | the live page, one click away (the board has no replay) |
+| an element with `data-check="pass"` or `"fail"`, and its text | the check line: what `page-check` found for this variant |
+| `data-field="what-it-is"`, `"from-refs"`, `"cost"` | What it is, Takes from (the group of the references board, or the owner's site, the structure comes from) and Cost, each with text |
+| `data-field="tells"`, `data-field="reflex"` | the tells `page-check` found and what will be done about them, and the reflex line of the variant |
+| `data-field="layout"` with `data-layout="<id>"` | the layout reference of the page, the same id the page declares |
+| an element with `data-cold="ship"` or `"fix"`, and its text | the cold review's verdict |
+| `<fieldset data-vote="<name>">` | the owner's vote, as on every board (the `page:votes` row); its radios are named `vote-<name>`, a group of their own per card |
+
+The pictures are the project's own files by a relative path, read from the page's folder as a browser reads it, or, in the copy published on a review surface (`review/index.html`, linted with `--round N`), `data:` URIs of the same bytes. The first hero
+board of a project (no earlier round has a site board at the same stage) shows 2 or 3 variants and needs no What changed and Weak points (info rows); a later one, the refine loop on the picked or combined variant, shows 1 or more and needs both,
+as a refine board does from round 2. Hardest surface, My call, questions and reply are required as on every board; there is no `positioning-map`, `strategy-core`, `today`, `losers`, `none-of-these` or `direction` section, no `project:*` row and no
+`masters:*` row, and `--min-directions` is not used (an info row says so). A commented-out `choices` section waits in the template for the pages stage. Each row below is one result for the whole board and names the variants it fails:
+
+| row | fails when |
+|---|---|
+| `page:site-stage` | `data-site-stage` is missing or is not `hero` or `pages` |
+| `site:tier` | the tier is not `standard` or `full` ("the site round is Standard and Full") |
+| `site:brief` | `brief/BRIEF.md` does not list a site on its `Required surfaces:` line (the same word list and the same reading as `site-refs:brief`; the detail names the line it read) |
+| `site:g4` | G4 is not recorded ("the site round comes after the system rules (G4)") |
+| `site:g4w` | G4w is not recorded; or it names a pick (it is anything but `skipped by owner`, read after the date `state --record` writes before the decision) and no round before this one holds a website references board that counts (`boardpage.is_site_refs_board`: `data-board="site-refs"`, the round of its own folder, at least four groups with a name and content): "G4w names a pick but no website references board came before this round". A skip needs no references board |
+| `site:variants` | the count (2 or 3 on the first hero board of a project, 1 or more on a later one) or a name (a word, not a label, a folder name, unique) |
+| `site:files` | a variant has no folder, or one that is not spelt as the card spells it (an entry of `rounds/rN/` equal to the card's name, letter case included: a disk that does not tell letter cases apart, macOS or Windows, opens `ledger/` for the card `Ledger`, but the reports of `page-check` and `capture` are named after the page's path, so a card spelt otherwise never finds them; the row says the card and its folder must be spelt alike, on every kind of disk); no `index.html`; an `index.html` with no `<body>` tag, or whose `<body>` declares no `data-layout` or no `data-page`, or a `data-page` that is no page id; a card with no link to the live page, or one that does not lead to `<name>/index.html` |
+| `site:layout` | the page's `data-layout` is missing, or is neither an id of `page-layouts.json` nor `own:<word>` (the detail lists the known ids); the card has no `data-field="layout"` line, or its `data-layout` differs from the page's. A layout of its own (`own:<word>`) is a warning, never a failure: "say on the card why none of the references fit" |
+| `site:fields` | What it is, Takes from or Cost is missing, empty, a placeholder or still holds a `[[fill: ...]]` marker, in a card |
+| `site:pages-stage` | never a failure. At the pages stage the page cards, the picked hero and the choices are not read yet: the row is "not verified" (`skipped`, exit 3), and the gates and sections above apply |
+
+The `inputs` of the lint report are the page, `brief/BRIEF.md` when it exists, the website references board that G4w stands on (when it names a pick) and the `index.html` of each variant, so `check` calls the report stale ("not verified") as soon as one of
+them changes.
 
 ## Hook guard
 
