@@ -482,7 +482,7 @@ def test_loading_the_layouts_stops_with_exit_3_naming_the_file_when_it_cannot_be
 
 
 def test_templates_are_self_contained_and_avoid_the_ai_default_cluster():
-    for name in ("round-page.html", "board.html", "review/index.html", "card.html", "style-board.html"):
+    for name in ("round-page.html", "board.html", "review/index.html", "card.html", "style-board.html", "site-refs-board.html"):
         text = (ROOT / "templates" / name).read_text(encoding="utf-8")
         assert not re.search(r"""(?:src|href)\s*=\s*["']?(?:https?:)?//""", text), name
         assert "@import" not in text and "url(http" not in text, name

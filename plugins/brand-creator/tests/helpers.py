@@ -324,3 +324,33 @@ def fill_motion_board(template: str, names: tuple[str, ...] = ("Settle", "Bounce
     for piece in re.split(r"(<!--.*?-->)", page, flags=re.S):      # markers inside HTML comments stay as the template wrote them
         out.append(piece if piece.startswith("<!--") else re.sub(r"\[\[fill:.*?\]\](?!\])", stand_in, piece, flags=re.S))
     return "".join(out)
+
+
+def fill_site_refs_board(template: str, names: tuple[str, ...] = ("Ledger", "Atlas", "Quay", "Harbour"), *, rnd: int = 2, brand: str = "Acme") -> str:
+    """The website references board template as a finished page that must pass board-lint: the group article repeated once per name and every [[fill: ...]] marker outside an HTML
+    comment replaced with stand-in text (a link, a date, a tiny inlined image where the marker asks for one). The three references of a group are the template's own."""
+    import re
+    m = re.search(r'      <article class="group".*?</article>\n', template, re.S)
+    assert m, "the template has no group article"
+    first = m.group(0)
+    marker = re.search(r"      <!-- \[\[fill: articles for groups two to four.*?-->\n", template, re.S)
+    assert marker, "the template has no 'articles for groups two to four' comment"
+
+    def named(block: str, name: str) -> str:
+        return block.replace("[[fill: Name one]]", name)
+
+    page = template.replace(first, named(first, names[0]), 1).replace(marker.group(0), "".join(named(first, n) for n in names[1:]), 1)
+    for word, name in zip(("one", "two", "three", "four"), names):
+        page = page.replace(f"[[fill: Name {word}]]", name)
+
+    def stand_in(mm: "re.Match[str]") -> str:
+        s = mm.group(0)[len("[[fill:"):-2].strip()
+        if s.startswith("language code"):
+            return "en"
+        return {"Brand": brand, "N": str(rnd), "YYYY-MM-DD": "2026-10-17"}.get(s) or (
+            "https://example.com/reference" if s.startswith("https://") else STYLE_TINY_PNG if s.startswith("data:image") else STYLE_STAND_IN)
+
+    out = []
+    for piece in re.split(r"(<!--.*?-->)", page, flags=re.S):      # markers inside HTML comments stay as the template wrote them
+        out.append(piece if piece.startswith("<!--") else re.sub(r"\[\[fill:.*?\]\](?!\])", stand_in, piece, flags=re.S))
+    return "".join(out)

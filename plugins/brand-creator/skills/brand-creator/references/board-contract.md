@@ -10,6 +10,7 @@ machine-checked part (the `data-section` and `data-field` vocabulary) is defined
 - [Required sections of a round page](#required-sections-of-a-round-page)
 - [Style board (round 0)](#style-board-round-0)
 - [Motion board (a round after G3)](#motion-board-a-round-after-g3)
+- [Website references board (after G4)](#website-references-board-after-g4)
 - [Per-direction cells](#per-direction-cells)
 - [Territory card (round 2+ and resets)](#territory-card-round-2-and-resets)
 - [Generation prompts](#generation-prompts)
@@ -25,6 +26,7 @@ machine-checked part (the `data-section` and `data-field` vocabulary) is defined
 | `templates/round-page.html` | `rounds/r<N>/board.html` | `pick` (round 1, resets) or `refine` | the page the owner reviews; linted |
 | `templates/style-board.html` | `rounds/r0/board.html` (after a full rejection also `rounds/r<N>/board.html` of a reset round) | `style` | the style research page before anything is drawn (P1s, every tier); linted; the owner's pick is gate G1s |
 | `templates/motion-board.html` | `rounds/r<N>/board.html` of a motion round | `motion` | the brand's signature move as variants, after G3 (Standard and Full: every brand unless nothing moves; Quick: when something moves); linted; below |
+| `templates/site-refs-board.html` | `rounds/r<N>/board.html` of a website references round | `site-refs` | groups of real sites to learn from, after G4 (Standard and Full, when the brief lists a site); linted; below |
 | `templates/board.html` | `rounds/r<N>/<direction>/board.html` | `refine` | one direction in depth (Standard, Full); can serve as the round page of a one-direction refine round |
 | `templates/review/index.html` | `review/index.html` | same as the round | the stable review page, regenerated every round, published to one URL; for a style board (round 0) the page is a copy of the style board instead (`cp rounds/r0/board.html review/index.html`, then `board-lint review/index.html --round 0`) |
 
@@ -138,6 +140,33 @@ and the reduced still on the card are the files `frames.json` lists, by sha256),
 `motion:timelines` (a warning, never a failure: two variants whose current motion reports show one length, within 5 % or 20 ms,
 and the same number of animations are one move tried twice, and three variants should try three moves).
 Taking a proof or its stills again after the lint makes the lint report stale: lint again, and shoot the board last.
+
+## Website references board (after G4)
+
+`<body data-round="N" data-board="site-refs">`, from `templates/site-refs-board.html`, built on the style board's frame (the same tokens, header, theme switch, questions and reply), written in the owner's language, visual first.
+It is a round from 2 on, never a reset round, in the Standard and Full tiers only, after G4, and only when `brief/BRIEF.md` lists a site under `Required surfaces:` in the owner's words (the lint reads that line
+against English and Polish words; a brief in another language needs the word `site` on it, and the untouched template line, in parentheses, does not count). The owner's pick is gate G4w. It is no pick, style, reset or rejected round,
+so the map, the style gate and the kept masters do not apply to it. Before it, the owner has answered the online-research question (`state --set site_research=online|links-only|none`), and `research/site-cliches.md`
+(from `templates/site-cliches.md`) holds at least three site clichés under "Avoid unless argued".
+
+| Section (`data-section`) | What it holds |
+|---|---|
+| `visitor-job` | who visits, the job they came to do, the one action that serves it |
+| `norm` | what most sites in the category do |
+| `owner-sites` | the sites the owner likes and dislikes, one `<li data-like="like">` or `"dislike"` each with a link and the owner's reason (`data-field="why"`), or one line saying the owner named none |
+| `group` (repeat, 4 to 6) | `data-name` (a word, never a label such as "Group 2"), `data-field="idea"` (how the group serves the visitor's job, not a look) and `data-field="references"`: three or more real sites, each a link, a captured screenshot (`<img data-field="shot">`, inlined, in a `<figure>` whose `<figcaption>` says whose site it is and when it was captured), `data-field="take"` (structure, rhythm, how it serves the job) and `data-field="avoid"` (their look); a vote, `<fieldset data-vote="<name>">` |
+| `site-cliches` | the category's site clichés, as listed in `research/site-cliches.md` |
+| `none-of-these` | the way out: research again |
+| `my-call` | `data-field="recommendation"` and `data-field="critique"` |
+| `questions` | numbered, lettered options, exactly one recommended; question 1 (which groups) is multi-pick with checkboxes and the reply lists every ticked group; question 2 confirms the liked and disliked sites |
+| `reply` | how to answer |
+
+There is no `hardest-surface`, `today`, `strategy-core`, `positioning-map`, `direction` or `losers` section. A group is real sites opened today: never write a site, an address or a description from memory, and a screenshot is for this
+private research page only, never reused in anything you build.
+
+`board-lint` gives these rows: `site-refs:tier` (Standard or Full), `site-refs:brief` (the brief lists a site), `site-refs:g4` (G4 is recorded), `site-refs:research` (the online-research answer is recorded; `none` counts),
+`site-refs:cliches-file` (three site clichés or more), the section rows, `groups:count` (4 to 6 groups: fewer fails, more warns) and `page:data-board`, which fails a references board in round 0 or 1 or in a round listed in
+`reset_rounds`. The lint report lists `brief/BRIEF.md` and `research/site-cliches.md` among its inputs, so a changed brief or cliché list makes it stale.
 
 ## Per-direction cells
 
