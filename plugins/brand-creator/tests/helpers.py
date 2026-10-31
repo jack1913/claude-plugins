@@ -375,12 +375,15 @@ def fill_site_refs_board(template: str, names: tuple[str, ...] = ("Ledger", "Atl
     return "".join(out)
 
 
+SITE_FROM_REFS = "The Ledger group of the references board: its structure and its rhythm, never its look."   # the Takes from line of a card the test did not word: it names a group of the references board
+
+
 def fill_site_board(template: str, names: tuple[str, ...] = ("Ledger", "Atlas"), *, rnd: int = 2, first: bool = True, stage: str = "hero", checks: dict | None = None,
-                    colds: dict | None = None, layouts: dict | None = None, brand: str = "Acme") -> str:
+                    colds: dict | None = None, layouts: dict | None = None, from_refs: dict | None = None, reflex: dict | None = None, brand: str = "Acme") -> str:
     """The site board template as a finished page that must pass board-lint: the variant article repeated once per name and every [[fill: ...]] marker outside an HTML comment replaced with stand-in
     text. `first` is the first board of its stage, which does without the two blocks a later one needs (What changed, Weak points); `stage` is the data-site-stage; `checks` maps a variant name to the
-    check line of its card (pass or fail, default pass), `colds` to its cold line (ship or fix, default ship) and `layouts` to its layout id (default walkthrough). The folders, the stills and the
-    reports of the variants are the test's to make."""
+    check line of its card (pass or fail, default pass), `colds` to its cold line (ship or fix, default ship), `layouts` to its layout id (default walkthrough), `from_refs` to its Takes from line
+    (default SITE_FROM_REFS) and `reflex` to its reflex line (default "no hits"). The folders, the stills, the reports and the cold reviews of the variants are the test's to make."""
     import re
     m = re.search(r'      <article class="variant".*?</article>\n', template, re.S)
     assert m, "the template has no variant article"
@@ -391,6 +394,8 @@ def fill_site_board(template: str, names: tuple[str, ...] = ("Ledger", "Atlas"),
     def named(b: str, name: str) -> str:
         b = b.replace("[[fill: Name one]]", name).replace('data-check="[[fill: pass or fail]]"', f'data-check="{(checks or {}).get(name, "pass")}"')
         b = b.replace("[[fill: layout id]]", (layouts or {}).get(name, "walkthrough"))
+        b = re.sub(r'(data-field="from-refs">)\[\[fill:[^\]]*\]\]', lambda mm: mm.group(1) + (from_refs or {}).get(name, SITE_FROM_REFS), b)
+        b = re.sub(r'(data-field="reflex">)\[\[fill:[^\]]*\]\]', lambda mm: mm.group(1) + (reflex or {}).get(name, "no hits"), b)
         return re.sub(r"\[\[fill: ship or fix\]\]", (colds or {}).get(name, "ship"), b)
 
     page = template.replace(block, named(block, names[0]) if names else "", 1).replace(marker.group(0), "".join(named(block, n) for n in names[1:]), 1)
@@ -475,4 +480,19 @@ def capture_record(p: Path, page: str) -> Path:
     out = shots / "capture.json"
     out.write_text(_json.dumps({"schema": 1, "tool": "capture", "source": {"page": page}, "date": "2026-10-17", "views": views,
                                 "full": {"file": "1440-light-full.png", "sha256": sha256_bytes(full), "height": 16, "cut": False}, "inputs": inputs, "problems": []}, indent=2) + "\n", encoding="utf-8")
+    return out
+
+
+def cold_review_record(p: Path, page: str, verdict: str = "ship", *, by: str = "in-thread", findings: tuple[str, ...] = ("The first screen says what only this brand could say.",),
+                       leave_out: tuple[str, ...] = (), add: tuple[str, ...] = ()) -> Path:
+    """The cold-review.md a reader of a page's four stills, brief/BRIEF.md and FACTS.md alone leaves beside the page: the verdict first, `by:`, the `inputs:` with the sha256 of each file as it is now, then the
+    findings as numbered lines (the prompt fragment of references/prompt-fragments.md, Review). `leave_out` drops listed inputs and `add` lists more files of the project, for a test that breaks the rule.
+    Call it after capture_record: the stills must be there. -> the review's path."""
+    from _common import sha256_file
+    folder = (p / page).parent
+    base = folder.relative_to(p).as_posix()
+    files = [f for f in [f"{base}/shots/{v}.png" for v in ("1440-light", "1440-dark", "390-light", "390-dark")] + ["brief/BRIEF.md", "FACTS.md"] if f not in leave_out] + list(add)
+    body = [f"verdict: {verdict}", f"by: {by}", "inputs:"] + [f"- {f} sha256:{sha256_file(p / f)}" for f in files] + [""] + [f"{i}. {t}" for i, t in enumerate(findings, 1)]
+    out = folder / "cold-review.md"
+    out.write_text("\n".join(body) + "\n", encoding="utf-8")
     return out

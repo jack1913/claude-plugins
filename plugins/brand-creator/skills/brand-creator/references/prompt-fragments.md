@@ -70,6 +70,15 @@ Generalised from prompts that worked; use them as written or close to it.
 - A motion round (`data-board="motion"`): run `brand-creator shot --motion rounds/r<N>/<variant>/proof.json` on each
   variant's proof and give its exit code and failing rows; Read each variant's `strip.png` and `reduced.png` before saying
   what moves; check that each card's proof line says what its report says and that `board-lint` passes its `motion:*` rows.
+- A cold review of a site hero reads only the four stills of the variant, `brief/BRIEF.md` and `FACTS.md`, never the
+  board, the references or the reasons. It writes `rounds/r<N>/<name>/cold-review.md`: `verdict: ship` or `verdict: fix`
+  first, a `by:` line (`by: in-thread`; in-thread it is not blind, and an agent only after the fleet gate), an `inputs:`
+  list with the sha256 of each file (`- <path> sha256:<hex>`), then up to five numbered findings, the one that costs the
+  visitor most first, each short enough to sit on a single line. The findings ask: does the first screen say what only
+  this brand could say; does it serve the visitor's job in BRIEF and put the job's own action in reach; does any part
+  read as a tell from `page-tells.json`; does every number and status word match FACTS or sit in a labelled sample. A
+  review judges what the page shows: where the page lacks something it would need (wording, a picture, a control), the
+  finding notes that the owner would have to supply it, and does not fault the page for leaving it out.
 
 **Implementation and safety**
 

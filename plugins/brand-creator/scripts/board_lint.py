@@ -21,6 +21,8 @@ A site board (site: a round from 2 on, in the Standard and Full tiers, after G4 
 round either, and the style gate never counts it. It has the rows site:tier, site:brief, site:g4 and site:g4w, and page:site-stage; the sections what-changed and weak-points (from the second board of a stage), hardest-surface, my-call,
 questions and reply; and, at the hero stage, one card per variant (site:variants, site:files, site:layout, site:fields; boardlib/siteboard.py) and the proof each brings: the page-check report of its page (site:check),
 the tells in it (site:tells) and the stills `capture` took (site:stills).
+Each hero card also gets the reflex rows of group 1 (site:<name>:reflex, the required line, then :reflex-format|reflex-ids|reflex-count|reflex-grounded|reflex-measured, and across cards site:reflex-shared), site:refs (what the card takes from is what
+the owner picked in G4w) and site:cold (rounds/rN/<name>/cold-review.md: its verdict, its inputs with sha256, and the card saying the same); boardlib/siteboard.py.
 A pick board also gets, for each direction, direction:<name>:reflex-format|reflex-ids|reflex-count|reflex-grounded and, across directions,
 directions:reflex-shared (the rules are in boardlib/reflex.py): two hits in one direction, or one hit that every direction shares, fail; a free-text line,
 an unknown id or an argument that shares no word with FACTS.md or brief/BRIEF.md warns. When the my-call section says data-judge="ran", each direction
