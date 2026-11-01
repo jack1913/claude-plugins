@@ -47,7 +47,7 @@ from urllib.parse import urlsplit
 
 import qa_rules
 from _color import parse_hex, wcag_ratio
-from _common import CliError, EXIT_CANNOT, EXIT_USAGE, Report, confine, fail, gate_recorded, plugin_root, rel, scratch_dir
+from _common import CliError, EXIT_CANNOT, EXIT_USAGE, PartInput, Report, confine, fail, gate_recorded, plugin_root, rel, scratch_dir
 
 REPORT_DIR = "page-check"
 SCHEMES = ("light", "dark")
@@ -266,9 +266,10 @@ def load_modern(project: Path) -> dict[str, str]:
     return {m.group(1): " ".join(m.group(2).split()) for m in MODERN_VALUE.finditer(css)}
 
 
-def base_inputs(project: Path, target: Target) -> list[Path]:
-    """The files every page check stands on: the built tokens (json and css), the rules, the facts and the state of the project, and the page (a project target)."""
-    files = [project / TOKENS_FILE, project / TOKENS_CSS, project / qa_rules.RULES_FILE, project / "FACTS.md", project / "BRAND-STATE.md"]
+def base_inputs(project: Path, target: Target) -> list[Path | PartInput]:
+    """The files every page check stands on: the built tokens (json and css), the rules, the facts and, of the state of the project, the G4 rules (BRAND-STATE.md "g4-rules": the G4 record
+    and the recorded "(rule)" lines, the only two things a page check reads from it; recording G5 or G6 or setting the phase does not make the report stale), and the page (a project target)."""
+    files = [project / TOKENS_FILE, project / TOKENS_CSS, project / qa_rules.RULES_FILE, project / "FACTS.md", PartInput(project / "BRAND-STATE.md", "g4-rules")]
     if target.kind == "project" and target.file:
         files.append(target.file)
     return files

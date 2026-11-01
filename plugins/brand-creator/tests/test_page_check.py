@@ -3178,3 +3178,122 @@ def test_the_tells_collector_reports_the_candidates_a_page_shows(acme):
     assert len({t["width"] for t in tiles}) == 1 and tiles[0]["left"] < tiles[1]["left"] < tiles[2]["left"] and len({t["top"] for t in tiles}) == 1
     assert [h["text"] for h in f["headings"]][:4] == ["Collector page", "After a rule", "After an image", "Heading"] and f["details"] == []
     assert f["last_band"]["sel"].endswith("div.trio:nth-of-type(6)") and f["last_band"]["headings"] == 4 and f["last_band"]["actions"] == 0
+
+
+# ---------------------------------------------------------------- a report input that stands for a part of a file: BRAND-STATE.md by its G4 rules (no browser)
+
+import _common  # noqa: E402
+from _common import PartInput, sha256_file  # noqa: E402
+
+G4_PART_RULE = "(rule) one mark per screen"
+
+
+def hand_report(p: Path, *, whole: bool = False) -> dict:
+    """The report `page-check` writes for pages/index.html, made by hand so that no browser is needed: the inputs are pagecheck.base_inputs (BRAND-STATE.md by its "g4-rules" part), or, with `whole`, the same
+    with BRAND-STATE.md as a whole file, the way older reports list it. -> the report as read."""
+    page = write_page(p)
+    inputs = pagecheck.base_inputs(p, pagecheck.Target("project", "pages/index.html", page="pages/index.html", file=page))
+    if whole:
+        inputs = [p / "BRAND-STATE.md" if isinstance(i, PartInput) else i for i in inputs]
+    rep = Report(pagecheck.report_tool("pages/index.html"), p, inputs, renderer="chromium")
+    rep.add("page:target", "info", "what was checked", detail="project page pages/index.html")
+    rep.write()
+    _common._OPEN_REPORTS.remove(rep)   # written by hand, never finished
+    return report(p, pagecheck.report_tool("pages/index.html"))
+
+
+def state_with_g4(tmp_path: Path) -> Path:
+    p = make_project(tmp_path)
+    record_g4(p, G4_PART_RULE)
+    return p
+
+
+def test_page_check_lists_brand_state_by_its_g4_rules_and_the_report_says_which_part(tmp_path):
+    """The record of BRAND-STATE.md carries the part and the hash of its canonical text; the other inputs stay whole files; inputs_sha includes the part name; a record without a part is the whole file."""
+    p = state_with_g4(tmp_path)
+    rep = hand_report(p)
+    mine = [i for i in rep["inputs"] if i["path"] == "BRAND-STATE.md"]
+    assert mine == [{"path": "BRAND-STATE.md", "part": "g4-rules", "sha256": mine[0]["sha256"]}] and re.fullmatch(r"[0-9a-f]{64}", mine[0]["sha256"]), rep["inputs"]
+    assert mine[0]["sha256"] != sha256_file(p / "BRAND-STATE.md"), "the hash is that of the part, not of the file"
+    assert "pages/index.html" in {i["path"] for i in rep["inputs"]} and not [i for i in rep["inputs"] if i["path"] != "BRAND-STATE.md" and "part" in i], "every other input is a whole file"
+    assert Report.inputs_sha(rep["inputs"]) == rep["inputs_sha"]
+    renamed = [{**i, "part": "other-part"} if "part" in i else i for i in rep["inputs"]]
+    assert Report.inputs_sha(renamed) != rep["inputs_sha"], "the part name is in inputs_sha"
+    whole = [i for i in hand_report(p, whole=True)["inputs"] if i["path"] == "BRAND-STATE.md"]
+    assert whole == [{"path": "BRAND-STATE.md", "sha256": sha256_file(p / "BRAND-STATE.md")}], "a record without a part is the whole file, as ever"
+
+
+def test_a_report_held_by_the_g4_rules_stays_current_when_another_line_of_brand_state_changes(tmp_path):
+    """The phase, a gate recorded later (G5, G6), a list line and a bullet that is no "(rule)" line change BRAND-STATE.md and leave the report current; so does white space inside a rule line."""
+    p = state_with_g4(tmp_path)
+    rep = hand_report(p)
+    assert stale_inputs(p, rep) == []
+    state = p / "BRAND-STATE.md"
+    assert bc("state", "--set", "phase=P9", project=p).returncode == 0
+    assert stale_inputs(p, rep) == []
+    assert bc("state", "--record", "G5", "book approved", project=p).returncode == 0
+    assert bc("state", "--record", "G6", "adoption go", project=p).returncode == 0
+    assert stale_inputs(p, rep) == []
+    mutate(state, "1. (...)", "1. an open question for the owner", count=2)                    # Change list and Still open
+    mutate(state, f"- {G4_PART_RULE}", f"- {G4_PART_RULE}\n- a note under the rules that is no rule line")
+    assert stale_inputs(p, rep) == []
+    mutate(state, G4_PART_RULE, "(rule)   one  mark\tper screen")                               # the same words: white space is not a change
+    assert stale_inputs(p, rep) == []
+    old = hand_report(p, whole=True)                                                            # a report that lists the whole file does not enjoy this
+    assert bc("state", "--set", "phase=P10", project=p).returncode == 0
+    assert stale_inputs(p, old) == ["BRAND-STATE.md changed"]
+    assert stale_inputs(p, rep) == []
+
+
+def test_a_report_held_by_the_g4_rules_goes_stale_when_a_rule_line_or_the_g4_record_changes(tmp_path):
+    """(m) a "(rule)" line edited, one more line, a line taken away, G4 recorded again; each makes the report stale and the sentence names the part."""
+    state = "BRAND-STATE.md"
+    changes = {
+        "a rule line edited": lambda p: mutate(p / state, "one mark per screen", "two marks per screen"),
+        "a rule line added": lambda p: mutate(p / state, f"- {G4_PART_RULE}", f"- {G4_PART_RULE}\n- (rule) no stock photos"),
+        "a rule line taken away": lambda p: mutate(p / state, f"- {G4_PART_RULE}", "- (rule) (...)"),
+        "the G4 record changed": lambda p: mutate(p / state, "system rules GO", "system rules GO, with a change"),
+    }
+    for what, change in changes.items():
+        p = state_with_g4(tmp_path / what.replace(" ", "-"))
+        rep = hand_report(p)
+        assert stale_inputs(p, rep) == []
+        change(p)
+        assert stale_inputs(p, rep) == ["BRAND-STATE.md (the G4 rules) changed"], what
+        again = hand_report(p)                                                                  # checked again, the report is current for the new rules
+        assert stale_inputs(p, again) == [] and again["inputs_sha"] != rep["inputs_sha"], what
+    p = state_with_g4(tmp_path / "recorded-twice")
+    rep = hand_report(p)
+    assert bc("state", "--record", "G4", "system rules, approved again", project=p).returncode == 0
+    assert stale_inputs(p, rep) == ["BRAND-STATE.md (the G4 rules) changed"]
+    p = make_project(tmp_path / "before-g4")                                                     # no G4 yet: the rule lines are not read, as page-check does not read them
+    rep = hand_report(p)
+    mutate(p / state, "- (rule) (...)", f"- {G4_PART_RULE}")
+    assert stale_inputs(p, rep) == []
+    assert bc("state", "--record", "G4", "system rules GO", project=p).returncode == 0
+    assert stale_inputs(p, rep) == ["BRAND-STATE.md (the G4 rules) changed"], "recording G4 makes the rules count"
+
+
+def test_a_part_that_cannot_be_read_makes_its_input_stale_and_says_why(tmp_path):
+    """(m) BRAND-STATE.md that cannot be read, a part this plugin does not know, a part of another file and a part that is no name: stale, with a sentence that says why, never current."""
+    p = state_with_g4(tmp_path)
+    rep = hand_report(p)
+    state = p / "BRAND-STATE.md"
+    text = mutate(state, "---\n", "", count=1)                                                  # the opening line of the frontmatter is gone
+    got = stale_inputs(p, rep)
+    assert len(got) == 1 and got[0].startswith("BRAND-STATE.md (the G4 rules) cannot be read: ") and "has no frontmatter" in got[0], got
+    broken = hand_report(p)                                                                     # a report made while it cannot be read is recorded, and reads as stale with the reason
+    assert stale_inputs(p, broken) == got
+    state.write_text(text, encoding="utf-8")
+    assert stale_inputs(p, rep) == [] and stale_inputs(p, broken) == ["BRAND-STATE.md (the G4 rules) changed"], "readable again: the first is current, the one made in the dark is not"
+    for part, words in (("no-such-part", "'no-such-part' is not a part this plugin can read (it reads: g4-rules)"), (7, "7 is not a part this plugin can read"), (None, "None is not a part this plugin can read")):
+        doc = json.loads(json.dumps(rep))
+        next(i for i in doc["inputs"] if i["path"] == "BRAND-STATE.md")["part"] = part
+        got = stale_inputs(p, doc)
+        assert len(got) == 1 and got[0].startswith("BRAND-STATE.md (") and "cannot be read" in got[0] and words in got[0], (part, got)
+    doc = json.loads(json.dumps(rep))
+    next(i for i in doc["inputs"] if i["path"] == "pages/index.html")["part"] = "g4-rules"
+    got = stale_inputs(p, doc)
+    assert got == ["pages/index.html (the G4 rules) cannot be read: 'g4-rules' is a part of BRAND-STATE.md, not of index.html"], got
+    state.unlink()
+    assert stale_inputs(p, rep) == ["BRAND-STATE.md is gone"], "a part of a file that is gone is gone"

@@ -34,7 +34,7 @@ import re
 from pathlib import Path
 from urllib.parse import unquote, unquote_to_bytes, urlsplit, urlunsplit
 
-from _common import CliError, Report, confine, gate_recorded, list_rounds, read_state, rel, sha256_bytes, sha256_file, stale_inputs
+from _common import STATE_FILE, CliError, PartInput, Report, confine, gate_recorded, list_rounds, read_state, rel, sha256_bytes, sha256_file, stale_inputs
 from boardpage import DATA_IMAGE, FILL, GENERIC_NAME, PLACEHOLDER, WORD_NAME, Node, is_site_refs_board, page_kind, page_marker, read_page, sections, thumb_problems
 from pagecheck import report_tool, tell_ids   # scripts/pagelib/pagecheck.py: the name of the report of one page and the ids of its generic tells, never a copy of either
 import motionboard
@@ -345,10 +345,12 @@ def read_record(project: Path, where: str, page: str) -> tuple[dict | None, list
     return doc, stale
 
 
-def made_from(project: Path, where: str) -> list[Path]:
-    """The files the record at `where` was made from, its own `inputs`: the page and every file the browser was served. A record that is missing or cannot be read lists none: the rows say so."""
+def made_from(project: Path, where: str) -> list[Path | PartInput]:
+    """The files the record at `where` was made from, its own `inputs`: the page and every file the browser was served. An input the record holds by one part of a file (BRAND-STATE.md "g4-rules")
+    stays that part here, so the lint is stale when the part changes and not when the rest of the file does. A record that is missing or cannot be read lists none: the rows say so."""
     try:
-        return [project / rec["path"] for rec in json.loads((project / where).read_text(encoding="utf-8"))["inputs"] if isinstance(rec, dict) and isinstance(rec.get("path"), str)]
+        recs = [rec for rec in json.loads((project / where).read_text(encoding="utf-8"))["inputs"] if isinstance(rec, dict) and isinstance(rec.get("path"), str)]
+        return [PartInput(project / rec["path"], rec["part"]) if isinstance(rec.get("part"), str) else project / rec["path"] for rec in recs]
     except (OSError, ValueError, AttributeError, KeyError, TypeError):
         return []
 
@@ -1135,7 +1137,9 @@ def decision_texts(project: Path) -> list[tuple[str, str]]:
 def choices_rows(rep: Report, project: Path, root: Node, page_ids: list[str]) -> None:
     """site:choices: the choices the pages make. At least one; each an element with data-choice="c<number>" (unique), some text, data-tag "rule" or "example"; a rule has a non-empty data-source whose text is found
     (any letter case, white space collapsed) in BRAND-STATE.md, DECISIONS.md or decisions/*.md; an example needs nothing; data-pages, when the attribute is there, names only page ids of this board (white space or
-    commas between them). DECISIONS.md and decisions/*.md are inputs of the lint report, so a changed decision makes it stale. BRAND-STATE.md is searched but not added for the choices; it is an input anyway through each page's page-check report, so recording a gate makes this report stale."""
+    commas between them). DECISIONS.md and decisions/*.md are inputs of the lint report, so a changed decision makes it stale. BRAND-STATE.md is one too, whole, when a rule's source is found there and in none of those files:
+    a page's page-check report holds it by its G4 rules only, so without it a source deleted from any other line of the file would leave this report current. Recording a gate then makes the report stale, and
+    the lint is run again (the finish chain does)."""
     label = "every choice is tagged rule or example, and a rule says where it was decided"
     rep.inputs.append(Path(project) / "DECISIONS.md")
     rep.inputs += sorted((Path(project) / DECISION_DIR).glob("*.md"))
@@ -1176,6 +1180,8 @@ def choices_rows(rep: Report, project: Path, root: Node, page_ids: list[str]) ->
                 problems.append(f"{who}: data-pages is empty: name page ids of this board, or leave the attribute out for every page")
             elif unknown:
                 problems.append(f"{who}: data-pages names {', '.join(unknown)}, which {'is' if len(unknown) == 1 else 'are'} no page card of this board (the pages: {', '.join(page_ids) or 'none'})")
+    if any(ws == [STATE_FILE] for ws in rules.values()):   # a source that only BRAND-STATE.md holds: the lint stands on the file itself, not on the part the page-check reports hold
+        rep.inputs.append(Path(project) / STATE_FILE)
     tags = [li.attrs.get("data-tag", "").strip() for li in items]
     where = ", ".join(dict.fromkeys(w for ws in rules.values() for w in ws))
     rep.add("site:choices", "fail" if problems else "pass", label,

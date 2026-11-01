@@ -493,12 +493,16 @@ SITE_VIEWS = (("1440-light", 1440, 900, "light"), ("1440-dark", 1440, 900, "dark
 
 def page_check_report(p: Path, page: str, status: str = "pass", tells: tuple[str, ...] = (), also: tuple[str, ...] = ()) -> Path:
     """The report `brand-creator page-check <page>` writes for a page of the project, made by hand so that no browser is needed: group 1's Report class under group 1's name for it
-    (pagecheck.report_tool), its inputs the page and the built tokens' stylesheet (and the project files named in `also`: a real report lists BRAND-STATE.md, qa/rules.json and FACTS.md too), `target` at the top level as page_check.py puts it, one tell:<id> row for each tell of page-tells.json (a
+    (pagecheck.report_tool), its inputs the page and the built tokens' stylesheet (and the project files named in `also`: a real report lists BRAND-STATE.md, qa/rules.json and FACTS.md too; "BRAND-STATE.md#g4-rules" is the file by one of its parts, as a real report lists it, plain "BRAND-STATE.md" the whole file, as an older report did), `target` at the top level as page_check.py puts it, one tell:<id> row for each tell of page-tells.json (a
     warning for each id in `tells`, a pass for the others) and, for status "fail", a failing page:load row, for "not-verified" a skipped one. -> the report's path."""
     import _common
     import pagecheck
     assert status in ("pass", "fail", "not-verified"), status
-    rep = _common.Report(pagecheck.report_tool(page), p, [p / page, p / "assets" / "tokens" / "tokens.css", *(p / f for f in also)], renderer="chromium")
+    def listed(spec: str):   # "<file>" or "<file>#<part>"
+        name, _, part = spec.partition("#")
+        return _common.PartInput(p / name, part) if part else p / name
+
+    rep = _common.Report(pagecheck.report_tool(page), p, [p / page, p / "assets" / "tokens" / "tokens.css", *(listed(f) for f in also)], renderer="chromium")
     rep.add("page:target", "info", "what was checked", detail=f"project page {page}; widths 390; schemes light")
     if status == "fail":
         rep.add("page:load:390-light", "fail", "the page loads without an error", detail="a request to another origin was stopped: https://example.invalid/x.png")

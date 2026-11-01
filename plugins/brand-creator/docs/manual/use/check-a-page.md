@@ -120,7 +120,7 @@ sit around an accent.
 
 - The reply ends with the exit code and the report path, and no row you did not expect is failing.
 - Every row either passed, warned, or says "not verified" and why. A row that did not run is never counted as a pass.
-- After you fix a page, run the same command again. A report goes stale when the page, a token or `FACTS.md` changes.
+- After you fix a page, run the same command again. A report goes stale when the page or a file it loads, a token, your page rules, `FACTS.md` or the system rules you approved changes. A later step, such as approving the book, does not.
 
 ## If something goes wrong
 

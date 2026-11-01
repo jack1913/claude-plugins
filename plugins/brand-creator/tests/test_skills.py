@@ -960,20 +960,24 @@ def test_the_site_round_phase_goes_hero_first_and_tags_every_choice():
             "`data-hero=\"<the picked variant>\"`", "The home page is a page like the others", "`rule`: the owner decided it", "`example`: a way the pages did it that may change",
             "record the owner's decision in `DECISIONS.md` first, then cite it", "A default you chose is never a rule",
             # the approval, in order
-            "`state --project <dir> --record G4p", "Recording a gate changes `BRAND-STATE.md`", "`freeze r<N> --name approved-site", "`site approve --project <dir>`",
+            "`state --project <dir> --record G4p", "Recording a gate changes `BRAND-STATE.md`, but the `page-check` reports hold only its G4 rules", "`freeze r<N> --name approved-site", "`site approve --project <dir>`",
             "`capture site/<id>/index.html` and `page-check site/<id>/index.html`",
             # reference pages, not templates; production sites live in the product repository
             "never fill-in templates", "The real site is built in the product repository",
             # the G4 rules live in BRAND-STATE.md; qa/rules.json holds the thresholds and page.rules tied to those lines
             "the \"(rule)\" lines of `BRAND-STATE.md` under \"Rules (G4)\", with the thresholds and the `page.rules` tied to those lines in `qa/rules.json`",
-            # any write to BRAND-STATE.md makes every page-check report, and the lint with them, stale
-            "Set the phase once, before the first `page-check`", "every `page-check` report lists `BRAND-STATE.md` among its inputs",
-            "Recording `review_url` and updating `BRAND-STATE.md` after that write it again: before the reply run `page-check` on each variant and `board-lint rounds/r<N>/board.html --project <dir>` once more",
-            "any write to `BRAND-STATE.md` (the phase, `review_url`, a gate, the Directions table, Still open) after the check, the capture or the lint",
+            # a page-check report holds BRAND-STATE.md by its G4 rules only: a later write to the file leaves the reports and the lint current, a changed G4 record or "(rule)" line does not
+            "A `page-check` report holds `BRAND-STATE.md` by its G4 rules only", "only a changed G4 record or \"(rule)\" line makes them stale",
+            "A report from an older release lists the whole file and goes stale at any write",
+            "Recording `review_url` and updating `BRAND-STATE.md` after that write it again, but the `page-check` reports hold only its G4 rules, so they stay current: before the reply run `board-lint rounds/r<N>/board.html --project <dir>` once more",
+            "a lint of a board whose rule cites a line only `BRAND-STATE.md` holds lists the whole file, so it needs that run",
+            "or a changed G4 record or \"(rule)\" line of `BRAND-STATE.md` after the check, the capture or the lint",
+            "Other writes to `BRAND-STATE.md` (the phase, `review_url`, a gate, the Directions table, Still open) leave the `page-check` reports current",
             "never a copy of an earlier round", "A later pages board (the refine loop on the pages, started as `cp -R` of the previous pages board) also has What changed and Weak points",
             "**G4p The site's reference pages approved.**"):
         assert needle in flat, needle
     assert "rules of G4 in `qa/rules.json`" not in flat and "copy of the refine round" not in flat
+    assert "Set the phase once" not in flat and "lists `BRAND-STATE.md` among its inputs" not in flat and "which every `page-check` report lists" not in flat, "the old rule: every write to BRAND-STATE.md makes the reports stale"
     # the hero before the pages, the pick before the pages, and the proof of each page in its order
     assert flat.index("## The hero first") < flat.index("## The cold review") < flat.index("## The other pages") < flat.index("## Approval")
     step = flat[flat.index("Per variant, in this order:"):]
@@ -1031,8 +1035,9 @@ def test_the_round_wrapper_has_a_site_kind():
                    "`data-hero=\"<the picked variant>\"` and a choices section that tags every choice `rule`", "or `example`",
                    "shoot the board last: `shot` keeps one report, and `check` wants the one of the latest board.",
                    "Taking a still, a check or a cold review again after the lint makes its report stale: lint again.",
-                   "So does any write to `BRAND-STATE.md` (the phase, `review_url`, a gate, the Directions table, Still open), because every `page-check` report lists it among its inputs",
-                   "set the phase before the first `page-check`, and after the writes of steps 8 and 9 above run `page-check` on each page of the round and `board-lint rounds/r<N>/board.html --project <dir>` again",
+                   "A write to `BRAND-STATE.md` (the phase, `review_url`, a gate, the Directions table, Still open) does not: a `page-check` report holds only its G4 rules (the G4 record and the \"(rule)\" lines)",
+                   "only a change to those needs `page-check` on each page of the round and then `board-lint rounds/r<N>/board.html --project <dir>` again",
+                   "lint a pages board again when a rule of it cites a line only `BRAND-STATE.md` holds",
                    "never fill-in templates"):
         assert needle in section, needle
     # the pages are made, checked and read before the board is built from them, and the board is shot last

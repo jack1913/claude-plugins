@@ -34,6 +34,11 @@ BM_TYPES = ("master", "product", "sub-brand")
 BM_ARCHS = ("branded-house", "endorsed", "sub-brand", "independent")
 
 
+def g4_rules(st) -> list[str]:
+    """The recorded "(rule)" lines of the Rules (G4) section of BRAND-STATE.md (a State), a line with a `(...)` placeholder left out. The one reading of them: `view` and the "g4-rules" part of a report input (`_common.PART_READERS`) share it."""
+    return [b for b in bookdata.bullets(bookdata.section_lines(st, "Rules (G4)")) if b.lower().startswith("(rule)") and not re.search(r"\(\.\.\.\)", b)]
+
+
 def view(project: Path) -> dict:
     """What the adapters read from BRAND-STATE.md and FACTS.md. A change here makes the adapter report stale; a change to the phase
     or the review URL does not."""
@@ -50,7 +55,7 @@ def view(project: Path) -> dict:
         "architecture": str(d.get("architecture", "standalone")), "mark_source": str(d.get("mark_source", "")),
         "content_languages": langs, "edition": raw_ed, "approved_edition": raw_ap, "g5": str(gates.get("G5", "") or "").strip(),
         "canonical_direction": canon, "register": row.get("register", ""),
-        "rules": [b for b in bookdata.bullets(bookdata.section_lines(st, "Rules (G4)")) if b.lower().startswith("(rule)") and not re.search(r"\(\.\.\.\)", b)],
+        "rules": g4_rules(st),
         "renames": [ln for ln in bookdata.section_lines(st, "Renames") if ln.strip().startswith("|")],
         "forbidden": forbidden_terms(project),
     }

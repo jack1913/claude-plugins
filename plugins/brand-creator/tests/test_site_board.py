@@ -1632,12 +1632,14 @@ def test_a_rule_may_cite_brand_state_decisions_or_a_decision_record_in_any_lette
     assert r.returncode == 0, r.stdout
     assert detail(p, "site:choices") == "3 choice(s): 3 rule(s), each found in DECISIONS.md, BRAND-STATE.md, decisions/ADR-0001-pricing.md; 0 example(s)"
     inputs = [i["path"] for i in report(p, "board-lint")["inputs"]]
-    assert "DECISIONS.md" in inputs and "decisions/ADR-0001-pricing.md" in inputs, inputs   # BRAND-STATE.md is searched but not added here: a real page-check report lists it, and that makes it an input
+    assert "DECISIONS.md" in inputs and "decisions/ADR-0001-pricing.md" in inputs, inputs
+    assert inputs.count("BRAND-STATE.md") == 1, inputs                                           # c2 is found in BRAND-STATE.md and nowhere else: the lint holds that file itself (no page-check report here)
 
 
 def test_brand_state_is_an_input_of_the_pages_lint_through_the_page_check_reports_and_recording_a_gate_makes_it_stale(tmp_path):
-    """A real page-check report lists BRAND-STATE.md, qa/rules.json and FACTS.md (pagecheck.base_inputs), so the lint, which adds the files its page-check reports were made from, depends on BRAND-STATE.md too:
-    `state --record` makes the lint report stale, and with it the report of every page. The choices only search the file; they do not add it."""
+    """An older page-check report lists BRAND-STATE.md whole, qa/rules.json and FACTS.md (the reports `page-check` writes now hold the file by its G4 rules; tests/test_site.py), so the lint, which adds the files
+    its page-check reports were made from, depends on the whole file: `state --record` makes the lint report stale, and with it the report of every page. The choices only search the file; they add it
+    themselves only for a source found nowhere else (the test after this one)."""
     from _common import stale_inputs
     p = pages_project(tmp_path)
     for pid in PAGES:
@@ -1651,6 +1653,37 @@ def test_brand_state_is_an_input_of_the_pages_lint_through_the_page_check_report
     assert stale_inputs(p, doc) == ["BRAND-STATE.md changed"]
     r = lint3(p)
     assert r.returncode == 1 and "site:check" in failed(p), r.stdout
+
+
+def test_a_rule_whose_source_only_brand_state_holds_makes_the_lint_stale_when_that_line_goes(tmp_path):
+    """(m) The choices search BRAND-STATE.md, and the page-check reports hold that file by its G4 rules only, so a source found nowhere else needs the file itself among the inputs of the lint:
+    deleting the cited line leaves the lint stale, as a fresh lint fails the choice. A source that DECISIONS.md holds too does not (the file is no input then). Synthetic project, reports by hand."""
+    from _common import stale_inputs
+    cited, also = "the stamp sits alone on the left edge", ("BRAND-STATE.md#g4-rules", "FACTS.md")
+    p = pages_project(tmp_path)
+    state = p / "BRAND-STATE.md"
+    state.write_text(state.read_text(encoding="utf-8") + f"\n## Notes\n\n- {cited}\n", encoding="utf-8")
+    mutate(board_of(p, 3), 'data-source="the stamp appears once per view"', f'data-source="{cited}"')
+    for pid in PAGES:
+        page_check_report(p, f"rounds/r3/{pid}/index.html", "pass", also=also)
+    assert lint3(p).returncode == 0, lint3(p).stdout
+    doc = report(p, "board-lint")
+    held = [i for i in doc["inputs"] if i["path"] == "BRAND-STATE.md"]
+    assert sorted("part" in i for i in held) == [False, True], held                              # the part the page-check reports hold, and the file itself for the source
+    assert stale_inputs(p, doc) == []
+    mutate(state, f"- {cited}\n", "")
+    assert stale_inputs(p, doc) == ["BRAND-STATE.md changed"], "the cited line is gone: the lint no longer stands"
+    r = lint3(p)
+    assert r.returncode == 1 and "site:choices" in failed(p) and "is not in BRAND-STATE.md" in detail(p, "site:choices"), r.stdout
+    # the same source also written in DECISIONS.md: BRAND-STATE.md is an input through the page-check reports only, and a line of it that goes changes nothing the lint stood on
+    both = "the stamp appears once per view"
+    state.write_text(state.read_text(encoding="utf-8") + f"\n- {both}\n", encoding="utf-8")
+    mutate(board_of(p, 3), f'data-source="{cited}"', f'data-source="{both}"')
+    assert lint3(p).returncode == 0, lint3(p).stdout
+    doc = report(p, "board-lint")
+    assert [i for i in doc["inputs"] if i["path"] == "BRAND-STATE.md"] == [i for i in doc["inputs"] if i["path"] == "BRAND-STATE.md" and "part" in i] != []
+    mutate(state, f"\n- {both}\n", "\n")
+    assert stale_inputs(p, doc) == [], "DECISIONS.md still holds the source"
 
 
 def test_an_example_needs_no_source(tmp_path):
