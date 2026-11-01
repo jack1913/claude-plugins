@@ -15,6 +15,9 @@
   adoption status [--set N|N-M|N,M=to do|doing|done]...    show or update progress (doing and done need G6)
   adoption verify                                          the pins, the numbering, the accounting and ADOPTION.md against adoption.json
   adoption render                                          write ADOPTION.md again from adoption.json
+  adoption wiring --repo LABEL (--before [--again] | --after)
+      Reads a surveyed repository's source for the links, form field names, handlers, test hooks, ids and scripts a redesign must not lose, and
+      stores them in adoption.json under `wiring` (the before record is the baseline; --after is the redesign as applied). Read only, and it proves it.
 """
 import fnmatch
 import hashlib
@@ -29,6 +32,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE / "lib"))
 sys.path.insert(0, str(HERE / "adaptlib"))
 import adoptdata as ad  # noqa: E402
+import wiring  # noqa: E402
 from _common import (EXIT_CANNOT, EXIT_FAIL, EXIT_USAGE, Parser, Report, add_project_arg, confine, fail, find_project, main_guard,  # noqa: E402
                      read_state, require_gate, today, write_bytes_if_changed)
 
@@ -293,10 +297,18 @@ def main() -> int:
     add_project_arg(v)
     r = sub.add_parser("render", help="write ADOPTION.md from adoption.json")
     add_project_arg(r)
+    w = sub.add_parser("wiring", help="record the links, form fields, handlers, test hooks, ids and scripts of a repository's source (read only)")
+    add_project_arg(w)
+    w.add_argument("--repo", required=True, metavar="LABEL", help="the repository's label, as in ADOPTION.md (it must have been surveyed)")
+    wg = w.add_mutually_exclusive_group(required=True)
+    wg.add_argument("--before", action="store_true", help="record the wiring before the redesign: the baseline")
+    wg.add_argument("--after", action="store_true", help="record the wiring after the redesign is applied (needs the before record)")
+    w.add_argument("--again", action="store_true", help="with --before: replace the baseline that is already recorded")
     a = ap.parse_args()
     project = find_project(a.project)
     name = str(read_state(project).get("name", "") or read_state(project).get("slug", "") or "Brand")
-    return {"survey": do_survey, "add": do_add, "status": do_status, "verify": do_verify, "render": do_render}[a.cmd](a, project, name)
+    return {"survey": do_survey, "add": do_add, "status": do_status, "verify": do_verify, "render": do_render,
+            "wiring": do_wiring}[a.cmd](a, project, name)
 
 
 def write_both(project: Path, doc: dict, name: str) -> list[str]:
@@ -573,6 +585,71 @@ def do_render(a, project: Path, name: str) -> int:
     ch = write_both(project, doc, name)
     print(f"{ad.DOC}: {'written' if ch else 'unchanged'}")
     return 0
+
+
+def do_wiring(a, project: Path, name: str) -> int:
+    doc = need_doc(project)
+    bad = ad.verify(doc)
+    if bad:
+        fail(EXIT_FAIL, "adoption.json is not consistent, so a wiring record is not added to it: " + "; ".join(bad[:3]))
+    row = next((r for r in doc["repos"] if r["label"] == a.repo), None)
+    if row is None:
+        fail(EXIT_USAGE, f"--repo {a.repo!r} is not a surveyed repository (labels: {', '.join(r['label'] for r in doc['repos'])})")
+    rid, label = row["id"], row["label"]
+    held = doc.get("wiring", {}).get(rid, {})
+    which = "before" if a.before else "after"
+    if a.again and not a.before:
+        fail(EXIT_USAGE, "--again goes with --before: it replaces the baseline")
+    if a.before and held.get("before") and not a.again:
+        fail(EXIT_FAIL, f"the before record of {label} ({held['before'].get('date')}) is the baseline: pass --again to replace it")
+    if a.after and not held.get("before"):
+        fail(EXIT_USAGE, f"no before record for {label}: record the wiring before the redesign starts with `brand-creator adoption wiring --repo {label} --before`")
+    rg = rg_path()
+    root = Path(os.path.realpath(project))
+    repo = Path(os.path.realpath(root / row["path"]))
+    if not repo.is_dir():
+        fail(EXIT_USAGE, f"repository {label} ({row['path']}) is not a folder; survey it again with --repo")
+    EXCLUDE.clear()
+    if repo in root.parents:   # the brand project lives inside this repository: its own files are not the repository's wiring
+        EXCLUDE.extend(["--glob", "!" + root.relative_to(repo).as_posix() + "/**"])
+    rep = Report("adoption-wiring", project, renderer="n/a (read-only scan)")
+    listed = list_files(rg, repo, label)
+    before_snap = snapshot(repo, listed)
+    read, left_out = [], 0
+    for f in listed:
+        if not wiring.is_source(f):
+            continue
+        if keep_reason(f, []):   # the owner's --keep globs are about brand slots; lock files, history, licences, minified output, dist, build and vendor are not wiring
+            left_out += 1
+        else:
+            read.append(f)
+    found: dict[str, list[str]] = {}
+    deep = 0
+    for f in read:
+        try:
+            text = (repo / f).read_text(encoding="utf-8", errors="replace")
+        except OSError as e:
+            fail(EXIT_CANNOT, f"cannot read {label}/{f}: {e}")
+        items, d = wiring.scan_text(text)
+        deep += d
+        wiring.add(found, f, items)
+    unchanged = before_snap == snapshot(repo, list_files(rg, repo, label))
+    rep.add(f"read-only:{label}", "pass" if unchanged else "fail", "the repository was not changed during the scan",
+            detail="the list of files, sizes and modification times is the same before and after" if unchanged
+            else "files, sizes or modification times changed while the scan ran: something else wrote to the repository (the scan writes nothing there). Nothing was stored")
+    if not unchanged:
+        return rep.finish()
+    items = dict(sorted(found.items()))
+    n = wiring.kind_counts(items)
+    rep.add(f"wiring:{label}", "info", f"the {which} record", detail=", ".join(f"{k} {v}" for k, v in n.items()) + f" ({len(items)} items)")
+    rep.add("wiring:scope", "info", "what the scan read and left out",
+            detail=f"{len(read)} source file(s) read; {left_out} more of the same kinds left out by the keep rules (lock files, change history, licences, minified output, "
+                   "dist, build and vendored folders), and every file .gitignore hides" + (f"; {deep} value(s) nested deeper than three levels were not read" if deep else ""))
+    doc.setdefault("wiring", {}).setdefault(rid, {})[which] = {"date": today(), "head": git_head(repo), "files": len(read), "items": items}
+    changed = write_both(project, doc, name)
+    rc = rep.finish()
+    print(f"\n{which} record of {label}: {len(items)} items from {len(read)} files; wrote {', '.join(changed) or 'nothing (unchanged)'}. No repository was edited.")
+    return rc
 
 
 main_guard(main)
