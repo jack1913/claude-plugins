@@ -8,8 +8,8 @@ Five skills, the rules they share, and the eval cases behind them. The commands,
 | --- | --- | --- | --- |
 | `swift:swiftui` | Automatically, when you write, review or refactor SwiftUI | Correct, current SwiftUI APIs: state and `@Observable`, view structure, layout, iPhone Duo and large displays, lists, previews in `#if DEBUG`, `#available` gates below 26, visionOS, Liquid Glass APIs, accessibility code, Instruments traces | A fork of AvdLee/SwiftUI-Agent-Skill 5.2.1 (`UPSTREAM.md`) |
 | `swift:design` | Automatically, when you build or restyle a screen | Apple-native design: hierarchy and grouping, typography and Dynamic Type, colour and dark mode, SF Symbols, when Liquid Glass fits, platform idioms, motion, design tokens | Our own text |
-| `swift:concurrency` | Automatically, for concurrency code, concurrency errors and Swift 6 migration | async/await, tasks and task groups, actors and `@MainActor`, `Sendable`, isolation diagnostics, Swift 5 → 6 migration, hanging or flaky async tests | A fork of AvdLee/Swift-Concurrency-Agent-Skill 2.3.0 (`UPSTREAM.md`) |
-| `swift:testing` | Automatically, when you write, migrate or review tests | Swift Testing: `@Test`, `#expect`/`#require`, traits, parameterized tests, `confirmation`, parallel execution, XCTest migration and what stays on XCTest | A fork of AvdLee/Swift-Testing-Agent-Skill 1.2.0 (`UPSTREAM.md`) |
+| `swift:concurrency` | Automatically, for concurrency code, concurrency errors and Swift 6 migration | async/await, tasks and task groups, actors and `@MainActor`, `Sendable`, isolation diagnostics, Swift 5 → 6 migration, the Swift 6.4 additions (cancellation shields, `Continuation`, `@diagnose`), hanging or flaky async tests | A fork of AvdLee/Swift-Concurrency-Agent-Skill 2.3.0 (`UPSTREAM.md`) |
+| `swift:testing` | Automatically, when you write, migrate or review tests | Swift Testing: `@Test`, `#expect`/`#require`, traits, parameterized tests, `confirmation`, parallel execution, exit tests, attachments, XCTest migration and what stays on XCTest | A fork of AvdLee/Swift-Testing-Agent-Skill 1.2.0 (`UPSTREAM.md`) |
 | `swift:review` | Only when you type `/swift:review <files or screenshots>` | An HIG review of a built screen from code and/or screenshots, reported as violation · location · HIG page · fix; it never edits files | Our own text ([ADR-0011](../../adr/ADR-0011-swift-review-skill.md)) |
 
 ## Topics by skill
@@ -23,7 +23,7 @@ Five skills, the rules they share, and the eval cases behind them. The commands,
 | Previews in `#if DEBUG` | ● | | | | |
 | Availability gates below OS 26 | ● | | | | |
 | visionOS | ● | ○ | | | ○ |
-| iPhone Duo, foldable and large displays | ● | | | | |
+| iPhone Duo, foldable and large displays | ● APIs | ● design rules | | | ○ checks |
 | Liquid Glass | ● APIs | ● when it fits | | | ○ placement |
 | Hierarchy, grouping, layout | ○ | ● | | | ○ |
 | Typography and Dynamic Type | ○ | ● | | | ○ |
