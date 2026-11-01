@@ -193,7 +193,9 @@ writing.
 
 Ask the README voice before the README seed is written: show the README voice menu from the
 `update-docs` template (nine voices), recommend one for this repo's type, and let the operator
-pick one, describe their own, or defer. Record the answer as the `readme voice` bake
+pick one, describe their own, or defer. Save the answer in the run record
+(`run-set --confirm readme_voice=<file>`, so `--resume` does not ask again) and record it as the
+`readme voice` bake
 (`references/stamping.md`); a deferred voice records "no voice", and nothing is imposed until a
 styling run asks again. Write the README seed (§3.5) in the chosen voice, keeping the README list
 in the docs standard's §2.
@@ -422,11 +424,12 @@ like any other missing canonical skill, so the pass is create-or-update, never s
 `docs/internals/docs-standard.md`: `--sync` copies `templates/docs-ia/internals-docs-standard.md`
 there (filling `<repo>`) and shows the two one-line additions it implies, a row in
 `docs/internals/README.md` and a row in the `AGENTS.md` pointer index, as a diff to confirm.
-It never overwrites an existing `docs-standard.md`: a differing one is only reported, as a `diff`,
-and left as it is. When an existing one has no `## Local deviations` section (a version 4
-standard), propose appending one, filled from `python3 "$SKILL_DIR/scripts/onboard.py"
-manual-conventions . --full` (every convention stated, so the list outranks the old body), and the
-README list from the template's §2, as a diff to confirm.
+It never overwrites an existing `docs-standard.md`, and never reports the repo's own text in it:
+instead, propose appending each template section (by heading) the repo's standard lacks (an H2
+or H3 such as the README list), as a diff to confirm. When it has no `## Local deviations`
+section (a version 4 standard), the appended one is filled from
+`python3 "$SKILL_DIR/scripts/onboard.py" manual-conventions . --full` (every convention stated,
+so the list outranks the old body).
 
 **A new standard starts out agreeing with the repo.** Before copying it, run
 `python3 "$SKILL_DIR/scripts/onboard.py" manual-conventions .` and read the JSON: the copy then

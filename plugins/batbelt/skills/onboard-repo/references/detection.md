@@ -111,9 +111,10 @@ must eventually cover.
     between tiers before it's confirmed.
 - **Persist the confirmed split** to the committed coverage record,
   `docs/.onboard-coverage.json` — a JSON array of objects shaped
-  `{surface, slug, tier, page, status}`, where `tier` is `principal` or
+  `{surface, slug, tier, page, status, reason}`, where `tier` is `principal` or
   `niche`, `page` is the authored page's path (or `null` before it's
-  written), and `status` is `covered` or `deferred`. §3.7 reads and updates
+  written), `status` is `covered` or `deferred`, and `reason` says why a deferred
+  row is deferred (empty otherwise). §3.7 reads and updates
   this file across authoring rounds; `check-docs --coverage` reads it too.
 
 ## Predecessor artifacts (by content, not name)

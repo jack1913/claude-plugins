@@ -132,11 +132,11 @@ with `check.py` and removes the two orphans, shown in the plan like any other ch
   `established` without having run the bootstrap (update-docs recounts pointers at
   runtime anyway, so a false claim only misleads the operator).
 - **capture fence convention:** how a grounded `docs/manual/` page shows a command
-  and its output. Recommended: the COMMAND in a ```` ```bash ```` fence with each line
-  marked `$`, the OUTPUT in a separate ```` ```console capture=<slug> ```` fence whose
-  lines are a verbatim, in-order subsequence of `docs/.onboard-captures/<slug>.txt`.
-  Separate fences copy-paste cleanly; note that markdownlint's MD014 cannot model the
-  split and is disabled per grounded page. Record the convention the repo actually
+  and its output. Recommended: the COMMAND in a ```` ```bash ```` fence with bare lines
+  (no `$` prompt, so they copy-paste cleanly and markdownlint's MD014 stays quiet), the
+  OUTPUT in a separate ```` ```console capture=<slug> ```` fence whose lines are a
+  verbatim, in-order subsequence of `docs/.onboard-captures/<slug>.txt`. The page shapes
+  show this split. Record the convention the repo actually
   uses (a single `text capture=<slug>` fence holding both is the other common shape).
   Every later run follows the recorded convention and never converts a page from one
   shape to the other.

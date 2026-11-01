@@ -27,6 +27,9 @@ writes anything.
 - `check.py shrink-check`, so the stamped `update-docs` can stop a rewrite that guts a page.
 - `/batbelt:onboard-repo` asks which README voice you want before it writes the README, and the README starts
   with an Install section.
+- `--sync` adds any section the template gained (such as Local deviations or the README list) to your existing
+  docs standard, as a diff for you to confirm, instead of only showing the whole file as changed.
+- A deferred row in the coverage record now says why it is deferred.
 
 ### Changed
 
@@ -49,6 +52,12 @@ writes anything.
 - Before 1.0, `changelog-release` bumps the minor version for a feature: 0.1.2 becomes 0.2.0.
 - `changelog-release` asks for an entry, or a reason to skip, for every merge in the release. Both skills commit by
   explicit path and name any unrelated changes they left out.
+- `changelog-release` cuts a SemVer version only when you ask for a release; a routine run only updates
+  `[Unreleased]`. It tags and pushes the tag only from the release branch.
+- The manual index is renumbered one list at a time, and its page count counts the tour only.
+- `--forbidden-allow` patterns are anchored: `*` stays within one folder, `**` crosses folders, and `README.md`
+  matches only the README at that level.
+- The README and the manual carry the jack1913 brand header.
 
 ## [0.2.1] - 2026-10-20
 

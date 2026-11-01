@@ -50,7 +50,7 @@ let the operator move a surface between tiers before it's confirmed.
 ## Surface → page coverage
 
 Every surface from the enumerator ends up in exactly one row of the committed
-`docs/.onboard-coverage.json` (`{surface, slug, tier, page, status}`). A
+`docs/.onboard-coverage.json` (`{surface, slug, tier, page, status, reason}`). A
 principal surface must have a real `page`: a principal row whose `page` is
 null, absent, or empty is exactly what `check-docs`'s `EMPTY_TIER` finding flags
 (it keys on `page`, not `status`). `deferred` is only a clean state for a niche

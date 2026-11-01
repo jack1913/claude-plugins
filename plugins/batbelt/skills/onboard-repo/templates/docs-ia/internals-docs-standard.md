@@ -34,7 +34,8 @@ layout) go in `docs/internals/`.
 
 These hold in every README voice:
 
-- The first screen says what <repo> is and shows the install command; a voice may open with one
+- The first screen says what <repo> is and shows the install command (or, for a repo with nothing to
+  install, such as a curated list or a spec, how to start using it); a voice may open with one
   short paragraph before it. A quick start installs before it uses anything.
 - The README keeps the install command and its platform twin. It is the one allowed copy of the
   install fact; the full walkthrough lives on the getting-started page.
@@ -43,9 +44,12 @@ These hold in every README voice:
 - H2 and H3 headings are coverage keys: renaming one updates `docs/.onboard-coverage.json` in the
   same change.
 - Versions and package facts match the file that owns them.
-- A Documentation section links each docs tier.
+- A Documentation section links the manual, internals and decisions (the archive is reached from
+  `docs/README.md`).
 
-The recorded voice decides the rest: hero, badges, emoji, callouts, `<details>` blocks, what opens
+The list sits in the standard's body, below REPO SPECIFICS: a voice's signature rule that departs
+from the README list wins, and is recorded once under Local deviations; the install command is
+the exception and stays in every voice. The recorded voice decides the rest: hero, badges, emoji, callouts, `<details>` blocks, what opens
 the first screen, tone, and where flags sit. With no README voice recorded, no voice is imposed;
 the list above still holds (a Local deviations entry may relax a §2 README rule other than the
 install command, such as a launchpad README with a table per section), and every run checks the
@@ -83,7 +87,8 @@ docs/adr/                    decisions, with a README index
 docs/archive/                frozen records: build logs, shipped plans and specs
 ```
 
-The Do a task list is the tour: numbered in reading order, and each how-to ends with a
+The index opens with a bold **New here?** pointer to the first-run page. The Do a task list is the
+tour: numbered in reading order, and each how-to ends with a
 **Next:** link to the page after it. A voice may rename the three groups, never merge or reorder
 them. A repo that files how-tos in `docs/manual/use/` records it under Local deviations.
 

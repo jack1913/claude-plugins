@@ -4762,3 +4762,59 @@ def test_renumber_toc_numbers_each_list_on_its_own_and_totals_the_tour():
     assert "1. [A](a.md)\n   1. [A detail](a.md#x)\n   2. [A more](a.md#y)\n2. [B](b.md)\n3. [C](c.md)" in out
     assert "1. [R](r.md)\n2. [S](s.md)" in out
     assert lib.renumber_toc(out) == out
+
+
+def test_update_docs_says_what_it_can_and_cannot_run():
+    ud = _flat(UPD)
+    assert "captured command this skill cannot run" not in ud
+    internals = _flat(ONBOARD.parent.parent / "docs" / "internals" / "onboard-repo-docs.md")
+    assert "captured command it has no grant to run" not in internals
+
+
+def test_readme_rules_fit_every_voice():
+    std = _flat(STD_V5)
+    assert "a repo with nothing to install" in std
+    assert "A Documentation section links the manual, internals and decisions" in std
+    assert "a voice's signature rule that departs from the README list wins" in std
+    assert "**New here?**" in std
+
+
+def test_command_fences_carry_no_prompt():
+    st = " ".join(_shape("stamping.md").split())
+    assert "with each line marked `$`" not in st and "no `$` prompt" in st
+    assert "MD014 cannot model the split" not in st
+
+
+def test_update_docs_defines_k():
+    t = _flat(UPD)
+    assert "`K` is the number of sections in the index doc's pointer index" in t
+
+
+def test_coverage_rows_carry_a_reason():
+    for rel in ("references/detection.md", "references/rubric.md", "references/author-manual.md",
+                "templates/update-docs/SKILL.md"):
+        t = _flat(ONBOARD / rel)
+        assert "{surface, slug, tier, page, status, reason}" in t, rel
+        assert "{surface, slug, tier, page, status}" not in t, rel
+
+
+def test_sync_appends_missing_standard_sections_and_check_never_calls_it_drift():
+    t = _flat(ONBOARD / "SKILL.md")
+    assert "propose appending each template section (by heading) the repo's standard lacks" in t
+    assert "a differing one is only reported, as a `diff`" not in t
+    cm = _flat(ONBOARD / "references" / "check-mode.md")
+    assert "--platform-pairs" in cm and "--forbidden" in cm
+
+
+def test_changelog_release_says_when_a_semver_run_cuts_a_version():
+    assert "A SemVer run cuts a version only when the operator asks for a release" in _flat(CR)
+
+
+def test_capture_plan_names_where_each_command_comes_from_and_claims_use_one_commit():
+    ud = _flat(UPD)
+    assert "the command block right above its fence" in ud
+    assert "`git log -1 --format=%H -- docs/`" in ud
+
+
+def test_onboard_records_the_readme_voice_in_the_run_record():
+    assert "run-set --confirm readme_voice=" in _flat(ONBOARD / "SKILL.md")

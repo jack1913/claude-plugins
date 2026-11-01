@@ -128,6 +128,10 @@ Report, without writing:
   python3 "$SKILL_DIR/scripts/check.py" check-docs docs README.md <index> --captures docs/.onboard-captures --coverage docs/.onboard-coverage.json
   ```
 
+  Add `--platform-pairs` when the update-docs REPO SPECIFICS records `platform pairs:
+  sh+powershell`, and `--forbidden <names> --forbidden-allow <globs>` from its `foreign facts`
+  bake, so `--check` judges the tree the way the routine runs do.
+
 A stamped `update-deps` is checked for template-region drift and marker integrity
 via the same `check-markers` call — the `--check` mode iterates every stamped
 skill present; no per-skill code path.

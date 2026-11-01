@@ -103,6 +103,10 @@ When REPO SPECIFICS bakes no **versioning scheme**, the scheme is SemVer (§4a).
 
 ### 4a. SemVer — bump inference (a default, not ground truth)
 
+A SemVer run cuts a version only when the operator asks for a release ("cut a release",
+"bump the version", a release run of this skill); a routine run only updates `[Unreleased]`.
+When the request is unclear, say which you will do in the one message.
+
 `fix` → patch, `feat` → minor, `!` / `BREAKING CHANGE` → major. When commits are
 non-conventional, fall back to PR/issue labels.
 

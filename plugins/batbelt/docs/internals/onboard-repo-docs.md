@@ -27,7 +27,7 @@ How onboard-repo sets up a repository's docs and checks them. The steps are in [
   - `ADR_INDEX_DRIFT`: a record with no row in the tier's index README.
   - `ADR_DANGLING_SUPERSEDE`: a "superseded by" or "amended by" pointer that resolves to no file.
   - `NEXT_CHAIN`: a page of the manual index's numbered tour whose Next link does not point at the next entry.
-  - `TOC_COUNT`: a "1 → N" total in the manual index that differs from the list.
+  - `TOC_COUNT`: a "1 → N" total in the manual index that differs from the number of pages in the tour (the list under Do a task, else the longest top-level list). `renumber-toc` numbers each list on its own and writes the same total.
   - `PLATFORM_TWIN`: a shell command block on a manual page with no PowerShell block after it. It is a warning when the manual has PowerShell anywhere, an error with `--platform-pairs`, and silent otherwise.
 - `--forbidden-allow` exempts files from `--forbidden`. Together they check that a fact another repository owns is named and linked, not restated.
 - `check.py shrink-check OLD NEW` warns on a dropped heading and fails a rewrite that cuts more than a quarter of a page's prose. It moved from `onboard.py` so the stamped `update-docs` can run it.
@@ -42,7 +42,7 @@ How onboard-repo sets up a repository's docs and checks them. The steps are in [
 - It names every unfinished principal page on each run. Before it did, only `onboard-repo --check` showed a park, and nobody runs that again after onboarding, so a deliberate deferral quietly became permanent. Niche deferrals and known baselines that have not changed are one count line.
 - Changing a `status` to silence a finding counts as the same dishonesty as hand-editing a capture.
 - A missing surface is a report-only finding. `update-docs` hands it to `/batbelt:onboard-repo`, whose authoring step creates only the missing pages.
-- `update-docs` does not author the page itself. A grounded page needs a captured command it has no grant to run, and an ungrounded page claiming an unverified capability is worse than a missing one.
+- `update-docs` does not author the page itself. A grounded page needs captures that onboarding's authoring loop plans, takes and reviews (update-docs only re-takes existing ones, read-only, on one yes), and an ungrounded page claiming an unverified capability is worse than a missing one.
 - The same posture covers the ADR tier. The index and status pointers are maintained, bodies stay frozen, and the check that each accepted ADR still binds is offered as a report. A "no longer binds" finding proposes a new superseding ADR. It never edits the accepted one.
 - These rules are in the [update-docs template](../../skills/onboard-repo/templates/update-docs/SKILL.md).
 

@@ -62,8 +62,9 @@ captured). Record **niche** surfaces as `status: deferred` in the coverage recor
 that's a clean, intentional decision, not a finding.
 
 **Emit the committed coverage record** at `docs/.onboard-coverage.json` — a JSON
-array of `{surface, slug, tier, page, status}` objects, one per enumerated
-surface (`tier` is `principal` or `niche`; `status` is `covered` or `deferred`).
+array of `{surface, slug, tier, page, status, reason}` objects, one per enumerated
+surface (`tier` is `principal` or `niche`; `status` is `covered` or `deferred`; `reason`
+says why a parked or deferred surface is deferred, and is empty otherwise).
 Commit it alongside the authored pages — it's how a later `--check` and the
 mechanical loop both know what's already been decided.
 
