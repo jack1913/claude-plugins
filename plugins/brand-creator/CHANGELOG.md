@@ -290,6 +290,10 @@ lints the board of the latest round again before `check`, so an edit of the fact
   `applied-skill` leaves a project that has a kit to `kit build`.
   A brand that moves also gets its motion spec and demo page in the kit.
 - Open-licence (OFL) fonts go into the kit with their licence; any other font is listed, never copied.
+- Once you have named the colours your text sits on, the kit also holds a ready-made snippet,
+  `snippets/on-ground.css`: one `data-ground` rule for each ground after the page colour, so text, buttons, focus
+  rings and borders switch to that ground's own colours. While the grounds are only a proposal the kit writes no
+  snippet and says so. A ground the tokens give no colour for is left out and named, never written half.
 
 ### Changed
 
