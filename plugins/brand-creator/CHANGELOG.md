@@ -163,6 +163,12 @@ lints the board of the latest round again before `check`, so an edit of the fact
   and nothing may stand nearer to it than a quarter of its height (`page:mark-clear-space`; `page.clear_space` in
   `qa/rules.json` changes the share). A page with no mark gets an info row that says what counts as one, and an inline
   `<svg>` that draws through `<use>` is reported as not verified, not failed.
+- `page-check` no longer takes a photo of a person named Mark for your logo. A file named `mark` or `wordmark` (alone or
+  followed by `-`, `_` or `@` and more) is taken for the brand mark by its name only when it is an `.svg` file:
+  `mark.svg`, `mark-dark.svg` and `wordmark-dark.svg` are, `mark.jpg`, `Mark.png`, `mark-kowalski.jpg` and `wordmark.png`
+  are not, so a team page no longer fails `page:mark-file`. `logo` is still taken for any image type (`logo.jpg`,
+  `logo@2x.png`). A `data-brand-mark` image, and an image that is byte for byte one of your logo files, are found
+  whatever their name, `mark.png` included.
 - `page-check` now checks the fonts of a page (`page:fonts`). The family each text is set in has to be one that a font
   token names; a generic family such as `monospace` counts only when a token's list writes it, so a page that sets no
   font and falls back to the browser's default fails. A named family must also be what the browser really drew: a font
