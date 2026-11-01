@@ -1827,7 +1827,9 @@ def find_tells(measures: dict, cfg: dict) -> dict:
             section = b["h1"] > 0 or b["headings"] > t["max_headings"]   # the page, or a band of it, and not a drawing in it
             # a list excuses a box only when the box is the list, or the items of the lists are nearly all of it: all its styled parts but at most one, or most of its area (the area of the items themselves, not of a list stretched past them)
             listed = b["in_lists"] > 0 and (b["styled"] - b["in_lists"] <= t["max_unlisted_styled"] or b["list_area"] >= t["min_list_area_ratio"] * b["width"] * b["height"] - EPSILON)
-            if b["width"] >= t["min_width_px"] and b["height"] >= t["min_height_px"] and b["styled"] >= t["min_styled_descendants"] and not (pictured or section or listed or b["labelled"]):
+            # a table is data, a badge in one of its cells too: the box is a table or a table section, or every styled part of it sits in a cell
+            tabular = b["table"] or (b["in_cells"] > 0 and b["styled"] == b["in_cells"])
+            if b["width"] >= t["min_width_px"] and b["height"] >= t["min_height_px"] and b["styled"] >= t["min_styled_descendants"] and not (pictured or section or listed or tabular or b["labelled"]):
                 meets[b["id"]] = b
         outer = set()
         for i in meets:
