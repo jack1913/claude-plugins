@@ -1406,10 +1406,12 @@ brand-creator page-check --url http://localhost:<port>/<path> [--project DIR] ..
   and the text of everything inside it that has no `data-sample` of its own, is not checked as a claim.
 - **Mark facts.** Every view also holds `marks` and `images`, collected over the same shown elements. A mark is an element with `data-brand-mark`, or an image whose file name says
   it is the logo: the name without its extension (its stem) is `logo`, `mark` or `wordmark`, alone or followed by `-`, `_` or `@` and more, in any case (`logo.svg`, `mark.svg`, `wordmark.svg`,
-  `logo@2x.png`, `mark-dark.svg`, `Wordmark_light.svg`). A stem that only holds one of the words (`partner-logo.svg`, `ikona-logowanie.svg`, `logos.png`, `bookmark.svg`, `marker.svg`, `market-chart.png`)
+  `logo@2x.png`, `mark-dark.svg`, `Wordmark_light.svg`). `mark` and `wordmark` are also people's names and ordinary words (a team page holds photos of people named Mark), so they make a candidate
+  by name only for an `.svg` file: `mark.svg`, `wordmark-dark.svg` are candidates, `mark.jpg`, `Mark.png`, `mark-kowalski.jpg` and `wordmark.png` are not; `logo` makes one for any image type
+  (`logo.jpg`, `logo@2x.png`). A stem that only holds one of the words (`partner-logo.svg`, `ikona-logowanie.svg`, `logos.png`, `bookmark.svg`, `marker.svg`, `market-chart.png`)
   or says something else (`site-mark.svg`, `lockup.svg`) is not a mark by its name, and a `data:` URL has no file name. A name only makes an image a candidate: the image is then judged as any mark
   is, so a `mark.svg` that is no logo file of the project fails `page:mark-file`. Any other image is a
-  mark only by its bytes (equal to a logo file of the project) or by `data-brand-mark`, which is also how a logo under another name opts in. The images are an `img` (what the browser chose to show, `currentSrc`, so the `source` of a `picture` is covered; `kind: "picture"` then), an SVG `image`, a CSS
+  mark only by its bytes (equal to a logo file of the project: a `mark.png` that is one is found, whatever its name) or by `data-brand-mark`, which is also how a logo under another name opts in. The images are an `img` (what the browser chose to show, `currentSrc`, so the `source` of a `picture` is covered; `kind: "picture"` then), an SVG `image`, a CSS
   `background-image` of an element and of its `::before` and `::after`, and an inline `<svg>` that has `data-brand-mark` (`kind: "inline-svg"`). **`data-brand-mark` convention:** put it
   on the `<img>` or the inline `<svg>` of the brand mark; its value may name the logo file the mark shows (`data-brand-mark="assets/logo/mark.svg"`), or be empty. On any other
   element it stands for the images inside it, and an element with none is reported as `kind: "other"`. `marks` holds the marked and the named ones, shown or not (`visible: false`, so a logo hidden at one width is known; up to 100 a view, `marks_total` says how
@@ -1483,7 +1485,7 @@ brand-creator page-check --url http://localhost:<port>/<path> [--project DIR] ..
   `smallest_px` and `small`.
 - **Brand rules.** `qa/rules.json` `page.rules` (validated as above) are the owner's own rules for pages. Each is tied by its `g4` words to a "(rule)" line of BRAND-STATE.md "Rules (G4)": the system
   rules the owner approves at G4 stay the one place a rule is decided, and a page rule only enforces one of them. Three kinds are measured:
-  - `max-marks-per-view` (`max`): the most identified brand marks (the marks `page:mark-file` judges: `data-brand-mark`, an image named `logo`, `mark` or `wordmark`, alone or followed by `-`, `_` or `@` and more, or an image with the bytes of a logo file; only a shown
+  - `max-marks-per-view` (`max`): the most identified brand marks (the marks `page:mark-file` judges: `data-brand-mark`, an image named `logo`, `mark` or `wordmark`, alone or followed by `-`, `_` or `@` and more (`mark` and `wordmark` only for an `.svg` file), or an image with the bytes of a logo file; only a shown
     mark) in one screen, over every width and scheme. A screen is a window one viewport high; the windows start at the top of the page and every half a viewport down, the last one reaching the end of the
     page. A mark is in a window when the vertical middle of its box is, and one box found two ways counts once. It needs nothing from the browser beyond the marks every view holds. Not seen: a mark
     that is `position: fixed` or `sticky` is placed where it is at rest at the top of the page, and two marks more than half a viewport apart are in one window only if a window starts between them; a

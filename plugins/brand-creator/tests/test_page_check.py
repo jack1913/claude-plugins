@@ -1799,6 +1799,63 @@ def test_a_file_named_mark_wordmark_or_logo_with_a_suffix_is_a_mark_and_a_stem_t
 
 @pytest.mark.requires_setup
 @pytest.mark.requires_node
+def test_mark_and_wordmark_name_a_mark_only_for_an_svg_file_and_logo_for_any_image(acme):
+    """The name rule by file type: mark and wordmark (alone or followed by -, _ or @ and more) make a candidate only for an .svg file, so the photos of people named Mark on a team page
+    (mark.jpg, Mark.png, mark-kowalski.jpg) and wordmark.png are only images; logo does for any type (logo.jpg, logo@2x.png). The bytes of a logo file, and data-brand-mark, find a mark
+    whatever its name."""
+    from px_lib import Img
+    pages = acme / "pages"
+    pages.mkdir(exist_ok=True)
+    logo = acme / "assets" / "logo"
+    people = ("mark.jpg", "Mark.png", "mark-kowalski.jpg", "wordmark.png")
+    candidates = ("mark.svg", "wordmark-dark.svg", "logo@2x.png", "logo.jpg")
+    for n in people:
+        (pages / n).write_bytes(Img(8, 8, "#" + hashlib.sha256(n.encode()).hexdigest()[:6]).png())   # a picture of its own, none of the logo files (the .jpg hold PNG bytes: the browser sniffs them)
+    for n in candidates:
+        shutil.copyfile(logo / ("mark.svg" if n.endswith(".svg") else "grid-mark-master.png"), pages / n)   # a logo file under a name that says logo, mark or wordmark
+    html = lambda names: "".join(f'<img src="{n}" width="48" height="48" alt="">' for n in names)
+
+    def run(page_html: str) -> tuple[dict, dict, dict]:
+        write_page(acme, mark_page(page_html))
+        r, rep = check_page(acme, "--schemes", "light")
+        (v,) = json.loads(Path(rep["measures"]).read_text(encoding="utf-8"))["views"]
+        return rep, mark_rows_of(rep)["page:mark-file"], v
+
+    # a team page: four pictures that are shown and are no marks, so nothing fails and the row is the info row
+    rep, row, v = run(html(people))
+    assert row["status"] == "info" and "no brand mark is shown" in row["detail"], row
+    assert v["marks"] == [] and {i["url"] for i in v["images"]} == {f"/pages/{n}" for n in people}, v   # shown (they are in images), and not named
+    # the four logo files under the other names are marks by their names, and being the logo files they pass
+    rep, row, v = run(html(candidates))
+    assert row["status"] == "pass" and row["marks_checked"] == len(candidates), row
+    assert {m["url"] for m in v["marks"]} == {f"/pages/{n}" for n in candidates} and all(m["named"] and not m["marked"] for m in v["marks"]) and v["images"] == [], v
+    # one byte changed in each: they are judged and fail by their names, the four pictures beside them are still not told of
+    for n in candidates:
+        if n.endswith(".svg"):
+            mutate(pages / n, "#007d71", "#007d72")
+        else:   # a raster: one byte more after the image
+            before = (pages / n).read_bytes()
+            (pages / n).write_bytes(before + b"\n")
+            assert (pages / n).read_bytes() != before   # the mutation applied
+    rep, row, v = run(html(people + candidates))
+    assert row["status"] == "fail" and {(o["url"], o["found_by"]) for o in row["offenders"]} == {(f"/pages/{n}", "name") for n in candidates}, row
+    assert not any(n in row["detail"] for n in people), row["detail"]
+    # bytes find a mark under any name: the logo's raster as mark.png is a mark and passes; one byte more and it is a picture again
+    shutil.copyfile(logo / "grid-mark-master.png", pages / "mark.png")
+    rep, row, v = run(html(("mark.png",)))
+    assert row["status"] == "pass" and row["marks_checked"] == 1 and row["files"] == ["assets/logo/grid-mark-master.png"], row
+    assert v["marks"] == [] and [i["url"] for i in v["images"]] == ["/pages/mark.png"]   # not by its name
+    assert [m["by"] for m in pagecheck.identified_marks(v, {logo_hash(acme, "grid-mark-master.png")})] == ["bytes"]
+    (pages / "mark.png").write_bytes((pages / "mark.png").read_bytes() + b"\n")
+    rep, row, v = run(html(("mark.png",)))
+    assert row["status"] == "info", row
+    # data-brand-mark finds one too, and it is judged: a picture named mark-kowalski.jpg that is marked is no logo file
+    rep, row, v = run(html(people).replace('<img src="mark-kowalski.jpg"', '<img data-brand-mark src="mark-kowalski.jpg"'))
+    assert row["status"] == "fail" and [(o["url"], o["found_by"]) for o in row["offenders"]] == [("/pages/mark-kowalski.jpg", "attribute")], row
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
 def test_the_report_goes_stale_when_a_logo_file_changes(acme):
     """A mark is judged against assets/logo/: a changed logo file, one the page never loads, makes the verdict stale."""
     copy = acme / "pages" / "mark-copy.svg"
