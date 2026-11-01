@@ -2658,3 +2658,128 @@ def test_kit_status_json_holds_the_same_facts_as_the_text(pack, tmp_path):
     assert os.path.realpath(b["path"]) == os.path.realpath(stale)
     r = kit_status(pack, install(pack, tmp_path, "same"), extra=("--json",))
     assert r.returncode == 0 and json.loads(r.stdout)["current"] is True
+
+
+# ---------------------------------------------------------------- the adoption category `kit`: one row per repository, pinned, left alone by a survey
+# The target is tests/fixtures/target-repo (a synthetic repository), copied next to the project as `shop`. The expected row is written out by hand.
+
+KIT_ROW_CHANGE = ("Copy the brand kit: every generated file byte for byte and the owner files the repository does not have, by the list "
+                  "`brand-creator kit status --repo <path>` prints; it must then say current. Never into a global skills folder.")
+
+
+def surveyed(p, tmp_path, *labels):
+    """The project `p` with each of `labels` surveyed as an empty product repository (a README only), beside the project. -> {label: folder}"""
+    repos = {}
+    for label in labels:
+        repos[label] = tmp_path / label
+        repos[label].mkdir()
+        (repos[label] / "README.md").write_text("the product\n", encoding="utf-8")
+    r = bc("adoption", "survey", *[a for label, d in repos.items() for a in ("--repo", f"{d}={label}")], project=p)
+    assert r.returncode == 0, r.stdout + r.stderr
+    return repos
+
+
+def adoption_doc(p) -> dict:
+    return json.loads((p / "adoption.json").read_text(encoding="utf-8"))
+
+
+@pytest.mark.requires_rg
+def test_a_kit_row_is_added_for_a_surveyed_repository_and_a_survey_leaves_it_alone(pack, tmp_path):
+    assert build(pack).returncode == 0
+    shop = tmp_path / "shop"
+    shutil.copytree(ROOT / "tests" / "fixtures" / "target-repo", shop)
+    survey = ("adoption", "survey", "--repo", f"{shop}=shop", "--old-name", "Oldco")
+    assert bc(*survey, project=pack).returncode == 0
+    n0 = len(adoption_doc(pack)["rows"])
+    assert n0 > 0 and all(r["category"] != "kit" for r in adoption_doc(pack)["rows"])
+    r = bc("adoption", "add", "--repo", "shop", "--kit", project=pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    doc = adoption_doc(pack)
+    assert doc["rows"][-1] == {"n": n0 + 1, "category": "kit", "repo": "r1", "file": ".claude/skills/acme-brand/", "lines": [], "find": "kit.json", "change": KIT_ROW_CHANGE}
+    assert doc["nrows"] == n0 + 1 and doc["pins"][str(n0 + 1)] == "r1|kit|.claude/skills/acme-brand/"      # pinned like any row
+    md = (pack / "ADOPTION.md").read_text(encoding="utf-8")
+    assert f"| {n0 + 1} | to do | Brand kit | shop | `.claude/skills/acme-brand/` | the whole folder | `kit.json` | {KIT_ROW_CHANGE} | <!-- target-repo -->" in md
+    assert "Brand kit 1." in md and "match nothing" not in md
+    assert bc("adoption", "verify", project=pack).returncode == 0
+    assert bc(*survey, project=pack).returncode == 0                                                         # a survey adds no row for a kit and takes none away
+    again = adoption_doc(pack)
+    assert again["rows"] == doc["rows"] and again["pins"] == doc["pins"] and again["nrows"] == n0 + 1 and str(n0 + 1) not in again["seen"]
+    assert "match nothing" not in (pack / "ADOPTION.md").read_text(encoding="utf-8")
+    assert bc("adoption", "verify", project=pack).returncode == 0
+    mutate_json(pack / "adoption.json", lambda d: d["rows"][-1].update({"file": ".claude/skills/other-brand/"}))
+    r = bc("adoption", "verify", project=pack)                                                               # and the pin catches an edit of it
+    assert r.returncode == 1 and "pinned" in r.stderr
+
+
+@pytest.mark.requires_rg
+def test_a_kit_row_needs_a_kit_in_the_project_and_is_one_per_repository(pack, tmp_path):
+    repos = surveyed(pack, tmp_path, "site", "app")
+    before = (pack / "adoption.json").read_bytes()
+    r = bc("adoption", "add", "--repo", "site", "--kit", project=pack)
+    assert r.returncode == 2 and "no kit in this project" in r.stderr and "kit build --yes" in r.stderr, r.stdout + r.stderr
+    assert (pack / "adoption.json").read_bytes() == before
+    assert build(pack).returncode == 0
+    r = bc("adoption", "add", "--repo", "elsewhere", "--kit", project=pack)
+    assert r.returncode == 2 and "not a surveyed repository" in r.stderr and "site, app" in r.stderr
+    for flag, value in (("--file", "a"), ("--find", "b"), ("--change", "c"), ("--lines", "3")):               # a kit row says what it is: it takes no words of its own
+        r = bc("adoption", "add", "--repo", "site", "--kit", flag, value, project=pack)
+        assert r.returncode == 2 and f"{flag}" in r.stderr and "--kit" in r.stderr, (flag, r.stdout + r.stderr)
+    assert (pack / "adoption.json").read_bytes() == before
+    r = bc("adoption", "add", "--repo", "site", "--file", "a", "--find", "b", project=pack)                  # without --kit the three words are still all needed
+    assert r.returncode == 2 and "required: --change" in r.stderr
+    assert (pack / "adoption.json").read_bytes() == before
+    assert bc("adoption", "add", "--repo", "site", "--kit", project=pack).returncode == 0
+    after_one = adoption_doc(pack)
+    r = bc("adoption", "add", "--repo", "site", "--kit", project=pack)                                       # one kit row per repository
+    assert r.returncode == 2 and "already has a kit row" in r.stderr and "row 1" in r.stderr, r.stdout + r.stderr
+    assert adoption_doc(pack) == after_one
+    assert bc("adoption", "add", "--repo", "app", "--kit", project=pack).returncode == 0                     # another repository gets its own
+    doc = adoption_doc(pack)
+    assert [(r["n"], r["category"], r["repo"]) for r in doc["rows"]] == [(1, "kit", "r1"), (2, "kit", "r2")] and doc["nrows"] == 2
+    assert doc["pins"] == {"1": "r1|kit|.claude/skills/acme-brand/", "2": "r2|kit|.claude/skills/acme-brand/"}
+    assert bc("adoption", "verify", project=pack).returncode == 0
+    assert all(not (d / ".claude").exists() for d in repos.values())                                         # no repository was written to
+
+
+@pytest.mark.requires_rg
+def test_adoption_status_says_whether_each_kit_copy_is_current(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repos = surveyed(pack, tmp_path, "site", "app", "web")
+    status = ("adoption", "status")
+    r = bc(*status, project=pack)
+    assert r.returncode == 0 and "kit copies" not in r.stdout and "kit" not in json.loads(bc(*status, "--json", project=pack).stdout)   # no kit row: the output is as it was
+    for label in repos:
+        assert bc("adoption", "add", "--repo", label, "--kit", project=pack).returncode == 0
+    shutil.copytree(kit_of(pack), installed_of(repos["site"]))                                               # site: a byte copy
+    shutil.copytree(kit_of(pack), installed_of(repos["web"]))                                                # web: a copy with one file changed; app: nothing
+    (installed_of(repos["web"]) / "brand/assets/tokens/tokens.css").write_text("edited", encoding="utf-8")
+    watched = {"project": (pack, tree_of(pack)), **{label: (d, tree_of(d)) for label, d in repos.items()}}
+    r = bc(*status, project=pack)
+    assert r.returncode == 0, r.stdout + r.stderr                                                            # a copy that is not current does not fail the status
+    lines = r.stdout.splitlines()
+    assert lines[:2] == [lines[0], "not done: 1-3"] and lines[0].startswith("not started: 0 of 3 rows done, 0 doing, 3 to do.")      # the counts first
+    assert lines[2:] == ["kit copies (read only; `brand-creator kit status` has the copy list):", "  site: current (version 1.1)", "  app: not installed",
+                         "  web: not current (installed version 1.1, project version 1.1)"], lines
+    for what, (folder, state) in watched.items():
+        assert tree_of(folder) == state, f"{what} was written to"                                            # it reads only
+    assert not list((pack / "assets" / "_checks").glob("*status*"))
+    shown = json.loads(bc(*status, "--json", project=pack).stdout)
+    assert list(shown) == ["headline", "counts", "rows", "kit"] and shown["rows"] == 3 and shown["counts"] == {"to do": 3, "doing": 0, "done": 0}
+    assert shown["kit"] == [{"label": "site", "state": "current", "installed_version": "1.1", "project_version": "1.1"},
+                            {"label": "app", "state": "not installed", "installed_version": None, "project_version": "1.1"},
+                            {"label": "web", "state": "not current", "installed_version": "1.1", "project_version": "1.1"}]
+    shutil.copy2(kit_of(pack) / "brand/assets/tokens/tokens.css", installed_of(repos["web"]) / "brand/assets/tokens/tokens.css")       # the copy made current
+    shutil.copytree(kit_of(pack), installed_of(repos["app"]))
+    r = bc(*status, project=pack)
+    assert r.returncode == 0 and r.stdout.splitlines()[2:] == ["kit copies (read only; `brand-creator kit status` has the copy list):", "  site: current (version 1.1)",
+                                                               "  app: current (version 1.1)", "  web: current (version 1.1)"], r.stdout
+    # a project kit that cannot be read is said, on stderr, and does not fail the status
+    (kit_of(pack) / "snippets/logo.html").unlink()
+    r = bc(*status, project=pack)
+    assert r.returncode == 0 and "kit copies" not in r.stdout, r.stdout + r.stderr
+    assert "warning: the kit copies were not read: the kit in the project is not whole" in r.stderr
+    shutil.rmtree(kit_of(pack))
+    r = bc(*status, "--json", project=pack)
+    shown = json.loads(r.stdout)
+    assert r.returncode == 0 and "no kit in this project" in r.stderr and "kit" not in shown, r.stdout + r.stderr
+    assert shown["kit_unread"].startswith("no kit in this project") and list(shown) == ["headline", "counts", "rows", "kit_unread"]        # and the JSON says it was not read

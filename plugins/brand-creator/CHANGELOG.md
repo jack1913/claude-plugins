@@ -320,6 +320,10 @@ lints the board of the latest round again before `check`, so an edit of the fact
   and an update keeps them), and prints the copy list: the generated files that need copying, then your own files the
   repository does not have. It only reads: nothing is written in the repository or in your project, and it checks
   that. It refuses your home folder, anything inside `~/.claude` and the brand project itself.
+- The adoption list can hold a brand kit row per repository. `brand-creator adoption add --repo <label> --kit` adds it
+  (it needs a kit in your project and takes no other words), a survey leaves it alone, `ADOPTION.md` shows it as "the
+  whole folder", and `brand-creator adoption status` says for each such repository whether its copy of the kit is
+  current. An adoption list without a kit row looks exactly as it did.
 
 ### Changed
 

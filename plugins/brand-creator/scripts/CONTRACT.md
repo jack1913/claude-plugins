@@ -2004,6 +2004,7 @@ files with sizes and modification times before and after. Slots (the category of
 | `path` | an icon, logo, favicon, wordmark, lockup, launcher or splash image file, or any file under a `.appiconset`, `.iconset`, `.icon`, `.imageset`, `.solidimagestack` or `.colorset` folder, grouped by folder |
 | `meta` | the slot lines of package.json, Cargo.toml, pyproject.toml, pubspec.yaml, plists, Tauri config, AppStream metainfo, web manifests, AndroidManifest.xml, .desktop and .nuspec files (name, description, icon, theme and background colour, identifier, author, homepage) |
 | `badge` | the badge and header-image lines of README files |
+| `kit` | the row `adoption add --repo LABEL --kit` writes: the copy of the project's brand kit into one repository (below); a survey never touches it |
 | `change` | a row written by hand with `adoption add` (a change no search finds); a survey never touches it |
 
 Every match is a row or is kept: lock files, change history, licence text, minified output and `dist`, `build`, `target`, `vendor`, `Pods` and similar folders
@@ -2021,6 +2022,21 @@ built from the counts (`adoptdata.sentence`). Its fixed text (the section order 
 `templates/ADOPTION.md` (placeholders `{{name}}`, `{{status}}`, `{{repos}}`, `{{about}}`, `{{groups}}`, `{{drift}}`, `{{rows}}`, `{{wiring}}`, `{{kept}}`, filled in one pass;
 a missing frame or placeholder exits 2). `check` (`adoption:data`) fails an ADOPTION.md that is not what the data renders, and warns about a row marked done
 that still matches at the last survey (`adoption:drift`).
+
+`adoption add --repo LABEL --kit` appends the `kit` row of a surveyed repository ([ADR-0011](../docs/adr/ADR-0011-a-generated-brand-kit-around-the-applied-skill.md)): `file` is the project's kit folder
+(`.claude/skills/<slug>-brand/`), `find` is `kit.json`, `lines` is empty (the row covers the whole folder, and `ADOPTION.md` shows its Lines cell as "the whole folder") and `change` says to copy
+the brand kit, every generated file byte for byte and the owner files the repository does not have, by the list `brand-creator kit status --repo <path>` prints, until that says current, and never
+into a global skills folder. The row is pinned like every row. It is exit 2 when the project has no kit (no `kit.json` in its kit folder), when the repository already has a kit row (one per
+repository), when `LABEL` was never surveyed, or when `--file`, `--find`, `--change` or `--lines` is given with `--kit`; without `--kit` the first three are still all required. `kit` is not among
+the surveyed categories: a survey adds no kit row, changes none and never reports one as matching nothing. A list with no kit row renders to the bytes it did before the category existed
+(the golden files `tests/fixtures/adoption/no-kit.json` and `no-kit.ADOPTION.md`).
+
+`adoption status` with a kit row also says, after the counts and the warnings, whether each such repository's copy of the kit is current. It does not judge a copy itself: it runs `kit.py status --json`
+with no `--repo` (the command that reads the repositories of the kit rows, with its refusals and its read-only proof) and prints under `kit copies (read only; ...)` one line per repository,
+`<label>: current (version V)`, `<label>: not installed` or `<label>: not current (installed version X, project version V)`. With `--json` the same go into a `kit` list of `{label, state,
+installed_version, project_version}`. A copy that is not current does not change the exit code, which stays 0. When `kit status` cannot judge (no kit in the project, a kit that is not whole, a
+refused folder) the status says `warning: the kit copies were not read: <why>` on stderr (`--json`: a `kit_unread` string), still exits 0, and prints no copy line. A list with no kit row prints what it
+printed before.
 
 ### adoption wiring
 
