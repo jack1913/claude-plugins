@@ -2195,7 +2195,7 @@ section. A project without a kit keeps the applied skill as it is: the same byte
 ```text
 .claude/skills/<slug>-brand/
   SKILL.md      generated: the applied skill, its paths inside the kit, plus the "## The kit" section (it holds the line `Kit version <version> (kit.json).`)
-  kit.json      generated: schema, version, edition, sources and the sha256 of every other generated file
+  kit.json      generated: schema, version, edition, sources, the sha256 of every other generated file and of each owner file (`owned`)
   rules.json    generated: the G4 rules with ids, the size rule and bands, the contrast pairs with their ratios, the forbidden words, the page block (see Rules and facts below)
   facts.json    generated: the public rows of FACTS.md
   brand/        generated: byte copies of the brand's files AT THEIR PROJECT PATHS, so a relative link in one of them still resolves
@@ -2206,13 +2206,16 @@ section. A project without a kit keeps the applied skill as it is: the same byte
   snippets/fonts.css   generated: an @font-face for each copied font
   snippets/on-ground.css   generated: one [data-ground] scope for each ground the owner named, after the page ground (see Grounds below)
   snippets/logo.html   generated: the logo in light and dark, switched as tokens.css switches them
+  EXTENDING.md  voice.md  visual.md  golden-rules.md   the owner's: scaffolded once from templates/kit/, never overwritten (see Owner files below)
+  recipes/web-page.md   the owner's: the web-page recipe
 ```
 
-Everything the build writes is generated and is never edited by hand: change the brand project and build again. `brand/`, `snippets/` and `reference-pages/` are the generated
-folders. A file outside them that the build did not write is the owner's: the build leaves it alone and `kit.json` does not list it.
+Everything the build writes, except the five owner files it scaffolds once (see Owner files below), is generated and is never edited by hand: change the brand project and build again.
+`brand/`, `snippets/` and `reference-pages/` are the generated folders. A file outside them that the build did not write, and each of the five owner files, is the owner's: the build leaves it
+alone. `kit.json` lists the five owner files (`owned`) and no other file of the owner's.
 
 `kit.json` (schema 1): `kit` (the folder's name), `version`, `edition`, `plugin_version`, `content_sha`, `generated` (path in the kit to sha256, every generated file except `kit.json`
-itself, SKILL.md with its version in it) and `sources` (`state_sha`, as `adapt.state_sha`, then the sha256 of `assets/tokens/tokens.json`, `assets/tokens/tokens.css`, `qa/rules.json`
+itself, SKILL.md with its version in it), `owned` (the owner's files, see Owner files below) and `sources` (`state_sha`, as `adapt.state_sha`, then the sha256 of `assets/tokens/tokens.json`, `assets/tokens/tokens.css`, `qa/rules.json`
 and `FACTS.md`, each `null` when the project has none; `motion`, see Motion below; and `logos`: one sha256 over the logo files and the band drawings). `kitlib.load()` is strict: a key it does not know, at
 any level, and a key that is missing, stop it (exit 2) naming the key.
 
@@ -2220,12 +2223,24 @@ The build needs G5 recorded (exit 1 without) and an approved edition (BRAND-STAT
 approved"). The tokens must be built: `tokens.json` or `tokens.css` missing is exit 3, naming `brand-creator tokens`. A band drawing that qa/rules.json names and the project lacks is exit 1,
 naming it. One that leaves the project, or is not written as a plain path (`assets/logo/./mark.svg`, an absolute path), is exit 2: the kit names a drawing by its project path, and SKILL.md
 names it the same way. Without `--yes` the plan goes to stdout (`would write <n> generated files into .claude/skills/<name>/ (version <v>)`, then one line `generated <path> (<bytes> bytes)`
-per file), the message to stderr and the exit is 2; `--plan` prints the same and exits 0. Nothing is written in either case.
+per file, then one line `scaffold <path> (<bytes> bytes, written once, never overwritten)` per owner file the build would write), the message to stderr and the exit is 2; `--plan` prints the same and exits 0. Nothing is written in either case.
 
 **The version** is `<edition>.<build>`, and `kit.json` `version` is its only home (SKILL.md prints it in the line `Kit version <version> (kit.json).`). The edition is `approved_edition`. The build number
 starts at 1 and goes up by 1 when a build changes any kit content. `content_sha` is sha256 over the sorted (path, sha256) pairs of every generated file except `kit.json`, SKILL.md hashed as
-rendered with the literal `<version>` in its version line, so the version is decided before it is written. Same edition and same `content_sha` as the last build keep the version; same edition and
+rendered with the literal `<version>` in its version line, and the owner's files (`owned`), so the version is decided before it is written. Same edition and same `content_sha` as the last build keep the version; same edition and
 another `content_sha` add 1 to the build number; a new edition starts at `<edition>.1`. No clock, no randomness: a second build with nothing changed writes nothing and keeps the version.
+
+**Owner files.** `EXTENDING.md`, `voice.md`, `visual.md`, `golden-rules.md` and `recipes/web-page.md` are the owner's. Each is scaffolded from `templates/kit/<path>` into the kit folder only when its
+path is absent (`kitlib.owner_plan`, `kitlib.write_owner`): a file that is there is never overwritten or moved, whatever it holds, a build with `--replace` included, and a file the owner deleted is
+scaffolded again at the next build. A scaffold is filled in one pass: `{{brand}}` is the brand's name and `{{skill}}` the kit folder's name, and any other `{{...}}` (a name with other letters, with
+spaces or across lines too) is exit 2 naming it and the template, and so is a `{{` or `}}` that is no placeholder at all (never closed, or never opened), before anything is written; filled-in text is never read for placeholders again. A scaffold the plugin lacks is exit 3. A path where an owner file belongs
+that holds something that is no file (a folder, a link to nothing) is exit 1, and so is a folder an owner file belongs in (`recipes/`) that is a file or a link to nothing, before anything is
+written; a link that leads out of the project is exit 2; the build moves none of these. `EXTENDING.md` has no fill marker. `voice.md`,
+`visual.md` and `golden-rules.md` each hold a heading with the brand's name, one sentence and one `[[fill: ...]]` marker (the note between the brackets holds no square bracket); `recipes/web-page.md`
+is the web-page recipe. `kit.json` `owned` is `{path in the kit: sha256}` for the five, the hash of the file on disk or, when it is absent, of the scaffold the build writes; `kitlib.load()` refuses
+an owner file it does not know, and one that is missing. `content_sha` covers these hashes, so an edit of the owner's moves the version at the next build and the same bytes keep it. The files are
+written after the generated ones and before `kit.json`. They are not in the report's `outputs`: `check` does not gate them, and the SKILL.md kit section lists them after the generated files under
+"Yours to extend; how: `EXTENDING.md`." (always the same five, whether they exist yet or not).
 
 **What the last build wrote** is the `kit` report's `outputs`, `kit_version` and `content_sha`. With no `kit` report, the `applied-skill` report's `output.sha256` stands in for SKILL.md, so the
 kit takes over a skill file that `applied-skill` generated. Against that record:
@@ -2307,7 +2322,7 @@ listed, and when only the page ground is listed; warn when a ground is left out 
 `sources.tokens` already covers the grounds, so `kit.json` has no key for them.
 
 Report `kit` (`assets/_checks/kit.json`), renderer `n/a (generated files)`. Inputs: the token files, the logo files, the band drawings, `qa/rules.json`, `FACTS.md` and `motion/motion.json`, each
-when the project has it. Row `kit:written` passes, with the detail `<n> generated files: <w> written, <u> unchanged, <r> moved to removed-<date>/; version <v>`. Extra keys: `outputs` (every generated
+when the project has it. Row `kit:written` passes, with the detail `<n> generated files: <w> written, <u> unchanged, <r> moved to removed-<date>/; version <v>`. Row `kit:owned` (info): `<k> owner files scaffolded this run, <m> kept as they are`. Extra keys: `outputs` (every generated
 path with its sha256, `kit.json` included), `kit_version` (the report's own `version` stays the plugin's), `content_sha`, `adapter_state_sha` (`adapt.state_sha`) and `kit_sources_sha` (sha256 over
 `sources`). A run that stops before the report is created (a hand edit, unbuilt tokens, a bad drawing) leaves the earlier report as it was.
 

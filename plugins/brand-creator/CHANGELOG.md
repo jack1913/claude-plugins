@@ -297,6 +297,10 @@ lints the board of the latest round again before `check`, so an edit of the fact
   `snippets/on-ground.css`: one `data-ground` rule for each ground after the page colour, so text, buttons, focus
   rings and borders switch to that ground's own colours. While the grounds are only a proposal the kit writes no
   snippet and says so. A ground the tokens give no colour for is left out and named, never written half.
+- The kit has parts that are yours: `EXTENDING.md` (how to extend the kit), `voice.md`, `visual.md`, `golden-rules.md` and
+  a web-page recipe in `recipes/`. `kit build --yes` writes each of them once, with a note where you write, and never
+  overwrites or moves it; delete one and the next build writes it again. The plan lists the files a build would add.
+  An edit of yours moves the kit's version at the next build.
 
 ### Changed
 
