@@ -4119,3 +4119,40 @@ def test_no_template_text_files_new_pages_into_use():
         assert "The new manual layout (`docs/manual/use/`) is created" not in t, rel
     assert "the order under Local deviations decides" in _flat(ONBOARD / "references" / "author-manual.md")
     assert "**Next:**" in _flat(ONBOARD / "references" / "author-manual.md")
+
+
+# ---- template v5: page shapes ----------------------------------------------
+
+
+def _shape(name):
+    return (ONBOARD / "references" / name).read_text(encoding="utf-8")
+
+
+def _skeleton(name):
+    # the illustrative page skeleton inside a shape file (between its ```` fences)
+    return _shape(name).split("````markdown illustrative", 1)[1].split("\n````", 1)[0]
+
+
+def test_how_to_shape_order():
+    t = _skeleton("manual-page-how-to.md")
+    order = ["```bash", "```powershell", "capture=<slug>", "*(", "## What it means",
+             "## Check it worked", "## If something goes wrong", "**Next:** ["]
+    pos = [t.index(s) for s in order]
+    assert pos == sorted(pos)
+    assert "## Related" not in _shape("manual-page-how-to.md")
+    assert "a how-to keeps the explanation its output needs" in " ".join(_shape("manual-page-how-to.md").split())
+
+
+def test_reference_shape_has_a_column_per_front_end():
+    t = _shape("manual-page-reference.md")
+    assert "| sh | PowerShell | Effect |" in t and "## See also" in t and "**Next:**" not in t
+
+
+def test_getting_started_shape_is_registered():
+    t = _skeleton("manual-page-getting-started.md")
+    order = ["By the end of this page", "## Prerequisites", "```bash", "```powershell",
+             "capture=<slug>", "## Check it worked", "**Next:** ["]
+    pos = [t.index(s) for s in order]
+    assert pos == sorted(pos)
+    assert "manual-page-getting-started.md" in _shape("_index.md")
+    assert "manual-page-getting-started.md" in _shape("author-manual.md")

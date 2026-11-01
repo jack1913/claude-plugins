@@ -11,7 +11,8 @@ and confirmed before overwrite — never a silent rewrite.
 
 **Page kinds and layout.** First-run pages go in `getting-started/`, how-to pages directly in
 `docs/manual/` (one per task), and commands, settings and troubleshooting in `reference/`. A
-how-to or getting-started page follows [manual-page-how-to.md](manual-page-how-to.md); a
+how-to page follows [manual-page-how-to.md](manual-page-how-to.md), a getting-started page
+[manual-page-getting-started.md](manual-page-getting-started.md), and a
 reference page follows [manual-page-reference.md](manual-page-reference.md). When the repo
 has `docs/internals/docs-standard.md`, its voice and layout rules apply on top; where they and
 this guidance differ, the order under Local deviations decides. Create a folder only when it gets
