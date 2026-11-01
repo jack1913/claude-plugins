@@ -28,7 +28,6 @@ from check import (  # noqa: F401  (re-exported for callers of this module)
     _TOTAL_RE,
     tour_entries,
     tour_items,
-    _non_fence_word_count,
     shrink_violations,
     _split_fences,
     canonicalize_output,
@@ -97,9 +96,9 @@ _OL_ITEM_RE = re.compile(r"^(\s*)\d+([.)])(\s+)", re.MULTILINE)
 
 
 def renumber_toc(text):
-    """Reflow a manual ToC: renumber each ordered list (a top-level list restarts at
-    1 after a heading or paragraph unless the repo numbered it on from the previous
-    list; nested items count within their parent), and rewrite the hardcoded
+    """Reflow a manual ToC: renumber each ordered list (a later top-level list runs on
+    from the previous one unless the repo restarted it at 1; nested items count
+    within their parent), and rewrite the hardcoded
     '1 → N' / '1 -> N' / '1 to N' ToC total to the tour's last number (check.py's
     `tour_entries`). Ordered-list lines and totals inside fenced code blocks are
     left untouched (not renumbered, not counted). Idempotent. No-op when the text
@@ -129,9 +128,9 @@ def renumber_toc(text):
             indent = len(m.group(1).expandtabs(4))
             orig = int(re.match(r"\s*(\d+)", line).group(1))
             if not stack:
-                # A new top-level list continues the numbering only when the repo
-                # wrote it that way (1-3 under one heading, 4-6 under the next).
-                start = prev_new + 1 if prev_orig is not None and orig == prev_orig + 1 else 1
+                # A later top-level list runs on from the previous one unless the
+                # repo restarted it at 1 (1-3 under one heading, 4-6 under the next).
+                start = prev_new + 1 if prev_orig is not None and orig != 1 else 1
                 stack = [[indent, start]]
             elif indent <= stack[0][0]:
                 stack = [[indent, stack[0][1] + 1]]
@@ -1294,7 +1293,6 @@ MANUAL_DEFAULTS = {"layout": "flat", "numbered_tour": True, "next_tour": True, "
 SEED_INDEX_GROUPS = ["Get started", "Do a task", "Look it up"]
 
 
-_prose = _prose_text  # one prose reader, shared with check.py's tour checks
 
 
 def _front_end_pair(root):
@@ -1320,8 +1318,8 @@ def detect_manual_conventions(repo_root):
     conv = {"layout": None, "numbered_tour": False, "next_tour": False,
             "capture_fence": None, "docs_voice": None,
             "platform_pairs": _front_end_pair(root), "manual_has_powershell": False,
-            "has_manual": manual.is_dir(), "index_groups": [], "new_here": False,
-            "unreadable": []}
+            "has_manual": manual.is_dir(), "has_index": False, "index_groups": [],
+            "new_here": False, "unreadable": []}
     if not manual.is_dir():
         return conv
     index = manual / "README.md"
@@ -1338,18 +1336,17 @@ def detect_manual_conventions(repo_root):
     pages = [p for p in pages if p in texts]
     parts = [p.relative_to(manual).parts for p in pages]
     how_to = [r for r in parts if not (len(r) > 1 and r[0] in ("getting-started", "reference"))]
-    if any(len(r) == 1 for r in how_to):
-        conv["layout"] = "flat"
-    else:
-        folders = {}
-        for r in how_to:
-            folders[r[0]] = folders.get(r[0], 0) + 1
-        if folders:
-            conv["layout"] = max(sorted(folders), key=lambda k: folders[k])
+    places = {}
+    for r in how_to:
+        place = "flat" if len(r) == 1 else r[0]
+        places[place] = places.get(place, 0) + 1
+    if places:
+        # where most how-to pages sit; a tie goes to the flat default
+        conv["layout"] = max(sorted(places, key=lambda k: (k != "flat", k)), key=lambda k: places[k])
     fence_langs = {}
     for page in ([index] if index in texts else []) + pages:
         text = texts[page]
-        if page != index and _NEXT_TARGET_RE.search(_prose(text)):
+        if page != index and _NEXT_TARGET_RE.search(_prose_text(text)):
             conv["next_tour"] = True
         for info, _body, _line in iter_fenced_blocks(text):
             tokens = info.split()
@@ -1361,18 +1358,37 @@ def detect_manual_conventions(repo_root):
     if fence_langs:
         conv["capture_fence"] = max(sorted(fence_langs), key=lambda k: fence_langs[k])
     if index in texts:
+        conv["has_index"] = True
         text = texts[index]
         conv["numbered_tour"] = bool(tour_items(text))
-        prose = _prose(text)
+        prose = _prose_text(text)
         conv["index_groups"] = [
             m.group(1).strip() for m in re.finditer(r"^##\s+(.+?)(?:\s+#+)?\s*$", prose, re.M)
         ]
         conv["new_here"] = "**New here?**" in prose
-        for para in re.split(r"\n\s*\n", _prose(text)):
+        for para in re.split(r"\n\s*\n", _prose_text(text)):
             if _VOICE_WORD_RE.search(para) and not para.lstrip().startswith("#"):
                 conv["docs_voice"] = " ".join(para.split())
                 break
     return conv
+
+
+def tour_questions(conv):
+    """Tour features the standard expects that this manual lacks: no numbered Do a
+    task list, no Next links, no **New here?** pointer. Each may be a deliberate
+    choice or only an unfinished manual, so --sync asks the operator about each one
+    and records only what they confirm; never written as a deviation unasked. []
+    when the manual has no index (nothing to judge yet)."""
+    if not conv.get("has_index"):
+        return []
+    out = []
+    if not conv.get("numbered_tour") and MANUAL_DEFAULTS["numbered_tour"]:
+        out.append("- §3 Layout: the Do a task list is not numbered; its order is not a reading tour.")
+    if not conv.get("next_tour") and MANUAL_DEFAULTS["next_tour"]:
+        out.append("- §3 Layout: pages do not end with a **Next:** link.")
+    if not conv.get("new_here"):
+        out.append("- §3 Layout: the index has no **New here?** pointer.")
+    return out
 
 
 def render_local_deviations(conv, full=False):
@@ -1400,16 +1416,12 @@ def render_local_deviations(conv, full=False):
         )
     elif groups and full:
         out.append("- §3 Layout: the index groups are %s." % ", ".join(SEED_INDEX_GROUPS))
-    if not conv.get("new_here"):
-        out.append("- §3 Layout: the index has no **New here?** pointer.")
-    elif full:
+    if full and conv.get("new_here"):
         out.append("- §3 Layout: the index opens with a **New here?** pointer.")
-    if full or conv["numbered_tour"] != MANUAL_DEFAULTS["numbered_tour"]:
-        out.append("- §3 Layout: the Do a task list is a numbered reading tour." if conv["numbered_tour"]
-                   else "- §3 Layout: the Do a task list is not numbered; its order is not a reading tour.")
-    if full or conv["next_tour"] != MANUAL_DEFAULTS["next_tour"]:
-        out.append("- §3 Layout: each how-to ends with a **Next:** link to the next page in the tour."
-                   if conv["next_tour"] else "- §3 Layout: pages do not end with a **Next:** link.")
+    if conv["numbered_tour"] and (full or not MANUAL_DEFAULTS["numbered_tour"]):
+        out.append("- §3 Layout: the Do a task list is a numbered reading tour.")
+    if conv["next_tour"] and (full or not MANUAL_DEFAULTS["next_tour"]):
+        out.append("- §3 Layout: each how-to ends with a **Next:** link to the next page in the tour.")
     fence = conv.get("capture_fence")
     if fence and (full or fence != MANUAL_DEFAULTS["capture_fence"]):
         out.append(

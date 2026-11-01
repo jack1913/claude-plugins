@@ -1369,13 +1369,18 @@ def _glob_regex(glob):
         elif glob[i] == "?":
             out.append("[^/]")
             i += 1
+        elif glob[i] == "[" and glob.find("]", i + 2) != -1:
+            j = glob.find("]", i + 2)
+            body = glob[i + 1 : j].replace("\\", "\\\\")
+            out.append("[^" + body[1:] + "]" if body.startswith("!") else "[" + body + "]")
+            i = j + 1
         else:
             out.append(re.escape(glob[i]))
             i += 1
     return re.compile("".join(out) + r"\Z")
 
 
-def _forbidden_allowed(f, relparts, globs):
+def _forbidden_allowed(f, relparts, patterns):
     """True when `--forbidden-allow` exempts this file. Each glob is anchored and
     matched against the path relative to the scanned root (`manual/reference/*` for
     `check-docs docs`) and, for a relative path, against the path as given
@@ -1383,7 +1388,7 @@ def _forbidden_allowed(f, relparts, globs):
     candidates = ["/".join(relparts or ())]
     if not f.is_absolute():
         candidates.append(f.as_posix())
-    return any(_glob_regex(g).match(c) for g in globs for c in candidates)
+    return any(p.match(c) for p in patterns for c in candidates)
 
 
 def _check_forbidden(f, text, forbidden):
@@ -1734,7 +1739,8 @@ def _check_docs(roots, captures_dir, coverage, forbidden, only=None, tier_check=
     sweep, which is noise while authoring is still in progress."""
     findings = []
     only_set = _resolve_only(only)
-    twin_candidates, read_paths, has_ps = [], set(), False
+    twin_candidates, read_paths, has_ps, index_texts = [], set(), False, []
+    allow_patterns = [_glob_regex(g) for g in forbidden_allow]
     for f, relparts in _iter_markdown_files(roots):
         if only_set is not None:
             try:
@@ -1758,7 +1764,7 @@ def _check_docs(roots, captures_dir, coverage, forbidden, only=None, tier_check=
         findings += _check_links(f, text, roots)
         findings += _check_tables(f, text)
         findings += _check_placeholders(f, text, coverage is not None)
-        if not _forbidden_allowed(f, relparts, forbidden_allow):
+        if not _forbidden_allowed(f, relparts, allow_patterns):
             findings += _check_forbidden(f, text, forbidden)
         findings += _check_unresolved_command(f, text, captures_dir)
         findings += _check_leaked_paths(f, text)
@@ -1770,13 +1776,19 @@ def _check_docs(roots, captures_dir, coverage, forbidden, only=None, tier_check=
             if _in_manual(relparts):
                 read_paths.add(f.resolve())
                 has_ps = has_ps or _has_powershell_fence(text)
-                twin_candidates += _check_platform_twin(f, text, "warn", relparts)
+                twin_candidates += _check_platform_twin(f, text, "warn")
+                if _is_manual_index(relparts):
+                    index_texts.append((f, text))
     if twin_candidates:
         if platform_pairs:
             findings += [("error",) + c[1:] for c in twin_candidates]
         elif has_ps or (only_set is not None and _manual_has_powershell(roots, skip=read_paths)):
             findings += twin_candidates
-    findings += _index_findings(roots, only_set)
+    if only_set is None:
+        for f, text in index_texts:
+            findings += _check_toc_count(f, text) + _check_next_chain(f, text)
+    else:
+        findings += _index_findings(roots, only_set)
     if tier_check:
         findings += _check_empty_tier(roots, coverage)
     has_error = any(sev == "error" for sev, *_ in findings)
@@ -1795,7 +1807,6 @@ _TOTAL_RE = re.compile(
     r"|(\b1\s*(?:→|->|to)\s*)\d+(?=\s*reading order)"  # 1→N reading order
 )
 
-_TOUR_ITEM_RE = re.compile(r"^\s*\d+[.)]\s+(?:\*\*)?\[[^\]]*\]\(<?([^)>\s#]+)", re.MULTILINE)
 _NEXT_TARGET_RE = re.compile(r"\*\*Next:\*\*\s*(?:\*\*)?\[[^\]]*\]\(<?([^)>\s#]+)")
 _ANY_ITEM_RE = re.compile(r"^( *)(\d+)[.)]\s+")
 _ITEM_LINK_RE = re.compile(r"^\s*\d+[.)]\s+(?:\*\*)?\[[^\]]*\]\(<?([^)>\s#]+)")
@@ -1819,13 +1830,14 @@ def _in_manual(relparts):
 
 
 def _top_level_lists(text):
-    """The top-level ordered lists in `text`'s prose, in order. Each is a dict:
-    `do_a_task` (it follows a "Do a task" heading) and `items`, each a dict with
-    `target` (its leading link, or None) and `number` (as written). A list starts
-    at an item indented at most three spaces; an item indented deeper than the
-    list's first item is nested and skipped. Blank and indented lines keep a list
-    open; any other line at column 0 closes it."""
-    lists, cur, pending = [], None, False
+    """The top-level ordered lists in `text`'s prose, in order, and whether a "Do a
+    task" heading exists. Each list is a dict: `do_a_task` (it follows that
+    heading, before the next heading) and `items`, each a dict with `target` (its
+    leading link, or None) and `number` (as written). A list starts at an item
+    indented at most three spaces; an item indented deeper than the list's first
+    item is nested and skipped. Blank and indented lines keep a list open; any
+    other line at column 0 closes it."""
+    lists, cur, in_do, saw_do = [], None, False, False
     for raw in _prose_text(text).split("\n"):
         line = raw.expandtabs(4)
         m = _ANY_ITEM_RE.match(line)
@@ -1834,9 +1846,8 @@ def _top_level_lists(text):
             if cur is None:
                 if indent > 3:
                     continue
-                cur = {"do_a_task": pending, "base": indent, "items": []}
+                cur = {"do_a_task": in_do, "base": indent, "items": []}
                 lists.append(cur)
-                pending = False
             if indent > cur["base"]:
                 continue
             cur["base"] = indent
@@ -1847,21 +1858,24 @@ def _top_level_lists(text):
         else:
             cur = None
             if line.startswith("#"):
-                pending = bool(_DO_A_TASK_RE.match(line.strip()))
-    return lists
+                in_do = bool(_DO_A_TASK_RE.match(line.strip()))
+                saw_do = saw_do or in_do
+    return lists, saw_do
 
 
 def tour_entries(text):
-    """The manual index's tour as written: the list under a "Do a task" heading,
-    else the longest top-level ordered list (the first, on a tie). Each entry is a
-    dict with `target` and `number`; [] when there is none."""
-    lists = _top_level_lists(text)
-    for lst in lists:
-        if lst["do_a_task"]:
-            return lst["items"]
+    """The manual index's tour as written. With a "Do a task" heading, it is the
+    first ordered list under that heading, or none when that group is not numbered.
+    Without one, it is the longest top-level ordered list whose items are mostly
+    links (the first, on a tie). Each entry is a dict with `target` and `number`;
+    [] when there is none."""
+    lists, saw_do = _top_level_lists(text)
+    if saw_do:
+        return next((lst["items"] for lst in lists if lst["do_a_task"]), [])
     best = []
     for lst in lists:
-        if len(lst["items"]) > len(best):
+        linked = sum(1 for e in lst["items"] if e["target"])
+        if linked and linked * 2 >= len(lst["items"]) and len(lst["items"]) > len(best):
             best = lst["items"]
     return best
 
@@ -1896,37 +1910,51 @@ def _check_toc_count(f, text):
     return out
 
 
+def _is_local_target(t):
+    return bool(t) and "://" not in t and not t.startswith("/")
+
+
 def _check_next_chain(index, text):
-    """NEXT_CHAIN (warn): each page of the index's tour ends with a `**Next:**` link
-    to the next entry. Checked only once the tour is in use (some entry has a Next
-    link); the last entry is free. Findings name pages as the index links them."""
+    """NEXT_CHAIN (warn): each local page of the index's tour ends with a `**Next:**`
+    link to the entry the index puts after it, in index order (an external entry
+    is matched by its URL; a page whose next entry has no link is not judged).
+    Checked only once the tour is in use (some page has a Next link); the last
+    entry is free. Findings name pages as the index links them."""
     base = index.parent
-    entries = [t for t in tour_items(text) if t and "://" not in t and not t.startswith("/")]
-    pages = []
+    entries = tour_items(text)
+    bodies = []
     for target in entries:
-        try:
-            pages.append((base / target).read_text(encoding="utf-8", errors="replace"))
-        except OSError:
-            pages.append(None)
-    if not any(b and _NEXT_TARGET_RE.search(_prose_text(b)) for b in pages):
+        body = None
+        if _is_local_target(target):
+            try:
+                body = (base / target).read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                body = None
+        bodies.append(body)
+    if not any(b and _NEXT_TARGET_RE.search(_prose_text(b)) for b in bodies):
         return []
     out = []
-    for k, (target, body) in enumerate(zip(entries, pages)):
-        if body is None or k == len(entries) - 1:
+    for k in range(len(entries) - 1):
+        target, body, expected = entries[k], bodies[k], entries[k + 1]
+        if body is None or expected is None:
             continue
         page = base / target
-        expected = entries[k + 1]
         m = _NEXT_TARGET_RE.search(_prose_text(body))
         if not m:
             last = max((i for i, ln in enumerate(body.split("\n"), start=1) if ln.strip()), default=1)
             out.append(("warn", "NEXT_CHAIN", str(page), last, "no Next link; the index puts %s next" % expected))
             continue
-        if (page.parent / m.group(1)).resolve() != (base / expected).resolve():
+        got = m.group(1)
+        if _is_local_target(expected):
+            same = (page.parent / got).resolve() == (base / expected).resolve()
+        else:
+            same = got == expected
+        if not same:
             fenced = _fenced_line_numbers(body)
             line = next((i for i, ln in enumerate(body.split("\n"), start=1)
                          if "**Next:**" in ln and i not in fenced), 1)
             out.append(("warn", "NEXT_CHAIN", str(page), line,
-                        "Next points to %s; the index puts %s next" % (m.group(1), expected)))
+                        "Next points to %s; the index puts %s next" % (got, expected)))
     return out
 
 
@@ -1939,7 +1967,7 @@ def _manual_has_powershell(roots, skip=()):
     """Any PowerShell fence on a manual page under the roots, reading only the
     files not in `skip` (the ones the main scan already read)."""
     for f, rel in _iter_markdown_files(roots):
-        if not _in_manual(rel) or f.resolve() in skip:
+        if not _in_manual(rel) or _is_frozen_tier(rel) or f.resolve() in skip:
             continue
         try:
             if f.stat().st_size > _MAX_DOC_BYTES:
@@ -1952,33 +1980,42 @@ def _manual_has_powershell(roots, skip=()):
     return False
 
 
-def _check_platform_twin(f, text, severity, relparts):
-    """PLATFORM_TWIN: a shell command fence on a manual page with no PowerShell
-    fence after it before the next heading. Output (`capture=`) and `illustrative`
-    fences are not commands and are skipped."""
-    if not _in_manual(relparts):
-        return []
+def _command_lang(info):
+    """'sh' or 'ps' for a shell or PowerShell COMMAND fence, else None. Output
+    fences (`capture=` or `illustrative`) and other languages are not commands."""
+    tokens = info.split()
+    if not tokens or any(t.startswith("capture=") or t == "illustrative" for t in tokens[1:]):
+        return None
+    lang = tokens[0].lower()
+    return "sh" if lang in _SH_LANGS else ("ps" if lang in _PS_LANGS else None)
+
+
+def _check_platform_twin(f, text, severity):
+    """PLATFORM_TWIN: within each section of a manual page (up to the next heading),
+    every shell command fence needs a PowerShell command fence after it. Twins pair
+    in order (two commands then their two twins is fine) and output fences between
+    them are skipped. The caller decides that `f` is a manual page."""
     lines = text.split("\n")
-    blocks = iter_fenced_blocks(text)
-    out = []
-    for k, (info, body, start) in enumerate(blocks):
-        tokens = info.split()
-        if not tokens or tokens[0].lower() not in _SH_LANGS:
-            continue
-        if any(t.startswith("capture=") or t == "illustrative" for t in tokens[1:]):
-            continue
-        end = start + body.count("\n") + 1
-        twin = False
-        if k + 1 < len(blocks):
-            ninfo, _nb, nstart = blocks[k + 1]
-            between = lines[end : nstart - 1]
-            ntokens = ninfo.split()
-            if (ntokens and ntokens[0].lower() in _PS_LANGS
-                    and not any(t.startswith("capture=") or t == "illustrative" for t in ntokens[1:])
-                    and not any(ln.lstrip().startswith("#") for ln in between)):
-                twin = True
-        if not twin:
+    fenced = _fenced_line_numbers(text)
+    headings = [i for i, ln in enumerate(lines, start=1) if ln.lstrip().startswith("#") and i not in fenced]
+    out, waiting = [], []
+
+    def _flush():
+        for start in waiting:
             out.append((severity, "PLATFORM_TWIN", str(f), start, "no PowerShell twin after this command"))
+        waiting.clear()
+
+    hi = 0
+    for info, _body, start in iter_fenced_blocks(text):
+        while hi < len(headings) and headings[hi] < start:
+            _flush()
+            hi += 1
+        kind = _command_lang(info)
+        if kind == "sh":
+            waiting.append(start)
+        elif kind == "ps" and waiting:
+            waiting.pop(0)
+    _flush()
     return out
 
 

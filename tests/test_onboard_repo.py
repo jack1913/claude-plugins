@@ -4254,7 +4254,8 @@ def test_sync_conventions_for_a_flat_numbered_manual(tmp_path):
                     "capture_fence": "text",
                     "docs_voice": "The manual: commands-first, one concept per page.",
                     "platform_pairs": True, "manual_has_powershell": True,
-                    "has_manual": True, "index_groups": [], "new_here": False, "unreadable": []}
+                    "has_manual": True, "has_index": True, "index_groups": [], "new_here": False,
+                    "unreadable": []}
     out = lib.render_local_deviations(conv)
     assert "`text capture=`" in out and "use/" not in out
 
@@ -4265,7 +4266,8 @@ def test_sync_conventions_keep_an_existing_use_layout(tmp_path):
     conv = lib.detect_manual_conventions(tmp_path)
     assert conv["layout"] == "use" and conv["numbered_tour"] is False
     out = lib.render_local_deviations(conv)
-    assert "`docs/manual/use/`" in out and "not numbered" in out
+    assert "`docs/manual/use/`" in out and "not numbered" not in out
+    assert any("not numbered" in q for q in lib.tour_questions(conv))
 
 
 def test_sync_conventions_without_a_manual(tmp_path):
@@ -4707,7 +4709,8 @@ def test_conventions_seed_groups_are_no_deviation_and_a_missing_pointer_is(tmp_p
     _seed(tmp_path, "docs/manual/a.md", "# A\n")
     conv = lib.detect_manual_conventions(tmp_path)
     out = lib.render_local_deviations(conv)
-    assert "groups" not in out and "New here?" in out
+    assert "groups" not in out and "New here?" not in out
+    assert any("New here?" in q for q in lib.tour_questions(conv))
     assert "Get started, Do a task, Look it up" in lib.render_local_deviations(conv, full=True)
 
 
@@ -4754,7 +4757,7 @@ def test_forbidden_allow_globs_are_anchored(tmp_path, capsys):
 
 def test_renumber_toc_numbers_each_list_on_its_own_and_totals_the_tour():
     text = ("# M\n\nRead **1 → 9**.\n\n## Get started\n\n4. [I](i.md)\n\n## Do a task\n\n"
-            "3. [A](a.md)\n   7. [A detail](a.md#x)\n   9. [A more](a.md#y)\n1. [B](b.md)\n2. [C](c.md)\n\n"
+            "1. [A](a.md)\n   7. [A detail](a.md#x)\n   9. [A more](a.md#y)\n1. [B](b.md)\n2. [C](c.md)\n\n"
             "## Look it up\n\n1. [R](r.md)\n8. [S](s.md)\n")
     out = lib.renumber_toc(text)
     assert "**1 → 3**" in out
@@ -4907,4 +4910,121 @@ def test_render_local_deviations_reads_manual_defaults(monkeypatch, tmp_path):
 
 def test_onboard_lib_reuses_checks_prose_helper():
     chk = _load_check()
-    assert lib._prose is chk._prose_text
+    assert lib._prose_text is chk._prose_text and not hasattr(lib, "_prose")
+
+
+# ---- /code-review, second pass ----------------------------------------------------
+
+
+def test_renumber_toc_keeps_running_on_after_an_entry_is_removed():
+    text = ("# M\n\nRead **1 → 5**.\n\n## Get started\n\n1. [A](a.md)\n2. [B](b.md)\n\n"
+            "## Do a task\n\n4. [D](d.md)\n5. [E](e.md)\n")
+    out = lib.renumber_toc(text)
+    assert "3. [D](d.md)\n4. [E](e.md)" in out and "**1 → 4**" in out
+
+
+def test_layout_follows_where_most_how_to_pages_sit(tmp_path):
+    for i in range(4):
+        _seed(tmp_path, "docs/manual/use/p%d.md" % i, "# P\n")
+    _seed(tmp_path, "docs/manual/glossary.md", "# G\n")
+    assert lib.detect_manual_conventions(tmp_path)["layout"] == "use"
+
+
+def test_unfinished_tours_are_questions_not_deviations(tmp_path):
+    _seed(tmp_path, "docs/manual/a.md", "# A\n")  # no index at all
+    conv = lib.detect_manual_conventions(tmp_path)
+    out = lib.render_local_deviations(conv)
+    assert "New here" not in out and "not numbered" not in out and "Next" not in out
+    assert lib.tour_questions(conv) == []  # nothing to ask without an index
+    _seed(tmp_path, "docs/manual/README.md", "# M\n\n- [A](a.md)\n")
+    conv = lib.detect_manual_conventions(tmp_path)
+    assert "Next" not in lib.render_local_deviations(conv)
+    qs = lib.tour_questions(conv)
+    assert len(qs) == 3 and all(q.startswith("- §3 Layout:") for q in qs)
+
+
+def test_cli_manual_conventions_prints_the_questions(tmp_path):
+    cli = _load_cli()
+    _seed(tmp_path, "docs/manual/README.md", "# M\n\n- [A](a.md)\n")
+    _seed(tmp_path, "docs/manual/a.md", "# A\n")
+    import contextlib
+    import io
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        assert cli.main(["manual-conventions", str(tmp_path)]) == 0
+    assert len(json.loads(buf.getvalue())["ask"]) == 3
+    assert "ask" in _flat(ONBOARD / "SKILL.md") and "ask the operator whether each is deliberate" in _flat(ONBOARD / "SKILL.md")
+
+
+def test_platform_twin_skips_output_between_a_command_and_its_twin(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "docs/manual/a.md",
+          "# A\n\n```bash\nmake\n```\n\n```console capture=a\nok\n```\n\n```powershell\nmake\n```\n")
+    _seed(tmp_path, "docs/manual/b.md",
+          "# B\n\n```bash\nmake\n```\n\n```bash\nmake test\n```\n\n```powershell\nmake\n```\n\n```powershell\nmake test\n```\n")
+    _seed(tmp_path, "docs/manual/c.md",
+          "# C\n\n```bash\nmake\n```\n\n```bash\nmake test\n```\n\n```powershell\nmake\n```\n")
+    _, _, lines = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
+    hits = [ln.split("\t")[2] for ln in lines if "PLATFORM_TWIN" in ln]
+    assert len(hits) == 1 and hits[0].endswith("c.md:7")
+
+
+def test_no_tour_when_do_a_task_is_a_bullet_list_and_fallback_needs_links():
+    chk = _load_check()
+    text = ("# M\n\nRead **1 → 3**.\n\n## Get started\n\n1. Install it\n2. Run it\n3. Check it\n\n"
+            "## Do a task\n\n- [A](a.md)\n- [B](b.md)\n")
+    assert chk.tour_entries(text) == []
+    plain = "# M\n\n1. Install it\n2. Run it\n3. Check it\n\n## More\n\n1. [A](a.md)\n2. [B](b.md)\n"
+    assert chk.tour_items(plain) == ["a.md", "b.md"]
+
+
+def test_next_chain_pairs_neighbours_in_index_order(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "docs/manual/README.md",
+          "# M\n\n1. [A](a.md)\n2. [Guide](https://example.org/guide)\n3. [C](c.md)\n")
+    _seed(tmp_path, "docs/manual/a.md", "# A\n\n**Next:** [C](c.md)\n")
+    _seed(tmp_path, "docs/manual/c.md", "# C\n")
+    _, _, lines = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check"])
+    hits = [ln for ln in lines if "NEXT_CHAIN" in ln]
+    assert len(hits) == 1 and "a.md" in hits[0] and "https://example.org/guide" in hits[0]
+
+
+def test_only_runs_read_the_same_powershell_signal_as_full_runs(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "docs/manual/two.md", "# Two\n\n```bash\n./run.sh\n```\n")
+    # a frozen page under a manual folder: the full run never reads it for the signal
+    _seed(tmp_path, "docs/archive/manual/old.md", "# Old\n\n```powershell\nGet-Item\n```\n")
+    _, full, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check"])
+    _, scoped, _ = _run_check(cli, capsys, [str(tmp_path / "docs")],
+                              ["--no-tier-check", "--only", str(tmp_path / "docs/manual/two.md")])
+    assert ("PLATFORM_TWIN" in full) == ("PLATFORM_TWIN" in scoped)
+
+
+def test_forbidden_allow_globs_compile_once_and_support_classes(tmp_path, capsys, monkeypatch):
+    chk = _load_check()
+    calls = []
+    real = chk._glob_regex
+    monkeypatch.setattr(chk, "_glob_regex", lambda g: calls.append(g) or real(g))
+    for name in ("a", "b", "c"):
+        _seed(tmp_path, "docs/manual/%s.md" % name, "# %s\n\nUses grill-me.\n" % name)
+    rc = chk.main(["check-docs", str(tmp_path / "docs"), "--no-tier-check", "--forbidden", "grill-me",
+                   "--forbidden-allow", "manual/[ab].md"])
+    out = capsys.readouterr().out
+    assert calls == ["manual/[ab].md"]
+    assert rc == 1 and out.count("FORBIDDEN_TOKEN") == 1 and "c.md" in out
+
+
+def test_an_unscoped_run_walks_the_tree_once(tmp_path, capsys, monkeypatch):
+    chk = _load_check()
+    _tour(tmp_path)
+    _twin_pages(tmp_path)
+    monkeypatch.setattr(chk, "_index_findings", lambda *a: (_ for _ in ()).throw(AssertionError("extra walk")))
+    monkeypatch.setattr(chk, "_manual_has_powershell", lambda *a, **k: (_ for _ in ()).throw(AssertionError("extra walk")))
+    assert chk.main(["check-docs", str(tmp_path / "docs"), "--no-tier-check"]) == 0
+    assert "PLATFORM_TWIN" in capsys.readouterr().out
+
+
+def test_no_dead_tour_regex():
+    chk = _load_check()
+    assert not hasattr(chk, "_TOUR_ITEM_RE")

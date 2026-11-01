@@ -56,8 +56,10 @@ writes anything.
   `[Unreleased]`. It tags and pushes the tag only from the release branch.
 - The manual index is renumbered one list at a time, unless you numbered on from one group to the next, which is
   kept. Its page count names the tour's last number, and a tour whose numbers skip is reported.
-- `PLATFORM_TWIN` accepts only a PowerShell command block as the twin, not captured PowerShell output, and the tour
-  checks report on the pages `--only` names.
+- `PLATFORM_TWIN` accepts only a PowerShell command block as the twin, not captured PowerShell output; twins pair
+  in order within a section, with output blocks between them. The tour checks report on the pages `--only` names.
+- `--sync` asks whether a missing tour feature (no numbered list, no Next links, no New here? pointer) is
+  deliberate before recording it, so an unfinished manual is not excused for good.
 - `--forbidden-allow` patterns are anchored: `*` stays within one folder, `**` crosses folders, and `README.md`
   matches only the README at that level.
 - The README and the manual carry the jack1913 brand header.

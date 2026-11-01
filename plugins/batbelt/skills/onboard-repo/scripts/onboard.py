@@ -467,6 +467,7 @@ def main(argv):
                 return _usage("ERROR: not a directory: " + args[0])
             conv = lib.detect_manual_conventions(args[0])
             conv["local_deviations"] = lib.render_local_deviations(conv, full=full)
+            conv["ask"] = lib.tour_questions(conv)
             print(json.dumps(conv, indent=2))
             return 0
         if cmd == "rewrite-links":
