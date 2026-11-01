@@ -146,6 +146,9 @@ with `check.py` and removes the two orphans, shown in the plan like any other ch
   commands-first default is baked. (The README voice, by contrast, has no default —
   a deferred README voice records "no voice" and re-prompts on the first styling run.)
 
+- **readme voice:** the voice the operator picked at §2 and its signature rules (the README
+  style guide), or "no voice" when deferred. With no voice, `update-docs` checks only the README
+  list in the docs standard's §2 and asks again on the first styling run.
 - **platform pairs:** `sh+powershell` when the repo ships a front-end per platform (an `install.sh`
   and an `install.ps1`, say): every manual command block then has its twin, and `update-docs` runs
   `check-docs` with `--platform-pairs`, which makes a missing twin an error. `none` otherwise.

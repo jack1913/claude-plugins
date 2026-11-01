@@ -30,6 +30,26 @@ and how to read it, as prose or a table); deeper "why" goes to an explanation pa
 The manual is for users only. Maintainer procedures (running tests, cutting a release, the repo
 layout) go in `docs/internals/`.
 
+### The README
+
+These hold in every README voice:
+
+- The first screen says what <repo> is and how to install it: the command, or one link to it. A
+  quick start installs before it uses anything.
+- The README keeps the install command and its platform twin. It is the one allowed copy of the
+  install fact; the full walkthrough lives on the getting-started page.
+- One section per feature: one or two paragraphs, at most one table, one link out to its page.
+- Table cells stay on one line.
+- H2 and H3 headings are coverage keys: renaming one updates `docs/.onboard-coverage.json` in the
+  same change.
+- Versions and package facts match the file that owns them.
+- A Documentation section links each docs tier.
+
+The recorded voice decides the rest: hero, badges, emoji, callouts, `<details>` blocks, what opens
+the first screen, tone, and where flags sit. With no README voice recorded, no voice is imposed;
+the list above still holds, and every run checks the README invariants and the recorded voice's
+signature rules, not only a styling run.
+
 ## 3. Where things live
 
 ### One fact, one home
@@ -39,7 +59,7 @@ A fact has exactly one owner. Every other page links to it and never retypes it.
 | Fact | Its only home |
 | --- | --- |
 | The current version | The manifest or file that already holds it (name it in `AGENTS.md`) |
-| How to install | One page in `docs/manual/getting-started/` |
+| How to install | One page in `docs/manual/getting-started/` (the README keeps the command, §2) |
 | How to use a feature | That feature's page, `docs/manual/<task>.md` |
 | What changed in a release | `CHANGELOG.md` |
 | Why a decision was made | One ADR |
@@ -76,7 +96,8 @@ that cite them move with them.
 
 ## 4. Voice
 
-For manual pages and READMEs. Internals and ADRs stay plain technical.
+For manual pages. The README follows its recorded voice and the list in §2. Internals and ADRs stay
+plain technical.
 
 - Talk to the reader: "you", active voice, present tense.
 - Lead with the task: what you can do → what to type or say → what you'll see → the fix if it goes

@@ -191,6 +191,13 @@ question](#the-update-deps-question-always-asked) here, so its answer is part of
 the plan the operator confirms rather than a surprise mid-write. Confirm before
 writing.
 
+Ask the README voice before the README seed is written: show the README voice menu from the
+`update-docs` template (nine voices), recommend one for this repo's type, and let the operator
+pick one, describe their own, or defer. Record the answer as the `readme voice` bake
+(`references/stamping.md`); a deferred voice records "no voice", and nothing is imposed until a
+styling run asks again. Write the README seed (§3.5) in the chosen voice, keeping the README list
+in the docs standard's §2.
+
 ## 3. Stamp (read `references/stamping.md`)
 
 For each stamped skill (`changelog-release`, `update-docs`, `update-rules`, and

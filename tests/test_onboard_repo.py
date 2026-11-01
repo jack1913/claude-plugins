@@ -4194,3 +4194,31 @@ def test_standard_voice_has_captions_callouts_twins_and_troubleshooting():
                    "If something goes wrong table"):
         assert phrase in std, phrase
     assert "**platform pairs:**" in _shape("stamping.md")
+
+
+# ---- template v5: README anatomy ---------------------------------------------
+
+
+def test_readme_keeps_its_install_block():
+    std = _flat(STD_V5)
+    assert "The README keeps the install command and its platform twin" in std
+    assert "every run checks the README invariants" in std
+    assert "For manual pages and READMEs" not in std
+
+
+def test_readme_seed_has_an_install_slot():
+    t = (DOCSIA / "README.md").read_text(encoding="utf-8")
+    assert "## Install" in t and "## Documentation" in t
+    assert t.index("## Install") < t.index("## Documentation")
+    assert "```bash" in t.split("## Install", 1)[1].split("## Documentation", 1)[0]
+
+
+def test_onboard_asks_the_readme_voice_before_the_seed():
+    t = _flat(ONBOARD / "SKILL.md")
+    assert "Ask the README voice before the README seed is written" in t
+    assert t.index("Ask the README voice before the README seed is written") < t.index("## 3.5 Scaffold")
+    assert "readme voice:" in _shape("stamping.md").lower()
+
+
+def test_deferred_readme_voice_imposes_nothing():
+    assert "With no README voice recorded, no voice is imposed" in _flat(STD_V5)
