@@ -423,7 +423,10 @@ like any other missing canonical skill, so the pass is create-or-update, never s
 there (filling `<repo>`) and shows the two one-line additions it implies, a row in
 `docs/internals/README.md` and a row in the `AGENTS.md` pointer index, as a diff to confirm.
 It never overwrites an existing `docs-standard.md`: a differing one is only reported, as a `diff`,
-and left as it is.
+and left as it is. When an existing one has no `## Local deviations` section (a version 4
+standard), propose appending one, filled from `python3 "$SKILL_DIR/scripts/onboard.py"
+manual-conventions . --full` (every convention stated, so the list outranks the old body), and the
+README list from the template's §2, as a diff to confirm.
 
 **A new standard starts out agreeing with the repo.** Before copying it, run
 `python3 "$SKILL_DIR/scripts/onboard.py" manual-conventions .` and read the JSON: the copy then
@@ -431,8 +434,10 @@ fills its Local deviations list with the printed `local_deviations` (in place of
 `use/` layout, an unnumbered index or a `text capture=` fence is recorded rather than reported (a
 flat manual with a numbered tour is already the standard's default). The same
 pass writes `docs voice:` and `platform pairs:` into the `update-docs` REPO SPECIFICS when they are
-missing: the voice from `docs_voice` (else the voice word in the old template region), and
-`sh+powershell` when `platform_pairs` is true. `preserve` carries REPO SPECIFICS verbatim, so
+missing: the voice from `docs_voice` (with none found, leave the line out so the default applies;
+never copy a voice word from the old template region), and `sh+powershell` when `platform_pairs`
+is true, that is when the root holds a `.sh`/`.ps1` front-end pair. A PowerShell block in the
+manual without such a pair (`manual_has_powershell`) is only mentioned to the operator. `preserve` carries REPO SPECIFICS verbatim, so
 these two lines are a separate edit shown as their own diff; all of it is confirmed together. Like the other docs-ia seeds it is the repo's own file, so nothing marks it as
 owned by the installer. `--sync` never moves or regroups a page: a new page goes where the
 repo's existing pages are.

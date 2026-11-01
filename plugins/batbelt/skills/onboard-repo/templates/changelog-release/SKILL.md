@@ -26,8 +26,13 @@ stage only the paths this run edited, then run the commands one at a time, in or
 stop at the first that fails; a no leaves them printed for the operator. `allowed-tools`
 pre-approves none of the commit, tag or push commands, so the harness still asks before
 each one under the operator's own permission rules. With a release script (§7), a yes
-runs the script's own cut command, never a hand-made `git tag`; with a `ci` bake, a yes
-runs the commit and push only, and the workflow tags (§11).
+runs the script's own cut command, never a hand-made `git tag`: `--suggest` first, its
+version shown, then the cut command in place of the hand-made commit and tag when the
+script does those (read the script to know which); with a `ci` bake, a yes runs the
+commit and push only, and the workflow tags (§11). The tag command and `git push origin
+<tag>` join the yes only on the release branch (REPO SPECIFICS, else the default branch;
+check with `git status --short --branch`); on any other branch they stay printed for
+after the merge, as `gh release create` does.
 
 Repo-specific facts (versioning scheme, version homes, monorepo mode,
 release-script delegation, dash punctuation, changeset dir, GitHub release)

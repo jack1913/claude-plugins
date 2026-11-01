@@ -155,6 +155,9 @@ with `check.py` and removes the two orphans, shown in the plan like any other ch
   that names that repository and links to it: the plugin's name and a link, never its skill list),
   or `none`. With a value, `update-docs` runs
   `check-docs --forbidden <names> --forbidden-allow <globs>`, so a restated fact is an error.
+- **known baselines:** dated counts the docs gate accepts as known, such as the frozen archive's
+  link errors (`docs/archive/: 13 link errors, 2026-11-01`), or `none`. `update-docs` compares each
+  run against this line and proposes an updated line when a count drops.
 - **platform pairs:** `sh+powershell` when the repo ships a front-end per platform (an `install.sh`
   and an `install.ps1`, say): every manual command block then has its twin, and `update-docs` runs
   `check-docs` with `--platform-pairs`, which makes a missing twin an error. `none` otherwise.

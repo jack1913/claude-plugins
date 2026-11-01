@@ -255,8 +255,9 @@ becomes permanent. Keep it visible without repeating it: deferred niche rows, an
 baseline such as an archive's frozen link errors, are summarised in one count line each
 ("4 niche surfaces deferred"; "13 link errors in docs/archive/, frozen"), while an
 unfinished principal page is named every run, with its reason: still deferred is a fine
-answer, forgotten is not. A count that is higher than at the last commit that touched `docs/`
-(read it with `git log -1 -- docs/`) is named in full.
+answer, forgotten is not. Compare each count with REPO SPECIFICS' `known baselines` line: a
+higher count is named in full, and with no line recorded, report the count once and propose the
+line to record.
 
 **Never flip a `status` to make a finding go away.** Marking a `principal` surface
 `deferred`, or dropping its row, silences the finding without writing the page —
@@ -398,7 +399,7 @@ that catches it. Skip when REPO SPECIFICS records `none`.
 Run a link check as a hard gate: `lychee` or `markdown-link-check` if present,
 else an internal relative-link `grep`. Broken links outside `docs/archive/` fail the run; link
 errors inside the frozen archive count toward §7.6's baseline line, and fail the run only when
-that count rises.
+that count rises above the `known baselines` value in REPO SPECIFICS.
 
 **Commit by path.** End by printing the docs commit with the exact paths this run
 changed — `git add -- <paths>`, then `git commit -m "<message>" -- <paths>` — and name

@@ -1714,8 +1714,8 @@ def _check_docs(roots, captures_dir, coverage, forbidden, only=None, tier_check=
             findings += _check_grounding(f, text, captures_dir)
             findings += _check_showcase(f, text, relparts)
             if twin_severity:
-                findings += _check_platform_twin(f, text, twin_severity)
-            if _is_manual_index(f):
+                findings += _check_platform_twin(f, text, twin_severity, relparts)
+            if _is_manual_index(relparts):
                 findings += _check_toc_count(f, text)
                 findings += _check_next_chain(f, text)
     if tier_check:
@@ -1740,6 +1740,9 @@ _TOTAL_RE = re.compile(
 
 _TOUR_ITEM_RE = re.compile(r"^\s*\d+[.)]\s+(?:\*\*)?\[[^\]]*\]\(<?([^)>\s#]+)", re.MULTILINE)
 _NEXT_TARGET_RE = re.compile(r"\*\*Next:\*\*\s*(?:\*\*)?\[[^\]]*\]\(<?([^)>\s#]+)")
+_TOP_ITEM_RE = re.compile(r"^\d+[.)]\s+")
+_ITEM_LINK_RE = re.compile(r"^\d+[.)]\s+(?:\*\*)?\[[^\]]*\]\(<?([^)>\s#]+)")
+_DO_A_TASK_RE = re.compile(r"^#{1,6}\s+do a task\s*#*\s*$", re.IGNORECASE)
 _SH_LANGS = {"bash", "sh", "shell", "zsh"}
 _PS_LANGS = {"powershell", "pwsh", "ps1"}
 
@@ -1748,64 +1751,106 @@ def _prose_text(text):
     return "".join(seg for seg, is_fence in _split_fences(text) if not is_fence)
 
 
-def _is_manual_index(f):
-    return f.name == "README.md" and f.parent.name == "manual"
+def _is_manual_index(relparts):
+    """The manual's index, judged on the path RELATIVE to the scanned root (a
+    checkout under a folder called `manual` is not the manual tier)."""
+    return relparts is not None and tuple(relparts[-2:]) == ("manual", "README.md")
+
+
+def _in_manual(relparts):
+    return relparts is not None and "manual" in relparts[:-1]
+
+
+def _top_level_lists(text):
+    """The top-level ordered lists in `text`'s prose, in order. Each is a dict:
+    `do_a_task` (it follows a "Do a task" heading) and `items` (each item's link
+    target, or None). Indented lines (nested items, continuations) and blank lines
+    keep a list open; any other line at column 0 closes it."""
+    lists, cur, pending = [], None, False
+    for line in _prose_text(text).split("\n"):
+        if _TOP_ITEM_RE.match(line):
+            if cur is None:
+                cur = {"do_a_task": pending, "items": []}
+                lists.append(cur)
+                pending = False
+            m = _ITEM_LINK_RE.match(line)
+            cur["items"].append(m.group(1) if m else None)
+        elif not line.strip() or line[:1] in (" ", "\t"):
+            continue
+        else:
+            cur = None
+            if line.startswith("#"):
+                pending = bool(_DO_A_TASK_RE.match(line.strip()))
+    return lists
+
+
+def tour_items(text):
+    """The manual index's tour: the list under a "Do a task" heading, else the
+    longest top-level ordered list (the first, on a tie). Returns its items' link
+    targets (None for an item without a leading link); [] when there is none."""
+    lists = _top_level_lists(text)
+    for lst in lists:
+        if lst["do_a_task"]:
+            return lst["items"]
+    best = []
+    for lst in lists:
+        if len(lst["items"]) > len(best):
+            best = lst["items"]
+    return best
 
 
 def _check_toc_count(f, text):
     """TOC_COUNT (warn): a `**1 → N**`-style total in the manual index that differs
-    from the number of ordered-list items outside fences."""
-    prose = _prose_text(text)
-    n = len(_OL_ITEM_RE.findall(prose))
+    from the number of entries in its tour."""
+    n = len(tour_items(text))
+    fenced = _fenced_line_numbers(text)
     out = []
     for i, line in enumerate(text.split("\n"), start=1):
+        if i in fenced:
+            continue
         for m in _TOTAL_RE.finditer(line):
             total = int(re.search(r"(\d+)$", m.group(0)).group(1))
-            if n and total != n and line in prose:
-                out.append(("warn", "TOC_COUNT", str(f), i, "says 1 → %d; the list has %d" % (total, n)))
+            if n and total != n:
+                out.append(("warn", "TOC_COUNT", str(f), i, "says 1 → %d; the tour has %d" % (total, n)))
     return out
 
 
 def _check_next_chain(index, text):
-    """NEXT_CHAIN (warn): each page of the index's numbered tour ends with a
-    `**Next:**` link to the next entry. Checked only once the tour is in use (some
-    entry has a Next link); the last entry is free."""
+    """NEXT_CHAIN (warn): each page of the index's tour ends with a `**Next:**` link
+    to the next entry. Checked only once the tour is in use (some entry has a Next
+    link); the last entry is free. Findings name pages as the index links them."""
     base = index.parent
-    entries = []
-    for m in _TOUR_ITEM_RE.finditer(_prose_text(text)):
-        target = m.group(1)
-        if "://" in target:
-            continue
-        entries.append((base / target).resolve())
+    entries = [t for t in tour_items(text) if t and "://" not in t and not t.startswith("/")]
     pages = []
-    for p in entries:
+    for target in entries:
         try:
-            body = p.read_text(encoding="utf-8", errors="replace")
+            pages.append((base / target).read_text(encoding="utf-8", errors="replace"))
         except OSError:
-            body = None
-        pages.append(body)
+            pages.append(None)
     if not any(b and _NEXT_TARGET_RE.search(_prose_text(b)) for b in pages):
         return []
     out = []
-    for k, (page, body) in enumerate(zip(entries, pages)):
+    for k, (target, body) in enumerate(zip(entries, pages)):
         if body is None or k == len(entries) - 1:
             continue
+        page = base / target
         expected = entries[k + 1]
         m = _NEXT_TARGET_RE.search(_prose_text(body))
         if not m:
-            out.append(("warn", "NEXT_CHAIN", str(page), 1, "no Next link; the index puts %s next" % expected.name))
+            out.append(("warn", "NEXT_CHAIN", str(page), 1, "no Next link; the index puts %s next" % expected))
             continue
-        got = (page.parent / m.group(1)).resolve()
-        if got != expected:
-            line = body[: body.find("**Next:**")].count("\n") + 1
+        if (page.parent / m.group(1)).resolve() != (base / expected).resolve():
+            fenced = _fenced_line_numbers(body)
+            line = next((i for i, ln in enumerate(body.split("\n"), start=1)
+                         if "**Next:**" in ln and i not in fenced), 1)
             out.append(("warn", "NEXT_CHAIN", str(page), line,
-                        "Next points to %s; the index puts %s next" % (m.group(1), expected.name)))
+                        "Next points to %s; the index puts %s next" % (m.group(1), expected)))
     return out
 
 
 def _manual_has_powershell(roots):
-    for f, _rel in _iter_markdown_files(roots):
-        if "manual" not in f.parts[:-1]:
+    for f, rel in _iter_markdown_files(roots):
+        if not _in_manual(rel):
             continue
         try:
             text = f.read_text(encoding="utf-8", errors="replace")
@@ -1817,11 +1862,11 @@ def _manual_has_powershell(roots):
     return False
 
 
-def _check_platform_twin(f, text, severity):
+def _check_platform_twin(f, text, severity, relparts):
     """PLATFORM_TWIN: a shell command fence on a manual page with no PowerShell
     fence after it before the next heading. Output (`capture=`) and `illustrative`
     fences are not commands and are skipped."""
-    if "manual" not in f.parts[:-1]:
+    if not _in_manual(relparts):
         return []
     lines = text.split("\n")
     blocks = iter_fenced_blocks(text)

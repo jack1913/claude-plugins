@@ -4236,6 +4236,8 @@ def test_deferred_readme_voice_imposes_nothing():
 
 
 def _flat_manual(tmp_path):
+    _seed(tmp_path, "update.sh", "#!/bin/sh\n")
+    _seed(tmp_path, "update.ps1", "# ps\n")
     _seed(tmp_path, "docs/manual/README.md",
           "# Manual\n\nThe manual: commands-first, one concept per page.\n\n"
           "1. [Update](updating.md)\n2. [Remove](uninstalling.md)\n")
@@ -4251,7 +4253,7 @@ def test_sync_conventions_for_a_flat_numbered_manual(tmp_path):
     assert conv == {"layout": "flat", "numbered_tour": True, "next_tour": True,
                     "capture_fence": "text",
                     "docs_voice": "The manual: commands-first, one concept per page.",
-                    "platform_pairs": True}
+                    "platform_pairs": True, "manual_has_powershell": True}
     out = lib.render_local_deviations(conv)
     assert "`text capture=`" in out and "use/" not in out
 
@@ -4583,3 +4585,100 @@ def test_v5_text_agrees_with_itself_round_2():
     assert "in the voice chosen at §2" in _flat(ONBOARD / "SKILL.md")
     seed = (DOCSIA / "README.md").read_text(encoding="utf-8")
     assert "```powershell" in seed
+
+
+# ---- template v5: final review fix pass -------------------------------------
+
+
+def test_platform_twin_and_index_use_paths_relative_to_the_root(tmp_path, capsys):
+    cli = _load_cli()
+    repo = tmp_path / "manual" / "repo"   # a checkout that merely sits under a folder named manual
+    _seed(repo, "docs/internals/README.md", "# Internals\n\n```bash\n./build.sh\n```\n")
+    _seed(repo, "README.md", "# Repo\n\nRead **1 → 5**.\n\n1. [A](a.md)\n")
+    rc, codes, _ = _run_check(cli, capsys, [str(repo / "docs"), str(repo / "README.md")],
+                              ["--no-tier-check", "--platform-pairs"])
+    assert "PLATFORM_TWIN" not in codes and "TOC_COUNT" not in codes
+
+
+def _grouped_index(tmp_path, heading="## Do a task"):
+    _seed(tmp_path, "docs/manual/README.md",
+          "# Manual\n\nRead the tour, **1 → 2**.\n\n## Get started\n\n1. [Install](getting-started/install.md)\n\n"
+          + heading + "\n\n1. [A](a.md)\n   1. [A, the details](a.md#details)\n2. [B](b.md)\n\n"
+          "## Look it up\n\n1. [Flags](reference/flags.md)\n2. [Bundles](reference/bundles.md)\n3. [Glossary](reference/glossary.md)\n")
+    _seed(tmp_path, "docs/manual/getting-started/install.md", "# Install\n\n**Next:** [A](../a.md)\n")
+    _seed(tmp_path, "docs/manual/a.md", "# A\n\n**Next:** [B](b.md)\n")
+    _seed(tmp_path, "docs/manual/b.md", "# B\n\nThat's the tour.\n")
+
+
+def test_the_tour_is_the_do_a_task_list_only(tmp_path, capsys):
+    cli = _load_cli()
+    _grouped_index(tmp_path)
+    _, codes, lines = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check"])
+    assert "TOC_COUNT" not in codes and "NEXT_CHAIN" not in codes, lines
+
+
+def test_without_a_do_a_task_heading_the_longest_list_is_the_tour(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "docs/manual/README.md",
+          "# Manual\n\n## Start\n\n1. [Install](install.md)\n\n## The daily manual\n\n"
+          "1. [A](a.md)\n2. [B](b.md)\n3. [C](c.md)\n")
+    _seed(tmp_path, "docs/manual/install.md", "# Install\n")
+    _seed(tmp_path, "docs/manual/a.md", "# A\n\n**Next:** [B](b.md)\n")
+    _seed(tmp_path, "docs/manual/b.md", "# B\n\n**Next:** [A](a.md)\n")
+    _seed(tmp_path, "docs/manual/c.md", "# C\n")
+    _, codes, lines = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check"])
+    hits = [ln for ln in lines if "NEXT_CHAIN" in ln]
+    assert len(hits) == 1 and "b.md" in hits[0]
+    assert str(tmp_path) not in hits[0].split("\t", 3)[3]  # the detail names pages, not absolute paths
+
+
+def test_conventions_read_bold_links_and_paren_lists(tmp_path):
+    _seed(tmp_path, "docs/manual/README.md", "# Manual\n\n1) **[Update](updating.md)** — keep it current\n")
+    _seed(tmp_path, "docs/manual/updating.md", "# Update\n\n**Next:** **[Remove](uninstalling.md)**\n")
+    conv = lib.detect_manual_conventions(tmp_path)
+    assert conv["numbered_tour"] is True and conv["next_tour"] is True
+
+
+def test_platform_pairs_come_from_the_front_end_pair(tmp_path):
+    _seed(tmp_path, "docs/manual/win.md", "# Win\n\n```powershell\nGet-Item x\n```\n")
+    conv = lib.detect_manual_conventions(tmp_path)
+    assert conv["platform_pairs"] is False and conv["manual_has_powershell"] is True
+    _seed(tmp_path, "install.sh", "#!/bin/sh\n")
+    _seed(tmp_path, "install.ps1", "# ps\n")
+    assert lib.detect_manual_conventions(tmp_path)["platform_pairs"] is True
+
+
+def test_full_local_deviations_state_every_convention(tmp_path):
+    conv = lib.detect_manual_conventions(_flat_manual(tmp_path))
+    full = lib.render_local_deviations(conv, full=True)
+    assert "directly in `docs/manual/`" in full and "numbered reading tour" in full
+    assert "**Next:**" in full and "`text capture=`" in full
+    cli = _load_cli()
+    import contextlib
+    import io
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rc = cli.main(["manual-conventions", str(tmp_path), "--full"])
+    assert rc == 0 and "numbered reading tour" in json.loads(buf.getvalue())["local_deviations"]
+
+
+def test_sync_upgrades_a_v4_standard_and_never_copies_an_old_voice_word():
+    t = _flat(ONBOARD / "SKILL.md")
+    assert "has no `## Local deviations` section" in t and "manual-conventions . --full" in t
+    assert "else the voice word in the old template region" not in t
+    assert "never copy a voice word from the old template region" in t
+    assert "a `.sh`/`.ps1` front-end pair" in t
+
+
+def test_release_tags_only_from_the_release_branch_and_orders_a_script():
+    t = _flat(CR)
+    assert "in place of the hand-made commit and tag when the script does those" in t
+    assert "only on the release branch" in t and "git status --short --branch" in t
+
+
+def test_known_baselines_are_recorded_not_guessed():
+    assert "**known baselines:**" in _shape("stamping.md")
+    ud = _flat(UPD)
+    assert "REPO SPECIFICS' `known baselines` line" in ud
+    assert "(read it with `git log -1 -- docs/`) is named in full" not in ud

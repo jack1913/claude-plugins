@@ -21,6 +21,9 @@ import xml.etree.ElementTree as _ET
 # `onboard_lib.check_instructions` still find it. One implementation, two names.
 from check import (  # noqa: F401  (re-exported for callers of this module)
     GROUNDING_WINDOW,
+    _NEXT_TARGET_RE,
+    _PS_LANGS,
+    tour_items,
     _OL_ITEM_RE,
     _TOTAL_RE,
     _non_fence_word_count,
@@ -1250,10 +1253,7 @@ def convert_copilot_prompt(text):
 
 # ---- manual conventions (--sync records them as the standard's Local deviations) ----
 
-_TOUR_ENTRY_RE = re.compile(r"^\s*\d+\.\s+\[", re.M)
-_NEXT_LINK_RE = re.compile(r"\*\*Next:\*\*\s*\[")
 _VOICE_WORD_RE = re.compile(r"\b(commands-first|task-first)\b", re.I)
-_PS_LANGS = ("powershell", "pwsh", "ps1")
 
 # What the v5 docs standard expects; anything else is a Local deviation.
 MANUAL_DEFAULTS = {"layout": "flat", "numbered_tour": True, "next_tour": True, "capture_fence": "console"}
@@ -1264,15 +1264,29 @@ def _prose(text):
     return "".join(seg for seg, is_fence in _split_fences(text) if not is_fence)
 
 
+def _front_end_pair(root):
+    """True when the repo root holds a `<stem>.sh` beside a `<stem>.ps1` (a
+    front-end per platform, e.g. install.sh + install.ps1)."""
+    try:
+        names = {p.name for p in pathlib.Path(root).iterdir() if p.is_file()}
+    except OSError:
+        return False
+    return any(n.endswith(".sh") and n[:-3] + ".ps1" in names for n in names)
+
+
 def detect_manual_conventions(repo_root):
     """Read how an existing docs/manual/ is built, so --sync can record it instead of
-    reporting it. Keys: layout ("flat" | "use" | None), numbered_tour, next_tour,
-    capture_fence (the fence language used with capture=, or None), docs_voice (the
-    index line naming commands-first or task-first, or None), platform_pairs (any
-    PowerShell fence in the manual). Pure read; no manual -> layout None."""
-    manual = pathlib.Path(repo_root) / "docs" / "manual"
+    reporting it. Keys: layout ("flat" | "use" | None), numbered_tour (the index has a
+    tour, as check-docs reads it), next_tour, capture_fence (the fence language used
+    with capture=, or None), docs_voice (the index paragraph naming commands-first or
+    task-first, or None), platform_pairs (a .sh/.ps1 front-end pair at the root) and
+    manual_has_powershell (any PowerShell fence in the manual: mentioned to the
+    operator, never baked on its own). Pure read; no manual -> layout None."""
+    root = pathlib.Path(repo_root)
+    manual = root / "docs" / "manual"
     conv = {"layout": None, "numbered_tour": False, "next_tour": False,
-            "capture_fence": None, "docs_voice": None, "platform_pairs": False}
+            "capture_fence": None, "docs_voice": None,
+            "platform_pairs": _front_end_pair(root), "manual_has_powershell": False}
     if not manual.is_dir():
         return conv
     index = manual / "README.md"
@@ -1284,43 +1298,51 @@ def detect_manual_conventions(repo_root):
         conv["layout"] = "flat"
     fence_langs = {}
     for page in ([index] if index.is_file() else []) + pages:
-        text = page.read_text(encoding="utf-8")
-        if page != index and _NEXT_LINK_RE.search(_prose(text)):
+        text = page.read_text(encoding="utf-8", errors="replace")
+        if page != index and _NEXT_TARGET_RE.search(_prose(text)):
             conv["next_tour"] = True
         for info, _body, _line in iter_fenced_blocks(text):
             tokens = info.split()
             lang = tokens[0].lower() if tokens else ""
             if lang in _PS_LANGS:
-                conv["platform_pairs"] = True
+                conv["manual_has_powershell"] = True
             if any(t.startswith("capture=") for t in tokens[1:]):
                 fence_langs[lang] = fence_langs.get(lang, 0) + 1
     if fence_langs:
         conv["capture_fence"] = max(sorted(fence_langs), key=lambda k: fence_langs[k])
     if index.is_file():
-        prose = _prose(index.read_text(encoding="utf-8"))
-        conv["numbered_tour"] = bool(_TOUR_ENTRY_RE.search(prose))
-        for para in re.split(r"\n\s*\n", prose):
+        text = index.read_text(encoding="utf-8", errors="replace")
+        conv["numbered_tour"] = bool(tour_items(text))
+        for para in re.split(r"\n\s*\n", _prose(text)):
             if _VOICE_WORD_RE.search(para) and not para.lstrip().startswith("#"):
                 conv["docs_voice"] = " ".join(para.split())
                 break
     return conv
 
 
-def render_local_deviations(conv):
+def render_local_deviations(conv, full=False):
     """The docs standard's Local deviations list for `conv` (from
     detect_manual_conventions): one Markdown bullet per value that differs from
-    MANUAL_DEFAULTS, or "" when nothing differs or there is no manual."""
+    MANUAL_DEFAULTS, or "" when nothing differs or there is no manual. With
+    full=True, every convention is stated, defaults included -- for a version 4
+    standard whose body says otherwise, where the list must outrank that body."""
     if conv.get("layout") is None:
         return ""
     out = []
     if conv["layout"] == "use":
         out.append("- §3 Layout: how-to pages sit in `docs/manual/use/`, not directly in `docs/manual/`.")
+    elif full:
+        out.append("- §3 Layout: how-to pages sit directly in `docs/manual/`.")
     if not conv["numbered_tour"]:
         out.append("- §3 Layout: the Do a task list is not numbered; its order is not a reading tour.")
+    elif full:
+        out.append("- §3 Layout: the Do a task list is a numbered reading tour.")
     if not conv["next_tour"]:
         out.append("- §3 Layout: pages do not end with a **Next:** link.")
+    elif full:
+        out.append("- §3 Layout: each how-to ends with a **Next:** link to the next page in the tour.")
     fence = conv.get("capture_fence")
-    if fence and fence != MANUAL_DEFAULTS["capture_fence"]:
+    if fence and (full or fence != MANUAL_DEFAULTS["capture_fence"]):
         out.append(
             "- §4 Output: captured output uses `%s capture=` fences; keep that shape, never convert it."
             % fence
