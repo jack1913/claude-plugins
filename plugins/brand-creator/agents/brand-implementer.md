@@ -27,6 +27,12 @@ RULES: work under the round/project dir only; never edit adoption targets before
    branch name yourself.
 2. Work row by row from the ADOPTION.md rows in the prompt. Line numbers from an earlier read may have drifted: find
    each spot by its content (the Find column). If a row's text is not there, do not guess: report it as not done.
+   - A redesign of an existing site has a wiring record made before the first change. When the last row is done, end with
+     `brand-creator adoption wiring --repo <label> --after` (and again at the end of a fix run). It reads the repository, and
+     the pages of the before record from the owner's local server, and writes nothing in the repository. Exit 3 means it
+     could not run (a page was not readable, or ripgrep is missing): report it, never skip it. Exit 2 with "no before
+     record" means no redesign was recorded: say so, and never record a before yourself, because a baseline taken after the
+     first change is no baseline. You never record a drop (`--drop`): it is the owner's decision.
 3. Files from the pack are copied, never redrawn, re-exported or optimised (`cp`, then `cmp` against the pack file).
    - A Brand kit row is copied by the list `brand-creator kit status --repo <path>` prints: `mkdir -p`, then `cp` one file
      at a time, exactly those files; an owner file the repository already has is never overwritten, and nothing goes into

@@ -200,6 +200,38 @@ test("adopt tells the implementer how a kit row is copied and the reviewer how i
   assert.match(agents["brand-reviewer"].body, /`brand-creator --data "<data>" kit status --repo <path> --project "<project>"` must exit 0/);
 });
 
+test("adopt asks the reviewer to run the wiring compare and report every unrecorded loss, and the lead is told such a review is not ready for a commit ask", async () => {
+  const base = fixture("adopt");
+  const two = { ...base, approved_agents: 4, repos: [base.repos[0], { ...base.repos[0], label: "app", path: "/REPOS/app" }] };
+  const r = await run("adopt", two);
+  assert.equal(r.error, null);
+  for (const label of ["shop", "app"]) {
+    const call = r.calls.find((c) => c.label === `review ${label}`);
+    const lines = call.prompt.split("\n");
+    const wiring = lines.filter((l) => l.startsWith("For a redesign of an existing site"));
+    assert.deepEqual(wiring, [
+      `For a redesign of an existing site (the repository has a wiring before record), brand-creator --data "/DATA" adoption wiring --repo ${label} --compare --project "/PROJECT" must exit 0; quote it with its exit code. Every item it lists as lost, not recorded as dropped, fails the review and goes into wiring_losses (an empty list when nothing is lost, or when it exits 2 because the repository has no before record). Any other exit (3: a page of the before record cannot be read because the owner's local server is not running) is not verified: say so in not_verified, never count it as no loss. You record no drop: a drop is the owner's decision, in the owner's words.`,
+    ], label);
+    assert.ok(lines.indexOf(wiring[0]) < lines.indexOf(RULES), "the wiring line sits before RULES, and RULES stays verbatim");
+    assert.equal(JSON.stringify(call.schema.properties.wiring_losses), JSON.stringify({ type: "array", items: { type: "string" } }));   // the schema comes out of the workflow sandbox: other realm, so compare as JSON
+    assert.ok(call.schema.required.includes("wiring_losses"), "a review states its wiring losses, an empty list when there are none");
+    assert.ok(!r.calls.find((c) => c.label === `apply ${label}`).prompt.includes("adoption wiring"), "the implementer's prompt is unchanged: its wiring rule is in its agent file");
+  }
+  assert.match(r.result.next, /A review whose wiring_losses is not empty is not ready for a commit ask: .*adoption wiring --repo <label> --drop "<item>::<reason>"/);
+  const flat = (n) => agents[n].body.replace(/\s+/g, " ");
+  assert.match(flat("brand-implementer"), /end with `brand-creator adoption wiring --repo <label> --after`/);
+  assert.match(flat("brand-implementer"), /never record a before yourself/);
+  assert.match(flat("brand-implementer"), /never record a drop/);
+  assert.match(flat("brand-reviewer"), /`brand-creator --data "<data>" adoption wiring --repo <label> --compare --project "<project>"`/);
+  assert.match(flat("brand-reviewer"), /Any item it lists as lost, not recorded as dropped, fails the review/);
+  assert.match(flat("brand-reviewer"), /never records a drop/);
+  const skill = fs.readFileSync(path.join(ROOT, "skills/brand-adopt/SKILL.md"), "utf8").replace(/\s+/g, " ");
+  assert.match(skill, /adoption wiring --repo <label> --before \[--page <local URL>\]/);
+  assert.match(skill, /adoption wiring --repo <label> --after/);
+  assert.match(skill, /adoption wiring --repo <label> --compare/);
+  assert.match(skill, /--drop "<item>::<the owner's reason>"/);
+});
+
 test("inventory: true adds one read-only stage first and needs the owner's approval for 5 agents", async () => {
   const a = { ...fixture("directions"), inventory: { repos: [{ label: "shop", path: "/REPOS/shop" }] } };
   const refused = await run("directions", a);

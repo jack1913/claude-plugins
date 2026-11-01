@@ -84,12 +84,13 @@ const IMPL = {
 }
 const REVIEW = {
   type: 'object',
-  required: ['repo', 'rows', 'commands', 'no_decision_fixes', 'decisions_for_you'],
+  required: ['repo', 'rows', 'commands', 'no_decision_fixes', 'decisions_for_you', 'wiring_losses'],
   properties: {
     repo: { type: 'string' },
     rows: { type: 'array', items: { type: 'object', required: ['row', 'status', 'evidence'], properties: { row: { type: 'string' }, status: { type: 'string', enum: ['done', 'partly', 'not done'] }, evidence: { type: 'string' } } } },
     commands: { type: 'array', items: { type: 'object', required: ['command', 'exit'], properties: { command: { type: 'string' }, exit: { type: 'integer' } } } },
     cmp_failures: { type: 'array', items: { type: 'string' } },
+    wiring_losses: { type: 'array', items: { type: 'string' } },
     no_decision_fixes: { type: 'array', items: { type: 'string' } },
     decisions_for_you: { type: 'array', items: { type: 'object', required: ['question', 'recommendation'], properties: { question: { type: 'string' }, recommendation: { type: 'string' } } } },
     not_verified: { type: 'array', items: { type: 'string' } },
@@ -121,6 +122,7 @@ async function review(impl, r) {
     'ROWS TO CHECK: ' + list(r.rows).join(' | ') + (MODE === 'fix' ? ' and the fixes: ' + list(r.findings).join(' | ') : ''),
     'Check: cmp every file copied from the pack against ' + A.project + '/assets (any difference fails the row); sizes against the slot; the repository\'s own build and tests (from its README, package scripts, Makefile or CI config' + (r.build ? '; the owner named: ' + r.build : '') + '), quoting each command with its exit code; git status and git diff before and after your checks (report anything your commands changed). A check that needs a real device is not verified.',
     'For a Brand kit row, brand-creator --data "' + A.data + '" kit status --repo "' + r.path + '" --project "' + A.project + '" must exit 0; quote it with its exit code.',
+    'For a redesign of an existing site (the repository has a wiring before record), brand-creator --data "' + A.data + '" adoption wiring --repo ' + r.label + ' --compare --project "' + A.project + '" must exit 0; quote it with its exit code. Every item it lists as lost, not recorded as dropped, fails the review and goes into wiring_losses (an empty list when nothing is lost, or when it exits 2 because the repository has no before record). Any other exit (3: a page of the before record cannot be read because the owner\'s local server is not running) is not verified: say so in not_verified, never count it as no loss. You record no drop: a drop is the owner\'s decision, in the owner\'s words.',
     'Every row: done, partly or not done with evidence. Split the rest into no-decision fixes and numbered decisions for the owner with a recommendation each. Be honest: if something is fine, say so; do not invent problems to fill the list.',
     RULES,
     'OUTPUT: the schema. Aim to finish within 30 minutes; tail-limit command output.',
@@ -149,5 +151,5 @@ return {
   repos: pairs,
   complete: done.map(p => p.repo),
   incomplete,
-  next: 'Lead: show each repository\'s rows (done / partly / not done) with the evidence; a fix run (mode fix) only for no-decision findings; then the numbered decisions. Commit, merge and push are three separate asks of the owner; say what a push triggers first.',
+  next: 'Lead: show each repository\'s rows (done / partly / not done) with the evidence; a fix run (mode fix) only for no-decision findings; then the numbered decisions. Commit, merge and push are three separate asks of the owner; say what a push triggers first. A review whose wiring_losses is not empty is not ready for a commit ask: each lost item is put back (a fix run), or the owner says why it goes and you record it in their words (brand-creator adoption wiring --repo <label> --drop "<item>::<reason>"), and the review runs again.',
 }

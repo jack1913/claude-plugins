@@ -328,6 +328,13 @@ lints the board of the latest round again before `check`, so an edit of the fact
   for byte. The implementer copies exactly the files `brand-creator kit status --repo <folder>` lists, one at a time,
   never over a file of your own in the repository and never into a global skills folder; the review passes when
   `kit status` says the copy is current. The adopt workflow's agents get the same two rules. The kit is left uncommitted.
+- A brand-adopt review fails a redesign that lost wiring you did not agree to drop. For a redesign of an existing site,
+  `/brand-creator:brand-adopt` records the site's wiring before any change (`brand-creator adoption wiring --before`),
+  the implementer records it again when the last row is done (`--after`), and the reviewer runs `--compare`: any link,
+  form field, handler, test hook, id or script that is gone and that you did not drop with your reason fails the review.
+  Only you decide a drop, and it is recorded in your words. The adopt workflow's review reports the losses in a
+  `wiring_losses` list and tells the lead such a review is not ready for a commit ask. The manual's "Apply the brand to
+  your product" page has a new section, "Redesigning a site: keep what it is wired to".
 
 ### Changed
 
