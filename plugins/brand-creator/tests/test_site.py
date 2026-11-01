@@ -159,7 +159,7 @@ import re
 from urllib.parse import unquote
 
 import pytest
-from helpers import mutate, mutate_json, page_check_report
+from helpers import mutate, mutate_json, page_check_report, symlink_or_skip
 from test_site_board import PAGES, lint, lint3, pages_project, settle
 
 import sitedata
@@ -439,6 +439,97 @@ def test_site_approve_refuses_a_path_outside_the_project(tmp_path):
     r = approve(p)
     assert r.returncode == 2 and "rounds/r3/start/link.svg is a symbolic link" in r.stderr, (r.stdout, r.stderr)
     untouched(p, before)
+
+
+LINKED = "is a symbolic link: a page folder is copied as it is, and a link can lead out of the project"
+BOARD_LINKED = "is a symbolic link: the pages board is read as it is, and a link can lead out of the project"
+
+
+def test_site_approve_refuses_a_page_folder_that_is_a_symbolic_link(tmp_path):
+    p = ready(tmp_path)
+    folder = p / "rounds" / "r3" / "start"
+    moved = tmp_path / "moved-start"                                                          # the page folder with its files, kept outside the project and reached through a link
+    folder.rename(moved)
+    symlink_or_skip(folder, moved)
+    assert (folder / "index.html").is_file(), "the link leads to the page: the lint of the board is still current"
+    before = _files(p)
+    r = approve(p)
+    assert r.returncode == 2, (r.stdout, r.stderr)
+    assert f"rounds/r3/start {LINKED}" in r.stderr and "nothing was written" in r.stderr and "1 problem(s)" in r.stderr, r.stderr
+    untouched(p, before)
+    # a link to a folder of the project is refused the same way: the page is read where it stands, not where a link says
+    folder.unlink()
+    inside = p / "rounds" / "r3" / "start-copy"
+    shutil.copytree(moved, inside)
+    symlink_or_skip(folder, inside)
+    before = _files(p)
+    r = approve(p)
+    assert r.returncode == 2 and f"rounds/r3/start {LINKED}" in r.stderr, (r.stdout, r.stderr)
+    untouched(p, before)
+    folder.unlink()
+    moved.rename(folder)
+    shutil.rmtree(inside)
+    assert approve(p).returncode == 0, "the same pages with no link go in"
+
+
+def test_site_approve_refuses_rounds_a_round_or_the_board_file_that_is_a_symbolic_link(tmp_path):
+    p = ready(tmp_path)
+    rounds = p / "rounds"
+    board = rounds / "r3" / "board.html"
+    # the board file
+    held = tmp_path / "board-elsewhere.html"
+    board.rename(held)
+    symlink_or_skip(board, held)
+    before = _files(p)
+    r = approve(p)
+    assert r.returncode == 2 and f"rounds/r3/board.html {BOARD_LINKED}" in r.stderr, (r.stdout, r.stderr)
+    untouched(p, before)
+    board.unlink()
+    held.rename(board)
+    # the round: rounds/r3 leads to a folder that holds the board and both pages
+    moved_round = tmp_path / "r3-elsewhere"
+    (rounds / "r3").rename(moved_round)
+    symlink_or_skip(rounds / "r3", moved_round)
+    before = _files(p)
+    r = approve(p)
+    assert r.returncode == 2 and f"rounds/r3 {BOARD_LINKED}" in r.stderr, (r.stdout, r.stderr)
+    untouched(p, before)
+    (rounds / "r3").unlink()
+    moved_round.rename(rounds / "r3")
+    # rounds/ itself
+    moved_rounds = tmp_path / "rounds-elsewhere"
+    rounds.rename(moved_rounds)
+    symlink_or_skip(rounds, moved_rounds)
+    before = _files(p)
+    r = approve(p)
+    assert r.returncode == 2 and f"rounds {BOARD_LINKED}" in r.stderr, (r.stdout, r.stderr)
+    untouched(p, before)
+    r = approve(p, "--round", "3")                                                           # a named round is looked at the same way
+    assert r.returncode == 2 and f"rounds {BOARD_LINKED}" in r.stderr, (r.stdout, r.stderr)
+    rounds.unlink()
+    moved_rounds.rename(rounds)
+    assert approve(p).returncode == 0, "the same pages with no link go in"
+
+
+def test_site_approve_refuses_a_folder_link_inside_a_page_folder_whatever_it_leads_to(tmp_path):
+    p = ready(tmp_path)
+    folder = p / "rounds" / "r3" / "start"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "x.png").write_bytes(b"outside")
+    inner = folder / "img"
+    inner.mkdir()
+    (inner / "a.png").write_bytes(b"a picture of the page")
+    for name, target in (("to-outside", outside), ("to-inside", inner)):
+        symlink_or_skip(folder / name, target)
+        settle(p, 3, "start")
+        assert lint3(p).returncode == 0
+        before = _files(p)
+        r = approve(p)
+        assert r.returncode == 2, (name, r.stdout, r.stderr)
+        assert f"rounds/r3/start/{name} {LINKED}" in r.stderr and "nothing was written" in r.stderr, (name, r.stderr)
+        untouched(p, before)
+        (folder / name).unlink()
 
 
 def test_site_approve_never_overwrites_and_replace_moves_the_old_site_aside(tmp_path):

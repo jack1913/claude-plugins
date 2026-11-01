@@ -559,3 +559,13 @@ def cold_review_record(p: Path, page: str, verdict: str = "ship", *, by: str = "
     out = folder / "cold-review.md"
     out.write_text("\n".join(body) + "\n", encoding="utf-8")
     return out
+
+
+def symlink_or_skip(link: Path, target: Path) -> None:
+    """Make a real symbolic link `link` -> `target` (a folder link when the target is a folder). Where the OS cannot make one (Windows without the privilege) the test is skipped, and the skip says so:
+    a refusal of symbolic links that did not run is NOT VERIFIED, which is not a pass."""
+    import pytest
+    try:
+        link.symlink_to(target, target_is_directory=target.is_dir())
+    except (OSError, NotImplementedError) as e:
+        pytest.skip(f"NOT VERIFIED: this OS cannot make a symbolic link here ({type(e).__name__}: {e}), so the symbolic-link refusals did not run")

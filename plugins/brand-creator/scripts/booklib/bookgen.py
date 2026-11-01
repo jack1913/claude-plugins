@@ -153,6 +153,7 @@ SLOWER = "4\u00d7 slower"   # the label of the box that plays a replay at a quar
 MOTION_GROUPS = ("duration.", "easing.", "motion.")   # the token groups of the motion chapter's token table
 COVER_ART_W, COVER_ART_H = 320, 96   # the box of the cover's art: a mark is 96 px tall, a wide drawing at most 320 px wide
 SITE_VIEWS = (1440, 390)             # the stills of site/<id>/shots/ the site chapter shows, as `capture` names them: <width>-light.png
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"    # the first eight bytes of every PNG: a still that does not start with them is not a picture `capture` took
 
 
 class BookBuild:
@@ -958,19 +959,27 @@ class BookBuild:
             fail(EXIT_FAIL, f"{what} needs the approved pages (site/site.json, from site approve): run the site round, or {way_out}{found}")
         doc = sitedata.load_site(self.project)
         layouts = sitedata.load_layouts()
-        stills = {page["id"]: [(width, self.project / sitedata.SITE_DIR / page["id"] / "shots" / f"{width}-light.png") for width in SITE_VIEWS] for page in doc["pages"]}
-        gone = {pid: [p.name for _, p in views if not p.is_file()] for pid, views in stills.items()}
+        pages = {page["id"]: confine(self.project, page["path"], what="site page") for page in doc["pages"]}   # a page or a still that is a link out of the project is never read
+        stills = {page["id"]: [(width, confine(self.project, f"{sitedata.SITE_DIR}/{page['id']}/shots/{width}-light.png", what="site still")) for width in SITE_VIEWS] for page in doc["pages"]}
+        gone = {pid: [f"{width}-light.png" for width, p in views if not p.is_file()] for pid, views in stills.items()}
         gone = {pid: names for pid, names in gone.items() if names}
         if gone:   # a book that quietly shows a page without its picture would still be "current" to `check` once the still appears: stop, write nothing
             fail(EXIT_FAIL, f"{what} needs the stills of the approved pages: " + "; ".join(f"site/{pid}/shots/ has no {' and no '.join(names)}" for pid, names in gone.items())
                  + ". Take them with " + " and ".join(f"`brand-creator capture site/{pid}/index.html`" for pid in gone) + ", then build the book again")
+        for pid, views in stills.items():
+            for width, p in views:
+                with p.open("rb") as fh:
+                    first = fh.read(len(PNG_SIGNATURE))
+                if first != PNG_SIGNATURE:   # a text file, a page or a picture of another kind put under a still's name would be embedded as a PNG
+                    fail(EXIT_FAIL, f"{what} needs the stills of the approved pages: site/{pid}/shots/{width}-light.png is not a PNG picture (it does not start with the PNG signature). "
+                                    f"Take it again with `brand-creator capture site/{pid}/index.html`, then build the book again")
         self.add_input(self.project / sitedata.SITE_FILE)
         head = [self.T(lang, "Choice"), self.T(lang, "Rule or example"), self.T(lang, "Where it was decided")]
         alt_label = self.T(lang, "The {id} page at {px} px, light")
         out = []
         for page in doc["pages"]:
             pid = page["id"]
-            self.add_input(self.project / page["path"])
+            self.add_input(pages[pid])
             layout = page["layout"]
             job = layouts[layout]["job"] if layout in layouts else self.T(lang, "A layout of its own.")
             out.append(f'<h3 data-site-page="{esc(pid)}">{esc(pid)}</h3>')
