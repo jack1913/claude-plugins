@@ -4015,7 +4015,7 @@ def test_update_docs_template_is_task_first_and_defers_to_the_standard():
     t = _norm(UPD)
     assert "commands-first" not in t
     assert "task-first" in t
-    assert "docs/internals/docs-standard.md" in t and "the standard wins" in t
+    assert "docs/internals/docs-standard.md" in t and "local deviations" in t
 
 
 def test_provenance_accepts_the_old_and_the_new_source():
@@ -4052,3 +4052,36 @@ def test_check_mode_reports_a_missing_docs_standard():
     text = (ONBOARD / "references" / "check-mode.md").read_text(encoding="utf-8")
     assert "docs-standard.md: ABSENT" in text
     assert "never\n  reported as drift" in text
+
+
+# ---- template v5: the repo's own choices outrank the standard ---------------
+
+PRECEDENCE = (
+    "REPO SPECIFICS → the standard's Local deviations → the standard's body → built-in defaults"
+)
+STD_V5 = DOCSIA / "internals-docs-standard.md"
+
+
+def _flat(path):
+    # whitespace-collapsed text (case and markup kept), so a pinned phrase still
+    # matches when the line wraps
+    return " ".join(pathlib.Path(path).read_text(encoding="utf-8").split())
+
+
+def test_docs_standard_defers_the_readme_voice():
+    t = _flat(STD_V5)
+    assert "Storefront" not in t and "storefront" not in t
+    assert "the README voice recorded in REPO SPECIFICS" in t
+
+
+def test_docs_standard_has_local_deviations():
+    raw = STD_V5.read_text(encoding="utf-8")
+    assert "\n## Local deviations\n" in raw
+    assert PRECEDENCE in _flat(STD_V5)
+    assert "an unfinished principal page is still reported" in _flat(STD_V5)
+
+
+def test_update_docs_uses_the_precedence_ladder():
+    t = _flat(UPD)
+    assert "The standard wins" not in t and PRECEDENCE in t
+    assert "never report a recorded deviation" in t

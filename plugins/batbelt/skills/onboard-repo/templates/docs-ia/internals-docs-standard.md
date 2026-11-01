@@ -19,7 +19,7 @@ instead.
 
 | Folder | For | Voice |
 | --- | --- | --- |
-| `README.md` | Anyone deciding whether to use <repo> | Storefront: friendly, short |
+| `README.md` | Anyone deciding whether to use <repo> | Set by the README voice recorded in REPO SPECIFICS |
 | `docs/manual/` | People who use <repo> | Friendly, short, task-first (§4) |
 | `docs/internals/` | Contributors | Plain technical |
 | `docs/adr/` | Contributors | Plain technical, one decision per file |
@@ -46,7 +46,7 @@ A fact has exactly one owner. Every other page links to it and never retypes it.
 ### Layout
 
 ```text illustrative
-README.md                    storefront: what <repo> is, install, links
+README.md                    what <repo> is, how to install it, links
 AGENTS.md                    pointer index for agents
 CHANGELOG.md                 Keep a Changelog (§6)
 docs/README.md               one table: the folders below
@@ -133,6 +133,25 @@ listed in that folder's `README.md`.
   changed decision is a new ADR.
 - Cite sources by commit, file or heading, never by `file:line`.
 
+## Local deviations
+
+What this repo does differently from the sections above, on purpose. Each entry names the rule it
+departs from and what the repo does instead. Onboarding and `--sync` fill this list from what the
+repo already does; add to it by hand when you make a new deliberate choice.
+
+```text illustrative
+- §3 Layout: how-to pages sit directly in docs/manual/, not in docs/manual/use/.
+- §3 Layout: the manual index is a numbered tour; each page ends with a Next link.
+```
+
+- None.
+
+When two rules disagree, the first of these wins:
+REPO SPECIFICS → the standard's Local deviations → the standard's body → built-in defaults.
+REPO SPECIFICS is the block at the end of the stamped `update-docs` skill. A recorded deviation is
+never reported as a finding. It never excuses unfinished work: an unfinished principal page is still
+reported.
+
 ## 8. Checks
 
 The stamped `update-docs` skill is the gate. Run it after any change to the docs:
@@ -146,4 +165,5 @@ It reports broken links, placeholders left in a page, output blocks without a pr
 (`capture=<slug>` or `illustrative`), manual pages with commands but no output, and decision records
 that are misnamed, lack Context/Decision/Consequences, are missing from the `adr/README.md` index, or
 point to a superseded-by record that does not exist. The status wording and the no-rewrite rule of §7
-are checked in review, not by the gate. The docs standard wins over the skill's built-in defaults when they differ.
+are checked in review, not by the gate. When this standard and the skill's built-in defaults differ,
+the order under Local deviations decides.

@@ -88,10 +88,13 @@ docs/{manual,internals,adr,archive}/ to enable IA-aware maintenance." On a
 which IA tiers/markers are absent** (e.g. "docs/manual present; docs/adr and
 docs/archive missing") so the operator can complete the scaffold.
 
-**The standard wins.** When `docs/internals/docs-standard.md` exists, it owns page kinds,
-manual layout (`getting-started/`, `use/`, `reference/`), voice, changelog shape and ADR rules.
-Where it and a built-in default or a baked `docs voice` in this file differ, follow the
-standard and report the difference; this skill's procedure and its `check.py` gate do not change.
+**Precedence.** When two rules disagree, the first of these wins:
+REPO SPECIFICS → the standard's Local deviations → the standard's body → built-in defaults.
+When `docs/internals/docs-standard.md` exists, its body owns page kinds, manual layout, voice,
+changelog shape and ADR rules wherever REPO SPECIFICS and the Local deviations say nothing. The
+README voice and its signature rules always come from REPO SPECIFICS. Follow the rule that wins and
+never report a recorded deviation. Report an unrecorded difference once, with the line to add under
+Local deviations. This skill's procedure and its `check.py` gate do not change.
 
 ## 7.5 Show-don't-tell (docs/manual/ maintenance)
 
