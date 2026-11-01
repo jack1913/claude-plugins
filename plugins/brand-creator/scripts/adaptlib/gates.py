@@ -1,9 +1,11 @@
-"""What `brand-creator check` gates for the stage-4c artefacts: adoption.json and ADOPTION.md, BRAND.md and DESIGN.md, the applied skill.
+"""What `brand-creator check` gates for the stage-4c artefacts: adoption.json and ADOPTION.md, BRAND.md and DESIGN.md, the applied skill or the brand kit around it.
 
 Each is a generated file: the report of the command that wrote it must be current and passing (the generic report gate in check.py), the file
 must still be the bytes the report recorded (a hand edit fails), and the sources it was made from must not have changed (not verified when
 they did). adoption.json is data: its pins, numbering and accounting are checked and ADOPTION.md must be what it renders. A repository with a wiring record
 (`adoption wiring`) gets the row `adoption:wiring:<label>`: it fails when the after record lost an item of the before record that nobody dropped.
+A project with a kit (kit.json in the skill folder) is gated through the `kit` report instead of the applied skill's: `kit:file` fails when a file the report recorded is gone
+or is other bytes, `kit:state` says not verified when the brand changed after the build.
 """
 from __future__ import annotations
 
@@ -12,14 +14,19 @@ from pathlib import Path
 
 import adapt
 import adoptdata as ad
+import kitlib
 from _common import CliError, Report, read_state, sha256_file
 
 
 def present(project: Path) -> dict:
-    out = {"adapters": [f for f in (adapt.BRAND_FILE, adapt.DESIGN_FILE) if (project / f).is_file()], "skill": None}
+    """What the project has of the generated artefacts: the adapter files, and for the skill folder either the kit (its folder, relative, when kit.json is there) or the plain applied skill
+    (its SKILL.md, relative): never both, because a kit's SKILL.md is the kit's to gate."""
+    out = {"adapters": [f for f in (adapt.BRAND_FILE, adapt.DESIGN_FILE) if (project / f).is_file()], "skill": None, "kit": None}
     try:
         sp = f"{adapt.SKILL_DIR}/{adapt.skill_name(project)}/SKILL.md"
-        if (project / sp).is_file():
+        if kitlib.exists(project):
+            out["kit"] = kitlib.kit_rel(project)
+        elif (project / sp).is_file():
             out["skill"] = sp
     except CliError:
         pass
@@ -33,6 +40,8 @@ def expected_reports(project: Path) -> list[tuple[str, str]]:
         out.append(("adapters", "brand-creator adapters --brand-md --design-md"))
     if p["skill"]:
         out.append(("applied-skill", "brand-creator applied-skill --yes"))
+    if p["kit"]:
+        out.append(("kit", "brand-creator kit build --yes"))
     return out
 
 
@@ -109,3 +118,45 @@ def rows(project: Path, rep: Report) -> None:
             if r.get("status") == "pass" and r.get("adapter_state_sha") != adapt.state_sha(project):
                 rep.add("applied-skill:state", "skipped", "the applied skill was made from the current BRAND-STATE.md and FACTS.md",
                         detail="not verified: the name, rules, facts or motion spec changed since the applied-skill report; run `brand-creator applied-skill --yes` again")
+    if p["kit"]:
+        kit_rows(project, rep, p["kit"])
+
+
+def kit_rows(project: Path, rep: Report, kit: str) -> None:
+    """kit:file and kit:state, from the `kit` report: every file it recorded writing is still there with the bytes it wrote, and the brand it was made from has not changed since."""
+    r = _report(project, "kit")
+    if r is None:
+        return   # the generic report gate already says it is missing or no report
+    again = "change the brand project and run `brand-creator kit build --yes`"
+    outs = r.get("outputs")
+    if not (isinstance(outs, dict) and outs):
+        rep.add("kit:file", "fail", "the kit is the bytes `kit build` wrote", detail="the kit report records no outputs it wrote: run `brand-creator kit build --yes`")
+    else:
+        differ, odd = [], []
+        for rel, sha in sorted(outs.items()):
+            if not (isinstance(sha, str) and kitlib.recorded_path(rel)):
+                odd.append(rel)   # a record that is no sha256 of a file of the kit is named, never opened
+                continue
+            f = project / kit / rel
+            if not f.is_file():
+                differ.append(f"{rel} (missing)")
+            elif sha256_file(f) != sha:
+                differ.append(rel)
+        if odd:
+            rep.add("kit:file", "fail", "the kit is the bytes `kit build` wrote",
+                    detail=f"the kit report holds {len(odd)} output record(s) that cannot be compared with a file of the kit ({', '.join(odd[:4])}): run `brand-creator kit build --yes`")
+        elif differ:
+            more = f", and {len(differ) - 4} more" if len(differ) > 4 else ""
+            rep.add("kit:file", "fail", "the kit is the bytes `kit build` wrote",
+                    detail=f"{len(differ)} kit file(s) differ from what was generated: {', '.join(differ[:4])}{more}. They were edited by hand or removed: {again}")
+        else:
+            rep.add("kit:file", "pass", "the kit is the bytes `kit build` wrote", detail=f"{len(outs)} generated files unchanged since they were generated")
+    if r.get("status") == "pass":
+        try:
+            now = (adapt.state_sha(project), kitlib.sources_sha(project))
+        except CliError as e:
+            rep.add("kit:state", "skipped", "the kit was made from the brand as it is now", detail=f"not verified: the brand's sources cannot be read ({e.message}); run `brand-creator kit build --yes` again")
+            return
+        if (r.get("adapter_state_sha"), r.get("kit_sources_sha")) != now:
+            rep.add("kit:state", "skipped", "the kit was made from the brand as it is now",
+                    detail="not verified: the name, rules, facts, tokens, logos, band drawings or motion spec changed since the kit report; run `brand-creator kit build --yes` again")

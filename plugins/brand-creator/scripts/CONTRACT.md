@@ -2184,6 +2184,7 @@ message on stderr, exit 2; `--plan` exits 0). The name is `<slug>-brand` (lower 
 the adapters (`applied-skill:file`, `applied-skill:state`).
 The same builder (`adapt.applied_skill_md(project, template, kit=...)`) writes the kit's SKILL.md, with every path inside the kit (the tokens, the marks and the band drawings
 under `brand/`, and the template's `{{kit}}` line filled with the kit section; see `kit`). Without a kit the template's `{{kit}}` line is dropped, as `{{motion}}` is, and the file is the bytes it always was.
+A project whose skill folder holds a `kit.json` is handed over to `kit build --yes`: `applied-skill` then exits 2 before it writes anything (with `--plan` and `--replace` too), with "this project's brand skill is a kit (kit.json): run `brand-creator kit build --yes`". `check` gates such a project through the `kit` report and runs no `applied-skill:file` or `applied-skill:state` row for it.
 
 ### kit
 
@@ -2233,6 +2234,17 @@ Report `kit` (`assets/_checks/kit.json`), renderer `n/a (generated files)`. Inpu
 when the project has it. Row `kit:written` passes, with the detail `<n> generated files: <w> written, <u> unchanged, <r> moved to removed-<date>/; version <v>`. Extra keys: `outputs` (every generated
 path with its sha256, `kit.json` included), `kit_version` (the report's own `version` stays the plugin's), `content_sha`, `adapter_state_sha` (`adapt.state_sha`) and `kit_sources_sha` (sha256 over
 `sources`). A run that stops before the report is created (a hand edit, unbuilt tokens, a bad drawing) leaves the earlier report as it was.
+
+**What `check` gates.** A skill folder with a `kit.json` is gated as a kit, and the plain applied skill's rows are not run for it (`present()` in `scripts/adaptlib/gates.py` names the kit, or the skill, never both):
+
+- `report:kit`, the generic report gate: the `kit` report exists, passes and is current against its inputs, and the fix it names is `brand-creator kit build --yes`.
+- `kit:file`: every path in the report's `outputs` (SKILL.md and `kit.json` too) is still in the kit with the sha256 the build recorded. Otherwise it fails, naming up to 4 paths (a missing one is marked
+  `(missing)`) and saying they were edited by hand or removed: change the brand project and run `brand-creator kit build --yes`. A report with no `outputs`, or one whose `outputs` hold a record that
+  cannot be compared with a file of the kit (a path that climbs out of the kit, a value that is no sha256), also fails the row and says so; it never crashes `check`. A file that is not in `outputs` (an owner's file, a foreign file) is not read by this row.
+- `kit:state`: only when the report passed. Not verified (`skipped`) when its `adapter_state_sha` or `kit_sources_sha` is not the one the project has now: the name, rules, facts, tokens, logos,
+  band drawings or motion spec changed after the kit was built. There is no row while they match.
+
+`check --cascade` searches the kit like any other text file of the project: `SKILL.md` and the text files under `brand/`.
 
 ### launch-todo
 

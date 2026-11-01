@@ -33,7 +33,7 @@
     bytes `book` wrote (a hand edit fails); a book.pdf report that exists is gated like any other
   * --cascade "<old value or phrase>" (repeatable): no current project artefact may still contain it (text files, PDFs as text, the documents named by
     tools/cascade.json, --also and FAMILY.md parent_docs); lines that record a product repository's old value (ADOPTION.md, LAUNCH.md) warn, they do not fail
-  * adoption.json (pins, numbering, accounting) and ADOPTION.md as rendered from it; BRAND.md, DESIGN.md and the applied skill as generated files
+  * adoption.json (pins, numbering, accounting) and ADOPTION.md as rendered from it; BRAND.md, DESIGN.md, the applied skill and the brand kit as generated files
   * motion/motion.json, when it exists: valid against its schema, and every duration and curve it names is a built token (a failing row, never a crash)
   * Standard and Full decide motion before G4: once G4 is recorded, motion/motion.json must exist, on or off (motion:decided), and a brand that moves needs a current passing
     report of motion/proof.json, the proof of the approved move (motion:proof; the report of any other proof never counts, a try-out's and the one report of an earlier version included, and a
