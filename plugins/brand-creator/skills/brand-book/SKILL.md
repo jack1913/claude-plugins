@@ -133,11 +133,18 @@ fences. Once the owner decides:
    A hand-authored book is patched to show the stamp before G5 is recorded.
 2. Ask once, at G5, with AskUserQuestion: BRAND.md and DESIGN.md for coding agents, and a per-brand skill in the
    project's own `.claude/skills/`. Recommend only what the owner will use. Without a yes, write neither.
+   The same question also offers the brand kit: a folder around that per-brand skill that a product repository can carry.
+   Recommend it when the brief lists a site or INVENTORY.md lists product repositories. Without a yes, write no kit.
 3. Yes to the adapters → `adapters --brand-md --design-md [--primary <role>]`. DESIGN.md is linted by the pinned
    `@google/design.md`; when it is not installed the result is "not verified" (exit 3), never a pass. Then
    `staleness --write` after the chain is rebuilt.
 4. Yes to the skill → `applied-skill` (prints the plan), then `applied-skill --yes`. It is a change to the project's
    configuration: say where it goes before writing.
+   Yes to the kit → `kit build` (it prints the plan and writes nothing), show the owner the plan, then `kit build --yes`. The kit
+   includes the per-brand skill as its `SKILL.md`, so a yes to the kit needs no separate `applied-skill`. Then fill the owner
+   files with the owner: `voice.md` from the tone chapter and the FACTS voice rows, `visual.md` from the book, `golden-rules.md`
+   citing rule ids from `rules.json`. Then `kit build --yes` again (it records the owner's text and moves the version on) and
+   `kit check` until it passes. A later brand change means `kit build --yes` again, then `kit check`.
 5. These files are generated: a later change goes into the sources, then the command again. `check` fails a hand edit.
 
 ## The PDF
@@ -155,6 +162,7 @@ that in chat. It is for reading and sharing, never a print file; print productio
 - A rule changed in the book only. A rule lives in many places: follow [cascade](../brand-creator/references/cascade.md)
   and run `check --cascade "<old value>"`.
 - Writing the adapters or the applied skill because they seem useful. They are the owner's opt-in at G5.
+- Editing a kit file under `brand/`, `snippets/` or `reference-pages/`: change the brand project, then rebuild.
 
 References: [10-book](../brand-creator/references/phases/10-book.md) (method and enforcement), `scripts/CONTRACT.md`
 ("Brand book"; "Adoption, cascade, adapters, applied skill and launch"), the [orchestrator](../brand-creator/SKILL.md)

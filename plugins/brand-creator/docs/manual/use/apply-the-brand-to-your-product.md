@@ -60,6 +60,23 @@ Good to know:
 - If your local server is not running when Claude reads the pages again, Claude says so and does not skip the step.
   Start the server and ask again.
 
+## Put the brand kit in a repository
+
+If you opted into the [brand kit](use-your-brand-kit.md) when you approved your brand files, you can put it in a
+repository too.
+
+1. After the survey, ask for the kit to go into a named repository:
+
+   > Add the brand kit for the repository `<label>`
+
+   It becomes one more row on the list, the whole folder.
+2. Apply it as above, on your branch. Claude copies the kit's files one at a time. It never overwrites a file of yours
+   that the repository already has, and never copies into a global skills folder.
+3. The review compares the copy with your kit byte for byte. Ask for `/brand-creator:brand-adopt status` any time to see
+   whether each copy is current.
+
+The kit is left uncommitted, like every other change. How to fill and keep the kit: [Use your brand kit](use-your-brand-kit.md).
+
 ## Check it worked
 
 - `/brand-creator:brand-adopt status` shows every row as done, partly done or not done, with evidence.

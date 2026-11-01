@@ -21,6 +21,7 @@ proven.
 | [Applied skill in a real session](#the-applied-skill-is-picked-up-by-a-real-session) | 2026-11-01, Claude Code 2.1.316, in the kit test baseline | passed: `<slug>-brand` was listed and was the first skill the session used |
 | [DESIGN.md and BRAND.md in a real agent](#designmd-and-brandmd-in-a-real-agent) | 2026-11-01, Claude Code 2.1.316, in the kit test baseline; `DESIGN.md` only | partly: colours and dark variants came from `DESIGN.md` and `tokens.css`; the font and logo files it linked were not in the folder |
 | [Kit test baseline](#kit-test-baseline-a-hero-from-the-applied-skill-and-from-a-kit) | 2026-11-01, Claude Code 2.1.316, Opus 5.5, frontend-design 1.1.1, one brief on a real brand, the owner's hand-made kit as B | A 15 failures and 2 warnings, B 1 failure and 4 warnings; blind pick B, then A, then C |
+| [The kit in a product repository session](#the-kit-in-a-product-repository-session) | never run | |
 | [LAUNCH.md links](#launchmd-links-open-the-register-pages) | never run | |
 | [Book, adoption, review and launch skills in a real session](#the-book-adoption-review-and-launch-skills-in-a-real-session) | never run | |
 | [Permission rule for the fallback form](#permission-rule-for-the-fallback-form) | never run | |
@@ -223,6 +224,31 @@ commands that needed approval were refused, the same in every run.
   that say where the files go in a product); the recipe runs the page check and labels sample figures with `data-sample`; the
   recipe names the hero's word budget and the stock labels, by pointing at the page check's warnings; the kit says it works
   beside the web skill, not instead of it.
+
+## The kit in a product repository session
+
+**Why manual.** The tests prove the copy list, `kit status --repo` and the adopt prompts. Whether Claude Code lists a kit that sits in a
+repository's own `.claude/skills/`, and whether a session there builds a page from it, needs a real session. Every run is billed.
+
+**Steps** (scratch copies only; the brand project itself is never written to):
+
+1. Take a scratch copy of a brand project that has a kit (`kit build --yes`, the three owner files filled, `kit check` passing), and a
+   throwaway repository outside every brand project: a copy of `tests/fixtures/target-repo/`, or a small site with its own public folder.
+2. Install the kit the way an owner does: `/brand-creator:brand-adopt survey`, `adoption add --repo <label> --kit`, then apply on a
+   branch you name. `kit status --repo <the repository>` must say current. Nothing may be committed, and nothing may appear in
+   `~/.claude/skills`.
+3. Start a fresh session in the repository, with a web-design skill (for example frontend-design) and no other plugin. Run `/skills`
+   and confirm `<slug>-brand` is listed. Ask for the home page hero from the brief line and the facts only.
+4. Read what the session did. Did it load the kit skill and the web-page recipe? Did it take colours, fonts and the logo from the
+   tokens and snippets, copy the files it uses into the product's public folder and link them from there, never into
+   `.claude/skills/`? Did it run `page-check` on the built page and mark samples with `data-sample`?
+5. In the scratch brand project, change a token and run `kit build --yes`. `kit status --repo` must say not current. Update the
+   copy by the list it prints, with a change to one owner file in the repository first: afterwards `kit status --repo` says current
+   and lists that owner file as the repository's own, unchanged.
+6. Record the date, the Claude Code version, the model, the web skill and its version, what the session loaded and did, and every gap.
+   Gaps feed the kit's files and recipe, never a patch of a generated file.
+
+**Last run:** never.
 
 ## LAUNCH.md links open the register pages
 

@@ -335,6 +335,10 @@ lints the board of the latest round again before `check`, so an edit of the fact
   Only you decide a drop, and it is recorded in your words. The adopt workflow's review reports the losses in a
   `wiring_losses` list and tells the lead such a review is not ready for a commit ask. The manual's "Apply the brand to
   your product" page has a new section, "Redesigning a site: keep what it is wired to".
+- You are now offered the brand kit when you approve your brand files, beside `BRAND.md`, `DESIGN.md` and the brand
+  skill, and it is recommended when your brief lists a site or you have product repositories. A new manual page,
+  [Use your brand kit](docs/manual/use/use-your-brand-kit.md), shows how to ask for it, fill in your own parts, put it
+  in a repository and keep it current.
 
 ### Changed
 
