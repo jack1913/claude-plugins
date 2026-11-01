@@ -4,7 +4,7 @@
 
 ## Displays and Continuity
 
-iPhone Duo has an outer display and a larger inner display. The outer display uses the familiar compact-horizontal, regular-vertical iPhone context in portrait; the inner display can provide regular width and height, including sidebar and multi-column presentations. Use the current proposal and size classes, not a device check, orientation, fixed breakpoint, or global screen.
+iPhone Duo has an outer display and a larger inner display. The outer display uses the familiar compact-horizontal, regular-vertical iPhone context in portrait and compact in both dimensions in landscape; the inner display provides regular width and height in every orientation, open or partially folded, including sidebar and multi-column presentations. Use the current proposal and size classes, not a device check, orientation, fixed breakpoint, or global screen.
 
 Opening, closing, rotating, partially folding, Split View multitasking, and pinned video all resize the same app experience. Preserve navigation state, content hierarchy, and functionality across those transitions. Do not make a feature available only in one pose or prescribe a bespoke layout for every pose. Generic resizability, safe-area, and display-scale rules remain canonical in [layout-best-practices.md](layout-best-practices.md) and [image-optimization.md](image-optimization.md).
 
@@ -24,7 +24,7 @@ In a portrait-only iPhone app, regular width effectively means the inner display
 
 ## Fold and Camera Regions
 
-The outer camera always shapes the outer-display area; standard safe areas and bars account for it. On the inner display, an active fold is represented as a `.division` reserved region because it separates the available area. The active FaceTime camera is an `.occlusion` region because it covers a smaller frame. Inner regions can change activity as the device pose and camera use change.
+The outer camera always shapes the outer-display area; standard safe areas and bars account for it, and the outer display reports it, with the system status area beside it, as active `.occlusion` regions. On the inner display, the fold is a `.division` reserved region because it separates the available area: a band 40 points wide across the middle of the display, with 20-point margins on each side, vertical in the book pose and horizontal in the table-top pose. It is active while the device is partially open and inactive, with the same frame, when the device is fully open. The FaceTime camera is an `.occlusion` region because it covers a smaller frame; while the camera is not in use it is reported only with `.includeInactive`. Inner regions change activity as the device pose and camera use change.
 
 System components (`NavigationStack`, `NavigationSplitView`, `TabView`, sheets, alerts, menus, `List`, `ScrollView`) already adapt around the fold and system UI. Do not displace continuously scrolling articles, feeds, documents, or lists merely because a fold exists. Pick the technique with the list above, then see [`ArrangementView`](layout-best-practices.md#two-region-arrangements-271) and [reserved regions](layout-best-practices.md#reserved-regions-271).
 
@@ -36,7 +36,7 @@ When a partially folded book-like pose requires displacement, a trailing region 
 
 ## Hinge Effects, Not Layout
 
-`onHingeChange` provides live hinge state and angle for optional interactions or effects. Do not use it to drive layout; use size classes, `ArrangementView`, and reserved regions instead. `DeviceHingeContext.hinge` is optional, so reset effect state when there is no hinge or when the relevant hinge status ends.
+`onHingeChange` provides live hinge state and angle for optional interactions or effects. The status is `.closed`, `.partiallyOpen` or `.fullyOpen`, and the angle runs from 0 (closed) to 180 degrees (fully open); updates arrive continuously while the device folds. Do not use it to drive layout; use size classes, `ArrangementView`, and reserved regions instead. `DeviceHingeContext.hinge` is optional, so reset effect state when there is no hinge or when the relevant hinge status ends.
 
 ```swift
 @available(iOS 27.1, macOS 27.1, macCatalyst 27.1, tvOS 27.1, visionOS 27.1, watchOS 27.1, *)
@@ -66,7 +66,7 @@ Scene accessories can pair supplementary content with the main scene on another 
 
 ## Verifying Layouts
 
-Before claiming a fold or landscape layout works, check whether your environment can pose the iPhone Duo simulator. `simctl` cannot fold or rotate it; a tool that sets the simulator's pose can, and without one, ask the developer to confirm the closed, partially folded (book) and fully open poses, in portrait and landscape. Xcode Previews are another way to iterate on layout.
+Before claiming a fold or landscape layout works, check whether your environment can pose the iPhone Duo simulator. `simctl` cannot fold or rotate it. Xcode's Device Hub can: its device toolbar has Closed, Partially Open and Open pose buttons and a Rotate Right button, and they are reachable through macOS accessibility scripting when the tool running them has Accessibility permission. Without such access, ask the developer to confirm the closed, partially folded (book and table-top) and fully open poses, in portrait and landscape. Xcode Previews are another way to iterate on layout.
 
 Resizing is continuous, so also check the extremes, not just named poses: narrowest, widest, shortest, tallest, and roughly square. Look for clipped content, overlapping controls, and text that sprawls at wide sizes. If the root is a `TabView`, see [Tab Bar and Sidebar](sheet-navigation-patterns.md#tab-bar-and-sidebar-sdk-27) for the iPhone sidebar presentation.
 

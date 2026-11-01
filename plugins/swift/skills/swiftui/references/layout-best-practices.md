@@ -176,12 +176,12 @@ struct AdaptivePlayer: View {
 
 Apple lists `ArrangementView` as introduced in 27.1 on every platform (iOS, iPadOS, Mac Catalyst, macOS, tvOS, visionOS and watchOS). Name 27.1 for each platform your target builds for in the check, as above: the `*` admits unnamed platforms at their deployment target, so a bare `#available(iOS 27.1, *)` fails to compile on macOS or visionOS below 27.1. With each platform named, no `#if os(...)` guard is needed.
 
-Both split and overlay styles accept `axes(_:)`. Leave the axes unconstrained when either orientation is valid. Restrict the set only when the content relationship requires it; if a split cannot use the permitted axis in the current proposal, the arrangement may show a single region instead of forcing an unsuitable split. Keep the earlier-OS fallback equivalent in hierarchy and functionality.
+Both split and overlay styles accept `axes(_:)`. Leave the axes unconstrained when either orientation is valid. Restrict the set only when the content relationship requires it; if a split cannot use the permitted axis in the current proposal, the arrangement may show a single region instead of forcing an unsuitable split. Keep the earlier-OS fallback equivalent in hierarchy and functionality. A `.split` arrangement places its two regions on either side of an active fold, with the fold's band between them, and splits evenly when the fold is inactive; in a compact-width, compact-height space, such as the iPhone Duo outer display in landscape, it showed only the primary region even with unconstrained axes, so keep every function reachable from the primary region.
 
 Treat these nesting combinations conservatively and test them on the 27.1 SDK:
 
 - Do not put `NavigationSplitView` inside `ArrangementView`, or `ArrangementView` inside `NavigationSplitView`.
-- Do not put `ArrangementView` inside `List` or `ScrollView`.
+- Do not put `ArrangementView` inside `List` or `ScrollView`. Inside a `ScrollView` on the iPhone Duo simulator, a `.split` arrangement laid its regions out side by side across a horizontal fold instead of placing them around it.
 
 An arrangement supplies layout, not navigation infrastructure. Keep it inside a `NavigationStack` when the arranged content needs stack navigation. Each region handles its own scrolling.
 
@@ -216,7 +216,7 @@ let possibleDivisions = proxy.reservedRegions(
 )
 ```
 
-Do not treat an inactive region as a current obstruction; inspect `isActive` before displacement. Inactive division regions can have a zero-sized frame.
+Do not treat an inactive region as a current obstruction; inspect `isActive` before displacement. On the iPhone Duo simulator an inactive division keeps the same frame it has while active, so `.includeInactive` geometry stays put as the device folds; still fall back to an ordinary layout if a frame is zero-sized.
 
 The query's `layoutDirectionBehavior` defaults to `.mirrors`, so directional geometry follows right-to-left layout. Preserve that default for interface content. Override it only when coordinates intentionally represent physical hardware placement rather than leading/trailing UI, and keep the reason explicit.
 

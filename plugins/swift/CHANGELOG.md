@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - the arrangement tuning modifiers, and checking layouts in every pose.
 - The new tab sidebar example compiles for every platform: `.defaultTabBarPlacement(.sidebar)` is limited to iOS, iPadOS, Mac Catalyst and visionOS, and the example is left out on watchOS. Upstream's `@available(iOS 27.0, *)` form fails to compile for macOS, tvOS, visionOS and watchOS.
 
+### Changed
+
+- The iPhone Duo guidance now states what the iPhone Duo simulator reports in each pose, checked with Xcode 27.2: size classes on each display, the fold as a 40-point region that stays in place whether active or not, the hinge statuses and angles, where a split arrangement puts its two regions, and that Device Hub's pose buttons can be scripted.
+
 ### Fixed
 
 - The Liquid Glass segmented-control example uses each label as its `ForEach` id instead of its position, and the list checklist ties the `Array(...)`-free `enumerated()` form to an OS 26 deployment target, as the list guidance already did.
