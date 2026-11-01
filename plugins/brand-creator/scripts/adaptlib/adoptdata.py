@@ -7,6 +7,8 @@ Rows are numbered by position and are append-only. Progress (to do, doing, done)
 row put in the middle, taken out or moved would move statuses silently. Two pins stop that: `nrows` (the row count) and `pins` (the start of
 every row's identity, `repo|category|file`, keyed by number). `verify()` fails on any difference. Only `adoption survey` adds rows, at the end.
 Line numbers are the survey's: they may drift, so every row also carries `find`, a content excerpt to look for.
+`wiring` is the record of `brand-creator adoption wiring` (what a redesign must keep: links, form fields, handlers, test hooks, ids, scripts), one entry per
+repository id with a `before` and an `after` record. It holds the repository's own values, so it is in TARGET_KEYS; `verify()` checks its shape.
 """
 from __future__ import annotations
 
@@ -33,12 +35,12 @@ CATEGORIES = [
 SURVEYED = [c for c, _l in CATEGORIES if c != "change"]
 CATEGORY_LABEL = dict(CATEGORIES)
 # keys that hold the old values of the target repos by design: the cascade search does not read them
-TARGET_KEYS = ("find", "terms", "identifiers", "kept")
+TARGET_KEYS = ("find", "terms", "identifiers", "kept", "wiring")
 
 
 def empty(slug: str) -> dict:
     return {"schema": SCHEMA, "slug": slug, "repos": [], "terms": {"names": [], "colours": []}, "survey": {}, "nrows": 0, "pins": {},
-            "rows": [], "progress": {}, "seen": {}, "kept": [], "identifiers": [], "accounting": {}}
+            "rows": [], "progress": {}, "seen": {}, "kept": [], "identifiers": [], "accounting": {}, "wiring": {}}
 
 
 def path(project: Path) -> Path:
@@ -148,6 +150,33 @@ def verify(doc: dict) -> list[str]:
     acc = doc.get("accounting") or {}
     if acc and acc.get("hits") != acc.get("in_rows", 0) + acc.get("kept", 0):
         bad.append(f"accounting: {acc.get('hits')} hits, {acc.get('in_rows')} in rows, {acc.get('kept')} kept: every hit must be a row or kept")
+    bad += verify_wiring(doc)
+    return bad
+
+
+def verify_wiring(doc: dict) -> list[str]:
+    """The `wiring` record (`adoption wiring`): one entry per surveyed repository id, each holding a before and an after record whose `items` map an
+    item (`kind:value`) to the files that held it. Only the shape is checked here."""
+    wiring = doc.get("wiring", {})
+    if not isinstance(wiring, dict):
+        return [f"wiring is {type(wiring).__name__}, not an object keyed by repository id"]
+    bad: list[str] = []
+    known = {r.get("id") for r in doc.get("repos", []) if isinstance(r, dict)}
+    for rid, entry in wiring.items():
+        if rid not in known:
+            bad.append(f"wiring names repository {rid!r}, which was never surveyed")
+        elif not isinstance(entry, dict):
+            bad.append(f"wiring of {rid} is not an object")
+        else:
+            for which in ("before", "after"):
+                rec = entry.get(which)
+                if rec is None:
+                    continue
+                items = rec.get("items") if isinstance(rec, dict) else None
+                if not isinstance(items, dict):
+                    bad.append(f"wiring of {rid}: the {which} record has no `items` object")
+                elif not all(isinstance(files, list) and all(isinstance(f, str) for f in files) for files in items.values()):
+                    bad.append(f"wiring of {rid}: an item of the {which} record does not map to a list of strings")
     return bad
 
 

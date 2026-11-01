@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width">
+  <title>Sample shop</title>
+  <link rel="stylesheet" href="/css/site.css">
+  <base href="/app/">
+  <script src="./js/app.js?v=3" defer></script>
+  <script src="https://analytics.example.com/tag.js"></script>
+</head>
+<body>
+  <!-- <a href="/commented-out" data-testid="commented-out">gone</a> -->
+  <header id="top">
+    <a href="/" data-testid="logo-link">Home</a>
+    <a href="/products?sort=new#list" data-track-click="nav-products">Products</a>
+    <a href="#">Back</a>
+    <a href="#main">Skip to content</a>
+    <a name="legacy-anchor"></a>
+  </header>
+  <main id="main">
+    <form id="signup-form" action="/signup" method="post" data-analytics-form="signup">
+      <input name="email" type="email" id="email" data-cy="email-input">
+      <select name="plan"><option value="free">Free</option></select>
+      <textarea name="note"></textarea>
+      <button type="submit" formaction="/signup/express" data-gtm-event="signup-click" onclick="track('signup')">Join</button>
+    </form>
+    <p id="note text">An id with a space is not a static id.</p>
+    <img src="/img/hero.png" alt="">
+  </main>
+  <script>
+    document.getElementById("top").addEventListener("click", function () {});
+    var link = { href: "/not-markup", name: "not-a-field" };
+  </script>
+</body>
+</html>

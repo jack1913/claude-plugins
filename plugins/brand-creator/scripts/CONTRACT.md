@@ -75,7 +75,7 @@ exit code) before it exits, so the previous passing report cannot survive a fail
 recorded once. `brand-creator check` reads these reports, recomputes each
 report's `inputs` hashes, and treats a stale report (inputs changed since) as not verified. Tool names: `tokens`,
 `contrast`, `logo-sheet`, `board-lint`, `shot`, `emit-web`, `emit-social`, `emit-apple`, `emit-windows`, `emit-linux`, `emit-tray`, `emit-tauri`, `emit-wallet`, `emit-developer`, `check`, `names`, `downscale`, `states`, `family`, `fontcheck`,
-`motion/<slug>-<hash6>` (from `shot --motion`, one per proof file; see Motion proof) and `frames/<slug>-<hash6>` (from `frames`), `page-check/<slug>-<hash6>` (from `page-check`, one per page; see Page check), `idempotence` (from `verify-idempotent`), `staleness`, `book`, `book-lint`, `book-pdf`, `print-check`, `adoption`, `adapters`, `applied-skill`, `launch-todo`, and one `emit-<target>` per emitter (with several marks, `emit-<target>/<mark>` and `logo-sheet/<mark>` per mark)
+`motion/<slug>-<hash6>` (from `shot --motion`, one per proof file; see Motion proof) and `frames/<slug>-<hash6>` (from `frames`), `page-check/<slug>-<hash6>` (from `page-check`, one per page; see Page check), `idempotence` (from `verify-idempotent`), `staleness`, `book`, `book-lint`, `book-pdf`, `print-check`, `adoption`, `adoption-wiring`, `adapters`, `applied-skill`, `launch-todo`, and one `emit-<target>` per emitter (with several marks, `emit-<target>/<mark>` and `logo-sheet/<mark>` per mark)
 (`emit-web`, `emit-social`, `emit-apple`, `emit-windows`, `emit-linux`, `emit-tray`, `emit-tauri`, `emit-wallet`, `emit-developer`, `emit-print`, `emit-presskit`). The renderer in use is stored in the report and
 printed on every run.
 
@@ -2021,6 +2021,43 @@ built from the counts (`adoptdata.sentence`). Its fixed text (the section order 
 a missing frame or placeholder exits 2). `check` (`adoption:data`) fails an ADOPTION.md that is not what the data renders, and warns about a row marked done
 that still matches at the last survey (`adoption:drift`).
 
+### adoption wiring
+
+`adoption wiring --repo LABEL (--before [--again] | --after)` records the wiring of a surveyed repository's source: the links, form field names, handlers,
+test hooks, ids and scripts that a redesign can drop without the adoption list noticing ([ADR-0012](../docs/adr/ADR-0012-a-redesign-records-the-sites-wiring.md)).
+`LABEL` must be a repository of the survey (exit 2 otherwise), and exactly one of `--before` and `--after` is given (exit 2 otherwise). The command needs no gate, as the survey needs none:
+it changes nothing outside the project, and it proves that.
+
+Files are listed with ripgrep as the survey lists them (`.gitignore` honoured, `.git` left out, symlinks not followed, the brand project left out when it
+lives inside the repository). A file is read when its extension is one of `.html .htm .jsx .tsx .js .ts .mjs .vue .svelte .astro .erb .ejs .hbs .handlebars
+.njk .liquid .twig .php .mdx` and the survey's keep rules (`keep_reason(path, [])`) do not keep it: lock files, change history, licence text, minified output,
+and `dist`, `build`, `target`, `out`, `.next`, `.nuxt`, `coverage`, `vendor`, `Pods`, `DerivedData`, `__pycache__` and `node_modules` folders. The owner's `--keep` globs
+are about brand slots and do not apply here. HTML comments are removed first, and the body of a `<script>` or `<style>` is not read as markup. Attributes are read
+from tags (`<name ...>`, across lines); a value is a quoted string or a `{...}` expression kept with its braces, balanced to three levels, with white space
+squashed. An unquoted value is not read, and nor is a `{...}` nested deeper than three levels (the `wiring:scope` row counts them). An item is `kind:value`, with
+everything after the colon cut at 120 characters:
+
+| kind | what is an item |
+|---|---|
+| `link` | the value of `href`, `to`, `action` and `formAction` (`formaction` too); not an empty value or `#`, and not `href` on `link`, `script`, `base`, `use`, `image` and `style` tags |
+| `field` | `name` on any tag but `meta`, `link`, `a`, `iframe`, `param`, `slot`, `map` and `object`; and the string argument of `register("...")` (not of `x.register(...)`) |
+| `handler` | an attribute `on[A-Z]...` or `on[a-z]...`, `@event`, `v-on:event` or `on:event` that has a value: `handler:<attribute>=<value>` |
+| `hook` | `data-testid`, `data-test`, `data-cy`, `data-qa` and `data-track*`, `data-analytics*`, `data-event*`, `data-gtm*`: `hook:<attribute>=<value>` |
+| `id` | a static `id="..."`: no braces and no white space in the value |
+| `script` | the `src` of a `<script>`, without its query and without a leading `./` |
+
+The record is `adoption.json` `wiring[<repository id>]["before" | "after"]` = `{"date", "head", "files", "items"}`: the day, the repository's git head (or `no git head`), the number of
+files read, and `items`, sorted, each mapped to up to five files that held it. A repository id is the survey's (`r1`, `r2`). `--before` is the baseline: over an existing
+before record it exits 1 ("pass --again to replace it"), and `--again` replaces the before record only. `--after` needs a before record (exit 2) and replaces an earlier after record. The key
+`kept` of `adoption.json` is the survey's list of lines left out of the count, so the record has its own key. `verify` (and `check`, `adoption:data`) fails a `wiring` entry for a repository that was
+never surveyed and a record whose `items` are not an object of lists of strings; `ADOPTION.md` does not show the record yet, and `check --cascade` does not search it.
+
+The report is `adoption-wiring` with the rows `read-only:<label>`, `wiring:<label>` (info: the count per kind) and `wiring:scope` (info: the files read, the files of
+those kinds the keep rules left out, and the values not read). The scan lists the files with sizes and modification times before and after reading; a difference fails
+`read-only:<label>`, exits 1 and stores nothing. Without ripgrep the command exits 3 with the install command and stores nothing; a file that cannot be read exits 3.
+The extraction is by pattern, so it is approximate (a value built at run time, a tag a template engine assembles): ADR-0012 says why a noisy item is dropped with a reason rather
+than hidden.
+
 ### check --cascade
 
 `check --cascade "<old value or phrase>"` (repeatable; `--ignore-case`; `--also PATH` repeatable) searches every current text file of the project, PDFs as text
@@ -2030,7 +2067,7 @@ are only read, and one that does not exist fails. A current file holding the val
 `cascade:scope` row: `history/`, `decisions/`, `BRAND-STATE.md`, `DECISIONS.md`, earlier rounds, `removed-*/`, `assets/_checks/`, `assets/manifest.json`, binary files
 and print PDFs (their text is outlines). `_build/` folders are searched: their HTML (OG card, social posts, App Store frames, print pieces) is the only text
 layer of an image made from a value given on the command line, which `emit` does not check against FACTS. A line that carries `<!-- target-repo -->` (an ADOPTION.md row, the rename list of LAUNCH.md) and the `find`, `terms`,
-`identifiers` and `kept` fields of adoption.json record what a product repository holds: they are counted apart and make a warning, never a failure; any other line
+`identifiers`, `kept` and `wiring` fields of adoption.json record what a product repository holds: they are counted apart and make a warning, never a failure; any other line
 of those files, including the text of an adoption row's `change`, is searched like the rest.
 
 ### adapters

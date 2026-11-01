@@ -264,6 +264,14 @@ lints the board of the latest round again before `check`, so an edit of the fact
 - A behaviour eval, `site-refs-gate-before-site-round`: on a Standard project with the system rules approved and a brief
   that lists a site, "build the home page" writes no page of the site and records neither the website references pick
   nor a skip, and without web tools Claude says the website references need web access and stops.
+- Redesigning a site? `brand-creator adoption wiring --before` records its links, form fields, handlers, test hooks,
+  ids and scripts, so nothing is lost by accident. Name a repository you surveyed with `adoption survey`; the command
+  reads its source (`.html`, `.jsx`, `.tsx`, `.vue`, `.svelte`, `.php` and the other template and script files, with
+  `.gitignore` honoured and lock files, change history, minified output, `dist`, `build` and vendored folders left out)
+  and writes the record into `adoption.json`. It never edits the repository, and proves it: if anything in the
+  repository changes while it reads, the row `read-only:<label>` fails and nothing is stored. The first `--before` is the
+  baseline and is not replaced unless you pass `--again`; `--after` records the site once the redesign is applied and
+  needs the baseline. The reading is by pattern, so a link or id built when the page runs is missed or noisy.
 
 ### Changed
 
