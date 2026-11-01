@@ -133,7 +133,7 @@ The brand book can show these pages in an optional Site chapter, with every choi
 | Claude says the references come first and stops | Pick references, or say "skip the references". The first screen waits for one of the two |
 | A version shows "fix" | Ask Claude to fix what the cold review found, or to say on the card why it keeps it |
 | Claude says the pages need a first screen you picked | Pick a first screen first. The other pages are built from it |
-| `check` says the pictures or the page check of an approved page are "not verified" | The page or a token changed after the last run. Ask Claude to take the pictures and run the page check again |
+| `check` says the pictures or the page check of an approved page are "not verified" | Something the check stands on changed after the last run: the page or a file it loads, your tokens, your page rules, your facts, or the system rules you approved. Approving a later step, such as the book, does not. Ask Claude to take the pictures and run the page check again |
 | `check` fails an approved page | The row names the page. Either it was edited after you approved it (put the approved page back, or approve it again from the round), or it breaks your brand rules (fix it and approve again) |
 | Claude says `site/` already holds approved pages | Approving again moves the old pages to a `removed-<date>` folder, never deletes them, and only when you say to replace them |
 

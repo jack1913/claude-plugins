@@ -149,9 +149,10 @@ review and the choices are in `references/phases/07p-site-round.md`; the board's
    (it quotes where the owner decided it) or `example`. Hardest surface, My call, questions and reply as on every board.
 5. Lint (steps 6 and 7 above), shoot the board last: `shot` keeps one report, and `check` wants the one of the latest board.
    Taking a still, a check or a cold review again after the lint makes its report stale: lint again.
-   So does any write to `BRAND-STATE.md` (the phase, `review_url`, a gate, the Directions table, Still open), because every
-   `page-check` report lists it among its inputs: set the phase before the first `page-check`, and after the writes of
-   steps 8 and 9 above run `page-check` on each page of the round and `board-lint rounds/r<N>/board.html --project <dir>` again.
+   A write to `BRAND-STATE.md` (the phase, `review_url`, a gate, the Directions table, Still open) does not: a `page-check`
+   report holds only its G4 rules (the G4 record and the "(rule)" lines), so only a change to those needs `page-check` on each
+   page of the round and then `board-lint rounds/r<N>/board.html --project <dir>` again. After the writes of steps 8 and 9
+   above, lint a pages board again when a rule of it cites a line only `BRAND-STATE.md` holds.
 6. Reply and stop. The owner picks or combines a hero, or says none of these (new variants, or a new references board and a
    new G4w). The pages are built in the turn after the pick. The approved pages are references for whoever builds the real
    site, never fill-in templates.

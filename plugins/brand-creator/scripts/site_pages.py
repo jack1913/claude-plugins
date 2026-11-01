@@ -31,7 +31,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE / "lib"))
 sys.path.insert(0, str(HERE / "boardlib"))
 sys.path.insert(0, str(HERE / "pagelib"))   # boardlib/siteboard.py names the page-check report of a page with pagelib/pagecheck.py
-from _common import (EXIT_FAIL, EXIT_USAGE, CliError, Parser, add_project_arg, confine, fail, find_project, gate_recorded, list_rounds, main_guard,  # noqa: E402
+from _common import (EXIT_FAIL, EXIT_USAGE, STATE_FILE, CliError, Parser, add_project_arg, confine, fail, find_project, gate_recorded, list_rounds, main_guard,  # noqa: E402
                      sha256_bytes, sha256_file, stale_inputs, today)
 from boardpage import page_kind, page_marker, read_page  # noqa: E402
 import siteboard  # noqa: E402
@@ -44,9 +44,18 @@ JUNK = (".DS_Store",)
 SHOWN = 12                           # problems listed in a message before "and N more"
 
 
+def old_page_reports(project: Path, board_rel: str, page_ids: list[str]) -> bool:
+    """True when the page-check report of a page of the board lists BRAND-STATE.md whole: a report made before page-check held that file by its G4 rules (the part "g4-rules", _common.PART_READERS)."""
+    folder = board_rel.rsplit("/", 1)[0]
+    return any(project / STATE_FILE in siteboard.made_from(project, f"assets/_checks/{siteboard.report_tool(f'{folder}/{pid}/index.html')}.json") for pid in page_ids)
+
+
 def lint_problem(project: Path, board_rel: str, page_ids: list[str]) -> str | None:
     """Why assets/_checks/board-lint.json is not a current, passing lint of the board, or None. Current is `check`'s rule: no file it was made from is gone or changed (the board itself is one of them).
-    A page-check report lists BRAND-STATE.md among the files it was made from, and so does the lint through it: recording G4p changes the file, so the pages are checked again (`page_ids`) before the board is."""
+    A page-check report holds BRAND-STATE.md by its G4 rules only (an input with a "part", _common.PART_READERS), and so does the lint through it: recording G4p, G5, G6 or the phase leaves both current,
+    and a changed G4 record or "(rule)" line makes both stale: the pages are checked again (`page_ids`), then the board is linted. The lint holds the whole file too when a rule's source is found
+    only there (siteboard.choices_rows): a write to it then makes the lint stale, and linting again is enough. A report made when it listed the whole file is stale after any write to it:
+    the message says to check the pages again before the board is linted."""
     cmd = f"brand-creator board-lint {board_rel}"
     again = f"lint the pages board first: {cmd}"
     f = project / LINT_REPORT
@@ -66,10 +75,16 @@ def lint_problem(project: Path, board_rel: str, page_ids: list[str]) -> str | No
         stale.append(f"it does not list {board_rel} among the files it was made from")
     if stale:
         extra = ""
-        if stale == ["BRAND-STATE.md changed"]:
+        whole, rules = f"{STATE_FILE} changed", f"{STATE_FILE} (the G4 rules) changed"
+        if set(stale) <= {whole, rules}:   # only BRAND-STATE.md changed
             checks = "; ".join(f"brand-creator page-check {board_rel.rsplit('/', 1)[0]}/{pid}/index.html" for pid in page_ids)
-            extra = (" (recording a gate changes BRAND-STATE.md, which the page-check reports of the pages were made from: check each page again"
-                     f"{' (' + checks + ')' if checks else ''}, then lint the board)")
+            pages = f"check each page again{' (' + checks + ')' if checks else ''}, then lint the board"
+            if rules in stale:
+                extra = f" (the G4 rules changed, which the page-check reports of the pages were made from: {pages})"
+            elif old_page_reports(project, board_rel, page_ids):
+                extra = f" (recording a gate changes BRAND-STATE.md, which the page-check reports of the pages were made from: {pages})"
+            else:
+                extra = " (recording a gate changes BRAND-STATE.md, which a rule of the board cites as its source: lint the board again)"
         return f"the board-lint report is stale ({'; '.join(stale[:3])}){extra}: {again}"
     if doc.get("status") != "pass":
         return f"the board-lint report of {board_rel} is {doc.get('status')!r}, not pass: change the board as its rows say, then lint it again: {cmd}"

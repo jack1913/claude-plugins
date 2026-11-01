@@ -69,9 +69,11 @@ Commands are written after `brand-creator --data "${CLAUDE_PLUGIN_DATA}"`.
 | G4p record | `BRAND-STATE.md` → `gates.G4p` (`state --record G4p "<decision>"`) |
 | The approved pages | `site/<id>/index.html`, their files, and `site/site.json` (from `site approve`) |
 
-Set the phase once, before the first `page-check` (`state --project <dir> --set phase=P7p`): every `page-check` report
-lists `BRAND-STATE.md` among its inputs, so any later write to it (the phase, `review_url`, a gate, the Directions table,
-Still open) makes the round's reports, and with them the board's lint, stale. A site board is no pick, style or reset
+A `page-check` report holds `BRAND-STATE.md` by its G4 rules only (the G4 record and the "(rule)" lines under "Rules
+(G4)", the two things a page check reads from it). So a later write to the file (the phase, `review_url`, a gate, the
+Directions table, Still open) leaves the round's reports and the board's lint current; only a changed G4 record or "(rule)"
+line makes them stale, and then `page-check` runs again on each page, then the lint. A report from an older release lists
+the whole file and goes stale at any write: run `page-check` on that page once more. A site board is no pick, style or reset
 round, so the hook, `freeze`, `shot` and the review surface work unchanged and the style gate ignores it. The first board of each stage
 (the first hero board, then the first pages board) is a new, empty folder (`mkdir rounds/r<N>`), never a copy of an
 earlier round. A later board of the same stage, the refine loop on the picked or combined variant, starts as
@@ -120,9 +122,10 @@ data-page="start">`) in every project.
    again. The review copy is `cp rounds/r<N>/board.html review/index.html`, with each still given a
    `data:image/png;base64,...` src of the same file and each live link the path seen from `review/`
    (`../rounds/r<N>/<Name>/index.html`; it opens from this machine only), linted with `board-lint review/index.html
-   --round <N>`. Recording `review_url` and updating `BRAND-STATE.md` after that write it again: before the reply run
-   `page-check` on each variant and `board-lint rounds/r<N>/board.html --project <dir>` once more, so that `check` finds
-   the board's lint current.
+   --round <N>`. Recording `review_url` and updating `BRAND-STATE.md` after that write it again, but the `page-check`
+   reports hold only its G4 rules, so they stay current: before the reply run `board-lint rounds/r<N>/board.html --project
+   <dir>` once more, so that `check` finds the board's lint current (a lint of a board whose rule cites a line only
+   `BRAND-STATE.md` holds lists the whole file, so it needs that run).
 6. **Reply and stop.** The owner picks or combines a hero, or says none of these. Restate the pick in one line and write it
    into `DECISIONS.md` with the owner's words and the date. "None of these" is new variants (a new hero board; the old
    ones stay in their round) or, when what was missing is the references, a new website references board and a new G4w.
@@ -209,10 +212,12 @@ The owner approves the pages and the tags, in their words. Then, in this order:
 1. **Restate** which pages are approved and which choices are rules (with where each was decided) and which are examples.
 2. `state --project <dir> --record G4p "approved <pages>; rules <ids>"`. Never record it on a bare "ok", and never for pages
    the owner did not approve.
-3. **Make the proof current again.** Recording a gate changes `BRAND-STATE.md`, which every `page-check` report lists
-   among its inputs, so the reports of the round's pages and with them the board's lint are stale. Run `page-check` on each
-   page of the round and `board-lint rounds/r<N>/board.html --project <dir>` again (`site approve` refuses a lint that
-   is not current and passing).
+3. **Make the proof current again, when it is not.** Recording a gate changes `BRAND-STATE.md`, but the `page-check`
+   reports hold only its G4 rules, so the reports of the round's pages and the board's lint stay current. Lint again when
+   `site approve` says the lint is stale: it does when a rule of the board cites a line only `BRAND-STATE.md` holds, and
+   when a report is from an older release (run `page-check` on each page of the round first, then `board-lint
+   rounds/r<N>/board.html --project <dir>`). A changed G4 record or "(rule)" line needs the same two runs.
+   `site approve` refuses a lint that is not current and passing.
 4. `freeze r<N> --name approved-site --project <dir>` keeps the round in `history/`.
 5. `site approve --project <dir>` copies each approved page from `rounds/r<N>/<id>/` into `site/<id>/` (without `shots/` and
    `cold-review.md`, with every relative path made to resolve from there) and writes `site/site.json`: the pages, the layout
@@ -253,10 +258,11 @@ board, the owner chooses between new variants or pages (a new site board) and a 
   pattern, the lint fails the board.
 - **An in-thread cold review presented as blind.** It is not. Say `by: in-thread`, and never write findings from the
   reasons you know.
-- **A stale proof.** A page, still, token file or any write to `BRAND-STATE.md` (the phase, `review_url`, a gate, the
-  Directions table, Still open) after the check, the capture or the lint: run them again before showing the board or
-  running `site approve`. Set the phase before the first `page-check`; after the later writes run `page-check` on each
-  page of the round, then `board-lint rounds/r<N>/board.html --project <dir>`.
+- **A stale proof.** A page, still, token file, or a changed G4 record or "(rule)" line of `BRAND-STATE.md` after the
+  check, the capture or the lint: run them again before showing the board or running `site approve` (`page-check` on each
+  page of the round, then `board-lint rounds/r<N>/board.html --project <dir>`). Other writes to `BRAND-STATE.md` (the
+  phase, `review_url`, a gate, the Directions table, Still open) leave the `page-check` reports current; they make the
+  lint stale only when a rule cites a line that only `BRAND-STATE.md` holds, and then the lint alone runs again.
 - **Building the production site here.** The pages are references. The real site is built in the product repository.
 - **Capturing in an earlier round.** `capture` refuses a page in `history/` or in a round before the latest; work in the
   latest round.

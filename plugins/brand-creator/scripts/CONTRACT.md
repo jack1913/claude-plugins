@@ -79,6 +79,15 @@ report's `inputs` hashes, and treats a stale report (inputs changed since) as no
 (`emit-web`, `emit-social`, `emit-apple`, `emit-windows`, `emit-linux`, `emit-tray`, `emit-tauri`, `emit-wallet`, `emit-developer`, `emit-print`, `emit-presskit`). The renderer in use is stored in the report and
 printed on every run.
 
+**An input may stand for a part of a file.** An entry of `inputs` is a whole file, `{"path", "sha256"}`, unless it also has `"part"`: `{"path": "BRAND-STATE.md", "part": "g4-rules", "sha256": "<hex>"}` stands for one named part of the file,
+and its `sha256` is that of the part's canonical text, not of the file. One registry reads the parts (`PART_READERS` in `scripts/lib/_common.py`: the part's name, the file it belongs to, what to call it in a sentence, how to read it);
+a `Report` takes `PartInput(path, "<part>")` among its inputs. The only part so far is `g4-rules` of `BRAND-STATE.md`: the G4 record (white space collapsed) and, once G4 is recorded, the recorded `(rule)` lines of Rules (G4) in file order
+(white space collapsed; `adapt.g4_rules`, the one reading `adapt.view(project)["rules"]` also makes), as one line of JSON. The rest of the file (the phase, the other gates, the Directions table, Still open, a line of Rules (G4) that is no `(rule)`
+line) is not in it. `_common.stale_inputs`, the rule `check` and the boards apply, recomputes the part: the input is stale when the part changed (`BRAND-STATE.md (the G4 rules) changed`) and when it cannot be read, with a sentence that says why
+(`BRAND-STATE.md (the G4 rules) cannot be read: ...`: no frontmatter, a part this plugin does not know, a part of another file). A part that cannot be read when the report is written is recorded as unreadable, so the report reads as stale and never as
+current. `inputs_sha` hashes the part name after the path for a part input; a record without `part` is judged and hashed as it always was, so older reports keep their meaning. A board lint that copies the records of the reports it stands on
+(`board-lint` of a site board, from its page-check reports) copies a part as it is, so it follows.
+
 ## Exit codes
 
 | code | meaning |
@@ -605,7 +614,7 @@ The `inputs` of the lint report are the page, `brief/BRIEF.md` when it exists, t
 them changes.
 
 The proof rows add to those inputs, for each variant: its page-check report, `shots/capture.json`, the four stills and the files named by `capture.json` for them, and every file the two records list as made from (the page, `tokens.css`, a stylesheet, a script; a page-check report also lists
-`BRAND-STATE.md`, `qa/rules.json` and `FACTS.md`, so recording a gate makes the page-check reports, and with them this lint report, stale). Without a variant card the three rows are "not verified" (`skipped`); the fixtures of `tests/test_site_board.py` write the reports and the stills by hand, in the shape
+`BRAND-STATE.md` by its G4 rules (the part `g4-rules`, see Reports), `qa/rules.json` and `FACTS.md`, and the lint keeps those records as they are: a changed G4 record or `(rule)` line makes the page-check reports, and with them this lint report, stale; recording G4p, G5 or G6 or setting the phase does not, unless a rule of the choices cites a line only `BRAND-STATE.md` holds: see `site:choices` below). Without a variant card the three rows are "not verified" (`skipped`); the fixtures of `tests/test_site_board.py` write the reports and the stills by hand, in the shape
 `page-check` and `capture` give them, so the tests need no browser.
 
 The cold review of a hero is the file `rounds/rN/<name>/cold-review.md`:
@@ -656,7 +665,7 @@ The rows of the pages stage (the gates and the sections above apply as well):
 | `section:choices` | the page has no `data-section="choices"` element, or it is empty |
 | `site:choices` | no item with `data-choice`; an id that is not `c` and a number, or is used twice; an item with no text; `data-tag` missing or neither `rule` nor `example`; a rule whose `data-source` is empty, is shorter than six characters, or is found in none of `BRAND-STATE.md`, `DECISIONS.md` and `decisions/*.md` ("a rule says where it was decided: record the owner's decision in DECISIONS.md, then cite it"); a `data-pages` that is empty, or names an id that is no page card of this board |
 
-The `inputs` of the lint report add the `index.html` of each page, `DECISIONS.md` and `decisions/*.md` (a changed decision makes it stale; `BRAND-STATE.md` is searched for the choices but is not added for them: it is an input anyway through the page-check report of each page, so recording a gate makes this report stale, as above) and the rest the proof rows add (see above).
+The `inputs` of the lint report add the `index.html` of each page, `DECISIONS.md` and `decisions/*.md` (a changed decision makes it stale) and the rest the proof rows add (see above). `BRAND-STATE.md` is searched for the choices too, and the page-check reports hold only its G4 rules, so the lint lists the whole file itself (a record without `part`) when a rule's `data-source` is found in it and in none of the other files: deleting or changing the cited line, or recording a gate, makes the lint stale, and linting again settles it (the finish chain lints the board of the latest round again). A source that `DECISIONS.md` or a record under `decisions/` holds too does not add the file: those are inputs already. A changed G4 record or `(rule)` line makes the lint stale through the page-check reports, as above.
 
 ## Hook guard
 
@@ -1296,7 +1305,7 @@ brand-creator page-check --url http://localhost:<port>/<path> [--project DIR] ..
   and connects to any host the machine can reach.
 - **The report.** Tool `page-check/<slug>-<hash6>` (`assets/_checks/page-check/<slug>-<hash6>.json`), one per page: the slug is the page's file stem (for a URL, the stem of the last
   segment of its path), else `page`, and the hash is the first six hex of the sha256 of the ident, which is the project-relative posix path of a project page,
-  `from:<real DIR>/<page>`, or `url:<URL>`. Inputs: `assets/tokens/tokens.json`, `assets/tokens/tokens.css`, `qa/rules.json`, `FACTS.md` and `BRAND-STATE.md` (when they exist) and, for a
+  `from:<real DIR>/<page>`, or `url:<URL>`. Inputs: `assets/tokens/tokens.json`, `assets/tokens/tokens.css`, `qa/rules.json`, `FACTS.md` and `BRAND-STATE.md` by its G4 rules (the part `g4-rules`: the G4 record and the recorded `(rule)` lines, the only things the check reads from it; see Reports) (when they exist) and, for a
   project page, the page and every project file the browser was served (`tokens.css` included), so a change to one makes the report stale; a `--from` or `--url`
   report lists the brand's files only. The report holds these keys at its top level: `target` (`{"kind": "project"|"from"|"url", "page", "from", "url"}`), `widths`,
   `schemes` and `measures` (the path of the measurements). `check` does not gate page-check reports.
@@ -1498,7 +1507,7 @@ brand-creator page-check --url http://localhost:<port>/<path> [--project DIR] ..
   BRAND-STATE.md unreadable. So a proposal never fails a page; the owner's approval does. The row holds `rule` (the entry), `tied`, `g4_line` (the line or null) and, per kind, `max` (and `min`),
   `most_in_one_screen`, `screen` (`{width, scheme, top, bottom}`) and `marks` for marks; `controls_checked`, `longest` and `offenders` for controls; `accents_checked` and `offenders` for accents. A
   selector the browser does not take as CSS fails the row whether or not it is tied (the rule cannot be judged), and says so; a selector that matches nothing passes and says so. A rule that
-  could not be measured (no view rendered, a mark with no box) is `skipped` or "NOT verified" in a warning, never a pass. The rows read `BRAND-STATE.md`, which is already an input of the report. The
+  could not be measured (no view rendered, a mark with no box) is `skipped` or "NOT verified" in a warning, never a pass. The rows read the G4 record and the `(rule)` lines of `BRAND-STATE.md`, which are already an input of the report (the part `g4-rules`). The
   judging imports `scripts/adaptlib/adapt.py` (next to `pagelib`) only when a project has page rules.
 - **Generic tells.** `skills/brand-creator/references/page-tells.json` (`{"$description", "version": 1, "languages": ["en", "pl"], "tells": [...], "notes": [...]}`) lists the patterns that read as a template whatever
   the brand. A tell is `{id, name, what, why, measure}` plus, where it has them, `threshold` (the numbers) and `words` (a list per language of `languages`). The browser reports candidates and
@@ -1633,8 +1642,10 @@ library's `site` module wherever `scripts/` is on `sys.path`) puts the pages the
   2. exit 2 when `rounds/r<N>/board.html` (`N` is `--round`, else the latest round) does not exist, or is not a `data-board="site"` page at `data-site-stage="pages"`, or when `rounds`, `rounds/r<N>` or the board file is a symbolic link,
      wherever it leads (`rounds/r3 is a symbolic link: the pages board is read as it is, and a link can lead out of the project`; this is looked at before the file is looked for or read);
   3. exit 1 unless `assets/_checks/board-lint.json` is the lint of that very board, current and `pass` (`lint the pages board first: brand-creator board-lint rounds/r<N>/board.html`).
-     Current is `check`'s rule: no file the lint was made from is gone or changed. A page-check report lists `BRAND-STATE.md` among the files it was made from and the lint lists
-     theirs, so recording G4p makes the lint stale when a page was checked before it. The message then names `page-check` for each page and the lint; both have to be run again;
+     Current is `check`'s rule: no file the lint was made from is gone or changed. A page-check report holds `BRAND-STATE.md` by its G4 rules (the part `g4-rules`, see Reports) and the lint keeps
+     those records, so recording G4p, G5 or G6 leaves the lint current, and a changed G4 record or `(rule)` line makes it stale: the message then names `page-check` for each page and the lint, and both have to be
+     run again. Two cases differ: a lint made from page-check reports that list the whole `BRAND-STATE.md`, as older ones do, is stale after any write to it (the same message), and a lint of a board with a rule
+     whose source only `BRAND-STATE.md` holds lists the whole file itself (see `site:choices`), so recording G4p makes it stale and the message asks for the lint again alone;
   4. exit 1 when `site/` exists and `--replace` is not given (`site/ holds approved pages already`).
 - **Pages.** One page per page card of the board (`data-site-page`); each needs its folder `rounds/r<N>/<id>/`, its `index.html` and a `data-layout` on `<body>`. The folder is copied into
   `site/<id>/` except `shots/` and `cold-review.md` at the top of it (`capture` writes `shots/` again beside the approved page) and `.DS_Store`. A symbolic link anywhere in a page folder exits 2, and so does a page folder that is itself a symbolic link or has one above it, wherever it leads
@@ -1702,8 +1713,8 @@ made before the site round, and a site round not yet approved) gets no `site:` r
   `inputs`, and lists the four first-screen stills (`1440-light`, `1440-dark`, `390-light`, `390-dark`) by file and sha256 where the files in `shots/` have those bytes. Otherwise the row is "not verified" and
   names `brand-creator capture site/<id>/index.html` (a capture is a record of the page, not a gate on it, so it never fails the row).
 
-`site approve` writes no report, so right after it `site:pages` and `site:stills` are "not verified" until `page-check` and `capture` have run on each page, which is what its output asks for. Recording G4p
-changes `BRAND-STATE.md`, which a page-check report lists among the files it was made from: run `page-check` on the approved pages after G4p. A page that `check` passes has not changed since approval, was checked against
+`site approve` writes no report, so right after it `site:pages` and `site:stills` are "not verified" until `page-check` and `capture` have run on each page, which is what its output asks for. The page-check report of a page
+in `site/` holds `BRAND-STATE.md` by its G4 rules only, so recording G5 or G6 or setting the phase afterwards leaves it current; a changed G4 record or `(rule)` line makes it stale. A page that `check` passes has not changed since approval, was checked against
 the brand rules as it is, and has stills of the page as it is.
 
 ## Brand book

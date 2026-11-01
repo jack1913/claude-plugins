@@ -276,7 +276,7 @@ def test_site_approve_needs_a_current_passing_lint_of_the_pages_board(tmp_path):
 
 def test_recording_g4p_after_the_lint_makes_it_stale_when_a_page_check_read_brand_state(tmp_path):
     p = pages_project(tmp_path)
-    for pid in PAGES:                                                                        # a real page-check report lists BRAND-STATE.md among the files it was made from
+    for pid in PAGES:                                                                        # an older page-check report lists the whole of BRAND-STATE.md among the files it was made from
         page_check_report(p, f"rounds/r3/{pid}/index.html", "pass", also=("BRAND-STATE.md",))
     assert lint3(p).returncode == 0
     assert bc("state", "--record", "G4p", G4P, project=p).returncode == 0
@@ -292,6 +292,109 @@ def test_recording_g4p_after_the_lint_makes_it_stale_when_a_page_check_read_bran
     r = approve(p)
     assert r.returncode == 0, (r.stdout, r.stderr)
     assert sitedata.validate_site(p) == []
+
+
+def check_rows(p: Path) -> dict:
+    """The rows of `check` about the site proof: id -> (status, detail). The exit code has other reasons in a synthetic project; the rows are what counts."""
+    from helpers import report
+    bc("check", project=p)
+    return {x["id"]: (x["status"], x.get("detail", "")) for x in report(p, "check")["results"] if x["id"].startswith(("site:", "report:board-lint"))}
+
+
+def test_a_changed_g4_rule_after_the_lint_names_the_g4_rules_and_asks_for_the_pages_again(tmp_path):
+    """(m) The page-check reports of the pages hold BRAND-STATE.md by its G4 rules: a "(rule)" line that changes after the lint makes the lint stale with a message that says so (`the G4 rules changed`, not
+    `recording a gate`), names `page-check` for each page and then the lint; the pages checked again and the board linted again go through."""
+    p = pages_project(tmp_path)
+    mine = ("BRAND-STATE.md#g4-rules", "FACTS.md")
+    assert bc("state", "--record", "G4p", G4P, project=p).returncode == 0
+    for pid in PAGES:
+        page_check_report(p, f"rounds/r3/{pid}/index.html", "pass", also=mine)
+    assert lint3(p).returncode == 0
+    mutate(p / "BRAND-STATE.md", "- (rule) (...)", "- (rule) one mark per screen")
+    r = approve(p)
+    assert r.returncode == 1, (r.stdout, r.stderr)
+    assert "the board-lint report is stale (BRAND-STATE.md (the G4 rules) changed)" in r.stderr, r.stderr
+    assert "the G4 rules changed, which the page-check reports of the pages were made from: check each page again" in r.stderr and "recording a gate" not in r.stderr, r.stderr
+    assert "brand-creator page-check rounds/r3/start/index.html" in r.stderr and "brand-creator page-check rounds/r3/pricing/index.html" in r.stderr, r.stderr
+    assert "then lint the board" in r.stderr and "brand-creator board-lint rounds/r3/board.html" in r.stderr, r.stderr
+    assert not (p / "site").exists()
+    for pid in PAGES:
+        page_check_report(p, f"rounds/r3/{pid}/index.html", "pass", also=mine)
+    assert lint3(p).returncode == 0
+    r = approve(p)
+    assert r.returncode == 0, (r.stdout, r.stderr)
+
+
+def test_a_gate_recorded_after_the_lint_asks_for_the_lint_only_when_a_rule_cites_brand_state(tmp_path):
+    """(m) A rule whose source only BRAND-STATE.md holds puts the whole file among the inputs of the lint (siteboard.choices_rows), so recording G4p after the lint makes it stale. The page-check reports are
+    current (they hold the G4 rules only), so the message asks for the lint again and not for a page check; the board linted again goes through. After the approval, G5 recorded makes the lint stale and only the lint:
+    the site rows stay current, and the lint run again (the finish chain does) settles it."""
+    cited = "the stamp sits alone on the left edge"
+    p = pages_project(tmp_path)
+    state = p / "BRAND-STATE.md"
+    state.write_text(state.read_text(encoding="utf-8") + f"\n## Notes\n\n- {cited}\n", encoding="utf-8")
+    mutate(p / "rounds" / "r3" / "board.html", 'data-source="the stamp appears once per view"', f'data-source="{cited}"')
+    for pid in PAGES:
+        page_check_report(p, f"rounds/r3/{pid}/index.html", "pass", also=("BRAND-STATE.md#g4-rules", "FACTS.md"))
+    assert lint3(p).returncode == 0, lint3(p).stdout
+    assert bc("state", "--record", "G4p", G4P, project=p).returncode == 0
+    r = approve(p)
+    assert r.returncode == 1, (r.stdout, r.stderr)
+    assert "the board-lint report is stale (BRAND-STATE.md changed)" in r.stderr, r.stderr
+    assert "which a rule of the board cites as its source: lint the board again" in r.stderr and "check each page again" not in r.stderr and "brand-creator page-check" not in r.stderr, r.stderr
+    assert not (p / "site").exists()
+    assert lint3(p).returncode == 0
+    r = approve(p)
+    assert r.returncode == 0, (r.stdout, r.stderr)
+    from helpers import capture_record
+    for pid in PAGES:
+        page_check_report(p, f"site/{pid}/index.html", "pass", also=("BRAND-STATE.md#g4-rules", "FACTS.md"))
+        capture_record(p, f"site/{pid}/index.html")
+    assert {k: v[0] for k, v in check_rows(p).items()} == {"report:board-lint": "pass", "site:record": "pass", "site:pages": "pass", "site:stills": "pass"}
+    assert bc("state", "--record", "G5", "book approved", project=p).returncode == 0
+    stale = check_rows(p)                                                                    # the lint read the file for a source: it is stale, the page checks are not
+    assert stale["report:board-lint"][0] == "skipped" and "BRAND-STATE.md changed" in stale["report:board-lint"][1], stale
+    assert stale["site:pages"][0] == stale["site:stills"][0] == "pass", stale
+    assert lint3(p).returncode == 0                                                          # the finish chain lints the board of the latest round again
+    assert {k: v[0] for k, v in check_rows(p).items()} == {"report:board-lint": "pass", "site:record": "pass", "site:pages": "pass", "site:stills": "pass"}
+
+
+def test_a_gate_recorded_after_the_pages_are_approved_leaves_the_proof_of_the_site_current(tmp_path):
+    """(m) Finishing a site project: a page-check report holds BRAND-STATE.md by its G4 rules only, so recording G4p, approving, then recording G5 and G6, setting the phase and linting the pages board again
+    (the finish chain does) leaves `report:board-lint` and the site rows of `check` current; a changed "(rule)" line does not. Synthetic project; the reports are written by hand in the shape page-check gives them."""
+    from _common import stale_inputs
+    from helpers import capture_record, report
+    p = pages_project(tmp_path)
+    mine = ("BRAND-STATE.md#g4-rules", "FACTS.md")
+    for pid in PAGES:
+        page_check_report(p, f"rounds/r3/{pid}/index.html", "pass", also=mine)
+    assert lint3(p).returncode == 0
+    lint = report(p, "board-lint")
+    held = [i for i in lint["inputs"] if i["path"] == "BRAND-STATE.md"]
+    assert len(held) == 1 and held[0]["part"] == "g4-rules", "the lint follows the page-check reports: the same part, listed once"
+    assert bc("state", "--record", "G4p", G4P, project=p).returncode == 0
+    assert stale_inputs(p, lint) == [], "recording G4p changes BRAND-STATE.md and not its G4 rules"
+    r = approve(p)                                                                           # no page checked again, no lint again in between
+    assert r.returncode == 0, (r.stdout, r.stderr)
+    for pid in PAGES:
+        page_check_report(p, f"site/{pid}/index.html", "pass", also=mine)
+        capture_record(p, f"site/{pid}/index.html")
+
+    def rows() -> dict:
+        return check_rows(p)
+    before = rows()
+    assert {k: v[0] for k, v in before.items()} == {"report:board-lint": "pass", "site:record": "pass", "site:pages": "pass", "site:stills": "pass"}, before
+    assert bc("state", "--set", "phase=P12", project=p).returncode == 0
+    assert bc("state", "--record", "G5", "book approved", project=p).returncode == 0
+    assert bc("state", "--record", "G6", "adoption go", project=p).returncode == 0
+    assert {k: v[0] for k, v in rows().items()} == {k: "pass" for k in before}, rows()
+    assert lint3(p).returncode == 0                                                          # the finish chain lints the board of the latest round again
+    after = rows()
+    assert {k: v[0] for k, v in after.items()} == {k: "pass" for k in before}, after
+    mutate(p / "BRAND-STATE.md", "- (rule) (...)", "- (rule) one mark per screen")          # a G4 rule is a change the proof stands on
+    changed = rows()
+    assert changed["report:board-lint"][0] == "skipped" and "BRAND-STATE.md (the G4 rules) changed" in changed["report:board-lint"][1], changed
+    assert changed["site:pages"][0] == "skipped" and "BRAND-STATE.md (the G4 rules) changed" in changed["site:pages"][1], changed
 
 
 def test_site_approve_takes_only_a_site_board_at_the_pages_stage(tmp_path):
