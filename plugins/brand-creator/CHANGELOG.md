@@ -328,6 +328,10 @@ lints the board of the latest round again before `check`, so an edit of the fact
   for byte. The implementer copies exactly the files `brand-creator kit status --repo <folder>` lists, one at a time,
   never over a file of your own in the repository and never into a global skills folder; the review passes when
   `kit status` says the copy is current. The adopt workflow's agents get the same two rules. The kit is left uncommitted.
+- You are now offered the brand kit when you approve your brand files, beside `BRAND.md`, `DESIGN.md` and the brand
+  skill, and it is recommended when your brief lists a site or you have product repositories. A new manual page,
+  [Use your brand kit](docs/manual/use/use-your-brand-kit.md), shows how to ask for it, fill in your own parts, put it
+  in a repository and keep it current.
 
 ### Changed
 

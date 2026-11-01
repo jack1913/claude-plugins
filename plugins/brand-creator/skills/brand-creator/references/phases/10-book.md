@@ -10,6 +10,7 @@
 - [Self-review before G5](#self-review-before-g5)
 - [Collapse, edition and approval](#collapse-edition-and-approval)
 - [Adapters and the applied skill (opt-in at G5)](#adapters-and-the-applied-skill-opt-in-at-g5)
+- [The brand kit (opt-in at G5)](#the-brand-kit-opt-in-at-g5)
 - [Gate](#gate)
 - [Pitfalls](#pitfalls)
 - [Enforcement](#enforcement)
@@ -123,11 +124,35 @@ Ask once, at G5, whether the owner wants either. Nothing below is written withou
 - Both are generated files: `check` fails a hand edit, treats a changed source as not verified, and `check --cascade` searches them. `staleness` reads
   both as inputs of the pack. `--replace` moves a hand-edited file to `removed-<date>/` before writing a new one.
 
+## The brand kit (opt-in at G5)
+
+The kit is a folder around the applied skill that a product repository can carry. It is offered in the same G5 question as the
+adapters and the applied skill, in every tier, and recommended when the brief lists a site or INVENTORY.md lists product
+repositories. Nothing is written without the owner's yes, and it needs G5 recorded and an approved edition.
+
+1. `brand-creator kit build` prints the plan and writes nothing (exit 2). Show it, then `kit build --yes` writes
+   `.claude/skills/<slug>-brand/`: `SKILL.md` (the applied skill, from the same builder, with its paths inside the kit and a "The kit"
+   section that prints the version), `kit.json`, `rules.json`, `facts.json`, the brand's own files copied byte for byte under `brand/`
+   at their project paths, and `snippets/`. The kit includes the per-brand skill, so a yes to the kit needs no separate
+   `applied-skill`: that command leaves a project with a kit to `kit build`.
+2. The owner's files are written once from `templates/kit/` and never overwritten or moved: `EXTENDING.md`, `voice.md`, `visual.md`,
+   `golden-rules.md` and `recipes/web-page.md`. Fill the three with a `[[fill: ...]]` marker with the owner: `voice.md` from the tone
+   chapter of the book and the FACTS voice rows, `visual.md` from the book, `golden-rules.md` citing rule ids from `rules.json`.
+3. `kit build --yes` again records the owner's text and moves the version on (until then `kit check` warns that owner files changed
+   since the last build), then `kit check` until it passes. A fresh kit fails `kit:fill` until those three files are filled; it also
+   fails a hand-edited generated file and a dead link, and says "not verified" when the brand changed after the kit was built.
+4. A brand change goes into the project (tokens, logo, rules, facts), then `kit build --yes` again, then `kit check`. A generated
+   file edited by hand, or a file put into `brand/`, `snippets/` or `reference-pages/`, stops the build (exit 1); `--replace` moves
+   it to `removed-<date>/` and builds. An edit of an owner file moves the kit's version at the next build.
+5. To put the kit in a repository: `adoption add --repo <label> --kit`, then [the brand-adopt skill](../../../brand-adopt/SKILL.md)
+   copies it on the owner's branch and `kit status --repo <path>` must say `current`. The scripts never write outside the project, and
+   the kit is never copied into `~/.claude/skills` or any global folder, and never committed.
+
 ## Gate
 
 **G5** (every tier; in Quick it closes the project after the short guide): the edition is approved, the collapse step is done, `check`
-exits 0 with the book's reports current. BRAND.md and DESIGN.md adapters
-and an applied brand skill are written only on the owner's explicit yes at this gate.
+exits 0 with the book's reports current. BRAND.md and DESIGN.md adapters,
+an applied brand skill and the brand kit are written only on the owner's explicit yes at this gate.
 
 ## Pitfalls
 

@@ -21,6 +21,7 @@ Plain words for the terms brand-creator uses.
 | Mark | Your logo symbol. A lockup is the mark together with your name |
 | Pack | A set of files for one place, such as favicons and web icons, social images, or Apple icons |
 | Brand book | One page, `book.html`, with the rules for using your brand: logo at several sizes, colours with contrast, type and files. Built from your project, so it can't drift from the files |
+| Brand kit | A folder in your project, around your brand's skill, that a product repository can carry: your tokens, logo files, open-licence fonts, rules and facts copied in and locked, ready-made snippets, and pages of your own. See [Use your brand kit](../use/use-your-brand-kit.md) |
 | Hand-off | A step Claude gives to you instead of doing it, such as buying a domain or filing a trademark |
 | Leftover search | `/brand-creator:check` with an old value: it searches the whole project for places the old name, colour or rule still shows |
 

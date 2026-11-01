@@ -721,6 +721,25 @@ def test_brand_book_skill_is_narrow_model_invocable_and_carries_the_method_per_m
     assert "[the brand-book skill](../../../brand-book/SKILL.md)" in (REFS / "phases" / "10-book.md").read_text(encoding="utf-8")
 
 
+def test_the_kit_is_offered_at_g5_in_the_brand_book_skill_the_phase_file_and_the_command_table():
+    """G3-21: the one G5 question also offers the kit; each place names the commands in order and the pitfall of editing a generated kit file."""
+    book = _flat(SKILLS / "brand-book" / "SKILL.md")
+    for needle in ("The same question also offers the brand kit", "when the brief lists a site or INVENTORY.md lists product repositories",
+                   "Without a yes, write no kit", "`kit build` (it prints the plan and writes nothing)", "then `kit build --yes`",
+                   "needs no separate `applied-skill`", "`kit check` until it passes",
+                   "Editing a kit file under `brand/`, `snippets/` or `reference-pages/`: change the brand project, then rebuild"):
+        assert needle in book, needle
+    phase = _flat(REFS / "phases" / "10-book.md")
+    assert "- [The brand kit (opt-in at G5)](#the-brand-kit-opt-in-at-g5)" in (REFS / "phases" / "10-book.md").read_text(encoding="utf-8")
+    assert "## The brand kit (opt-in at G5)" in (REFS / "phases" / "10-book.md").read_text(encoding="utf-8")
+    for needle in ("`kit build --yes` writes", "an applied brand skill and the brand kit are written only on the owner's explicit yes at this gate",
+                   "never copied into `~/.claude/skills` or any global folder, and never committed"):
+        assert needle in phase, needle
+    row = next(ln for ln in ORCH.read_text(encoding="utf-8").splitlines() if ln.startswith("| BRAND.md, DESIGN.md, a per-brand skill and the brand kit"))
+    for needle in ("`kit build` (the plan)", "`kit build --yes`", "`kit check`", "`kit status --repo <dir>`"):
+        assert needle in row, needle
+
+
 def test_brand_adopt_is_user_invoked_and_states_every_safety_rule_of_the_apply():
     p = SKILLS / "brand-adopt" / "SKILL.md"
     fm, body = frontmatter(p)

@@ -144,6 +144,10 @@ candidates, checks meaning in each audience language and writes a go, go-with-co
 - `check --cascade "<old value>"` (the leftover search) finds leftovers of a changed rule, token or colour across the project.
 - When you approve the finished files, you may opt into `BRAND.md` and `DESIGN.md` for other agents, and a small
   per-brand skill in your project's `.claude/skills/`.
+- At the same point you may opt into the brand kit: that skill's folder with your tokens, logo files, open-licence fonts,
+  rules, facts and ready-made snippets copied in and locked, and parts that are yours (`voice.md`, `visual.md`,
+  `golden-rules.md`, a web-page recipe). `kit build` writes it, `kit check` proves it whole, and `kit status` says whether
+  a product repository's copy is current. See [Use your brand kit](../use/use-your-brand-kit.md).
 - `launch-todo` writes `LAUNCH.md`: trademark first, then domains and handles with the date each was checked, renames and
   the print hand-off. It only reads local files.
 
