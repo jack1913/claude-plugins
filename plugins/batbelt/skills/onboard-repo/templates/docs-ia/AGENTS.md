@@ -6,7 +6,7 @@
 ## 2. Repo layout
 | Path | Purpose |
 | --- | --- |
-| `docs/manual/` | Consumer documentation — task-first, one task per page |
+| `docs/manual/` | Consumer documentation — commands-first, one concept per page |
 | `docs/internals/` | Technical mechanics — contributors only |
 | `docs/adr/` | Architecture Decision Records |
 | `docs/archive/` | Frozen point-in-time records |

@@ -71,7 +71,7 @@ construction" benefit is only real once the markers exist.
 
 ## 7. Structure
 
-Structure = the docs IA when present: `docs/manual/` (consumer, task-first —
+Structure = the docs IA when present: `docs/manual/` (consumer, commands-first —
 Diátaxis how-to/reference), `docs/internals/` (technical — Diátaxis explanation),
 `docs/adr/` (decisions), `docs/archive/` (frozen). `AGENTS.md` is the index (thin
 `CLAUDE.md` = `@AGENTS.md`); keep it within a ~200–300 line budget, overflow to

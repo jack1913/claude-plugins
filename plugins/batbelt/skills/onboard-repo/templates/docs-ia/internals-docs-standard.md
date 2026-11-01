@@ -6,7 +6,8 @@ part of the docs can find their way in any other.
 ## 1. Four kinds of page
 
 Every page is exactly one kind ([Diátaxis](https://diataxis.fr/)). Never mix two on one page; link
-instead.
+instead. One exception: a how-to keeps the explanation its output needs (what the reader just saw,
+and how to read it, as prose or a table); deeper "why" goes to an explanation page.
 
 | Kind | Answers | Lives in | Title shape |
 | --- | --- | --- | --- |
@@ -20,7 +21,7 @@ instead.
 | Folder | For | Voice |
 | --- | --- | --- |
 | `README.md` | Anyone deciding whether to use <repo> | Set by the README voice recorded in REPO SPECIFICS |
-| `docs/manual/` | People who use <repo> | Friendly, short, task-first (§4) |
+| `docs/manual/` | People who use <repo> | The docs voice recorded in REPO SPECIFICS; by default commands-first, one concept per page, each showing what you'll actually see (§4) |
 | `docs/internals/` | Contributors | Plain technical |
 | `docs/adr/` | Contributors | Plain technical, one decision per file |
 | `docs/archive/` | Nobody day to day | Frozen, never edited |
@@ -82,16 +83,25 @@ For manual pages and READMEs. Internals and ADRs stay plain technical.
   wrong.
 - One idea per sentence. Short sentences, plain words.
 - Explain a term the first time it appears, or drop it. Never show internal codes (phase or gate
-  numbers, decision numbers, build-stage names) on a user page.
+  numbers, decision numbers, build-stage names) on a user page. To give the reason for a choice,
+  link the explanation by its title, never its number.
 - No citations after sentences. Facts are checked in the work; a page links to deeper docs at most
   once per section.
 - Sentence-case headings. Descriptive link text, never "click here".
 - Numbered lists for steps and for the manual's reading order; bullets for everything else.
 - Show real output where it helps the reader. Never invent output; never show maintainer commands
-  (`jq`, `git ls-files`) on a user page.
+  (`jq`, `git ls-files`) on a user page. Each captured block has an italic caption saying how it was
+  taken; a trimmed one says it is an excerpt.
+- When the repo has a front-end per platform, every command block has its twin right after it, sh
+  first. Output from a platform nobody captured is `illustrative`.
+- Callouts (`> [!IMPORTANT]`, `> [!NOTE]`, `> [!WARNING]`) mark a guarantee or a destructive step,
+  at most one per section.
+- Every how-to has an If something goes wrong table (`You see | Do this`) built from the real error
+  text.
 - No numbers that rot: test counts, timings, "so far", "yet". Say how to check instead.
-- Hard-code no version except in the one file that owns it and `CHANGELOG.md`. Use `<version>` in
-  examples.
+- Hard-code no current version except in the one file that owns it and `CHANGELOG.md`; use
+  `<version>` in examples, while upgrade notes keep the versions they name ("Installs from 1.2 and
+  earlier ..."), because a past version is a fixed fact.
 - One word per idea across the whole repo: pick a term for each concept and keep it.
 
 ## 5. If this repo ships Claude Code skills

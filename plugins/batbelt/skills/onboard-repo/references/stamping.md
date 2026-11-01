@@ -136,14 +136,19 @@ with `check.py` and removes the two orphans, shown in the plan like any other ch
   lines are a verbatim, in-order subsequence of `docs/.onboard-captures/<slug>.txt`.
   Separate fences copy-paste cleanly; note that markdownlint's MD014 cannot model the
   split and is disabled per grounded page. Record the convention the repo actually
-  uses — a single `text capture=<slug>` fence holding both is the older shape — so a
-  later run converts pages consistently rather than mixing the two.
+  uses (a single `text capture=<slug>` fence holding both is the other common shape).
+  Every later run follows the recorded convention and never converts a page from one
+  shape to the other.
 - **docs voice:** the tone `update-docs` enforces on `docs/manual/` pages —
-  default "task-first, one-concept-per-page, scannable, operator-voiced; cite
-  ADRs, don't inline rationale", or aligned to the README voice when that voice is
+  default "commands-first, one concept per page, each showing what you'll actually see;
+  link the explanation by its title, never its number", or aligned to the README voice when that voice is
   docs-natural (Field Notes / Lab Notebook / Workshop / The Index). On defer, the
-  task-first default is baked. (The README voice, by contrast, has no default —
+  commands-first default is baked. (The README voice, by contrast, has no default —
   a deferred README voice records "no voice" and re-prompts on the first styling run.)
+
+- **platform pairs:** `sh+powershell` when the repo ships a front-end per platform (an `install.sh`
+  and an `install.ps1`, say): every manual command block then has its twin, and `update-docs` runs
+  `check-docs` with `--platform-pairs`, which makes a missing twin an error. `none` otherwise.
 
 ## REPO SPECIFICS schema — `update-rules`
 

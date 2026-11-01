@@ -3981,7 +3981,7 @@ def test_docs_standard_is_listed_in_internals_readme_and_agents_index():
     assert "(docs-standard.md)" in readme
     agents = (DOCSIA / "AGENTS.md").read_text(encoding="utf-8")
     assert "`docs/internals/docs-standard.md`" in agents
-    assert "commands-first" not in agents
+    assert "task-first" not in agents and "commands-first" in agents
 
 
 def test_manual_readme_seed_has_the_three_task_headings():
@@ -4011,10 +4011,10 @@ def test_manual_page_templates_exist_and_author_manual_points_at_them():
     assert "manual-page-how-to.md" in index and "manual-page-reference.md" in index
 
 
-def test_update_docs_template_is_task_first_and_defers_to_the_standard():
+def test_update_docs_template_is_commands_first_and_defers_to_the_standard():
     t = _norm(UPD)
-    assert "commands-first" not in t
-    assert "task-first" in t
+    assert "task-first" not in t
+    assert "commands-first" in t
     assert "docs/internals/docs-standard.md" in t and "local deviations" in t
 
 
@@ -4156,3 +4156,41 @@ def test_getting_started_shape_is_registered():
     assert pos == sorted(pos)
     assert "manual-page-getting-started.md" in _shape("_index.md")
     assert "manual-page-getting-started.md" in _shape("author-manual.md")
+
+
+# ---- template v5: voice rules and stamping defaults --------------------------
+
+VOICE = "commands-first, one concept per page, each showing what you'll actually see"
+
+
+def test_default_docs_voice_is_commands_first():
+    st = " ".join(_shape("stamping.md").split())
+    assert VOICE in st and "task-first" not in st
+    assert "task-first" not in _flat(UPD) and "task-first" not in _flat(STD_V5)
+    assert VOICE in _flat(STD_V5)
+
+
+def test_user_pages_link_reasons_by_title():
+    st = " ".join(_shape("stamping.md").split())
+    assert "cite ADRs" not in st
+    assert "link the explanation by its title, never its number" in _flat(STD_V5)
+
+
+def test_upgrade_notes_keep_past_versions():
+    std = _flat(STD_V5)
+    assert "upgrade notes keep the versions they name" in std
+    assert "a how-to keeps the explanation its output needs" in std
+
+
+def test_capture_fence_shape_is_recorded_never_converted():
+    st = " ".join(_shape("stamping.md").split())
+    assert "converts pages" not in st and "never converts a page" in st
+
+
+def test_standard_voice_has_captions_callouts_twins_and_troubleshooting():
+    std = _flat(STD_V5)
+    for phrase in ("an italic caption saying how it was taken", "at most one per section",
+                   "every command block has its twin right after it",
+                   "If something goes wrong table"):
+        assert phrase in std, phrase
+    assert "**platform pairs:**" in _shape("stamping.md")
