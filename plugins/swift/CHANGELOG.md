@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-01
+
+This release brings the plugin up to Xcode 27.2 and the shipping iPhone Duo. `swift:swiftui` takes in the upstream 5.2.1 Duo and large-display guidance, checked against the 27.2 SDKs and on the iPhone Duo simulator in every pose; `swift:design` and `/swift:review` gain iPhone Duo rules from Apple's new HIG page; and `swift:concurrency` and `swift:testing` cover what Swift 6.4 and Swift Testing add.
+
 ### Added
 
 - `swift:swiftui` takes in upstream SwiftUI Agent Skill 5.2.1's iPhone Duo and large-display guidance:
@@ -27,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The README and the manual carry the jack1913 brand header.
 - `swift:swiftui`'s inspector advice follows what the Xcode 27.2 simulator shows: on the iPhone Duo inner display in portrait the inspector overlays the content wherever it is attached, and pushes keep working; the list-tint quirk is confirmed on 27.2.
 - The iPhone Duo guidance now states what the iPhone Duo simulator reports in each pose, checked with Xcode 27.2: size classes on each display, the fold as a 40-point region that stays in place whether active or not, the hinge statuses and angles, where a split arrangement puts its two regions, and that Device Hub's pose buttons can be scripted.
 - `swift:concurrency` states what the Xcode 27.2 project templates set: `SWIFT_VERSION = 5.0`, Approachable Concurrency on and MainActor default isolation, so a fresh app is in Swift 5 language mode. The skill no longer says strict checking is on by default outside Swift 6 mode.

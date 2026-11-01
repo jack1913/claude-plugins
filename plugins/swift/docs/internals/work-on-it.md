@@ -3,7 +3,7 @@
 On a clean tree, the three free checks print this:
 
 ```text capture=check-apis-strict
-111 manifest APIs, 0 failures, 0 warnings
+159 manifest APIs, 0 failures, 0 warnings
 ```
 
 ```text capture=unit-tests
