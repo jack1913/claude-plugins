@@ -20,6 +20,7 @@ proven.
 | [Trademark deep link](#trademark-deep-link-opens-a-result-page) | never run | |
 | [Applied skill in a real session](#the-applied-skill-is-picked-up-by-a-real-session) | never run | |
 | [DESIGN.md and BRAND.md in a real agent](#designmd-and-brandmd-in-a-real-agent) | never run | |
+| [Kit test baseline](#kit-test-baseline-a-hero-from-the-applied-skill-and-from-a-kit) | never run | |
 | [LAUNCH.md links](#launchmd-links-open-the-register-pages) | never run | |
 | [Book, adoption, review and launch skills in a real session](#the-book-adoption-review-and-launch-skills-in-a-real-session) | never run | |
 | [Permission rule for the fallback form](#permission-rule-for-the-fallback-form) | never run | |
@@ -167,6 +168,42 @@ then ask for a slide title in the brand and confirm the answer uses the skill's 
 **Why manual.** The files are linted (DESIGN.md) and checked for structure, not for whether an agent reads them better than the token files.
 Give an agent the generated `DESIGN.md` and ask for a small page; check it takes the colours from the file and the dark variants for dark mode.
 Check the `type` and `architecture` pairing of `BRAND.md` against the format's own README, which this plugin could not read when it wrote the mapping.
+
+**Last run:** never.
+
+## Kit test baseline: a hero from the applied skill and from a kit
+
+**Why manual.** It needs a real Claude Code session, a web-building skill and a brand's own files, which are read only. Every
+run is billed, and no test can start a session. The result is a baseline: how a hero built from the applied skill alone compares
+with one built from a brand kit, so the kit work has gaps to close and something to measure against.
+
+**Steps** (scratch copies only; the brand project itself is never written to):
+
+1. In a scratch folder outside every brand project, make folder A: copy the brand's applied skill folder, `DESIGN.md` and
+   `tokens.css` into it. Make folder B: copy a brand kit into it. Use the owner's hand-made kit while the plugin cannot generate
+   one yet, and the generated kit once it can.
+2. In a fresh session in A, with the owner's web skill (for example frontend-design) and no other plugin, ask for the home
+   page hero from the brief line and the facts only. Save the page.
+3. Do the same in B. Then run C in a fresh session in an empty folder: the same web skill, brief line and facts, and no brand
+   material at all.
+4. Score A and B with `brand-creator page-check`, both tiers, with `--project <a scratch copy of the brand project>` and
+   `--from <folder A or B> <page>` (or `--url`). The scratch copy is there because page-check writes its report into the project
+   it is given: never pass the brand project itself. Add the owner's own checklist if there is one. Count brand-rule failures,
+   reflex warnings and invented values (a colour, size or claim that is in no brand file). If the installed plugin has no
+   `page-check` command, score by hand and say so. C has no brand rules to break, so it is not scored here.
+5. The blind pick. Take a phone and a desktop screenshot of each of the three heroes, shuffle them and name them X, Y and Z. A
+   reader who did not watch the runs picks the one to ship, verdict first, then why. The reader is the owner, or a fresh
+   `brand-reviewer` agent after the fleet gate (it is billed), never the lead who ran the sessions. Only then say which run made
+   which. The counts of step 4 measure what breaks the brand's rules, not quality
+   ([ADR-0007](../adr/ADR-0007-brand-side-of-the-web.md)), so the pick is the quality signal. One brief is a first signal, not
+   proof.
+6. Record the date, the Claude Code version, the model, the web skill and its version, the scores of A and B, the blind pick
+   with its reasons, and the gaps. The gaps feed the kit work. Nothing in the brand project changes.
+7. The same run fills two existing rows:
+   - [Applied skill in a real session](#the-applied-skill-is-picked-up-by-a-real-session): was `<slug>-brand` listed by
+     `/skills` and used in A?
+   - [DESIGN.md and BRAND.md in a real agent](#designmd-and-brandmd-in-a-real-agent): did the agent take colours and dark
+     variants from `DESIGN.md`?
 
 **Last run:** never.
 
