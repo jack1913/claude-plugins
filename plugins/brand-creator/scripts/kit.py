@@ -34,8 +34,8 @@ other {{...}} is exit 2 and nothing is written) only when the file is absent. Th
 content hash covers them, so an edit of yours moves the version at the next build. The plan lists the scaffolds the build would write as `scaffold <path> (<bytes> bytes, ...)`.
 
 Nothing in a generated file is edited by hand: change the brand project and build again. A file of the kit that differs from what the last build wrote, or a file in
-brand/, snippets/ or reference-pages/ that the kit did not write, stops the build (exit 1, up to 6 paths named) unless --replace, which moves each to
-removed-<date>[-n]/<its project path>. A file the last build wrote that the project no longer has (a logo taken away) is moved there too, and said so. Nothing is deleted.
+brand/, snippets/ or reference-pages/ that the kit did not write (a file named exactly .DS_Store, which Finder leaves behind, is not one; a link is one, wherever it sits in the kit and whatever it points at, and is never followed or written through), stops the build
+(exit 1, up to 6 paths named) unless --replace, which moves each to removed-<date>[-n]/<its project path>. A file the last build wrote that the project no longer has (a logo taken away) is moved there too, and said so. Nothing is deleted.
 A SKILL.md that `applied-skill` wrote is taken over; one edited by hand stops the first build the same way.
 
 Writes the report `kit` (rows kit:written and kit:owned; outputs lists every generated path with its sha256, kit.json included, and no owner file). Exit 0 written. Exit 1: G5 not recorded, no approved
@@ -77,7 +77,7 @@ def move_aside(project: Path, rels: list[str]) -> str:
     kd = kitlib.kit_rel(project)
     folder = removed_folder(project, rels)
     for rel in rels:
-        src = confine(project, f"{kd}/{rel}", what="kit file")
+        src = confine(project, f"{kd}/{Path(rel).parent.as_posix()}", what="kit file") / Path(rel).name   # the file itself, or the link: a link is moved, never what it points at
         dest = confine(project, f"{folder}/{kd}/{rel}", what="backup")
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(src), str(dest))

@@ -68,14 +68,21 @@ def required(lang: dict) -> str:
     return (BASIC_LATIN if lang.get("basic_latin") else "") + lang["letters"] + lang["symbols"]
 
 
+def invalid_weight(font) -> int | None:
+    """The OS/2 usWeightClass a font stores when it is not a weight (CSS and OpenType take 1 to 1000), else None."""
+    stored = font["OS/2"].usWeightClass if "OS/2" in font else None
+    return stored if stored is not None and not 1 <= stored <= 1000 else None
+
+
 def face(font, stem: str) -> dict:
     """-> {family, weight, style} of one font file: the family from name ID 16, else name ID 1, else the file stem; the weight from OS/2
-    usWeightClass, else 400; the style `italic` when OS/2 fsSelection bit 0 or head.macStyle bit 1 is set, else `normal`."""
+    usWeightClass (1 to 1000), else 400 (no OS/2 table, or a stored value that is no weight: `invalid_weight`); the style `italic` when OS/2
+    fsSelection bit 0 or head.macStyle bit 1 is set, else `normal`."""
     nm = font["name"]
     italic = bool(font["OS/2"].fsSelection & 1) if "OS/2" in font else False
     italic = italic or ("head" in font and bool(font["head"].macStyle & 2))
     return {"family": nm.getDebugName(16) or nm.getDebugName(1) or stem,
-            "weight": font["OS/2"].usWeightClass if "OS/2" in font else 400,
+            "weight": font["OS/2"].usWeightClass if "OS/2" in font and invalid_weight(font) is None else 400,
             "style": "italic" if italic else "normal"}
 
 
@@ -180,6 +187,8 @@ def main() -> int:
             if extras:
                 rep.add(f"extras:{shown}:{code}", "warn", f"typographic extras, {lang['name']} set", detail=f"not in the font: {''.join(extras)} (quotes, dashes or ellipsis the language sets with; the browser would fall back to another font for them)", missing=extras)
         status, detail, facts = licence_hint(font)
+        if (bad := invalid_weight(font)) is not None:
+            detail = f"OS/2 usWeightClass {bad} is not a valid weight (1 to 1000): taken as 400, as for a font with no OS/2 table; {detail}"
         rep.add(f"licence:{shown}", status, "licence hint (from the name table)", detail=detail, **facts, **identity)
         if a.no_platform:
             continue

@@ -29,7 +29,7 @@ To change something generated, change the brand project (the tokens, the logo, t
 
 ## The version
 
-The version is `<edition>.<build>`. It lives in `kit.json`, and `SKILL.md` prints it. Write no version anywhere else. The build number goes up by one at the next build when anything in the kit changed, your own files included.
+The version is `<edition>.<build>`. It lives in `kit.json`, and `SKILL.md` prints it. Write no version anywhere else. The build number goes up by one at the next build when anything the build generates changed, or when one of your five files changed: `EXTENDING.md`, `voice.md`, `visual.md`, `golden-rules.md` or `recipes/web-page.md`. A file of your own beside them, such as `recipes/email.md` or `notes/`, is not part of the kit's content and moves nothing.
 
 ## A product repository's copy
 

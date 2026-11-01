@@ -258,6 +258,198 @@ def test_a_file_put_into_a_generated_folder_stops_the_build(pack):
     assert written_row(pack)["detail"] == "15 generated files: 0 written, 15 unchanged, 3 moved to removed-2026-10-17/; version 1.1"
 
 
+def test_a_finder_ds_store_in_a_generated_folder_is_not_a_foreign_file(pack):
+    """macOS puts a `.DS_Store` into a folder the owner opens in Finder. A file named exactly that is ignored in the generated folders: it never stops a build, is never moved,
+    and is not in the plan or the report. A file whose name only starts like it is a foreign file as any other."""
+    assert build(pack).returncode == 0
+    kd = kit_of(pack)
+    finder = ["brand/.DS_Store", "brand/assets/logo/.DS_Store", "snippets/.DS_Store", "reference-pages/.DS_Store"]
+    for rel in finder:
+        (kd / rel).parent.mkdir(parents=True, exist_ok=True)
+        (kd / rel).write_bytes(b"\x00\x00\x00\x01Bud1")
+    r = bc("kit", "build", "--plan", project=pack)
+    assert r.returncode == 0 and "DS_Store" not in r.stdout + r.stderr and r.stdout.splitlines()[0].startswith("would write 15 generated files")
+    r = build(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "DS_Store" not in r.stdout + r.stderr and not list(pack.glob("removed-*"))
+    assert written_row(pack)["detail"] == "15 generated files: 0 written, 15 unchanged, 0 moved to removed-2026-10-17/; version 1.1"
+    assert all((kd / rel).read_bytes() == b"\x00\x00\x00\x01Bud1" for rel in finder)                          # left where Finder put them
+    assert not [rel for rel in report(pack, "kit")["outputs"] if "DS_Store" in rel] and not [rel for rel in kit_json(pack)["generated"] if "DS_Store" in rel]
+    assert kit_json(pack)["version"] == "1.1"
+    (kd / "snippets" / ".DS_Store.bak").write_text("mine\n", encoding="utf-8")
+    (kd / "brand" / "assets" / "logo" / "ds_store").write_text("mine\n", encoding="utf-8")                  # not the exact name either
+    (kd / "reference-pages" / "old.md").write_text("mine\n", encoding="utf-8")                              # the only foreign file of a folder that Finder also left a file in
+    r = build(pack)
+    assert r.returncode == 1 and "snippets/.DS_Store.bak (not written by the kit)" in r.stderr and "brand/assets/logo/ds_store (not written by the kit)" in r.stderr
+    assert "brand/.DS_Store" not in r.stderr and "snippets/.DS_Store " not in r.stderr
+    r = build(pack, "--replace")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "DS_Store.bak" in r.stdout and "brand/.DS_Store" not in r.stdout and (pack / KIT_REMOVED / "snippets/.DS_Store.bak").is_file()
+    assert all((kd / rel).is_file() for rel in finder) and not (pack / KIT_REMOVED / "brand" / ".DS_Store").exists()
+    assert sorted(f.name for f in (kd / "reference-pages").iterdir()) == [".DS_Store"] and (pack / KIT_REMOVED / "reference-pages" / "old.md").is_file()   # the folder keeps Finder's file: it is not emptied
+
+
+def test_replace_moves_a_link_in_a_generated_folder_and_never_the_file_it_points_at(pack, tmp_path):
+    """A link inside the kit that points at another file (one of the project's, or one beyond it) is a foreign file like any other: `--replace` moves the link itself aside."""
+    from helpers import symlink_or_skip
+    assert build(pack).returncode == 0
+    outside = tmp_path / "outside.txt"
+    outside.write_text("outside\n", encoding="utf-8")
+    facts = (pack / "FACTS.md").read_bytes()
+    symlink_or_skip(kit_of(pack) / "brand" / "notes.md", pack / "FACTS.md")
+    symlink_or_skip(kit_of(pack) / "snippets" / "far.txt", outside)
+    r = build(pack)
+    assert r.returncode == 1 and "brand/notes.md (not written by the kit)" in r.stderr and "snippets/far.txt (not written by the kit)" in r.stderr
+    r = build(pack, "--replace")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (pack / "FACTS.md").read_bytes() == facts and outside.read_text(encoding="utf-8") == "outside\n"      # what the links pointed at stays where it was
+    assert not (kit_of(pack) / "brand" / "notes.md").is_symlink() and not (kit_of(pack) / "snippets" / "far.txt").is_symlink()
+    assert (pack / KIT_REMOVED / "brand" / "notes.md").is_symlink() and (pack / KIT_REMOVED / "snippets" / "far.txt").is_symlink()      # the links are in the backup folder
+    assert written_row(pack)["detail"] == "15 generated files: 0 written, 15 unchanged, 2 moved to removed-2026-10-17/; version 1.1"
+
+
+def test_a_link_to_a_folder_inside_a_generated_folder_is_a_foreign_file_and_is_never_followed(pack):
+    """`os.walk` lists a link to a folder with the folders and does not enter it. The kit lists it as the one foreign path it is, and `--replace` moves the link itself: the project folder
+    it leads to keeps every file. The same at the path of a file the kit writes, and for a link above planned files, where the files seen through the link are not the kit's to compare or move."""
+    from helpers import symlink_or_skip
+    assert build(pack).returncode == 0
+    kd, assets = kit_of(pack), pack / "assets"
+    before = {f.relative_to(pack).as_posix(): file_sha(f) for f in assets.rglob("*") if f.is_file() and "_checks" not in f.parts}
+    symlink_or_skip(kd / "brand" / "linked-folder", assets / "logo")
+    (kd / "brand/assets/tokens/tokens.css").unlink()
+    symlink_or_skip(kd / "brand/assets/tokens/tokens.css", assets / "logo")                              # a folder where a file the kit writes belongs
+    r = build(pack)
+    assert r.returncode == 1 and "Traceback" not in r.stderr and not list(pack.glob("removed-*"))
+    assert "brand/linked-folder (not written by the kit)" in r.stderr and "brand/assets/tokens/tokens.css (not written by the kit)" in r.stderr
+    r = build(pack, "--replace")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (pack / KIT_REMOVED / "brand" / "linked-folder").is_symlink() and (pack / KIT_REMOVED / "brand/assets/tokens/tokens.css").is_symlink()
+    assert not (kd / "brand" / "linked-folder").exists() and (kd / "brand/assets/tokens/tokens.css").is_file() and not (kd / "brand/assets/tokens/tokens.css").is_symlink()
+    assert before == {f.relative_to(pack).as_posix(): file_sha(f) for f in assets.rglob("*") if f.is_file() and "_checks" not in f.parts}      # the project's own files, all there
+    assert kit_files(pack) == KIT_FILES and written_row(pack)["detail"] == "15 generated files: 1 written, 14 unchanged, 2 moved to removed-2026-10-17/; version 1.1"
+    shutil.rmtree(pack / "removed-2026-10-17")
+    stale = {"brand/assets/tokens/stale.txt": "0" * 64}                                                  # recorded by the last build, no longer planned, and seen again through a link:
+    (assets / "tokens" / "stale.txt").write_text("mine\n", encoding="utf-8")                              # the project's own file, not the kit's
+    mutate_json(pack / "assets" / "_checks" / "kit.json", lambda d: d["outputs"].update(stale))
+    shutil.rmtree(kd / "brand" / "assets")
+    symlink_or_skip(kd / "brand" / "assets", assets)
+    r = build(pack)
+    assert r.returncode == 1 and "brand/assets (not written by the kit)" in r.stderr and "stale.txt" not in r.stderr
+    r = build(pack, "--replace")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (assets / "tokens" / "stale.txt").read_text(encoding="utf-8") == "mine\n" and (pack / KIT_REMOVED / "brand" / "assets").is_symlink()
+    assert not (kd / "brand" / "assets").is_symlink() and kit_files(pack) == KIT_FILES and not (kd / "brand/assets/tokens/stale.txt").exists()
+
+
+@pytest.mark.parametrize("folder", ["brand", "snippets", "reference-pages"])
+def test_a_generated_folder_that_is_a_link_is_a_foreign_file_and_the_folder_it_leads_to_is_never_touched(pack, folder):
+    """A generated folder that is itself a link to a folder of the project: the build stops (exit 1, naming the folder), and `--replace` moves the link, never the files of the project
+    folder it leads to; the kit then writes a folder of its own."""
+    from helpers import symlink_or_skip
+    assert build(pack).returncode == 0
+    kd, victim = kit_of(pack), pack / "victim"
+    if (kd / folder).is_dir():
+        shutil.move(str(kd / folder), str(victim))                                                       # the kit's own files, now in a folder of the project
+    else:
+        victim.mkdir()
+    (victim / "owner-notes.md").write_text("mine\n", encoding="utf-8")
+    kept = {f.relative_to(victim).as_posix(): file_sha(f) for f in victim.rglob("*") if f.is_file()}
+    symlink_or_skip(kd / folder, victim)
+    r = build(pack)
+    assert r.returncode == 1 and f"{folder} (not written by the kit)" in r.stderr and "Traceback" not in r.stderr and not list(pack.glob("removed-*"))
+    r = build(pack, "--replace")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert kept == {f.relative_to(victim).as_posix(): file_sha(f) for f in victim.rglob("*") if f.is_file()}        # nothing of the project folder moved, changed or removed
+    assert (pack / KIT_REMOVED / folder).is_symlink() and not (kd / folder).is_symlink() and kit_files(pack) == KIT_FILES
+    assert not (kd / folder / "owner-notes.md").exists()
+
+
+@pytest.mark.parametrize("rel", ["brand/assets/tokens/tokens.css", "brand/assets/logo/mark.svg", "snippets/logo.html", "SKILL.md", "rules.json", "facts.json", "kit.json"])
+def test_a_link_at_a_path_the_kit_writes_is_a_foreign_file_even_when_it_leads_to_the_bytes_the_last_build_wrote(pack, rel):
+    """A link in the kit folder is never read through or written through, not even one that leads to a file holding exactly what the last build recorded (which is no hand edit by the bytes):
+    the build stops naming it, and `--replace` moves the link itself, leaving what it pointed at alone; the kit then holds a real file."""
+    from helpers import symlink_or_skip
+    assert build(pack).returncode == 0
+    kd, notes = kit_of(pack), pack / "notes"
+    notes.mkdir()
+    copy, written = notes / "copy.bin", (kit_of(pack) / rel).read_bytes()
+    copy.write_bytes(written)
+    (kd / rel).unlink()
+    symlink_or_skip(kd / rel, copy)
+    r = build(pack)
+    assert r.returncode == 1 and "Traceback" not in r.stderr and f"{rel} (not written by the kit)" in r.stderr and not list(pack.glob("removed-*"))
+    assert (kd / rel).is_symlink() and copy.read_bytes() == written                          # nothing was written, nothing moved
+    r = build(pack, "--replace")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert copy.read_bytes() == written                                                      # the file the link pointed at is as it was
+    assert (pack / KIT_REMOVED / rel).is_symlink() and (kd / rel).is_file() and not (kd / rel).is_symlink() and kit_files(pack) == KIT_FILES
+    assert (kd / rel).read_bytes() == written                                                # the same bytes, in a file of the kit
+    assert build(pack).returncode == 0 and not (kd / rel).is_symlink()
+
+
+@pytest.mark.parametrize("rel, source, change", [
+    ("brand/assets/tokens/tokens.css", "assets/tokens/tokens.css", lambda f: f.write_text(f.read_text(encoding="utf-8") + "/* changed */\n", encoding="utf-8")),
+    ("facts.json", "FACTS.md", lambda f: mutate(f, "tools are made in batches of 200", "tools are made in batches of 300"))])
+def test_a_link_to_the_projects_own_file_or_to_a_backup_copy_is_never_written_through(pack, rel, source, change):
+    """Two ways to make the kit write into a project file through a link at a path it writes. A link to the project's own source file; and a link to a backup copy that holds the
+    bytes the last build recorded, while the project then changes so that the build has new bytes for that path. Both stop the build, and neither file is touched, with or without `--replace`."""
+    from helpers import symlink_or_skip
+    assert build(pack).returncode == 0
+    kd, notes = kit_of(pack), pack / "notes"
+    notes.mkdir()
+    own, backup = pack / source, notes / "my-backup"
+    recorded = (kd / rel).read_bytes()
+    backup.write_bytes(recorded)
+    (kd / rel).unlink()
+    symlink_or_skip(kd / rel, own)                                                           # (1) a link to the project's own file
+    own_before = own.read_bytes()
+    r = build(pack)
+    assert r.returncode == 1 and f"{rel} (not written by the kit)" in r.stderr and own.read_bytes() == own_before and (kd / rel).is_symlink()
+    (kd / rel).unlink()
+    symlink_or_skip(kd / rel, backup)                                                        # (2) a link to a backup copy, and the project changes
+    change(own)
+    changed = own.read_bytes()
+    r = build(pack)
+    assert r.returncode == 1 and f"{rel} (not written by the kit)" in r.stderr and "Traceback" not in r.stderr
+    assert backup.read_bytes() == recorded and (kd / rel).is_symlink() and not list(pack.glob("removed-*"))
+    r = build(pack, "--replace")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert backup.read_bytes() == recorded and own.read_bytes() == changed                   # the backup keeps the old bytes, the project file is the one it was
+    assert (pack / KIT_REMOVED / rel).is_symlink() and (kd / rel).is_file() and not (kd / rel).is_symlink()
+    if rel != "facts.json":
+        assert (kd / rel).read_bytes() == changed                                            # a real file of the kit now holds the new bytes
+    else:
+        assert "batches of 300" in (kd / rel).read_text(encoding="utf-8")
+
+
+def test_a_dangling_link_at_a_path_the_kit_writes_is_a_foreign_file(pack):
+    from helpers import symlink_or_skip
+    assert build(pack).returncode == 0
+    kd = kit_of(pack)
+    (kd / "rules.json").unlink()
+    symlink_or_skip(kd / "rules.json", pack / "nowhere.json")
+    r = build(pack)
+    assert r.returncode == 1 and "rules.json (not written by the kit)" in r.stderr and "Traceback" not in r.stderr and not (pack / "nowhere.json").exists()
+    assert build(pack, "--replace").returncode == 0 and (kd / "rules.json").is_file() and not (kd / "rules.json").is_symlink() and not (pack / "nowhere.json").exists()
+
+
+def test_a_kit_json_that_is_a_link_is_no_record_of_the_last_build(pack, tmp_path):
+    """With the kit report gone, kit.json stands in for it (`kitlib.previous`), but never through a link: a link that leads out of the project gives neither its version nor its hashes."""
+    from helpers import symlink_or_skip
+    assert build(pack).returncode == 0
+    kd, far = kit_of(pack), tmp_path / "far-kit.json"
+    far.write_bytes((kd / "kit.json").read_bytes())
+    mutate(far, '"version": "1.1"', '"version": "7.7"')
+    (kd / "kit.json").unlink()
+    symlink_or_skip(kd / "kit.json", far)
+    (pack / "assets" / "_checks" / "kit.json").unlink()
+    far_before = far.read_bytes()
+    r = build(pack, "--plan")
+    assert r.returncode == 0 and "version 1.1)" in r.stdout and "7.7" not in r.stdout + r.stderr
+    r = build(pack)
+    assert r.returncode == 1 and "kit.json (not written by the kit)" in r.stderr and far.read_bytes() == far_before
+
+
 def test_a_logo_taken_out_of_the_project_moves_its_kit_copy_to_removed(pack):
     assert build(pack).returncode == 0
     gone = kit_of(pack) / "brand/assets/logo/wordmark-dark.svg"
@@ -284,6 +476,36 @@ def test_a_new_edition_starts_the_build_number_again(pack):
     kj = json.loads((kit_of(pack) / "kit.json").read_text(encoding="utf-8"))
     assert (kj["edition"], kj["version"]) == ("2", "2.1")
     assert "Kit version 2.1 (kit.json)." in (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
+
+
+def test_a_deleted_kit_report_keeps_the_version_and_blames_nobody_for_an_edit(pack):
+    """kit.json is the version's only home: with the `kit` report gone, its version and content_sha stand in, and the files the last build wrote are not "edited by hand"."""
+    assert build(pack).returncode == 0
+    mutate(pack / "FACTS.md", "tools are made in batches of 200", "tools are made in batches of 250")
+    assert build(pack).returncode == 0 and kit_json(pack)["version"] == "1.2"            # a version that a fall back to the first build would not give
+    report_file = pack / "assets" / "_checks" / "kit.json"
+    report_file.unlink()
+    first = kit_state(pack)
+    r = build(pack)                                                                      # no change in the brand
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert kit_json(pack)["version"] == "1.2" and kit_state(pack) == first and not list(pack.glob("removed-*"))
+    assert report(pack, "kit")["kit_version"] == "1.2" and written_row(pack)["detail"].endswith("0 written, 15 unchanged, 0 moved to removed-2026-10-17/; version 1.2")
+    report_file.unlink()
+    mutate(pack / "FACTS.md", "tools are made in batches of 250", "tools are made in batches of 300")
+    r = build(pack)                                                                      # a change in the brand: the build number goes up by 1
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert kit_json(pack)["version"] == "1.3" and "Kit version 1.3 (kit.json)." in (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
+    assert not list(pack.glob("removed-*")) and report(pack, "kit")["kit_version"] == "1.3"
+
+
+def test_without_a_report_a_kit_json_that_cannot_be_read_gives_no_record(pack):
+    """A kit.json that is not a valid kit.json is no record of a build: with no report either, every file counts as the owner's, as before kit.json was read."""
+    assert build(pack).returncode == 0
+    (pack / "assets" / "_checks" / "kit.json").unlink()
+    mutate_json(kit_of(pack) / "kit.json", lambda d: d.__setitem__("flavour", "x"))
+    r = build(pack)
+    assert r.returncode == 1 and "edited by hand" in r.stderr and "kit.json" in r.stderr and "Traceback" not in r.stderr
+    assert build(pack, "--replace").returncode == 0 and kit_json(pack)["version"] == "1.1"
 
 
 def test_the_kit_takes_over_a_skill_file_that_applied_skill_wrote(pack):
@@ -463,6 +685,49 @@ def test_a_font_the_report_cannot_describe_is_listed_and_not_copied(pack):
     assert kit_json(pack)["fonts"]["not_copied"] == [{"file": "assets/fonts/TestFont-subset.ttf", "reason": "the fontcheck report reads no licence for it"}]
 
 
+def set_weight_class(font, value: int) -> None:
+    """Store `value` as the OS/2 usWeightClass of a font file, in place."""
+    from helpers import fonttools
+    r = fonttools("import sys\nfrom fontTools.ttLib import TTFont\nf = TTFont(sys.argv[1])\nf['OS/2'].usWeightClass = int(sys.argv[2])\nf.save(sys.argv[1])\n", str(font), str(value))
+    assert r.returncode == 0, r.stderr
+
+
+def test_a_font_that_stores_an_invalid_weight_class_gets_font_weight_400(pack):
+    """OS/2 usWeightClass 0 (or one over 1000) is no weight: fontcheck takes it as 400 and the kit's @font-face never says `font-weight: 0`."""
+    with_font(pack, fontcheck=False)
+    font = pack / "assets" / "fonts" / TEST_FONT.name
+    for stored in (0, 1001, 65535):
+        set_weight_class(font, stored)
+        r = bc("fontcheck", "--lang", "en", "--no-platform", project=pack)
+        assert r.returncode == 0, r.stdout + r.stderr
+        r = build(pack)
+        assert r.returncode == 0, (stored, r.stdout + r.stderr)
+        assert (kit_of(pack) / "snippets" / "fonts.css").read_text(encoding="utf-8") == FONT_FACE, stored
+        assert fonts_row(pack)["status"] == "pass"
+    set_weight_class(font, 1000)                                                    # the edge of the range is a weight
+    assert bc("fontcheck", "--lang", "en", "--no-platform", project=pack).returncode == 0
+    assert build(pack).returncode == 0
+    assert "  font-weight: 1000;\n" in (kit_of(pack) / "snippets" / "fonts.css").read_text(encoding="utf-8")
+
+
+def test_a_fontcheck_report_with_a_weight_that_is_no_weight_copies_no_font(pack):
+    """A report written before fontcheck took 0 as 400 is still current while the fonts are unchanged: the kit does not take its weight 0 (or 1001, or `true`, or a float) for a weight."""
+    with_font(pack)
+    path = pack / "assets" / "_checks" / "fontcheck.json"
+    row = "licence:assets/fonts/TestFont-subset.ttf"
+    for stored in (0, -1, 1001, True, 400.0, "400", None):
+        mutate_json(path, lambda d: next(r for r in d["results"] if r["id"] == row).__setitem__("weight", stored))
+        r = build(pack)
+        assert r.returncode == 0, (stored, r.stdout + r.stderr)
+        assert kit_files(pack) == KIT_FILES and not (kit_of(pack) / "snippets" / "fonts.css").exists(), stored
+        assert kit_json(pack)["fonts"]["not_copied"] == [{"file": "assets/fonts/TestFont-subset.ttf",
+                                                          "reason": "the fontcheck report has no weight or style for it: run `brand-creator fontcheck` again"}], stored
+    for stored in (1, 1000):                                                        # the edges are weights
+        mutate_json(path, lambda d: next(r for r in d["results"] if r["id"] == row).__setitem__("weight", stored))
+        assert build(pack).returncode == 0
+        assert f"  font-weight: {stored};\n" in (kit_of(pack) / "snippets" / "fonts.css").read_text(encoding="utf-8")
+
+
 def test_a_band_drawing_that_is_missing_or_outside_the_project_stops_the_build(pack, tmp_path):
     (pack / "assets" / "logo" / "mark.svg").unlink()
     r = build(pack)
@@ -584,7 +849,10 @@ def test_check_fails_a_kit_report_that_records_nothing_to_compare_and_never_cras
     cases = ((lambda d: d.pop("outputs"), "records no outputs", ""), (lambda d: d.__setitem__("outputs", {}), "records no outputs", ""),
              (lambda d: d.__setitem__("outputs", ["SKILL.md"]), "records no outputs", ""),
              (lambda d: d.__setitem__("outputs", {"../../x": "0" * 64}), "cannot be compared", "../../x"),     # a record that is no sha256 of a file of the kit is named, never opened
-             (lambda d: d.__setitem__("outputs", {"SKILL.md": 7}), "cannot be compared", "SKILL.md"))
+             (lambda d: d.__setitem__("outputs", {"SKILL.md": 7}), "cannot be compared", "SKILL.md"),
+             (lambda d: d.__setitem__("outputs", {"SKILL.md": "not-a-sha"}), "cannot be compared", "SKILL.md"),      # a string that is not 64 hex characters is no sha256 either
+             (lambda d: d.__setitem__("outputs", {"SKILL.md": "0" * 63}), "cannot be compared", "SKILL.md"),
+             (lambda d: d.__setitem__("outputs", {"SKILL.md": "g" * 64}), "cannot be compared", "SKILL.md"))
     for change, said, named in cases:
         mutate_json(report_file, change)
         row = check_rows(pack)["kit:file"]
@@ -614,6 +882,20 @@ def test_check_says_not_verified_when_the_brand_changed_after_the_kit(pack):
     rows = check_rows(pack)
     assert rows["report:kit"]["status"] == "pass" and rows["kit:file"]["status"] == "pass"
     assert rows["kit:state"]["status"] == "skipped" and "not verified" in rows["kit:state"]["detail"]
+    assert build(pack).returncode == 0
+    assert "kit:state" not in check_rows(pack)
+
+
+def test_check_names_the_fonts_among_the_causes_of_a_kit_made_from_another_brand(pack):
+    """sources.fonts (the font files, their licence texts and the fontcheck report) moves the kit state too, so the message names the fonts."""
+    with_font(pack)
+    assert build(pack).returncode == 0
+    assert "kit:state" not in check_rows(pack)
+    mutate(pack / "assets" / "fonts" / "OFL.txt", "SIL Open Font License", "SIL Open Font License, as shipped")      # a licence text is a source of the fonts, and of nothing else
+    row = check_rows(pack)["kit:state"]
+    assert row["status"] == "skipped"
+    assert row["detail"] == ("not verified: the name, rules, facts, tokens, logos, band drawings, fonts or motion spec changed since the kit report; "
+                             "run `brand-creator kit build --yes` again")
     assert build(pack).returncode == 0
     assert "kit:state" not in check_rows(pack)
 
@@ -725,6 +1007,104 @@ def test_a_proof_page_outside_the_project_stops_the_build(pack, tmp_path):
         r = build(pack)
         assert r.returncode == 0, page + "\n" + r.stdout + r.stderr
         assert kit_files(pack) == sorted([*KIT_FILES, *MOTION_KIT]), page
+
+
+SECRET = b"<!doctype html><title>SECRET-OUTSIDE</title>"
+
+
+def link_layout(p, outside, name):
+    """The layout of a path that is checked as one file and read as another: `L` is a link to deep/dir, so `L/../<name>` names deep/<name> (a normal file inside the project), but
+    the plain path <name> is a link to `outside`, a file beyond the project."""
+    from helpers import symlink_or_skip
+    (p / "deep" / "dir").mkdir(parents=True)
+    (p / "deep" / name).write_bytes(b"<!doctype html><title>inside</title>")
+    outside.write_bytes(SECRET)
+    symlink_or_skip(p / name, outside)
+    symlink_or_skip(p / "L", p / "deep" / "dir")
+
+
+def nothing_secret_in(p) -> None:
+    """No file of the project's .claude/ folder (where the kit goes) holds the outside file's bytes."""
+    found = [f for f in (p / ".claude").rglob("*") if f.is_file() and SECRET in f.read_bytes()] if (p / ".claude").exists() else []
+    assert found == []
+
+
+def test_a_proof_page_read_through_a_link_that_leaves_the_project_is_never_copied(pack, tmp_path):
+    """The page `L/../E` (L a link to deep/dir, E a link to a file outside the project, deep/E a normal file) must not make the kit read E as if the check had been made on deep/E.
+    The kit mirrors the plain path E, so E is what is checked and what is read, and the outside bytes never reach the kit."""
+    moving(pack)
+    link_layout(pack, tmp_path / "outside.html", "E")
+    mutate_json(pack / "motion" / "proof.json", lambda d: d["cases"][1].__setitem__("page", "L/../E"))
+    for args in (("--yes",), ("--plan",)):
+        r = bc("kit", "build", *args, project=pack)
+        assert r.returncode == 2, (args, r.stdout, r.stderr)
+        assert "outside the project" in r.stderr and "demo-page" in r.stderr and "Traceback" not in r.stderr
+        assert b"SECRET-OUTSIDE" not in r.stdout.encode() and not (pack / ".claude").exists() and not (pack / "assets" / "_checks" / "kit.json").exists()
+    mutate_json(pack / "motion" / "proof.json", lambda d: d["cases"][1].__setitem__("page", "E"))        # the plain path is refused too, whoever names it
+    r = build(pack)
+    assert r.returncode == 2 and "outside the project" in r.stderr and not (pack / ".claude").exists()
+    nothing_secret_in(pack)
+
+
+def test_a_proof_page_is_read_from_the_path_that_was_checked_whichever_way_a_link_is_resolved(pack, tmp_path, monkeypatch):
+    """`confine` takes `..` out of a path before it follows a link, so `L/../E` is E there. If it ever followed links first (as the OS does when it opens the path), `L/../E`
+    would pass as deep/E while the kit went on to read the plain path E. The page is checked again as the plain path and read from the checked path, so it cannot."""
+    import os
+    from pathlib import Path
+
+    import _common
+    import kitlib
+    moving(pack)
+    link_layout(pack, tmp_path / "outside.html", "E")
+    mutate_json(pack / "motion" / "proof.json", lambda d: d["cases"][1].__setitem__("page", "L/../E"))
+
+    def links_first(p):
+        p, tail = Path(p), []
+        while not p.exists() and p != p.parent:
+            tail.append(p.name)
+            p = p.parent
+        return Path(os.path.realpath(p)).joinpath(*reversed(tail))      # no lexical clean-up of `..` first
+
+    monkeypatch.setattr(_common, "_realpath_lenient", links_first)
+    assert _common.confine(pack, "L/../E", read=True) == (pack / "deep" / "E").resolve()      # the premise: the raw page is deep/E, inside the project
+    with pytest.raises(_common.CliError) as e:
+        kitlib.motion_files(pack)
+    assert e.value.code == 2 and "outside the project" in e.value.message and "demo-page" in e.value.message
+
+
+def test_a_band_drawing_read_through_a_link_that_leaves_the_project_is_never_copied(pack, tmp_path):
+    """The same layout for a band drawing of qa/rules.json (the drawing is named by its plain path, and that is the file read)."""
+    link_layout(pack, tmp_path / "outside.svg", "D.svg")
+    rules = {"schema": 1, "bands": [{"name": "small", "max_px": 32, "drawing": "assets/logo/grid-mark.svg"}, {"name": "large", "drawing": "L/../D.svg"}]}
+    (pack / "qa" / "rules.json").write_text(json.dumps(rules), encoding="utf-8")
+    r = build(pack)
+    assert r.returncode == 2 and "outside the project" in r.stderr and "Traceback" not in r.stderr and not (pack / ".claude").exists()
+    rules["bands"][1]["drawing"] = "D.svg"                                    # written plainly, it is the same link to the outside, refused the same way
+    (pack / "qa" / "rules.json").write_text(json.dumps(rules), encoding="utf-8")
+    r = build(pack)
+    assert r.returncode == 2 and "outside the project" in r.stderr and not (pack / ".claude").exists()
+    nothing_secret_in(pack)
+
+
+@pytest.mark.parametrize("rel", ["assets/tokens/tokens.css", "assets/tokens/tokens.json", "assets/logo/mark.svg", "assets/fonts/TestFont-subset.ttf", "assets/fonts/OFL.txt",
+                                 "motion/motion.json", "motion/SPEC.md"])
+def test_every_kind_of_file_the_kit_copies_is_refused_when_it_is_a_link_that_leaves_the_project(pack, tmp_path, rel):
+    """The audit of every file the kit copies (the tokens, a logo, a font, its licence text, the motion spec and its hand-off): each is read from the path `confine` checked, so a
+    project file that is a link to a file beyond the project is exit 2 for the plan and the build, and nothing is written."""
+    from helpers import symlink_or_skip
+    if rel.startswith("assets/fonts/"):
+        with_font(pack)
+    if rel.startswith("motion/"):
+        moving(pack)
+    far = tmp_path / "far-file"
+    far.write_bytes((pack / rel).read_bytes())
+    (pack / rel).unlink()
+    symlink_or_skip(pack / rel, far)
+    for args in (("--yes",), ("--plan",)):
+        r = bc("kit", "build", *args, project=pack)
+        assert r.returncode == 2, (rel, args, r.stdout, r.stderr)
+        assert "outside the project" in r.stderr and "Traceback" not in r.stderr
+    assert not kit_of(pack).exists() and not (pack / "assets" / "_checks" / "kit.json").exists()
 
 
 def test_a_changed_demo_page_rebuilds_its_copy_and_changes_the_motion_source(pack):
@@ -953,6 +1333,23 @@ def test_known_rule_ids_are_the_g4_slugs_the_page_rules_and_the_site_rule_choice
     with pytest.raises(CliError) as e:
         kitlib.known_rule_ids(pack)
     assert e.value.code == 1 and "site/site.json" in e.value.message
+
+
+def test_known_rule_ids_refuses_a_site_record_whose_choices_are_not_a_list_and_never_crashes(pack):
+    import kitlib
+    from _common import CliError
+    site = {"schema": 1, "approved": "2026-10-17 (test)", "round": 1, "hero": "a", "pages": [], "choices": [{"id": "c1", "text": "one call to action", "tag": "rule", "source": "DECISIONS.md"}]}
+    (pack / "site").mkdir()
+    f = pack / "site" / "site.json"
+    f.write_text(json.dumps(site), encoding="utf-8")
+    assert kitlib.known_rule_ids(pack) == ["site:c1"]
+    for bad in (None, "c1", 7, {"c1": {}}, True):
+        mutate_json(f, lambda d: d.__setitem__("choices", bad))
+        with pytest.raises(CliError) as e:
+            kitlib.known_rule_ids(pack)
+        assert e.value.code == 2 and "site/site.json" in e.value.message and "choices" in e.value.message, (bad, e.value.message)
+    mutate_json(f, lambda d: d.pop("choices"))                                   # no choices at all is a record with none
+    assert kitlib.known_rule_ids(pack) == []
 
 
 # ---------------------------------------------------------------- grounds: the page roles mapped to those of each ground the owner named
