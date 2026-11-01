@@ -17,10 +17,15 @@ An item is `kind:value`, with everything after the colon cut at 120 characters. 
 A value is a quoted string or a `{...}` expression kept with its braces, balanced to three levels, with its white space squashed. HTML comments
 are removed first, and the body of a <script> or <style> is not read as markup. The reading is by pattern, so it is approximate: a value built
 at run time, a deeper expression or a tag a template engine assembles is missed or noisy (ADR-0012, Consequences).
+
+A page of the owner's own local server is read too (`adoption wiring --page URL`): `render.mjs wiring` prints the same six kinds from the rendered DOM
+(scripts/pagelib/wiring.mjs) and `rendered_items` turns that into the same `kind:value` items, so an item found in both places is one item. The file it is
+recorded under is `rendered:<path of the URL>` (`rendered_source`).
 """
 from __future__ import annotations
 
 import re
+from urllib.parse import urlsplit
 
 EXTENSIONS = (".html", ".htm", ".jsx", ".tsx", ".js", ".ts", ".mjs", ".vue", ".svelte", ".astro", ".erb", ".ejs", ".hbs", ".handlebars",
               ".njk", ".liquid", ".twig", ".php", ".mdx")
@@ -185,6 +190,29 @@ def scan_text(text: str) -> tuple[list[str], int]:
         if v:
             items[f"field:{v[:MAX_VALUE]}"] = None
     return list(items), deep
+
+
+def rendered_source(url: str) -> str:
+    """The file label of an item read from a rendered page: `rendered:<path of the URL>`. Only the path, so the page keeps its label when the dev server
+    comes up on another port."""
+    return "rendered:" + (urlsplit(url).path or "/")
+
+
+def rendered_items(data: object) -> list[str]:
+    """The items of one rendered page from what `render.mjs wiring` printed, `{kind: [value, ...]}` for exactly the six kinds, in document order, without repeats.
+    White space is squashed and everything after `kind:` is cut at MAX_VALUE characters again (the browser side does the same). ValueError for any other shape."""
+    if not isinstance(data, dict) or set(data) != set(KINDS):
+        raise ValueError("expected an object with the keys " + ", ".join(KINDS))
+    items: dict[str, None] = {}
+    for kind in KINDS:
+        values = data[kind]
+        if not isinstance(values, list) or not all(isinstance(v, str) for v in values):
+            raise ValueError(f"{kind} is not a list of strings")
+        for v in values:
+            text = squash(v)
+            if text:
+                items[f"{kind}:{text[:MAX_VALUE]}"] = None
+    return list(items)
 
 
 def add(store: dict[str, list[str]], path: str, items: list[str]) -> None:

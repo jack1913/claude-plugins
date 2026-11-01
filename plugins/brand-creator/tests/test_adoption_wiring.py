@@ -3,11 +3,14 @@
 
 The target is tests/fixtures/target-site, a synthetic site. Expected values are written out by hand from its files, never taken from the module under
 test. Reading rules not worth a fixture file are shown by example against wiring.scan_text; the extension list is checked against a hand-written list."""
+import http.server
 import json
 import os
 import re
 import shutil
 import stat
+import threading
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -558,3 +561,145 @@ def test_adoption_md_of_a_list_without_wiring_is_the_bytes_it_was(proj, site):
     assert bc("adoption", "render", project=proj).returncode == 0 and (proj / "ADOPTION.md").read_bytes() == GOLDEN.read_bytes()
     assert bc("adoption", "wiring", "--repo", "site", "--before", project=proj).returncode == 0
     assert (proj / "ADOPTION.md").read_bytes() != GOLDEN.read_bytes() and "## Wiring kept" in (proj / "ADOPTION.md").read_text()
+
+
+# ---------------------------------------------------------------- rendered pages: --page URL
+
+
+@contextmanager
+def serve(pages: dict):
+    """`pages` (path -> HTML text, changed by the test while it runs) served by http.server on 127.0.0.1 at a free port, in a thread of this test, for the length of
+    the block. -> the base URL. Loopback is this machine, not the network the suite must stay off: nothing here reaches another machine."""
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            body = pages.get(self.path.split("?", 1)[0])
+            self.send_response(200 if body is not None else 404)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.end_headers()
+            self.wfile.write((body if body is not None else "not found").encode("utf-8"))
+
+        def log_message(self, *a, **k):
+            pass
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        yield f"http://127.0.0.1:{srv.server_address[1]}"
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+HOME = """<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Home</title><script src="/js/dyn.js"></script></head><body>
+<a href="/pricing" data-testid="nav-pricing">Pricing</a>
+<a href="/rendered-only" id="rendered-only-link" data-testid="rendered-only">only in the DOM</a>
+<form action="/rendered-form"><input name="rendered-field"></form>
+<script>document.body.insertAdjacentHTML("beforeend", '<a href="/from-script">added by a script</a>');</script>
+</body></html>"""
+PRICING = """<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Pricing</title></head><body>
+<a href="/">Home</a> <button name="buy" onclick="buy()">Buy</button>
+</body></html>"""
+
+# the items the two pages add to the source's 37 (the pricing link, its hook and the home link are in the source too), counted by hand
+RENDERED_NEW = {
+    "link:/rendered-only": ["rendered:/"], "link:/rendered-form": ["rendered:/"], "link:/from-script": ["rendered:/"],
+    "field:rendered-field": ["rendered:/"], "field:buy": ["rendered:/pricing"], "handler:onclick=buy()": ["rendered:/pricing"],
+    "hook:data-testid=rendered-only": ["rendered:/"], "id:rendered-only-link": ["rendered:/"], "script:/js/dyn.js": ["rendered:/"],
+}
+RENDERED_SHARED = {"link:/pricing": ["src/Header.jsx", "rendered:/"], "hook:data-testid=nav-pricing": ["src/Header.jsx", "rendered:/"], "link:/": ["index.html", "rendered:/pricing"]}
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_rendered_page_adds_its_wiring_and_a_server_that_is_gone_is_not_verified(proj, site):
+    """The pages are served from http.server on 127.0.0.1, port 0, in a thread of this test: loopback is this machine, not the network the suite must avoid."""
+    surveyed(proj, site)
+    pages = {"/": HOME, "/pricing": PRICING}
+    with serve(pages) as base:
+        r = wire(proj, "--before", "--page", f"{base}/", "--page", f"{base}/pricing", "--page", f"{base}/")     # a page named twice is read once
+        assert r.returncode == 0, r.stdout + r.stderr
+        rec = record(proj)
+        assert rec["pages"] == [f"{base}/", f"{base}/pricing"] and rec["files"] == 5
+        assert rec["items"] == {**EXPECTED, **RENDERED_NEW, **RENDERED_SHARED} and list(rec["items"]) == sorted(rec["items"])        # the source's file stays, the page is added
+        rows = {x["id"]: x for x in report(proj, "adoption-wiring")["results"]}
+        assert set(rows) == {"read-only:site", "wiring:site", "wiring:scope", "wiring:pages"} and rows["read-only:site"]["status"] == "pass"
+        assert rows["wiring:site"]["detail"] == "link 11, field 8, handler 6, hook 10, id 8, script 3 (46 items)"
+        assert rows["wiring:pages"]["status"] == "info" and "2 page(s)" in rows["wiring:pages"]["detail"] and "/ (" in rows["wiring:pages"]["detail"]
+        assert "Listeners that a script adds are not visible in the DOM" in rows["wiring:pages"]["detail"]
+        assert bc("adoption", "verify", project=proj).returncode == 0
+        # --compare renders the pages of the baseline again: nothing lost
+        r = wire(proj, "--compare")
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert "(46 items recorded, 46 found now)" in r.stdout and "rendered pages read again: /, /pricing" in r.stdout and "wiring compare: PASS" in r.stdout
+        # the redesign takes the buy button off the pricing page: the loss is named with the page it was on
+        pages["/pricing"] = PRICING.replace('<button name="buy" onclick="buy()">Buy</button>', "")
+        r = wire(proj, "--compare")
+        assert r.returncode == 1, r.stdout + r.stderr
+        assert r.stdout.splitlines()[2:5] == ["lost, not recorded as dropped: 2", "  field:buy (was in rendered:/pricing)", "  handler:onclick=buy() (was in rendered:/pricing)"], r.stdout
+        # a page that is not there is not read: exit 3, and nothing is stored or reported
+        before_doc, before_rep = (proj / "adoption.json").read_bytes(), (proj / "assets" / "_checks" / "adoption-wiring.json").read_bytes()
+        r = wire(proj, "--after", "--page", f"{base}/missing")
+        assert r.returncode == 3 and "answered 404" in r.stderr and "nothing was stored" in r.stderr, r.stdout + r.stderr
+        assert (proj / "adoption.json").read_bytes() == before_doc and (proj / "assets" / "_checks" / "adoption-wiring.json").read_bytes() == before_rep
+    # the server is gone: --after and --compare read the pages of the baseline, cannot, and say so; exit 3 is "not verified", never a pass
+    for args, said in ((("--after",), "nothing was stored"), (("--compare",), "nothing was compared"), (("--before", "--again", "--page", f"{base}/"), "nothing was stored")):
+        r = wire(proj, *args)
+        assert r.returncode == 3 and "could not read the wiring of" in r.stderr and said in r.stderr and "wiring compare" not in r.stdout, (args, r.stdout + r.stderr)
+        assert (proj / "adoption.json").read_bytes() == before_doc and (proj / "assets" / "_checks" / "adoption-wiring.json").read_bytes() == before_rep
+    assert "after" not in record_entry(proj)
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_after_and_compare_read_the_pages_of_the_baseline_or_the_ones_given_wherever_the_server_runs(proj, site):
+    """A redesigned site comes up on another port; its pages are the same paths. Served from http.server on 127.0.0.1 (this machine), as above."""
+    surveyed(proj, site)
+    pages = {"/": HOME, "/pricing": PRICING}
+    with serve(pages) as old:
+        assert wire(proj, "--before", "--page", f"{old}/", "--page", f"{old}/pricing").returncode == 0
+    redesigned = {"/": HOME.replace('<a href="/rendered-only" id="rendered-only-link" data-testid="rendered-only">only in the DOM</a>', ""), "/pricing": PRICING}
+    with serve(redesigned) as new:
+        r = wire(proj, "--compare")                                                                  # the baseline's pages are on the old port: nobody answers
+        assert r.returncode == 3, r.stdout + r.stderr
+        r = wire(proj, "--compare", "--page", f"{new}/", "--page", f"{new}/pricing")
+        assert r.returncode == 1, r.stdout + r.stderr
+        assert "  link:/rendered-only (was in rendered:/)" in r.stdout and "  hook:data-testid=rendered-only (was in rendered:/)" in r.stdout
+        assert "  id:rendered-only-link (was in rendered:/)" in r.stdout and "lost, not recorded as dropped: 3" in r.stdout
+        r = wire(proj, "--after", "--page", f"{new}/", "--page", f"{new}/pricing")
+        assert r.returncode == 0, r.stdout + r.stderr
+        after = record(proj, "after")
+        assert after["pages"] == [f"{new}/", f"{new}/pricing"] and "link:/rendered-only" not in after["items"] and "link:/from-script" in after["items"]
+        assert after["items"]["link:/from-script"] == ["rendered:/"]                                  # the label is the path: the port is not part of it
+        assert bc("check", project=proj).returncode == 1
+        row = check_row(proj)
+        assert row["status"] == "fail" and "link:/rendered-only" in row["detail"]
+        r = wire(proj, "--before", "--again")                                                          # a baseline asked for again with no page reads the source only, and says so
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert "the baseline this replaces also read 2 rendered page(s)" in r.stdout and "Pass --page for each" in r.stdout
+        assert "pages" not in record(proj) and "link:/from-script" not in record(proj)["items"]
+
+
+def test_a_page_that_is_not_on_this_machine_is_refused_before_anything_is_read(proj, site, tmp_path):
+    """No browser is needed: every refusal comes before one is started, and the URLs are never opened. node is hidden from the PATH, so a refusal that came
+    from render.mjs (which refuses the same URLs by the same rule) would be exit 3, not 2."""
+    surveyed(proj, site)
+    no_node = {"PATH": path_without(tmp_path, "node", keep=("rg",))}
+    held = (proj / "adoption.json").read_bytes()
+    for url in ("https://example.com/", "http://localhost.evil.test/", "http://user:secret@localhost/", "file:///etc/hosts", "http://127.1/", "localhost:3000", ""):
+        r = wire(proj, "--before", "--page", url, env=no_node)
+        assert r.returncode == 2 and "the wiring is read from your own local server" in r.stderr, (url, r.stderr)
+        assert (proj / "adoption.json").read_bytes() == held and not (proj / "assets" / "_checks" / "adoption-wiring.json").exists()
+    assert wire(proj, "--before").returncode == 0
+    for args in (("--after", "--page", "https://example.com/"), ("--compare", "--page", "http://10.0.0.1:3000/")):
+        r = wire(proj, *args, env=no_node)
+        assert r.returncode == 2 and "your own local server" in r.stderr, (args, r.stderr)
+    r = wire(proj, "--drop", "link:/::the home page is gone", "--page", "http://127.0.0.1:1/")
+    assert r.returncode == 2 and "--drop reads no page" in r.stderr
+    # an adoption.json edited to list a page elsewhere is refused the same way, before a browser starts
+    mutate_json(proj / "adoption.json", lambda d: d["wiring"]["r1"]["before"].update(pages=["https://example.com/"]))
+    for args in (("--after",), ("--compare",)):
+        r = wire(proj, *args, env=no_node)
+        assert r.returncode == 2 and "your own local server" in r.stderr, (args, r.stderr)
+    mutate_json(proj / "adoption.json", lambda d: d["wiring"]["r1"]["before"].update(pages="http://127.0.0.1:1/"))
+    r = bc("adoption", "verify", project=proj)
+    assert r.returncode == 1 and "`pages` of the before record are not a list of strings" in r.stderr

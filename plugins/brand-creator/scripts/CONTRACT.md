@@ -2053,10 +2053,37 @@ before record it exits 1 ("pass --again to replace it"), and `--again` replaces 
 never surveyed, a record whose `items` are not an object of lists of strings and a `dropped` that is not an object of item to non-empty reason; `check --cascade` does not search the record.
 
 The report is `adoption-wiring` with the rows `read-only:<label>`, `wiring:<label>` (info: the count per kind) and `wiring:scope` (info: the files read, the files of
-those kinds the keep rules left out, and the values not read). The scan lists the files with sizes and modification times before and after reading; a difference fails
+those kinds the keep rules left out, and the values not read), and `wiring:pages` when a page was read (see below). The scan lists the files with sizes and modification times before and after reading; a difference fails
 `read-only:<label>`, exits 1 and stores nothing. Without ripgrep the command exits 3 with the install command and stores nothing; a file that cannot be read exits 3.
 The extraction is by pattern, so it is approximate (a value built at run time, a tag a template engine assembles): ADR-0012 says why a noisy item is dropped with a reason rather
 than hidden.
+
+**Rendered pages (`--page URL`).** `--page` is repeatable and goes with `--before`, `--after` or `--compare` (with `--drop`, which reads no page, it is exit 2). Each URL must be on this machine: http or
+https on `localhost`, `127.0.0.1` or `[::1]`, by the one loopback rule of the page check (`is_loopback_url` in `scripts/pagelib/pagecheck.py`, twin of `isLoopbackUrl` in `scripts/lib/_common.mjs`). Any
+other URL is exit 2 ("the wiring is read from your own local server") before the repository is read or a browser is started. `adoption wiring` runs `node scripts/render.mjs wiring <url>` for each page
+(`node` on PATH, else exit 3 with the install hint). That subcommand is not a `brand-creator` command; it refuses a URL that is not loopback with exit 2 too, starts Chromium as `shot` does, blocks
+service workers, stops every request to another origin and every redirect that leads to one (as `page-measure` does), waits for the load event (at most 15 s) and a short settle, and prints one line of JSON on
+stdout: `{"link": [...], "field": [...], "handler": [...], "hook": [...], "id": [...], "script": [...]}`, every kind present, values in document order without repeats. It writes nothing. A page that does not load
+(a server that is gone, an answer of 400 or more, a page that ends on another origin), a data directory that was never set up and a missing Chromium are exit 3 with nothing on stdout. The DOM is read
+with `getAttribute`, as written (never as the browser resolves it), with the rules of the source scan, so one item found in both places is one item:
+
+| kind | read from the DOM |
+|---|---|
+| `link` | `href` of `a` and `area`, `action` of `form`, `formaction` of any element; not an empty value or `#` |
+| `field` | `name` of `input`, `select`, `textarea` and `button` |
+| `handler` | an inline attribute `on[a-z]+` with a value, for an event the browser knows (`onclick`, `onsubmit`; not `one`): `handler:<attribute>=<value>`. Listeners that a script adds are not attributes and are not seen: they are read from the source only |
+| `hook` | `data-testid`, `data-test`, `data-cy`, `data-qa`, `data-track*`, `data-analytics*`, `data-event*` and `data-gtm*` with a value: `hook:<attribute>=<value>` |
+| `id` | `id`, with no braces and no white space in the value |
+| `script` | `src` of `script`, without its query and without a leading `./` |
+
+`wiring.rendered_items` turns that into `kind:value` items (white space squashed, everything after the colon cut at 120 characters again). An item found on a page is recorded under the file label
+`rendered:<path of the URL>`, the path only, so a page keeps its label when the dev server comes up on another port; it joins the source's item of the same name (the source files first, then the pages, up to
+five files). The `before` or `after` record gets a key `pages` (the URLs as given, a repeat read once) when a page was read; a record without pages has no such key, as before. `--before` reads the pages
+of its `--page` options. `--after` and `--compare` read the `--page` options, else the pages of the before record, so a redesign that comes up on another port needs `--page` for each page. A baseline
+asked for again (`--before --again`) with no `--page` reads the source only and says that the replaced baseline read pages. The pages are read before the report is made and before the repository is
+listed, so a page that cannot be read leaves nothing behind: no record, no report change, and for `--compare` no verdict. Because of that order, anything the owner's own server writes into the repository while it serves the pages is outside the read-only proof, which brackets the reading of the source. A run that read pages adds the report row `wiring:pages` (info: the pages
+and their item counts, and that a script's listeners are read from the source only), and `--compare` prints `rendered pages read again: ...` under its first line. `verify` fails a `pages` that is not
+a list of strings; a page in an edited adoption.json that is not loopback is exit 2 when it would be read.
 
 A loss is an item of the before record that the repository no longer has and nobody dropped.
 

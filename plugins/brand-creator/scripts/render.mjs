@@ -19,6 +19,7 @@
 //                               (what it loaded); a page in history/ or in a round before the latest is refused
 //   render.mjs capture --url URL --name NAME  stills and thumbnails of a real site into research/site-refs/NAME/: the only command that lets Chromium reach the network, and
 //                               only after the owner answered the online-research question (site_research)
+//   render.mjs wiring <url>  the wiring of a page of the owner's own local server (loopback only), read from the DOM: JSON {kind: [values]} for `brand-creator adoption wiring --page`
 // Needs `brand-creator setup` (Playwright in <data>/node_modules, Chromium build recorded in <data>/setup.json).
 import fs from "node:fs";
 import path from "node:path";
@@ -30,6 +31,7 @@ import {
 } from "./lib/_common.mjs";
 import { isLoopbackUrl } from "./lib/_common.mjs";
 import { collect } from "./pagelib/page_measure.mjs";
+import { collectWiring } from "./pagelib/wiring.mjs";
 
 const ANIMATION_CAP_MS = 15000;   // shot waits at most this long for running animations and transitions to end
 
@@ -44,6 +46,7 @@ const USAGE = `usage:
   render.mjs page-measure --request FILE.json --out FILE.json [--project DIR]
   render.mjs capture <page.html> [--project DIR] [--wait MS] [--timeout MS]
   render.mjs capture --url URL --name NAME [--project DIR] [--timeout MS]
+  render.mjs wiring <url>
   render.mjs selftest
 shots are written outside the project (default: <data>/scratch/...) or, with --out, under <project>/specimens/ (shots kept as specimens); the report goes to <project>/assets/_checks/shot.json.
 shot loads lazy images first, pauses --wait MS after load (default 300), then waits for running animations and transitions to end
@@ -53,7 +56,9 @@ motion/frames/<case>/ (a try-out proof, one in the latest round or a removed-*/ 
 <project>/assets/_checks/frames/<slug>-<hash6>.json. Both reports take as inputs the proof, the pages and every project file the pages loaded (a stylesheet, tokens.css, a
 script, an image), so a change to one of them makes the report stale.
 capture writes no report: its stills and capture.json go beside the page (<page folder>/shots/), or with --url into research/site-refs/NAME/; --url is refused until
-site_research in BRAND-STATE.md is online or links-only, and it is the only form that lets the browser reach the network.`;
+site_research in BRAND-STATE.md is online or links-only, and it is the only form that lets the browser reach the network.
+wiring opens one page of your own local server (http or https on localhost, 127.0.0.1 or [::1]; anything else is refused) and prints, as JSON on stdout, the links, form fields, ids, test hooks,
+scripts and inline handlers it carries as written in the DOM; a page that does not load is exit 3.`;
 
 const MIME = {
   ".html": "text/html; charset=utf-8", ".htm": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8",
@@ -2443,6 +2448,44 @@ async function captureSite(project, values) {
   return EXIT.PASS;
 }
 
+// ---------------------------------------------------------------- wiring
+// The wiring of a page the owner's own local server serves (`brand-creator adoption wiring --page URL`, scripts/CONTRACT.md "adoption wiring"): what the DOM carries that a redesign must
+// not lose, as JSON {link, field, handler, hook, id, script: [values]} on stdout (pagelib/wiring.mjs reads it). Loopback only, by the one rule of page-check (isLoopbackUrl), and the browser
+// reaches nothing else: a request to another origin is stopped, a redirect to one too, as in page-measure. Nothing is written.
+const WIRING_TIMEOUT_MS = 15000;   // the page has this long to load
+
+async function cmdWiring(argv) {
+  const { positionals } = parse(argv, {});
+  if (positionals.length !== 1) die(EXIT.USAGE, `wiring needs exactly one URL\n${USAGE}`);
+  const url = positionals[0];
+  if (!isLoopbackUrl(url)) die(EXIT.USAGE, `the wiring is read from your own local server (http or https on localhost, 127.0.0.1 or [::1]), not ${JSON.stringify(url)}`);
+  const origin = new URL(url).origin;
+  const browser = await launch();   // a missing setup fails before anything is opened
+  let ctx;
+  try {
+    ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: "block" });   // no service worker: it could ask other origins in ways a route does not see
+    const seen = await instrument(ctx, origin, { ownRedirects: true });
+    const page = await ctx.newPage();
+    const escaped = [];   // a hop of a redirect chain is not routed: one followed to another origin (the chain changed between the check and the browser's own follow) fails the read
+    page.on("request", (r) => { if (r.redirectedFrom() && !r.url().startsWith(origin + "/")) escaped.push(r.url().slice(0, 160)); });
+    const cannot = (why) => die(EXIT.CANNOT, `could not read the wiring of ${url}: ${why}`);
+    let response;
+    try { response = await withTimeout(page.goto(url, { waitUntil: "load", timeout: WIRING_TIMEOUT_MS }), WIRING_TIMEOUT_MS + 2000, `loading ${url}`); } catch (e) {
+      cannot(firstLine(e) + (seen.nonLocal.length ? ` (a request to another origin was stopped: ${seen.nonLocal[0]})` : ""));
+    }
+    if (!response) cannot("the browser got no answer");
+    if (response.status() >= 400) cannot(`the server answered ${response.status()}`);
+    if (escaped.length) cannot(`a redirect led to another origin and was not stopped (${escaped[0]})`);
+    if (!page.url().startsWith(origin + "/")) cannot(`the page ended on ${page.url().slice(0, 160)}, not on ${origin}`);
+    await page.waitForTimeout(PAGE_SETTLE_MS);   // a client-rendered page draws its markup a moment after the load event
+    console.log(JSON.stringify(await collectWiring(page)));
+  } finally {
+    if (ctx) await ctx.close();
+    await browser.close();
+  }
+  return EXIT.PASS;
+}
+
 // ---------------------------------------------------------------- selftest
 async function cmdSelftest() {
   const browser = await launch();
@@ -2469,6 +2512,7 @@ mainGuard(async () => {
     case "frames": return cmdFrames(rest);
     case "page-measure": return cmdPageMeasure(rest);
     case "capture": return cmdCapture(rest);
+    case "wiring": return cmdWiring(rest);
     case undefined: case "-h": case "--help": console.log(USAGE); return cmd ? EXIT.PASS : EXIT.USAGE;
     default: return die(EXIT.USAGE, `unknown command ${cmd}\n${USAGE}`);
   }

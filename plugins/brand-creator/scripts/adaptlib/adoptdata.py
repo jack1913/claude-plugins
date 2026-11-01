@@ -179,6 +179,9 @@ def verify_wiring(doc: dict) -> list[str]:
                     bad.append(f"wiring of {rid}: the {which} record has no `items` object")
                 elif not all(isinstance(files, list) and all(isinstance(f, str) for f in files) for files in items.values()):
                     bad.append(f"wiring of {rid}: an item of the {which} record does not map to a list of strings")
+                pages = rec.get("pages") if isinstance(rec, dict) else None
+                if pages is not None and not (isinstance(pages, list) and all(isinstance(u, str) for u in pages)):
+                    bad.append(f"wiring of {rid}: the `pages` of the {which} record are not a list of strings")
             dropped = entry.get("dropped")
             if dropped is not None:
                 if not isinstance(dropped, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in dropped.items()):
