@@ -23,6 +23,15 @@ The three plans were checked against each other and against the code. What chang
   in the snapshot.
 - Verify commands set `BRAND_CREATOR_DATA`; the mutation ledger and `BRAND_CREATOR_REQUIRE_ALL=1` need it.
 
+## Amendment (2026-11-01): three ideas from taste-skill
+
+The owner approved three text changes after a read-only analysis of taste-skill (MIT, Leonxlnx/taste-skill, commit 12af471):
+
+- G3-01 adds a third run with no brand material and a blind pick of the one to ship.
+- G3-13's step 1 states the page's idea and tests it against a competitor; its step 5 checks the built page, never a
+  development server's.
+- G3-02 credits taste-skill for these ideas next to Hallmark.
+
 ## Goal
 
 Every brand gets a generated, extendable brand kit that a product repository can carry. The kit sits around the per-brand applied
@@ -274,21 +283,28 @@ lychee --config lychee.toml --root-dir "$(pwd)" './plugins/brand-creator/**/*.md
     Copy a brand kit into folder B: the owner's hand-made one before this release, the generated one after it.
   - Step 2. In a fresh session in A, with the owner's web skill (for example frontend-design) and no other plugin, ask for the home
     page hero from the brief line and the facts only. Save the page.
-  - Step 3. Do the same in B.
-  - Step 4. Score both with `brand-creator page-check`, both tiers, with `--project <a scratch copy of the brand project>` (page-check
+  - Step 3. Do the same in B. Then a third run, C, in a fresh session in an empty folder: the same web skill, brief line and
+    facts, and no brand material at all.
+  - Step 4. Score A and B with `brand-creator page-check`, both tiers, with `--project <a scratch copy of the brand project>` (page-check
     writes its report into the project it is given, so never the brand project itself) and `--from <folder A or B> <page>` or
     `--url`, and with the owner's own checklist if there is one. Count brand-rule failures, reflex warnings and invented values (a colour, size or
-    claim that is in no brand file). Before group 1's page check exists, score by hand and say so.
-  - Step 5. Record the date, Claude Code version, model, web skill and its version, both scores and the gaps. The gaps feed the kit
-    work. Nothing in the brand project changes.
-  - Step 6. The same run fills two existing rows. "Applied skill in a real session": was `<slug>-brand` listed by `/skills` and used
+    claim that is in no brand file). Before group 1's page check exists, score by hand and say so. C has no brand rules to break,
+    so it is not scored here.
+  - Step 5. The blind pick. Take a phone and a desktop screenshot of each of the three heroes, shuffle them and name them X, Y and
+    Z. A reader who did not watch the runs picks the one to ship, verdict first, then why: the owner, or a fresh brand-reviewer
+    agent after the fleet gate (it is billed). Only then say which run made which. The counts of step 4 measure what breaks the
+    brand's rules, not quality (ADR-0007), so the pick is the quality signal. One brief is a first signal, not proof.
+  - Step 6. Record the date, Claude Code version, model, web skill and its version, the scores of A and B, the blind pick with its
+    reasons, and the gaps. The gaps feed the kit work. Nothing in the brand project changes.
+  - Step 7. The same run fills two existing rows. "Applied skill in a real session": was `<slug>-brand` listed by `/skills` and used
     in A? "DESIGN.md and BRAND.md in a real agent": did the agent take colours and dark variants from DESIGN.md?
   - Last run: never.
 - **Tests:** none (docs only).
 - **Docs:** this page only. No CHANGELOG entry (internals).
 - **Verify:** the docs checks.
 - **Done when:** the section and its row exist, and markdownlint and lychee pass, including the row's anchor link.
-- **Owner checkpoint:** the owner and the lead run it, in-thread, from scratch copies. It is not an implementer task. Ideally it runs
+- **Owner checkpoint:** the owner and the lead run it, in-thread, from scratch copies; the blind pick is made by the owner or a
+  fresh reviewer agent, never by the lead who ran it. It is not an implementer task. Ideally it runs
   before G3-04, so its gaps can shape the recipe text in G3-13.
 
 ### G3-02 ADR: a generated brand kit around the applied skill
@@ -313,7 +329,11 @@ lychee --config lychee.toml --root-dir "$(pwd)" './plugins/brand-creator/**/*.md
     a brand change, and `kit check` says when. List the defaults the owner may change.
   - Credit (ideas only, reimplemented; no text or code copied): Hallmark (MIT), commit 4f6a46c. Its `references/anatomy.md` (start a
     page from the visitor's job) and its `references/review-hero.md` (build the hero first; a cold review with fixed inputs and the
-    verdict first).
+    verdict first). And taste-skill (MIT, Leonxlnx/taste-skill), commit 12af471: its `skills/taste-skill/SKILL.md` (a page's
+    idea is something only this client has; inspect the built page, not the development server) and its
+    `skills/taste-skill/references/research.md` (pages built with and without the skill, compared side by side). They shaped the
+    recipe's idea line and built-page check, and the kit test baseline's third run and blind pick. No library, rule, threshold,
+    word list, photograph or code was taken.
 - **Tests:** none. `check-docs-standard.py` checks the Status line.
 - **Docs:** ADR README row: `| [ADR-<n>](<file>) | A generated brand kit sits around the applied skill | accepted |`.
 - **Verify:** the docs checks.
@@ -636,16 +656,19 @@ lychee --config lychee.toml --root-dir "$(pwd)" './plugins/brand-creator/**/*.md
 - **Files:** `templates/kit/recipes/web-page.md`, `tests/test_skills.py`.
 - **Do:** Write seven numbered steps, with no value in them. Each step is a short paragraph:
   1. The visitor's job: name the one job a visitor comes to this page for, and the material at hand (facts, photos, data). Start
-     there, never from a list of sections.
+     there, never from a list of sections. Then write the page's idea in one line: something only this brand can say, built
+     from its facts (`facts.json`). Test it with a competitor the owner names: put their name in the line; if it still reads
+     true, it is no idea yet, so rewrite it.
   2. References: the brand's reference pages (`reference-pages/`, when the kit has them) and the layout reference that fits the job
      (brand-creator's `page-layouts.json`; each layout is named after what the visitor came to do). Take structure and rhythm from
      them, never another site's look.
   3. Tokens: colour, type, spacing and motion come from `brand/assets/tokens/tokens.css` (`var(--...)`) and `rules.json`. A value the
      tokens lack is asked for, never invented.
   4. Hero first: build the hero alone, in light and dark, at a phone and a desktop width. Nothing else until it holds.
-  5. Page check: run the brand's page check on it, both tiers, from the brand project. For a page in a product repository, use
-     `brand-creator page-check --from <the product's folder> <page> --project <the brand project>`, or `--url
-     http://localhost:<port>/<path>` for the product's own local server. Fix every brand-rule failure; fix or argue each reflex
+  5. Page check: run the brand's page check on it, both tiers, from the brand project. Check the built page, never a
+     development server's version of it. For a page in a product repository, use `brand-creator page-check --from <the
+     product's folder, or its build output when a build step makes the page> <page> --project <the brand project>`, or `--url
+     http://localhost:<port>/<path>` for a local preview of the product's production build. Fix every brand-rule failure; fix or argue each reflex
      warning.
   6. Cold read: someone who did not build it gets fixed inputs (the page, the brief line, the visitor's job) and answers with a
      verdict first, ship or fix, then the reasons.
@@ -657,8 +680,8 @@ lychee --config lychee.toml --root-dir "$(pwd)" './plugins/brand-creator/**/*.md
 - **Tests:** `test_the_web_page_recipe_is_steps_only_with_no_values` (f, static, no data dir needed) in `tests/test_skills.py`:
   `tests/test_kit.py` has a module-level `pytestmark` (requires_setup, requires_node) that a test inside it cannot escape. It checks: seven numbered steps in this order (by their
   keywords), no number with a unit, no hex colour, no ratio, no `[[fill`, and the words `[data-sample]` and `page-check` present.
-- **Docs:** none beyond the template. CHANGELOG: extend the kit bullet ("a web-page recipe that starts from the visitor's job, builds
-  the hero first and checks it against the brand").
+- **Docs:** none beyond the template. CHANGELOG: extend the kit bullet ("a web-page recipe that starts from the visitor's job and the page's
+  idea, builds the hero first and checks the built page against the brand").
 - **Verify:** `-k web_page_recipe`.
 - **Done when:** the test passes.
 
@@ -1184,7 +1207,8 @@ lychee --config lychee.toml --root-dir "$(pwd)" './plugins/brand-creator/**/*.md
 
 ## Owner checkpoints (not implementer tasks)
 
-1. G3-01's baseline run, by the owner with the lead, in-thread and from scratch copies. Best before G3-04.
+1. G3-01's baseline run, by the owner with the lead, in-thread and from scratch copies, with the blind pick by the owner or a
+   fresh reviewer agent. Best before G3-04.
 2. After G3-21: a kit build on a scratch copy of the pilot brand, on the owner's say-so, to compare with the owner's hand-made kit.
    The pilot brand's own project is not written.
 3. After G3-28: the first wiring record on the owner's site, `--before`, read only, before any redesign.
