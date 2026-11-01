@@ -2049,7 +2049,9 @@ everything after the colon cut at 120 characters:
 
 The record is `adoption.json` `wiring[<repository id>]["before" | "after"]` = `{"date", "head", "files", "items"}`: the day, the repository's git head (or `no git head`), the number of
 files read, and `items`, sorted, each mapped to up to five files that held it. A repository id is the survey's (`r1`, `r2`). `--before` is the baseline: over an existing
-before record it exits 1 ("pass --again to replace it"), and `--again` replaces the before record only. `--after` needs a before record (exit 2) and replaces an earlier after record. The key
+before record it exits 1 ("pass --again to replace it"), and `--again` replaces the before record and removes that repository's after record: that record was taken against the baseline that is gone, and kept, `check` would compare the new baseline
+with an after record taken before it (a link added after the old `--after` and still in the repository would fail as "gone from the after record", and the verdict could as well be a false pass). The run says on stdout that it removed the after record (with its date) and that
+`--after` has to be recorded again; until then `check` gives the info row of a before record without an after. The drops stay: they are the owner's reasons for items of the before record, not part of the after record. `--after` needs a before record (exit 2) and replaces an earlier after record. The key
 `kept` of `adoption.json` is the survey's list of lines left out of the count, so the record has its own key. `verify` (and `check`, `adoption:data`) fails a `wiring` entry for a repository that was
 never surveyed, a record whose `items` are not an object of lists of strings and a `dropped` that is not an object of item to non-empty reason; `check --cascade` does not search the record.
 

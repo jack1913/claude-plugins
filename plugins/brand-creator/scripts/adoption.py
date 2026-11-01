@@ -18,6 +18,7 @@
   adoption wiring --repo LABEL (--before [--again] | --after | --compare | --drop "ITEM::REASON"...) [--page URL]...
       Reads a surveyed repository's source for the links, form field names, handlers, test hooks, ids and scripts a redesign must not lose, and
       stores them in adoption.json under `wiring` (the before record is the baseline; --after is the redesign as applied). Read only, and it proves it.
+      --before --again replaces the baseline and removes the after record that was taken against the old one (record --after again).
       --page URL (repeatable, with --before, --after or --compare) reads a page of your own local server too, from the DOM, in Chromium (loopback URLs only).
       --compare reads the repository now and prints what the redesign lost, writing nothing (exit 1 on a loss nobody dropped). --drop records, in the
       owner's words, why an item of the before record goes; a loss is acceptable only so.
@@ -311,7 +312,7 @@ def main() -> int:
     wg.add_argument("--after", action="store_true", help="record the wiring after the redesign is applied (needs the before record)")
     wg.add_argument("--compare", action="store_true", help="read the repository now and list what the redesign lost against the before record (writes nothing; exit 1 on a loss nobody dropped)")
     wg.add_argument("--drop", action="append", default=[], metavar="ITEM::REASON", help="record why an item of the before record goes, in the owner's words (repeatable)")
-    w.add_argument("--again", action="store_true", help="with --before: replace the baseline that is already recorded")
+    w.add_argument("--again", action="store_true", help="with --before: replace the baseline that is already recorded (the after record, taken against the old baseline, is removed; drops stay)")
     w.add_argument("--page", action="append", default=[], metavar="URL", help="a page of your own local server to read from the DOM too (repeatable; http or https on localhost, 127.0.0.1 or [::1]; "
                                                                              "with --before, --after or --compare). --after and --compare read the pages of the before record when none is given")
     a = ap.parse_args()
@@ -725,11 +726,16 @@ def do_wiring(a, project: Path, name: str) -> int:
                 + ". Listeners that a script adds are not visible in the DOM: they are read from the source only")
     old = held.get(which) if a.before else None
     record = {"date": today(), "head": git_head(repo), "files": len(read), **({"pages": pages} if pages else {}), "items": items}
-    doc.setdefault("wiring", {}).setdefault(rid, {})[which] = record
+    entry = doc.setdefault("wiring", {}).setdefault(rid, {})
+    entry[which] = record
+    stale_after = entry.pop("after", None) if a.before else None   # an after record was taken against the baseline that --again replaces: kept, `check` would compare it with the new one. The drops stay: they are the owner's reasons for items of the before record
     changed = write_both(project, doc, name)
     rc = rep.finish()
     print(f"\n{which} record of {label}: {len(items)} items from {len(read)} files" + (f" and {len(pages)} rendered page(s)" if pages else "")
           + f"; wrote {', '.join(changed) or 'nothing (unchanged)'}. No repository was edited.")
+    if stale_after:
+        print(f"note: the after record of {label} ({stale_after.get('date')}) is removed: it was taken against the baseline this replaces. Record --after again when the redesign is applied "
+              f"(`brand-creator adoption wiring --repo {label} --after`)." + (f" The {len(entry['dropped'])} item(s) dropped with a reason stay recorded." if entry.get("dropped") else ""))
     if old and old.get("pages") and not pages:
         print(f"note: the baseline this replaces also read {len(old['pages'])} rendered page(s) ({', '.join(old['pages'])}); this one read none. Pass --page for each to read them again.")
     return rc

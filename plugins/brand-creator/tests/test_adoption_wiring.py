@@ -8,7 +8,9 @@ import json
 import os
 import re
 import shutil
+import socket
 import stat
+import struct
 import threading
 from contextlib import contextmanager
 from pathlib import Path
@@ -216,6 +218,29 @@ def test_generated_and_vendored_files_are_not_read_for_wiring(proj, site):
     assert "3 more of the same kinds left out by the keep rules" in rows["wiring:scope"]["detail"]      # dist/bundle.js, vendor/widget.js, public/app.min.js
 
 
+def test_the_brand_projects_own_files_are_not_the_repositorys_wiring_when_it_lives_inside_it(tmp_path):
+    """The brand project is a folder of the monorepo it is adopted into: its boards and pages hold links, hooks and ids that are not the product's wiring. Without the
+    exclusion in `wiring_repo` they would be recorded as the product's, and the review would then ask for them back."""
+    repo = tmp_path / "mono"
+    shutil.copytree(FIX, repo)
+    proj = make_project(repo, tier="full")                                                       # mono/acme: the project is inside the repository
+    assert proj.parent == repo
+    board = proj / "preview.html"
+    board.write_text("<!doctype html><title>a board of the brand project</title><p>board</p>\n", encoding="utf-8")
+    mutate(board, "<p>board</p>", '<a href="/brand-only" id="brand-only" data-testid="brand-only">board</a><input name="brand-only-field">')
+    items, _deep = wiring.scan_text(board.read_text(encoding="utf-8"))
+    assert {"link:/brand-only", "id:brand-only", "hook:data-testid=brand-only", "field:brand-only-field"} <= set(items)   # read as a repository file, it would be wiring
+    surveyed(proj, repo)
+    r = wire(proj, "--before")
+    assert r.returncode == 0, r.stdout + r.stderr
+    rec = record(proj)
+    assert rec["items"] == EXPECTED and rec["files"] == 5                                         # the site alone: nothing of acme/, not even its file
+    assert "brand-only" not in json.dumps(rec) and not any(f.startswith("acme/") for files in rec["items"].values() for f in files)
+    assert wire(proj, "--after").returncode == 0 and record(proj, "after")["items"] == EXPECTED
+    r = wire(proj, "--compare")                                                                   # the comparison reads the repository the same way
+    assert r.returncode == 0 and "(37 items recorded, 37 found now)" in r.stdout and "new items: 0" in r.stdout, r.stdout + r.stderr
+
+
 # ---------------------------------------------------------------- the baseline
 
 def test_a_before_record_is_kept_unless_asked_again(proj, site):
@@ -233,7 +258,8 @@ def test_a_before_record_is_kept_unless_asked_again(proj, site):
     assert r.returncode == 0, r.stderr
     now = load(proj)["wiring"]["r1"]
     assert "link:/added-later" in now["before"]["items"] and "link:/added-later" not in first["items"]
-    assert now["after"] == both["after"]                                                        # --again replaces the baseline and nothing else
+    assert "after" not in now and both["after"]["items"]                                        # --again replaces the baseline and removes the after record taken against the old one
+    assert {k: v for k, v in now.items() if k != "before"} == {k: v for k, v in both.items() if k not in ("before", "after")}   # and changes nothing else
     assert wire(proj, "--after", "--again").returncode == 2                                     # --again is for --before only
 
 
@@ -492,6 +518,39 @@ def test_check_fails_a_recorded_after_that_lost_wiring_nobody_dropped(proj, site
     assert bc("check", project=proj).returncode == 0 and check_row(proj)["status"] == "pass"
 
 
+def test_a_baseline_asked_for_again_removes_the_after_record_taken_against_the_old_one(proj, site):
+    surveyed(proj, site)
+    r = wire(proj, "--before")
+    assert r.returncode == 0 and "is removed" not in r.stdout                                    # a first baseline has no after record to remove
+    assert drops(proj, "link:/pricing::moved to /plans").returncode == 0
+    assert wire(proj, "--after").returncode == 0
+    first_after = record(proj, "after")
+    assert bc("check", project=proj).returncode == 0 and check_row(proj)["status"] == "pass"
+    mutate(site / "index.html", "</body>", '<a href="/new-feature" data-testid="new-feature">new</a>\n</body>')   # the site gains a link, then the baseline is taken again
+    r = wire(proj, "--before", "--again")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "note: the after record of site (2026-10-17) is removed: it was taken against the baseline this replaces" in r.stdout
+    assert "Record --after again" in r.stdout and "adoption wiring --repo site --after" in r.stdout and "1 item(s) dropped with a reason stay recorded" in r.stdout
+    entry = record_entry(proj)
+    assert "link:/new-feature" in entry["before"]["items"] and "link:/new-feature" not in first_after["items"]
+    assert "after" not in entry and entry["dropped"] == {"link:/pricing": "moved to /plans"}      # the after record goes, the owner's reason stays
+    # check does not compare the new baseline with the old after record: it asks for --after, as it does for a before with no after
+    r = bc("check", project=proj)
+    row = check_row(proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert row["status"] == "info" and "record --after when the redesign is applied" in row["detail"] and "new-feature" not in row["detail"]
+    assert next(x for x in report(proj, "check")["results"] if x["id"] == "adoption:data")["status"] == "pass"
+    assert "no after record yet" in (proj / "ADOPTION.md").read_text() and bc("adoption", "verify", project=proj).returncode == 0
+    r = wire(proj, "--compare")                                                                   # the live comparison was never affected: it reads the repository, not the after record
+    assert r.returncode == 0 and "wiring compare: PASS" in r.stdout
+    # recording --after against the new baseline compares like with like
+    assert wire(proj, "--after").returncode == 0
+    assert "link:/new-feature" in record(proj, "after")["items"]
+    r = bc("check", project=proj)
+    row = check_row(proj)
+    assert r.returncode == 0 and row["status"] == "pass" and row["detail"].endswith("0 dropped with a reason"), r.stdout + row["detail"]   # link:/pricing is still there, so nothing needed its drop
+
+
 def test_check_names_a_wiring_record_of_the_wrong_shape_once_and_does_not_crash(proj, site):
     surveyed(proj, site)
     assert wire(proj, "--before").returncode == 0
@@ -566,12 +625,22 @@ def test_adoption_md_of_a_list_without_wiring_is_the_bytes_it_was(proj, site):
 # ---------------------------------------------------------------- rendered pages: --page URL
 
 
+GONE = object()   # a key of the dict `serve` takes: with it the server is "gone"
+
+
 @contextmanager
 def serve(pages: dict):
-    """`pages` (path -> HTML text, changed by the test while it runs) served by http.server on 127.0.0.1 at a free port, in a thread of this test, for the length of
-    the block. -> the base URL. Loopback is this machine, not the network the suite must stay off: nothing here reaches another machine."""
+    """`pages` (path -> HTML text, changed by the test while it runs) served by http.server on 127.0.0.1 at a port the OS picks (port 0, read back from the bound socket),
+    in a thread of this test, for the length of the block. -> the base URL. Loopback is this machine, not the network the suite must stay off: nothing here reaches
+    another machine. `pages[GONE] = True` makes the server reset every connection from then on: a server that is gone, as a browser sees it. It keeps its socket, so the port is
+    never freed while the test runs and no other server (the test's next one, or another test's) can come up on it, as one could on the port of a server that had really stopped.
+    (A socket that is bound and not listening does not do on macOS: a connection to it times out instead of being refused.)"""
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
+            if GONE in pages:
+                self.connection.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))   # close with a reset
+                self.close_connection = True
+                return
             body = pages.get(self.path.split("?", 1)[0])
             self.send_response(200 if body is not None else 404)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -641,11 +710,12 @@ def test_a_rendered_page_adds_its_wiring_and_a_server_that_is_gone_is_not_verifi
         r = wire(proj, "--after", "--page", f"{base}/missing")
         assert r.returncode == 3 and "answered 404" in r.stderr and "nothing was stored" in r.stderr, r.stdout + r.stderr
         assert (proj / "adoption.json").read_bytes() == before_doc and (proj / "assets" / "_checks" / "adoption-wiring.json").read_bytes() == before_rep
-    # the server is gone: --after and --compare read the pages of the baseline, cannot, and say so; exit 3 is "not verified", never a pass
-    for args, said in ((("--after",), "nothing was stored"), (("--compare",), "nothing was compared"), (("--before", "--again", "--page", f"{base}/"), "nothing was stored")):
-        r = wire(proj, *args)
-        assert r.returncode == 3 and "could not read the wiring of" in r.stderr and said in r.stderr and "wiring compare" not in r.stdout, (args, r.stdout + r.stderr)
-        assert (proj / "adoption.json").read_bytes() == before_doc and (proj / "assets" / "_checks" / "adoption-wiring.json").read_bytes() == before_rep
+        # the server is gone: --after and --compare read the pages of the baseline, cannot, and say so; exit 3 is "not verified", never a pass
+        pages[GONE] = True                                                                         # it keeps its port, so nothing else can answer at the baseline's address
+        for args, said in ((("--after",), "nothing was stored"), (("--compare",), "nothing was compared"), (("--before", "--again", "--page", f"{base}/"), "nothing was stored")):
+            r = wire(proj, *args)
+            assert r.returncode == 3 and "could not read the wiring of" in r.stderr and said in r.stderr and "wiring compare" not in r.stdout, (args, r.stdout + r.stderr)
+            assert (proj / "adoption.json").read_bytes() == before_doc and (proj / "assets" / "_checks" / "adoption-wiring.json").read_bytes() == before_rep
     assert "after" not in record_entry(proj)
 
 
@@ -657,26 +727,27 @@ def test_after_and_compare_read_the_pages_of_the_baseline_or_the_ones_given_wher
     pages = {"/": HOME, "/pricing": PRICING}
     with serve(pages) as old:
         assert wire(proj, "--before", "--page", f"{old}/", "--page", f"{old}/pricing").returncode == 0
-    redesigned = {"/": HOME.replace('<a href="/rendered-only" id="rendered-only-link" data-testid="rendered-only">only in the DOM</a>', ""), "/pricing": PRICING}
-    with serve(redesigned) as new:
-        r = wire(proj, "--compare")                                                                  # the baseline's pages are on the old port: nobody answers
-        assert r.returncode == 3, r.stdout + r.stderr
-        r = wire(proj, "--compare", "--page", f"{new}/", "--page", f"{new}/pricing")
-        assert r.returncode == 1, r.stdout + r.stderr
-        assert "  link:/rendered-only (was in rendered:/)" in r.stdout and "  hook:data-testid=rendered-only (was in rendered:/)" in r.stdout
-        assert "  id:rendered-only-link (was in rendered:/)" in r.stdout and "lost, not recorded as dropped: 3" in r.stdout
-        r = wire(proj, "--after", "--page", f"{new}/", "--page", f"{new}/pricing")
-        assert r.returncode == 0, r.stdout + r.stderr
-        after = record(proj, "after")
-        assert after["pages"] == [f"{new}/", f"{new}/pricing"] and "link:/rendered-only" not in after["items"] and "link:/from-script" in after["items"]
-        assert after["items"]["link:/from-script"] == ["rendered:/"]                                  # the label is the path: the port is not part of it
-        assert bc("check", project=proj).returncode == 1
-        row = check_row(proj)
-        assert row["status"] == "fail" and "link:/rendered-only" in row["detail"]
-        r = wire(proj, "--before", "--again")                                                          # a baseline asked for again with no page reads the source only, and says so
-        assert r.returncode == 0, r.stdout + r.stderr
-        assert "the baseline this replaces also read 2 rendered page(s)" in r.stdout and "Pass --page for each" in r.stdout
-        assert "pages" not in record(proj) and "link:/from-script" not in record(proj)["items"]
+        pages[GONE] = True                                                                           # the old server is gone but keeps its port: the redesigned site cannot come up on it
+        redesigned = {"/": HOME.replace('<a href="/rendered-only" id="rendered-only-link" data-testid="rendered-only">only in the DOM</a>', ""), "/pricing": PRICING}
+        with serve(redesigned) as new:
+            r = wire(proj, "--compare")                                                                  # the baseline's pages are on the old port: nobody answers
+            assert r.returncode == 3, r.stdout + r.stderr
+            r = wire(proj, "--compare", "--page", f"{new}/", "--page", f"{new}/pricing")
+            assert r.returncode == 1, r.stdout + r.stderr
+            assert "  link:/rendered-only (was in rendered:/)" in r.stdout and "  hook:data-testid=rendered-only (was in rendered:/)" in r.stdout
+            assert "  id:rendered-only-link (was in rendered:/)" in r.stdout and "lost, not recorded as dropped: 3" in r.stdout
+            r = wire(proj, "--after", "--page", f"{new}/", "--page", f"{new}/pricing")
+            assert r.returncode == 0, r.stdout + r.stderr
+            after = record(proj, "after")
+            assert after["pages"] == [f"{new}/", f"{new}/pricing"] and "link:/rendered-only" not in after["items"] and "link:/from-script" in after["items"]
+            assert after["items"]["link:/from-script"] == ["rendered:/"]                                  # the label is the path: the port is not part of it
+            assert bc("check", project=proj).returncode == 1
+            row = check_row(proj)
+            assert row["status"] == "fail" and "link:/rendered-only" in row["detail"]
+            r = wire(proj, "--before", "--again")                                                          # a baseline asked for again with no page reads the source only, and says so
+            assert r.returncode == 0, r.stdout + r.stderr
+            assert "the baseline this replaces also read 2 rendered page(s)" in r.stdout and "Pass --page for each" in r.stdout
+            assert "pages" not in record(proj) and "link:/from-script" not in record(proj)["items"]
 
 
 def test_a_page_that_is_not_on_this_machine_is_refused_before_anything_is_read(proj, site, tmp_path):

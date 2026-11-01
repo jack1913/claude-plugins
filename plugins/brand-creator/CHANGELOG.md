@@ -270,7 +270,8 @@ lints the board of the latest round again before `check`, so an edit of the fact
   `.gitignore` honoured and lock files, change history, minified output, `dist`, `build` and vendored folders left out)
   and writes the record into `adoption.json`. It never edits the repository, and proves it: if anything in the
   repository changes while it reads, the row `read-only:<label>` fails and nothing is stored. The first `--before` is the
-  baseline and is not replaced unless you pass `--again`; `--after` records the site once the redesign is applied and
+  baseline and is not replaced unless you pass `--again`, which also removes the `--after` record taken against the old
+  baseline (the run says so; record `--after` again); `--after` records the site once the redesign is applied and
   needs the baseline. The reading is by pattern, so a link or id built when the page runs is missed or noisy.
   `--compare` says what a redesign lost: it reads the repository again, writes nothing, and lists every item of the
   baseline that is gone, with the files it was in. A loss is fine only when you record why, in your own words:
