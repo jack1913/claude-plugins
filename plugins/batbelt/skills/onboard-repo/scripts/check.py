@@ -1352,11 +1352,38 @@ def _check_empty_tier(roots, coverage):
     return findings
 
 
+def _glob_regex(glob):
+    """An anchored regex for a path glob: `*` and `?` stay inside one path segment,
+    `**` crosses segments, and `**/` also matches nothing (`**/x.md` matches `x.md`)."""
+    out, i = [], 0
+    while i < len(glob):
+        if glob.startswith("**/", i):
+            out.append("(?:.*/)?")
+            i += 3
+        elif glob.startswith("**", i):
+            out.append(".*")
+            i += 2
+        elif glob[i] == "*":
+            out.append("[^/]*")
+            i += 1
+        elif glob[i] == "?":
+            out.append("[^/]")
+            i += 1
+        else:
+            out.append(re.escape(glob[i]))
+            i += 1
+    return re.compile("".join(out) + r"\Z")
+
+
 def _forbidden_allowed(f, relparts, globs):
-    """True when `--forbidden-allow` exempts this file: a glob matching the tail of
-    its path (`manual/reference/*` matches `docs/manual/reference/plugins.md`)."""
-    path = pathlib.PurePosixPath(f.as_posix())
-    return any(path.match(g) for g in globs)
+    """True when `--forbidden-allow` exempts this file. Each glob is anchored and
+    matched against the path relative to the scanned root (`manual/reference/*` for
+    `check-docs docs`) and, for a relative path, against the path as given
+    (`docs/manual/reference/*`). `README.md` exempts only a README at that level."""
+    candidates = ["/".join(relparts or ())]
+    if not f.is_absolute():
+        candidates.append(f.as_posix())
+    return any(_glob_regex(g).match(c) for g in globs for c in candidates)
 
 
 def _check_forbidden(f, text, forbidden):
@@ -1837,7 +1864,8 @@ def _check_next_chain(index, text):
         expected = entries[k + 1]
         m = _NEXT_TARGET_RE.search(_prose_text(body))
         if not m:
-            out.append(("warn", "NEXT_CHAIN", str(page), 1, "no Next link; the index puts %s next" % expected))
+            last = max((i for i, ln in enumerate(body.split("\n"), start=1) if ln.strip()), default=1)
+            out.append(("warn", "NEXT_CHAIN", str(page), last, "no Next link; the index puts %s next" % expected))
             continue
         if (page.parent / m.group(1)).resolve() != (base / expected).resolve():
             fenced = _fenced_line_numbers(body)

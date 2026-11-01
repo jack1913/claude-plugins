@@ -4253,7 +4253,8 @@ def test_sync_conventions_for_a_flat_numbered_manual(tmp_path):
     assert conv == {"layout": "flat", "numbered_tour": True, "next_tour": True,
                     "capture_fence": "text",
                     "docs_voice": "The manual: commands-first, one concept per page.",
-                    "platform_pairs": True, "manual_has_powershell": True}
+                    "platform_pairs": True, "manual_has_powershell": True,
+                    "has_manual": True, "index_groups": [], "new_here": False}
     out = lib.render_local_deviations(conv)
     assert "`text capture=`" in out and "use/" not in out
 
@@ -4682,3 +4683,82 @@ def test_known_baselines_are_recorded_not_guessed():
     ud = _flat(UPD)
     assert "REPO SPECIFICS' `known baselines` line" in ud
     assert "(read it with `git log -1 -- docs/`) is named in full" not in ud
+
+
+# ---- template v5: nothing deferred -------------------------------------------
+
+
+def test_conventions_record_index_groups_and_the_new_here_pointer(tmp_path):
+    _seed(tmp_path, "docs/manual/README.md",
+          "# Manual\n\n**New here?** Start with [Install](getting-started/install.md).\n\n"
+          "## Getting started\n\n- [Install](getting-started/install.md)\n\n"
+          "## The daily-use manual\n\n1. [A](a.md)\n\n## Reference (tables)\n\n- [Flags](reference/flags.md)\n")
+    _seed(tmp_path, "docs/manual/a.md", "# A\n")
+    conv = lib.detect_manual_conventions(tmp_path)
+    assert conv["index_groups"] == ["Getting started", "The daily-use manual", "Reference (tables)"]
+    assert conv["new_here"] is True
+    out = lib.render_local_deviations(conv)
+    assert "Getting started, The daily-use manual, Reference (tables)" in out and "New here" not in out
+
+
+def test_conventions_seed_groups_are_no_deviation_and_a_missing_pointer_is(tmp_path):
+    _seed(tmp_path, "docs/manual/README.md",
+          "# Manual\n\n## Get started\n\n- [I](i.md)\n\n## Do a task\n\n1. [A](a.md)\n\n## Look it up\n\n- [R](r.md)\n")
+    _seed(tmp_path, "docs/manual/a.md", "# A\n")
+    conv = lib.detect_manual_conventions(tmp_path)
+    out = lib.render_local_deviations(conv)
+    assert "groups" not in out and "New here?" in out
+    assert "Get started, Do a task, Look it up" in lib.render_local_deviations(conv, full=True)
+
+
+def test_conventions_any_subfolder_layout_is_recorded(tmp_path):
+    _seed(tmp_path, "docs/manual/README.md", "# Manual\n\n1. [A](guides/a.md)\n")
+    _seed(tmp_path, "docs/manual/guides/a.md", "# A\n\n```text capture=a\n$ a\nok\n```\n")
+    conv = lib.detect_manual_conventions(tmp_path)
+    assert conv["layout"] == "guides"
+    out = lib.render_local_deviations(conv)
+    assert "`docs/manual/guides/`" in out and "`text capture=`" in out
+
+
+def test_conventions_without_how_to_pages_still_record_the_fence(tmp_path):
+    _seed(tmp_path, "docs/manual/README.md", "# Manual\n\n- [Install](getting-started/install.md)\n")
+    _seed(tmp_path, "docs/manual/getting-started/install.md",
+          "# Install\n\n```text capture=i\n$ i\nok\n```\n")
+    conv = lib.detect_manual_conventions(tmp_path)
+    assert conv["has_manual"] is True and conv["layout"] is None
+    assert "`text capture=`" in lib.render_local_deviations(conv)
+
+
+def test_next_chain_reports_a_missing_link_at_the_page_end(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "docs/manual/README.md", "# M\n\n1. [A](a.md)\n2. [B](b.md)\n3. [C](c.md)\n")
+    _seed(tmp_path, "docs/manual/a.md", "# A\n\nText.\n\nMore text.\n")
+    _seed(tmp_path, "docs/manual/b.md", "# B\n\n**Next:** [C](c.md)\n")
+    _seed(tmp_path, "docs/manual/c.md", "# C\n")
+    _, _, lines = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check"])
+    hit = [ln for ln in lines if "NEXT_CHAIN" in ln and "a.md" in ln]
+    assert len(hit) == 1 and hit[0].split("\t")[2].endswith("a.md:5")
+
+
+def test_forbidden_allow_globs_are_anchored(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "README.md", "# R\n\nUses grill-me.\n")
+    _seed(tmp_path, "docs/manual/README.md", "# M\n\nUses grill-me.\n")
+    _seed(tmp_path, "docs/manual/reference/deep/plugins.md", "# P\n\nUses grill-me.\n")
+    rc, _, lines = _run_check(cli, capsys, [str(tmp_path / "README.md"), str(tmp_path / "docs")],
+                              ["--no-tier-check", "--forbidden", "grill-me",
+                               "--forbidden-allow", "README.md,**/reference/**"])
+    hits = [ln.split("\t")[2] for ln in lines if "FORBIDDEN_TOKEN" in ln]
+    assert len(hits) == 1 and "docs/manual/README.md" in hits[0]
+
+
+def test_renumber_toc_numbers_each_list_on_its_own_and_totals_the_tour():
+    text = ("# M\n\nRead **1 → 9**.\n\n## Get started\n\n4. [I](i.md)\n\n## Do a task\n\n"
+            "5. [A](a.md)\n   7. [A detail](a.md#x)\n   9. [A more](a.md#y)\n1. [B](b.md)\n2. [C](c.md)\n\n"
+            "## Look it up\n\n3. [R](r.md)\n8. [S](s.md)\n")
+    out = lib.renumber_toc(text)
+    assert "**1 → 3**" in out
+    assert "1. [I](i.md)" in out
+    assert "1. [A](a.md)\n   1. [A detail](a.md#x)\n   2. [A more](a.md#y)\n2. [B](b.md)\n3. [C](c.md)" in out
+    assert "1. [R](r.md)\n2. [S](s.md)" in out
+    assert lib.renumber_toc(out) == out
