@@ -1070,16 +1070,19 @@ def test_a_copyright_year_and_an_error_pages_status_code_are_no_claims(tmp_path)
     off = claims_of_page(tmp_path, [claim_run("Founded in 2026. © 2025 Acme", "body > p"), claim_run("Since 2024, copyright 2024", "body > b"), claim_run("Copyright holders: 2026 members", "body > i")])
     assert [o["number"] for o in off["unbacked_numbers"]] == ["2026", "2024", "2026"] and [o["selector"] for o in off["unbacked_numbers"]] == ["body > p", "body > b", "body > i"], off["detail"]   # only a year right after the sign is not a claim
     big = [claim_run("Błąd 404", "body > main > p"), claim_run("404", "body > main > div")]
-    assert claims_of_page(tmp_path, big, title="Błąd 404 | Acme", h1=["404"])["claims_checked"]["numbers"] == 0
-    assert claims_of_page(tmp_path, big, title="Błąd 404 | Acme")["status"] == "pass" and claims_of_page(tmp_path, big, title="Acme", h1=["Strony nie ma 404"])["status"] == "pass"   # the title alone, or the h1 alone
-    lonely = claims_of_page(tmp_path, big, title="Acme", h1=["Strona nie istnieje"])
+    assert claims_of_page(tmp_path, big, title="Błąd 404 | Acme", h1=["404"], lang="pl")["claims_checked"]["numbers"] == 0
+    assert claims_of_page(tmp_path, big, title="Błąd 404 | Acme", lang="pl")["status"] == "pass" and claims_of_page(tmp_path, big, title="Acme", h1=["Strona nie istnieje 404"], lang="pl")["status"] == "pass"   # the title alone, or the h1 alone
+    lonely = claims_of_page(tmp_path, big, title="Acme", h1=["Strona nie istnieje"], lang="pl")   # an error word of the page's language, and no code in the title or h1
     assert lonely["status"] == "fail" and [o["number"] for o in lonely["unbacked_numbers"]] == ["404", "404"], lonely["detail"]    # a page that does not say it in its title or h1 is not an error page
     other = [*big, claim_run("500 firms trust us", "body > main > b"), claim_run("Costs 404 zł", "body > main > i"), claim_run("Version 404.5", "body > main > u"),
              claim_run("Tel. 600 123 456, 00-950 Warszawa, ul. Polna 12", "body > main > s")]
-    got = claims_of_page(tmp_path, other, title="Błąd 404 | Acme", h1=["404"])
+    got = claims_of_page(tmp_path, other, title="Błąd 404 | Acme", h1=["404"], lang="pl")
     assert [o["number"] for o in got["unbacked_numbers"]] == ["500", "404 zł", "404.5", "600 123 456", "00", "950", "12"], got["detail"]   # only that same bare number; phone, postal and street numbers are claims
-    not_error = claims_of_page(tmp_path, [claim_run("Total 200", "body > p"), claim_run("Hello 399", "body > b"), claim_run("Hello 600", "body > i")], title="Total 200 399 600", h1=["200 399 600"])
-    assert [o["number"] for o in not_error["unbacked_numbers"]] == ["200", "399", "600"], not_error["detail"]   # a status code is 400 to 599
+    for number in ("200", "399", "600"):   # the only number of the title, with an error word of the page's language: still no status code, which is 400 to 599
+        not_error = claims_of_page(tmp_path, [claim_run(f"Hello {number}", "body > p")], title=f"Error {number}")
+        assert not_error["status"] == "fail" and [o["number"] for o in not_error["unbacked_numbers"]] == [number], (number, not_error["detail"])
+    for number in ("400", "599"):
+        assert claims_of_page(tmp_path, [claim_run(f"Hello {number}", "body > p")], title=f"Error {number}")["status"] == "pass", number
 
 
 def claims_of_file(tmp_path: Path, runs: list, page: str = "pages/x.html", title: str = "", h1=(), lang: str = "en", url: str | None = None, kind: str = "project") -> dict:
@@ -1111,28 +1114,68 @@ def test_a_page_named_after_a_status_code_is_an_error_page_whatever_its_title_an
 
 def test_a_code_in_the_title_or_an_h1_counts_only_when_it_is_the_only_number_there(tmp_path):
     write_facts(tmp_path, ("name", "Acme hand tools"))
-    big = [claim_run("500+ firm nam ufa", "body > main > h1"), claim_run("Kod 500", "body > main > p")]
-    plus = claims_of_file(tmp_path, big, h1=["500+ firm nam ufa"])
+    big = [claim_run("Błąd 500+ firm nam ufa", "body > main > h1"), claim_run("Kod 500", "body > main > p")]
+    plus = claims_of_file(tmp_path, big, h1=["Błąd 500+ firm nam ufa"], lang="pl")   # every heading of the plus cases holds an error word of the page's language: only the plus decides
     assert plus["status"] == "fail" and [o["number"] for o in plus["unbacked_numbers"]] == ["500", "500"], plus["detail"]   # a count with a plus is no status code
-    assert claims_of_file(tmp_path, big, title="500 + firm", h1=["500 + firm nam ufa"])["status"] == "fail"
-    lead = claims_of_file(tmp_path, big, h1=["+500 klientów"])
+    assert claims_of_file(tmp_path, big, title="Błąd 500 + firm", h1=["Błąd 500 + firm nam ufa"], lang="pl")["status"] == "fail"
+    lead = claims_of_file(tmp_path, big, h1=["Błąd +500 klientów"], lang="pl")
     assert lead["status"] == "fail" and [o["number"] for o in lead["unbacked_numbers"]] == ["500", "500"], lead["detail"]   # a plus before the number is a count too
-    assert claims_of_file(tmp_path, big, title="+ 500 klientów")["status"] == "fail" and pagecheck.status_codes([{"claim_h1": ["+500 firm"]}]) == set()
-    assert pagecheck.status_codes([{"claim_h1": ["500+ firm"]}]) == set() and pagecheck.status_codes([{"claim_h1": ["Błąd 500"]}]) == {"500"}
-    for title, h1 in (("Błąd 404 | Acme", []), ("Acme", ["Strony nie ma 404"]), ("Acme", ["Error 500 – Acme"]), ("404 – Nie znaleziono", ["404"])):
+    assert claims_of_file(tmp_path, big, title="Błąd + 500 klientów", lang="pl")["status"] == "fail" and claims_of_file(tmp_path, big, title="Error 500+", lang="en")["status"] == "fail"
+    for lang, text in (("pl", "Błąd 500+ firm"), ("pl", "+500 firm. Błąd"), ("pl", "Błąd + 500 firm"), ("pl", "Błąd 500 + firm"),
+                       ("en", "Error 500+"), ("en", "Error +500"), ("en", "Error + 500"), ("en", "Error 500 +")):
+        assert pagecheck.status_codes([{"lang": lang, "claim_h1": [text]}]) == set() and pagecheck.status_codes([{"lang": lang, "document": {"title": text}}]) == set(), (lang, text)
+        assert pagecheck.status_codes([{"lang": lang, "claim_h1": [text.replace("+", "")]}]) == {"500"}, (lang, text)   # the same words without the plus are the code: only the plus decides
+    for title, h1, lang in (("Błąd 404 | Acme", [], "pl"), ("Acme", ["Strona nie istnieje 404"], "pl"), ("Acme", ["Error 500 – Acme"], "en"), ("404 – Nie znaleziono", ["404"], "pl")):
         code = "404" if "404" in title + "".join(h1) else "500"
-        got = claims_of_file(tmp_path, [claim_run(f"Błąd {code}", "body > main > p"), claim_run(code, "body > div")], title=title, h1=h1)
+        got = claims_of_file(tmp_path, [claim_run(f"Błąd {code}", "body > main > p"), claim_run(code, "body > div")], title=title, h1=h1, lang=lang)
         assert got["status"] == "pass" and got["claims_checked"]["numbers"] == 0, (title, h1, got["detail"])
     two = [claim_run("Błąd 404", "body > main > p"), claim_run("Kod 500", "body > b")]
-    for title, h1 in (("Acme 2026 – Błąd 404", []), ("Acme", ["404 or 500"]), ("Acme", ["Błąd 404 – od 2026"]), ("Acme", ["404, 404"]),
-                      ("Acme", ["5 lat, 404 klientów"]), ("Acme", ["Error 404 (1 of 3)"]), ("Acme", ["Błąd 404 – © 2026 Acme"]), ("Acme", ["Błąd 404 – 5 maja"])):
-        got = claims_of_file(tmp_path, two, title=title, h1=h1)
+    for title, h1, lang in (("Acme 2026 – Błąd 404", [], "pl"), ("Acme", ["Błąd: 404 or 500"], "pl"), ("Acme", ["Błąd 404 – od 2026"], "pl"), ("Acme", ["Błąd 404, 404"], "pl"),
+                            ("Acme", ["5 lat, błąd 404"], "pl"), ("Acme", ["Error 404 (1 of 3)"], "en"), ("Acme", ["Błąd 404 – © 2026 Acme"], "pl"), ("Acme", ["Błąd 404 – 5 maja"], "pl")):
+        got = claims_of_file(tmp_path, two, title=title, h1=h1, lang=lang)
         assert got["status"] == "fail" and [o["number"] for o in got["unbacked_numbers"]] == ["404", "500"], (title, h1, got["detail"])   # other numbers in the same text, a single digit or a copyright year too: it says nothing of an error
     single = claims_of_file(tmp_path, [claim_run("Od 500 sztuk", "body > main > p")], h1=["5 lat, 500 klientów"])
     assert single["status"] == "fail" and [o["number"] for o in single["unbacked_numbers"]] == ["500"], single["detail"]   # the 5 is no claim, but it is a number of the h1: 500 is not its code
-    assert pagecheck.status_codes([{"claim_h1": ["5 lat, 500 klientów"]}]) == set() and pagecheck.status_codes([{"claim_h1": ["Error 500 (1 of 3)"]}]) == set()
-    mixed = claims_of_file(tmp_path, two, title="Błąd 404 | Acme", h1=["500+ firm nam ufa"])
+    assert pagecheck.status_codes([{"lang": "pl", "claim_h1": ["5 lat, 500 klientów"]}]) == set() and pagecheck.status_codes([{"lang": "en", "claim_h1": ["Error 500 (1 of 3)"]}]) == set()
+    mixed = claims_of_file(tmp_path, two, title="Błąd 404 | Acme", h1=["500+ firm nam ufa"], lang="pl")
     assert [o["number"] for o in mixed["unbacked_numbers"]] == ["500"], mixed["detail"]   # the title still holds the code, the h1 holds none
+
+
+def test_a_code_in_a_title_or_an_h1_needs_an_error_word_of_the_pages_language_and_a_count_exempts_nothing(tmp_path):
+    write_facts(tmp_path, ("name", "Acme hand tools"))
+    codes = lambda lang, *h1, title="": pagecheck.status_codes([{"lang": lang, "document": {"title": title}, "claim_h1": list(h1)}])
+    for lang, text, number in (("pl", "Ponad 400 projektów", "400"), ("pl", "Zaufało nam 500 firm", "500"), ("en", "Over 400 clients", "400")):   # a count in a heading says nothing of an error
+        assert codes(lang, text) == set() and codes(lang, title=text) == set(), (lang, text)
+        got = claims_of_file(tmp_path, [claim_run(text, "body > main > h1")], title="Acme", h1=[text], lang=lang)
+        assert got["status"] == "fail" and [o["number"] for o in got["unbacked_numbers"]] == [number], (text, got["detail"])   # the number is a claim, as anywhere else
+        assert claims_of_file(tmp_path, [claim_run(text, "body > main > h1")], title=text, lang=lang)["status"] == "fail", text
+    for lang, text, number in (("pl", "404 · Nie znaleziono", "404"), ("en", "Error 500", "500"), ("pl", "Błąd 404 – strona nie istnieje", "404")):   # the code with an error word of the page's language
+        assert codes(lang, text) == {number} and codes(lang, title=text) == {number}, (lang, text)
+        runs = [claim_run(text, "body > main > h1"), claim_run(number, "body > main > div")]
+        for title, h1 in ((text, ()), ("Acme", (text,))):
+            got = claims_of_file(tmp_path, runs, title=title, h1=h1, lang=lang)
+            assert got["status"] == "pass" and got["claims_checked"]["numbers"] == 0, (text, got["detail"])
+    for lang, words in (("en", ("error", "not found", "forbidden", "unauthorized", "unavailable", "gone", "bad request", "server error")),
+                        ("pl", ("błąd", "nie znaleziono", "nie istnieje", "brak dostępu", "odmowa dostępu", "niedostępna", "niedostępny"))):   # every listed word, in any letter case
+        for word in words:
+            for text in (f"{word} 403", f"403 – {word}", f"{word.upper()} 403", f"{word.capitalize()}: 403!", f"{word.replace(' ', chr(160))} 403"):
+                assert codes(lang, text) == {"403"} and codes(lang, title=text) == {"403"}, (lang, text)
+    assert codes("pl", "Error 500", "Not found 404") == set() and codes("en", "Błąd 500", "404 · Nie znaleziono") == set()   # the words of the page's language only
+    for lang in ("de", "fr", ""):
+        assert codes(lang, "Error 500", "Błąd 404", "Seite nicht gefunden 404", title="Not found 404") == set(), lang   # another language, or none: the file name only
+    assert codes("pl-PL", "Błąd 404") == {"404"} and codes("EN-gb", "Error 404") == {"404"}                          # the primary language of the page decides
+    assert codes("en", "500", title="Error | Acme") == set() and codes("en", "Error", "500") == set()                  # the word and the number are in the same text
+    assert codes("en", "Terror 404", "Fiasco 500") == set() and codes("pl", "Nobłąd 404") == set()                 # a whole word, not a part of one
+    assert codes("en", "Error 404 and Gone 500") == set() and codes("en", "Error 404, 2026") == set()                  # an error word does not lift the rule of the only number
+    for text in ("Error 404 zł", "Error 404.5", "Error 404%", "Error €404", "Error 404 km", "Error 404k"):                # a number with a sign, a code or a unit is not a bare number
+        assert codes("en", text) == set(), text
+    assert [codes("en", f"Error {n}") for n in ("399", "600", "200")] == [set()] * 3 and [codes("en", f"Error {n}") for n in ("400", "599")] == [{"400"}, {"599"}]   # a status code is 400 to 599
+    assert pagecheck.status_codes([{"claim_h1": ["Error 500"]}]) == set()                                              # a view that names no language
+    label = [claim_run("Kod 404", "body > main > p"), claim_run("Over 400 clients", "body > main > h1")]
+    for lang in ("en", "de", ""):   # the file name says it whatever the language, and the title and h1 need not hold the code
+        got = claims_of_file(tmp_path, label, "404.html", title="Acme", h1=["Over 400 clients"], lang=lang)
+        assert got["status"] == "fail" and [o["number"] for o in got["unbacked_numbers"]] == ["400"], (lang, got["detail"])   # 404 is exempt, the count is still a claim
+    assert pagecheck.status_codes([{"lang": "de", "claim_h1": ["Seite nicht gefunden"]}], pagecheck.Target("project", "404.html", page="404.html")) == {"404"}
 
 
 def test_a_date_with_a_month_name_is_one_date_in_polish_and_english(tmp_path):
@@ -1182,6 +1225,38 @@ def test_a_date_with_a_month_name_is_backed_by_the_numbers_of_the_date_in_the_fa
     assert dotted["status"] == "pass", dotted["detail"]                                                                              # a date written with a month name in the facts backs the other forms
     write_facts(tmp_path, ("release", "premiera 21 października"))
     assert claims_of_page(tmp_path, [claim_run("Premiera 21.10")], lang="pl")["status"] == "pass"           # and a dotted 21.10 is backed by its two parts
+
+
+def test_a_number_that_runs_past_a_month_name_is_not_part_of_the_date_and_a_day_with_a_comma_and_a_year_is(tmp_path):
+    num = lambda text, lang="en", **kw: [(n["text"], n["number"], n.get("parts")) for n in pagecheck.numbers_in(text, lang=lang, **kw)]
+    october = lambda text: (text, "21.10.2026", ["21", "10", "2026"])
+    assert num("March 15% of users") == [("15%", "15", None)] and num("March 15 % of users") == [("15 %", "15", None)] and num("March 15‰ of users") == [("15‰", "15", None)]   # a percent is the claim, not the day of March
+    assert num("May 3.5 kg") == [("3.5 kg", "3.5", None)] and num("October 12,5 users") == [("12,5", "12.5", None)]                      # a decimal number is not a day
+    assert num("March 15.11.2026") == [("15.11.2026", "15.11.2026", ["15", "11", "2026"])]                                            # a dotted date is a dotted date, not the day of March
+    assert num("October 21.2026") == [("21.2026", "21.2026", None)] and pagecheck.month_dates("October 21,20265", "en") == []        # a digit glued to the day, and a year of five digits
+    assert num("October 21,2026") == [october("October 21,2026")] and num("October 21, 2026") == [october("October 21, 2026")]        # a comma and a year, with a space or without one, is the full date
+    assert num("October 21 2026") == [october("October 21 2026")] and num("October 21st,2026") == [october("October 21st,2026")]
+    assert num("Ends October 21,2026.") == [october("October 21,2026")] and num("Ends on October 21, 2026, at noon") == [october("October 21, 2026")]
+    assert num("Sale ends October 21. 12 pieces left") == [("October 21", "21/10", ["21", "10"]), ("12", "12", None)]                  # a full stop after the day ends the sentence
+    assert num("October 21, 15% off") == [("October 21", "21/10", ["21", "10"]), ("15%", "15", None)]                                   # a comma after the day, then a number that is not a year
+    assert num("October 21, 5 people came") == [("October 21", "21/10", ["21", "10"])]                                                # (the 5 is a bare single digit)
+    assert num("21 October 15% off") == [("21 October", "21/10", ["21", "10"]), ("15%", "15", None)]
+    assert num("March 15% of users and October 21,2026", pagecheck.ANY_LANGUAGE, every=True) == [("15%", "15", None), october("October 21,2026")]   # a FACTS.md value reads them the same way
+    # a Polish day is followed by the genitive of the month: the nominative or the locative after a day is no date
+    assert num("21 października", "pl") == [("21 października", "21/10", ["21", "10"])]
+    assert num("21 październik", "pl") == [("21", "21", None)] and num("21 październiku", "pl") == [("21", "21", None)]
+    assert num("21 październik 2026", "pl") == [("21", "21", None), ("październik 2026", "10/2026", ["10", "2026"])]                 # the nominative with a year is the month and the year, and the 21 stays a number
+    assert num("5 październik", "pl") == []                                                                                              # a bare single digit is no claim
+    write_facts(tmp_path, ("users", "we have 200 users"), ("release", "premiera 2026-10-21"))
+    got = claims_of_page(tmp_path, [claim_run("March 15% of users", "body > p")], lang="en")
+    assert got["status"] == "fail" and [o["number"] for o in got["unbacked_numbers"]] == ["15%"], got["detail"]                       # judged as a percent: 15 is no fact
+    got = claims_of_page(tmp_path, [claim_run("October 21,2026", "body > p"), claim_run("October 21, 2026", "body > b")], lang="en")
+    assert got["status"] == "pass" and got["claims_checked"]["numbers"] == 2, got["detail"]                                           # one date each, backed by 2026, 10 and 21
+    got = claims_of_page(tmp_path, [claim_run("October 21,2027", "body > p")], lang="en")
+    assert got["status"] == "fail" and [o["number"] for o in got["unbacked_numbers"]] == ["October 21,2027"], got["detail"]          # the year is part of the date: 2027 is no fact
+    write_facts(tmp_path, ("days", "ponad 21 dni"), ("month", "miesiąc 10"), ("share", "15% of users"))
+    got = claims_of_page(tmp_path, [claim_run("October 21,2026", "body > p"), claim_run("March 15% of users", "body > b")], lang="en")
+    assert got["status"] == "fail" and [o["number"] for o in got["unbacked_numbers"]] == ["October 21,2026"], got["detail"]         # the 2026 is no fact, and the percent is backed
 
 
 def test_a_dotted_date_has_two_digits_each_or_a_year_and_a_bare_decimal_stays_a_decimal(tmp_path):
@@ -1559,6 +1634,7 @@ def test_a_copyright_year_is_no_claim_and_a_year_elsewhere_is(acme):
 @pytest.mark.requires_node
 def test_the_status_code_of_an_error_page_is_no_claim_but_other_numbers_on_it_are(acme):
     page = write_page(acme)
+    mutate(page, '<html lang="en">', '<html lang="pl">')   # the error words are those of the page's language
     mutate(page, "<title>Acme</title>", "<title>Błąd 404 | Acme</title>")
     mutate(page, "<h1>Acme hand tools</h1>", "<h1>Nie znaleziono</h1>\n  <p>Błąd 404</p><div style=\"font-size: 8rem\">404</div>")   # the title holds the code, the h1 does not
     r, rep = check_page(acme, "--schemes", "light")
@@ -1568,7 +1644,7 @@ def test_the_status_code_of_an_error_page_is_no_claim_but_other_numbers_on_it_ar
     r, rep = check_page(acme, "--schemes", "light")
     assert r.returncode == 1, r.stdout + r.stderr
     assert [o["number"] for o in row(rep, "page:claims")["unbacked_numbers"]] == ["404", "404"]
-    mutate(page, "<h1>Nie znaleziono</h1>", "<h1>404</h1>")   # the h1 alone holds it
+    mutate(page, "<h1>Nie znaleziono</h1>", "<h1>404 · Nie znaleziono</h1>")   # the h1 alone holds it, with its error word
     r, rep = check_page(acme, "--schemes", "light")
     assert r.returncode == 0, r.stdout + r.stderr
     mutate(page, "</main>", "<p>500 firms. Tel. 600 123 456, 00-950 Warszawa, ul. Polna 12.</p>\n</main>")   # another number is a claim, and so are a phone number, a postal code and a street number
@@ -1614,18 +1690,49 @@ def test_a_page_named_after_its_status_code_is_an_error_page_and_a_count_with_a_
         assert r.returncode == 0, r.stdout + r.stderr
         assert row(report(acme, pagecheck.report_tool(f"url:{base}/pages/404.html")), "page:claims")["claims_checked"]["numbers"] == 0
     page = write_page(acme)
-    mutate(page, "<h1>Acme hand tools</h1>", "<h1>500+ firm nam ufa</h1>")   # the only number of the h1, with a plus: a count, not a status code
+    mutate(page, '<html lang="en">', '<html lang="pl">')   # the error words are those of the page's language: each h1 below holds one, so only the plus or the second number decides
+    mutate(page, "<h1>Acme hand tools</h1>", "<h1>Błąd 500+</h1>")   # the only number of the h1, with a plus: a count, not a status code
     r, rep = check_page(acme, "--schemes", "light")
     assert r.returncode == 1, r.stdout + r.stderr
     assert [o["number"] for o in row(rep, "page:claims")["unbacked_numbers"]] == ["500"]
-    mutate(page, "<h1>500+ firm nam ufa</h1>", "<h1>+500 klientów</h1>")   # a plus before the number is a count too
+    mutate(page, "<h1>Błąd 500+</h1>", "<h1>Błąd +500</h1>")   # a plus before the number is a count too
     r, rep = check_page(acme, "--schemes", "light")
     assert r.returncode == 1, r.stdout + r.stderr
     assert [o["number"] for o in row(rep, "page:claims")["unbacked_numbers"]] == ["500"]
-    mutate(page, "<h1>+500 klientów</h1>", "<h1>5 lat, 500 klientów</h1>")   # another number in the h1, a single digit too: 500 is not its status code
+    mutate(page, "<h1>Błąd +500</h1>", "<h1>Błąd: 5 lat, 500 klientów</h1>")   # another number in the h1, a single digit too: 500 is not its status code
     r, rep = check_page(acme, "--schemes", "light")
     assert r.returncode == 1, r.stdout + r.stderr
     assert [o["number"] for o in row(rep, "page:claims")["unbacked_numbers"]] == ["500"]
+    mutate(page, "<h1>Błąd: 5 lat, 500 klientów</h1>", "<h1>Błąd 500</h1>")   # the same words with the code as the only number, and no plus: the status code
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert row(rep, "page:claims")["claims_checked"]["numbers"] == 0
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_count_in_a_heading_is_no_error_page_and_a_code_with_an_error_word_of_the_pages_language_is(acme):
+    page = write_page(acme)
+    for lang, h1, number in (("en", "Over 400 clients", "400"), ("pl", "Ponad 400 projektów", "400"), ("pl", "Zaufało nam 500 firm", "500")):
+        write_page(acme, PAGE.replace('<html lang="en">', f'<html lang="{lang}">').replace("<h1>Acme hand tools</h1>", f"<h1>{h1}</h1>"))
+        r, rep = check_page(acme, "--schemes", "light")
+        assert r.returncode == 1, h1 + r.stdout + r.stderr
+        assert [o["number"] for o in row(rep, "page:claims")["unbacked_numbers"]] == [number], h1   # a count in the heading exempts nothing
+    mutate(page, "<h1>Zaufało nam 500 firm</h1>", "<h1>404 · Nie znaleziono</h1>\n  <p>404</p>")   # the code and an error word of the page's language (pl)
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert row(rep, "page:claims")["status"] == "pass" and row(rep, "page:claims")["claims_checked"]["numbers"] == 0
+    mutate(page, '<html lang="pl">', '<html lang="en">')   # the same words on an English page are not error words
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert [o["number"] for o in row(rep, "page:claims")["unbacked_numbers"]] == ["404", "404"]
+    mutate(page, "<h1>404 · Nie znaleziono</h1>", "<h1>Error 404</h1>")   # English words on an English page
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 0, r.stdout + r.stderr
+    mutate(page, '<html lang="en">', '<html lang="de">')   # another language: the file name only
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert [o["number"] for o in row(rep, "page:claims")["unbacked_numbers"]] == ["404", "404"]
 
 
 @pytest.mark.requires_setup
@@ -1643,6 +1750,11 @@ def test_a_date_with_a_month_name_on_a_page_is_one_date_that_needs_the_numbers_o
     r, rep = check_page(acme, "--schemes", "light")
     assert r.returncode == 0, r.stdout + r.stderr
     assert row(rep, "page:claims")["status"] == "pass" and row(rep, "page:claims")["claims_checked"]["numbers"] == 3
+    mutate(page, "<p>October 2026</p>", "<p>October 2026</p><p>October 21,2026</p><p>March 15% of users</p>")   # the date with a comma and no space; the percent is no date
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert [o["number"] for o in row(rep, "page:claims")["unbacked_numbers"]] == ["15%"] and row(rep, "page:claims")["claims_checked"]["numbers"] == 5
+    mutate(page, "<p>October 2026</p><p>October 21,2026</p><p>March 15% of users</p>", "<p>October 2026</p>")
     mutate(page, "<p>21 October 2026</p>", "<p>22 October 2026</p>")
     r, rep = check_page(acme, "--schemes", "light")
     assert r.returncode == 1, r.stdout + r.stderr

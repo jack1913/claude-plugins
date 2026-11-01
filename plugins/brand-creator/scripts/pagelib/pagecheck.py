@@ -698,10 +698,16 @@ COPYRIGHT_BEFORE = re.compile(r"(?:©|\(c\)|\bcopyright\b)\s*(?:(?:©|\(c\))\s*)
 COPYRIGHT_LOOKBACK = 40                   # characters before a year that are looked at for the sign
 DATE_YEAR_R = re.compile(r"\.((?:19|20)\d{2})r(?!\w)")   # the Polish year written glued to the date: 15.11.2026r.
 STATUS_CODE = re.compile(r"[45]\d\d")      # a 4xx or 5xx status code of an error page
+# The words that say a title or an h1 is about an error, per page language: a code in such a text counts as the page's status code only when the same text holds one of them.
+ERROR_WORDS = {"en": ("error", "not found", "forbidden", "unauthorized", "unavailable", "gone", "bad request", "server error"),
+               "pl": ("błąd", "nie znaleziono", "nie istnieje", "brak dostępu", "odmowa dostępu", "niedostępna", "niedostępny")}
+ERROR_WORD_PATTERNS = {lang: re.compile(r"(?<!\w)(?:" + "|".join(r"\s+".join(re.escape(w) for w in phrase.split()) for phrase in phrases) + r")(?!\w)", re.I) for lang, phrases in ERROR_WORDS.items()}   # whole words, any letter case, any white space between the words of a phrase
 
 # A date written with a month name is one date, not numbers, in the languages whose month names are listed (the page language decides: any other, or none, keeps the numbers as they are).
 # Polish: "21 października 2026", "21 października", and a month with a year, in the nominative, genitive or locative ("Październik 2026", "października 2026", "w październiku 2026"), in any
 # letter case. English: "October 21, 2026", "October 21st", "21 October 2026", "21 October", "October 2026", with a capital letter or in capitals (a lower-case "may" or "march" is a word).
+# A day that a number runs past is no day: "March 15% of users" is a percent, "May 3.5 kg" and "October 12,5" are decimals. Only a comma and a four-digit year may follow a day that way:
+# "October 21,2026" (with or without a space after the comma) is the full date. After a day the nominative or the locative of a Polish month is no date: "21 październik" is the number 21.
 MONTH_NAMES = {"pl": (("stycznia", "styczeń", "styczniu"), ("lutego", "luty", "lutym"), ("marca", "marzec", "marcu"), ("kwietnia", "kwiecień", "kwietniu"), ("maja", "maj", "maju"),
                       ("czerwca", "czerwiec", "czerwcu"), ("lipca", "lipiec", "lipcu"), ("sierpnia", "sierpień", "sierpniu"), ("września", "wrzesień", "wrześniu"),
                       ("października", "październik", "październiku"), ("listopada", "listopad", "listopadzie"), ("grudnia", "grudzień", "grudniu")),   # genitive, nominative, locative
@@ -709,6 +715,7 @@ MONTH_NAMES = {"pl": (("stycznia", "styczeń", "styczniu"), ("lutego", "luty", "
 ANY_LANGUAGE = "*"                        # numbers_in(lang=...) for a text of no known language (a FACTS.md value): the month names of every listed language
 _DAY = r"(?:0?[1-9]|[12]\d|3[01])"
 _YEAR = r"(?:(?:19|20)\d{2})(?=r(?!\w)|(?!\w))"      # a year may be followed by the Polish r. glued to it: 2026r.
+_DAY_ENDS = r"(?!\s?[%‰])(?:(?![.,]\d)|(?=,\s*" + _YEAR + r"))"   # after a day: no percent sign, and no digit glued by . or , unless a comma and a year (October 21,2026)
 
 
 def _month_alternatives(lang: str, genitive_only: bool = False) -> tuple[str, dict[str, int]]:
@@ -733,7 +740,7 @@ def _month_date_patterns() -> dict[str, list[re.Pattern]]:
             forms = [rf"{before_day}(?P<d>{_DAY})\s+(?P<m>{gen_month})(?!\w)(?:\s+(?P<y>{_YEAR}))?",          # 21 października 2026, 21 października
                      rf"(?<!\w)(?P<m>{any_month})\s+(?P<y>{_YEAR})"]                                         # Październik 2026, października 2026, w październiku 2026
         else:
-            forms = [rf"(?<!\w)(?P<m>{any_month})\s+(?P<d>{_DAY})(?:st|nd|rd|th)?(?!\w)(?:,?\s+(?P<y>{_YEAR}))?",   # October 21, 2026, October 21st, October 21
+            forms = [rf"(?<!\w)(?P<m>{any_month})\s+(?P<d>{_DAY})(?:st|nd|rd|th)?(?!\w){_DAY_ENDS}(?:(?:,\s*|\s+)(?P<y>{_YEAR}))?",   # October 21, 2026, October 21,2026, October 21st, October 21
                      rf"{before_day}(?P<d>{_DAY})(?:st|nd|rd|th)?\s+(?P<m>{any_month})(?!\w)(?:,?\s+(?P<y>{_YEAR}))?",  # 21 October 2026, 21st October, 21 October
                      rf"(?<!\w)(?P<m>{any_month})\s+(?P<y>{_YEAR})"]                                         # October 2026
         out[lang] = [re.compile(f, flags[lang]) for f in forms]
@@ -828,13 +835,18 @@ def target_stem(target) -> str:
 def status_codes(views: list[dict], target=None) -> set[str]:
     """The status codes of an error page. A page is an error page when its file name, without the extension, is a 4xx or 5xx code (`404.html`, `500.html`), or its `<title>` or an `<h1>`
     (`document.title` and `claim_h1` of a view) holds one as a bare number. The text counts only when that number is the only one in it (every number, a bare single digit and a copyright
-    year too) and no `+` stands before or after it: `Błąd 404 | Acme` and `Strony nie ma 404` do, `500+ firm nam ufa`, `+500 klientów`, `5 lat, 500 klientów`, `Error 500 (1 of 3)` and
-    `404 and 500` do not. A number on an error page that is this same code is the page's status code, not a claim, wherever it stands on the page; any other number is judged as usual."""
+    year too), no `+` stands before or after it, and the same text holds an error word of the page's language (ERROR_WORDS: English and Polish; the language is the view's `lang`, the
+    document's, and any other, or none, leaves the file name as the only rule): `Błąd 404 | Acme` and `404 · Nie znaleziono` on a Polish page, `Error 500` on an English one do; a count in a
+    heading (`Ponad 400 projektów`, `Zaufało nam 500 firm`, `Over 400 clients`), `500+ firm nam ufa`, `+500 klientów`, `5 lat, 500 klientów`, `Error 500 (1 of 3)` and `404 and 500` do not.
+    A number on an error page that is this same code is the page's status code, not a claim, wherever it stands on the page; any other number is judged as usual."""
     codes = set()
     stem = target_stem(target)
     if STATUS_CODE.fullmatch(stem):
         codes.add(stem)
     for v in views:
+        error_words = ERROR_WORD_PATTERNS.get(_primary_language(v.get("lang") or ""))
+        if error_words is None:
+            continue   # the page is in a language whose error words are not listed: the file name is the only rule
         for text in [(v.get("document") or {}).get("title"), *(v.get("claim_h1") or [])]:
             if not isinstance(text, str):
                 continue
@@ -842,7 +854,7 @@ def status_codes(views: list[dict], target=None) -> set[str]:
             if len(found) == 1:
                 (n,) = found
                 plus = re.search(r"\+\s?$", text[:n["at"]]) or re.match(r"\s?\+", text[n["at"] + len(n["text"]):])   # +500 and 500+ are counts
-                if n["bare"] and STATUS_CODE.fullmatch(n["number"]) and not plus:
+                if n["bare"] and STATUS_CODE.fullmatch(n["number"]) and not plus and error_words.search(text):
                     codes.add(n["number"])
     return codes
 
