@@ -281,6 +281,11 @@ lints the board of the latest round again before `check`, so an edit of the fact
   `--compare`) to read the pages of your own local server too, as the browser shows them: only addresses on this
   machine (`localhost`, `127.0.0.1` or `[::1]`) are opened, and a page that cannot be read stops the run and stores
   nothing. Listeners that a script adds are not visible in the page, so they are read from the source only.
+- A brand kit for your product repositories: `brand-creator kit build --yes` writes it around your brand skill, with the
+  brand's own files copied in byte for byte and locked (opt-in when you approve the brand). The kit gets a version
+  (`<edition>.<build>`) that goes up by one when anything in it changes and stays the same when nothing does. A kit
+  file you edited by hand, or a file you put into one of its generated folders, stops the next build; `--replace` moves
+  it to `removed-<date>/` and builds. Nothing is deleted.
 
 ### Changed
 
