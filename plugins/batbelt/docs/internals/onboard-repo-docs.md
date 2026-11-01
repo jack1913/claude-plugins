@@ -28,8 +28,8 @@ How onboard-repo sets up a repository's docs and checks them. The steps are in [
   - `ADR_DANGLING_SUPERSEDE`: a "superseded by" or "amended by" pointer that resolves to no file.
   - `NEXT_CHAIN`: a page of the manual index's numbered tour whose Next link does not point at the next entry.
   - `TOC_COUNT`: a "1 → N" total in the manual index that differs from the tour's last number, or a tour whose numbers do not count up by one. The tour is the list under Do a task, else the longest top-level list. `renumber-toc` numbers each list on its own, keeps numbering that runs on from one group to the next, and writes the same total.
-  - `PLATFORM_TWIN`: a shell command block on a manual page that runs a `.sh` front-end with a `.ps1` sibling, and has no PowerShell twin. It is a warning when the manual has PowerShell anywhere, an error with `--platform-pairs`, and silent otherwise.
-- `--forbidden-allow` exempts files from `--forbidden`. Together they check that a fact another repository owns is named and linked, not restated.
+  - `PLATFORM_TWIN`: a shell command block on a manual page that runs a `.sh` front-end with a `.ps1` sibling, and has no PowerShell block in its section that runs that `.ps1`. `manual-conventions` detects platform pairs with the same rule (`front_end_scripts`). It is a warning when the manual has PowerShell anywhere, an error with `--platform-pairs`, and silent otherwise.
+- `--forbidden-allow` exempts files from `--forbidden`; a glob that matches no scanned file is reported as `FORBIDDEN_ALLOW_UNUSED`. Together they check that a fact another repository owns is named and linked, not restated.
 - `check.py shrink-check OLD NEW` warns on a dropped heading and fails a rewrite that cuts more than a quarter of a page's prose. It moved from `onboard.py` so the stamped `update-docs` can run it.
 - The index and the status pointers are the only maintained parts of a frozen record, so that is where drift lands.
 - Grounding, showcase and ADR shape checks stop at the frozen `docs/archive/**` tier. Link checks still apply.

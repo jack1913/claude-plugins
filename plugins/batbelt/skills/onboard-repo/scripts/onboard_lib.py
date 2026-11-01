@@ -26,6 +26,7 @@ from check import (  # noqa: F401  (re-exported for callers of this module)
     _PS_LANGS,
     _is_excluded,
     _prose_text,
+    front_end_scripts,
     _TOTAL_RE,
     is_table_row,
     toc_entries,
@@ -102,8 +103,9 @@ def renumber_toc(text):
     """Reflow a manual ToC: renumber each ordered list (a later top-level list runs on
     from the previous one unless the repo restarted it at 1; nested items count
     within their parent), and rewrite the hardcoded
-    '1 → N' / '1 -> N' / '1 to N' ToC total to the tour's last number (check.py's
-    `tour_entries`). Ordered-list lines and totals inside fenced code blocks are
+    '1 → N' / '1 -> N' / '1 to N' ToC total to the last number of the tour, or of
+    the index's only top-level list when there is no tour (check.py's `toc_entries`;
+    with several lists and no tour the total is left alone). Ordered-list lines and totals inside fenced code blocks are
     left untouched (not renumbered, not counted). Idempotent. No-op when the text
     has no ordered-list items outside code fences (spec Section 3, review I-1/I-2)."""
     # A leading BOM (U+FEFF) is NOT matched by `\s`, so a "﻿1. …" first line
@@ -1311,31 +1313,13 @@ MANUAL_DEFAULTS = {"layout": "flat", "capture_fence": "console"}
 SEED_INDEX_GROUPS = ["Get started", "Do a task", "Look it up"]
 
 
-def _front_end_pair(root, docs_text):
-    """True when the repo has a front-end per platform: a `<stem>.sh` beside a
-    `<stem>.ps1` in the root, `scripts/` or `bin/`, whose .sh path is named in
-    `docs_text` (the README and the manual). A helper pair nobody documents is not
-    a front-end."""
-    root = pathlib.Path(root)
-    for folder in ("", "scripts", "bin"):
-        d = root / folder if folder else root
-        try:
-            names = {p.name for p in d.iterdir() if p.is_file()}
-        except OSError:
-            continue
-        for n in names:
-            if n.endswith(".sh") and n[:-3] + ".ps1" in names:
-                if (folder + "/" + n if folder else n) in docs_text:
-                    return True
-    return False
-
-
 def detect_manual_conventions(repo_root):
     """Read how an existing docs/manual/ is built, so --sync can record it instead of
     reporting it. Keys: layout ("flat" | "use" | None), numbered_tour (the index has a
     tour, as check-docs reads it), next_tour, capture_fence (the fence language used
     with capture=, or None), docs_voice (the index paragraph naming commands-first or
-    task-first, or None), platform_pairs (a .sh/.ps1 front-end pair at the root) and
+    task-first, or None), platform_pairs (the README or the manual names a `.sh` whose
+    `.ps1` sibling exists: check.py's `front_end_scripts`, the rule PLATFORM_TWIN uses) and
     manual_has_powershell (any PowerShell fence in the manual: mentioned to the
     operator, never baked on its own). Pure read; no manual -> layout None."""
     root = pathlib.Path(repo_root)
@@ -1350,7 +1334,7 @@ def detect_manual_conventions(repo_root):
     except OSError:
         readme = ""
     if not manual.is_dir():
-        conv["platform_pairs"] = _front_end_pair(root, readme)
+        conv["platform_pairs"] = bool(front_end_scripts(readme, [root]))
         return conv
     index = manual / "README.md"
     pages = sorted(
@@ -1364,7 +1348,7 @@ def detect_manual_conventions(repo_root):
         except OSError:
             conv["unreadable"].append(page.relative_to(manual).as_posix())
     pages = [p for p in pages if p in texts]
-    conv["platform_pairs"] = _front_end_pair(root, readme + "\n".join(texts.values()))
+    conv["platform_pairs"] = bool(front_end_scripts(readme + "\n".join(texts.values()), [root]))
     parts = [p.relative_to(manual).parts for p in pages]
     how_to = [r for r in parts if not (len(r) > 1 and r[0] in ("getting-started", "reference"))]
     places = {}

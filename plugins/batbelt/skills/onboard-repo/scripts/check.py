@@ -1376,7 +1376,10 @@ def _glob_regex(glob):
                 raise ValueError("unclosed or empty [...] in %r" % glob)
             body = body.replace("\\", "\\\\")
             if body.startswith("!"):
-                out.append("[^/" + body[1:] + "]")  # a negated class never matches /
+                rest = body[1:]
+                if rest.startswith("-"):
+                    rest = "\\" + rest  # a leading - is a literal, not a range
+                out.append("[^" + rest + "/]")  # a negated class never matches /
             else:
                 if body.startswith("^"):
                     body = "\\" + body  # ^ is a literal in a glob class
@@ -1389,6 +1392,10 @@ def _glob_regex(glob):
 
 
 def _forbidden_allowed(f, relparts, patterns):
+    return bool(_allow_hits(f, relparts, patterns))
+
+
+def _allow_hits(f, relparts, patterns):
     """True when `--forbidden-allow` exempts this file. Each glob is anchored and
     matched against the file's path from where check-docs runs, the repo root
     (`docs/manual/reference/*`; `README.md` exempts only the root README). A file
@@ -1400,7 +1407,7 @@ def _forbidden_allowed(f, relparts, patterns):
             path = "/".join(relparts or ())
     else:
         path = f.as_posix()
-    return any(p.match(path) for p in patterns)
+    return {glob for glob, regex in patterns if regex.match(path)}
 
 
 def _check_forbidden(f, text, forbidden):
@@ -1759,7 +1766,8 @@ def _check_docs(roots, captures_dir, coverage, forbidden, only=None, tier_check=
     findings = []
     only_set = _resolve_only(only)
     twin_candidates, manual = [], {}
-    allow_patterns = list(forbidden_allow)  # compiled by cmd_check_docs (_glob_regex)
+    allow_patterns = list(forbidden_allow)  # (glob, regex) pairs, compiled by cmd_check_docs
+    allow_used = set()
     for f, relparts in _iter_markdown_files(roots):
         if only_set is not None:
             try:
@@ -1776,7 +1784,9 @@ def _check_docs(roots, captures_dir, coverage, forbidden, only=None, tier_check=
         findings += _check_links(f, text, roots)
         findings += _check_tables(f, text)
         findings += _check_placeholders(f, text, coverage is not None)
-        if not _forbidden_allowed(f, relparts, allow_patterns):
+        hits = _allow_hits(f, relparts, allow_patterns)
+        allow_used |= hits
+        if not hits:
             findings += _check_forbidden(f, text, forbidden)
         findings += _check_unresolved_command(f, text, captures_dir)
         findings += _check_leaked_paths(f, text)
@@ -1816,6 +1826,11 @@ def _check_docs(roots, captures_dir, coverage, forbidden, only=None, tier_check=
                 findings.append(finding)
         except OSError:
             continue
+    if only_set is None:
+        for glob, _regex in allow_patterns:
+            if glob not in allow_used:
+                findings.append(("warn", "FORBIDDEN_ALLOW_UNUSED", "--forbidden-allow", 0,
+                                 "%s matches no scanned file (globs are paths from the repo root)" % glob))
     if tier_check:
         findings += _check_empty_tier(roots, coverage)
     has_error = any(sev == "error" for sev, *_ in findings)
@@ -1836,7 +1851,7 @@ _TOTAL_RE = re.compile(
 
 _NEXT_TARGET_RE = re.compile(r"\*\*Next:\*\*\s*(?:\*\*)?\[[^\]]*\]\(<?([^)>\s#]+)")
 _ANY_ITEM_RE = re.compile(r"^( *)(\d+)[.)]\s+")
-_LINK_IN_ITEM_RE = re.compile(r"\[[^\]]*\]\(<?([^)>\s#]+)")
+_ITEM_LINK_RE = re.compile(r"^\s*\d+[.)]\s+(?:\*\*)?\[[^\]]*\]\(<?([^)>\s#]+)")
 _DO_A_TASK_RE = re.compile(r"^#{1,6}\s+do a task\s*#*\s*$", re.IGNORECASE)
 _SH_LANGS = {"bash", "sh", "shell", "zsh"}
 _PS_LANGS = {"powershell", "pwsh", "ps1"}
@@ -1861,7 +1876,8 @@ def _top_level_lists(text):
     task" heading exists. Each list is a dict: `do_a_task` (it sits in that
     heading's section, which runs to the next heading of the same or a higher
     level, so its subsections count) and `items`, each a dict with `target` (its
-    leading link, or None) and `number` (as written). A list starts at an item
+    leading link, or None: a link later in the line is not the entry's page) and
+    `number` (as written). A list starts at an item
     indented at most three spaces; an item indented deeper than the list's first
     item is nested and skipped. Blank and indented lines keep a list open, and so
     does an unindented line right after an item (a wrapped line of its text); a
@@ -1890,9 +1906,8 @@ def _top_level_lists(text):
             if indent > cur["base"]:
                 continue
             cur["base"] = indent
-            links = _LINK_IN_ITEM_RE.findall(line[m.end():])
-            target = next((t for t in links if _is_local_target(t)), links[0] if links else None)
-            cur["items"].append({"target": target, "number": int(m.group(2))})
+            link = _ITEM_LINK_RE.match(line)
+            cur["items"].append({"target": link.group(1) if link else None, "number": int(m.group(2))})
         elif not line.strip():
             prev_blank = True
         elif line[:1] == " " or (cur is not None and not prev_blank):
@@ -1921,37 +1936,48 @@ def tour_entries(text):
 
 def toc_entries(text):
     """What a `**1 → N**` total counts: the tour, or, when the index has no tour, its
-    longest top-level ordered list (plain steps included)."""
+    only top-level ordered list (plain steps included). With several lists and no
+    tour the total is ambiguous, and [] is returned."""
     tour = tour_entries(text)
     if tour:
         return tour
     lists, _saw_do = _top_level_lists(text)
-    return max((lst["items"] for lst in lists), key=len, default=[])
-
+    return lists[0]["items"] if len(lists) == 1 else []
 
 def is_table_row(line):
     return line.lstrip().startswith("|")
 
 
 def tour_items(text):
-    """The tour's link targets, in order (None for an entry without a leading link)."""
+    """The tour's entries as their leading link targets, in order (None for an entry
+    whose line does not start with a link)."""
     return [e["target"] for e in tour_entries(text)]
+
+def _effective_numbers(numbers):
+    """The numbers a reader sees: Markdown auto-numbers a list written 1. 1. 1., so
+    such a list counts up from its first number."""
+    if len(numbers) > 1 and len(set(numbers)) == 1:
+        return [numbers[0] + i for i in range(len(numbers))]
+    return numbers
 
 
 def _check_toc_count(f, text):
     """TOC_COUNT (warn): a `**1 → N**`-style total in the manual index that differs
-    from the number the tour's last entry carries, or a tour whose numbers do not
-    count up by one. A total may count across groups (1-3 under Get started, 4-6
-    under Do a task): it names the tour's last number either way."""
-    tour = toc_entries(text)
-    if not tour:
-        return []
+    from the number its list's last entry carries (the tour, else the index's only
+    list), or a tour whose numbers do not count up by one. An auto-numbered list
+    (1. 1. 1.) is valid. A total may count across groups (1-3 under Get started,
+    4-6 under Do a task): it names the last number either way."""
     out = []
-    numbers = [e["number"] for e in tour]
-    if any(b != a + 1 for a, b in zip(numbers, numbers[1:])):
-        out.append(("warn", "TOC_COUNT", str(f), 1,
-                    "the tour's numbers do not count up by one: %s" % ", ".join(map(str, numbers))))
-    last = numbers[-1]
+    tour = tour_entries(text)
+    if tour:
+        numbers = _effective_numbers([e["number"] for e in tour])
+        if any(b != a + 1 for a, b in zip(numbers, numbers[1:])):
+            out.append(("warn", "TOC_COUNT", str(f), 1,
+                        "the tour's numbers do not count up by one: %s" % ", ".join(map(str, numbers))))
+    counted = toc_entries(text)
+    if not counted:
+        return out
+    last = _effective_numbers([e["number"] for e in counted])[-1]
     fenced = _fenced_line_numbers(text)
     for i, line in enumerate(text.split("\n"), start=1):
         if i in fenced or is_table_row(line):
@@ -1959,9 +1985,8 @@ def _check_toc_count(f, text):
         for m in _TOTAL_RE.finditer(line):
             total = int(re.search(r"(\d+)$", m.group(0)).group(1))
             if total != last:
-                out.append(("warn", "TOC_COUNT", str(f), i, "says 1 → %d; the tour ends at %d" % (total, last)))
+                out.append(("warn", "TOC_COUNT", str(f), i, "says 1 → %d; the list ends at %d" % (total, last)))
     return out
-
 
 def _is_local_target(t):
     return bool(t) and "://" not in t and not t.startswith("/")
@@ -2019,71 +2044,88 @@ def _command_lang(info):
     return "sh" if lang in _SH_LANGS else ("ps" if lang in _PS_LANGS else None)
 
 
-_SH_SCRIPT_RE = re.compile(r"(?:^|[\s;&|(=])(?:\./)?((?:[\w.-]+/)*[\w.-]+\.sh)\b")
+_SH_PATH_RE = re.compile(r"(https?://\S*?/)?(?:\./)?((?:[\w.-]+/)*[\w.-]+\.sh)(?![\w.-])")
+_PS1_PATH_RE = re.compile(r"(https?://\S*?/)?(?:\.[\\/])?((?:[\w.-]+[\\/])*[\w.-]+\.ps1)(?![\w.-])")
+_SCRIPT_LEAD = " \t\n`'\"(=;|&"
 
 
-def _repo_root_for(f):
-    """The repo a docs page belongs to: the parent of the nearest `docs` folder
-    above it, else the working directory (check-docs runs from the repo root)."""
+def _script_paths(regex, text):
+    """The script paths `text` names: a URL counts by its file name, a relative path
+    as written (`./` dropped, backslashes as `/`). A name glued to other text
+    (`uninstall.sh` is not `install.sh`) counts as itself."""
+    out = []
+    for m in regex.finditer(text):
+        url, path = m.group(1), m.group(2).replace("\\", "/")
+        if url:
+            out.append(path.rsplit("/", 1)[-1])
+        elif m.start() == 0 or text[m.start() - 1] in _SCRIPT_LEAD:
+            out.append(path)
+    return out
+
+
+def front_end_scripts(text, roots):
+    """The `.sh` front-ends `text` runs or names: each `.sh` path whose `.ps1`
+    sibling exists under one of `roots` (a repo has a front-end per platform there).
+    Detection (`manual-conventions`) and PLATFORM_TWIN share this one rule."""
+    out = []
+    for path in _script_paths(_SH_PATH_RE, text):
+        if any((pathlib.Path(r) / path).with_suffix(".ps1").is_file() for r in roots):
+            out.append(path)
+    return out
+
+
+def _twin_roots(f):
+    """Where a manual page's scripts are looked up: the repo it sits in (the parent
+    of the nearest `docs` folder above it) and the working directory."""
+    roots = []
     try:
         for parent in f.resolve().parents:
             if parent.name == "docs":
-                return parent.parent
+                roots.append(parent.parent)
+                break
     except OSError:
         pass
-    return pathlib.Path.cwd()
-
-
-def _runs_front_end(body, root):
-    """True when a shell command block runs a `.sh` script that has a `.ps1`
-    sibling: a front-end per platform, whose Windows users need the twin. A
-    command that is the same in both shells (a CLI, git, npm) needs none."""
-    for path in _SH_SCRIPT_RE.findall(body):
-        sibling = pathlib.PurePosixPath(path).with_suffix(".ps1")
-        if (root / sibling).is_file() and sibling.name not in body:
-            return True  # a block that also names the .ps1 carries its own twin
-    return False
+    roots.append(pathlib.Path.cwd())
+    return roots
 
 
 def _check_platform_twin(f, text, severity):
     """PLATFORM_TWIN: within each section of a manual page (up to the next heading),
-    every shell command fence that runs a `.sh` front-end with a `.ps1` sibling
-    needs a PowerShell command fence. Twins pair in order, either one first (two
-    commands then their two twins is fine), and output fences between them are
-    skipped. The caller decides that `f` is a manual page."""
+    every shell command fence that runs a `.sh` front-end (`front_end_scripts`)
+    needs a PowerShell command fence that runs its `.ps1`, before or after it.
+    Twins pair by script name, so an unrelated PowerShell block (an `npm` twin)
+    never stands in; a shell block that also names the `.ps1` is its own twin, and
+    output fences are skipped. The caller decides that `f` is a manual page."""
     lines = text.split("\n")
     fenced = _fenced_line_numbers(text)
     headings = [i for i, ln in enumerate(lines, start=1) if _ATX_RE.match(ln.expandtabs(4)) and i not in fenced]
-    out, waiting, spare_ps = [], [], [0]
+    roots = _twin_roots(f)
+    out, needed, shown = [], [], []
 
     def _flush():
-        for start in waiting:
-            out.append((severity, "PLATFORM_TWIN", str(f), start, "no PowerShell twin for this command"))
-        waiting.clear()
-        spare_ps[0] = 0
+        for start, ps1 in needed:
+            if ps1 in shown:
+                shown.remove(ps1)
+            else:
+                out.append((severity, "PLATFORM_TWIN", str(f), start, "no PowerShell twin (%s) for this command" % ps1))
+        needed.clear()
+        shown.clear()
 
-    root = _repo_root_for(f)
     hi = 0
     for info, body, start in iter_fenced_blocks(text):
         while hi < len(headings) and headings[hi] < start:
             _flush()
             hi += 1
         kind = _command_lang(info)
-        if kind == "sh" and not _runs_front_end(body, root):
-            continue
         if kind == "sh":
-            if spare_ps[0]:
-                spare_ps[0] -= 1  # its twin came first (a Windows-first section)
-            else:
-                waiting.append(start)
+            own = {p.rsplit("/", 1)[-1] for p in _script_paths(_PS1_PATH_RE, body)}
+            wanted = {sh.rsplit("/", 1)[-1][:-3] + ".ps1" for sh in front_end_scripts(body, roots)}
+            for ps1 in sorted(wanted - own):  # one twin per script per block, however often it runs
+                needed.append((start, ps1))
         elif kind == "ps":
-            if waiting:
-                waiting.pop(0)
-            else:
-                spare_ps[0] += 1
+            shown.extend(p.rsplit("/", 1)[-1] for p in _script_paths(_PS1_PATH_RE, body))
     _flush()
     return out
-
 
 # --- shrink guard (moved here from onboard_lib so update-docs can run it) -------
 
@@ -2404,7 +2446,7 @@ def cmd_check_docs(rest, prog="check.py"):
     except (ValueError, OSError):
         return _usage_p("ERROR: malformed coverage record: " + str(coverage_file))
     try:
-        allow_patterns = [_glob_regex(g) for g in forbidden_allow]
+        allow_patterns = [(g, _glob_regex(g)) for g in forbidden_allow]
     except (ValueError, re.error) as exc:
         return _usage_p("ERROR: bad --forbidden-allow glob: %s" % exc)
     findings, code = _check_docs(
