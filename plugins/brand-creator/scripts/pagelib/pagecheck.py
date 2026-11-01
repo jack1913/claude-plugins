@@ -688,7 +688,8 @@ UNITS_SPACED = r"%|‰|€|\$|£|zł|" + CURRENCY_CODES + r"|mln|mld|tys\.?|km|k
 UNITS_GLUED = r"k|m|g|l|h|s|x|×"          # single letters: a unit only when written right against the number (4K, 5m), never "3 s..."
 NUMBER = re.compile(r"(?<![\w.,])(?P<pre>(?:[€$£]|(?:" + CURRENCY_CODES + r")(?![a-z]))\s?)?(?P<num>(?:\d{1,3}(?:[   ]\d{3})+|\d+)(?:[.,]\d+)*)(?P<post>\s?(?:" + UNITS_SPACED + ")|(?:" + UNITS_GLUED + "))?(?!\\w)", re.I)
 CONTEXT_CHARS = 30                        # characters of text kept each side of a claim in a row's detail
-# A dotted date is its numbers, the same as the ISO form: dd.mm.yyyy (the year 19xx or 20xx), or dd.mm, which is also a decimal (30.10) and so is read both ways. 1.5 (a single digit each) stays a decimal.
+# A dotted date is its numbers, the same as the ISO form: dd.mm.yyyy (the year 19xx or 20xx, the day and month with one digit or two), or dd.mm with two digits each (30.10, 05.11), which is also a
+# decimal (30.1) and so is read both ways. dd.mm with fewer digits and no year (12.5, 2.10, 10.1) stays a decimal.
 DOTTED_DATE = re.compile(r"(?P<d>0?[1-9]|[12]\d|3[01])\.(?P<m>0?[1-9]|1[0-2])(?:\.(?P<y>(?:19|20)\d{2}))?")
 YEAR = re.compile(r"(?:19|20)\d{2}")
 # The text just before a year that makes it a copyright year: a (c) sign or the word, then the year, or a range of years ("(c) 2024-2026": the second year follows "2024-").
@@ -696,6 +697,70 @@ COPYRIGHT_BEFORE = re.compile(r"(?:©|\(c\)|\bcopyright\b)\s*(?:(?:©|\(c\))\s*)
 COPYRIGHT_LOOKBACK = 40                   # characters before a year that are looked at for the sign
 DATE_YEAR_R = re.compile(r"\.((?:19|20)\d{2})r(?!\w)")   # the Polish year written glued to the date: 15.11.2026r.
 STATUS_CODE = re.compile(r"[45]\d\d")      # a 4xx or 5xx status code of an error page
+
+# A date written with a month name is one date, not numbers, in the languages whose month names are listed (the page language decides: any other, or none, keeps the numbers as they are).
+# Polish: "21 października 2026", "21 października", and a month with a year, in the nominative, genitive or locative ("Październik 2026", "października 2026", "w październiku 2026"), in any
+# letter case. English: "October 21, 2026", "October 21st", "21 October 2026", "21 October", "October 2026", with a capital letter or in capitals (a lower-case "may" or "march" is a word).
+MONTH_NAMES = {"pl": (("stycznia", "styczeń", "styczniu"), ("lutego", "luty", "lutym"), ("marca", "marzec", "marcu"), ("kwietnia", "kwiecień", "kwietniu"), ("maja", "maj", "maju"),
+                      ("czerwca", "czerwiec", "czerwcu"), ("lipca", "lipiec", "lipcu"), ("sierpnia", "sierpień", "sierpniu"), ("września", "wrzesień", "wrześniu"),
+                      ("października", "październik", "październiku"), ("listopada", "listopad", "listopadzie"), ("grudnia", "grudzień", "grudniu")),   # genitive, nominative, locative
+               "en": tuple((n,) for n in ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"))}
+ANY_LANGUAGE = "*"                        # numbers_in(lang=...) for a text of no known language (a FACTS.md value): the month names of every listed language
+_DAY = r"(?:0?[1-9]|[12]\d|3[01])"
+_YEAR = r"(?:(?:19|20)\d{2})(?=r(?!\w)|(?!\w))"      # a year may be followed by the Polish r. glued to it: 2026r.
+
+
+def _month_alternatives(lang: str, genitive_only: bool = False) -> tuple[str, dict[str, int]]:
+    """The regular expression that matches any month name of `lang` (a Polish genitive only with `genitive_only`), and the table from a lower-cased name to the month number."""
+    names, numbers = [], {}
+    for number, forms in enumerate(MONTH_NAMES[lang], 1):
+        for form in (forms[:1] if genitive_only else forms):
+            names += [form, form.upper()] if lang == "en" else [form]
+            numbers[form.lower()] = number
+    return "|".join(re.escape(n) for n in sorted(set(names), key=len, reverse=True)), numbers
+
+
+def _month_date_patterns() -> dict[str, list[re.Pattern]]:
+    """The patterns of a date with a month name, per language: named groups `m` (month name), `d` (day, where the form has one) and `y` (year, where it may have one)."""
+    out: dict[str, list[re.Pattern]] = {}
+    flags = {"pl": re.I, "en": 0}
+    for lang in MONTH_NAMES:
+        any_month, _ = _month_alternatives(lang)
+        gen_month, _ = _month_alternatives(lang, genitive_only=True)
+        before_day = r"(?<![\w.,])"
+        if lang == "pl":
+            forms = [rf"{before_day}(?P<d>{_DAY})\s+(?P<m>{gen_month})(?!\w)(?:\s+(?P<y>{_YEAR}))?",          # 21 października 2026, 21 października
+                     rf"(?<!\w)(?P<m>{any_month})\s+(?P<y>{_YEAR})"]                                         # Październik 2026, października 2026, w październiku 2026
+        else:
+            forms = [rf"(?<!\w)(?P<m>{any_month})\s+(?P<d>{_DAY})(?:st|nd|rd|th)?(?!\w)(?:,?\s+(?P<y>{_YEAR}))?",   # October 21, 2026, October 21st, October 21
+                     rf"{before_day}(?P<d>{_DAY})(?:st|nd|rd|th)?\s+(?P<m>{any_month})(?!\w)(?:,?\s+(?P<y>{_YEAR}))?",  # 21 October 2026, 21st October, 21 October
+                     rf"(?<!\w)(?P<m>{any_month})\s+(?P<y>{_YEAR})"]                                         # October 2026
+        out[lang] = [re.compile(f, flags[lang]) for f in forms]
+    return out
+
+
+MONTH_DATE_PATTERNS = _month_date_patterns()
+MONTH_NUMBERS = {lang: _month_alternatives(lang)[1] for lang in MONTH_NAMES}
+
+
+def month_dates(text: str, lang: str) -> list[tuple[int, int, list[str]]]:
+    """The dates written with a month name in `text`, in the order they stand: [(start, end, parts)], `parts` the day (as written), the month number and the year, those that are
+    written. `lang` is a primary language code ("pl", "en"), ANY_LANGUAGE for the names of all of them, and any other gives []. Where two readings overlap the one that starts first
+    wins, then the longer: "21 October 2026" is one date, not "21 October" and "October 2026"."""
+    langs = list(MONTH_NAMES) if lang == ANY_LANGUAGE else [lang] if lang in MONTH_NAMES else []
+    found = []
+    for code in langs:
+        for rx in MONTH_DATE_PATTERNS[code]:
+            for m in rx.finditer(text):
+                parts = [g for g in (m.group("d") if "d" in rx.groupindex else None, str(MONTH_NUMBERS[code][m.group("m").lower()]), m.group("y")) if g]
+                found.append((m.start(), m.end(), parts))
+    found.sort(key=lambda f: (f[0], -f[1]))
+    out, end = [], 0
+    for start, stop, parts in found:
+        if start >= end:
+            out.append((start, stop, parts))
+            end = stop
+    return out
 
 
 def canonical_number(raw: str) -> str:
@@ -713,16 +778,24 @@ def canonical_number(raw: str) -> str:
     return s.rstrip("0").rstrip(".") if "." in s else s
 
 
-def numbers_in(text: str, every: bool = False) -> list[dict]:
+def numbers_in(text: str, every: bool = False, lang: str | None = None) -> list[dict]:
     """The numbers of a text that are claims: a number of two digits or more (`1.5` has two), or one next to a percent sign, a currency sign or code (before the number or
     after it, with or without a space), or a unit (`5%`, `$5`, `9 €`, `PLN 5`, `9 zł`, `4K`). A bare single digit (a step label, "1 of 3") is not a claim, unless `every` is set (the numbers a FACTS.md value holds are all of them). A digit written
     against letters (mp3, A4, 3rd) or in a dotted version (v1.2.3) is not read. Digits grouped by spaces are one number only when the first group has 1 to 3 digits and each later group
     exactly 3 (`13 205,20` is one number; `2026 200` is two). A year right after a copyright sign or the word (`© 2026`, `(c) 2026`, `Copyright 2024-2026`) is not a claim, unless `every` is set.
-    A dotted date (`15.11.2026`, `30.10`) is a date whose numbers are its parts, as the ISO form (`2026-11-15`) is: the entry holds `parts` (as written); `30.10` is also the decimal 30.1, so it
-    is backed by either reading, but `1.5` (one digit each) is a decimal only. -> [{text, number (canonical), at, bare, parts?}], `text` as written with its sign or unit, `bare` set when no
-    sign, code or unit is attached."""
+    A dotted date (`15.11.2026`, `1.5.2026r.`, `30.10`) is a date whose numbers are its parts, as the ISO form (`2026-11-15`) is: the entry holds `parts` (as written). It is a date when a year
+    follows (the day and month with one digit or two) or when the day and the month have two digits each (`30.10`, `05.11`); `30.10` is also the decimal 30.1, so it is backed by either reading,
+    but `12.5`, `2.10` and `10.1` are decimals only. A date written with a month name (see month_dates) is one entry too, with `parts` (day, month number, year as written): it is read
+    only when `lang` is a language whose month names are listed ("pl", "en", or ANY_LANGUAGE for a FACTS.md value), and is a claim whatever the digits of its day; the numbers inside it are no
+    entries of their own. -> [{text, number (canonical), at, bare, parts?}], `text` as written with its sign or unit, `bare` set when no sign, code or unit is attached; the `number` of
+    a date with a year is its parts joined by dots, of one without, by a slash (it is never a decimal)."""
+    spans = month_dates(text, lang) if lang else []
     out = []
+    for start, stop, parts in spans:
+        out.append({"text": text[start:stop], "number": (".".join if len(parts) == 3 else "/".join)(parts), "at": start, "bare": True, "parts": parts})
     for m in NUMBER.finditer(text):
+        if any(start <= m.start() < stop for start, stop, _ in spans):
+            continue
         num, pre, post = m.group("num"), m.group("pre"), m.group("post")
         if not (every or sum(c.isdigit() for c in num) >= 2 or pre or post):
             continue
@@ -730,26 +803,46 @@ def numbers_in(text: str, every: bool = False) -> list[dict]:
             continue
         entry = {"text": m.group(0).strip(), "number": canonical_number(num), "at": m.start(), "bare": not (pre or post)}
         date = DOTTED_DATE.fullmatch(num) if entry["bare"] else None
-        if date and (date.group("y") or len(date.group("d")) > 1 or len(date.group("m")) > 1):
+        glued = DATE_YEAR_R.match(text, m.end()) if date and not date.group("y") else None
+        if date and (date.group("y") or glued or (len(date.group("d")) > 1 and len(date.group("m")) > 1)):
             entry["parts"] = [g for g in (date.group("d"), date.group("m"), date.group("y")) if g]
-            glued = None if date.group("y") else DATE_YEAR_R.match(text, m.end())
             if glued:
                 entry["parts"].append(glued.group(1))
                 entry["text"] += glued.group(0)[:-1]
             if len(entry["parts"]) == 3:
                 entry["number"] = ".".join(entry["parts"])   # with a year it is no decimal: kept as written
         out.append(entry)
-    return out
+    return sorted(out, key=lambda n: n["at"])
 
 
-def status_codes(views: list[dict]) -> set[str]:
-    """The status codes of an error page: a bare 4xx or 5xx number that the `<title>` or an `<h1>` of the page holds (`document.title` and `claim_h1` of a view). A number on such a page that is
-    this same number is the page's status code, not a claim; any other number is judged as usual."""
+def target_stem(target) -> str:
+    """The file name of the page a target aims at, without its extension: `404` for 404.html (a project page or a page of --from) and for http://localhost:8000/404.html, `` for a URL
+    that ends in a slash. `target` may be None."""
+    if target is None:
+        return ""
+    path = urlsplit(target.url or "").path if target.kind == "url" else (target.page or "")
+    return posixpath.splitext(posixpath.basename(path))[0]
+
+
+def status_codes(views: list[dict], target=None) -> set[str]:
+    """The status codes of an error page. A page is an error page when its file name, without the extension, is a 4xx or 5xx code (`404.html`, `500.html`), or its `<title>` or an `<h1>`
+    (`document.title` and `claim_h1` of a view) holds one as a bare number. The text counts only when that number is the only one in it (every number, a bare single digit and a copyright
+    year too) and no `+` stands before or after it: `Błąd 404 | Acme` and `Strony nie ma 404` do, `500+ firm nam ufa`, `+500 klientów`, `5 lat, 500 klientów`, `Error 500 (1 of 3)` and
+    `404 and 500` do not. A number on an error page that is this same code is the page's status code, not a claim, wherever it stands on the page; any other number is judged as usual."""
     codes = set()
+    stem = target_stem(target)
+    if STATUS_CODE.fullmatch(stem):
+        codes.add(stem)
     for v in views:
         for text in [(v.get("document") or {}).get("title"), *(v.get("claim_h1") or [])]:
-            if isinstance(text, str):
-                codes.update(n["number"] for n in numbers_in(text) if n["bare"] and STATUS_CODE.fullmatch(n["number"]))
+            if not isinstance(text, str):
+                continue
+            found = numbers_in(text, every=True)      # every number of the text, a bare single digit and a copyright year too: the code must be the only one
+            if len(found) == 1:
+                (n,) = found
+                plus = re.search(r"\+\s?$", text[:n["at"]]) or re.match(r"\s?\+", text[n["at"] + len(n["text"]):])   # +500 and 500+ are counts
+                if n["bare"] and STATUS_CODE.fullmatch(n["number"]) and not plus:
+                    codes.add(n["number"])
     return codes
 
 
@@ -791,7 +884,7 @@ def _primary_language(lang: str) -> str:
 def claim_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
     """page:claims: outside a labelled sample, every claim on the page is backed by a FACTS.md value. A claim is a number (see numbers_in) that no value of FACTS.md holds as
     a number, or a status word (English and Polish) that no value contains; the check reads the visible text of each block and skips the text of an element inside a non-empty
-    `data-sample`. Not a claim: a copyright year, and the status code of an error page (see numbers_in and status_codes). A `data-sample` with no label fails ("label the sample"). A block of text that several views show is judged and counted once, and named at the first view that has it. A page language other than English or Polish (the closest `lang`, else the document's) has no list of
+    `data-sample`. Not a claim: a copyright year, and the status code of an error page (see numbers_in and status_codes). A date written with a month name is one date, read by the language of its block (see numbers_in). A `data-sample` with no label fails ("label the sample"). A block of text that several views show is judged and counted once, and named at the first view that has it. A page language other than English or Polish (the closest `lang`, else the document's) has no list of
     status words: the row warns "NOT verified". page:samples (info, only when the page has labelled samples): each sample with its label, an excerpt, its selector and the first
     view it was seen in: the before-publishing list, also written to the report as `samples`."""
     ctx.extra["samples"] = []
@@ -803,11 +896,11 @@ def claim_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
     facts = fact_values(ctx.project)
     backing_numbers = set()
     for value in facts:
-        for n in numbers_in(value, every=True):
+        for n in numbers_in(value, every=True, lang=ANY_LANGUAGE):
             backing_numbers.add(n["number"])
             backing_numbers.update(n.get("parts", ()))
     unpadded = {x.lstrip("0") or "0" for x in backing_numbers if x.isdigit()}      # 05 and 5 are one day or month
-    codes = status_codes(views)
+    codes = status_codes(views, ctx.target)
 
     def backed(n: dict) -> bool:
         """A number is backed when a fact holds it; a dotted date also when a fact holds each of its parts (the day and month with or without a leading 0)."""
@@ -841,7 +934,7 @@ def claim_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
             seen_runs.add((run["sel"], text, lang))
             languages[lang] = languages.get(lang, 0) + 1
             runs_checked += 1
-            for n in numbers_in(text):
+            for n in numbers_in(text, lang=lang):
                 if n["bare"] and n["number"] in codes:
                     continue   # the status code of an error page: its title or h1 holds the same number
                 numbers_checked += 1
