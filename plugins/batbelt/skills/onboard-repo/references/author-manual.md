@@ -77,6 +77,9 @@ python3 "$SKILL_DIR/scripts/check.py" check-docs docs README.md <index> \
   --only <the page under work> --no-tier-check
 ```
 
+Add `--platform-pairs` to this command and to the closing unscoped run when the `platform pairs`
+bake is `sh+powershell`, so a missing twin is fixed while the page is written, not reported later.
+
 **Pass the FULL roots plus `--only` — never a single-file root.** `--only` scopes which
 files *report*; the roots still resolve links and tiers. Narrowing the roots instead
 silently downgrades a real `BROKEN_LINK` from error to warning (severity keys on

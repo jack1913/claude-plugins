@@ -27,7 +27,8 @@ In order, top to bottom:
    <!-- END REPO SPECIFICS -->
    ```
 
-   **Carried forward verbatim on `--sync`.** Exactly one well-formed pair per
+   **Carried forward verbatim on `--sync`** (the one exception: `--sync` proposes the missing
+   `docs voice:` and `platform pairs:` lines as their own diff). Exactly one well-formed pair per
    file — `--sync` fails closed otherwise (`scripts/onboard.py check-markers`).
 
 ## Stamped gate script (`update-docs`, `update-rules`)
@@ -149,6 +150,10 @@ with `check.py` and removes the two orphans, shown in the plan like any other ch
 - **readme voice:** the voice the operator picked at §2 and its signature rules (the README
   style guide), or "no voice" when deferred. With no voice, `update-docs` checks only the README
   list in the docs standard's §2 and asks again on the first styling run.
+- **foreign facts:** names this repo's docs mention that another repository owns (the skill or
+  command names of a plugin it installs, say) and the globs where they may appear (its captures,
+  the one page that links out to that repository), or `none`. With a value, `update-docs` runs
+  `check-docs --forbidden <names> --forbidden-allow <globs>`, so a restated fact is an error.
 - **platform pairs:** `sh+powershell` when the repo ships a front-end per platform (an `install.sh`
   and an `install.ps1`, say): every manual command block then has its twin, and `update-docs` runs
   `check-docs` with `--platform-pairs`, which makes a missing twin an error. `none` otherwise.

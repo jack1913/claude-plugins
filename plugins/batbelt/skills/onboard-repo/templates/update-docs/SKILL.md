@@ -1,14 +1,14 @@
 ---
 name: update-docs
 description: Audit and update README, CLAUDE.md, and docs/ to match the code. Applies edits by default; --dry-run for report-only.
-allowed-tools: Read, Edit, Write, Bash(git diff:*), Bash(git status:*), Bash(grep:*), Bash(lychee:*), Bash(markdown-link-check:*), Bash(python3:*), Bash(mv:*)
+allowed-tools: Read, Edit, Write, Bash(git diff:*), Bash(git status:*), Bash(git log:*), Bash(grep:*), Bash(lychee:*), Bash(markdown-link-check:*), Bash(python3:*), Bash(mv:*)
 ---
 
 # update-docs
 
 Audit and update `README.md`, `CLAUDE.md`, and `docs/**` so they match the code.
 **Applies edits by default;** pass `--dry-run` for a report-only check. On the
-apply path, if the working tree has uncommitted doc changes, advise a commit first
+apply path, if the working tree has uncommitted doc changes, advise committing them first, by path (§8)
 (an edit to an uncommitted doc is the one non-git-reversible case). **Never** touch
 `CHANGELOG.md` (owned by `changelog-release`) or inline code comments.
 
@@ -53,8 +53,8 @@ stay capped.
   the run's summary how each one was re-derived. A claim that cannot be re-derived is
   reported, never guessed.
 
-**Reported for a human:** a new page (§7.7), an ADR body (§7.9), a capture (§7.5
-re-takes it only on one confirmation), moving a principal surface to deferred (§7.6),
+**Reported for a human:** a new page (§7.7), an ADR body (§7.9), a capture whose command is
+not read-only (§7.5 re-takes the others on one confirmation), moving a principal surface to deferred (§7.6),
 and anything §7.10 forbids.
 
 ## 4. Confidence & scope
@@ -102,8 +102,8 @@ REPO SPECIFICS → the standard's Local deviations → the standard's body → b
 When `docs/internals/docs-standard.md` exists, its body owns page kinds, manual layout, voice,
 changelog shape and ADR rules wherever REPO SPECIFICS and the Local deviations say nothing. The
 README voice and its signature rules always come from REPO SPECIFICS. Follow the rule that wins and
-never report a recorded deviation. Report an unrecorded difference once, with the line to add under
-Local deviations. This skill's procedure and its `check.py` gate do not change.
+never report a recorded deviation. Report an unrecorded difference as one line, with the line to
+add under Local deviations. This skill's procedure and its `check.py` gate do not change.
 
 ## 7.5 Show-don't-tell (docs/manual/ maintenance)
 
@@ -130,6 +130,9 @@ redirect onto the destination) and write the result to
 python3 .claude/skills/update-docs/scripts/check.py redact <raw> \
   --home "$HOME" --user "$USER" --stamp <stamp> > <tmp> && mv <tmp> docs/.onboard-captures/<slug>.txt
 ```
+
+Write the raw output under `.onboard-repo-retired/captures-raw/<stamp>/` (git-ignored), with
+`<stamp>` today's date (`date +%F`), and pass that same `<stamp>` to `redact`.
 
 `redact` is **best-effort, not a secret scanner** — it strips only the tokens it is
 given, so keys, `ghp_`/`sk-` tokens, `user:pass@` URLs and emails pass straight
@@ -247,11 +250,12 @@ That last row is the point. A surface parked mid-onboarding (it would not conver
 its capture needed infrastructure the operator lacked) is recorded `deferred` with a
 reason. Without this section a park is visible **only** to `onboard-repo --check`,
 which is the command nobody runs again after onboarding — so the deferral quietly
-becomes permanent. Keep it visible without repeating it: niche rows that were deferred
-and have not changed since the last run, and a known baseline that has not grown (an
-archive's frozen link errors), are summarised in one count line ("4 niche surfaces
-deferred, unchanged"), while an unfinished principal page is named every run, with
-its reason: still deferred is a fine answer, forgotten is not.
+becomes permanent. Keep it visible without repeating it: deferred niche rows, and a known
+baseline such as an archive's frozen link errors, are summarised in one count line each
+("4 niche surfaces deferred"; "13 link errors in docs/archive/, frozen"), while an
+unfinished principal page is named every run, with its reason: still deferred is a fine
+answer, forgotten is not. A count that is higher than at the last commit that touched `docs/`
+(read it with `git log -1 -- docs/`) is named in full.
 
 **Never flip a `status` to make a finding go away.** Marking a `principal` surface
 `deferred`, or dropping its row, silences the finding without writing the page —
@@ -305,7 +309,9 @@ Exit `1` means an **error-level** finding; `2` a usage error. Warnings alone exi
 `0`, so **read the output, not just the status**.
 
 When REPO SPECIFICS records `platform pairs: sh+powershell`, add `--platform-pairs`, so a
-command block with no PowerShell twin is an error (`PLATFORM_TWIN`).
+command block with no PowerShell twin is an error (`PLATFORM_TWIN`). When it records `foreign
+facts`, add `--forbidden <names> --forbidden-allow <globs>` from that bake, so a fact another
+repository owns is linked, never restated.
 
 **Run it unscoped.** `check-docs` also takes `--only PATH` and `--no-tier-check`,
 which exist for `onboard-repo`'s per-page authoring loop — not for this gate, which
@@ -333,7 +339,7 @@ this skill maintains, when `docs/adr/` exists:
   `ADR_NAMING`/`ADR_SHAPE`. All warn-level: bookkeeping edits, not content
   decisions.
 - **Judgment, offered — never run unasked, and offered only when an accepted ADR's
-  `Source` files changed since the last run:** a still-in-force sweep, one
+  `Source` files changed after the last commit that touched `docs/`:** a still-in-force sweep, one
   independent verifier per accepted ADR with the brief `onboard-repo` §3.7b
   gives its ADR verifier — does the cited evidence still support the decision,
   and does the choice still bind the code today? **Report-only.** A "no longer
@@ -346,17 +352,19 @@ this skill maintains, when `docs/adr/` exists:
 ## 7.10 Never degrade an existing structure
 
 A good README and manual are easy to flatten one well-meant edit at a time. These rules
-hold whatever the standard's body says, and each names the check that proves it:
+hold whatever REPO SPECIFICS, the Local deviations or the standard's body say, and each names
+the check that proves it. When a REPO SPECIFICS line contradicts the manual index (a
+hand-listed reading chain, say), report it: the index and `NEXT_CHAIN` win.
 
 | Never | Check |
 | --- | --- |
 | remove the README install block, or break a signature rule of the recorded README voice | the install fence survives the diff |
 | move or rename a manual page: the skill never moves or renames a page once `docs/manual/README.md` exists | no `mv` under `docs/manual/` |
 | add or drop a page without renumbering the index's tour and relinking the pages on both sides | `check-docs`: `NEXT_CHAIN` and `TOC_COUNT` stay clean |
-| cut a how-to's explanation or table to fit "one kind per page" | `python3 .claude/skills/update-docs/scripts/check.py shrink-check <old> <new>` on every rewritten page |
+| cut a how-to's explanation or table, to fit "one kind per page" or to keep internals off a user page, without first moving it to its home | `python3 .claude/skills/update-docs/scripts/check.py shrink-check <old> <new>` on every rewritten page |
 | delete a repeated fact without merging it into its one home | the home holds every verified row |
 | strip the versions from upgrade notes | those lines survive the diff |
-| convert a capture fence from the recorded shape to another | fences match REPO SPECIFICS' capture fence convention |
+| convert a capture fence from the recorded shape to another | fences match the recorded shape: REPO SPECIFICS' capture fence convention, or the standard's Local deviations |
 | drop the twin of a command block, or add a command without the twin when platform pairs are recorded | `check-docs --platform-pairs` (`PLATFORM_TWIN`) |
 | let a template update replace a baked voice line | the voice lines in REPO SPECIFICS are unchanged |
 
@@ -368,7 +376,9 @@ voice's signature rules, not only a styling run.
 A green gate does not prove the prose true. After the edits, check the claims on the
 pages this run changed first, then on pages that cite a file changed since the last
 docs commit. The limit is: changed pages first, one reviewer per lens, at most 8 readers and 2 rounds, then report what remains. The lenses are accuracy against the code and the
-reader's view (can someone follow it without the code). Readers are read-only, in a
+reader's view (can someone follow it without the code). Share the pages out across the
+readers; each reader checks one lens, so every page gets one reviewer per lens. Readers are
+read-only, in a
 fresh context when the harness offers one; otherwise do the pass yourself. Check each
 fix before the next round; a third round is never run: what is left goes in the report
 with its evidence.

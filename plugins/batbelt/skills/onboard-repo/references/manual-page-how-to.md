@@ -2,7 +2,7 @@
 
 Read at [author-manual.md](author-manual.md) when you write a how-to page in `docs/manual/` (one task). A first-run page follows [manual-page-getting-started.md](manual-page-getting-started.md) instead. The rules are in `docs/internals/docs-standard.md` when the repo has it; this is the shape. One page, one task, and a how-to keeps the explanation its output needs: what the reader just saw, and how to read it. Deeper "why" goes to `docs/internals/`, linked once.
 
-Replace every `<...>`. Ground each output block as the author-manual step says: a provenance tag on the fence, `illustrative` when it is a mock. Drop a section the task does not need; keep the order of the rest.
+Replace every `<...>`. Ground each output block as the author-manual step says: a provenance tag on the fence, `illustrative` when it is a mock. Drop a section the task does not need, except If something goes wrong: every how-to keeps it. Keep the order of the rest.
 
 When the repo has a front-end per platform (a `.sh` and a `.ps1`, say), every command block has its twin right after it, sh first, with no heading between them. Output from a platform nobody captured is `illustrative`.
 

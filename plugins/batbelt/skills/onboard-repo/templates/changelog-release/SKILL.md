@@ -10,17 +10,24 @@ Update `CHANGELOG.md` and bump the version following **Keep a Changelog 1.1.0**
 and the repo's **versioning scheme** — **SemVer 2.0.0** by default, or **CalVer**
 when REPO SPECIFICS bakes one (§4b). Accumulate under `[Unreleased]`.
 
-**Land it on one yes.** Stage only the paths this run edited: `git add -- CHANGELOG.md
-<version homes>`. Then print the commands that land the release, each on its own line:
-`git commit -m "<message>" -- <paths>`, `git push`, and `git tag` only when this run cut
-a version — and name every unrelated dirty file you left out (from `git status
---short`). Ask once; on a yes, run the printed commands one at a time, in order, and
-stop at the first that fails; a no leaves them printed for the operator. `allowed-tools`
-pre-approves none of them, so the harness still asks before each one under the
-operator's own permission rules. With a release script (§7), a yes runs the script's own
-cut command, never a hand-made `git tag`; with a `ci` bake, a yes runs the commit and
-push only, and the workflow tags (§11). When `update-docs` has doc changes for this
-release, commit those first, so the release ships with its docs.
+**Land it on one yes.** Show, in one message: the version block; every merge in the
+range that had no bullet, by SHA and subject, with the bullet you drafted for it (§2);
+the paths this run edited (`CHANGELOG.md` and the version homes), and every unrelated
+dirty file you will leave out (from `git status --short`); and the commands that land
+the release, each on its own line, in this order: `git commit -m "<message>" --
+<paths>`; when this run cut a version, the tag command (REPO SPECIFICS' release tags,
+default `git tag -a v<version> -m "v<version>"`); `git push`; and `git push origin
+<tag>` for that tag. Ask once: the operator can keep the draft, change it, or state a
+skip for each unmatched merge, and say yes or no to the commands. On a yes, stage only
+the paths this run edited (`git add -- CHANGELOG.md <version homes>`), then run the
+commands one at a time, in order, and stop at the first that fails; a no leaves them
+printed for the operator. `allowed-tools` pre-approves none of the commit, tag or push
+commands, so the harness still asks before each one under the operator's own permission
+rules. With a release script (§7), a yes runs the script's own cut command, never a
+hand-made `git tag`; with a `ci` bake, a yes runs the commit and push only, and the
+workflow tags (§11). When `update-docs` printed a docs commit for this release, ask the
+operator to run it first, so the release ships with its docs; this skill commits only
+its own paths.
 
 Repo-specific facts (versioning scheme, version homes, monorepo mode,
 release-script delegation, dash punctuation, changeset dir, GitHub release)
@@ -74,8 +81,8 @@ Distinguish lines this run *generates* from *pre-existing curated* content:
   out, never folded in.
 - **Every merge has an entry.** List the merges in the range —
   `git log --merges --first-parent BASELINE..HEAD` — and match each to a bullet in the
-  version block. A merge with no bullet gets one, or a stated skip ("CI only") shown to
-  the operator before staging.
+  version block. A merge with no bullet gets a drafted one, shown by SHA and subject in the
+  one ask (intro), where the operator keeps the draft, changes it, or states a skip ("CI only").
 
 ## 3. Write for the reader, not the log
 
@@ -119,8 +126,8 @@ literal.
   release — or the later day the operator names when the release lands after
   today. Read the clock (`date +%Y-%m-%dT%H:%M%z`; PowerShell: `Get-Date -Format o`)
   and convert it to that zone — never take the session's local date. Never a
-  commit's date either: no release commit exists yet (this skill stages, never
-  commits), and `HEAD` may be days old. Print the date and zone next to the
+  commit's date either: no release commit exists yet when the date is chosen, and `HEAD`
+  may be days old. Print the date and zone next to the
   version so the operator can correct it before running the commands;
 - **counter** `N` = `0` for the first release with that rendered date part, `+1`
   for each further one — when the last release (§1, heading, tag or version home)

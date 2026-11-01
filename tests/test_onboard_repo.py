@@ -595,7 +595,8 @@ def test_changelog_release_body_pins_key_rules():
     assert "repo specifics" in t
     assert "compare" in t and ("dead link" in t or "unless" in t)
     assert "dash" in t or "punctuation" in t
-    assert "stage" in t and ("do not commit" in t or "never commit" in t)
+    # v5: it stages and commits only on the one yes; a no leaves the commands printed
+    assert "on a yes, stage only the paths this run edited" in t and "a no leaves them printed" in t
 
 
 def test_changelog_release_body_pins_calver_rules():
@@ -4454,7 +4455,7 @@ CR = ONBOARD / "templates" / "changelog-release" / "SKILL.md"
 def test_changelog_release_runs_on_one_yes():
     t = _flat(CR)
     assert "never run them yourself" not in t
-    assert "Ask once; on a yes, run the printed commands one at a time" in t
+    assert "On a yes, stage only the paths this run edited" in t and "run the commands one at a time" in t
     fm = CR.read_text(encoding="utf-8").split("---", 2)[1]
     for grant in ("Bash(git commit", "Bash(git push", "Bash(git tag:", "Bash(gh release"):
         assert grant not in fm, grant  # `Bash(git tag -l:*)` (read-only) stays
@@ -4468,13 +4469,13 @@ def test_pre_1_0_feature_bumps_the_minor():
 
 def test_every_merge_has_an_entry():
     t = _flat(CR)
-    assert "git log --merges --first-parent" in t and "or a stated skip" in t
+    assert "git log --merges --first-parent" in t and "or state a skip" in t
 
 
 def test_changelog_release_commits_by_path():
     t = _flat(CR)
     assert 'git commit -m "<message>" -- <paths>' in t
-    assert "name every unrelated dirty file" in t
+    assert "every unrelated dirty file you will leave out" in t
     assert "Bash(git status:*)" in CR.read_text(encoding="utf-8").split("---", 2)[1]
 
 
@@ -4493,3 +4494,51 @@ def test_sync_names_each_behaviour_change_of_version_5():
     for change in ("Local deviations", "commands-first", "never moved or regrouped",
                    "re-derive from the code", "on one yes", "PLATFORM_TWIN"):
         assert change in t.split("name each behaviour change", 1)[1][:1600], change
+
+
+# ---- template v5: fixes from the GREEN eval, round 1 --------------------------
+
+
+def test_foreign_facts_bake_drives_the_cross_repo_check():
+    st = _flat(ONBOARD / "references" / "stamping.md")
+    assert "**foreign facts:**" in _shape("stamping.md")
+    assert "--forbidden <names> --forbidden-allow <globs>" in _flat(UPD)
+    assert "foreign facts" in _flat(ONBOARD / "references" / "detection.md")
+    assert "or `none`" in st.split("**foreign facts:**", 1)[1][:600]
+
+
+def test_release_pushes_the_tag_it_makes():
+    t = _flat(CR)
+    order = ['git commit -m "<message>" -- <paths>', "the tag command", "`git push`", "git push origin <tag>"]
+    pos = [t.index(s) for s in order]
+    assert pos == sorted(pos)
+
+
+def test_unmatched_merges_are_shown_in_the_one_ask_and_staging_waits_for_yes():
+    t = _flat(CR)
+    assert "by SHA and subject" in t and "keep the draft, change it, or state a skip" in t
+    assert t.index("On a yes, stage only the paths this run edited") > t.index("Ask once")
+    assert "this skill stages, never commits" not in t
+
+
+def test_update_docs_needs_no_memory_between_runs():
+    t = _flat(UPD)
+    assert "since the last run" not in t
+    assert "the last commit that touched `docs/`" in t
+    assert "Bash(git log:*)" in UPD.read_text(encoding="utf-8").split("---", 2)[1]
+
+
+def test_v5_text_agrees_with_itself():
+    std = _flat(STD_V5)
+    assert "- §3 Layout: how-to pages sit directly in docs/manual/" not in std
+    assert "Lead with the task" not in std
+    assert "a flat manual, a numbered tour or" not in _flat(ONBOARD / "SKILL.md")
+    ud = _flat(UPD)
+    assert "the index and `NEXT_CHAIN` win" in ud
+    assert "or the standard's Local deviations" in ud
+    assert "each reader checks one lens" in ud
+    assert "--platform-pairs" in _flat(ONBOARD / "references" / "author-manual.md")
+    ref = _skeleton("manual-page-reference.md")
+    assert ref.index("```bash") < ref.index("```powershell")
+    assert "except If something goes wrong" in _flat(ONBOARD / "references" / "manual-page-how-to.md")
+    assert "On first adoption" in _flat(ONBOARD / "references" / "adopt-docs.md")

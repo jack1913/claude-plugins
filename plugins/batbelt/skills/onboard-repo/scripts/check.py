@@ -1731,8 +1731,7 @@ _OL_ITEM_RE = re.compile(r"^(\s*)\d+([.)])(\s+)", re.MULTILINE)
 # The ToC total. Each cue is FULLY delimited so a look-alike prose range does not
 # match (review C1): bold on BOTH sides ("**1 → N**"), the literal "(read 1 → N)",
 # or the MD029 "1→N reading order" comment. A bare "(1 to 5)" / "steps 1 to 7." /
-# unrelated "**1 → 5**" table cell is left alone. Seed ships digit totals so this is
-# not inert on a fresh scaffold.
+# unrelated "**1 → 5**" table cell is left alone.
 _TOTAL_RE = re.compile(
     r"(\*\*1\s*(?:→|->|to)\s*)\d+(?=\*\*)"  # **1 → N**
     r"|(\(read\s+1\s*(?:→|->|to)\s*)\d+(?=\))"  # (read 1 → N)

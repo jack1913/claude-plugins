@@ -34,7 +34,11 @@ With a front-end per platform:
 Example:
 
 ```bash
-$ <cli> <verb> --flag
+<cli> <verb> --flag
+```
+
+```powershell
+<cli> <verb> -Flag
 ```
 
 ## See also

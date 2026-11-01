@@ -428,10 +428,12 @@ and left as it is.
 **A new standard starts out agreeing with the repo.** Before copying it, run
 `python3 "$SKILL_DIR/scripts/onboard.py" manual-conventions .` and read the JSON: the copy then
 fills its Local deviations list with the printed `local_deviations` (in place of `- None.`), so a
-flat manual, a numbered tour or a `text capture=` fence is recorded rather than reported. The same
+`use/` layout, an unnumbered index or a `text capture=` fence is recorded rather than reported (a
+flat manual with a numbered tour is already the standard's default). The same
 pass writes `docs voice:` and `platform pairs:` into the `update-docs` REPO SPECIFICS when they are
 missing: the voice from `docs_voice` (else the voice word in the old template region), and
-`sh+powershell` when `platform_pairs` is true. All of it is part of the diff the operator confirms. Like the other docs-ia seeds it is the repo's own file, so nothing marks it as
+`sh+powershell` when `platform_pairs` is true. `preserve` carries REPO SPECIFICS verbatim, so
+these two lines are a separate edit shown as their own diff; all of it is confirmed together. Like the other docs-ia seeds it is the repo's own file, so nothing marks it as
 owned by the installer. `--sync` never moves or regroups a page: a new page goes where the
 repo's existing pages are.
 

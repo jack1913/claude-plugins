@@ -34,8 +34,8 @@ layout) go in `docs/internals/`.
 
 These hold in every README voice:
 
-- The first screen says what <repo> is and how to install it: the command, or one link to it. A
-  quick start installs before it uses anything.
+- The first screen says what <repo> is and shows the install command; a voice may open with one
+  short paragraph before it. A quick start installs before it uses anything.
 - The README keeps the install command and its platform twin. It is the one allowed copy of the
   install fact; the full walkthrough lives on the getting-started page.
 - One section per feature: one or two paragraphs, at most one table, one link out to its page.
@@ -101,7 +101,7 @@ For manual pages. The README follows its recorded voice and the list in §2. Int
 plain technical.
 
 - Talk to the reader: "you", active voice, present tense.
-- Lead with the task: what you can do → what to type or say → what you'll see → the fix if it goes
+- Lead with the command: what to type or say → what you'll see → what it means → the fix if it goes
   wrong.
 - One idea per sentence. Short sentences, plain words.
 - Explain a term the first time it appears, or drop it. Never show internal codes (phase or gate
@@ -179,8 +179,8 @@ departs from and what the repo does instead. Onboarding and `--sync` fill this l
 repo already does; add to it by hand when you make a new deliberate choice.
 
 ```text illustrative
-- §3 Layout: how-to pages sit directly in docs/manual/, not in docs/manual/use/.
-- §3 Layout: the manual index is a numbered tour; each page ends with a Next link.
+- §3 Layout: how-to pages sit in docs/manual/use/, not directly in docs/manual/.
+- §4 Output: captured output uses text capture= fences; keep that shape, never convert it.
 ```
 
 - None.

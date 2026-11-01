@@ -76,7 +76,7 @@ small table, not judgment call:
 | Source `CLAUDE.md` | Replaced **wholesale** with the one-line `@AGENTS.md` stub — nothing else survives in it once `AGENTS.md` is the index. |
 | Already on the convention (`@import`-only `CLAUDE.md` + a real `AGENTS.md`) | **Hard no-op** — already on the convention, do nothing. |
 
-File each consumer page by kind: first-run pages in `docs/manual/getting-started/`, how-to
+On first adoption, file each consumer page by kind: first-run pages in `docs/manual/getting-started/`, how-to
 pages directly in `docs/manual/`, tables and lookups in `docs/manual/reference/`, and list it in
 `docs/manual/README.md` under Get started, Do a task (numbered, in reading order) or Look it up.
 
