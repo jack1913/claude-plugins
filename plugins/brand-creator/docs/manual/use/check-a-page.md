@@ -94,9 +94,12 @@ Some numbers are not claims, so you do not need a fact for them:
 
 - A year after a copyright sign or the word, such as "© 2026" or "Copyright 2024–2026".
 - The code of an error page. A page is an error page when its file is named after the code (`404.html`), or when its
-  title or main heading holds the code and no other number, with no "+" before or after it. Then the code can stand
-  anywhere on it, such as a small "Błąd 404" label and a large "404". A heading such as "500+ firm nam ufa", "+500
-  klientów" or "5 lat, 500 klientów" is a count, so it does not make an error page.
+  title or main heading holds the code and no other number, with no "+" before or after it, and the same text has an
+  error word in the language of the page: "Błąd", "Nie znaleziono" or "nie istnieje" on a Polish page, "Error", "Not
+  found" or "Gone" on an English one. Then the code can stand anywhere on it, such as a small "Błąd 404" label and a
+  large "404". A heading such as "Ponad 400 projektów", "Zaufało nam 500 firm", "Over 400 clients", "500+ firm nam
+  ufa" or "5 lat, 500 klientów" is a count, so it does not make an error page. For a page in another language, or one
+  that does not say its language (`lang` on its `html` tag), only the file name counts.
 
 A date is read as its numbers, in either form. The fact "premiera 2026-11-15" backs "Premiera 15.11.2026", and "Wypłata
 30.10" needs a fact that holds 30 and 10. A number with spaces between thousands, such as "13 205,20 zł", counts as one
@@ -107,6 +110,10 @@ A date written with a month name is one date, not numbers, when the page is in P
 and "November 15, 2026" too. A date with a month name is a claim even when its day has one digit ("5 maja"), so a
 street such as "ul. 3 Maja" needs a fact, like any address. A date with dots is a date when it has a year ("5.11.2026")
 or two digits each way ("30.10", "05.11"); "12.5" or "2.10" is a plain number, and the fact has to hold that number.
+
+A number right after a month name stays a number when it is not a day. In "March 15% of users" the claim is "15%", and
+in "May 3.5 kg" it is "3.5 kg". A day with a year after a comma, such as "October 21,2026", is still one date. In
+Polish, "21 października" is a date; "21 październik" is read as the number 21.
 
 Phone numbers, postal codes and street numbers are still claims. Each one needs a fact in `FACTS.md`, or a sample label.
 

@@ -153,6 +153,13 @@ lints the board of the latest round again before `check`, so an edit of the fact
   "Październik 2026", "October 21, 2026", "21 October 2026", "October 2026". A dotted "30.10" is a date only when the
   day and the month have two digits each, or a year follows ("1.5.2026r."); "12.5", "2.10" and "10.1" are plain
   numbers, on the page and in `FACTS.md`.
+- `page-check` reads a count in a heading and a number after a month name more closely, after a final review. A code in
+  the title or main heading now makes an error page only when it is the only number there, has no "+" before or after
+  it, and the same text holds an error word of the page's language ("Błąd", "Nie znaleziono", "nie istnieje" in Polish;
+  "Error", "Not found", "Gone" in English). A heading such as "Ponad 400 projektów", "Zaufało nam 500 firm" or "Over 400
+  clients" is a count and exempts nothing, and a page in another language, or one that sets no language, is an error
+  page by its file name only. A number right after a month name stays its own claim when it is not a day ("March 15% of
+  users" holds "15%"), and "October 21,2026" is one date.
 - `page-check` now checks the brand mark on a page. Put `data-brand-mark` on the mark's `<img>` or inline `<svg>` (the
   value may name the logo file, `data-brand-mark="assets/logo/mark.svg"`); an image whose file name is `logo`, `mark` or
   `wordmark`, alone or followed by `-`, `_` or `@` and more (`logo.svg`, `mark-dark.svg`, `logo@2x.png`; `partner-logo.svg`
