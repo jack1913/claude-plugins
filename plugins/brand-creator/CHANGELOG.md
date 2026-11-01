@@ -154,9 +154,9 @@ lints the board of the latest round again before `check`, so an edit of the fact
   day and the month have two digits each, or a year follows ("1.5.2026r."); "12.5", "2.10" and "10.1" are plain
   numbers, on the page and in `FACTS.md`.
 - `page-check` now checks the brand mark on a page. Put `data-brand-mark` on the mark's `<img>` or inline `<svg>` (the
-  value may name the logo file, `data-brand-mark="assets/logo/mark.svg"`); an image whose file is named `logo`, or starts
-  with `logo-` or `logo_` (`logo.svg`, `logo-dark.png`; `partner-logo.svg` is not), and any image that is byte for byte a
-  file of `assets/logo/`, is taken for the mark too. The
+  value may name the logo file, `data-brand-mark="assets/logo/mark.svg"`); an image whose file name is `logo`, `mark` or
+  `wordmark`, alone or followed by `-`, `_` or `@` and more (`logo.svg`, `mark-dark.svg`, `logo@2x.png`; `partner-logo.svg`
+  and `bookmark.svg` are not), and any image that is byte for byte a file of `assets/logo/`, is taken for the mark too. The
   mark has to be a logo file of the project (`page:mark-file`: the same bytes, or for an inline SVG the same drawing,
   whatever the order of its attributes, its spaces, its title or the size and label it is given); it has to be the
   drawing your size bands name for the height it is shown at, or that drawing's `-dark.svg` twin (`page:mark-band`);

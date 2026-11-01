@@ -1719,7 +1719,7 @@ def test_a_mark_that_is_not_a_master_byte_for_byte_fails(acme):
 
 @pytest.mark.requires_setup
 @pytest.mark.requires_node
-def test_only_a_file_named_logo_or_a_marked_element_is_a_mark_not_a_name_that_holds_the_word(acme):
+def test_a_file_named_logo_or_a_marked_element_is_a_mark_not_a_name_that_holds_the_word(acme):
     """logo.svg and data-brand-mark make a mark; partner-logo.svg and ikona-logowanie.svg, other drawings whose names only hold the word, do not."""
     pages = acme / "pages"
     pages.mkdir(exist_ok=True)
@@ -1758,6 +1758,43 @@ def test_only_a_file_named_logo_or_a_marked_element_is_a_mark_not_a_name_that_ho
     # the same file without the attribute and without a name that says logo is only an image
     rep, row = run('<img class="mark" src="brand.svg" width="48" height="48" alt="Acme">' + both)
     assert row["status"] == "info", row
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_file_named_mark_wordmark_or_logo_with_a_suffix_is_a_mark_and_a_stem_that_only_holds_the_word_is_not(acme):
+    """The name rule: the stem is logo, mark or wordmark, alone or followed by -, _ or @ and more (mark.svg, wordmark.svg, logo@2x.svg, mark-dark.svg, Wordmark_Light.svg). A stem that only
+    starts with or holds one of the words (bookmark, marker, market-chart, partner-logo, ikona-logowanie, logowanie) is only an image. A candidate is then judged like any mark."""
+    pages = acme / "pages"
+    pages.mkdir(exist_ok=True)
+    candidates = ("mark.svg", "wordmark.svg", "logo@2x.svg", "mark-dark.svg", "Wordmark_Light.svg")
+    others = ("bookmark.svg", "marker.svg", "market-chart.svg", "partner-logo.svg", "ikona-logowanie.svg", "logowanie.svg")
+    for name in candidates:
+        shutil.copyfile(acme / "assets" / "logo" / "mark.svg", pages / name)   # the master, under a name that says mark, wordmark or logo
+    for name in others:
+        (pages / name).write_text(DOT.replace('r="3"', 'r="2"'), encoding="utf-8")   # a drawing that is none of the logo files
+    html = lambda names: "".join(f'<img src="{n}" width="48" height="48" alt="">' for n in names)
+
+    def run(names) -> tuple[dict, dict]:
+        write_page(acme, mark_page(html(names)))
+        r, rep = check_page(acme, "--schemes", "light")
+        return rep, mark_rows_of(rep)["page:mark-file"]
+
+    # every candidate is a mark by its name and, being the master's bytes, passes; the other six are images and not judged
+    rep, row = run(candidates + others)
+    assert row["status"] == "pass" and row["marks_checked"] == len(candidates) and row["files"] == ["assets/logo/mark.svg"], row
+    (v,) = json.loads(Path(rep["measures"]).read_text(encoding="utf-8"))["views"]
+    assert {m["url"] for m in v["marks"]} == {f"/pages/{n}" for n in candidates} and all(m["named"] and not m["marked"] for m in v["marks"]), v["marks"]
+    assert {i["url"] for i in v["images"]} == {f"/pages/{n}" for n in others}, v["images"]
+    # one byte changed in each candidate: each is judged and fails by its name; none of the six other names is told of
+    for name in candidates:
+        mutate(pages / name, "#007d71", "#007d72")
+    rep, row = run(candidates + others)
+    assert row["status"] == "fail" and {(o["url"], o["found_by"]) for o in row["offenders"]} == {(f"/pages/{n}", "name") for n in candidates}, row
+    assert not any(n.removesuffix(".svg") in row["detail"] for n in others), row["detail"]
+    # the page with the six other names only: no mark, so nothing fails and the row is the info row
+    rep, row = run(others)
+    assert row["status"] == "info" and "no brand mark is shown" in row["detail"] and "logo, mark or wordmark" in row["detail"], row
 
 
 @pytest.mark.requires_setup
@@ -1916,8 +1953,9 @@ def test_the_marks_collector_finds_marks_by_attribute_and_by_name_and_measures_t
     (v,) = json.loads(Path(rep["measures"]).read_text(encoding="utf-8"))["views"]
     got = {(m["kind"], m["url"]): m for m in v["marks"]}
     assert set(got) == {("img", "/pages/logo.svg"), ("background", "/pages/logo-bg.svg"), ("background", "/pages/logo_pseudo.svg"), ("image", "/pages/logo-svgimage.svg"),
-                        ("img", "/pages/plain.svg"), ("other", None), ("img", "/pages/logo-hidden.svg")}, sorted(got, key=str)   # the hidden logo is a mark that is not shown
-    assert {i["url"] for i in v["images"]} >= {"/pages/partner-logo.svg", "/pages/ikona-logowanie.svg", "/pages/logos.svg", "/pages/siteMark.svg", "/pages/lockup.svg", "/pages/wordmark-x.svg"}   # a name that only holds the word, or says mark, wordmark or lockup, is an image
+                        ("img", "/pages/plain.svg"), ("other", None), ("img", "/pages/logo-hidden.svg"), ("img", "/pages/wordmark-x.svg")}, sorted(got, key=str)   # the hidden logo is a mark that is not shown
+    assert {i["url"] for i in v["images"]} >= {"/pages/partner-logo.svg", "/pages/ikona-logowanie.svg", "/pages/logos.svg", "/pages/siteMark.svg", "/pages/lockup.svg"}   # a name that only holds the word, or says something else, is an image
+    assert got[("img", "/pages/wordmark-x.svg")]["named"] and "/pages/wordmark-x.svg" not in {i["url"] for i in v["images"]}   # wordmark followed by - and more is a name candidate
     hidden = got[("img", "/pages/logo-hidden.svg")]
     assert hidden["visible"] is False and hidden["named"] and not hidden["marked"] and hidden["nearest_px"] is None   # it is reported as not shown, and no neighbour is looked for
     assert {i["url"] for i in v["images"]} >= {"/pages/bookmark.svg", "/pages/marketing-hero.svg", "/pages/near.svg"} and "/pages/logo-hidden.svg" not in {i["url"] for i in v["images"]}

@@ -533,7 +533,8 @@ const SVG_MARKUP_CAP = 60000;   // characters of an inline SVG mark kept for the
 const DATA_URL_CAP = 5 * 1024 * 1024;   // a data: image larger than this is not hashed
 
 /** The brand mark on the page and what stands next to it, in one walk. A mark is an element with `data-brand-mark`, or an image whose file name says it is the logo: the name (without its
- *  extension) is `logo` or starts with `logo-` or `logo_` (`logo.svg`, `logo-dark.png`; not `partner-logo.svg`, `ikona-logowanie.svg` or `logos.png`, which only hold the word). The
+ *  extension) is `logo`, `mark` or `wordmark`, alone or followed by `-`, `_` or `@` and more (`logo.svg`, `mark-dark.svg`, `wordmark_light.svg`, `logo@2x.png`; not `partner-logo.svg`,
+ *  `ikona-logowanie.svg`, `bookmark.svg`, `marker.svg` or `market-chart.png`, which only hold the word). The
  *  third way to be a mark, an image whose bytes equal a logo file of the project, is the judge's (`pagecheck.identified_marks`). The images are `img` (what the
  *  browser chose to show, `currentSrc`, so the `source` of a `picture` is covered), an SVG `image`, a CSS `background-image` of an element and of its `::before` and `::after`.
  *  `data-brand-mark` on an element that is none of them stands for the images inside it. `marks` holds the marked and the named ones, `images` the other visible images (a judge may
@@ -553,9 +554,10 @@ async function markFacts(page) {
     const stemOf = (u) => {
       try { return decodeURIComponent(new URL(u, document.baseURI).pathname.split("/").pop() || "").replace(/\.[A-Za-z0-9]{1,5}$/, ""); } catch { return ""; }
     };
-    // a file is named like the logo when its stem is `logo` or starts with `logo-` or `logo_` (`logo.svg`, `logo-dark.png`, `logo_white.svg`), in any case; a word that merely holds
-    // it (`partner-logo.svg`, `ikona-logowanie.svg`, `logos.png`) is not, and a data: URL has no file name at all
-    const named = (u) => !/^data:/i.test(u) && /^logo(?:[-_]|$)/i.test(stemOf(u));
+    // a file is named like the logo when its stem is `logo`, `mark` or `wordmark`, alone or followed by `-`, `_` or `@` and more (`logo.svg`, `mark-dark.svg`, `wordmark_light.svg`,
+    // `logo@2x.png`), in any case; a word that merely holds one (`partner-logo.svg`, `ikona-logowanie.svg`, `logos.png`, `bookmark.svg`, `marker.svg`, `market-chart.png`) is not, and a data:
+    // URL has no file name at all
+    const named = (u) => !/^data:/i.test(u) && /^(?:logo|mark|wordmark)(?:[-_@]|$)/i.test(stemOf(u));
     const place = (u) => {   // -> {url, own, data?}: where an image lives, as the key of `resources` when it is the page's own
       if (!u) return { url: null, own: false };
       if (/^data:/i.test(u)) return { url: u.slice(0, 80), own: false, data: u };

@@ -1062,7 +1062,7 @@ def logo_files(project: Path, rules: dict) -> dict[str, str]:
 
 
 def identified_marks(view: dict, logo_hashes) -> list[dict]:
-    """The marks of one measured view: what the page marks (`data-brand-mark`), what is named `logo` (the stem is `logo`, or starts with `logo-` or `logo_`), and any other image whose bytes are a logo file of the project. Each is the
+    """The marks of one measured view: what the page marks (`data-brand-mark`), what is named like a logo (the stem is `logo`, `mark` or `wordmark`, alone or followed by `-`, `_` or `@` and more), and any other image whose bytes are a logo file of the project. Each is the
     collector's entry plus `by` (attribute, name or bytes) and `sha256` (the bytes seen: render.mjs hashed a file of the page's own origin, the collector a data: URL; None when
     they were not seen). Every rule about marks reads them from here."""
     resources = view.get("resources") or {}
@@ -1123,8 +1123,8 @@ def _clear_space_row(rep: Report, shown: list, ctx: Ctx) -> None:
 def mark_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
     """page:mark-file, page:mark-band and page:mark-clear-space: the brand mark on the page.
 
-    A mark is an element with `data-brand-mark`, an image whose file name says it is the logo (the name without its extension is `logo`, or starts with `logo-` or `logo_`; `partner-logo.svg` and
-    `ikona-logowanie.svg` only hold the word and are not), or any image whose bytes are a file of assets/logo/ (see `identified_marks`). Only a mark that is shown is judged.
+    A mark is an element with `data-brand-mark`, an image whose file name says it is the logo (the name without its extension is `logo`, `mark` or `wordmark`, alone or followed by `-`, `_` or `@` and more: `logo.svg`, `mark-dark.svg`, `logo@2x.png`; `partner-logo.svg`,
+    `ikona-logowanie.svg` and `bookmark.svg` only hold the word and are not), or any image whose bytes are a file of assets/logo/ (see `identified_marks`). Only a mark that is shown is judged.
     `page:mark-file` fails a mark that is none of the logo files of the project (assets/logo/ and the drawings named in qa/rules.json bands, favicon and marks, with their -dark.svg
     twins): the bytes of a file, or an inline SVG after canonicalisation (`canonical_svg`). `data-brand-mark="<file>"` also names the file it shows (or its twin).
     `page:mark-band` fails a banded drawing (one a band of qa/rules.json names, or its twin) that is not the drawing `qa_rules.pick_band` names for the mark's rendered height; a wordmark
@@ -1143,8 +1143,8 @@ def mark_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
     truncated = f"NOT verified beyond the first marks and images of a view: {_names(cut, 2)}" if cut else ""
     if not shown:
         hidden = f"; {len({(m['sel'], m.get('url')) for _, m in found})} marked or named mark(s) are not shown in any view" if found else ""
-        rep.add("page:mark-file", "info", "the brand mark", detail="no brand mark is shown on this page: a mark is an element with data-brand-mark, an image whose file is named logo "
-                "(logo.svg, logo-dark.svg, logo_white.png), or an image whose bytes are a logo file of the project" + hidden + ("; " + truncated if truncated else ""))
+        rep.add("page:mark-file", "info", "the brand mark", detail="no brand mark is shown on this page: a mark is an element with data-brand-mark, an image whose file is named logo, mark or wordmark "
+                "(logo.svg, mark-dark.svg, wordmark_light.png, logo@2x.png), or an image whose bytes are a logo file of the project" + hidden + ("; " + truncated if truncated else ""))
         return
     if not masters:
         why = f"not verified: the project has no logo files ({LOGO_DIR}/) to compare the mark with"
