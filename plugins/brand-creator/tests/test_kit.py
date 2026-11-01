@@ -641,7 +641,7 @@ def test_the_kit_is_searched_by_the_cascade(pack):
 
 # ---------------------------------------------------------------- motion: the spec, its hand-off text and the demo page
 # Acme has motion/demo.html and motion/proof.json (a states case and a page case named demo-page) but no motion/motion.json: the brand has not decided, so
-# the twelve files of a build hold no motion file. The spec is written as test_adapters.py writes it; its tokens (two durations and a curve) are built first.
+# the fourteen files of a build hold no motion file. The spec is written as test_adapters.py writes it; its tokens (two durations and a curve) are built first.
 from test_adapters import add_motion, off_spec, on_spec, put_spec  # noqa: E402
 
 MOTION_KIT = ["brand/motion/SPEC.md", "brand/motion/demo.html", "brand/motion/motion.json"]
@@ -664,7 +664,7 @@ def motion_hash(p, rels) -> str:
 def test_a_brand_that_moves_gets_its_motion_spec_and_demo_page_in_the_kit(pack):
     moving(pack)
     r = bc("kit", "build", "--plan", project=pack)
-    assert r.returncode == 0 and r.stdout.splitlines()[0] == "would write 15 generated files into .claude/skills/acme-brand/ (version 1.1)", r.stdout + r.stderr
+    assert r.returncode == 0 and r.stdout.splitlines()[0] == "would write 17 generated files into .claude/skills/acme-brand/ (version 1.1)", r.stdout + r.stderr
     r = build(pack)
     assert r.returncode == 0, r.stdout + r.stderr
     assert kit_files(pack) == sorted([*KIT_FILES, *MOTION_KIT])                    # the proof itself (motion/proof.json) is a test file, not the brand's
@@ -680,7 +680,7 @@ def test_a_brand_that_moves_gets_its_motion_spec_and_demo_page_in_the_kit(pack):
     rep = report(pack, "kit")
     assert rep["status"] == "pass" and sorted(rep["outputs"]) == sorted([*KIT_FILES, *MOTION_KIT])
     assert {"motion/motion.json", "motion/SPEC.md", "motion/demo.html"} <= {i["path"] for i in rep["inputs"]}
-    assert written_row(pack)["detail"] == "15 generated files: 15 written, 0 unchanged, 0 moved to removed-2026-10-17/; version 1.1"
+    assert written_row(pack)["detail"] == "17 generated files: 17 written, 0 unchanged, 0 moved to removed-2026-10-17/; version 1.1"
     first = kit_state(pack)
     assert build(pack).returncode == 0 and kit_state(pack) == first and kit_json(pack)["version"] == "1.1"       # a second build writes nothing
 
