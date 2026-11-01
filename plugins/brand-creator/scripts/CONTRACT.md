@@ -928,7 +928,9 @@ the check "not verified" (exit 3). Paths are relative to FAMILY.md; a sibling re
   is "not verified"). Language sets are data files, `scripts/data/languages/<code>.json` (`schema, code, name, letters, symbols, extras,
   basic_latin, rules`; en, pl, de, cs, fr, es, tr); the plugin has no default language. The sets come from `--lang` or
   `content_languages` in BRAND-STATE.md. A missing required letter fails, a missing typographic extra warns, more than two font families
-  warns (default budget, owner-adjustable).
+  warns (default budget, owner-adjustable). The `licence:<font>` row also carries `family` (name ID 16, else name ID 1, else the file
+  stem), `weight` (OS/2 `usWeightClass`, else 400) and `style` (`italic` when OS/2 `fsSelection` bit 0 or `head.macStyle` bit 1 is
+  set, else `normal`); its status and detail do not depend on them.
 - `outline-glyphs` writes text as paths: fontTools instancer pins the variable axes, skia-pathops removes overlaps, `SVGPathPen` writes
   one `<path>` per glyph. The SVG has no `<text>` and no font reference (mark_lint checks) and carries `data-baseline`, `data-cap-height`
   and `data-x-height` that `logo-sheet --guides` draws. Layout is the font's advance widths plus `--tracking` and `--pair`; GPOS kerning

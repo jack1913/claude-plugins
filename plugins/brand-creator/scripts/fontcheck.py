@@ -68,6 +68,17 @@ def required(lang: dict) -> str:
     return (BASIC_LATIN if lang.get("basic_latin") else "") + lang["letters"] + lang["symbols"]
 
 
+def face(font, stem: str) -> dict:
+    """-> {family, weight, style} of one font file: the family from name ID 16, else name ID 1, else the file stem; the weight from OS/2
+    usWeightClass, else 400; the style `italic` when OS/2 fsSelection bit 0 or head.macStyle bit 1 is set, else `normal`."""
+    nm = font["name"]
+    italic = bool(font["OS/2"].fsSelection & 1) if "OS/2" in font else False
+    italic = italic or ("head" in font and bool(font["head"].macStyle & 2))
+    return {"family": nm.getDebugName(16) or nm.getDebugName(1) or stem,
+            "weight": font["OS/2"].usWeightClass if "OS/2" in font else 400,
+            "style": "italic" if italic else "normal"}
+
+
 def licence_hint(font) -> tuple[str, str, dict]:
     """-> (status, detail, facts) from the name table and OS/2 fsType."""
     nm = font["name"]
@@ -152,9 +163,8 @@ def main() -> int:
         except Exception as e:  # fontTools raises several types for unreadable fonts
             rep.add(f"font:{shown}", "fail", "readable font file", detail=f"cannot read {shown}: {e}")
             continue
-        names = font["name"]
-        fam = names.getDebugName(16) or names.getDebugName(1) or p.stem
-        families.setdefault(fam, []).append(shown)
+        identity = face(font, p.stem)
+        families.setdefault(identity["family"], []).append(shown)
         cmap = font.getBestCmap()
         all_required = ""
         for code in codes:
@@ -170,7 +180,7 @@ def main() -> int:
             if extras:
                 rep.add(f"extras:{shown}:{code}", "warn", f"typographic extras, {lang['name']} set", detail=f"not in the font: {''.join(extras)} (quotes, dashes or ellipsis the language sets with; the browser would fall back to another font for them)", missing=extras)
         status, detail, facts = licence_hint(font)
-        rep.add(f"licence:{shown}", status, "licence hint (from the name table)", detail=detail, **facts)
+        rep.add(f"licence:{shown}", status, "licence hint (from the name table)", detail=detail, **facts, **identity)
         if a.no_platform:
             continue
         chars = "".join(dict.fromkeys(all_required))

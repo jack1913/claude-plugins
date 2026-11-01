@@ -294,6 +294,7 @@ lints the board of the latest round again before `check`, so an edit of the fact
 - brand-creator's description now includes the brand's website references and reference pages, and still leaves building
   production websites to other tools. `/brand-creator:check` says in its description that, with `--page`, it checks a
   page built anywhere against the brand.
+- `fontcheck` names each font's family, weight and style in its licence row.
 
 ### Fixed
 
