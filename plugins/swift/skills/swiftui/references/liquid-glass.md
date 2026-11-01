@@ -314,7 +314,7 @@ struct GlassCard: View {
 ```swift
 struct GlassSegmentedControl: View {
     @Binding var selection: Int
-    let options: [String]
+    let options: [String] // unique labels: each one is its segment's identity
     @Namespace private var animation
 
     var body: some View {

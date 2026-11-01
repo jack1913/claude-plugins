@@ -119,7 +119,7 @@ Read-only apps conform only to `ReadableDocument` and use `viewer:` / `makeReada
 
 `makeDocument` is `async` and runs on the main actor, so you can suspend it to show a template picker or import preview before the document appears; throw `CancellationError` to cancel. On macOS and visionOS, drive that from a separate `Window` scene via a stored `CheckedContinuation`; on iOS, present a `.sheet` from a `NewDocumentButton`.
 
-`DocumentGroupLaunchScene` (iOS/visionOS) hosts `NewDocumentButton`s, each carrying a `DocumentCreationSource`. `DocumentCreationSource` is an SDK 27 API (iOS 27, macOS 27, visionOS 27); `NewDocumentButton`'s `source:` is iOS 27 and visionOS 27 only. Read `context.creationSource` in `makeDocument` to configure the new document:
+`DocumentGroupLaunchScene` (iOS/visionOS) hosts `NewDocumentButton`s, each carrying a `DocumentCreationSource`. `DocumentCreationSource` is an SDK 27 API (iOS 27, Mac Catalyst 27, macOS 27, visionOS 27); `NewDocumentButton`'s `source:` is iOS 27 and visionOS 27 only. Read `context.creationSource` in `makeDocument` to configure the new document:
 
 ```swift
 DocumentGroupLaunchScene("My Notes") {

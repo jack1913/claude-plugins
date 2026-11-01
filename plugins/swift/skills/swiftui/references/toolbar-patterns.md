@@ -127,13 +127,20 @@ For a custom item's presentation details, a view built for the 27.1 SDK can read
 When a view combines a toolbar and tab bar, `.toolbarVerticalCompressionBehavior(.prefersToolbarItems)` keeps toolbar actions visible longer, while `.prefersTabBar` favors destinations. The default `.automatic` compresses toolbar items first. Like the axis values above, `.prefersToolbarItems` and `.prefersTabBar` exist only on iOS, iPadOS and Mac Catalyst, so put the modifier call inside `#if os(iOS)`:
 
 ```swift
-TabView {
-    // tabs
+@available(iOS 27.1, macOS 27.1, macCatalyst 27.1, tvOS 27.1, visionOS 27.1, watchOS 27.1, *)
+struct CompressedToolbarTabs: View {
+    var body: some View {
+        TabView {
+            // tabs
+        }
+        #if os(iOS)
+        .toolbarVerticalCompressionBehavior(.prefersToolbarItems)
+        #endif
+    }
 }
-#if os(iOS)
-.toolbarVerticalCompressionBehavior(.prefersToolbarItems)
-#endif
 ```
+
+Select this view behind `#available` with the same platforms; inside `#if os(iOS)` the modifier still needs iOS 27.1.
 
 Choose based on the experience's primary task, then use the existing SDK 27 [overflow and visibility](#sdk-27-overflow-and-visibility) APIs to prioritize individual actions rather than duplicating overflow controls.
 

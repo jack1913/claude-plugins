@@ -872,6 +872,18 @@
       }
     },
     {
+      "name": "ToolbarMinimizationSafeAreaAdjustment.disabled",
+      "path": "swiftui/toolbarminimizationsafeareaadjustment/disabled",
+      "claims": {
+        "iOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": false,
+        "visionOS": false,
+        "tvOS": false,
+        "watchOS": false
+      }
+    },
+    {
       "name": "ToolbarMinimizationRestoration.atScrollEdge",
       "path": "swiftui/toolbarminimizationrestoration/atscrolledge",
       "claims": {
