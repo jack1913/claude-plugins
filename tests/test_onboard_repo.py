@@ -4254,7 +4254,7 @@ def test_sync_conventions_for_a_flat_numbered_manual(tmp_path):
                     "capture_fence": "text",
                     "docs_voice": "The manual: commands-first, one concept per page.",
                     "platform_pairs": True, "manual_has_powershell": True,
-                    "has_manual": True, "index_groups": [], "new_here": False}
+                    "has_manual": True, "index_groups": [], "new_here": False, "unreadable": []}
     out = lib.render_local_deviations(conv)
     assert "`text capture=`" in out and "use/" not in out
 
@@ -4754,8 +4754,8 @@ def test_forbidden_allow_globs_are_anchored(tmp_path, capsys):
 
 def test_renumber_toc_numbers_each_list_on_its_own_and_totals_the_tour():
     text = ("# M\n\nRead **1 → 9**.\n\n## Get started\n\n4. [I](i.md)\n\n## Do a task\n\n"
-            "5. [A](a.md)\n   7. [A detail](a.md#x)\n   9. [A more](a.md#y)\n1. [B](b.md)\n2. [C](c.md)\n\n"
-            "## Look it up\n\n3. [R](r.md)\n8. [S](s.md)\n")
+            "3. [A](a.md)\n   7. [A detail](a.md#x)\n   9. [A more](a.md#y)\n1. [B](b.md)\n2. [C](c.md)\n\n"
+            "## Look it up\n\n1. [R](r.md)\n8. [S](s.md)\n")
     out = lib.renumber_toc(text)
     assert "**1 → 3**" in out
     assert "1. [I](i.md)" in out
@@ -4818,3 +4818,93 @@ def test_capture_plan_names_where_each_command_comes_from_and_claims_use_one_com
 
 def test_onboard_records_the_readme_voice_in_the_run_record():
     assert "run-set --confirm readme_voice=" in _flat(ONBOARD / "SKILL.md")
+
+
+# ---- /code-review findings ------------------------------------------------------
+
+
+def test_next_chain_honours_only_both_ways(tmp_path, capsys):
+    cli = _load_cli()
+    _tour(tmp_path, next_of_a="a.md")  # a.md's Next points back at itself
+    docs = str(tmp_path / "docs")
+    _, codes, _ = _run_check(cli, capsys, [docs], ["--no-tier-check", "--only", str(tmp_path / "docs/manual/README.md")])
+    assert "NEXT_CHAIN" not in codes
+    _, codes, lines = _run_check(cli, capsys, [docs], ["--no-tier-check", "--only", str(tmp_path / "docs/manual/a.md")])
+    assert "NEXT_CHAIN" in codes and all("a.md" in ln for ln in lines if "NEXT_CHAIN" in ln)
+
+
+def test_an_indented_top_level_list_is_still_the_tour():
+    chk = _load_check()
+    text = "# M\n\nRead **1 → 9**.\n\n 1. [A](a.md)\n    1. [A1](a.md#1)\n 1. [B](b.md)\n    1. [B1](b.md#1)\n"
+    assert chk.tour_items(text) == ["a.md", "b.md"]
+    out = lib.renumber_toc(text)
+    assert "**1 → 2**" in out and " 2. [B](b.md)" in out
+
+
+def test_renumber_toc_keeps_numbering_that_continues_across_groups():
+    text = ("# M\n\nRead **1 → 6**.\n\n## Get started\n\n1. [A](a.md)\n2. [B](b.md)\n3. [C](c.md)\n\n"
+            "## Do a task\n\n4. [D](d.md)\n5. [E](e.md)\n6. [F](f.md)\n")
+    assert lib.renumber_toc(text) == text
+
+
+def test_toc_count_accepts_a_total_that_continues_across_groups(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "docs/manual/README.md",
+          "# M\n\nRead **1 → 4**.\n\n## Get started\n\n1. [I](i.md)\n2. [J](j.md)\n\n## Do a task\n\n3. [A](a.md)\n4. [B](b.md)\n")
+    for p in ("i", "j", "a", "b"):
+        _seed(tmp_path, "docs/manual/%s.md" % p, "# %s\n" % p)
+    _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check"])
+    assert "TOC_COUNT" not in codes
+
+
+def test_manual_conventions_refuses_a_missing_root(tmp_path, capsys):
+    cli = _load_cli()
+    assert cli.main(["manual-conventions", str(tmp_path / "nope")]) == 2
+
+
+def test_platform_twin_needs_a_powershell_command_not_its_output(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "docs/manual/two.md",
+          "# Two\n\n```bash\n./run.sh\n```\n\n```powershell capture=win\nPS> done\n```\n")
+    rc, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
+    assert rc == 1 and "PLATFORM_TWIN" in codes
+
+
+def test_manual_conventions_skips_excluded_dirs_and_names_unreadable_pages(tmp_path):
+    _seed(tmp_path, "docs/manual/README.md", "# M\n\n1. [A](a.md)\n")
+    _seed(tmp_path, "docs/manual/a.md", "# A\n")
+    _seed(tmp_path, "docs/manual/node_modules/pkg/x.md", "# X\n\n```powershell\nGet-Item\n```\n")
+    (tmp_path / "docs/manual/odd.md").mkdir()  # a directory with a .md name
+    (tmp_path / "docs/manual/gone.md").symlink_to(tmp_path / "missing.md")  # dangling
+    conv = lib.detect_manual_conventions(tmp_path)
+    assert conv["manual_has_powershell"] is False and conv["layout"] == "flat"
+    assert conv["unreadable"] == ["gone.md"]
+
+
+def test_index_group_headings_keep_a_trailing_hash():
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        root = pathlib.Path(d)
+        _seed(root, "docs/manual/README.md", "# M\n\n## Use C#\n\n1. [A](a.md)\n\n## Closed ##\n")
+        _seed(root, "docs/manual/a.md", "# A\n")
+        assert lib.detect_manual_conventions(root)["index_groups"] == ["Use C#", "Closed"]
+
+
+def test_platform_twin_warns_under_only_from_powershell_elsewhere(tmp_path, capsys):
+    cli = _load_cli()
+    _twin_pages(tmp_path)  # one.md has a pair, two.md a lone bash block
+    _, codes, lines = _run_check(cli, capsys, [str(tmp_path / "docs")],
+                                 ["--no-tier-check", "--only", str(tmp_path / "docs/manual/two.md")])
+    assert codes.count("PLATFORM_TWIN") == 1
+
+
+def test_render_local_deviations_reads_manual_defaults(monkeypatch, tmp_path):
+    conv = lib.detect_manual_conventions(_flat_manual(tmp_path))
+    assert "directly in `docs/manual/`" not in lib.render_local_deviations(conv)
+    monkeypatch.setitem(lib.MANUAL_DEFAULTS, "layout", "use")
+    assert "directly in `docs/manual/`" in lib.render_local_deviations(conv)
+
+
+def test_onboard_lib_reuses_checks_prose_helper():
+    chk = _load_check()
+    assert lib._prose is chk._prose_text

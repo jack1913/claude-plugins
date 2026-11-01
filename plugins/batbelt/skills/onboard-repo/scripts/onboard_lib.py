@@ -23,9 +23,11 @@ from check import (  # noqa: F401  (re-exported for callers of this module)
     GROUNDING_WINDOW,
     _NEXT_TARGET_RE,
     _PS_LANGS,
-    tour_items,
-    _OL_ITEM_RE,
+    _is_excluded,
+    _prose_text,
     _TOTAL_RE,
+    tour_entries,
+    tour_items,
     _non_fence_word_count,
     shrink_violations,
     _split_fences,
@@ -90,13 +92,16 @@ def preserve_repo_specifics(old_text, new_template_text):
     return new_before + BEGIN + old_inner + END + new_after
 
 
+# An ordered-list item: "N." or "N)" style (review M2).
+_OL_ITEM_RE = re.compile(r"^(\s*)\d+([.)])(\s+)", re.MULTILINE)
 
 
 def renumber_toc(text):
-    """Reflow a manual ToC: renumber each ordered list on its own (top-level lists
-    restart at 1 after a heading or paragraph; nested items count within their
-    parent), and rewrite the hardcoded '1 → N' / '1 -> N' / '1 to N' ToC total to
-    the number of entries in the tour (check.py's `tour_items`). Ordered-list lines and totals inside fenced code blocks are
+    """Reflow a manual ToC: renumber each ordered list (a top-level list restarts at
+    1 after a heading or paragraph unless the repo numbered it on from the previous
+    list; nested items count within their parent), and rewrite the hardcoded
+    '1 → N' / '1 -> N' / '1 to N' ToC total to the tour's last number (check.py's
+    `tour_entries`). Ordered-list lines and totals inside fenced code blocks are
     left untouched (not renumbered, not counted). Idempotent. No-op when the text
     has no ordered-list items outside code fences (spec Section 3, review I-1/I-2)."""
     # A leading BOM (U+FEFF) is NOT matched by `\s`, so a "﻿1. …" first line
@@ -105,7 +110,8 @@ def renumber_toc(text):
     bom = ""
     if text[:1] == "﻿":
         bom, text = text[0], text[1:]
-    counters = []  # (indent, count) for each open nesting level
+    stack = []  # [indent, number] per open level; stack[0] is the top-level list
+    prev_orig = prev_new = None  # the last top-level item: number as written / as renumbered
     any_item = False
     parts = []
     for seg, is_fence in _split_fences(text):
@@ -115,25 +121,38 @@ def renumber_toc(text):
         lines = seg.split("\n")
         for i, line in enumerate(lines):
             m = _OL_ITEM_RE.match(line)
-            if m:
-                any_item = True
-                indent = len(m.group(1).expandtabs(4))
-                while counters and counters[-1][0] > indent:
-                    counters.pop()
-                if counters and counters[-1][0] == indent:
-                    counters[-1][1] += 1
+            if not m:
+                if line.strip() and line[:1] not in (" ", "\t"):
+                    stack = []  # a heading or paragraph at column 0 ends every open list
+                continue
+            any_item = True
+            indent = len(m.group(1).expandtabs(4))
+            orig = int(re.match(r"\s*(\d+)", line).group(1))
+            if not stack:
+                # A new top-level list continues the numbering only when the repo
+                # wrote it that way (1-3 under one heading, 4-6 under the next).
+                start = prev_new + 1 if prev_orig is not None and orig == prev_orig + 1 else 1
+                stack = [[indent, start]]
+            elif indent <= stack[0][0]:
+                stack = [[indent, stack[0][1] + 1]]
+            else:
+                while len(stack) > 1 and stack[-1][0] > indent:
+                    stack.pop()
+                if len(stack) > 1 and stack[-1][0] == indent:
+                    stack[-1][1] += 1
                 else:
-                    counters.append([indent, 1])
-                lines[i] = "%s%d%s%s%s" % (
-                    m.group(1), counters[-1][1], m.group(2), m.group(3), line[m.end():]
-                )
-            elif line.strip() and line[:1] not in (" ", "\t"):
-                counters = []  # a heading or paragraph at column 0 ends every open list
+                    stack.append([indent, 1])
+            if len(stack) == 1:
+                prev_orig, prev_new = orig, stack[0][1]
+            lines[i] = "%s%d%s%s%s" % (m.group(1), stack[-1][1], m.group(2), m.group(3), line[m.end():])
         parts.append("\n".join(lines))
     if not any_item:
         return bom + text
     numbered = "".join(parts)
-    n = len(tour_items(numbered)) or len(_OL_ITEM_RE.findall(_prose(numbered)))
+    tour = tour_entries(numbered)
+    if not tour:
+        return bom + numbered
+    n = tour[-1]["number"]
 
     def _total(m):
         # exactly one of the three alternation groups matched; keep its lead text.
@@ -145,6 +164,7 @@ def renumber_toc(text):
     for seg, is_fence in _split_fences(numbered):
         out.append(seg if is_fence else _TOTAL_RE.sub(_total, seg))
     return bom + "".join(out)
+
 
 def rewrite_markdown_links(text, moves):
     """Rewrite markdown inline-link, image, and reference-definition TARGETS from
@@ -558,10 +578,6 @@ def rebase_relative_links(text, page_old, page_new, moves):
         seg = _REBASE_REFDEF_RE.sub(lambda m: m.group(1) + rebase_one(m.group(2)) + m.group(3), seg)
         out.append(seg)
     return "".join(out)
-
-
-
-
 
 
 _CARGO_WS_RE = re.compile(r"^\s*\[workspace\]\s*$", re.MULTILINE)
@@ -1278,9 +1294,7 @@ MANUAL_DEFAULTS = {"layout": "flat", "numbered_tour": True, "next_tour": True, "
 SEED_INDEX_GROUPS = ["Get started", "Do a task", "Look it up"]
 
 
-def _prose(text):
-    """The non-fence text of a page."""
-    return "".join(seg for seg, is_fence in _split_fences(text) if not is_fence)
+_prose = _prose_text  # one prose reader, shared with check.py's tour checks
 
 
 def _front_end_pair(root):
@@ -1306,11 +1320,22 @@ def detect_manual_conventions(repo_root):
     conv = {"layout": None, "numbered_tour": False, "next_tour": False,
             "capture_fence": None, "docs_voice": None,
             "platform_pairs": _front_end_pair(root), "manual_has_powershell": False,
-            "has_manual": manual.is_dir(), "index_groups": [], "new_here": False}
+            "has_manual": manual.is_dir(), "index_groups": [], "new_here": False,
+            "unreadable": []}
     if not manual.is_dir():
         return conv
     index = manual / "README.md"
-    pages = sorted(p for p in manual.rglob("*.md") if p != index)
+    pages = sorted(
+        p for p in manual.rglob("*.md")
+        if p != index and not p.is_dir() and not _is_excluded(p.relative_to(manual).parts[:-1])
+    )
+    texts = {}
+    for page in ([index] if index.is_file() else []) + pages:
+        try:
+            texts[page] = page.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            conv["unreadable"].append(page.relative_to(manual).as_posix())
+    pages = [p for p in pages if p in texts]
     parts = [p.relative_to(manual).parts for p in pages]
     how_to = [r for r in parts if not (len(r) > 1 and r[0] in ("getting-started", "reference"))]
     if any(len(r) == 1 for r in how_to):
@@ -1322,8 +1347,8 @@ def detect_manual_conventions(repo_root):
         if folders:
             conv["layout"] = max(sorted(folders), key=lambda k: folders[k])
     fence_langs = {}
-    for page in ([index] if index.is_file() else []) + pages:
-        text = page.read_text(encoding="utf-8", errors="replace")
+    for page in ([index] if index in texts else []) + pages:
+        text = texts[page]
         if page != index and _NEXT_TARGET_RE.search(_prose(text)):
             conv["next_tour"] = True
         for info, _body, _line in iter_fenced_blocks(text):
@@ -1335,12 +1360,12 @@ def detect_manual_conventions(repo_root):
                 fence_langs[lang] = fence_langs.get(lang, 0) + 1
     if fence_langs:
         conv["capture_fence"] = max(sorted(fence_langs), key=lambda k: fence_langs[k])
-    if index.is_file():
-        text = index.read_text(encoding="utf-8", errors="replace")
+    if index in texts:
+        text = texts[index]
         conv["numbered_tour"] = bool(tour_items(text))
         prose = _prose(text)
         conv["index_groups"] = [
-            m.group(1).strip() for m in re.finditer(r"^##\s+(.+?)\s*#*\s*$", prose, re.M)
+            m.group(1).strip() for m in re.finditer(r"^##\s+(.+?)(?:\s+#+)?\s*$", prose, re.M)
         ]
         conv["new_here"] = "**New here?**" in prose
         for para in re.split(r"\n\s*\n", _prose(text)):
@@ -1360,12 +1385,13 @@ def render_local_deviations(conv, full=False):
         return ""
     out = []
     layout = conv.get("layout")
-    if layout and layout != "flat":
-        out.append(
-            "- §3 Layout: how-to pages sit in `docs/manual/%s/`, not directly in `docs/manual/`." % layout
-        )
-    elif layout and full:
-        out.append("- §3 Layout: how-to pages sit directly in `docs/manual/`.")
+    if layout and (full or layout != MANUAL_DEFAULTS["layout"]):
+        if layout == "flat":
+            out.append("- §3 Layout: how-to pages sit directly in `docs/manual/`.")
+        else:
+            out.append(
+                "- §3 Layout: how-to pages sit in `docs/manual/%s/`, not directly in `docs/manual/`." % layout
+            )
     groups = conv.get("index_groups") or []
     if groups and groups != SEED_INDEX_GROUPS:
         out.append(
@@ -1378,14 +1404,12 @@ def render_local_deviations(conv, full=False):
         out.append("- §3 Layout: the index has no **New here?** pointer.")
     elif full:
         out.append("- §3 Layout: the index opens with a **New here?** pointer.")
-    if not conv["numbered_tour"]:
-        out.append("- §3 Layout: the Do a task list is not numbered; its order is not a reading tour.")
-    elif full:
-        out.append("- §3 Layout: the Do a task list is a numbered reading tour.")
-    if not conv["next_tour"]:
-        out.append("- §3 Layout: pages do not end with a **Next:** link.")
-    elif full:
-        out.append("- §3 Layout: each how-to ends with a **Next:** link to the next page in the tour.")
+    if full or conv["numbered_tour"] != MANUAL_DEFAULTS["numbered_tour"]:
+        out.append("- §3 Layout: the Do a task list is a numbered reading tour." if conv["numbered_tour"]
+                   else "- §3 Layout: the Do a task list is not numbered; its order is not a reading tour.")
+    if full or conv["next_tour"] != MANUAL_DEFAULTS["next_tour"]:
+        out.append("- §3 Layout: each how-to ends with a **Next:** link to the next page in the tour."
+                   if conv["next_tour"] else "- §3 Layout: pages do not end with a **Next:** link.")
     fence = conv.get("capture_fence")
     if fence and (full or fence != MANUAL_DEFAULTS["capture_fence"]):
         out.append(

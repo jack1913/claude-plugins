@@ -463,6 +463,8 @@ def main(argv):
             args = [a for a in rest if a != "--full"]
             if len(args) != 1:
                 return _usage("usage: onboard.py manual-conventions <repo_root> [--full]")
+            if not pathlib.Path(args[0]).is_dir():
+                return _usage("ERROR: not a directory: " + args[0])
             conv = lib.detect_manual_conventions(args[0])
             conv["local_deviations"] = lib.render_local_deviations(conv, full=full)
             print(json.dumps(conv, indent=2))

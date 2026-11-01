@@ -27,7 +27,7 @@ How onboard-repo sets up a repository's docs and checks them. The steps are in [
   - `ADR_INDEX_DRIFT`: a record with no row in the tier's index README.
   - `ADR_DANGLING_SUPERSEDE`: a "superseded by" or "amended by" pointer that resolves to no file.
   - `NEXT_CHAIN`: a page of the manual index's numbered tour whose Next link does not point at the next entry.
-  - `TOC_COUNT`: a "1 → N" total in the manual index that differs from the number of pages in the tour (the list under Do a task, else the longest top-level list). `renumber-toc` numbers each list on its own and writes the same total.
+  - `TOC_COUNT`: a "1 → N" total in the manual index that differs from the tour's last number, or a tour whose numbers do not count up by one. The tour is the list under Do a task, else the longest top-level list. `renumber-toc` numbers each list on its own, keeps numbering that runs on from one group to the next, and writes the same total.
   - `PLATFORM_TWIN`: a shell command block on a manual page with no PowerShell block after it. It is a warning when the manual has PowerShell anywhere, an error with `--platform-pairs`, and silent otherwise.
 - `--forbidden-allow` exempts files from `--forbidden`. Together they check that a fact another repository owns is named and linked, not restated.
 - `check.py shrink-check OLD NEW` warns on a dropped heading and fails a rewrite that cuts more than a quarter of a page's prose. It moved from `onboard.py` so the stamped `update-docs` can run it.

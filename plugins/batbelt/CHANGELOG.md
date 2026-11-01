@@ -54,7 +54,10 @@ writes anything.
   explicit path and name any unrelated changes they left out.
 - `changelog-release` cuts a SemVer version only when you ask for a release; a routine run only updates
   `[Unreleased]`. It tags and pushes the tag only from the release branch.
-- The manual index is renumbered one list at a time, and its page count counts the tour only.
+- The manual index is renumbered one list at a time, unless you numbered on from one group to the next, which is
+  kept. Its page count names the tour's last number, and a tour whose numbers skip is reported.
+- `PLATFORM_TWIN` accepts only a PowerShell command block as the twin, not captured PowerShell output, and the tour
+  checks report on the pages `--only` names.
 - `--forbidden-allow` patterns are anchored: `*` stays within one folder, `**` crosses folders, and `README.md`
   matches only the README at that level.
 - The README and the manual carry the jack1913 brand header.
