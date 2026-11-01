@@ -4444,3 +4444,41 @@ def test_update_docs_commits_by_path():
     t = _flat(UPD)
     assert "git add -- <paths>" in t and "name every unrelated dirty file" in t
     assert "Bash(git status:*)" in UPD.read_text(encoding="utf-8").split("---", 2)[1]
+
+
+# ---- template v5: changelog-release asks once, then runs ---------------------
+
+CR = ONBOARD / "templates" / "changelog-release" / "SKILL.md"
+
+
+def test_changelog_release_runs_on_one_yes():
+    t = _flat(CR)
+    assert "never run them yourself" not in t
+    assert "Ask once; on a yes, run the printed commands one at a time" in t
+    fm = CR.read_text(encoding="utf-8").split("---", 2)[1]
+    for grant in ("Bash(git commit", "Bash(git push", "Bash(git tag:", "Bash(gh release"):
+        assert grant not in fm, grant  # `Bash(git tag -l:*)` (read-only) stays
+
+
+def test_pre_1_0_feature_bumps_the_minor():
+    raw = CR.read_text(encoding="utf-8")
+    assert "a feature bumps `y` and resets `z`" in _flat(CR)
+    assert "a feature or\n  fix bumps `z`" not in raw
+
+
+def test_every_merge_has_an_entry():
+    t = _flat(CR)
+    assert "git log --merges --first-parent" in t and "or a stated skip" in t
+
+
+def test_changelog_release_commits_by_path():
+    t = _flat(CR)
+    assert 'git commit -m "<message>" -- <paths>' in t
+    assert "name every unrelated dirty file" in t
+    assert "Bash(git status:*)" in CR.read_text(encoding="utf-8").split("---", 2)[1]
+
+
+def test_run_on_yes_never_tags_with_a_release_script():
+    t = _flat(CR)
+    assert "a yes runs the script's own cut command, never a hand-made `git tag`" in t
+    assert "with a `ci` bake, a yes runs the commit and push only" in t

@@ -1,17 +1,26 @@
 ---
 name: changelog-release
-description: Update CHANGELOG.md and bump the version following Keep a Changelog and the repo's versioning scheme (SemVer by default, or CalVer). Stages changes; never commits.
-allowed-tools: Read, Edit, Write, Bash(git log:*), Bash(git diff:*), Bash(git add:*), Bash(git tag -l:*), Bash(git rev-list:*), Bash(head:*), Bash(gh pr view:*), Bash(gh issue view:*), Bash(date:*), PowerShell(Get-Date:*)
+description: Update CHANGELOG.md and bump the version following Keep a Changelog and the repo's versioning scheme (SemVer by default, or CalVer). Prints the commands that land the release, then runs them on one yes.
+allowed-tools: Read, Edit, Write, Bash(git log:*), Bash(git diff:*), Bash(git status:*), Bash(git add:*), Bash(git tag -l:*), Bash(git rev-list:*), Bash(head:*), Bash(gh pr view:*), Bash(gh issue view:*), Bash(date:*), PowerShell(Get-Date:*)
 ---
 
 # changelog-release
 
 Update `CHANGELOG.md` and bump the version following **Keep a Changelog 1.1.0**
 and the repo's **versioning scheme** — **SemVer 2.0.0** by default, or **CalVer**
-when REPO SPECIFICS bakes one (§4b). Accumulate under `[Unreleased]`. **Stage the changes but do
-not commit** — after editing, print the `git commit` / `git push` commands (and
-`git tag`, only when this run cut a version) for the operator to run; never run
-them yourself.
+when REPO SPECIFICS bakes one (§4b). Accumulate under `[Unreleased]`.
+
+**Land it on one yes.** Stage only the paths this run edited: `git add -- CHANGELOG.md
+<version homes>`. Then print the commands that land the release, each on its own line:
+`git commit -m "<message>" -- <paths>`, `git push`, and `git tag` only when this run cut
+a version — and name every unrelated dirty file you left out (from `git status
+--short`). Ask once; on a yes, run the printed commands one at a time, in order, and
+stop at the first that fails; a no leaves them printed for the operator. `allowed-tools`
+pre-approves none of them, so the harness still asks before each one under the
+operator's own permission rules. With a release script (§7), a yes runs the script's own
+cut command, never a hand-made `git tag`; with a `ci` bake, a yes runs the commit and
+push only, and the workflow tags (§11). When `update-docs` has doc changes for this
+release, commit those first, so the release ships with its docs.
 
 Repo-specific facts (versioning scheme, version homes, monorepo mode,
 release-script delegation, dash punctuation, changeset dir, GitHub release)
@@ -60,7 +69,13 @@ Distinguish lines this run *generates* from *pre-existing curated* content:
   truth — any Unreleased bullet you cannot tie to the history or working tree is
   **flagged for human confirmation**, never auto-kept and never auto-dropped.
 - **Bump inference** (SemVer, §4a) uses the union of commits + diff + the intent evidenced by
-  `[Unreleased]` (a backfilled baseline can hide already-shipping work).
+  `[Unreleased]` (a backfilled baseline can hide already-shipping work). Only the diff of
+  paths this release ships counts: a dirty file another session left is named and left
+  out, never folded in.
+- **Every merge has an entry.** List the merges in the range —
+  `git log --merges --first-parent BASELINE..HEAD` — and match each to a bullet in the
+  version block. A merge with no bullet gets one, or a stated skip ("CI only") shown to
+  the operator before staging.
 
 ## 3. Write for the reader, not the log
 
@@ -85,10 +100,10 @@ number from the rule below that contradicts it. The positional rule here applies
 only when no release script is baked.
 
 **Pre-1.0 rule (positional; no-release-script case):**
-- for `0.y.z` with `y ≥ 1`: a breaking change bumps `y` (reset `z`); a feature or
-  fix bumps `z`;
+- for `0.y.z` with `y ≥ 1`: a breaking change bumps `y` and resets `z`, with the §5
+  callout; a feature bumps `y` and resets `z`; a fix bumps `z`;
 - for `0.0.z`: every change bumps `z`.
-(A delegated script may use a different pre-1.0 convention — e.g. feature → `0.(y+1).0`. Its rule wins.)
+(A delegated script may use a different pre-1.0 convention. Its rule wins.)
 
 ### 4b. CalVer — the date decides
 
@@ -162,15 +177,16 @@ intended bump, and **beware incidental matches**: if the script greps for a keyw
 that word appearing in an unrelated entry (e.g. "non-breaking change") can force the
 wrong bump — keep it out of entries that don't mean it. Then, exactly like the
 commit/tag/push commands, **print** the release script's `--suggest` (and cut)
-commands (the concrete invocation is in REPO SPECIFICS) for the operator to run —
-**you never run the release script yourself** (that is why no script interpreter is
-in `allowed-tools`). The script's output is the authoritative version.
+commands (the concrete invocation is in REPO SPECIFICS). They are part of the one yes
+in the intro: run `--suggest` first and show its version, then the cut command. No
+script interpreter is in `allowed-tools`, so the harness asks before running it. The
+script's output is the authoritative version.
 
 ## 8. Keep-a-Changelog correctness
 
 - **Suppress `[<version>]: <compare-url>` reference-link footers** unless you can
-  confirm the tags/URLs exist — this flow does not tag, so unconfirmed compare
-  links would be dead links.
+  confirm the tags/URLs exist — the tag may not exist yet when the block is
+  written, so an unconfirmed compare link would be a dead link.
 - **Mirror the existing top entry's dash punctuation** (`—` vs `-`).
 
 ## 9. Changesets
@@ -222,11 +238,12 @@ When this run cut a version block:
   or the release yourself**, and print no `git tag` command for it — a hand-made
   tag makes the workflow skip or fail.
 - **`manual`:** print `gh release create <tag> --target <release-branch commit>
-  --title <version> --notes-file <file>` for the operator to run once the release
-  is merged (and deployed, if the bake says so) — never run it yourself.
+  --title <version> --notes-file <file>`. It joins the one yes only when the release
+  is already merged (and deployed, if the bake says so); otherwise leave it printed
+  for the operator to run then.
 
-**Explicitly NOT done here:** automated publish/tag/push by this skill (a baked
-`ci` workflow may do it; the skill never does); verbatim commit
+**Explicitly NOT done here:** running any command without the one yes; tagging under
+a `ci` bake or with a release script (the workflow or the script owns the tag); verbatim commit
 subjects; RAG/knowledge-graph anti-hallucination (ground truth is
 `git log` / `gh pr view`).
 
