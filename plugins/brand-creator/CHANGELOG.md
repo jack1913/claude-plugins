@@ -308,6 +308,12 @@ lints the board of the latest round again before `check`, so an edit of the fact
   The web-page recipe starts from the visitor's job and the page's idea, builds the hero first, copies the brand's
   files into the product's own public or static folder and links them from there, works beside your web-design skill
   and not instead of it, and checks the built page against the brand, with every sample figure marked as a sample.
+- `brand-creator kit check` proves the kit is whole: every link in it resolves inside it, no fill marker is left, the
+  versions agree, and it says when the brand changed after the kit was built. A fresh kit fails it until you have
+  filled in your own files (`voice.md`, `visual.md` and `golden-rules.md`). It also fails a generated file you edited
+  and a file you put into a generated folder (move it to `recipes/` or a folder of your own), and warns when one of your
+  own files changed since the last build. `brand-creator check` expects its report once you have a kit, and says
+  when a file was added to the kit after it.
 
 ### Changed
 

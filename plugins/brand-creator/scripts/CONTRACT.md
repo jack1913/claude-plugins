@@ -75,7 +75,7 @@ exit code) before it exits, so the previous passing report cannot survive a fail
 recorded once. `brand-creator check` reads these reports, recomputes each
 report's `inputs` hashes, and treats a stale report (inputs changed since) as not verified. Tool names: `tokens`,
 `contrast`, `logo-sheet`, `board-lint`, `shot`, `emit-web`, `emit-social`, `emit-apple`, `emit-windows`, `emit-linux`, `emit-tray`, `emit-tauri`, `emit-wallet`, `emit-developer`, `check`, `names`, `downscale`, `states`, `family`, `fontcheck`,
-`motion/<slug>-<hash6>` (from `shot --motion`, one per proof file; see Motion proof) and `frames/<slug>-<hash6>` (from `frames`), `page-check/<slug>-<hash6>` (from `page-check`, one per page; see Page check), `idempotence` (from `verify-idempotent`), `staleness`, `book`, `book-lint`, `book-pdf`, `print-check`, `adoption`, `adoption-wiring`, `adapters`, `applied-skill`, `kit`, `launch-todo`, and one `emit-<target>` per emitter (with several marks, `emit-<target>/<mark>` and `logo-sheet/<mark>` per mark)
+`motion/<slug>-<hash6>` (from `shot --motion`, one per proof file; see Motion proof) and `frames/<slug>-<hash6>` (from `frames`), `page-check/<slug>-<hash6>` (from `page-check`, one per page; see Page check), `idempotence` (from `verify-idempotent`), `staleness`, `book`, `book-lint`, `book-pdf`, `print-check`, `adoption`, `adoption-wiring`, `adapters`, `applied-skill`, `kit`, `kit-check`, `launch-todo`, and one `emit-<target>` per emitter (with several marks, `emit-<target>/<mark>` and `logo-sheet/<mark>` per mark)
 (`emit-web`, `emit-social`, `emit-apple`, `emit-windows`, `emit-linux`, `emit-tray`, `emit-tauri`, `emit-wallet`, `emit-developer`, `emit-print`, `emit-presskit`). The renderer in use is stored in the report and
 printed on every run.
 
@@ -2345,6 +2345,40 @@ path with its sha256, `kit.json` included), `kit_version` (the report's own `ver
   band drawings, fonts (the font files, their licence texts or the `fontcheck` report) or motion spec changed after the kit was built. There is no row while they match.
 
 `check --cascade` searches the kit like any other text file of the project: `SKILL.md` and the text files under `brand/`.
+
+### kit check
+
+`kit check` (`scripts/kit.py`; the checks are `scripts/adaptlib/kitlib.py`: `files_check`, `link_check`, `fill_markers`, `version_problems`, `source_changes`, `owned_changes`) proves that the kit in the project is whole,
+and writes the report `kit-check` (`assets/_checks/kit-check.json`), renderer `n/a (generated files)`. It reads the kit and the brand and writes nothing but that report. Exit 0 pass, 1 a row failed, 3 a row is not verified
+(skipped). Exit 2: no kit in the project, "no kit in this project: `brand-creator kit build --yes` (opt-in at G5)"; a `kit.json` that `kitlib.load()` refuses (a key it does not know or a key that is missing, named); a `kit.json`
+that is a link (a link is never read through; `kit build --yes --replace` moves it aside). Both stop the run before the report is created, so the earlier report stands, and `check` sees it stale.
+
+Inputs: every file under the kit folder (a link is no input), the files the kit is made from (`kitlib.input_paths`: the token files, the logo files and band drawings, `qa/rules.json`, `FACTS.md`, the motion files, the font files,
+their licence texts and the `fontcheck` report), `BRAND-STATE.md` and the `kit` report, so a file that changed or went makes the report stale. Extra keys: `kit_version` and `kit_tree_sha`, the sha256 over the sorted paths of every
+file and link below the kit folder, each marked file or link (`kitlib.tree_sha`), because a file added since is no recorded input. Every row reads a plain file of the kit only: a link to a file or to a folder is never followed,
+read or hashed, and a link where a generated file belongs is not that file.
+
+Rows, in this order:
+
+- `kit:files`: fails when a path in `kit.json` `generated` is missing, is a link or a folder, or has another sha256 (a path that no kit holds, one that climbs out of the kit, is named and never opened); when `kit.json` is not the
+  bytes the `kit` report recorded in `outputs`; or when a file in `brand/`, `snippets/` or `reference-pages/` is not listed in `generated` (a link counts, a Finder `.DS_Store` does not): the detail says "move it to recipes/ or a folder
+  of your own". Up to 6 paths are named. Skipped ("not verified: there is no `kit` report that records what the build wrote") when there is no `kit` report or it records no outputs.
+- `kit:links`: every relative link of a `.md` file (`](target)`, outside fenced code blocks and code spans), a `.html` file (`src=`, `href=`, `xlink:href=` and `srcset=` of a tag, so not a comment or a script) and a `.css` file
+  (`url(...)`, comments left out) anywhere in the kit resolves to an existing file inside the kit, with the letter case that is there (a Mac finds `Mark.svg` for `mark.svg`, Linux does not) and no link on the way. The target is
+  percent-decoded and resolved from the folder of the file that holds it. A fragment, a `?query`, an empty target, `//host` and a target with a URL scheme (`http:`, `https:`, `mailto:`, `data:`, `tel:`) are not relative links and are
+  not judged. Fails for a target that "points outside the kit: it will not resolve in a product repository", an absolute path (a leading `/`, `file:`, a drive letter) and a missing file or folder. The first 6 are listed as
+  `<file>:<line> -> <target>` with the reason.
+- `kit:fill`: fails on any `[[fill` (any case) in a text file of the kit (a file with a NUL byte in it is none), listed as `<file>:<line>`, up to 6. A fresh kit fails here until the owner has replaced the markers of `voice.md`,
+  `visual.md` and `golden-rules.md`.
+- `kit:versions`: fails unless SKILL.md holds `Kit version <kit.json version> (kit.json).` exactly once and no other such line, `kit.json` `version` is of its own `edition`, and `kit.json` `edition` equals BRAND-STATE.md
+  `approved_edition` ("the kit is of edition X, the brand is at Y: run `brand-creator kit build --yes`").
+- `kit:plugin`: warn when `plugin_version` is not the running plugin's (pass otherwise). It never changes the status.
+- `kit:sources`: skipped (not verified) when `kitlib.sources(project)` differs from `kit.json` `sources`, naming the keys that changed and "run `brand-creator kit build --yes`"; also when a source cannot be read.
+- `kit:owned`: warn when an owner file differs from `kit.json` `owned`: "changed since the last build: `brand-creator kit build --yes` records it and moves the version on", "is missing" (the build writes the scaffold again), or
+  "is no file the kit can read" (a folder or a link). It never changes the status.
+
+**What `check` gates.** A kit makes `check` expect the `kit-check` report as well as the `kit` report: `report:kit-check`, the generic report gate (the fix it names is `brand-creator kit check`), so a failing, stale or missing
+report is a failing or not verified `check`. The row `kit:checked` says not verified when the report passed but its `kit_tree_sha` is not the kit's now: a file was added to the kit, or taken out of it, after `kit check` ran. There is no row while they match.
 
 ### launch-todo
 
