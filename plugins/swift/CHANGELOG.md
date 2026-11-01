@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `swift:swiftui` now loads reliably when you ask for an Xcode preview: its description names previews. Before, "Add an Xcode preview …" loaded it in only 1 of 3 runs, and the preview came out without `#if DEBUG`.
 - The Liquid Glass segmented-control example uses each label as its `ForEach` id instead of its position, and the list checklist ties the `Array(...)`-free `enumerated()` form to an OS 26 deployment target, as the list guidance already did.
 - Four vertical-bar toolbar values exist only on iOS, iPadOS and Mac Catalyst, and `swift:swiftui` now puts them inside `#if os(iOS)`: `ToolbarItemAxisBehavior.horizontalOnly` and `.verticalPreferred`, and `ToolbarVerticalCompressionBehavior.prefersToolbarItems` and `.prefersTabBar`. Earlier text said every vertical-bar API needed only the all-platform 27.1 availability check; for these four values that does not compile for macOS, tvOS, visionOS or watchOS.
 - The same holds for the SDK 27 toolbar minimization values (`.onScrollDown`, `.onScrollUp`, `.never`, `.enabled`, `.disabled`, `.atScrollEdge`), now inside `#if os(iOS)`, and for the `.low` and `.high` visibility priorities, now inside `#if os(iOS) || os(macOS)`. `.topBarPinnedTrailing` and `ToolbarOverflowMenu` are documented as missing on tvOS and watchOS as well as macOS.
