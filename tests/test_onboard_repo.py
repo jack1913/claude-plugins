@@ -3830,11 +3830,12 @@ def test_update_docs_can_actually_run_what_it_prescribes():
     assert "Bash(mv:*)" in front, "capture-then-mv needs mv"
 
 
-def test_update_docs_hands_the_capture_run_to_the_operator():
+def test_update_docs_runs_only_confirmed_read_only_captures():
     t = _norm(UPD)
-    # it may PROPOSE a capture, but it carries no arbitrary-shell grant, so the
-    # operator runs it -- exactly as onboard-repo §3.7 does
-    assert "operator runs it" in t
+    # v5: it re-takes a stale capture only on one confirmation, and only with a
+    # read-only command; anything that writes elsewhere stays the operator's to run
+    assert "ask one confirmation" in t and "only read-only commands go on the plan" in t
+    assert "stays the operator's to run" in t
     assert "redact" in t and "not a secret scanner" in t
     # and the honest failure mode: leave the stale block, never fake the evidence
     assert "leave the stale block alone and report it" in t
@@ -4398,3 +4399,48 @@ def test_docs_standard_has_the_cross_repo_rule():
     std = _flat(STD_V5)
     assert "A fact another repository owns" in std and "never restate it" in std
     assert "--forbidden-allow" in std
+
+
+# ---- template v5: update-docs applies verified fixes, bounded, protected -----
+
+BOUND = "changed pages first, one reviewer per lens, at most 8 readers and 2 rounds, then report what remains"
+
+
+def test_update_docs_applies_verified_fixes():
+    t = _flat(UPD)
+    assert "A claim re-derived from the code is fixed in place" in t
+    assert "`--apply` acts only on the universal" not in t
+    assert "--apply" not in t.split("<!-- stamped by onboard-repo")[0]
+
+
+def test_update_docs_bounds_verification():
+    t = _flat(UPD)
+    assert BOUND in t and "a third round is never run" in t
+
+
+def test_update_docs_has_a_capture_plan():
+    t = _flat(UPD)
+    assert "List the stale captures once and ask one confirmation" in t
+    assert "no shell-execution grant" not in t
+
+
+def test_update_docs_quiets_known_deferred_items():
+    t = _flat(UPD)
+    assert "one count line" in t and "an unfinished principal page is named every run" in t
+    assert "Restate every parked surface each run" not in t
+
+
+def test_update_docs_protection_rules():
+    raw = UPD.read_text(encoding="utf-8")
+    assert "\n## 7.10 Never degrade an existing structure\n" in raw
+    t = _flat(UPD)
+    for rule in ("install block", "never moves or renames a page", "the twin", "upgrade notes",
+                 "check.py shrink-check", "NEXT_CHAIN", "--platform-pairs",
+                 "every run checks the README invariants"):
+        assert rule in t, rule
+
+
+def test_update_docs_commits_by_path():
+    t = _flat(UPD)
+    assert "git add -- <paths>" in t and "name every unrelated dirty file" in t
+    assert "Bash(git status:*)" in UPD.read_text(encoding="utf-8").split("---", 2)[1]
