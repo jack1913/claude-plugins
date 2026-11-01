@@ -15,9 +15,10 @@
   adoption status [--set N|N-M|N,M=to do|doing|done]...    show or update progress (doing and done need G6)
   adoption verify                                          the pins, the numbering, the accounting and ADOPTION.md against adoption.json
   adoption render                                          write ADOPTION.md again from adoption.json
-  adoption wiring --repo LABEL (--before [--again] | --after | --compare | --drop "ITEM::REASON"...)
+  adoption wiring --repo LABEL (--before [--again] | --after | --compare | --drop "ITEM::REASON"...) [--page URL]...
       Reads a surveyed repository's source for the links, form field names, handlers, test hooks, ids and scripts a redesign must not lose, and
       stores them in adoption.json under `wiring` (the before record is the baseline; --after is the redesign as applied). Read only, and it proves it.
+      --page URL (repeatable, with --before, --after or --compare) reads a page of your own local server too, from the DOM, in Chromium (loopback URLs only).
       --compare reads the repository now and prints what the redesign lost, writing nothing (exit 1 on a loss nobody dropped). --drop records, in the
       owner's words, why an item of the before record goes; a loss is acceptable only so.
 """
@@ -33,13 +34,16 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE / "lib"))
 sys.path.insert(0, str(HERE / "adaptlib"))
+sys.path.insert(0, str(HERE / "pagelib"))
 import adoptdata as ad  # noqa: E402
+import pagecheck  # noqa: E402  (is_loopback_url: the one loopback rule, shared with `page-check --url`)
 import wiring  # noqa: E402
 from _common import (EXIT_CANNOT, EXIT_FAIL, EXIT_USAGE, Parser, Report, add_project_arg, confine, fail, find_project, main_guard,  # noqa: E402
-                     read_state, require_gate, today, write_bytes_if_changed)
+                     plugin_root, read_state, require_gate, run, today, which_or_cannot, write_bytes_if_changed)
 
 RG_BASE = ["--no-config", "--hidden", "--glob", "!.git", "--no-require-git"]
 MAX_LINES = 200
+WIRING_RUN_TIMEOUT_S = 120   # one page: Chromium starts and the page has 15 s to load
 HINT_RG = "Install ripgrep (macOS: brew install ripgrep; Linux: apt install ripgrep; Windows: winget install BurntSushi.ripgrep.MSVC)."
 
 KEEP_RULES = [   # (kind, pattern, reason): the first rule that matches decides
@@ -308,6 +312,8 @@ def main() -> int:
     wg.add_argument("--compare", action="store_true", help="read the repository now and list what the redesign lost against the before record (writes nothing; exit 1 on a loss nobody dropped)")
     wg.add_argument("--drop", action="append", default=[], metavar="ITEM::REASON", help="record why an item of the before record goes, in the owner's words (repeatable)")
     w.add_argument("--again", action="store_true", help="with --before: replace the baseline that is already recorded")
+    w.add_argument("--page", action="append", default=[], metavar="URL", help="a page of your own local server to read from the DOM too (repeatable; http or https on localhost, 127.0.0.1 or [::1]; "
+                                                                             "with --before, --after or --compare). --after and --compare read the pages of the before record when none is given")
     a = ap.parse_args()
     project = find_project(a.project)
     name = str(read_state(project).get("name", "") or read_state(project).get("slug", "") or "Brand")
@@ -603,8 +609,8 @@ def wiring_repo(project: Path, row: dict, label: str) -> Path:
     return repo
 
 
-def wiring_scan(rg: str, repo: Path, label: str) -> dict:
-    """Read the repository's source for wiring and prove nothing in it changed meanwhile:
+def wiring_scan(rg: str, repo: Path, label: str, rendered: list[tuple[str, list[str]]] = ()) -> dict:
+    """Read the repository's source for wiring and prove nothing in it changed meanwhile, then add what the rendered pages showed (`rendered`: [(file label, items)]):
     {items: {item: up to 5 files}, sorted; read: the files read; left_out: files of those kinds the keep rules skipped; deep: values nested too deep; unchanged: bool}."""
     listed = list_files(rg, repo, label)
     before_snap = snapshot(repo, listed)
@@ -627,10 +633,52 @@ def wiring_scan(rg: str, repo: Path, label: str) -> dict:
         deep += d
         wiring.add(found, f, items)
     unchanged = before_snap == snapshot(repo, list_files(rg, repo, label))
+    for source, items in rendered:
+        wiring.add(found, source, items)
     return {"items": dict(sorted(found.items())), "read": read, "left_out": left_out, "deep": deep, "unchanged": unchanged}
 
 
+def need_loopback(pages: list[str]) -> None:
+    """Exit 2 for a page that is not on this machine: the wiring is read from the owner's own local server (render.mjs refuses it too, by the same rule)."""
+    for url in pages:
+        if not pagecheck.is_loopback_url(url):
+            fail(EXIT_USAGE, f"--page {url!r}: the wiring is read from your own local server (http or https on localhost, 127.0.0.1 or [::1])")
+
+
+def render_pages(pages: list[str], what: str) -> list[tuple[str, list[str]]]:
+    """Read each page's wiring from the DOM (`render.mjs wiring`, Chromium, loopback only) -> [(the file label of its items, its items)]. A page that cannot be read stops the run
+    with exit 3 before anything is stored or compared; `what` finishes the message."""
+    if not pages:
+        return []
+    node = which_or_cannot("node", "Install Node 22 or newer. Run: brand-creator prereq --for quick")
+    out = []
+    for url in pages:
+        cp = run([node, str(plugin_root() / "scripts" / "render.mjs"), "wiring", url], timeout=WIRING_RUN_TIMEOUT_S, check=False)
+        message = cp.stderr.decode("utf-8", "replace").strip().removeprefix("error: ")
+        if cp.returncode == EXIT_USAGE:
+            fail(EXIT_USAGE, message or "render.mjs wiring refused the page")
+        if cp.returncode != 0:
+            fail(EXIT_CANNOT, (message or f"render.mjs wiring exited {cp.returncode}") + f" ({what}: start your site's dev or preview server and run this again)")
+        try:
+            out.append((wiring.rendered_source(url), wiring.rendered_items(json.loads(cp.stdout.decode("utf-8")))))
+        except ValueError as e:
+            fail(EXIT_CANNOT, f"render.mjs wiring printed something that is not a page's wiring ({e}) for {url} ({what})")
+    return out
+
+
+def wiring_pages(a, held: dict) -> list[str]:
+    """The pages to read: the --page URLs, else (for --after and --compare) the pages of the before record, else none."""
+    pages = list(dict.fromkeys(a.page))
+    if not pages and (a.after or a.compare):
+        pages = list((held.get("before") or {}).get("pages") or [])
+    need_loopback(pages)   # also what an edited adoption.json lists
+    return pages
+
+
 def do_wiring(a, project: Path, name: str) -> int:
+    if a.page and a.drop:
+        fail(EXIT_USAGE, "--page goes with --before, --after or --compare: --drop reads no page")
+    need_loopback(a.page)
     doc = need_doc(project)
     bad = ad.verify(doc)
     if bad:
@@ -652,10 +700,12 @@ def do_wiring(a, project: Path, name: str) -> int:
         return wiring_drop(a, project, name, doc, held, label)
     rg = rg_path()
     repo = wiring_repo(project, row, label)
+    pages = wiring_pages(a, held)
+    rendered = render_pages(pages, "nothing was compared" if a.compare else "nothing was stored")   # before the report and the read-only proof: a page that cannot be read leaves nothing behind
     if a.compare:
-        return wiring_compare(rg, repo, label, held)
+        return wiring_compare(rg, repo, label, held, pages, rendered)
     rep = Report("adoption-wiring", project, renderer="n/a (read-only scan)")
-    got = wiring_scan(rg, repo, label)
+    got = wiring_scan(rg, repo, label, rendered)
     read, deep = got["read"], got["deep"]
     unchanged = got["unchanged"]
     rep.add(f"read-only:{label}", "pass" if unchanged else "fail", "the repository was not changed during the scan",
@@ -669,22 +719,33 @@ def do_wiring(a, project: Path, name: str) -> int:
     rep.add("wiring:scope", "info", "what the scan read and left out",
             detail=f"{len(read)} source file(s) read; {got['left_out']} more of the same kinds left out by the keep rules (lock files, change history, licences, minified output, "
                    "dist, build and vendored folders), and every file .gitignore hides" + (f"; {deep} value(s) nested deeper than three levels were not read" if deep else ""))
-    doc.setdefault("wiring", {}).setdefault(rid, {})[which] = {"date": today(), "head": git_head(repo), "files": len(read), "items": items}
+    if pages:
+        rep.add("wiring:pages", "info", "what the rendered pages added",
+                detail=f"{len(pages)} page(s) read from your own local server, from the DOM: " + ", ".join(f"{src.removeprefix('rendered:')} ({len(its)} items)" for src, its in rendered)
+                + ". Listeners that a script adds are not visible in the DOM: they are read from the source only")
+    old = held.get(which) if a.before else None
+    record = {"date": today(), "head": git_head(repo), "files": len(read), **({"pages": pages} if pages else {}), "items": items}
+    doc.setdefault("wiring", {}).setdefault(rid, {})[which] = record
     changed = write_both(project, doc, name)
     rc = rep.finish()
-    print(f"\n{which} record of {label}: {len(items)} items from {len(read)} files; wrote {', '.join(changed) or 'nothing (unchanged)'}. No repository was edited.")
+    print(f"\n{which} record of {label}: {len(items)} items from {len(read)} files" + (f" and {len(pages)} rendered page(s)" if pages else "")
+          + f"; wrote {', '.join(changed) or 'nothing (unchanged)'}. No repository was edited.")
+    if old and old.get("pages") and not pages:
+        print(f"note: the baseline this replaces also read {len(old['pages'])} rendered page(s) ({', '.join(old['pages'])}); this one read none. Pass --page for each to read them again.")
     return rc
 
 
-def wiring_compare(rg: str, repo: Path, label: str, entry: dict) -> int:
-    """Read the repository now and say what the redesign lost against the before record. Writes nothing: no record, no report, no ADOPTION.md."""
-    got = wiring_scan(rg, repo, label)
+def wiring_compare(rg: str, repo: Path, label: str, entry: dict, pages: list[str], rendered: list[tuple[str, list[str]]]) -> int:
+    """Read the repository now (and the rendered pages) and say what the redesign lost against the before record. Writes nothing: no record, no report, no ADOPTION.md."""
+    got = wiring_scan(rg, repo, label, rendered)
     if not got["unchanged"]:
         fail(EXIT_FAIL, f"files, sizes or modification times in {label} changed while it was read: something else wrote to the repository (the comparison writes nothing there). Nothing was compared")
     now, before = got["items"], entry["before"]
     lost, _lost_dropped = ad.wiring_lost(entry, now)
     dropped = entry.get("dropped") or {}
     print(f"{label}: the repository now, against the before record of {before.get('date')} ({len(before['items'])} items recorded, {len(now)} found now)")
+    if pages:
+        print(f"rendered pages read again: {', '.join(src.removeprefix('rendered:') for src, _its in rendered)} (listeners that a script adds are not visible in the DOM: they are read from the source only)")
     print(f"lost, not recorded as dropped: {len(lost)}")
     for item in lost:
         print(f"  {item} (was in {', '.join(before['items'][item])})")

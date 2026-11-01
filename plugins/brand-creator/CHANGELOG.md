@@ -277,7 +277,10 @@ lints the board of the latest round again before `check`, so an edit of the fact
   `--drop "link:/pricing::the pricing page moved to /plans"` (repeatable). `brand-creator check` fails a recorded
   `--after` that lost wiring nobody dropped (the row `adoption:wiring:<label>`), and `ADOPTION.md` shows the wiring in
   a "Wiring kept" section: the counts before and after, and each lost item as dropped with your reason or lost and not
-  recorded. A list without wiring is unchanged.
+  recorded. A list without wiring is unchanged. Pass `--page <url>` (repeatable, with `--before`, `--after` or
+  `--compare`) to read the pages of your own local server too, as the browser shows them: only addresses on this
+  machine (`localhost`, `127.0.0.1` or `[::1]`) are opened, and a page that cannot be read stops the run and stores
+  nothing. Listeners that a script adds are not visible in the page, so they are read from the source only.
 
 ### Changed
 
