@@ -565,7 +565,10 @@ def skill_name(project: Path) -> str:
     return name
 
 
-def applied_skill_md(project: Path, template: str) -> str:
+def applied_skill_md(project: Path, template: str, *, kit: dict | None = None) -> str:
+    """The applied skill's text. `kit` is {"prefix": "brand/", "section": "<markdown>"} when the skill is the core of a brand kit: every file the
+    skill names is then at prefix + its project path (the kit mirrors project paths) and the section fills {{kit}}. With `kit=None` the skill sits
+    in .claude/skills/<name>/ of the project, its paths climb out of it (`../../../`), and a template's {{kit}} line is dropped."""
     v = view(project)
     doc, _ = bookdata.tokens(project)
     name = skill_name(project)
@@ -573,8 +576,12 @@ def applied_skill_md(project: Path, template: str) -> str:
     rules, src = qa_rules.load(project)
     ds = rules["downscale"]
     logos = logo_paths(project)
+    up = kit["prefix"] if kit is not None else "../../../"   # where the project's files are, seen from SKILL.md: marks and the tokens
     def band_line(b: dict, who: str = "") -> str:
-        return f"- {who}{b.get('name', 'band')}: {'up to ' + str(b['max_px']) + ' px' if b.get('max_px') else 'larger sizes'} uses `{b.get('drawing', '')}`"
+        drawing = b.get("drawing", "")
+        if kit is not None and drawing:   # a band names the drawing by its project path; inside a kit that path is under the prefix
+            drawing = kit["prefix"] + drawing
+        return f"- {who}{b.get('name', 'band')}: {'up to ' + str(b['max_px']) + ' px' if b.get('max_px') else 'larger sizes'} uses `{drawing}`"
 
     sizes = ([band_line(b, f"{m['name']}, ") for m in rules["marks"].values() for b in m["bands"]] if rules["marks"]
              else [band_line(b) for b in rules.get("bands", [])])
@@ -596,7 +603,9 @@ def applied_skill_md(project: Path, template: str) -> str:
         "pairs": "\n".join(pair_table(doc)),
         "type": "\n".join(type_lines(doc, "The tokens define no font family: ask the owner before choosing one.")),
         "layout": layout,
-        "mark": "\n".join([f"- `../../../{p}`" for p in logos] if logos else ["No mark file exists yet under `assets/logo/`."]),
+        "mark": "\n".join([f"- `{up}{p}`" for p in logos] if logos else ["No mark file exists yet under `assets/logo/`."]),
+        "tokens": f"{up}assets/tokens/tokens.json",
+        "kit": kit["section"] if kit is not None else "",
         "small": f"At {ds['accent_rule_max_size']} px and below the accent must hold a solid {ds['accent_min_px']} x {ds['accent_min_px']} px square "
                  f"({'qa/rules.json' if 'downscale.accent_min_px' in rules['_from_file'] else 'the plugin proposal until qa/rules.json sets it'}).\n\n" + ("\n".join(sizes) if sizes else ""),
         "motion": motion,
@@ -609,6 +618,8 @@ def applied_skill_md(project: Path, template: str) -> str:
         template = template.replace("{{motion}}\n\n", "")
     if not layout:   # the same for the layout section
         template = template.replace("{{layout}}\n\n", "")
+    if kit is None:   # and for the kit section: a skill that is no kit's core keeps the text it always had
+        template = template.replace("{{kit}}\n\n", "")
     left = sorted({m for m in re.findall(r"\{\{([a-z-]+)\}\}", template) if m not in fill})
     if left:
         fail(EXIT_USAGE, f"the applied-skill template has placeholders this version does not know: {', '.join('{{' + m + '}}' for m in left)}")
