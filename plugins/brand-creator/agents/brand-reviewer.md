@@ -47,6 +47,12 @@ writing, note the time you read each file and say so in the output; re-read befo
   Makefile or CI config) and quote each command with its exit code. A check that needs a real device is "not verified".
 - **A Brand kit row**: `brand-creator --data "<data>" kit status --repo <path> --project "<project>"` must exit 0; quote it
   with its exit code. It reads only, and its exit 0 is the byte comparison of the kit's generated files.
+- **A redesign of an existing site** (the repository has a wiring before record): run
+  `brand-creator --data "<data>" adoption wiring --repo <label> --compare --project "<project>"`; it must exit 0, so quote it
+  with its exit code. It reads the repository now and writes nothing. Any item it lists as lost, not recorded as dropped,
+  fails the review: list each one. Exit 2 with "no before record" means no redesign was recorded; any other exit is "not
+  verified", never "no loss". The reviewer never records a drop (`--drop`) and never runs `--before` or `--after`: a drop is
+  the owner's decision, in the owner's words.
 - **Claims from research**: you have no web tools (Read, Grep, Glob, Bash only), so you cannot re-fetch a source; the
   refuting verifier of a research fan-out is a `brand-researcher` call. Check a claim only against sources already saved
   in the project (the file the claim cites, `research/`), and say "not verified: no web access" for anything else.
