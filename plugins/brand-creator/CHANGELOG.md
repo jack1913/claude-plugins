@@ -272,6 +272,12 @@ lints the board of the latest round again before `check`, so an edit of the fact
   repository changes while it reads, the row `read-only:<label>` fails and nothing is stored. The first `--before` is the
   baseline and is not replaced unless you pass `--again`; `--after` records the site once the redesign is applied and
   needs the baseline. The reading is by pattern, so a link or id built when the page runs is missed or noisy.
+  `--compare` says what a redesign lost: it reads the repository again, writes nothing, and lists every item of the
+  baseline that is gone, with the files it was in. A loss is fine only when you record why, in your own words:
+  `--drop "link:/pricing::the pricing page moved to /plans"` (repeatable). `brand-creator check` fails a recorded
+  `--after` that lost wiring nobody dropped (the row `adoption:wiring:<label>`), and `ADOPTION.md` shows the wiring in
+  a "Wiring kept" section: the counts before and after, and each lost item as dropped with your reason or lost and not
+  recorded. A list without wiring is unchanged.
 
 ### Changed
 

@@ -2017,15 +2017,15 @@ removed, moved or edited, a progress entry for a row that does not exist and an 
 carries `find`, a content excerpt, and `ADOPTION.md` says so; the live lines are in `seen`. `adoption status --set ROWS=STATE` (ROWS as `N`, `N-M`, `N,M`)
 changes progress; `doing` and `done` need G6, to do (the reversal) does not. `ADOPTION.md` is rendered from the data and every sentence about its state is
 built from the counts (`adoptdata.sentence`). Its fixed text (the section order and the "How this list is applied" rules) is the frame
-`templates/ADOPTION.md` (placeholders `{{name}}`, `{{status}}`, `{{repos}}`, `{{about}}`, `{{groups}}`, `{{drift}}`, `{{rows}}`, `{{kept}}`, filled in one pass;
+`templates/ADOPTION.md` (placeholders `{{name}}`, `{{status}}`, `{{repos}}`, `{{about}}`, `{{groups}}`, `{{drift}}`, `{{rows}}`, `{{wiring}}`, `{{kept}}`, filled in one pass;
 a missing frame or placeholder exits 2). `check` (`adoption:data`) fails an ADOPTION.md that is not what the data renders, and warns about a row marked done
 that still matches at the last survey (`adoption:drift`).
 
 ### adoption wiring
 
-`adoption wiring --repo LABEL (--before [--again] | --after)` records the wiring of a surveyed repository's source: the links, form field names, handlers,
+`adoption wiring --repo LABEL (--before [--again] | --after | --compare | --drop "ITEM::REASON"...)` records the wiring of a surveyed repository's source: the links, form field names, handlers,
 test hooks, ids and scripts that a redesign can drop without the adoption list noticing ([ADR-0012](../docs/adr/ADR-0012-a-redesign-records-the-sites-wiring.md)).
-`LABEL` must be a repository of the survey (exit 2 otherwise), and exactly one of `--before` and `--after` is given (exit 2 otherwise). The command needs no gate, as the survey needs none:
+`LABEL` must be a repository of the survey (exit 2 otherwise), and exactly one of `--before`, `--after`, `--compare` and `--drop` is given (exit 2 otherwise). The command needs no gate, as the survey needs none:
 it changes nothing outside the project, and it proves that.
 
 Files are listed with ripgrep as the survey lists them (`.gitignore` honoured, `.git` left out, symlinks not followed, the brand project left out when it
@@ -2050,13 +2050,29 @@ The record is `adoption.json` `wiring[<repository id>]["before" | "after"]` = `{
 files read, and `items`, sorted, each mapped to up to five files that held it. A repository id is the survey's (`r1`, `r2`). `--before` is the baseline: over an existing
 before record it exits 1 ("pass --again to replace it"), and `--again` replaces the before record only. `--after` needs a before record (exit 2) and replaces an earlier after record. The key
 `kept` of `adoption.json` is the survey's list of lines left out of the count, so the record has its own key. `verify` (and `check`, `adoption:data`) fails a `wiring` entry for a repository that was
-never surveyed and a record whose `items` are not an object of lists of strings; `ADOPTION.md` does not show the record yet, and `check --cascade` does not search it.
+never surveyed, a record whose `items` are not an object of lists of strings and a `dropped` that is not an object of item to non-empty reason; `check --cascade` does not search the record.
 
 The report is `adoption-wiring` with the rows `read-only:<label>`, `wiring:<label>` (info: the count per kind) and `wiring:scope` (info: the files read, the files of
 those kinds the keep rules left out, and the values not read). The scan lists the files with sizes and modification times before and after reading; a difference fails
 `read-only:<label>`, exits 1 and stores nothing. Without ripgrep the command exits 3 with the install command and stores nothing; a file that cannot be read exits 3.
 The extraction is by pattern, so it is approximate (a value built at run time, a tag a template engine assembles): ADR-0012 says why a noisy item is dropped with a reason rather
 than hidden.
+
+A loss is an item of the before record that the repository no longer has and nobody dropped.
+
+- `--compare` reads the repository now with the same scan and the same read-only proof, and **writes nothing**: no record, no report, no ADOPTION.md. It needs a before record (exit 2 without
+  one) and ripgrep (exit 3). It prints the repository, the date of the before record and the item counts; `lost, not recorded as dropped: N` with one line per item and the files it was in;
+  `dropped with a reason: N` with one line per dropped item and its reason; `new items: N`; and a verdict line, `wiring compare: PASS` or `wiring compare: FAIL`. Exit 1 when a loss is not
+  recorded as dropped, 0 when none is. A repository that changed while it was read is exit 1 with no verdict.
+- `--drop "ITEM::REASON"` (repeatable) records, in `wiring[<id>]["dropped"]` as `{item: reason}`, why an item of the before record goes. The item must be in the before record and the reason
+  must not be empty, else exit 2 and nothing is stored (all or none). An item may hold `::` itself: the item is the first start of the text, ending at a `::`, that is an item of the before
+  record. White space in the reason is squashed; a second drop of an item replaces its reason; `--before --again` keeps the drops. Claude never writes the reason: it is the owner's. It reads
+  no repository, so it needs no ripgrep. It rewrites adoption.json and ADOPTION.md and writes no report.
+- `check` gives each repository with a before record the row `adoption:wiring:<label>`: **fail** when the after record lost an item that nobody dropped (it names up to five, then "and N more"),
+  **pass** otherwise, and **info** ("record --after when the redesign is applied") with a before record only. A record of the wrong shape gets no row; `adoption:data` names it.
+- `ADOPTION.md` shows the record in the section `## Wiring kept`, between the rows and "How this list is applied" (the placeholder `{{wiring}}`, empty when no repository has a before
+  record, so a list without wiring renders the bytes it always did). Per repository: one line of counts per kind, before and after; under it one line per lost item, `- <item>: dropped, <reason>`
+  or `- <item>: lost, not recorded`. Every line carries `<!-- target-repo -->`, so the cascade counts it as a record.
 
 ### check --cascade
 

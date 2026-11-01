@@ -1,0 +1,45 @@
+# Acme: adoption
+
+Status: **not started**. 0 of 9 rows done, 0 doing, 9 to do. The survey found 8 matching lines in 4 files and 1 icon and logo files across 1 repositories; 1 more lines in 1 files are kept, not counted. 1 row(s) are code changes written by hand.
+
+Repositories, read only from here (nothing in them is edited by brand-creator): `site` (no git head).
+
+9 rows, surveyed on 2026-10-17. **Line numbers may drift: find the place by its content** (the Find column), not by the line. Paths are relative to the repository. Each row has a status: to do, doing (made in the repository's working tree, not committed) or done (committed; whether a row is done is the owner's call). Progress is stored apart from the rows (`adoption status`); rows are never renumbered or removed, a new survey only adds rows at the end.
+
+Groups: Old name 3, Old colour 2, Icon and logo files 1, Package and platform metadata 1, README badges and header images 1, Code change 1.
+
+| # | Status | Group | Repo | File | Lines (may drift) | Find | Change |
+|---|---|---|---|---|---|---|---|
+| 1 | to do | Old name | site | `README.md` | 1 | `# Sample shop` | Replace the old name where people read it (titles, labels, copy). Identifiers (bundle id, package name, repository URL) are renames: see LAUNCH.md. | <!-- target-repo -->
+| 2 | to do | Old name | site | `index.html` | 6 | `<title>Sample shop</title>` | Replace the old name where people read it (titles, labels, copy). Identifiers (bundle id, package name, repository URL) are renames: see LAUNCH.md. | <!-- target-repo -->
+| 3 | to do | Old name | site | `manifest.json` | 2 | `"name": "Sample shop",` | Replace the old name where people read it (titles, labels, copy). Identifiers (bundle id, package name, repository URL) are renames: see LAUNCH.md. | <!-- target-repo -->
+| 4 | to do | Old colour | site | `manifest.json` | 3 | `"theme_color": "#123456"` | Replace with the matching token value from assets/tokens/ (light and dark); check the contrast pair it sits in. | <!-- target-repo -->
+| 5 | to do | Old colour | site | `src/colours.css` | 1 | `a { color: #123456; }` | Replace with the matching token value from assets/tokens/ (light and dark); check the contrast pair it sits in. | <!-- target-repo -->
+| 6 | to do | Icon and logo files | site | `public` | 1 file(s) | `logo.svg` | Replace these 1 icon and logo file(s) with the pack's files and keep the file names the code refers to. No pack file has one of these names: map each to a slot in INVENTORY.md. | <!-- target-repo -->
+| 7 | to do | Package and platform metadata | site | `manifest.json` | 2-3 | `"name": "Sample shop",` | Check each slot against the new brand: name, description, icon path, theme and background colours, author, homepage. | <!-- target-repo -->
+| 8 | to do | README badges and header images | site | `README.md` | 3 | `![badge](https://img.shields.io/badge/build-passing-green)` | Check the header image and the badges: logo or banner from the pack, labels and colours for the new name. | <!-- target-repo -->
+| 9 | to do | Code change | site | `src/Header.jsx` | 8 | `onClick` | Check the menu button still opens the menu. | <!-- target-repo -->
+
+## How this list is applied
+
+Nothing in a repository changes until the owner asks for it (gate G6), and then only on a branch the owner names.
+
+- One repository at a time: one implementer works through its rows, then a separate review checks the work before
+  anything is committed.
+- Each place is found by the text in the Find column, never by the line number. A row whose text is no longer there is
+  reported as not done, never guessed.
+- Icons, lockups and other pack files are copied from the pack and compared byte for byte with it (`cmp`); they are never
+  redrawn, re-exported or recoloured in the repository.
+- The review runs the repository's own build and tests and quotes the results. A check that needs a real device is listed
+  as not verified.
+- The repository's hooks always run; a hook that fails for an unrelated reason is reported, and fixed as a separate change
+  only if the owner agrees.
+- Commit, merge and push are three separate asks. Before a push, what it triggers (CI, a deploy, a publish) is said first.
+- A row that acts on a live service (a rename, an upload, a store listing, a DNS change) needs its own OK.
+
+## Kept, not counted
+
+1 matching lines in 1 files that the survey saw and did not make rows, each with its reason. A row or this list accounts for every match.
+
+- lock file: the package manager writes it, nobody edits it by hand:
+  - `site` `package-lock.json` (1 line, old name) <!-- target-repo -->

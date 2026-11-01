@@ -2,7 +2,8 @@
 
 Each is a generated file: the report of the command that wrote it must be current and passing (the generic report gate in check.py), the file
 must still be the bytes the report recorded (a hand edit fails), and the sources it was made from must not have changed (not verified when
-they did). adoption.json is data: its pins, numbering and accounting are checked and ADOPTION.md must be what it renders.
+they did). adoption.json is data: its pins, numbering and accounting are checked and ADOPTION.md must be what it renders. A repository with a wiring record
+(`adoption wiring`) gets the row `adoption:wiring:<label>`: it fails when the after record lost an item of the before record that nobody dropped.
 """
 from __future__ import annotations
 
@@ -60,6 +61,21 @@ def rows(project: Path, rep: Report) -> None:
         still, _gone = ad.drift(doc)
         if still:
             rep.add("adoption:drift", "warn", "rows marked done still match at the last survey", detail=f"row(s) {ad.ranges(still)}: survey again, or the change is not finished")
+        for _rid, label, entry in ([] if ad.verify_wiring(doc) else ad.wiring_records(doc)):   # a record of the wrong shape is adoption:data's to name
+            after = entry.get("after")
+            if not after:
+                rep.add(f"adoption:wiring:{label}", "info", "the wiring is recorded before the redesign",
+                        detail=f"only the before record exists: record --after when the redesign is applied (`brand-creator adoption wiring --repo {label} --after`)")
+                continue
+            lost, dropped = ad.wiring_lost(entry, after["items"])
+            if lost:
+                more = f" and {len(lost) - 5} more" if len(lost) > 5 else ""
+                rep.add(f"adoption:wiring:{label}", "fail", "the redesign lost no wiring that nobody dropped",
+                        detail=f"{len(lost)} item(s) of the before record are gone from the after record and nobody dropped them: {', '.join(lost[:5])}{more}. "
+                               f"Put each back and record --after again, or record why it goes: `brand-creator adoption wiring --repo {label} --drop \"ITEM::REASON\"`")
+            else:
+                rep.add(f"adoption:wiring:{label}", "pass", "the redesign lost no wiring that nobody dropped",
+                        detail=f"{len(entry['before']['items'])} items before, {len(after['items'])} after; {len(dropped)} dropped with a reason")
     p = present(project)
     if p["adapters"]:
         r = _report(project, "adapters")

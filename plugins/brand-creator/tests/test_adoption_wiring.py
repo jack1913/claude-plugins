@@ -11,13 +11,14 @@ import stat
 from pathlib import Path
 
 import pytest
-from helpers import ROOT, bc, make_project, mutate_json, path_without
+from helpers import ROOT, bc, make_project, mutate, mutate_json, path_without, report
 
 import adoptdata as ad
 import wiring
 
 pytestmark = pytest.mark.requires_rg
 FIX = ROOT / "tests" / "fixtures" / "target-site"
+GOLDEN = ROOT / "tests" / "fixtures" / "adoption-md" / "ADOPTION-before-wiring.txt"      # the ADOPTION.md the survey below rendered before it had a wiring section
 
 # item -> the files that hold it, counted by hand in tests/fixtures/target-site (files in the order the scan reads them: sorted)
 EXPECTED = {
@@ -115,7 +116,9 @@ def test_the_wiring_of_a_site_is_read_from_its_source_with_every_kind(proj, site
     flat = json.dumps(rec["items"])
     for left_out in ("/css/site.css", "/app/", "link:#\"", "viewport", "legacy-anchor", "footer", "not-markup", "not-a-field", "commented-out", "note text", "id:note"):
         assert left_out not in flat, left_out
-    assert "wiring" in load(proj) and (proj / "ADOPTION.md").read_bytes() == md             # the list renders the bytes it rendered before
+    now, frame = (proj / "ADOPTION.md").read_text(), md.decode().index("## How this list is applied")
+    assert "wiring" in load(proj) and "## Wiring kept" in now                                   # the list shows the record, and everything around the new section is as it was
+    assert now.startswith(md.decode()[:frame]) and now.endswith(md.decode()[frame:])
     assert bc("adoption", "verify", project=proj).returncode == 0
 
 
@@ -249,9 +252,12 @@ def test_wiring_needs_a_surveyed_repository_and_one_of_before_or_after(proj, sit
     r = wire(proj, "--before", label="other")
     assert r.returncode == 2 and "not a surveyed repository" in r.stderr and "site" in r.stderr
     r = wire(proj)
-    assert r.returncode == 2 and "one of the arguments --before --after is required" in r.stderr
+    assert r.returncode == 2 and "one of the arguments --before --after --compare --drop is required" in r.stderr
     r = wire(proj, "--before", "--after")
     assert r.returncode == 2 and "not allowed with" in r.stderr
+    for pair in (("--before", "--compare"), ("--after", "--drop", "link:/::x"), ("--compare", "--drop", "link:/::x")):
+        r = wire(proj, *pair)
+        assert r.returncode == 2 and "not allowed with" in r.stderr, pair
     assert bc("adoption", "wiring", "--before", project=proj).returncode == 2                 # --repo is required
     assert load(proj)["wiring"] == {}
 
@@ -287,7 +293,8 @@ def test_an_adoption_json_from_before_wiring_still_verifies_and_takes_a_record(p
 
 
 @pytest.mark.parametrize("how,needle", [("repo", "never surveyed"), ("items", "does not map to a list of strings"), ("noitems", "has no `items` object"),
-                                          ("shape", "not an object keyed by repository id"), ("entry", "wiring of r1 is not an object")])
+                                          ("shape", "not an object keyed by repository id"), ("entry", "wiring of r1 is not an object"),
+                                          ("dropped", "`dropped` is not an object of item to reason"), ("noreason", "an empty reason")])
 def test_verify_fails_a_wiring_record_of_an_unknown_repository_or_the_wrong_shape(proj, site, how, needle):
     surveyed(proj, site)
     assert wire(proj, "--before").returncode == 0
@@ -302,9 +309,252 @@ def test_verify_fails_a_wiring_record_of_an_unknown_repository_or_the_wrong_shap
             del w["r1"]["before"]["items"]
         elif how == "entry":
             w["r1"] = []
+        elif how == "dropped":
+            w["r1"]["dropped"] = ["link:/"]
+        elif how == "noreason":
+            w["r1"]["dropped"] = {"link:/": "  "}
         else:
             d["wiring"] = []
     mutate_json(proj / "adoption.json", change)
     r = bc("adoption", "verify", project=proj)
     assert r.returncode == 1 and needle in r.stderr, r.stderr
     assert bc("adoption", "status", project=proj).returncode == 1                                # nothing builds on it
+
+
+# ---------------------------------------------------------------- compare, drop, the check row and ADOPTION.md
+
+def edit(path: Path, old: str, new: str) -> None:
+    """Change a file of the repository and prove the change applied (for the tests that must not call mutate())."""
+    text = path.read_text(encoding="utf-8")
+    assert old in text, f"{old!r} not found in {path}"
+    path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+
+def drops(proj, *pairs, label="site", env=None):
+    args = []
+    for pair in pairs:
+        args += ["--drop", pair]
+    return wire(proj, *args, label=label, env=env)
+
+
+def record_entry(proj, rid="r1") -> dict:
+    return load(proj)["wiring"][rid]
+
+
+def check_row(proj, label="site") -> dict:
+    return next(x for x in report(proj, "check")["results"] if x["id"] == f"adoption:wiring:{label}")
+
+
+def wiring_section(md: str) -> list[str]:
+    return md[md.index("## Wiring kept"):md.index("## How this list is applied")].rstrip("\n").split("\n")
+
+
+# the whole form is one block in index.html: dropping it loses ten items (field:email stays, Signup.vue has it too)
+FORM_LOST = ["field:note", "field:plan", "handler:onclick=track('signup')", "hook:data-analytics-form=signup", "hook:data-cy=email-input",
+             "hook:data-gtm-event=signup-click", "id:email", "id:signup-form", "link:/signup", "link:/signup/express"]
+
+
+def test_compare_lists_what_a_redesign_lost_and_fails_until_it_is_dropped_with_a_reason(proj, site):
+    surveyed(proj, site)
+    assert wire(proj, "--before").returncode == 0
+    r = wire(proj, "--compare")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "against the before record of 2026-10-17 (37 items recorded, 37 found now)" in r.stdout
+    assert "lost, not recorded as dropped: 0\n" in r.stdout and "dropped with a reason: 0\n" in r.stdout and "new items: 0\n" in r.stdout
+    assert "wiring compare: PASS" in r.stdout
+    # a redesign: the pricing link and its test hook are renamed, the plan select is gone
+    mutate(site / "src" / "Header.jsx", 'to="/pricing" data-testid="nav-pricing"', 'to="/plans" data-testid="nav-plans"')
+    mutate(site / "index.html", '<select name="plan"><option value="free">Free</option></select>', "")
+    r = wire(proj, "--compare")
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert r.stdout.splitlines()[1:6] == ["lost, not recorded as dropped: 3",
+                                          "  field:plan (was in index.html)",
+                                          "  hook:data-testid=nav-pricing (was in src/Header.jsx)",
+                                          "  link:/pricing (was in src/Header.jsx)",
+                                          "dropped with a reason: 0"], r.stdout
+    assert "new items: 2\n" in r.stdout                                                          # hook:data-testid=nav-plans, link:/plans
+    assert "wiring compare: FAIL. 3 item(s)" in r.stdout and '--drop "ITEM::REASON"' in r.stdout
+    # one drop, with the owner's reason: two losses remain, and the drop is listed with its reason
+    r = drops(proj, "link:/pricing::the pricing page moved to /plans")
+    assert r.returncode == 0, r.stdout + r.stderr
+    r = wire(proj, "--compare")
+    assert r.returncode == 1
+    lines = r.stdout.splitlines()
+    assert lines[1:5] == ["lost, not recorded as dropped: 2", "  field:plan (was in index.html)", "  hook:data-testid=nav-pricing (was in src/Header.jsx)",
+                          "dropped with a reason: 1"] and lines[5] == "  link:/pricing: the pricing page moved to /plans", r.stdout
+    # both remaining losses dropped in one call: the comparison passes and still lists every reason
+    assert drops(proj, "field:plan::the plan is chosen in the account now", "hook:data-testid=nav-pricing::the end-to-end test uses nav-plans").returncode == 0
+    r = wire(proj, "--compare")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout.splitlines()[1:8] == ["lost, not recorded as dropped: 0", "dropped with a reason: 3", "  field:plan: the plan is chosen in the account now",
+                                          "  hook:data-testid=nav-pricing: the end-to-end test uses nav-plans", "  link:/pricing: the pricing page moved to /plans",
+                                          "new items: 2", "wiring compare: PASS. Every item of the before record is still there or was dropped with a reason."], r.stdout
+
+
+def test_compare_reads_the_repository_now_and_writes_nothing(proj, site, tmp_path):
+    surveyed(proj, site)
+    assert wire(proj, "--before").returncode == 0
+    with (site / "index.html").open("a") as f:
+        f.write('<a href="/added-later" data-testid="added-later">new</a>\n')
+    held, mine = tree(site), tree(proj)
+    r = wire(proj, "--compare")
+    assert r.returncode == 0 and "new items: 2\n" in r.stdout and "(37 items recorded, 39 found now)" in r.stdout, r.stdout + r.stderr   # it read the site as it is now
+    assert tree(site) == held and tree(proj) == mine                                            # no file of the repository or of the project changed: no record, no report, no ADOPTION.md
+    # it proves its own read: a repository something else writes to while it is read gives exit 1 and no verdict about wiring
+    shim = tmp_path / "shim"
+    shim.mkdir()
+    counter = tmp_path / "calls"
+    f = shim / "rg"
+    f.write_text(f'#!/bin/bash\nn=$(cat "{counter}" 2>/dev/null || echo 0)\nn=$((n+1))\necho $n > "{counter}"\n'
+                 f'if [ "$n" -ge 2 ]; then echo "<p>changed</p>" >> "{site}/index.html"; fi\nexec {shutil.which("rg")} "$@"\n')
+    f.chmod(f.stat().st_mode | stat.S_IEXEC)
+    mine = tree(proj)
+    r = wire(proj, "--compare", env={"PATH": f"{shim}:{os.environ['PATH']}"})
+    assert r.returncode == 1 and "changed while it was read" in r.stderr and "wiring compare" not in r.stdout, r.stdout + r.stderr
+    assert tree(proj) == mine
+    # no ripgrep is exit 3 with the fix, a repository that was never surveyed or has no before record is exit 2
+    r = wire(proj, "--compare", env={"PATH": path_without(tmp_path, "rg")})
+    assert r.returncode == 3 and "ripgrep" in r.stderr and "Install" in r.stderr
+    assert wire(proj, "--compare", label="other").returncode == 2
+    fresh = make_project(tmp_path / "second", slug="second")
+    surveyed(fresh, site)
+    r = wire(fresh, "--compare")
+    assert r.returncode == 2 and "no before record for site" in r.stderr and "--before" in r.stderr
+
+
+def test_a_drop_needs_an_item_of_the_before_record_and_a_reason(proj, site, tmp_path):
+    surveyed(proj, site)
+    r = drops(proj, "link:/pricing::moved")
+    assert r.returncode == 2 and "no before record for site" in r.stderr and load(proj)["wiring"] == {}
+    with (site / "index.html").open("a") as f:
+        f.write('<a href="/legacy::route">an item that holds the separator</a>\n')
+    assert wire(proj, "--before").returncode == 0
+    md = (proj / "ADOPTION.md").read_bytes()
+    for bad, needle in (("link:/pricing", "needs ITEM::REASON"),                                   # no separator
+                        ("link:/pricing::", "has no reason"), ("link:/pricing::   ", "has no reason"),
+                        ("link:/nowhere::gone", "is not an item of the before record"),
+                        ("::gone", "is not an item of the before record"), ("", "needs ITEM::REASON")):
+        r = drops(proj, bad)
+        assert r.returncode == 2 and needle in r.stderr, (bad, r.stderr)
+        assert "dropped" not in record_entry(proj)
+    r = drops(proj, "link:/pricing::moved to /plans", "link:/nowhere::gone")                     # one bad spec stores none
+    assert r.returncode == 2 and "link:/nowhere" in r.stderr and "dropped" not in record_entry(proj)
+    assert (proj / "ADOPTION.md").read_bytes() == md
+    # a good drop is stored under the repository, sorted, with the owner's words; the list stays consistent
+    r = drops(proj, "link:/pricing::moved to /plans", "id:main::the anchor is renamed  to   #content")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert record_entry(proj)["dropped"] == {"id:main": "the anchor is renamed to #content", "link:/pricing": "moved to /plans"}
+    assert "id:main: dropped" in r.stdout and "link:/pricing: dropped" in r.stdout
+    assert bc("adoption", "verify", project=proj).returncode == 0
+    # the separator may be part of the item (the item is the first start that is in the record) and may be in the reason; a second drop replaces the reason
+    r = drops(proj, "link:/legacy::route::the route has a new name, see ::redirects", "link:/pricing::replaced reason")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert record_entry(proj)["dropped"] == {"id:main": "the anchor is renamed to #content", "link:/legacy::route": "the route has a new name, see ::redirects",
+                                              "link:/pricing": "replaced reason"}
+    assert record_entry(proj)["before"] == load(proj)["wiring"]["r1"]["before"] and "after" not in record_entry(proj)       # nothing else changed
+    # recording a drop reads no repository: it works without ripgrep, and a baseline asked for again keeps the drops
+    r = drops(proj, "field:q::the search box is gone", env={"PATH": path_without(tmp_path, "rg")})
+    assert r.returncode == 0 and "field:q" in record_entry(proj)["dropped"]
+    assert wire(proj, "--before", "--again").returncode == 0 and "field:q" in record_entry(proj)["dropped"]
+    assert wire(proj, "--compare", "--again").returncode == 2                                   # --again is for --before only
+
+
+def test_check_fails_a_recorded_after_that_lost_wiring_nobody_dropped(proj, site):
+    surveyed(proj, site)
+    assert wire(proj, "--before").returncode == 0
+    r = bc("check", project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    row = check_row(proj)
+    assert row["status"] == "info" and "record --after when the redesign is applied" in row["detail"]
+    form = (site / "index.html").read_text()
+    mutate(site / "index.html", form[form.index("<form"):form.index("</form>") + len("</form>")], "")        # the redesign loses the whole form
+    assert wire(proj, "--after").returncode == 0
+    r = bc("check", project=proj)
+    row = check_row(proj)
+    assert r.returncode == 1 and row["status"] == "fail", r.stdout
+    assert row["detail"].startswith("10 item(s) of the before record are gone from the after record and nobody dropped them: " + ", ".join(FORM_LOST[:5]) + " and 5 more")
+    assert next(x for x in report(proj, "check")["results"] if x["id"] == "adoption:data")["status"] == "pass"
+    # five dropped, five left: all five are named and no "more"
+    assert drops(proj, *[f"{i}::the form moved to the account page" for i in FORM_LOST[:5]]).returncode == 0
+    r = bc("check", project=proj)
+    row = check_row(proj)
+    assert r.returncode == 1 and row["status"] == "fail" and ", ".join(FORM_LOST[5:]) in row["detail"] and "more" not in row["detail"]
+    assert drops(proj, *[f"{i}::the form moved to the account page" for i in FORM_LOST[5:]]).returncode == 0
+    r = bc("check", project=proj)
+    row = check_row(proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert row["status"] == "pass" and "10 dropped with a reason" in row["detail"]
+    # a repository that keeps everything passes without any drop
+    assert wire(proj, "--before", "--again").returncode == 0 and wire(proj, "--after").returncode == 0
+    assert bc("check", project=proj).returncode == 0 and check_row(proj)["status"] == "pass"
+
+
+def test_check_names_a_wiring_record_of_the_wrong_shape_once_and_does_not_crash(proj, site):
+    surveyed(proj, site)
+    assert wire(proj, "--before").returncode == 0
+    mutate_json(proj / "adoption.json", lambda d: d["wiring"]["r1"].update(after={"items": {"link:/": "index.html"}}))
+    r = bc("check", project=proj)
+    rows = {x["id"]: x for x in report(proj, "check")["results"]}
+    assert r.returncode == 1 and rows["adoption:data"]["status"] == "fail" and rows["adoption:data"]["detail"].count("does not map to a list of strings") == 1
+    assert "adoption:wiring:site" not in rows and "Traceback" not in r.stderr
+
+
+def test_adoption_md_shows_the_wiring_and_marks_its_lines_as_the_repository(proj, site):
+    assert bc("adoption", "survey", "--repo", f"{site}=site", "--old-name", "Sample shop", project=proj).returncode == 0
+    assert "## Wiring kept" not in (proj / "ADOPTION.md").read_text()
+    assert wire(proj, "--before").returncode == 0
+    md = (proj / "ADOPTION.md").read_text()
+    counts = "link 8, field 6, handler 5, hook 9, id 7, script 2"
+    assert wiring_section(md) == ["## Wiring kept", "", f"- `site`: before (2026-10-17) {counts}; no after record yet {ad.MARK}"]
+    assert md.index("| # | Status |") < md.index("## Wiring kept") < md.index("## How this list is applied") < md.index("## Kept, not counted")
+    assert "{{" not in md and "\n\n\n" not in md
+    # the redesign: the pricing link and the plan select are gone, after is recorded
+    edit(site / "src" / "Header.jsx", '<Link to="/pricing" data-testid="nav-pricing">Pricing</Link>', '<Link data-testid="nav-pricing">Pricing</Link>')
+    edit(site / "index.html", '<select name="plan"><option value="free">Free</option></select>', "")
+    assert wire(proj, "--after").returncode == 0
+    md = (proj / "ADOPTION.md").read_text()
+    assert wiring_section(md) == ["## Wiring kept", "",
+                                  f"- `site`: before (2026-10-17) {counts}; after (2026-10-17) link 7, field 5, handler 5, hook 9, id 7, script 2 {ad.MARK}",
+                                  f"  - `field:plan`: lost, not recorded {ad.MARK}",
+                                  f"  - `link:/pricing`: lost, not recorded {ad.MARK}"]
+    assert drops(proj, "link:/pricing::the pricing page moved to /plans", "field:plan::the plan is chosen in the account now").returncode == 0
+    md = (proj / "ADOPTION.md").read_text()
+    sec = wiring_section(md)
+    assert sec[3:] == [f"  - `field:plan`: dropped, the plan is chosen in the account now {ad.MARK}",
+                       f"  - `link:/pricing`: dropped, the pricing page moved to /plans {ad.MARK}"]
+    assert all(ln.endswith(ad.MARK) for ln in sec[2:]), sec                                     # every line that holds the repository's values is a record, not a leftover
+    assert bc("adoption", "verify", project=proj).returncode == 0
+    # the cascade counts those lines as records: a leftover search for an item's value warns and names no file
+    r = bc("check", "--cascade", "/pricing", "--cascade", "field:plan", project=proj)
+    cas = {x["id"]: x for x in report(proj, "check")["results"] if x["id"].startswith("cascade:") and x["id"] != "cascade:scope"}
+    assert r.returncode == 0 and set(cas) == {"cascade:/pricing", "cascade:field:plan"}, cas
+    assert all(c["status"] == "warn" and c["hits"] == [] and c["recorded"] >= 1 for c in cas.values()), cas
+    # two repositories: each has its own lines, in the order of the survey
+    other = site.parent / "other"
+    shutil.copytree(FIX, other)
+    edit(other / "index.html", "Sample shop", "Other shop")
+    surveyed(proj, other, label="other")
+    assert bc("adoption", "wiring", "--repo", "other", "--before", project=proj).returncode == 0
+    sec = wiring_section((proj / "ADOPTION.md").read_text())
+    assert [ln for ln in sec if ln.startswith("- ")] == [f"- `site`: before (2026-10-17) {counts}; after (2026-10-17) link 7, field 5, handler 5, hook 9, id 7, script 2 {ad.MARK}",
+                                                         f"- `other`: before (2026-10-17) {counts}; no after record yet {ad.MARK}"]
+
+
+def test_adoption_md_of_a_list_without_wiring_is_the_bytes_it_was(proj, site):
+    """The frame has a {{wiring}} line now. A list with no wiring record renders the bytes it rendered before (the file in tests/fixtures/adoption-md was
+    written by the survey below, before the placeholder existed), whether adoption.json has an empty `wiring` or an older one has none."""
+    (site / "public" / "logo.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>\n')
+    (site / "manifest.json").write_text('{\n  "name": "Sample shop",\n  "theme_color": "#123456"\n}\n')
+    (site / "README.md").write_text("# Sample shop\n\n![badge](https://img.shields.io/badge/build-passing-green)\n")
+    (site / "src" / "colours.css").write_text("a { color: #123456; }\n")
+    r = bc("adoption", "survey", "--repo", f"{site}=site", "--old-name", "Sample shop", "--old-colour", "#123456", project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    r = bc("adoption", "add", "--repo", "site", "--file", "src/Header.jsx", "--find", "onClick", "--change", "Check the menu button still opens the menu.", "--lines", "8", project=proj)
+    assert r.returncode == 0, r.stderr
+    assert load(proj)["wiring"] == {} and (proj / "ADOPTION.md").read_bytes() == GOLDEN.read_bytes()
+    doc = load(proj)
+    del doc["wiring"]
+    (proj / "adoption.json").write_bytes(ad.dumps(doc))
+    assert bc("adoption", "render", project=proj).returncode == 0 and (proj / "ADOPTION.md").read_bytes() == GOLDEN.read_bytes()
+    assert bc("adoption", "wiring", "--repo", "site", "--before", project=proj).returncode == 0
+    assert (proj / "ADOPTION.md").read_bytes() != GOLDEN.read_bytes() and "## Wiring kept" in (proj / "ADOPTION.md").read_text()
