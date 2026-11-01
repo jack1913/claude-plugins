@@ -16,5 +16,6 @@ Why brand-creator works the way it does, one decision per file. Decisions made b
 | [ADR-0008](ADR-0008-text-grounds-carry-complete-roles.md) | Every ground that carries text has five roles in both themes, named by the owner | accepted |
 | [ADR-0009](ADR-0009-website-references-before-any-site-page.md) | Website references come before any site page: an online-research OK, a captured board and a recorded gate (G4w) | accepted |
 | [ADR-0010](ADR-0010-the-site-round-makes-reference-pages-not-templates.md) | The site round makes reference pages, not templates: hero first, a cold review, choices tagged rule or example, and a recorded gate (G4p) | accepted |
+| [ADR-0012](ADR-0012-a-redesign-records-the-sites-wiring.md) | A redesign records the site's wiring: six kinds of item before and after, and a loss only as dropped with a reason | accepted |
 
 New records follow [ADR-TEMPLATE.md](ADR-TEMPLATE.md).
