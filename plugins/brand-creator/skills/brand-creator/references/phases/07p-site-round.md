@@ -72,8 +72,7 @@ Commands are written after `brand-creator --data "${CLAUDE_PLUGIN_DATA}"`.
 A `page-check` report holds `BRAND-STATE.md` by its G4 rules only (the G4 record and the "(rule)" lines under "Rules
 (G4)", the two things a page check reads from it). So a later write to the file (the phase, `review_url`, a gate, the
 Directions table, Still open) leaves the round's reports and the board's lint current; only a changed G4 record or "(rule)"
-line makes them stale, and then `page-check` runs again on each page, then the lint. A report from an older release lists
-the whole file and goes stale at any write: run `page-check` on that page once more. A site board is no pick, style or reset
+line makes them stale, and then `page-check` runs again on each page, then the lint. A site board is no pick, style or reset
 round, so the hook, `freeze`, `shot` and the review surface work unchanged and the style gate ignores it. The first board of each stage
 (the first hero board, then the first pages board) is a new, empty folder (`mkdir rounds/r<N>`), never a copy of an
 earlier round. A later board of the same stage, the refine loop on the picked or combined variant, starts as
@@ -124,8 +123,9 @@ data-page="start">`) in every project.
    (`../rounds/r<N>/<Name>/index.html`; it opens from this machine only), linted with `board-lint review/index.html
    --round <N>`. Recording `review_url` and updating `BRAND-STATE.md` after that write it again, but the `page-check`
    reports hold only its G4 rules, so they stay current: before the reply run `board-lint rounds/r<N>/board.html --project
-   <dir>` once more, so that `check` finds the board's lint current (a lint of a board whose rule cites a line only
-   `BRAND-STATE.md` holds lists the whole file, so it needs that run).
+   <dir>` once more, so that `check` finds the board's lint current (every `board-lint` run writes the one report
+   `assets/_checks/board-lint.json`, so the lint of the review copy took the place of the board's, and `check` wants the
+   report of `rounds/r<N>/board.html`).
 6. **Reply and stop.** The owner picks or combines a hero, or says none of these. Restate the pick in one line and write it
    into `DECISIONS.md` with the owner's words and the date. "None of these" is new variants (a new hero board; the old
    ones stay in their round) or, when what was missing is the references, a new website references board and a new G4w.
@@ -218,9 +218,9 @@ this order:
    the board still holds a page card the owner did not approve.
 3. **Make the proof current again, when it is not.** Recording a gate changes `BRAND-STATE.md`, but the `page-check`
    reports hold only its G4 rules, so the reports of the round's pages and the board's lint stay current. Lint again when
-   `site approve` says the lint is stale: it does when a rule of the board cites a line only `BRAND-STATE.md` holds, and
-   when a report is from an older release (run `page-check` on each page of the round first, then `board-lint
-   rounds/r<N>/board.html --project <dir>`). A changed G4 record or "(rule)" line needs the same two runs.
+   `site approve` says the lint is stale: it does when a rule of the board cites a line only `BRAND-STATE.md` holds
+   (`board-lint rounds/r<N>/board.html --project <dir>`). A changed G4 record or "(rule)" line needs `page-check` on each
+   page of the round first, then that lint.
    `site approve` refuses a lint that is not current and passing.
 4. `freeze r<N> --name approved-site --project <dir>` keeps the round in `history/`.
 5. `site approve --project <dir>` copies every page card of the pages board from `rounds/r<N>/<id>/` into `site/<id>/` (without `shots/` and

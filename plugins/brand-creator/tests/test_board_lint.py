@@ -1514,6 +1514,23 @@ def test_the_review_page_of_round_0_is_the_style_board_and_passes_the_lint(proj,
     assert lint(proj, "review/index.html", "--round", "0").returncode == 1
 
 
+def test_the_lint_of_the_review_copy_takes_the_place_of_the_lint_of_the_board_and_check_wants_the_board(proj):
+    """Every board-lint run writes the one report assets/_checks/board-lint.json, whatever page it linted: after the review copy is linted the report is of review/index.html and `check` calls it
+    stale (the latest page is the board of the round), until the board is linted once more (the phase files say so: 07p-site-round.md, "The hero first", step 5)."""
+    def check_row():
+        assert bc("check", project=proj).returncode in (0, 1, 3)   # the rest of the project is not built: the row is what is read
+        return next(x for x in report(proj, "check")["results"] if x["id"] == "report:board-lint")
+    review = proj / "review" / "index.html"
+    review.parent.mkdir()
+    review.write_text((proj / "rounds/r1/board.html").read_text(encoding="utf-8"), encoding="utf-8")
+    assert lint(proj).returncode == 0 and report(proj, "board-lint")["page"] == "rounds/r1/board.html"
+    assert check_row()["status"] == "pass"
+    assert lint(proj, "review/index.html", "--round", "1").returncode == 0 and report(proj, "board-lint")["page"] == "review/index.html"
+    row = check_row()
+    assert row["status"] == "skipped" and "the report is for review/index.html, the latest page is rounds/r1/board.html" in row["detail"], row
+    assert lint(proj).returncode == 0 and check_row()["status"] == "pass"
+
+
 def _clear_g1s(proj):
     st = proj / "BRAND-STATE.md"
     text = st.read_text()
