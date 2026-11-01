@@ -121,8 +121,9 @@ plain technical.
 - Show real output where it helps the reader. Never invent output; never show maintainer commands
   (`jq`, `git ls-files`) on a user page. Each captured block has an italic caption saying how it was
   taken; a trimmed one says it is an excerpt.
-- When the repo has a front-end per platform, every command block has its twin right after it, sh
-  first. Output from a platform nobody captured is `illustrative`.
+- When the repo has a front-end per platform, every command block that runs a `.sh` front-end has its
+  PowerShell twin, sh first; a command that is the same in both shells (a CLI, `git`, `npm`) needs
+  none. Output from a platform nobody captured is `illustrative`.
 - A captured block is a `console capture=<slug>` fence holding only the output, right after its
   command block, unless Local deviations record another shape.
 - Callouts (`> [!IMPORTANT]`, `> [!NOTE]`, `> [!WARNING]`) mark a guarantee or a destructive step,

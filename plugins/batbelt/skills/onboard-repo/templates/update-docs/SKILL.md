@@ -371,7 +371,7 @@ hand-listed reading chain, say), report it: the index and `NEXT_CHAIN` win.
 | delete a repeated fact without merging it into its one home | the home holds every verified row |
 | strip the versions from upgrade notes | those lines survive the diff |
 | convert a capture fence from the recorded shape to another | fences match the recorded shape: REPO SPECIFICS' capture fence convention, or the standard's Local deviations |
-| drop the twin of a command block, or add a command without the twin when platform pairs are recorded | `check-docs --platform-pairs` (`PLATFORM_TWIN`) |
+| drop the twin (the PowerShell block) of a command that runs a `.sh` front-end, or add such a command without one when platform pairs are recorded | `check-docs --platform-pairs` (`PLATFORM_TWIN`) |
 | let a template update replace a baked voice line | the voice lines in REPO SPECIFICS are unchanged |
 
 And every run checks the README invariants (the docs standard's §2) and the recorded

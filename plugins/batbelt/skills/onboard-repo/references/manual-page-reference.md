@@ -2,7 +2,7 @@
 
 Read at [author-manual.md](author-manual.md) when you write a page for `docs/manual/reference/` (commands, settings, troubleshooting). A reference page answers "what exactly is X?": a title that is a noun, tables, no storytelling. Steps belong on a how-to page.
 
-Replace every `<...>`. One row per real command, flag or setting, taken from the repo's own help output or config, never from memory. When the repo has a front-end per platform, a flag table has one column per front-end plus Effect: `| sh | PowerShell | Effect |`. Every command block has its twin right after it, sh first.
+Replace every `<...>`. One row per real command, flag or setting, taken from the repo's own help output or config, never from memory. When the repo has a front-end per platform, a flag table has one column per front-end plus Effect: `| sh | PowerShell | Effect |`. Every command block that runs the `.sh` front-end has its PowerShell twin right after it, sh first.
 
 ````markdown illustrative
 # Commands

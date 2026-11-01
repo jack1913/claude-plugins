@@ -62,8 +62,12 @@ writes anything.
   subsections, as one tour. A malformed `--forbidden-allow` pattern is refused with a usage error.
 - A tour entry's page is its first local link, wherever it sits in the line; an index with plain numbered steps
   still gets its page count fixed, and a bold range in a table cell is no longer taken for that count.
-- PowerShell twins may come before or after their shell command. Platform pairs come only from a documented
-  `.sh`/`.ps1` front-end pair (in the root, `scripts/` or `bin/`), not from any helper pair.
+- PowerShell twins may come before or after their shell command, and only a command that runs a `.sh` front-end
+  with a `.ps1` sibling needs one (a block that runs both scripts is its own twin): a CLI, `git` or `npm` command
+  does not.
+- A numbered list that starts at 0 (an opt-in step 0) keeps its zero start when the index is renumbered.
+- Platform pairs come only from a documented `.sh`/`.ps1` front-end pair (in the root, `scripts/` or `bin/`), not
+  from any helper pair.
 - `--forbidden-allow` globs are paths from the repo root, and a `[...]` class never matches a `/`.
 - `--sync` asks whether a missing tour feature (no numbered list, no Next links, no New here? pointer) is
   deliberate before recording it, so an unfinished manual is not excused for good.

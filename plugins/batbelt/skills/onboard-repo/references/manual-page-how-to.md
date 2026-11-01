@@ -4,7 +4,7 @@ Read at [author-manual.md](author-manual.md) when you write a how-to page in `do
 
 Replace every `<...>`. Ground each output block as the author-manual step says: a provenance tag on the fence, `illustrative` when it is a mock. Drop a section the task does not need, except If something goes wrong: every how-to keeps it. Keep the order of the rest.
 
-When the repo has a front-end per platform (a `.sh` and a `.ps1`, say), every command block has its twin right after it, sh first, with no heading between them. Output from a platform nobody captured is `illustrative`.
+When the repo has a front-end per platform (a `.sh` and a `.ps1`, say), every command block that runs the `.sh` has its PowerShell twin right after it, sh first, with no heading between them; a command that is the same in both shells needs none. Output from a platform nobody captured is `illustrative`.
 
 ````markdown illustrative
 # <Verb phrase: "Update your install">

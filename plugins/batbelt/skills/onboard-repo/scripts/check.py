@@ -2019,11 +2019,38 @@ def _command_lang(info):
     return "sh" if lang in _SH_LANGS else ("ps" if lang in _PS_LANGS else None)
 
 
+_SH_SCRIPT_RE = re.compile(r"(?:^|[\s;&|(=])(?:\./)?((?:[\w.-]+/)*[\w.-]+\.sh)\b")
+
+
+def _repo_root_for(f):
+    """The repo a docs page belongs to: the parent of the nearest `docs` folder
+    above it, else the working directory (check-docs runs from the repo root)."""
+    try:
+        for parent in f.resolve().parents:
+            if parent.name == "docs":
+                return parent.parent
+    except OSError:
+        pass
+    return pathlib.Path.cwd()
+
+
+def _runs_front_end(body, root):
+    """True when a shell command block runs a `.sh` script that has a `.ps1`
+    sibling: a front-end per platform, whose Windows users need the twin. A
+    command that is the same in both shells (a CLI, git, npm) needs none."""
+    for path in _SH_SCRIPT_RE.findall(body):
+        sibling = pathlib.PurePosixPath(path).with_suffix(".ps1")
+        if (root / sibling).is_file() and sibling.name not in body:
+            return True  # a block that also names the .ps1 carries its own twin
+    return False
+
+
 def _check_platform_twin(f, text, severity):
     """PLATFORM_TWIN: within each section of a manual page (up to the next heading),
-    every shell command fence needs a PowerShell command fence. Twins pair in order,
-    either one first (two commands then their two twins is fine), and output
-    fences between them are skipped. The caller decides that `f` is a manual page."""
+    every shell command fence that runs a `.sh` front-end with a `.ps1` sibling
+    needs a PowerShell command fence. Twins pair in order, either one first (two
+    commands then their two twins is fine), and output fences between them are
+    skipped. The caller decides that `f` is a manual page."""
     lines = text.split("\n")
     fenced = _fenced_line_numbers(text)
     headings = [i for i, ln in enumerate(lines, start=1) if _ATX_RE.match(ln.expandtabs(4)) and i not in fenced]
@@ -2035,12 +2062,15 @@ def _check_platform_twin(f, text, severity):
         waiting.clear()
         spare_ps[0] = 0
 
+    root = _repo_root_for(f)
     hi = 0
-    for info, _body, start in iter_fenced_blocks(text):
+    for info, body, start in iter_fenced_blocks(text):
         while hi < len(headings) and headings[hi] < start:
             _flush()
             hi += 1
         kind = _command_lang(info)
+        if kind == "sh" and not _runs_front_end(body, root):
+            continue
         if kind == "sh":
             if spare_ps[0]:
                 spare_ps[0] -= 1  # its twin came first (a Windows-first section)

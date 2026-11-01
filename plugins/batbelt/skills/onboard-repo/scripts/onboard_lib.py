@@ -138,7 +138,12 @@ def renumber_toc(text):
             if not stack:
                 # A later top-level list runs on from the previous one unless the
                 # repo restarted it at 1 (1-3 under one heading, 4-6 under the next).
-                start = prev_new + 1 if prev_orig is not None and orig != 1 else 1
+                if orig == 0:
+                    start = 0  # a zero-based list (an opt-in step 0) keeps its start
+                elif prev_orig is not None and orig != 1:
+                    start = prev_new + 1
+                else:
+                    start = 1
                 stack = [[indent, start]]
             elif indent <= stack[0][0]:
                 stack = [[indent, stack[0][1] + 1]]

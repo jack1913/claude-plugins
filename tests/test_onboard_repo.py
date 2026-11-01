@@ -4198,7 +4198,7 @@ def test_capture_fence_shape_is_recorded_never_converted():
 def test_standard_voice_has_captions_callouts_twins_and_troubleshooting():
     std = _flat(STD_V5)
     for phrase in ("an italic caption saying how it was taken", "at most one per section",
-                   "every command block has its twin right after it",
+                   "every command block that runs a `.sh` front-end has its PowerShell twin",
                    "If something goes wrong table"):
         assert phrase in std, phrase
     assert "**platform pairs:**" in _shape("stamping.md")
@@ -4339,6 +4339,7 @@ def test_toc_count_flags_a_wrong_lead_count(tmp_path, capsys):
 
 
 def _twin_pages(tmp_path, paired_second=False):
+    _seed(tmp_path, "run.ps1", "# ps\n")  # run.sh's PowerShell sibling: a front-end per platform
     _seed(tmp_path, "docs/manual/one.md", "# One\n\n```bash\n./run.sh\n```\n\n```powershell\n.\\run.ps1\n```\n")
     two = "# Two\n\n```bash\n./run.sh --all\n```\n"
     if paired_second:
@@ -4348,6 +4349,7 @@ def _twin_pages(tmp_path, paired_second=False):
 
 def test_platform_twin_errors_with_platform_pairs(tmp_path, capsys):
     cli = _load_cli()
+    _seed(tmp_path, "run.ps1", "# ps\n")
     _seed(tmp_path, "docs/manual/two.md", "# Two\n\n```bash\n./run.sh --all\n```\n")
     rc, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
     assert rc == 1 and "PLATFORM_TWIN" in codes
@@ -4868,6 +4870,7 @@ def test_manual_conventions_refuses_a_missing_root(tmp_path, capsys):
 
 def test_platform_twin_needs_a_powershell_command_not_its_output(tmp_path, capsys):
     cli = _load_cli()
+    _seed(tmp_path, "run.ps1", "# ps\n")
     _seed(tmp_path, "docs/manual/two.md",
           "# Two\n\n```bash\n./run.sh\n```\n\n```powershell capture=win\nPS> done\n```\n")
     rc, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
@@ -4960,12 +4963,14 @@ def test_cli_manual_conventions_prints_the_questions(tmp_path):
 
 def test_platform_twin_skips_output_between_a_command_and_its_twin(tmp_path, capsys):
     cli = _load_cli()
+    _seed(tmp_path, "build.ps1", "# ps\n")
+    _seed(tmp_path, "check.ps1", "# ps\n")
     _seed(tmp_path, "docs/manual/a.md",
-          "# A\n\n```bash\nmake\n```\n\n```console capture=a\nok\n```\n\n```powershell\nmake\n```\n")
+          "# A\n\n```bash\n./build.sh\n```\n\n```console capture=a\nok\n```\n\n```powershell\n.\\build.ps1\n```\n")
     _seed(tmp_path, "docs/manual/b.md",
-          "# B\n\n```bash\nmake\n```\n\n```bash\nmake test\n```\n\n```powershell\nmake\n```\n\n```powershell\nmake test\n```\n")
+          "# B\n\n```bash\n./build.sh\n```\n\n```bash\n./check.sh\n```\n\n```powershell\n.\\build.ps1\n```\n\n```powershell\n.\\check.ps1\n```\n")
     _seed(tmp_path, "docs/manual/c.md",
-          "# C\n\n```bash\nmake\n```\n\n```bash\nmake test\n```\n\n```powershell\nmake\n```\n")
+          "# C\n\n```bash\n./build.sh\n```\n\n```bash\n./check.sh\n```\n\n```powershell\n.\\build.ps1\n```\n")
     _, _, lines = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
     hits = [ln.split("\t")[2] for ln in lines if "PLATFORM_TWIN" in ln]
     assert len(hits) == 1 and hits[0].endswith("c.md:7")
@@ -4993,6 +4998,7 @@ def test_next_chain_pairs_neighbours_in_index_order(tmp_path, capsys):
 
 def test_only_runs_read_the_same_powershell_signal_as_full_runs(tmp_path, capsys):
     cli = _load_cli()
+    _seed(tmp_path, "run.ps1", "# ps\n")
     _seed(tmp_path, "docs/manual/two.md", "# Two\n\n```bash\n./run.sh\n```\n")
     # a frozen page under a manual folder: the full run never reads it for the signal
     _seed(tmp_path, "docs/archive/manual/old.md", "# Old\n\n```powershell\nGet-Item\n```\n")
@@ -5082,8 +5088,9 @@ def test_sync_text_records_structure_and_asks_about_tour_gaps():
 
 def test_platform_twin_ignores_hash_lines_that_are_not_headings(tmp_path, capsys):
     cli = _load_cli()
+    _seed(tmp_path, "build.ps1", "# ps\n")
     _seed(tmp_path, "docs/manual/a.md",
-          "# A\n\n```bash\nmake\n```\n\n    # an indented code line\n#!/bin/sh is a shebang\n\n```powershell\nmake\n```\n")
+          "# A\n\n```bash\n./build.sh\n```\n\n    # an indented code line\n#!/bin/sh is a shebang\n\n```powershell\n.\\build.ps1\n```\n")
     _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
     assert "PLATFORM_TWIN" not in codes
 
@@ -5147,7 +5154,8 @@ def test_glob_classes_stay_inside_one_segment():
 
 def test_platform_twin_accepts_powershell_first(tmp_path, capsys):
     cli = _load_cli()
-    _seed(tmp_path, "docs/manual/a.md", "# A\n\n```powershell\nmake\n```\n\n```bash\nmake\n```\n")
+    _seed(tmp_path, "build.ps1", "# ps\n")
+    _seed(tmp_path, "docs/manual/a.md", "# A\n\n```powershell\n.\\build.ps1\n```\n\n```bash\n./build.sh\n```\n")
     _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
     assert "PLATFORM_TWIN" not in codes
 
@@ -5179,3 +5187,40 @@ def test_check_docs_takes_compiled_allow_patterns_only():
     import inspect
     chk = _load_check()
     assert "hasattr(p, \"match\")" not in inspect.getsource(chk._check_docs)
+
+
+# ---- real-repo sweep (23 manuals on the maintainer's machine) ---------------------
+
+
+def test_platform_twin_only_asks_twins_for_front_end_scripts(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "install.sh", "#!/bin/sh\n")
+    _seed(tmp_path, "install.ps1", "# ps\n")
+    _seed(tmp_path, "vendor/tool.sh", "#!/bin/sh\n")  # no PowerShell sibling: not a front-end
+    _seed(tmp_path, "docs/manual/a.md",
+          "# A\n\n```bash\nmytool sync --list\n```\n\n```bash\nbash vendor/tool.sh\n```\n\n"
+          "```bash\n./install.sh --yes\n```\n\n## B\n\n```powershell\nGet-Item x\n```\n")
+    _, _, lines = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
+    hits = [ln.split("\t")[2] for ln in lines if "PLATFORM_TWIN" in ln]
+    assert len(hits) == 1 and hits[0].endswith("a.md:11")
+
+
+def test_renumber_toc_keeps_a_zero_start():
+    tour = ("# M\n\n## The daily-use manual (read 1 → 4)\n\n0. [A](a.md) — opt-in\n1. [B](b.md)\n2. [C](c.md)\n"
+            "3. [D](d.md)\n4. [E](e.md)\n")
+    assert lib.renumber_toc(tour) == tour
+    groups = ("<!-- the 1→0 reading order -->\n# M\n\n## Getting started\n\n1. [S](s.md)\n2. [V](v.md)\n\n"
+              "## Daily\n\n3. [B](b.md)\n4. [T](t.md)\n5. [U](u.md)\n\n## Hardware\n\n0. [Q](q.md)\n")
+    out = lib.renumber_toc(groups)
+    assert "the 1→5 reading order" in out and "0. [Q](q.md)" in out and "3. [B](b.md)\n4. [T](t.md)" in out
+
+
+def test_a_block_that_names_the_ps1_sibling_carries_its_own_twin(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "install.sh", "#!/bin/sh\n")
+    _seed(tmp_path, "install.ps1", "# ps\n")
+    _seed(tmp_path, "docs/manual/install.md",
+          "# Install\n\n```sh\nsh install.sh                    # macOS / Linux\n"
+          "powershell -File install.ps1     # Windows\n```\n")
+    _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
+    assert "PLATFORM_TWIN" not in codes

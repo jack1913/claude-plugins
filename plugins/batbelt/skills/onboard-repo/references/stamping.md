@@ -160,7 +160,7 @@ with `check.py` and removes the two orphans, shown in the plan like any other ch
   link errors (`docs/archive/: 13 link errors, 2026-11-01`), or `none`. `update-docs` compares each
   run against this line and proposes an updated line when a count drops.
 - **platform pairs:** `sh+powershell` when the repo ships a front-end per platform (an `install.sh`
-  and an `install.ps1`, say): every manual command block then has its twin, and `update-docs` runs
+  and an `install.ps1`, say): every manual command that runs the `.sh` front-end then has its PowerShell twin, and `update-docs` runs
   `check-docs` with `--platform-pairs`, which makes a missing twin an error. `none` otherwise.
 
 ## REPO SPECIFICS schema — `update-rules`
