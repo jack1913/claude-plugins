@@ -63,6 +63,7 @@ A fact has exactly one owner. Every other page links to it and never retypes it.
 | How to use a feature | That feature's page, `docs/manual/<task>.md` |
 | What changed in a release | `CHANGELOG.md` |
 | Why a decision was made | One ADR |
+| A fact another repository owns (a plugin's commands, its skills, its versions) | Its home there: name it and link to it; never restate it. Check with `check-docs --forbidden <names> --forbidden-allow <globs>` |
 
 ### Layout
 

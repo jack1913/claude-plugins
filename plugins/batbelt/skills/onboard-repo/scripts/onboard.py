@@ -498,18 +498,7 @@ def main(argv):
             )
             return 0
         if cmd == "shrink-check":
-            cleared = "--cleared" in rest
-            files = [a for a in rest if a != "--cleared"]
-            if len(files) != 2:
-                return _usage("usage: onboard.py shrink-check <old_file> <new_file> [--cleared]")
-            viols = lib.shrink_violations(
-                pathlib.Path(files[0]).read_text(encoding="utf-8"),
-                pathlib.Path(files[1]).read_text(encoding="utf-8"),
-                cleared,
-            )
-            for sev, msg in viols:
-                sys.stdout.write("%s\t%s\n" % (sev.upper(), msg))
-            return 1 if any(sev == "error" for sev, _ in viols) else 0
+            return check.run("shrink-check", rest, prog="onboard.py")
         if cmd == "redact":
             return check.run("redact", rest, prog="onboard.py")
         if cmd == "deps-detect":

@@ -21,6 +21,10 @@ import xml.etree.ElementTree as _ET
 # `onboard_lib.check_instructions` still find it. One implementation, two names.
 from check import (  # noqa: F401  (re-exported for callers of this module)
     GROUNDING_WINDOW,
+    _OL_ITEM_RE,
+    _TOTAL_RE,
+    _non_fence_word_count,
+    shrink_violations,
     _split_fences,
     canonicalize_output,
     check_instructions,
@@ -83,18 +87,6 @@ def preserve_repo_specifics(old_text, new_template_text):
     return new_before + BEGIN + old_inner + END + new_after
 
 
-# An ordered-list item: "N." or "N)" style (review M2).
-_OL_ITEM_RE = re.compile(r"^(\s*)\d+([.)])(\s+)", re.MULTILINE)
-# The ToC total. Each cue is FULLY delimited so a look-alike prose range does not
-# match (review C1): bold on BOTH sides ("**1 → N**"), the literal "(read 1 → N)",
-# or the MD029 "1→N reading order" comment. A bare "(1 to 5)" / "steps 1 to 7." /
-# unrelated "**1 → 5**" table cell is left alone. Seed ships digit totals so this is
-# not inert on a fresh scaffold.
-_TOTAL_RE = re.compile(
-    r"(\*\*1\s*(?:→|->|to)\s*)\d+(?=\*\*)"  # **1 → N**
-    r"|(\(read\s+1\s*(?:→|->|to)\s*)\d+(?=\))"  # (read 1 → N)
-    r"|(\b1\s*(?:→|->|to)\s*)\d+(?=\s*reading order)"  # 1→N reading order
-)
 
 
 def renumber_toc(text):
@@ -547,35 +539,8 @@ def rebase_relative_links(text, page_old, page_new, moves):
     return "".join(out)
 
 
-def _non_fence_word_count(text):
-    n = 0
-    for seg, is_fence in _split_fences(text):
-        if not is_fence:
-            n += len(seg.split())
-    return n
 
 
-def shrink_violations(old_text, new_text, cleared_finding):
-    """Guard a loop rewrite (spec 4.1). warn: an ATX heading in old_text is gone
-    from new_text. error: non-fence word count cut by > 25% UNLESS cleared_finding
-    (a rewrite that clears >=1 gate/reviewer finding may legitimately shrink, e.g.
-    deleting a fabricated paragraph). Pure."""
-    out = []
-    old_h = set(heading_slugs(old_text))
-    new_h = set(heading_slugs(new_text))
-    for slug in sorted(old_h - new_h):
-        out.append(("warn", "heading dropped: %s" % slug))
-    ow = _non_fence_word_count(old_text)
-    nw = _non_fence_word_count(new_text)
-    if ow > 0 and nw < ow * 0.75 and not cleared_finding:
-        out.append(
-            (
-                "error",
-                "non-fence word count cut %d%% (%d -> %d)"
-                % (round((ow - nw) * 100.0 / ow), ow, nw),
-            )
-        )
-    return out
 
 
 _CARGO_WS_RE = re.compile(r"^\s*\[workspace\]\s*$", re.MULTILINE)

@@ -161,6 +161,8 @@ _DELEGATED = [
     ["check-instructions", "rules", "more"],
     ["redact", "raw.txt", "--home", "/h", "--user", "bob", "--stamp", "S"],
     ["redact", "raw.txt", "--home", "/h", "--user", "bob", "--stamp", "S", "--extra", "sekret"],
+    ["shrink-check", "old.md", "new.md"],
+    ["shrink-check", "old.md", "new.md", "--cleared"],
 ]
 
 
@@ -228,6 +230,10 @@ def _delegation_fixture(tmp_path):
     # `sekret` is what makes the two redact variants differ: only the --extra form
     # strips it, so a delegation that drops trailing args shows up as identical output.
     _seed(tmp_path, "raw.txt", "bob ran it from /h and pasted sekret at S\n")
+    # shrink-check: a 40-word page cut to 4 words and a dropped heading, so both the
+    # error and the --cleared variant change the output.
+    _seed(tmp_path, "old.md", "# Keep\n\n" + "word " * 40 + "\n\n## Gone\n\nmore\n")
+    _seed(tmp_path, "new.md", "# Keep\n\nword word word word\n")
 
 
 def _run(mod, argv, capsys, tmp_path):
@@ -4289,3 +4295,106 @@ def test_sync_conventions_read_a_wrapped_voice_lead_whole(tmp_path):
     conv = lib.detect_manual_conventions(tmp_path)
     assert conv["docs_voice"] == ("How to use it day to day — commands-first, one concept per page, "
                                   "each showing you what you'll actually see.")
+
+
+# ---- template v5: tour, count and platform-twin checks ----------------------
+
+
+def _tour(tmp_path, next_of_a="b.md"):
+    _seed(tmp_path, "docs/manual/README.md",
+          "# Manual\n\nRead pages **1 → 2** in order.\n\n1. [A](a.md)\n2. [B](b.md)\n")
+    _seed(tmp_path, "docs/manual/a.md", "# A\n\n**Next:** [B](%s)\n" % next_of_a)
+    _seed(tmp_path, "docs/manual/b.md", "# B\n\nThat's the tour.\n")
+
+
+def test_next_chain_flags_an_out_of_order_link(tmp_path, capsys):
+    cli = _load_cli()
+    _tour(tmp_path, next_of_a="a.md")
+    rc, codes, lines = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check"])
+    assert rc == 0 and "NEXT_CHAIN" in codes
+    assert any("a.md" in ln and "NEXT_CHAIN" in ln for ln in lines)
+
+
+def test_next_chain_quiet_on_a_correct_tour(tmp_path, capsys):
+    cli = _load_cli()
+    _tour(tmp_path)
+    _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check"])
+    assert "NEXT_CHAIN" not in codes and "TOC_COUNT" not in codes
+
+
+def test_toc_count_flags_a_wrong_lead_count(tmp_path, capsys):
+    cli = _load_cli()
+    _tour(tmp_path)
+    idx = tmp_path / "docs/manual/README.md"
+    idx.write_text(idx.read_text(encoding="utf-8").replace("**1 → 2**", "**1 → 3**"), encoding="utf-8")
+    rc, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check"])
+    assert rc == 0 and "TOC_COUNT" in codes
+
+
+def _twin_pages(tmp_path, paired_second=False):
+    _seed(tmp_path, "docs/manual/one.md", "# One\n\n```bash\n./run.sh\n```\n\n```powershell\n.\\run.ps1\n```\n")
+    two = "# Two\n\n```bash\n./run.sh --all\n```\n"
+    if paired_second:
+        two += "\n```powershell\n.\\run.ps1 -All\n```\n"
+    _seed(tmp_path, "docs/manual/two.md", two)
+
+
+def test_platform_twin_errors_with_platform_pairs(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "docs/manual/two.md", "# Two\n\n```bash\n./run.sh --all\n```\n")
+    rc, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
+    assert rc == 1 and "PLATFORM_TWIN" in codes
+
+
+def test_platform_twin_warns_when_the_manual_has_powershell(tmp_path, capsys):
+    cli = _load_cli()
+    _twin_pages(tmp_path)
+    rc, codes, lines = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check"])
+    assert rc == 0 and codes.count("PLATFORM_TWIN") == 1
+    assert any("two.md" in ln for ln in lines if "PLATFORM_TWIN" in ln)
+
+
+def test_platform_twin_silent_without_signal(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "docs/manual/two.md", "# Two\n\n```bash\n./run.sh --all\n```\n")
+    _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check"])
+    assert "PLATFORM_TWIN" not in codes
+
+
+def test_platform_twin_skips_output_and_illustrative_fences(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "docs/manual/two.md",
+          "# Two\n\n```bash illustrative\n./run.sh\n```\n\n```text capture=x\n$ ./run.sh\nok\n```\n")
+    _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
+    assert "PLATFORM_TWIN" not in codes
+
+
+def test_forbidden_allow_exempts_matching_files(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "docs/manual/skills.md", "# Skills\n\nUse grill-me.\n")
+    _seed(tmp_path, "docs/manual/reference/plugins.md", "# Plugins\n\nIt ships grill-me.\n")
+    rc, codes, lines = _run_check(cli, capsys, [str(tmp_path / "docs")],
+                                  ["--no-tier-check", "--forbidden", "grill-me",
+                                   "--forbidden-allow", "manual/reference/*"])
+    hits = [ln for ln in lines if "FORBIDDEN_TOKEN" in ln]
+    assert rc == 1 and len(hits) == 1 and "skills.md" in hits[0]
+
+
+def test_check_py_serves_shrink_check(tmp_path, capsys):
+    chk = _load_check()
+    old = _seed(tmp_path, "old.md", "# T\n\n" + "word " * 40 + "\n")
+    new = _seed(tmp_path, "new.md", "# T\n\nword word\n")
+    assert chk.main(["shrink-check", str(old), str(new)]) == 1
+    assert "ERROR" in capsys.readouterr().out
+    assert chk.main(["shrink-check", str(old), str(new), "--cleared"]) == 0
+
+
+def test_onboard_lib_reexports_shrink_violations():
+    chk = _load_check()
+    assert lib.shrink_violations is chk.shrink_violations
+
+
+def test_docs_standard_has_the_cross_repo_rule():
+    std = _flat(STD_V5)
+    assert "A fact another repository owns" in std and "never restate it" in std
+    assert "--forbidden-allow" in std
