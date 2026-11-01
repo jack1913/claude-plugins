@@ -13,13 +13,13 @@ Protects finished work inside a brand project, and nothing else:
     redirects (> >>), tee, truncate, dd of=, cp/install/ln/rsync into it. New files appear only through
     `brand-creator freeze`, which is always allowed.
   * <project>/rounds/rN/ : every round except the latest (highest N) is read-only: Edit, Write and Bash writes are
-    blocked (GAP S2-P5-t4). The latest round, and a new round with a higher N, stay writable. One exception:
+    blocked. The latest round, and a new round with a higher N, stay writable. One exception:
     rounds/r0/ (the style board) stays writable while `gates.G1s` in BRAND-STATE.md is empty or missing, so a project
     that is already past round 1 can still run its style research as round 0; once G1s is recorded it is read-only like
     any earlier round. The exception needs a `gates:` block map the guard fully understands (see gate_is_empty); a state
     it cannot read, or can read two ways, gives no exception. scripts/patch.py asks the same question through round_is_open.
     Deletes anywhere under rounds/ are blocked (move to removed-<date>/ instead, which is allowed from the latest
-    round). BRAND_CREATOR_GUARD_STRICT=1 applies the literal plan reading: Bash redirects, sed -i, tee, cp and mv
+    round). BRAND_CREATOR_GUARD_STRICT=1 applies the strict reading: Bash redirects, sed -i, tee, cp and mv
     into ANY round are blocked too (use the Write tool for the latest round).
   * A project folder that holds rounds/ or history/ cannot be deleted or moved, and neither can a folder that
     contains one (checked with a shallow glob: */BRAND-STATE.md and */*/BRAND-STATE.md), so `rm -rf <project>` and

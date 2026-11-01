@@ -1113,7 +1113,7 @@ def test_a_reflex_hit_may_name_a_stock_layout_a_tell_or_a_cliche_in_any_letter_c
     assert rows(proj)["site:Atlas:reflex-ids"]["status"] == "pass" and detail(proj, "site:Atlas:reflex-ids") == f"{hit} ({source})"
 
 
-def test_an_unknown_reflex_id_follows_the_group_1_rule(proj):
+def test_an_unknown_reflex_id_follows_the_rule_of_a_style_board_direction(proj):
     mutate(board_of(proj), 'data-field="reflex">no hits</dd>', 'data-field="reflex">hit: palette-made-up | the harbour photograph</dd>')
     r = lint(proj)
     assert r.returncode == 0, r.stdout                                                         # a warning now, a failure from the next release
@@ -1229,6 +1229,50 @@ def test_a_measured_tell_missing_from_the_reflex_warns(proj):
     assert lint(proj).returncode == 0
     row = rows(proj)["site:Ledger:reflex-measured"]
     assert row["status"] == "warn" and "page-check found three-equal-tiles; argue it on the card" in row["detail"], row
+
+
+def page_check_could_not_check(p: Path, name: str, tid: str) -> None:
+    """The report of a page as page-check writes it when it cannot check a tell (no lang, a language with no word list, past the element cap): a `warn` row with `hits: []` and the reason."""
+    def go(d: dict) -> None:
+        for r in d["results"]:
+            if r["id"] == f"tell:{tid}":
+                r["hits"] = []
+                r["detail"] = "NOT verified: the page declares no lang, so the word list of the tell cannot be chosen"
+    mutate_json(check_report_of(p, name), go)
+
+
+def test_a_tell_page_check_could_not_check_is_said_to_be_not_verified_never_found(proj):
+    settle(proj, 2, "Ledger", tells=("eyebrow", "three-equal-tiles"))
+    page_check_could_not_check(proj, "Ledger", "three-equal-tiles")
+    r = lint(proj)
+    assert r.returncode == 1 and "site:tells" in failed(proj), r.stdout                            # the card must still name it, as for a tell that was found
+    why = detail(proj, "site:tells")
+    assert "eyebrow (" in why and "which page-check found" in why, why
+    assert "three-equal-tiles (" in why and "which page-check could not verify on this page" in why, why
+    assert "show every tell page-check found or could not verify, with what you will do about it" in why, why
+    page_check_could_not_check(proj, "Ledger", "eyebrow")
+    r = lint(proj)
+    assert r.returncode == 1 and "site:tells" in failed(proj), r.stdout
+    why = detail(proj, "site:tells")
+    assert "which page-check found" not in why and "which page-check could not verify on this page" in why, why         # nothing was found: nothing says "found"
+    mutate(board_of(proj), "none found", "eyebrow: moved into the heading; three-equal-tiles: kept, argued in My call")
+    assert lint(proj).returncode == 0
+    assert detail(proj, "site:tells") == "2 tell(s) page-check could not verify, each named on its card"
+    row = rows(proj)["site:Ledger:reflex-measured"]
+    assert row["status"] == "warn" and row["detail"].startswith("page-check could not verify eyebrow, three-equal-tiles; argue each on the card") and "found" not in row["detail"], row
+    mutate(board_of(proj), 'data-field="reflex">no hits</dd>', 'data-field="reflex">hit: eyebrow | the kicker is the name of the shop. near miss: three-equal-tiles (the tiles differ in width)</dd>')
+    assert lint(proj).returncode == 0
+    row = rows(proj)["site:Ledger:reflex-measured"]
+    assert row["status"] == "pass" and row["detail"] == "2 tell(s) page-check could not verify, each argued on the reflex line", row
+
+
+def test_a_tell_found_and_a_tell_not_checked_are_told_apart_on_one_page(proj):
+    settle(proj, 2, "Ledger", tells=("eyebrow", "three-equal-tiles"))
+    page_check_could_not_check(proj, "Ledger", "three-equal-tiles")
+    mutate(board_of(proj), "none found", "eyebrow: moved into the heading; three-equal-tiles: kept, argued in My call")
+    assert lint(proj).returncode == 0, lint(proj).stdout
+    assert detail(proj, "site:tells") == "1 tell(s) found by page-check, each named on its card; 1 tell(s) page-check could not verify, each named on its card"
+    assert detail(proj, "site:Ledger:reflex-measured") == "page-check found eyebrow; page-check could not verify three-equal-tiles; argue each on the card ('hit: <id> | <argument>', or 'near miss: <id> (<why>)') or change the page"
 
 
 def test_the_measured_tells_are_not_verified_without_a_page_check_verdict(proj):

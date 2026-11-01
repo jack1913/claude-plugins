@@ -230,12 +230,16 @@ lints the board of the latest round again before `check`, so an edit of the fact
   two or three heroes on the first board, and for each hero or page a page check and four captured views of the page as
   it is now. A hero's cold review has to match those views too. The other pages follow a hero you picked, every choice
   is tagged as a rule or an example, and a rule says where you decided it.
+  When `page-check` could not check a page for a tell (no `lang`, a language with no word list, a page with more
+  elements than it checks), `board-lint` says it could not verify that tell, not that it found it, and the card still
+  has to name it or argue it.
 - `brand-creator site approve` copies the approved pages of the site round into `site/`, with their paths fixed, and
   writes `site/site.json`: each page, its layout, and every choice marked as a brand rule (with where it was decided)
   or an example. It needs the pages approved (G4p recorded) and the pages board linted since its last change. It
   refuses a page that loads from the internet or from outside your project, writes nothing when any page fails, and
-  never deletes an earlier `site/` (`--replace` moves it to `removed-<date>/site/`). The approved pages are
-  references for whoever builds your site, not templates to fill in.
+  never deletes an earlier `site/` (`--replace` moves it to `removed-<date>/site/`). It copies every page card of the
+  pages board, so an approval covers the whole board: to leave a page out, remove its card from the board and lint it
+  again first. The approved pages are references for whoever builds your site, not templates to fill in.
 - A new how-to, "Get reference pages for your site", walks through the website references and the site round, from your
   answer on online research to the approved pages. The manual index and the commands page link to it, "Choose a tier"
   and "What it makes" describe the new steps, and the glossary explains website references, reference page, cold review

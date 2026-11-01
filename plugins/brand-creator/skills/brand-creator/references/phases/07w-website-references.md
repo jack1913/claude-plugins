@@ -38,7 +38,8 @@ the brief in their own words, and then the step applies. Quick never runs it.
   tokens and rules of G4 are what the site is built in; this step takes none of its look from a reference.
 - The sites the owner named, liked or disliked, as links or screenshots. If a named site may be the owner's own, say so on
   the board and ask in its questions.
-- `site_research` in BRAND-STATE.md (`auto` until the owner is asked): the answer decides what you may open.
+- `site_research` in BRAND-STATE.md (`auto`, or not set in an older project, until the owner is asked): the answer decides
+  what you may open.
 - [page-layouts.json](../page-layouts.json): the layout references keyed to the visitor's job, for a group's
   `data-layout` when one fits.
 
@@ -82,8 +83,9 @@ without a captured or sent screenshot does not count.
 
 Searching for sites tells search services what the brand makes, and opening a site tells its owner that someone looked.
 The naming step already asks before it does that for candidate names; this step asks too. Read
-`state --project <dir> --get site_research` first: anything but `auto` is the owner's recorded answer, and you **never ask
-again**. The owner may change it in their own words, and then you record the new one.
+`state --project <dir> --get site_research` first: `auto` or not set (an older project has no such key, and the command
+exits 1) means the owner was not asked; any other value is the owner's recorded answer, and you **never ask again**. The
+owner may change it in their own words, and then you record the new one.
 
 Ask once, with one AskUserQuestion item (the same question in plain text without the tool), and say what each option lets
 you do. Record the answer with `state --set site_research=` and the value of the option the owner chose. Options:

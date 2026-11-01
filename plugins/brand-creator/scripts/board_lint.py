@@ -23,7 +23,7 @@ questions and reply; and, at the hero stage, one card per variant (site:variants
 the tells in it (site:tells) and the stills `capture` took (site:stills).
 At the pages stage the page cards are read instead (site:hero-first: data-hero names a variant card of an earlier hero board; site:pages: a page id each; the rows of a hero card that fit a page; site:cold only for a page that has a cold review)
 and the choices section is required: site:choices holds every choice to a tag, rule or example, and a rule to the line of BRAND-STATE.md, DECISIONS.md or decisions/*.md that says where the owner decided it.
-Each hero card also gets the reflex rows of group 1 (site:<name>:reflex, the required line, then :reflex-format|reflex-ids|reflex-count|reflex-grounded|reflex-measured, and across cards site:reflex-shared), site:refs (what the card takes from is what
+Each hero card also gets the reflex rows of a style board's direction (site:<name>:reflex, the required line, then :reflex-format|reflex-ids|reflex-count|reflex-grounded|reflex-measured, and across cards site:reflex-shared), site:refs (what the card takes from is what
 the owner picked in G4w) and site:cold (rounds/rN/<name>/cold-review.md: its verdict, its inputs with sha256, and the card saying the same); boardlib/siteboard.py.
 A pick board also gets, for each direction, direction:<name>:reflex-format|reflex-ids|reflex-count|reflex-grounded and, across directions,
 directions:reflex-shared (the rules are in boardlib/reflex.py): two hits in one direction, or one hit that every direction shares, fail; a free-text line,

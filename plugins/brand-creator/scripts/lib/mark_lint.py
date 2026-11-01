@@ -1,8 +1,8 @@
 """mark_lint: a mark, lockup, wordmark or favicon SVG must be pure vector shapes.
 
 Fails on <text>, <tspan>, <textPath>, font-family, @font-face, an external href (anything that is not a '#fragment'
-or a data: URI), <script> and <foreignObject>. Outline text first (scripts/outline_glyphs.py in a later stage).
-Rule source: GAP S2-P6-t5 / S2-P10-sr1 / S4-19 in the plan.
+or a data: URI), <script> and <foreignObject>. Outline text first (scripts/outline_glyphs.py).
+A mark has to look the same wherever it is opened, so it holds no live text, font, script or file loaded from outside itself.
 """
 from __future__ import annotations
 

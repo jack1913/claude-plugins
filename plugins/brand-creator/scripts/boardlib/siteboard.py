@@ -13,7 +13,7 @@ capture, and the caption says so). Every capture.json is an input of the lint re
 Whether the brief lists a site is read from the value after "Required surfaces:" in brief/BRIEF.md, against a list of English and Polish words (SITE_WORDS). A value wrapped in parentheses is the untouched
 line of the template ("(site, app icon, ...)"), the owner's own words not yet written, and does not count. A brief in another language is not recognised: the owner adds the word "site" to the line.
 
-Three more kinds of row close the card of a hero variant (reflex_rows, refs_rows, cold_rows). The reflex test of the card (data-field="reflex") is group 1's, read by boardlib/reflex.py against the ids of page-tells.json and ai-defaults.json and the items of research/site-cliches.md:
+Three more kinds of row close the card of a hero variant (reflex_rows, refs_rows, cold_rows). The reflex test of the card (data-field="reflex") is the one a style board's direction has, read by boardlib/reflex.py against the ids of page-tells.json and ai-defaults.json and the items of research/site-cliches.md:
 site:<name>:reflex (the line is there: a card with no reflex line fails, as a direction does) and site:<name>:reflex-format|reflex-ids|reflex-count|reflex-grounded for each card, site:<name>:reflex-measured (a tell page-check measured that the line does not argue) and site:reflex-shared across the cards. site:refs holds each card's "Takes from" to what the owner picked in G4w (a group of the references
 board, or a site the owner liked, that the G4w record names before its "dislikes"). site:cold reads rounds/rN/<name>/cold-review.md: the verdict first, `by:`, the inputs it was made from with their sha256 (the four stills, brief/BRIEF.md and FACTS.md, each equal to the file now), at most five findings, and the card's cold line saying the same verdict.
 
@@ -429,13 +429,27 @@ def tells_found(doc: dict) -> list[tuple[str, str]]:
     return found
 
 
+def tells_unchecked(doc: dict) -> set[str]:
+    """The ids of the tells whose warning says page-check could not check: the row is a `warn` with `hits: []` (no lang, a language with no word list, past the element cap), so it found nothing and verified nothing.
+    A row with a hit, or an older report whose row has no `hits` at all, is a tell page-check found."""
+    rows = doc.get("results") if isinstance(doc.get("results"), list) else []
+    return {m.group(1) for r in rows if isinstance(r, dict) and r.get("status") == "warn" and r.get("hits") == [] and (m := TELL_ROW.fullmatch(str(r.get("id", ""))))}
+
+
 def tells_problems(v: SiteVariant, doc: dict) -> list[str]:
-    """site:tells for one variant: every tell its page-check report warns of is named, by its id, on the card's tells line (data-field="tells")."""
+    """site:tells for one variant: every tell its page-check report warns of is named, by its id, on the card's tells line (data-field="tells"). A tell page-check could not check (tells_unchecked) is named too, and the
+    message says page-check could not verify it, not that it found it."""
     text = " ".join(n.text() for n in v.card.find_all(data_field="tells"))
+    unchecked = tells_unchecked(doc)
     missing = [(tid, name) for tid, name in tells_found(doc) if not re.search(rf"(?<![A-Za-z0-9-]){re.escape(tid)}(?![A-Za-z0-9-])", text, re.I)]
     if not missing:
         return []
-    return [f"{v.name}: the card does not name {', '.join(f'{tid} ({name})' if name else tid for tid, name in missing)}, which page-check found: show every tell page-check found, "
+    def named(pairs: list[tuple[str, str]]) -> str:
+        return ", ".join(f"{tid} ({name})" if name else tid for tid, name in pairs)
+    found = [(tid, name) for tid, name in missing if tid not in unchecked]
+    unverified = [(tid, name) for tid, name in missing if tid in unchecked]
+    said = " and ".join(([f"{named(found)}, which page-check found"] if found else []) + ([f"{named(unverified)}, which page-check could not verify on this page"] if unverified else []))
+    return [f"{v.name}: the card does not name {said}: show every tell page-check found{' or could not verify' if unverified else ''}, "
             "with what you will do about it (name each by its id on the tells line, data-field=\"tells\")"]
 
 
@@ -516,7 +530,7 @@ def proof_rows(rep: Report, project: Path, page: Path, variants: list[SiteVarian
     reads the report that site:check found current: a variant with no such report is not judged here (site:check says why), so a board with nothing else wrong in the tells is "not verified", never a pass.
     The cards of the pages stage are read by the same rows (`noun` "page", `count_row` the row that says why there is none).
     -> the current page-check verdict of each variant that has one, by the variant's name (reflex_rows reads the tells in it)."""
-    labels = (("site:check", f"each {noun}'s page-check is current and the card says what it found"), ("site:tells", "the card names every tell page-check found"),
+    labels = (("site:check", f"each {noun}'s page-check is current and the card says what it found"), ("site:tells", "the card names every tell page-check found or could not verify"),
               ("site:stills", "the stills on the cards are those `capture` took of the page as it is now"))
     if not variants:
         for rid, label in labels:
@@ -533,8 +547,10 @@ def proof_rows(rep: Report, project: Path, page: Path, variants: list[SiteVarian
     elif unread:
         rep.add("site:tells", "skipped", labels[1][1], detail=f"not verified: no current page-check verdict to read the tells from for {', '.join(unread)} (site:check says why)")
     else:
-        count = sum(len(tells_found(doc)) for _, doc in judged)
-        rep.add("site:tells", "pass", labels[1][1], detail=(f"{count} tell(s) found by page-check, each named on its card" if count else "page-check found no tell"))
+        unchecked = sum(len(tells_unchecked(doc)) for _, doc in judged)
+        count = sum(len(tells_found(doc)) for _, doc in judged) - unchecked
+        said = ([f"{count} tell(s) found by page-check, each named on its card"] if count else []) + ([f"{unchecked} tell(s) page-check could not verify, each named on its card"] if unchecked else [])
+        rep.add("site:tells", "pass", labels[1][1], detail="; ".join(said) if said else "page-check found no tell")
     problems = [x for v in variants for x in stills_problems(project, page, v)]
     rep.add("site:stills", "fail" if problems else "pass", labels[2][1],
             detail=shown(problems) if problems else "the four stills of each card are the files `capture` took of the page as it is now, byte for byte")
@@ -549,7 +565,7 @@ def proof_rows(rep: Report, project: Path, page: Path, variants: list[SiteVarian
 FACTS_FILE = "FACTS.md"
 COLD_FILE = "cold-review.md"      # rounds/rN/<name>/cold-review.md: what a reader of the four stills, the brief and the facts alone said about the first screen
 MAX_FINDINGS = 5                  # a cold review gives at most this many findings, the costliest to the visitor first
-REFLEX_LABEL = "the card has a reflex line"   # site:<name>:reflex: the required field; group 1's row of a direction says "required field"
+REFLEX_LABEL = "the card has a reflex line"   # site:<name>:reflex: the required field; the row of a style board's direction says "required field"
 REFLEX_SOURCES = "page-tells.json, ai-defaults.json or research/site-cliches.md"   # where the name of a hit may come from, as a reflex row says it
 NO_CLICHE_FILE = "page-tells.json and ai-defaults.json (the project has no research/site-cliches.md, so no cliché of the category's sites can be named)"
 COLD_VERDICT = re.compile(r"verdict[ \t]*:[ \t]*(ship|fix)", re.I)       # the first non-empty line of cold-review.md
@@ -573,17 +589,22 @@ def measured_row(rep: Report, v: SiteVariant, parsed: reflex.Parsed | None, doc:
         rep.add(rid, "skipped", label, detail="not verified: no current page-check verdict to read the measured tells from (site:check says why)")
         return
     argued = {reflex.norm(e.name) for e in parsed.entries} if parsed is not None else set()
-    found = [tid for tid, _ in tells_found(doc)]
+    unchecked = tells_unchecked(doc)
+    found = [tid for tid, _ in tells_found(doc) if tid not in unchecked]
+    unverified = [tid for tid, _ in tells_found(doc) if tid in unchecked]
     missing = [tid for tid in found if reflex.norm(tid) not in argued]
-    if missing:
-        rep.add(rid, "warn", label, detail=f"page-check found {', '.join(missing)}; argue {'it' if len(missing) == 1 else 'each'} on the card ('hit: <id> | <argument>', or 'near miss: <id> (<why>)') or change the page")
+    missing_unverified = [tid for tid in unverified if reflex.norm(tid) not in argued]
+    if missing or missing_unverified:
+        said = ([f"page-check found {', '.join(missing)}"] if missing else []) + ([f"page-check could not verify {', '.join(missing_unverified)}"] if missing_unverified else [])
+        rep.add(rid, "warn", label, detail=f"{'; '.join(said)}; argue {'it' if len(missing) + len(missing_unverified) == 1 else 'each'} on the card ('hit: <id> | <argument>', or 'near miss: <id> (<why>)') or change the page")
     else:
-        rep.add(rid, "pass", label, detail=f"{len(found)} measured tell(s), each argued on the reflex line" if found else "page-check measured no tell")
+        said = ([f"{len(found)} measured tell(s), each argued on the reflex line"] if found else []) + ([f"{len(unverified)} tell(s) page-check could not verify, each argued on the reflex line"] if unverified else [])
+        rep.add(rid, "pass", label, detail="; ".join(said) if said else "page-check measured no tell")
 
 
 def ids_detail(parsed: reflex.Parsed, tells: list[str], ids: list[str], cliches: list[str]) -> str | None:
     """The detail of a passing site:<name>:reflex-ids: each hit with where its name comes from. reflex.known gives the label "ai-defaults" to every id it is passed, and `ids` holds the tells of page-tells.json as
-    well as those of ai-defaults.json, so a tell would read "(ai-defaults)": it is relabelled "(page-tells)" here (reflex.py is group 1's and stays as it is). None when no hit is named."""
+    well as those of ai-defaults.json, so a tell would read "(ai-defaults)": it is relabelled "(page-tells)" here (reflex.py is shared with the style board's directions and stays as it is). None when no hit is named."""
     named = [e for e in reflex.hits(parsed) if reflex.norm(e.name)]
     if not named:
         return None
@@ -592,7 +613,7 @@ def ids_detail(parsed: reflex.Parsed, tells: list[str], ids: list[str], cliches:
 
 
 def reflex_rows(rep: Report, project: Path, variants: list[SiteVariant], verdicts: dict[str, dict]) -> None:
-    """The reflex test of each card (group 1's rules, boardlib/reflex.py). site:<name>:reflex is the required field, as `direction:<name>:reflex` is on a style board: a card whose reflex line is missing or empty fails, so
+    """The reflex test of each card (the rules of a style board's direction, boardlib/reflex.py). site:<name>:reflex is the required field, as `direction:<name>:reflex` is on a style board: a card whose reflex line is missing or empty fails, so
     that deleting the line never gets round :reflex-count and site:reflex-shared. For each card with a reflex line, `reflex.line_rows` against the ids of page-tells.json and ai-defaults.json and the items of the project's
     research/site-cliches.md gives site:<name>:reflex-format, :reflex-ids (a tell of page-tells.json is labelled page-tells; ids_detail), :reflex-count (two hits in one card fail) and :reflex-grounded (the warnings say
     "a failure from the next release"). site:<name>:reflex-measured (measured_row) compares the line with what page-check measured. site:reflex-shared fails when every card hits one pattern, so the variants are not
