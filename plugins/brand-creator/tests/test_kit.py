@@ -1010,7 +1010,7 @@ def test_each_named_ground_gets_a_scope_that_maps_the_page_roles_to_its_own(pack
     build_tokens(pack)
     assert (json.loads((pack / "assets/tokens/tokens.json").read_text(encoding="utf-8"))["grounds"]["named_by_owner"]) == NAMED
     r = bc("kit", "build", "--plan", project=pack)
-    assert r.returncode == 0 and r.stdout.splitlines()[0] == "would write 13 generated files into .claude/skills/acme-brand/ (version 1.2)", r.stdout + r.stderr
+    assert r.returncode == 0 and r.stdout.splitlines()[0] == "would write 15 generated files into .claude/skills/acme-brand/ (version 1.2)", r.stdout + r.stderr
     r = build(pack)
     assert r.returncode == 0, r.stdout + r.stderr
     assert kit_files(pack) == sorted([*KIT_FILES, ON_GROUND])
