@@ -218,8 +218,8 @@ test("list shows interactive roster sessions with kind, role and job", async () 
     assignJob(t.deps, "u1", "review PR 7");
     assert.equal(await main(["list"], t.deps), 0);
     const rows = t.out.join("\n");
-    assert.match(rows, /^u1 {2}0 {2}0% {2}fresh {2}\(no turns yet\) {2}interactive worker active review PR 7$/m);
-    assert.match(rows, /^u2 {2}0 {2}0% {2}fresh {2}\(no turns yet\) {2}interactive analyst clean$/m);
+    assert.match(rows, /^u1 {2}0 {2}0% {2}fresh {2}\(no turns yet\) {2}model fresh {2}interactive worker active review PR 7$/m);
+    assert.match(rows, /^u2 {2}0 {2}0% {2}fresh {2}\(no turns yet\) {2}model fresh {2}interactive analyst clean$/m);
     assert.doesNotMatch(rows, /^stranger/m);
   } finally {
     t.cleanup();

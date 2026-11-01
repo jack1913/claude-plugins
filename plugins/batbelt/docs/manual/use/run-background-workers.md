@@ -44,8 +44,14 @@ Claude picks a clean session of yours in that repository and gives it the job, w
 files go, for example). You see a line like `assigned backend-b7: merge payments into test`. If no clean session is free
 there, it starts a background worker instead: `spawned backend-merge id=<id> in <folder>`.
 
-- A session that already did a job never gets another one. Clear it (`/clear`) and tell Claude, or let it start a worker.
-- One session edits one folder at a time. For a second job in the same repository, use a second clone.
+- Each job gets a tier. Design, writing and review are `creative`: an Opus model at high effort or more. Renames,
+  moves and checks are `mechanical`: another model at medium effort or less. If a session runs the wrong model or
+  effort, Claude says `MISMATCH` and gives you `/model` and `/effort` lines to paste into that window. It never
+  changes a session's settings itself.
+- A session that already did a job gets another one only while it is small, under 30% of the size where it would
+  compact. Otherwise clear it (`/clear`) and tell Claude, or let Claude start a worker.
+- One session edits one repository at a time, unless both jobs name the folders they write, the folders don't
+  overlap, and only one of them runs git. Otherwise, for a second job in the same repository, use a second clone.
 - When a session has a question, Claude asks you, one at a time, quoting your own words back before its reading of them.
 
 ## Keep it small
@@ -58,8 +64,10 @@ Claude measures each session's context, and compacts only between tasks:
     `backend-b7: /compact keep the merge state and the next step`. A message from another session can't run `/compact`.
 - A busy session at 50% or more is asked to stop at its next task boundary first.
 - Before compacting a worker above 50%, Claude tells you its size and that a compaction can cost close to a dollar.
+- Once Claude has seen a session auto-compact, it knows the size where that happens. From 80% of it, a session's line
+  ends in `WARN near compaction`.
 
-Ask "how are my sessions?" to see each one's size, state and job.
+Ask "how are my sessions?" to see each one's size, model and effort, state and job.
 
 ## Wrap up the day
 
@@ -77,7 +85,9 @@ Not now? Say so. The next time you start the master, it offers the report first.
 
 When a background job is done, Claude closes the worker and shows a line like
 `closed backend-merge (resume: cd "<folder>" && claude --resume <session id>)`. The conversation is kept: run that command to
-open it again. The day's report is in the logs folder, under the date: `<logs folder>/2026-10-28/report.md`.
+open it again. The day's report is in the logs folder, under the date: `<logs folder>/2026-10-28/report.md`. A day
+there starts at 05:00, so work past midnight stays with its day. To start it at another hour, set
+`PUPPET_DAY_START_HOUR` (`0` for midnight).
 
 ## If something goes wrong
 
@@ -85,8 +95,10 @@ open it again. The day's report is in the logs folder, under the date: `<logs fo
 | --- | --- |
 | `puppet: no context window` | Tell Claude the window size your status line shows, or set `PUPPET_CONTEXT_WINDOW` to it (in tokens) |
 | `puppet: cannot run claude` | Set `PUPPET_CLAUDE_BIN` to the full path of the `claude` executable |
-| `already editing` | Another session works in that folder. Wait for it to finish, or use a second clone |
-| `one job per context` | That session already did a job. Clear it and tell Claude, or let Claude start a worker |
+| `already editing` | Another session works in that folder. Wait for it to finish, use a second clone, or give both jobs separate folders |
+| `one job per context` | That session already did a job. Claude can reuse it while it is small; otherwise clear it and tell Claude, or let Claude start a worker |
+| `MISMATCH … tier …` | Paste the `/model` and `/effort` lines Claude gives you into that window |
+| `WARN near compaction` | That session is close to auto-compacting. Let it finish its task, then compact or clear it as Claude suggests |
 | `no clean session for <folder>; spawn one` | None of your sessions is free there; Claude starts a worker |
 | `changed (new session id …)` | The window was cleared or restarted. Tell Claude whether it is clean now |
 | `just compacted (auto); its size is known after its next turn` | Wait for that session's next answer, then ask again |

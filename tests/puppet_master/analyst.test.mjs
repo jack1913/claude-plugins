@@ -241,3 +241,30 @@ test("cli: logs prints the folder and the newest earlier report not yet reviewed
     t.cleanup();
   }
 });
+
+test("addFinding takes evidence from an earlier day folder and files the finding under today", () => {
+  const t = setup(at(28, 10));
+  try {
+    t.events("2026-10-27", [ev("s:1", "user-turn")]);
+    t.events("2026-10-28", [ev("s:2", "user-turn")]);
+    const f = finding(t, { evidence: ["s:1", "s:2"] });
+    assert.equal(f.id, "F-1");
+    assert.ok(fs.existsSync(path.join(t.logs, "2026-10-28", "findings.jsonl")));
+    assert.throws(() => finding(t, { evidence: ["s:3"] }), /evidence s:3 is not a harvested event of 2026-10-28 or an earlier day/);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("the work day starts at 05:00: at 02:00 the summary is still the day before", () => {
+  const t = setup(at(28, 2));
+  try {
+    t.events("2026-10-27", [ev("s:1", "user-turn")]);
+    t.stats("2026-10-27", { runs: 1, sessions: ["u1"], lines: 5, events: 1 });
+    assert.equal(summarize(t.deps, { logsDir: t.logs }).day, "2026-10-27");
+    t.deps.env.PUPPET_DAY_START_HOUR = "0";
+    assert.equal(summarize(t.deps, { logsDir: t.logs }).day, "2026-10-28");
+  } finally {
+    t.cleanup();
+  }
+});

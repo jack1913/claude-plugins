@@ -21,10 +21,30 @@ export function resolveLogsDir({ flag, env = {}, pluginData, configDir: cfg }) {
   return { dir: path.join(cfg, "puppet-master", "logs"), source: "config" };
 }
 
-// The local calendar day of `date`, as YYYY-MM-DD: one folder per working day.
+// The local calendar day of `date`, as YYYY-MM-DD.
 export function dayOf(date) {
   const p = (n) => String(n).padStart(2, "0");
   return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}`;
+}
+
+// A work day starts at this local hour, so a session running past midnight stays in one
+// day folder. PUPPET_DAY_START_HOUR overrides it (0 restores calendar days).
+export const DAY_START_HOUR = 5;
+
+export function dayStartHour(env = {}) {
+  const v = env.PUPPET_DAY_START_HOUR;
+  if (v === undefined || v === "") return DAY_START_HOUR;
+  if (!/^\d{1,2}$/.test(v) || Number(v) > 23) {
+    throw new PuppetError(`PUPPET_DAY_START_HOUR must be a whole hour from 0 to 23, got "${v}"`, 2);
+  }
+  return Number(v);
+}
+
+// The work day of `date`, as YYYY-MM-DD: one folder per work day.
+export function workDay(date, startHour = DAY_START_HOUR) {
+  const d = new Date(date.getTime());
+  d.setHours(d.getHours() - startHour);
+  return dayOf(d);
 }
 
 // --- redaction ------------------------------------------------------------------------
@@ -102,9 +122,11 @@ function shellEvents(command) {
   return out;
 }
 
-// Events from one entry; `commands` maps tool_use ids to their shell commands so a
-// failed result can be matched to what ran.
-function entryEvents(e, commands) {
+// Events from one entry. `seen.commands` maps tool_use ids to their shell commands so a
+// failed result can be matched to what ran; `seen.asks` holds the ids of AskUserQuestion
+// calls, whose result is the user's answer.
+function entryEvents(e, seen) {
+  const { commands, asks } = seen;
   const found = [];
   const add = (kind, text) => found.push({ kind, text });
   const content = e.message?.content;
@@ -116,6 +138,11 @@ function entryEvents(e, commands) {
       for (const b of content) {
         if (b?.type !== "tool_result") continue;
         const r = textOf(b.content);
+        // A dialog answer is the user speaking, as much as a typed turn.
+        if (asks.has(b.tool_use_id)) {
+          if (!b.is_error && r) add("user-turn", r);
+          continue;
+        }
         // The helper's own failure line starts a line; text that merely quotes the
         // format (a `cat` of SKILL.md) does not.
         if (/^puppet: /m.test(r)) add("helper-error", r);
@@ -129,8 +156,12 @@ function entryEvents(e, commands) {
   } else if (e.type === "assistant" && Array.isArray(content)) {
     for (const b of content) {
       if (b?.type !== "tool_use") continue;
-      if (b.name === "SendMessage") {
-        const m = typeof b.input?.message === "string" ? b.input.message : JSON.stringify(b.input?.message);
+      if (b.name === "AskUserQuestion") {
+        asks.add(b.id);
+      } else if (b.name === "SendMessage") {
+        // A pure notify_when_idle subscription carries no message: nothing was said.
+        if (b.input?.message === undefined || b.input.message === "") continue;
+        const m = typeof b.input.message === "string" ? b.input.message : JSON.stringify(b.input.message);
         add("message-out", `${b.input?.to}: ${m}`);
       } else if (SHELLS.has(b.name) && typeof b.input?.command === "string") {
         commands.set(b.id, b.input.command);
@@ -150,7 +181,7 @@ function entryEvents(e, commands) {
 export function extractEvents(text, { sessionId, session, fromLine }) {
   const lines = text.split(/\r?\n/);
   const sid = sessionId.slice(0, 8);
-  const commands = new Map();
+  const seen = { commands: new Map(), asks: new Set() };
   const events = [];
   let nextLine = fromLine;
   for (let i = 0; i < lines.length; i++) {
@@ -168,7 +199,7 @@ export function extractEvents(text, { sessionId, session, fromLine }) {
       throw new PuppetError(`${session} transcript line ${i + 1} is not valid JSON`);
     }
     // Earlier lines are read only to learn their tool_use commands.
-    const found = e.isSidechain ? [] : entryEvents(e, commands);
+    const found = e.isSidechain ? [] : entryEvents(e, seen);
     if (i < fromLine) continue;
     nextLine = i + 1;
     found.forEach((f, k) => {
@@ -248,7 +279,8 @@ export function harvest(deps, { logsDir, sessions }) {
 }
 
 function harvestLocked(deps, { logsDir, sessions }) {
-  const day = dayOf(deps.now());
+  const startHour = dayStartHour(deps.env);
+  const day = workDay(deps.now(), startHour);
   const projects = path.join(configDir(deps.env), "projects");
   const offsetsPath = path.join(logsDir, "offsets.json");
   const offsets = readJson(deps, offsetsPath, {});
@@ -280,19 +312,35 @@ function harvestLocked(deps, { logsDir, sessions }) {
     offsets[s.sessionId] = r.nextLine;
     events.push(...r.events);
   }
-  const dayDir = path.join(logsDir, day);
-  deps.fs.mkdirSync(dayDir, { recursive: true });
-  if (events.length > 0) {
-    deps.fs.appendFileSync(path.join(dayDir, "events.jsonl"), events.map((e) => `${JSON.stringify(e)}\n`).join(""));
+  // Each event goes to the work day of its own timestamp, so a harvest run after the day
+  // ends still files that day's events under it. An event without a usable timestamp goes
+  // to the run's day.
+  const byDay = new Map([[day, []]]);
+  for (const e of events) {
+    const t = e.ts ? new Date(e.ts) : null;
+    const d = t && !Number.isNaN(t.getTime()) ? workDay(t, startHour) : day;
+    if (!byDay.has(d)) byDay.set(d, []);
+    byDay.get(d).push(e);
+  }
+  // The run itself (its runs, sessions and lines) counts on the run's day; events count on
+  // the day they were filed under.
+  for (const [d, dayEvents] of byDay) {
+    const dayDir = path.join(logsDir, d);
+    deps.fs.mkdirSync(dayDir, { recursive: true });
+    if (dayEvents.length > 0) {
+      deps.fs.appendFileSync(path.join(dayDir, "events.jsonl"), dayEvents.map((e) => `${JSON.stringify(e)}\n`).join(""));
+    }
+    const statsPath = path.join(dayDir, "harvest-stats.json");
+    const stats = readJson(deps, statsPath, { runs: 0, sessions: [], lines: 0, events: 0 });
+    const isRunDay = d === day;
+    writeJson(deps, statsPath, {
+      runs: stats.runs + (isRunDay ? 1 : 0),
+      sessions: [...new Set([...stats.sessions, ...(isRunDay ? read : dayEvents.map((e) => e.session))])],
+      lines: stats.lines + (isRunDay ? lines : 0),
+      events: stats.events + dayEvents.length,
+    });
   }
   writeJson(deps, offsetsPath, offsets);
-  const statsPath = path.join(dayDir, "harvest-stats.json");
-  const stats = readJson(deps, statsPath, { runs: 0, sessions: [], lines: 0, events: 0 });
-  writeJson(deps, statsPath, {
-    runs: stats.runs + 1,
-    sessions: [...new Set([...stats.sessions, ...read])],
-    lines: stats.lines + lines,
-    events: stats.events + events.length,
-  });
-  return { sessions: read.length, missing, restarted, lines, events: events.length, day };
+  const days = [...byDay.keys()].filter((d) => d === day || byDay.get(d).length > 0).sort();
+  return { sessions: read.length, missing, restarted, lines, events: events.length, day, days };
 }

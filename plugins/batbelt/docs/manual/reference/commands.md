@@ -29,6 +29,16 @@ Type the command in the session you want as the master, or ask Claude to hand a 
 
 > /batbelt:puppet-master
 
+It reads these environment variables, all optional:
+
+| Variable | What it sets |
+| --- | --- |
+| `PUPPET_CONTEXT_WINDOW` | Your sessions' context window, in tokens, when Claude can't learn it |
+| `PUPPET_COMPACT_AT` | The size, in tokens, at which your sessions auto-compact. Without it, Claude uses the smallest one it has seen |
+| `PUPPET_DAY_START_HOUR` | The hour a day starts in the analyst's logs, from `0` to `23`. Default `5` |
+| `PUPPET_LOGS_DIR` | The logs folder, ahead of the plugin option |
+| `PUPPET_CLAUDE_BIN` | The full path of the `claude` executable |
+
 ## onboard-repo
 
 Run it inside the repository you want to set up. With no arguments it does the full pass: it shows a plan, then changes the repository only after you say yes. How-to: [Set up a repository](../use/set-up-a-repository.md).

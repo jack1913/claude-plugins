@@ -5,10 +5,12 @@ import path from "node:path";
 
 import {
   EVENT_KINDS,
+  dayStartHour,
   extractEvents,
   harvest,
   redact,
   resolveLogsDir,
+  workDay,
 } from "../../plugins/batbelt/skills/puppet-master/scripts/harvest.mjs";
 import { main } from "../../plugins/batbelt/skills/puppet-master/scripts/puppet.mjs";
 import { agent, fixture, makeDeps } from "./helpers.mjs";
@@ -131,7 +133,7 @@ test("harvest appends events, advances offsets and adds to the day's stats", () 
   const t = harvestSetup();
   try {
     const r = harvest(t.deps, { logsDir: t.logs, sessions: [{ name: "u1", sessionId: SID }] });
-    assert.deepEqual(r, { sessions: 1, missing: [], restarted: [], lines: 23, events: 10, day: DAY });
+    assert.deepEqual(r, { sessions: 1, missing: [], restarted: [], lines: 23, events: 10, day: DAY, days: [DAY] });
     assert.equal(readJsonl(path.join(t.logs, DAY, "events.jsonl")).length, 10);
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(t.logs, "offsets.json"), "utf8")), { [SID]: 23 });
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(t.logs, DAY, "harvest-stats.json"), "utf8")), {
@@ -332,4 +334,61 @@ test("cli: harvest names a transcript it restarted from the top", async () => {
   } finally {
     t.cleanup();
   }
+});
+
+test("a notify_when_idle subscription with no message is not harvested as a message", () => {
+  const send = (input) =>
+    `${JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", id: "t", name: "SendMessage", input }] } })}\n`;
+  const text = send({ to: "w1", notify_when_idle: true }) + send({ to: "w1", message: "hello" });
+  const { events } = extractEvents(text, { sessionId: "abcdef12-0", session: "m", fromLine: 0 });
+  assert.deepEqual(events.map((e) => e.excerpt), ["w1: hello"]);
+});
+
+test("workDay: the day starts at 05:00 local, PUPPET_DAY_START_HOUR moves it, a bad value is refused", () => {
+  assert.equal(workDay(new Date(2026, 9, 28, 4, 59)), "2026-10-27");
+  assert.equal(workDay(new Date(2026, 9, 28, 5, 0)), "2026-10-28");
+  assert.equal(workDay(new Date(2026, 9, 28, 0, 30), dayStartHour({ PUPPET_DAY_START_HOUR: "0" })), "2026-10-28");
+  assert.equal(dayStartHour({}), 5);
+  for (const v of ["24", "-1", "5.5", "five"]) {
+    assert.throws(() => dayStartHour({ PUPPET_DAY_START_HOUR: v }), /PUPPET_DAY_START_HOUR must be a whole hour from 0 to 23/);
+  }
+});
+
+test("harvest files each event under the work day of its own timestamp", () => {
+  const local = (d, h, m = 0) => new Date(2026, 9, d, h, m).toISOString();
+  const userLine = (ts, text) => `${JSON.stringify({ type: "user", timestamp: ts, message: { role: "user", content: text } })}\n`;
+  const t = makeDeps({ now: () => new Date(2026, 9, 28, 10, 0) });
+  t.logs = path.join(t.dir, "logs");
+  t.writeTranscript(
+    SID,
+    userLine(local(27, 23, 30), "late") + userLine(local(28, 2, 0), "after midnight") + userLine(local(28, 9, 0), "morning"),
+  );
+  try {
+    const r = harvest(t.deps, { logsDir: t.logs, sessions: [{ name: "u1", sessionId: SID }] });
+    assert.deepEqual([r.day, r.days, r.events], ["2026-10-28", ["2026-10-27", "2026-10-28"], 3]);
+    const excerpts = (d) => readJsonl(path.join(t.logs, d, "events.jsonl")).map((e) => e.excerpt);
+    assert.deepEqual(excerpts("2026-10-27"), ["late", "after midnight"]);
+    assert.deepEqual(excerpts("2026-10-28"), ["morning"]);
+    const stats = (d) => JSON.parse(fs.readFileSync(path.join(t.logs, d, "harvest-stats.json"), "utf8"));
+    assert.deepEqual(stats("2026-10-27"), { runs: 0, sessions: ["u1"], lines: 0, events: 2 });
+    assert.deepEqual(stats("2026-10-28"), { runs: 1, sessions: ["u1"], lines: 3, events: 1 });
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("an AskUserQuestion answer is a user turn, also when the question was read on an earlier run; a declined dialog is not", () => {
+  const l = (o) => `${JSON.stringify({ timestamp: "2026-10-27T12:00:00Z", ...o })}\n`;
+  const ask = (id) => l({ type: "assistant", message: { content: [{ type: "tool_use", id, name: "AskUserQuestion", input: { questions: [] } }] } });
+  const result = (id, content, isError) =>
+    l({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: id, content, ...(isError ? { is_error: true } : {}) }] } });
+  const text =
+    ask("q1") +
+    result("q1", 'The user answered: "Use idle sessions?"="Yes, use them"') +
+    ask("q2") +
+    result("q2", "The user doesn't want to proceed with this tool use.", true);
+  const all = extractEvents(text, { sessionId: SID, session: "m", fromLine: 0 }).events;
+  assert.deepEqual(all.map((e) => [e.kind, e.excerpt]), [["user-turn", 'The user answered: "Use idle sessions?"="Yes, use them"']]);
+  const later = extractEvents(text, { sessionId: SID, session: "m", fromLine: 1 }).events;
+  assert.deepEqual(later.map((e) => e.id), ["abcdef12:2"]);
 });

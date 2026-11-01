@@ -102,7 +102,7 @@ test("list shows a worker with no transcript yet as fresh and succeeds", async (
   try {
     t.writeTranscript(t.deps.agents[0].sessionId, fixture("transcript-usage-sum.jsonl"));
     assert.equal(await main(["list", "--window", "1000000"], t.deps), 0);
-    assert.match(t.out.join("\n"), /^w2 {2}0 {2}0% {2}fresh {2}\(no turns yet\)$/m);
+    assert.match(t.out.join("\n"), /^w2 {2}0 {2}0% {2}fresh {2}\(no turns yet\) {2}model fresh$/m);
   } finally {
     t.cleanup();
   }

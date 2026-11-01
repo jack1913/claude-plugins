@@ -46,9 +46,40 @@ function parseTranscript(text) {
 // The worker's context size: the last main-thread assistant usage, unless a
 // compact_boundary came after it (a worker measured right after `cycle`).
 export function transcriptTokens(text) {
+  return tokensOf(parseTranscript(text));
+}
+
+// What one read of a transcript tells: its size, the smallest size it was automatically
+// compacted at, and the model and effort of its last main-thread API request. The size
+// throws as transcriptTokens does; the rest never throws and is null when unrecorded.
+export function transcriptFacts(text) {
+  const entries = parseTranscript(text);
+  let autoCompactAt = null;
+  let model = null;
+  let effort = null;
+  for (const e of entries) {
+    if (e.isSidechain) continue;
+    if (e.type === "system" && e.subtype === "compact_boundary" && e.compactMetadata?.trigger === "auto") {
+      const pre = e.compactMetadata.preTokens;
+      if (Number.isInteger(pre) && pre > 0 && (autoCompactAt === null || pre < autoCompactAt)) autoCompactAt = pre;
+    } else if (e.type === "api-request" && /main_thread/.test(e.querySource ?? "")) {
+      model = e.params?.model ?? null;
+      effort = e.params?.output_config?.effort ?? null;
+    }
+  }
+  let size;
+  try {
+    size = tokensOf(entries);
+  } catch (err) {
+    size = { error: err };
+  }
+  return { ...size, autoCompactAt, model, effort };
+}
+
+function tokensOf(entries) {
   let usage = null;
   let boundary = null;
-  for (const e of parseTranscript(text)) {
+  for (const e of entries) {
     if (e.isSidechain) continue;
     if (e.type === "assistant" && e.message?.usage) {
       const u = e.message.usage;
@@ -122,6 +153,19 @@ export function resolveWindow({ flag, recorded, env } = {}) {
   );
 }
 
+// The size at which sessions get compacted automatically: a flag, else PUPPET_COMPACT_AT,
+// else the smallest automatic compaction seen in a transcript. Never guessed: null when
+// none of the three is there.
+export function resolveCompactAt({ flag, env, observed } = {}) {
+  if (flag !== undefined) return { compactAt: positiveInt(flag, "--compact-at"), source: "flag" };
+  if (env !== undefined && env !== "") return { compactAt: positiveInt(env, "PUPPET_COMPACT_AT"), source: "env" };
+  if (Number.isInteger(observed) && observed > 0) return { compactAt: observed, source: "observed" };
+  return null;
+}
+
+// Within this share of the compaction point, measure warns.
+export const WARN_SHARE = 0.8;
+
 export function percent(tokens, window) {
   return Math.round((tokens / window) * 1000) / 10;
 }
@@ -164,9 +208,17 @@ export function listAgents(deps) {
   return agents;
 }
 
-export function findWorker(agents, key) {
+// `closed` is the roster's map of sessions `close` removed: a lookup of one says so and
+// how to resume it, rather than that no such session exists.
+export function findWorker(agents, key, closed = {}) {
   const hits = agents.filter((a) => a.name === key || a.id === key || a.sessionId === key);
-  if (hits.length === 0) throw new PuppetError(`no session named or numbered "${key}"`);
+  if (hits.length === 0) {
+    const gone = Object.entries(closed ?? {}).find(([n, r]) => n === key || r.id === key || r.sessionId === key);
+    if (gone) {
+      throw new PuppetError(`${gone[0]} is closed (resume: ${resumeHint(gone[1].cwd, gone[1].sessionId, { bg: false })})`);
+    }
+    throw new PuppetError(`no session named or numbered "${key}"`);
+  }
   if (hits.length > 1) {
     const ids = hits.map((a) => a.id ?? a.sessionId).join(", ");
     throw new PuppetError(`"${key}" is ambiguous: sessions ${ids}; use an id`);
@@ -250,45 +302,89 @@ function freshMeasure(agent) {
     windowSource: null,
     state: "fresh",
     tokenSource: "none",
+    model: null,
+    effort: null,
+    autoCompactAt: null,
   };
 }
 
-export function measureAgent(deps, agent, record, { window } = {}) {
+const minPositive = (a, b) => [a, b].filter((x) => Number.isInteger(x) && x > 0).reduce((m, x) => Math.min(m, x), Infinity);
+
+export function measureAgent(deps, agent, record, { window, compactAt, observed } = {}) {
   const file = findTranscript(projectsDir(deps), agent.sessionId, { optional: true });
   if (file === null) return freshMeasure(agent);
-  let t;
-  try {
-    t = transcriptTokens(deps.fs.readFileSync(file, "utf8"));
-  } catch (e) {
-    if (e instanceof PuppetError && e.code === "no-usage") return freshMeasure(agent);
-    throw e;
+  const t = transcriptFacts(deps.fs.readFileSync(file, "utf8"));
+  if (t.error) {
+    if (t.error instanceof PuppetError && t.error.code === "no-usage") return freshMeasure(agent);
+    throw t.error;
   }
-  const w = resolveWindow({
-    flag: window,
-    recorded: record?.window,
-    env: deps.env.PUPPET_CONTEXT_WINDOW,
+  const seen = minPositive(observed, t.autoCompactAt);
+  const c = resolveCompactAt({
+    flag: compactAt,
+    env: deps.env.PUPPET_COMPACT_AT,
+    observed: Number.isFinite(seen) ? seen : undefined,
   });
+  let w;
+  try {
+    w = resolveWindow({ flag: window, recorded: record?.window, env: deps.env.PUPPET_CONTEXT_WINDOW });
+  } catch (e) {
+    // With a known compaction point the window is only context; without one, no size
+    // can be judged, and the error stands.
+    if (!(e instanceof PuppetError) || c === null) throw e;
+    w = { window: null, source: null };
+  }
   return {
     name: agent.name,
     id: agent.id,
     tokens: t.tokens,
-    percent: percent(t.tokens, w.window),
+    percent: w.window === null ? null : percent(t.tokens, w.window),
     window: w.window,
     windowSource: w.source,
+    compactAt: c?.compactAt ?? null,
+    compactSource: c?.source ?? null,
+    compactPercent: c === null ? null : percent(t.tokens, c.compactAt),
+    warn: c !== null && t.tokens >= WARN_SHARE * c.compactAt,
     state: workerState(agent),
     tokenSource: t.source,
+    model: t.model,
+    effort: t.effort,
+    autoCompactAt: t.autoCompactAt,
   };
 }
 
-export function measureWorker(deps, key, { window } = {}) {
-  const agent = findWorker(listAgents(deps), key);
-  const record = loadRegistry(deps).workers[agent.name];
-  return measureAgent(deps, agent, record, { window });
+// Keep the smallest automatic compaction any measured transcript showed; true when it moved.
+function noteCompactions(reg, measures) {
+  const seen = measures.reduce((m, x) => minPositive(m, x?.autoCompactAt), minPositive(reg.observedCompactAt));
+  if (Number.isFinite(seen) && seen !== reg.observedCompactAt) {
+    reg.observedCompactAt = seen;
+    return true;
+  }
+  return false;
 }
 
-function measureLine(m) {
+export function measureWorker(deps, key, { window, compactAt } = {}) {
+  const reg = loadRegistry(deps);
+  const agent = findWorker(listAgents(deps), key, reg.closed);
+  const record = reg.workers[agent.name];
+  const m = measureAgent(deps, agent, record, { window, compactAt, observed: reg.observedCompactAt });
+  if (noteCompactions(reg, [m])) saveRegistry(deps, reg);
+  return m;
+}
+
+export function measureLine(m) {
   if (m.state === "fresh") return `${m.name}  0  0%  fresh  (no turns yet)`;
-  return `${m.name}  ${m.tokens}  ${m.percent}%  ${m.state}  (window ${m.window} from ${m.windowSource})`;
+  const size =
+    m.window === null
+      ? `${m.name}  ${m.tokens}  ?%  ${m.state}  (window unknown)`
+      : `${m.name}  ${m.tokens}  ${m.percent}%  ${m.state}  (window ${m.window} from ${m.windowSource})`;
+  const point = m.compactAt === null ? "" : `  ${m.compactPercent}% of compaction point ${m.compactAt} (${m.compactSource})`;
+  return `${size}${point}${m.warn ? "  WARN near compaction" : ""}`;
+}
+
+// Model and effort of a measured session, `fresh` before its first turn.
+export function modelLine(m) {
+  if (m.state === "fresh") return "fresh";
+  return `${m.model ?? "?"} ${m.effort ?? "?"}`;
 }
 
 // --- spawning -------------------------------------------------------------------------
@@ -349,11 +445,95 @@ function queueHarvest(reg, name, sessionId) {
 
 export function isEditing(rec, agents) {
   const r = normalize(rec);
-  if (r.role === "analyst") return false;
+  if (r.role !== "worker") return false;
   const live = agents.find((a) => (r.id && a.id === r.id) || a.sessionId === r.sessionId);
   if (!live) return false;
   if (r.jobState === "active") return true;
   return r.jobState === "unknown" && !IDLE_STATES.has(workerState(live));
+}
+
+// --- write scopes: two jobs may share a checkout when they cannot collide -----------------
+
+// A job's write scope: folders relative to its checkout, in posix form. "." is the whole
+// checkout. An absolute path or one that climbs out with ".." is refused.
+export function parseScope(deps, value) {
+  if (value === undefined) return undefined;
+  const win = (deps.platform ?? process.platform) === "win32";
+  const dirs = String(value)
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => {
+      const p = s.replace(/\\/g, "/");
+      if (path.posix.isAbsolute(p) || /^[A-Za-z]:/.test(p)) {
+        throw new PuppetError(`--scope folders are relative to the checkout, got "${s}"`, 2);
+      }
+      const n = path.posix.normalize(p).replace(/\/+$/, "") || ".";
+      if (n === ".." || n.startsWith("../")) throw new PuppetError(`--scope "${s}" leaves the checkout`, 2);
+      return win ? n.toLowerCase() : n;
+    });
+  if (dirs.length === 0) throw new PuppetError("--scope needs at least one folder", 2);
+  return dirs;
+}
+
+const overlaps = (x, y) => x === "." || y === "." || x === y || y.startsWith(`${x}/`) || x.startsWith(`${y}/`);
+
+// Why two jobs in one checkout would collide, or null when they cannot: both declare a
+// write scope, the scopes are disjoint, and at most one of them runs git.
+export function collision(a, b) {
+  if (!a.scope || !b.scope) return "one editing session per checkout unless both jobs pass --scope";
+  if (a.git !== false && b.git !== false) return "both jobs run git; pass --no-git to one of them";
+  const hit = a.scope.find((x) => b.scope.some((y) => overlaps(x, y)));
+  if (hit) return `write scopes overlap at ${hit}`;
+  return null;
+}
+
+// Refuse when the new job collides with any session editing the same checkout.
+function checkLock(deps, reg, agents, self, checkout, job) {
+  const key = checkoutKey(deps, checkout);
+  for (const [other, o] of Object.entries(reg.workers)) {
+    if (other === self || checkoutKey(deps, o.checkout) !== key || !isEditing(o, agents)) continue;
+    const why = collision(job, { scope: o.scope, git: o.git });
+    if (why) throw new PuppetError(`${other} is already editing ${o.checkout}: ${why}`);
+  }
+}
+
+function jobFields(deps, { scope, noGit } = {}) {
+  const s = parseScope(deps, scope);
+  return { ...(s ? { scope: s } : {}), git: !noGit };
+}
+
+// --- tiers: which model and effort a job needs ------------------------------------------
+
+export const TIERS = {
+  creative: "an Opus model at high effort or more",
+  mechanical: "a model other than Opus at medium effort or less",
+};
+const HIGH = new Set(["high", "xhigh", "max"]);
+const LOW = new Set(["low", "medium"]);
+
+// true when the session matches the tier, false when it does not, null when its model or
+// effort is not recorded yet (a fresh session).
+export function tierMatch(tier, { model, effort } = {}) {
+  if (!(tier in TIERS)) throw new PuppetError(`--tier must be creative or mechanical, got "${tier}"`, 2);
+  if (!model || !effort) return null;
+  const opus = /opus/i.test(model);
+  return tier === "creative" ? opus && HIGH.has(effort) : !opus && LOW.has(effort);
+}
+
+export function tierLine(name, tier, facts) {
+  const ok = tierMatch(tier, facts);
+  if (ok === null) return `${name} tier ${tier}: unchecked (no turn yet); have it state its model, then read its effort with list --name`;
+  const has = `${facts.model} ${facts.effort}`;
+  return ok ? `${name} tier ${tier}: ok (${has})` : `MISMATCH ${name} tier ${tier} needs ${TIERS[tier]}; it runs ${has}`;
+}
+
+// The model and effort of a listed session, read from its transcript; nulls when fresh.
+function sessionFacts(deps, agent) {
+  const file = findTranscript(projectsDir(deps), agent.sessionId, { optional: true });
+  if (file === null) return { model: null, effort: null };
+  const t = transcriptFacts(deps.fs.readFileSync(file, "utf8"));
+  return { model: t.model, effort: t.effort };
 }
 
 // No transcript, or no assistant turn yet: nothing has happened in this context.
@@ -370,22 +550,25 @@ function isFresh(deps, agent) {
   }
 }
 
-const ROLES = new Set(["worker", "analyst"]);
+const ROLES = new Set(["worker", "analyst", "master"]);
 
-export function adoptSession(deps, key, { role = "worker" } = {}) {
-  if (!ROLES.has(role)) throw new PuppetError(`--role must be worker or analyst, got "${role}"`, 2);
+export function adoptSession(deps, key, { role = "worker", window } = {}) {
+  if (!ROLES.has(role)) throw new PuppetError(`--role must be worker, analyst or master, got "${role}"`, 2);
+  const w = window === undefined ? undefined : positiveInt(window, "--window");
   const agents = listAgents(deps);
-  const agent = findWorker(agents, key);
   const reg = loadRegistry(deps);
-  if (role === "analyst") {
+  const agent = findWorker(agents, key, reg.closed);
+  if (role !== "worker") {
     for (const [other, rec] of Object.entries(reg.workers)) {
-      if (other !== agent.name && normalize(rec).role === "analyst" && isLive(agents, rec)) {
-        throw new PuppetError(`${other} is already the analyst`);
+      if (other !== agent.name && normalize(rec).role === role && isLive(agents, rec)) {
+        throw new PuppetError(`${other} is already the ${role}`);
       }
     }
   }
   const before = reg.workers[agent.name];
   if (before && before.sessionId !== agent.sessionId) queueHarvest(reg, agent.name, before.sessionId);
+  if (reg.closed) delete reg.closed[agent.name];
+  const kept = w ?? before?.window;
   const rec = {
     ...(agent.id ? { id: agent.id } : {}),
     sessionId: agent.sessionId,
@@ -395,7 +578,7 @@ export function adoptSession(deps, key, { role = "worker" } = {}) {
     role,
     job: null,
     jobState: isFresh(deps, agent) ? "clean" : "unknown",
-    ...(reg.workers[agent.name]?.window ? { window: reg.workers[agent.name].window } : {}),
+    ...(kept ? { window: kept } : {}),
   };
   reg.workers[agent.name] = rec;
   saveRegistry(deps, reg);
@@ -404,7 +587,7 @@ export function adoptSession(deps, key, { role = "worker" } = {}) {
 
 // The roster record of a listed session, refusing one the user cleared or restarted.
 function rosterRecord(agents, reg, key) {
-  const agent = findWorker(agents, key);
+  const agent = findWorker(agents, key, reg.closed);
   const rec = reg.workers[agent.name];
   if (!rec) throw new PuppetError(`${agent.name} is not in the roster; adopt it first`);
   if (rec.sessionId !== agent.sessionId) {
@@ -415,29 +598,52 @@ function rosterRecord(agents, reg, key) {
   return { agent, rec: normalize(rec) };
 }
 
-export function assignJob(deps, key, label) {
+// Below this share of its compaction point (or window), a finished session may take the
+// next job with --reuse.
+export const REUSE_BELOW = 30;
+
+export function assignJob(deps, key, label, { reuse = false, scope, noGit = false, tier } = {}) {
   if (!label || !label.trim()) throw new PuppetError("assign needs a job label", 2);
+  if (tier !== undefined) tierMatch(tier, {});
+  const job = jobFields(deps, { scope, noGit });
   const agents = listAgents(deps);
   const reg = loadRegistry(deps);
   const { agent, rec } = rosterRecord(agents, reg, key);
-  if (rec.role === "analyst") throw new PuppetError(`${agent.name} is the analyst; the analyst takes no jobs`);
-  if (rec.jobState !== "clean") {
+  if (rec.role !== "worker") throw new PuppetError(`${agent.name} is the ${rec.role}; the ${rec.role} takes no jobs`);
+  const reusable = reuse && rec.jobState === "done";
+  if (rec.jobState !== "clean" && !reusable) {
     const did = rec.jobState === "active" ? `holds "${rec.job}"` : rec.job ? `did "${rec.job}"` : "did other work";
+    const hint = rec.jobState === "done" ? "; if the user asked to reuse sessions, pass --reuse" : "";
     throw new PuppetError(
-      `one job per context: ${agent.name} already ${did}; use a clean session or spawn one`,
+      `one job per context: ${agent.name} already ${did}; use a clean session or spawn one${hint}`,
     );
   }
-  const key2 = checkoutKey(deps, rec.checkout);
-  for (const [other, o] of Object.entries(reg.workers)) {
-    if (other === agent.name || checkoutKey(deps, o.checkout) !== key2) continue;
-    if (isEditing(o, agents)) {
-      throw new PuppetError(`${other} is already editing ${o.checkout}; one editing session per checkout`);
+  if (reusable) {
+    let m;
+    try {
+      m = measureAgent(deps, agent, rec, { observed: reg.observedCompactAt });
+    } catch (e) {
+      if (!(e instanceof PuppetError)) throw e;
+      throw new PuppetError(`cannot measure ${agent.name} for --reuse: ${e.message}`);
+    }
+    const share = m.compactPercent ?? m.percent ?? 0;
+    if (share >= REUSE_BELOW) {
+      throw new PuppetError(
+        `${agent.name} is at ${share}% (${m.tokens} tokens); --reuse needs under ${REUSE_BELOW}%: give the user its /clear line first`,
+      );
     }
   }
-  const next = { ...rec, job: label, jobState: "active", jobStartedAt: deps.now().toISOString() };
+  checkLock(deps, reg, agents, agent.name, rec.checkout, job);
+  const now = deps.now().toISOString();
+  const jobs = [...(rec.jobs ?? []), { label, startedAt: now }];
+  const next = { ...rec, job: label, jobState: "active", jobStartedAt: now, jobs, ...job };
+  if (!job.scope) delete next.scope;
+  if (tier !== undefined) next.tier = tier;
+  else delete next.tier;
   reg.workers[agent.name] = next;
   saveRegistry(deps, reg);
-  return { name: agent.name, ...next };
+  const tierCheck = tier === undefined ? null : tierLine(agent.name, tier, sessionFacts(deps, agent));
+  return { name: agent.name, ...next, tierCheck };
 }
 
 export function finishJob(deps, key) {
@@ -445,27 +651,40 @@ export function finishJob(deps, key) {
   const reg = loadRegistry(deps);
   const { agent, rec } = rosterRecord(agents, reg, key);
   if (rec.jobState !== "active") throw new PuppetError(`${agent.name} has no active job`);
-  const next = { ...rec, jobState: "done" };
+  const jobs = [...(rec.jobs ?? [])];
+  if (jobs.length > 0) jobs[jobs.length - 1] = { ...jobs[jobs.length - 1], endedAt: deps.now().toISOString() };
+  const next = { ...rec, jobState: "done", ...(jobs.length > 0 ? { jobs } : {}) };
   reg.workers[agent.name] = next;
   saveRegistry(deps, reg);
   return { name: agent.name, ...next };
 }
 
-// A clean worker session in the cwd's checkout, the user's own windows first; null when
-// there is none, or when another session is already editing that checkout.
-export function pickSession(deps, cwd) {
-  const key = checkoutKey(deps, checkoutOf(deps, cwd));
+// A clean worker session in the cwd's checkout; null when there is none, or when the job
+// would collide with a session already editing that checkout. With a tier, a session that
+// already matches it comes first, then one not yet checked; within each, the user's own
+// windows first.
+export function pickSession(deps, cwd, { scope, noGit = false, tier } = {}) {
+  if (tier !== undefined) tierMatch(tier, {});
+  const job = jobFields(deps, { scope, noGit });
+  const checkout = checkoutOf(deps, cwd);
+  const key = checkoutKey(deps, checkout);
   const agents = listAgents(deps);
   const reg = loadRegistry(deps);
   const here = Object.entries(reg.workers).filter(([, r]) => checkoutKey(deps, r.checkout) === key);
-  if (here.some(([, r]) => isEditing(r, agents))) return null;
+  if (here.some(([, r]) => isEditing(r, agents) && collision(job, { scope: r.scope, git: r.git }))) return null;
+  const rank = (c) => {
+    const match = tier === undefined ? 0 : { true: 0, null: 1, false: 2 }[String(c.match)];
+    return match * 2 + (c.record.kind === "interactive" ? 0 : 1);
+  };
   const clean = here
-    .map(([name, r]) => ({ name, record: normalize(r) }))
-    .filter(({ name, record }) => {
-      const a = agents.find((x) => x.name === name);
-      return a && a.sessionId === record.sessionId && record.role === "worker" && record.jobState === "clean";
+    .map(([name, r]) => ({ name, record: normalize(r), agent: agents.find((x) => x.name === name) }))
+    .filter(({ record, agent }) => agent && agent.sessionId === record.sessionId && record.role === "worker" && record.jobState === "clean")
+    .map((c) => {
+      if (tier === undefined) return c;
+      const facts = sessionFacts(deps, c.agent);
+      return { ...c, match: tierMatch(tier, facts), tierCheck: tierLine(c.name, tier, facts) };
     })
-    .sort((a, b) => (a.record.kind === "interactive" ? 0 : 1) - (b.record.kind === "interactive" ? 0 : 1));
+    .sort((a, b) => rank(a) - rank(b));
   return clean[0] ?? null;
 }
 
@@ -483,8 +702,9 @@ function readBrief(deps, briefFile) {
   return text;
 }
 
-export function spawnWorker(deps, name, cwd, briefFile, { job } = {}) {
+export function spawnWorker(deps, name, cwd, briefFile, { job, scope, noGit = false } = {}) {
   if (!NAME_RE.test(name)) throw new PuppetError(`worker name "${name}" must match [A-Za-z0-9._-]+`, 2);
+  const fields = jobFields(deps, { scope, noGit });
   const brief = readBrief(deps, briefFile);
   const agents = listAgents(deps);
   const clash = agents.find((a) => a.name === name);
@@ -496,9 +716,10 @@ export function spawnWorker(deps, name, cwd, briefFile, { job } = {}) {
   const reg = loadRegistry(deps);
   for (const [other, rec] of Object.entries(reg.workers)) {
     if (checkoutKey(deps, rec.checkout) !== key) continue;
-    if (isEditing(rec, agents)) {
+    const why = isEditing(rec, agents) ? collision(fields, { scope: rec.scope, git: rec.git }) : null;
+    if (why) {
       throw new PuppetError(
-        `worker "${other}" (id ${rec.id ?? rec.sessionId}) is already editing ${rec.checkout}; one editing worker per checkout — close it or use another checkout`,
+        `worker "${other}" (id ${rec.id ?? rec.sessionId}) is already editing ${rec.checkout}: ${why} — close it or use another checkout`,
       );
     }
     // A live session that is clean, done or the analyst stays in the roster, and so does one
@@ -522,7 +743,10 @@ export function spawnWorker(deps, name, cwd, briefFile, { job } = {}) {
     job: job ?? name,
     jobState: "active",
     jobStartedAt: deps.now().toISOString(),
+    jobs: [{ label: job ?? name, startedAt: deps.now().toISOString() }],
+    ...fields,
   };
+  if (reg.closed) delete reg.closed[name];
   saveRegistry(deps, reg);
   return { name, id, sessionId: started.sessionId, checkout };
 }
@@ -561,7 +785,7 @@ function newBoundaries(text, since) {
 }
 
 export function cycleWorker(deps, key, focus, { nextBriefFile } = {}) {
-  const agent = requireBackground(findWorker(listAgents(deps), key), "cycling");
+  const agent = requireBackground(findWorker(listAgents(deps), key, loadRegistry(deps).closed), "cycling");
   const state = workerState(agent);
   if (!IDLE_STATES.has(state)) {
     throw new PuppetError(`${agent.name} is not at a task boundary (state ${state}); not cycling`);
@@ -629,7 +853,10 @@ export function closeWorker(deps, key) {
     const hit = Object.entries(reg.workers).find(
       ([n, r]) => n === key || r.id === key || r.sessionId === key,
     );
-    if (!hit) throw new PuppetError(`no live session and no recorded worker named or numbered "${key}"`);
+    if (!hit) {
+      findWorker([], key, reg.closed);
+      throw new PuppetError(`no live session and no recorded worker named or numbered "${key}"`);
+    }
     [name, { id, sessionId, cwd }] = hit;
   }
   const resume = resumeHint(cwd, sessionId, { bg: false });
@@ -642,6 +869,7 @@ export function closeWorker(deps, key) {
   }
   queueHarvest(reg, name, sessionId);
   delete reg.workers[name];
+  reg.closed = { ...(reg.closed ?? {}), [name]: { ...(id ? { id } : {}), sessionId, cwd, closedAt: deps.now().toISOString() } };
   saveRegistry(deps, reg);
   return { name, sessionId, resume };
 }
@@ -650,13 +878,13 @@ export function closeWorker(deps, key) {
 
 const USAGE = [
   "usage: puppet.mjs <command> ...",
-  "  measure <worker> [--window N] [--json]",
-  "  list [--window N] [--json]",
-  "  adopt <session> [--role worker|analyst]",
-  "  assign <session> <job>",
+  "  measure <worker> [--window N] [--compact-at N] [--json]",
+  "  list [--name <session>] [--window N] [--compact-at N] [--json]",
+  "  adopt <session> [--role worker|analyst|master] [--window N]",
+  "  assign <session> <job> [--reuse] [--scope <dir[,dir]>] [--no-git] [--tier creative|mechanical]",
   "  finish <session>",
-  "  pick <cwd>",
-  "  spawn <name> <cwd> <brief-file> [--job <label>]",
+  "  pick <cwd> [--scope <dir[,dir]>] [--no-git] [--tier creative|mechanical]",
+  "  spawn <name> <cwd> <brief-file> [--job <label>] [--scope <dir[,dir]>] [--no-git]",
   "  cycle <worker> <focus> [--next <brief-file>]",
   "  close <worker>",
   "  harvest [--master <session>] [--logs <dir>] [--plugin-data <dir>]",
@@ -669,6 +897,12 @@ const USAGE = [
 
 const FLAGS = {
   "--window": true,
+  "--compact-at": true,
+  "--name": true,
+  "--reuse": false,
+  "--scope": true,
+  "--no-git": false,
+  "--tier": true,
   "--json": false,
   "--next": true,
   "--role": true,
@@ -712,7 +946,7 @@ function wantPositional(positional, n, cmd) {
 
 function cmdMeasure(deps, positional, flags) {
   wantPositional(positional, 1, "measure");
-  const m = measureWorker(deps, positional[0], { window: flags.window });
+  const m = measureWorker(deps, positional[0], { window: flags.window, compactAt: flags["compact-at"] });
   deps.out(flags.json ? JSON.stringify(m) : measureLine(m));
   return 0;
 }
@@ -723,9 +957,10 @@ function cmdList(deps, positional, flags) {
   const reg = loadRegistry(deps);
   const rows = [];
   let failed = false;
+  const opts = { window: flags.window, compactAt: flags["compact-at"], observed: reg.observedCompactAt };
   const measure = (a, rec, extra) => {
     try {
-      rows.push({ ...measureAgent(deps, a, rec, { window: flags.window }), ...extra });
+      rows.push({ ...measureAgent(deps, a, rec, opts), ...extra });
     } catch (e) {
       if (!(e instanceof PuppetError)) throw e;
       failed = true;
@@ -757,29 +992,44 @@ function cmdList(deps, positional, flags) {
   for (const a of agents.filter((x) => x.kind === "background" && !managed.has(x.sessionId))) {
     measure(a, undefined, {});
   }
-  if (pruned) saveRegistry(deps, reg);
-  for (const r of rows) {
+  if (noteCompactions(reg, rows) || pruned) saveRegistry(deps, reg);
+  let shown = rows;
+  if (flags.name !== undefined) {
+    shown = rows.filter((r) => r.name === flags.name);
+    // A miss says whether the name was closed, and how to resume it.
+    if (shown.length === 0) findWorker([], flags.name, reg.closed);
+    failed = shown.some((r) => r.error);
+  }
+  for (const r of shown) {
     if (flags.json) deps.out(JSON.stringify(r));
     else if (r.error) deps.out(`${r.name}  ?  (${r.error})`);
     else if (r.changed) deps.out(`${r.name}  changed  (new session id: ask the user whether it was cleared)`);
     else if (r.state === "gone") deps.out(`${r.name}  gone  (resume: ${resumeHint(r.cwd, r.sessionId)})`);
-    else if (r.roster) deps.out(`${measureLine(r)}  ${r.kind} ${r.role} ${r.jobState}${r.job ? ` ${r.job}` : ""}`);
-    else deps.out(measureLine(r));
+    else if (r.roster) {
+      const job = `${r.kind} ${r.role} ${r.jobState}${r.job ? ` ${r.job}` : ""}`;
+      deps.out(`${measureLine(r)}  model ${modelLine(r)}  ${job}`);
+    } else deps.out(`${measureLine(r)}  model ${modelLine(r)}`);
   }
   return failed ? 1 : 0;
 }
 
 function cmdAdopt(deps, positional, flags) {
   wantPositional(positional, 1, "adopt");
-  const r = adoptSession(deps, positional[0], { role: flags.role ?? "worker" });
+  const r = adoptSession(deps, positional[0], { role: flags.role ?? "worker", window: flags.window });
   deps.out(`adopted ${r.name} (${r.kind}, ${r.role}, ${r.jobState}) in ${r.checkout}`);
   return 0;
 }
 
-function cmdAssign(deps, positional) {
+function cmdAssign(deps, positional, flags) {
   wantPositional(positional, 2, "assign");
-  const r = assignJob(deps, positional[0], positional[1]);
-  deps.out(`assigned ${r.name}: ${r.job}`);
+  const r = assignJob(deps, positional[0], positional[1], {
+    reuse: Boolean(flags.reuse),
+    scope: flags.scope,
+    noGit: Boolean(flags["no-git"]),
+    tier: flags.tier,
+  });
+  deps.out(`assigned ${r.name}: ${r.job}${r.scope ? ` (scope ${r.scope.join(",")}${r.git ? "" : ", no git"})` : ""}`);
+  if (r.tierCheck) deps.out(r.tierCheck);
   return 0;
 }
 
@@ -896,17 +1146,26 @@ function cmdShipped(deps, positional, flags) {
   return 0;
 }
 
-function cmdPick(deps, positional) {
+function cmdPick(deps, positional, flags) {
   wantPositional(positional, 1, "pick");
-  const hit = pickSession(deps, positional[0]);
+  const hit = pickSession(deps, positional[0], {
+    scope: flags.scope,
+    noGit: Boolean(flags["no-git"]),
+    tier: flags.tier,
+  });
   if (!hit) throw new PuppetError(`no clean session for ${checkoutOf(deps, positional[0])}; spawn one`);
   deps.out(hit.name);
+  if (hit.tierCheck) deps.out(hit.tierCheck);
   return 0;
 }
 
 function cmdSpawn(deps, positional, flags) {
   wantPositional(positional, 3, "spawn");
-  const w = spawnWorker(deps, ...positional, { job: flags.job });
+  const w = spawnWorker(deps, ...positional, {
+    job: flags.job,
+    scope: flags.scope,
+    noGit: Boolean(flags["no-git"]),
+  });
   deps.out(`spawned ${w.name} id=${w.id} in ${w.checkout}`);
   return 0;
 }

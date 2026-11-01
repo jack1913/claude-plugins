@@ -4,7 +4,7 @@
 
 import path from "node:path";
 
-import { dayOf, redact } from "./harvest.mjs";
+import { dayStartHour, redact, workDay } from "./harvest.mjs";
 import { PuppetError } from "./puppet.mjs";
 
 // Each tag names a flaw in the skill, the helper or a brief, never a person.
@@ -30,6 +30,9 @@ export const INSTRUMENTS = ["analyst-brief.md", "harvest.mjs", "analyst.mjs"];
 
 const DECISIONS = new Set(["approve", "reject", "defer"]);
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// The work day `date` falls in (harvest.mjs files events by it).
+const today = (deps, date = deps.now()) => workDay(date, dayStartHour(deps.env));
 
 function isInstrument(target) {
   return target.startsWith("instrument:") && INSTRUMENTS.includes(target.slice("instrument:".length));
@@ -71,12 +74,18 @@ export function addFinding(deps, { logsDir, tag, target, evidence, note }) {
     );
   }
   if (!Array.isArray(evidence) || evidence.length === 0) {
-    throw new PuppetError("a finding needs at least one evidence id from the day's events", 2);
+    throw new PuppetError("a finding needs at least one evidence id from the harvested events", 2);
   }
-  const day = dayOf(deps.now());
-  const known = new Set(readLines(deps, path.join(logsDir, day, "events.jsonl")).map((e) => e.id));
-  for (const id of evidence) {
-    if (!known.has(id)) throw new PuppetError(`evidence ${id} is not a harvested event of ${day}`);
+  // Evidence may come from an earlier day: a late harvest files events under the day they
+  // happened. The finding itself belongs to today.
+  const day = today(deps);
+  const missing = new Set(evidence);
+  for (const d of [day, ...dayFolders(deps, logsDir).filter((x) => x < day).reverse()]) {
+    if (missing.size === 0) break;
+    for (const e of readLines(deps, path.join(logsDir, d, "events.jsonl"))) missing.delete(e.id);
+  }
+  for (const id of missing) {
+    throw new PuppetError(`evidence ${id} is not a harvested event of ${day} or an earlier day`);
   }
   const file = path.join(logsDir, day, "findings.jsonl");
   const f = {
@@ -149,7 +158,7 @@ function readStats(deps, dir) {
 
 const mean = (xs) => (xs.length === 0 ? null : xs.reduce((a, b) => a + b, 0) / xs.length);
 
-export function summarize(deps, { logsDir, day = dayOf(deps.now()) }) {
+export function summarize(deps, { logsDir, day = today(deps) }) {
   const dir = path.join(logsDir, day);
   const stats = readStats(deps, dir);
   const events = readLines(deps, path.join(dir, "events.jsonl"));
@@ -175,7 +184,7 @@ export function summarize(deps, { logsDir, day = dayOf(deps.now()) }) {
   const shipped = approved
     .filter((d) => d.changeSha)
     .map((d) => {
-      const shipDay = dayOf(new Date(d.shippedAt));
+      const shipDay = today(deps, new Date(d.shippedAt));
       const count = (x) => x.tags.filter((t) => t === d.tag).length;
       return {
         proposalId: d.proposalId,
@@ -215,8 +224,8 @@ export function headline(s) {
 // skipped review is not hidden by a later one; null when there is none. Today's report is
 // still being written.
 export function unreviewedReport(deps, { logsDir }) {
-  const today = dayOf(deps.now());
-  for (const day of dayFolders(deps, logsDir).filter((d) => d < today).reverse()) {
+  const now = today(deps);
+  for (const day of dayFolders(deps, logsDir).filter((d) => d < now).reverse()) {
     const p = path.join(logsDir, day, "report.md");
     let text;
     try {

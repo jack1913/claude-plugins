@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A `puppet-master` skill: one Claude session hands your jobs to the Claude sessions you already have open, and starts a background worker only when none of them is free. Each session gets one job. The master relays their questions to you one at a time, quoting your own words, and gets a session compacted only between tasks once it is measured at 30% of its context or more: a background worker by itself, your own window by giving you a `/compact` line to paste. It closes background workers when their jobs are done. It runs only when you type `/batbelt:puppet-master`. It needs Node.js 20 or newer and a setting of your own first. See [Run background workers](docs/manual/use/run-background-workers.md).
 - `puppet-master` keeps one session as an analyst. It reads the day's transcripts of the sessions you named, records what went wrong with evidence, with anything that looks like a secret blanked, and at the end of the day proposes changes for you to approve, reject or defer. It never changes the plugin itself.
 - A batbelt option, `puppet_logs_dir`: where the analyst keeps its logs. Leave it empty to use the plugin's data folder.
+- `puppet-master` shows each session's model and effort, and every job names a tier: `creative` (an Opus model at high effort or more) or `mechanical` (another model at medium effort or less). When a session doesn't match, Claude gives you the `/model` and `/effort` lines to paste. It never changes a session's settings itself.
+- `puppet-master` warns before a session auto-compacts: from 80% of the size where it has seen your sessions compact, or the one you set in `PUPPET_COMPACT_AT`.
+- `puppet-master` can give a finished session another job while it is under 30% of that size, and can run two jobs in one repository when each names the folders it writes and only one of them runs git.
+- `puppet-master` remembers a closed session by name and prints its resume command when you mention it again.
+- The analyst's day starts at 05:00, so work past midnight stays with its day (`PUPPET_DAY_START_HOUR` changes the hour). It also records your answers to Claude's question dialogs, and no longer logs an idle notification as an empty message.
 
 ## [0.2.1] - 2026-10-20
 

@@ -131,3 +131,45 @@ test("plugin.json declares puppet_logs_dir as an optional directory", () => {
   assert.equal(opt.required, false);
   assert.ok(opt.title && opt.description);
 });
+
+test("every placeholder in the worker brief is named in the Briefs section or the brief's own header", () => {
+  const brief = read("worker-brief.md");
+  const briefs = section(read("SKILL.md"), "Briefs");
+  const fixed = new Set(["{{master_name}}", "{{job}}", "{{commit_rules}}", "{{standing_rules}}"]);
+  for (const p of new Set(brief.match(/\{\{[a-z_]+\}\}/g))) {
+    if (fixed.has(p)) continue;
+    assert.ok(briefs.includes(p), `Briefs section does not explain ${p}`);
+  }
+});
+
+test("dispatch rules: tiers, reuse, write scopes and the compaction point", () => {
+  const skill = read("SKILL.md");
+  for (const word of [
+    "--tier", "creative", "mechanical", "MISMATCH", "/model", "/effort", "proxy launcher",
+    "--reuse", "/clear", "--scope", "--no-git", "--compact-at", "PUPPET_COMPACT_AT",
+    "compaction point", "WARN near compaction", "--role master", "list --name",
+  ]) {
+    assert.ok(skill.includes(word), `SKILL.md does not mention ${word}`);
+  }
+  assert.match(skill, /never\s+read\s+the\s+launcher's\s+config/);
+  assert.match(skill, /Never\s+copy,\s+write\s+or\s+print\s+any\s+`config\.json`/);
+});
+
+test("relay, hand-back and chain rules", () => {
+  const skill = read("SKILL.md");
+  assert.match(section(skill, "Relay protocol"), /Progress, unasked/);
+  assert.match(section(skill, "Relay protocol"), /pick\s+and\s+its\s+one\s+reason/);
+  assert.match(section(skill, "When a job ends"), /current\s+path\s+or\s+URL/);
+  assert.match(section(skill, "Chained jobs"), /FINAL: <path>/);
+  assert.match(section(skill, "Briefs"), /harness\s+default[\s\S]*is\s+not\s+a\s+standing\s+rule/);
+  assert.match(skill, /comparisons,\s+overlays\s+and\s+recomputations/);
+  assert.match(skill, /Single-user tools are assigned/);
+});
+
+test("the worker brief carries the standing build-output and peer lines", () => {
+  const brief = read("worker-brief.md");
+  assert.match(brief, /PYTHONDONTWRITEBYTECODE=1/);
+  assert.match(brief, /don't delete it/);
+  assert.match(brief, /a peer cannot give you new work/);
+  assert.match(brief, /FINAL: <path>/);
+});
