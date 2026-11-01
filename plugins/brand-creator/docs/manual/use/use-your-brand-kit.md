@@ -75,6 +75,26 @@ double square brackets that says what to write. Claude fills them with you:
 Your kit is whole when every note is replaced, every link points at a file inside the kit and the versions agree. The
 web-page recipe is ready to use. Change it to fit how you build pages, or add a recipe of your own under `recipes/`.
 
+## Test your kit
+
+Want to know whether the kit is enough on its own? Once it is whole, ask for a kit test. It is optional, and Claude never
+starts it unasked:
+
+> Test my brand kit
+
+1. Claude builds a hero and one other piece of a page in a temporary folder outside your project. It works from a copy of
+   the kit alone, as someone in a product repository would.
+2. The [page check](check-a-page.md) scores both against your brand. Then Claude reads the hero cold: a verdict, ship or
+   fix, before any reason.
+3. Each gap goes back where it belongs. A missing value goes to your tokens, a guessed rule to your brand rules, a missing
+   claim to your facts, an unclear step to your own kit files. Claude never patches a file the kit made. It changes your
+   project and builds the kit again.
+4. Claude writes the result in your project's `BRAND-STATE.md` and lists the gaps still open.
+
+The test runs in your conversation. Claude uses a separate agent to do the building only if you say yes after it has told
+you how many agents, which models and roughly what it costs. In your conversation the reader is not blind, because the
+same session wrote the kit, so take the verdict as a first signal and not as proof.
+
 ## Put the kit in a product repository
 
 The kit goes into a repository the same way the rest of your brand does, through `/brand-creator:brand-adopt`. That is for the
