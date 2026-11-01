@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `NavigationSplitView` on large displays;
   - the iPhone tab sidebar with `defaultTabBarPlacement(_:)` and `isTabViewSidebarAvailable`;
   - the arrangement tuning modifiers, and checking layouts in every pose.
-- A `duo-player-split` eval case: two peer regions on the iPhone Duo become an `ArrangementView` split behind an iOS and macOS 27.1 check, with no device or orientation checks. A one-run check scored 1.00 with the plugin and 0.33 without.
+- A `duo-player-split` eval case: two peer regions on the iPhone Duo become an `ArrangementView` split behind an iOS and macOS 27.1 check, with no device or orientation checks. Graders check the split arrangement, the version check and that the old layout stays as the earlier-OS branch.
 - The new tab sidebar example compiles for every platform: `.defaultTabBarPlacement(.sidebar)` is limited to iOS, iPadOS, Mac Catalyst and visionOS, and the example is left out on watchOS. Upstream's `@available(iOS 27.0, *)` form fails to compile for macOS, tvOS, visionOS and watchOS.
 
 ### Changed
