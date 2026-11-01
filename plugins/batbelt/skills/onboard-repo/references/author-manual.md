@@ -18,7 +18,8 @@ has `docs/internals/docs-standard.md`, its voice and layout rules apply on top; 
 this guidance differ, the order under Local deviations decides. Create a folder only when it gets
 its first page, and link every page from `docs/manual/README.md` under Get started, Do a task or
 Look it up. Do a task is the tour: number it in reading order, end each how-to and getting-started
-page with `**Next:** [title](page.md) — reason` pointing at the next entry, and when you add a page,
+page with `**Next:** [title](page.md) — reason` pointing at the next entry (the last page in the
+tour says "That's the tour." instead), and when you add a page,
 renumber the list and relink the neighbours on both sides.
 
 **For each principal surface**, author a **showcase-first** page — lead with
@@ -79,6 +80,8 @@ python3 "$SKILL_DIR/scripts/check.py" check-docs docs README.md <index> \
 
 Add `--platform-pairs` to this command and to the closing unscoped run when the `platform pairs`
 bake is `sh+powershell`, so a missing twin is fixed while the page is written, not reported later.
+Add `--forbidden <names> --forbidden-allow <globs>` from the `foreign facts` bake when it has a
+value.
 
 **Pass the FULL roots plus `--only` — never a single-file root.** `--only` scopes which
 files *report*; the roots still resolve links and tiers. Narrowing the roots instead

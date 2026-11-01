@@ -5,11 +5,14 @@
 ## Install
 
 ```bash
-<install command, from the detected front-end>
+<install command for the sh front-end>
 ```
 
-<One sentence: what it installs and where. With a front-end per platform, add each one's block
-right after this one, sh first.>
+```powershell
+<install command for the PowerShell front-end; drop this block when the repo has none>
+```
+
+<One sentence: what it installs and where.>
 
 ## Documentation
 

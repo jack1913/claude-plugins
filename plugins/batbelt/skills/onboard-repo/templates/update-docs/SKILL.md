@@ -108,7 +108,7 @@ add under Local deviations. This skill's procedure and its `check.py` gate do no
 ## 7.5 Show-don't-tell (docs/manual/ maintenance)
 
 Maintaining a `docs/manual/` page carries the same voice rule it was authored
-under: **show, don't tell.** Lead with what running the thing actually
+under: **show, don't tell.** Lead with the command and what running it actually
 produces; don't just assert a capability in prose. When editing an existing
 output block, keep its **provenance tag** honest — `capture=<slug>` only where
 a committed capture under `docs/.onboard-captures/` backs it, `illustrative`
@@ -131,8 +131,9 @@ python3 .claude/skills/update-docs/scripts/check.py redact <raw> \
   --home "$HOME" --user "$USER" --stamp <stamp> > <tmp> && mv <tmp> docs/.onboard-captures/<slug>.txt
 ```
 
-Write the raw output under `.onboard-repo-retired/captures-raw/<stamp>/` (git-ignored), with
-`<stamp>` today's date (`date +%F`), and pass that same `<stamp>` to `redact`.
+Write the raw output to `.onboard-repo-retired/<stamp>/captures-raw/<slug>.txt` (git-ignored),
+with `<stamp>` from `date +%Y%m%d-%H%M%S` as onboarding uses, and pass that same `<stamp>` to
+`redact`.
 
 `redact` is **best-effort, not a secret scanner** — it strips only the tokens it is
 given, so keys, `ghp_`/`sk-` tokens, `user:pass@` URLs and emails pass straight
@@ -144,7 +145,7 @@ turns evidence into fiction while leaving the gate green), and do not swap a rea
 
 ## README voice — a menu, recorded per repo
 
-The **README voice** is a per-repo choice. The chosen voice and its signature rules live in the **REPO SPECIFICS** block (the "README style guide" bake); the `docs/` reference tree stays plain technical **regardless** of the README voice — voice is a landing-surface choice, not a docs-wide one.
+The **README voice** is a per-repo choice. The chosen voice and its signature rules live in the **REPO SPECIFICS** block (the `readme voice` bake; older stamps keep it under a README style guide heading); the `docs/` reference tree stays plain technical **regardless** of the README voice — voice is a landing-surface choice, not a docs-wide one.
 
 The **docs voice** (REPO SPECIFICS) governs `docs/manual/` tone; this supersedes 'docs/ stays plain technical' for consumer docs only — internals/adr/archive stay plain technical.
 
@@ -361,7 +362,7 @@ hand-listed reading chain, say), report it: the index and `NEXT_CHAIN` win.
 | remove the README install block, or break a signature rule of the recorded README voice | the install fence survives the diff |
 | move or rename a manual page: the skill never moves or renames a page once `docs/manual/README.md` exists | no `mv` under `docs/manual/` |
 | add or drop a page without renumbering the index's tour and relinking the pages on both sides | `check-docs`: `NEXT_CHAIN` and `TOC_COUNT` stay clean |
-| cut a how-to's explanation or table, to fit "one kind per page" or to keep internals off a user page, without first moving it to its home | `python3 .claude/skills/update-docs/scripts/check.py shrink-check <old> <new>` on every rewritten page |
+| cut a how-to's explanation or table, to fit "one kind per page" or to keep internals off a user page (report it instead; moving content to its home is a human call) | `python3 .claude/skills/update-docs/scripts/check.py shrink-check <old> <new>` on every rewritten page |
 | delete a repeated fact without merging it into its one home | the home holds every verified row |
 | strip the versions from upgrade notes | those lines survive the diff |
 | convert a capture fence from the recorded shape to another | fences match the recorded shape: REPO SPECIFICS' capture fence convention, or the standard's Local deviations |
@@ -395,7 +396,9 @@ that catches it. Skip when REPO SPECIFICS records `none`.
 ## 8. Close-out gate (machine-verifiable)
 
 Run a link check as a hard gate: `lychee` or `markdown-link-check` if present,
-else an internal relative-link `grep`. Broken links fail the run.
+else an internal relative-link `grep`. Broken links outside `docs/archive/` fail the run; link
+errors inside the frozen archive count toward §7.6's baseline line, and fail the run only when
+that count rises.
 
 **Commit by path.** End by printing the docs commit with the exact paths this run
 changed — `git add -- <paths>`, then `git commit -m "<message>" -- <paths>` — and name

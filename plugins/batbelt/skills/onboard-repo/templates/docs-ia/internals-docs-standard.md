@@ -47,7 +47,9 @@ These hold in every README voice:
 
 The recorded voice decides the rest: hero, badges, emoji, callouts, `<details>` blocks, what opens
 the first screen, tone, and where flags sit. With no README voice recorded, no voice is imposed;
-the list above still holds, and every run checks the README invariants and the recorded voice's
+the list above still holds (a Local deviations entry may relax a §2 README rule other than the
+install command, such as a launchpad README with a table per section), and every run checks the
+README invariants and the recorded voice's
 signature rules, not only a styling run.
 
 ## 3. Where things live
@@ -116,6 +118,8 @@ plain technical.
   taken; a trimmed one says it is an excerpt.
 - When the repo has a front-end per platform, every command block has its twin right after it, sh
   first. Output from a platform nobody captured is `illustrative`.
+- A captured block is a `console capture=<slug>` fence holding only the output, right after its
+  command block, unless Local deviations record another shape.
 - Callouts (`> [!IMPORTANT]`, `> [!NOTE]`, `> [!WARNING]`) mark a guarantee or a destructive step,
   at most one per section.
 - Every how-to has an If something goes wrong table (`You see | Do this`) built from the real error
@@ -153,7 +157,8 @@ description: >-
 - Sections, in this order, only when used: Added, Changed, Deprecated, Removed, Fixed, Security.
 - Write for users: what changed for them, in §4 voice. No commit logs.
 - A removed or renamed command goes under Removed or Changed with what to type instead.
-- The top version equals the version in the manifest.
+- The top version equals the version in the manifest, or the latest release tag when the repo has no
+  manifest.
 - The public API that SemVer protects: what a user can depend on, such as command names and their
   arguments, configuration keys, file formats and documented behaviour. While the version is
   `0.y.z`, a minor bump may break it; the changelog says so.

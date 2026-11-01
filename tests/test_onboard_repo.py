@@ -4542,3 +4542,44 @@ def test_v5_text_agrees_with_itself():
     assert ref.index("```bash") < ref.index("```powershell")
     assert "except If something goes wrong" in _flat(ONBOARD / "references" / "manual-page-how-to.md")
     assert "On first adoption" in _flat(ONBOARD / "references" / "adopt-docs.md")
+
+
+# ---- template v5: fixes from the GREEN eval, round 2 (no third eval round) ---
+
+
+def test_release_prints_what_it_runs():
+    t = _flat(CR)
+    order = ["git add -- CHANGELOG.md <version homes>", 'git commit -m "<message>" -- <paths>',
+             "`git push`", "git push origin <tag>", "gh release create"]
+    intro = t.split("Repo-specific facts", 1)[0]
+    pos = [intro.index(s) for s in order]
+    assert pos == sorted(pos)
+    assert "REPO SPECIFICS' release tags" not in t
+    assert "this skill never runs another skill's commit" in t
+
+
+def test_archive_link_errors_are_a_baseline_not_a_failed_run():
+    t = _flat(UPD)
+    assert "Broken links outside `docs/archive/` fail the run" in t
+
+
+def test_link_out_page_carries_the_name_and_a_link_only():
+    st = _flat(ONBOARD / "references" / "stamping.md")
+    assert "its captures" not in st.split("**foreign facts:**", 1)[1][:700]
+    assert "the plugin's name and a link, never its skill list" in st
+
+
+def test_v5_text_agrees_with_itself_round_2():
+    ud, std = _flat(UPD), _flat(STD_V5)
+    assert "the `readme voice` bake" in ud
+    assert "console capture=<slug>" in std
+    assert "may relax a §2 README rule other than the install command" in std
+    assert "the latest release tag when the repo has no manifest" in std
+    assert "report it instead; moving content to its home is a human call" in ud
+    assert ".onboard-repo-retired/<stamp>/captures-raw/<slug>.txt" in ud
+    assert "That's the tour." in _flat(ONBOARD / "references" / "author-manual.md")
+    assert "--forbidden" in _flat(ONBOARD / "references" / "author-manual.md")
+    assert "illustrative" in _flat(ONBOARD / "references" / "manual-page-getting-started.md").split("````", 1)[0]
+    assert "in the voice chosen at §2" in _flat(ONBOARD / "SKILL.md")
+    seed = (DOCSIA / "README.md").read_text(encoding="utf-8")
+    assert "```powershell" in seed

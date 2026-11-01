@@ -2,7 +2,7 @@
 
 Read at [author-manual.md](author-manual.md) when you write a page for `docs/manual/getting-started/` (first run). The rules are in `docs/internals/docs-standard.md` when the repo has it; this is the shape. The page ends at the first working result.
 
-Replace every `<...>`. Ground each output block as the author-manual step says: a provenance tag on the fence, `illustrative` when it is a mock. When the repo has a front-end per platform, every command block has its twin right after it, sh first.
+Replace every `<...>`. Ground each output block as the author-manual step says: a provenance tag on the fence, `illustrative` when it is a mock. When the repo has a front-end per platform, every command block has its twin right after it, sh first. Output from a platform nobody captured is `illustrative`.
 
 ````markdown illustrative
 # Install <repo>

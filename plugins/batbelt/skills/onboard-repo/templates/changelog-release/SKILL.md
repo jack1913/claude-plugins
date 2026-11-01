@@ -12,22 +12,22 @@ when REPO SPECIFICS bakes one (§4b). Accumulate under `[Unreleased]`.
 
 **Land it on one yes.** Show, in one message: the version block; every merge in the
 range that had no bullet, by SHA and subject, with the bullet you drafted for it (§2);
-the paths this run edited (`CHANGELOG.md` and the version homes), and every unrelated
-dirty file you will leave out (from `git status --short`); and the commands that land
-the release, each on its own line, in this order: `git commit -m "<message>" --
-<paths>`; when this run cut a version, the tag command (REPO SPECIFICS' release tags,
-default `git tag -a v<version> -m "v<version>"`); `git push`; and `git push origin
-<tag>` for that tag. Ask once: the operator can keep the draft, change it, or state a
-skip for each unmatched merge, and say yes or no to the commands. On a yes, stage only
-the paths this run edited (`git add -- CHANGELOG.md <version homes>`), then run the
-commands one at a time, in order, and stop at the first that fails; a no leaves them
-printed for the operator. `allowed-tools` pre-approves none of the commit, tag or push
-commands, so the harness still asks before each one under the operator's own permission
-rules. With a release script (§7), a yes runs the script's own cut command, never a
-hand-made `git tag`; with a `ci` bake, a yes runs the commit and push only, and the
-workflow tags (§11). When `update-docs` printed a docs commit for this release, ask the
-operator to run it first, so the release ships with its docs; this skill commits only
-its own paths.
+every unrelated dirty file you will leave out (from `git status --short`); any docs
+commit `update-docs` printed for this release, which the operator runs first so the
+release ships with its docs (this skill never runs another skill's commit); and the
+commands that land the release, each on its own line, in this order: `git add --
+CHANGELOG.md <version homes>`; `git commit -m "<message>" -- <paths>` with the same
+paths; when this run cut a version, the tag command (the repo's own when REPO SPECIFICS
+names one, else `git tag -a v<version> -m "v<version>"`); `git push`; `git push origin
+<tag>` for that tag; and last, under a `manual` GitHub Release bake once the release is
+merged, `gh release create` (§11). Ask once: the operator can keep the draft, change it,
+or state a skip for each unmatched merge, and say yes or no to the commands. On a yes,
+stage only the paths this run edited, then run the commands one at a time, in order, and
+stop at the first that fails; a no leaves them printed for the operator. `allowed-tools`
+pre-approves none of the commit, tag or push commands, so the harness still asks before
+each one under the operator's own permission rules. With a release script (§7), a yes
+runs the script's own cut command, never a hand-made `git tag`; with a `ci` bake, a yes
+runs the commit and push only, and the workflow tags (§11).
 
 Repo-specific facts (versioning scheme, version homes, monorepo mode,
 release-script delegation, dash punctuation, changeset dir, GitHub release)

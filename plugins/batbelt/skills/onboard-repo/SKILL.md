@@ -289,7 +289,7 @@ For a repo without the IA, create **only what's absent** (create-only-missing):
 `docs/manual/`, `docs/internals/`, `docs/adr/`, `docs/archive/` (the manual's
 subfolders `getting-started/` and `reference/` are not made here: each is created
 with its first page; how-to pages sit directly in `docs/manual/`, so no folder is ever empty), and copy the seeds from `$SKILL_DIR/templates/docs-ia/` to their
-targets — `CLAUDE.md`→`CLAUDE.md`, `AGENTS.md`→`AGENTS.md`, `README.md`→`README.md`,
+targets — `CLAUDE.md`→`CLAUDE.md`, `AGENTS.md`→`AGENTS.md`, `README.md`→`README.md` (written in the voice chosen at §2),
 `docs-README.md`→`docs/README.md`, `docs-manual-README.md`→`docs/manual/README.md`,
 `internals-README.md`→`docs/internals/README.md`,
 `ADR-TEMPLATE.md`→`docs/adr/ADR-TEMPLATE.md`,
