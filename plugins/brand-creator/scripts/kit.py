@@ -9,6 +9,7 @@
     brand-creator kit build --plan              print what would be written and exit 0
     brand-creator kit build --yes --replace     a file of the kit that was edited by hand, or one put into a generated folder, stops the build; --replace moves it aside
     brand-creator kit check                     prove the kit is whole, current and filled in (writes the report kit-check; read only otherwise)
+    brand-creator kit status --repo DIR[=LABEL] [--repo ...] [--json]   is the copy of the kit in a product repository current, and what to copy (writes nothing)
 
 The kit holds the brand's own files copied byte for byte at their project paths under brand/ (the token files, the logo files and the drawings qa/rules.json names
 for each size band), SKILL.md (the applied skill, written by the same builder, its paths pointing inside the kit, with a "## The kit" section) and kit.json, which
@@ -48,9 +49,19 @@ what changed) and kit:owned (warns when an owner file changed since the last bui
 Writes the report `kit` (rows kit:written and kit:owned; outputs lists every generated path with its sha256, kit.json included, and no owner file). Exit 0 written. Exit 1: G5 not recorded, no approved
 edition, a band drawing the project does not have, or a hand edit or foreign file without --replace. Exit 2: no --yes (the plan is printed first); a path that leaves the
 project; a band drawing that is not written as a plain path; a scaffold with a placeholder this version does not know. Exit 1 also: an owner file's path that holds something that is no file, or a folder an owner file belongs in (recipes/) that is a file or a link to nothing. Exit 3: the tokens are not built; a scaffold the plugin lacks; fonts are in assets/fonts/ and there is no current fontcheck report (the kit is written without them).
+
+`kit status` reads <DIR>/.claude/skills/<slug>-brand/ of each repository and writes nothing, in the repository or in the project (no report either). Per repository it says `not installed`
+(no kit.json there), `current (version V)` (every generated file and kit.json are the project's bytes) or `not current` (the installed and the project version, then the generated files that
+differ, are missing, or are left over from an older kit). It also lists the owner files that differ (the repository's own, kept on update) and the copy list: the generated files to copy
+(kit.json last), then the owner files the repository lacks, as paths relative to the kit folder. Without --repo it reads each repository that has a `kit` row in adoption.json (none: exit 2).
+Exit 0 when every copy is current, 1 when one is not installed or not current, or when a repository's kit folder changed while it was read (its files, sizes and times are listed before
+and after). Exit 2: no kit in the project; a folder that does not exist; the project itself or a folder inside it; your home folder or any path inside ~/.claude (the kit goes into one product
+repository at a time, never into a global skills folder); a kit folder that is a link. Exit 3: the kit in the project is not whole (`kit check` says what).
 """
 import argparse
+import json
 import os
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -61,6 +72,7 @@ sys.path.insert(0, str(HERE / "booklib"))
 sys.path.insert(0, str(HERE / "adaptlib"))
 sys.path.insert(0, str(HERE / "boardlib"))   # kitlib.known_rule_ids reads the choices of site/site.json with boardlib/sitedata.py
 import adapt  # noqa: E402
+import adoptdata  # noqa: E402
 import kitlib  # noqa: E402
 from _common import (EXIT_FAIL, EXIT_USAGE, CliError, Parser, Report, add_project_arg, confine, fail, find_project, main_guard, plugin_version,  # noqa: E402
                      require_gate, sha256_bytes, today, write_bytes_if_changed)
@@ -323,6 +335,130 @@ def build(project: Path, a) -> int:
     return rep.finish()
 
 
+def parse_repo(spec: str) -> tuple[str, str, Path]:
+    """`DIR[=LABEL]` as (label, DIR as given, DIR with its links resolved). The label is the folder's name when none is given (a path may hold an `=`, a label never holds a slash)."""
+    p, sep, label = spec.rpartition("=")
+    if not sep or "/" in label or os.sep in label:
+        p, label = spec, ""
+    if not p.strip():
+        fail(EXIT_USAGE, f"--repo {spec}: name a folder")
+    d = Path(p).expanduser()
+    if not d.is_dir():
+        fail(EXIT_USAGE, f"--repo {p}: not a folder")
+    real = Path(os.path.realpath(d))
+    return label.strip() or re.sub(r"[^A-Za-z0-9._-]+", "-", real.name) or "repo", p, real
+
+
+def refusal(project: Path, real: Path) -> str | None:
+    """Why a folder cannot be read as a product repository, or None: the brand project itself or a folder inside it, your home folder, or a path inside ~/.claude (a global skills folder).
+    `real` has its links resolved. The text starts with "is" and goes after the name of the folder."""
+    root = Path(os.path.realpath(project))
+    if real == root or root in real.parents:
+        return "is the brand project itself or a folder inside it: name a product repository"
+    home = Path(os.path.realpath(Path.home()))
+    if real == home:
+        return "is your home folder: the kit goes into one product repository at a time, never into a global skills folder"
+    for claude in {home / ".claude", Path(os.path.realpath(Path.home() / ".claude"))}:
+        if real == claude or claude in real.parents:
+            return "is inside ~/.claude: the kit goes into one product repository at a time, never into a global skills folder"
+    return None
+
+
+def adoption_repos(project: Path) -> list[str]:
+    """`DIR=LABEL` of every repository that has a `kit` row in adoption.json, in the order of its rows, each once. The path is the one the adoption list stores (relative to the project)."""
+    try:
+        doc = adoptdata.load(project)
+    except (OSError, ValueError) as e:
+        fail(EXIT_USAGE, f"{adoptdata.FILE} cannot be read ({e}): pass --repo DIR")
+    if not isinstance(doc, dict):
+        return []
+    repos = {r.get("id"): r for r in doc.get("repos") or [] if isinstance(r, dict)}
+    root, out = Path(os.path.realpath(project)), []
+    for row in doc.get("rows") or []:
+        if not isinstance(row, dict) or row.get("category") != "kit":
+            continue
+        repo = repos.get(row.get("repo"))
+        if not (repo and isinstance(repo.get("path"), str) and isinstance(repo.get("label"), str)):
+            fail(EXIT_USAGE, f"{adoptdata.FILE}: the kit row {row.get('n')} names a repository that is not listed in `repos`: run `brand-creator adoption verify`")
+        spec = f"{os.path.normpath(root / repo['path'])}={repo['label']}"
+        if spec not in out:
+            out.append(spec)
+    return out
+
+
+def status_lines(res: dict, kd_rel: str) -> list[str]:
+    """The text of one repository: its state, what differs, and the copy list."""
+    v, label = res["project_version"], res["label"]
+    if res["state"] == kitlib.NOT_INSTALLED:
+        L = [f"{label}: not installed"]
+    elif res["state"] == kitlib.CURRENT:
+        L = [f"{label}: current (version {v})"]
+    else:
+        L = [f"{label}: not current (installed version {res['installed_version'] or 'unknown'}, project version {v})"]
+    if res["note"]:
+        L.append(f"  {res['note']}")
+    for title, items in (("generated files that differ", [f"{rel} ({why})" for rel, why in res["differ"]]),
+                         ("generated files that are missing", res["missing"]),
+                         ("left over from an older kit (not in this kit)", res["left_over"]),
+                         ("owner files that differ (kept on update)", [rel for rel, _why in res["owner_differ"]])):
+        if items:
+            L += [f"  {title}:", *(f"    {i}" for i in items)]
+    if res["copy"]:
+        L.append(f"  copy list, paths relative to {kd_rel}/ (the generated files, kit.json last, then the owner files the repository lacks):")
+        L += [f"    {rel} (owner file, the repository has none)" if rel in res["copy_owner"] else f"    {rel}" for rel in res["copy"]]
+    return L
+
+
+def status(project: Path, a) -> int:
+    if not kitlib.exists(project):
+        fail(EXIT_USAGE, "no kit in this project: `brand-creator kit build --yes` (opt-in at G5)")
+    if (kitlib.kit_dir(project) / kitlib.KIT_FILE).is_symlink():
+        fail(EXIT_USAGE, f"{kitlib.kit_rel(project)}/{kitlib.KIT_FILE} is a link, and a link is never read through: `brand-creator kit build --yes --replace` moves it aside and writes the kit")
+    doc = kitlib.load(project)
+    kd, kd_rel, name = kitlib.kit_dir(project), kitlib.kit_rel(project), adapt.skill_name(project)
+    specs = a.repo or adoption_repos(project)
+    if not specs:
+        fail(EXIT_USAGE, "pass --repo DIR (repeatable): the adoption list has no repository with a kit row (`brand-creator adoption add --repo LABEL --kit`)")
+    planned = []
+    for spec in specs:                                    # every folder is judged before one is read: a bad one stops the run with nothing printed
+        label, given, real = parse_repo(spec)
+        why = refusal(project, real)
+        if why:
+            fail(EXIT_USAGE, f"--repo {given} {why}")
+        installed = real / adapt.SKILL_DIR / name
+        if installed.is_symlink():
+            fail(EXIT_USAGE, f"--repo {given}: {kd_rel}/ is a link, and a link is never read through: look at where it leads and replace it with a folder")
+        target = Path(os.path.realpath(installed))
+        why = refusal(project, target)
+        if why:
+            fail(EXIT_USAGE, f"--repo {given}: {kd_rel} leads to {target}, which {why}")
+        planned.append((label, real, installed))
+    results = []
+    for label, real, installed in planned:
+        before = kitlib.folder_state(installed)
+        res = kitlib.compare(kd, installed)
+        res.update({"label": label, "path": str(real), "read_only": kitlib.folder_state(installed) == before, "note": None})
+        if res["state"] == kitlib.NOT_INSTALLED and os.path.lexists(installed):
+            res["note"] = f"{kd_rel}/ is there but holds no {kitlib.KIT_FILE}: it is not a kit, so look at it before you copy over it"
+        results.append(res)
+    kept = all(r["read_only"] for r in results)
+    ok = kept and all(r["state"] == kitlib.CURRENT for r in results)
+    if a.json:
+        keys = ("label", "path", "state", "installed_version", "project_version", "differ", "missing", "left_over", "owner_differ", "copy", "copy_owner", "read_only")
+        shown = [{k: ([{"file": rel, "why": why} for rel, why in r[k]] if k in ("differ", "owner_differ") else r[k]) for k in keys} for r in results]
+        print(json.dumps({"kit": name, "version": doc["version"], "repos": shown, "current": ok}, indent=2, ensure_ascii=False))
+    else:
+        print(f"kit {name}, version {doc['version']}")
+        for r in results:
+            print("\n".join(status_lines(r, kd_rel)))
+        if kept:
+            print("read only: nothing in the installed kit folders changed while they were read")
+    for r in results:
+        if not r["read_only"]:
+            print(f"error: {r['label']}: the installed kit folder changed while it was read, so what is said about it cannot be relied on", file=sys.stderr)
+    return 0 if ok else EXIT_FAIL
+
+
 def main() -> int:
     ap = Parser(prog="brand-creator kit", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     add_project_arg(ap)
@@ -335,8 +471,15 @@ def main() -> int:
     b.add_argument("--project", default=argparse.SUPPRESS, help="brand project folder")   # also after the subcommand
     c = sub.add_parser("check", help="prove the kit is whole: files, links, fill markers, versions, sources and the owner's files (writes the report kit-check)")
     c.add_argument("--project", default=argparse.SUPPRESS, help="brand project folder")
+    st = sub.add_parser("status", help="is the copy of the kit in a product repository current, and what to copy (reads only; writes nothing)")
+    st.add_argument("--repo", action="append", default=[], metavar="DIR[=LABEL]",
+                    help="a product repository (repeatable; read only). Without it, every repository that has a kit row in adoption.json")
+    st.add_argument("--json", action="store_true", help="print the result as JSON")
+    st.add_argument("--project", default=argparse.SUPPRESS, help="brand project folder")
     a = ap.parse_args()
     project = find_project(getattr(a, "project", None))
+    if a.cmd == "status":
+        return status(project, a)
     return build(project, a) if a.cmd == "build" else check(project, a)
 
 

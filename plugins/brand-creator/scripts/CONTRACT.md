@@ -2380,6 +2380,36 @@ Rows, in this order:
 **What `check` gates.** A kit makes `check` expect the `kit-check` report as well as the `kit` report: `report:kit-check`, the generic report gate (the fix it names is `brand-creator kit check`), so a failing, stale or missing
 report is a failing or not verified `check`. The row `kit:checked` says not verified when the report passed but its `kit_tree_sha` is not the kit's now: a file was added to the kit, or taken out of it, after `kit check` ran. There is no row while they match.
 
+### kit status
+
+`kit status [--repo DIR[=LABEL]]... [--json]` (`scripts/kit.py`; the comparison is `kitlib.compare(kit_dir, installed_dir)`) says whether the copy of the kit in each product repository is current. It reads
+`<DIR>/.claude/skills/<slug>-brand/` and writes nothing: no file in the repository, none in the project, no report (it has no report row and `check` does not gate it). The copy itself is made by the
+implementer from the copy list this command prints ([ADR-0011](../docs/adr/ADR-0011-a-generated-brand-kit-around-the-applied-skill.md)); a script never writes outside the project. `DIR` is read as `survey --repo` reads it
+(a label after the last `=`, the folder's name when there is none; a relative `DIR` is relative to the working folder). Without `--repo`, every repository that has a `kit` row in `adoption.json` is read, each once, at the
+path the adoption list stores for it; with no such row the exit is 2, "pass --repo DIR (repeatable)".
+
+Per repository, one of three states (`--json`: `state`):
+
+- `not installed`: the kit folder holds no `kit.json`. A folder that exists without one is named ("is there but holds no kit.json: it is not a kit, so look at it before you copy over it").
+- `current (version V)`: every generated file `kit.json` lists, and `kit.json` itself, is a plain file with the project's bytes. The comparison is byte for byte, never by size or time.
+- `not current (installed version A, project version B)`: A is `unknown` when the installed `kit.json` cannot be read. Listed after it: the generated files that differ (`not the same bytes`, or `is a link or a folder, not a file`),
+  the generated files that are missing, and the files left over from an older kit (any file in `brand/`, `snippets/` or `reference-pages/` that the project's kit does not list; a Finder `.DS_Store` is none).
+
+Every state also prints the owner files that differ ("owner files that differ (kept on update)"), which never make a copy not current: an installed kit's owner files are the repository's own, and an update copies one only where the
+repository has none. The copy list, as paths relative to the kit folder, is the generated files to copy (all of them when nothing is installed, otherwise those that differ or are missing; `kit.json` last, as the build writes it,
+so a copy that stops half way is not vouched for), then the owner files the repository lacks. Files left over are not on it: the implementer takes them out. `--json` prints one document, `{kit, version,
+repos: [{label, path, state, installed_version, project_version, differ: [{file, why}], missing, left_over, owner_differ: [{file, why}], copy, copy_owner, read_only}], current}`, where `copy` is the whole copy list
+and `copy_owner` names the owner files in it.
+
+It proves it read only, as the survey does: the installed kit folder is listed with the path, kind, size and modification time of every entry (`kitlib.folder_state`, no link followed) before and after the comparison, and a
+difference exits 1, naming the repository on stderr, without the "read only" line. Nothing in a link is read: a link where a generated file belongs is a file that differs, and a link in a generated folder is left over.
+
+Exit 0 when every repository is current (and unchanged while read). Exit 1 when one is not installed or not current, or its folder changed while it was read. Exit 2, before anything is read, for: no kit in the project (or a
+`kit.json` that is a link, or one `kitlib.load()` refuses); no `--repo` and no kit row; a folder that does not exist; the project itself or a folder inside it; the user's home folder (`Path.home()`) or any path inside
+`~/.claude` ("the kit goes into one product repository at a time, never into a global skills folder"), also when the repository's kit folder leads there through a link; a repository whose kit folder is a link. Exit 3: the kit
+in the project is not whole (a generated file `kit.json` lists is missing there, is no plain file, or is not the sha256 `kit.json` records), because a copy cannot be judged against a kit that is not what it says: run
+`kit check`, then `kit build --yes`.
+
 ### launch-todo
 
 `launch-todo [--name CANDIDATE]` writes `LAUNCH.md` from `templates/LAUNCH.md` and reads local files only: the names report (`assets/_checks/names.json`: the

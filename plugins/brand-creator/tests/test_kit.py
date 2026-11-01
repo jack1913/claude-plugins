@@ -2324,3 +2324,337 @@ def test_a_kit_json_that_lists_a_path_outside_the_kit_fails_and_the_path_is_neve
         assert r.returncode == 1 and "Traceback" not in r.stderr, (listed, r.stdout + r.stderr)
         assert f"{listed} (is no path a kit holds)" in check_report_rows(pack)["kit:files"]["detail"], listed
         mutate_json(kj, lambda d: d["generated"].pop(listed))
+
+
+# ---------------------------------------------------------------- kit status: is the copy in a product repository current?
+# `kit status --repo DIR` reads <DIR>/.claude/skills/acme-brand/ and writes nothing. A repository's copy is made with shutil.copytree of the project's kit folder.
+import os  # noqa: E402
+import subprocess  # noqa: E402
+import sys  # noqa: E402
+
+COPY_ORDER = sorted(r for r in KIT_FILES if r != "kit.json") + ["kit.json"]                      # the copy list: the generated files, kit.json last (as the build writes it) ...
+OWNER_ORDER = ["EXTENDING.md", "voice.md", "visual.md", "golden-rules.md", "recipes/web-page.md"]   # ... then the owner files the repository lacks
+READ_ONLY_LINE = "read only: nothing in the installed kit folders changed while they were read"
+
+
+def kit_status(p, *repos, extra=(), env=None):
+    return bc("kit", "status", *[a for r in repos for a in ("--repo", str(r))], *extra, project=p, env=env)
+
+
+def installed_of(repo):
+    return repo / ".claude" / "skills" / "acme-brand"
+
+
+def install(p, tmp_path, name="site"):
+    """A product repository that holds a byte copy of the project's kit folder."""
+    repo = tmp_path / name
+    shutil.copytree(kit_of(p), installed_of(repo))
+    return repo
+
+
+def listed(out: str, title: str) -> list[str]:
+    """The items under a section of the status text: the lines indented four spaces after the line that starts with `  <title>`."""
+    lines = out.splitlines()
+    start = next(n for n, ln in enumerate(lines) if ln.startswith(f"  {title}"))
+    items = []
+    for ln in lines[start + 1:]:
+        if not ln.startswith("    "):
+            break
+        items.append(ln.strip())
+    return items
+
+
+def paths_of(items: list[str]) -> list[str]:
+    return [i.split(" (")[0] for i in items]
+
+
+def tree_of(root) -> list:
+    """Every folder, file and link below `root` with its size and modification time: what a read-only run leaves as it was."""
+    out = []
+    for dirpath, dirs, names in os.walk(root):
+        for n in [*dirs, *names]:
+            f = os.path.join(dirpath, n)
+            st = os.lstat(f)
+            out.append((os.path.relpath(f, root), st.st_size, st.st_mtime_ns))
+    return sorted(out)
+
+
+def test_kit_status_says_not_installed_and_lists_what_to_copy(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = tmp_path / "site"
+    repo.mkdir()
+    (repo / "README.md").write_text("the product", encoding="utf-8")
+    project_before, repo_before = tree_of(pack), tree_of(repo)
+    r = kit_status(pack, repo)
+    assert r.returncode == 1, r.stdout + r.stderr
+    lines = r.stdout.splitlines()
+    assert lines[0] == "kit acme-brand, version 1.1" and "site: not installed" in lines and lines[-1] == READ_ONLY_LINE
+    items = listed(r.stdout, "copy list")
+    assert paths_of(items) == COPY_ORDER + OWNER_ORDER                                  # fifteen generated files, kit.json last, then the five owner files
+    assert not any("owner file" in i for i in items[:len(COPY_ORDER)]) and all("owner file" in i for i in items[len(COPY_ORDER):])
+    assert tree_of(pack) == project_before and tree_of(repo) == repo_before             # nothing written, in the project or in the repository
+    assert not list((pack / "assets" / "_checks").glob("*status*"))                      # and no report
+
+
+def test_kit_status_says_when_the_kit_folder_is_there_but_holds_no_kit(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = tmp_path / "site"
+    (installed_of(repo)).mkdir(parents=True)
+    (installed_of(repo) / "SKILL.md").write_text("a skill somebody wrote by hand\n", encoding="utf-8")
+    r = kit_status(pack, repo)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "site: not installed" in r.stdout.splitlines()
+    assert ".claude/skills/acme-brand/ is there but holds no kit.json: it is not a kit, so look at it before you copy over it" in r.stdout
+    assert paths_of(listed(r.stdout, "copy list")) == COPY_ORDER + OWNER_ORDER
+
+
+def test_a_byte_copy_of_the_kit_is_current(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = install(pack, tmp_path)
+    r = kit_status(pack, repo)
+    assert r.returncode == 0, r.stdout + r.stderr
+    lines = r.stdout.splitlines()
+    assert "site: current (version 1.1)" in lines and lines[-1] == READ_ONLY_LINE
+    assert "copy list" not in r.stdout and "differ" not in r.stdout and "missing" not in r.stdout
+    (installed_of(repo) / "brand" / ".DS_Store").write_bytes(b"Finder was here")        # what Finder leaves in a folder it opened is no file of the kit
+    assert kit_status(pack, repo).returncode == 0
+
+
+def test_a_changed_generated_file_in_the_repository_is_not_current_and_owner_changes_are_kept(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = install(pack, tmp_path)
+    kd = installed_of(repo)
+    mutate(kd / "brand/assets/tokens/tokens.css", "#4cd7c8", "#4cd7c9")                  # a generated file edited in the repository
+    (kd / "snippets/logo.html").unlink()                                                  # a generated file that is gone
+    (kd / "brand/assets/logo/old-mark.svg").write_text("<svg/>", encoding="utf-8")        # a file of an older kit, which this kit no longer has
+    voice = kd / "voice.md"
+    voice.write_text(voice.read_text(encoding="utf-8") + "\nOur own words.\n", encoding="utf-8")   # the repository's own voice file
+    (kd / "visual.md").unlink()                                                           # an owner file the repository lacks
+    r = kit_status(pack, repo)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "site: not current (installed version 1.1, project version 1.1)" in r.stdout.splitlines()
+    assert listed(r.stdout, "generated files that differ") == ["brand/assets/tokens/tokens.css (not the same bytes)"]
+    assert listed(r.stdout, "generated files that are missing") == ["snippets/logo.html"]
+    assert listed(r.stdout, "left over from an older kit") == ["brand/assets/logo/old-mark.svg"]
+    assert listed(r.stdout, "owner files that differ (kept on update)") == ["voice.md"]
+    copy = paths_of(listed(r.stdout, "copy list"))
+    assert copy == ["brand/assets/tokens/tokens.css", "snippets/logo.html", "visual.md"]        # the generated files that need copying, then the owner file it lacks; voice.md is not in it
+    for rel in copy:                                                                       # the copy the list asks for, and the old file taken out
+        shutil.copy2(kit_of(pack) / rel, kd / rel)
+    r = kit_status(pack, repo)                                                             # the copy is whole now, and only the old file is left: that alone is not current
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "site: not current (installed version 1.1, project version 1.1)" in r.stdout.splitlines()
+    assert listed(r.stdout, "left over from an older kit") == ["brand/assets/logo/old-mark.svg"]
+    assert "copy list" not in r.stdout and "generated files that differ" not in r.stdout and "generated files that are missing" not in r.stdout
+    (kd / "brand/assets/logo/old-mark.svg").unlink()
+    r = kit_status(pack, repo)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "site: current (version 1.1)" in r.stdout.splitlines() and "copy list" not in r.stdout
+    assert listed(r.stdout, "owner files that differ (kept on update)") == ["voice.md"]    # still the repository's own, and current all the same
+    assert "Our own words." in voice.read_text(encoding="utf-8")
+
+
+def test_an_older_installed_version_is_not_current_and_names_both_versions(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = install(pack, tmp_path)
+    mutate_json(installed_of(repo) / "kit.json", lambda d: d.__setitem__("version", "1.0"))
+    r = kit_status(pack, repo)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "site: not current (installed version 1.0, project version 1.1)" in r.stdout.splitlines()
+    assert listed(r.stdout, "generated files that differ") == ["kit.json (not the same bytes)"]
+    assert paths_of(listed(r.stdout, "copy list")) == ["kit.json"]
+    (installed_of(repo) / "kit.json").write_text("not json at all", encoding="utf-8")        # a kit.json that cannot be read has no version to name
+    r = kit_status(pack, repo)
+    assert r.returncode == 1 and "site: not current (installed version unknown, project version 1.1)" in r.stdout.splitlines()
+
+
+def test_kit_status_refuses_a_global_skills_folder_the_home_folder_and_the_project(pack, tmp_path):
+    assert build(pack).returncode == 0
+    home = tmp_path / "home"
+    (home / ".claude" / "skills").mkdir(parents=True)
+    linked = tmp_path / "linked"                                                          # a repository whose .claude is a link into the global folder
+    linked.mkdir()
+    (linked / ".claude").symlink_to(home / ".claude")
+    uv = lambda *a: subprocess.run(["uv", *a], capture_output=True, text=True, timeout=60).stdout.strip()     # HOME moves, and uv must still find its cache and its Pythons
+    env = {"HOME": str(home), "UV_CACHE_DIR": uv("cache", "dir"), "UV_PYTHON_INSTALL_DIR": uv("python", "dir")}
+    before = (tree_of(home), tree_of(pack), tree_of(linked))
+    for target, needle in ((home, "is your home folder"), (home / ".claude", "is inside ~/.claude"), (home / ".claude" / "skills", "is inside ~/.claude"),
+                           (pack, "is the brand project itself or a folder inside it"), (pack / "assets", "is the brand project itself or a folder inside it"),
+                           (tmp_path / "nothing-here", "not a folder"), (linked, "~/.claude")):
+        r = kit_status(pack, target, env=env)
+        assert r.returncode == 2, (target, r.stdout + r.stderr)
+        assert needle in r.stderr and not r.stdout, (target, r.stderr)
+    assert "the kit goes into one product repository at a time, never into a global skills folder" in kit_status(pack, home, env=env).stderr
+    assert "the kit goes into one product repository at a time, never into a global skills folder" in kit_status(pack, home / ".claude" / "skills", env=env).stderr
+    ok = tmp_path / "site"                                                                # a folder below the home folder is a repository like any other
+    ok.mkdir()
+    assert kit_status(pack, ok, env=env).returncode == 1 and (tree_of(home), tree_of(pack), tree_of(linked)) == before
+    r = kit_status(pack, ok, tmp_path / "nothing-here", env=env)                           # one bad folder stops the run before anything is read
+    assert r.returncode == 2 and not r.stdout
+
+
+def test_kit_status_reads_and_never_writes_the_repository(pack, tmp_path):
+    assert build(pack).returncode == 0
+    fresh = tmp_path / "fresh"
+    fresh.mkdir()
+    (fresh / "package.json").write_text("{}", encoding="utf-8")
+    copied = install(pack, tmp_path, "copied")
+    stale = install(pack, tmp_path, "stale")
+    (installed_of(stale) / "brand/assets/tokens/tokens.css").write_text("edited", encoding="utf-8")
+    (installed_of(stale) / "voice.md").unlink()
+    project_before, repos_before = tree_of(pack), [tree_of(d) for d in (fresh, copied, stale)]
+    for extra in ((), ("--json",)):
+        r = kit_status(pack, fresh, copied, stale, extra=extra)
+        assert r.returncode == 1 and "Traceback" not in r.stderr, r.stdout + r.stderr
+        assert tree_of(pack) == project_before and [tree_of(d) for d in (fresh, copied, stale)] == repos_before
+    r = kit_status(pack, fresh, copied, stale)
+    assert [ln for ln in r.stdout.splitlines() if ln.startswith(("fresh:", "copied:", "stale:"))] == [
+        "fresh: not installed", "copied: current (version 1.1)", "stale: not current (installed version 1.1, project version 1.1)"]
+
+
+def test_kit_status_proves_it_read_only_by_the_sizes_and_times_of_the_installed_folder(tmp_path):
+    import kitlib
+    d = tmp_path / "kit"
+    (d / "brand").mkdir(parents=True)
+    f = d / "brand" / "a.txt"
+    f.write_text("one", encoding="utf-8")
+    os.utime(f, ns=(1_000_000_000, 1_000_000_000))
+    state = kitlib.folder_state(d)
+    assert kitlib.folder_state(d) == state                                                # the same folder, the same proof
+    f.write_text("two", encoding="utf-8")                                                 # the same size, another time
+    os.utime(f, ns=(2_000_000_000, 2_000_000_000))
+    assert kitlib.folder_state(d) != state
+    os.utime(f, ns=(1_000_000_000, 1_000_000_000))
+    assert kitlib.folder_state(d) == state                                                # the size and the time are what is listed, so the same size and time are the same proof
+    f.write_text("three", encoding="utf-8")                                               # another size, the same time
+    os.utime(f, ns=(1_000_000_000, 1_000_000_000))
+    assert kitlib.folder_state(d) != state
+    f.write_text("one", encoding="utf-8")
+    os.utime(f, ns=(1_000_000_000, 1_000_000_000))
+    (d / "brand" / "b.txt").write_text("", encoding="utf-8")                              # a file added
+    assert kitlib.folder_state(d) != state
+    (d / "brand" / "b.txt").unlink()
+    (d / "brand" / "link").symlink_to(f)                                                  # a link added: listed as the link it is, never followed
+    assert kitlib.folder_state(d) != state
+    assert kitlib.folder_state(tmp_path / "absent") == kitlib.folder_state(tmp_path / "also-absent")      # a folder that is not there is a state too
+
+
+def test_kit_status_exits_1_when_the_installed_folder_changes_while_it_is_read(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = install(pack, tmp_path)
+    script = ROOT / "scripts" / "kit.py"
+    code = ("import runpy, sys\n"
+            "script, project, repo = sys.argv[1:4]\n"
+            "scripts = script.rsplit('/', 1)[0]\n"
+            "sys.path[:0] = [scripts + '/' + d for d in ('lib', 'booklib', 'adaptlib', 'boardlib')]\n"
+            "import kitlib\n"
+            "real = kitlib.compare\n"
+            "def touching(kit, installed):\n"
+            "    got = real(kit, installed)\n"
+            "    (installed / 'voice.md').write_text('somebody wrote here while the repository was read', encoding='utf-8')\n"
+            "    return got\n"
+            "kitlib.compare = touching\n"
+            "sys.argv = ['kit.py', 'status', '--repo', repo, '--project', project]\n"
+            "runpy.run_path(script, run_name='__main__')\n")
+    r = subprocess.run([sys.executable, "-c", code, str(script), str(pack), str(repo)], capture_output=True, text=True, timeout=120,
+                       env={**os.environ, "BRAND_CREATOR_TODAY": "2026-10-17"})
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "site: current (version 1.1)" in r.stdout.splitlines() and READ_ONLY_LINE not in r.stdout
+    assert "error: site: the installed kit folder changed while it was read" in r.stderr
+
+
+def test_kit_status_names_a_repository_by_its_label_and_reads_several_at_once(pack, tmp_path):
+    assert build(pack).returncode == 0
+    copied = install(pack, tmp_path, "web")
+    empty = tmp_path / "app"
+    empty.mkdir()
+    r = bc("kit", "status", "--repo", f"{copied}=front", "--repo", str(empty), project=pack)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert [ln for ln in r.stdout.splitlines() if ln[:1].isalpha() and ": " in ln and not ln.startswith(("kit ", "read only"))] == ["front: current (version 1.1)", "app: not installed"]
+    r = bc("kit", "status", "--repo", f"{copied}=front", project=pack)
+    assert r.returncode == 0 and "front: current (version 1.1)" in r.stdout.splitlines()
+
+
+def test_kit_status_without_repo_reads_the_repositories_that_have_a_kit_row(pack, tmp_path):
+    assert build(pack).returncode == 0
+    r = bc("kit", "status", project=pack)
+    assert r.returncode == 2 and "pass --repo" in r.stderr and not r.stdout, r.stdout + r.stderr
+    copied, other = install(pack, tmp_path, "site"), tmp_path / "other"
+    other.mkdir()
+    kit_row = {"n": 1, "category": "kit", "repo": "r1", "file": ".claude/skills/acme-brand/", "lines": [], "find": "kit.json", "change": "Copy the brand kit"}
+    (pack / "adoption.json").write_text(json.dumps({
+        "schema": 1, "slug": "acme", "repos": [{"id": "r1", "label": "site", "path": "../site"}, {"id": "r2", "label": "other", "path": "../other"}],
+        "rows": [{"n": 2, "category": "name", "repo": "r2", "file": "README.md", "lines": [], "find": "Old", "change": "x"}, kit_row]}), encoding="utf-8")
+    r = bc("kit", "status", project=pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "site: current (version 1.1)" in r.stdout.splitlines() and "other:" not in r.stdout           # a repository with no kit row is not read
+    (pack / "adoption.json").write_text(json.dumps({"schema": 1, "slug": "acme", "repos": [{"id": "r1", "label": "site", "path": "../site"}], "rows": [
+        {"n": 1, "category": "name", "repo": "r1", "file": "README.md", "lines": [], "find": "Old", "change": "x"}]}), encoding="utf-8")
+    r = bc("kit", "status", project=pack)
+    assert r.returncode == 2 and "pass --repo" in r.stderr
+    assert copied.is_dir()
+
+
+def test_kit_status_needs_a_kit_in_the_project_and_never_reads_through_a_link(pack, tmp_path):
+    repo = tmp_path / "site"
+    repo.mkdir()
+    r = kit_status(pack, repo)
+    assert r.returncode == 2 and "no kit in this project: `brand-creator kit build --yes` (opt-in at G5)" in r.stderr and not r.stdout
+    assert not (pack / ".claude").exists() and not (repo / ".claude").exists()
+    assert build(pack).returncode == 0
+    elsewhere = tmp_path / "elsewhere"                                                   # a repository whose kit folder is a link to a folder with a kit in it
+    shutil.copytree(kit_of(pack), elsewhere)
+    (repo / ".claude" / "skills").mkdir(parents=True)
+    installed_of(repo).symlink_to(elsewhere)
+    r = kit_status(pack, repo)
+    assert r.returncode == 2 and "is a link, and a link is never read through" in r.stderr and not r.stdout
+    installed_of(repo).unlink()
+    shutil.copytree(kit_of(pack), installed_of(repo))
+    (installed_of(repo) / "snippets" / "logo.html").unlink()
+    (installed_of(repo) / "snippets" / "logo.html").symlink_to(kit_of(pack) / "snippets" / "logo.html")      # a link with the right bytes behind it is no copy of the file
+    r = kit_status(pack, repo)
+    assert r.returncode == 1 and listed(r.stdout, "generated files that differ") == ["snippets/logo.html (is a link or a folder, not a file)"]
+    (installed_of(repo) / "snippets" / "logo.html").unlink()
+    shutil.copy2(kit_of(pack) / "snippets" / "logo.html", installed_of(repo) / "snippets" / "logo.html")
+    assert kit_status(pack, repo).returncode == 0                                        # the file back as a file: current again
+    (installed_of(repo) / "brand" / "elsewhere").symlink_to(elsewhere)                  # a link to a folder in a generated folder is left over, and is not followed
+    r = kit_status(pack, repo)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert listed(r.stdout, "left over from an older kit") == ["brand/elsewhere"]
+
+
+def test_kit_status_cannot_judge_a_copy_against_a_kit_that_is_not_whole_in_the_project(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = install(pack, tmp_path)
+    mutate(kit_of(pack) / "brand/assets/tokens/tokens.css", "#4cd7c8", "#4cd7c9")         # the project's own kit, edited by hand: kit check says so
+    (kit_of(pack) / "snippets/logo.html").unlink()
+    r = kit_status(pack, repo)
+    assert r.returncode == 3 and not r.stdout, r.stdout + r.stderr
+    assert "the kit in the project is not whole, so no copy can be judged against it" in r.stderr
+    assert "brand/assets/tokens/tokens.css (edited by hand)" in r.stderr and "snippets/logo.html (missing)" in r.stderr and "brand-creator kit check" in r.stderr
+
+
+def test_kit_status_json_holds_the_same_facts_as_the_text(pack, tmp_path):
+    assert build(pack).returncode == 0
+    fresh, stale = tmp_path / "fresh", install(pack, tmp_path, "stale")
+    fresh.mkdir()
+    kd = installed_of(stale)
+    (kd / "brand/assets/tokens/tokens.css").write_text("edited", encoding="utf-8")
+    (kd / "snippets/logo.html").unlink()
+    (kd / "brand/old.svg").write_text("<svg/>", encoding="utf-8")
+    (kd / "voice.md").write_text("mine", encoding="utf-8")
+    (kd / "visual.md").unlink()
+    r = kit_status(pack, fresh, stale, extra=("--json",))
+    assert r.returncode == 1, r.stdout + r.stderr
+    doc = json.loads(r.stdout)
+    assert [k for k in doc] == ["kit", "version", "repos", "current"] and doc["kit"] == "acme-brand" and doc["version"] == "1.1" and doc["current"] is False
+    a, b = doc["repos"]
+    assert (a["label"], a["state"], a["installed_version"], a["project_version"]) == ("fresh", "not installed", None, "1.1")
+    assert a["copy"] == COPY_ORDER + OWNER_ORDER and a["copy_owner"] == OWNER_ORDER and a["read_only"] is True
+    assert (b["label"], b["state"], b["installed_version"], b["project_version"]) == ("stale", "not current", "1.1", "1.1")
+    assert b["differ"] == [{"file": "brand/assets/tokens/tokens.css", "why": "not the same bytes"}] and b["missing"] == ["snippets/logo.html"]
+    assert b["left_over"] == ["brand/old.svg"] and b["owner_differ"] == [{"file": "voice.md", "why": "not the same bytes"}]
+    assert b["copy"] == ["brand/assets/tokens/tokens.css", "snippets/logo.html", "visual.md"] and b["copy_owner"] == ["visual.md"]
+    assert os.path.realpath(b["path"]) == os.path.realpath(stale)
+    r = kit_status(pack, install(pack, tmp_path, "same"), extra=("--json",))
+    assert r.returncode == 0 and json.loads(r.stdout)["current"] is True

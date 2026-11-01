@@ -314,6 +314,12 @@ lints the board of the latest round again before `check`, so an edit of the fact
   and a file you put into a generated folder (move it to `recipes/` or a folder of your own), and warns when one of your
   own files changed since the last build. `brand-creator check` expects its report once you have a kit, and says
   when a file was added to the kit after it.
+- `brand-creator kit status --repo <folder>` tells whether a product repository's copy of the kit is current, and what
+  to copy. It says `not installed`, `current` or `not current` (with both versions, and the files that differ, are
+  missing or are left over from an older kit), lists your own files in the copy that differ (they are the repository's
+  and an update keeps them), and prints the copy list: the generated files that need copying, then your own files the
+  repository does not have. It only reads: nothing is written in the repository or in your project, and it checks
+  that. It refuses your home folder, anything inside `~/.claude` and the brand project itself.
 
 ### Changed
 

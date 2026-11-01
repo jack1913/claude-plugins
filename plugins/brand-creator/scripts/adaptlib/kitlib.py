@@ -1208,3 +1208,125 @@ def scan(project: Path, files: dict[str, bytes], recorded: dict[str, str]) -> tu
     foreign |= {rel for rel in ROOT_FILES if rel in files and (kd / rel).is_symlink()}   # these sit outside the generated folders, and the build writes them all the same
     retired = sorted(rel for rel in recorded if rel not in files and _plain_file(kd, rel))
     return edited, sorted(foreign), retired
+
+
+# ---------------------------------------------------------------- kit status: is the copy in a product repository current?
+# `kit status --repo` (scripts/kit.py) compares the kit folder of the project with the folder a product repository holds, and only reads. Nothing here writes, and a link is never read through.
+
+NOT_INSTALLED = "not installed"                             # the repository's kit folder holds no kit.json
+CURRENT = "current"                                         # every generated file and kit.json are the project's bytes
+NOT_CURRENT = "not current"                                 # a generated file differs or is missing, or a file of an older kit is left over
+WHY_MISSING = "missing"
+WHY_LINK = "is a link or a folder, not a file"
+WHY_BYTES = "not the same bytes"
+STATUS_SHOWN = 6                                            # paths named in a message before "and N more"
+
+
+def _read_plain(base: Path, rel: str) -> tuple[bytes | None, str | None]:
+    """(the bytes, None) of a plain file `rel` of a kit folder `base`, or (None, why): missing, a link or a folder (or behind a link), or unreadable. A link is never read through."""
+    if not os.path.lexists(base / rel):
+        return None, WHY_MISSING
+    if not _plain_file(base, rel):
+        return None, WHY_LINK
+    try:
+        return (base / rel).read_bytes(), None
+    except OSError as e:
+        return None, f"cannot be read ({e.strerror or e})"
+
+
+def _generated_files_in(kd: Path) -> list[str]:
+    """The paths in a kit folder of every file inside a generated folder, sorted, as `on_disk` lists them for the project: a Finder `.DS_Store` is left out, a link to a folder is the one path
+    it is and is never followed, and a generated folder that is itself a link is listed as that one path."""
+    out = []
+    for d in GENERATED_DIRS:
+        if (kd / d).is_symlink():
+            out.append(d)
+            continue
+        for root, dirs, names in os.walk(kd / d):
+            out += [(Path(root) / n).relative_to(kd).as_posix() for n in names if n != FINDER_FILE]
+            out += [(Path(root) / n).relative_to(kd).as_posix() for n in dirs if (Path(root) / n).is_symlink()]
+    return sorted(out)
+
+
+def installed_version(installed: Path) -> str | None:
+    """The `version` kit.json states in an installed copy, or None when there is no plain kit.json there or it holds no version."""
+    if not _plain_file(installed, KIT_FILE):
+        return None
+    version = (_json_object(installed / KIT_FILE) or {}).get("version")
+    return version if isinstance(version, str) and version.strip() else None
+
+
+def folder_state(folder: Path) -> str:
+    """One sha256 over every folder, file and link below `folder` (and the folder itself), each with its path, kind, size and modification time, none followed through a link: the read-only
+    proof of `kit status`, taken before and after. A folder that is not there is a state too."""
+    h = hashlib.sha256()
+    if not os.path.lexists(folder):
+        return h.hexdigest()
+    entries = [(folder, "")]
+    for root, dirs, names in os.walk(folder):
+        entries += [(Path(root) / n, (Path(root) / n).relative_to(folder).as_posix()) for n in [*dirs, *names]]
+    for f, rel in sorted(entries, key=lambda e: e[1]):
+        try:
+            st = os.lstat(f)
+        except OSError:
+            h.update(f"{rel}\0gone\n".encode("utf-8", "replace"))
+            continue
+        kind = "link" if f.is_symlink() else "folder" if f.is_dir() else "file"
+        h.update(f"{rel}\0{kind}\0{st.st_size}\0{st.st_mtime_ns}\n".encode("utf-8", "replace"))
+    return h.hexdigest()
+
+
+def compare(kit: Path, installed: Path) -> dict:
+    """The kit folder of the project (`kit`) against the folder a product repository holds (`installed`). Reads both, writes nothing, follows no link.
+
+    Returns {"state": NOT_INSTALLED | CURRENT | NOT_CURRENT, "installed_version", "project_version", "differ": [(path, why)], "missing": [path], "left_over": [path],
+    "owner_differ": [(path, why)], "copy": [path], "copy_owner": [path]}. The copy list `copy` is the generated files to copy (all of them when nothing is installed, otherwise
+    those that differ or are missing; kit.json last, as the build writes it), then the owner files the repository lacks; `copy_owner` names those. A kit is NOT_INSTALLED when its
+    folder holds no kit.json; CURRENT when every generated file and kit.json are byte for byte the project's; NOT_CURRENT otherwise, which includes a file in brand/, snippets/ or
+    reference-pages/ that the project's kit does not have (`left_over`: a file of an older kit). An owner file that differs is the repository's own and is only reported
+    (`owner_differ`); one the repository lacks is on the copy list. The project's kit must be whole: a generated file kit.json lists that is missing there, no plain file, or not the
+    sha256 kit.json records ends the run (exit 3), because a copy cannot be judged against a kit that is not itself what it says."""
+    doc = _json_object(kit / KIT_FILE)
+    if doc is None or (bad := problems(doc)):
+        fail(EXIT_USAGE, f"{kit / KIT_FILE} is no kit.json this version reads" + (f": {bad[0]}" if doc is not None else ""))
+    wanted = [*sorted(doc["generated"]), KIT_FILE]                      # kit.json last: a copy that stops half way leaves a kit that kit.json does not vouch for
+    mine, broken = {}, []
+    for rel in wanted:
+        data, why = _read_plain(kit, rel) if recorded_path(rel) else (None, "is no path a kit holds")
+        if why:
+            broken.append(f"{rel} ({why})")
+        elif rel != KIT_FILE and sha256_bytes(data) != doc["generated"][rel]:
+            broken.append(f"{rel} (edited by hand)")
+        else:
+            mine[rel] = data
+    if broken:
+        shown = ", ".join(broken[:STATUS_SHOWN]) + (f", and {len(broken) - STATUS_SHOWN} more" if len(broken) > STATUS_SHOWN else "")
+        fail(EXIT_CANNOT, f"the kit in the project is not whole, so no copy can be judged against it: {shown}. Run `brand-creator kit check`, then `brand-creator kit build --yes`")
+    owner = {rel: data for rel in OWNED_FILES if (data := _read_plain(kit, rel)[0]) is not None}   # the project's owner files that can be copied
+    out = {"state": NOT_INSTALLED, "installed_version": None, "project_version": doc["version"], "differ": [], "missing": [], "left_over": [], "owner_differ": [],
+           "copy": [], "copy_owner": []}
+    if not os.path.lexists(installed / KIT_FILE):
+        out["copy"] = list(wanted)
+    else:
+        out["installed_version"] = installed_version(installed)
+        for rel in wanted:
+            data, why = _read_plain(installed, rel)
+            if why == WHY_MISSING:
+                out["missing"].append(rel)
+            elif data != mine[rel]:
+                out["differ"].append((rel, WHY_BYTES if data is not None else why))
+            else:
+                continue
+            out["copy"].append(rel)
+        out["left_over"] = [rel for rel in _generated_files_in(installed) if rel not in doc["generated"]]
+        out["state"] = NOT_CURRENT if out["differ"] or out["missing"] or out["left_over"] else CURRENT
+    for rel in OWNED_FILES:
+        if rel not in owner:
+            continue
+        data, why = _read_plain(installed, rel)
+        if why == WHY_MISSING:
+            out["copy_owner"].append(rel)
+        elif data != owner[rel]:
+            out["owner_differ"].append((rel, WHY_BYTES if data is not None else why))
+    out["copy"] += out["copy_owner"]
+    return out
