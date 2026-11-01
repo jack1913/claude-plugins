@@ -211,6 +211,11 @@ lints the board of the latest round again before `check`, so an edit of the fact
   rules, and a name that is not one of the patterns is refused before the page is opened. The social post template
   that ships with the plugin has a small capital label above its headline; that counts as an eyebrow, and it is
   reported, not changed.
+- `page-check` reads tables and carousels more closely in the mock-up warning (`tell:styled-div-mock`), after trying it on
+  a real brand site. A status badge or chip inside a table cell is part of the table: an index table whose rows each end
+  in a styled badge no longer warns, while a table with a styled header or footer beside it is still judged on all its
+  styled boxes. The items of a list count only as far as they lie in the box, so a carousel whose items run on past the
+  box, between a styled head and footer, now warns instead of being excused by items that add up to more than the box.
 - `/brand-creator:check` takes `--page` to check one page against your brand instead of the whole project: a page in
   your project, a page of a site built elsewhere on your computer, or a page your computer serves (`localhost`,
   `127.0.0.1` or `[::1]`; a page on another website is refused). Claude reports the failing rows with their fix, the
