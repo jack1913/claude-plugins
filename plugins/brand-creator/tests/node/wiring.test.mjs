@@ -120,7 +120,9 @@ test("wiring: a URL that is not loopback is refused with exit 2", async () => {
 
 test("wiring: a page that does not load, or whose server is gone, is exit 3 and prints nothing", async (t) => {
   if (needSetup(t)) return;
+  let gone = false;   // a server that is gone keeps its port and resets every connection: a port that was freed could be taken by another server before the page is asked for
   const srv = await listen((req, res) => {
+    if (gone) { req.socket.resetAndDestroy(); return; }
     if (req.url === "/broken") { res.writeHead(500); res.end("no"); return; }
     if (req.url === "/away") { res.writeHead(302, { location: "http://example.invalid/elsewhere" }); res.end(); return; }
     res.writeHead(404); res.end();
@@ -133,11 +135,14 @@ test("wiring: a page that does not load, or whose server is gone, is exit 3 and 
       assert.match(r.stderr, new RegExp(needle));
       assert.equal(r.stdout, "");
     }
+    gone = true;   // the server has stopped answering
+    const r = await render(["wiring", base + "/"]);
+    assert.equal(r.status, 3, r.stdout + r.stderr);
+    assert.match(r.stderr, /could not read the wiring of /);
+    assert.doesNotMatch(r.stderr, /answered/, "the server hung up; it did not answer with a status");
+    assert.ok(srv.hits.includes("/"), "the page was asked for, and the server hung up");
+    assert.equal(r.stdout, "");
   } finally { await srv.close(); }
-  const gone = await render(["wiring", base + "/"]);   // the server has stopped
-  assert.equal(gone.status, 3, gone.stdout + gone.stderr);
-  assert.match(gone.stderr, /could not read the wiring of /);
-  assert.equal(gone.stdout, "");
 });
 
 test("wiring: a data directory that was never set up is exit 3, prints nothing and opens no page", async () => {
