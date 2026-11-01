@@ -239,6 +239,20 @@ Three levels available:
 
 **Strategy**: Start with Minimal → Targeted → Complete, fixing errors at each level.
 
+#### Per-declaration warning control (Swift 6.4)
+
+In Swift 6.4 a diagnostic that belongs to a group ends with its id, for example `capture of 'm' with non-Sendable type 'Model' in a '@Sendable' closure [#SendableClosureCaptures]`. `@diagnose` (SE-0522) takes that id and changes it for one declaration:
+
+```swift
+@diagnose(SendableClosureCaptures, as: error)
+func finished(_ model: Model) { /* a non-Sendable capture here is an error */ }
+
+@diagnose(SendableClosureCaptures, as: ignored, reason: "migration tracked in the backlog")
+func pending(_ model: Model) { /* these warnings are silenced */ }
+```
+
+The levels are `error`, `warning` and `ignored`. A module can promote a warning to an error one file or type at a time, or silence one with a reason, instead of blanket suppression. `as: warning` and `as: ignored` only affect warnings; they do not downgrade an error the Swift 6 language mode requires. `@diagnose` needs Swift 6.4; the command-line flags `-Werror <group>` / `-Wwarning <group>` exist since Swift 6.1 (SE-0443), and SwiftPM's warning settings since 6.2 (SE-0480).
+
 ### 6. Add Sendable Conformances
 
 Even if the compiler doesn't complain, add `Sendable` to types that will cross isolation domains:
@@ -539,11 +553,15 @@ somePublisher
 // ✅ Rethink the problem with Swift Concurrency
 Task {
     var lastValue: String?
-    for await value in stream {
-        guard value != lastValue else { continue }
-        lastValue = value
-        try await Task.sleep(for: .seconds(0.5))
-        await process(value)
+    do {
+        for await value in stream {
+            guard value != lastValue else { continue }
+            lastValue = value
+            try await Task.sleep(for: .seconds(0.5))
+            await process(value)
+        }
+    } catch {
+        // Cancelled while waiting
     }
 }
 ```

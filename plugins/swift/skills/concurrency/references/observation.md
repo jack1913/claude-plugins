@@ -198,9 +198,36 @@ final class SearchModel {
 
 `Observations` batches synchronous mutations until the next `await`, so observers only see consistent snapshots — no half-updated state. It is **not back-ported**; reach for the fallback below if you need to support older OS versions.
 
+### Swift 6.4 (iOS 27 / macOS 27): synchronous continuous tracking
+
+For synchronous consumers (UIKit/AppKit views, middleware), `withContinuousObservation(options:apply:)` (SE-0506) re-arms itself after each change and returns a noncopyable `ObservationTracking.Token`. Calling `token.cancel()` or dropping the token stops it. The closure runs after the change, at the next suspension point of the calling isolation, so it runs on the main actor when started from `@MainActor` code. The first event has kind `.initial`.
+
+```swift
+@available(anyAppleOS 27.0, *)
+@MainActor
+final class HeaderController {
+    let model = SearchModel()
+    private var token: ObservationTracking.Token?
+
+    func start() {
+        token = withContinuousObservation(options: [.didSet]) { [model] _ in
+            print("query:", model.query) // the properties read here are the ones tracked
+        }
+    }
+
+    func stop() {
+        token.take()?.cancel()
+    }
+}
+```
+
+Only properties the closure actually reads are tracked, so read them unconditionally: a read behind `if event.matches(...)` is skipped on the first (`.initial`) event and the observation never fires again. `event.matches(\SearchModel.query)` tells which tracked property changed.
+
+`withObservationTracking(options:_:onChange:)` does not re-arm: it reports the first change only, delivering `.willSet` and `.didSet` as separate events when both are requested (`.deinit` reports a tracked object's deallocation). Read `event.kind`; `event.cancel()` inside the `.willSet` event suppresses the matching `.didSet`. The shipped name is `withContinuousObservation`, not the proposal's `withContinuousObservationTracking`.
+
 ### Pre-Swift 6.2 fallback: `withObservationTracking` + `AsyncStream`
 
-`withObservationTracking` fires `onChange` only once per cycle, so the closure has to re-register itself to keep observing.
+`withObservationTracking` fires `onChange` only once per cycle (on iOS 27 / macOS 27, `withContinuousObservation` re-arms by itself; see above), so the closure has to re-register itself to keep observing.
 
 ```swift
 import AsyncAlgorithms

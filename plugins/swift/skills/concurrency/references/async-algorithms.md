@@ -385,21 +385,29 @@ struct ImageLoader {
     func loadImagesWithMetadata(urls: [URL]) async throws -> [LoadedImage] {
         let imageStream = AsyncThrowingStream<UIImage, Error> { continuation in
             Task {
-                for url in urls {
-                    let image = try await downloadImage(from: url)
-                    continuation.yield(image)
+                do {
+                    for url in urls {
+                        let image = try await downloadImage(from: url)
+                        continuation.yield(image)
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
                 }
-                continuation.finish()
             }
         }
 
         let metadataStream = AsyncThrowingStream<ImageMetadata, Error> { continuation in
             Task {
-                for url in urls {
-                    let metadata = try await fetchMetadata(for: url)
-                    continuation.yield(metadata)
+                do {
+                    for url in urls {
+                        let metadata = try await fetchMetadata(for: url)
+                        continuation.yield(metadata)
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
                 }
-                continuation.finish()
             }
         }
 
@@ -426,18 +434,22 @@ Concatenate sequences sequentially. **Stable operator ✅**
 import AsyncAlgorithms
 
 struct ArticlePaginator {
-    func loadAllArticles() -> AsyncStream<[Article]> {
-        AsyncStream { continuation in
+    func loadAllArticles() -> AsyncThrowingStream<[Article], Error> {
+        AsyncThrowingStream { continuation in
             Task {
-                var page = 1
-                var hasMore = true
-                while hasMore {
-                    let articles = try await fetchPage(page: page)
-                    continuation.yield(articles)
-                    hasMore = articles.count == 20
-                    page += 1
+                do {
+                    var page = 1
+                    var hasMore = true
+                    while hasMore {
+                        let articles = try await fetchPage(page: page)
+                        continuation.yield(articles)
+                        hasMore = articles.count == 20
+                        page += 1
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
                 }
-                continuation.finish()
             }
         }
     }

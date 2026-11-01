@@ -23,7 +23,8 @@
     "coredata",
     "xctest",
     "testing",
-    "xcuiautomation"
+    "xcuiautomation",
+    "observation"
   ],
   "apis": [
     {
@@ -1364,6 +1365,97 @@
         "macOS": "12.0",
         "deprecated": false
       }
+    },
+    {
+      "name": "withTaskCancellationShield",
+      "path": "swift/withtaskcancellationshield(operation:)-8zlgh",
+      "claims": {
+        "iOS": "27.0",
+        "iPadOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": "27.0",
+        "visionOS": "27.0",
+        "tvOS": "27.0",
+        "watchOS": "27.0"
+      }
+    },
+    {
+      "name": "Continuation",
+      "path": "swift/continuation",
+      "claims": {
+        "iOS": "27.0",
+        "iPadOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": "27.0",
+        "visionOS": "27.0",
+        "tvOS": "27.0",
+        "watchOS": "27.0"
+      }
+    },
+    {
+      "name": "withContinuation",
+      "path": "swift/withcontinuation(of:throwing:_:)",
+      "claims": {
+        "iOS": "27.0",
+        "iPadOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": "27.0",
+        "visionOS": "27.0",
+        "tvOS": "27.0",
+        "watchOS": "27.0"
+      }
+    },
+    {
+      "name": "withContinuousObservation",
+      "path": "observation/withcontinuousobservation(options:apply:)",
+      "claims": {
+        "iOS": "27.0",
+        "iPadOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": "27.0",
+        "visionOS": "27.0",
+        "tvOS": "27.0",
+        "watchOS": "27.0"
+      }
+    },
+    {
+      "name": "withObservationTracking(options:_:onChange:)",
+      "path": "observation/withobservationtracking(options:_:onchange:)",
+      "claims": {
+        "iOS": "27.0",
+        "iPadOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": "27.0",
+        "visionOS": "27.0",
+        "tvOS": "27.0",
+        "watchOS": "27.0"
+      }
+    },
+    {
+      "name": "ObservationTracking.Token",
+      "path": "observation/observationtracking/token",
+      "claims": {
+        "iOS": "27.0",
+        "iPadOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": "27.0",
+        "visionOS": "27.0",
+        "tvOS": "27.0",
+        "watchOS": "27.0"
+      }
+    },
+    {
+      "name": "Observations",
+      "path": "observation/observations",
+      "claims": {
+        "iOS": "26.0",
+        "iPadOS": "26.0",
+        "Mac Catalyst": "26.0",
+        "macOS": "26.0",
+        "visionOS": "26.0",
+        "tvOS": "26.0",
+        "watchOS": "26.0"
+      }
     }
   ],
   "ignore": {
@@ -1554,7 +1646,8 @@
       "LibraryView",
       "ProfileModel",
       "Saver",
-      "StageView"
+      "StageView",
+      "Connection"
     ],
     "SwiftUI runtime symbols named in Instruments output": [
       "EnvironmentWriter",
@@ -1576,7 +1669,9 @@
     ],
     "words from compiler diagnostics quoted verbatim": [
       "Main",
-      "Sending"
+      "Sending",
+      "NoUseUnstructuredThrowingTask",
+      "SendableClosureCaptures"
     ],
     "example test-plan names": [
       "Core",
@@ -1596,7 +1691,8 @@
       "textFormattingDefinition"
     ],
     "Apple generic parameter names (not index entries)": [
-      "CollectionID"
+      "CollectionID",
+      "Success"
     ],
     "Swift compiler feature flags and build settings (not doc index entries)": [
       "DisableOutwardActorInference",

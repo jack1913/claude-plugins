@@ -200,6 +200,8 @@ Must be:
 3. All properties Sendable
 4. No superclass or `NSObject` only
 
+A `weak let` to a `Sendable` class type (Swift 6.3, SE-0481) keeps the class `Sendable`; `weak var` does not (`stored property ... of 'Sendable'-conforming class ... is mutable`), and a weak reference to a non-`Sendable` type fails either way.
+
 ```swift
 final class User: Sendable {
     let name: String
@@ -237,6 +239,23 @@ class ViewModel {
 }
 // Implicitly Sendable
 ```
+
+### Marking a class deliberately non-Sendable (Swift 6.4)
+
+`public class Base: ~Sendable { }` (SE-0518) records that the type was audited and is not `Sendable`. Unlike `@available(*, unavailable) extension Base: Sendable {}`, it is not inherited, so a subclass can still declare `@unchecked Sendable` with a documented invariant.
+
+```swift
+public class Base: ~Sendable {
+    public init() {}
+}
+
+final class Cache: Base, @unchecked Sendable {
+    private let lock = NSLock() // invariant: every access to `storage` holds `lock`
+    private var storage: [String: Int] = [:]
+}
+```
+
+A library can build with `-Wwarning ExplicitSendable` to find public types that state no intent either way.
 
 ### Composition over inheritance
 

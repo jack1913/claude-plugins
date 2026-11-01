@@ -72,7 +72,7 @@ A concrete implementation of `AsyncSequence` that bridges callback-based or dele
 
 ## Continuation
 
-A mechanism to bridge callback-based APIs to async/await. `withCheckedContinuation` and `withCheckedThrowingContinuation` provide safe bridging with runtime checks. `withUnsafeContinuation` variants skip checks for performance-critical code.
+A mechanism to bridge callback-based APIs to async/await. `withCheckedContinuation` and `withCheckedThrowingContinuation` provide safe bridging with runtime checks. `withUnsafeContinuation` variants skip checks for performance-critical code. Swift 6.4 adds the noncopyable `Continuation<Success, Failure>` with `withContinuation(of:throwing:_:)` (iOS 27 / macOS 27): `resume` consumes it, so a second resume does not compile, and dropping it unresumed traps. Keep the checked variants for older deployment targets.
 
 ## Task Local
 

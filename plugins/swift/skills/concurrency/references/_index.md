@@ -7,7 +7,7 @@ Quick navigation for the Swift Concurrency skill.
 | File | Use it for |
 |---|---|
 | `async-await-basics.md` | closure-to-async bridges and foundational async/await usage |
-| `tasks.md` | `Task`, cancellation, task groups, structured vs unstructured work |
+| `tasks.md` | `Task`, cancellation and shields, task groups, structured vs unstructured work |
 | `actors.md` | actor isolation, `@MainActor`, reentrancy, isolated conformances |
 | `sendable.md` | `Sendable`, `@Sendable`, region isolation, escape hatches |
 | `threading.md` | execution model, suspension points, Swift 6.2 isolation behavior |
@@ -27,7 +27,7 @@ Quick navigation for the Swift Concurrency skill.
 | `performance.md` | Instruments workflow, actor hops, suspension cost |
 | `memory-management.md` | retain cycles, long-lived tasks, cleanup |
 | `core-data.md` | `NSManagedObjectID`, `perform`, default isolation conflicts |
-| `observation.md` | `@Observable` with `@MainActor`, cross-isolation access, Sendable constraints |
+| `observation.md` | `@Observable` with `@MainActor`, cross-isolation access, Sendable constraints, continuous tracking |
 
 ## Migration and Tooling
 

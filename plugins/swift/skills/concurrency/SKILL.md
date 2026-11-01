@@ -21,7 +21,7 @@ when_to_use: >-
 Before proposing a fix:
 
 1. Read the project's AGENTS.md and CLAUDE.md (see Project Rules above), then analyze `Package.swift` or `.pbxproj` to determine Swift language mode, strict concurrency level, default isolation, and upcoming features. Do this always, not only for migration work, and also before writing new concurrency code.
-2. Capture the exact diagnostic and offending symbol.
+2. Capture the exact diagnostic and offending symbol. In Swift 6.4 a diagnostic that belongs to a group ends with its id, such as `[#SendableClosureCaptures]`; note it, because `@diagnose` and `-Werror`/`-Wwarning` take it.
 3. Determine the isolation boundary: `@MainActor`, custom actor, actor instance isolation, or `nonisolated`.
 4. Confirm whether the code is UI-bound or intended to run off the main actor. When spawning unstructured tasks, inspect the synchronous prefix (everything before the first `await`): start on `@MainActor` only when that prefix truly needs main-actor access; otherwise use `Task { @concurrent in ... }` and hop back with `MainActor.run` only after the suspension. A trivial non-main line (for example, `print`) followed by main-actor work in the same prefix is not a reason to use `@concurrent`. For delayed retries, timers, and backoff tasks, separate the waiting from the UI mutation. The sleep often belongs off the main actor even when the final state update belongs on it.
 
@@ -33,11 +33,11 @@ Project settings that change concurrency behavior:
 | Strict concurrency | `.enableExperimentalFeature("StrictConcurrency=targeted")` | `SWIFT_STRICT_CONCURRENCY` |
 | Default isolation | `.defaultIsolation(MainActor.self)` | `SWIFT_DEFAULT_ACTOR_ISOLATION` |
 | Upcoming features | `.enableUpcomingFeature("NonisolatedNonsendingByDefault")` | `SWIFT_UPCOMING_FEATURE_*` |
-| Approachable Concurrency | N/A (use individual upcoming features) | `SWIFT_APPROACHABLE_CONCURRENCY` |
+| Approachable Concurrency | N/A (use individual upcoming features) | `SWIFT_APPROACHABLE_CONCURRENCY` (bundles `DisableOutwardActorInference`, `GlobalActorIsolatedTypesUsability`, `InferIsolatedConformances`, `InferSendableFromCaptures` and `NonisolatedNonsendingByDefault`; Swift 6 mode already has the first, second and fourth, so there it still turns on `InferIsolatedConformances` and `NonisolatedNonsendingByDefault`) |
 
-> **Xcode 26 note**: New projects created in Xcode 26 will often start with `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` and `SWIFT_APPROACHABLE_CONCURRENCY = YES` enabled by default. Treat these as likely defaults for newly created projects, not as confirmed settings.
+> **Xcode 26/27 note**: The Xcode 27.2 project templates (read from the template files, not a generated project) set `SWIFT_VERSION = 5.0` and `SWIFT_APPROACHABLE_CONCURRENCY = YES` for Swift targets, and the shared app template adds `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`. A fresh app therefore likely builds in Swift 5 language mode, not Swift 6 (some Document App templates set `6.0`). Existing projects keep their old values, and Xcode 26 templates were not re-checked. Treat the values as likely defaults, not as confirmed settings.
 
-If any of these are unknown, ask the developer to confirm them before giving migration-sensitive guidance. Do not guess, even for new Xcode 26 projects.
+If any of these are unknown, ask the developer to confirm them before giving migration-sensitive guidance. Do not guess, even for new Xcode 26/27 projects.
 
 Guardrails:
 
@@ -45,6 +45,7 @@ Guardrails:
 - Prefer structured concurrency over unstructured tasks. Use `Task.detached` only with a clear reason.
 - If recommending `@preconcurrency`, `@unchecked Sendable`, or `nonisolated(unsafe)`, require a documented safety invariant and a follow-up removal plan.
 - Optimize for the smallest safe change. Do not refactor unrelated architecture during migration.
+- Swift 6.4 / OS 27 concurrency APIs (`Continuation`, `withTaskCancellationShield`, `withContinuousObservation`) are `@available(anyAppleOS 27.0, *)`. Gate them with `if #available(anyAppleOS 27.0, *)` and keep a fallback when the deployment target is older. `anyAppleOS` needs the Swift 6.4 toolchain (Xcode 27) and covers iOS, macOS, tvOS, watchOS and visionOS in one clause.
 - Course references are for deeper learning only. Use them sparingly and only when they clearly help answer the developer's question.
 
 ## Quick Fix Mode
@@ -72,6 +73,7 @@ Skip Quick Fix Mode when any of these are true:
 | `wait(...) is unavailable from asynchronous contexts` | Is this legacy XCTest async waiting? | Replace with `await fulfillment(of:)` or Swift Testing equivalents. | `references/testing.md` |
 | Core Data concurrency warnings | Are `NSManagedObject` instances crossing contexts or actors? | Pass `NSManagedObjectID` or map to a Sendable value type. | `references/core-data.md` |
 | `@Observable` isolation or Sendable errors | Is the `@Observable` class annotated with the correct actor? | Add `@MainActor` for UI state; pass Sendable snapshots across boundaries. | `references/observation.md` |
+| `unstructured throwing task ... is not used [#NoUseUnstructuredThrowingTask]` (Swift 6.4) | Is the error meant to be ignored? | Catch inside the task, keep the task and read its `value`, or assign it to `_`. | `references/tasks.md` |
 | `Thread.current` unavailable from asynchronous contexts | Are you debugging by thread instead of isolation? | Reason in terms of isolation and use Instruments/debugger instead. | `references/threading.md` |
 | SwiftLint concurrency-related warnings | Which specific lint rule triggered? | Use `references/linting.md` for rule intent and preferred fixes; avoid dummy awaits. | `references/linting.md` |
 | `... cannot satisfy conformance requirement for a 'Sendable' type parameter` (`SendableMetatype`) | Does the conformance carry global-actor isolation? | Remove actor isolation from the conformance, or avoid passing the metatype across isolation boundaries. See `SendableMetatype` section in `references/actors.md`. | `references/actors.md` |
@@ -108,8 +110,12 @@ Prefer changes that preserve behavior while satisfying data-race safety:
 **Network request with UI update**
 ```swift
 Task { @concurrent in
-    let data = try await fetchData()
-    await MainActor.run { self.updateUI(with: data) }
+    do {
+        let data = try await fetchData()
+        await MainActor.run { self.updateUI(with: data) }
+    } catch {
+        await MainActor.run { self.showError(error) }
+    }
 }
 ```
 
@@ -162,7 +168,7 @@ Task {
 ## Swift 6 Migration Quick Guide
 
 Key changes in Swift 6:
-- **Strict concurrency checking** enabled by default
+- **Strict concurrency checking** enabled by default in the Swift 6 language mode (Swift 5 mode defaults to minimal)
 - **Complete data-race safety** at compile time
 - **Sendable requirements** enforced on boundaries
 - **Isolation checking** for all async boundaries
@@ -187,7 +193,7 @@ Open the smallest reference that matches the question:
 
 - Foundations
   - `references/async-await-basics.md` — async/await syntax, execution order, async let, URLSession patterns
-  - `references/tasks.md` — Task lifecycle, cancellation, priorities, task groups, structured vs unstructured
+  - `references/tasks.md` — Task lifecycle, cancellation and shields, priorities, task groups, structured vs unstructured
   - `references/actors.md` — Actor isolation, @MainActor, global actors, reentrancy, custom executors, Mutex
   - `references/sendable.md` — Sendable conformance, value/reference types, @unchecked, region isolation
   - `references/threading.md` — Execution model, suspension points, Swift 6.2 isolation behavior
@@ -199,7 +205,7 @@ Open the smallest reference that matches the question:
   - `references/performance.md` — Profiling with Instruments, reducing suspension points, execution strategies
   - `references/memory-management.md` — Retain cycles in tasks, memory safety patterns
   - `references/core-data.md` — NSManagedObject sendability, custom executors, isolation conflicts
-  - `references/observation.md` — @Observable with @MainActor, cross-isolation access, Sendable constraints
+  - `references/observation.md` — @Observable with @MainActor, cross-isolation access, Sendable constraints, Observations, continuous tracking
 - Migration and tooling
   - `references/migration.md` — Swift 6 migration strategy, closure-to-async conversion, @preconcurrency, FRP migration
   - `references/linting.md` — Concurrency-focused lint rules and SwiftLint `async_without_await`
@@ -215,7 +221,7 @@ When changing concurrency code:
 3. Run tests, especially actor-, lifetime-, and cancellation-sensitive tests.
 4. Use Instruments for performance claims instead of guessing.
 5. Verify deallocation and cancellation behavior for long-lived tasks.
-6. Check `Task.isCancelled` in long-running operations.
+6. Check `Task.isCancelled` in long-running operations, and shield cleanup that must run after cancellation (`withTaskCancellationShield`, `references/tasks.md`).
 7. Never use semaphores or ad hoc locking in async contexts when actor isolation or `Mutex` would express ownership more safely.
 
 ---
