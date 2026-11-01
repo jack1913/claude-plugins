@@ -134,7 +134,7 @@ def kit_rows(project: Path, rep: Report, kit: str) -> None:
     else:
         differ, odd = [], []
         for rel, sha in sorted(outs.items()):
-            if not (isinstance(sha, str) and kitlib.recorded_path(rel)):
+            if not (kitlib.is_sha(sha) and kitlib.recorded_path(rel)):
                 odd.append(rel)   # a record that is no sha256 of a file of the kit is named, never opened
                 continue
             f = project / kit / rel
@@ -159,4 +159,4 @@ def kit_rows(project: Path, rep: Report, kit: str) -> None:
             return
         if (r.get("adapter_state_sha"), r.get("kit_sources_sha")) != now:
             rep.add("kit:state", "skipped", "the kit was made from the brand as it is now",
-                    detail="not verified: the name, rules, facts, tokens, logos, band drawings or motion spec changed since the kit report; run `brand-creator kit build --yes` again")
+                    detail="not verified: the name, rules, facts, tokens, logos, band drawings, fonts or motion spec changed since the kit report; run `brand-creator kit build --yes` again")

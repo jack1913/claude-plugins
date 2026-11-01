@@ -172,8 +172,8 @@ fontTools, Brotli and skia-pathops (`outline_glyphs.py`, `fontcheck.py`), Pillow
   adoption.json  ADOPTION.md       the adoption rows as data (progress and pins apart) and the document rendered from it; see Adoption
   LAUNCH.md                        the owner's launch checklist (templates/LAUNCH.md); see Adoption, cascade, adapters, applied skill and launch
   BRAND.md  DESIGN.md              generated adapters, opt-in at G5 (`adapters`)
-  .claude/skills/<slug>-brand/SKILL.md   the per-brand applied skill, written only by `applied-skill --yes` or `kit build --yes`
-  .claude/skills/<slug>-brand/     the per-brand applied skill, or the brand kit around it (kit.json), written only by `applied-skill --yes` or `kit build --yes`
+  .claude/skills/<slug>-brand/     the per-brand applied skill (its SKILL.md alone, written by `applied-skill --yes`), or the brand kit around it (a kit.json beside SKILL.md, written by `kit build --yes`;
+                                   its owner files are scaffolded once and are the owner's: see kit)
   tools/cascade.json                  documents outside the project that `check --cascade` searches too (optional)
   removed-<date>[-n]/              dated copies of what `collapse` changed and of slots an emitter retired (never deleted)
   FAMILY.md                        family modes only (templates/FAMILY.md); read by family-check
@@ -930,8 +930,8 @@ the check "not verified" (exit 3). Paths are relative to FAMILY.md; a sibling re
   basic_latin, rules`; en, pl, de, cs, fr, es, tr); the plugin has no default language. The sets come from `--lang` or
   `content_languages` in BRAND-STATE.md. A missing required letter fails, a missing typographic extra warns, more than two font families
   warns (default budget, owner-adjustable). The `licence:<font>` row also carries `family` (name ID 16, else name ID 1, else the file
-  stem), `weight` (OS/2 `usWeightClass`, else 400) and `style` (`italic` when OS/2 `fsSelection` bit 0 or `head.macStyle` bit 1 is
-  set, else `normal`); its status and detail do not depend on them.
+  stem), `weight` (OS/2 `usWeightClass` when it is 1 to 1000, else 400: a font with no OS/2 table, or one that stores 0 or a value over 1000, is 400) and `style` (`italic` when OS/2 `fsSelection` bit 0 or `head.macStyle` bit 1 is
+  set, else `normal`); its status does not depend on them, and its detail changes only for a stored weight that is no weight: it then starts "OS/2 usWeightClass <n> is not a valid weight (1 to 1000): taken as 400".
 - `outline-glyphs` writes text as paths: fontTools instancer pins the variable axes, skia-pathops removes overlaps, `SVGPathPen` writes
   one `<path>` per glyph. The SVG has no `<text>` and no font reference (mark_lint checks) and carries `data-baseline`, `data-cap-height`
   and `data-x-height` that `logo-sheet --guides` draws. Layout is the font's advance widths plus `--tracking` and `--pair`; GPOS kerning
@@ -2244,14 +2244,20 @@ an owner file it does not know, and one that is missing. `content_sha` covers th
 written after the generated ones and before `kit.json`. They are not in the report's `outputs`: `check` does not gate them, and the SKILL.md kit section lists them after the generated files under
 "Yours to extend; how: `EXTENDING.md`." (always the same five, whether they exist yet or not).
 
-**What the last build wrote** is the `kit` report's `outputs`, `kit_version` and `content_sha`. With no `kit` report, the `applied-skill` report's `output.sha256` stands in for SKILL.md, so the
-kit takes over a skill file that `applied-skill` generated. Against that record:
+**What the last build wrote** is the `kit` report's `outputs`, `kit_version` and `content_sha`. With no `kit` report (or one that records no outputs), `kit.json` stands in, because it is the version's only home:
+its `generated` hashes, its own bytes as they are on disk, its `version` and its `content_sha`. A deleted report therefore resets nothing: the version goes on, and a file the last build wrote is not "edited by hand".
+A `kit.json` that `kitlib.load` would refuse is no record, and neither is one that is a link (a link is never read through). With neither, the `applied-skill` report's `output.sha256` stands in for SKILL.md, so the kit takes over a skill file that `applied-skill` generated. Against that record:
 
 - A planned file on disk whose bytes differ from the plan and whose sha256 is not the recorded one was edited by hand (`kit.json` too). A file inside a generated folder that is neither planned nor
   recorded is a foreign file. Either one stops the build (exit 1, up to 6 paths named, nothing written or moved) unless `--replace`, which moves each to `removed-<date>[-n]/<its project path>`
   (for example `removed-2026-10-17/.claude/skills/acme-brand/SKILL.md`) and writes the kit. A SKILL.md edited by hand after `applied-skill` stops the first kit build the same way.
+  A file named exactly `.DS_Store` (what Finder leaves in a folder it opened) is neither: it is ignored in `brand/`, `snippets/` and `reference-pages/`, never moved, never reported as added, and in no record.
+  A symbolic link inside a generated folder, to a file or to a folder, a generated folder that is itself a link, and a link at the path of a file the kit writes (`SKILL.md`, `kit.json`, `rules.json` and
+  `facts.json` at the top of the kit folder too), are foreign files as any other, whatever they point at, even a file that holds the very bytes the last build wrote: a link is never followed (nothing
+  under a link to a folder is read, compared or listed, and no file is read or written through a link), and `--replace` moves the link itself to `removed-<date>[-n]/`, never what it points at; the kit then
+  holds a real file at that path. The kit folder itself and the folders above it are paths of the project, and the kit goes through a link there as long as it stays inside the project.
 - A file recorded before and no longer planned (a logo taken out of the project) is moved to `removed-<date>[-n]/` as well, and said so, with no `--replace` needed. A generated folder this
-  empties is removed. Nothing is ever deleted.
+  empties is removed (one that still holds a Finder `.DS_Store` stays). Nothing is ever deleted.
 - Files are written only when their bytes change, `kit.json` last.
 
 **Fonts.** Each `.ttf`, `.otf`, `.woff` or `.woff2` under `assets/fonts/` (found as `fontcheck` finds them) is copied to `brand/assets/fonts/<its path under assets/fonts/>` only when both hold:
@@ -2264,7 +2270,7 @@ the `fontcheck` report (`assets/_checks/fontcheck.json`) is current (`_common.st
 - the fontcheck report reads no licence for it (no row for the file, or `recognised` empty)
 - licence: `<recognised>`; only OFL fonts are copied (a default you may change): copy it into a product yourself, under its own licence
 - OFL by its name table, but no OFL licence text in assets/fonts/: add the font's OFL.txt
-- the fontcheck report has no family name: run `brand-creator fontcheck` again (also said, with "weight or style" for "family name", when the row has no weight or no style)
+- the fontcheck report has no family name: run `brand-creator fontcheck` again (also said, with "weight or style" for "family name", when the row has no weight or no style; a weight that is not a whole number from 1 to 1000 is no weight)
 
 `kit.json` `fonts.copied` lists `{file, licence, licence_files}` with paths in the kit. `snippets/fonts.css` is written when one font or more is copied, sorted by path. It opens with the comment
 `/* generated by brand-creator from assets/fonts/ and the fontcheck report; paths are relative to this file */`, a second comment that says to copy `brand/assets/fonts/` into the product's own public or static folder and to point each font source at the path the site serves it from (a built site does not serve `.claude/skills/`), then one `@font-face` per copied font with `font-family` (the report's `family`),
@@ -2307,7 +2313,7 @@ rules keep the image that is shown. It adds no key to `kit.json`: the snippet is
 ASCII form, ends a word. `The mark keeps its clear space` is `the-mark-keeps-its-clear-space`; `Znak zawsze na jasnym tle` is `znak-zawsze-na-jasnym-tle`. A line with no ASCII letter or digit gets `rule`. A
 repeat gets `-2`, `-3` in BRAND-STATE order (`kitlib.rule_ids`; the next number no other id has taken). `kitlib.known_rule_ids(project)` lists every id a rule can be named by, each once: the G4 slugs bare,
 `page:<id>` for each `page.rules[].id` of `qa/rules.json`, and `site:<id>` for each choice of `site/site.json` tagged `rule` (none while the project has no site record; a record that cannot be read is exit 1,
-naming the file).
+naming the file, and one whose `choices` is not a list is exit 2, naming `site/site.json` and the key).
 
 **Grounds.** `brand-creator tokens` writes the text grounds into `tokens.json` `grounds` only (see Token sources: `tokens.css` has no per-ground scope), so the kit writes the snippet. `snippets/on-ground.css`
 is written only when `grounds.named_by_owner` is a real `YYYY-MM-DD` date followed by the owner's words (`adapt.owner_named`, the rule `contrast` holds it to). While the grounds are a proposal no
@@ -2334,9 +2340,9 @@ path with its sha256, `kit.json` included), `kit_version` (the report's own `ver
 - `report:kit`, the generic report gate: the `kit` report exists, passes and is current against its inputs, and the fix it names is `brand-creator kit build --yes`.
 - `kit:file`: every path in the report's `outputs` (SKILL.md and `kit.json` too) is still in the kit with the sha256 the build recorded. Otherwise it fails, naming up to 4 paths (a missing one is marked
   `(missing)`) and saying they were edited by hand or removed: change the brand project and run `brand-creator kit build --yes`. A report with no `outputs`, or one whose `outputs` hold a record that
-  cannot be compared with a file of the kit (a path that climbs out of the kit, a value that is no sha256), also fails the row and says so; it never crashes `check`. A file that is not in `outputs` (an owner's file, a foreign file) is not read by this row.
+  cannot be compared with a file of the kit (a path that climbs out of the kit, a value that is not a sha256: 64 lower-case hex characters), also fails the row and says so; it never crashes `check`. A file that is not in `outputs` (an owner's file, a foreign file) is not read by this row.
 - `kit:state`: only when the report passed. Not verified (`skipped`) when its `adapter_state_sha` or `kit_sources_sha` is not the one the project has now: the name, rules, facts, tokens, logos,
-  band drawings or motion spec changed after the kit was built. There is no row while they match.
+  band drawings, fonts (the font files, their licence texts or the `fontcheck` report) or motion spec changed after the kit was built. There is no row while they match.
 
 `check --cascade` searches the kit like any other text file of the project: `SKILL.md` and the text files under `brand/`.
 

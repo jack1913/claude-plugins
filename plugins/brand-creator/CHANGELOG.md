@@ -285,8 +285,9 @@ lints the board of the latest round again before `check`, so an edit of the fact
 - A brand kit for your product repositories: `brand-creator kit build --yes` writes it around your brand skill, with the
   brand's own files copied in byte for byte and locked (opt-in when you approve the brand). The kit gets a version
   (`<edition>.<build>`) that goes up by one when anything in it changes and stays the same when nothing does. A kit
-  file you edited by hand, or a file you put into one of its generated folders, stops the next build; `--replace` moves
-  it to `removed-<date>/` and builds. Nothing is deleted.
+  file you edited by hand, or a file you put into one of its generated folders (a link counts, to a file or to a folder,
+  also one at the place of a file the kit writes; a Finder `.DS_Store` does not), stops the next build; `--replace` moves it
+  to `removed-<date>/` and builds, moving a link itself and never what it points at. Nothing is deleted.
   `brand-creator check` fails a kit file you edited by hand and says when the brand changed after the kit was built, and
   `applied-skill` leaves a project that has a kit to `kit build`.
   A brand that moves also gets its motion spec and demo page in the kit.
@@ -294,10 +295,12 @@ lints the board of the latest round again before `check`, so an edit of the fact
 - The kit carries your rules and facts as data: `rules.json` (your recorded rules, each with a short id, the size rule
   and the drawing for each size, the contrast pairs with their ratios, the words never to use and your page rules) and
   `facts.json` (the facts you confirmed; contact details never).
-- Once you have named the colours your text sits on, the kit also holds a ready-made snippet,
-  `snippets/on-ground.css`: one `data-ground` rule for each ground after the page colour, so text, buttons, focus
-  rings and borders switch to that ground's own colours. While the grounds are only a proposal the kit writes no
-  snippet and says so. A ground the tokens give no colour for is left out and named, never written half.
+- The kit has ready-made snippets: the fonts (`snippets/fonts.css`, one `@font-face` for each font it copies), the
+  logo per theme (`snippets/logo.html`, your logo and its dark version where you have one, switched the way your
+  colours switch) and text on each of your grounds (`snippets/on-ground.css`). Once you have named the colours your
+  text sits on, that last one holds one `data-ground` rule for each ground after the page colour, so text, buttons,
+  focus rings and borders switch to that ground's own colours. While the grounds are only a proposal the kit writes
+  no ground snippet and says so. A ground the tokens give no colour for is left out and named, never written half.
 - The kit has parts that are yours: `EXTENDING.md` (how to extend the kit), `voice.md`, `visual.md`, `golden-rules.md` and
   a web-page recipe in `recipes/`. `kit build --yes` writes each of them once, with a note where you write, and never
   overwrites or moves it; delete one and the next build writes it again. The plan lists the files a build would add.

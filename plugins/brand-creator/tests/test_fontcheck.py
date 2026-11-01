@@ -194,6 +194,39 @@ def test_the_licence_row_takes_the_family_weight_and_style_from_the_next_table_w
     }
 
 
+WEIGHT_VARIANTS = """
+import sys
+from fontTools.ttLib import TTFont
+out, src = sys.argv[1], sys.argv[2]
+for name, stored in (("w-zero", 0), ("w-over", 1001), ("w-max", 1000), ("w-min", 1), ("w-huge", 65535)):
+    f = TTFont(src)
+    f["OS/2"].usWeightClass = stored
+    f.save(f"{out}/{name}.ttf")
+"""
+
+
+def test_an_invalid_weight_class_is_taken_as_400_and_the_detail_says_the_stored_value_was_invalid(proj, tmp_path):
+    from helpers import fonttools
+    made = fonttools(WEIGHT_VARIANTS, str(tmp_path), str(TEST_FONT))
+    assert made.returncode == 0, made.stderr
+    names = ["w-zero", "w-over", "w-max", "w-min", "w-huge"]
+    args = ["fontcheck", "--lang", "pl", "--no-platform"]
+    for n in names:
+        args += ["--font", str(tmp_path / f"{n}.ttf")]
+    r = bc(*args, project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    res = results(proj)
+    assert {n: res[f"licence:{n}.ttf"]["weight"] for n in names} == {"w-zero": 400, "w-over": 400, "w-max": 1000, "w-min": 1, "w-huge": 400}      # 1 to 1000 is a weight
+    for n, stored in (("w-zero", 0), ("w-over", 1001), ("w-huge", 65535)):
+        lic = res[f"licence:{n}.ttf"]
+        assert f"OS/2 usWeightClass {stored} is not a valid weight (1 to 1000): taken as 400" in lic["detail"], lic["detail"]
+        assert lic["status"] == "info" and lic["recognised"] == "SIL Open Font License (OFL)" and "not legal advice" in lic["detail"]      # nothing else about the row changed
+    for n in ("w-max", "w-min"):
+        assert "usWeightClass" not in res[f"licence:{n}.ttf"]["detail"]
+    ok = fc(proj, "--lang", "pl")                                                  # the fixture's own 400 is valid and says nothing
+    assert ok.returncode == 0 and "usWeightClass" not in results(proj)[f"licence:{TEST_FONT.name}"]["detail"]
+
+
 def test_a_restricted_embedding_flag_fails_the_licence_hint(proj, tmp_path):
     restricted = font_variant(tmp_path / "restricted.ttf", fs_type=2)
     r = fc(proj, "--lang", "pl", font=restricted)

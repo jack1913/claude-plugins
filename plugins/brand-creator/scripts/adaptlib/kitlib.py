@@ -38,6 +38,7 @@ KIT_FILE = "kit.json"
 SCHEMA = 1
 SKILL_FILE = "SKILL.md"
 GENERATED_DIRS = ("brand", "snippets", "reference-pages")   # a file in one of these that the kit did not write is a foreign file
+FINDER_FILE = ".DS_Store"                                   # what Finder puts into a folder it opened: a file with exactly this name is no foreign file, in any generated folder
 PREFIX = "brand/"                                           # where the project's files sit inside the kit: project path = PREFIX + path
 TOKENS_JSON = "assets/tokens/tokens.json"
 TOKENS_CSS = "assets/tokens/tokens.css"
@@ -85,6 +86,11 @@ FONT_NOT_COPIED_KEYS = ("file", "reason")
 _SHA = re.compile(r"[0-9a-f]{64}")
 _VERSION = re.compile(r"[1-9][0-9]*\.[1-9][0-9]*")
 _EDITION = re.compile(r"[1-9][0-9]*")
+
+
+def is_sha(value) -> bool:
+    """True for a sha256 as the kit writes it: a string of 64 lower-case hex characters."""
+    return isinstance(value, str) and bool(_SHA.fullmatch(value))
 
 
 def version_line(version: str) -> str:
@@ -311,7 +317,7 @@ def _why_not(rows: dict | None, row: dict | None, has_text: bool) -> str | None:
         return "OFL by its name table, but no OFL licence text in assets/fonts/: add the font's OFL.txt"
     if not (isinstance(row.get("family"), str) and row["family"].strip()):
         return "the fontcheck report has no family name: run `brand-creator fontcheck` again"
-    if type(row.get("weight")) is not int or row.get("style") not in ("normal", "italic"):
+    if type(row.get("weight")) is not int or not 1 <= row["weight"] <= 1000 or row.get("style") not in ("normal", "italic"):   # a weight CSS takes: a report from before fontcheck took 0 as 400 is no weight
         return "the fontcheck report has no weight or style for it: run `brand-creator fontcheck` again"
     return None
 
@@ -369,11 +375,13 @@ def fonts_record(fonts: dict) -> dict:
 def _proof_page(project: Path, page: str, case: str) -> str:
     """The plain project path of the page of a proof case (`./motion/demo.html`, `motion/../motion/demo.html` and an absolute path inside the project all name
     `motion/demo.html`), because the kit mirrors project paths. A page outside the project is exit 2."""
-    confine(project, page, what=f"the page of the proof case {case!r}", read=True)
+    what = f"the page of the proof case {case!r}"
+    confine(project, page, what=what, read=True)
     joined = posixpath.normpath(posixpath.join(os.path.abspath(project), page))   # an absolute `page` stands as it is
     for root in (os.path.abspath(project), os.path.realpath(project)):             # the project folder named with or without its links resolved
         plain = posixpath.relpath(joined, root)
         if plain != ".." and not plain.startswith("../"):
+            confine(project, plain, what=what, read=True)                          # the path the kit goes on to read is checked itself, not only the path it came from
             return plain
     fail(EXIT_USAGE, f"{MOTION_PROOF}: the page {page!r} of the case {case!r} cannot be named by a path below the project folder: write it as a plain path inside the project")
 
@@ -416,7 +424,7 @@ def motion_files(project: Path) -> dict[str, bytes]:
         files[PREFIX + MOTION_SPEC] = _project_file(project, MOTION_SPEC, "motion hand-off")
     if spec is not None and spec["motion"] == "on":
         for name, page in proof_pages(project):
-            f = project / page
+            f = confine(project, page, what=f"the page of the proof case {name!r}", read=True)   # read from the path that passed the check, never from another spelling of it
             if not f.is_file():
                 fail(EXIT_FAIL, f"{MOTION_PROOF} names the page {page} for the case {name!r} but the project has no such file: add it, or change {MOTION_PROOF}")
             files[PREFIX + page] = f.read_bytes()
@@ -497,13 +505,16 @@ def g4_rules(project: Path) -> list[dict]:
 
 def known_rule_ids(project: Path) -> list[str]:
     """Every id a `[rule: ...]` tag may name, each once: the G4 slugs (written bare), `page:<id>` for each page rule of qa/rules.json, and `site:<id>` for each choice of site/site.json
-    tagged `rule` (none while the project has no site record). A site record that cannot be read stops the run (exit 1, naming it): `check` says what is wrong with it."""
+    tagged `rule` (none while the project has no site record). A site record that cannot be read stops the run (exit 1, naming it), and so does one whose `choices` is not a list (exit 2, naming the file and the key): `check` says what is wrong with it."""
     out = [r["id"] for r in g4_rules(project)]
     rules, _ = qa_rules.load(project)
     out += [f"page:{r['id']}" for r in rules["page"]["rules"]]
     if (project / "site" / "site.json").is_file():   # sitedata.SITE_FILE
         import sitedata   # scripts/boardlib: on the path of `kit` and `check`; read here only, so a command that never asks for rule ids does not need it
-        out += [f"site:{c['id']}" for c in sitedata.load_site(project).get("choices", []) if isinstance(c, dict) and c.get("tag") == "rule" and isinstance(c.get("id"), str)]
+        choices = sitedata.load_site(project).get("choices", [])
+        if not isinstance(choices, list):
+            fail(EXIT_USAGE, f"site/site.json: choices must be a list of the pages' choices, not {json.dumps(choices)[:40]}: fix the record (`brand-creator check` says what is wrong with it)")
+        out += [f"site:{c['id']}" for c in choices if isinstance(c, dict) and c.get("tag") == "rule" and isinstance(c.get("id"), str)]
     return list(dict.fromkeys(out))
 
 
@@ -750,7 +761,7 @@ def _project_file(project: Path, rel: str, what: str) -> bytes:
 
 def _drawing(project: Path, drawing: str) -> bytes:
     """The bytes of a band drawing. It is named by its plain path in the project, because the kit mirrors project paths and SKILL.md names it by the same string."""
-    confine(project, drawing, what="band drawing", read=True)   # outside the project: exit 2
+    f = confine(project, drawing, what="band drawing", read=True)   # outside the project: exit 2; the file is read from this path
     if drawing != posixpath.normpath(drawing) or posixpath.isabs(drawing):
         plain = posixpath.normpath(drawing)
         if posixpath.isabs(plain):   # an absolute path inside the project: the plain path is the one below the project folder (named with or without its links resolved)
@@ -758,7 +769,6 @@ def _drawing(project: Path, drawing: str) -> bytes:
             plain = next((r for r in below if not r.startswith("..")), plain)
         fail(EXIT_USAGE, f"qa/rules.json: the band drawing {drawing!r} must be written as a plain path inside the project ({plain!r}): "
                          "the kit names it by the path it has in the project")
-    f = project / drawing
     if not f.is_file():
         fail(EXIT_FAIL, f"qa/rules.json names the band drawing {drawing} but the project has no such file: add it, or change qa/rules.json")
     return f.read_bytes()
@@ -846,27 +856,43 @@ def kit_json_bytes(project: Path, files: dict[str, bytes], version: str, edition
 
 # ---------------------------------------------------------------- the record of the last build
 
+def _json_object(f: Path) -> dict | None:
+    """The JSON object in a file, or None when there is no such file, it cannot be read, or it holds something else."""
+    try:
+        doc = json.loads(f.read_text(encoding="utf-8")) if f.is_file() else None
+    except (OSError, ValueError):
+        return None
+    return doc if isinstance(doc, dict) else None
+
+
 def previous(project: Path) -> dict | None:
-    """What the last build wrote: {"outputs": {path in the kit: sha256}, "version", "content_sha"}. It is the `kit` report's (`outputs`, `kit_version`, `content_sha`: its own `version` is the plugin's). With no kit report, the `applied-skill`
-    report's output stands in for SKILL.md (the kit takes over a skill file that was generated). None when neither exists, or a report holds no usable record."""
-    for rel in (REPORT, APPLIED_REPORT):
-        f = project / rel
-        try:
-            doc = json.loads(f.read_text(encoding="utf-8")) if f.is_file() else None
-        except (OSError, ValueError):
-            doc = None
-        if not isinstance(doc, dict):
-            continue
-        if rel == REPORT:
-            out = doc.get("outputs")
-            if isinstance(out, dict) and out and all(isinstance(k, str) and isinstance(v, str) for k, v in out.items()):
-                return {"outputs": {k: v for k, v in out.items() if recorded_path(k)}, "version": doc.get("kit_version") if isinstance(doc.get("kit_version"), str) else None,
-                        "content_sha": doc.get("content_sha") if isinstance(doc.get("content_sha"), str) else None}
-            continue
-        sha = (doc.get("output") or {}).get("sha256") if isinstance(doc.get("output"), dict) else None
-        if isinstance(sha, str) and sha:
-            return {"outputs": {SKILL_FILE: sha}, "version": None, "content_sha": None}
-    return None
+    """What the last build wrote: {"outputs": {path in the kit: sha256}, "version", "content_sha"}. It is the `kit` report's (`outputs`, `kit_version`, `content_sha`: its own `version` is the plugin's).
+    With no usable kit report, kit.json stands in for it (`_kit_json_record`: it is the version's only home), and after that the `applied-skill` report's output stands in for SKILL.md (the kit
+    takes over a skill file that was generated). None when none exists, or a report holds no usable record."""
+    doc = _json_object(project / REPORT) or {}
+    out = doc.get("outputs")
+    if isinstance(out, dict) and out and all(isinstance(k, str) and isinstance(v, str) for k, v in out.items()):
+        return {"outputs": {k: v for k, v in out.items() if recorded_path(k)}, "version": doc.get("kit_version") if isinstance(doc.get("kit_version"), str) else None,
+                "content_sha": doc.get("content_sha") if isinstance(doc.get("content_sha"), str) else None}
+    if record := _kit_json_record(project):
+        return record
+    output = (_json_object(project / APPLIED_REPORT) or {}).get("output")
+    sha = output.get("sha256") if isinstance(output, dict) else None
+    return {"outputs": {SKILL_FILE: sha}, "version": None, "content_sha": None} if isinstance(sha, str) and sha else None
+
+
+def _kit_json_record(project: Path) -> dict | None:
+    """The record of the last build as kit.json holds it, for a build whose `kit` report is gone: its `generated` hashes, kit.json's own file as it is on disk (the one thing kit.json cannot
+    list of itself), and its `version` and `content_sha`. So a file the last build wrote is not an edit by hand, and the version goes on from where it was. None when there is no kit.json, or it is
+    not one this version reads (`problems`): a kit.json that cannot be trusted is no record, and the files stand as the owner's, as they did before kit.json was read."""
+    try:
+        f = kit_dir(project) / KIT_FILE
+    except CliError:   # a slug that cannot be a skill name has no skill folder
+        return None
+    doc = None if f.is_symlink() else _json_object(f)   # a link is no kit.json of the last build: it is not read through
+    if doc is None or problems(doc):
+        return None
+    return {"outputs": {**{k: v for k, v in doc["generated"].items() if recorded_path(k)}, KIT_FILE: sha256_file(f)}, "version": doc["version"], "content_sha": doc["content_sha"]}
 
 
 def recorded_path(rel: str) -> bool:
@@ -878,22 +904,38 @@ def recorded_path(rel: str) -> bool:
 # ---------------------------------------------------------------- what is on disk
 
 def on_disk(project: Path) -> list[str]:
-    """The paths in the kit of every file inside a generated folder, sorted."""
+    """The paths in the kit of every file inside a generated folder, sorted. A file named exactly `.DS_Store` (what Finder leaves in a folder it opened) is left out: it is neither
+    foreign nor moved nor planned. A link to a folder is listed as the one path it is, and never followed, and so is a generated folder that is itself a link: nothing is listed, read
+    or moved through a link."""
     kd, out = kit_dir(project), []
     for d in GENERATED_DIRS:
-        for root, _dirs, names in os.walk(kd / d):
-            out += [(Path(root) / n).relative_to(kd).as_posix() for n in names]
+        if (kd / d).is_symlink():
+            out.append(d)
+            continue
+        for root, dirs, names in os.walk(kd / d):
+            out += [(Path(root) / n).relative_to(kd).as_posix() for n in names if n != FINDER_FILE]
+            out += [(Path(root) / n).relative_to(kd).as_posix() for n in dirs if (Path(root) / n).is_symlink()]
     return sorted(out)
+
+
+def _plain_file(kd: Path, rel: str) -> bool:
+    """True for a file of the kit that is a file, is itself no link, and sits in no folder that is a link: a link is never read through, and what a link to a folder leads to is not the kit's,
+    so it is neither compared nor moved."""
+    parts = rel.split("/")
+    return not any(kd.joinpath(*parts[:i]).is_symlink() for i in range(1, len(parts) + 1)) and (kd / rel).is_file()
 
 
 def scan(project: Path, files: dict[str, bytes], recorded: dict[str, str]) -> tuple[list[str], list[str], list[str]]:
     """Compare the kit folder with the plan `files` (everything the build would write, kit.json included) and the record of the last build `recorded`
     ({path: sha256}). Returns (edited, foreign, retired), each sorted paths in the kit:
     - edited: a planned file on disk whose bytes differ from the plan and whose sha256 is not the recorded one (somebody changed it);
-    - foreign: a file inside a generated folder that is neither planned nor recorded (somebody put it there);
+    - foreign: a file inside a generated folder that is neither planned nor recorded (somebody put it there); and every link, whatever it points at and wherever it sits (in a generated
+      folder, at the path of a file the kit writes, a generated folder that is a link, or one of the files at the top of the kit folder): a link is never read through, written through or
+      followed, it is moved aside as it is;
     - retired: recorded before, no longer planned, still on disk (a logo taken out of the project): moved aside, not stopped on."""
     kd = kit_dir(project)
-    edited = sorted(rel for rel, data in files.items() if (kd / rel).is_file() and (kd / rel).read_bytes() != data and sha256_file(kd / rel) != recorded.get(rel))
-    foreign = [rel for rel in on_disk(project) if rel not in files and rel not in recorded]
-    retired = sorted(rel for rel in recorded if rel not in files and (kd / rel).is_file())
-    return edited, foreign, retired
+    edited = sorted(rel for rel, data in files.items() if _plain_file(kd, rel) and (kd / rel).read_bytes() != data and sha256_file(kd / rel) != recorded.get(rel))
+    foreign = {rel for rel in on_disk(project) if (rel not in files and rel not in recorded) or (kd / rel).is_symlink()}
+    foreign |= {rel for rel in ROOT_FILES if rel in files and (kd / rel).is_symlink()}   # these sit outside the generated folders, and the build writes them all the same
+    retired = sorted(rel for rel in recorded if rel not in files and _plain_file(kd, rel))
+    return edited, sorted(foreign), retired
