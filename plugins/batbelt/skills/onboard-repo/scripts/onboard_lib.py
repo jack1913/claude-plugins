@@ -21,6 +21,7 @@ import xml.etree.ElementTree as _ET
 # `onboard_lib.check_instructions` still find it. One implementation, two names.
 from check import (  # noqa: F401  (re-exported for callers of this module)
     GROUNDING_WINDOW,
+    _ATX_RE,
     _NEXT_TARGET_RE,
     _PS_LANGS,
     _is_excluded,
@@ -111,6 +112,7 @@ def renumber_toc(text):
         bom, text = text[0], text[1:]
     stack = []  # [indent, number] per open level; stack[0] is the top-level list
     prev_orig = prev_new = None  # the last top-level item: number as written / as renumbered
+    prev_blank = True
     any_item = False
     parts = []
     for seg, is_fence in _split_fences(text):
@@ -121,9 +123,13 @@ def renumber_toc(text):
         for i, line in enumerate(lines):
             m = _OL_ITEM_RE.match(line)
             if not m:
-                if line.strip() and line[:1] not in (" ", "\t"):
-                    stack = []  # a heading or paragraph at column 0 ends every open list
+                if _ATX_RE.match(line.expandtabs(4)):
+                    stack = []  # a heading ends every open list
+                elif line.strip() and line[:1] not in (" ", "\t") and prev_blank:
+                    stack = []  # so does a paragraph after a blank line; a wrapped line does not
+                prev_blank = not line.strip()
                 continue
+            prev_blank = False
             any_item = True
             indent = len(m.group(1).expandtabs(4))
             orig = int(re.match(r"\s*(\d+)", line).group(1))
@@ -1289,10 +1295,10 @@ def convert_copilot_prompt(text):
 _VOICE_WORD_RE = re.compile(r"\b(commands-first|task-first)\b", re.I)
 
 # What the v5 docs standard expects; anything else is a Local deviation.
-MANUAL_DEFAULTS = {"layout": "flat", "numbered_tour": True, "next_tour": True, "capture_fence": "console"}
+# The v5 standard's layout and capture fence; anything else is a Local deviation. (A numbered
+# tour with Next links is expected too: a manual without one gets tour_questions, not a deviation.)
+MANUAL_DEFAULTS = {"layout": "flat", "capture_fence": "console"}
 SEED_INDEX_GROUPS = ["Get started", "Do a task", "Look it up"]
-
-
 
 
 def _front_end_pair(root):
@@ -1382,9 +1388,9 @@ def tour_questions(conv):
     if not conv.get("has_index"):
         return []
     out = []
-    if not conv.get("numbered_tour") and MANUAL_DEFAULTS["numbered_tour"]:
+    if not conv.get("numbered_tour"):
         out.append("- §3 Layout: the Do a task list is not numbered; its order is not a reading tour.")
-    if not conv.get("next_tour") and MANUAL_DEFAULTS["next_tour"]:
+    if not conv.get("next_tour"):
         out.append("- §3 Layout: pages do not end with a **Next:** link.")
     if not conv.get("new_here"):
         out.append("- §3 Layout: the index has no **New here?** pointer.")
@@ -1418,9 +1424,9 @@ def render_local_deviations(conv, full=False):
         out.append("- §3 Layout: the index groups are %s." % ", ".join(SEED_INDEX_GROUPS))
     if full and conv.get("new_here"):
         out.append("- §3 Layout: the index opens with a **New here?** pointer.")
-    if conv["numbered_tour"] and (full or not MANUAL_DEFAULTS["numbered_tour"]):
+    if conv["numbered_tour"] and full:
         out.append("- §3 Layout: the Do a task list is a numbered reading tour.")
-    if conv["next_tour"] and (full or not MANUAL_DEFAULTS["next_tour"]):
+    if conv["next_tour"] and full:
         out.append("- §3 Layout: each how-to ends with a **Next:** link to the next page in the tour.")
     fence = conv.get("capture_fence")
     if fence and (full or fence != MANUAL_DEFAULTS["capture_fence"]):

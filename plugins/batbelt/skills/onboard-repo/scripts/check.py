@@ -1369,9 +1369,12 @@ def _glob_regex(glob):
         elif glob[i] == "?":
             out.append("[^/]")
             i += 1
-        elif glob[i] == "[" and glob.find("]", i + 2) != -1:
-            j = glob.find("]", i + 2)
-            body = glob[i + 1 : j].replace("\\", "\\\\")
+        elif glob[i] == "[":
+            j = glob.find("]", i + 1)
+            body = glob[i + 1 : j] if j != -1 else ""
+            if j == -1 or body in ("", "!"):
+                raise ValueError("unclosed or empty [...] in %r" % glob)
+            body = body.replace("\\", "\\\\")
             out.append("[^" + body[1:] + "]" if body.startswith("!") else "[" + body + "]")
             i = j + 1
         else:
@@ -1698,31 +1701,38 @@ def _resolve_only(only):
     return out
 
 
-def _index_findings(roots, only_set):
-    """TOC_COUNT and NEXT_CHAIN for each manual index under the roots. They judge the
-    whole tour, so they run whatever `--only` names, and only the findings on files
-    `--only` names are kept."""
-    out = []
+def _read_doc(f):
+    """(text, too_large) for a docs file: its text, or None when it cannot be read
+    or is larger than _MAX_DOC_BYTES (`too_large` says which). The one per-file read
+    guard every check-docs pass shares."""
+    try:
+        size = f.stat().st_size
+    except OSError:
+        return None, False
+    if size > _MAX_DOC_BYTES:
+        return None, True
+    try:
+        return f.read_text(encoding="utf-8", errors="replace"), False
+    except OSError:
+        return None, False
+
+
+def _fill_manual_cache(roots, cache):
+    """Add every live manual page under the roots that `cache` (resolved path ->
+    (path, relparts, text)) does not hold yet: the one extra walk an `--only` run
+    needs, because the tour and the PowerShell signal are judged tree-wide."""
     for f, relparts in _iter_markdown_files(roots):
-        if not _is_manual_index(relparts) or _is_frozen_tier(relparts):
+        if not _in_manual(relparts) or _is_frozen_tier(relparts):
             continue
         try:
-            if f.stat().st_size > _MAX_DOC_BYTES:
-                continue
-            text = f.read_text(encoding="utf-8", errors="replace")
+            key = f.resolve()
         except OSError:
             continue
-        out += _check_toc_count(f, text) + _check_next_chain(f, text)
-    if only_set is None:
-        return out
-    kept = []
-    for finding in out:
-        try:
-            if pathlib.Path(finding[2]).resolve() in only_set:
-                kept.append(finding)
-        except OSError:
+        if key in cache:
             continue
-    return kept
+        text, _big = _read_doc(f)
+        if text is not None:
+            cache[key] = (f, relparts, text)
 
 
 def _check_docs(roots, captures_dir, coverage, forbidden, only=None, tier_check=True,
@@ -1739,8 +1749,8 @@ def _check_docs(roots, captures_dir, coverage, forbidden, only=None, tier_check=
     sweep, which is noise while authoring is still in progress."""
     findings = []
     only_set = _resolve_only(only)
-    twin_candidates, read_paths, has_ps, index_texts = [], set(), False, []
-    allow_patterns = [_glob_regex(g) for g in forbidden_allow]
+    twin_candidates, manual = [], {}
+    allow_patterns = [p if hasattr(p, "match") else _glob_regex(p) for p in forbidden_allow]
     for f, relparts in _iter_markdown_files(roots):
         if only_set is not None:
             try:
@@ -1748,18 +1758,13 @@ def _check_docs(roots, captures_dir, coverage, forbidden, only=None, tier_check=
                     continue
             except OSError:
                 continue
-        try:
-            size = f.stat().st_size
-        except OSError:
-            continue
-        if size > _MAX_DOC_BYTES:
+        text, too_large = _read_doc(f)
+        if too_large:
             findings.append(
-                ("warn", "FILE_TOO_LARGE", str(f), 1, "%d bytes; skipped content checks" % size)
+                ("warn", "FILE_TOO_LARGE", str(f), 1, "%d bytes; skipped content checks" % f.stat().st_size)
             )
             continue
-        try:
-            text = f.read_text(encoding="utf-8", errors="replace")
-        except OSError:
+        if text is None:
             continue
         findings += _check_links(f, text, roots)
         findings += _check_tables(f, text)
@@ -1774,21 +1779,36 @@ def _check_docs(roots, captures_dir, coverage, forbidden, only=None, tier_check=
             findings += _check_grounding(f, text, captures_dir)
             findings += _check_showcase(f, text, relparts)
             if _in_manual(relparts):
-                read_paths.add(f.resolve())
-                has_ps = has_ps or _has_powershell_fence(text)
+                manual[f.resolve()] = (f, relparts, text)
                 twin_candidates += _check_platform_twin(f, text, "warn")
-                if _is_manual_index(relparts):
-                    index_texts.append((f, text))
+    if only_set is not None:
+        _fill_manual_cache(roots, manual)
     if twin_candidates:
         if platform_pairs:
             findings += [("error",) + c[1:] for c in twin_candidates]
-        elif has_ps or (only_set is not None and _manual_has_powershell(roots, skip=read_paths)):
+        elif any(_has_powershell_fence(text) for _f, _r, text in manual.values()):
             findings += twin_candidates
-    if only_set is None:
-        for f, text in index_texts:
-            findings += _check_toc_count(f, text) + _check_next_chain(f, text)
-    else:
-        findings += _index_findings(roots, only_set)
+
+    def _cached(path):
+        try:
+            hit = manual.get(path.resolve())
+        except OSError:
+            return None
+        return hit[2] if hit else _read_doc(path)[0]
+
+    index_findings = []
+    for f, relparts, text in manual.values():
+        if _is_manual_index(relparts):
+            index_findings += _check_toc_count(f, text) + _check_next_chain(f, text, _cached)
+    for finding in index_findings:
+        if only_set is None:
+            findings.append(finding)
+            continue
+        try:
+            if pathlib.Path(finding[2]).resolve() in only_set:
+                findings.append(finding)
+        except OSError:
+            continue
     if tier_check:
         findings += _check_empty_tier(roots, coverage)
     has_error = any(sev == "error" for sev, *_ in findings)
@@ -1831,47 +1851,58 @@ def _in_manual(relparts):
 
 def _top_level_lists(text):
     """The top-level ordered lists in `text`'s prose, in order, and whether a "Do a
-    task" heading exists. Each list is a dict: `do_a_task` (it follows that
-    heading, before the next heading) and `items`, each a dict with `target` (its
+    task" heading exists. Each list is a dict: `do_a_task` (it sits in that
+    heading's section, which runs to the next heading of the same or a higher
+    level, so its subsections count) and `items`, each a dict with `target` (its
     leading link, or None) and `number` (as written). A list starts at an item
     indented at most three spaces; an item indented deeper than the list's first
-    item is nested and skipped. Blank and indented lines keep a list open; any
-    other line at column 0 closes it."""
-    lists, cur, in_do, saw_do = [], None, False, False
+    item is nested and skipped. Blank and indented lines keep a list open, and so
+    does an unindented line right after an item (a wrapped line of its text); a
+    heading, or a paragraph after a blank line, closes it."""
+    lists, cur, do_level, saw_do, prev_blank = [], None, None, False, True
     for raw in _prose_text(text).split("\n"):
         line = raw.expandtabs(4)
+        heading = _ATX_RE.match(line)
+        if heading:
+            cur, prev_blank = None, False
+            level = len(heading.group(1))
+            if _DO_A_TASK_RE.match(line.strip()):
+                do_level, saw_do = level, True
+            elif do_level is not None and level <= do_level:
+                do_level = None
+            continue
         m = _ANY_ITEM_RE.match(line)
         if m:
+            prev_blank = False
             indent = len(m.group(1))
             if cur is None:
                 if indent > 3:
                     continue
-                cur = {"do_a_task": in_do, "base": indent, "items": []}
+                cur = {"do_a_task": do_level is not None, "base": indent, "items": []}
                 lists.append(cur)
             if indent > cur["base"]:
                 continue
             cur["base"] = indent
             link = _ITEM_LINK_RE.match(line)
             cur["items"].append({"target": link.group(1) if link else None, "number": int(m.group(2))})
-        elif not line.strip() or line[:1] == " ":
-            continue
+        elif not line.strip():
+            prev_blank = True
+        elif line[:1] == " " or (cur is not None and not prev_blank):
+            prev_blank = False
         else:
-            cur = None
-            if line.startswith("#"):
-                in_do = bool(_DO_A_TASK_RE.match(line.strip()))
-                saw_do = saw_do or in_do
+            cur, prev_blank = None, False
     return lists, saw_do
 
 
 def tour_entries(text):
-    """The manual index's tour as written. With a "Do a task" heading, it is the
-    first ordered list under that heading, or none when that group is not numbered.
-    Without one, it is the longest top-level ordered list whose items are mostly
-    links (the first, on a tie). Each entry is a dict with `target` and `number`;
-    [] when there is none."""
+    """The manual index's tour as written. With a "Do a task" heading, it is every
+    ordered list in that section, subsections included, in order; none when that
+    group is not numbered. Without one, it is the longest top-level ordered list
+    whose items are mostly links (the first, on a tie). Each entry is a dict with
+    `target` and `number`; [] when there is none."""
     lists, saw_do = _top_level_lists(text)
     if saw_do:
-        return next((lst["items"] for lst in lists if lst["do_a_task"]), [])
+        return [e for lst in lists if lst["do_a_task"] for e in lst["items"]]
     best = []
     for lst in lists:
         linked = sum(1 for e in lst["items"] if e["target"])
@@ -1914,23 +1945,16 @@ def _is_local_target(t):
     return bool(t) and "://" not in t and not t.startswith("/")
 
 
-def _check_next_chain(index, text):
+def _check_next_chain(index, text, read=None):
     """NEXT_CHAIN (warn): each local page of the index's tour ends with a `**Next:**`
     link to the entry the index puts after it, in index order (an external entry
     is matched by its URL; a page whose next entry has no link is not judged).
     Checked only once the tour is in use (some page has a Next link); the last
     entry is free. Findings name pages as the index links them."""
     base = index.parent
+    read = read or (lambda p: _read_doc(p)[0])
     entries = tour_items(text)
-    bodies = []
-    for target in entries:
-        body = None
-        if _is_local_target(target):
-            try:
-                body = (base / target).read_text(encoding="utf-8", errors="replace")
-            except OSError:
-                body = None
-        bodies.append(body)
+    bodies = [read(base / t) if _is_local_target(t) else None for t in entries]
     if not any(b and _NEXT_TARGET_RE.search(_prose_text(b)) for b in bodies):
         return []
     out = []
@@ -1963,23 +1987,6 @@ def _has_powershell_fence(text):
                for info, _b, _l in iter_fenced_blocks(text))
 
 
-def _manual_has_powershell(roots, skip=()):
-    """Any PowerShell fence on a manual page under the roots, reading only the
-    files not in `skip` (the ones the main scan already read)."""
-    for f, rel in _iter_markdown_files(roots):
-        if not _in_manual(rel) or _is_frozen_tier(rel) or f.resolve() in skip:
-            continue
-        try:
-            if f.stat().st_size > _MAX_DOC_BYTES:
-                continue
-            text = f.read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            continue
-        if _has_powershell_fence(text):
-            return True
-    return False
-
-
 def _command_lang(info):
     """'sh' or 'ps' for a shell or PowerShell COMMAND fence, else None. Output
     fences (`capture=` or `illustrative`) and other languages are not commands."""
@@ -1997,7 +2004,7 @@ def _check_platform_twin(f, text, severity):
     them are skipped. The caller decides that `f` is a manual page."""
     lines = text.split("\n")
     fenced = _fenced_line_numbers(text)
-    headings = [i for i, ln in enumerate(lines, start=1) if ln.lstrip().startswith("#") and i not in fenced]
+    headings = [i for i, ln in enumerate(lines, start=1) if _ATX_RE.match(ln.expandtabs(4)) and i not in fenced]
     out, waiting = [], []
 
     def _flush():
@@ -2337,9 +2344,13 @@ def cmd_check_docs(rest, prog="check.py"):
         coverage = _load_coverage(coverage_file)
     except (ValueError, OSError):
         return _usage_p("ERROR: malformed coverage record: " + str(coverage_file))
+    try:
+        allow_patterns = [_glob_regex(g) for g in forbidden_allow]
+    except (ValueError, re.error) as exc:
+        return _usage_p("ERROR: bad --forbidden-allow glob: %s" % exc)
     findings, code = _check_docs(
         roots, captures_dir, coverage, forbidden, only=only, tier_check=tier_check,
-        platform_pairs=platform_pairs, forbidden_allow=forbidden_allow,
+        platform_pairs=platform_pairs, forbidden_allow=allow_patterns,
     )
     for sev, fcode, fpath, lineno, detail in findings:
         sys.stdout.write("%s\t%s\t%s:%d\t%s\n" % (sev.upper(), fcode, fpath, lineno, detail))

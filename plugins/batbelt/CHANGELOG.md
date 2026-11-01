@@ -58,6 +58,8 @@ writes anything.
   kept. Its page count names the tour's last number, and a tour whose numbers skip is reported.
 - `PLATFORM_TWIN` accepts only a PowerShell command block as the twin, not captured PowerShell output; twins pair
   in order within a section, with output blocks between them. The tour checks report on the pages `--only` names.
+- The tour checks read a list item whose text wraps onto the next line, and a Do a task section with
+  subsections, as one tour. A malformed `--forbidden-allow` pattern is refused with a usage error.
 - `--sync` asks whether a missing tour feature (no numbered list, no Next links, no New here? pointer) is
   deliberate before recording it, so an unfinished manual is not excused for good.
 - `--forbidden-allow` patterns are anchored: `*` stays within one folder, `**` crosses folders, and `README.md`

@@ -5015,16 +5015,77 @@ def test_forbidden_allow_globs_compile_once_and_support_classes(tmp_path, capsys
     assert rc == 1 and out.count("FORBIDDEN_TOKEN") == 1 and "c.md" in out
 
 
+def _count_walks(chk, monkeypatch):
+    calls = []
+    real = chk._iter_markdown_files
+    monkeypatch.setattr(chk, "_iter_markdown_files", lambda roots: calls.append(1) or real(roots))
+    return calls
+
+
 def test_an_unscoped_run_walks_the_tree_once(tmp_path, capsys, monkeypatch):
     chk = _load_check()
     _tour(tmp_path)
     _twin_pages(tmp_path)
-    monkeypatch.setattr(chk, "_index_findings", lambda *a: (_ for _ in ()).throw(AssertionError("extra walk")))
-    monkeypatch.setattr(chk, "_manual_has_powershell", lambda *a, **k: (_ for _ in ()).throw(AssertionError("extra walk")))
+    calls = _count_walks(chk, monkeypatch)
     assert chk.main(["check-docs", str(tmp_path / "docs"), "--no-tier-check"]) == 0
-    assert "PLATFORM_TWIN" in capsys.readouterr().out
+    assert "PLATFORM_TWIN" in capsys.readouterr().out and len(calls) == 1
+
+
+def test_an_only_run_walks_the_tree_twice_at_most(tmp_path, capsys, monkeypatch):
+    chk = _load_check()
+    _tour(tmp_path, next_of_a="a.md")
+    _twin_pages(tmp_path)
+    calls = _count_walks(chk, monkeypatch)
+    chk.main(["check-docs", str(tmp_path / "docs"), "--no-tier-check", "--only", str(tmp_path / "docs/manual/two.md")])
+    out = capsys.readouterr().out
+    assert "PLATFORM_TWIN" in out and "NEXT_CHAIN" not in out and len(calls) == 2
 
 
 def test_no_dead_tour_regex():
     chk = _load_check()
     assert not hasattr(chk, "_TOUR_ITEM_RE")
+
+
+# ---- /code-review, third pass (high) ------------------------------------------------
+
+
+def test_a_wrapped_item_line_keeps_the_tour_open():
+    chk = _load_check()
+    text = "## Do a task\n\n1. [a](a.md) long\nwrapped text\n2. [b](b.md)\n3. [c](c.md)\n\n**1 → 9**\n"
+    assert chk.tour_items(text) == ["a.md", "b.md", "c.md"]
+    assert "**1 → 3**" in lib.renumber_toc(text)
+
+
+def test_do_a_task_subsections_form_one_tour(tmp_path):
+    chk = _load_check()
+    text = "## Do a task\n### Setup\n1. [a](a.md)\n2. [b](b.md)\n### Daily\n3. [c](c.md)\n\nRead **1 → 9**\n"
+    assert chk.tour_items(text) == ["a.md", "b.md", "c.md"]
+    assert "Read **1 → 3**" in lib.renumber_toc(text)
+    _seed(tmp_path, "docs/manual/README.md", text)
+    _seed(tmp_path, "docs/manual/a.md", "# a\n")
+    assert lib.detect_manual_conventions(tmp_path)["numbered_tour"] is True
+
+
+def test_a_bad_allow_glob_is_a_usage_error(tmp_path, capsys):
+    chk = _load_check()
+    _seed(tmp_path, "docs/manual/a.md", "# A\n")
+    for glob in ("[z-a]", "[!]"):
+        assert chk.main(["check-docs", str(tmp_path / "docs"), "--forbidden", "x", "--forbidden-allow", glob]) == 2
+
+
+def test_sync_text_records_structure_and_asks_about_tour_gaps():
+    t = _flat(ONBOARD / "SKILL.md")
+    assert "an unnumbered index" not in t
+    assert "renamed index groups or a `text capture=` fence is recorded rather than reported" in t
+
+
+def test_platform_twin_ignores_hash_lines_that_are_not_headings(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "docs/manual/a.md",
+          "# A\n\n```bash\nmake\n```\n\n    # an indented code line\n#!/bin/sh is a shebang\n\n```powershell\nmake\n```\n")
+    _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
+    assert "PLATFORM_TWIN" not in codes
+
+
+def test_manual_defaults_holds_only_live_keys():
+    assert set(lib.MANUAL_DEFAULTS) == {"layout", "capture_fence"}

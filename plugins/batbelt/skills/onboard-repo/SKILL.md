@@ -434,17 +434,17 @@ so the list outranks the old body).
 **A new standard starts out agreeing with the repo.** Before copying it, run `python3
 "$SKILL_DIR/scripts/onboard.py" manual-conventions .` and read the JSON: the copy then fills its
 Local deviations list with the printed `local_deviations` (in place of `- None.`), so a `use/`
-layout, an unnumbered index or a `text capture=` fence is recorded rather than reported (a flat
-manual with a numbered tour is already the standard's default). The same pass writes `docs
-voice:` and `platform pairs:` into the `update-docs` REPO SPECIFICS when they are missing: the
-voice from `docs_voice` (with none found, leave the line out so the default applies; never copy
-a voice word from the old template region), and `sh+powershell` when `platform_pairs` is true,
-that is when the root holds a `.sh`/`.ps1` front-end pair. A PowerShell block in the manual
-without such a pair (`manual_has_powershell`) is only mentioned to the operator. `preserve`
-carries REPO SPECIFICS verbatim, so these two lines are a separate edit shown as their own diff;
-all of it is confirmed together. Like the other docs-ia seeds it is the repo's own file, so
-nothing marks it as owned by the installer. `--sync` never moves or regroups a page: a new page
-goes where the repo's existing pages are.
+layout, renamed index groups or a `text capture=` fence is recorded rather than reported (a flat
+manual is already the standard's default; a missing tour feature is asked about, below). The
+same pass writes `docs voice:` and `platform pairs:` into the `update-docs` REPO SPECIFICS when
+they are missing: the voice from `docs_voice` (with none found, leave the line out so the
+default applies; never copy a voice word from the old template region), and `sh+powershell` when
+`platform_pairs` is true, that is when the root holds a `.sh`/`.ps1` front-end pair. A
+PowerShell block in the manual without such a pair (`manual_has_powershell`) is only mentioned
+to the operator. `preserve` carries REPO SPECIFICS verbatim, so these two lines are a separate
+edit shown as their own diff; all of it is confirmed together. Like the other docs-ia seeds it
+is the repo's own file, so nothing marks it as owned by the installer. `--sync` never moves or
+regroups a page: a new page goes where the repo's existing pages are.
 
 The JSON's `ask` list holds tour features the standard expects and this manual lacks (no numbered
 Do a task list, no Next links, no **New here?** pointer). Each may be deliberate or only mean the
