@@ -12,7 +12,11 @@
       Run again to add rows (never to change or remove one). Never edits a repository: the survey proves its own read-only claim.
   adoption add --repo LABEL --file PATH --find TEXT --change TEXT [--lines 15-33]
       Appends one row for a change no search finds (logic, a platform rule the product repository gets wrong). Pinned like any row.
-  adoption status [--set N|N-M|N,M=to do|doing|done]...    show or update progress (doing and done need G6)
+  adoption add --repo LABEL --kit
+      Appends the row "Brand kit" for a repository: copy the project's brand kit into it (every generated file byte for byte, and the owner files it does not have), by the list
+      `brand-creator kit status --repo <path>` prints. Needs a kit in the project; one row per repository; takes no --file, --find, --change or --lines. Pinned like any row, and a
+      survey never adds, changes or removes it.
+  adoption status [--set N|N-M|N,M=to do|doing|done]...    show or update progress (doing and done need G6); with kit rows, also says per repository whether its kit copy is current (reads only)
   adoption verify                                          the pins, the numbering, the accounting and ADOPTION.md against adoption.json
   adoption render                                          write ADOPTION.md again from adoption.json
   adoption wiring --repo LABEL (--before [--again] | --after | --compare | --drop "ITEM::REASON"...) [--page URL]...
@@ -36,15 +40,18 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE / "lib"))
 sys.path.insert(0, str(HERE / "adaptlib"))
 sys.path.insert(0, str(HERE / "pagelib"))
+sys.path.insert(0, str(HERE / "booklib"))   # kitlib reads bookdata
 import adoptdata as ad  # noqa: E402
+import kitlib  # noqa: E402  (where the kit is: `adoption add --kit`)
 import pagecheck  # noqa: E402  (is_loopback_url: the one loopback rule, shared with `page-check --url`)
 import wiring  # noqa: E402
-from _common import (EXIT_CANNOT, EXIT_FAIL, EXIT_USAGE, Parser, Report, add_project_arg, confine, fail, find_project, main_guard,  # noqa: E402
+from _common import (EXIT_CANNOT, EXIT_FAIL, EXIT_USAGE, CliError, Parser, Report, add_project_arg, confine, fail, find_project, main_guard,  # noqa: E402
                      plugin_root, read_state, require_gate, run, today, which_or_cannot, write_bytes_if_changed)
 
 RG_BASE = ["--no-config", "--hidden", "--glob", "!.git", "--no-require-git"]
 MAX_LINES = 200
 WIRING_RUN_TIMEOUT_S = 120   # one page: Chromium starts and the page has 15 s to load
+KIT_STATUS_TIMEOUT_S = 120   # `kit status` reads the kit folder of the project and of each repository
 HINT_RG = "Install ripgrep (macOS: brew install ripgrep; Linux: apt install ripgrep; Windows: winget install BurntSushi.ripgrep.MSVC)."
 
 KEEP_RULES = [   # (kind, pattern, reason): the first rule that matches decides
@@ -232,6 +239,11 @@ CHANGE = {
 }
 
 
+KIT_FIND = "kit.json"
+KIT_CHANGE = ("Copy the brand kit: every generated file byte for byte and the owner files the repository does not have, by the list `brand-creator kit status --repo <path>` prints; "
+              "it must then say current. Never into a global skills folder.")
+
+
 def survey_repo(rg: str, repo: Path, label: str, rid: str, names: list[str], colours: list[str], keeps: list[dict]):
     """-> (files, hits) where a hit is (category, file, line, text); path hits have line 0 and the directory as the file."""
     files = list_files(rg, repo, label)
@@ -289,13 +301,14 @@ def main() -> int:
     s.add_argument("--old-colours-file", metavar="FILE", help="one colour per line (lines starting // are comments)")
     s.add_argument("--keep", action="append", default=[], metavar="GLOB::REASON", help="a path pattern (repo-relative) to list as kept, not counted, with the reason")
     s.add_argument("--replace-terms", action="store_true", help="forget the names and colours of the earlier survey (they are otherwise kept and searched again)")
-    ad_ = sub.add_parser("add", help="append a hand-written row (a code change)")
+    ad_ = sub.add_parser("add", help="append a hand-written row (a code change), or with --kit the row that copies the brand kit")
     add_project_arg(ad_)
     ad_.add_argument("--repo", required=True, metavar="LABEL", help="the repository's label, as in ADOPTION.md")
-    ad_.add_argument("--file", required=True, help="the file in that repository")
-    ad_.add_argument("--find", required=True, help="a text to find the place by (line numbers drift)")
-    ad_.add_argument("--change", required=True, help="what to change there, in a sentence")
+    ad_.add_argument("--file", help="the file in that repository")
+    ad_.add_argument("--find", help="a text to find the place by (line numbers drift)")
+    ad_.add_argument("--change", help="what to change there, in a sentence")
     ad_.add_argument("--lines", default="", help="line numbers as read now: N, N-M, N,M")
+    ad_.add_argument("--kit", action="store_true", help="add the row that copies the project's brand kit into the repository (no --file, --find, --change or --lines; one row per repository)")
     st = sub.add_parser("status", help="show the counts, or set the progress of rows")
     add_project_arg(st)
     st.add_argument("--set", action="append", default=[], metavar="ROWS=STATE", help="rows as N, N-M or N,M,..; state to do, doing or done (doing and done need G6)")
@@ -316,6 +329,13 @@ def main() -> int:
     w.add_argument("--page", action="append", default=[], metavar="URL", help="a page of your own local server to read from the DOM too (repeatable; http or https on localhost, 127.0.0.1 or [::1]; "
                                                                              "with --before, --after or --compare). --after and --compare read the pages of the before record when none is given")
     a = ap.parse_args()
+    if a.cmd == "add":   # --file, --find and --change are needed together, unless the row is the kit's, which takes none of the four
+        if a.kit:
+            for flag, unset in (("file", None), ("find", None), ("change", None), ("lines", "")):   # even an empty value is a value that would be dropped
+                if getattr(a, flag) != unset:
+                    ad_.error(f"argument --{flag}: not allowed with argument --kit")
+        elif missing := [f"--{flag}" for flag in ("file", "find", "change") if getattr(a, flag) is None]:
+            ad_.error("the following arguments are required: " + ", ".join(missing))
     project = find_project(a.project)
     name = str(read_state(project).get("name", "") or read_state(project).get("slug", "") or "Brand")
     return {"survey": do_survey, "add": do_add, "status": do_status, "verify": do_verify, "render": do_render,
@@ -507,6 +527,8 @@ def do_add(a, project: Path, name: str) -> int:
     rid = next((r["id"] for r in doc["repos"] if r["label"] == a.repo), None)
     if rid is None:
         fail(EXIT_USAGE, f"--repo {a.repo!r} is not a surveyed repository (labels: {', '.join(r['label'] for r in doc['repos'])})")
+    if a.kit:
+        return add_kit_row(project, name, doc, rid, a.repo)
     for k in ("file", "find", "change"):
         if not getattr(a, k).strip():
             fail(EXIT_USAGE, f"--{k} is empty")
@@ -518,6 +540,23 @@ def do_add(a, project: Path, name: str) -> int:
     doc["nrows"] = len(doc["rows"])
     write_both(project, doc, name)
     print(f"row {n} added (code change in {a.repo}: {row['file']})")
+    return 0
+
+
+def add_kit_row(project: Path, name: str, doc: dict, rid: str, label: str) -> int:
+    """Append the row that copies the project's brand kit into the repository `rid` (`label`): the whole folder, so no lines. Exit 2 with no kit in the project, or when the repository has a kit row."""
+    if not kitlib.exists(project):
+        fail(EXIT_USAGE, "no kit in this project, so there is nothing to copy into a repository: `brand-creator kit build --yes` (opt-in at G5)")
+    held = next((r["n"] for r in doc["rows"] if r["category"] == "kit" and r["repo"] == rid), None)
+    if held is not None:
+        fail(EXIT_USAGE, f"{label!r} already has a kit row (row {held}): a repository gets one, and an update is the same copy again")
+    n = len(doc["rows"]) + 1
+    row = {"n": n, "category": "kit", "repo": rid, "file": kitlib.kit_rel(project) + "/", "lines": [], "find": KIT_FIND, "change": KIT_CHANGE}
+    doc["rows"].append(row)
+    doc["pins"][str(n)] = ad.pin_of(row)
+    doc["nrows"] = len(doc["rows"])
+    write_both(project, doc, name)
+    print(f"row {n} added (brand kit for {label}: {row['file']})")
     return 0
 
 
@@ -533,6 +572,40 @@ def parse_rows(spec: str, n: int) -> list[int]:
             fail(EXIT_USAGE, f"rows {part!r}: the list has rows 1 to {n}")
         out += range(lo, hi + 1)
     return out
+
+
+KIT_COPIES_HEAD = "kit copies (read only; `brand-creator kit status` has the copy list):"
+
+
+def kit_copies(project: Path, doc: dict) -> tuple[list[dict], str | None]:
+    """What `brand-creator kit status` says about the copy of the kit in each repository that has a kit row: ([{label, state, installed_version, project_version}] in the order of the
+    kit rows, None), or ([], why it could not be read: no kit in the project, a kit that is not whole, a repository it refuses). ([], None) when no row is a kit row. It is `kit.py status`
+    itself that reads (so the copy is judged by the one rule, and read only, as `kit status` proves); anything it says on stderr while it still gave an answer is passed on."""
+    if not any(r["category"] == "kit" for r in doc["rows"]):
+        return [], None
+    try:
+        cp = run([sys.executable, str(HERE / "kit.py"), "status", "--json", "--project", str(project)], timeout=KIT_STATUS_TIMEOUT_S, check=False)
+    except CliError as e:
+        return [], e.message
+    said = cp.stderr.decode("utf-8", "replace").strip()
+    try:
+        shown = json.loads(cp.stdout.decode("utf-8"))["repos"] if cp.returncode in (0, 1) else None
+    except (ValueError, KeyError):
+        shown = None
+    if shown is None:
+        return [], " ".join(said.removeprefix("error: ").split()) or f"`kit status` exited {cp.returncode} and said nothing"
+    if said:
+        print(said, file=sys.stderr)
+    return [{k: r[k] for k in ("label", "state", "installed_version", "project_version")} for r in shown], None
+
+
+def kit_line(k: dict) -> str:
+    """One repository's kit copy as `kit status` words it."""
+    if k["state"] == kitlib.CURRENT:
+        return f"{k['label']}: current (version {k['project_version']})"
+    if k["state"] == kitlib.NOT_INSTALLED:
+        return f"{k['label']}: not installed"
+    return f"{k['label']}: not current (installed version {k['installed_version'] or 'unknown'}, project version {k['project_version']})"
 
 
 def do_status(a, project: Path, name: str) -> int:
@@ -558,8 +631,9 @@ def do_status(a, project: Path, name: str) -> int:
         write_both(project, doc, name)
         print(f"progress updated for {len(changes)} row(s)")
     c = ad.counts(doc)
+    kits, unread = kit_copies(project, doc)   # after the counts, and a copy that is not current does not change the exit code
     if a.json:
-        print(json.dumps({"headline": ad.headline(doc), "counts": c, "rows": len(doc["rows"])}, indent=2))
+        print(json.dumps({"headline": ad.headline(doc), "counts": c, "rows": len(doc["rows"]), **({"kit": kits} if kits else {}), **({"kit_unread": unread} if unread else {})}, indent=2))
     else:
         print(f"{ad.headline(doc)}: {ad.sentence(doc)}")
         todo = [r["n"] for r in doc["rows"] if ad.status_of(doc, r["n"]) != "done"]
@@ -568,6 +642,10 @@ def do_status(a, project: Path, name: str) -> int:
         still, _gone = ad.drift(doc)
         if still:
             print(f"warning: row(s) {ad.ranges(still)} are done but still match at the last survey")
+        if kits:
+            print("\n".join([KIT_COPIES_HEAD, *(f"  {kit_line(k)}" for k in kits)]))
+    if unread:
+        print(f"warning: the kit copies were not read: {unread}", file=sys.stderr)
     return 0
 
 

@@ -10,6 +10,8 @@ Line numbers are the survey's: they may drift, so every row also carries `find`,
 `wiring` is the record of `brand-creator adoption wiring` (what a redesign must keep: links, form fields, handlers, test hooks, ids, scripts), one entry per
 repository id with a `before` and an `after` record and the owner's `dropped` items (item -> the reason, in the owner's words). It holds the repository's own
 values, so it is in TARGET_KEYS; `verify()` checks its shape, `wiring_lost()` says what a redesign lost, and ADOPTION.md shows it (`wiring_section()`).
+A `kit` row (`adoption add --repo LABEL --kit`) is the brand kit's copy into one repository: it covers the whole kit folder, so it has no lines, and a survey neither adds nor
+changes it (it is not in SURVEYED). ADOPTION.md shows its Lines cell as "the whole folder".
 """
 from __future__ import annotations
 
@@ -32,9 +34,10 @@ CATEGORIES = [
     ("path", "Icon and logo files"),
     ("meta", "Package and platform metadata"),
     ("badge", "README badges and header images"),
+    ("kit", "Brand kit"),         # written by `adoption add --repo LABEL --kit` (the copy of the brand kit into a repository); never touched by a survey
     ("change", "Code change"),    # written by hand with `adoption add` (a change no search finds: logic, a platform rule); never touched by a survey
 ]
-SURVEYED = [c for c, _l in CATEGORIES if c != "change"]
+SURVEYED = [c for c, _l in CATEGORIES if c not in ("kit", "change")]
 CATEGORY_LABEL = dict(CATEGORIES)
 # keys that hold the old values of the target repos by design: the cascade search does not read them
 TARGET_KEYS = ("find", "terms", "identifiers", "kept", "wiring")
@@ -308,6 +311,8 @@ def render(doc: dict, name: str) -> str:
             sn = seen_of(doc, r)
             if r["category"] == "change":
                 where = ranges(r.get("lines", [])) or "no line given"
+            elif r["category"] == "kit":
+                where = "the whole folder"
             else:
                 where = f"{sn['hits']} file(s)" if r["category"] == "path" else (ranges(sn["lines"]) or "no match now")
             L.append(f"| {r['n']} | {status_of(doc, r['n'])} | {cell(CATEGORY_LABEL[r['category']])} | {cell(repo_label(doc, r['repo']))} | "
