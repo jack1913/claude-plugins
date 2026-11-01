@@ -1718,9 +1718,10 @@ def find_tells(measures: dict, cfg: dict) -> dict:
             media = b["media_px"]
             pictured = any(n in media for n in ("canvas", "video")) or any(media.get(n, 0) > t["max_icon_px"] for n in ("img", "svg", "picture"))   # an img, svg or picture this small is an icon
             section = b["h1"] > 0 or b["headings"] > t["max_headings"]   # the page, or a band of it, and not a drawing in it
-            styled = b["styled"] - b["in_lists"] + b["lists"]   # the items of a list, and all they hold, are one box
-            if b["width"] >= t["min_width_px"] and b["height"] >= t["min_height_px"] and styled >= t["min_styled_descendants"] and not (pictured or section or b["labelled"]):
-                meets[b["id"]] = {**b, "styled": styled}
+            # a list excuses a box only when the box is the list, or the items of the lists are nearly all of it: all its styled parts but at most one, or most of its area (the area of the items themselves, not of a list stretched past them)
+            listed = b["in_lists"] > 0 and (b["styled"] - b["in_lists"] <= t["max_unlisted_styled"] or b["list_area"] >= t["min_list_area_ratio"] * b["width"] * b["height"] - EPSILON)
+            if b["width"] >= t["min_width_px"] and b["height"] >= t["min_height_px"] and b["styled"] >= t["min_styled_descendants"] and not (pictured or section or listed or b["labelled"]):
+                meets[b["id"]] = b
         outer = set()
         for i in meets:
             p = parent.get(i)

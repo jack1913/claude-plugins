@@ -30,7 +30,8 @@ A failure in any of these fails the check.
 It also warns about patterns that make a page look like any other template: a small capital label above a heading, an arrow
 glued to a button label, a line of items joined by dots, a stock label such as "Learn more" on the second button of the
 hero, a hero with too much text, a mock-up built from styled boxes instead of a picture, and a row of three equal tiles. A
-warning never fails the page. Stock labels are checked in English and Polish; on a page in another language the check says
+table, a checklist or a timeline is not a mock-up, but a drawn panel with a header, figures or a footer around a list is.
+A warning never fails the page. Stock labels are checked in English and Polish; on a page in another language the check says
 "not verified" for them.
 
 ## Check a page

@@ -179,7 +179,8 @@ lints the board of the latest round again before `check`, so an edit of the fact
   rows): a small label in capitals over a heading (an eyebrow), an arrow glued to a link or button label, a line of
   items joined by middle dots (a bulleted list is not one), a stock label such as "Learn more" or "Dowiedz się więcej"
   on the hero's second action, more than 45 words in the hero's first screen, a mock-up built from many styled boxes
-  with no picture bigger than an icon (a list counts as one box; a page, or a band of it, with headings is not one),
+  with no picture bigger than an icon (a table is not one, and a list is not unless it is the box or most of it, so a
+  panel with its own header or footer beside a list is; a page, or a band of it, with headings is not one),
   and a row of three equal tiles. Each warning names where the pattern is and at which widths; none of
   them ever fails a page. A page in another language is reported as not verified for the stock labels, and a page that
   follows the stock order of a product page (hero, three tiles, FAQ, closing band) gets a note. To hold your pages to
