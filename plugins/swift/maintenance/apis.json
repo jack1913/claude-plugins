@@ -346,7 +346,10 @@
       "claims": {
         "iOS": "18.0",
         "macOS": "15.0",
-        "visionOS": "2.0"
+        "visionOS": "2.0",
+        "Mac Catalyst": "18.0",
+        "tvOS": "18.0",
+        "watchOS": false
       }
     },
     {
@@ -1157,6 +1160,114 @@
         "watchOS": false,
         "visionOS": false
       }
+    },
+    {
+      "name": "defaultTabBarPlacement(_:)",
+      "path": "swiftui/view/defaulttabbarplacement(_:)",
+      "claims": {
+        "iOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": "27.0",
+        "visionOS": "27.0",
+        "tvOS": "27.0",
+        "watchOS": "27.0"
+      }
+    },
+    {
+      "name": "isTabViewSidebarAvailable",
+      "path": "swiftui/environmentvalues/istabviewsidebaravailable",
+      "claims": {
+        "iOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": "27.0",
+        "visionOS": "27.0",
+        "tvOS": "27.0",
+        "watchOS": "27.0"
+      }
+    },
+    {
+      "name": "AdaptableTabBarPlacement.sidebar",
+      "path": "swiftui/adaptabletabbarplacement/sidebar",
+      "claims": {
+        "iOS": "18.0",
+        "Mac Catalyst": "18.0",
+        "visionOS": "2.0",
+        "macOS": false,
+        "tvOS": false,
+        "watchOS": false
+      }
+    },
+    {
+      "name": "splitArrangementLayoutRatio(_:)",
+      "path": "swiftui/view/splitarrangementlayoutratio(_:)",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": "27.1",
+        "macOS": "27.1",
+        "visionOS": "27.1",
+        "tvOS": "27.1",
+        "watchOS": "27.1"
+      }
+    },
+    {
+      "name": "splitArrangementLayoutSize(minWidth:idealWidth:maxWidth:minHeight:idealHeight:maxHeight:)",
+      "path": "swiftui/view/splitarrangementlayoutsize(minwidth:idealwidth:maxwidth:minheight:idealheight:maxheight:)",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": "27.1",
+        "macOS": "27.1",
+        "visionOS": "27.1",
+        "tvOS": "27.1",
+        "watchOS": "27.1"
+      }
+    },
+    {
+      "name": "splitArrangementFixedLayoutSize(horizontal:vertical:)",
+      "path": "swiftui/view/splitarrangementfixedlayoutsize(horizontal:vertical:)",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": "27.1",
+        "macOS": "27.1",
+        "visionOS": "27.1",
+        "tvOS": "27.1",
+        "watchOS": "27.1"
+      }
+    },
+    {
+      "name": "overlayArrangementEdge(_:)",
+      "path": "swiftui/view/overlayarrangementedge(_:)",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": "27.1",
+        "macOS": "27.1",
+        "visionOS": "27.1",
+        "tvOS": "27.1",
+        "watchOS": "27.1"
+      }
+    },
+    {
+      "name": "splitArrangementAxis",
+      "path": "swiftui/environmentvalues/splitarrangementaxis",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": "27.1",
+        "macOS": "27.1",
+        "visionOS": "27.1",
+        "tvOS": "27.1",
+        "watchOS": "27.1"
+      }
+    },
+    {
+      "name": "overlayArrangementZIndex",
+      "path": "swiftui/environmentvalues/overlayarrangementzindex",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": "27.1",
+        "macOS": "27.1",
+        "visionOS": "27.1",
+        "tvOS": "27.1",
+        "watchOS": "27.1"
+      }
     }
   ],
   "ignore": {
@@ -1214,6 +1325,7 @@
       "ExpensiveRow",
       "ExpensiveView",
       "ExportButton",
+      "FavoritesView",
       "FileEvent",
       "FileTreeView",
       "FontSizeSlider",

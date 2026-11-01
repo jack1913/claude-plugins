@@ -91,8 +91,8 @@ The first argument picks the upstream; with no `ref` it compares against that up
 
 ```text capture=upstream-diff
 upstream: https://github.com/AvdLee/SwiftUI-Agent-Skill (skills/swiftui-expert-skill)
-baseline: 5.1.0 -> ref: 5.1.0
-no upstream changes: 5.1.0 is the baseline
+baseline: 5.2.1 -> ref: 5.2.1
+no upstream changes: 5.2.1 is the baseline
 ```
 
 That is `maintenance/upstream-diff.sh swiftui`. It clones the upstream into a temp dir and diffs its skill folder between the baseline in that upstream's `UPSTREAM.md` section and the ref; it never writes to this repo. Port changes by hand, then update the section's baseline and Ported table.

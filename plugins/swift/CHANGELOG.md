@@ -7,8 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `swift:swiftui` takes in upstream SwiftUI Agent Skill 5.2.1's iPhone Duo and large-display guidance:
+  - pick the technique by screen structure before reaching for `ArrangementView` or reserved regions;
+  - reflow card screens into two columns, and size a custom layout around the fold;
+  - resizing advice: no device-sized frames, size classes for what to show, no swapping of containers that adapt on their own;
+  - `NavigationSplitView` on large displays;
+  - the iPhone tab sidebar with `defaultTabBarPlacement(_:)` and `isTabViewSidebarAvailable`;
+  - the arrangement tuning modifiers, and checking layouts in every pose.
+- The new tab sidebar example compiles for every platform: `.defaultTabBarPlacement(.sidebar)` is limited to iOS, iPadOS, Mac Catalyst and visionOS, and the example is left out on watchOS. Upstream's `@available(iOS 27.0, *)` form fails to compile for macOS, tvOS, visionOS and watchOS.
+
 ### Fixed
 
+- The Liquid Glass segmented-control example uses each label as its `ForEach` id instead of its position, and the list checklist ties the `Array(...)`-free `enumerated()` form to an OS 26 deployment target, as the list guidance already did.
 - Four vertical-bar toolbar values exist only on iOS, iPadOS and Mac Catalyst, and `swift:swiftui` now puts them inside `#if os(iOS)`: `ToolbarItemAxisBehavior.horizontalOnly` and `.verticalPreferred`, and `ToolbarVerticalCompressionBehavior.prefersToolbarItems` and `.prefersTabBar`. Earlier text said every vertical-bar API needed only the all-platform 27.1 availability check; for these four values that does not compile for macOS, tvOS, visionOS or watchOS.
 - The same holds for the SDK 27 toolbar minimization values (`.onScrollDown`, `.onScrollUp`, `.never`, `.enabled`, `.disabled`, `.atScrollEdge`), now inside `#if os(iOS)`, and for the `.low` and `.high` visibility priorities, now inside `#if os(iOS) || os(macOS)`. `.topBarPinnedTrailing` and `ToolbarOverflowMenu` are documented as missing on tvOS and watchOS as well as macOS.
 - `DocumentCreationSource` is documented as available on macOS 27 too; only `NewDocumentButton`'s `source:` is iOS and visionOS only.

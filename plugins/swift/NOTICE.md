@@ -4,7 +4,7 @@ The `swift` plugin is licensed under the MIT License (`LICENSE.md`, copyright 20
 
 ## AvdLee/SwiftUI-Agent-Skill
 
-- Source: https://github.com/AvdLee/SwiftUI-Agent-Skill at `5.1.0` (`b24e68a965dc4b5bd2cc41dc60c094a26a9379ce`)
+- Source: https://github.com/AvdLee/SwiftUI-Agent-Skill imported at `5.1.0` (`b24e68a965dc4b5bd2cc41dc60c094a26a9379ce`), ported through `5.2.1` (`9897311e3e42cc77e87603226e74bea711092fbd`)
 - Taken: `skills/swiftui/`, which is upstream's `skills/swiftui-expert-skill/` with the changes the repository's `UPSTREAM.md` lists. Files marked "New" there are this project's own.
 
 ```text

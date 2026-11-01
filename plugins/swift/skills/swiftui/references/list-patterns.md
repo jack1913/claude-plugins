@@ -529,7 +529,7 @@ Table(people) { /* columns */ }
 - [ ] Constant number of views per ForEach element; rows are unary (single top-level view)
 - [ ] No inline filtering in ForEach (prefilter and cache instead)
 - [ ] No `AnyView` in list rows
-- [ ] `.enumerated()` uses the element's id (not `\.offset`); no `Array(...)` wrapper needed on Swift 6.1+
+- [ ] `.enumerated()` uses the element's id (not `\.offset`); no `Array(...)` wrapper needed when the deployment target is OS 26 or later
 - [ ] Use `.refreshable` for pull-to-refresh
 - [ ] Use `ContentUnavailableView` for empty states (iOS 17+)
 - [ ] Use `.scrollContentBackground(.hidden)` for custom list backgrounds

@@ -6,7 +6,7 @@ Five skills, the rules they share, and the eval cases behind them. The commands,
 
 | Skill | Loads | Covers | Built from |
 | --- | --- | --- | --- |
-| `swift:swiftui` | Automatically, when you write, review or refactor SwiftUI | Correct, current SwiftUI APIs: state and `@Observable`, view structure, layout, lists, previews in `#if DEBUG`, `#available` gates below 26, visionOS, Liquid Glass APIs, accessibility code, Instruments traces | A fork of AvdLee/SwiftUI-Agent-Skill 5.1.0 (`UPSTREAM.md`) |
+| `swift:swiftui` | Automatically, when you write, review or refactor SwiftUI | Correct, current SwiftUI APIs: state and `@Observable`, view structure, layout, lists, previews in `#if DEBUG`, `#available` gates below 26, visionOS, Liquid Glass APIs, accessibility code, Instruments traces | A fork of AvdLee/SwiftUI-Agent-Skill 5.2.1 (`UPSTREAM.md`) |
 | `swift:design` | Automatically, when you build or restyle a screen | Apple-native design: hierarchy and grouping, typography and Dynamic Type, colour and dark mode, SF Symbols, when Liquid Glass fits, platform idioms, motion, design tokens | Our own text |
 | `swift:concurrency` | Automatically, for concurrency code, concurrency errors and Swift 6 migration | async/await, tasks and task groups, actors and `@MainActor`, `Sendable`, isolation diagnostics, Swift 5 → 6 migration, hanging or flaky async tests | A fork of AvdLee/Swift-Concurrency-Agent-Skill 2.3.0 (`UPSTREAM.md`) |
 | `swift:testing` | Automatically, when you write, migrate or review tests | Swift Testing: `@Test`, `#expect`/`#require`, traits, parameterized tests, `confirmation`, parallel execution, XCTest migration and what stays on XCTest | A fork of AvdLee/Swift-Testing-Agent-Skill 1.2.0 (`UPSTREAM.md`) |
