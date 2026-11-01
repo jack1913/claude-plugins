@@ -18,9 +18,9 @@ proven.
 | [Live name screening](#live-name-screening) | never run as a release check | |
 | [Website capture of a real site](#website-capture-of-a-real-site) | never run | |
 | [Trademark deep link](#trademark-deep-link-opens-a-result-page) | never run | |
-| [Applied skill in a real session](#the-applied-skill-is-picked-up-by-a-real-session) | never run | |
-| [DESIGN.md and BRAND.md in a real agent](#designmd-and-brandmd-in-a-real-agent) | never run | |
-| [Kit test baseline](#kit-test-baseline-a-hero-from-the-applied-skill-and-from-a-kit) | never run | |
+| [Applied skill in a real session](#the-applied-skill-is-picked-up-by-a-real-session) | 2026-11-01, Claude Code 2.1.316, in the kit test baseline | passed: `<slug>-brand` was listed and was the first skill the session used |
+| [DESIGN.md and BRAND.md in a real agent](#designmd-and-brandmd-in-a-real-agent) | 2026-11-01, Claude Code 2.1.316, in the kit test baseline; `DESIGN.md` only | partly: colours and dark variants came from `DESIGN.md` and `tokens.css`; the font and logo files it linked were not in the folder |
+| [Kit test baseline](#kit-test-baseline-a-hero-from-the-applied-skill-and-from-a-kit) | 2026-11-01, Claude Code 2.1.316, Opus 5.5, frontend-design 1.1.1, one brief on a real brand, the owner's hand-made kit as B | A 15 failures and 2 warnings, B 1 failure and 4 warnings; blind pick B, then A, then C |
 | [LAUNCH.md links](#launchmd-links-open-the-register-pages) | never run | |
 | [Book, adoption, review and launch skills in a real session](#the-book-adoption-review-and-launch-skills-in-a-real-session) | never run | |
 | [Permission rule for the fallback form](#permission-rule-for-the-fallback-form) | never run | |
@@ -180,8 +180,8 @@ with one built from a brand kit, so the kit work has gaps to close and something
 **Steps** (scratch copies only; the brand project itself is never written to):
 
 1. In a scratch folder outside every brand project, make folder A: copy the brand's applied skill folder, `DESIGN.md` and
-   `tokens.css` into it. Make folder B: copy a brand kit into it. Use the owner's hand-made kit while the plugin cannot generate
-   one yet, and the generated kit once it can.
+   `tokens.css` into it. Make folder B: copy a brand kit into it. Use the generated kit, or the owner's hand-made one where none is
+   generated.
 2. In a fresh session in A, with the owner's web skill (for example frontend-design) and no other plugin, ask for the home
    page hero from the brief line and the facts only. Save the page.
 3. Do the same in B. Then run C in a fresh session in an empty folder: the same web skill, brief line and facts, and no brand
@@ -205,7 +205,24 @@ with one built from a brand kit, so the kit work has gaps to close and something
    - [DESIGN.md and BRAND.md in a real agent](#designmd-and-brandmd-in-a-real-agent): did the agent take colours and dark
      variants from `DESIGN.md`?
 
-**Last run:** never.
+**Last run:** 2026-11-01. Claude Code 2.1.316, model Opus 5.5, web skill frontend-design 1.1.1, one brief on a real brand, with
+the owner's hand-made kit as B. Each session ran headless (`claude -p`) with only the web skill loaded and file edits accepted;
+commands that needed approval were refused, the same in every run.
+
+- A, the applied skill: 15 failures and 2 warnings. Twelve failures have one cause: the font and logo files the page links are not
+  in the folder, because the applied skill and `DESIGN.md` name project paths. The rest: the browser's default link colour on the
+  empty logo slot, three step numbers as claims no fact backs, the brand fonts not drawn, and 49 words in the hero.
+- B, the hand-made kit: 1 failure and 4 warnings. Figures in a drawn app preview (a month and a payday) carry no sample label; the
+  second action has a stock label; the hero has 52 words; the preview is a mock-up made of styled boxes. The page links the fonts
+  inside the kit's own folder (`.claude/skills/<kit>/brand/fonts/`), a path a built site does not serve.
+- Both: the dark primary button's text pair is not declared in the brand's pairs (a gap in the brand's data, not in the kit).
+  Neither session used the web skill: the brand skill was the only one each loaded.
+- Blind pick, by the owner: B, because it carries everything the owner picked, the fonts included; then A, whose hero picture is
+  a little better; then C.
+- Gaps for the kit work: the brand's files have to resolve where the page is (the fonts and the logo per theme, with snippets
+  that say where the files go in a product); the recipe runs the page check and labels sample figures with `data-sample`; the
+  recipe names the hero's word budget and the stock labels, by pointing at the page check's warnings; the kit says it works
+  beside the web skill, not instead of it.
 
 ## LAUNCH.md links open the register pages
 
