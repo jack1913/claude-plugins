@@ -144,6 +144,15 @@ lints the board of the latest round again before `check`, so an edit of the fact
   "In 2026 200 tools" is the numbers 2026 and 200. A year after a copyright sign or the word ("© 2026", "Copyright
   2024–2026") is not a claim, and neither is the code of an error page: a "404" on a page whose title or main heading
   holds "404". A phone number, a postal code and a street number are still claims and need a fact or a sample label.
+- `page-check` reads error pages and dates more closely, after a trial on a real site. A page is an error page when
+  its file is named after the code (`404.html`, `500.html`), or when its title or main heading holds the code as the
+  only number in it (a single digit counts as one), with no "+" before or after it; a heading such as "500+ firm nam
+  ufa", "+500 klientów" or "5 lat, 500 klientów" is a count and exempts nothing. The code is then no claim anywhere on
+  the page, so a small "Błąd 404" label above the heading is not one. A date written with a month name is
+  one date in a Polish or English page, backed like a dotted date: "21 października 2026", "21 października",
+  "Październik 2026", "October 21, 2026", "21 October 2026", "October 2026". A dotted "30.10" is a date only when the
+  day and the month have two digits each, or a year follows ("1.5.2026r."); "12.5", "2.10" and "10.1" are plain
+  numbers, on the page and in `FACTS.md`.
 - `page-check` now checks the brand mark on a page. Put `data-brand-mark` on the mark's `<img>` or inline `<svg>` (the
   value may name the logo file, `data-brand-mark="assets/logo/mark.svg"`); an image whose file is named `logo`, or starts
   with `logo-` or `logo_` (`logo.svg`, `logo-dark.png`; `partner-logo.svg` is not), and any image that is byte for byte a

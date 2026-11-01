@@ -92,11 +92,20 @@ fact to `FACTS.md` (only a fact you confirm) or to mark the text as a sample.
 Some numbers are not claims, so you do not need a fact for them:
 
 - A year after a copyright sign or the word, such as "© 2026" or "Copyright 2024–2026".
-- The code of an error page. A page whose title or main heading says "Błąd 404" can show a large "404".
+- The code of an error page. A page is an error page when its file is named after the code (`404.html`), or when its
+  title or main heading holds the code and no other number, with no "+" before or after it. Then the code can stand
+  anywhere on it, such as a small "Błąd 404" label and a large "404". A heading such as "500+ firm nam ufa", "+500
+  klientów" or "5 lat, 500 klientów" is a count, so it does not make an error page.
 
 A date is read as its numbers, in either form. The fact "premiera 2026-11-15" backs "Premiera 15.11.2026", and "Wypłata
 30.10" needs a fact that holds 30 and 10. A number with spaces between thousands, such as "13 205,20 zł", counts as one
 number.
+
+A date written with a month name is one date, not numbers, when the page is in Polish or English: "21 października
+2026", "Październik 2026", "October 21, 2026", "21 October 2026". The fact "premiera 2026-11-15" backs "15 listopada 2026"
+and "November 15, 2026" too. A date with a month name is a claim even when its day has one digit ("5 maja"), so a
+street such as "ul. 3 Maja" needs a fact, like any address. A date with dots is a date when it has a year ("5.11.2026")
+or two digits each way ("30.10", "05.11"); "12.5" or "2.10" is a plain number, and the fact has to hold that number.
 
 Phone numbers, postal codes and street numbers are still claims. Each one needs a fact in `FACTS.md`, or a sample label.
 
@@ -130,7 +139,7 @@ sit around an accent.
 | Code 3 and a message about Chromium or setup | Run `/brand-creator:setup`, then check again |
 | Code 2 and "page-check runs offline" | The address is not on your computer. Build the site here and give its folder, or serve it locally |
 | A colour row fails and names a colour | The page paints a colour that is not one of your colours for that theme. The row gives the nearest brand colour. Use the token, or change the token if the brand changed |
-| A claims row fails | A number or status word has no fact behind it. Add the fact to `FACTS.md`, or mark the text as a sample. A phone number, postal code or street number needs one too. A copyright year and the code of an error page do not |
+| A claims row fails | A number or status word has no fact behind it. Add the fact to `FACTS.md`, or mark the text as a sample. A phone number, postal code or street number needs one too. A copyright year and the code of an error page do not. A date is one claim, written with dots or a month name |
 | A font row says "not verified" | The check could not tell which font the browser drew, for example a system font this computer does not have. Load the font with the page and check again |
 
 More: [Troubleshooting](../reference/troubleshooting.md).
