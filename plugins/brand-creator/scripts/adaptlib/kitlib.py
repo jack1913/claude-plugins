@@ -11,6 +11,7 @@ rules.json and facts.json (the G4 rules with ids, the pairs, the public facts) a
 snippets/logo.html (the logo in light and dark, switched as tokens.css switches them) is made here too: `logo_html`.
 The owner's files (EXTENDING.md, voice.md, visual.md, golden-rules.md, recipes/web-page.md) are scaffolded once from templates/kit/ and never overwritten: `owner_plan`, `write_owner`.
 kit.json records each one's sha256 (`owned`) and `content_sha` covers them, so an owner edit moves the version at the next build.
+`kit check` reads the kit with `files_check`, `link_check`, `fill_markers`, `version_problems`, `source_changes` and `owned_changes`, and only ever from a plain file of the kit.
 
 `plan(project)` is every generated file except kit.json, as {path in the kit: bytes}, with SKILL.md carrying the literal `<version>` in its version line. The
 version is decided from what the plan holds (`content_sha`, `next_version`) and then put into SKILL.md (`with_version`), so SKILL.md never has to be written twice.
@@ -899,6 +900,274 @@ def recorded_path(rel: str) -> bool:
     """A path a record may name: SKILL.md, kit.json, rules.json, facts.json, or a plain path under one of the generated folders. Anything else (a path that climbs out of the kit)
     is not read."""
     return rel in ROOT_FILES or (posixpath.normpath(rel) == rel and not posixpath.isabs(rel) and rel.split("/")[0] in GENERATED_DIRS and not rel.endswith("/"))
+
+
+# ---------------------------------------------------------------- kit check: files, links, fill markers, versions, sources, owner files
+# `kit check` (scripts/kit.py) reads the kit and writes the report `kit-check`. Everything it reads is read from a plain file of the kit: a link inside the kit is never followed.
+
+from html.parser import HTMLParser  # noqa: E402
+from urllib.parse import unquote  # noqa: E402
+
+from _common import STATE_FILE  # noqa: E402
+
+CHECK_TOOL = "kit-check"                                    # the report of `kit check`: assets/_checks/kit-check.json
+LINK_KINDS = {".md": "md", ".html": "html", ".htm": "html", ".css": "css"}   # the files whose relative links are checked, by their extension
+FILL_MARKER = "[[fill"                                      # the note a scaffold leaves where the owner writes, any case
+OWNED_CHANGED = "changed since the last build"              # why an owner file is not what the last build recorded ...
+OWNED_MISSING = "is missing"
+OWNED_NOT_FILE = "is no file the kit can read (a folder, or a link)"
+_VERSION_LINE = re.compile(r"Kit version (\S+) \(kit\.json\)\.")
+_FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+_CODE_SPAN = re.compile(r"(`+)(?:(?!\1).)+?\1")
+_MD_LINK = re.compile(r"\]\(\s*(<[^>\n]*>|[^\s)]*)")
+_CSS_URL = re.compile(r"""url\(\s*(?:"([^"]*)"|'([^']*)'|([^)'"\s]*))\s*\)""", re.I)
+_CSS_COMMENT = re.compile(r"/\*.*?\*/", re.S)
+_SCHEME = re.compile(r"^([A-Za-z][A-Za-z0-9+.\-]*):")
+_DESCRIPTOR = re.compile(r"\d+(?:\.\d+)?[wx],?")
+
+
+def kit_report(project: Path) -> dict | None:
+    """The `kit` report (what the last build wrote) as a document, or None when there is none or it holds no JSON object."""
+    return _json_object(project / REPORT)
+
+
+def kit_paths(project: Path) -> list[str]:
+    """The path in the kit of every file and every link below the kit folder, sorted. A link to a folder is listed as the one path it is and never followed; a folder with nothing
+    in it is not listed."""
+    kd, out = kit_dir(project), []
+    for root, dirs, names in os.walk(kd):
+        base = Path(root)
+        out += [(base / n).relative_to(kd).as_posix() for n in names]
+        out += [(base / n).relative_to(kd).as_posix() for n in dirs if (base / n).is_symlink()]
+    return sorted(out)
+
+
+def tree_sha(project: Path) -> str:
+    """One sha256 over the sorted paths of `kit_paths`, each marked file or link: a file added to the kit or taken out of it moves it, a change inside a file does not (the report's
+    inputs say that)."""
+    kd = kit_dir(project)
+    return sha256_bytes("".join(f"{rel}\0{'link' if (kd / rel).is_symlink() else 'file'}\n" for rel in kit_paths(project)).encode("utf-8"))
+
+
+def check_inputs(project: Path) -> list[Path]:
+    """The files a `kit-check` report lists as inputs, so that any change makes it stale: every file under the kit folder (a link is no input), the files the kit is made from
+    (`input_paths`), BRAND-STATE.md (the approved edition) and the `kit` report (what the build wrote)."""
+    kd = kit_dir(project)
+    own = [kd / rel for rel in kit_paths(project) if _plain_file(kd, rel)]
+    return [*own, *(p for p in (project / STATE_FILE, project / REPORT) if p.is_file()), *input_paths(project)]
+
+
+def kit_bytes(project: Path, rel: str) -> bytes | None:
+    """The bytes of a file of the kit, or None when it is not a plain file: missing, a folder, a link, or behind a link."""
+    kd = kit_dir(project)
+    if not _plain_file(kd, rel):
+        return None
+    try:
+        return (kd / rel).read_bytes()
+    except OSError:
+        return None
+
+
+def kit_text(project: Path, rel: str) -> str | None:
+    """A file of the kit as text (UTF-8, a byte it cannot read replaced), or None when `kit_bytes` has none or the file is binary (a NUL byte in it)."""
+    data = kit_bytes(project, rel)
+    return None if data is None or b"\0" in data else data.decode("utf-8", errors="replace")
+
+
+def files_check(project: Path, doc: dict, outputs: dict) -> dict:
+    """kit.json against the kit folder: {"count": generated files listed, "differ": [(path, why)], "foreign": [paths], "kit_json": None or why it is not the bytes the `kit` report recorded}.
+    A generated file differs when it is missing, is no plain file (a link, a folder), or has another sha256 than kit.json lists; a path kit.json lists that no kit holds is named and never
+    opened. A foreign file is one in a generated folder that kit.json does not list (`on_disk`: a link counts, a Finder `.DS_Store` does not). `outputs` is the `kit` report's."""
+    kd, listed = kit_dir(project), doc["generated"]
+    differ = []
+    for rel, sha in sorted(listed.items()):
+        if not recorded_path(rel):
+            differ.append((rel, "is no path a kit holds"))
+        elif not os.path.lexists(kd / rel):
+            differ.append((rel, "missing"))
+        elif not _plain_file(kd, rel):
+            differ.append((rel, "is a link or a folder, not a file"))
+        elif sha256_file(kd / rel) != sha:
+            differ.append((rel, "edited by hand"))
+    kit_json = None
+    if not _plain_file(kd, KIT_FILE):
+        kit_json = "is a link or a folder, not a file"
+    elif sha256_file(kd / KIT_FILE) != outputs.get(KIT_FILE):
+        kit_json = "is not the bytes the kit report recorded: it was edited by hand"
+    return {"count": len(listed), "differ": differ, "foreign": [rel for rel in on_disk(project) if rel not in listed], "kit_json": kit_json}
+
+
+def fill_markers(project: Path) -> list[str]:
+    """`<file>:<line>` of every `[[fill` (any case) in a text file of the kit, in path then line order. A file with a NUL byte in it is no text file."""
+    out = []
+    for rel in kit_paths(project):
+        text = kit_text(project, rel)
+        if text is not None:
+            out += [f"{rel}:{n}" for n, line in enumerate(text.split("\n"), 1) if FILL_MARKER in line.lower()]
+    return out
+
+
+def outside_fences(text: str):
+    """The lines of a Markdown text that are not inside a fenced code block, as (line number from 1, line): the fence lines themselves are left out. A fence opens with three backticks
+    or tildes (up to three spaces in), and closes with the same character, at least as many, and nothing after."""
+    fence = None
+    for n, raw in enumerate(text.split("\n"), 1):
+        line = raw.rstrip("\r")
+        m = _FENCE.match(line)
+        if fence is None:
+            if m and not (m.group(1)[0] == "`" and "`" in line[m.end():]):   # a backtick fence's info string holds no backtick
+                fence = m.group(1)
+                continue
+            yield n, line
+        elif m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence) and not line[m.end():].strip():
+            fence = None
+
+
+def md_links(text: str) -> list[tuple[int, str]]:
+    """The targets of `](target)` in a Markdown text as (line, target), outside fenced code blocks and inline code (a code span is not a link). `<...>` around a target is taken off and a
+    title after it is not part of it."""
+    out = []
+    for n, line in outside_fences(text):
+        line = _CODE_SPAN.sub(lambda m: " " * len(m.group(0)), line)
+        out += [(n, m.group(1)[1:-1] if m.group(1).startswith("<") else m.group(1)) for m in _MD_LINK.finditer(line)]
+    return out
+
+
+def _srcset_urls(value: str) -> list[str]:
+    """The URLs of a srcset value: every word that is not a width or density descriptor, a trailing comma taken off."""
+    return [u for u in (w.rstrip(",") for w in value.split() if not _DESCRIPTOR.fullmatch(w)) if u]
+
+
+class _LinkParser(HTMLParser):
+    """The `src`, `href` and `srcset` of the tags of an HTML text, each with the line of its tag. Comments and the text of script and style are not tags."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.found: list[tuple[int, str]] = []
+
+    def handle_starttag(self, tag, attrs) -> None:
+        for name, value in attrs:
+            if value is None:
+                continue
+            if name in ("src", "href", "xlink:href"):
+                self.found.append((self.getpos()[0], value))
+            elif name == "srcset":
+                self.found += [(self.getpos()[0], u) for u in _srcset_urls(value)]
+
+
+def html_links(text: str) -> list[tuple[int, str]]:
+    """The targets of `src=`, `href=` and `srcset=` in an HTML text as (line of the tag, target)."""
+    p = _LinkParser()
+    p.feed(text)
+    p.close()
+    return p.found
+
+
+def css_links(text: str) -> list[tuple[int, str]]:
+    """The targets of `url(...)` in a CSS text as (line, target), comments left out."""
+    text = _CSS_COMMENT.sub(lambda m: re.sub(r"[^\n]", " ", m.group(0)), text)
+    return [(text.count("\n", 0, m.start()) + 1, next(g for g in m.groups() if g is not None)) for m in _CSS_URL.finditer(text)]
+
+
+_LINK_READERS = {"md": md_links, "html": html_links, "css": css_links}
+OUTSIDE = "points outside the kit: it will not resolve in a product repository"
+ABSOLUTE = "an absolute path: it will not resolve in a product repository"
+
+
+def _not_a_file(kd: Path, rel: str) -> str | None:
+    """None when `rel` (a plain path in the kit) is a file of the kit, found with the exact letter case a Linux checkout needs and with no link on the way; else why not."""
+    cur = kd
+    for part in rel.split("/"):
+        try:
+            names = os.listdir(cur)
+        except OSError:
+            return "no such file in the kit"
+        if part not in names:
+            alike = [n for n in names if n.lower() == part.lower()]
+            return f"no such file in the kit ({alike[0]} is there: a product repository on Linux tells the letter case apart)" if alike else "no such file in the kit"
+        cur = cur / part
+        if cur.is_symlink():
+            return "behind a link in the kit: a link is never followed"
+    return None if cur.is_file() else "a folder, not a file"
+
+
+def link_problem(project: Path, from_rel: str, target: str) -> tuple[bool, str | None]:
+    """(is it a relative link, what is wrong with it). A fragment, a `?query`, an empty target, a network address (`//host`) and a link with a URL scheme (`http:`, `https:`, `mailto:`,
+    `data:`, `tel:`, ...) are not relative links: (False, None). A relative link is percent-decoded, resolved from the folder of the file that holds it, and must be an existing file inside the
+    kit: otherwise it is an absolute path (a leading `/`, `file:`, a drive letter), one that points outside the kit, or a missing file."""
+    path = target.strip().split("#")[0].split("?")[0]
+    if not path or path.startswith("//"):
+        return False, None
+    m = _SCHEME.match(path)
+    if m and len(m.group(1)) > 1 and m.group(1).lower() != "file":
+        return False, None
+    path = unquote(path)
+    if path.startswith("/") or m:
+        return True, ABSOLUTE
+    joined = posixpath.normpath(posixpath.join(posixpath.dirname(from_rel), path))
+    if joined == ".." or joined.startswith("../"):
+        return True, OUTSIDE
+    return True, "a folder, not a file" if joined == "." else _not_a_file(kit_dir(project), joined)
+
+
+def link_check(project: Path) -> dict:
+    """Every relative link of the kit's Markdown, HTML and CSS files (`LINK_KINDS`): {"files": files read, "links": relative links judged, "bad": [(file, line, target, why)]}."""
+    files = links = 0
+    bad = []
+    for rel in kit_paths(project):
+        kind = LINK_KINDS.get(Path(rel).suffix.lower())
+        text = kit_text(project, rel) if kind else None
+        if text is None:
+            continue
+        files += 1
+        for line, target in _LINK_READERS[kind](text):
+            relative, why = link_problem(project, rel, target)
+            links += relative
+            if why:
+                bad.append((rel, line, target, why))
+    return {"files": files, "links": links, "bad": bad}
+
+
+def version_problems(project: Path, doc: dict) -> list[str]:
+    """What is wrong with the version the kit states, each a sentence: SKILL.md must hold `Kit version <kit.json version> (kit.json).` exactly once and no other such line, the version must
+    be of kit.json's own edition, and that edition must be the one BRAND-STATE.md approved."""
+    bad = []
+    text = kit_text(project, SKILL_FILE)
+    if text is None:
+        bad.append(f"{SKILL_FILE} is missing or is not a file")
+    else:
+        found = _VERSION_LINE.findall(text)
+        if found != [doc["version"]]:
+            said = ("has no version line" if not found else f"holds the version line {len(found)} times" if len(set(found)) == 1 and len(found) > 1
+                    else "says version " + ", ".join(found))
+            bad.append(f"{SKILL_FILE} {said} (kit.json says {doc['version']}): it must hold `{version_line(doc['version'])}` exactly once")
+    if doc["version"].partition(".")[0] != doc["edition"]:
+        bad.append(f"kit.json version {doc['version']} does not start with its edition {doc['edition']} (a version is <edition>.<build>)")
+    approved = adapt.view(project)["approved_edition"]
+    if doc["edition"] != approved:
+        bad.append(f"the kit is of edition {doc['edition']}, the brand is at {approved or 'no approved edition'}: run `brand-creator kit build --yes`")
+    return bad
+
+
+def source_changes(project: Path, doc: dict) -> list[str]:
+    """The keys of kit.json `sources` whose sha256 is not the one the project has now, in kit.json's order. May raise CliError when a source cannot be read."""
+    now = sources(project)
+    return [k for k in SOURCE_KEYS if now.get(k) != doc["sources"].get(k)]
+
+
+def owned_changes(project: Path, doc: dict) -> list[tuple[str, str]]:
+    """The owner's files that are not what kit.json `owned` recorded at the last build, as (path, why): missing, no file (a folder, a link), or another sha256."""
+    kd, out = kit_dir(project), []
+    for rel in OWNED_FILES:
+        data = kit_bytes(project, rel)
+        if data is not None:
+            if sha256_bytes(data) != doc["owned"][rel]:
+                out.append((rel, OWNED_CHANGED))
+        elif os.path.lexists(kd / rel):
+            out.append((rel, OWNED_NOT_FILE))
+        else:
+            out.append((rel, OWNED_MISSING))
+    return out
 
 
 # ---------------------------------------------------------------- what is on disk

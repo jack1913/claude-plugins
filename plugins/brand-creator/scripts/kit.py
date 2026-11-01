@@ -8,6 +8,7 @@
     brand-creator kit build --yes               write the kit (needs G5 recorded and the owner's explicit OK, which is --yes)
     brand-creator kit build --plan              print what would be written and exit 0
     brand-creator kit build --yes --replace     a file of the kit that was edited by hand, or one put into a generated folder, stops the build; --replace moves it aside
+    brand-creator kit check                     prove the kit is whole, current and filled in (writes the report kit-check; read only otherwise)
 
 The kit holds the brand's own files copied byte for byte at their project paths under brand/ (the token files, the logo files and the drawings qa/rules.json names
 for each size band), SKILL.md (the applied skill, written by the same builder, its paths pointing inside the kit, with a "## The kit" section) and kit.json, which
@@ -38,6 +39,12 @@ brand/, snippets/ or reference-pages/ that the kit did not write (a file named e
 (exit 1, up to 6 paths named) unless --replace, which moves each to removed-<date>[-n]/<its project path>. A file the last build wrote that the project no longer has (a logo taken away) is moved there too, and said so. Nothing is deleted.
 A SKILL.md that `applied-skill` wrote is taken over; one edited by hand stops the first build the same way.
 
+`kit check` reads the kit and writes the report `kit-check`; no kit is exit 2. Its inputs are every file under the kit folder, the files the kit is made from, BRAND-STATE.md and the `kit` report, so any change
+makes it stale. Rows: kit:files (every generated file is what kit.json lists, kit.json is the bytes the `kit` report recorded, no file in a generated folder is unlisted; with no `kit` report: not verified), kit:links (every
+relative link in a .md, .html or .css file resolves to a file inside the kit: one that points outside it, an absolute path or a missing file fails), kit:fill (no `[[fill` marker is left in a text file), kit:versions (SKILL.md holds
+`Kit version <kit.json version> (kit.json).` exactly once, and the kit's edition is the approved one), kit:plugin (warns on another plugin version), kit:sources (not verified when the brand changed after the kit was built, naming
+what changed) and kit:owned (warns when an owner file changed since the last build). Exit 0 pass, 1 a row failed, 3 not verified. A link inside the kit is never followed.
+
 Writes the report `kit` (rows kit:written and kit:owned; outputs lists every generated path with its sha256, kit.json included, and no owner file). Exit 0 written. Exit 1: G5 not recorded, no approved
 edition, a band drawing the project does not have, or a hand edit or foreign file without --replace. Exit 2: no --yes (the plan is printed first); a path that leaves the
 project; a band drawing that is not written as a plain path; a scaffold with a placeholder this version does not know. Exit 1 also: an owner file's path that holds something that is no file, or a folder an owner file belongs in (recipes/) that is a file or a link to nothing. Exit 3: the tokens are not built; a scaffold the plugin lacks; fonts are in assets/fonts/ and there is no current fontcheck report (the kit is written without them).
@@ -55,8 +62,8 @@ sys.path.insert(0, str(HERE / "adaptlib"))
 sys.path.insert(0, str(HERE / "boardlib"))   # kitlib.known_rule_ids reads the choices of site/site.json with boardlib/sitedata.py
 import adapt  # noqa: E402
 import kitlib  # noqa: E402
-from _common import (EXIT_FAIL, EXIT_USAGE, Parser, Report, add_project_arg, confine, fail, find_project, main_guard, require_gate,  # noqa: E402
-                     sha256_bytes, today, write_bytes_if_changed)
+from _common import (EXIT_FAIL, EXIT_USAGE, CliError, Parser, Report, add_project_arg, confine, fail, find_project, main_guard, plugin_version,  # noqa: E402
+                     require_gate, sha256_bytes, today, write_bytes_if_changed)
 
 SHOWN = 6   # paths named in a message before "and N more"
 
@@ -141,6 +148,122 @@ def ground_row(rep, grounds: dict) -> None:
         rep.add("kit:grounds", "info", label, detail=f"only the page ground ({grounds['page']}) is listed, so there is no other ground to scope: {snippet} is not written")
 
 
+def named(items: list[str]) -> str:
+    """The first SHOWN items joined, and how many more there are."""
+    return ", ".join(items[:SHOWN]) + (f", and {len(items) - SHOWN} more" if len(items) > SHOWN else "")
+
+
+def files_row(rep, project: Path, doc: dict) -> None:
+    """Row kit:files: every generated file is what kit.json lists, kit.json is the bytes the `kit` report recorded, and nothing unlisted sits in a generated folder. Skipped with no `kit` report."""
+    label = "the kit holds the generated files kit.json lists, as `kit build` wrote them"
+    outputs = (kitlib.kit_report(project) or {}).get("outputs")
+    if not (isinstance(outputs, dict) and outputs):
+        rep.add("kit:files", "skipped", label, detail="not verified: there is no `kit` report that records what the build wrote; run `brand-creator kit build --yes`")
+        return
+    got, bad = kitlib.files_check(project, doc, outputs), []
+    if got["differ"]:
+        bad.append(f"{len(got['differ'])} generated file(s) differ from kit.json: {named([f'{rel} ({why})' for rel, why in got['differ']])}; "
+                   "change the brand project and run `brand-creator kit build --yes`")
+    if got["kit_json"]:
+        bad.append(f"{kitlib.KIT_FILE} {got['kit_json']}; run `brand-creator kit build --yes`")
+    if got["foreign"]:
+        bad.append(f"{len(got['foreign'])} file(s) in a generated folder are not listed in kit.json: {named(got['foreign'])}; move it to recipes/ or a folder of your own")
+    if bad:
+        rep.add("kit:files", "fail", label, detail="; ".join(bad))
+    else:
+        rep.add("kit:files", "pass", label, detail=f"{got['count']} generated files are the bytes kit.json lists, kit.json is the bytes the `kit` report recorded, and nothing unlisted sits in {', '.join(kitlib.GENERATED_DIRS)}")
+
+
+def links_row(rep, project: Path) -> None:
+    """Row kit:links: every relative link of a .md, .html or .css file of the kit resolves to a file inside the kit."""
+    label = "every relative link in the kit resolves to a file inside it"
+    got = kitlib.link_check(project)
+    if got["bad"]:
+        listed = [f"{f}:{line} -> {target} ({why})" for f, line, target, why in got["bad"]]
+        rep.add("kit:links", "fail", label, detail=f"{len(listed)} of {got['links']} relative links {'does' if len(listed) == 1 else 'do'} not resolve inside the kit: {named(listed)}")
+    else:
+        rep.add("kit:links", "pass", label, detail=f"{got['links']} relative link{'s' if got['links'] != 1 else ''} in {got['files']} .md, .html and .css files resolve inside the kit")
+
+
+def fill_row(rep, project: Path) -> None:
+    """Row kit:fill: no `[[fill` marker is left in a text file of the kit."""
+    label = "no fill marker is left in the kit"
+    found = kitlib.fill_markers(project)
+    if found:
+        rep.add("kit:fill", "fail", label, detail=f"{len(found)} fill marker(s) left: {named(found)}; replace each note with your own text (these files are yours)")
+    else:
+        rep.add("kit:fill", "pass", label, detail="no [[fill marker is left")
+
+
+def versions_row(rep, project: Path, doc: dict) -> None:
+    """Row kit:versions: SKILL.md holds the version of kit.json exactly once, and the kit is of the approved edition."""
+    label = "the kit states one version, kit.json's, and is of the approved edition"
+    bad = kitlib.version_problems(project, doc)
+    if bad:
+        rep.add("kit:versions", "fail", label, detail="; ".join(bad))
+    else:
+        rep.add("kit:versions", "pass", label, detail=f"{kitlib.version_line(doc['version'])} once in {kitlib.SKILL_FILE}; the edition {doc['edition']} is the approved one")
+
+
+def plugin_row(rep, doc: dict) -> None:
+    """Row kit:plugin: warn when the kit was built by another plugin version than the one running."""
+    label = "the kit was built by this version of the plugin"
+    now = plugin_version()
+    if doc["plugin_version"] != now:
+        rep.add("kit:plugin", "warn", label, detail=f"the kit was built by brand-creator {doc['plugin_version']}, this is {now}: `brand-creator kit build --yes` records it (the kit's version moves only if its content does)")
+    else:
+        rep.add("kit:plugin", "pass", label, detail=f"built by brand-creator {now}")
+
+
+def sources_row(rep, project: Path, doc: dict) -> None:
+    """Row kit:sources: skipped (not verified) when the brand changed after the kit was built, naming the sources that changed."""
+    label = "the kit was made from the brand as it is now"
+    try:
+        changed = kitlib.source_changes(project, doc)
+    except CliError as e:
+        rep.add("kit:sources", "skipped", label, detail=f"not verified: the brand's sources cannot be read ({e.message}); run `brand-creator kit build --yes` again")
+        return
+    if changed:
+        rep.add("kit:sources", "skipped", label, detail=f"not verified: the brand changed after the kit was built ({', '.join(changed)}); run `brand-creator kit build --yes`")
+    else:
+        rep.add("kit:sources", "pass", label, detail="the sources kit.json records are the ones the project has now")
+
+
+def owned_check_row(rep, project: Path, doc: dict) -> None:
+    """Row kit:owned: warn when an owner file is not what the last build recorded."""
+    label = "the owner's files are as the last build recorded them"
+    changed = kitlib.owned_changes(project, doc)
+    if changed:
+        why_files: dict[str, list[str]] = {}
+        for rel, why in changed:
+            why_files.setdefault(why, []).append(rel)
+        then = {kitlib.OWNED_CHANGED: "`brand-creator kit build --yes` records it and moves the version on",
+                kitlib.OWNED_MISSING: "`brand-creator kit build --yes` writes the scaffold again",
+                kitlib.OWNED_NOT_FILE: "move it away yourself, then run `brand-creator kit build --yes`"}
+        rep.add("kit:owned", "warn", label, detail="; ".join(f"{named(rels)} {why}: {then[why]}" for why, rels in why_files.items()))
+    else:
+        rep.add("kit:owned", "pass", label, detail=f"the {len(kitlib.OWNED_FILES)} owner files are as the last build recorded them")
+
+
+def check(project: Path, a) -> int:
+    if not kitlib.exists(project):
+        fail(EXIT_USAGE, "no kit in this project: `brand-creator kit build --yes` (opt-in at G5)")
+    if (kitlib.kit_dir(project) / kitlib.KIT_FILE).is_symlink():
+        fail(EXIT_USAGE, f"{kitlib.kit_rel(project)}/{kitlib.KIT_FILE} is a link, and a link is never read through: `brand-creator kit build --yes --replace` moves it aside and writes the kit")
+    doc = kitlib.load(project)
+    rep = Report(kitlib.CHECK_TOOL, project, renderer="n/a (generated files)")
+    rep.inputs.extend(kitlib.check_inputs(project))
+    files_row(rep, project, doc)
+    links_row(rep, project)
+    fill_row(rep, project)
+    versions_row(rep, project, doc)
+    plugin_row(rep, doc)
+    sources_row(rep, project, doc)
+    owned_check_row(rep, project, doc)
+    rep.extra.update({"kit_version": doc["version"], "kit_tree_sha": kitlib.tree_sha(project)})
+    return rep.finish()
+
+
 def build(project: Path, a) -> int:
     require_gate(project, "G5", for_what="The brand kit")
     edition = adapt.view(project)["approved_edition"]
@@ -210,8 +333,11 @@ def main() -> int:
     b.add_argument("--replace", action="store_true",
                    help="a file edited by hand, or put into a generated folder, is moved to removed-<date>/ and the kit is written (nothing is deleted)")
     b.add_argument("--project", default=argparse.SUPPRESS, help="brand project folder")   # also after the subcommand
+    c = sub.add_parser("check", help="prove the kit is whole: files, links, fill markers, versions, sources and the owner's files (writes the report kit-check)")
+    c.add_argument("--project", default=argparse.SUPPRESS, help="brand project folder")
     a = ap.parse_args()
-    return build(find_project(getattr(a, "project", None)), a)
+    project = find_project(getattr(a, "project", None))
+    return build(project, a) if a.cmd == "build" else check(project, a)
 
 
 main_guard(main)

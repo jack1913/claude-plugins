@@ -5,7 +5,8 @@ must still be the bytes the report recorded (a hand edit fails), and the sources
 they did). adoption.json is data: its pins, numbering and accounting are checked and ADOPTION.md must be what it renders. A repository with a wiring record
 (`adoption wiring`) gets the row `adoption:wiring:<label>`: it fails when the after record lost an item of the before record that nobody dropped.
 A project with a kit (kit.json in the skill folder) is gated through the `kit` report instead of the applied skill's: `kit:file` fails when a file the report recorded is gone
-or is other bytes, `kit:state` says not verified when the brand changed after the build.
+or is other bytes, `kit:state` says not verified when the brand changed after the build. The `kit-check` report (`kit check`) is expected as well, and `kit:checked` says not
+verified when a file was added to the kit or taken out of it after that report.
 """
 from __future__ import annotations
 
@@ -42,6 +43,7 @@ def expected_reports(project: Path) -> list[tuple[str, str]]:
         out.append(("applied-skill", "brand-creator applied-skill --yes"))
     if p["kit"]:
         out.append(("kit", "brand-creator kit build --yes"))
+        out.append(("kit-check", "brand-creator kit check"))
     return out
 
 
@@ -120,6 +122,7 @@ def rows(project: Path, rep: Report) -> None:
                         detail="not verified: the name, rules, facts or motion spec changed since the applied-skill report; run `brand-creator applied-skill --yes` again")
     if p["kit"]:
         kit_rows(project, rep, p["kit"])
+        kit_check_rows(project, rep)
 
 
 def kit_rows(project: Path, rep: Report, kit: str) -> None:
@@ -160,3 +163,18 @@ def kit_rows(project: Path, rep: Report, kit: str) -> None:
         if (r.get("adapter_state_sha"), r.get("kit_sources_sha")) != now:
             rep.add("kit:state", "skipped", "the kit was made from the brand as it is now",
                     detail="not verified: the name, rules, facts, tokens, logos, band drawings, fonts or motion spec changed since the kit report; run `brand-creator kit build --yes` again")
+
+
+def kit_check_rows(project: Path, rep: Report) -> None:
+    """kit:checked, from the `kit-check` report: a passing report stands for the files it read (the generic report gate sees one that changed or went), not for a file added to the kit since,
+    so the report records the kit's tree (`kit_tree_sha`) and this row says not verified when a file was added to the kit or taken out of it after `kit check` ran. No row while the tree matches."""
+    r = _report(project, "kit-check")
+    if r is None or r.get("status") != "pass":
+        return   # the generic report gate already says it is missing, failing or stale
+    try:
+        now = kitlib.tree_sha(project)
+    except CliError:
+        return
+    if r.get("kit_tree_sha") != now:
+        rep.add("kit:checked", "skipped", "the kit is the one `kit check` read",
+                detail="not verified: a file was added to the kit, or taken out of it, after the kit-check report; run `brand-creator kit check` again")

@@ -1925,3 +1925,402 @@ def test_kit_json_must_list_every_owner_file_and_no_other(pack):
             kitlib.load(pack)
         assert e.value.code == 2 and needle in e.value.message, where
         f.write_bytes(good)
+
+
+# ---------------------------------------------------------------- kit check, part 1: files, links, fill markers, versions, sources, owner files
+# `kit check` writes the report kit-check. A fresh kit fails it on the fill markers of the owner's files; every other row of a fresh kit passes. The Acme kit holds eight Markdown, HTML and CSS
+# files (SKILL.md, EXTENDING.md, voice.md, visual.md, golden-rules.md, recipes/web-page.md, snippets/logo.html and brand/assets/tokens/tokens.css), and seven relative links, all in
+# snippets/logo.html: an <img src> for each of its seven logo images (grid-mark, mark and wordmark with their dark twins, and mark-animated alone).
+ALL_PASS = {"kit:files": "pass", "kit:links": "pass", "kit:fill": "pass", "kit:versions": "pass", "kit:plugin": "pass", "kit:sources": "pass", "kit:owned": "pass"}
+FRESH_LINKS = 7
+FRESH_FILES = 8
+OUTSIDE_KIT = "points outside the kit: it will not resolve in a product repository"
+
+
+def kit_check(p):
+    return bc("kit", "check", project=p)
+
+
+def check_report_rows(p) -> dict:
+    return {r["id"]: r for r in report(p, "kit-check")["results"]}
+
+
+def statuses(p) -> dict:
+    return {i: r["status"] for i, r in check_report_rows(p).items()}
+
+
+def fill_owned(kit):
+    """`mutate` each `[[fill: ...]]` marker of the owner's files into plain text with a tag, as an owner fills them in."""
+    for rel in OWNER_FILES:
+        f = kit / rel
+        for marker in re.findall(r"\[\[fill:[^\]]*\]\]", f.read_text(encoding="utf-8")):
+            mutate(f, marker, "Keep it short. [example]")
+
+
+def filled_kit(p):
+    """A kit whose owner files are filled in and recorded by a second build, so that the kit check has nothing to say about them (the owner's edit moved the version to 1.2)."""
+    assert build(p).returncode == 0
+    fill_owned(kit_of(p))
+    r = build(p)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert kit_json(p)["version"] == "1.2"
+
+
+def test_a_fresh_kit_fails_on_its_fill_markers_until_the_owner_files_are_filled(pack):
+    assert build(pack).returncode == 0
+    r = kit_check(pack)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert report(pack, "kit-check")["status"] == "fail" and "[FAIL] kit:fill" in r.stdout
+    assert statuses(pack) == {**ALL_PASS, "kit:fill": "fail"}
+    assert check_report_rows(pack)["kit:fill"]["detail"].startswith("3 fill marker(s) left: golden-rules.md:5, visual.md:5, voice.md:5;")
+    voice = kit_of(pack) / "voice.md"
+    marker = re.search(r"\[\[fill:[^\]]*\]\]", voice.read_text(encoding="utf-8")).group(0)
+    mutate(voice, marker, "Plain and short. [example]")                      # one filled in: two to go
+    assert kit_check(pack).returncode == 1
+    assert check_report_rows(pack)["kit:fill"]["detail"].startswith("2 fill marker(s) left: golden-rules.md:5, visual.md:5;")
+    fill_owned(kit_of(pack))
+    r = kit_check(pack)
+    assert r.returncode == 0, r.stdout + r.stderr                             # no fill marker left: a warning about the owner's edits is no failure
+    assert report(pack, "kit-check")["status"] == "pass" and statuses(pack) == {**ALL_PASS, "kit:owned": "warn"}
+    assert check_report_rows(pack)["kit:owned"]["detail"] == ("voice.md, visual.md, golden-rules.md changed since the last build: "
+                                                              "`brand-creator kit build --yes` records it and moves the version on")
+    assert build(pack).returncode == 0 and kit_json(pack)["version"] == "1.2"  # the build records the owner's words and moves the version on
+    assert kit_check(pack).returncode == 0 and statuses(pack) == ALL_PASS
+
+
+def test_a_link_that_leaves_the_kit_fails(pack):
+    filled_kit(pack)
+    assert kit_check(pack).returncode == 0
+    assert check_report_rows(pack)["kit:links"]["detail"] == f"{FRESH_LINKS} relative links in {FRESH_FILES} .md, .html and .css files resolve inside the kit"
+    visual = kit_of(pack) / "visual.md"
+    before = mutate(visual, "Keep it short. [example]", "Keep it short. [example]\n\n[mark](../../../assets/logo/mark.svg)")
+    r = kit_check(pack)
+    assert r.returncode == 1, r.stdout + r.stderr
+    row = check_report_rows(pack)["kit:links"]
+    assert row["status"] == "fail"
+    assert row["detail"] == (f"1 of {FRESH_LINKS + 1} relative links does not resolve inside the kit: "
+                             f"visual.md:7 -> ../../../assets/logo/mark.svg ({OUTSIDE_KIT})")
+    assert statuses(pack)["kit:fill"] == "pass" and statuses(pack)["kit:files"] == "pass"
+    for link, said in (("/assets/logo/mark.svg", "an absolute path: it will not resolve in a product repository"),
+                       ("brand/assets/logo/nope.svg", "no such file in the kit"),
+                       ("brand/assets/logo/Mark.svg", "a product repository on Linux tells the letter case apart"),    # the file is mark.svg: found on a Mac, dead on Linux
+                       ("brand/assets/logo", "a folder, not a file"),
+                       ("brand/assets/logo/mark.svg/more", "no such file in the kit")):
+        visual.write_text(before + f"\n[x]({link})\n", encoding="utf-8")
+        assert kit_check(pack).returncode == 1, link
+        detail = check_report_rows(pack)["kit:links"]["detail"]
+        assert f"visual.md:7 -> {link} (" in detail and said in detail, (link, detail)
+    ok = ("[a](brand/assets/logo/mark.svg) [b](brand/assets/logo/mark.svg?v=2#top) [c](#top) [d](https://example.com/x.png) [e](mailto:?subject=hello) "
+          "[f](data:image/png;base64,AAAA) [g](<brand/assets/logo/wordmark.svg> \"title\") [h](//cdn.example.com/x.css) [i](brand/assets/logo/wordmark%2Ddark.svg)")
+    visual.write_text(before + f"\n{ok}\n", encoding="utf-8")                  # relative: a, b, g, i. Not files of the kit: c to f and h
+    assert kit_check(pack).returncode == 0
+    assert check_report_rows(pack)["kit:links"]["detail"] == f"{FRESH_LINKS + 4} relative links in {FRESH_FILES} .md, .html and .css files resolve inside the kit"
+
+
+MD_NOTES = """[ok](../brand/assets/logo/mark.svg) and ![image](<../brand/assets/logo/wordmark.svg> "title")
+`[code](../gone-in-code.md)`
+```
+[fenced](../gone-in-a-fence.md)
+```
+[dead](../brand/assets/gone.md)
+[percent](../brand/assets/logo/wordmark%2Ddark.svg)
+"""
+HTML_NOTES = """<!doctype html>
+<html><head>
+<!-- <a href="../gone-in-a-comment.html">not a link</a> -->
+<link rel="stylesheet" href="../brand/assets/tokens/tokens.css">
+<script>var s = '<a href="../gone-in-a-script.html">';</script>
+</head><body>
+<img src="../brand/assets/logo/mark.svg" srcset="../brand/assets/logo/mark.svg 1x, ../brand/assets/logo/gone-2x.svg 2x" alt="">
+<a href="../brand/assets/logo/gone.svg#top">dead</a>
+<a href="https://example.com/x">out</a> <a href="mailto:?subject=hello">mail</a> <a href="#top">top</a> <a href="">here</a>
+<svg><use xlink:href="../brand/assets/logo/wordmark.svg#w"/></svg>
+</body></html>
+"""
+CSS_NOTES = """/* url(../gone-in-a-comment.png) */
+.a { background: url("../brand/assets/logo/mark.svg"); }
+.b { background: url(../brand/assets/logo/gone.png); }
+.c { background: url( 'data:image/png;base64,AAAA' ) }
+.d { background: url(#grad) }
+"""
+
+
+def test_links_are_read_from_markdown_html_and_css_and_only_relative_ones_are_judged(pack):
+    filled_kit(pack)
+    notes = kit_of(pack) / "notes"                                           # a folder of the owner's own, beside the generated ones
+    notes.mkdir()
+    (notes / "own.md").write_text(MD_NOTES, encoding="utf-8")
+    (notes / "page.html").write_text(HTML_NOTES, encoding="utf-8")
+    (notes / "style.css").write_text(CSS_NOTES, encoding="utf-8")
+    r = kit_check(pack)
+    assert r.returncode == 1, r.stdout + r.stderr
+    row = check_report_rows(pack)["kit:links"]
+    # own.md: four relative links (the code span and the fenced block are no links), page.html: six, style.css: two, and the seven of the fresh kit
+    gone = "(no such file in the kit)"
+    assert row["status"] == "fail" and row["detail"] == (
+        f"4 of {FRESH_LINKS + 4 + 6 + 2} relative links do not resolve inside the kit: "
+        f"notes/own.md:6 -> ../brand/assets/gone.md {gone}, notes/page.html:7 -> ../brand/assets/logo/gone-2x.svg {gone}, "
+        f"notes/page.html:8 -> ../brand/assets/logo/gone.svg#top {gone}, notes/style.css:3 -> ../brand/assets/logo/gone.png {gone}")
+    for name in ("own.md", "page.html", "style.css"):
+        (notes / name).unlink()
+    assert kit_check(pack).returncode == 0
+
+
+def test_a_generated_file_edited_or_a_file_added_to_a_generated_folder_fails_kit_check(pack):
+    filled_kit(pack)
+    assert kit_check(pack).returncode == 0 and statuses(pack) == ALL_PASS
+    css = kit_of(pack) / "brand" / "assets" / "tokens" / "tokens.css"
+    before = mutate(css, "#4cd7c8", "#4cd7c9")
+    assert kit_check(pack).returncode == 1
+    assert check_report_rows(pack)["kit:files"]["detail"] == ("1 generated file(s) differ from kit.json: brand/assets/tokens/tokens.css (edited by hand); "
+                                                              "change the brand project and run `brand-creator kit build --yes`")
+    css.write_text(before, encoding="utf-8")
+    assert kit_check(pack).returncode == 0
+    stray = kit_of(pack) / "brand" / "notes.txt"
+    stray.write_text("mine", encoding="utf-8")                                 # a file of the owner's in a generated folder
+    assert kit_check(pack).returncode == 1
+    assert check_report_rows(pack)["kit:files"]["detail"] == "1 file(s) in a generated folder are not listed in kit.json: brand/notes.txt; move it to recipes/ or a folder of your own"
+    stray.unlink()
+    (kit_of(pack) / "notes").mkdir()
+    (kit_of(pack) / "notes" / "mine.txt").write_text("mine", encoding="utf-8")      # the owner's own folder is no generated folder
+    assert kit_check(pack).returncode == 0
+    (kit_of(pack) / "brand" / "assets" / "logo" / "wordmark.svg").unlink()
+    assert kit_check(pack).returncode == 1
+    assert "brand/assets/logo/wordmark.svg (missing)" in check_report_rows(pack)["kit:files"]["detail"]
+    assert build(pack).returncode == 0                                         # the build writes it back
+    kj = kit_of(pack) / "kit.json"
+    mutate(kj, '"kit": "acme-brand"', '"kit":  "acme-brand"')                  # the same JSON, other bytes: not what the build wrote
+    assert kit_check(pack).returncode == 1
+    assert check_report_rows(pack)["kit:files"]["detail"] == "kit.json is not the bytes the kit report recorded: it was edited by hand; run `brand-creator kit build --yes`"
+    skill = kit_of(pack) / "SKILL.md"
+    mutate(skill, "## Never", "## Never\n\n- Do anything.")
+    assert kit_check(pack).returncode == 1
+    detail = check_report_rows(pack)["kit:files"]["detail"]
+    assert "SKILL.md (edited by hand)" in detail and "kit.json is not the bytes the kit report recorded" in detail
+
+
+def test_the_version_in_skill_md_must_be_the_one_in_kit_json(pack):
+    filled_kit(pack)
+    assert kit_check(pack).returncode == 0
+    skill = kit_of(pack) / "SKILL.md"
+    line = "Kit version 1.2 (kit.json)."
+    mutate(skill, line, "Kit version 1.3 (kit.json).")
+    assert kit_check(pack).returncode == 1
+    assert check_report_rows(pack)["kit:versions"]["detail"] == "SKILL.md says version 1.3 (kit.json says 1.2): it must hold `Kit version 1.2 (kit.json).` exactly once"
+    assert statuses(pack)["kit:files"] == "fail"                               # the file is no longer the bytes the build wrote either
+    mutate(skill, "Kit version 1.3 (kit.json).", f"{line}\n\n{line}")
+    assert kit_check(pack).returncode == 1
+    assert check_report_rows(pack)["kit:versions"]["detail"] == "SKILL.md holds the version line 2 times (kit.json says 1.2): it must hold `Kit version 1.2 (kit.json).` exactly once"
+    mutate(skill, f"{line}\n\n{line}", "A line that states no version.")
+    assert kit_check(pack).returncode == 1
+    assert check_report_rows(pack)["kit:versions"]["detail"] == "SKILL.md has no version line (kit.json says 1.2): it must hold `Kit version 1.2 (kit.json).` exactly once"
+    assert build(pack, "--replace").returncode == 0 and kit_check(pack).returncode == 0     # the build writes SKILL.md back (the edited one is moved aside)
+    kj = kit_of(pack) / "kit.json"
+    mutate_json(kj, lambda d: d.__setitem__("version", "2.1"))                 # a version of another edition than kit.json's own
+    assert kit_check(pack).returncode == 1
+    assert "kit.json version 2.1 does not start with its edition 1 (a version is <edition>.<build>)" in check_report_rows(pack)["kit:versions"]["detail"]
+
+
+def test_a_kit_of_an_older_edition_fails_kit_check(pack):
+    filled_kit(pack)
+    assert kit_check(pack).returncode == 0
+    assert bc("state", "--set", "edition=2", project=pack).returncode == 0
+    assert bc("state", "--record", "G5", "approved edition 2 (test)", project=pack).returncode == 0     # the brand is at edition 2 now
+    r = kit_check(pack)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert check_report_rows(pack)["kit:versions"]["detail"] == "the kit is of edition 1, the brand is at 2: run `brand-creator kit build --yes`"
+    assert statuses(pack)["kit:versions"] == "fail"
+    assert build(pack).returncode == 0
+    r = kit_check(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (kit_json(pack)["edition"], kit_json(pack)["version"]) == ("2", "2.1")
+
+
+def test_a_brand_change_after_the_build_makes_kit_check_not_verified(pack):
+    filled_kit(pack)
+    assert kit_check(pack).returncode == 0
+    mutate(pack / "FACTS.md", "tools are made in batches of 200", "tools are made in batches of 300")
+    r = kit_check(pack)
+    assert r.returncode == 3, r.stdout + r.stderr                               # not verified, never a pass
+    assert report(pack, "kit-check")["status"] == "not-verified"
+    assert statuses(pack) == {**ALL_PASS, "kit:sources": "skipped"}             # the files are the bytes the build wrote; it is the brand that moved on
+    assert check_report_rows(pack)["kit:sources"]["detail"] == ("not verified: the brand changed after the kit was built (state_sha, facts); "
+                                                                "run `brand-creator kit build --yes`")
+    assert build(pack).returncode == 0
+    assert kit_check(pack).returncode == 0 and statuses(pack) == ALL_PASS
+    shutil.copy(pack / "assets" / "logo" / "wordmark.svg", pack / "assets" / "logo" / "zz-extra.svg")      # a new logo is a source too
+    assert kit_check(pack).returncode == 3
+    assert check_report_rows(pack)["kit:sources"]["detail"] == "not verified: the brand changed after the kit was built (logos); run `brand-creator kit build --yes`"
+
+
+def test_check_asks_for_kit_check_once_a_kit_exists(pack):
+    assert bc("applied-skill", "--yes", project=pack).returncode == 0           # a plain applied skill first: no kit, so no kit-check
+    assert not any(i.startswith(("report:kit", "kit:")) for i in check_rows(pack))
+    filled_kit(pack)
+    rows = check_rows(pack)
+    assert rows["report:kit-check"]["status"] == "skipped"
+    assert "no kit-check report" in rows["report:kit-check"]["detail"] and "`brand-creator kit check`" in rows["report:kit-check"]["detail"]
+    assert kit_check(pack).returncode == 0
+    rows = check_rows(pack)
+    assert rows["report:kit-check"]["status"] == "pass" and "kit:checked" not in rows
+    voice = kit_of(pack) / "voice.md"
+    voice.write_text(voice.read_text(encoding="utf-8").replace("Keep it short. [example]", "Keep it short and plain. [example]"), encoding="utf-8")     # a file the report read changed: it is stale
+    rows = check_rows(pack)
+    assert rows["report:kit-check"]["status"] == "skipped" and "stale" in rows["report:kit-check"]["detail"] and "voice.md changed" in rows["report:kit-check"]["detail"]
+    assert kit_check(pack).returncode == 0 and check_rows(pack)["report:kit-check"]["status"] == "pass"
+    visual = kit_of(pack) / "visual.md"
+    visual.write_text(visual.read_text(encoding="utf-8") + "\n[[fill: more]]\n", encoding="utf-8")
+    assert kit_check(pack).returncode == 1
+    rows = check_rows(pack)
+    assert rows["report:kit-check"]["status"] == "fail" and "kit:fill" in rows["report:kit-check"]["detail"]       # a failing kit check is a failing check
+
+
+def test_a_file_added_to_the_kit_after_kit_check_makes_check_say_not_verified(pack):
+    filled_kit(pack)
+    assert kit_check(pack).returncode == 0
+    assert "kit:checked" not in check_rows(pack)
+    notes = kit_of(pack) / "notes"
+    notes.mkdir()
+    (notes / "new.md").write_text("A page of my own.\n", encoding="utf-8")     # no input of the report that was written: it cannot make the report stale, the tree says so
+    rows = check_rows(pack)
+    assert rows["report:kit-check"]["status"] == "pass"
+    assert rows["kit:checked"]["status"] == "skipped" and "added to the kit, or taken out of it" in rows["kit:checked"]["detail"]
+    assert kit_check(pack).returncode == 0
+    assert "kit:checked" not in check_rows(pack)
+    (notes / "new.md").unlink()                                                # taken out again: the input is gone, so the report is stale
+    rows = check_rows(pack)
+    assert rows["report:kit-check"]["status"] == "skipped" and "notes/new.md is gone" in rows["report:kit-check"]["detail"]
+
+
+def test_a_demo_page_whose_files_are_in_the_kit_has_no_dead_link(pack):
+    moving(pack)
+    demo = pack / "motion" / "demo.html"
+    page = demo.read_text(encoding="utf-8")
+    assert "</head>" in page and "</main>" in page
+    demo.write_text(page.replace("</head>", '<link rel="stylesheet" href="../assets/tokens/tokens.css">\n</head>')
+                        .replace("</main>", '<img src="../assets/logo/mark.svg" alt="">\n</main>'), encoding="utf-8")      # the brand's files, where the page finds them from motion/
+    filled_kit(pack)
+    assert (kit_of(pack) / "brand" / "motion" / "demo.html").is_file()
+    r = kit_check(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    # the seven links of snippets/logo.html and the two of the demo page; the Markdown, HTML and CSS files are the eight of a fresh kit, brand/motion/demo.html and brand/motion/SPEC.md
+    assert check_report_rows(pack)["kit:links"]["detail"] == f"{FRESH_LINKS + 2} relative links in {FRESH_FILES + 2} .md, .html and .css files resolve inside the kit"
+    (pack / "motion" / "helper.js").write_text("// the page's own script\n", encoding="utf-8")        # the project has the file; the kit copies the page and not what it loads
+    demo.write_text(demo.read_text(encoding="utf-8").replace("</body>", '<script src="./helper.js"></script>\n</body>'), encoding="utf-8")
+    assert build(pack).returncode == 0
+    r = kit_check(pack)
+    assert r.returncode == 1, r.stdout + r.stderr
+    detail = check_report_rows(pack)["kit:links"]["detail"]
+    assert detail.startswith(f"1 of {FRESH_LINKS + 3} relative links does not resolve inside the kit: brand/motion/demo.html:") and "-> ./helper.js (no such file in the kit)" in detail
+
+
+def test_kit_check_without_a_kit_is_a_usage_error_and_writes_no_report(pack):
+    r = kit_check(pack)
+    assert r.returncode == 2, r.stdout + r.stderr
+    assert "no kit in this project: `brand-creator kit build --yes` (opt-in at G5)" in r.stderr
+    assert not (pack / "assets" / "_checks" / "kit-check.json").exists() and not (pack / ".claude").exists()
+
+
+def test_kit_check_without_the_kit_report_cannot_verify_the_files(pack):
+    filled_kit(pack)
+    (pack / "assets" / "_checks" / "kit.json").unlink()
+    r = kit_check(pack)
+    assert r.returncode == 3, r.stdout + r.stderr
+    assert statuses(pack) == {**ALL_PASS, "kit:files": "skipped"}
+    assert check_report_rows(pack)["kit:files"]["detail"] == ("not verified: there is no `kit` report that records what the build wrote; "
+                                                              "run `brand-creator kit build --yes`")
+
+
+def test_kit_check_reads_kit_json_strictly_and_a_kit_json_that_is_a_link_is_refused(pack, tmp_path):
+    filled_kit(pack)
+    kj = kit_of(pack) / "kit.json"
+    good = kj.read_bytes()
+    mutate_json(kj, lambda d: d.__setitem__("surprise", 1))
+    before = (pack / "assets" / "_checks" / "kit-check.json").exists()
+    r = kit_check(pack)
+    assert r.returncode == 2 and "surprise: unknown key" in r.stderr and not before
+    kj.write_bytes(good)
+    outside = tmp_path / "kit.json"
+    outside.write_bytes(good)
+    kj.unlink()
+    kj.symlink_to(outside)
+    r = kit_check(pack)
+    assert r.returncode == 2 and "is a link, and a link is never read through" in r.stderr and not (pack / "assets" / "_checks" / "kit-check.json").exists()
+
+
+def test_kit_check_never_reads_through_a_link(pack, tmp_path):
+    filled_kit(pack)
+    outside = tmp_path / "outside.md"
+    outside.write_text("[[fill: from outside]] [gone](../nowhere.md)\n", encoding="utf-8")
+    folder = tmp_path / "folder"
+    folder.mkdir()
+    (folder / "page.md").write_text("[[fill: from a folder]]\n", encoding="utf-8")
+    kd = kit_of(pack)
+    (kd / "mine.md").symlink_to(outside)                                        # a link to a file, and one to a folder, in the owner's part of the kit: neither is read
+    (kd / "mine").symlink_to(folder)
+    r = kit_check(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert statuses(pack) == ALL_PASS
+    assert not any(i["path"].endswith(("mine.md", "mine/page.md")) for i in report(pack, "kit-check")["inputs"])
+    (kd / "brand" / "assets" / "logo" / "mark.svg").unlink()                    # a link where a generated file belongs is not that file, whatever it points at
+    (kd / "brand" / "assets" / "logo" / "mark.svg").symlink_to(pack / "assets" / "logo" / "mark.svg")
+    (kd / "brand" / "linked").symlink_to(folder)                                # and a link to a folder in a generated folder is a file nobody listed
+    r = kit_check(pack)
+    assert r.returncode == 1, r.stdout + r.stderr
+    detail = check_report_rows(pack)["kit:files"]["detail"]
+    assert "brand/assets/logo/mark.svg (is a link or a folder, not a file)" in detail and "not listed in kit.json: brand/linked;" in detail
+    (kd / "visual.md").write_text("[behind](../kit/mine/page.md) [also](mine/page.md) [mine](mine.md)\n", encoding="utf-8")    # a link into a linked folder or file is not a file of the kit
+    r = kit_check(pack)
+    detail = check_report_rows(pack)["kit:links"]["detail"]
+    assert "visual.md:1 -> mine/page.md (behind a link in the kit: a link is never followed)" in detail and "visual.md:1 -> mine.md (is" not in detail
+    assert f"visual.md:1 -> ../kit/mine/page.md ({OUTSIDE_KIT})" in detail
+
+
+def test_the_plugin_version_row_warns_and_never_fails(pack):
+    filled_kit(pack)
+    kj, rep = kit_of(pack) / "kit.json", pack / "assets" / "_checks" / "kit.json"
+    mutate_json(kj, lambda d: d.__setitem__("plugin_version", "0.0.1"))
+    mutate_json(rep, lambda d: d["outputs"].__setitem__("kit.json", file_sha(kj)))      # the report records this kit.json as the one the build wrote
+    r = kit_check(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    row = check_report_rows(pack)["kit:plugin"]
+    assert row["status"] == "warn" and row["detail"].startswith("the kit was built by brand-creator 0.0.1, this is ")
+    assert "`brand-creator kit build --yes` records it" in row["detail"] and report(pack, "kit-check")["status"] == "pass"
+    assert build(pack).returncode == 0 and kit_json(pack)["plugin_version"] != "0.0.1" and kit_json(pack)["version"] == "1.2"      # recorded; the content did not move
+    assert kit_check(pack).returncode == 0 and statuses(pack) == ALL_PASS
+
+
+def test_a_deleted_or_replaced_owner_file_warns_and_a_marker_in_a_generated_copy_fails(pack):
+    filled_kit(pack)
+    kd = kit_of(pack)
+    (kd / "recipes" / "web-page.md").unlink()
+    r = kit_check(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert check_report_rows(pack)["kit:owned"]["status"] == "warn"
+    assert check_report_rows(pack)["kit:owned"]["detail"] == "recipes/web-page.md is missing: `brand-creator kit build --yes` writes the scaffold again"
+    assert build(pack).returncode == 0 and (kd / "recipes" / "web-page.md").is_file() and kit_check(pack).returncode == 0
+    voice = kd / "voice.md"
+    voice.unlink()
+    voice.mkdir()                                                               # a folder where the file belongs
+    assert kit_check(pack).returncode == 0
+    assert check_report_rows(pack)["kit:owned"]["detail"] == "voice.md is no file the kit can read (a folder, or a link): move it away yourself, then run `brand-creator kit build --yes`"
+    voice.rmdir()
+    shutil.copy2(FIXTURES / "FACTS.md", pack / "FACTS.md")
+    mutate(pack / "FACTS.md", "tools are made in batches of 200", "tools are made in batches of 200 [[fill: the real number]]")
+    assert build(pack).returncode == 0                                          # the brand's own file carries a marker, and the kit holds a copy of what it says
+    r = kit_check(pack)
+    assert r.returncode == 1 and "facts.json:" in check_report_rows(pack)["kit:fill"]["detail"]
+
+
+def test_a_kit_json_that_lists_a_path_outside_the_kit_fails_and_the_path_is_never_opened(pack, tmp_path):
+    filled_kit(pack)
+    secret = tmp_path / "secret.txt"
+    secret.write_text("outside the project", encoding="utf-8")
+    kj, rep = kit_of(pack) / "kit.json", pack / "assets" / "_checks" / "kit.json"
+    for listed in ("../../../../../../../../../../" + str(secret).lstrip("/"), "brand/../../x", "/etc/hosts"):
+        mutate_json(kj, lambda d: d["generated"].__setitem__(listed, "0" * 64))
+        mutate_json(rep, lambda d: d["outputs"].__setitem__("kit.json", file_sha(kj)))
+        r = kit_check(pack)
+        assert r.returncode == 1 and "Traceback" not in r.stderr, (listed, r.stdout + r.stderr)
+        assert f"{listed} (is no path a kit holds)" in check_report_rows(pack)["kit:files"]["detail"], listed
+        mutate_json(kj, lambda d: d["generated"].pop(listed))
