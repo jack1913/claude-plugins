@@ -75,7 +75,7 @@ def test_kit_mode_writes_braces_in_the_kit_section_as_they_are(pack):
 
 # ---------------------------------------------------------------- kit build: the generated core
 # The Acme project has eight logo files (assets/logo/*.svg and *.png), tokens built to assets/tokens/tokens.css and tokens.json, and a qa/rules.json whose
-# bands name grid-mark.svg and mark.svg. The kit folder of a build holds these twelve files, written out by hand (BRAND_CREATOR_TODAY is 2026-10-17).
+# bands name grid-mark.svg and mark.svg. The kit folder of a build holds these fourteen files, written out by hand (BRAND_CREATOR_TODAY is 2026-10-17).
 import filecmp  # noqa: E402
 import hashlib  # noqa: E402
 import json  # noqa: E402
@@ -84,7 +84,7 @@ import re  # noqa: E402
 from helpers import mutate, mutate_json, report  # noqa: E402
 
 KIT_LOGOS = ["grid-mark-dark.svg", "grid-mark-master.png", "grid-mark.svg", "mark-animated.svg", "mark-dark.svg", "mark.svg", "wordmark-dark.svg", "wordmark.svg"]
-KIT_FILES = sorted(["SKILL.md", "kit.json", "brand/assets/tokens/tokens.css", "brand/assets/tokens/tokens.json", *[f"brand/assets/logo/{n}" for n in KIT_LOGOS]])
+KIT_FILES = sorted(["SKILL.md", "kit.json", "rules.json", "facts.json", "brand/assets/tokens/tokens.css", "brand/assets/tokens/tokens.json", *[f"brand/assets/logo/{n}" for n in KIT_LOGOS]])
 KIT_REMOVED = "removed-2026-10-17/.claude/skills/acme-brand"
 
 
@@ -121,11 +121,11 @@ def test_the_kit_needs_g5_and_yes_and_writes_nothing_without_them(acme):
     assert bc("state", "--record", "G5", "approved (test)", project=acme).returncode == 0
     r = bc("kit", "build", project=acme)
     assert r.returncode == 2 and "--yes" in r.stderr and not (acme / ".claude").exists() and not (acme / "assets" / "_checks" / "kit.json").exists()
-    assert "would write 12 generated files into .claude/skills/acme-brand/ (version 1.1)" in r.stdout          # the plan goes to stdout, the message to stderr
+    assert "would write 14 generated files into .claude/skills/acme-brand/ (version 1.1)" in r.stdout          # the plan goes to stdout, the message to stderr
     r = bc("kit", "build", "--plan", project=acme)
     assert r.returncode == 0 and not (acme / ".claude").exists() and not (acme / "assets" / "_checks" / "kit.json").exists()
     lines = r.stdout.splitlines()
-    assert lines[0] == "would write 12 generated files into .claude/skills/acme-brand/ (version 1.1)"
+    assert lines[0] == "would write 14 generated files into .claude/skills/acme-brand/ (version 1.1)"
     assert sorted(re.fullmatch(r"generated (\S+) \((\d+) bytes\)", ln).group(1) for ln in lines[1:]) == KIT_FILES
     assert f"generated brand/assets/tokens/tokens.css ({(acme / 'assets/tokens/tokens.css').stat().st_size} bytes)" in lines
     r = bc("kit", "build", "--yes", project=acme)
@@ -162,7 +162,7 @@ def test_the_kit_core_is_the_applied_skill_with_paths_inside_the_kit(pack):
     assert rep["kit_version"] == "1.1" and rep["version"] == kj["plugin_version"]          # the report's own `version` stays the plugin's
     assert sorted(rep["outputs"]) == KIT_FILES and all(file_sha(kit_of(pack) / rel) == sha for rel, sha in rep["outputs"].items())
     assert rep["adapter_state_sha"] and rep["kit_sources_sha"]
-    assert written_row(pack)["detail"] == "12 generated files: 12 written, 0 unchanged, 0 moved to removed-2026-10-17/; version 1.1"
+    assert written_row(pack)["detail"] == "14 generated files: 14 written, 0 unchanged, 0 moved to removed-2026-10-17/; version 1.1"
     assert {i["path"] for i in rep["inputs"]} == {"assets/tokens/tokens.css", "assets/tokens/tokens.json", "qa/rules.json", "FACTS.md",
                                                   *[f"assets/logo/{n}" for n in KIT_LOGOS]}
 
@@ -173,7 +173,7 @@ def test_a_second_build_with_nothing_changed_is_byte_identical_and_keeps_the_ver
     r = build(pack)
     assert r.returncode == 0, r.stderr
     assert kit_state(pack) == first                                   # the same bytes, and no file was written again
-    assert written_row(pack)["detail"] == "12 generated files: 0 written, 12 unchanged, 0 moved to removed-2026-10-17/; version 1.1"
+    assert written_row(pack)["detail"] == "14 generated files: 0 written, 14 unchanged, 0 moved to removed-2026-10-17/; version 1.1"
     assert json.loads((kit_of(pack) / "kit.json").read_text(encoding="utf-8"))["version"] == "1.1"
     assert not list(pack.glob("removed-*"))
 
@@ -213,7 +213,7 @@ def test_a_hand_edited_kit_file_stops_the_build_and_replace_moves_it_aside(pack)
     kept = pack / KIT_REMOVED / "brand/assets/tokens/tokens.css"
     assert kept.is_file() and "#f9f7ef" in kept.read_text(encoding="utf-8")
     assert list(pack.glob("removed-*/**/*")) and [p.relative_to(pack).as_posix() for p in pack.glob("removed-*/**/*") if p.is_file()] == [kept.relative_to(pack).as_posix()]
-    assert written_row(pack)["detail"] == "12 generated files: 1 written, 11 unchanged, 1 moved to removed-2026-10-17/; version 1.1"
+    assert written_row(pack)["detail"] == "14 generated files: 1 written, 13 unchanged, 1 moved to removed-2026-10-17/; version 1.1"
     assert build(pack).returncode == 0                                # and the next build is quiet again
 
 
@@ -242,7 +242,7 @@ def test_a_file_put_into_a_generated_folder_stops_the_build(pack):
     for rel in ("brand/assets/notes.md", "snippets/mine.css", "reference-pages/start/extra.md"):
         assert not (kit_of(pack) / rel).exists() and (pack / KIT_REMOVED / rel).read_text(encoding="utf-8") == "mine\n"
     assert (kit_of(pack) / "my-notes.md").is_file() and not (kit_of(pack) / "reference-pages").exists() and not (kit_of(pack) / "snippets").exists()   # emptied folders go
-    assert written_row(pack)["detail"] == "12 generated files: 0 written, 12 unchanged, 3 moved to removed-2026-10-17/; version 1.1"
+    assert written_row(pack)["detail"] == "14 generated files: 0 written, 14 unchanged, 3 moved to removed-2026-10-17/; version 1.1"
 
 
 def test_a_logo_taken_out_of_the_project_moves_its_kit_copy_to_removed(pack):
@@ -255,7 +255,7 @@ def test_a_logo_taken_out_of_the_project_moves_its_kit_copy_to_removed(pack):
     assert "wordmark-dark.svg" in r.stdout and "removed-2026-10-17" in r.stdout          # said, not done quietly
     assert not gone.exists() and (pack / KIT_REMOVED / "brand/assets/logo/wordmark-dark.svg").read_bytes() == bytes_before
     assert kit_files(pack) == [f for f in KIT_FILES if f != "brand/assets/logo/wordmark-dark.svg"]
-    assert written_row(pack)["detail"].startswith("11 generated files: ") and "1 moved to removed-2026-10-17/" in written_row(pack)["detail"]
+    assert written_row(pack)["detail"].startswith("13 generated files: ") and "1 moved to removed-2026-10-17/" in written_row(pack)["detail"]
     assert json.loads((kit_of(pack) / "kit.json").read_text(encoding="utf-8"))["version"] == "1.2"
 
 
@@ -354,7 +354,7 @@ def kit_json(p) -> dict:
 def test_an_ofl_font_is_copied_with_its_licence_and_gets_a_font_face(pack):
     with_font(pack)
     r = bc("kit", "build", "--plan", project=pack)
-    assert r.returncode == 0 and r.stdout.splitlines()[0] == "would write 15 generated files into .claude/skills/acme-brand/ (version 1.1)", r.stdout + r.stderr
+    assert r.returncode == 0 and r.stdout.splitlines()[0] == "would write 17 generated files into .claude/skills/acme-brand/ (version 1.1)", r.stdout + r.stderr
     r = build(pack)
     assert r.returncode == 0, r.stdout + r.stderr
     assert kit_files(pack) == sorted([*KIT_FILES, *FONT_KIT])
@@ -743,3 +743,200 @@ def test_a_motion_proof_that_cannot_be_read_stops_the_build_and_none_leaves_only
     r = build(pack)
     assert r.returncode == 2 and "demo-page" in r.stderr and "names no page" in r.stderr
     assert kit_files(pack) == sorted([*KIT_FILES, "brand/motion/motion.json"]) and kit_json(pack)["version"] == "1.1"      # the kit of the first build stands
+
+
+# ---------------------------------------------------------------- rules.json and facts.json: the rules and the facts as data
+# The contrast ratios are worked out by hand from the Acme colours (light: text #0d1b2d, muted #4b596c, accent #007d71 on #f9f7ee; dark: text #f0eee7, muted #a7b2c1,
+# accent #4cd7c8 on #0e141d), with the WCAG formula, and rounded to 2 decimals.
+ACME_PAIRS = [
+    {"fg": "color.text", "bg": "color.bg", "kind": "ui-text", "min": 4.5, "light": 16.15, "dark": 15.92},
+    {"fg": "color.muted", "bg": "color.bg", "kind": "ui-text", "min": 4.5, "light": 6.64, "dark": 8.61},
+    {"fg": "color.accent", "bg": "color.bg", "kind": "ui-text-large", "min": 3, "light": 4.69, "dark": 10.44},
+    {"fg": "color.border", "bg": "color.bg", "kind": "ui-component", "min": 3, "light": 6.64, "dark": 8.61},
+    {"fg": "color.mark", "bg": "color.bg", "kind": "brand-rule", "min": 3, "light": 16.15, "dark": 15.92},
+    {"fg": "color.accent", "bg": "color.bg", "kind": "brand-rule", "min": 2, "light": 4.69, "dark": 10.44},
+]
+ACME_BANDS = [{"mark": None, "name": "small", "max_px": 32, "drawing": "brand/assets/logo/grid-mark.svg"},
+              {"mark": None, "name": "large", "max_px": None, "drawing": "brand/assets/logo/mark.svg"}]
+PLACEHOLDER_RULE = "- (rule) (...)"          # the line the template leaves in BRAND-STATE.md Rules (G4)
+CONTACT_VALUES = ("Sample Person", "Founder", "+00 000 000 000", "1 Example Street")
+
+
+def record_rules(p, *lines):
+    """Record G4 "(rule)" lines in BRAND-STATE.md by replacing the template's placeholder bullet."""
+    mutate(p / "BRAND-STATE.md", PLACEHOLDER_RULE, "\n".join(f"- (rule) {t}" for t in lines))
+
+
+def rules_of(p) -> dict:
+    return json.loads((kit_of(p) / "rules.json").read_text(encoding="utf-8"))
+
+
+def facts_of(p) -> dict:
+    return json.loads((kit_of(p) / "facts.json").read_text(encoding="utf-8"))
+
+
+def test_rules_json_lists_the_g4_rules_with_ids_and_the_pairs_with_their_ratios(pack):
+    record_rules(pack, "The mark keeps its clear space", "A button says at most three words, always")
+    mutate(pack / "brief" / "BRIEF.md", "FORBIDDEN count in every page shot. -->", "FORBIDDEN count in every page shot. -->\n\n- synergy\n- `leverage`")
+    r = build(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert kit_files(pack) == KIT_FILES and "rules.json" in KIT_FILES and "facts.json" in KIT_FILES
+    expected = {"schema": 1, "edition": "1",
+                "g4": [{"id": "the-mark-keeps-its-clear-space", "text": "The mark keeps its clear space"},
+                       {"id": "a-button-says-at-most-three", "text": "A button says at most three words, always"}],
+                "downscale": {"accent_min_px": 4, "accent_rule_max_size": 32, "from": "qa/rules.json"},
+                "bands": ACME_BANDS, "pairs": ACME_PAIRS, "forbidden": ["synergy", "leverage"]}
+    text = (kit_of(pack) / "rules.json").read_text(encoding="utf-8")
+    assert json.loads(text) == expected
+    assert text == json.dumps(expected, indent=2, ensure_ascii=False) + "\n" and "page" not in json.loads(text)      # Acme's qa/rules.json has no page block
+    kj = kit_json(pack)
+    assert {"rules.json", "facts.json"} <= set(kj["generated"]) and kj["generated"]["rules.json"] == file_sha(kit_of(pack) / "rules.json")
+    assert "rules.json" in report(pack, "kit")["outputs"] and "facts.json" in report(pack, "kit")["outputs"]
+    skill = (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
+    assert "- `rules.json`" in skill and "- `facts.json`" in skill                                                    # both are listed in the kit section
+    first = kit_state(pack)
+    assert build(pack).returncode == 0 and kit_state(pack) == first                                                   # a second build writes nothing
+
+
+def test_rules_json_says_where_the_size_rule_comes_from_and_names_each_marks_drawings(pack):
+    rules = {"schema": 1, "bands": [{"name": "small", "max_px": 32, "drawing": "assets/logo/grid-mark.svg"}, {"name": "large", "drawing": "assets/logo/mark.svg"}]}
+    (pack / "qa" / "rules.json").write_text(json.dumps(rules), encoding="utf-8")                         # the project's file sets no downscale number
+    assert build(pack).returncode == 0
+    assert rules_of(pack)["downscale"] == {"accent_min_px": 4, "accent_rule_max_size": 32, "from": "plugin proposal"}
+    assert rules_of(pack)["bands"] == ACME_BANDS
+    marks = {"schema": 1, "downscale": {"accent_min_px": 3, "accent_rule_max_size": 24},
+             "marks": {"tool-a": {"bands": [{"name": "small", "max_px": 16, "drawing": "assets/logo/grid-mark.svg"}, {"name": "large", "drawing": "assets/logo/mark.svg"}]},
+                       "tool-b": {"bands": [{"name": "all", "drawing": "assets/logo/wordmark.svg"}]}}}
+    (pack / "qa" / "rules.json").write_text(json.dumps(marks), encoding="utf-8")
+    assert build(pack).returncode == 0
+    assert rules_of(pack)["downscale"] == {"accent_min_px": 3, "accent_rule_max_size": 24, "from": "qa/rules.json"}
+    assert rules_of(pack)["bands"] == [{"mark": "tool-a", "name": "small", "max_px": 16, "drawing": "brand/assets/logo/grid-mark.svg"},
+                                       {"mark": "tool-a", "name": "large", "max_px": None, "drawing": "brand/assets/logo/mark.svg"},
+                                       {"mark": "tool-b", "name": "all", "max_px": None, "drawing": "brand/assets/logo/wordmark.svg"}]
+    for band in rules_of(pack)["bands"]:
+        assert (kit_of(pack) / band["drawing"]).is_file()                                                  # every drawing rules.json names is in the kit
+
+
+def test_a_rule_in_polish_gets_an_ascii_id_and_two_alike_get_a_number(pack):
+    record_rules(pack, "Znak zawsze na jasnym tle", "Żółta łata nigdy nie zasłania znaku", "Znak zawsze na jasnym tle",
+                 "Mark, always on a light ground, never on a photo", "Mark, always on a light ground, only in the brand colours", "Znak zawsze na jasnym tle")
+    assert build(pack).returncode == 0
+    assert rules_of(pack)["g4"] == [
+        {"id": "znak-zawsze-na-jasnym-tle", "text": "Znak zawsze na jasnym tle"},
+        {"id": "zolta-lata-nigdy-nie-zaslania-znaku", "text": "Żółta łata nigdy nie zasłania znaku"},      # ż and ó fold to z and o, ł to l
+        {"id": "znak-zawsze-na-jasnym-tle-2", "text": "Znak zawsze na jasnym tle"},
+        {"id": "mark-always-on-a-light-ground", "text": "Mark, always on a light ground, never on a photo"},   # only the first six words count ...
+        {"id": "mark-always-on-a-light-ground-2", "text": "Mark, always on a light ground, only in the brand colours"},   # ... so these two are alike
+        {"id": "znak-zawsze-na-jasnym-tle-3", "text": "Znak zawsze na jasnym tle"}]
+    raw = (kit_of(pack) / "rules.json").read_text(encoding="utf-8")
+    assert "Żółta łata nigdy nie zasłania znaku" in raw and "\\u" not in raw                                  # the text keeps its own letters
+
+
+def test_a_rule_id_is_the_ascii_slug_of_its_first_six_words():
+    import kitlib
+    cases = {"(rule) The mark keeps its clear space": "the-mark-keeps-its-clear-space",
+             "The mark keeps its clear space and more words": "the-mark-keeps-its-clear-space",        # no marker needed; the seventh word is not read
+             "(RULE)   One   MARK per screen!": "one-mark-per-screen",                                   # marker in any case, white space and punctuation do not count
+             "(rule) Don't use the mark’s outline": "dont-use-the-marks-outline",                         # apostrophes join, they do not split
+             "(rule) Straße: Größe ≥ 4×4 px": "strasse-grosse-4-4-px",                                    # ß and o with an umlaut fold; a sign between two numbers ends a word
+             "(rule) Mark—always on light": "mark-always-on-light",                                        # so does a dash with no space round it
+             "(rule) — & —": "rule", "(rule) Знак всегда на светлом фоне": "rule"}                       # no ASCII letter or digit: `rule`
+    for line, want in cases.items():
+        assert kitlib.rule_id(line) == want, line
+    assert kitlib.rule_ids(["(rule) Mark", "(rule) Mark", "(rule) Mark 2", "(rule) Mark"]) == ["mark", "mark-2", "mark-2-2", "mark-3"]    # a number already taken is skipped
+    assert kitlib.rule_ids(["(rule) — & —", "(rule) Знак"]) == ["rule", "rule-2"]
+    assert kitlib.rule_ids([]) == []
+
+
+def test_facts_json_holds_the_public_facts_and_never_a_contact_row(pack):
+    assert build(pack).returncode == 0
+    want = [("spare parts", "every tool has a published spare-parts list"), ("batch size", "tools are made in batches of 200"), ("repair guide", "a repair guide is in every box"),
+            ("status", "the online shop is in development"), ("AppStream summary", "Hand tools with a published spare-parts list"),
+            ("AppStream description", "Acme makes small-batch hand tools. Every tool has a published spare-parts list and a repair guide in the box."),
+            ("project license", "MIT"), ("metadata license", "CC0-1.0"), ("website", "https://example.com")]
+    doc = facts_of(pack)
+    assert doc == {"schema": 1, "facts": [{"fact": f, "value": v, "source": "owner, intake", "confirmed": "2026-10-17"} for f, v in want]}
+    raw = (kit_of(pack) / "facts.json").read_text(encoding="utf-8")
+    assert raw == json.dumps(doc, indent=2, ensure_ascii=False) + "\n"
+    assert not [c for c in CONTACT_VALUES if c in raw] and "contact" not in raw and "postal" not in raw        # the contact name, role, phone and the postal address stay out
+    assert not [c for c in CONTACT_VALUES if c in (kit_of(pack) / "rules.json").read_text(encoding="utf-8") + (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")]
+    assert kit_json(pack)["generated"]["facts.json"] == file_sha(kit_of(pack) / "facts.json")
+
+
+def test_facts_json_of_a_project_without_facts_is_an_empty_list(acme):
+    for kv in ("content_languages=en", "edition=1"):
+        assert bc("state", "--set", kv, project=acme).returncode == 0
+    assert bc("state", "--record", "G5", "approved (test)", project=acme).returncode == 0
+    (acme / "FACTS.md").unlink()                                                                               # a project that has not written its facts
+    r = build(acme)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert facts_of(acme) == {"schema": 1, "facts": []} and (kit_of(acme) / "facts.json").read_text(encoding="utf-8") == '{\n  "schema": 1,\n  "facts": []\n}\n'
+    assert rules_of(acme)["g4"] == [] and rules_of(acme)["forbidden"] == []                                    # no recorded rule, no forbidden word: empty lists, never a missing key
+
+
+def test_the_page_block_of_qa_rules_reaches_rules_json_unchanged(pack):
+    block = {"widths": [360, 1280], "display_min_px": 24, "clear_space": 0.3,
+             "rules": [{"id": "one-mark", "kind": "max-marks-per-view", "max": 1, "g4": "one mark per screen"},
+                       {"id": "short-buttons", "kind": "max-words-per-control", "max": 3, "g4": "a button says at most three words"}]}
+    mutate_json(pack / "qa" / "rules.json", lambda d: d.__setitem__("page", block))
+    assert build(pack).returncode == 0
+    assert rules_of(pack)["page"] == block and list(rules_of(pack)["page"]) == list(block)                     # the same keys in the same order
+    only = {"rules": [{"id": "no-eyebrow", "kind": "tell", "tell": "eyebrow", "g4": "no eyebrow over a heading"}]}
+    mutate_json(pack / "qa" / "rules.json", lambda d: d.__setitem__("page", only))
+    assert build(pack).returncode == 0
+    assert rules_of(pack)["page"] == only                                                                      # a block that sets one key is written as it is, with no default added
+    assert kit_json(pack)["version"] == "1.2"
+
+
+def test_a_rule_recorded_after_the_build_rewrites_rules_json_and_is_no_hand_edit(pack):
+    record_rules(pack, "The mark keeps its clear space")
+    assert build(pack).returncode == 0
+    mutate(pack / "BRAND-STATE.md", "- (rule) The mark keeps its clear space", "- (rule) The mark keeps its clear space\n- (rule) Never stretch the mark")
+    r = build(pack)
+    assert r.returncode == 0, r.stdout + r.stderr                                                              # the old rules.json is the last build's, not somebody's edit
+    assert [g["id"] for g in rules_of(pack)["g4"]] == ["the-mark-keeps-its-clear-space", "never-stretch-the-mark"]
+    assert kit_json(pack)["version"] == "1.2" and not list(pack.glob("removed-*"))
+    mutate(pack / "FACTS.md", "tools are made in batches of 200", "tools are made in batches of 300")          # and the same for facts.json
+    assert build(pack).returncode == 0
+    assert "tools are made in batches of 300" in (kit_of(pack) / "facts.json").read_text(encoding="utf-8") and kit_json(pack)["version"] == "1.3"
+    assert not list(pack.glob("removed-*"))
+
+
+def test_a_hand_edited_rules_json_or_facts_json_stops_the_build_and_check_fails_it(pack):
+    record_rules(pack, "The mark keeps its clear space")
+    assert build(pack).returncode == 0
+    assert check_rows(pack)["kit:file"]["status"] == "pass"
+    for name, old, new in (("rules.json", "The mark keeps its clear space", "The mark may be stretched"), ("facts.json", "MIT", "GPL")):
+        f = kit_of(pack) / name
+        before = mutate(f, old, new)
+        row = check_rows(pack)["kit:file"]
+        assert row["status"] == "fail" and name in row["detail"] and "edited by hand" in row["detail"], (name, row)
+        r = build(pack)
+        assert r.returncode == 1 and f"{name} (edited by hand)" in r.stderr and new in f.read_text(encoding="utf-8"), (name, r.stderr)
+        r = build(pack, "--replace")
+        assert r.returncode == 0, r.stderr
+        assert f.read_text(encoding="utf-8") == before and new in (pack / KIT_REMOVED / name).read_text(encoding="utf-8")      # the plan's bytes are back, the edit is kept aside
+        assert check_rows(pack)["kit:file"]["status"] == "pass"
+
+
+def test_known_rule_ids_are_the_g4_slugs_the_page_rules_and_the_site_rule_choices(pack):
+    import kitlib
+    from _common import CliError
+    record_rules(pack, "The mark keeps its clear space", "Never stretch the mark")
+    assert kitlib.known_rule_ids(pack) == ["the-mark-keeps-its-clear-space", "never-stretch-the-mark"]       # no page rules and no site record yet
+    assert kitlib.g4_rules(pack) == [{"id": "the-mark-keeps-its-clear-space", "text": "The mark keeps its clear space"},
+                                     {"id": "never-stretch-the-mark", "text": "Never stretch the mark"}]
+    mutate_json(pack / "qa" / "rules.json", lambda d: d.__setitem__("page", {"rules": [
+        {"id": "one-mark", "kind": "max-marks-per-view", "max": 1, "g4": "one mark per screen"},
+        {"id": "short-buttons", "kind": "max-words-per-control", "max": 3, "g4": "a button says at most three words"}]}))
+    assert kitlib.known_rule_ids(pack) == ["the-mark-keeps-its-clear-space", "never-stretch-the-mark", "page:one-mark", "page:short-buttons"]
+    site = {"schema": 1, "approved": "2026-10-17 (test)", "round": 1, "hero": "a", "pages": [],
+            "choices": [{"id": "c1", "text": "the footer repeats the contact line", "tag": "rule", "source": "DECISIONS.md"},
+                        {"id": "c2", "text": "a calm blue", "tag": "example", "source": ""}, {"id": "c3", "text": "one call to action", "tag": "rule", "source": "DECISIONS.md"}]}
+    (pack / "site").mkdir()
+    (pack / "site" / "site.json").write_text(json.dumps(site), encoding="utf-8")
+    assert kitlib.known_rule_ids(pack) == ["the-mark-keeps-its-clear-space", "never-stretch-the-mark", "page:one-mark", "page:short-buttons", "site:c1", "site:c3"]   # an example is no rule
+    (pack / "site" / "site.json").write_text("{not json", encoding="utf-8")
+    with pytest.raises(CliError) as e:
+        kitlib.known_rule_ids(pack)
+    assert e.value.code == 1 and "site/site.json" in e.value.message

@@ -290,6 +290,9 @@ lints the board of the latest round again before `check`, so an edit of the fact
   `applied-skill` leaves a project that has a kit to `kit build`.
   A brand that moves also gets its motion spec and demo page in the kit.
 - Open-licence (OFL) fonts go into the kit with their licence; any other font is listed, never copied.
+- The kit carries your rules and facts as data: `rules.json` (your recorded rules, each with a short id, the size rule
+  and the drawing for each size, the contrast pairs with their ratios, the words never to use and your page rules) and
+  `facts.json` (the facts you confirmed; contact details never).
 
 ### Changed
 

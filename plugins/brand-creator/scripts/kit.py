@@ -14,6 +14,10 @@ for each size band), SKILL.md (the applied skill, written by the same builder, i
 records the sha256 of every generated file, the version and what the kit was made from. The version is <edition>.<build>: the edition is BRAND-STATE.md
 approved_edition, the build number starts at 1 and goes up by 1 when a build changes any kit content. A second build with nothing changed writes nothing.
 
+The rules and the facts are data: rules.json holds the "(rule)" lines of BRAND-STATE.md Rules (G4) each with an id (the ASCII slug of its first six words, `-2`, `-3` for a repeat),
+the size rule and the drawing of each size band, the contrast pairs with their computed ratios, the forbidden words and, when the project's own qa/rules.json has one, its `page`
+block verbatim; facts.json holds the public rows of FACTS.md (a contact or postal address row never). Both sit at the top of the kit folder and are locked by kit.json.
+
 Fonts: each .ttf, .otf, .woff or .woff2 in assets/fonts/ is copied to brand/assets/fonts/ only when the current fontcheck report (assets/_checks/fontcheck.json) reads it
 as SIL Open Font License (OFL) and a licence text with "SIL OPEN FONT LICENSE" in it sits in assets/fonts/ (the text is copied along); snippets/fonts.css then holds an
 @font-face for each copied font. Any other font is listed in kit.json (fonts.not_copied) with the reason and never copied. With no current fontcheck report no font is
@@ -38,6 +42,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE / "lib"))
 sys.path.insert(0, str(HERE / "booklib"))
 sys.path.insert(0, str(HERE / "adaptlib"))
+sys.path.insert(0, str(HERE / "boardlib"))   # kitlib.known_rule_ids reads the choices of site/site.json with boardlib/sitedata.py
 import adapt  # noqa: E402
 import kitlib  # noqa: E402
 from _common import (EXIT_FAIL, EXIT_USAGE, Parser, Report, add_project_arg, confine, fail, find_project, main_guard, require_gate,  # noqa: E402

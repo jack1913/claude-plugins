@@ -2196,6 +2196,8 @@ section. A project without a kit keeps the applied skill as it is: the same byte
 .claude/skills/<slug>-brand/
   SKILL.md      generated: the applied skill, its paths inside the kit, plus the "## The kit" section (it holds the line `Kit version <version> (kit.json).`)
   kit.json      generated: schema, version, edition, sources and the sha256 of every other generated file
+  rules.json    generated: the G4 rules with ids, the size rule and bands, the contrast pairs with their ratios, the forbidden words, the page block (see Rules and facts below)
+  facts.json    generated: the public rows of FACTS.md
   brand/        generated: byte copies of the brand's files AT THEIR PROJECT PATHS, so a relative link in one of them still resolves
     assets/tokens/tokens.css, tokens.json
     assets/logo/*.svg, *.png, and every band drawing qa/rules.json names, top-level and per mark (at its own path)
@@ -2260,6 +2262,24 @@ spec says the brand moves (`"motion": "on"`) and `motion/proof.json` exists, the
 project lacks is exit 1, naming the file and the case; a `motion/proof.json` that cannot be read as `{"cases": [...]}`, or a page case with no `page`, is exit 2. The proof itself is never copied.
 A brand whose spec says nothing moves (`"motion": "off"`) gets the spec, which holds the reason, and `motion/SPEC.md` if there is one, and no page; a brand that decided nothing gets no motion file.
 `sources.motion` is one sha256 over these files (the sorted pairs `<project path>\0<sha256>\n`, as `logos` and `fonts` are made), or `null` when the kit holds none. The report's inputs add them.
+
+**Rules and facts.** `rules.json` and `facts.json` sit at the top of the kit folder, are generated like every other file (locked by `kit.json`, listed in the kit section of SKILL.md, covered by
+`kit:file`) and are written with `indent=2`, no ASCII escapes and a trailing newline. Both are always written.
+
+- `rules.json` (schema 1): `edition` (`approved_edition`, a string); `g4`, the recorded "(rule)" lines of BRAND-STATE.md "Rules (G4)" (the reading of `adapt.view`: a line with a `(...)` placeholder is no
+  rule) as `{id, text}` in file order, `text` without the "(rule)" marker and with white space collapsed; `downscale`, `{accent_min_px, accent_rule_max_size, from}`, where `from` is `qa/rules.json` when
+  that file sets `downscale.accent_min_px` (the reading of the size line in SKILL.md) and `plugin proposal` otherwise; `bands`, `{mark, name, max_px, drawing}` for the top-level bands (`mark` null) and
+  then each mark's, `max_px` null on the last band of a mark and `drawing` the path in the kit (`brand/<project path>`); `pairs`, `{fg, bg, kind, min, light, dark}` from the tokens (`adapt.pairs`), the
+  two ratios rounded to 2 decimals; `forbidden`, the words of the Forbidden sections of `brief/BRIEF.md` and `research/cliches.md` (a list, empty when there are none); and `page`, the `page` block of
+  the project's own `qa/rules.json` file verbatim, present only when that file has one. The merged defaults are never written: `qa_rules.load` always returns a `page` block, so the file itself is read.
+- `facts.json` (schema 1): `facts`, `{fact, value, source, confirmed}` for each row `adapt.public_facts` returns, in file order. A row whose label starts `contact`, or is `postal address`, is never in it.
+
+**Rule ids.** A G4 rule's id (`kitlib.rule_id`) is the ASCII slug of its first six words: the "(rule)" marker taken off (any case), accents folded away (NFKD, and the letters it leaves whole: `ł` becomes `l`,
+`ø` `o`, `đ` `d`, `ß` `ss`, `æ` `ae`), lower-case, apostrophes dropped, then the first six words joined by `-`. A word is a run of ASCII letters and digits; any other character, a dash or a letter with no
+ASCII form, ends a word. `The mark keeps its clear space` is `the-mark-keeps-its-clear-space`; `Znak zawsze na jasnym tle` is `znak-zawsze-na-jasnym-tle`. A line with no ASCII letter or digit gets `rule`. A
+repeat gets `-2`, `-3` in BRAND-STATE order (`kitlib.rule_ids`; the next number no other id has taken). `kitlib.known_rule_ids(project)` lists every id a rule can be named by, each once: the G4 slugs bare,
+`page:<id>` for each `page.rules[].id` of `qa/rules.json`, and `site:<id>` for each choice of `site/site.json` tagged `rule` (none while the project has no site record; a record that cannot be read is exit 1,
+naming the file).
 
 Report `kit` (`assets/_checks/kit.json`), renderer `n/a (generated files)`. Inputs: the token files, the logo files, the band drawings, `qa/rules.json`, `FACTS.md` and `motion/motion.json`, each
 when the project has it. Row `kit:written` passes, with the detail `<n> generated files: <w> written, <u> unchanged, <r> moved to removed-<date>/; version <v>`. Extra keys: `outputs` (every generated
