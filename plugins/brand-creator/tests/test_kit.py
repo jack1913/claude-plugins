@@ -523,3 +523,109 @@ def test_the_content_hash_ignores_the_order_the_files_are_listed_in_and_notices_
     assert a == kitlib.content_sha({"a": "2" * 64, "b": "1" * 64}) and re.fullmatch(r"[0-9a-f]{64}", a)
     assert a != kitlib.content_sha({"a": "2" * 64, "b": "3" * 64}) and a != kitlib.content_sha({"a": "2" * 64, "c": "1" * 64})
     assert a != kitlib.content_sha({"b": "1" * 64, "a": "2" * 64}, {"voice.md": "4" * 64})       # the owner's files count too
+
+
+# ---------------------------------------------------------------- motion: the spec, its hand-off text and the demo page
+# Acme has motion/demo.html and motion/proof.json (a states case and a page case named demo-page) but no motion/motion.json: the brand has not decided, so
+# the twelve files of a build hold no motion file. The spec is written as test_adapters.py writes it; its tokens (two durations and a curve) are built first.
+from test_adapters import add_motion, off_spec, on_spec, put_spec  # noqa: E402
+
+MOTION_KIT = ["brand/motion/SPEC.md", "brand/motion/demo.html", "brand/motion/motion.json"]
+SPEC_TEXT = "# Motion spec\n\nThe dot drops onto the grid and settles.\n"
+
+
+def moving(p, *, spec_md=True):
+    """Acme decides that it moves: the duration and curve tokens built, motion/motion.json written, and the hand-off text next to it."""
+    add_motion(p)
+    put_spec(p, on_spec())
+    if spec_md:
+        (p / "motion" / "SPEC.md").write_text(SPEC_TEXT, encoding="utf-8")
+
+
+def motion_hash(p, rels) -> str:
+    """sha256 over the (path, sha256 of the file) pairs, sorted by path, as the plan words it: `<path>\\0<sha256>\\n` for each."""
+    return hashlib.sha256("".join(f"{r}\0{file_sha(p / r)}\n" for r in sorted(rels)).encode()).hexdigest()
+
+
+def test_a_brand_that_moves_gets_its_motion_spec_and_demo_page_in_the_kit(pack):
+    moving(pack)
+    r = bc("kit", "build", "--plan", project=pack)
+    assert r.returncode == 0 and r.stdout.splitlines()[0] == "would write 15 generated files into .claude/skills/acme-brand/ (version 1.1)", r.stdout + r.stderr
+    r = build(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert kit_files(pack) == sorted([*KIT_FILES, *MOTION_KIT])                    # the proof itself (motion/proof.json) is a test file, not the brand's
+    for rel in ("motion/motion.json", "motion/SPEC.md", "motion/demo.html"):
+        assert filecmp.cmp(pack / rel, kit_of(pack) / "brand" / rel, shallow=False), rel
+    assert (kit_of(pack) / "brand" / "motion" / "SPEC.md").read_text(encoding="utf-8") == SPEC_TEXT
+    assert json.loads((kit_of(pack) / "brand/motion/motion.json").read_text(encoding="utf-8"))["signature"]["name"] == " Settle "      # the bytes, not a tidied copy
+    assert set(MOTION_KIT) <= set(kit_json(pack)["generated"]) and all(file_sha(kit_of(pack) / rel) == sha for rel, sha in kit_json(pack)["generated"].items())
+    skill = (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
+    assert all(f"- `{rel}`" in skill for rel in MOTION_KIT)
+    assert kit_json(pack)["sources"]["motion"] == motion_hash(pack, ["motion/motion.json", "motion/SPEC.md", "motion/demo.html"])
+    assert kit_json(pack)["sources"]["motion"] != file_sha(pack / "motion" / "motion.json")
+    rep = report(pack, "kit")
+    assert rep["status"] == "pass" and sorted(rep["outputs"]) == sorted([*KIT_FILES, *MOTION_KIT])
+    assert {"motion/motion.json", "motion/SPEC.md", "motion/demo.html"} <= {i["path"] for i in rep["inputs"]}
+    assert written_row(pack)["detail"] == "15 generated files: 15 written, 0 unchanged, 0 moved to removed-2026-10-17/; version 1.1"
+    first = kit_state(pack)
+    assert build(pack).returncode == 0 and kit_state(pack) == first and kit_json(pack)["version"] == "1.1"       # a second build writes nothing
+
+
+def test_a_brand_where_nothing_moves_gets_only_its_reason(pack):
+    assert build(pack).returncode == 0
+    assert kit_files(pack) == KIT_FILES and kit_json(pack)["sources"]["motion"] is None          # nothing decided: no motion file, though Acme has a demo page and a proof
+    put_spec(pack, off_spec())
+    r = build(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert kit_files(pack) == sorted([*KIT_FILES, "brand/motion/motion.json"])                  # the reason is in the spec; no demo page, no proof, nothing that moves
+    assert filecmp.cmp(pack / "motion" / "motion.json", kit_of(pack) / "brand/motion/motion.json", shallow=False)
+    assert json.loads((kit_of(pack) / "brand/motion/motion.json").read_text(encoding="utf-8"))["reason"] == off_spec()["reason"]
+    assert kit_json(pack)["sources"]["motion"] == motion_hash(pack, ["motion/motion.json"]) and kit_json(pack)["version"] == "1.2"
+
+
+def test_a_proof_page_outside_the_project_stops_the_build(pack, tmp_path):
+    moving(pack)
+    (tmp_path / "outside.html").write_text("<!doctype html><title>outside</title>", encoding="utf-8")
+    proof = pack / "motion" / "proof.json"
+    mutate_json(proof, lambda d: d["cases"][1].__setitem__("page", "../outside.html"))
+    r = build(pack)
+    assert r.returncode == 2 and "outside the project" in r.stderr and "Traceback" not in r.stderr and not (pack / ".claude").exists()
+    mutate_json(proof, lambda d: d["cases"][1].__setitem__("page", "motion/gone.html"))
+    r = build(pack)
+    assert r.returncode == 1 and "motion/gone.html" in r.stderr and "demo-page" in r.stderr and "Traceback" not in r.stderr and not (pack / ".claude").exists()
+    for page in ("./motion/demo.html", "motion/../motion/demo.html", str(pack / "motion" / "demo.html")):     # the same file by other names: one copy, at its plain path
+        mutate_json(proof, lambda d: d["cases"][1].__setitem__("page", page))
+        r = build(pack)
+        assert r.returncode == 0, page + "\n" + r.stdout + r.stderr
+        assert kit_files(pack) == sorted([*KIT_FILES, *MOTION_KIT]), page
+
+
+def test_a_changed_demo_page_rebuilds_its_copy_and_changes_the_motion_source(pack):
+    moving(pack)
+    assert build(pack).returncode == 0
+    before = kit_json(pack)["sources"]["motion"]
+    mutate(pack / "motion" / "demo.html", "press 320ms", "press 640ms")
+    r = build(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert filecmp.cmp(pack / "motion" / "demo.html", kit_of(pack) / "brand/motion/demo.html", shallow=False) and "press 640ms" in (kit_of(pack) / "brand/motion/demo.html").read_text(encoding="utf-8")
+    assert kit_json(pack)["sources"]["motion"] != before and kit_json(pack)["version"] == "1.2" and not list(pack.glob("removed-*"))
+    (pack / "motion" / "SPEC.md").unlink()                                                      # the hand-off text taken away: its copy goes to removed-<date>/
+    r = build(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "brand/motion/SPEC.md" in r.stdout and (pack / KIT_REMOVED / "brand/motion/SPEC.md").read_text(encoding="utf-8") == SPEC_TEXT
+    assert kit_files(pack) == sorted([*KIT_FILES, "brand/motion/demo.html", "brand/motion/motion.json"]) and kit_json(pack)["version"] == "1.3"
+
+
+def test_a_motion_proof_that_cannot_be_read_stops_the_build_and_none_leaves_only_the_spec(pack):
+    moving(pack, spec_md=False)
+    (pack / "motion" / "proof.json").unlink()                                                   # no proof: no page to copy, only the spec
+    r = build(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert kit_files(pack) == sorted([*KIT_FILES, "brand/motion/motion.json"]) and kit_json(pack)["sources"]["motion"] == motion_hash(pack, ["motion/motion.json"])
+    (pack / "motion" / "proof.json").write_text("{", encoding="utf-8")                         # a proof the kit cannot read is not a proof without pages
+    r = build(pack)
+    assert r.returncode == 2 and "motion/proof.json" in r.stderr and "Traceback" not in r.stderr
+    (pack / "motion" / "proof.json").write_text(json.dumps({"schema": 1, "cases": [{"name": "demo-page", "type": "page", "selector": "#mark"}]}), encoding="utf-8")
+    r = build(pack)
+    assert r.returncode == 2 and "demo-page" in r.stderr and "names no page" in r.stderr
+    assert kit_files(pack) == sorted([*KIT_FILES, "brand/motion/motion.json"]) and kit_json(pack)["version"] == "1.1"      # the kit of the first build stands

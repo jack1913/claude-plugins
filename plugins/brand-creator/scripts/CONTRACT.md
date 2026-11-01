@@ -2199,6 +2199,7 @@ section. A project without a kit keeps the applied skill as it is: the same byte
     assets/tokens/tokens.css, tokens.json
     assets/logo/*.svg, *.png, and every band drawing qa/rules.json names, top-level and per mark (at its own path)
     assets/fonts/<the OFL fonts> and their licence texts (see Fonts below)
+    motion/motion.json, motion/SPEC.md, and the page of each page case of motion/proof.json when the brand moves (see Motion below)
   snippets/fonts.css   generated: an @font-face for each copied font
 ```
 
@@ -2206,8 +2207,8 @@ Everything the build writes is generated and is never edited by hand: change the
 folders. A file outside them that the build did not write is the owner's: the build leaves it alone and `kit.json` does not list it.
 
 `kit.json` (schema 1): `kit` (the folder's name), `version`, `edition`, `plugin_version`, `content_sha`, `generated` (path in the kit to sha256, every generated file except `kit.json`
-itself, SKILL.md with its version in it) and `sources` (`state_sha`, as `adapt.state_sha`, then the sha256 of `assets/tokens/tokens.json`, `assets/tokens/tokens.css`, `qa/rules.json`,
-`FACTS.md` and `motion/motion.json`, each `null` when the project has none, and `logos`: one sha256 over the logo files and the band drawings). `kitlib.load()` is strict: a key it does not know, at
+itself, SKILL.md with its version in it) and `sources` (`state_sha`, as `adapt.state_sha`, then the sha256 of `assets/tokens/tokens.json`, `assets/tokens/tokens.css`, `qa/rules.json`
+and `FACTS.md`, each `null` when the project has none; `motion`, see Motion below; and `logos`: one sha256 over the logo files and the band drawings). `kitlib.load()` is strict: a key it does not know, at
 any level, and a key that is missing, stop it (exit 2) naming the key.
 
 The build needs G5 recorded (exit 1 without) and an approved edition (BRAND-STATE.md `approved_edition`, which `state --record G5` writes; empty: exit 1, "G5 is recorded but no edition is
@@ -2250,6 +2251,14 @@ is set. `kit.json` always has the key `fonts` (both lists empty when there are n
 when `assets/fonts/` holds no font file. Row `kit:fonts`: pass when every font is copied; warn when one is not (the kit is still written); skipped when there is no current `fontcheck` report (the kit
 is written without any font and the build exits 3). No fonts means no row. The report's inputs add the font files, the licence texts and the `fontcheck` report, so a changed font makes the `kit`
 report stale.
+
+**Motion.** A brand that has decided about motion has its files in the kit, each a byte copy at its project path under `brand/` (so a relative link in the demo page still resolves):
+`motion/motion.json` when the project has it (the spec is read as `motionspec.load` reads it: an invalid one is exit 2, naming the field), and `motion/SPEC.md` when the project has it. When the
+spec says the brand moves (`"motion": "on"`) and `motion/proof.json` exists, the `page` file of each `"type": "page"` case of the proof is copied too, to `brand/<its plain path>` (`./motion/demo.html`,
+`motion/../motion/demo.html` and an absolute path inside the project all name `brand/motion/demo.html`; a page two cases share is copied once). A page outside the project is exit 2 and a page the
+project lacks is exit 1, naming the file and the case; a `motion/proof.json` that cannot be read as `{"cases": [...]}`, or a page case with no `page`, is exit 2. The proof itself is never copied.
+A brand whose spec says nothing moves (`"motion": "off"`) gets the spec, which holds the reason, and `motion/SPEC.md` if there is one, and no page; a brand that decided nothing gets no motion file.
+`sources.motion` is one sha256 over these files (the sorted pairs `<project path>\0<sha256>\n`, as `logos` and `fonts` are made), or `null` when the kit holds none. The report's inputs add them.
 
 Report `kit` (`assets/_checks/kit.json`), renderer `n/a (generated files)`. Inputs: the token files, the logo files, the band drawings, `qa/rules.json`, `FACTS.md` and `motion/motion.json`, each
 when the project has it. Row `kit:written` passes, with the detail `<n> generated files: <w> written, <u> unchanged, <r> moved to removed-<date>/; version <v>`. Extra keys: `outputs` (every generated
