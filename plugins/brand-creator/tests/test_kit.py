@@ -523,3 +523,117 @@ def test_the_content_hash_ignores_the_order_the_files_are_listed_in_and_notices_
     assert a == kitlib.content_sha({"a": "2" * 64, "b": "1" * 64}) and re.fullmatch(r"[0-9a-f]{64}", a)
     assert a != kitlib.content_sha({"a": "2" * 64, "b": "3" * 64}) and a != kitlib.content_sha({"a": "2" * 64, "c": "1" * 64})
     assert a != kitlib.content_sha({"b": "1" * 64, "a": "2" * 64}, {"voice.md": "4" * 64})       # the owner's files count too
+
+
+# ---------------------------------------------------------------- check gates the kit, and applied-skill hands over to it
+
+def check_rows(p) -> dict:
+    """Run `check` and return its rows by id. What the Acme project as a whole lacks decides check's exit code, so these tests read the kit rows, not the code."""
+    r = bc("check", project=p)
+    assert "Traceback" not in r.stderr, r.stderr
+    return {row["id"]: row for row in report(p, "check")["results"]}
+
+
+def test_check_fails_a_kit_file_edited_after_the_build(pack):
+    assert bc("applied-skill", "--yes", project=pack).returncode == 0         # the project had the plain applied skill first; the kit takes its place
+    assert build(pack).returncode == 0
+    rows = check_rows(pack)
+    assert rows["report:kit"]["status"] == "pass" and rows["kit:file"]["status"] == "pass"
+    assert "kit:state" not in rows                                            # nothing changed since the build
+    assert [i for i in rows if i.startswith("applied-skill:") or i == "report:applied-skill"] == []     # the kit stands in for the skill: its rows are not run
+    skill = kit_of(pack) / "SKILL.md"
+    before = mutate(skill, "## Never", "## Never\n\n- Do anything.")
+    row = check_rows(pack)["kit:file"]
+    assert row["status"] == "fail" and "SKILL.md" in row["detail"] and "edited by hand" in row["detail"]
+    assert "change the brand project and run `brand-creator kit build --yes`" in row["detail"]
+    skill.write_text(before, encoding="utf-8")
+    assert check_rows(pack)["kit:file"]["status"] == "pass"
+    css = kit_of(pack) / "brand" / "assets" / "tokens" / "tokens.css"          # a copy of the brand's own file counts as much as SKILL.md
+    before = mutate(css, "#4cd7c8", "#4cd7c9")
+    row = check_rows(pack)["kit:file"]
+    assert row["status"] == "fail" and "brand/assets/tokens/tokens.css" in row["detail"] and "SKILL.md" not in row["detail"]
+    css.write_text(before, encoding="utf-8")
+    (kit_of(pack) / "brand" / "assets" / "logo" / "wordmark.svg").unlink()      # a file taken away is as much a difference as an edit
+    row = check_rows(pack)["kit:file"]
+    assert row["status"] == "fail" and "brand/assets/logo/wordmark.svg (missing)" in row["detail"]
+    assert build(pack).returncode == 0                                         # the build writes it back
+    assert check_rows(pack)["kit:file"]["status"] == "pass"
+    for rel in KIT_FILES[:6]:                                                  # six files changed (the first six in order; kit.json is not among them): the detail names four and counts the rest
+        (kit_of(pack) / rel).write_bytes(b"x")
+    detail = check_rows(pack)["kit:file"]["detail"]
+    assert all(rel in detail for rel in KIT_FILES[:4]) and KIT_FILES[4] not in detail and KIT_FILES[5] not in detail and "and 2 more" in detail
+
+
+def test_check_fails_a_kit_report_that_records_nothing_to_compare_and_never_crashes(pack):
+    assert build(pack).returncode == 0
+    report_file = pack / "assets" / "_checks" / "kit.json"
+    good = report_file.read_text(encoding="utf-8")
+    cases = ((lambda d: d.pop("outputs"), "records no outputs", ""), (lambda d: d.__setitem__("outputs", {}), "records no outputs", ""),
+             (lambda d: d.__setitem__("outputs", ["SKILL.md"]), "records no outputs", ""),
+             (lambda d: d.__setitem__("outputs", {"../../x": "0" * 64}), "cannot be compared", "../../x"),     # a record that is no sha256 of a file of the kit is named, never opened
+             (lambda d: d.__setitem__("outputs", {"SKILL.md": 7}), "cannot be compared", "SKILL.md"))
+    for change, said, named in cases:
+        mutate_json(report_file, change)
+        row = check_rows(pack)["kit:file"]
+        assert row["status"] == "fail" and said in row["detail"] and named in row["detail"] and "brand-creator kit build --yes" in row["detail"], (said, row)
+        report_file.write_text(good, encoding="utf-8")
+    assert check_rows(pack)["kit:file"]["status"] == "pass"
+
+
+def test_check_says_not_verified_when_the_brand_changed_after_the_kit(pack):
+    assert build(pack).returncode == 0
+    assert "kit:state" not in check_rows(pack)
+    mutate(pack / "FACTS.md", "tools are made in batches of 200", "tools are made in batches of 300")
+    rows = check_rows(pack)
+    assert rows["kit:state"]["status"] == "skipped" and "not verified" in rows["kit:state"]["detail"] and "brand-creator kit build --yes" in rows["kit:state"]["detail"]
+    assert rows["kit:file"]["status"] == "pass"                                # the files are the bytes the build wrote; it is the brand that moved on
+    assert build(pack).returncode == 0
+    rows = check_rows(pack)
+    assert "kit:state" not in rows and rows["report:kit"]["status"] == "pass" and rows["kit:file"]["status"] == "pass"
+    assert bc("state", "--set", "name=Acme Tools", project=pack).returncode == 0          # BRAND-STATE.md is not an input of the report: its view is hashed
+    rows = check_rows(pack)
+    assert rows["report:kit"]["status"] == "pass" and rows["kit:state"]["status"] == "skipped"
+    assert build(pack).returncode == 0
+    assert "kit:state" not in check_rows(pack)
+    # A new logo changes `kit_sources_sha` and nothing else: the name and FACTS.md are hashed into both shas, and a logo that did not exist when the kit was built is not among
+    # the report's recorded inputs, so `report:kit` stays green. `kit:state` is the only row that can say so, and it must look at `kit_sources_sha` too.
+    shutil.copy(pack / "assets" / "logo" / "wordmark.svg", pack / "assets" / "logo" / "zz-extra.svg")
+    rows = check_rows(pack)
+    assert rows["report:kit"]["status"] == "pass" and rows["kit:file"]["status"] == "pass"
+    assert rows["kit:state"]["status"] == "skipped" and "not verified" in rows["kit:state"]["detail"]
+    assert build(pack).returncode == 0
+    assert "kit:state" not in check_rows(pack)
+
+
+def test_check_does_not_judge_the_brand_against_a_kit_report_that_did_not_pass(pack):
+    assert build(pack).returncode == 0
+    report_file = pack / "assets" / "_checks" / "kit.json"
+    shutil.copy(pack / "assets" / "logo" / "wordmark.svg", pack / "assets" / "logo" / "zz-extra.svg")     # the brand moved on; a logo is no recorded input, so the report row stays as the report says
+    assert check_rows(pack)["kit:state"]["status"] == "skipped"                # after a passing report: not verified
+    mutate_json(report_file, lambda d: d.__setitem__("status", "fail"))
+    rows = check_rows(pack)
+    assert rows["report:kit"]["status"] == "fail" and "kit:state" not in rows   # a report that failed is already a failure: there is no "made from" to compare
+
+
+def test_the_applied_skill_command_hands_over_to_the_kit(pack):
+    assert build(pack).returncode == 0
+    before = kit_state(pack)
+    skill_report = pack / "assets" / "_checks" / "applied-skill.json"
+    for args in (("--yes",), ("--yes", "--replace"), ("--plan",), ()):
+        r = bc("applied-skill", *args, project=pack)
+        assert r.returncode == 2, (args, r.stdout, r.stderr)
+        assert "this project's brand skill is a kit (kit.json): run `brand-creator kit build --yes`" in r.stderr, args
+        assert not skill_report.exists() and not list(pack.glob("removed-*")) and kit_state(pack) == before, args       # before any write
+    (kit_of(pack) / "kit.json").unlink()                                       # without kit.json the folder is a plain applied skill again
+    assert bc("applied-skill", "--yes", "--replace", project=pack).returncode == 0
+    assert skill_report.is_file()
+
+
+def test_the_kit_is_searched_by_the_cascade(pack):
+    assert build(pack).returncode == 0
+    r = bc("check", "--cascade", "#4cd7c8", project=pack)
+    assert "Traceback" not in r.stderr
+    cas = next(x for x in report(pack, "check")["results"] if x["id"] == "cascade:#4cd7c8")
+    kit_hits = [h for h in cas["hits"] if h.startswith(".claude/skills/acme-brand/brand/")]
+    assert cas["status"] == "fail" and any(h.startswith(".claude/skills/acme-brand/brand/assets/tokens/tokens.css:") for h in kit_hits), cas["hits"]
+    assert any(h.startswith(".claude/skills/acme-brand/SKILL.md:") for h in cas["hits"])

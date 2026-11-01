@@ -2,7 +2,7 @@
 still holds it fails the check.
 
 Searched: every text file of the project (book sources and book.html, README, token sources and built tokens, text assets, templates in the
-project, ADOPTION.md, LAUNCH.md, BRAND.md, DESIGN.md, the applied skill under .claude/skills/), PDFs through pdftotext (a PDF whose text is
+project, ADOPTION.md, LAUNCH.md, BRAND.md, DESIGN.md, the applied skill under .claude/skills/, which for a kit is its SKILL.md and its brand/ copies), PDFs through pdftotext (a PDF whose text is
 outlines holds no text to search; the print PDFs say so), and the files named by `tools/cascade.json` ("also": paths, relative to the project, of
 documents outside it such as a parent brand's README, read only), by `--also`, and by the `parent_docs` list of the family-check block of
 FAMILY.md (relative to FAMILY.md). Skipped on purpose, and said so: history/, decisions/, BRAND-STATE.md, DECISIONS.md (they record what was

@@ -286,6 +286,8 @@ lints the board of the latest round again before `check`, so an edit of the fact
   (`<edition>.<build>`) that goes up by one when anything in it changes and stays the same when nothing does. A kit
   file you edited by hand, or a file you put into one of its generated folders, stops the next build; `--replace` moves
   it to `removed-<date>/` and builds. Nothing is deleted.
+  `brand-creator check` fails a kit file you edited by hand and says when the brand changed after the kit was built, and
+  `applied-skill` leaves a project that has a kit to `kit build`.
 - Open-licence (OFL) fonts go into the kit with their licence; any other font is listed, never copied.
 
 ### Changed
