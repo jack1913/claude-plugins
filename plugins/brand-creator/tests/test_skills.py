@@ -927,7 +927,7 @@ def test_the_round_wrapper_builds_a_references_board_after_g4():
                    "A website references board is another: a new, empty folder (`mkdir rounds/r<N>`), not a copy.",
                    "--require G4` (exit 1: the system rules are not approved yet; say so and stop)",
                    "stop when the tier is Quick or `brief/BRIEF.md` lists no site under `Required surfaces:`",
-                   "`state --project <dir> --get site_research`: `auto` means the owner has not been asked yet, so ask the online-research question first",
+                   "`state --project <dir> --get site_research`: `auto` or not set (an older project has no such key, and the command exits 1) means the owner has not been asked yet, so ask the online-research question first",
                    "templates/site-refs-board.html` (`data-board=\"site-refs\"`), once its sites are captured",
                    "without web tools say so and stop, and never invent a site",
                    "A website references board: copy it the same way (its pictures are already inlined).",

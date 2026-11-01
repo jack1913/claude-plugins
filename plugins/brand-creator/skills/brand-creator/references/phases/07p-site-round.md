@@ -198,23 +198,27 @@ the pages start in their own turn.
    Propose a choice as a rule only when the owner has already decided it (the G4 rules, the hero pick, an answer they gave
    in their own words); everything else is an example. A default you chose is never a rule. `data-pages` names the pages a
    choice applies to; left out, it applies to every page.
-5. **The questions** ask the owner to approve the pages (all, some, or change something first) and to confirm the tags.
+5. **The questions** ask the owner to approve the pages (all of them, or change something first) and to confirm the tags.
+   An approval covers the whole pages board: `site approve` copies every page card on it. To leave a page out, remove its
+   card (and its id from any choice's `data-pages`) from the pages board and lint it again, then ask for the approval.
    When the owner turns an example into a rule, write the decision into `DECISIONS.md` first, then change the tag and the
    source on the board and lint again.
 
 ## Approval
 
-The owner approves the pages and the tags, in their words. Then, in this order:
+The owner approves the pages and the tags, in their words. The approval covers every page card on the pages board; a page
+the owner leaves out has its card removed and the board linted again first (step 5 of "The other pages"). Then, in
+this order:
 
 1. **Restate** which pages are approved and which choices are rules (with where each was decided) and which are examples.
-2. `state --project <dir> --record G4p "approved <pages>; rules <ids>"`. Never record it on a bare "ok", and never for pages
-   the owner did not approve.
+2. `state --project <dir> --record G4p "approved <pages>; rules <ids>"`. Never record it on a bare "ok", and never while
+   the board still holds a page card the owner did not approve.
 3. **Make the proof current again.** Recording a gate changes `BRAND-STATE.md`, which every `page-check` report lists
    among its inputs, so the reports of the round's pages and with them the board's lint are stale. Run `page-check` on each
    page of the round and `board-lint rounds/r<N>/board.html --project <dir>` again (`site approve` refuses a lint that
    is not current and passing).
 4. `freeze r<N> --name approved-site --project <dir>` keeps the round in `history/`.
-5. `site approve --project <dir>` copies each approved page from `rounds/r<N>/<id>/` into `site/<id>/` (without `shots/` and
+5. `site approve --project <dir>` copies every page card of the pages board from `rounds/r<N>/<id>/` into `site/<id>/` (without `shots/` and
    `cold-review.md`, with every relative path made to resolve from there) and writes `site/site.json`: the pages, the layout
    each used, a checksum of each, and the choices with their tags and sources. It refuses without G4p, on a page that
    needs the network, and when `site/` already holds approved pages (`--replace` moves the old ones to
@@ -228,8 +232,8 @@ The book can show them in an opt-in `site` chapter.
 
 ## Gate
 
-**G4p The site's reference pages approved.** The pages board is open on the review surface. The owner approves all of the
-pages or some of them, and confirms the tags. Restate, then record it as above (`state --record G4p`). The hero pick has no
+**G4p The site's reference pages approved.** The pages board is open on the review surface. The owner approves the pages on the
+board (all of its page cards) and confirms the tags. Restate, then record it as above (`state --record G4p`). The hero pick has no
 gate of its own; it is written into `DECISIONS.md`.
 
 The site round is optional and late, so there is no re-arm as after a rejected style board: after "none of these" on a site

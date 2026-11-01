@@ -81,10 +81,11 @@ never a template.
 
 ## Step 4: approve the pages
 
-1. Say which pages you approve and whether the tags are right. A bare "ok" is not enough: Claude asks which pages and
-   which tags.
-2. Claude restates what you approved and records it. Then it saves the round in `history/` and copies each approved page
-   into your project, checks it again where it now lives, and takes its pictures again:
+1. Say that you approve the pages and whether the tags are right. A bare "ok" is not enough: Claude asks you to confirm
+   the pages and the tags. Your approval covers every page on the board. To leave a page out, ask Claude to take it off
+   the board first.
+2. Claude restates what you approved and records it. Then it saves the round in `history/` and copies each page on the
+   board into your project, checks it again where it now lives, and takes its pictures again:
 
    ```text
    site/

@@ -1,6 +1,6 @@
 """Print production helpers shared by `emit print` and `print-check`.
 
-Honest print (plan review MUST #12): Chromium prints an RGB page that is exactly trim + 2 x bleed; Ghostscript turns the text into outlines
+Honest print: Chromium prints an RGB page that is exactly trim + 2 x bleed; Ghostscript turns the text into outlines
 (`-dNoOutputFonts`); pikepdf sets the boxes and the metadata afterwards. PDF/X-4 is written only when the owner supplies a CMYK output
 profile (`--icc`), and even then the file is only a "PDF/X-4 candidate (preflight with your printer)": nothing here can verify conformance.
 Without a profile the file is an "RGB proof, not print-ready". The label is in the PDF's Subject, Keywords, XMP description and in the file name.

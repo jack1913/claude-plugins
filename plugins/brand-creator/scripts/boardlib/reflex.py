@@ -165,7 +165,7 @@ def ai_default_ids(path: Path | str | None = None) -> list[str]:
 
 def cliche_items(project: Path | str, rel: str = "research/cliches.md") -> list[str]:
     """The bullets under the heading 'Avoid unless argued' of the project's cliché file (rel, project-relative), up to the next heading. Placeholders
-    such as '(...)' and HTML comments are dropped; [] when the file is missing. Group 2's site board passes rel='research/site-cliches.md'."""
+    such as '(...)' and HTML comments are dropped; [] when the file is missing. The site board passes rel='research/site-cliches.md'."""
     f = Path(project) / rel
     if not f.is_file():
         return []

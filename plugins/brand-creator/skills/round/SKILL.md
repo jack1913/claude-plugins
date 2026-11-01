@@ -42,8 +42,9 @@ other pages; steps below, "A site round").
    `check --cascade`); `on` or `not decided` go on. Before a website references board, run
    `state --project <dir> --require G4` (exit 1: the system rules are not approved yet; say so and stop), and stop when the
    tier is Quick or `brief/BRIEF.md` lists no site under `Required surfaces:` (the owner may add one in their own words).
-   Then read `state --project <dir> --get site_research`: `auto` means the owner has not been asked yet, so ask the
-   online-research question first and record the answer, as the phase file says. Before a site board, run
+   Then read `state --project <dir> --get site_research`: `auto` or not set (an older project has no such key, and the
+   command exits 1) means the owner has not been asked yet, so ask the online-research question first and record the
+   answer, as the phase file says. Before a site board, run
    `state --project <dir> --require G4w` (exit 1: the website references come first; say so and stop), and stop when the
    tier is Quick or `brief/BRIEF.md` lists no site under `Required surfaces:`. A G4w that is `skipped by owner` goes on.
 5. Build `rounds/r<N>/board.html`: round 0 (and a reset round's style research) from
