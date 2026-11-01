@@ -75,7 +75,7 @@ def test_kit_mode_writes_braces_in_the_kit_section_as_they_are(pack):
 
 # ---------------------------------------------------------------- kit build: the generated core
 # The Acme project has eight logo files (assets/logo/*.svg and *.png), tokens built to assets/tokens/tokens.css and tokens.json, and a qa/rules.json whose
-# bands name grid-mark.svg and mark.svg. The kit folder of a build holds these fourteen files, written out by hand (BRAND_CREATOR_TODAY is 2026-10-17).
+# bands name grid-mark.svg and mark.svg. The kit folder of a build holds these fifteen files, written out by hand (BRAND_CREATOR_TODAY is 2026-10-17).
 import filecmp  # noqa: E402
 import hashlib  # noqa: E402
 import json  # noqa: E402
@@ -84,7 +84,8 @@ import re  # noqa: E402
 from helpers import mutate, mutate_json, report  # noqa: E402
 
 KIT_LOGOS = ["grid-mark-dark.svg", "grid-mark-master.png", "grid-mark.svg", "mark-animated.svg", "mark-dark.svg", "mark.svg", "wordmark-dark.svg", "wordmark.svg"]
-KIT_FILES = sorted(["SKILL.md", "kit.json", "rules.json", "facts.json", "brand/assets/tokens/tokens.css", "brand/assets/tokens/tokens.json", *[f"brand/assets/logo/{n}" for n in KIT_LOGOS]])
+KIT_FILES = sorted(["SKILL.md", "kit.json", "rules.json", "facts.json", "snippets/logo.html", "brand/assets/tokens/tokens.css", "brand/assets/tokens/tokens.json",
+                    *[f"brand/assets/logo/{n}" for n in KIT_LOGOS]])
 KIT_REMOVED = "removed-2026-10-17/.claude/skills/acme-brand"
 
 
@@ -121,11 +122,11 @@ def test_the_kit_needs_g5_and_yes_and_writes_nothing_without_them(acme):
     assert bc("state", "--record", "G5", "approved (test)", project=acme).returncode == 0
     r = bc("kit", "build", project=acme)
     assert r.returncode == 2 and "--yes" in r.stderr and not (acme / ".claude").exists() and not (acme / "assets" / "_checks" / "kit.json").exists()
-    assert "would write 14 generated files into .claude/skills/acme-brand/ (version 1.1)" in r.stdout          # the plan goes to stdout, the message to stderr
+    assert "would write 15 generated files into .claude/skills/acme-brand/ (version 1.1)" in r.stdout          # the plan goes to stdout, the message to stderr
     r = bc("kit", "build", "--plan", project=acme)
     assert r.returncode == 0 and not (acme / ".claude").exists() and not (acme / "assets" / "_checks" / "kit.json").exists()
     lines = r.stdout.splitlines()
-    assert lines[0] == "would write 14 generated files into .claude/skills/acme-brand/ (version 1.1)"
+    assert lines[0] == "would write 15 generated files into .claude/skills/acme-brand/ (version 1.1)"
     assert sorted(re.fullmatch(r"generated (\S+) \((\d+) bytes\)", ln).group(1) for ln in lines[1:]) == KIT_FILES
     assert f"generated brand/assets/tokens/tokens.css ({(acme / 'assets/tokens/tokens.css').stat().st_size} bytes)" in lines
     r = bc("kit", "build", "--yes", project=acme)
@@ -162,7 +163,7 @@ def test_the_kit_core_is_the_applied_skill_with_paths_inside_the_kit(pack):
     assert rep["kit_version"] == "1.1" and rep["version"] == kj["plugin_version"]          # the report's own `version` stays the plugin's
     assert sorted(rep["outputs"]) == KIT_FILES and all(file_sha(kit_of(pack) / rel) == sha for rel, sha in rep["outputs"].items())
     assert rep["adapter_state_sha"] and rep["kit_sources_sha"]
-    assert written_row(pack)["detail"] == "14 generated files: 14 written, 0 unchanged, 0 moved to removed-2026-10-17/; version 1.1"
+    assert written_row(pack)["detail"] == "15 generated files: 15 written, 0 unchanged, 0 moved to removed-2026-10-17/; version 1.1"
     assert {i["path"] for i in rep["inputs"]} == {"assets/tokens/tokens.css", "assets/tokens/tokens.json", "qa/rules.json", "FACTS.md",
                                                   *[f"assets/logo/{n}" for n in KIT_LOGOS]}
 
@@ -173,7 +174,7 @@ def test_a_second_build_with_nothing_changed_is_byte_identical_and_keeps_the_ver
     r = build(pack)
     assert r.returncode == 0, r.stderr
     assert kit_state(pack) == first                                   # the same bytes, and no file was written again
-    assert written_row(pack)["detail"] == "14 generated files: 0 written, 14 unchanged, 0 moved to removed-2026-10-17/; version 1.1"
+    assert written_row(pack)["detail"] == "15 generated files: 0 written, 15 unchanged, 0 moved to removed-2026-10-17/; version 1.1"
     assert json.loads((kit_of(pack) / "kit.json").read_text(encoding="utf-8"))["version"] == "1.1"
     assert not list(pack.glob("removed-*"))
 
@@ -213,7 +214,7 @@ def test_a_hand_edited_kit_file_stops_the_build_and_replace_moves_it_aside(pack)
     kept = pack / KIT_REMOVED / "brand/assets/tokens/tokens.css"
     assert kept.is_file() and "#f9f7ef" in kept.read_text(encoding="utf-8")
     assert list(pack.glob("removed-*/**/*")) and [p.relative_to(pack).as_posix() for p in pack.glob("removed-*/**/*") if p.is_file()] == [kept.relative_to(pack).as_posix()]
-    assert written_row(pack)["detail"] == "14 generated files: 1 written, 13 unchanged, 1 moved to removed-2026-10-17/; version 1.1"
+    assert written_row(pack)["detail"] == "15 generated files: 1 written, 14 unchanged, 1 moved to removed-2026-10-17/; version 1.1"
     assert build(pack).returncode == 0                                # and the next build is quiet again
 
 
@@ -241,8 +242,9 @@ def test_a_file_put_into_a_generated_folder_stops_the_build(pack):
     assert r.returncode == 0, r.stderr
     for rel in ("brand/assets/notes.md", "snippets/mine.css", "reference-pages/start/extra.md"):
         assert not (kit_of(pack) / rel).exists() and (pack / KIT_REMOVED / rel).read_text(encoding="utf-8") == "mine\n"
-    assert (kit_of(pack) / "my-notes.md").is_file() and not (kit_of(pack) / "reference-pages").exists() and not (kit_of(pack) / "snippets").exists()   # emptied folders go
-    assert written_row(pack)["detail"] == "14 generated files: 0 written, 14 unchanged, 3 moved to removed-2026-10-17/; version 1.1"
+    assert (kit_of(pack) / "my-notes.md").is_file() and not (kit_of(pack) / "reference-pages").exists()          # an emptied folder goes ...
+    assert sorted(f.name for f in (kit_of(pack) / "snippets").iterdir()) == ["logo.html"]                       # ... one that still holds a generated file stays
+    assert written_row(pack)["detail"] == "15 generated files: 0 written, 15 unchanged, 3 moved to removed-2026-10-17/; version 1.1"
 
 
 def test_a_logo_taken_out_of_the_project_moves_its_kit_copy_to_removed(pack):
@@ -255,7 +257,7 @@ def test_a_logo_taken_out_of_the_project_moves_its_kit_copy_to_removed(pack):
     assert "wordmark-dark.svg" in r.stdout and "removed-2026-10-17" in r.stdout          # said, not done quietly
     assert not gone.exists() and (pack / KIT_REMOVED / "brand/assets/logo/wordmark-dark.svg").read_bytes() == bytes_before
     assert kit_files(pack) == [f for f in KIT_FILES if f != "brand/assets/logo/wordmark-dark.svg"]
-    assert written_row(pack)["detail"].startswith("13 generated files: ") and "1 moved to removed-2026-10-17/" in written_row(pack)["detail"]
+    assert written_row(pack)["detail"].startswith("14 generated files: ") and "1 moved to removed-2026-10-17/" in written_row(pack)["detail"]
     assert json.loads((kit_of(pack) / "kit.json").read_text(encoding="utf-8"))["version"] == "1.2"
 
 
@@ -354,7 +356,7 @@ def kit_json(p) -> dict:
 def test_an_ofl_font_is_copied_with_its_licence_and_gets_a_font_face(pack):
     with_font(pack)
     r = bc("kit", "build", "--plan", project=pack)
-    assert r.returncode == 0 and r.stdout.splitlines()[0] == "would write 17 generated files into .claude/skills/acme-brand/ (version 1.1)", r.stdout + r.stderr
+    assert r.returncode == 0 and r.stdout.splitlines()[0] == "would write 18 generated files into .claude/skills/acme-brand/ (version 1.1)", r.stdout + r.stderr
     r = build(pack)
     assert r.returncode == 0, r.stdout + r.stderr
     assert kit_files(pack) == sorted([*KIT_FILES, *FONT_KIT])
@@ -641,7 +643,7 @@ def test_the_kit_is_searched_by_the_cascade(pack):
 
 # ---------------------------------------------------------------- motion: the spec, its hand-off text and the demo page
 # Acme has motion/demo.html and motion/proof.json (a states case and a page case named demo-page) but no motion/motion.json: the brand has not decided, so
-# the fourteen files of a build hold no motion file. The spec is written as test_adapters.py writes it; its tokens (two durations and a curve) are built first.
+# the fifteen files of a build hold no motion file. The spec is written as test_adapters.py writes it; its tokens (two durations and a curve) are built first.
 from test_adapters import add_motion, off_spec, on_spec, put_spec  # noqa: E402
 
 MOTION_KIT = ["brand/motion/SPEC.md", "brand/motion/demo.html", "brand/motion/motion.json"]
@@ -664,7 +666,7 @@ def motion_hash(p, rels) -> str:
 def test_a_brand_that_moves_gets_its_motion_spec_and_demo_page_in_the_kit(pack):
     moving(pack)
     r = bc("kit", "build", "--plan", project=pack)
-    assert r.returncode == 0 and r.stdout.splitlines()[0] == "would write 17 generated files into .claude/skills/acme-brand/ (version 1.1)", r.stdout + r.stderr
+    assert r.returncode == 0 and r.stdout.splitlines()[0] == "would write 18 generated files into .claude/skills/acme-brand/ (version 1.1)", r.stdout + r.stderr
     r = build(pack)
     assert r.returncode == 0, r.stdout + r.stderr
     assert kit_files(pack) == sorted([*KIT_FILES, *MOTION_KIT])                    # the proof itself (motion/proof.json) is a test file, not the brand's
@@ -680,7 +682,7 @@ def test_a_brand_that_moves_gets_its_motion_spec_and_demo_page_in_the_kit(pack):
     rep = report(pack, "kit")
     assert rep["status"] == "pass" and sorted(rep["outputs"]) == sorted([*KIT_FILES, *MOTION_KIT])
     assert {"motion/motion.json", "motion/SPEC.md", "motion/demo.html"} <= {i["path"] for i in rep["inputs"]}
-    assert written_row(pack)["detail"] == "17 generated files: 17 written, 0 unchanged, 0 moved to removed-2026-10-17/; version 1.1"
+    assert written_row(pack)["detail"] == "18 generated files: 18 written, 0 unchanged, 0 moved to removed-2026-10-17/; version 1.1"
     first = kit_state(pack)
     assert build(pack).returncode == 0 and kit_state(pack) == first and kit_json(pack)["version"] == "1.1"       # a second build writes nothing
 
@@ -1195,3 +1197,91 @@ def test_a_page_variable_shared_by_two_roles_is_set_once_or_the_ground_is_left_o
         "a scope sets a variable once; "
         "the page ground uses --color-accent for action and focus, and this ground gives them different colours (--color-panel-action and --color-panel-focus): "
         "a scope sets a variable once)")
+
+
+# ---------------------------------------------------------------- snippets/logo.html: the logo in light and dark
+# Acme has three marks with a dark twin (grid-mark, mark, wordmark) and one without (mark-animated); grid-mark-master.png is not an SVG. The snippet is written out by hand.
+LOGO_HEAD = "<!-- generated by brand-creator: the logo in light and dark, switched as tokens.css switches them; paths are relative to this file -->"
+LOGO_STYLE = ("<style>\n"
+              "  /* light shows by default; dark shows where tokens.css switches to dark; only display: none is used, so the page keeps the display value it chose */\n"
+              '  :root[data-theme="light"] .brand-logo--dark { display: none; }\n'
+              '  :root[data-theme="dark"] .brand-logo--light { display: none; }\n'
+              "  @media not all and (prefers-color-scheme: dark) {\n"
+              '    :root:not([data-theme="dark"]) .brand-logo--dark { display: none; }\n'
+              "  }\n"
+              "  @media (prefers-color-scheme: dark) {\n"
+              '    :root:not([data-theme="light"]) .brand-logo--light { display: none; }\n'
+              "  }\n"
+              "</style>\n")
+
+
+def logo_pair(name, alt="Acme"):
+    return (f"<!-- {name} -->\n"
+            f'<img class="brand-logo brand-logo--light" src="../brand/assets/logo/{name}.svg" alt="{alt}">\n'
+            f'<img class="brand-logo brand-logo--dark" src="../brand/assets/logo/{name}-dark.svg" alt="{alt}">\n')
+
+
+ACME_LOGO_HTML = (LOGO_HEAD + "\n" + LOGO_STYLE + "\n" + logo_pair("grid-mark") + "\n" + logo_pair("mark") + "\n"
+                  "<!-- mark-animated -->\n"
+                  '<img class="brand-logo" src="../brand/assets/logo/mark-animated.svg" alt="Acme">\n'
+                  "\n" + logo_pair("wordmark"))
+
+
+def test_the_logo_snippet_pairs_each_mark_with_its_dark_twin_and_switches_like_tokens_css(pack):
+    r = build(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    snippet = (kit_of(pack) / "snippets" / "logo.html").read_text(encoding="utf-8")
+    assert snippet == ACME_LOGO_HTML
+    assert '<img class="brand-logo brand-logo--light" src="../brand/assets/logo/mark.svg" alt="Acme">\n' \
+           '<img class="brand-logo brand-logo--dark" src="../brand/assets/logo/mark-dark.svg" alt="Acme">\n' in snippet
+    css = (kit_of(pack) / "brand" / "assets" / "tokens" / "tokens.css").read_text(encoding="utf-8")
+    for selector in (':root[data-theme="dark"]', ':root:not([data-theme="light"])'):              # the two selectors tokens.css switches the dark colours with
+        assert selector in snippet and selector in css, selector
+    assert "prefers-color-scheme: dark" in snippet and "prefers-color-scheme: dark" in css
+    for src in re.findall(r'src="([^"]+)"', snippet):                                              # every path is relative to the snippet and lands on a file of the kit
+        assert (kit_of(pack) / "snippets" / src).resolve().is_file(), src
+        assert filecmp.cmp(pack / "assets" / "logo" / src.rsplit("/", 1)[1], kit_of(pack) / "snippets" / src, shallow=False)
+    assert "snippets/logo.html" in kit_json(pack)["generated"] and file_sha(kit_of(pack) / "snippets" / "logo.html") == kit_json(pack)["generated"]["snippets/logo.html"]
+    assert "- `snippets/logo.html`" in (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
+    assert "snippets/logo.html" in report(pack, "kit")["outputs"]
+    first = kit_state(pack)
+    assert build(pack).returncode == 0 and kit_state(pack) == first and kit_json(pack)["version"] == "1.1"       # a second build writes nothing
+
+
+def test_a_mark_without_a_dark_twin_is_shown_in_both_themes(pack):
+    assert build(pack).returncode == 0
+    snippet = (kit_of(pack) / "snippets" / "logo.html").read_text(encoding="utf-8")
+    assert snippet.count('<img class="brand-logo" src="../brand/assets/logo/mark-animated.svg" alt="Acme">\n') == 1
+    assert "mark-animated-dark" not in snippet and snippet.count("mark-animated") == 2                                   # its comment and its one image
+    hiding = [ln.split("{")[0].strip() for ln in snippet.splitlines() if "{ display: none; }" in ln]
+    assert len(hiding) == 4 and all(sel.endswith((".brand-logo--light", ".brand-logo--dark")) for sel in hiding)          # no rule can hide the plain class
+    style = snippet.split("<style>")[1].split("</style>")[0]
+    assert [b.strip() for b in re.findall(r"\{([^{}]*)\}", style)] == ["display: none;"] * 4                                  # every declaration there is: no size, colour or spacing
+
+
+def test_a_dark_twin_taken_away_turns_the_pair_into_a_single_image(pack):
+    assert build(pack).returncode == 0
+    (pack / "assets" / "logo" / "wordmark-dark.svg").unlink()
+    assert build(pack).returncode == 0
+    snippet = (kit_of(pack) / "snippets" / "logo.html").read_text(encoding="utf-8")
+    assert snippet.endswith("<!-- wordmark -->\n" '<img class="brand-logo" src="../brand/assets/logo/wordmark.svg" alt="Acme">\n')
+    assert "wordmark-dark" not in snippet and logo_pair("mark") in snippet and kit_json(pack)["version"] == "1.2"
+
+
+def test_the_logo_snippet_names_the_brand_in_the_alt_and_quotes_what_html_needs_quoted():
+    import kitlib
+    got = kitlib.logo_html('Acme "Q" & <Co>', ["assets/logo/my mark.svg", "assets/logo/my mark-dark.svg", "assets/logo/b--> x.svg", "assets/logo/z-dark.svg", "assets/logo/m.png"])
+    text = got.decode("utf-8")
+    assert text.startswith(LOGO_HEAD + "\n<style>\n")
+    alt = 'alt="Acme &quot;Q&quot; &amp; &lt;Co&gt;"'
+    assert (f'<!-- my mark -->\n<img class="brand-logo brand-logo--light" src="../brand/assets/logo/my%20mark.svg" {alt}>\n'
+            f'<img class="brand-logo brand-logo--dark" src="../brand/assets/logo/my%20mark-dark.svg" {alt}>\n') in text
+    assert f'<!-- b--&gt; x -->\n<img class="brand-logo" src="../brand/assets/logo/b--%3E%20x.svg" {alt}>\n' in text        # nothing in a name can end the comment or the attribute
+    assert text.index("<!-- b--&gt; x -->") < text.index("<!-- my mark -->")                                               # sorted by name
+    assert "z-dark" not in text and "m.png" not in text and text.count("<img") == 3                                        # a dark file with no light one, and a PNG, are left out
+
+
+def test_a_logo_folder_with_nothing_to_show_gets_no_snippet():
+    import kitlib
+    assert kitlib.logo_html("Acme", []) is None
+    assert kitlib.logo_html("Acme", ["assets/logo/mark.png", "assets/logo/mark-dark.svg"]) is None
