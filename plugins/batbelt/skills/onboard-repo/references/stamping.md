@@ -152,9 +152,10 @@ with `check.py` and removes the two orphans, shown in the plan like any other ch
   list in the docs standard's §2 and asks again on the first styling run.
 - **foreign facts:** names this repo's docs mention that another repository owns (the skill or
   command names of a plugin it installs, say) and the globs where they may appear (the one page
-  that names that repository and links to it: the plugin's name and a link, never its skill list),
-  or `none`. With a value, `update-docs` runs
-  `check-docs --forbidden <names> --forbidden-allow <globs>`, so a restated fact is an error.
+  that names that repository and links to it: the plugin's name and a link, never its skill
+  list), or `none`. Globs are paths from the repo root (`docs/manual/reference/*`). With a
+  value, `update-docs` runs `check-docs --forbidden <names> --forbidden-allow <globs>`, so a
+  restated fact is an error.
 - **known baselines:** dated counts the docs gate accepts as known, such as the frozen archive's
   link errors (`docs/archive/: 13 link errors, 2026-11-01`), or `none`. `update-docs` compares each
   run against this line and proposes an updated line when a count drops.

@@ -1375,7 +1375,12 @@ def _glob_regex(glob):
             if j == -1 or body in ("", "!"):
                 raise ValueError("unclosed or empty [...] in %r" % glob)
             body = body.replace("\\", "\\\\")
-            out.append("[^" + body[1:] + "]" if body.startswith("!") else "[" + body + "]")
+            if body.startswith("!"):
+                out.append("[^/" + body[1:] + "]")  # a negated class never matches /
+            else:
+                if body.startswith("^"):
+                    body = "\\" + body  # ^ is a literal in a glob class
+                out.append("(?!/)[" + body + "]")
             i = j + 1
         else:
             out.append(re.escape(glob[i]))
@@ -1385,13 +1390,17 @@ def _glob_regex(glob):
 
 def _forbidden_allowed(f, relparts, patterns):
     """True when `--forbidden-allow` exempts this file. Each glob is anchored and
-    matched against the path relative to the scanned root (`manual/reference/*` for
-    `check-docs docs`) and, for a relative path, against the path as given
-    (`docs/manual/reference/*`). `README.md` exempts only a README at that level."""
-    candidates = ["/".join(relparts or ())]
-    if not f.is_absolute():
-        candidates.append(f.as_posix())
-    return any(p.match(c) for p in patterns for c in candidates)
+    matched against the file's path from where check-docs runs, the repo root
+    (`docs/manual/reference/*`; `README.md` exempts only the root README). A file
+    outside the working directory falls back to its path below the scanned root."""
+    if f.is_absolute():
+        try:
+            path = f.resolve().relative_to(pathlib.Path.cwd().resolve()).as_posix()
+        except (OSError, ValueError):
+            path = "/".join(relparts or ())
+    else:
+        path = f.as_posix()
+    return any(p.match(path) for p in patterns)
 
 
 def _check_forbidden(f, text, forbidden):
@@ -1702,19 +1711,19 @@ def _resolve_only(only):
 
 
 def _read_doc(f):
-    """(text, too_large) for a docs file: its text, or None when it cannot be read
-    or is larger than _MAX_DOC_BYTES (`too_large` says which). The one per-file read
-    guard every check-docs pass shares."""
+    """(text, size) for a docs file: its text, or None when it cannot be read or is
+    larger than _MAX_DOC_BYTES, and the size the one stat read (None when even that
+    failed). The one per-file read guard every check-docs pass shares."""
     try:
         size = f.stat().st_size
     except OSError:
-        return None, False
+        return None, None
     if size > _MAX_DOC_BYTES:
-        return None, True
+        return None, size
     try:
-        return f.read_text(encoding="utf-8", errors="replace"), False
+        return f.read_text(encoding="utf-8", errors="replace"), size
     except OSError:
-        return None, False
+        return None, size
 
 
 def _fill_manual_cache(roots, cache):
@@ -1730,7 +1739,7 @@ def _fill_manual_cache(roots, cache):
             continue
         if key in cache:
             continue
-        text, _big = _read_doc(f)
+        text, _size = _read_doc(f)
         if text is not None:
             cache[key] = (f, relparts, text)
 
@@ -1750,7 +1759,7 @@ def _check_docs(roots, captures_dir, coverage, forbidden, only=None, tier_check=
     findings = []
     only_set = _resolve_only(only)
     twin_candidates, manual = [], {}
-    allow_patterns = [p if hasattr(p, "match") else _glob_regex(p) for p in forbidden_allow]
+    allow_patterns = list(forbidden_allow)  # compiled by cmd_check_docs (_glob_regex)
     for f, relparts in _iter_markdown_files(roots):
         if only_set is not None:
             try:
@@ -1758,11 +1767,9 @@ def _check_docs(roots, captures_dir, coverage, forbidden, only=None, tier_check=
                     continue
             except OSError:
                 continue
-        text, too_large = _read_doc(f)
-        if too_large:
-            findings.append(
-                ("warn", "FILE_TOO_LARGE", str(f), 1, "%d bytes; skipped content checks" % f.stat().st_size)
-            )
+        text, size = _read_doc(f)
+        if size is not None and size > _MAX_DOC_BYTES:
+            findings.append(("warn", "FILE_TOO_LARGE", str(f), 1, "%d bytes; skipped content checks" % size))
             continue
         if text is None:
             continue
@@ -1819,8 +1826,8 @@ def _check_docs(roots, captures_dir, coverage, forbidden, only=None, tier_check=
 
 # The ToC total. Each cue is FULLY delimited so a look-alike prose range does not
 # match (review C1): bold on BOTH sides ("**1 → N**"), the literal "(read 1 → N)",
-# or the MD029 "1→N reading order" comment. A bare "(1 to 5)" / "steps 1 to 7." /
-# unrelated "**1 → 5**" table cell is left alone.
+# or the MD029 "1→N reading order" comment. A bare "(1 to 5)" / "steps 1 to 7." is
+# left alone, and callers skip table rows, so a "**1 → 5**" cell is not a total.
 _TOTAL_RE = re.compile(
     r"(\*\*1\s*(?:→|->|to)\s*)\d+(?=\*\*)"  # **1 → N**
     r"|(\(read\s+1\s*(?:→|->|to)\s*)\d+(?=\))"  # (read 1 → N)
@@ -1829,7 +1836,7 @@ _TOTAL_RE = re.compile(
 
 _NEXT_TARGET_RE = re.compile(r"\*\*Next:\*\*\s*(?:\*\*)?\[[^\]]*\]\(<?([^)>\s#]+)")
 _ANY_ITEM_RE = re.compile(r"^( *)(\d+)[.)]\s+")
-_ITEM_LINK_RE = re.compile(r"^\s*\d+[.)]\s+(?:\*\*)?\[[^\]]*\]\(<?([^)>\s#]+)")
+_LINK_IN_ITEM_RE = re.compile(r"\[[^\]]*\]\(<?([^)>\s#]+)")
 _DO_A_TASK_RE = re.compile(r"^#{1,6}\s+do a task\s*#*\s*$", re.IGNORECASE)
 _SH_LANGS = {"bash", "sh", "shell", "zsh"}
 _PS_LANGS = {"powershell", "pwsh", "ps1"}
@@ -1883,8 +1890,9 @@ def _top_level_lists(text):
             if indent > cur["base"]:
                 continue
             cur["base"] = indent
-            link = _ITEM_LINK_RE.match(line)
-            cur["items"].append({"target": link.group(1) if link else None, "number": int(m.group(2))})
+            links = _LINK_IN_ITEM_RE.findall(line[m.end():])
+            target = next((t for t in links if _is_local_target(t)), links[0] if links else None)
+            cur["items"].append({"target": target, "number": int(m.group(2))})
         elif not line.strip():
             prev_blank = True
         elif line[:1] == " " or (cur is not None and not prev_blank):
@@ -1911,6 +1919,20 @@ def tour_entries(text):
     return best
 
 
+def toc_entries(text):
+    """What a `**1 → N**` total counts: the tour, or, when the index has no tour, its
+    longest top-level ordered list (plain steps included)."""
+    tour = tour_entries(text)
+    if tour:
+        return tour
+    lists, _saw_do = _top_level_lists(text)
+    return max((lst["items"] for lst in lists), key=len, default=[])
+
+
+def is_table_row(line):
+    return line.lstrip().startswith("|")
+
+
 def tour_items(text):
     """The tour's link targets, in order (None for an entry without a leading link)."""
     return [e["target"] for e in tour_entries(text)]
@@ -1921,7 +1943,7 @@ def _check_toc_count(f, text):
     from the number the tour's last entry carries, or a tour whose numbers do not
     count up by one. A total may count across groups (1-3 under Get started, 4-6
     under Do a task): it names the tour's last number either way."""
-    tour = tour_entries(text)
+    tour = toc_entries(text)
     if not tour:
         return []
     out = []
@@ -1932,7 +1954,7 @@ def _check_toc_count(f, text):
     last = numbers[-1]
     fenced = _fenced_line_numbers(text)
     for i, line in enumerate(text.split("\n"), start=1):
-        if i in fenced:
+        if i in fenced or is_table_row(line):
             continue
         for m in _TOTAL_RE.finditer(line):
             total = int(re.search(r"(\d+)$", m.group(0)).group(1))
@@ -1999,18 +2021,19 @@ def _command_lang(info):
 
 def _check_platform_twin(f, text, severity):
     """PLATFORM_TWIN: within each section of a manual page (up to the next heading),
-    every shell command fence needs a PowerShell command fence after it. Twins pair
-    in order (two commands then their two twins is fine) and output fences between
-    them are skipped. The caller decides that `f` is a manual page."""
+    every shell command fence needs a PowerShell command fence. Twins pair in order,
+    either one first (two commands then their two twins is fine), and output
+    fences between them are skipped. The caller decides that `f` is a manual page."""
     lines = text.split("\n")
     fenced = _fenced_line_numbers(text)
     headings = [i for i, ln in enumerate(lines, start=1) if _ATX_RE.match(ln.expandtabs(4)) and i not in fenced]
-    out, waiting = [], []
+    out, waiting, spare_ps = [], [], [0]
 
     def _flush():
         for start in waiting:
-            out.append((severity, "PLATFORM_TWIN", str(f), start, "no PowerShell twin after this command"))
+            out.append((severity, "PLATFORM_TWIN", str(f), start, "no PowerShell twin for this command"))
         waiting.clear()
+        spare_ps[0] = 0
 
     hi = 0
     for info, _body, start in iter_fenced_blocks(text):
@@ -2019,9 +2042,15 @@ def _check_platform_twin(f, text, severity):
             hi += 1
         kind = _command_lang(info)
         if kind == "sh":
-            waiting.append(start)
-        elif kind == "ps" and waiting:
-            waiting.pop(0)
+            if spare_ps[0]:
+                spare_ps[0] -= 1  # its twin came first (a Windows-first section)
+            else:
+                waiting.append(start)
+        elif kind == "ps":
+            if waiting:
+                waiting.pop(0)
+            else:
+                spare_ps[0] += 1
     _flush()
     return out
 

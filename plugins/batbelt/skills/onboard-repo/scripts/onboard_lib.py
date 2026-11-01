@@ -27,6 +27,8 @@ from check import (  # noqa: F401  (re-exported for callers of this module)
     _is_excluded,
     _prose_text,
     _TOTAL_RE,
+    is_table_row,
+    toc_entries,
     tour_entries,
     tour_items,
     shrink_violations,
@@ -154,10 +156,10 @@ def renumber_toc(text):
     if not any_item:
         return bom + text
     numbered = "".join(parts)
-    tour = tour_entries(numbered)
-    if not tour:
+    counted = toc_entries(numbered)
+    if not counted:
         return bom + numbered
-    n = tour[-1]["number"]
+    n = counted[-1]["number"]
 
     def _total(m):
         # exactly one of the three alternation groups matched; keep its lead text.
@@ -167,7 +169,10 @@ def renumber_toc(text):
     # Rewrite the anchored total only in prose segments (never inside a fence).
     out = []
     for seg, is_fence in _split_fences(numbered):
-        out.append(seg if is_fence else _TOTAL_RE.sub(_total, seg))
+        if is_fence:
+            out.append(seg)
+        else:
+            out.append("\n".join(ln if is_table_row(ln) else _TOTAL_RE.sub(_total, ln) for ln in seg.split("\n")))
     return bom + "".join(out)
 
 
@@ -1301,14 +1306,23 @@ MANUAL_DEFAULTS = {"layout": "flat", "capture_fence": "console"}
 SEED_INDEX_GROUPS = ["Get started", "Do a task", "Look it up"]
 
 
-def _front_end_pair(root):
-    """True when the repo root holds a `<stem>.sh` beside a `<stem>.ps1` (a
-    front-end per platform, e.g. install.sh + install.ps1)."""
-    try:
-        names = {p.name for p in pathlib.Path(root).iterdir() if p.is_file()}
-    except OSError:
-        return False
-    return any(n.endswith(".sh") and n[:-3] + ".ps1" in names for n in names)
+def _front_end_pair(root, docs_text):
+    """True when the repo has a front-end per platform: a `<stem>.sh` beside a
+    `<stem>.ps1` in the root, `scripts/` or `bin/`, whose .sh path is named in
+    `docs_text` (the README and the manual). A helper pair nobody documents is not
+    a front-end."""
+    root = pathlib.Path(root)
+    for folder in ("", "scripts", "bin"):
+        d = root / folder if folder else root
+        try:
+            names = {p.name for p in d.iterdir() if p.is_file()}
+        except OSError:
+            continue
+        for n in names:
+            if n.endswith(".sh") and n[:-3] + ".ps1" in names:
+                if (folder + "/" + n if folder else n) in docs_text:
+                    return True
+    return False
 
 
 def detect_manual_conventions(repo_root):
@@ -1323,10 +1337,15 @@ def detect_manual_conventions(repo_root):
     manual = root / "docs" / "manual"
     conv = {"layout": None, "numbered_tour": False, "next_tour": False,
             "capture_fence": None, "docs_voice": None,
-            "platform_pairs": _front_end_pair(root), "manual_has_powershell": False,
+            "platform_pairs": False, "manual_has_powershell": False,
             "has_manual": manual.is_dir(), "has_index": False, "index_groups": [],
             "new_here": False, "unreadable": []}
+    try:
+        readme = (root / "README.md").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        readme = ""
     if not manual.is_dir():
+        conv["platform_pairs"] = _front_end_pair(root, readme)
         return conv
     index = manual / "README.md"
     pages = sorted(
@@ -1340,6 +1359,7 @@ def detect_manual_conventions(repo_root):
         except OSError:
             conv["unreadable"].append(page.relative_to(manual).as_posix())
     pages = [p for p in pages if p in texts]
+    conv["platform_pairs"] = _front_end_pair(root, readme + "\n".join(texts.values()))
     parts = [p.relative_to(manual).parts for p in pages]
     how_to = [r for r in parts if not (len(r) > 1 and r[0] in ("getting-started", "reference"))]
     places = {}
@@ -1424,9 +1444,9 @@ def render_local_deviations(conv, full=False):
         out.append("- §3 Layout: the index groups are %s." % ", ".join(SEED_INDEX_GROUPS))
     if full and conv.get("new_here"):
         out.append("- §3 Layout: the index opens with a **New here?** pointer.")
-    if conv["numbered_tour"] and full:
+    if conv.get("numbered_tour") and full:
         out.append("- §3 Layout: the Do a task list is a numbered reading tour.")
-    if conv["next_tour"] and full:
+    if conv.get("next_tour") and full:
         out.append("- §3 Layout: each how-to ends with a **Next:** link to the next page in the tour.")
     fence = conv.get("capture_fence")
     if fence and (full or fence != MANUAL_DEFAULTS["capture_fence"]):

@@ -4648,6 +4648,7 @@ def test_platform_pairs_come_from_the_front_end_pair(tmp_path):
     assert conv["platform_pairs"] is False and conv["manual_has_powershell"] is True
     _seed(tmp_path, "install.sh", "#!/bin/sh\n")
     _seed(tmp_path, "install.ps1", "# ps\n")
+    _seed(tmp_path, "README.md", "# R\n\n```bash\n./install.sh\n```\n")  # a documented front-end
     assert lib.detect_manual_conventions(tmp_path)["platform_pairs"] is True
 
 
@@ -4671,7 +4672,7 @@ def test_sync_upgrades_a_v4_standard_and_never_copies_an_old_voice_word():
     assert "has no `## Local deviations` section" in t and "manual-conventions . --full" in t
     assert "else the voice word in the old template region" not in t
     assert "never copy a voice word from the old template region" in t
-    assert "a `.sh`/`.ps1` front-end pair" in t
+    assert "a documented `.sh`/`.ps1` front-end pair" in t
 
 
 def test_release_tags_only_from_the_release_branch_and_orders_a_script():
@@ -5089,3 +5090,92 @@ def test_platform_twin_ignores_hash_lines_that_are_not_headings(tmp_path, capsys
 
 def test_manual_defaults_holds_only_live_keys():
     assert set(lib.MANUAL_DEFAULTS) == {"layout", "capture_fence"}
+
+
+# ---- /code-review, fourth pass ------------------------------------------------------
+
+
+def test_renumber_toc_rewrites_the_total_when_links_are_not_first():
+    text = "# M\n\nRead (read 1 → 9) below.\n\n1. Install: see [a](a.md)\n2. Use: see [b](b.md)\n"
+    assert "(read 1 → 2)" in lib.renumber_toc(text)
+
+
+def test_a_total_without_any_tour_links_still_counts_its_list(tmp_path, capsys):
+    text = "# M\n\nRead **1 → 9**.\n\n1. Install it\n2. Run it\n"
+    assert "**1 → 2**" in lib.renumber_toc(text)
+    cli = _load_cli()
+    _seed(tmp_path, "docs/manual/README.md", text)
+    _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check"])
+    assert "TOC_COUNT" in codes
+
+
+def test_a_bold_range_in_a_table_cell_is_not_the_total(tmp_path, capsys):
+    text = "# M\n\n| steps | **1 → 5** |\n| --- | --- |\n\n1. [a](a.md)\n2. [b](b.md)\n"
+    assert "**1 → 5**" in lib.renumber_toc(text)
+    cli = _load_cli()
+    _seed(tmp_path, "docs/manual/README.md", text)
+    _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check"])
+    assert "TOC_COUNT" not in codes
+
+
+def test_shrink_check_on_a_non_utf8_file_is_a_usage_error(tmp_path, capsys):
+    chk = _load_check()
+    old = tmp_path / "old.md"
+    old.write_bytes(b"# T\n\ncaf\xe9\n")
+    new = _seed(tmp_path, "new.md", "# T\n\nok\n")
+    assert chk.main(["shrink-check", str(old), str(new)]) == 2
+    assert "Traceback" not in capsys.readouterr().err
+
+
+def test_forbidden_allow_matches_repo_relative_paths(tmp_path, capsys, monkeypatch):
+    chk = _load_check()
+    _seed(tmp_path, "README.md", "# R\n\nUses grill-me.\n")
+    _seed(tmp_path, "docs/README.md", "# D\n\nUses grill-me.\n")
+    monkeypatch.chdir(tmp_path)
+    rc = chk.main(["check-docs", "docs", "README.md", "--no-tier-check", "--forbidden", "grill-me",
+                   "--forbidden-allow", "README.md"])
+    out = capsys.readouterr().out
+    assert rc == 1 and out.count("FORBIDDEN_TOKEN") == 1 and "docs/README.md" in out
+
+
+def test_glob_classes_stay_inside_one_segment():
+    chk = _load_check()
+    assert not chk._glob_regex("[!a]b").match("/b")
+    assert not chk._glob_regex("a[/]b").match("a/b")
+    assert chk._glob_regex("[^]x").match("^x")  # a leading ^ is a literal in a glob class
+
+
+def test_platform_twin_accepts_powershell_first(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "docs/manual/a.md", "# A\n\n```powershell\nmake\n```\n\n```bash\nmake\n```\n")
+    _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
+    assert "PLATFORM_TWIN" not in codes
+
+
+def test_platform_pairs_need_a_documented_front_end(tmp_path):
+    _seed(tmp_path, "bench.sh", "#!/bin/sh\n")
+    _seed(tmp_path, "bench.ps1", "# ps\n")
+    _seed(tmp_path, "README.md", "# R\n\nRun the tool.\n")
+    assert lib.detect_manual_conventions(tmp_path)["platform_pairs"] is False
+    _seed(tmp_path, "scripts/install.sh", "#!/bin/sh\n")
+    _seed(tmp_path, "scripts/install.ps1", "# ps\n")
+    _seed(tmp_path, "README.md", "# R\n\n```bash\n./scripts/install.sh\n```\n")
+    assert lib.detect_manual_conventions(tmp_path)["platform_pairs"] is True
+    assert "named in the README or the manual" in _flat(ONBOARD / "references" / "detection.md")
+
+
+def test_read_doc_reports_the_size_it_read(tmp_path):
+    chk = _load_check()
+    big = _seed(tmp_path, "big.md", "x" * (chk._MAX_DOC_BYTES + 1))
+    text, size = chk._read_doc(big)
+    assert text is None and size == chk._MAX_DOC_BYTES + 1
+
+
+def test_render_local_deviations_tolerates_a_partial_conv():
+    assert "`docs/manual/use/`" in lib.render_local_deviations({"has_manual": True, "layout": "use"})
+
+
+def test_check_docs_takes_compiled_allow_patterns_only():
+    import inspect
+    chk = _load_check()
+    assert "hasattr(p, \"match\")" not in inspect.getsource(chk._check_docs)

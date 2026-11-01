@@ -439,12 +439,13 @@ manual is already the standard's default; a missing tour feature is asked about,
 same pass writes `docs voice:` and `platform pairs:` into the `update-docs` REPO SPECIFICS when
 they are missing: the voice from `docs_voice` (with none found, leave the line out so the
 default applies; never copy a voice word from the old template region), and `sh+powershell` when
-`platform_pairs` is true, that is when the root holds a `.sh`/`.ps1` front-end pair. A
-PowerShell block in the manual without such a pair (`manual_has_powershell`) is only mentioned
-to the operator. `preserve` carries REPO SPECIFICS verbatim, so these two lines are a separate
-edit shown as their own diff; all of it is confirmed together. Like the other docs-ia seeds it
-is the repo's own file, so nothing marks it as owned by the installer. `--sync` never moves or
-regroups a page: a new page goes where the repo's existing pages are.
+`platform_pairs` is true, that is when the repo has a documented `.sh`/`.ps1` front-end pair (in
+the root, `scripts/` or `bin/`). A PowerShell block in the manual without such a pair
+(`manual_has_powershell`) is only mentioned to the operator. `preserve` carries REPO SPECIFICS
+verbatim, so these two lines are a separate edit shown as their own diff; all of it is confirmed
+together. Like the other docs-ia seeds it is the repo's own file, so nothing marks it as owned
+by the installer. `--sync` never moves or regroups a page: a new page goes where the repo's
+existing pages are.
 
 The JSON's `ask` list holds tour features the standard expects and this manual lacks (no numbered
 Do a task list, no Next links, no **New here?** pointer). Each may be deliberate or only mean the
