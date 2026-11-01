@@ -11,7 +11,7 @@ instead.
 | Kind | Answers | Lives in | Title shape |
 | --- | --- | --- | --- |
 | Getting started | "How do I begin?" | `docs/manual/getting-started/` | Verb phrase: "Install <repo>" |
-| How-to | "How do I do X?" | `docs/manual/use/` | Verb phrase: "Review a screen" |
+| How-to | "How do I do X?" | `docs/manual/<task>.md` | Verb phrase: "Review a screen" |
 | Reference | "What exactly is X?" | `docs/manual/reference/` | Noun: "Commands", "Settings" |
 | Explanation | "Why is it like this?" | `docs/internals/`, `docs/adr/` | Noun or question |
 
@@ -39,7 +39,7 @@ A fact has exactly one owner. Every other page links to it and never retypes it.
 | --- | --- |
 | The current version | The manifest or file that already holds it (name it in `AGENTS.md`) |
 | How to install | One page in `docs/manual/getting-started/` |
-| How to use a feature | That feature's page in `docs/manual/use/` |
+| How to use a feature | That feature's page, `docs/manual/<task>.md` |
 | What changed in a release | `CHANGELOG.md` |
 | Why a decision was made | One ADR |
 
@@ -50,14 +50,21 @@ README.md                    what <repo> is, how to install it, links
 AGENTS.md                    pointer index for agents
 CHANGELOG.md                 Keep a Changelog (§6)
 docs/README.md               one table: the folders below
-docs/manual/README.md        the manual index: Get started, Do a task, Look it up
+docs/manual/README.md        the manual index: Get started, Do a task (the tour), Look it up
 docs/manual/getting-started/ first-run pages
-docs/manual/use/             one how-to per task
+docs/manual/<task>.md        one how-to per task, in the index's reading order
 docs/manual/reference/       commands, settings, troubleshooting
 docs/internals/              how it works, tests, release, this standard
 docs/adr/                    decisions, with a README index
 docs/archive/                frozen records: build logs, shipped plans and specs
 ```
+
+The Do a task list is the tour: numbered in reading order, and each how-to ends with a
+**Next:** link to the page after it. A voice may rename the three groups, never merge or reorder
+them. A repo that files how-tos in `docs/manual/use/` records it under Local deviations.
+
+Adopting existing docs never moves or regroups them: an existing manual's layout, index order and
+Next tour are kept, and recorded under Local deviations where they differ from this section.
 
 Create a folder when it gets its first page; no empty folders. A repo with little to say may keep
 its whole manual in `docs/manual/README.md` until it outgrows one page.
@@ -79,7 +86,7 @@ For manual pages and READMEs. Internals and ADRs stay plain technical.
 - No citations after sentences. Facts are checked in the work; a page links to deeper docs at most
   once per section.
 - Sentence-case headings. Descriptive link text, never "click here".
-- Numbered lists for steps, bullets for everything else.
+- Numbered lists for steps and for the manual's reading order; bullets for everything else.
 - Show real output where it helps the reader. Never invent output; never show maintainer commands
   (`jq`, `git ls-files`) on a user page.
 - No numbers that rot: test counts, timings, "so far", "yet". Say how to check instead.

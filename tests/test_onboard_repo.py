@@ -4085,3 +4085,37 @@ def test_update_docs_uses_the_precedence_ladder():
     t = _flat(UPD)
     assert "The standard wins" not in t and PRECEDENCE in t
     assert "never report a recorded deviation" in t
+
+
+# ---- template v5: a manual keeps its layout and its tour ---------------------
+
+
+def test_docs_standard_layout_is_flat_by_default():
+    t = _flat(STD_V5)
+    assert "docs/manual/<task>.md" in t
+    assert "an existing manual's layout, index order and Next tour are kept" in t
+    assert "Numbered lists for steps and for the manual's reading order" in t
+
+
+def test_manual_index_seed_is_a_numbered_tour():
+    t = (DOCSIA / "docs-manual-README.md").read_text(encoding="utf-8")
+    assert "**New here?**" in t
+    assert t.index("## Get started") < t.index("## Do a task") < t.index("## Look it up")
+    do_a_task = t.split("## Do a task", 1)[1].split("## Look it up", 1)[0]
+    assert "\n1. {{TODO:" in do_a_task and "**Next:**" in do_a_task
+
+
+def test_adoption_never_moves_pages():
+    t = _flat(ONBOARD / "references" / "adopt-docs.md")
+    assert "only on first adoption" in t and "never moves a page" in t
+
+
+def test_no_template_text_files_new_pages_into_use():
+    for rel in ("SKILL.md", "references/author-manual.md", "references/rubric.md",
+                "references/adopt-docs.md"):
+        t = _flat(ONBOARD / rel)
+        assert "use/` (one how-to per task)" not in t, rel
+        assert "task pages in `docs/manual/use/`" not in t, rel
+        assert "The new manual layout (`docs/manual/use/`) is created" not in t, rel
+    assert "the order under Local deviations decides" in _flat(ONBOARD / "references" / "author-manual.md")
+    assert "**Next:**" in _flat(ONBOARD / "references" / "author-manual.md")

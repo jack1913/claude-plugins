@@ -280,8 +280,8 @@ Read [references/rule-mining.md](references/rule-mining.md) and follow it as wri
 
 For a repo without the IA, create **only what's absent** (create-only-missing):
 `docs/manual/`, `docs/internals/`, `docs/adr/`, `docs/archive/` (the manual's
-subfolders `getting-started/`, `use/` and `reference/` are not made here: each is created
-with its first page, so no folder is ever empty), and copy the seeds from `$SKILL_DIR/templates/docs-ia/` to their
+subfolders `getting-started/` and `reference/` are not made here: each is created
+with its first page; how-to pages sit directly in `docs/manual/`, so no folder is ever empty), and copy the seeds from `$SKILL_DIR/templates/docs-ia/` to their
 targets — `CLAUDE.md`→`CLAUDE.md`, `AGENTS.md`→`AGENTS.md`, `README.md`→`README.md`,
 `docs-README.md`→`docs/README.md`, `docs-manual-README.md`→`docs/manual/README.md`,
 `internals-README.md`→`docs/internals/README.md`,
@@ -400,8 +400,8 @@ there (filling `<repo>`) and shows the two one-line additions it implies, a row 
 `docs/internals/README.md` and a row in the `AGENTS.md` pointer index, as a diff to confirm.
 It never overwrites an existing `docs-standard.md`: a differing one is only reported, as a `diff`,
 and left as it is. Like the other docs-ia seeds it is the repo's own file, so nothing marks it as
-owned by the installer. The new manual layout (`docs/manual/use/`) is
-created when its first page is.
+owned by the installer. `--sync` never moves or regroups a page: a new page goes where the
+repo's existing pages are.
 
 **The permission plan syncs too.** Run `settings-audit` on `.claude/settings.json`;
 when it exits `1`, show the `settings-migrate` dry run beside the skill diffs and

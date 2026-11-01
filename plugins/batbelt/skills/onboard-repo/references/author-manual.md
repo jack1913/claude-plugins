@@ -9,13 +9,16 @@ Section 3.7 of [SKILL.md](../SKILL.md), moved here; only citations of another re
 (create-only-missing per page); a page that already exists is shown as a `diff`
 and confirmed before overwrite — never a silent rewrite.
 
-**Page kinds and layout.** The manual has three folders: `getting-started/` (first run),
-`use/` (one how-to per task) and `reference/` (commands, settings, troubleshooting). A
+**Page kinds and layout.** First-run pages go in `getting-started/`, how-to pages directly in
+`docs/manual/` (one per task), and commands, settings and troubleshooting in `reference/`. A
 how-to or getting-started page follows [manual-page-how-to.md](manual-page-how-to.md); a
 reference page follows [manual-page-reference.md](manual-page-reference.md). When the repo
-has `docs/internals/docs-standard.md`, its voice and layout rules apply on top, and the
-standard wins where this guidance differs. Create a folder only when it gets its first page,
-and link every page from `docs/manual/README.md` under Get started, Do a task or Look it up.
+has `docs/internals/docs-standard.md`, its voice and layout rules apply on top; where they and
+this guidance differ, the order under Local deviations decides. Create a folder only when it gets
+its first page, and link every page from `docs/manual/README.md` under Get started, Do a task or
+Look it up. Do a task is the tour: number it in reading order, end each how-to and getting-started
+page with `**Next:** [title](page.md) — reason` pointing at the next entry, and when you add a page,
+renumber the list and relink the neighbours on both sides.
 
 **For each principal surface**, author a **showcase-first** page — lead with
 rendered output, per `references/stamping.md`'s show-don't-tell voice. **Ground

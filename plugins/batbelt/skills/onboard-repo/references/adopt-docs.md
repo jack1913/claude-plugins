@@ -4,6 +4,11 @@ Section 3.6 of [SKILL.md](../SKILL.md), moved here; only citations of another re
 
 ## 3.6 Adopt existing docs (only when the repo already has docs; report-first)
 
+Filing pages by kind happens only on first adoption, while the repo's docs are not yet in the
+tiers. Once `docs/manual/README.md` exists, adoption never moves a page: the manual's layout,
+index order and **Next:** tour are kept, and recorded under the standard's Local deviations where
+they differ from it.
+
 Classify each existing page with `references/rubric.md` → propose
 `old → docs/<tier>/<slug>.md` (dated/superseded pages → `docs/archive/`). Show the
 **full move plan** and **advise a pre-adoption `git` commit** (the rollback
@@ -29,7 +34,7 @@ On confirm, in order:
    includes it references relatively) alongside it, so relative asset links don't
    dangle.
 3. **Renumber the manual ToC (only if `docs/manual/README.md` has a numbered reading-order
-   list; the stamped seed has none, so skip this step then) — capture to a temp file, never redirect onto the
+   list, such as the seed's Do a task list) — capture to a temp file, never redirect onto the
    same file** (`… > docs/manual/README.md` truncates it to empty):
    `python3 "$SKILL_DIR/scripts/onboard.py" renumber-toc docs/manual/README.md > <tmp> && mv <tmp> docs/manual/README.md`
 4. **Fix links, in this exact order — it's load-bearing:**
@@ -71,9 +76,9 @@ small table, not judgment call:
 | Source `CLAUDE.md` | Replaced **wholesale** with the one-line `@AGENTS.md` stub — nothing else survives in it once `AGENTS.md` is the index. |
 | Already on the convention (`@import`-only `CLAUDE.md` + a real `AGENTS.md`) | **Hard no-op** — already on the convention, do nothing. |
 
-File each consumer page by kind: first-run pages in `docs/manual/getting-started/`, task
-pages in `docs/manual/use/`, tables and lookups in `docs/manual/reference/`, and list it in
-`docs/manual/README.md` under Get started, Do a task or Look it up.
+File each consumer page by kind: first-run pages in `docs/manual/getting-started/`, how-to
+pages directly in `docs/manual/`, tables and lookups in `docs/manual/reference/`, and list it in
+`docs/manual/README.md` under Get started, Do a task (numbered, in reading order) or Look it up.
 
 Flatten nested docs dirs into the tiers; dedupe slug collisions; file a straddling
 doc by its primary audience and flag it for a possible split.

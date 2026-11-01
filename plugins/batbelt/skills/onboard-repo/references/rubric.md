@@ -19,7 +19,7 @@ Per-repo-type examples:
 - **Full-stack app** — feature walkthroughs → consumer; data model / deploy pipeline → technical; superseded RFCs → historical.
 
 Getting-started (per target), task how-tos and pure reference tables are consumer subpages
-(`docs/manual/getting-started/`, `docs/manual/use/`, `docs/manual/reference/`).
+(`docs/manual/getting-started/`, `docs/manual/<task>.md`, `docs/manual/reference/`).
 
 **Not documentation at all — an agent working directory.** A markdown tree written by
 a *tool* rather than authored for a reader has no tier and is skipped by the docs walk
