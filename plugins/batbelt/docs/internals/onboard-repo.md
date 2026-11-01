@@ -12,9 +12,9 @@ Related pages: [agent configuration](onboard-repo-agent-config.md) and [docs and
 - It grounds the instruction files the repository already has.
 - It offers to port a repository that is moving off GitHub Copilot.
 - It scaffolds or adopts the four docs tiers (`docs/manual`, `docs/internals`, `docs/adr`, `docs/archive`) and an `AGENTS.md` index.
-- It writes a consumer manual under `docs/manual/` (`getting-started/`, `use/` and `reference/`), shaped by the page templates in `references/manual-page-how-to.md` and `references/manual-page-reference.md`.
-- It stamps the docs standard to `docs/internals/docs-standard.md` from `templates/docs-ia/internals-docs-standard.md`, and lists it in the internals README and the `AGENTS.md` pointer index. The standard is create-only-missing, like the other docs seeds.
-- The provenance header of a stamped skill says `from batbelt`. The parser also accepts `from claude-configs`, so repositories stamped earlier still sync. `TEMPLATE_VERSION` is 4.
+- It writes a consumer manual under `docs/manual/`: first-run pages in `getting-started/`, how-to pages directly in `docs/manual/`, and reference pages in `reference/`. The pages follow the shapes in `references/manual-page-getting-started.md`, `references/manual-page-how-to.md` and `references/manual-page-reference.md`, and the index's numbered Do a task list is a tour that each page continues with a Next link.
+- It stamps the docs standard to `docs/internals/docs-standard.md` from `templates/docs-ia/internals-docs-standard.md`, and lists it in the internals README and the `AGENTS.md` pointer index. The standard is create-only-missing, like the other docs seeds. Its Local deviations list is filled from `onboard.py manual-conventions`, which reads how an existing manual is built.
+- The provenance header of a stamped skill says `from batbelt`. The parser also accepts `from claude-configs`, so repositories stamped earlier still sync. `TEMPLATE_VERSION` is 5.
 
 ## It runs only when typed
 

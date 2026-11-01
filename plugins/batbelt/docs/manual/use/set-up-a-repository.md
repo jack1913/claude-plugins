@@ -28,7 +28,7 @@ Set a repository up so Claude, and anyone who clones it, works well there. It ad
   - `update-docs` keeps the docs in line with the code.
   - `update-rules` checks your `.claude/rules` and skills.
 - A permission list in `.claude/settings.json`, so routine commands don't prompt and risky ones do. If you already have one, it merges into it instead of overwriting it.
-- An `AGENTS.md` index and a `docs/` manual for the repository, with folders for getting started, how-to pages and reference pages.
+- An `AGENTS.md` index and a `docs/` manual for the repository: a getting-started page, how-to pages read in order as a tour, and reference pages.
 - A docs standard page, `docs/internals/docs-standard.md`, that says how the docs are written and where they live.
 - Housekeeping: a `CHANGELOG.md` if you have none, a pointer in `CLAUDE.md`, a sample `.claude/rules/EXAMPLE.md` and two `.gitignore` lines. Its backups and saved progress go in `.onboard-repo-retired/`, which stays out of git.
 
@@ -48,15 +48,9 @@ Before you commit, read every captured output it saved. It removes your home pat
 
 ## Keep it up to date
 
-After a batbelt update, type `/batbelt:onboard-repo --sync`. It shows each change as a diff, backs up every file it replaces, and keeps the part of each skill that is specific to your repository. A real sync of this marketplace on 2026-10-20 showed this for `update-docs`:
+After a batbelt update, type `/batbelt:onboard-repo --sync`. It shows each change as a diff, backs up every file it replaces, and keeps the part of each skill that is specific to your repository. It also lists what behaves differently from now on.
 
-```text illustrative
-< Structure = the docs IA when present: `docs/manual/` (consumer, commands-first —
-> Structure = the docs IA when present: `docs/manual/` (consumer, task-first —
-> **The standard wins.** When `docs/internals/docs-standard.md` exists, it owns page kinds,
-< <!-- stamped by onboard-repo v3 from claude-configs on 2026-10-19. …
-> <!-- stamped by onboard-repo v4 from batbelt on 2026-10-20. …
-```
+If your repository already has a manual, `--sync` keeps it as it is. It never moves or regroups a page. It writes down how your docs are built (where the pages sit, a numbered tour, the shape of your output blocks) in the docs standard's Local deviations list, so later runs keep that structure instead of reporting it.
 
 Nothing changes until you say yes.
 

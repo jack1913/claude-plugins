@@ -1040,8 +1040,8 @@ def test_move_manifest_roundtrips():
     assert got_dirs == dirs
 
 
-def test_template_version_is_four():
-    assert lib.TEMPLATE_VERSION == 4
+def test_template_version_is_five():
+    assert lib.TEMPLATE_VERSION == 5
 
 
 # ---- Phase 1: heading_slugs -------------------------------------------------
@@ -4482,3 +4482,14 @@ def test_run_on_yes_never_tags_with_a_release_script():
     t = _flat(CR)
     assert "a yes runs the script's own cut command, never a hand-made `git tag`" in t
     assert "with a `ci` bake, a yes runs the commit and push only" in t
+
+
+# ---- template v5: the version, and what --sync says changed ------------------
+
+
+def test_sync_names_each_behaviour_change_of_version_5():
+    t = _flat(ONBOARD / "SKILL.md")
+    assert "name each behaviour change" in t
+    for change in ("Local deviations", "commands-first", "never moved or regrouped",
+                   "re-derive from the code", "on one yes", "PLATFORM_TWIN"):
+        assert change in t.split("name each behaviour change", 1)[1][:1600], change

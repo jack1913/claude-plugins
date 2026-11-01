@@ -405,7 +405,7 @@ captured command this skill cannot run. **Running a capture without the
 one confirmation §7.5 asks for.** **Editing a `.txt` under `docs/.onboard-captures/`** — re-capture or
 leave it and report.
 
-<!-- stamped by onboard-repo v4 from batbelt on <date>. The template region is regenerated on /batbelt:onboard-repo --sync (backup + diff shown first); the REPO SPECIFICS block is preserved. -->
+<!-- stamped by onboard-repo v5 from batbelt on <date>. The template region is regenerated on /batbelt:onboard-repo --sync (backup + diff shown first); the REPO SPECIFICS block is preserved. -->
 
 <!-- BEGIN REPO SPECIFICS (preserved on --sync) -->
 <!-- onboard-repo fills this in per repo; see references/stamping.md -->

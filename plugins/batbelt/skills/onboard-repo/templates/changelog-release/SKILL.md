@@ -247,7 +247,7 @@ a `ci` bake or with a release script (the workflow or the script owns the tag); 
 subjects; RAG/knowledge-graph anti-hallucination (ground truth is
 `git log` / `gh pr view`).
 
-<!-- stamped by onboard-repo v4 from batbelt on <date>. The template region is regenerated on /batbelt:onboard-repo --sync (backup + diff shown first); the REPO SPECIFICS block is preserved. -->
+<!-- stamped by onboard-repo v5 from batbelt on <date>. The template region is regenerated on /batbelt:onboard-repo --sync (backup + diff shown first); the REPO SPECIFICS block is preserved. -->
 
 <!-- BEGIN REPO SPECIFICS (preserved on --sync) -->
 <!-- onboard-repo fills this in per repo; see references/stamping.md -->

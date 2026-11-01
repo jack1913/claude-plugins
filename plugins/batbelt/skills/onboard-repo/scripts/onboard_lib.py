@@ -45,7 +45,7 @@ from check import (  # noqa: F401  (re-exported for callers of this module)
 )
 
 # Bump when the stamped template layout changes; recorded in the provenance header.
-TEMPLATE_VERSION = 4
+TEMPLATE_VERSION = 5
 
 BEGIN = "<!-- BEGIN REPO SPECIFICS (preserved on --sync) -->"
 END = "<!-- END REPO SPECIFICS -->"

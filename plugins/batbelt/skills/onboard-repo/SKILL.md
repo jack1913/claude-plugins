@@ -364,6 +364,22 @@ When the `update-docs` diff shows the mode change, **call it out explicitly**: t
 template now **applies edits by default** (it was report-first) — a behavioral
 change for this repo's collaborators; `--dry-run` restores preview.
 
+When the stamps being replaced are version 4 or older, name each behaviour change of version 5
+before asking, so the operator confirms what changes for collaborators, not only a diff:
+
+- the repo's own choices outrank the docs standard, in this order: REPO SPECIFICS → the
+  standard's Local deviations → the standard's body → built-in defaults; `--sync` fills the Local
+  deviations list from how the docs are already built;
+- the default docs voice is commands-first again, and the README voice comes only from REPO
+  SPECIFICS;
+- an existing manual is never moved or regrouped; new how-to pages sit directly in `docs/manual/`;
+- `update-docs` fixes prose claims it can re-derive from the code, re-takes stale captures on one
+  confirmation, checks claims within limits, and refuses the edits its §7.10 lists;
+- `changelog-release` runs the commands it prints on one yes, and before 1.0 a feature bumps the
+  minor version;
+- `check-docs` gains `NEXT_CHAIN`, `TOC_COUNT` and `PLATFORM_TWIN`, plus `--platform-pairs`,
+  `--forbidden-allow` and a `shrink-check` verb.
+
 A stamped `update-deps` (when present) syncs via the same single-file `preserve`
 call — the `parse_regions` / `preserve_repo_specifics` machinery is
 skill-agnostic; it regenerates the template region and preserves the REPO

@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-01
+
+This release changes how the docs of a repository you set up are kept. While batbelt is `0.y.z`, a minor
+release may break things: the stamped `update-docs` and `changelog-release` now do more on their own (see
+Changed). Run `/batbelt:onboard-repo --sync` in each repository you set up; it lists what changes before it
+writes anything.
+
+### Added
+
+- A Local deviations list in the docs standard. `--sync` fills it from how your docs are already built, so a
+  repository's own layout, reading tour and output blocks are kept instead of reported.
+- A getting-started page shape, and a how-to shape that shows each command with its PowerShell twin, the real
+  output with a note on how it was captured, what it means, a `You see | Do this` table and a Next link.
+- `check-docs` checks that the manual's Next links follow the index (`NEXT_CHAIN`), that the index's page count
+  matches its list (`TOC_COUNT`), and that every shell command has a PowerShell twin (`PLATFORM_TWIN`, an error
+  with `--platform-pairs`).
+- `check-docs --forbidden-allow`, to check that a fact another repository owns is linked, not restated.
+- `check.py shrink-check`, so the stamped `update-docs` can stop a rewrite that guts a page.
+- `/batbelt:onboard-repo` asks which README voice you want before it writes the README, and the README starts
+  with an Install section.
+
+### Changed
+
+- Your repository's own choices outrank the docs standard: REPO SPECIFICS first, then the Local deviations, then
+  the standard, then built-in defaults. The standard no longer sets the README voice.
+- The default docs voice is commands-first again: one concept per page, each showing what you'll actually see.
+- How-to pages sit directly in `docs/manual/` by default. An existing manual is never moved or regrouped, and one
+  that uses `use/` keeps it.
+- The README keeps its install command whatever its voice, and every `update-docs` run checks the README's fixed
+  rules.
+- `update-docs` fixes a claim it can re-derive from the code, such as a count or a flag name, instead of only
+  reporting it. New pages, decision records and captures still wait for you.
+- `update-docs` checks the claims on the pages a run changed, with one reviewer per angle, at most 8 readers and
+  2 rounds, then reports what is left.
+- `update-docs` lists stale captures once and re-takes them after one yes, with read-only commands only.
+- `update-docs` reports unchanged niche deferrals and known baselines as one line, and offers the decision-record
+  check only when a record's sources changed.
+- `changelog-release` prints the commit, push and tag commands, then runs them one by one after one yes. Your own
+  permission rules still apply to each command.
+- Before 1.0, `changelog-release` bumps the minor version for a feature: 0.1.2 becomes 0.2.0.
+- `changelog-release` asks for an entry, or a reason to skip, for every merge in the release. Both skills commit by
+  explicit path and name any unrelated changes they left out.
+
 ## [0.2.1] - 2026-10-20
 
 ### Added
