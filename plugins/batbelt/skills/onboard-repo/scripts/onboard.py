@@ -6,6 +6,7 @@ Usage:
   onboard.py check-markers <file>                       # exit 0 if well-formed, else 2
   onboard.py find-predecessors <claude_dir>             # JSON list -> stdout
   onboard.py renumber-toc <file>                        # reflow manual ToC -> stdout
+  onboard.py manual-conventions <repo_root>             # how docs/manual/ is built, JSON -> stdout
   onboard.py rewrite-links <file> <manifest>            # apply manifest moves -> stdout
   onboard.py rebase-links <file> <page_old> <page_new> <manifest>  # re-anchor a moved page
   onboard.py write-move-manifest <pairs.json> <dirs.json>  # build a move manifest -> stdout
@@ -456,6 +457,13 @@ def main(argv):
             if len(rest) != 1:
                 return _usage("usage: onboard.py renumber-toc <file>")
             sys.stdout.write(lib.renumber_toc(pathlib.Path(rest[0]).read_text(encoding="utf-8")))
+            return 0
+        if cmd == "manual-conventions":
+            if len(rest) != 1:
+                return _usage("usage: onboard.py manual-conventions <repo_root>")
+            conv = lib.detect_manual_conventions(rest[0])
+            conv["local_deviations"] = lib.render_local_deviations(conv)
+            print(json.dumps(conv, indent=2))
             return 0
         if cmd == "rewrite-links":
             if len(rest) != 2:

@@ -296,7 +296,8 @@ targets — `CLAUDE.md`→`CLAUDE.md`, `AGENTS.md`→`AGENTS.md`, `README.md`→
 `docs-archive-README.md`→`docs/archive/README.md`,
 `internals-agent-instructions.md`→`docs/internals/agent-instructions.md`,
 `internals-docs-standard.md`→`docs/internals/docs-standard.md` — filling each `<placeholder>`
-from confirmed detection. These are the **repo's own files**: never mark them with
+from confirmed detection. When the repo already has a manual, the standard's Local deviations list
+comes from `onboard.py manual-conventions` as in §5. These are the **repo's own files**: never mark them with
 an installer's ownership/deletion marker (such a marker licenses removal by that
 installer's uninstall and would target a repo's real docs). Populate the
 `AGENTS.md` pointer index **cite-or-defer**.
@@ -406,7 +407,15 @@ like any other missing canonical skill, so the pass is create-or-update, never s
 there (filling `<repo>`) and shows the two one-line additions it implies, a row in
 `docs/internals/README.md` and a row in the `AGENTS.md` pointer index, as a diff to confirm.
 It never overwrites an existing `docs-standard.md`: a differing one is only reported, as a `diff`,
-and left as it is. Like the other docs-ia seeds it is the repo's own file, so nothing marks it as
+and left as it is.
+
+**A new standard starts out agreeing with the repo.** Before copying it, run
+`python3 "$SKILL_DIR/scripts/onboard.py" manual-conventions .` and read the JSON: the copy then
+fills its Local deviations list with the printed `local_deviations` (in place of `- None.`), so a
+flat manual, a numbered tour or a `text capture=` fence is recorded rather than reported. The same
+pass writes `docs voice:` and `platform pairs:` into the `update-docs` REPO SPECIFICS when they are
+missing: the voice from `docs_voice` (else the voice word in the old template region), and
+`sh+powershell` when `platform_pairs` is true. All of it is part of the diff the operator confirms. Like the other docs-ia seeds it is the repo's own file, so nothing marks it as
 owned by the installer. `--sync` never moves or regroups a page: a new page goes where the
 repo's existing pages are.
 

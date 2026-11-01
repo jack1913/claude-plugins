@@ -1281,3 +1281,83 @@ def convert_copilot_prompt(text):
     if args:
         notes.append("${input:...} -> $name for: " + ", ".join(args))
     return converted, args, notes
+
+
+# ---- manual conventions (--sync records them as the standard's Local deviations) ----
+
+_TOUR_ENTRY_RE = re.compile(r"^\s*\d+\.\s+\[", re.M)
+_NEXT_LINK_RE = re.compile(r"\*\*Next:\*\*\s*\[")
+_VOICE_WORD_RE = re.compile(r"\b(commands-first|task-first)\b", re.I)
+_PS_LANGS = ("powershell", "pwsh", "ps1")
+
+# What the v5 docs standard expects; anything else is a Local deviation.
+MANUAL_DEFAULTS = {"layout": "flat", "numbered_tour": True, "next_tour": True, "capture_fence": "console"}
+
+
+def _prose(text):
+    """The non-fence text of a page."""
+    return "".join(seg for seg, is_fence in _split_fences(text) if not is_fence)
+
+
+def detect_manual_conventions(repo_root):
+    """Read how an existing docs/manual/ is built, so --sync can record it instead of
+    reporting it. Keys: layout ("flat" | "use" | None), numbered_tour, next_tour,
+    capture_fence (the fence language used with capture=, or None), docs_voice (the
+    index line naming commands-first or task-first, or None), platform_pairs (any
+    PowerShell fence in the manual). Pure read; no manual -> layout None."""
+    manual = pathlib.Path(repo_root) / "docs" / "manual"
+    conv = {"layout": None, "numbered_tour": False, "next_tour": False,
+            "capture_fence": None, "docs_voice": None, "platform_pairs": False}
+    if not manual.is_dir():
+        return conv
+    index = manual / "README.md"
+    pages = sorted(p for p in manual.rglob("*.md") if p != index)
+    parts = [p.relative_to(manual).parts for p in pages]
+    if any(len(r) > 1 and r[0] == "use" for r in parts):
+        conv["layout"] = "use"
+    elif any(len(r) == 1 for r in parts):
+        conv["layout"] = "flat"
+    fence_langs = {}
+    for page in ([index] if index.is_file() else []) + pages:
+        text = page.read_text(encoding="utf-8")
+        if page != index and _NEXT_LINK_RE.search(_prose(text)):
+            conv["next_tour"] = True
+        for info, _body, _line in iter_fenced_blocks(text):
+            tokens = info.split()
+            lang = tokens[0].lower() if tokens else ""
+            if lang in _PS_LANGS:
+                conv["platform_pairs"] = True
+            if any(t.startswith("capture=") for t in tokens[1:]):
+                fence_langs[lang] = fence_langs.get(lang, 0) + 1
+    if fence_langs:
+        conv["capture_fence"] = max(sorted(fence_langs), key=lambda k: fence_langs[k])
+    if index.is_file():
+        prose = _prose(index.read_text(encoding="utf-8"))
+        conv["numbered_tour"] = bool(_TOUR_ENTRY_RE.search(prose))
+        for para in re.split(r"\n\s*\n", prose):
+            if _VOICE_WORD_RE.search(para) and not para.lstrip().startswith("#"):
+                conv["docs_voice"] = " ".join(para.split())
+                break
+    return conv
+
+
+def render_local_deviations(conv):
+    """The docs standard's Local deviations list for `conv` (from
+    detect_manual_conventions): one Markdown bullet per value that differs from
+    MANUAL_DEFAULTS, or "" when nothing differs or there is no manual."""
+    if conv.get("layout") is None:
+        return ""
+    out = []
+    if conv["layout"] == "use":
+        out.append("- §3 Layout: how-to pages sit in `docs/manual/use/`, not directly in `docs/manual/`.")
+    if not conv["numbered_tour"]:
+        out.append("- §3 Layout: the Do a task list is not numbered; its order is not a reading tour.")
+    if not conv["next_tour"]:
+        out.append("- §3 Layout: pages do not end with a **Next:** link.")
+    fence = conv.get("capture_fence")
+    if fence and fence != MANUAL_DEFAULTS["capture_fence"]:
+        out.append(
+            "- §4 Output: captured output uses `%s capture=` fences; keep that shape, never convert it."
+            % fence
+        )
+    return "\n".join(out) + "\n" if out else ""

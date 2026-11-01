@@ -4222,3 +4222,70 @@ def test_onboard_asks_the_readme_voice_before_the_seed():
 
 def test_deferred_readme_voice_imposes_nothing():
     assert "With no README voice recorded, no voice is imposed" in _flat(STD_V5)
+
+
+# ---- template v5: --sync records a repo's manual conventions -----------------
+
+
+def _flat_manual(tmp_path):
+    _seed(tmp_path, "docs/manual/README.md",
+          "# Manual\n\nThe manual: commands-first, one concept per page.\n\n"
+          "1. [Update](updating.md)\n2. [Remove](uninstalling.md)\n")
+    _seed(tmp_path, "docs/manual/updating.md",
+          "# Update\n\n```bash\n./update.sh\n```\n\n```powershell\n.\\update.ps1\n```\n\n"
+          "```text capture=update\n$ ./update.sh\nok\n```\n\n**Next:** [Remove](uninstalling.md)\n")
+    _seed(tmp_path, "docs/manual/uninstalling.md", "# Remove\n\nThat's the tour.\n")
+    return tmp_path
+
+
+def test_sync_conventions_for_a_flat_numbered_manual(tmp_path):
+    conv = lib.detect_manual_conventions(_flat_manual(tmp_path))
+    assert conv == {"layout": "flat", "numbered_tour": True, "next_tour": True,
+                    "capture_fence": "text",
+                    "docs_voice": "The manual: commands-first, one concept per page.",
+                    "platform_pairs": True}
+    out = lib.render_local_deviations(conv)
+    assert "`text capture=`" in out and "use/" not in out
+
+
+def test_sync_conventions_keep_an_existing_use_layout(tmp_path):
+    _seed(tmp_path, "docs/manual/README.md", "# Manual\n\n## Do a task\n\n- [Grill](use/grill.md)\n")
+    _seed(tmp_path, "docs/manual/use/grill.md", "# Grill\n")
+    conv = lib.detect_manual_conventions(tmp_path)
+    assert conv["layout"] == "use" and conv["numbered_tour"] is False
+    out = lib.render_local_deviations(conv)
+    assert "`docs/manual/use/`" in out and "not numbered" in out
+
+
+def test_sync_conventions_without_a_manual(tmp_path):
+    conv = lib.detect_manual_conventions(tmp_path)
+    assert conv["layout"] is None and lib.render_local_deviations(conv) == ""
+
+
+def test_cli_manual_conventions(tmp_path):
+    cli = _load_cli()
+    import contextlib
+    import io
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rc = cli.main(["manual-conventions", str(_flat_manual(tmp_path))])
+    out = json.loads(buf.getvalue())
+    assert rc == 0 and out["layout"] == "flat" and "`text capture=`" in out["local_deviations"]
+
+
+def test_sync_fills_local_deviations_and_the_voice_lines():
+    t = _flat(ONBOARD / "SKILL.md")
+    assert "onboard.py manual-conventions" in t
+    assert "fills its Local deviations list" in t
+    assert "`docs voice:` and `platform pairs:`" in t
+
+
+def test_sync_conventions_read_a_wrapped_voice_lead_whole(tmp_path):
+    _seed(tmp_path, "docs/manual/README.md",
+          "# Manual\n\nHow to use it day to day — commands-first, one concept per page,\n"
+          "each showing you what you'll actually see.\n\n1. [Update](updating.md)\n")
+    _seed(tmp_path, "docs/manual/updating.md", "# Update\n")
+    conv = lib.detect_manual_conventions(tmp_path)
+    assert conv["docs_voice"] == ("How to use it day to day — commands-first, one concept per page, "
+                                  "each showing you what you'll actually see.")
