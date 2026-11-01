@@ -24,7 +24,8 @@
     "xctest",
     "testing",
     "xcuiautomation",
-    "observation"
+    "observation",
+    "coreimage"
   ],
   "apis": [
     {
@@ -1456,6 +1457,54 @@
         "tvOS": "26.0",
         "watchOS": "26.0"
       }
+    },
+    {
+      "name": "ExitTest",
+      "path": "testing/exittest"
+    },
+    {
+      "name": "expect(processExitsWith:observing:_:sourceLocation:performing:)",
+      "path": "testing/expect(processexitswith:observing:_:sourcelocation:performing:)"
+    },
+    {
+      "name": "require(processExitsWith:observing:_:sourceLocation:performing:)",
+      "path": "testing/require(processexitswith:observing:_:sourcelocation:performing:)"
+    },
+    {
+      "name": "Issue.Severity",
+      "path": "testing/issue/severity-swift.enum"
+    },
+    {
+      "name": "Issue.record(_:severity:sourceLocation:)",
+      "path": "testing/issue/record(_:severity:sourcelocation:)"
+    },
+    {
+      "name": "Test.cancel(_:sourceLocation:)",
+      "path": "testing/test/cancel(_:sourcelocation:)"
+    },
+    {
+      "name": "CustomTestReflectable",
+      "path": "testing/customtestreflectable"
+    },
+    {
+      "name": "Attachment",
+      "path": "testing/attachment"
+    },
+    {
+      "name": "Attachment.record(_:named:sourceLocation:)",
+      "path": "testing/attachment/record(_:named:sourcelocation:)"
+    },
+    {
+      "name": "Attachment.init(exporting:as:named:sourceLocation:)",
+      "path": "testing/attachment/init(exporting:as:named:sourcelocation:)"
+    },
+    {
+      "name": "Attachment.init(contentsOf:named:sourceLocation:)",
+      "path": "testing/attachment/init(contentsof:named:sourcelocation:)"
+    },
+    {
+      "name": "AttachableImageFormat",
+      "path": "testing/attachableimageformat"
     }
   ],
   "ignore": {

@@ -45,14 +45,14 @@ Use this skill to write, review, migrate, and debug Swift tests with modern Swif
 ## Routing map (read the right reference fast)
 
 - Test building blocks and suite organization -> `references/fundamentals.md`
-- `#expect`, `#require`, and throw expectations -> `references/expectations.md`
+- `#expect`, `#require`, throw expectations, and exit tests -> `references/expectations.md`
 - Traits, tags, and Xcode test-plan filtering -> `references/traits-and-tags.md`
 - Parameterized test design and combinatorics -> `references/parameterized-testing.md`
 - Default parallel execution, `.serialized`, isolation strategy -> `references/parallelization-and-isolation.md`
 - Test speed, determinism, and flakiness prevention -> `references/performance-and-best-practices.md`
 - Async waiting and callback bridging -> `references/async-testing-and-waiting.md`
 - XCTest coexistence and migration workflow -> `references/migration-from-xctest.md`
-- Test navigator/report workflows and diagnostics -> `references/xcode-workflows.md`
+- Test navigator/report workflows, attachments, and diagnostics -> `references/xcode-workflows.md`
 - Index and quick navigation -> `references/_index.md`
 
 ## Common pitfalls -> next best move
@@ -61,7 +61,9 @@ Use this skill to write, review, migrate, and debug Swift tests with modern Swif
 - Failing optional preconditions hidden in later assertions -> `try #require(...)` then assert on unwrapped value.
 - Flaky integration tests on shared database -> isolate dependencies or in-memory repositories; use `.serialized` only as a transition step.
 - Disabled tests that silently rot -> prefer `withKnownIssue` for temporary known failures to preserve signal.
-- Unclear failure values for complex types -> conform type to `CustomTestStringConvertible` for focused test diagnostics.
+- Unclear failure values for complex types -> conform type to `CustomTestStringConvertible` for focused test diagnostics, or to `CustomTestReflectable` (Xcode 27+) to choose which properties the failure shows.
+- Code that must trap (`precondition`, `fatalError`, `exit`) -> an exit test, `#expect(processExitsWith:)` (not on iOS, tvOS, watchOS or visionOS destinations).
+- A test that must end early without failing (`XCTSkip`) -> `try Test.cancel("reason")`; a problem that should only warn -> `Issue.record("...", severity: .warning)`.
 - Test-plan include/exclude by names -> use tags and tag-based filters instead.
 
 ## Verification checklist
