@@ -803,7 +803,9 @@
         "iOS": "27.0",
         "Mac Catalyst": "27.0",
         "visionOS": "27.0",
-        "macOS": false
+        "macOS": false,
+        "tvOS": false,
+        "watchOS": false
       }
     },
     {
@@ -813,7 +815,93 @@
         "iOS": "27.0",
         "Mac Catalyst": "27.0",
         "visionOS": "27.0",
-        "macOS": false
+        "macOS": false,
+        "tvOS": false,
+        "watchOS": false
+      }
+    },
+    {
+      "name": "ToolbarMinimizationBehavior.onScrollDown",
+      "path": "swiftui/toolbarminimizationbehavior/onscrolldown",
+      "claims": {
+        "iOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": false,
+        "visionOS": false,
+        "tvOS": false,
+        "watchOS": false
+      }
+    },
+    {
+      "name": "ToolbarMinimizationBehavior.onScrollUp",
+      "path": "swiftui/toolbarminimizationbehavior/onscrollup",
+      "claims": {
+        "iOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": false,
+        "visionOS": false,
+        "tvOS": false,
+        "watchOS": false
+      }
+    },
+    {
+      "name": "ToolbarMinimizationBehavior.never",
+      "path": "swiftui/toolbarminimizationbehavior/never",
+      "claims": {
+        "iOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": false,
+        "visionOS": false,
+        "tvOS": false,
+        "watchOS": false
+      }
+    },
+    {
+      "name": "ToolbarMinimizationSafeAreaAdjustment.enabled",
+      "path": "swiftui/toolbarminimizationsafeareaadjustment/enabled",
+      "claims": {
+        "iOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": false,
+        "visionOS": false,
+        "tvOS": false,
+        "watchOS": false
+      }
+    },
+    {
+      "name": "ToolbarMinimizationRestoration.atScrollEdge",
+      "path": "swiftui/toolbarminimizationrestoration/atscrolledge",
+      "claims": {
+        "iOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": false,
+        "visionOS": false,
+        "tvOS": false,
+        "watchOS": false
+      }
+    },
+    {
+      "name": "ToolbarItemVisibilityPriority.high",
+      "path": "swiftui/toolbaritemvisibilitypriority/high",
+      "claims": {
+        "iOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": "26.1",
+        "visionOS": false,
+        "tvOS": false,
+        "watchOS": false
+      }
+    },
+    {
+      "name": "ToolbarItemVisibilityPriority.low",
+      "path": "swiftui/toolbaritemvisibilitypriority/low",
+      "claims": {
+        "iOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": "26.1",
+        "visionOS": false,
+        "tvOS": false,
+        "watchOS": false
       }
     },
     {
@@ -886,6 +974,54 @@
         "visionOS": "27.1",
         "tvOS": "27.1",
         "watchOS": "27.1"
+      }
+    },
+    {
+      "name": "ToolbarItemAxisBehavior.horizontalOnly",
+      "path": "swiftui/toolbaritemaxisbehavior/horizontalonly",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": "27.1",
+        "macOS": false,
+        "visionOS": false,
+        "tvOS": false,
+        "watchOS": false
+      }
+    },
+    {
+      "name": "ToolbarItemAxisBehavior.verticalPreferred",
+      "path": "swiftui/toolbaritemaxisbehavior/verticalpreferred",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": "27.1",
+        "macOS": false,
+        "visionOS": false,
+        "tvOS": false,
+        "watchOS": false
+      }
+    },
+    {
+      "name": "ToolbarVerticalCompressionBehavior.prefersToolbarItems",
+      "path": "swiftui/toolbarverticalcompressionbehavior/preferstoolbaritems",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": "27.1",
+        "macOS": false,
+        "visionOS": false,
+        "tvOS": false,
+        "watchOS": false
+      }
+    },
+    {
+      "name": "ToolbarVerticalCompressionBehavior.prefersTabBar",
+      "path": "swiftui/toolbarverticalcompressionbehavior/preferstabbar",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": "27.1",
+        "macOS": false,
+        "visionOS": false,
+        "tvOS": false,
+        "watchOS": false
       }
     },
     {
@@ -973,7 +1109,11 @@
       "path": "swiftui/documentcreationsource",
       "claims": {
         "iOS": "27.0",
-        "visionOS": "27.0"
+        "visionOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": "27.0",
+        "tvOS": false,
+        "watchOS": false
       }
     },
     {

@@ -108,25 +108,40 @@ SwiftUI infers axis eligibility from the item. Symbol-capable items can move ver
 ToolbarItem {
     SelectOrDoneButton()
 }
+#if os(iOS)
 .axisBehavior(.horizontalOnly)
+#endif
 
 ToolbarItem {
     CompactCompassControl()
 }
+#if os(iOS)
 .axisBehavior(.verticalPreferred)
+#endif
 ```
 
-Use `.horizontalOnly` when related states must stay together and one representation cannot fit a fixed-width vertical bar. Use `.verticalPreferred` only when a custom view has a compact vertical representation. Otherwise keep `.automatic`.
+Use `.horizontalOnly` when related states must stay together and one representation cannot fit a fixed-width vertical bar. Use `.verticalPreferred` only when a custom view has a compact vertical representation. Otherwise keep `.automatic`. `axisBehavior(_:)` and `.automatic` exist on every platform, but `.horizontalOnly` and `.verticalPreferred` exist only on iOS, iPadOS and Mac Catalyst: the SDK marks them unavailable on macOS, tvOS, visionOS and watchOS, so they sit inside `#if os(iOS)`, which also covers Mac Catalyst. No availability check can admit them on the other platforms.
 
-For a custom item's presentation details, a view built for the 27.1 SDK can read `@Environment(\.toolbarVerticalEdge)`. A non-`nil` value means the environment supports a vertical bar on that directional edge; use it to select a compact representation, not to add safe-area spacing. Keep the property declaration in a type marked `@available(iOS 27.1, macOS 27.1, macCatalyst 27.1, tvOS 27.1, visionOS 27.1, watchOS 27.1, *)` and selected behind `#available` with the same platforms. Name 27.1 for each platform the target builds for: the `*` admits unnamed platforms at their deployment target. `toolbarVerticalEdge` and the other vertical-bar APIs in this section (`axisBehavior(_:)`, `toolbarVerticalCompressionBehavior(_:)`, `toolbarVerticalBehavior(_:)`) are introduced in 27.1 on every platform, Mac Catalyst included, so no `#if os(...)` guard is needed; only the availability check is.
+For a custom item's presentation details, a view built for the 27.1 SDK can read `@Environment(\.toolbarVerticalEdge)`. A non-`nil` value means the environment supports a vertical bar on that directional edge; use it to select a compact representation, not to add safe-area spacing. Keep the property declaration in a type marked `@available(iOS 27.1, macOS 27.1, macCatalyst 27.1, tvOS 27.1, visionOS 27.1, watchOS 27.1, *)` and selected behind `#available` with the same platforms. Name 27.1 for each platform the target builds for: the `*` admits unnamed platforms at their deployment target. `toolbarVerticalEdge` and the vertical-bar modifiers in this section (`axisBehavior(_:)`, `toolbarVerticalCompressionBehavior(_:)`, `toolbarVerticalBehavior(_:)`) are introduced in 27.1 on every platform, Mac Catalyst included, so they need only the availability check; the four iOS-only values in this section (`.horizontalOnly`, `.verticalPreferred`, `.prefersToolbarItems` and `.prefersTabBar`) are the exception.
 
-When a view combines a toolbar and tab bar, `.toolbarVerticalCompressionBehavior(.prefersToolbarItems)` keeps toolbar actions visible longer, while `.prefersTabBar` favors destinations. The default `.automatic` compresses toolbar items first. Choose based on the experience's primary task, then use the existing SDK 27 [overflow and visibility](#sdk-27-overflow-and-visibility) APIs to prioritize individual actions rather than duplicating overflow controls.
+When a view combines a toolbar and tab bar, `.toolbarVerticalCompressionBehavior(.prefersToolbarItems)` keeps toolbar actions visible longer, while `.prefersTabBar` favors destinations. The default `.automatic` compresses toolbar items first. Like the axis values above, `.prefersToolbarItems` and `.prefersTabBar` exist only on iOS, iPadOS and Mac Catalyst, so put the modifier call inside `#if os(iOS)`:
 
-Most interfaces should keep automatic vertical behavior. Use `.toolbarVerticalBehavior(.disabled)` only for a narrow exception, such as a bottom-heavy single-page interface or a sheet whose lone toolbar item would cost more space than it saves. All of these vertical-bar APIs require 27.1 on every platform (iOS, iPadOS, Mac Catalyst, macOS, tvOS, visionOS and watchOS), and the first example's `.topBarPinnedTrailing` requires iOS 27 or visionOS 27 and has no macOS release; gate it as in [SDK 27 overflow and visibility](#sdk-27-overflow-and-visibility), and preserve the ordinary system toolbar as the earlier-OS fallback.
+```swift
+TabView {
+    // tabs
+}
+#if os(iOS)
+.toolbarVerticalCompressionBehavior(.prefersToolbarItems)
+#endif
+```
+
+Choose based on the experience's primary task, then use the existing SDK 27 [overflow and visibility](#sdk-27-overflow-and-visibility) APIs to prioritize individual actions rather than duplicating overflow controls.
+
+Most interfaces should keep automatic vertical behavior. Use `.toolbarVerticalBehavior(.disabled)` only for a narrow exception, such as a bottom-heavy single-page interface or a sheet whose lone toolbar item would cost more space than it saves. All of these vertical-bar APIs require 27.1 on every platform (iOS, iPadOS, Mac Catalyst, macOS, tvOS, visionOS and watchOS), `.disabled` included; only `.horizontalOnly`, `.verticalPreferred`, `.prefersToolbarItems` and `.prefersTabBar` are iOS-only. The first example's `.topBarPinnedTrailing` requires iOS 27 or visionOS 27 and has no macOS, tvOS or watchOS release; gate it as in [SDK 27 overflow and visibility](#sdk-27-overflow-and-visibility), and preserve the ordinary system toolbar as the earlier-OS fallback.
 
 ## SDK 27 overflow and visibility
 
-When toolbar content does not fit, the system can move lower-priority items into an overflow menu. `visibilityPriority(_:)` is available on iOS 27+, macOS 26.1+, watchOS 27+, tvOS 27+, and visionOS 27+. `.automatic` is available on every supported platform. `.low` and `.high` are available only on iOS and macOS. `ToolbarItemVisibilityPriority(higherThan:)` and `(lowerThan:)` are available on iOS 27+ and macOS 27+.
+When toolbar content does not fit, the system can move lower-priority items into an overflow menu. `visibilityPriority(_:)` is available on iOS 27+, macOS 26.1+, watchOS 27+, tvOS 27+, and visionOS 27+. `.automatic` is available on every supported platform. `.low` and `.high` are available only on iOS and macOS. `ToolbarItemVisibilityPriority(higherThan:)` and `(lowerThan:)` are available on iOS 27+ and macOS 27+. When the target also builds for tvOS, visionOS or watchOS, put `.low`, `.high` and the `higherThan:` / `lowerThan:` initializers inside `#if os(iOS) || os(macOS)`: those platforms have none of them, so no availability check admits them there.
 
 ```swift
 .toolbar {
@@ -134,11 +149,13 @@ When toolbar content does not fit, the system can move lower-priority items into
         UndoButton()
         RedoButton()
     }
+    #if os(iOS) || os(macOS)
     .visibilityPriority(.high)
+    #endif
 }
 ```
 
-`ToolbarOverflowMenu` is toolbar content whose children always appear in the overflow menu. The `View.toolbarOverflowMenu { ... }` modifier provides the same behavior outside a toolbar builder. Both are available on iOS 27+ and visionOS 27+ only. The type and modifier have different syntaxes:
+`ToolbarOverflowMenu` is toolbar content whose children always appear in the overflow menu. The `View.toolbarOverflowMenu { ... }` modifier provides the same behavior outside a toolbar builder. Both are available on iOS 27+ and visionOS 27+ only, with no macOS, tvOS or watchOS release. The type and modifier have different syntaxes:
 
 ```swift
 .toolbar {
@@ -155,9 +172,9 @@ content
     }
 ```
 
-`.topBarPinnedTrailing` keeps a `ToolbarItem` at the trailing edge and prevents it from moving into overflow. It is available on iOS 27+ and visionOS 27+ only.
+`.topBarPinnedTrailing` keeps a `ToolbarItem` at the trailing edge and prevents it from moving into overflow. It is available on iOS 27+ and visionOS 27+ only, with no macOS, tvOS or watchOS release.
 
-For deployment targets below SDK 27, prefer one availability check around the toolbar content when using these APIs. Name visionOS in the check too, and keep it inside `#if os(iOS) || os(visionOS)` when the target also builds for macOS: macOS has neither API, so no `#available` version admits them there, and the `#else` branch gives macOS the plain item:
+For deployment targets below SDK 27, prefer one availability check around the toolbar content when using these APIs. Name visionOS in the check too, and keep it inside `#if os(iOS) || os(visionOS)` when the target also builds for macOS, tvOS or watchOS: none of them has either API, so no `#available` version admits them there, and the `#else` branch gives them the plain item:
 
 ```swift
 .toolbar {
@@ -184,14 +201,16 @@ For deployment targets below SDK 27, prefer one availability check around the to
 
 ## Minimization, margins, and status bar
 
-`toolbarMinimizationBehavior(_:for:)`, `toolbarMinimizationSafeAreaAdjustment(_:for:)`, and `toolbarMinimizationRestoration(_:for:)` are available on all Apple platforms in SDK 27. The behavior cases `.automatic`, `.onScrollDown`, `.onScrollUp`, and `.never` and the safe-area cases `.automatic`, `.enabled`, and `.disabled` have platform-specific availability; use `.automatic` for cross-platform code and gate iOS-only cases as needed.
+`toolbarMinimizationBehavior(_:for:)`, `toolbarMinimizationSafeAreaAdjustment(_:for:)`, and `toolbarMinimizationRestoration(_:for:)` are available on all Apple platforms in SDK 27, and so is each one's `.automatic` value. The behavior cases `.onScrollDown`, `.onScrollUp` and `.never`, the safe-area cases `.enabled` and `.disabled`, and the restoration case `.atScrollEdge` exist only on iOS, iPadOS and Mac Catalyst: the SDK marks them unavailable on macOS, tvOS, visionOS and watchOS, so no availability check admits them there. Use `.automatic` for cross-platform code and put the iOS-only cases inside `#if os(iOS)`, which also covers the `.navigationBar` placement that macOS lacks:
 
 ```swift
 ScrollView {
     Content()
 }
+#if os(iOS)
 .toolbarMinimizationBehavior(.onScrollDown, for: .navigationBar)
 .toolbarMinimizationSafeAreaAdjustment(.automatic, for: .navigationBar)
+#endif
 ```
 
 `contentMarginsRemoved(_:)` removes the system margins around toolbar content. It is available on iOS 27+, macOS 27+, tvOS 27+, watchOS 27+, and visionOS 27+.

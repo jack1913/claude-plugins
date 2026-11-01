@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Four vertical-bar toolbar values exist only on iOS, iPadOS and Mac Catalyst, and `swift:swiftui` now puts them inside `#if os(iOS)`: `ToolbarItemAxisBehavior.horizontalOnly` and `.verticalPreferred`, and `ToolbarVerticalCompressionBehavior.prefersToolbarItems` and `.prefersTabBar`. Earlier text said every vertical-bar API needed only the all-platform 27.1 availability check; for these four values that does not compile for macOS, tvOS, visionOS or watchOS.
+- The same holds for the SDK 27 toolbar minimization values (`.onScrollDown`, `.onScrollUp`, `.never`, `.enabled`, `.disabled`, `.atScrollEdge`), now inside `#if os(iOS)`, and for the `.low` and `.high` visibility priorities, now inside `#if os(iOS) || os(macOS)`. `.topBarPinnedTrailing` and `ToolbarOverflowMenu` are documented as missing on tvOS and watchOS as well as macOS.
+- `DocumentCreationSource` is documented as available on macOS 27 too; only `NewDocumentButton`'s `source:` is iOS and visionOS only.
+- The other 27.1 APIs (`ArrangementView`, reserved regions, `onHingeChange`, `toolbarVerticalEdge` and the vertical-bar modifiers) now compile against the Xcode 27.2 SDKs on every platform, so `latest-apis.md` no longer asks you to recheck them against the 27.1 SDK.
+
 ## [0.3.2] - 2026-10-20
 
 ### Added
