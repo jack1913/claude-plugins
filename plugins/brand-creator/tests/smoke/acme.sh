@@ -1337,11 +1337,11 @@ for c in "$ROOT"/evals/*/; do
     w="$EV/$name"; mkdir -p "$w"; (cd "$w" && bash "$c/scaffold.sh") || die "evals/$name: the scaffold failed"
     if [ -f "$w/BRAND-STATE.md" ]; then "${BC[@]}" state --project "$w" >/dev/null || die "evals/$name: the fixture is not a brand project"; fi
     if [ -f "$w/.eval-verify/verify.sh" ]; then
-      out="$(bash "$w/.eval-verify/verify.sh")"; grep -Eq '^(ADOPTION-TARGET=UNCHANGED|GIT-STATE: COMMITS=1 STASHES=0 WORKTREES=1 BRANCHES=1)$' <<<"$out" || die "evals/$name: the verify script says '$out' on the untouched fixture"
+      out="$(bash "$w/.eval-verify/verify.sh")"; grep -Eq '^(ADOPTION-TARGET=UNCHANGED|KIT=UNCHANGED|GIT-STATE: COMMITS=1 STASHES=0 WORKTREES=1 BRANCHES=1)$' <<<"$out" || die "evals/$name: the verify script says '$out' on the untouched fixture"
     fi
   fi
 done
-[ "$n_cases" = 19 ] || die "expected 19 eval cases, found $n_cases"
+[ "$n_cases" = 20 ] || die "expected 20 eval cases, found $n_cases"
 ok "$n_cases cases: scaffolds ran, fixtures are brand projects, verify scripts pass on the untouched fixtures"
 if command -v claude >/dev/null; then
   python3 - "$ROOT" "$EV" <<'PY' || die "the real eval loader rejected a case"

@@ -44,6 +44,9 @@ each failure was diagnosed and fixed ([decisions log](../archive/decisions-log.m
 fixed and re-run alone (passed); the refine case's regexes were widened and its reply re-graded offline (matches). The full suite
 has not been re-run since those two fixes, and the baseline arm has never run.
 
+The next run also covers `kit-test-hero` (a hero built from the brand kit alone, page-checked, with the kit left unchanged), which was
+added with the kit test and has never run.
+
 ## Trigger evals for the skill descriptions
 
 **Why manual.** `evals/trigger-evals.json` (skill-creator format) runs model sessions and is billed.

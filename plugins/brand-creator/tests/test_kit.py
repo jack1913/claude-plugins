@@ -2783,3 +2783,33 @@ def test_adoption_status_says_whether_each_kit_copy_is_current(pack, tmp_path):
     shown = json.loads(r.stdout)
     assert r.returncode == 0 and "no kit in this project" in r.stderr and "kit" not in shown, r.stdout + r.stderr
     assert shown["kit_unread"].startswith("no kit in this project") and list(shown) == ["headline", "counts", "rows", "kit_unread"]        # and the JSON says it was not read
+
+
+# ---------------------------------------------------------------- the committed Acme kit the kit-test-hero eval starts from
+# evals/_shared/acme-kit/ is a snapshot, so the billed eval needs no build step. tests/tools/regen_eval_kit.py rebuilds it.
+EVAL_KIT = ROOT / "evals" / "_shared" / "acme-kit"
+
+
+def files_of(d) -> list[str]:
+    return sorted(f.relative_to(d).as_posix() for f in d.rglob("*") if f.is_file())
+
+
+def test_the_eval_kit_snapshot_is_what_kit_build_writes_for_acme(pack):
+    """The snapshot is the kit of the Acme pack, built, its owner files filled with fill_owned's text, and built again. kit.json holds `plugin_version`, which changes at
+    every release, so it is dropped on both sides before the two are compared; every other file is compared byte for byte. When this fails, run tests/tools/regen_eval_kit.py
+    (it needs a set-up data directory) and commit the folder."""
+    filled_kit(pack)
+    built = kit_of(pack)
+    assert files_of(EVAL_KIT) == files_of(built), "the files differ: run tests/tools/regen_eval_kit.py"
+    assert "kit.json" in files_of(built) and "snippets/logo.html" in files_of(built) and "brand/assets/tokens/tokens.css" in files_of(built)
+    for rel in files_of(built):
+        if rel == "kit.json":
+            continue
+        assert (EVAL_KIT / rel).read_bytes() == (built / rel).read_bytes(), f"{rel} differs from what the build writes now: run tests/tools/regen_eval_kit.py"
+    snap_json, built_json = (json.loads((d / "kit.json").read_text(encoding="utf-8")) for d in (EVAL_KIT, built))
+    assert snap_json.pop("plugin_version") and built_json.pop("plugin_version")                  # both name a version; the version itself is not compared
+    assert snap_json == built_json, "kit.json differs (plugin_version apart): run tests/tools/regen_eval_kit.py"
+    for rel in OWNER_FILES:                                                                      # the owner files are filled in, not the scaffolds
+        assert "[[fill:" not in (EVAL_KIT / rel).read_text(encoding="utf-8"), rel
+    for rel in ("voice.md", "visual.md", "golden-rules.md"):
+        assert "Keep it short. [example]" in (EVAL_KIT / rel).read_text(encoding="utf-8"), rel
