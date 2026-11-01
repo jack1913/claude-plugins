@@ -979,6 +979,40 @@ def test_the_book_shows_each_proofs_motion_report_and_leaves_an_exploration_proo
     assert "no motion report" in r.stdout + r.stderr
 
 
+def checks_row(proj: Path, tool: str) -> str:
+    """The row of the book's report table that names `tool`."""
+    html = (proj / "book.html").read_text()
+    rows = [m.group(0) for m in re.finditer(r"<tr\b(?:(?!</tr>).)*</tr>", html, re.S) if f">{tool}<" in m.group(0)]
+    assert len(rows) == 1, (tool, rows)
+    return rows[0]
+
+
+@setup
+@resvg
+def test_a_report_with_a_part_input_stays_current_for_the_book_when_an_unrelated_line_of_brand_state_changes(proj):
+    """(m) The book judges a report's inputs by the rule `check` applies (_common.stale_inputs): an input with a "part" (BRAND-STATE.md by its G4 rules) stands for that part only, so the phase, a list
+    line and a bullet that is no "(rule)" line leave the report current in the proof table, and a changed "(rule)" line makes it stale, with the sentence that names the part."""
+    from _common import part_sha256
+    assert bc("state", "--record", "G4", "system rules GO", project=proj).returncode == 0
+    state, f = proj / "BRAND-STATE.md", proj / "assets/_checks/contrast.json"
+    doc = json.loads(f.read_text())
+    doc["inputs"].append({"path": "BRAND-STATE.md", "part": "g4-rules", "sha256": part_sha256(state, "g4-rules")})   # as `page-check` records it; the part's hash is not the file's
+    f.write_text(json.dumps(doc, indent=2) + "\n")
+    r = bc("book", project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert ">current<" in checks_row(proj, "contrast") and "contrast report is stale" not in r.stdout + r.stderr
+    assert bc("state", "--set", "phase=P9", project=proj).returncode == 0
+    mutate(state, "1. (...)", "1. an open question for the owner")                          # Still open
+    mutate(state, "- (rule) the accent is a fill, never text (proposal)", "- (rule) the accent is a fill, never text (proposal)\n- a note under the rules that is no rule line")
+    r = bc("book", project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert ">current<" in checks_row(proj, "contrast") and "contrast report is stale" not in r.stdout + r.stderr
+    mutate(state, "the accent is a fill, never text (proposal)", "the accent is never text")                      # a rule line: the part changed
+    r = bc("book", project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert ">stale<" in checks_row(proj, "contrast") and "contrast report is stale (BRAND-STATE.md (the G4 rules) changed)" in r.stdout + r.stderr
+
+
 # ---------------------------------------------------------------- the opt-in site chapter: the approved pages of site/site.json
 
 def test_the_site_chapter_is_opt_in_and_stands_after_the_components(tmp_path):
@@ -1169,7 +1203,7 @@ def test_a_site_still_that_is_a_link_out_of_the_project_is_never_embedded(proj, 
     r = bc("book", project=proj)
     err = r.stdout + r.stderr
     assert r.returncode == 2, err
-    assert "site still site/start/shots/390-light.png is outside the project" in err, err
+    assert "site still site/start/shots/390-light.png is outside the project" in err and "brand-creator only reads inside the project" in err and "only writes" not in err, err   # a read is refused: the sentence does not speak of writes
     assert (proj / "book.html").read_bytes() == before, "a book that cannot be built is not written"
     still.unlink()                                                                            # the way out: the still taken again, as a file of the project
     still.write_bytes(stills["site/start/shots/390-light.png"])
@@ -1192,7 +1226,7 @@ def test_a_site_page_that_is_a_link_out_of_the_project_stops_the_book(proj, tmp_
     assert bc("book", "--init", project=proj).returncode == 0 and fill_markers(proj) == 2
     r = bc("book", project=proj)
     err = r.stdout + r.stderr
-    assert r.returncode == 2 and "site page site/start/index.html is outside the project" in err, err
+    assert r.returncode == 2 and "site page site/start/index.html is outside the project" in err and "brand-creator only reads inside the project" in err and "only writes" not in err, err
     assert (proj / "book.html").read_bytes() == before
 
 

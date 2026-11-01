@@ -968,15 +968,16 @@ def test_the_site_round_phase_goes_hero_first_and_tags_every_choice():
             "the \"(rule)\" lines of `BRAND-STATE.md` under \"Rules (G4)\", with the thresholds and the `page.rules` tied to those lines in `qa/rules.json`",
             # a page-check report holds BRAND-STATE.md by its G4 rules only: a later write to the file leaves the reports and the lint current, a changed G4 record or "(rule)" line does not
             "A `page-check` report holds `BRAND-STATE.md` by its G4 rules only", "only a changed G4 record or \"(rule)\" line makes them stale",
-            "A report from an older release lists the whole file and goes stale at any write",
             "Recording `review_url` and updating `BRAND-STATE.md` after that write it again, but the `page-check` reports hold only its G4 rules, so they stay current: before the reply run `board-lint rounds/r<N>/board.html --project <dir>` once more",
-            "a lint of a board whose rule cites a line only `BRAND-STATE.md` holds lists the whole file, so it needs that run",
+            "every `board-lint` run writes the one report `assets/_checks/board-lint.json`, so the lint of the review copy took the place of the board's, and `check` wants the report of `rounds/r<N>/board.html`",
             "or a changed G4 record or \"(rule)\" line of `BRAND-STATE.md` after the check, the capture or the lint",
             "Other writes to `BRAND-STATE.md` (the phase, `review_url`, a gate, the Directions table, Still open) leave the `page-check` reports current",
             "never a copy of an earlier round", "A later pages board (the refine loop on the pages, started as `cp -R` of the previous pages board) also has What changed and Weak points",
             "**G4p The site's reference pages approved.**"):
         assert needle in flat, needle
     assert "rules of G4 in `qa/rules.json`" not in flat and "copy of the refine round" not in flat
+    assert "older release" not in flat, "page-check has never been released: no owner has a report from an older release"
+    assert "a lint of a board whose rule cites a line only `BRAND-STATE.md` holds lists the whole file, so it needs that run" not in flat, "a hero board has no choices: the review copy's lint replaced the board's report"
     assert "Set the phase once" not in flat and "lists `BRAND-STATE.md` among its inputs" not in flat and "which every `page-check` report lists" not in flat, "the old rule: every write to BRAND-STATE.md makes the reports stale"
     # the hero before the pages, the pick before the pages, and the proof of each page in its order
     assert flat.index("## The hero first") < flat.index("## The cold review") < flat.index("## The other pages") < flat.index("## Approval")

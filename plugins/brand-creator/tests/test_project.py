@@ -366,6 +366,21 @@ def test_path_confinement(tmp_path):
     assert _common.confine(p, "assets/new/x.txt") == Path(os.path.realpath(p)) / "assets" / "new" / "x.txt"
 
 
+def test_a_refused_path_says_writes_unless_the_caller_only_reads_it(tmp_path):
+    """The refusal ends "brand-creator only writes inside the project" for a path that may be written; a caller that only reads the path (read=True) is told "only reads", and the rest is the same."""
+    p = make_project(tmp_path)
+    outside = tmp_path / "outside" / "x.png"
+    root = Path(os.path.realpath(p))
+    with pytest.raises(_common.CliError) as w:
+        _common.confine(p, outside, what="report")
+    with pytest.raises(_common.CliError) as r:
+        _common.confine(p, outside, what="site still", read=True)
+    assert w.value.message == f"report {outside} is outside the project {root}; brand-creator only writes inside the project"
+    assert r.value.message == f"site still {outside} is outside the project {root}; brand-creator only reads inside the project"
+    assert w.value.code == r.value.code == 2
+    assert _common.confine(p, "assets/x.png", read=True) == root / "assets" / "x.png", "a path inside the project is resolved the same for a read"
+
+
 # ---- review finding S4: enum keys are validated, nothing is written on a bad value
 
 @pytest.mark.parametrize("key,bad", [

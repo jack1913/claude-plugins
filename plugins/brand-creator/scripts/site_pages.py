@@ -115,7 +115,7 @@ def link_problem(project: Path, path_rel: str, what: str, as_it_is: str) -> str 
         if here.is_symlink():
             return f"{'/'.join(parts)} is a symbolic link: {as_it_is}, and a link can lead out of the project"
     try:
-        confine(project, path_rel, what=what)
+        confine(project, path_rel, what=what, read=True)
     except CliError as e:
         return e.message
     return None

@@ -174,8 +174,9 @@ def _realpath_lenient(p: Path) -> Path:
     return Path(os.path.realpath(p)).joinpath(*reversed(tail))
 
 
-def confine(project: Path, path: str | Path, *, what: str = "path") -> Path:
-    """Resolve path (relative paths are relative to the project) and require it to stay inside the project."""
+def confine(project: Path, path: str | Path, *, what: str = "path", read: bool = False) -> Path:
+    """Resolve path (relative paths are relative to the project) and require it to stay inside the project.
+    `read=True` is for a caller that only reads the path: the refusal then ends "brand-creator only reads inside the project", where the wording for a path that may be written says "writes"."""
     root = Path(os.path.realpath(project))
     p = Path(path)
     if not p.is_absolute():
@@ -184,7 +185,7 @@ def confine(project: Path, path: str | Path, *, what: str = "path") -> Path:
     try:
         real.relative_to(root)
     except ValueError:
-        fail(EXIT_USAGE, f"{what} {path} is outside the project {root}; brand-creator only writes inside the project")
+        fail(EXIT_USAGE, f"{what} {path} is outside the project {root}; brand-creator only {'reads' if read else 'writes'} inside the project")
     return real
 
 

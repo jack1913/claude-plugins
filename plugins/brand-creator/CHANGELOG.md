@@ -314,9 +314,8 @@ lints the board of the latest round again before `check`, so an edit of the fact
   project record (`BRAND-STATE.md`), so approving the book or the adoption made the page checks of the round and of
   `site/`, and the pages board's check with them, "not verified", and the finish chain turned that into a failure. A page
   check now depends only on what it reads from that file: the system rules you approved. Changing one of those rules
-  still makes the checks stale, as it should. A page check made with an earlier version is still stale after such a step:
-  run it once more. A rule on the pages board whose source is a line of `BRAND-STATE.md` and of no other decision file
-  makes the board's check go stale when that file changes: check the board again.
+  still makes the checks stale, as it should. A rule on the pages board whose source is a line of `BRAND-STATE.md` and
+  of no other decision file makes the board's check go stale when that file changes: check the board again.
 
 ## [0.4.2] - 2026-10-24
 

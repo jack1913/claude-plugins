@@ -20,7 +20,7 @@ import qa_rules
 import sitedata
 import svgtools
 from _color import wcag_ratio
-from _common import EXIT_FAIL, EXIT_USAGE, confine, fail, motion_proof_kind, rasterise_svg, sha256_file
+from _common import EXIT_FAIL, EXIT_USAGE, confine, fail, motion_proof_kind, rasterise_svg, sha256_file, stale_inputs
 from mark_lint import lint_svg_text
 
 esc = bookmd.esc
@@ -276,13 +276,7 @@ class BookBuild:
             doc = json.loads(f.read_text(encoding="utf-8"))
         except ValueError:
             return None, ["not valid JSON"]
-        stale = []
-        for rec in doc.get("inputs", []):
-            q = self.project / rec["path"]
-            if not q.is_file():
-                stale.append(f"{rec['path']} is gone")
-            elif sha256_file(q) != rec["sha256"]:
-                stale.append(f"{rec['path']} changed")
+        stale = stale_inputs(self.project, doc)   # the rule `check` applies: an input with a "part" stands for that part of the file only
         self.add_input(f)
         return doc, stale
 
@@ -959,8 +953,8 @@ class BookBuild:
             fail(EXIT_FAIL, f"{what} needs the approved pages (site/site.json, from site approve): run the site round, or {way_out}{found}")
         doc = sitedata.load_site(self.project)
         layouts = sitedata.load_layouts()
-        pages = {page["id"]: confine(self.project, page["path"], what="site page") for page in doc["pages"]}   # a page or a still that is a link out of the project is never read
-        stills = {page["id"]: [(width, confine(self.project, f"{sitedata.SITE_DIR}/{page['id']}/shots/{width}-light.png", what="site still")) for width in SITE_VIEWS] for page in doc["pages"]}
+        pages = {page["id"]: confine(self.project, page["path"], what="site page", read=True) for page in doc["pages"]}   # a still that is a link out of the project is never read, and nothing from a page that is one is embedded (validate_site has hashed the page files)
+        stills = {page["id"]: [(width, confine(self.project, f"{sitedata.SITE_DIR}/{page['id']}/shots/{width}-light.png", what="site still", read=True)) for width in SITE_VIEWS] for page in doc["pages"]}
         gone = {pid: [f"{width}-light.png" for width, p in views if not p.is_file()] for pid, views in stills.items()}
         gone = {pid: names for pid, names in gone.items() if names}
         if gone:   # a book that quietly shows a page without its picture would still be "current" to `check` once the still appears: stop, write nothing
