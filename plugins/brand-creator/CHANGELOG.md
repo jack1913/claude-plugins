@@ -142,40 +142,30 @@ lints the board of the latest round again before `check`, so an edit of the fact
   or "30.10", is its numbers, as "2026-11-15" is: the fact "premiera 2026-11-15" backs "Premiera 15.11.2026", and
   "Wypłata 30.10" needs 30 and 10. Digits with spaces between thousands, such as "13 205,20 zł", are one number, but
   "In 2026 200 tools" is the numbers 2026 and 200. A year after a copyright sign or the word ("© 2026", "Copyright
-  2024–2026") is not a claim, and neither is the code of an error page: a "404" on a page whose title or main heading
-  holds "404". A phone number, a postal code and a street number are still claims and need a fact or a sample label.
-- `page-check` reads error pages and dates more closely, after a trial on a real site. A page is an error page when
-  its file is named after the code (`404.html`, `500.html`), or when its title or main heading holds the code as the
-  only number in it (a single digit counts as one), with no "+" before or after it; a heading such as "500+ firm nam
-  ufa", "+500 klientów" or "5 lat, 500 klientów" is a count and exempts nothing. The code is then no claim anywhere on
-  the page, so a small "Błąd 404" label above the heading is not one. A date written with a month name is
-  one date in a Polish or English page, backed like a dotted date: "21 października 2026", "21 października",
-  "Październik 2026", "October 21, 2026", "21 October 2026", "October 2026". A dotted "30.10" is a date only when the
+  2024–2026") is not a claim, and neither is the code of an error page (next item). A phone number, a postal code and a street number are still claims and need a fact or a sample label.
+- `page-check` knows an error page and a date written with a month name. A page is an error page when its file is
+  named after the code (`404.html`, `500.html`), or when its title or main heading holds a code from 400 to 599 as the
+  only number in it (a single digit counts as one), with no "+" before or after it, and the same text holds an error
+  word of the page's language, such as "Błąd", "Nie znaleziono" or "nie istnieje" in Polish and "Error", "Not found"
+  or "Gone" in English. A heading such as "Ponad 400 projektów", "500+ firm nam ufa" or "5 lat, 500 klientów" is a
+  count and exempts nothing, and a page in another language, or one that sets no language, is an error page by its file
+  name only. The code is then no claim anywhere on the page, so a small "Błąd 404" label above the heading is not one.
+  A date written with a month name is one date in a Polish or English page, backed like a dotted date: "21 października
+  2026", "21 października", "Październik 2026", "October 21, 2026", "October 21,2026", "21 October 2026", "October
+  2026"; a number after a month name that is not a day stays its own claim ("March 15% of users" holds "15%"). A dotted "30.10" is a date only when the
   day and the month have two digits each, or a year follows ("1.5.2026r."); "12.5", "2.10" and "10.1" are plain
   numbers, on the page and in `FACTS.md`.
-- `page-check` reads a count in a heading and a number after a month name more closely, after a final review. A code in
-  the title or main heading now makes an error page only when it is the only number there, has no "+" before or after
-  it, and the same text holds an error word of the page's language ("Błąd", "Nie znaleziono", "nie istnieje" in Polish;
-  "Error", "Not found", "Gone" in English). A heading such as "Ponad 400 projektów", "Zaufało nam 500 firm" or "Over 400
-  clients" is a count and exempts nothing, and a page in another language, or one that sets no language, is an error
-  page by its file name only. A number right after a month name stays its own claim when it is not a day ("March 15% of
-  users" holds "15%"), and "October 21,2026" is one date.
 - `page-check` now checks the brand mark on a page. Put `data-brand-mark` on the mark's `<img>` or inline `<svg>` (the
-  value may name the logo file, `data-brand-mark="assets/logo/mark.svg"`); an image whose file name is `logo`, `mark` or
-  `wordmark`, alone or followed by `-`, `_` or `@` and more (`logo.svg`, `mark-dark.svg`, `logo@2x.png`; `partner-logo.svg`
-  and `bookmark.svg` are not), and any image that is byte for byte a file of `assets/logo/`, is taken for the mark too. The
+  value may name the logo file, `data-brand-mark="assets/logo/mark.svg"`); an image whose file name is `logo`, alone or
+  followed by `-`, `_` or `@` and more (`logo.svg`, `logo@2x.png`, `logo.jpg`; `partner-logo.svg` is not), an `.svg` file
+  named `mark` or `wordmark` the same way (`mark-dark.svg`, `wordmark.svg`; `bookmark.svg`, `mark.jpg` and `Mark.png` are
+  not, so a team member's photo is never taken for the logo), and any image that is byte for byte a file of `assets/logo/`, is taken for the mark too. The
   mark has to be a logo file of the project (`page:mark-file`: the same bytes, or for an inline SVG the same drawing,
   whatever the order of its attributes, its spaces, its title or the size and label it is given); it has to be the
   drawing your size bands name for the height it is shown at, or that drawing's `-dark.svg` twin (`page:mark-band`);
   and nothing may stand nearer to it than a quarter of its height (`page:mark-clear-space`; `page.clear_space` in
   `qa/rules.json` changes the share). A page with no mark gets an info row that says what counts as one, and an inline
   `<svg>` that draws through `<use>` is reported as not verified, not failed.
-- `page-check` no longer takes a photo of a person named Mark for your logo. A file named `mark` or `wordmark` (alone or
-  followed by `-`, `_` or `@` and more) is taken for the brand mark by its name only when it is an `.svg` file:
-  `mark.svg`, `mark-dark.svg` and `wordmark-dark.svg` are, `mark.jpg`, `Mark.png`, `mark-kowalski.jpg` and `wordmark.png`
-  are not, so a team page no longer fails `page:mark-file`. `logo` is still taken for any image type (`logo.jpg`,
-  `logo@2x.png`). A `data-brand-mark` image, and an image that is byte for byte one of your logo files, are found
-  whatever their name, `mark.png` included.
 - `page-check` now checks the fonts of a page (`page:fonts`). The family each text is set in has to be one that a font
   token names; a generic family such as `monospace` counts only when a token's list writes it, so a page that sets no
   font and falls back to the browser's default fails. A named family must also be what the browser really drew: a font
@@ -201,8 +191,10 @@ lints the board of the latest round again before `check`, so an edit of the fact
   rows): a small label in capitals over a heading (an eyebrow), an arrow glued to a link or button label, a line of
   items joined by middle dots (a bulleted list is not one), a stock label such as "Learn more" or "Dowiedz się więcej"
   on the hero's second action, more than 45 words in the hero's first screen, a mock-up built from many styled boxes
-  with no picture bigger than an icon (a table is not one, and a list is not unless it is the box or most of it, so a
-  panel with its own header or footer beside a list is; a page, or a band of it, with headings is not one),
+  with no picture bigger than an icon (a table is not one, status badges or chips in its cells included, unless a styled
+  header or footer sits beside it; a list is not one unless it is the box or most of it, counting each item only as far as it lies in the box, so a panel
+  with its own header or footer beside a list is, and so is a carousel whose items run on past the box; a page, or a
+  band of it, with headings is not one),
   and a row of three equal tiles. Each warning names where the pattern is and at which widths; none of
   them ever fails a page. A page in another language is reported as not verified for the stock labels, and a page that
   follows the stock order of a product page (hero, three tiles, FAQ, closing band) gets a note. To hold your pages to
@@ -211,11 +203,6 @@ lints the board of the latest round again before `check`, so an edit of the fact
   rules, and a name that is not one of the patterns is refused before the page is opened. The social post template
   that ships with the plugin has a small capital label above its headline; that counts as an eyebrow, and it is
   reported, not changed.
-- `page-check` reads tables and carousels more closely in the mock-up warning (`tell:styled-div-mock`), after trying it on
-  a real brand site. A status badge or chip inside a table cell is part of the table: an index table whose rows each end
-  in a styled badge no longer warns, while a table with a styled header or footer beside it is still judged on all its
-  styled boxes. The items of a list count only as far as they lie in the box, so a carousel whose items run on past the
-  box, between a styled head and footer, now warns instead of being excused by items that add up to more than the box.
 - `/brand-creator:check` takes `--page` to check one page against your brand instead of the whole project: a page in
   your project, a page of a site built elsewhere on your computer, or a page your computer serves (`localhost`,
   `127.0.0.1` or `[::1]`; a page on another website is refused). Claude reports the failing rows with their fix, the

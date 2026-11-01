@@ -187,8 +187,8 @@ the pages start in their own turn.
    same template with its three comments at the end put to use: the pages in place of the variants, the choices section
    and the two questions of the pages. `<body data-round="<N>" data-board="site" data-site-stage="pages"
    data-hero="<the picked variant>">`. The lint fails a pages board without an earlier hero board that holds that variant
-   (hero first), and a page card spelt unlike its page id. Lint, shoot and make the review copy as for the hero, and run `page-check` and the lint again after the
-   writes to `BRAND-STATE.md`. A later pages board (the refine loop on the pages, started as `cp -R` of the previous pages
+   (hero first), and a page card spelt unlike its page id. Lint, shoot and make the review copy as for the hero; a write to `BRAND-STATE.md` asks for
+   `page-check` and the lint again only when it changes the G4 record or a "(rule)" line. A later pages board (the refine loop on the pages, started as `cp -R` of the previous pages
    board) also has What changed and Weak points: the lint requires both from the second board of a stage.
 4. **The choices.** List every structural and visual choice the pages make (the order of the sections, where the action
    sits, what repeats, how a page ends, the density, the way an image or a figure is shown), one `<li data-choice="c1">`

@@ -949,7 +949,7 @@ def claim_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
             runs_checked += 1
             for n in numbers_in(text, lang=lang):
                 if n["bare"] and n["number"] in codes:
-                    continue   # the status code of an error page: its title or h1 holds the same number
+                    continue   # the status code of an error page: its title or h1 holds the same number next to an error word
                 numbers_checked += 1
                 if not backed(n):
                     unbacked_numbers.setdefault((n["number"], run["sel"]), {"number": n["text"], "selector": run["sel"], "context": _context(text, n["at"], len(n["text"])), "width": v.get("width")})

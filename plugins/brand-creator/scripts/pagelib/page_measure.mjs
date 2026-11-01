@@ -557,7 +557,7 @@ async function markFacts(page) {
     };
     // a file is named like the logo when its stem is `logo`, `mark` or `wordmark`, alone or followed by `-`, `_` or `@` and more (`logo.svg`, `mark-dark.svg`, `wordmark_light.svg`,
     // `logo@2x.png`), in any case; a word that merely holds one (`partner-logo.svg`, `ikona-logowanie.svg`, `logos.png`, `bookmark.svg`, `marker.svg`, `market-chart.png`) is not, and a data:
-    // URL has no file name at all. `mark` and `wordmark` are also people's names and ordinary words, so they name a candidate only for an .svg file (`mark.jpg`, `Mark.png`,
+    // URL has no file name at all. `mark` is also a person's name, and both are ordinary words, so they name a candidate only for an .svg file (`mark.jpg`, `Mark.png`,
     // `mark-kowalski.jpg`, `wordmark.png` are not); `logo` names one for any image type (`logo.jpg`, `logo@2x.png`)
     const named = (u) => {
       if (/^data:/i.test(u)) return false;

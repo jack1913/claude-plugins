@@ -83,7 +83,7 @@ printed on every run.
 and its `sha256` is that of the part's canonical text, not of the file. One registry reads the parts (`PART_READERS` in `scripts/lib/_common.py`: the part's name, the file it belongs to, what to call it in a sentence, how to read it);
 a `Report` takes `PartInput(path, "<part>")` among its inputs. The only part so far is `g4-rules` of `BRAND-STATE.md`: the G4 record (white space collapsed) and, once G4 is recorded, the recorded `(rule)` lines of Rules (G4) in file order
 (white space collapsed; `adapt.g4_rules`, the one reading `adapt.view(project)["rules"]` also makes), as one line of JSON. The rest of the file (the phase, the other gates, the Directions table, Still open, a line of Rules (G4) that is no `(rule)`
-line) is not in it. `_common.stale_inputs`, the rule `check` and the boards apply, recomputes the part: the input is stale when the part changed (`BRAND-STATE.md (the G4 rules) changed`) and when it cannot be read, with a sentence that says why
+line) is not in it. `_common.stale_inputs`, the rule `check`, the boards and the book apply, recomputes the part: the input is stale when the part changed (`BRAND-STATE.md (the G4 rules) changed`) and when it cannot be read, with a sentence that says why
 (`BRAND-STATE.md (the G4 rules) cannot be read: ...`: no frontmatter, a part this plugin does not know, a part of another file). A part that cannot be read when the report is written is recorded as unreadable, so the report reads as stale and never as
 current. `inputs_sha` hashes the part name after the path for a part input; a record without `part` is judged and hashed as it always was, so older reports keep their meaning. A board lint that copies the records of the reports it stands on
 (`board-lint` of a site board, from its page-check reports) copies a part as it is, so it follows.
@@ -1406,8 +1406,8 @@ brand-creator page-check --url http://localhost:<port>/<path> [--project DIR] ..
   and the text of everything inside it that has no `data-sample` of its own, is not checked as a claim.
 - **Mark facts.** Every view also holds `marks` and `images`, collected over the same shown elements. A mark is an element with `data-brand-mark`, or an image whose file name says
   it is the logo: the name without its extension (its stem) is `logo`, `mark` or `wordmark`, alone or followed by `-`, `_` or `@` and more, in any case (`logo.svg`, `mark.svg`, `wordmark.svg`,
-  `logo@2x.png`, `mark-dark.svg`, `Wordmark_light.svg`). `mark` and `wordmark` are also people's names and ordinary words (a team page holds photos of people named Mark), so they make a candidate
-  by name only for an `.svg` file: `mark.svg`, `wordmark-dark.svg` are candidates, `mark.jpg`, `Mark.png`, `mark-kowalski.jpg` and `wordmark.png` are not; `logo` makes one for any image type
+  `logo@2x.png`, `mark-dark.svg`, `Wordmark_light.svg`). `mark` is also a person's name, and both are ordinary words (a team page holds photos of people named Mark), so they make a candidate
+  by name only for an `.svg` file: `mark.svg` and `wordmark-dark.svg` are candidates, `mark.jpg`, `Mark.png`, `mark-kowalski.jpg` and `wordmark.png` are not; `logo` makes one for any image type
   (`logo.jpg`, `logo@2x.png`). A stem that only holds one of the words (`partner-logo.svg`, `ikona-logowanie.svg`, `logos.png`, `bookmark.svg`, `marker.svg`, `market-chart.png`)
   or says something else (`site-mark.svg`, `lockup.svg`) is not a mark by its name, and a `data:` URL has no file name. A name only makes an image a candidate: the image is then judged as any mark
   is, so a `mark.svg` that is no logo file of the project fails `page:mark-file`. Any other image is a
@@ -1647,7 +1647,7 @@ library's `site` module wherever `scripts/` is on `sys.path`) puts the pages the
   3. exit 1 unless `assets/_checks/board-lint.json` is the lint of that very board, current and `pass` (`lint the pages board first: brand-creator board-lint rounds/r<N>/board.html`).
      Current is `check`'s rule: no file the lint was made from is gone or changed. A page-check report holds `BRAND-STATE.md` by its G4 rules (the part `g4-rules`, see Reports) and the lint keeps
      those records, so recording G4p, G5 or G6 leaves the lint current, and a changed G4 record or `(rule)` line makes it stale: the message then names `page-check` for each page and the lint, and both have to be
-     run again. Two cases differ: a lint made from page-check reports that list the whole `BRAND-STATE.md`, as older ones do, is stale after any write to it (the same message), and a lint of a board with a rule
+     run again. One case differs: a lint of a board with a rule
      whose source only `BRAND-STATE.md` holds lists the whole file itself (see `site:choices`), so recording G4p makes it stale and the message asks for the lint again alone;
   4. exit 1 when `site/` exists and `--replace` is not given (`site/ holds approved pages already`).
 - **Pages.** One page per page card of the board (`data-site-page`); each needs its folder `rounds/r<N>/<id>/`, its `index.html` and a `data-layout` on `<body>`. The folder is copied into

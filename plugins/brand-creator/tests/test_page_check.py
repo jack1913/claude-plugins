@@ -3365,7 +3365,7 @@ def test_a_row_of_items_running_past_its_box_fills_no_more_of_it_than_the_box(ac
     assert (shot["styled"], shot["in_lists"]) == (12, 10), shot                                        # the head, the footer and ten items
     assert 10 * 202 * 142 > 0.8 * shot["width"] * shot["height"]                                       # the items by themselves are larger than the box, which is what excused it
     assert shot["list_area"] == (3 * 202 + 11) * 142 and shot["list_area"] < 0.8 * shot["width"] * shot["height"], shot   # three whole items and 11 px of a fourth: what lies in the box
-    assert shot["list_area"] <= shot["width"] * shot["height"]                                         # a share of the box is never more than the whole
+    assert shot["list_area"] <= shot["width"] * shot["height"]                                         # clipped to the box: items that do not overlap never add up to more than the whole
     assert mock_row(CAROUSEL.replace('<div class="head">Featured</div>', "").replace('<div class="foot"></div>', ""))["status"] == "pass"   # the row of items alone is the whole list: no part beside it
     fits = mock_row(CAROUSEL.replace("overflow: hidden; gap: 8px", "overflow: hidden").replace("width: 200px", "width: 62px"))
     assert fits["status"] == "warn" and shot_facts()["list_area"] == 10 * 64 * 142, fits               # ten items that all lie in the box are counted whole

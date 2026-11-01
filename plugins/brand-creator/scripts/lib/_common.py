@@ -320,7 +320,7 @@ def part_sha256(path: Path, part) -> str:
 
 
 def stale_inputs(project: Path, doc: dict) -> list[str]:
-    """Why a report no longer stands for the files it was made from: each file of its `inputs` that is gone or changed since (by sha256). One rule for `check` and board-lint.
+    """Why a report no longer stands for the files it was made from: each file of its `inputs` that is gone or changed since (by sha256). One rule for `check`, board-lint and the book.
     An input with a "part" stands for that part of the file only (PART_READERS): it is stale when the part changed, or cannot be read (the sentence says why), not when another part of the file did."""
     stale = []
     for rec in doc.get("inputs", []):

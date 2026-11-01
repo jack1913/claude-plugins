@@ -95,8 +95,8 @@ Some numbers are not claims, so you do not need a fact for them:
 - A year after a copyright sign or the word, such as "© 2026" or "Copyright 2024–2026".
 - The code of an error page. A page is an error page when its file is named after the code (`404.html`), or when its
   title or main heading holds the code and no other number, with no "+" before or after it, and the same text has an
-  error word in the language of the page: "Błąd", "Nie znaleziono" or "nie istnieje" on a Polish page, "Error", "Not
-  found" or "Gone" on an English one. Then the code can stand anywhere on it, such as a small "Błąd 404" label and a
+  error word in the language of the page, such as "Błąd", "Nie znaleziono" or "nie istnieje" on a Polish page and
+  "Error", "Not found" or "Gone" on an English one. Then the code can stand anywhere on it, such as a small "Błąd 404" label and a
   large "404". A heading such as "Ponad 400 projektów", "Zaufało nam 500 firm", "Over 400 clients", "500+ firm nam
   ufa" or "5 lat, 500 klientów" is a count, so it does not make an error page. For a page in another language, or one
   that does not say its language (`lang` on its `html` tag), only the file name counts.
