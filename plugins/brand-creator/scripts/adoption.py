@@ -15,9 +15,11 @@
   adoption status [--set N|N-M|N,M=to do|doing|done]...    show or update progress (doing and done need G6)
   adoption verify                                          the pins, the numbering, the accounting and ADOPTION.md against adoption.json
   adoption render                                          write ADOPTION.md again from adoption.json
-  adoption wiring --repo LABEL (--before [--again] | --after)
+  adoption wiring --repo LABEL (--before [--again] | --after | --compare | --drop "ITEM::REASON"...)
       Reads a surveyed repository's source for the links, form field names, handlers, test hooks, ids and scripts a redesign must not lose, and
       stores them in adoption.json under `wiring` (the before record is the baseline; --after is the redesign as applied). Read only, and it proves it.
+      --compare reads the repository now and prints what the redesign lost, writing nothing (exit 1 on a loss nobody dropped). --drop records, in the
+      owner's words, why an item of the before record goes; a loss is acceptable only so.
 """
 import fnmatch
 import hashlib
@@ -303,6 +305,8 @@ def main() -> int:
     wg = w.add_mutually_exclusive_group(required=True)
     wg.add_argument("--before", action="store_true", help="record the wiring before the redesign: the baseline")
     wg.add_argument("--after", action="store_true", help="record the wiring after the redesign is applied (needs the before record)")
+    wg.add_argument("--compare", action="store_true", help="read the repository now and list what the redesign lost against the before record (writes nothing; exit 1 on a loss nobody dropped)")
+    wg.add_argument("--drop", action="append", default=[], metavar="ITEM::REASON", help="record why an item of the before record goes, in the owner's words (repeatable)")
     w.add_argument("--again", action="store_true", help="with --before: replace the baseline that is already recorded")
     a = ap.parse_args()
     project = find_project(a.project)
@@ -587,32 +591,21 @@ def do_render(a, project: Path, name: str) -> int:
     return 0
 
 
-def do_wiring(a, project: Path, name: str) -> int:
-    doc = need_doc(project)
-    bad = ad.verify(doc)
-    if bad:
-        fail(EXIT_FAIL, "adoption.json is not consistent, so a wiring record is not added to it: " + "; ".join(bad[:3]))
-    row = next((r for r in doc["repos"] if r["label"] == a.repo), None)
-    if row is None:
-        fail(EXIT_USAGE, f"--repo {a.repo!r} is not a surveyed repository (labels: {', '.join(r['label'] for r in doc['repos'])})")
-    rid, label = row["id"], row["label"]
-    held = doc.get("wiring", {}).get(rid, {})
-    which = "before" if a.before else "after"
-    if a.again and not a.before:
-        fail(EXIT_USAGE, "--again goes with --before: it replaces the baseline")
-    if a.before and held.get("before") and not a.again:
-        fail(EXIT_FAIL, f"the before record of {label} ({held['before'].get('date')}) is the baseline: pass --again to replace it")
-    if a.after and not held.get("before"):
-        fail(EXIT_USAGE, f"no before record for {label}: record the wiring before the redesign starts with `brand-creator adoption wiring --repo {label} --before`")
-    rg = rg_path()
+def wiring_repo(project: Path, row: dict, label: str) -> Path:
+    """The folder of a surveyed repository. When the brand project lives inside it, its own files are not the repository's wiring."""
     root = Path(os.path.realpath(project))
     repo = Path(os.path.realpath(root / row["path"]))
     if not repo.is_dir():
         fail(EXIT_USAGE, f"repository {label} ({row['path']}) is not a folder; survey it again with --repo")
     EXCLUDE.clear()
-    if repo in root.parents:   # the brand project lives inside this repository: its own files are not the repository's wiring
+    if repo in root.parents:
         EXCLUDE.extend(["--glob", "!" + root.relative_to(repo).as_posix() + "/**"])
-    rep = Report("adoption-wiring", project, renderer="n/a (read-only scan)")
+    return repo
+
+
+def wiring_scan(rg: str, repo: Path, label: str) -> dict:
+    """Read the repository's source for wiring and prove nothing in it changed meanwhile:
+    {items: {item: up to 5 files}, sorted; read: the files read; left_out: files of those kinds the keep rules skipped; deep: values nested too deep; unchanged: bool}."""
     listed = list_files(rg, repo, label)
     before_snap = snapshot(repo, listed)
     read, left_out = [], 0
@@ -634,22 +627,103 @@ def do_wiring(a, project: Path, name: str) -> int:
         deep += d
         wiring.add(found, f, items)
     unchanged = before_snap == snapshot(repo, list_files(rg, repo, label))
+    return {"items": dict(sorted(found.items())), "read": read, "left_out": left_out, "deep": deep, "unchanged": unchanged}
+
+
+def do_wiring(a, project: Path, name: str) -> int:
+    doc = need_doc(project)
+    bad = ad.verify(doc)
+    if bad:
+        what = "a wiring record is not added to it" if (a.before or a.after) else ("the wiring is not compared" if a.compare else "a drop is not recorded in it")
+        fail(EXIT_FAIL, f"adoption.json is not consistent, so {what}: " + "; ".join(bad[:3]))
+    row = next((r for r in doc["repos"] if r["label"] == a.repo), None)
+    if row is None:
+        fail(EXIT_USAGE, f"--repo {a.repo!r} is not a surveyed repository (labels: {', '.join(r['label'] for r in doc['repos'])})")
+    rid, label = row["id"], row["label"]
+    held = doc.get("wiring", {}).get(rid, {})
+    which = "before" if a.before else "after"
+    if a.again and not a.before:
+        fail(EXIT_USAGE, "--again goes with --before: it replaces the baseline")
+    if a.before and held.get("before") and not a.again:
+        fail(EXIT_FAIL, f"the before record of {label} ({held['before'].get('date')}) is the baseline: pass --again to replace it")
+    if not a.before and not held.get("before"):
+        fail(EXIT_USAGE, f"no before record for {label}: record the wiring before the redesign starts with `brand-creator adoption wiring --repo {label} --before`")
+    if a.drop:
+        return wiring_drop(a, project, name, doc, held, label)
+    rg = rg_path()
+    repo = wiring_repo(project, row, label)
+    if a.compare:
+        return wiring_compare(rg, repo, label, held)
+    rep = Report("adoption-wiring", project, renderer="n/a (read-only scan)")
+    got = wiring_scan(rg, repo, label)
+    read, deep = got["read"], got["deep"]
+    unchanged = got["unchanged"]
     rep.add(f"read-only:{label}", "pass" if unchanged else "fail", "the repository was not changed during the scan",
             detail="the list of files, sizes and modification times is the same before and after" if unchanged
             else "files, sizes or modification times changed while the scan ran: something else wrote to the repository (the scan writes nothing there). Nothing was stored")
     if not unchanged:
         return rep.finish()
-    items = dict(sorted(found.items()))
+    items = got["items"]
     n = wiring.kind_counts(items)
     rep.add(f"wiring:{label}", "info", f"the {which} record", detail=", ".join(f"{k} {v}" for k, v in n.items()) + f" ({len(items)} items)")
     rep.add("wiring:scope", "info", "what the scan read and left out",
-            detail=f"{len(read)} source file(s) read; {left_out} more of the same kinds left out by the keep rules (lock files, change history, licences, minified output, "
+            detail=f"{len(read)} source file(s) read; {got['left_out']} more of the same kinds left out by the keep rules (lock files, change history, licences, minified output, "
                    "dist, build and vendored folders), and every file .gitignore hides" + (f"; {deep} value(s) nested deeper than three levels were not read" if deep else ""))
     doc.setdefault("wiring", {}).setdefault(rid, {})[which] = {"date": today(), "head": git_head(repo), "files": len(read), "items": items}
     changed = write_both(project, doc, name)
     rc = rep.finish()
     print(f"\n{which} record of {label}: {len(items)} items from {len(read)} files; wrote {', '.join(changed) or 'nothing (unchanged)'}. No repository was edited.")
     return rc
+
+
+def wiring_compare(rg: str, repo: Path, label: str, entry: dict) -> int:
+    """Read the repository now and say what the redesign lost against the before record. Writes nothing: no record, no report, no ADOPTION.md."""
+    got = wiring_scan(rg, repo, label)
+    if not got["unchanged"]:
+        fail(EXIT_FAIL, f"files, sizes or modification times in {label} changed while it was read: something else wrote to the repository (the comparison writes nothing there). Nothing was compared")
+    now, before = got["items"], entry["before"]
+    lost, _lost_dropped = ad.wiring_lost(entry, now)
+    dropped = entry.get("dropped") or {}
+    print(f"{label}: the repository now, against the before record of {before.get('date')} ({len(before['items'])} items recorded, {len(now)} found now)")
+    print(f"lost, not recorded as dropped: {len(lost)}")
+    for item in lost:
+        print(f"  {item} (was in {', '.join(before['items'][item])})")
+    print(f"dropped with a reason: {len(dropped)}")
+    for item in sorted(dropped):
+        print(f"  {item}: {dropped[item]}")
+    print(f"new items: {sum(1 for i in now if i not in before['items'])}")
+    if lost:
+        print(f"wiring compare: FAIL. {len(lost)} item(s) of the before record are gone and nobody dropped them: put each back, or record why it goes with "
+              f"`brand-creator adoption wiring --repo {label} --drop \"ITEM::REASON\"`.")
+        return EXIT_FAIL
+    print("wiring compare: PASS. Every item of the before record is still there or was dropped with a reason.")
+    return 0
+
+
+def split_drop(spec: str, items, label: str) -> tuple[str, str]:
+    """`ITEM::REASON` -> (item, reason). An item may hold `::` itself, so the item is the first start of the text, ending at a `::`, that is an item of the before record."""
+    ends = [i for i in range(len(spec)) if spec.startswith("::", i)]
+    if not ends:
+        fail(EXIT_USAGE, f"--drop needs ITEM::REASON, got {spec!r}")
+    for i in ends:
+        item = spec[:i].strip()
+        if item in items:
+            reason = " ".join(spec[i + 2:].split())
+            if not reason:
+                fail(EXIT_USAGE, f"--drop {item!r} has no reason: a loss is acceptable only with the reason, in the owner's words")
+            return item, reason
+    fail(EXIT_USAGE, f"--drop {spec[:ends[0]].strip()!r} is not an item of the before record of {label} (items are written kind:value, as --compare prints them)")
+
+
+def wiring_drop(a, project: Path, name: str, doc: dict, entry: dict, label: str) -> int:
+    """Record why items of the before record go. All or none: one bad spec stores nothing. Reads no repository."""
+    chosen = dict(split_drop(spec, entry["before"]["items"], label) for spec in a.drop)
+    entry["dropped"] = dict(sorted({**(entry.get("dropped") or {}), **chosen}.items()))
+    changed = write_both(project, doc, name)
+    for item, reason in sorted(chosen.items()):
+        print(f"{item}: dropped, {reason}")
+    print(f"wiring of {label}: {len(chosen)} item(s) dropped with a reason; wrote {', '.join(changed) or 'nothing (unchanged)'}. No repository was read or edited.")
+    return 0
 
 
 main_guard(main)
