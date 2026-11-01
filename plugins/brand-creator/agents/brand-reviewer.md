@@ -45,6 +45,8 @@ writing, note the time you read each file and say so in the output; re-read befo
 - **Applied repositories**: `cmp` every file copied from the pack against the pack's file (any difference fails the
   row); check sizes against the slot; run the repository's own build and tests (from its README, package scripts,
   Makefile or CI config) and quote each command with its exit code. A check that needs a real device is "not verified".
+- **A Brand kit row**: `brand-creator --data "<data>" kit status --repo <path> --project "<project>"` must exit 0; quote it
+  with its exit code. It reads only, and its exit 0 is the byte comparison of the kit's generated files.
 - **Claims from research**: you have no web tools (Read, Grep, Glob, Bash only), so you cannot re-fetch a source; the
   refuting verifier of a research fan-out is a `brand-researcher` call. Check a claim only against sources already saved
   in the project (the file the claim cites, `research/`), and say "not verified: no web access" for anything else.

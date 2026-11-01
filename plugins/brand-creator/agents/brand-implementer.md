@@ -28,6 +28,9 @@ RULES: work under the round/project dir only; never edit adoption targets before
 2. Work row by row from the ADOPTION.md rows in the prompt. Line numbers from an earlier read may have drifted: find
    each spot by its content (the Find column). If a row's text is not there, do not guess: report it as not done.
 3. Files from the pack are copied, never redrawn, re-exported or optimised (`cp`, then `cmp` against the pack file).
+   - A Brand kit row is copied by the list `brand-creator kit status --repo <path>` prints: `mkdir -p`, then `cp` one file
+     at a time, exactly those files; an owner file the repository already has is never overwritten, and nothing goes into
+     `~/.claude/skills` or any global folder. Then `kit status --repo <path>` must say current. The kit is not committed.
 4. The output must not change unless asked: when the prompt asks for byte identity of a build, record the sha256 of
    every shipped file before, rebuild after, and prove every hash is identical (or list the files that were meant to
    change).
