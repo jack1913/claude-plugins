@@ -79,6 +79,8 @@ adoption, adapters, launch
   adapters                opt-in at G5: BRAND.md (Strategy, Voice, Visual, Governance) and DESIGN.md generated from the tokens, BRAND-STATE and FACTS;
                           DESIGN.md is linted with the pinned @google/design.md when setup installed it, else "not verified"
   applied-skill           opt-in at G5, needs --yes: writes .claude/skills/<slug>-brand/SKILL.md into the project (colours, type, mark rules, claims)
+  kit build|check|status  the brand kit around the applied skill, opt-in at G5: build (needs --yes) writes .claude/skills/<slug>-brand/ with the brand's own
+                          files copied in byte for byte and locked by kit.json; check proves it whole, status that a product repository's copy is current
   launch-todo             LAUNCH.md for the owner: trademark first, domains with their check date, handles, e-mail, renames, print hand-off, decisions
                           (reads local files only; nothing outward is ever executed). check --cascade "<old value>" greps every project artefact
 
@@ -208,6 +210,7 @@ case "$sub" in
   adoption)   py adoption.py "$@" ;;
   adapters)   py adapters.py "$@" ;;
   applied-skill) py applied_skill.py "$@" ;;
+  kit)        py kit.py "$@" ;;
   launch-todo) py launch.py "$@" ;;
   downscale)  py downscale_check.py "$@" ;;
   states-check) py states_check.py "$@" ;;

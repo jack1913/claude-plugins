@@ -75,7 +75,7 @@ exit code) before it exits, so the previous passing report cannot survive a fail
 recorded once. `brand-creator check` reads these reports, recomputes each
 report's `inputs` hashes, and treats a stale report (inputs changed since) as not verified. Tool names: `tokens`,
 `contrast`, `logo-sheet`, `board-lint`, `shot`, `emit-web`, `emit-social`, `emit-apple`, `emit-windows`, `emit-linux`, `emit-tray`, `emit-tauri`, `emit-wallet`, `emit-developer`, `check`, `names`, `downscale`, `states`, `family`, `fontcheck`,
-`motion/<slug>-<hash6>` (from `shot --motion`, one per proof file; see Motion proof) and `frames/<slug>-<hash6>` (from `frames`), `page-check/<slug>-<hash6>` (from `page-check`, one per page; see Page check), `idempotence` (from `verify-idempotent`), `staleness`, `book`, `book-lint`, `book-pdf`, `print-check`, `adoption`, `adapters`, `applied-skill`, `launch-todo`, and one `emit-<target>` per emitter (with several marks, `emit-<target>/<mark>` and `logo-sheet/<mark>` per mark)
+`motion/<slug>-<hash6>` (from `shot --motion`, one per proof file; see Motion proof) and `frames/<slug>-<hash6>` (from `frames`), `page-check/<slug>-<hash6>` (from `page-check`, one per page; see Page check), `idempotence` (from `verify-idempotent`), `staleness`, `book`, `book-lint`, `book-pdf`, `print-check`, `adoption`, `adapters`, `applied-skill`, `kit`, `launch-todo`, and one `emit-<target>` per emitter (with several marks, `emit-<target>/<mark>` and `logo-sheet/<mark>` per mark)
 (`emit-web`, `emit-social`, `emit-apple`, `emit-windows`, `emit-linux`, `emit-tray`, `emit-tauri`, `emit-wallet`, `emit-developer`, `emit-print`, `emit-presskit`). The renderer in use is stored in the report and
 printed on every run.
 
@@ -172,7 +172,8 @@ fontTools, Brotli and skia-pathops (`outline_glyphs.py`, `fontcheck.py`), Pillow
   adoption.json  ADOPTION.md       the adoption rows as data (progress and pins apart) and the document rendered from it; see Adoption
   LAUNCH.md                        the owner's launch checklist (templates/LAUNCH.md); see Adoption, cascade, adapters, applied skill and launch
   BRAND.md  DESIGN.md              generated adapters, opt-in at G5 (`adapters`)
-  .claude/skills/<slug>-brand/SKILL.md   the per-brand applied skill, written only by `applied-skill --yes`
+  .claude/skills/<slug>-brand/SKILL.md   the per-brand applied skill, written only by `applied-skill --yes` or `kit build --yes`
+  .claude/skills/<slug>-brand/     the per-brand applied skill, or the brand kit around it (kit.json), written only by `applied-skill --yes` or `kit build --yes`
   tools/cascade.json                  documents outside the project that `check --cascade` searches too (optional)
   removed-<date>[-n]/              dated copies of what `collapse` changed and of slots an emitter retired (never deleted)
   FAMILY.md                        family modes only (templates/FAMILY.md); read by family-check
@@ -2103,6 +2104,55 @@ message on stderr, exit 2; `--plan` exits 0). The name is `<slug>-brand` (lower 
 the adapters (`applied-skill:file`, `applied-skill:state`).
 The same builder (`adapt.applied_skill_md(project, template, kit=...)`) writes the kit's SKILL.md, with every path inside the kit (the tokens, the marks and the band drawings
 under `brand/`, and the template's `{{kit}}` line filled with the kit section; see `kit`). Without a kit the template's `{{kit}}` line is dropped, as `{{motion}}` is, and the file is the bytes it always was.
+
+### kit
+
+`kit build --yes [--plan] [--replace]` (`scripts/kit.py`; the kit as data is `scripts/adaptlib/kitlib.py`) writes the brand kit into the applied skill's folder, `.claude/skills/<slug>-brand/`.
+The kit is the applied skill with more around it: its SKILL.md is still written by `adapt.applied_skill_md` (see `applied-skill`), now with every path inside the kit and a `## The kit`
+section. A project without a kit keeps the applied skill as it is: the same bytes, the same command and the same `check` rows.
+
+```text
+.claude/skills/<slug>-brand/
+  SKILL.md      generated: the applied skill, its paths inside the kit, plus the "## The kit" section (it holds the line `Kit version <version> (kit.json).`)
+  kit.json      generated: schema, version, edition, sources and the sha256 of every other generated file
+  brand/        generated: byte copies of the brand's files AT THEIR PROJECT PATHS, so a relative link in one of them still resolves
+    assets/tokens/tokens.css, tokens.json
+    assets/logo/*.svg, *.png, and every band drawing qa/rules.json names, top-level and per mark (at its own path)
+```
+
+Everything the build writes is generated and is never edited by hand: change the brand project and build again. `brand/`, `snippets/` and `reference-pages/` are the generated
+folders. A file outside them that the build did not write is the owner's: the build leaves it alone and `kit.json` does not list it.
+
+`kit.json` (schema 1): `kit` (the folder's name), `version`, `edition`, `plugin_version`, `content_sha`, `generated` (path in the kit to sha256, every generated file except `kit.json`
+itself, SKILL.md with its version in it) and `sources` (`state_sha`, as `adapt.state_sha`, then the sha256 of `assets/tokens/tokens.json`, `assets/tokens/tokens.css`, `qa/rules.json`,
+`FACTS.md` and `motion/motion.json`, each `null` when the project has none, and `logos`: one sha256 over the logo files and the band drawings). `kitlib.load()` is strict: a key it does not know, at
+any level, and a key that is missing, stop it (exit 2) naming the key.
+
+The build needs G5 recorded (exit 1 without) and an approved edition (BRAND-STATE.md `approved_edition`, which `state --record G5` writes; empty: exit 1, "G5 is recorded but no edition is
+approved"). The tokens must be built: `tokens.json` or `tokens.css` missing is exit 3, naming `brand-creator tokens`. A band drawing that qa/rules.json names and the project lacks is exit 1,
+naming it. One that leaves the project, or is not written as a plain path (`assets/logo/./mark.svg`, an absolute path), is exit 2: the kit names a drawing by its project path, and SKILL.md
+names it the same way. Without `--yes` the plan goes to stdout (`would write <n> generated files into .claude/skills/<name>/ (version <v>)`, then one line `generated <path> (<bytes> bytes)`
+per file), the message to stderr and the exit is 2; `--plan` prints the same and exits 0. Nothing is written in either case.
+
+**The version** is `<edition>.<build>`, and `kit.json` `version` is its only home (SKILL.md prints it in the line `Kit version <version> (kit.json).`). The edition is `approved_edition`. The build number
+starts at 1 and goes up by 1 when a build changes any kit content. `content_sha` is sha256 over the sorted (path, sha256) pairs of every generated file except `kit.json`, SKILL.md hashed as
+rendered with the literal `<version>` in its version line, so the version is decided before it is written. Same edition and same `content_sha` as the last build keep the version; same edition and
+another `content_sha` add 1 to the build number; a new edition starts at `<edition>.1`. No clock, no randomness: a second build with nothing changed writes nothing and keeps the version.
+
+**What the last build wrote** is the `kit` report's `outputs`, `kit_version` and `content_sha`. With no `kit` report, the `applied-skill` report's `output.sha256` stands in for SKILL.md, so the
+kit takes over a skill file that `applied-skill` generated. Against that record:
+
+- A planned file on disk whose bytes differ from the plan and whose sha256 is not the recorded one was edited by hand (`kit.json` too). A file inside a generated folder that is neither planned nor
+  recorded is a foreign file. Either one stops the build (exit 1, up to 6 paths named, nothing written or moved) unless `--replace`, which moves each to `removed-<date>[-n]/<its project path>`
+  (for example `removed-2026-10-17/.claude/skills/acme-brand/SKILL.md`) and writes the kit. A SKILL.md edited by hand after `applied-skill` stops the first kit build the same way.
+- A file recorded before and no longer planned (a logo taken out of the project) is moved to `removed-<date>[-n]/` as well, and said so, with no `--replace` needed. A generated folder this
+  empties is removed. Nothing is ever deleted.
+- Files are written only when their bytes change, `kit.json` last.
+
+Report `kit` (`assets/_checks/kit.json`), renderer `n/a (generated files)`. Inputs: the token files, the logo files, the band drawings, `qa/rules.json`, `FACTS.md` and `motion/motion.json`, each
+when the project has it. Row `kit:written` passes, with the detail `<n> generated files: <w> written, <u> unchanged, <r> moved to removed-<date>/; version <v>`. Extra keys: `outputs` (every generated
+path with its sha256, `kit.json` included), `kit_version` (the report's own `version` stays the plugin's), `content_sha`, `adapter_state_sha` (`adapt.state_sha`) and `kit_sources_sha` (sha256 over
+`sources`). A run that stops before the report is created (a hand edit, unbuilt tokens, a bad drawing) leaves the earlier report as it was.
 
 ### launch-todo
 
