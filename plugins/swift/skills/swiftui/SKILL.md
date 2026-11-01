@@ -2,8 +2,8 @@
 name: swiftui
 description: >-
   Writes, reviews and refactors SwiftUI with current APIs for iOS, iPadOS, macOS and visionOS. Use when
-  building or changing SwiftUI views, state and data flow, layout, animation or Liquid Glass, or migrating
-  off deprecated APIs.
+  building or changing SwiftUI views and their Xcode previews, layout, animation or Liquid Glass, or
+  migrating off deprecated APIs.
 when_to_use: >-
   State and `@Observable` data flow, view composition, resizable layouts, safe areas, display scale,
   performance, lists, environment, localization. iPhone Duo, foldable or large-display layouts
