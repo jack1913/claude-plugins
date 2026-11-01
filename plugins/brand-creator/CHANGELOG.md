@@ -301,6 +301,9 @@ lints the board of the latest round again before `check`, so an edit of the fact
   a web-page recipe in `recipes/`. `kit build --yes` writes each of them once, with a note where you write, and never
   overwrites or moves it; delete one and the next build writes it again. The plan lists the files a build would add.
   An edit of yours moves the kit's version at the next build.
+  The web-page recipe starts from the visitor's job and the page's idea, builds the hero first, copies the brand's
+  files into the product's own public or static folder and links them from there, works beside your web-design skill
+  and not instead of it, and checks the built page against the brand, with every sample figure marked as a sample.
 
 ### Changed
 

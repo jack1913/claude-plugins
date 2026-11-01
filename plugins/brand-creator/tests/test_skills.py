@@ -481,6 +481,50 @@ def test_loading_the_layouts_stops_with_exit_3_naming_the_file_when_it_cannot_be
     assert short.value.code == EXIT_CANNOT and "3 items" in short.value.message
 
 
+RECIPE = ROOT / "templates" / "kit" / "recipes" / "web-page.md"
+RECIPE_LEADS = ("The visitor's job:", "References:", "Tokens and files:", "Hero first:", "Page check:", "Cold read:", "Before publishing:")
+RECIPE_VALUE = re.compile(r"(?i)\d(?:\.\d+)?\s*(?:%|(?:px|rem|em|ms|s|vh|vw|svh|dvh|ch|fr|deg|pt)\b)|\d\s*:\s*\d|#[0-9a-f]{3,8}\b|\b(?:rgba?|hsla?|oklch|oklab|hwb|lab|lch)\(")
+
+
+def test_the_web_page_recipe_is_steps_only_with_no_values():
+    """The kit's web-page recipe is seven numbered steps and no value: the brand's values live in its tokens and rules.json, and the recipe points at the page check's rows instead of
+    copying a word list or a threshold. Static, so no data directory is needed (tests/test_kit.py has a module-level mark that a test inside it cannot escape)."""
+    for sample in ("Hero padding 48px", "a 200ms ease", "a 60% ground", "1.5 rem", "contrast 4.5:1", "#0a0a0a", "rgb(0 0 0)", "oklch(0.5 0.1 200)"):
+        assert RECIPE_VALUE.search(sample), sample
+    for sample in ("step 3 of 7", "a phone and a desktop width", "tell:hero-text-budget", "# Web page"):
+        assert not RECIPE_VALUE.search(sample), sample
+    text = RECIPE.read_text(encoding="utf-8")
+    lines = text.splitlines()
+    assert lines[0] == "# Web page" and lines[1] == ""
+    assert lines[2] == "Steps only. The brand's values live in the tokens and rules.json; a line you add that pins a value cites a token or a rule, or is tagged `[example]`."
+    assert lines[-1] == "The other pages follow the same steps."
+    steps = re.findall(r"(?m)^(\d+)\. (.*)$", text)
+    assert [n for n, _ in steps] == [str(i) for i in range(1, 8)], "seven numbered steps"
+    assert all(step.startswith(lead) for (_, step), lead in zip(steps, RECIPE_LEADS)), "in this order: the visitor's job, references, tokens, hero, page check, cold read, before publishing"
+    body = re.sub(r"(?m)^\d+\. ", "", text)
+    assert not RECIPE_VALUE.search(body), RECIPE_VALUE.search(body)
+    assert not re.search(r"\d", body), "no digit anywhere: a value the brand has not decided is never pinned"
+    assert "[[fill" not in text and "{{" not in text and "}}" not in text, "complete as scaffolded: no marker, no placeholder"
+    assert "var(--" not in text, "a token name is the brand's; the recipe names none"
+    assert "](" not in text and not re.search(r"(?m)^\s*[-*+] ", text), "no link that could leave the kit, no untagged bullet: only numbered steps"
+    assert "[data-sample]" in text and "page-check" in text
+    # it points at the page check's rows, which exist, and copies none of its lists
+    tells = json.loads((REFS / "page-tells.json").read_text(encoding="utf-8"))
+    ids = {t["id"] for t in tells["tells"]}
+    pointed = set(re.findall(r"`tell:([a-z-]+)`", text))
+    assert pointed == {"hero-text-budget", "stock-second-action", "styled-div-mock"} and pointed <= ids
+    pagecheck = (ROOT / "scripts" / "pagelib" / "pagecheck.py").read_text(encoding="utf-8")
+    for row in ("page:claims", "page:samples"):
+        assert f"`{row}`" in text and f'"{row}"' in pagecheck, row
+    words = [w for t in tells["tells"] + tells["notes"] for ws in t.get("words", {}).values() for w in ws]
+    assert len(words) > 40 and not [w for w in words if w.casefold() in text.casefold()], "no stock label or word list is copied"
+    # the gaps the kit test baseline found
+    for needle in ("into the product's own public or static folder and link them from there", "Never link into `.claude/skills/`",
+                   "with the owner's web-design skill loaded beside this kit, never instead of it", "a plain placeholder marked as a sample",
+                   "mark every sample with the `[data-sample]` attribute and a label", "Run the page check again"):
+        assert needle in text, needle
+
+
 def test_templates_are_self_contained_and_avoid_the_ai_default_cluster():
     for name in ("round-page.html", "board.html", "review/index.html", "card.html", "style-board.html", "site-refs-board.html", "site-board.html"):
         text = (ROOT / "templates" / name).read_text(encoding="utf-8")
