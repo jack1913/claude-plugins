@@ -391,14 +391,19 @@ def _run_verb(cmd, rest):
             key, _sep, src = spec.partition("=")
             if not key or not src:
                 return _usage("ERROR: --confirm takes KEY=FILE")
-            confirmed = {key: json.loads(pathlib.Path(src).read_text(encoding="utf-8"))}
+            confirmed = _read_confirm(key, src)
+            if confirmed is None:
+                return _usage("ERROR: --confirm file is not JSON: " + src)
         lib.run_set_phase(run, str(opts["--phase"]), confirmed)
     elif "--confirm" in opts:
         spec = str(opts["--confirm"])
         key, _sep, src = spec.partition("=")
         if not key or not src:
             return _usage("ERROR: --confirm takes KEY=FILE")
-        run["confirmed"][key] = json.loads(pathlib.Path(src).read_text(encoding="utf-8"))
+        confirmed = _read_confirm(key, src)
+        if confirmed is None:
+            return _usage("ERROR: --confirm file is not JSON: " + src)
+        run["confirmed"][key] = confirmed[key]
     elif "--add" in opts:
         if "--kind" not in opts:
             return _usage("ERROR: --add requires --kind")
@@ -424,6 +429,14 @@ def _run_verb(cmd, rest):
         )
     sys.stdout.write(lib.write_run(run))
     return 0
+
+
+def _read_confirm(key, src):
+    """{key: the JSON in src}, or None when src is not JSON (the caller names the file)."""
+    try:
+        return {key: json.loads(pathlib.Path(src).read_text(encoding="utf-8"))}
+    except ValueError:
+        return None
 
 
 def main(argv):

@@ -193,8 +193,7 @@ intended bump, and **beware incidental matches**: if the script greps for a keyw
 that word appearing in an unrelated entry (e.g. "non-breaking change") can force the
 wrong bump — keep it out of entries that don't mean it. Then, exactly like the
 commit/tag/push commands, **print** the release script's `--suggest` (and cut)
-commands (the concrete invocation is in REPO SPECIFICS). They are part of the one yes
-in the intro: run `--suggest` first and show its version, then the cut command. No
+commands (the concrete invocation is in REPO SPECIFICS). They are part of the one yes in the intro: run `--suggest` first and show its version, then the cut command. If `--suggest` prints a version other than the one shown, stop: show the script's version and ask again before the cut command. No
 script interpreter is in `allowed-tools`, so the harness asks before running it. The
 script's output is the authoritative version.
 

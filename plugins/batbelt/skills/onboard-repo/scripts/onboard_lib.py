@@ -25,7 +25,9 @@ from check import (  # noqa: F401  (re-exported for callers of this module)
     _NEXT_TARGET_RE,
     _PS_LANGS,
     _is_excluded,
+    _first_token_lang,
     _prose_text,
+    _tags_of,
     front_end_scripts,
     _TOTAL_RE,
     is_table_row,
@@ -1364,11 +1366,10 @@ def detect_manual_conventions(repo_root):
         if page != index and _NEXT_TARGET_RE.search(_prose_text(text)):
             conv["next_tour"] = True
         for info, _body, _line in iter_fenced_blocks(text):
-            tokens = info.split()
-            lang = tokens[0].lower() if tokens else ""
+            lang = _first_token_lang(info)
             if lang in _PS_LANGS:
                 conv["manual_has_powershell"] = True
-            if any(t.startswith("capture=") for t in tokens[1:]):
+            if "capture" in _tags_of(info)[0]:
                 fence_langs[lang] = fence_langs.get(lang, 0) + 1
     if fence_langs:
         conv["capture_fence"] = max(sorted(fence_langs), key=lambda k: fence_langs[k])

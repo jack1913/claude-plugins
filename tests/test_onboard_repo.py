@@ -4339,7 +4339,8 @@ def test_toc_count_flags_a_wrong_lead_count(tmp_path, capsys):
 
 
 def _twin_pages(tmp_path, paired_second=False):
-    _seed(tmp_path, "run.ps1", "# ps\n")  # run.sh's PowerShell sibling: a front-end per platform
+    _seed(tmp_path, "run.ps1", "# ps\n")
+    _seed(tmp_path, "run.sh", "#!/bin/sh\n")  # run.sh's PowerShell sibling: a front-end per platform
     _seed(tmp_path, "docs/manual/one.md", "# One\n\n```bash\n./run.sh\n```\n\n```powershell\n.\\run.ps1\n```\n")
     two = "# Two\n\n```bash\n./run.sh --all\n```\n"
     if paired_second:
@@ -4350,6 +4351,7 @@ def _twin_pages(tmp_path, paired_second=False):
 def test_platform_twin_errors_with_platform_pairs(tmp_path, capsys):
     cli = _load_cli()
     _seed(tmp_path, "run.ps1", "# ps\n")
+    _seed(tmp_path, "run.sh", "#!/bin/sh\n")
     _seed(tmp_path, "docs/manual/two.md", "# Two\n\n```bash\n./run.sh --all\n```\n")
     rc, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
     assert rc == 1 and "PLATFORM_TWIN" in codes
@@ -4871,6 +4873,7 @@ def test_manual_conventions_refuses_a_missing_root(tmp_path, capsys):
 def test_platform_twin_needs_a_powershell_command_not_its_output(tmp_path, capsys):
     cli = _load_cli()
     _seed(tmp_path, "run.ps1", "# ps\n")
+    _seed(tmp_path, "run.sh", "#!/bin/sh\n")
     _seed(tmp_path, "docs/manual/two.md",
           "# Two\n\n```bash\n./run.sh\n```\n\n```powershell capture=win\nPS> done\n```\n")
     rc, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
@@ -4964,7 +4967,9 @@ def test_cli_manual_conventions_prints_the_questions(tmp_path):
 def test_platform_twin_skips_output_between_a_command_and_its_twin(tmp_path, capsys):
     cli = _load_cli()
     _seed(tmp_path, "build.ps1", "# ps\n")
+    _seed(tmp_path, "build.sh", "#!/bin/sh\n")
     _seed(tmp_path, "check.ps1", "# ps\n")
+    _seed(tmp_path, "check.sh", "#!/bin/sh\n")
     _seed(tmp_path, "docs/manual/a.md",
           "# A\n\n```bash\n./build.sh\n```\n\n```console capture=a\nok\n```\n\n```powershell\n.\\build.ps1\n```\n")
     _seed(tmp_path, "docs/manual/b.md",
@@ -4999,6 +5004,7 @@ def test_next_chain_pairs_neighbours_in_index_order(tmp_path, capsys):
 def test_only_runs_read_the_same_powershell_signal_as_full_runs(tmp_path, capsys):
     cli = _load_cli()
     _seed(tmp_path, "run.ps1", "# ps\n")
+    _seed(tmp_path, "run.sh", "#!/bin/sh\n")
     _seed(tmp_path, "docs/manual/two.md", "# Two\n\n```bash\n./run.sh\n```\n")
     # a frozen page under a manual folder: the full run never reads it for the signal
     _seed(tmp_path, "docs/archive/manual/old.md", "# Old\n\n```powershell\nGet-Item\n```\n")
@@ -5089,6 +5095,7 @@ def test_sync_text_records_structure_and_asks_about_tour_gaps():
 def test_platform_twin_ignores_hash_lines_that_are_not_headings(tmp_path, capsys):
     cli = _load_cli()
     _seed(tmp_path, "build.ps1", "# ps\n")
+    _seed(tmp_path, "build.sh", "#!/bin/sh\n")
     _seed(tmp_path, "docs/manual/a.md",
           "# A\n\n```bash\n./build.sh\n```\n\n    # an indented code line\n#!/bin/sh is a shebang\n\n```powershell\n.\\build.ps1\n```\n")
     _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
@@ -5155,6 +5162,7 @@ def test_glob_classes_stay_inside_one_segment():
 def test_platform_twin_accepts_powershell_first(tmp_path, capsys):
     cli = _load_cli()
     _seed(tmp_path, "build.ps1", "# ps\n")
+    _seed(tmp_path, "build.sh", "#!/bin/sh\n")
     _seed(tmp_path, "docs/manual/a.md", "# A\n\n```powershell\n.\\build.ps1\n```\n\n```bash\n./build.sh\n```\n")
     _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
     assert "PLATFORM_TWIN" not in codes
@@ -5237,12 +5245,13 @@ def _front_end_repo(tmp_path):
 def test_a_remote_install_one_liner_needs_its_twin(tmp_path, capsys):
     cli = _load_cli()
     _front_end_repo(tmp_path)
-    one_liner = "curl -fsSL https://example.org/raw/main/install.sh | bash"
+    _git_remote(tmp_path)  # the URL points at this repo (me/tool)
+    one_liner = "curl -fsSL https://raw.githubusercontent.com/me/tool/main/install.sh | bash"
     _seed(tmp_path, "docs/manual/a.md", "# A\n\n```bash\n" + one_liner + "\n```\n")
     rc, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
     assert rc == 1 and "PLATFORM_TWIN" in codes
     _seed(tmp_path, "docs/manual/a.md", "# A\n\n```bash\n" + one_liner + "\n```\n\n"
-          "```powershell\nirm https://example.org/raw/main/install.ps1 | iex\n```\n")
+          "```powershell\nirm https://raw.githubusercontent.com/me/tool/main/install.ps1 | iex\n```\n")
     _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
     assert "PLATFORM_TWIN" not in codes
 
@@ -5302,7 +5311,8 @@ def test_front_end_detection_names_the_documented_script_exactly(tmp_path):
     _front_end_repo(tmp_path)
     _seed(tmp_path, "README.md", "# R\n\nRun ./scripts/install.sh, or uninstall.sh to remove it.\n")
     assert lib.detect_manual_conventions(tmp_path)["platform_pairs"] is False
-    _seed(tmp_path, "README.md", "# R\n\n```bash\ncurl -fsSL https://example.org/raw/main/install.sh | bash\n```\n")
+    _git_remote(tmp_path)  # the URL points at this repo (me/tool)
+    _seed(tmp_path, "README.md", "# R\n\n```bash\ncurl -fsSL https://raw.githubusercontent.com/me/tool/main/install.sh | bash\n```\n")
     assert lib.detect_manual_conventions(tmp_path)["platform_pairs"] is True
 
 
@@ -5334,3 +5344,161 @@ def test_a_block_that_runs_a_script_twice_needs_one_twin(tmp_path, capsys):
     _, _, lines = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
     hits = [ln.split("\t")[2] for ln in lines if "PLATFORM_TWIN" in ln]
     assert hits == [str(tmp_path / "docs/manual/a.md") + ":14"]
+
+
+# ---- /code-review max (whole branch, with the settled file) -----------------------
+
+HOMEBREW = '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
+
+
+def _git_remote(root, url="git@github.com:me/tool.git"):
+    _seed(root, ".git/config", '[remote "origin"]\n\turl = %s\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n' % url)
+
+
+def test_a_third_party_installer_url_is_not_this_repos_front_end(tmp_path, capsys):
+    cli = _load_cli()
+    _front_end_repo(tmp_path)
+    _git_remote(tmp_path)
+    _seed(tmp_path, "docs/manual/getting-started/install.md", "# Install\n\n```bash\n" + HOMEBREW + "\n```\n")
+    _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
+    assert "PLATFORM_TWIN" not in codes
+    own = "curl -fsSL https://raw.githubusercontent.com/me/tool/main/install.sh -o i.sh"
+    _seed(tmp_path, "docs/manual/getting-started/install.md", "# Install\n\n```bash\n" + own + "\n```\n")
+    _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
+    assert "PLATFORM_TWIN" in codes
+
+
+def test_a_front_end_needs_both_scripts_in_the_repo(tmp_path):
+    _seed(tmp_path, "install.ps1", "# ps\n")  # no install.sh
+    _seed(tmp_path, "README.md", "# R\n\n```bash\n./install.sh\n```\n")
+    assert lib.detect_manual_conventions(tmp_path)["platform_pairs"] is False
+
+
+def test_an_own_repo_url_to_a_subfolder_front_end_counts(tmp_path):
+    _seed(tmp_path, "scripts/install.sh", "#!/bin/sh\n")
+    _seed(tmp_path, "scripts/install.ps1", "# ps\n")
+    _git_remote(tmp_path, "https://github.com/me/tool.git")
+    _seed(tmp_path, "README.md", "# R\n\nGet https://raw.githubusercontent.com/me/tool/main/scripts/install.sh and run it.\n")
+    assert lib.detect_manual_conventions(tmp_path)["platform_pairs"] is True
+
+
+def _toc_round_trip(tmp_path, capsys, text):
+    cli = _load_cli()
+    once = lib.renumber_toc(text)
+    assert lib.renumber_toc(once) == once
+    _seed(tmp_path, "docs/manual/README.md", once)
+    _, codes, lines = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check"])
+    assert "TOC_COUNT" not in codes, lines
+    return once
+
+
+def test_renumber_and_toc_count_agree_on_restarting_subsections(tmp_path, capsys):
+    a = ("# M\n\nRead **1 → 6**.\n\n## Do a task\n\n### Install\n\n1. [a](a.md)\n1. [b](b.md)\n1. [c](c.md)\n\n"
+         "### Use\n\n1. [d](d.md)\n1. [e](e.md)\n1. [f](f.md)\n")
+    assert "**1 → 3**" in _toc_round_trip(tmp_path, capsys, a)
+    b = "# M\n\nRead **1 → 9**.\n\n## Do a task\n\n### One\n\n1. [a](a.md)\n\n### Two\n\n1. [b](b.md)\n"
+    assert "**1 → 1**" in _toc_round_trip(tmp_path, capsys, b)
+    c = ("# M\n\nRead **1 → 2**.\n\n## Do a task\n\n### One\n\n1. [a](a.md)\n2. [b](b.md)\n\n"
+         "### Two\n\n1. [c](c.md)\n2. [d](d.md)\n")
+    assert _toc_round_trip(tmp_path, capsys, c) == c
+
+
+def test_negated_glob_classes_keep_every_dash_literal():
+    chk = _load_check()
+    assert chk._glob_regex("docs/manual/[!_-]*.md").match("docs/manual/a.md")
+    assert not chk._glob_regex("docs/manual/[!_-]*.md").match("docs/manual/-a.md")
+    assert chk._glob_regex("docs/x[!+-]y.md").match("docs/x.y.md")
+    assert not chk._glob_regex("docs/x[!+-]y.md").match("docs/x+y.md")
+
+
+def test_a_renamed_do_a_task_group_is_still_the_tour(tmp_path, capsys):
+    chk = _load_check()
+    text = ("# M\n\nRead **1 → 5**.\n\n## Start\n\n- [Install](install.md)\n\n## Use it\n\n"
+            "### Daily\n\n1. [a](a.md)\n2. [b](b.md)\n3. [c](c.md)\n\n### Weekly\n\n4. [d](d.md)\n5. [e](e.md)\n\n"
+            "## Look it up\n\n- [Flags](reference/flags.md)\n")
+    assert chk.tour_items(text) == ["a.md", "b.md", "c.md", "d.md", "e.md"]
+    assert lib.renumber_toc(text) == text
+    cli = _load_cli()
+    _seed(tmp_path, "docs/manual/README.md", text)
+    _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check"])
+    assert "TOC_COUNT" not in codes
+
+
+def test_twin_names_compare_without_case(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "build.sh", "#!/bin/sh\n")
+    _seed(tmp_path, "Build.ps1", "# ps\n")
+    _seed(tmp_path, "docs/manual/a.md", "# A\n\n```bash\n./build.sh\n```\n\n```powershell\n.\\Build.ps1\n```\n")
+    _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
+    assert "PLATFORM_TWIN" not in codes
+
+
+def test_a_powershell_twin_may_reach_its_script_through_a_variable(tmp_path, capsys):
+    cli = _load_cli()
+    _front_end_repo(tmp_path)
+    for twin in ('& "$PSScriptRoot\\install.ps1"', "powershell -File:.\\install.ps1"):
+        _seed(tmp_path, "docs/manual/a.md", "# A\n\n```bash\n./install.sh\n```\n\n```powershell\n" + twin + "\n```\n")
+        _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
+        assert "PLATFORM_TWIN" not in codes, twin
+
+
+def test_a_too_long_script_name_does_not_abort_the_run(tmp_path, capsys, monkeypatch):
+    chk = _load_check()
+    real = chk.pathlib.Path.is_file
+
+    def is_file(self):
+        if len(self.name) > 255:
+            raise OSError(63, "File name too long")
+        return real(self)
+
+    monkeypatch.setattr(chk.pathlib.Path, "is_file", is_file)
+    _seed(tmp_path, "docs/manual/a.md", "# A\n\n```bash\n./" + "a" * 300 + ".sh\n```\n\n[gone](missing.md)\n")
+    rc = chk.main(["check-docs", str(tmp_path / "docs"), "--no-tier-check", "--platform-pairs"])
+    assert rc == 1 and "BROKEN_LINK" in capsys.readouterr().out
+
+
+def test_sync_text_names_the_shared_front_end_rule_and_json_confirms():
+    t = _flat(ONBOARD / "SKILL.md")
+    assert "in the root, `scripts/` or `bin/`" not in t and "`front_end_scripts`" in t
+    assert "run-set --confirm readme_voice=" in t and "as JSON" in t
+
+
+def test_a_plain_text_confirm_file_is_named_in_the_error(tmp_path, capsys):
+    import contextlib
+    import io
+
+    cli = _load_cli()
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        assert cli.main(["run-init", "S1", str(tmp_path)]) == 0
+    run = _seed(tmp_path, "run.json", buf.getvalue())
+    voice = _seed(tmp_path, "voice.txt", "Minimal Hacker\n")
+    capsys.readouterr()
+    assert cli.main(["run-set", str(run), "--confirm", "readme_voice=" + str(voice)]) == 2
+    err = capsys.readouterr().err
+    assert "--confirm" in err and "voice.txt" in err and "manifest" not in err
+
+
+def test_a_differing_suggest_version_stops_the_cut():
+    assert "If `--suggest` prints a version other than the one shown, stop" in _flat(CR)
+
+
+def test_no_dead_allow_wrapper_and_one_fence_tag_parser():
+    import inspect
+    chk = _load_check()
+    assert not hasattr(chk, "_forbidden_allowed")
+    assert "info.split()" not in inspect.getsource(chk._command_lang)
+    assert "info.split()" not in inspect.getsource(chk._has_powershell_fence)
+    assert "info.split()" not in inspect.getsource(lib.detect_manual_conventions)
+
+
+def test_the_tour_group_is_found_by_its_how_to_links_not_its_position():
+    chk = _load_check()
+    use_llm_like = ("# M\n\n1. [Install](getting-started/install.md)\n2. [Quick start](getting-started/quickstart.md)\n\n"
+                    "## I want to…\n\n- [Update](updating.md)\n- [Configure](configure.md)\n\n"
+                    "## Reference\n\n1. [Flags](reference/flags.md)\n2. [Settings](reference/settings.md)\n\n"
+                    "## Going deeper\n\n- [How it works](../internals/README.md)\n")
+    assert chk.tour_items(use_llm_like) == []
+    renamed_first = ("# M\n\n## Daily use\n\n1. [A](a.md)\n2. [B](b.md)\n\n## Start\n\n1. [I](getting-started/i.md)\n\n"
+                     "## Look up\n\n- [F](reference/f.md)\n")
+    assert chk.tour_items(renamed_first) == ["a.md", "b.md"]

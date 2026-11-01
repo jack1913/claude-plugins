@@ -1378,8 +1378,10 @@ def _glob_regex(glob):
             if body.startswith("!"):
                 rest = body[1:]
                 if rest.startswith("-"):
-                    rest = "\\" + rest  # a leading - is a literal, not a range
-                out.append("[^" + rest + "/]")  # a negated class never matches /
+                    rest = "\\" + rest  # an edge - is a literal, not a range
+                if rest.endswith("-") and not rest.endswith("\\-"):
+                    rest = rest[:-1] + "\\-"
+                out.append("[^/" + rest + "]")  # a negated class never matches /
             else:
                 if body.startswith("^"):
                     body = "\\" + body  # ^ is a literal in a glob class
@@ -1391,12 +1393,8 @@ def _glob_regex(glob):
     return re.compile("".join(out) + r"\Z")
 
 
-def _forbidden_allowed(f, relparts, patterns):
-    return bool(_allow_hits(f, relparts, patterns))
-
-
 def _allow_hits(f, relparts, patterns):
-    """True when `--forbidden-allow` exempts this file. Each glob is anchored and
+    """The `--forbidden-allow` globs that exempt this file (an empty set: none). Each glob is anchored and
     matched against the file's path from where check-docs runs, the repo root
     (`docs/manual/reference/*`; `README.md` exempts only the root README). A file
     outside the working directory falls back to its path below the scanned root."""
@@ -1873,8 +1871,8 @@ def _in_manual(relparts):
 
 def _top_level_lists(text):
     """The top-level ordered lists in `text`'s prose, in order, and whether a "Do a
-    task" heading exists. Each list is a dict: `do_a_task` (it sits in that
-    heading's section, which runs to the next heading of the same or a higher
+    task" heading exists. Each list is a dict: `h2` (the line of the H2 group it sits
+    in, or None before the first one), `do_a_task` (it sits in that heading's section, which runs to the next heading of the same or a higher
     level, so its subsections count) and `items`, each a dict with `target` (its
     leading link, or None: a link later in the line is not the entry's page) and
     `number` (as written). A list starts at an item
@@ -1882,13 +1880,15 @@ def _top_level_lists(text):
     item is nested and skipped. Blank and indented lines keep a list open, and so
     does an unindented line right after an item (a wrapped line of its text); a
     heading, or a paragraph after a blank line, closes it."""
-    lists, cur, do_level, saw_do, prev_blank = [], None, None, False, True
-    for raw in _prose_text(text).split("\n"):
-        line = raw.expandtabs(4)
+    prose = [raw.expandtabs(4) for raw in _prose_text(text).split("\n")]
+    lists, cur, do_level, saw_do, prev_blank, h2 = [], None, None, False, True, None
+    for k, line in enumerate(prose):
         heading = _ATX_RE.match(line)
         if heading:
             cur, prev_blank = None, False
             level = len(heading.group(1))
+            if level == 2:
+                h2 = k
             if _DO_A_TASK_RE.match(line.strip()):
                 do_level, saw_do = level, True
             elif do_level is not None and level <= do_level:
@@ -1901,13 +1901,14 @@ def _top_level_lists(text):
             if cur is None:
                 if indent > 3:
                     continue
-                cur = {"do_a_task": do_level is not None, "base": indent, "items": []}
+                cur = {"do_a_task": do_level is not None, "base": indent, "items": [], "h2": h2}
                 lists.append(cur)
             if indent > cur["base"]:
                 continue
             cur["base"] = indent
             link = _ITEM_LINK_RE.match(line)
-            cur["items"].append({"target": link.group(1) if link else None, "number": int(m.group(2))})
+            cur["items"].append({"target": link.group(1) if link else None, "number": int(m.group(2)),
+                                 "list": len(lists) - 1})
         elif not line.strip():
             prev_blank = True
         elif line[:1] == " " or (cur is not None and not prev_blank):
@@ -1917,15 +1918,34 @@ def _top_level_lists(text):
     return lists, saw_do
 
 
+def _is_how_to_link(target):
+    """A link to a how-to page: a local `.md` in the manual, not a getting-started or
+    reference page and not outside the manual."""
+    return (_is_local_target(target) and target.endswith(".md") and not target.startswith("../")
+            and not target.startswith(("getting-started/", "reference/")))
+
+
 def tour_entries(text):
     """The manual index's tour as written. With a "Do a task" heading, it is every
-    ordered list in that section, subsections included, in order; none when that
-    group is not numbered. Without one, it is the longest top-level ordered list
-    whose items are mostly links (the first, on a tie). Each entry is a dict with
-    `target` and `number`; [] when there is none."""
+    ordered list in that section (subsections included); none when that group is
+    not numbered. Otherwise, when the index has H2 groups, it is the group whose
+    ordered lists hold the most links to how-to pages (a renamed Do a task group),
+    or none. With no H2 groups, it is the longest top-level ordered list whose items
+    are mostly leading links (the first, on a tie). Each entry is a dict with
+    `target`, `number` and `list`; [] when there is none."""
     lists, saw_do = _top_level_lists(text)
     if saw_do:
         return [e for lst in lists if lst["do_a_task"] for e in lst["items"]]
+    if any(_ATX_RE.match(ln.expandtabs(4)) and len(_ATX_RE.match(ln.expandtabs(4)).group(1)) == 2
+           for ln in _prose_text(text).split("\n")):
+        score = {}
+        for lst in lists:
+            if lst["h2"] is not None:
+                score[lst["h2"]] = score.get(lst["h2"], 0) + sum(1 for e in lst["items"] if _is_how_to_link(e["target"]))
+        best = max(sorted(score), key=lambda k: score[k], default=None)
+        if best is None or score[best] == 0:
+            return []
+        return [e for lst in lists if lst["h2"] == best for e in lst["items"]]
     best = []
     for lst in lists:
         linked = sum(1 for e in lst["items"] if e["target"])
@@ -1953,31 +1973,35 @@ def tour_items(text):
     whose line does not start with a link)."""
     return [e["target"] for e in tour_entries(text)]
 
-def _effective_numbers(numbers):
-    """The numbers a reader sees: Markdown auto-numbers a list written 1. 1. 1., so
-    such a list counts up from its first number."""
-    if len(numbers) > 1 and len(set(numbers)) == 1:
-        return [numbers[0] + i for i in range(len(numbers))]
-    return numbers
-
+def _effective_numbers(entries):
+    """The numbers a reader sees, list by list: Markdown auto-numbers a list written
+    1. 1. 1., so such a list counts up from its first number."""
+    out, by_list = [], {}
+    for e in entries:
+        by_list.setdefault(e.get("list", 0), []).append(e["number"])
+    for numbers in by_list.values():
+        if len(numbers) > 1 and len(set(numbers)) == 1:
+            numbers = [numbers[0] + i for i in range(len(numbers))]
+        out.append(numbers)
+    return out
 
 def _check_toc_count(f, text):
     """TOC_COUNT (warn): a `**1 → N**`-style total in the manual index that differs
     from the number its list's last entry carries (the tour, else the index's only
-    list), or a tour whose numbers do not count up by one. An auto-numbered list
-    (1. 1. 1.) is valid. A total may count across groups (1-3 under Get started,
+    list), or a tour list whose numbers do not count up by one. Numbering is judged
+    list by list, as renumber-toc writes it; an auto-numbered list (1. 1. 1.) is
+    valid. A total may count across groups (1-3 under Get started,
     4-6 under Do a task): it names the last number either way."""
     out = []
     tour = tour_entries(text)
-    if tour:
-        numbers = _effective_numbers([e["number"] for e in tour])
+    for numbers in _effective_numbers(tour):
         if any(b != a + 1 for a, b in zip(numbers, numbers[1:])):
             out.append(("warn", "TOC_COUNT", str(f), 1,
-                        "the tour's numbers do not count up by one: %s" % ", ".join(map(str, numbers))))
+                        "a tour list's numbers do not count up by one: %s" % ", ".join(map(str, numbers))))
     counted = toc_entries(text)
     if not counted:
         return out
-    last = _effective_numbers([e["number"] for e in counted])[-1]
+    last = _effective_numbers(counted)[-1][-1]
     fenced = _fenced_line_numbers(text)
     for i, line in enumerate(text.split("\n"), start=1):
         if i in fenced or is_table_row(line):
@@ -2030,47 +2054,112 @@ def _check_next_chain(index, text, read=None):
 
 
 def _has_powershell_fence(text):
-    return any(info.split()[:1] and info.split()[0].lower() in _PS_LANGS
-               for info, _b, _l in iter_fenced_blocks(text))
-
+    return any(_first_token_lang(info) in _PS_LANGS for info, _b, _l in iter_fenced_blocks(text))
 
 def _command_lang(info):
     """'sh' or 'ps' for a shell or PowerShell COMMAND fence, else None. Output
     fences (`capture=` or `illustrative`) and other languages are not commands."""
-    tokens = info.split()
-    if not tokens or any(t.startswith("capture=") or t == "illustrative" for t in tokens[1:]):
+    tags, illustrative = _tags_of(info)
+    if "capture" in tags or illustrative:
         return None
-    lang = tokens[0].lower()
+    lang = _first_token_lang(info)
     return "sh" if lang in _SH_LANGS else ("ps" if lang in _PS_LANGS else None)
 
-
 _SH_PATH_RE = re.compile(r"(https?://\S*?/)?(?:\./)?((?:[\w.-]+/)*[\w.-]+\.sh)(?![\w.-])")
-_PS1_PATH_RE = re.compile(r"(https?://\S*?/)?(?:\.[\\/])?((?:[\w.-]+[\\/])*[\w.-]+\.ps1)(?![\w.-])")
 _SCRIPT_LEAD = " \t\n`'\"(=;|&"
 
 
+def _repo_slugs(root):
+    """`owner/repo` for each remote in the repo's git config (a worktree's or a
+    submodule's `.git` file is followed to its config), lower-cased; empty when
+    there is none. Used to tell this repo's install URL from a third-party one."""
+    git = pathlib.Path(root) / ".git"
+    try:
+        if git.is_file():
+            gitdir = pathlib.Path(git.read_text(encoding="utf-8").split(":", 1)[1].strip())
+            if not gitdir.is_absolute():
+                gitdir = pathlib.Path(root) / gitdir
+            common = gitdir / "commondir"
+            base = gitdir / common.read_text(encoding="utf-8").strip() if common.is_file() else gitdir
+            config = base / "config"
+        else:
+            config = git / "config"
+        text = config.read_text(encoding="utf-8", errors="replace")
+    except (OSError, IndexError):
+        return set()
+    slugs = set()
+    for m in re.finditer(r"^\s*url\s*=\s*(\S+)", text, re.MULTILINE):
+        parts = [s for s in re.split(r"[:/]", re.sub(r"\.git$", "", m.group(1).rstrip("/"))) if s]
+        if len(parts) >= 2:
+            slugs.add((parts[-2] + "/" + parts[-1]).lower())
+    return slugs
+
+
 def _script_paths(regex, text):
-    """The script paths `text` names: a URL counts by its file name, a relative path
-    as written (`./` dropped, backslashes as `/`). A name glued to other text
-    (`uninstall.sh` is not `install.sh`) counts as itself."""
+    """The (url, path) pairs `text` names for a script: `url` is the URL prefix or
+    None; a relative path is as written (`./` dropped, backslashes as `/`). A
+    relative name glued to other text (`uninstall.sh` is not `install.sh`) counts
+    as itself."""
     out = []
     for m in regex.finditer(text):
         url, path = m.group(1), m.group(2).replace("\\", "/")
         if url:
-            out.append(path.rsplit("/", 1)[-1])
+            out.append((url, path))
         elif m.start() == 0 or text[m.start() - 1] in _SCRIPT_LEAD:
-            out.append(path)
+            out.append((None, path))
     return out
 
 
+def _ps1_names(text):
+    """Every `.ps1` file name `text` mentions, lower-cased: however PowerShell
+    reaches it (`.\\x.ps1`, `-File:x.ps1`, `"$PSScriptRoot\\x.ps1"`, a URL)."""
+    return [n.lower() for n in re.findall(r"(?<![\w.-])([\w.-]+\.ps1)(?![\w.-])", text)]
+
+
+def _pair_exists(root, sh_path):
+    """True when `root/sh_path` is a file and a `.ps1` of the same stem sits beside
+    it (compared without case, as PowerShell does). Never raises."""
+    try:
+        sh = pathlib.Path(root) / sh_path
+        if not sh.is_file():
+            return False
+        want = sh.with_suffix(".ps1").name.lower()
+        return any(p.name.lower() == want and p.is_file() for p in sh.parent.iterdir())
+    except OSError:
+        return False
+
+
+def _repo_paths_in_url(url, path, slugs):
+    """The repo-relative paths a URL may name, longest first, when it points at this
+    repo (one of `slugs` appears in it); [] for a third-party URL."""
+    full = url + path
+    low = full.lower()
+    for slug in slugs:
+        k = low.find("/" + slug + "/")
+        if k != -1:
+            segs = full[k + len(slug) + 2 :].split("/")
+            return ["/".join(segs[n:]) for n in range(len(segs))]
+    return []
+
+
 def front_end_scripts(text, roots):
-    """The `.sh` front-ends `text` runs or names: each `.sh` path whose `.ps1`
-    sibling exists under one of `roots` (a repo has a front-end per platform there).
-    Detection (`manual-conventions`) and PLATFORM_TWIN share this one rule."""
-    out = []
-    for path in _script_paths(_SH_PATH_RE, text):
-        if any((pathlib.Path(r) / path).with_suffix(".ps1").is_file() for r in roots):
-            out.append(path)
+    """The `.sh` front-ends `text` runs or names: each `.sh` path that is a file
+    under one of `roots` with a `.ps1` sibling (a front-end per platform). A URL
+    counts only when it points at this repo (its git remote's owner/repo is in it);
+    its path inside the repo is then tried longest tail first. Detection
+    (`manual-conventions`) and PLATFORM_TWIN share this one rule."""
+    out, slugs = [], None
+    for url, path in _script_paths(_SH_PATH_RE, text):
+        if url:
+            if slugs is None:
+                slugs = set().union(*(_repo_slugs(r) for r in roots))
+            candidates = _repo_paths_in_url(url, path, slugs)
+        else:
+            candidates = [path]
+        for cand in candidates:
+            if any(_pair_exists(r, cand) for r in roots):
+                out.append(cand)
+                break
     return out
 
 
@@ -2118,12 +2207,12 @@ def _check_platform_twin(f, text, severity):
             hi += 1
         kind = _command_lang(info)
         if kind == "sh":
-            own = {p.rsplit("/", 1)[-1] for p in _script_paths(_PS1_PATH_RE, body)}
-            wanted = {sh.rsplit("/", 1)[-1][:-3] + ".ps1" for sh in front_end_scripts(body, roots)}
+            own = set(_ps1_names(body))
+            wanted = {sh.rsplit("/", 1)[-1][:-3].lower() + ".ps1" for sh in front_end_scripts(body, roots)}
             for ps1 in sorted(wanted - own):  # one twin per script per block, however often it runs
                 needed.append((start, ps1))
         elif kind == "ps":
-            shown.extend(p.rsplit("/", 1)[-1] for p in _script_paths(_PS1_PATH_RE, body))
+            shown.extend(_ps1_names(body))
     _flush()
     return out
 

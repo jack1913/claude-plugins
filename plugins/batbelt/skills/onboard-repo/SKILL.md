@@ -193,12 +193,12 @@ writing.
 
 Ask the README voice before the README seed is written: show the README voice menu from the
 `update-docs` template (nine voices), recommend one for this repo's type, and let the operator
-pick one, describe their own, or defer. Save the answer in the run record
-(`run-set --confirm readme_voice=<file>`, so `--resume` does not ask again) and record it as the
-`readme voice` bake
+pick one, describe their own, or defer. Save the answer in the run record (`run-set --confirm
+readme_voice=<file>`, the file holding the answer as JSON, such as `{"voice": "Minimal
+Hacker"}`, so `--resume` does not ask again) and record it as the `readme voice` bake
 (`references/stamping.md`); a deferred voice records "no voice", and nothing is imposed until a
-styling run asks again. Write the README seed (§3.5) in the chosen voice, keeping the README list
-in the docs standard's §2.
+styling run asks again. Write the README seed (§3.5) in the chosen voice, keeping the README
+list in the docs standard's §2.
 
 ## 3. Stamp (read `references/stamping.md`)
 
@@ -439,13 +439,14 @@ manual is already the standard's default; a missing tour feature is asked about,
 same pass writes `docs voice:` and `platform pairs:` into the `update-docs` REPO SPECIFICS when
 they are missing: the voice from `docs_voice` (with none found, leave the line out so the
 default applies; never copy a voice word from the old template region), and `sh+powershell` when
-`platform_pairs` is true, that is when the repo has a documented `.sh`/`.ps1` front-end pair (in
-the root, `scripts/` or `bin/`). A PowerShell block in the manual without such a pair
-(`manual_has_powershell`) is only mentioned to the operator. `preserve` carries REPO SPECIFICS
-verbatim, so these two lines are a separate edit shown as their own diff; all of it is confirmed
-together. Like the other docs-ia seeds it is the repo's own file, so nothing marks it as owned
-by the installer. `--sync` never moves or regroups a page: a new page goes where the repo's
-existing pages are.
+`platform_pairs` is true, that is when the repo has a documented `.sh`/`.ps1` front-end pair:
+the README or the manual names a `.sh` whose `.ps1` sibling exists (check.py's
+`front_end_scripts`, the rule PLATFORM_TWIN uses; a URL counts only when it points at this
+repo). A PowerShell block in the manual without such a pair (`manual_has_powershell`) is only
+mentioned to the operator. `preserve` carries REPO SPECIFICS verbatim, so these two lines are a
+separate edit shown as their own diff; all of it is confirmed together. Like the other docs-ia
+seeds it is the repo's own file, so nothing marks it as owned by the installer. `--sync` never
+moves or regroups a page: a new page goes where the repo's existing pages are.
 
 The JSON's `ask` list holds tour features the standard expects and this manual lacks (no numbered
 Do a task list, no Next links, no **New here?** pointer). Each may be deliberate or only mean the

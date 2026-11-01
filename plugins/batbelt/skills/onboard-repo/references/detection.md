@@ -84,8 +84,8 @@ editing manifests directly.
   `prebuild` hook that rewrites a generated file) so the bake records it.
 - Seed the section→source SET map from the **index doc**'s existing pointers
   (cite-or-defer: only where the source verifies).
-- **Front-ends** — a `.sh` the README or the manual names (a remote install URL counts by its file
-  name) whose `.ps1` sibling exists, such as `install.sh` beside `install.ps1`, means a front-end per
+- **Front-ends** — a `.sh` the README or the manual names (a remote install URL only when it points
+  at this repo, by its git remote) whose `.ps1` sibling exists, such as `install.sh` beside `install.ps1`, means a front-end per
   platform, named in the README or the manual: bake `platform pairs: sh+powershell`, and the README
   seed's Install section gets both blocks. A helper pair nobody documents is not a front-end.
 - **Foreign facts** — plugins or packages the repo installs from another repository (a plugin

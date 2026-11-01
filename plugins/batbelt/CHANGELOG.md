@@ -50,6 +50,8 @@ writes anything.
 - `changelog-release` prints the commit, push and tag commands, then runs them one by one after one yes. Your own
   permission rules still apply to each command.
 - Before 1.0, `changelog-release` bumps the minor version for a feature: 0.1.2 becomes 0.2.0.
+- With a release script, `changelog-release` stops before the cut when `--suggest` prints a version other than
+  the one you approved.
 - `changelog-release` asks for an entry, or a reason to skip, for every merge in the release. Both skills commit by
   explicit path and name any unrelated changes they left out.
 - `changelog-release` cuts a SemVer version only when you ask for a release; a routine run only updates
@@ -61,11 +63,13 @@ writes anything.
 - The tour checks read a list item whose text wraps onto the next line, and a Do a task section with
   subsections, as one tour. A malformed `--forbidden-allow` pattern is refused with a usage error.
 - A tour entry's page is the link its line starts with. An index whose only list is plain numbered steps still gets
-  its page count fixed, a total is left alone when the index is ambiguous, an auto-numbered list (1. 1. 1.) is
-  valid, and a bold range in a table cell is no longer taken for the count.
+  its page count fixed, a total is left alone when the index is ambiguous, numbering is judged list by list the way
+  `renumber-toc` writes it (an auto-numbered list, 1. 1. 1., is valid), and a bold range in a table cell is no
+  longer taken for the count. A renamed Do a task group is found by its links to how-to pages.
 - PowerShell twins may come before or after their shell command, and pair by script name. Only a command that runs
-  a `.sh` front-end with a `.ps1` sibling (a remote install one-liner included) needs one; a block that runs both
-  scripts is its own twin, and a CLI, `git` or `npm` command needs none.
+  a `.sh` front-end with a `.ps1` sibling (a remote install one-liner for this repo included; a third-party
+  installer is not) needs one; a block that runs both scripts is its own twin, names compare without case, and a
+  CLI, `git` or `npm` command needs none.
 - A numbered list that starts at 0 (an opt-in step 0) keeps its zero start when the index is renumbered.
 - Platform pairs come only from a `.sh` the README or the manual names whose `.ps1` sibling exists, the same rule
   the twin check uses; `uninstall.sh` no longer counts as naming `install.sh`.
