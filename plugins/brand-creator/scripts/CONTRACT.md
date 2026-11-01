@@ -2204,6 +2204,7 @@ section. A project without a kit keeps the applied skill as it is: the same byte
     assets/fonts/<the OFL fonts> and their licence texts (see Fonts below)
     motion/motion.json, motion/SPEC.md, and the page of each page case of motion/proof.json when the brand moves (see Motion below)
   snippets/fonts.css   generated: an @font-face for each copied font
+  snippets/on-ground.css   generated: one [data-ground] scope for each ground the owner named, after the page ground (see Grounds below)
 ```
 
 Everything the build writes is generated and is never edited by hand: change the brand project and build again. `brand/`, `snippets/` and `reference-pages/` are the generated
@@ -2280,6 +2281,21 @@ ASCII form, ends a word. `The mark keeps its clear space` is `the-mark-keeps-its
 repeat gets `-2`, `-3` in BRAND-STATE order (`kitlib.rule_ids`; the next number no other id has taken). `kitlib.known_rule_ids(project)` lists every id a rule can be named by, each once: the G4 slugs bare,
 `page:<id>` for each `page.rules[].id` of `qa/rules.json`, and `site:<id>` for each choice of `site/site.json` tagged `rule` (none while the project has no site record; a record that cannot be read is exit 1,
 naming the file).
+
+**Grounds.** `brand-creator tokens` writes the text grounds into `tokens.json` `grounds` only (see Token sources: `tokens.css` has no per-ground scope), so the kit writes the snippet. `snippets/on-ground.css`
+is written only when `grounds.named_by_owner` is a real `YYYY-MM-DD` date followed by the owner's words (`adapt.owner_named`, the rule `contrast` holds it to). While the grounds are a proposal no
+snippet is written and the row `kit:grounds` (info) says "the grounds are a proposal until the owner names them", because the model never guesses which colours text sits on. The first listed ground
+is the page ground and its five roles (text, action, on-action, focus, border) are the base variables, named as `tokens.css` names a token: the dots become hyphens (`color.text` is `--color-text`).
+Each other listed ground, in the order listed, gets one rule `[data-ground="<its token name without color.>"]` that sets `background-color` to its own colour and points each base variable at
+the ground's own role (`--color-text: var(--color-on-panel);` and so on for the five); the file opens with a generated-by comment, sets nothing else and invents no value. A role that names the page
+ground's own token is not set again (a variable pointed at itself is invalid, and the element keeps what it inherits). A ground is left out of the snippet, and named in the row, when the tokens
+give no colour for its ground or one of its five roles (left out, `null`, or no colour token; `contrast` owns completeness, in its `grounds:<mode>:<ground>:roles` rows, and this only refuses to write half a scope); when its
+`data-ground` name is already used by a ground listed before it; when the page ground uses one token for two roles (focus and action both `color.accent`, say, so that both are `--color-accent`) and the
+ground gives those roles different colours: a rule that sets a variable twice keeps only the later value, so the ground would take one role's colour for the other (when the colours agree the variable is
+set once); and when it names a variable its own rule sets to something else (a ground that is the page's text colour while its text is another, say): inside the rule that name no longer
+holds the page's colour. If the page ground itself lacks a colour, or no other ground is whole, nothing is written, and a snippet an earlier build wrote is moved to `removed-<date>/` like any file the kit no longer plans. Row `kit:grounds`: none when `tokens.json` has no `grounds`; info when the grounds are a proposal, when none is
+listed, and when only the page ground is listed; warn when a ground is left out or the page ground lacks a colour; pass when every other ground has its scope. It never changes the report's status.
+`sources.tokens` already covers the grounds, so `kit.json` has no key for them.
 
 Report `kit` (`assets/_checks/kit.json`), renderer `n/a (generated files)`. Inputs: the token files, the logo files, the band drawings, `qa/rules.json`, `FACTS.md` and `motion/motion.json`, each
 when the project has it. Row `kit:written` passes, with the detail `<n> generated files: <w> written, <u> unchanged, <r> moved to removed-<date>/; version <v>`. Extra keys: `outputs` (every generated

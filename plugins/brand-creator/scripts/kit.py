@@ -23,6 +23,12 @@ as SIL Open Font License (OFL) and a licence text with "SIL OPEN FONT LICENSE" i
 @font-face for each copied font. Any other font is listed in kit.json (fonts.not_copied) with the reason and never copied. With no current fontcheck report no font is
 copied, the rest is written and the build exits 3 (run `brand-creator fontcheck`, then `kit build` again).
 
+Grounds: once the owner has named the colours text sits on (tokens.json `grounds`, `named_by_owner` a real date and the owner's words), snippets/on-ground.css holds one
+[data-ground="<name>"] scope for each ground after the first, which is the page ground: the scope sets the ground's own background and points the page ground's text, action,
+on-action, focus and border variables at the ground's own colours. While the grounds are only a proposal no snippet is written (row kit:grounds says so); a ground the
+tokens give no colour for, one that gives two roles different colours where the page ground uses one token for both (a rule that sets a variable twice keeps only
+the later value), one that uses a variable its own scope sets, or one whose data-ground name is taken, is left out and named.
+
 Nothing in a generated file is edited by hand: change the brand project and build again. A file of the kit that differs from what the last build wrote, or a file in
 brand/, snippets/ or reference-pages/ that the kit did not write, stops the build (exit 1, up to 6 paths named) unless --replace, which moves each to
 removed-<date>[-n]/<its project path>. A file the last build wrote that the project no longer has (a logo taken away) is moved there too, and said so. Nothing is deleted.
@@ -96,6 +102,34 @@ def font_row(rep, fonts: dict) -> None:
                 detail=f"{n} font{'s' if n != 1 else ''} copied with {'their' if n != 1 else 'its'} licence text; {kitlib.FONTS_CSS} written")
 
 
+def ground_row(rep, grounds: dict) -> None:
+    """Row kit:grounds, about snippets/on-ground.css. No row when the tokens list no grounds. Info while the grounds are a proposal (nothing is written, because the model
+    never guesses which colours text sits on) and when there is no other ground to scope; warn when a ground is left out, or the page ground (the first listed) lacks a
+    colour so that none can be scoped; pass when every other ground has its scope. A ground is left out, with the reason kitlib.ground_plan gives, when the tokens give it no
+    colour, when the page ground uses one token for two roles and the ground gives them two colours, when it uses a variable its own scope sets, or when its name is taken."""
+    if grounds["state"] == "absent":
+        return
+    label, snippet = "text grounds from tokens.json", kitlib.ON_GROUND_CSS
+    if grounds["state"] == "proposal":
+        rep.add("kit:grounds", "info", label, detail=f"the grounds are a proposal until the owner names them: {snippet} is not written")
+    elif not grounds["listed"]:
+        rep.add("kit:grounds", "info", label, detail=f"the owner named the grounds but tokens.json lists none: {snippet} is not written")
+    elif grounds["page_gaps"]:
+        rep.add("kit:grounds", "warn", label, detail=f"the page ground ({grounds['page']}, the first listed) lacks {', '.join(grounds['page_gaps'])}, so no other ground can be "
+                                                    f"scoped against it: {snippet} is not written")
+    elif grounds["left_out"]:
+        left = grounds["left_out"]
+        shown = "; ".join(f"{name} ({why})" for name, why in left[:SHOWN]) + (f"; and {len(left) - SHOWN} more" if len(left) > SHOWN else "")
+        n = len(grounds["scoped"])
+        rep.add("kit:grounds", "warn", label, detail=f"{n} of {n + len(left)} other grounds scoped in {snippet}; left out: {shown}" if n
+                else f"{snippet} is not written, every other ground is left out: {shown}")
+    elif grounds["scoped"]:
+        n = len(grounds["scoped"])
+        rep.add("kit:grounds", "pass", label, detail=f"{n} ground{'s' if n != 1 else ''} scoped in {snippet}; the page ground is {grounds['page']}")
+    else:
+        rep.add("kit:grounds", "info", label, detail=f"only the page ground ({grounds['page']}) is listed, so there is no other ground to scope: {snippet} is not written")
+
+
 def build(project: Path, a) -> int:
     require_gate(project, "G5", for_what="The brand kit")
     edition = adapt.view(project)["approved_edition"]
@@ -138,6 +172,7 @@ def build(project: Path, a) -> int:
     rep.add("kit:written", "pass", f"{kd_rel}/ generated",
             detail=f"{len(files)} generated files: {written} written, {unchanged} unchanged, {len(moving)} moved to {folder}/; version {version}")
     font_row(rep, fonts)
+    ground_row(rep, kitlib.ground_plan(project))
     rep.extra.update({"outputs": {rel: sha256_bytes(data) for rel, data in sorted(files.items())}, "kit_version": version, "content_sha": csha,
                       "adapter_state_sha": src["state_sha"], "kit_sources_sha": kitlib.sources_sha(project, src)})
     return rep.finish()

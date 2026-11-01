@@ -293,6 +293,10 @@ lints the board of the latest round again before `check`, so an edit of the fact
 - The kit carries your rules and facts as data: `rules.json` (your recorded rules, each with a short id, the size rule
   and the drawing for each size, the contrast pairs with their ratios, the words never to use and your page rules) and
   `facts.json` (the facts you confirmed; contact details never).
+- Once you have named the colours your text sits on, the kit also holds a ready-made snippet,
+  `snippets/on-ground.css`: one `data-ground` rule for each ground after the page colour, so text, buttons, focus
+  rings and borders switch to that ground's own colours. While the grounds are only a proposal the kit writes no
+  snippet and says so. A ground the tokens give no colour for is left out and named, never written half.
 
 ### Changed
 
