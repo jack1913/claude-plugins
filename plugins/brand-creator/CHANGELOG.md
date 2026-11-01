@@ -288,6 +288,7 @@ lints the board of the latest round again before `check`, so an edit of the fact
   it to `removed-<date>/` and builds. Nothing is deleted.
   `brand-creator check` fails a kit file you edited by hand and says when the brand changed after the kit was built, and
   `applied-skill` leaves a project that has a kit to `kit build`.
+  A brand that moves also gets its motion spec and demo page in the kit.
 - Open-licence (OFL) fonts go into the kit with their licence; any other font is listed, never copied.
 
 ### Changed
