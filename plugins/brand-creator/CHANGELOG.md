@@ -339,6 +339,11 @@ lints the board of the latest round again before `check`, so an edit of the fact
   skill, and it is recommended when your brief lists a site or you have product repositories. A new manual page,
   [Use your brand kit](docs/manual/use/use-your-brand-kit.md), shows how to ask for it, fill in your own parts, put it
   in a repository and keep it current.
+- After the kit is written you can ask for a kit test: a hero built from the kit alone and checked against the brand. A
+  builder works in a folder outside your project from a copy of the kit, the page check scores what it makes, a cold read
+  says ship or fix, and each gap goes back to your tokens, rules, facts or your own kit files (a file the kit made is
+  never patched). The result is noted in `BRAND-STATE.md`. It runs in your conversation; a separate agent builds only
+  after you have said yes to its count, models and cost.
 
 ### Changed
 

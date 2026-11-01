@@ -20,6 +20,10 @@ To change something generated, change the brand project (the tokens, the logo, t
 - A folder of your own sits beside the generated ones, for example `notes/`. Do not put a file into `brand/`, `snippets/` or `reference-pages/`: the build treats it as foreign and stops.
 - A link inside the kit points at a file inside the kit, so that it still resolves in a product repository.
 
+## Test the kit
+
+To find out whether the kit is enough on its own, ask in the brand project for a kit test. A builder works from a copy of this kit alone and makes a hero and one other piece, `brand-creator page-check` scores them against the brand, and a cold reader says ship or fix. Each gap goes back to the brand project's tokens, rules or facts, or to one of your own files above, and then the kit is built again. A generated file is never patched. The result is written in the project's `BRAND-STATE.md`.
+
 ## Tags and values
 
 - A bullet in a recipe, and a bullet or a numbered line in `visual.md` and `golden-rules.md`, carries a tag: `[rule: <id>]` or `[example]`. Numbered steps in a recipe need no tag.

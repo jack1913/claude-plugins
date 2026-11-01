@@ -11,6 +11,7 @@
 - [Collapse, edition and approval](#collapse-edition-and-approval)
 - [Adapters and the applied skill (opt-in at G5)](#adapters-and-the-applied-skill-opt-in-at-g5)
 - [The brand kit (opt-in at G5)](#the-brand-kit-opt-in-at-g5)
+  - [Kit test (optional)](#kit-test-optional)
 - [Gate](#gate)
 - [Pitfalls](#pitfalls)
 - [Enforcement](#enforcement)
@@ -147,6 +148,36 @@ repositories. Nothing is written without the owner's yes, and it needs G5 record
 5. To put the kit in a repository: `adoption add --repo <label> --kit`, then [the brand-adopt skill](../../../brand-adopt/SKILL.md)
    copies it on the owner's branch and `kit status --repo <path>` must say `current`. The scripts never write outside the project, and
    the kit is never copied into `~/.claude/skills` or any global folder, and never committed.
+
+### Kit test (optional)
+
+After the kit is written the owner may ask for a kit test: a hero and one other piece of the page, built from the kit alone and
+checked against the brand. Offer it when `kit check` passes; never start it unasked. It runs in the thread. It is not blind (the
+session that wrote the kit builds from it), so say so, and read only the kit's own files. The steps, in order:
+
+1. **Build.** Make a scratch folder outside the project (`mktemp -d`) and copy the kit folder `.claude/skills/<slug>-brand/` into
+   it, as a product repository would carry it. One builder works there from the kit alone, following `recipes/web-page.md`: the
+   visitor's job and the brief line in, a hero and one other piece out. It reads nothing else of the brand project (no book, no
+   rounds, no project tokens). It copies the brand files it uses from the kit's `brand/` into its own folder and links them from
+   there.
+2. **Score.** `brand-creator page-check --from <the scratch folder> <page> --project <the brand project>` for each page, both
+   tiers: the brand rules fail the page and the reflex tells warn. Each run writes a report into the brand project's
+   `assets/_checks/page-check/`, which `check` does not gate. Then a cold read with the cold-review bullet under **Review** in
+   [prompt-fragments.md](../prompt-fragments.md): the hero's stills, the brief line the builder had and `FACTS.md`, and nothing
+   else, with `verdict: ship` or `verdict: fix` first. `shot` and `capture` take a page of a project only, so take the stills in a
+   scratch copy of the brand project with the builder's folder copied into it (`capture <page> --project <the copy>`), never in
+   the brand project itself.
+3. **Gaps flow back.** Name where each gap belongs and fix it there: a value the tokens lacked goes to the tokens, a rule the
+   builder had to guess to the G4 rules, a claim it could not make to `FACTS.md`, a step it misread to the owner's files
+   (`recipes/web-page.md`, `voice.md`, `visual.md`, `golden-rules.md`, `EXTENDING.md`). Then `kit build --yes` and `kit check`. A
+   generated kit file is never patched: the next build stops on a hand edit.
+4. **Record.** One line in BRAND-STATE.md Notes: `kit test <date>: page-check <status>; gaps: <the gaps, and the cold read's
+   verdict>`. List each gap still open under "Still open".
+
+One builder agent may do step 1 instead of the thread, only after the fleet gate ([fleet.md](../fleet.md)): the agent count, the
+models that will run, the size, the cost, and the owner's yes. Its prompt is the skeleton of
+[prompt-fragments.md](../prompt-fragments.md) with the scratch folder as its only folder and the kit's files as its only
+CONTEXT. No workflow is added for the kit test.
 
 ## Gate
 
