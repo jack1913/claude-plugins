@@ -281,7 +281,7 @@ When rows push further screens (settings, mailboxes, folders), `NavigationSplitV
 - Consider choosing the default detail by importance, not position. When pushed pages are secondary, a regular-width-only overview page selected from a summary row atop the sidebar (as in Settings) can beat auto-selecting the first row.
 - The split view can reset selection to `nil` on expand: re-fill it on regular width, and clear regular-only selections on collapse so compact width returns to the list.
 - Use a `NavigationStack` in the detail column for deeper pushes.
-- Observed in Xcode 27.1: a selectable `List` rendered `Link` and `Button` rows in the primary color rather than the tint. Recheck on newer Xcode before working around it.
+- A selectable `List` renders `Link` and `Button` rows in the primary color rather than the tint (seen in Xcode 27.1 and again on the Xcode 27.2 simulator).
 
 ### Tab Bar and Sidebar (SDK 27)
 
@@ -315,7 +315,7 @@ A trailing-edge panel for supplementary information.
 
 On wider size classes (macOS, iPad landscape), it appears as a **trailing column**. On compact size classes (iPhone), it **adapts to a sheet** automatically.
 
-Attach `inspector(isPresented:content:)` around the `NavigationStack`, not on a pushed screen; on a resizable display such as the iPhone Duo inner display, an inspector on a pushed screen broke pushes and put full-bleed content under the inspector column in Xcode 27.1 (see [iphone-duo.md](iphone-duo.md#choose-the-technique-by-screen-structure)).
+On the iPhone Duo inner display in portrait (669 points wide), the inspector overlays the content instead of narrowing it: a pushed screen's frame stays the full width and its centred content sits partly under the inspector, whether `inspector(isPresented:content:)` is attached to the pushed screen or around the `NavigationStack`, and with or without a full-bleed background. Pushes kept working in both placements. Keep essential content clear of the trailing edge or let people hide the inspector, and check both orientations.
 
 ### Basic Inspector
 

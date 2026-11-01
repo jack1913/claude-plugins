@@ -17,7 +17,7 @@ Classify the screen by structure before choosing a fold technique; starting from
 1. **Rows push further screens** (settings, mailboxes, folders, even a short list): `NavigationSplitView` needs no Duo-specific code; it collapses on compact width and scales to iPad and resizable windows. See [sheet-navigation-patterns.md](sheet-navigation-patterns.md#large-displays).
 2. **Cards or a feed in one `ScrollView`** (dashboards, collection grids): [reflow into two columns](layout-best-practices.md#two-column-reflow-for-card-screens) with the gutter over a vertical fold; don't split at a horizontal fold.
 3. **Two peer regions without navigation** (media and controls, visual and copy): `ArrangementView` with `.split`, outside any scroll view.
-4. **Content plus a supplementary queue or panel**: consider keeping the compact pattern, a persistent bar that pushes the full view (like the Music mini player). If you use `.inspector`, attach it around the `NavigationStack`, not on a pushed screen; in Xcode 27.1 that broke pushes and put full-bleed content under the inspector column.
+4. **Content plus a supplementary queue or panel**: consider keeping the compact pattern, a persistent bar that pushes the full view (like the Music mini player). If you use `.inspector`, check that it does not hide essential content: on the inner display in portrait it overlays the content instead of narrowing it (see [Inspector](sheet-navigation-patterns.md#inspector)).
 5. **Custom edge-to-edge chrome only**: read `reservedRegions` directly.
 
 In a portrait-only iPhone app, regular width effectively means the inner display, which ignores supported orientations and can still be landscape.

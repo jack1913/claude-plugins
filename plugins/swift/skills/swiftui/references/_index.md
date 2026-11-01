@@ -33,7 +33,7 @@ Every file in this folder, and what to open it for. `SKILL.md` has the same poin
 | `state-management.md` | Choosing a property wrapper: `@State`, `@Binding`, `@Bindable`, `@Observable` and data flow |
 | `styled-text-editing.md` | Attributed `TextEditor`, text selection and formatting definitions |
 | `text-patterns.md` | Verbatim vs localized `Text` |
-| `toolbar-patterns.md` | Customizable toolbars, search, adaptive vertical bars, overflow and visibility |
+| `toolbar-patterns.md` | Customizable toolbars, search, adaptive vertical bars, overflow and visibility, navigation title alignment |
 | `trace-analysis.md` | Reading an Instruments `.trace` file |
 | `trace-recording.md` | Recording a new Instruments trace |
 | `view-structure.md` | View structure: extracting subviews, `@ViewBuilder`, `@ContentBuilder`, a cheap `body` and `init` |

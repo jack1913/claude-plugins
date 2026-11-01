@@ -228,6 +228,47 @@ On iOS 27+, `ToolbarPlacement.statusBar` can be passed to `toolbarVisibility(_:f
 .toolbarVisibility(.hidden, for: .statusBar)
 ```
 
+## Navigation title alignment (27.2+)
+
+`toolbarTitleAlignment(_:)` overrides the alignment the navigation bar picks for its title: `.automatic`, `.leading` or `.center`. Leave the system choice in place unless the design needs a fixed alignment. The modifier exists only on iOS, iPadOS and Mac Catalyst 27.2+; on macOS, tvOS, visionOS and watchOS the SDK marks it unavailable, so no availability check admits it there. Wrap it in `#if os(iOS)` and `#available(iOS 27.2, *)`, with the unmodified view as the fallback:
+
+```swift
+extension View {
+    @ViewBuilder
+    func centeredNavigationTitle() -> some View {
+        #if os(iOS)
+        if #available(iOS 27.2, *) {
+            toolbarTitleAlignment(.center)
+        } else {
+            self
+        }
+        #else
+        self
+        #endif
+    }
+}
+
+NavigationStack {
+    Content()
+        .navigationTitle("Library")
+        .centeredNavigationTitle()
+}
+```
+
+`@Environment(\.toolbarTitleAlignment)` reports the alignment the bar resolved: `.leading` or `.center` once the system has chosen one, `.automatic` before. Read it in a custom title view (a `ToolbarItem` with the `.title` placement) to align that view's content to match, not to decide its size. Unlike the modifier, the environment value and `ToolbarTitleAlignment` itself are available on every platform from 27.2:
+
+```swift
+@available(iOS 27.2, macOS 27.2, tvOS 27.2, watchOS 27.2, visionOS 27.2, *)
+struct TitleLabel: View {
+    @Environment(\.toolbarTitleAlignment) private var alignment
+
+    var body: some View {
+        Text("Library")
+            .frame(maxWidth: .infinity, alignment: alignment == .center ? .center : .leading)
+    }
+}
+```
+
 ## Dynamic toolbar content
 
 `ForEach` conforms to `ToolbarContent` when built with the SDK 27 toolchain and back-deploys to iOS 16+, macOS 13+, watchOS 9+, tvOS 16+, and visionOS 1+. Give the collection elements stable identity. `EmptyView` as toolbar content requires iOS 27+, macOS 27+, tvOS 27+, watchOS 27+, and visionOS 27+.
@@ -240,6 +281,19 @@ On iOS 27+, `ToolbarPlacement.statusBar` can be passed to `toolbarVisibility(_:f
                 action.perform()
             }
         }
+    }
+}
+```
+
+To show or hide one toolbar item from state, use `ToolbarContent.hidden(_:)` (also on `CustomizableToolbarContent`). It is available on iOS 26.4+, macOS 15+, visionOS 26.4+, tvOS 27.2+ and watchOS 27.2+. Below those versions, fall back to an `if` inside the `.toolbar` builder:
+
+```swift
+.toolbar {
+    if #available(iOS 26.4, macOS 15.0, visionOS 26.4, tvOS 27.2, watchOS 27.2, *) {
+        ToolbarItem(placement: .primaryAction) { Button("Go") { } }
+            .hidden(isEmpty)
+    } else if !isEmpty {
+        ToolbarItem(placement: .primaryAction) { Button("Go") { } }
     }
 }
 ```

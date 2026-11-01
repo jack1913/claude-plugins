@@ -1280,6 +1280,90 @@
         "tvOS": "27.1",
         "watchOS": "27.1"
       }
+    },
+    {
+      "name": "toolbarTitleAlignment(_:)",
+      "path": "swiftui/view/toolbartitlealignment(_:)",
+      "claims": {
+        "iOS": "27.2",
+        "iPadOS": "27.2",
+        "Mac Catalyst": "27.2",
+        "macOS": false,
+        "visionOS": false,
+        "tvOS": false,
+        "watchOS": false
+      }
+    },
+    {
+      "name": "ToolbarTitleAlignment",
+      "path": "swiftui/toolbartitlealignment",
+      "claims": {
+        "iOS": "27.2",
+        "iPadOS": "27.2",
+        "Mac Catalyst": "27.2",
+        "macOS": "27.2",
+        "visionOS": "27.2",
+        "tvOS": "27.2",
+        "watchOS": "27.2"
+      }
+    },
+    {
+      "name": "toolbarTitleAlignment",
+      "path": "swiftui/environmentvalues/toolbartitlealignment",
+      "claims": {
+        "iOS": "27.2",
+        "iPadOS": "27.2",
+        "Mac Catalyst": "27.2",
+        "macOS": "27.2",
+        "visionOS": "27.2",
+        "tvOS": "27.2",
+        "watchOS": "27.2"
+      }
+    },
+    {
+      "name": "hidden(_:)",
+      "path": "swiftui/toolbarcontent/hidden(_:)",
+      "claims": {
+        "iOS": "26.4",
+        "iPadOS": "26.4",
+        "Mac Catalyst": "26.4",
+        "macOS": "15.0",
+        "visionOS": "26.4",
+        "tvOS": "27.2",
+        "watchOS": "27.2"
+      }
+    },
+    {
+      "name": "background(_:alignment:)",
+      "path": "swiftui/view/background(_:alignment:)",
+      "claims": {
+        "deprecated": true
+      }
+    },
+    {
+      "name": "background(alignment:content:)",
+      "path": "swiftui/view/background(alignment:content:)",
+      "claims": {
+        "iOS": "15.0",
+        "macOS": "12.0",
+        "deprecated": false
+      }
+    },
+    {
+      "name": "mask(_:)",
+      "path": "swiftui/view/mask(_:)",
+      "claims": {
+        "deprecated": true
+      }
+    },
+    {
+      "name": "mask(alignment:_:)",
+      "path": "swiftui/view/mask(alignment:_:)",
+      "claims": {
+        "iOS": "15.0",
+        "macOS": "12.0",
+        "deprecated": false
+      }
     }
   ],
   "ignore": {
