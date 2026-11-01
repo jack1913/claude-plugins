@@ -173,6 +173,33 @@ test("adopt tells the implementer the row-list syntax of adoption status (one co
   assert.match(r.calls[0].prompt, /adoption status --set <rows>=doing .* \(one argument: rows as N, N-M or N,M,\.\.\., for example --set 1,6,11-12=doing\)/);
 });
 
+test("adopt tells the implementer how a kit row is copied and the reviewer how it is checked", async () => {
+  const base = fixture("adopt");
+  const two = { ...base, approved_agents: 4, repos: [base.repos[0], { ...base.repos[0], label: "app", path: "/REPOS/app" }] };
+  const r = await run("adopt", two);
+  assert.equal(r.error, null);
+  for (const [label, path] of [["shop", "/REPOS/shop"], ["app", "/REPOS/app"]]) {
+    const implLines = r.calls.find((c) => c.label === `apply ${label}`).prompt.split("\n");
+    const kitCopy = implLines.filter((l) => l.startsWith("A Brand kit row"));
+    assert.deepEqual(kitCopy, [
+      `A Brand kit row (its file is a .claude/skills/<slug>-brand/ folder, Find kit.json) is copied by the list brand-creator --data "/DATA" kit status --repo "${path}" --project "/PROJECT" prints: mkdir -p, then cp one file at a time, exactly those files; an owner file the repository already has is never overwritten; never into ~/.claude/skills or any global skills folder; the kit is not committed; kit status --repo must then say current.`,
+    ], label);
+    assert.ok(implLines.indexOf(kitCopy[0]) < implLines.indexOf(RULES), "the kit line sits before RULES, and RULES stays verbatim");
+    const revLines = r.calls.find((c) => c.label === `review ${label}`).prompt.split("\n");
+    const kitCheck = revLines.filter((l) => l.startsWith("For a Brand kit row"));
+    assert.deepEqual(kitCheck, [
+      `For a Brand kit row, brand-creator --data "/DATA" kit status --repo "${path}" --project "/PROJECT" must exit 0; quote it with its exit code.`,
+    ], label);
+    assert.ok(revLines.indexOf(kitCheck[0]) < revLines.indexOf(RULES), "the kit line sits before RULES, and RULES stays verbatim");
+  }
+  const fix = await run("adopt", { ...base, mode: "fix", repos: [{ ...base.repos[0], findings: ["1 header logo still points at the old file"] }] });
+  assert.equal(fix.error, null);
+  assert.match(fix.calls.find((c) => c.label === "apply shop").prompt, /kit status --repo "\/REPOS\/shop" --project "\/PROJECT" prints: mkdir -p, then cp one file at a time/);
+  assert.match(agents["brand-implementer"].body, /A Brand kit row is copied by the list `brand-creator kit status --repo <path>` prints/);
+  assert.match(agents["brand-implementer"].body, /nothing goes into\s+`~\/\.claude\/skills` or any global folder/);
+  assert.match(agents["brand-reviewer"].body, /`brand-creator --data "<data>" kit status --repo <path> --project "<project>"` must exit 0/);
+});
+
 test("inventory: true adds one read-only stage first and needs the owner's approval for 5 agents", async () => {
   const a = { ...fixture("directions"), inventory: { repos: [{ label: "shop", path: "/REPOS/shop" }] } };
   const refused = await run("directions", a);

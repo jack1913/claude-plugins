@@ -50,11 +50,16 @@ corner. The agent surveys read only, lists, and changes nothing until the owner 
    findings that need no decision, then the owner's decisions. Mark progress as it happens: `adoption status --set 1-5=doing`,
    then `done` when committed (the owner's call; `doing` is made in the working tree and not committed). Survey again from time
    to time: a row marked done that still matches is flagged.
+   A Brand kit row (added when the project has a kit and the owner wants it in a repository: `adoption add --repo <label> --kit`):
+   run `kit status --repo <path>` and copy exactly the files of its copy list (`mkdir -p` then `cp`, one file at a time; an owner
+   file the repository already has is never overwritten), then `kit status --repo <path>` must say current. Never copy into
+   `~/.claude/skills` or any global folder. The kit is not committed.
 6. The review proves the work: lockups and files copied from the pack are byte-compared with the pack (`cmp`) and size-checked
    in the target; the repository's own build and tests run, and their commands and exit codes are quoted; the product is built
    and run to see the real icon where the platform allows it. A check that needs a real device is listed "not verified". Never
    skip a repository's own hooks (`--no-verify`): an unrelated failing hook is reported, and fixed as a separate change only if
    the owner agrees.
+   For a Brand kit row, `kit status --repo <path>` exit 0 is the byte comparison.
 7. Commit, merge and push are three separate asks, each answered by the owner. Before a push, read the target's CI, deploy and
    publish configuration and say what the push triggers and what cannot be undone. Rows that act on a live service (renaming a
    repository, a hosted service or an app id, an upload, a DNS change, a store listing) need their own OK, apart from the apply
@@ -89,4 +94,6 @@ push are separate asks. The survey and `adoption add` do not touch a repository 
 - The survey proves it wrote nothing in a repository (`read-only:<label>`: the list of files, sizes and times before and after).
 - `adoption verify` and `check` (`adoption:data`): the pins, the numbering, the accounting and that ADOPTION.md is what adoption.json renders.
 - `check --cascade "<old name>"` treats the adoption rows as the work list (a warning), not as a leftover.
+- A Brand kit row is proved by `kit status --repo <path>` (read only, writes nothing in the repository): exit 0 means every
+  generated file of the copy is the project's bytes; the owner files are the repository's and are never overwritten.
 - Proven by `test_adoption.py` (see the table in [09-qa](09-qa.md)).

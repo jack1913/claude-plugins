@@ -324,6 +324,10 @@ lints the board of the latest round again before `check`, so an edit of the fact
   (it needs a kit in your project and takes no other words), a survey leaves it alone, `ADOPTION.md` shows it as "the
   whole folder", and `brand-creator adoption status` says for each such repository whether its copy of the kit is
   current. An adoption list without a kit row looks exactly as it did.
+- `/brand-creator:brand-adopt` installs the brand kit in a repository you name, on your branch, and checks the copy byte
+  for byte. The implementer copies exactly the files `brand-creator kit status --repo <folder>` lists, one at a time,
+  never over a file of your own in the repository and never into a global skills folder; the review passes when
+  `kit status` says the copy is current. The adopt workflow's agents get the same two rules. The kit is left uncommitted.
 
 ### Changed
 

@@ -31,6 +31,7 @@ RULES: work under the round/project dir only; never edit adoption targets before
 2. Add what no search finds, one row each: `adoption add --repo <label> --file <path> --find "<text>" --change "<sentence>"`
    (a platform rule the repository gets wrong, an icon picked at runtime, a size that drifted from the platform's page:
    the pack follows the platform, the drift becomes a row).
+   When the project has a kit and the owner wants it in a repository: `adoption add --repo <label> --kit`.
 3. Show ADOPTION.md's counts and groups, and the rows that act on live services (step 5). Stop. Nothing is applied
    because a list exists.
 
@@ -45,6 +46,9 @@ RULES: work under the round/project dir only; never edit adoption targets before
 4. The implementer: create the owner's branch; work row by row, finding each place **by its content** (the Find
    column), never by the line number; a row whose text is gone is reported "not done", never guessed. Files from the
    pack are copied, never redrawn or re-exported. `adoption status --set <rows>=doing` as rows are made.
+   A Brand kit row: run `kit status --repo <path>` and copy exactly the files of its copy list (`mkdir -p` then `cp`, one
+   file at a time; an owner file the repository already has is never overwritten), then `kit status --repo <path>` must say
+   current. Never copy into `~/.claude/skills` or any global folder. The kit is not committed.
 5. Never pass `--no-verify` or any other hook skip. A hook that fails for an unrelated reason is reported; fixing it is a
    separate change, made only if the owner agrees.
 
@@ -54,6 +58,7 @@ A fresh pass that did not do the implementation (you after re-reading the diff, 
 gate). It writes nothing; it reports.
 
 - `cmp` every file copied from the pack against the pack's file; any difference fails the row.
+- `kit status --repo <path>` exit 0 is the byte comparison of a kit row.
 - Size-check the copied lockups and icons in the target (dimensions, the platform's slot).
 - Run the repository's own build and tests (from its README, package scripts, Makefile or CI config), and quote the
   commands and their exit codes. Build and run the product to see the real icon where the platform allows it; read the
