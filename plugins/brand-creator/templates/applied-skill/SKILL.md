@@ -10,9 +10,11 @@ description: {{description}}
 Use this whenever you make or review material for {{brand}}. If something here does not cover a choice, ask the owner: do not invent a
 colour, a claim or a rule.
 
+{{kit}}
+
 ## Colour
 
-Light and dark values of every role, from the built design tokens (`../../../assets/tokens/tokens.json`).
+Light and dark values of every role, from the built design tokens (`{{tokens}}`).
 
 {{colours}}
 

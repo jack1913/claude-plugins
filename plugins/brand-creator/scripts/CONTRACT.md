@@ -2099,6 +2099,8 @@ proposal, said so), motion (the section above, through the template's `{{motion}
 had), what is never done, the G4 rules, the facts that may be claimed (contact facts left out). It needs G5 and `--yes` (without it: the plan on stdout, a
 message on stderr, exit 2; `--plan` exits 0). The name is `<slug>-brand` (lower case, hyphens, at most 64 characters, no `claude` or `anthropic`). Gated by `check` like
 the adapters (`applied-skill:file`, `applied-skill:state`).
+The same builder (`adapt.applied_skill_md(project, template, kit=...)`) writes the kit's SKILL.md, with every path inside the kit (the tokens, the marks and the band drawings
+under `brand/`, and the template's `{{kit}}` line filled with the kit section; see `kit`). Without a kit the template's `{{kit}}` line is dropped, as `{{motion}}` is, and the file is the bytes it always was.
 
 ### launch-todo
 
