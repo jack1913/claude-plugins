@@ -29,14 +29,18 @@ on-action, focus and border variables at the ground's own colours. While the gro
 tokens give no colour for, one that gives two roles different colours where the page ground uses one token for both (a rule that sets a variable twice keeps only
 the later value), one that uses a variable its own scope sets, or one whose data-ground name is taken, is left out and named.
 
+The owner's files (EXTENDING.md, voice.md, visual.md, golden-rules.md, recipes/web-page.md) are scaffolded from templates/kit/ (the placeholders {{brand}} and {{skill}} filled; any
+other {{...}} is exit 2 and nothing is written) only when the file is absent. They are never overwritten or moved. kit.json records the sha256 of each one (`owned`) and the version's
+content hash covers them, so an edit of yours moves the version at the next build. The plan lists the scaffolds the build would write as `scaffold <path> (<bytes> bytes, ...)`.
+
 Nothing in a generated file is edited by hand: change the brand project and build again. A file of the kit that differs from what the last build wrote, or a file in
 brand/, snippets/ or reference-pages/ that the kit did not write, stops the build (exit 1, up to 6 paths named) unless --replace, which moves each to
 removed-<date>[-n]/<its project path>. A file the last build wrote that the project no longer has (a logo taken away) is moved there too, and said so. Nothing is deleted.
 A SKILL.md that `applied-skill` wrote is taken over; one edited by hand stops the first build the same way.
 
-Writes the report `kit` (row kit:written; outputs lists every generated path with its sha256, kit.json included). Exit 0 written. Exit 1: G5 not recorded, no approved
+Writes the report `kit` (rows kit:written and kit:owned; outputs lists every generated path with its sha256, kit.json included, and no owner file). Exit 0 written. Exit 1: G5 not recorded, no approved
 edition, a band drawing the project does not have, or a hand edit or foreign file without --replace. Exit 2: no --yes (the plan is printed first); a path that leaves the
-project; a band drawing that is not written as a plain path. Exit 3: the tokens are not built; fonts are in assets/fonts/ and there is no current fontcheck report (the kit is written without them).
+project; a band drawing that is not written as a plain path; a scaffold with a placeholder this version does not know. Exit 1 also: an owner file's path that holds something that is no file, or a folder an owner file belongs in (recipes/) that is a file or a link to nothing. Exit 3: the tokens are not built; a scaffold the plugin lacks; fonts are in assets/fonts/ and there is no current fontcheck report (the kit is written without them).
 """
 import argparse
 import os
@@ -102,6 +106,13 @@ def font_row(rep, fonts: dict) -> None:
                 detail=f"{n} font{'s' if n != 1 else ''} copied with {'their' if n != 1 else 'its'} licence text; {kitlib.FONTS_CSS} written")
 
 
+def owner_row(rep, written: list[str], kept: list[str]) -> None:
+    """Row kit:owned (info): how many of the owner's files were scaffolded this run and how many were already there and are kept as they are."""
+    k, m = len(written), len(kept)
+    rep.add("kit:owned", "info", "the owner's files",
+            detail=f"{k} owner file{'s' if k != 1 else ''} scaffolded this run, {m} kept as they are")
+
+
 def ground_row(rep, grounds: dict) -> None:
     """Row kit:grounds, about snippets/on-ground.css. No row when the tokens list no grounds. Info while the grounds are a proposal (nothing is written, because the model
     never guesses which colours text sits on) and when there is no other ground to scope; warn when a ground is left out, or the page ground (the first listed) lacks a
@@ -140,16 +151,19 @@ def build(project: Path, a) -> int:
     confine(project, kd_rel, what="kit folder")
     fonts = kitlib.font_plan(project)                      # OFL fonts and their licence text are planned files; any other font is only listed
     generated = kitlib.plan(project, fonts)                # SKILL.md with the literal <version>: the version is decided from what the plan holds
-    csha = kitlib.content_sha({rel: sha256_bytes(data) for rel, data in generated.items()})
+    owner = kitlib.owner_plan(project)                     # the owner's files: every scaffold is filled now, so an unknown placeholder stops the run before anything is written
+    csha = kitlib.content_sha({rel: sha256_bytes(data) for rel, data in generated.items()}, owner["owned"])
     prev = kitlib.previous(project)
     version = kitlib.next_version(prev, edition, csha)
     files = kitlib.with_version(generated, version)
     src = kitlib.sources(project)
-    files[kitlib.KIT_FILE] = kitlib.kit_json_bytes(project, files, version, edition, csha, src, fonts)
+    files[kitlib.KIT_FILE] = kitlib.kit_json_bytes(project, files, version, edition, csha, src, fonts, owner["owned"])
     if a.plan or not a.yes:
         print(f"would write {len(files)} generated files into {kd_rel}/ (version {version})")
         for rel in sorted(files):
             print(f"generated {rel} ({len(files[rel])} bytes)")
+        for rel in owner["write"]:
+            print(f"scaffold {rel} ({len(owner['files'][rel])} bytes, written once, never overwritten)")
         if not a.plan:
             print("error: the brand kit is written into the project's .claude/skills/ and needs the owner's explicit OK at G5: re-run with --yes", file=sys.stderr)
         return 0 if a.plan else EXIT_USAGE
@@ -164,13 +178,21 @@ def build(project: Path, a) -> int:
     rep = Report("kit", project, renderer="n/a (generated files)")
     rep.inputs.extend(kitlib.input_paths(project))
     written = unchanged = 0
-    for rel in sorted(r for r in files if r != kitlib.KIT_FILE) + [kitlib.KIT_FILE]:   # kit.json last: a run that stops half way leaves a kit that kit.json does not vouch for
+
+    def put(rel: str) -> None:
+        nonlocal written, unchanged
         if write_bytes_if_changed(confine(project, f"{kd_rel}/{rel}", what="kit file"), files[rel]):
             written += 1
         else:
             unchanged += 1
+
+    for rel in sorted(r for r in files if r != kitlib.KIT_FILE):
+        put(rel)
+    scaffolded, kept = kitlib.write_owner(project, owner)   # the owner's files go in before kit.json, which records their hashes and is the last file written:
+    put(kitlib.KIT_FILE)                                    # a run that stops half way leaves a kit that kit.json does not vouch for
     rep.add("kit:written", "pass", f"{kd_rel}/ generated",
             detail=f"{len(files)} generated files: {written} written, {unchanged} unchanged, {len(moving)} moved to {folder}/; version {version}")
+    owner_row(rep, scaffolded, kept)
     font_row(rep, fonts)
     ground_row(rep, kitlib.ground_plan(project))
     rep.extra.update({"outputs": {rel: sha256_bytes(data) for rel, data in sorted(files.items())}, "kit_version": version, "content_sha": csha,

@@ -87,6 +87,7 @@ KIT_LOGOS = ["grid-mark-dark.svg", "grid-mark-master.png", "grid-mark.svg", "mar
 KIT_FILES = sorted(["SKILL.md", "kit.json", "rules.json", "facts.json", "snippets/logo.html", "brand/assets/tokens/tokens.css", "brand/assets/tokens/tokens.json",
                     *[f"brand/assets/logo/{n}" for n in KIT_LOGOS]])
 KIT_REMOVED = "removed-2026-10-17/.claude/skills/acme-brand"
+OWNER_FILES = sorted(["EXTENDING.md", "voice.md", "visual.md", "golden-rules.md", "recipes/web-page.md"])   # the owner's files: scaffolded once, not generated, not in KIT_FILES
 
 
 def kit_of(p):
@@ -94,8 +95,14 @@ def kit_of(p):
 
 
 def kit_files(p) -> list[str]:
+    """The files of the kit folder that the build generates: the owner's files (OWNER_FILES, scaffolded once) are left out, and `owner_files` lists them."""
     d = kit_of(p)
-    return sorted(f.relative_to(d).as_posix() for f in d.rglob("*") if f.is_file()) if d.is_dir() else []
+    return sorted(r for r in (f.relative_to(d).as_posix() for f in d.rglob("*") if f.is_file()) if r not in OWNER_FILES) if d.is_dir() else []
+
+
+def owner_files(p) -> list[str]:
+    d = kit_of(p)
+    return sorted(r for r in OWNER_FILES if (d / r).is_file())
 
 
 def file_sha(f) -> str:
@@ -127,7 +134,11 @@ def test_the_kit_needs_g5_and_yes_and_writes_nothing_without_them(acme):
     assert r.returncode == 0 and not (acme / ".claude").exists() and not (acme / "assets" / "_checks" / "kit.json").exists()
     lines = r.stdout.splitlines()
     assert lines[0] == "would write 15 generated files into .claude/skills/acme-brand/ (version 1.1)"
-    assert sorted(re.fullmatch(r"generated (\S+) \((\d+) bytes\)", ln).group(1) for ln in lines[1:]) == KIT_FILES
+    kinds = [re.fullmatch(r"(generated|scaffold) (\S+) \((\d+) bytes(?:, written once, never overwritten)?\)", ln) for ln in lines[1:]]
+    assert all(kinds), [ln for ln, m in zip(lines[1:], kinds) if not m]                      # every line after the first is a generated line or a scaffold line, nothing else
+    assert sorted(m.group(2) for m in kinds if m.group(1) == "generated") == KIT_FILES
+    assert sorted(m.group(2) for m in kinds if m.group(1) == "scaffold") == OWNER_FILES
+    assert all(("written once" in ln) == ln.startswith("scaffold ") for ln in lines[1:])
     assert f"generated brand/assets/tokens/tokens.css ({(acme / 'assets/tokens/tokens.css').stat().st_size} bytes)" in lines
     r = bc("kit", "build", "--yes", project=acme)
     assert r.returncode == 0, r.stderr
@@ -1285,3 +1296,219 @@ def test_a_logo_folder_with_nothing_to_show_gets_no_snippet():
     import kitlib
     assert kitlib.logo_html("Acme", []) is None
     assert kitlib.logo_html("Acme", ["assets/logo/mark.png", "assets/logo/mark-dark.svg"]) is None
+
+
+# ---------------------------------------------------------------- the owner's files: scaffolded once, never overwritten
+# EXTENDING.md, voice.md, visual.md, golden-rules.md and recipes/web-page.md come from templates/kit/ when the file is absent. They are the owner's, not generated:
+# kit.json lists them under `owned`, and kit_files() (the generated files) leaves them out.
+
+def owned_row(p) -> str:
+    return next(r for r in report(p, "kit")["results"] if r["id"] == "kit:owned")["detail"]
+
+
+def owner_state(p) -> dict:
+    return {rel: (file_sha(kit_of(p) / rel), (kit_of(p) / rel).stat().st_mtime_ns) for rel in OWNER_FILES}
+
+
+def test_the_first_build_scaffolds_the_owner_files_once(pack):
+    r = build(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert kit_files(pack) == KIT_FILES and owner_files(pack) == OWNER_FILES
+    kd = kit_of(pack)
+    ext = (kd / "EXTENDING.md").read_text(encoding="utf-8")
+    assert ext.startswith("# Extending the Acme brand kit\n") and "`.claude/skills/acme-brand/`" in ext and "{{" not in ext and "[[fill" not in ext    # complete: no marker left
+    for needle in ("`brand-creator kit build --yes`", "`recipes/`", "`[rule: <id>]`", "`[example]`", "/brand-creator:brand-adopt", "`brand-creator kit status --repo <folder>`",
+                   "`var(--name)`", "`{dotted.path}`", "Never edit one", "the next build stops on a hand edit"):
+        assert needle in ext, needle
+    for name, head in (("voice.md", "# Acme voice"), ("visual.md", "# Acme visual"), ("golden-rules.md", "# Acme golden rules")):
+        text = (kd / name).read_text(encoding="utf-8")
+        assert text.startswith(head + "\n\n") and text.count("[[fill: ") == 1 and "{{" not in text, name
+        assert re.search(r"^\[\[fill: [^\[\]]+\]\]$", text, re.M), name                                              # one marker, its note has no square bracket
+    assert "[[fill: up to ten rules, each tagged with a rule id from rules.json or as an example]]" in (kd / "golden-rules.md").read_text(encoding="utf-8")
+    assert (kd / "recipes" / "web-page.md").read_text(encoding="utf-8").startswith("# Web page\n")
+    kj = kit_json(pack)
+    assert sorted(kj["owned"]) == OWNER_FILES and all(file_sha(kd / rel) == sha for rel, sha in kj["owned"].items())
+    assert not set(OWNER_FILES) & set(kj["generated"]) and not set(OWNER_FILES) & set(report(pack, "kit")["outputs"])    # not generated: check's kit:file never reads them
+    assert owned_row(pack) == "5 owner files scaffolded this run, 0 kept as they are"
+    skill = (kd / "SKILL.md").read_text(encoding="utf-8")
+    assert "Yours to extend; how: `EXTENDING.md`. A build writes each of these once and never overwrites or moves it." in skill
+    assert all(f"- `{rel}`" in skill for rel in OWNER_FILES)
+    assert skill.index("- `brand/assets/tokens/tokens.css`") < skill.index("Yours to extend") < skill.index("## Colour")
+    # a second build has nothing to scaffold: the plan names none, and nothing is touched
+    owner_before, kit_before = owner_state(pack), kit_state(pack)
+    r = bc("kit", "build", "--plan", project=pack)
+    assert r.returncode == 0 and "scaffold " not in r.stdout
+    assert build(pack).returncode == 0
+    assert owned_row(pack) == "0 owner files scaffolded this run, 5 kept as they are"
+    assert owner_state(pack) == owner_before and kit_state(pack) == kit_before and kit_json(pack)["version"] == "1.1"
+
+
+def test_an_owner_file_is_never_overwritten_and_its_change_moves_the_version(pack):
+    assert build(pack).returncode == 0
+    f = kit_of(pack) / "voice.md"
+    first = kit_json(pack)
+    mutate(f, "# Acme voice", "# Acme voice, in my words")
+    mine = f.read_bytes()
+    r = build(pack)
+    assert r.returncode == 0, r.stdout + r.stderr                       # an owner edit is no hand edit: the build neither stops nor moves anything
+    assert f.read_bytes() == mine and not list(pack.glob("removed-*"))
+    kj = kit_json(pack)
+    assert kj["version"] == "1.2" and kj["owned"]["voice.md"] == file_sha(f) and kj["owned"]["voice.md"] != first["owned"]["voice.md"]
+    assert kj["content_sha"] != first["content_sha"] and kj["generated"] == first["generated"] | {"SKILL.md": kj["generated"]["SKILL.md"]}
+    assert "Kit version 1.2 (kit.json)." in (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
+    assert owned_row(pack) == "0 owner files scaffolded this run, 5 kept as they are"
+    assert check_rows(pack)["kit:file"]["status"] == "pass"             # check does not gate an owner's file
+    assert build(pack).returncode == 0 and kit_json(pack)["version"] == "1.2"        # the edit is now part of the record: the same content keeps the version
+    for n, rel in enumerate(OWNER_FILES, start=3):                      # every owner file counts, a recipe and EXTENDING.md too
+        f = kit_of(pack) / rel
+        f.write_text(f.read_text(encoding="utf-8") + "\nmine\n", encoding="utf-8")
+        assert build(pack).returncode == 0 and kit_json(pack)["version"] == f"1.{n}", rel
+        assert f.read_text(encoding="utf-8").endswith("\nmine\n") and kit_json(pack)["owned"][rel] == file_sha(f)
+
+
+def test_a_deleted_owner_file_is_scaffolded_again(pack):
+    assert build(pack).returncode == 0
+    kd = kit_of(pack)
+    scaffolds = {rel: (kd / rel).read_bytes() for rel in OWNER_FILES}
+    (kd / "voice.md").unlink()
+    shutil.rmtree(kd / "recipes")
+    r = bc("kit", "build", "--plan", project=pack)
+    assert r.returncode == 0 and sorted(re.findall(r"^scaffold (\S+) ", r.stdout, re.M)) == ["recipes/web-page.md", "voice.md"] and not (kd / "voice.md").exists()
+    assert build(pack).returncode == 0
+    assert {rel: (kd / rel).read_bytes() for rel in OWNER_FILES} == scaffolds
+    assert owned_row(pack) == "2 owner files scaffolded this run, 3 kept as they are"
+    assert kit_json(pack)["version"] == "1.1"                           # the same bytes as before: the content has not changed
+    (kd / "visual.md").unlink()
+    assert build(pack).returncode == 0 and owned_row(pack) == "1 owner file scaffolded this run, 4 kept as they are"
+
+
+def test_a_changed_scaffold_leaves_an_owner_file_that_is_already_in_the_kit(pack, plugin_copy):
+    r = bc("kit", "build", "--yes", project=pack, plugin=plugin_copy)
+    assert r.returncode == 0, r.stdout + r.stderr
+    f = kit_of(pack) / "golden-rules.md"
+    first = f.read_bytes()
+    mutate(plugin_copy / "templates" / "kit" / "golden-rules.md", "The few rules", "Some other words about the rules")
+    r = bc("kit", "build", "--yes", project=pack, plugin=plugin_copy)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert f.read_bytes() == first and kit_json(pack)["version"] == "1.1" and owned_row(pack) == "0 owner files scaffolded this run, 5 kept as they are"
+    f.unlink()                                                          # absent: the scaffold of today is written
+    r = bc("kit", "build", "--yes", project=pack, plugin=plugin_copy)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "Some other words about the rules" in f.read_text(encoding="utf-8") and kit_json(pack)["version"] == "1.2"
+
+
+def test_the_kit_scaffolds_keep_their_placeholder_guard(pack, plugin_copy):
+    tpl = plugin_copy / "templates" / "kit" / "voice.md"
+    original = mutate(tpl, "# {{brand}} voice", "# {{brand}} voice {{nope}}")
+    for args in (("--yes",), ("--plan",)):
+        r = bc("kit", "build", *args, project=pack, plugin=plugin_copy)
+        assert r.returncode == 2 and "templates/kit/voice.md has placeholders this version does not know: {{nope}}" in r.stderr, (args, r.stdout + r.stderr)
+        assert not (pack / ".claude").exists() and not (pack / "assets" / "_checks" / "kit.json").exists()          # nothing is written
+    for odd in ("{{Brand}}", "{{ brand }}", "{{no_pe}}", "{{}}"):         # a name the pass would not have matched is refused too, not written into a file that is never overwritten
+        tpl.write_text(original.replace("# {{brand}} voice", "# {{brand}} voice " + odd), encoding="utf-8")
+        r = bc("kit", "build", "--yes", project=pack, plugin=plugin_copy)
+        assert r.returncode == 2 and odd in r.stderr and not (pack / ".claude").exists(), (odd, r.stdout + r.stderr)
+    def into_heading(odd: str) -> str:
+        return original.replace("# {{brand}} voice", "# {{brand}} voice " + odd, 1)
+
+    for text, said in ((into_heading("{{no\npe}}"), "{{no\\npe}}"),               # a placeholder across lines is a placeholder this version does not know
+                       (into_heading("{{brand"), "templates/kit/voice.md has"),    # never closed: it runs to the next }}, so it is refused as one
+                       (original + "\n{{brand", "that is no placeholder"),         # never closed, and nothing after it to close it
+                       (into_heading("brand}}"), "that is no placeholder")):       # never opened
+        tpl.write_text(text, encoding="utf-8")
+        for args in (("--yes",), ("--plan",)):
+            r = bc("kit", "build", *args, project=pack, plugin=plugin_copy)
+            assert r.returncode == 2 and said in r.stderr and "templates/kit/voice.md" in r.stderr, (text, args, r.stdout + r.stderr)
+            assert not (pack / ".claude").exists() and not (pack / "assets" / "_checks" / "kit.json").exists(), text              # nothing is written
+    tpl.write_text(original, encoding="utf-8")
+    r = bc("kit", "build", "--yes", project=pack, plugin=plugin_copy)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (kit_of(pack) / "voice.md").read_text(encoding="utf-8").startswith("# Acme voice\n")
+    tpl.unlink()                                                        # a scaffold the plugin lacks is a broken plugin, not a kit to write without it
+    (kit_of(pack) / "voice.md").unlink()
+    r = bc("kit", "build", "--yes", project=pack, plugin=plugin_copy)
+    assert r.returncode == 3 and "templates/kit/voice.md is missing" in r.stderr and not (kit_of(pack) / "voice.md").exists()
+
+
+def test_the_scaffolds_fill_their_placeholders_in_one_pass(pack):
+    assert bc("state", "--set", "name=Acme {{skill}}", project=pack).returncode == 0
+    r = build(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    kd = kit_of(pack)
+    assert (kd / "voice.md").read_text(encoding="utf-8").startswith("# Acme {{skill}} voice\n")            # the brand's name is written as it is, never read for placeholders again
+    ext = (kd / "EXTENDING.md").read_text(encoding="utf-8")
+    assert ext.startswith("# Extending the Acme {{skill}} brand kit\n") and "`.claude/skills/acme-brand/`" in ext
+
+
+def test_something_that_is_no_file_where_an_owner_file_belongs_stops_the_build_and_is_left_alone(pack):
+    kd = kit_of(pack)
+    (kd / "voice.md").mkdir(parents=True)
+    (kd / "voice.md" / "mine.txt").write_text("mine\n", encoding="utf-8")
+    for args in ((), ("--replace",)):                                   # --replace moves generated files; an owner's path is never moved
+        r = build(pack, *args)
+        assert r.returncode == 1 and ".claude/skills/acme-brand/voice.md is not a file" in r.stderr, r.stdout + r.stderr
+        assert (kd / "voice.md" / "mine.txt").read_text(encoding="utf-8") == "mine\n" and not (pack / "assets" / "_checks" / "kit.json").exists()
+        assert not list(pack.glob("removed-*")) and not (kd / "kit.json").exists()
+    shutil.rmtree(kd / "voice.md")
+    (kd / "visual.md").symlink_to("nowhere.md")                         # a link to nothing is no file either
+    r = build(pack)
+    assert r.returncode == 1 and "visual.md is not a file" in r.stderr and not (kd / "kit.json").exists()
+    (kd / "visual.md").unlink()
+    outside = pack.parent / "outside.md"
+    outside.write_text("outside\n", encoding="utf-8")
+    (kd / "visual.md").symlink_to(outside)                              # a link that leads out of the project is never followed
+    r = build(pack)
+    assert r.returncode == 2 and "outside the project" in r.stderr and not (kd / "kit.json").exists() and outside.read_text(encoding="utf-8") == "outside\n"
+    (kd / "visual.md").unlink()
+    # the folder an owner file belongs in: a file or a link to nothing at `recipes` stops the build before anything is written, and --plan does not promise a scaffold under it
+    for what in ("a file", "a link to nothing"):
+        if what == "a file":
+            (kd / "recipes").write_text("mine\n", encoding="utf-8")
+        else:
+            (kd / "recipes").unlink()
+            (kd / "recipes").symlink_to("nowhere")
+        for args in (("--yes",), ("--yes", "--replace"), ("--plan",)):
+            r = bc("kit", "build", *args, project=pack)
+            assert r.returncode == 1, (what, args, r.stdout + r.stderr)
+            assert ".claude/skills/acme-brand/recipes/web-page.md is not a file" in r.stderr and ".claude/skills/acme-brand/recipes is not a folder" in r.stderr, (what, args, r.stderr)
+            assert "scaffold " not in r.stdout and sorted(f.name for f in kd.iterdir()) == ["recipes"], (what, args, r.stdout)         # nothing else was written: no SKILL.md, no kit.json
+            assert not (pack / "assets" / "_checks" / "kit.json").exists() and not list(pack.glob("removed-*"))
+        assert (kd / "recipes").is_symlink() or (kd / "recipes").read_text(encoding="utf-8") == "mine\n"                              # left as it was
+    (kd / "recipes").unlink()                                           # the advice works: move it away, then build again
+    r = build(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert kit_json(pack)["version"] == "1.1" and owner_files(pack) == OWNER_FILES and kit_files(pack) == KIT_FILES
+
+
+def test_a_file_where_an_owner_files_folder_belongs_keeps_the_report_and_the_kit_of_the_last_build(pack):
+    assert build(pack).returncode == 0
+    kd = kit_of(pack)
+    shutil.rmtree(kd / "recipes")
+    (kd / "recipes").write_text("mine\n", encoding="utf-8")
+    rep_before, kit_before, state_before = (pack / "assets" / "_checks" / "kit.json").read_bytes(), (kd / "kit.json").read_bytes(), kit_state(pack)
+    r = build(pack)
+    assert r.returncode == 1 and "recipes is not a folder" in r.stderr, r.stdout + r.stderr
+    assert (pack / "assets" / "_checks" / "kit.json").read_bytes() == rep_before and (kd / "kit.json").read_bytes() == kit_before and kit_state(pack) == state_before   # the report keeps its outputs and version
+    assert report(pack, "kit")["outputs"] and report(pack, "kit")["kit_version"] == "1.1"
+    (kd / "recipes").unlink()
+    assert build(pack).returncode == 0 and kit_json(pack)["version"] == "1.1" and owner_files(pack) == OWNER_FILES        # no hand edit is left behind: the next build is clean
+    assert check_rows(pack)["kit:file"]["status"] == "pass"
+
+
+def test_kit_json_must_list_every_owner_file_and_no_other(pack):
+    import kitlib
+    from _common import CliError
+    assert build(pack).returncode == 0
+    assert sorted(kitlib.load(pack)["owned"]) == OWNER_FILES
+    f = kit_of(pack) / "kit.json"
+    for where, change, needle in (("an owner file nobody scaffolds", lambda d: d["owned"].__setitem__("notes.md", "0" * 64), "owned.notes.md: unknown owner file"),
+                                  ("an owner file left out", lambda d: d["owned"].pop("voice.md"), "owned.voice.md: missing"),
+                                  ("a hash that is none", lambda d: d["owned"].__setitem__("voice.md", "x"), "owned.voice.md: must be a sha256"),
+                                  ("no owned key", lambda d: d.pop("owned"), "owned: missing"),
+                                  ("a list", lambda d: d.__setitem__("owned", []), "owned: must be an object")):
+        good = f.read_bytes()
+        mutate_json(f, change)
+        with pytest.raises(CliError) as e:
+            kitlib.load(pack)
+        assert e.value.code == 2 and needle in e.value.message, where
+        f.write_bytes(good)
