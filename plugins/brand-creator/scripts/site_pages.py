@@ -17,7 +17,8 @@ Approved pages are references for whoever builds the real site, never fill-in te
 
 Nothing is written when any page fails. An existing site/ stops the run unless --replace is given, which moves it to removed-<date>/site/ first (it is never deleted).
 Exit 0 written. Exit 1: G4p not recorded; no current, passing board-lint report of the board; a page that cannot go (a network address, a path starting with /, a file that is not there, a page without its
-layout or index.html); site/ already holds pages. Exit 2: usage; a round that is not a site board at the pages stage; a path that leaves the project; a symbolic link in a page folder.
+layout or index.html); site/ already holds pages. Exit 2: usage; a round that is not a site board at the pages stage; a path that leaves the project; a symbolic link in a page folder, or one that is
+rounds/, rounds/r<N>/, the board file or a page folder itself.
 """
 import json
 import os
@@ -30,8 +31,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE / "lib"))
 sys.path.insert(0, str(HERE / "boardlib"))
 sys.path.insert(0, str(HERE / "pagelib"))   # boardlib/siteboard.py names the page-check report of a page with pagelib/pagecheck.py
-from _common import (EXIT_FAIL, EXIT_USAGE, CliError, Parser, add_project_arg, fail, find_project, gate_recorded, list_rounds, main_guard,  # noqa: E402
-                     rel, sha256_bytes, sha256_file, stale_inputs, today)
+from _common import (EXIT_FAIL, EXIT_USAGE, CliError, Parser, add_project_arg, confine, fail, find_project, gate_recorded, list_rounds, main_guard,  # noqa: E402
+                     sha256_bytes, sha256_file, stale_inputs, today)
 from boardpage import page_kind, page_marker, read_page  # noqa: E402
 import siteboard  # noqa: E402
 import sitedata  # noqa: E402
@@ -89,8 +90,25 @@ def listed(problems: list[str], limit: int = SHOWN) -> str:
     return "\n".join(f"  - {p}" for p in problems[:limit]) + (f"\n  - and {len(problems) - limit} more" if len(problems) > limit else "")
 
 
+def link_problem(project: Path, path_rel: str, what: str, as_it_is: str) -> str | None:
+    """Why the project-relative `path_rel` (the board file, or a page folder) cannot be read as it stands, or None: a part of it below the project (rounds, rounds/r<N>, the folder or the file) is a
+    symbolic link, wherever it leads (a link is looked at part by part: os.walk follows the top folder it is given, and a link higher up leads the whole page elsewhere), or the real path is not inside the
+    project (`confine`, which names `what`). `as_it_is` ends the sentence the way the link refusals inside a page folder do: "<path> is a symbolic link: <as_it_is>, and a link can lead out of the project"."""
+    here, parts = project, []
+    for part in Path(path_rel).parts:
+        here, parts = here / part, [*parts, part]
+        if here.is_symlink():
+            return f"{'/'.join(parts)} is a symbolic link: {as_it_is}, and a link can lead out of the project"
+    try:
+        confine(project, path_rel, what=what)
+    except CliError as e:
+        return e.message
+    return None
+
+
 def plan_page(project: Path, v, moves: dict[str, str], problems: list[tuple[int, str]]) -> list[tuple[str, Path, bytes | None]]:
-    """What goes into site/<id>/ for one page -> [(path inside the page folder, source file, the new bytes or None to copy the file as it is)]. Problems are added to `problems` as (exit code, sentence)."""
+    """What goes into site/<id>/ for one page -> [(path inside the page folder, source file, the new bytes or None to copy the file as it is)]. Problems are added to `problems` as (exit code, sentence).
+    `approve` has refused a page folder that is a link (or behind one) by now, so the top of the walk is a folder of the project; the links below it are refused here."""
     src = project / v.dir
     out: list[tuple[str, Path, bytes | None]] = []
     for dirpath, dirnames, filenames in os.walk(src, followlinks=False):
@@ -98,8 +116,8 @@ def plan_page(project: Path, v, moves: dict[str, str], problems: list[tuple[int,
         here = "" if here == "." else here
         dirnames[:] = sorted(d for d in dirnames if not (here == "" and d == EXCLUDED_DIR))
         for d in dirnames:
-            if (Path(dirpath) / d).is_symlink():
-                problems.append((EXIT_USAGE, f"{rel(project, Path(dirpath) / d)} is a symbolic link: a page folder is copied as it is, and a link can lead out of the project"))
+            if (Path(dirpath) / d).is_symlink():   # named as it stands in the page folder: `rel` would follow the link, and a link out of the project has no project-relative path
+                problems.append((EXIT_USAGE, f"{v.dir}/{here + '/' if here else ''}{d} is a symbolic link: a page folder is copied as it is, and a link can lead out of the project"))
         for name in sorted(filenames):
             if (here == "" and name == EXCLUDED_FILE) or name in JUNK:
                 continue
@@ -163,6 +181,9 @@ def approve(project: Path, round_arg: int | None, replace: bool) -> int:
     n = round_arg if round_arg is not None else rounds[-1][0]
     board_rel = f"rounds/r{n}/board.html"
     board = project / board_rel
+    linked = link_problem(project, board_rel, "pages board", "the pages board is read as it is")   # before anything is read through it
+    if linked:
+        fail(EXIT_USAGE, linked)
     if not board.is_file():
         fail(EXIT_USAGE, f"{board_rel} does not exist: site approve copies the pages of a site board at the pages stage (--round N)")
     root = read_page(board)
@@ -181,6 +202,9 @@ def approve(project: Path, round_arg: int | None, replace: bool) -> int:
     problems_of_board, named = siteboard.page_problems(siteboard.page_cards(root))
     if problems_of_board:
         fail(EXIT_FAIL, "the pages board has no usable page card (" + "; ".join(problems_of_board[:3]) + f"): change the board, then lint it: brand-creator board-lint {board_rel}")
+    unsafe = [m for pid, _ in named if (m := link_problem(project, f"rounds/r{n}/{pid}", "page folder", "a page folder is copied as it is"))]   # before SiteVariant reads the page through it
+    if unsafe:
+        fail(EXIT_USAGE, f"nothing was written: {len(unsafe)} problem(s) stop the pages of {board_rel}\n" + listed(unsafe))
     pages = [siteboard.SiteVariant(project, n, pid, card, noun="page") for pid, card in named]
     marker = page_marker(root)
     hero = marker.attrs.get(siteboard.HERO_ATTR, "").strip() if marker is not None else ""

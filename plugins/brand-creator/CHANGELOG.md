@@ -239,6 +239,10 @@ lints the board of the latest round again before `check`, so an edit of the fact
   and a table of the choices on it, with where each rule was decided. It needs the pages approved (`site approve`)
   and their stills (`capture site/<page>/index.html`); without the approved pages, or without a still, the book stops
   and says what to run, and writes nothing. A book without the chapter is unchanged.
+- `site approve` refuses a page folder, a round folder, the `rounds/` folder or the pages board when it is a
+  symbolic link, wherever the link leads, and a folder link inside a page that leads out of your project; nothing is
+  written. The `site` chapter of the book takes pages and stills only from inside your project, and stops on a still
+  that is not a PNG picture, naming the file and the `capture` command that takes it again.
 - A behaviour eval, `site-refs-gate-before-site-round`: on a Standard project with the system rules approved and a brief
   that lists a site, "build the home page" writes no page of the site and records neither the website references pick
   nor a skip, and without web tools Claude says the website references need web access and stops.

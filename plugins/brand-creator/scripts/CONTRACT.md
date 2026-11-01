@@ -1628,13 +1628,17 @@ library's `site` module wherever `scripts/` is on `sys.path`) puts the pages the
 
 - Refused, in this order, before anything is written:
   1. exit 1 when G4p is not recorded (`site approve needs the owner's approval of the pages (G4p) recorded first`, with the `state --record G4p` command);
-  2. exit 2 when `rounds/r<N>/board.html` (`N` is `--round`, else the latest round) does not exist, or is not a `data-board="site"` page at `data-site-stage="pages"`;
+  2. exit 2 when `rounds/r<N>/board.html` (`N` is `--round`, else the latest round) does not exist, or is not a `data-board="site"` page at `data-site-stage="pages"`, or when `rounds`, `rounds/r<N>` or the board file is a symbolic link,
+     wherever it leads (`rounds/r3 is a symbolic link: the pages board is read as it is, and a link can lead out of the project`; this is looked at before the file is looked for or read);
   3. exit 1 unless `assets/_checks/board-lint.json` is the lint of that very board, current and `pass` (`lint the pages board first: brand-creator board-lint rounds/r<N>/board.html`).
      Current is `check`'s rule: no file the lint was made from is gone or changed. A page-check report lists `BRAND-STATE.md` among the files it was made from and the lint lists
      theirs, so recording G4p makes the lint stale when a page was checked before it. The message then names `page-check` for each page and the lint; both have to be run again;
   4. exit 1 when `site/` exists and `--replace` is not given (`site/ holds approved pages already`).
 - **Pages.** One page per page card of the board (`data-site-page`); each needs its folder `rounds/r<N>/<id>/`, its `index.html` and a `data-layout` on `<body>`. The folder is copied into
-  `site/<id>/` except `shots/` and `cold-review.md` at the top of it (`capture` writes `shots/` again beside the approved page) and `.DS_Store`. A symbolic link anywhere in a page folder exits 2.
+  `site/<id>/` except `shots/` and `cold-review.md` at the top of it (`capture` writes `shots/` again beside the approved page) and `.DS_Store`. A symbolic link anywhere in a page folder exits 2, and so does a page folder that is itself a symbolic link or has one above it, wherever it leads
+  (`rounds/r3/start is a symbolic link: a page folder is copied as it is, and a link can lead out of the project`), and a page folder whose real path (`confine`) is not inside the project: this is looked at after
+  refusals 1 to 4 and before any page is read, for every page card, and is listed as `nothing was written: N problem(s) stop the pages of rounds/r<N>/board.html`. A link inside a page folder is named by its place in the
+  folder (`rounds/r3/start/img`), also when it leads out of the project.
 - **Paths.** In each `.html` and `.css` file (UTF-8; any other file is copied byte for byte) a relative URL is read in `src`, `href`, `poster`, `xlink:href`, `srcset` and `imagesrcset` (every URL in the
   list), the `data` of an `<object>`, and `url()` and `@import` in a `<style>` element, a `style` attribute and a `.css` file. One that resolves to a file of the project outside the page's
   folder is written again so that it leads to the same file from `site/<id>/` (`../../../assets/tokens/tokens.css` becomes `../../assets/tokens/tokens.css`); one that leads into the folder of another
@@ -1747,7 +1751,9 @@ message begins `{{site}}` instead of `the site chapter` and ends with `take {{si
 and the alt text `The <id> page at 1440 px, light` (390 for the other; the alt is a label of `book/book.json` `labels`, written with `{id}` and `{px}` where the page id and the width go); and one table with
 the columns `Choice`, `Rule or example` and `Where it was decided`, one row (`data-choice`, `data-tag`) for each choice that names the page in `pages` or has no `pages`, in record order, the third
 cell the choice's `source` (`-` when it has none). A page whose choices are none gets the sentence `No choice is recorded for this page.` (a label of `book/book.json` `labels`) instead of the table. A still that is not there stops the build, as above:
-a book built without a picture would stay current for `check` when the still is taken later. The inputs of the `book` report are `site/site.json`, each page file and each still shown, so a page, a record or a still
+a book built without a picture would stay current for `check` when the still is taken later. Each page file and each still is resolved with `confine` before it is read (`site page <path> is outside the project ...`,
+`site still <path> is outside the project ...`, exit 2: a link out of the project is never embedded), and a still whose first eight bytes are not the PNG signature stops the build with exit 1 and
+`the site chapter needs the stills of the approved pages: site/<id>/shots/<view>-light.png is not a PNG picture (it does not start with the PNG signature)`, then the `brand-creator capture site/<id>/index.html` that takes it again. The inputs of the `book` report are `site/site.json`, each page file and each still shown, so a page, a record or a still
 that changes makes the report stale. `templates/book/site.md` holds the owner's prose: what the pages are for (references for whoever builds the real site; a rule is the brand's, an example may
 change) and how the real site is built (in the product repositories, from the tokens and the rules). A book without `site` in `book_chapters` is byte for byte what it was.
 

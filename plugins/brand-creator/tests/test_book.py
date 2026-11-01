@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from helpers import ROOT, bc, fill_markers, make_project, install_fixture, mutate, report
+from helpers import ROOT, bc, fill_markers, make_project, install_fixture, mutate, report, symlink_or_skip
 
 import bookdata
 import bookmd
@@ -1044,6 +1044,11 @@ def site_chapter(proj: Path) -> str:
     return html[start:html.index("</section>", start)]
 
 
+def base64_of(f: Path) -> str:
+    import base64
+    return base64.b64encode(f.read_bytes()).decode()
+
+
 def cells(row_html: str) -> list[str]:
     import html as htmllib
     return [htmllib.unescape(re.sub(r"<[^>]+>", "", c)).strip() for c in re.findall(r"<td[^>]*>(.*?)</td>", row_html, re.S)]
@@ -1147,6 +1152,70 @@ def test_a_site_still_that_is_missing_stops_the_book_and_names_the_capture_comma
     bc("check", project=proj)
     assert {x["id"]: x["status"] for x in report(proj, "check")["results"]}["report:book"] == "pass"
     assert "site/pricing/shots/390-light.png" in {i["path"] for i in report(proj, "book")["inputs"]}
+
+
+@setup
+@resvg
+def test_a_site_still_that_is_a_link_out_of_the_project_is_never_embedded(proj, tmp_path):
+    stills = add_site(proj)
+    outside = tmp_path / "outside-secret.png"
+    outside.write_bytes(_png(8, 6, 200))                                                      # a real PNG, so only its place can be what stops the book
+    still = proj / "site/start/shots/390-light.png"
+    still.unlink()
+    symlink_or_skip(still, outside)
+    before = (proj / "book.html").read_bytes()
+    assert bc("state", "--set", "book_chapters=tone,site", project=proj).returncode == 0
+    assert bc("book", "--init", project=proj).returncode == 0 and fill_markers(proj) == 2
+    r = bc("book", project=proj)
+    err = r.stdout + r.stderr
+    assert r.returncode == 2, err
+    assert "site still site/start/shots/390-light.png is outside the project" in err, err
+    assert (proj / "book.html").read_bytes() == before, "a book that cannot be built is not written"
+    still.unlink()                                                                            # the way out: the still taken again, as a file of the project
+    still.write_bytes(stills["site/start/shots/390-light.png"])
+    r = bc("book", project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert base64_of(outside) not in (proj / "book.html").read_text()
+
+
+@setup
+@resvg
+def test_a_site_page_that_is_a_link_out_of_the_project_stops_the_book(proj, tmp_path):
+    add_site(proj)
+    page = proj / "site/start/index.html"
+    kept = tmp_path / "start-index.html"
+    kept.write_bytes(page.read_bytes())                                                       # the very bytes the record holds: only the place is wrong
+    page.unlink()
+    symlink_or_skip(page, kept)
+    before = (proj / "book.html").read_bytes()
+    assert bc("state", "--set", "book_chapters=tone,site", project=proj).returncode == 0
+    assert bc("book", "--init", project=proj).returncode == 0 and fill_markers(proj) == 2
+    r = bc("book", project=proj)
+    err = r.stdout + r.stderr
+    assert r.returncode == 2 and "site page site/start/index.html is outside the project" in err, err
+    assert (proj / "book.html").read_bytes() == before
+
+
+@setup
+@resvg
+def test_a_site_still_that_is_not_a_png_stops_the_book_and_names_the_file_and_the_capture_command(proj):
+    stills = add_site(proj)
+    before = (proj / "book.html").read_bytes()
+    assert bc("state", "--set", "book_chapters=tone,site", project=proj).returncode == 0
+    assert bc("book", "--init", project=proj).returncode == 0 and fill_markers(proj) == 2
+    for what, bad in (("a page", b"<!doctype html><title>not a picture</title>"), ("a jpeg", b"\xff\xd8\xff\xe0 not a png"), ("a file cut short", b"\x89PNG"), ("an empty file", b"")):
+        still = proj / "site/pricing/shots/1440-light.png"
+        still.write_bytes(bad)
+        r = bc("book", project=proj)
+        err = r.stdout + r.stderr
+        assert r.returncode == 1, (what, err)
+        assert "the site chapter needs the stills of the approved pages: site/pricing/shots/1440-light.png is not a PNG picture" in err, (what, err)
+        assert "`brand-creator capture site/pricing/index.html`" in err, (what, err)
+        assert (proj / "book.html").read_bytes() == before, "a book that cannot be built is not written"
+    still.write_bytes(stills["site/pricing/shots/1440-light.png"])                            # the picture back: the book builds again
+    r = bc("book", project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert site_chapter(proj).count("<img") == 4
 
 
 @setup
