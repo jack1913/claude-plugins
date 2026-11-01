@@ -110,8 +110,11 @@ or two digits each way ("30.10", "05.11"); "12.5" or "2.10" is a plain number, a
 
 Phone numbers, postal codes and street numbers are still claims. Each one needs a fact in `FACTS.md`, or a sample label.
 
-To have your logo judged, mark it with `data-brand-mark` on its `img` or inline `svg`, or give its file a name such as `logo.svg`
-(`logo-dark.svg` and `logo_white.png` work too). A file such as `partner-logo.svg` is not taken for your logo.
+To have your logo judged, mark it with `data-brand-mark` on its `img` or inline `svg`, or name its file `logo`, `mark` or
+`wordmark`, alone or followed by `-`, `_` or `@` and more: `logo.svg`, `mark.svg`, `mark-dark.svg`, `logo@2x.png` and
+`wordmark_light.svg` all work. A file such as `partner-logo.svg`, `bookmark.svg` or `marker.svg` is not taken for your
+logo. A file with one of those names has to be one of your logo files, so a different drawing called `mark.svg` fails the
+logo row.
 
 ## Turn a warning into a brand rule
 
