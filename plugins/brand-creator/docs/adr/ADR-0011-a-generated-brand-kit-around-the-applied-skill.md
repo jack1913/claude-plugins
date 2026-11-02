@@ -169,3 +169,34 @@ agent after the fleet gate had no agent to run. A record that still offered it w
 for this job. The change is written in the [book phase](../../skills/brand-creator/references/phases/10-book.md#kit-test-optional),
 in the manual page [Use your brand kit](../manual/use/use-your-brand-kit.md#test-your-kit) and in the
 [changelog](../../CHANGELOG.md).
+
+The owner decided two more things the same day, after a kit built on a scratch copy of a real brand was compared with that
+brand's hand-made kit. Neither changes a numbered decision above: the font rule (D6) and the install rule (D11) stay as they
+are. Each adds files to what a bullet covers, and says so.
+
+- **Masters travel with the kit.** A brand's approved masters (the ad, deck and other templates the owner approved, with their
+  pictures, PDFs, PPTX and the fonts they ship) live in the project's `assets/masters/`, a folder the plugin did not know
+  before. Everything under it is copied into the kit at its project path (`brand/assets/masters/...`), byte for byte, listed
+  in `kit.json` `generated` and recorded in `kit.json` `sources.masters`, so `kit check` and `check` go stale when a master
+  changes. This adds to the list of copied files in the bullet "`brand/` mirrors project paths". A font in the folder goes
+  through the one font rule (D6, and the same rule the fonts of a reference page follow): copied only when the `fontcheck`
+  report reads it as OFL and its licence text sits in `assets/fonts/`, otherwise listed in `fonts.not_copied`, with a warning in
+  `kit check` for a link to it. A font file of a format `fontcheck` cannot read (`.ttc`, `.otc`, `.eot`, `.dfont` and the
+  Type 1 files) has no licence the rule could read, so it is never copied and is listed the same way: the rule holds for every
+  font file in the folder, not only the four formats it can read. A link in a master HTML file must resolve inside the kit, like any kit file. The plugin cannot
+  know which masters are approved, so only approved masters go into `assets/masters/`; the contract and the manual say so.
+  A project without the folder is unchanged: `sources.masters` is left out rather than written as `null`, so its `kit.json` and
+  its version are the bytes they were.
+- **The owner's own files travel.** This replaces the bullet "The owner's: `EXTENDING.md`, `voice.md`, `visual.md`,
+  `golden-rules.md` and `recipes/web-page.md`", which named five scaffolded files as the whole set. D11's rule is unchanged,
+  and only the set of files it covers grows. Every file of the kit folder that is no generated file, not `kit.json` and no Finder `.DS_Store` is an
+  owner file: the five that are scaffolded once, and any recipe or folder the owner adds (`recipes/email.md`, `notes/`).
+  `kit.json` `owned` hashes each one at the next build, so the version moves when one is added, changed or taken away; `kit
+  check` row `kit:owned` covers each; the copy list of `kit status` carries each, copied into a repository only where the
+  repository has none and reported when its copy differs, as D11 says. A Markdown file of the owner's goes through
+  `kit:fill`, `kit:tags` and `kit:numbers` as the recipes do (`EXTENDING.md` and `voice.md` stay unjudged for tags and values,
+  as before); a file of another kind is copied and never judged by those three rows (`kit:links` still reads the links of its `.html` or `.css`,
+  as of any file of the kit). A file inside `brand/`, `snippets/` or
+  `reference-pages/` is still foreign and stops the build. A symbolic link among the owner's files, whatever it
+  points at (a file or a folder of the project, nothing, or a place outside the project), is refused the way a `kit.json` that is
+  a link is: the build stops (exit 1) and `--replace` moves the link itself aside.

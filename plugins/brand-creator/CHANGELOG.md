@@ -300,6 +300,13 @@ ends with a non-zero exit code. A
   `applied-skill` leaves a project that has a kit to `kit build`.
   A brand that moves also gets its motion spec and demo page in the kit.
 - Open-licence (OFL) fonts go into the kit with their licence; any other font is listed, never copied.
+- The masters you approved go into the kit too. Put them in `assets/masters/` in your brand project (an ad or deck
+  template with its pictures, PDFs, PPTX and fonts; only approved ones, because the kit cannot tell which are approved):
+  `kit build --yes` copies everything under it, byte for byte, to `brand/assets/masters/`, and a master you change, add or
+  take away makes `kit check` say "not verified" until you build again. A font in it follows the font rule, and a font
+  file of a kind fontcheck cannot read (`.ttc`, `.eot` and similar) is never copied, only listed. A link
+  in a master's page must lead to a file inside the kit. An SVG master is checked like any SVG under `assets/`: `check`
+  fails one that still holds live text.
 - The pages you approved for your site go into the kit too. When you have approved pages (`brand-creator site approve`),
   `kit build --yes` copies each one with its screenshots and every file it loads, at the same paths so its links still
   work, and writes a note for each page in `reference-pages/<page>/notes.md`: its layout (structure only), when you
@@ -329,7 +336,12 @@ ends with a non-zero exit code. A
 - The kit has parts that are yours: `EXTENDING.md` (how to extend the kit), `voice.md`, `visual.md`, `golden-rules.md` and
   a web-page recipe in `recipes/`. `kit build --yes` writes each of them once, with a note where you write, and never
   overwrites or moves it; delete one and the next build writes it again. The plan lists the files a build would add.
-  An edit of yours moves the kit's version at the next build.
+  A recipe or file you add yourself (`recipes/email.md`, a `notes/` folder) is yours too and travels with the kit: the
+  next build records it, `kit check` holds a Markdown note of yours to the same rules as your recipes (a file of another
+  kind is copied and never read for those, but the links in an `.html` or `.css` file of yours must still lead to a file
+  inside the kit), and the copy list gives it to a repository that has none. A shortcut (a symbolic link)
+  among your files is refused like a `kit.json` that is a link: the build stops, and `--replace` sets the shortcut aside.
+  A file of yours added, changed or taken away moves the kit's version at the next build.
   The web-page recipe starts from the visitor's job and the page's idea, builds the hero first, tells you to copy the brand's
   files into the product's own public or static folder and link them from there, works beside your web-design skill
   and not instead of it, and checks the built page against the brand, with every sample figure marked as a sample.
@@ -361,8 +373,8 @@ ends with a non-zero exit code. A
 - `brand-creator kit status --repo <folder>` tells whether a product repository's copy of the kit is current, and what
   to copy. It says `not installed`, `current` or `not current` (with both versions, and the files that differ, are
   missing or are left over from an older kit), lists your own files in the copy that differ (they are the repository's
-  and an update keeps them), and prints the copy list: the generated files that need copying, then your own files the
-  repository does not have. It only reads: nothing is written in the repository or in your project, and it checks
+  and an update keeps them), and prints the copy list: the generated files that need copying, then your own files, the ones you
+  added too, that the repository does not have. It only reads: nothing is written in the repository or in your project, and it checks
   that. It refuses your home folder, anything inside `~/.claude` and the brand project itself.
   A file your brand dropped (a logo you took out) stays in a copy that was updated: `kit status` lists it as left
   over, says it is not on the copy list and goes to `removed-<date>/` in that repository, and when both versions are
@@ -403,6 +415,9 @@ ends with a non-zero exit code. A
 
 ### Changed
 
+- `brand-creator fontcheck --font <file>` checks the fonts you name together with every font under `assets/fonts/`.
+  Naming an extra font, such as one your ad or deck master ships, no longer leaves your brand's own fonts out of the font
+  report, and so out of your brand kit.
 - A pack recorded with `staleness --write` reads as stale after this update (the scripts it hashes changed); rebuild
   it.
 - The list of generic first-idea patterns every direction is tested against has four new patterns, found in a real

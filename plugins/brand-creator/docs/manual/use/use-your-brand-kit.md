@@ -31,6 +31,8 @@ brand skill on its own.
 **Made for you.** Claude builds these from your brand project. Never edit them: change your project, then build again.
 
 - exact copies of your tokens, logo files, OFL fonts with their licence texts, and your motion files if you have any;
+- exact copies of the masters you approved, such as an ad or a deck template with its pictures, PDFs and fonts, from the
+  `assets/masters/` folder of your brand project (more on that below);
 - your brand rules, each with a short name, and the facts you confirmed, never contact details;
 - ready-made code for your fonts, your logo in light and dark, and text on each background colour you named;
 - your approved site pages, with their screenshots and a note on each page's choices;
@@ -49,8 +51,31 @@ the starter again.
 - `recipes/web-page.md`: the steps for building a web page in your brand. Change it to fit how you work.
 - `EXTENDING.md`: how to add to the kit.
 
-A recipe or folder you add yourself, such as `recipes/email.md`, stays in your brand project. It doesn't change the
-version, and it isn't copied into your product.
+A recipe or folder you add yourself, such as `recipes/email.md` or a `notes/` folder, is yours too, and it travels with
+the kit. At the next build it counts as a change, so the version goes up by one. It is copied into your product like the
+files above, but only where your product doesn't have it yet. A note of yours written in Markdown is checked like your
+recipes. A file of another kind, such as a PDF, is copied and its words are never checked. If it is a web page or a
+stylesheet, its links still have to lead to a file inside the kit.
+
+## Put your masters in the kit
+
+Masters are the templates you approved, such as an ad, a slide deck or a poster, with the pictures, PDFs and fonts they
+use. Put them in the `assets/masters/` folder of your brand project, and the kit carries them too.
+
+1. Put only approved masters in that folder. Claude can't tell which ones you approved, so everything in it goes into
+   the kit.
+2. Fonts a master brings follow the same rule as your other fonts: only open-licence (OFL) ones are copied, each with its
+   licence text in `assets/fonts/`. Ask Claude to check them first. Any other font is listed and left out, and the kit
+   check warns about a link to it. A font file the check can't read, such as `.ttc` or `.eot`, is always left out and
+   listed, because nobody can read its licence: supply it under its own licence.
+3. Ask:
+
+   > Build the kit again, then check it
+
+Claude copies every file under the folder, exactly as it is, into the kit. A link inside a master's page has to lead to a
+file that is in the kit too, or the kit check fails. A picture of yours saved as SVG must be shapes only: the brand check
+fails any SVG under `assets/` that still holds live text, your masters included, so ask Claude to turn its text into
+shapes first. Change a master later, and the kit check says "not verified" until you build again.
 
 ## Ask for it
 
@@ -91,7 +116,7 @@ it, free to change:
 ```
 
 A line with a size, a colour or a ratio, such as `48px`, also says where it comes from: a token, a rule, or `[example]`.
-Claude writes the tags as it drafts; you check them. In a recipe, tag the bullet points too; numbered steps need none.
+Claude writes the tags as it drafts; you check them. In a recipe, or in any other note of yours written in Markdown, tag the bullet points too; numbered steps need none.
 The kit's `EXTENDING.md` has every form of tag. Then ask:
 
 > Build the kit again, then check it
@@ -102,8 +127,8 @@ your approved book's edition.
 ## The version number
 
 Each kit has a version, such as 1.3. The first number is your approved brand book's edition. The second goes up by one
-at the next build when a made-for-you file or one of your five files changed, and stays put when nothing did. A new
-edition starts again at 1. The number tells you which kit a copy holds. Whether a copy is up to date, Claude decides by
+at the next build when a made-for-you file changed or a file of yours was added, changed or taken away, and stays put
+when nothing did. A new edition starts again at 1. The number tells you which kit a copy holds. Whether a copy is up to date, Claude decides by
 comparing the files themselves.
 
 ## Test your kit
@@ -159,8 +184,8 @@ Under "kit copies", each website or app reads:
 - **not current**: its copy is older, or a file in it differs, is missing or is left over.
 
 For the detail, ask Claude to check the copy in that folder. It only reads, and names the files that differ, are
-missing or are left over, and what to copy. Your own files in a copy may differ: they belong to that code now, and an
-update keeps them.
+missing or are left over, and what to copy. Your own files in a copy, the ones you added too, may differ: they belong to
+that code now, and an update keeps them.
 
 A file left over is one your brand dropped, such as a logo you took out. It is never deleted: when Claude applies the
 kit again, it moves the file into a `removed-` folder with the date, inside that code, keeping its path. Then the copy
@@ -195,8 +220,11 @@ shows as "not verified", with what to run again.
 | Claude says the tokens are not built | Ask Claude to build them, then the kit again |
 | The kit has no fonts, and Claude says to check them | Ask Claude to check your fonts, then build again |
 | A font is listed as not copied | Claude says why. Not checked yet: ask Claude to check it with your other fonts, then build again. OFL without its licence text: add the text to `assets/fonts/`. Another licence: it goes into your product only by your decision, under its own licence |
-| The check names `voice.md`, `visual.md` or `golden-rules.md` | A note in double square brackets is left, or a line lacks its tag or a value's source. Ask Claude to fix it |
+| The check names `voice.md`, `visual.md`, `golden-rules.md`, a recipe or a note of your own written in Markdown | A note in double square brackets is left, or a line lacks its tag or a value's source. Ask Claude to fix it |
 | The build stops on a file edited by hand, or added to `brand/`, `snippets/` or `reference-pages/` | Make the change in your brand project and build again. Move a file you added to `recipes/` or a folder of your own. Or ask Claude to set the named files aside, into a `removed-` folder |
+| The build stops on a shortcut (a symbolic link) among your own files | The kit never follows a shortcut. Replace it with the real file, or ask Claude to set the shortcut aside into a `removed-` folder |
+| The kit check says the brand changed and names the masters | A master was changed, added or taken away after the kit was built. Ask Claude to build the kit again |
+| The kit check says a link in a master leads nowhere | The master's page uses a file the kit doesn't hold. Put that file in `assets/masters/` too, or change the link |
 | The build stops and names an approved site page | Its page check or screenshots fail or are out of date, it changed after you approved it, or it uses a file that isn't in your brand project. Do what the message says |
 | Claude says there is no kit when you add it to your code | Build the kit first |
 | Claude refuses a folder when it checks a copy | It refuses your home folder, Claude's settings folder and your brand project. Give it one website's or app's folder |

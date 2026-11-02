@@ -25,7 +25,7 @@ as SIL Open Font License (OFL) and a licence text with "SIL OPEN FONT LICENSE" i
 @font-face for each copied font. Any other font is listed in kit.json (fonts.not_copied) with the reason and never copied. With no current fontcheck report no font is
 copied, the rest is written and the build exits 3 (run `brand-creator fontcheck`, then `kit build` again).
 A font a reference page brings, a .ttf, .otf, .woff or .woff2 file in a page folder or one a page loads from outside assets/fonts/, goes by the same rule: it is copied (at its project path under brand/, with
-the licence text) only when the current fontcheck report has read it as OFL (`brand-creator fontcheck --font FILE` for it; fontcheck reads assets/fonts/ alone unless fonts are named) and an OFL licence text sits
+the licence text) only when the current fontcheck report has read it as OFL (`brand-creator fontcheck --font FILE` for it; fontcheck always reads assets/fonts/ as well) and an OFL licence text sits
 in assets/fonts/. Any other, a font fontcheck has not read included, is listed in fonts.not_copied with the reason and not copied. snippets/fonts.css holds the fonts of assets/fonts/ only.
 
 Grounds: once the owner has named the colours text sits on (tokens.json `grounds`, `named_by_owner` a real date and the owner's words), snippets/on-ground.css holds one
@@ -44,9 +44,15 @@ answers it; a folder without index.html stops the build. A font a page has that 
 warns on the link too. kit.json records for each page its
 source_sha, the inputs_sha of its page-check report and of its capture.json (`reference_pages`) and, under sources, one sha256 over everything the pages are made from (`pages`).
 
-The owner's files (EXTENDING.md, voice.md, visual.md, golden-rules.md, recipes/web-page.md) are scaffolded from templates/kit/ (the placeholders {{brand}} and {{skill}} filled; any
-other {{...}} is exit 2 and nothing is written) only when the file is absent. They are never overwritten or moved. kit.json records the sha256 of each one (`owned`) and the version's
-content hash covers them, so an edit of yours moves the version at the next build. The plan lists the scaffolds the build would write as `scaffold <path> (<bytes> bytes, ...)`.
+Masters: everything under assets/masters/ (the ad, deck and other templates the owner approved, with their pictures, PDFs, PPTX and fonts; the plugin cannot know which are approved, so only approved ones belong
+there) is copied byte for byte to brand/<its project path> and recorded in kit.json sources (`masters`, present only when the folder holds a file). A font in it goes by the font rule above, and a font file of a format fontcheck cannot read (.ttc, .otc, .eot, .dfont, .pfb, .pfm, .pfa) is never copied: it is listed in kit.json fonts.not_copied with that reason; a link inside a master
+HTML file must resolve inside the kit (`kit check`). A project without the folder gets no change at all. Row kit:masters.
+
+The owner's files are every file of the kit folder that is no generated file, no kit.json and no Finder .DS_Store. Five of them (EXTENDING.md, voice.md, visual.md, golden-rules.md, recipes/web-page.md)
+are scaffolded from templates/kit/ (the placeholders {{brand}} and {{skill}} filled; any other {{...}} is exit 2 and nothing is written) only when the file is absent; they are never overwritten or moved. A
+recipe or a folder of your own (recipes/email.md, notes/) is yours as it stands. kit.json records the sha256 of each one (`owned`) and the version's content hash covers them, so a file of yours added,
+edited or taken away moves the version at the next build. A link among them, whatever it points at (a file or folder of the project, nothing, or a place outside the project), is refused like a kit.json that is a link: the build stops (exit 1), --replace moves the link itself aside. The plan lists the scaffolds
+the build would write as `scaffold <path> (<bytes> bytes, ...)`.
 
 Nothing in a generated file is edited by hand: change the brand project and build again. A file of the kit that differs from what the last build wrote, or a file in
 brand/, snippets/ or reference-pages/ that the kit did not write (a file named exactly .DS_Store, which Finder leaves behind, is not one; a link is one, wherever it sits in the kit and whatever it points at, and is never followed or written through), stops the build
@@ -58,8 +64,9 @@ makes it stale. Rows: kit:files (every generated file is what kit.json lists, ki
 relative link in a .md, .html or .css file resolves to a file inside the kit: one that points outside it, an absolute path or a missing file fails; a link to a folder is its index.html when the kit has one there;
 a link to a font that kit.json lists in fonts.not_copied is a warning: the font must be supplied under its own licence), kit:fill (no `[[fill` marker is left in a text file), kit:versions (SKILL.md holds
 `Kit version <kit.json version> (kit.json).` exactly once, and the kit's edition is the approved one), kit:plugin (warns on another plugin version), kit:sources (not verified when the brand changed after the kit was built, naming
-what changed) and kit:owned (warns when an owner file changed since the last build). Exit 0 pass, 1 a row failed, 3 not verified. A link inside the kit is never followed.
-Two rows read the owner's recipes (recipes/**/*.md), golden-rules.md, visual.md and the generated reference-pages/<id>/notes.md: kit:tags (every bullet, and in golden-rules.md and visual.md every numbered
+what changed) and kit:owned (warns when an owner file was changed, added or removed since the last build). Exit 0 pass, 1 a row failed, 3 not verified. A link inside the kit is never followed.
+Two rows read the owner's Markdown files (recipes/**/*.md and any other .md of hers except EXTENDING.md and voice.md), golden-rules.md, visual.md and the generated reference-pages/<id>/notes.md (an owner file that is not Markdown is never read by
+kit:fill, kit:tags or kit:numbers): kit:tags (every bullet, and in golden-rules.md and visual.md every numbered
 line too, outside code fences, carries `[example]` or `[rule: <id>]`; a numbered step of a recipe needs no tag. Every id a `[rule: <id>]` names, on any line of those files, a numbered step, a sentence or
 a code fence included, is one `known_rule_ids` lists: a rule of BRAND-STATE.md written bare, `page:<id>`, `site:<id>`) and kit:numbers (every value, code fences included, has a citation on its own line: a
 number with a unit, a ratio, a hex colour or rgb( hsl( oklch( needs `[example]`, a known rule id or a token that exists, `var(--name)` of the kit's tokens.css or `{dotted.path}` of its tokens.json, a path
@@ -72,14 +79,14 @@ other files than the kit's copy was); fail when its page-check report is current
 
 Writes the report `kit` (rows kit:written and kit:owned; outputs lists every generated path with its sha256, kit.json included, and no owner file). Exit 0 written. Exit 1: G5 not recorded, no approved
 edition, a band drawing the project does not have, or a hand edit or foreign file without --replace. Exit 2: no --yes (the plan is printed first); a path that leaves the
-project; a band drawing that is not written as a plain path; a scaffold with a placeholder this version does not know. Exit 1 also: an owner file's path that holds something that is no file, or a folder an owner file belongs in (recipes/) that is a file or a link to nothing. Exit 3: the tokens are not built; a scaffold the plugin lacks; fonts are in assets/fonts/ and there is no current fontcheck report (the kit is written without them).
+project; a band drawing that is not written as a plain path; a scaffold with a placeholder this version does not know. Exit 1 also: an owner file's path that holds a folder, or a folder an owner file belongs in (recipes/) that is a file; a link among the owner's files, whatever it points at (--replace moves it); assets/masters that is no folder, a link to a folder in it. Exit 2 also: a master that is a link leading out of the project. Exit 3: the tokens are not built; a scaffold the plugin lacks; fonts are in assets/fonts/ and there is no current fontcheck report (the kit is written without them).
 
 `kit status` reads <DIR>/.claude/skills/<slug>-brand/ of each repository and writes nothing, in the repository or in the project (no report either). Per repository it says `not installed`
 (no kit.json there), `current (version V)` (every generated file and kit.json are the project's bytes) or `not current` (the installed and the project version, then the generated files that
 differ, are missing, or are left over from an older kit; when both versions are the same it says so and counts what differs). A file left over is not on the copy list: the implementer moves it
 to removed-<date>/<kit folder>/ in the repository, keeping its path, and deletes nothing (--json: `left_over` lists them, `left_over_to` says where they go). It also lists the owner files that
 differ (the repository's own, kept on update) and the copy list: the generated files to copy
-(kit.json last), then the owner files the repository lacks, as paths relative to the kit folder. Without --repo it reads each repository that has a `kit` row in adoption.json (none: exit 2).
+(kit.json last), then the owner files the repository lacks (all of the owner's files, those she added too), as paths relative to the kit folder. Without --repo it reads each repository that has a `kit` row in adoption.json (none: exit 2).
 Exit 0 when every copy is current, 1 when one is not installed or not current, or when a repository's kit folder changed while it was read (its files, sizes and times are listed before
 and after). Exit 2: no kit in the project; a folder that does not exist; the project itself or a folder inside it; your home folder or any path inside ~/.claude (the kit goes into one product
 repository at a time, never into a global skills folder); a kit folder that is a link. Exit 3: the kit in the project is not whole (`kit check` says what).
@@ -209,6 +216,22 @@ def reference_row(rep, pages: dict) -> None:
         rep.add("kit:reference-pages", "pass", label, detail=copied)
 
 
+def masters_row(rep, masters: dict) -> None:
+    """Row kit:masters: pass with the number of master files copied (the files below assets/masters/, byte for byte, at brand/assets/masters/), warn when a font among them is not copied (the font rule
+    decides, as for assets/fonts/: the row says which font, how and why; `kit check` warns on a link to it). No row while the project has no file there."""
+    if not masters["paths"]:
+        return
+    label = "the masters of assets/masters/"
+    n = sum(1 for rel in masters["files"] if rel.startswith(f"{kitlib.PREFIX}{kitlib.MASTERS_DIR}/"))
+    copied = f"{n} master file{'s' if n != 1 else ''} copied byte for byte from {kitlib.MASTERS_DIR}/ to {kitlib.PREFIX}{kitlib.MASTERS_DIR}/"
+    left = masters["not_copied"]
+    if left:
+        shown = "; ".join(f"{font} {how} ({why})" for font, how, why in left[:SHOWN]) + (f"; and {len(left) - SHOWN} more" if len(left) > SHOWN else "")
+        rep.add("kit:masters", "warn", label, detail=f"{copied}; a font the kit does not copy is listed in kit.json (fonts.not_copied), and a link to it is a warning in `kit check`: supply it under its own licence: {shown}")
+    else:
+        rep.add("kit:masters", "pass", label, detail=copied)
+
+
 def named(items: list[str]) -> str:
     """The first SHOWN items joined, and how many more there are."""
     return ", ".join(items[:SHOWN]) + (f", and {len(items) - SHOWN} more" if len(items) > SHOWN else "")
@@ -307,11 +330,13 @@ def owned_check_row(rep, project: Path, doc: dict) -> None:
         for rel, why in changed:
             why_files.setdefault(why, []).append(rel)
         then = {kitlib.OWNED_CHANGED: "`brand-creator kit build --yes` records it and moves the version on",
+                kitlib.OWNED_ADDED: "`brand-creator kit build --yes` records it and moves the version on",
+                kitlib.OWNED_REMOVED: "`brand-creator kit build --yes` records it and moves the version on",
                 kitlib.OWNED_MISSING: "`brand-creator kit build --yes` writes the scaffold again",
                 kitlib.OWNED_NOT_FILE: "move it away yourself, then run `brand-creator kit build --yes`"}
         rep.add("kit:owned", "warn", label, detail="; ".join(f"{named(rels)} {why}: {then[why]}" for why, rels in why_files.items()))
     else:
-        rep.add("kit:owned", "pass", label, detail=f"the {len(kitlib.OWNED_FILES)} owner files are as the last build recorded them")
+        rep.add("kit:owned", "pass", label, detail=f"the {len(doc['owned'])} owner files are as the last build recorded them")
 
 
 IDS_HINT = "fix it and run `brand-creator kit check` again"
@@ -403,14 +428,15 @@ def build(project: Path, a) -> int:
     confine(project, kd_rel, what="kit folder")
     fonts = kitlib.font_plan(project)                      # OFL fonts and their licence text are planned files; any other font is only listed
     pages = kitlib.reference_plan(project, fonts)          # the approved reference pages: checked and read first, so that a page that cannot go stops the build before anything is written
-    generated = kitlib.plan(project, fonts, pages)         # SKILL.md with the literal <version>: the version is decided from what the plan holds
+    masters = kitlib.masters_plan(project)                 # the approved masters of assets/masters/: read now, so that one that cannot go stops the build before anything is written
+    generated = kitlib.plan(project, fonts, pages, masters)   # SKILL.md with the literal <version>: the version is decided from what the plan holds
     owner = kitlib.owner_plan(project)                     # the owner's files: every scaffold is filled now, so an unknown placeholder stops the run before anything is written
     csha = kitlib.content_sha({rel: sha256_bytes(data) for rel, data in generated.items()}, owner["owned"])
     prev = kitlib.previous(project)
     version = kitlib.next_version(prev, edition, csha)
     files = kitlib.with_version(generated, version)
     src = kitlib.sources(project)
-    files[kitlib.KIT_FILE] = kitlib.kit_json_bytes(project, files, version, edition, csha, src, fonts, owner["owned"], pages)
+    files[kitlib.KIT_FILE] = kitlib.kit_json_bytes(project, files, version, edition, csha, src, fonts, owner["owned"], pages, masters)
     if a.plan or not a.yes:
         print(f"would write {len(files)} generated files into {kd_rel}/ (version {version})")
         for rel in sorted(files):
@@ -421,12 +447,13 @@ def build(project: Path, a) -> int:
             print("error: the brand kit is written into the project's .claude/skills/ and needs the owner's explicit OK at G5: re-run with --yes", file=sys.stderr)
         return 0 if a.plan else EXIT_USAGE
     edited, foreign, retired = kitlib.scan(project, files, (prev or {}).get("outputs", {}))
-    stopped = [(rel, "edited by hand") for rel in edited] + [(rel, "not written by the kit") for rel in foreign]
+    stopped = ([(rel, "edited by hand") for rel in edited] + [(rel, "not written by the kit") for rel in foreign]
+               + [(rel, kitlib.LINK_AMONG_OWNER) for rel in owner["links"]])
     if stopped and not a.replace:
         shown = ", ".join(f"{rel} ({why})" for rel, why in stopped[:SHOWN]) + (f", and {len(stopped) - SHOWN} more" if len(stopped) > SHOWN else "")
-        fail(EXIT_FAIL, f"{kd_rel}/ holds files the kit would overwrite or does not know: {shown}. Change the brand project instead and run "
+        fail(EXIT_FAIL, f"{kd_rel}/ holds files the kit would overwrite or does not know: {shown}. Change the brand project instead (for a link among your own files, put the file itself there) and run "
                         f"`brand-creator kit build --yes` again, or add --replace to move them to removed-{today()}/ first (nothing is deleted)")
-    moving = (edited + foreign if a.replace else []) + retired
+    moving = (edited + foreign + owner["links"] if a.replace else []) + retired
     folder = move_aside(project, moving) if moving else f"removed-{today()}"
     rep = Report("kit", project, renderer="n/a (generated files)")
     rep.inputs.extend(kitlib.input_paths(project))
@@ -449,6 +476,7 @@ def build(project: Path, a) -> int:
     font_row(rep, fonts)
     ground_row(rep, kitlib.ground_plan(project))
     reference_row(rep, pages)
+    masters_row(rep, masters)
     rep.extra.update({"outputs": {rel: sha256_bytes(data) for rel, data in sorted(files.items())}, "kit_version": version, "content_sha": csha,
                       "adapter_state_sha": src["state_sha"], "kit_sources_sha": kitlib.sources_sha(project, src)})
     return rep.finish()

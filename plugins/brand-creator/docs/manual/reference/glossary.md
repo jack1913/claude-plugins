@@ -19,7 +19,7 @@ Plain words for the terms brand-creator uses.
 | Pack | A set of files for one place, such as favicons and web icons, social images, or Apple icons |
 | Brand book | One page, `book.html`, with the rules for using your brand: logo at several sizes, colours with contrast, type and files. Built from your project, so it can't drift from the files |
 | Brand kit | Your brand in one folder that your website's or app's code can carry a copy of: your colours, logo files and open-licence fonts, your rules and facts, ready-made bits of code, and a few files of your own, such as a recipe for building a page. See [Use your brand kit](../use/use-your-brand-kit.md) |
-| Owner files | The files in your brand kit that are yours to write, such as how your brand sounds (`voice.md`) and the recipe for building a page: Claude writes each once and never overwrites it, while the rest of the kit is made from your project and never edited by hand |
+| Owner files | The files in your brand kit that are yours to write, such as how your brand sounds (`voice.md`), the recipe for building a page and any recipe or file you add: Claude writes the starter files once and never overwrites any of them, while the rest of the kit is made from your project and never edited by hand |
 | Hand-off | A step Claude gives to you instead of doing it, such as buying a domain or filing a trademark |
 | Leftover search | `/brand-creator:check` with an old value: it searches the whole project for places the old name, colour or rule still shows |
 

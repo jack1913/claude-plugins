@@ -149,6 +149,7 @@ fontTools, Brotli and skia-pathops (`outline_glyphs.py`, `fontcheck.py`), Pillow
   assets/web/  assets/social/  assets/apple/  assets/windows/  assets/linux/  assets/tray/  assets/tauri/  assets/wallet/  assets/developer/   emitter output
   assets/print/  assets/presskit/  assets/social/posts/   print PDFs with their `.print.json` sidecars and the e-mail signature; the press-kit zip; social posts
   assets/fonts/                    the brand's font files (read by fontcheck)
+  assets/masters/                  the approved masters: the ad, deck and other templates the owner approved, with their pictures, PDFs, PPTX and the fonts they ship; copied whole into the kit (see kit)
   assets/manifest.json             artefacts written by emitters (put-on-byte-change)
   assets/_checks/                  JSON reports, the logo sheet and the guide overlay
   specimens/<name>/                page shots kept as specimens (shot --out specimens/<name>); any depth, the only project folder `shot --out` may write
@@ -925,7 +926,8 @@ the check "not verified" (exit 3). Paths are relative to FAMILY.md; a sibling re
 
 ### fontcheck, fonts and outline-glyphs
 
-- `fontcheck` answers three things per font file: glyph coverage per language set (cmap), a licence hint from the name table and OS/2
+- `fontcheck` reads every font under `assets/fonts/`, plus each `--font FILE` not among them (each once, `assets/fonts/` first), into the one
+  `fontcheck` report, so naming a font of a page or a master never drops the brand's own fonts from it. It answers three things per font file: glyph coverage per language set (cmap), a licence hint from the name table and OS/2
   `fsType` (a hint from the file, not legal advice; `fsType` restricted embedding fails), and Chromium's platform-font report with a
   control (`render.mjs fonts`: `CSS.getPlatformFontsForNode`; a character the font lacks must come back as another font, else the report
   is "not verified"). Language sets are data files, `scripts/data/languages/<code>.json` (`schema, code, name, letters, symbols, extras,
@@ -2226,22 +2228,25 @@ section. That section says the kit works beside the owner's web-design skill and
     assets/fonts/<the OFL fonts> and their licence texts (see Fonts below)
     motion/motion.json, motion/SPEC.md, and the page of each page case of motion/proof.json when the brand moves (see Motion below)
     site/<id>/ (the page, its folder and its stills) and every project file an approved reference page loads (see Reference pages below)
+    assets/masters/<every file of the approved masters, a font by the font rule> (see Masters below)
   snippets/fonts.css   generated: an @font-face for each copied font
   snippets/on-ground.css   generated: one [data-ground] scope for each ground the owner named, after the page ground (see Grounds below)
   snippets/logo.html   generated: the logo in light and dark, switched as tokens.css switches them
   reference-pages/<id>/notes.md   generated: an approved reference page's layout (structure only), approval, stills and choices, each tagged
   EXTENDING.md  voice.md  visual.md  golden-rules.md   the owner's: scaffolded once from templates/kit/, never overwritten (see Owner files below)
   recipes/web-page.md   the owner's: the web-page recipe
+  <any other file>      the owner's too: a recipe under recipes/, a folder of your own such as notes/ (see Owner files below)
 ```
 
 Everything the build writes, except the five owner files it scaffolds once (see Owner files below), is generated and is never edited by hand: change the brand project and build again.
-`brand/`, `snippets/` and `reference-pages/` are the generated folders. A file outside them that the build did not write, and each of the five owner files, is the owner's: the build leaves it
-alone. `kit.json` lists the five owner files (`owned`) and no other file of the owner's.
+`brand/`, `snippets/` and `reference-pages/` are the generated folders. Every file of the kit folder that is no generated file, is not `kit.json` and is no Finder `.DS_Store` is the owner's: the five the build
+scaffolds, a recipe the owner adds under `recipes/`, a file in a folder of her own. The build leaves each alone, and `kit.json` lists all of them (`owned`).
 
 `kit.json` (schema 1): `kit` (the folder's name), `version`, `edition`, `plugin_version`, `content_sha`, `generated` (path in the kit to sha256, every generated file except `kit.json`
 itself, SKILL.md with its version in it), `owned` (the owner's files, see Owner files below) and `sources` (`state_sha`, as `adapt.state_sha`, then the sha256 of `assets/tokens/tokens.json`, `assets/tokens/tokens.css`, `qa/rules.json`
-and `FACTS.md`, each `null` when the project has none; `motion`, see Motion below; and `logos`: one sha256 over the logo files and the band drawings). `kitlib.load()` is strict: a key it does not know, at
-any level, and a key that is missing, stop it (exit 2) naming the key.
+and `FACTS.md`, each `null` when the project has none; `motion`, see Motion below; and `logos`: one sha256 over the logo files and the band drawings; and `masters`, one sha256 over the files below `assets/masters/`, a key that is there only when the project has such a file, so that
+the `sources` of a project without masters are the bytes they always were). `kitlib.load()` is strict: a key it does not know, at any level, and a key that is missing, stop it (exit 2) naming the key
+(`sources.masters` is the one key that may be missing).
 
 The build needs G5 recorded (exit 1 without) and an approved edition (BRAND-STATE.md `approved_edition`, which `state --record G5` writes; empty: exit 1, "G5 is recorded but no edition is
 approved"). The tokens must be built: `tokens.json` or `tokens.css` missing is exit 3, naming `brand-creator tokens`. A band drawing that qa/rules.json names and the project lacks is exit 1,
@@ -2254,17 +2259,24 @@ starts at 1 and goes up by 1 when a build changes any kit content. `content_sha`
 rendered with the literal `<version>` in its version line, and the owner's files (`owned`), so the version is decided before it is written. Same edition and same `content_sha` as the last build keep the version; same edition and
 another `content_sha` add 1 to the build number; a new edition starts at `<edition>.1`. No clock, no randomness: a second build with nothing changed writes nothing and keeps the version.
 
-**Owner files.** `EXTENDING.md`, `voice.md`, `visual.md`, `golden-rules.md` and `recipes/web-page.md` are the owner's. Each is scaffolded from `templates/kit/<path>` into the kit folder only when its
-path is absent (`kitlib.owner_plan`, `kitlib.write_owner`): a file that is there is never overwritten or moved, whatever it holds, a build with `--replace` included, and a file the owner deleted is
-scaffolded again at the next build. A scaffold is filled in one pass: `{{brand}}` is the brand's name and `{{skill}}` the kit folder's name, and any other `{{...}}` (a name with other letters, with
+**Owner files.** The owner's files are every file of the kit folder that is no generated file (`SKILL.md`, `kit.json`, `rules.json` and `facts.json` at the top, and what sits in `brand/`, `snippets/` and
+`reference-pages/`) and no Finder `.DS_Store` (`kitlib.owner_paths`). Five of them, `EXTENDING.md`, `voice.md`, `visual.md`, `golden-rules.md` and `recipes/web-page.md`, are scaffolded from `templates/kit/<path>`
+into the kit folder only when the path is absent (`kitlib.owner_plan`, `kitlib.write_owner`): a file that is there is never overwritten or moved, whatever it holds, a build with `--replace` included, and a file
+the owner deleted is scaffolded again at the next build. Any other file (`recipes/email.md`, `notes/palette.txt`, a PDF in a folder of her own) is the owner's as it stands: the build only reads it. A scaffold is
+filled in one pass: `{{brand}}` is the brand's name and `{{skill}}` the kit folder's name, and any other `{{...}}` (a name with other letters, with
 spaces or across lines too) is exit 2 naming it and the template, and so is a `{{` or `}}` that is no placeholder at all (never closed, or never opened), before anything is written; filled-in text is never read for placeholders again. A scaffold the plugin lacks is exit 3. A path where an owner file belongs
-that holds something that is no file (a folder, a link to nothing) is exit 1, and so is a folder an owner file belongs in (`recipes/`) that is a file or a link to nothing, before anything is
-written; a link that leads out of the project is exit 2; the build moves none of these. `EXTENDING.md` has no fill marker. `voice.md`,
+that holds a folder is exit 1, and so is a folder an owner file belongs in (`recipes/`) that is a file, before anything is written; the build moves neither. Every symbolic link among the owner's files,
+or as the folder one belongs in, whatever it points at (a file or a folder of the project, nothing, or a place outside the project), is refused the way a `kit.json` that is a link is: the build stops
+(exit 1, never exit 2, "<path> (a link among your own files: never read through)", up to 6 paths named) and `--replace` moves the link itself to
+`removed-<date>[-n]/<its project path>`, never what it points at; one of the five whose path was such a link is scaffolded again. `kit check` never reads through it (`kit:owned`: "is no file the kit can read") and
+`kit status` is exit 3, because a copy cannot be listed from a file that is never read. `EXTENDING.md` has no fill marker. `voice.md`,
 `visual.md` and `golden-rules.md` each hold a heading with the brand's name, one sentence and one `[[fill: ...]]` marker (the note between the brackets holds no square bracket); `recipes/web-page.md`
-is the web-page recipe: seven numbered steps (the visitor's job and the page's idea, references, tokens and the brand files copied into the product's own public or static folder, the hero first with the web-design skill beside the kit, the page check, a cold read, and the samples marked before publishing), with no value, no link, no bullet and no fill marker. `kit.json` `owned` is `{path in the kit: sha256}` for the five, the hash of the file on disk or, when it is absent, of the scaffold the build writes; `kitlib.load()` refuses
-an owner file it does not know, and one that is missing. `content_sha` covers these hashes, so an edit of the owner's moves the version at the next build and the same bytes keep it. The files are
-written after the generated ones and before `kit.json`. They are not in the report's `outputs`: `check` does not gate them, and the SKILL.md kit section lists them after the generated files under
-"Yours to extend; how: `EXTENDING.md`." (always the same five, whether they exist yet or not).
+is the web-page recipe: seven numbered steps (the visitor's job and the page's idea, references, tokens and the brand files copied into the product's own public or static folder, the hero first with the web-design skill beside the kit, the page check, a cold read, and the samples marked before publishing), with no value, no link, no bullet and no fill marker. `kit.json` `owned` is `{path in the kit: sha256}` for every owner file: the hash of the file on disk or, for one of the five that is absent, of the scaffold the build writes; the five are always in it. `kitlib.load()` refuses
+a path that is no owner file (`kitlib.is_owner_path`: a plain path in the kit folder, not `kit.json` or a file the build writes, not below a generated folder, not a `.DS_Store`), a hash that is no sha256, and one of the five that is missing. `content_sha` covers these hashes, so an owner file
+added, edited or taken away moves the version at the next build and the same bytes keep it; a kit whose owner has added nothing has the `owned` it always had. The files are
+written after the generated ones and before `kit.json`. They are not in the report's `outputs`: `check` does not gate them, and the SKILL.md kit section lists after the generated files only the five, under
+"Yours to extend; how: `EXTENDING.md`." (always the same five, whether they exist yet or not, so that its list of files does not depend on what the owner has written; a recipe or file she adds is named
+nowhere in SKILL.md, and a session in a product repository finds it through `EXTENDING.md`. SKILL.md still carries the version line, which moves when she adds, changes or takes away an owner file).
 
 **What the last build wrote** is the `kit` report's `outputs`, `kit_version` and `content_sha`. With no `kit` report (or one that records no outputs), `kit.json` stands in, because it is the version's only home:
 its `generated` hashes, its own bytes as they are on disk, its `version` and its `content_sha`. A deleted report therefore resets nothing: the version goes on, and a file the last build wrote is not "edited by hand".
@@ -2305,11 +2317,11 @@ report stale.
 **Fonts a reference page brings.** A `.ttf`, `.otf`, `.woff` or `.woff2` file that is in a page folder (`site/<id>/fonts/X.ttf`) or that a page loads from outside `assets/fonts/` (`assets/web/X.ttf` through `url()` in a
 stylesheet) goes through the same rule as the fonts of `assets/fonts/` (`kitlib.page_font_plan`): it is copied, byte for byte, to `brand/<its project path>` (with the licence texts of `assets/fonts/`, once) only when
 the current `fontcheck` report has a `licence:<its project path>` row that passes the rule above, and an OFL licence text sits in `assets/fonts/`. Any other is listed in `kit.json` `fonts.not_copied` with its reason and is
-not copied, and a font file in a page folder is then left out of the page's copy. `fontcheck` reads `assets/fonts/` alone unless fonts are named, so a font outside it is read with `brand-creator fontcheck --font FILE`
-(every font the kit holds in one run: a run that names fonts reads only those). The reasons are those of the list above, and these two where the report does not cover the font: "no current fontcheck report:
-run brand-creator fontcheck --font FILE for every font the kit holds, this one included (fontcheck reads assets/fonts/ alone unless fonts are named, and a run that names fonts reads only those), then kit build", and the
+not copied, and a font file in a page folder is then left out of the page's copy. `fontcheck` always reads every font under `assets/fonts/`, and a font outside it is read with `brand-creator fontcheck --font FILE`
+(every such font the kit holds in one run: a run reads only the other fonts it names). The reasons are those of the list above, and these two where the report does not cover the font: "no current fontcheck report:
+run brand-creator fontcheck --font FILE naming every font the kit holds outside assets/fonts/, this one included (fontcheck always reads the fonts of assets/fonts/ too, and a run reads only the other fonts it names), then kit build", and the
 same advice after "fontcheck has not read it:" when there is a current report with no row for the font. A font that is copied is in `fonts.copied` with the licence texts; `snippets/fonts.css` holds the fonts of `assets/fonts/` only.
-Such a font never makes the build exit 3: it is a warning of row `kit:reference-pages`. `sources.pages` covers the `fontcheck` report and the licence texts as soon as a page brings a font, so a report written later
+The fonts of the masters go by the same rule (see Masters below). Such a font never makes the build exit 3: it is a warning of row `kit:reference-pages` (`kit:masters` for a master's). `sources.pages` covers the `fontcheck` report and the licence texts as soon as a page brings a font, so a report written later
 makes `kit check` say the brand changed after the kit was built.
 
 **Motion.** A brand that has decided about motion has its files in the kit, each a byte copy at its project path under `brand/` (so a relative link in the demo page still resolves):
@@ -2406,8 +2418,34 @@ be trusted, and the build reads nothing for them until the checks pass. A projec
   with the number of pages and their ids, when each is copied; warn when a page loads a font that is not copied (above); info "no approved reference pages" while the project has none. A reference page's notes are judged by `kit check`
   like a recipe (`kit:tags`, `kit:numbers`: their bullets are the page's choices).
 
+**Masters.** `assets/masters/` is a project folder the plugin knows: the masters the owner approved (an ad, a deck and other templates, with their pictures, PDFs, PPTX and the fonts they ship). Only approved masters belong in it:
+the plugin cannot know which are approved, so everything in the folder goes into the kit. Everything below it, at any depth, is copied byte for byte to `brand/<its project path>` (`brand/assets/masters/ad/index.html`),
+listed in `kit.json` `generated` like any copied file, and recorded in `sources.masters` (one sha256 over the sorted pairs `<project path>\0<sha256>\n` of the files, as `logos` and `fonts` are made, and, as soon as a font is
+among them, the `fontcheck` report and the licence texts of `assets/fonts/`). A master that changed, was added or taken away after the build is `kit:sources` not verified in `kit check`, naming `masters`, and
+`kit:state` of `check` not verified too; at the next build the copy is written again (a master taken away is moved to `removed-<date>/` like a logo taken away) and the version moves. A Finder `.DS_Store` is none.
+`kitlib.masters_plan` is the plan, and nothing in it writes:
+
+- A font (`.ttf`, `.otf`, `.woff`, `.woff2`) goes through the font rule (the paragraph "Fonts a reference page brings" above, `kitlib.page_font_plan`): copied, with the licence texts of `assets/fonts/`, only when the current `fontcheck`
+  report has a `licence:assets/masters/<file>` row that passes the rule and an OFL licence text sits in `assets/fonts/`; otherwise listed in `kit.json` `fonts.not_copied` with the reason (a font `fontcheck` has not read, read with
+  `brand-creator fontcheck --font FILE`, says to check the fonts) and not copied. A link to one is a warning of `kit:links`, never a failure. A font that a reference page loads from `assets/masters/` is listed once.
+- Any other font file (`.ttc`, `.otc`, `.eot`, `.dfont`, `.pfb`, `.pfm`, `.pfa`, in any letter case: `kitlib.UNREAD_FONT_FORMATS`) is a font `fontcheck` cannot read, so no licence can be found for it and the font rule can never
+  pass it: it is never copied, whatever else the folder holds, and is listed in `kit.json` `fonts.not_copied` with the reason "a font format fontcheck cannot read (<extension>): only .ttf, .otf, .woff and .woff2 fonts are
+  read, so its licence is unknown and it is not copied; copy it into a product yourself, under its own licence". It stays in `sources.masters` (a change to it is `kit:sources` not verified) and in the `kit:masters` warning,
+  and a link to it is a warning of `kit:links` like a link to any font that is not copied.
+- Links inside a master HTML or CSS file are the links of a file of the kit: `kit check` demands that each resolves to a file inside the kit (`kit:links`). A link to a project file the kit does not copy (a picture
+  outside `assets/masters/`, the logos and the tokens apart) fails there; the build does not copy files a master loads.
+- A link to a folder inside `assets/masters/` is exit 1 (the kit copies files, not links); a file that is a link leading outside the project, or `assets/masters` itself leading outside, is exit 2, except a font file (by its extension), which is never read: it goes through the font rule above and is listed in `fonts.not_copied`; `assets/masters` that is a file
+  or a link to a folder inside the project is exit 1. Nothing is written in either case.
+- A file that is a link to nothing, or is no plain file, is exit 1 in the words of a master: `master file <project path> cannot be read (a link to nothing, a folder, or no plain file): a master is copied as it is, so put the real file
+  back or take the link out of assets/masters/`. It is never worded as a reference page (`kitlib._page_bytes` takes the closing sentence from its caller). Nothing is written.
+- An SVG below `assets/masters/` is an SVG under `assets/` like any other: `check` lints it as pure vector (`mark_lint:assets/masters/<file>.svg`: no `<text>`, no font reference, no external reference), so an approved master
+  with live text is copied into the kit and fails `check`. The kit build does not lint.
+- A project without a file under `assets/masters/` (no folder, an empty one, one with a `.DS_Store` only) gets no change at all: no `sources.masters` key, no `kit:masters` row, the `kit.json` and the version it always had.
+  Row `kit:masters`: pass, "<n> master files copied byte for byte from assets/masters/ to brand/assets/masters/" (the files below the folder, the licence texts of fonts not counted); warn when a font is not copied, naming it, how
+  the folder has it (`sits in the masters folder`) and why; none while the project has no master.
+
 Report `kit` (`assets/_checks/kit.json`), renderer `n/a (generated files)`. Inputs: the token files, the logo files, the band drawings, `qa/rules.json`, `FACTS.md` and `motion/motion.json`, each
-when the project has it. Row `kit:written` passes, with the detail `<n> generated files: <w> written, <u> unchanged, <r> moved to removed-<date>/; version <v>`. Row `kit:owned` (info): `<k> owner files scaffolded this run, <m> kept as they are`. Extra keys: `outputs` (every generated
+when the project has it, and the files of the masters. Row `kit:written` passes, with the detail `<n> generated files: <w> written, <u> unchanged, <r> moved to removed-<date>/; version <v>`. Row `kit:owned` (info): `<k> owner files scaffolded this run, <m> kept as they are`. Extra keys: `outputs` (every generated
 path with its sha256, `kit.json` included), `kit_version` (the report's own `version` stays the plugin's), `content_sha`, `adapter_state_sha` (`adapt.state_sha`) and `kit_sources_sha` (sha256 over
 `sources`). A run that stops before the report is created (a hand edit, unbuilt tokens, a bad drawing) leaves the earlier report as it was.
 
@@ -2418,7 +2456,7 @@ path with its sha256, `kit.json` included), `kit_version` (the report's own `ver
   `(missing)`) and saying they were edited by hand or removed: change the brand project and run `brand-creator kit build --yes`. A report with no `outputs`, or one whose `outputs` hold a record that
   cannot be compared with a file of the kit (a path that climbs out of the kit, a value that is not a sha256: 64 lower-case hex characters), also fails the row and says so; it never crashes `check`. A file that is not in `outputs` (an owner's file, a foreign file) is not read by this row.
 - `kit:state`: only when the report passed. Not verified (`skipped`) when its `adapter_state_sha` or `kit_sources_sha` is not the one the project has now: the name, rules, facts, tokens, logos,
-  band drawings, fonts (the font files, their licence texts or the `fontcheck` report), approved reference pages (`site/site.json`, the page folders with their stills, the files the pages load) or motion spec changed after the kit was built. There is no row while they match.
+  band drawings, fonts (the font files, their licence texts or the `fontcheck` report), approved reference pages (`site/site.json`, the page folders with their stills, the files the pages load), masters (the files below `assets/masters/`) or motion spec changed after the kit was built. There is no row while they match.
 
 `check --cascade` searches the kit like any other text file of the project: `SKILL.md` and the text files under `brand/`.
 
@@ -2432,7 +2470,7 @@ then says of it depends on the file. A `kit.json` that `kitlib.load()` refuses h
 current (the staleness comparison reads the file the link leads to), and only the row `kit:checked` says not verified, because a file of the kit is a link now; a link leading to other bytes makes the report stale.
 
 Inputs: every file under the kit folder (a link is no input, and a Finder `.DS_Store` is no file of the kit: `kitlib.kit_paths` leaves a file with exactly that name out), the files the kit is made from (`kitlib.input_paths`: the token files, the logo files and band drawings, `qa/rules.json`, `FACTS.md`, the motion files, the font files,
-their licence texts and the `fontcheck` report, and for the approved reference pages `site/site.json`, the files of the page folders, the files they load and each page's page-check report: `kitlib.page_input_rels`), `BRAND-STATE.md` and the `kit` report, so a file that changed or went makes the report stale. Extra keys: `kit_version` and `kit_tree_sha`, the sha256 over the sorted paths of every
+their licence texts and the `fontcheck` report, for the approved reference pages `site/site.json`, the files of the page folders, the files they load and each page's page-check report: `kitlib.page_input_rels`, and the files of the masters: `kitlib.masters_sources`), `BRAND-STATE.md` and the `kit` report, so a file that changed or went makes the report stale. Extra keys: `kit_version` and `kit_tree_sha`, the sha256 over the sorted paths of every
 file and link below the kit folder, each marked file or link and without a Finder `.DS_Store` (`kitlib.tree_sha`), because a file added since is no recorded input. Every row reads a plain file of the kit only: a link to a file or to a folder is never followed,
 read or hashed, and a link where a generated file belongs is not that file.
 
@@ -2448,17 +2486,18 @@ Rows, in this order:
   (`../brand/site/pricing/`, with or without the last slash) is the folder's `index.html` when the kit has one there, as a web server answers it; a folder without one fails ("a folder, not a file"). The first 6 are listed as
   `<file>:<line> -> <target>` with the reason. A link to a font that `kit.json` lists in `fonts.not_copied` (the path in the kit is `brand/<its project path>`, spelled letter for letter, and the font is not in the kit) is no broken
   link and no pass: the row is a warning (exit 0) that says the font must be supplied under its own licence, copied into the product from where it was licensed, and lists the first 6 as
-  `<file>:<line> -> <target> (<path in the kit>: <reason>)`. A broken link beside it still fails the row.
-- `kit:fill`: fails on any `[[fill` (any case) in a text file of the kit (a file with a NUL byte in it is none), listed as `<file>:<line>`, up to 6. A fresh kit fails here until the owner has replaced the markers of `voice.md`,
-  `visual.md` and `golden-rules.md`.
+  `<file>:<line> -> <target> (<path in the kit>: <reason>)`. A broken link beside it still fails the row. A master's HTML or CSS file (`brand/assets/masters/...`) is a file of the kit like any other: its links are judged here, and so is the `.html` or `.css` file of the owner's own.
+- `kit:fill`: fails on any `[[fill` (any case) in a text file of the kit (a file with a NUL byte in it is none, and neither is an owner file that is not Markdown: it travels with the kit and is never read here; `kit:links` still reads the links of its `.html` or `.css`), listed as `<file>:<line>`, up to 6. A fresh kit fails here until the owner has replaced the markers of `voice.md`,
+  `visual.md` and `golden-rules.md`; a Markdown file the owner adds is read like those.
 - `kit:versions`: fails unless SKILL.md holds `Kit version <kit.json version> (kit.json).` exactly once and no other such line, `kit.json` `version` is of its own `edition`, and `kit.json` `edition` equals BRAND-STATE.md
   `approved_edition` ("the kit is of edition X, the brand is at Y: run `brand-creator kit build --yes`").
 - `kit:plugin`: warn when `plugin_version` is not the running plugin's (pass otherwise). It never changes the status.
-- `kit:sources`: skipped (not verified) when `kitlib.sources(project)` differs from `kit.json` `sources`, naming the keys that changed and "run `brand-creator kit build --yes`"; also when a source cannot be read.
-- `kit:owned`: warn when an owner file differs from `kit.json` `owned`: "changed since the last build: `brand-creator kit build --yes` records it and moves the version on", "is missing" (the build writes the scaffold again), or
-  "is no file the kit can read" (a folder or a link). It never changes the status.
-- `kit:tags`: the owner's recipes, `golden-rules.md`, `visual.md` and the generated notes of the reference pages are the judged files (`kitlib.judged_files`: every `.md` below `recipes/` at any depth, `golden-rules.md`, `visual.md`,
-  `reference-pages/<id>/notes.md`; a link is never followed). Outside code fences, every bullet line of a judged file (`- ` or `* `, indented or not; a thematic break such as `* * *` is none) carries `[example]` or `[rule: <id>]`, and
+- `kit:sources`: skipped (not verified) when `kitlib.sources(project)` differs from `kit.json` `sources`, naming the keys that changed (`masters` when a master was changed, added or taken away) and "run `brand-creator kit build --yes`"; also when a source cannot be read.
+- `kit:owned`: warn when an owner file differs from `kit.json` `owned` (`kitlib.owned_changes`: the five scaffolded files first, then the others sorted): "changed since the last build: `brand-creator kit build --yes` records it and moves the version on", "was added since the last build"
+  (a file of the owner's `owned` does not list) and "was removed since the last build" (one of hers, other than the five, that `owned` lists and the kit lacks), both with the same advice, "is missing" (one of the five: the build writes the scaffold again), or
+  "is no file the kit can read" (a folder or a link, never read through). It never changes the status. Pass: "the <n> owner files are as the last build recorded them".
+- `kit:tags`: the owner's Markdown files, `golden-rules.md`, `visual.md` and the generated notes of the reference pages are the judged files (`kitlib.judged_files`: every `.md` file of the owner's, below `recipes/` at any depth or anywhere else
+  in the kit folder outside the generated folders, except `EXTENDING.md` and `voice.md`; `golden-rules.md`, `visual.md`, `reference-pages/<id>/notes.md`; a link is never followed). An owner file that is not Markdown is never judged by `kit:fill`, `kit:tags` or `kit:numbers` (`kit:links` still reads the links of its `.html` or `.css`). Outside code fences, every bullet line of a judged file (`- ` or `* `, indented or not; a thematic break such as `* * *` is none) carries `[example]` or `[rule: <id>]`, and
   so does every numbered line (`1. ` or `1) `) of `golden-rules.md` and `visual.md`. A numbered step of a recipe, or of the notes, needs no tag. Every `[rule: <id>]` in a judged file is checked, on any line: a bullet, a numbered
   step that needs no tag, a sentence, a heading, a quote and a line inside a code fence too. `<id>` is matched exactly against `kitlib.known_rule_ids(project)` (D12: a G4 slug written bare, `page:<id>`, `site:<id>`), one id to a tag; a tag
   that names an id the kit does not know fails even beside `[example]`. Fails with `<file>:<line> untagged` or `<file>:<line> unknown rule id <id>` (`(empty)` for `[rule: ]`), up to 6 listed, with the tag syntax. The count in the detail
@@ -2532,8 +2571,9 @@ Per repository, one of three states (`--json`: `state`):
   (a script never writes there). A copy is current once that is done.
 
 Every state also prints the owner files that differ ("owner files that differ (kept on update)"), which never make a copy not current: an installed kit's owner files are the repository's own, and an update copies one only where the
-repository has none. The copy list, as paths relative to the kit folder, is the generated files to copy (all of them when nothing is installed, otherwise those that differ or are missing; `kit.json` last, as the build writes it,
-so a copy that stops half way is not vouched for), then the owner files the repository lacks. Files left over are not on it: the implementer takes them out. `--json` prints one document, `{kit, version,
+repository has none. The owner files are every owner file of the project's kit folder (`kitlib.owner_paths`: the five scaffolded ones and each file the owner added, in a recipe folder or one of her own), read from the folder as it is now, not
+from `kit.json`; a file of another kind than Markdown is among them. The copy list, as paths relative to the kit folder, is the generated files to copy (all of them when nothing is installed, otherwise those that differ or are missing; `kit.json` last, as the build writes it,
+so a copy that stops half way is not vouched for), then the owner files the repository lacks: the five in their order (`EXTENDING.md`, `voice.md`, `visual.md`, `golden-rules.md`, `recipes/web-page.md`), then the others sorted. A file of hers the repository has with other bytes is reported ("owner files that differ (kept on update)") and not copied, as for the five. Files left over are not on it: the implementer takes them out. `--json` prints one document, `{kit, version,
 repos: [{label, path, state, installed_version, project_version, differ: [{file, why}], missing, left_over, left_over_to, owner_differ: [{file, why}], copy, copy_owner, read_only}], current}`, where `copy` is the whole copy list
 and `copy_owner` names the owner files in it, and `left_over_to` says where the files in `left_over` go in the repository (`removed-<date>/<kit folder>/`, with the literal `<date>`), `null` when none is left over.
 
@@ -2543,7 +2583,7 @@ difference exits 1, naming the repository on stderr, without the "read only" lin
 Exit 0 when every repository is current (and unchanged while read). Exit 1 when one is not installed or not current, or its folder changed while it was read. Exit 2, before anything is read, for: no kit in the project (or a
 `kit.json` that is a link, or one `kitlib.load()` refuses); no `--repo` and no kit row; a folder that does not exist; the project itself or a folder inside it; the user's home folder (`Path.home()`) or any path inside
 `~/.claude` ("the kit goes into one product repository at a time, never into a global skills folder"), also when the repository's kit folder leads there through a link; a repository whose kit folder is a link. Exit 3: the kit
-in the project is not whole (a generated file `kit.json` lists is missing there, is no plain file, or is not the sha256 `kit.json` records), because a copy cannot be judged against a kit that is not what it says: run
+in the project is not whole (a generated file `kit.json` lists is missing there, is no plain file, or is not the sha256 `kit.json` records, or a link sits among the owner's files), because a copy cannot be judged against a kit that is not what it says: run
 `kit check`, then `kit build --yes`.
 
 ### launch-todo

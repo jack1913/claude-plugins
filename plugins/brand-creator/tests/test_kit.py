@@ -255,7 +255,8 @@ def test_a_file_put_into_a_generated_folder_stops_the_build(pack):
         assert not (kit_of(pack) / rel).exists() and (pack / KIT_REMOVED / rel).read_text(encoding="utf-8") == "mine\n"
     assert (kit_of(pack) / "my-notes.md").is_file() and not (kit_of(pack) / "reference-pages").exists()          # an emptied folder goes ...
     assert sorted(f.name for f in (kit_of(pack) / "snippets").iterdir()) == ["logo.html"]                       # ... one that still holds a generated file stays
-    assert written_row(pack)["detail"] == "15 generated files: 0 written, 15 unchanged, 3 moved to removed-2026-10-17/; version 1.1"
+    assert written_row(pack)["detail"] == "15 generated files: 2 written, 13 unchanged, 3 moved to removed-2026-10-17/; version 1.2"      # SKILL.md and kit.json: my-notes.md is an owner file, recorded now
+    assert sorted(kit_json(pack)["owned"]) == sorted([*OWNER_FILES, "my-notes.md"])
 
 
 def test_a_finder_ds_store_in_a_generated_folder_is_not_a_foreign_file(pack):
@@ -898,7 +899,7 @@ def test_check_names_the_fonts_among_the_causes_of_a_kit_made_from_another_brand
     mutate(pack / "assets" / "fonts" / "OFL.txt", "SIL Open Font License", "SIL Open Font License, as shipped")      # a licence text is a source of the fonts, and of nothing else
     row = check_rows(pack)["kit:state"]
     assert row["status"] == "skipped"
-    assert row["detail"] == ("not verified: the name, rules, facts, tokens, logos, band drawings, fonts, reference pages or motion spec changed since the kit report; "
+    assert row["detail"] == ("not verified: the name, rules, facts, tokens, logos, band drawings, fonts, reference pages, masters or motion spec changed since the kit report; "
                              "run `brand-creator kit build --yes` again")
     assert build(pack).returncode == 0
     assert "kit:state" not in check_rows(pack)
@@ -1863,36 +1864,21 @@ def test_something_that_is_no_file_where_an_owner_file_belongs_stops_the_build_a
     kd = kit_of(pack)
     (kd / "voice.md").mkdir(parents=True)
     (kd / "voice.md" / "mine.txt").write_text("mine\n", encoding="utf-8")
-    for args in ((), ("--replace",)):                                   # --replace moves generated files; an owner's path is never moved
+    for args in ((), ("--replace",)):                                   # --replace moves generated files and links; a folder where an owner's file belongs is never moved
         r = build(pack, *args)
         assert r.returncode == 1 and ".claude/skills/acme-brand/voice.md is not a file" in r.stderr, r.stdout + r.stderr
         assert (kd / "voice.md" / "mine.txt").read_text(encoding="utf-8") == "mine\n" and not (pack / "assets" / "_checks" / "kit.json").exists()
         assert not list(pack.glob("removed-*")) and not (kd / "kit.json").exists()
     shutil.rmtree(kd / "voice.md")
-    (kd / "visual.md").symlink_to("nowhere.md")                         # a link to nothing is no file either
-    r = build(pack)
-    assert r.returncode == 1 and "visual.md is not a file" in r.stderr and not (kd / "kit.json").exists()
-    (kd / "visual.md").unlink()
-    outside = pack.parent / "outside.md"
-    outside.write_text("outside\n", encoding="utf-8")
-    (kd / "visual.md").symlink_to(outside)                              # a link that leads out of the project is never followed
-    r = build(pack)
-    assert r.returncode == 2 and "outside the project" in r.stderr and not (kd / "kit.json").exists() and outside.read_text(encoding="utf-8") == "outside\n"
-    (kd / "visual.md").unlink()
-    # the folder an owner file belongs in: a file or a link to nothing at `recipes` stops the build before anything is written, and --plan does not promise a scaffold under it
-    for what in ("a file", "a link to nothing"):
-        if what == "a file":
-            (kd / "recipes").write_text("mine\n", encoding="utf-8")
-        else:
-            (kd / "recipes").unlink()
-            (kd / "recipes").symlink_to("nowhere")
-        for args in (("--yes",), ("--yes", "--replace"), ("--plan",)):
-            r = bc("kit", "build", *args, project=pack)
-            assert r.returncode == 1, (what, args, r.stdout + r.stderr)
-            assert ".claude/skills/acme-brand/recipes/web-page.md is not a file" in r.stderr and ".claude/skills/acme-brand/recipes is not a folder" in r.stderr, (what, args, r.stderr)
-            assert "scaffold " not in r.stdout and sorted(f.name for f in kd.iterdir()) == ["recipes"], (what, args, r.stdout)         # nothing else was written: no SKILL.md, no kit.json
-            assert not (pack / "assets" / "_checks" / "kit.json").exists() and not list(pack.glob("removed-*"))
-        assert (kd / "recipes").is_symlink() or (kd / "recipes").read_text(encoding="utf-8") == "mine\n"                              # left as it was
+    # the folder an owner file belongs in: a file at `recipes` stops the build before anything is written, and --plan does not promise a scaffold under it
+    (kd / "recipes").write_text("mine\n", encoding="utf-8")
+    for args in (("--yes",), ("--yes", "--replace"), ("--plan",)):
+        r = bc("kit", "build", *args, project=pack)
+        assert r.returncode == 1, (args, r.stdout + r.stderr)
+        assert ".claude/skills/acme-brand/recipes/web-page.md is not a file" in r.stderr and ".claude/skills/acme-brand/recipes is not a folder" in r.stderr, (args, r.stderr)
+        assert "scaffold " not in r.stdout and sorted(f.name for f in kd.iterdir()) == ["recipes"], (args, r.stdout)         # nothing else was written: no SKILL.md, no kit.json
+        assert not (pack / "assets" / "_checks" / "kit.json").exists() and not list(pack.glob("removed-*"))
+    assert (kd / "recipes").read_text(encoding="utf-8") == "mine\n"                                                          # left as it was
     (kd / "recipes").unlink()                                           # the advice works: move it away, then build again
     r = build(pack)
     assert r.returncode == 0, r.stdout + r.stderr
@@ -1914,13 +1900,13 @@ def test_a_file_where_an_owner_files_folder_belongs_keeps_the_report_and_the_kit
     assert check_rows(pack)["kit:file"]["status"] == "pass"
 
 
-def test_kit_json_must_list_every_owner_file_and_no_other(pack):
+def test_kit_json_must_list_the_five_scaffolded_owner_files(pack):
     import kitlib
     from _common import CliError
     assert build(pack).returncode == 0
     assert sorted(kitlib.load(pack)["owned"]) == OWNER_FILES
     f = kit_of(pack) / "kit.json"
-    for where, change, needle in (("an owner file nobody scaffolds", lambda d: d["owned"].__setitem__("notes.md", "0" * 64), "owned.notes.md: unknown owner file"),
+    for where, change, needle in (("a path that is no owner file", lambda d: d["owned"].__setitem__("brand/notes.md", "0" * 64), "owned.brand/notes.md: not an owner file"),
                                   ("an owner file left out", lambda d: d["owned"].pop("voice.md"), "owned.voice.md: missing"),
                                   ("a hash that is none", lambda d: d["owned"].__setitem__("voice.md", "x"), "owned.voice.md: must be a sha256"),
                                   ("no owned key", lambda d: d.pop("owned"), "owned: missing"),
@@ -2387,7 +2373,8 @@ def test_kit_check_never_reads_through_a_link(pack, tmp_path):
     (kd / "mine").symlink_to(folder)
     r = kit_check(pack)
     assert r.returncode == 0, r.stdout + r.stderr
-    assert statuses(pack) == ALL_PASS
+    assert statuses(pack) == {**ALL_PASS, "kit:owned": "warn"}                  # a link among the owner's files is no file the kit can read: kit:owned says so, and the build refuses it
+    assert check_report_rows(pack)["kit:owned"]["detail"].startswith("mine, mine.md is no file the kit can read (a folder, or a link)")
     assert not any(i["path"].endswith(("mine.md", "mine/page.md")) for i in report(pack, "kit-check")["inputs"])
     (kd / "brand" / "assets" / "logo" / "mark.svg").unlink()                    # a link where a generated file belongs is not that file, whatever it points at
     (kd / "brand" / "assets" / "logo" / "mark.svg").symlink_to(pack / "assets" / "logo" / "mark.svg")
@@ -3352,27 +3339,28 @@ def test_every_kind_of_value_is_found_and_names_links_and_tags_are_not_values():
     assert kitlib.json_token_paths({"modes": ["light"], "primitives": 3, "other": None, "motion": {"curves": "x"}}) == set()                                                                  # a file of another shape names no token and never crashes
 
 
-def test_tags_and_values_are_judged_only_in_the_recipes_golden_rules_visual_and_reference_page_notes(pack):
+def test_tags_and_values_are_judged_in_the_owners_markdown_files_golden_rules_visual_and_reference_page_notes_only(pack):
     filled_kit(pack)
     kd = kit_of(pack)
     say = "- Say 48px loudly."
-    mutate(kd / "voice.md", KEPT, KEPT + "\n\n" + say)                                                                         # the other owner files are not judged
+    mutate(kd / "voice.md", KEPT, KEPT + "\n\n" + say)                                                                         # voice.md and EXTENDING.md are not judged for tags and values
     mutate(kd / "EXTENDING.md", "# Extending the Acme brand kit", "# Extending the Acme brand kit\n\n" + say)
     (kd / "notes").mkdir()
-    (kd / "notes" / "own.md").write_text(say + "\n", encoding="utf-8")
+    (kd / "notes" / "own.md").write_text(say + "\n", encoding="utf-8")                                                          # any Markdown file of the owner's is judged
     (kd / "recipes" / "deep").mkdir()
     (kd / "recipes" / "deep" / "more.md").write_text("- A deep bullet.\n", encoding="utf-8")                                    # recipes/** : any depth
     (kd / "recipes" / "email.md").write_text("# Email\n\n" + say + "\n1. Write 48px.\n", encoding="utf-8")                      # a numbered step needs no tag, its value a citation
-    (kd / "recipes" / "notes.txt").write_text(say + "\n", encoding="utf-8")                                                     # .md only
+    (kd / "recipes" / "notes.txt").write_text(say + "\n", encoding="utf-8")                                                     # Markdown only
     (kd / "reference-pages" / "start").mkdir(parents=True)
     (kd / "reference-pages" / "start" / "notes.md").write_text("# start\n\n" + say + "\n", encoding="utf-8")                    # the generated notes of a page
     (kd / "reference-pages" / "start" / "other.md").write_text(say + "\n", encoding="utf-8")                                    # notes.md only
     r = kit_check(pack)
     assert r.returncode == 1, r.stdout + r.stderr                                                                             # kit:files fails too: nobody generated these notes
     assert check_report_rows(pack)["kit:tags"]["detail"] == lack_a_tag(
-        3, 3, "recipes/deep/more.md:1 untagged", "recipes/email.md:3 untagged", "reference-pages/start/notes.md:3 untagged")
+        4, 4, "notes/own.md:1 untagged", "recipes/deep/more.md:1 untagged", "recipes/email.md:3 untagged", "reference-pages/start/notes.md:3 untagged")
     assert check_report_rows(pack)["kit:numbers"]["detail"] == cites_nothing(
-        "recipes/email.md:3 (48px has no citation)", "recipes/email.md:4 (48px has no citation)", "reference-pages/start/notes.md:3 (48px has no citation)")
+        "notes/own.md:1 (48px has no citation)", "recipes/email.md:3 (48px has no citation)", "recipes/email.md:4 (48px has no citation)",
+        "reference-pages/start/notes.md:3 (48px has no citation)")
 
 
 def test_a_rule_tag_on_a_line_that_needs_no_tag_is_not_verified_when_the_rule_ids_cannot_be_read(pack):
@@ -3931,7 +3919,7 @@ def test_a_reference_page_that_is_changed_is_copied_again_and_the_sources_say_so
     assert r.returncode == 3, r.stdout + r.stderr
     assert check_report_rows(pack)["kit:sources"]["status"] == "skipped" and "(pages)" in check_report_rows(pack)["kit:sources"]["detail"]
     state = check_rows(pack)["kit:state"]                                                                                   # and `check` says the same, naming the reference pages
-    assert state["status"] == "skipped" and "fonts, reference pages or motion spec changed since the kit report" in state["detail"], state
+    assert state["status"] == "skipped" and "fonts, reference pages, masters or motion spec changed since the kit report" in state["detail"], state
     assert build(pack).returncode == 0
     after = kit_json(pack)
     assert after["version"] == "1.3" and after["sources"]["pages"] != before["sources"]["pages"]
@@ -4274,8 +4262,8 @@ def test_each_reference_page_gets_its_own_row_and_a_change_marks_only_its_page(p
 # assets/fonts/, otherwise listed in kit.json fonts.not_copied. fontcheck reads assets/fonts/ alone unless `--font` names a font, so these fonts are read with `--font`.
 PAGE_FONT = "site/start/fonts/Brought.ttf"
 LOADED_FONT = "assets/web/Other.ttf"
-CHECK_THEM = ("run `brand-creator fontcheck --font FILE` for every font the kit holds, this one included (fontcheck reads assets/fonts/ alone unless fonts are named, "
-              "and a run that names fonts reads only those), then `kit build`")
+CHECK_THEM = ("run `brand-creator fontcheck --font FILE` naming every font the kit holds outside assets/fonts/, this one included (fontcheck always "
+              "reads the fonts of assets/fonts/ too, and a run reads only the other fonts it names), then `kit build`")
 OFL_LABEL = "SIL Open Font License (OFL)"
 
 
@@ -4507,3 +4495,648 @@ def test_a_page_folder_or_index_that_is_a_link_leading_out_is_exit_2_whatever_th
         shutil.move(str(outside), str(page if what == "index.html" else folder))
     r = build(pack)                                                                                                   # the pages as they were: the kit goes in
     assert r.returncode == 0, r.stdout + r.stderr
+
+
+# ---------------------------------------------------------------- masters travel with the kit (K-01)
+# Everything under assets/masters/ is copied into the kit at its project path (brand/assets/masters/...), byte for byte, listed in kit.json `generated`, and recorded in kit.json
+# `sources.masters`. A font in it goes by the font rule of assets/fonts/ (copied only when fontcheck read it as OFL and an OFL text sits in assets/fonts/). A project without the folder
+# builds the bytes it always did: no key, no row.
+MASTER_PNG = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01master-png\x00\xff"
+MASTER_PPTX = b"PK\x03\x04\x14\x00\x00\x00\x08\x00master-pptx\x00\x01\x02"
+MASTER_PDF = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n\x00"
+MASTER_HTML = ('<!doctype html>\n<html><head><link rel="stylesheet" href="ad.css"></head>\n'
+               '<body><img src="ad.png" alt=""><img src="../../logo/mark.svg" alt=""></body></html>\n')
+MASTER_CSS = '.ad { background: url("ad.png"); }\n'
+MASTERS = {"assets/masters/ad/index.html": MASTER_HTML.encode(), "assets/masters/ad/ad.css": MASTER_CSS.encode(), "assets/masters/ad/ad.png": MASTER_PNG,
+           "assets/masters/deck/deck.pptx": MASTER_PPTX, "assets/masters/deck/slides.pdf": MASTER_PDF}
+MASTERS_KIT = sorted(f"brand/{rel}" for rel in MASTERS)
+MASTER_FONT = "assets/masters/fonts/Master.ttf"
+
+
+def with_masters(p, files=MASTERS):
+    for rel, data in files.items():
+        f = p / rel
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_bytes(data)
+
+
+def masters_row(p) -> dict:
+    return next(r for r in report(p, "kit")["results"] if r["id"] == "kit:masters")
+
+
+def test_a_master_and_its_picture_are_copied_byte_for_byte_and_listed(pack):
+    with_masters(pack)
+    r = bc("kit", "build", "--plan", project=pack)
+    assert r.returncode == 0 and r.stdout.splitlines()[0] == "would write 20 generated files into .claude/skills/acme-brand/ (version 1.1)", r.stdout + r.stderr
+    assert f"generated brand/assets/masters/ad/ad.png ({len(MASTER_PNG)} bytes)" in r.stdout.splitlines()
+    assert not (pack / ".claude").exists()
+    r = build(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert kit_files(pack) == sorted([*KIT_FILES, *MASTERS_KIT])
+    for rel, data in MASTERS.items():
+        assert (kit_of(pack) / "brand" / rel).read_bytes() == data, rel                   # byte for byte, the PNG, the PPTX and the PDF too
+    kj = kit_json(pack)
+    assert set(MASTERS_KIT) <= set(kj["generated"]) and all(file_sha(kit_of(pack) / rel) == sha for rel, sha in kj["generated"].items())
+    assert kj["generated"]["brand/assets/masters/ad/ad.png"] == hashlib.sha256(MASTER_PNG).hexdigest()
+    expected = hashlib.sha256("".join(f"{rel}\0{hashlib.sha256(MASTERS[rel]).hexdigest()}\n" for rel in sorted(MASTERS)).encode()).hexdigest()
+    assert kj["sources"]["masters"] == expected                                          # one sha256 over the sorted pairs `<project path>\0<sha256>\n`, as the other sources are made
+    assert kj["fonts"] == {"copied": [], "not_copied": []} and kj["version"] == "1.1"
+    skill = (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
+    assert all(f"- `{rel}`" in skill for rel in MASTERS_KIT)
+    rep = report(pack, "kit")
+    assert rep["status"] == "pass" and sorted(rep["outputs"]) == sorted([*KIT_FILES, *MASTERS_KIT])
+    assert set(MASTERS) <= {i["path"] for i in rep["inputs"]}                            # a changed master makes the `kit` report stale
+    assert masters_row(pack)["status"] == "pass"
+    assert masters_row(pack)["detail"] == "5 master files copied byte for byte from assets/masters/ to brand/assets/masters/"
+    assert written_row(pack)["detail"] == "20 generated files: 20 written, 0 unchanged, 0 moved to removed-2026-10-17/; version 1.1"
+    first = kit_state(pack)
+    assert build(pack).returncode == 0 and kit_state(pack) == first and kit_json(pack)["version"] == "1.1"       # a second build writes nothing
+    mutate(pack / "assets/masters/ad/index.html", "<body>", "<body class=\"changed\">")                       # a deliberate break: one master changes, and its copy, its hash and the version follow
+    assert build(pack).returncode == 0
+    changed = (pack / "assets/masters/ad/index.html").read_bytes()
+    assert (kit_of(pack) / "brand/assets/masters/ad/index.html").read_bytes() == changed and b'class="changed"' in changed
+    assert kit_json(pack)["generated"]["brand/assets/masters/ad/index.html"] == hashlib.sha256(changed).hexdigest() and kit_json(pack)["version"] == "1.2"
+
+
+def test_the_links_in_a_master_html_must_resolve_inside_the_kit(pack):
+    with_masters(pack)
+    filled_kit(pack)
+    r = kit_check(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert statuses(pack) == ALL_PASS                                                    # ad.css, ad.png and ../../logo/mark.svg are all in the kit
+    assert check_report_rows(pack)["kit:links"]["detail"] == f"{FRESH_LINKS + 4} relative links in {FRESH_FILES + 2} .md, .html and .css files resolve inside the kit"
+    mutate(pack / "assets/masters/ad/index.html", 'src="ad.png"', 'src="missing.png"')   # a master that links to a file the kit does not hold
+    mutate(pack / "assets/masters/ad/ad.css", 'url("ad.png")', 'url("../../../../../outside.png")')
+    assert build(pack).returncode == 0                                                   # the build copies the masters as they are; `kit check` judges the links
+    r = kit_check(pack)
+    assert r.returncode == 1, r.stdout + r.stderr
+    detail = check_report_rows(pack)["kit:links"]["detail"]
+    assert check_report_rows(pack)["kit:links"]["status"] == "fail"
+    assert "brand/assets/masters/ad/index.html:3 -> missing.png (no such file in the kit)" in detail
+    assert f"brand/assets/masters/ad/ad.css:1 -> ../../../../../outside.png ({OUTSIDE_KIT})" in detail
+
+
+def test_changing_adding_or_taking_away_a_master_makes_the_kit_stale(pack):
+    with_masters(pack)
+    filled_kit(pack)
+    assert kit_check(pack).returncode == 0 and "kit:state" not in check_rows(pack)
+    mutate(pack / "assets/masters/ad/ad.css", ".ad {", ".ad { color: red;")             # a master changed after the build
+    r = kit_check(pack)
+    assert r.returncode == 3, r.stdout + r.stderr                                        # not verified, never a pass
+    assert statuses(pack) == {**ALL_PASS, "kit:sources": "skipped"}
+    assert check_report_rows(pack)["kit:sources"]["detail"] == "not verified: the brand changed after the kit was built (masters); run `brand-creator kit build --yes`"
+    state = check_rows(pack)["kit:state"]                                                # and check's own row says so too
+    assert state["status"] == "skipped" and state["detail"].startswith("not verified: ") and "masters" in state["detail"]
+    assert build(pack).returncode == 0
+    assert kit_json(pack)["version"] == "1.3" and (kit_of(pack) / "brand/assets/masters/ad/ad.css").read_text(encoding="utf-8") == MASTER_CSS.replace(".ad {", ".ad { color: red;")
+    assert kit_check(pack).returncode == 0 and statuses(pack) == ALL_PASS and "kit:state" not in check_rows(pack)
+    with (pack / "assets/masters/ad/ad.png").open("ab") as fh:                           # a picture too: the bytes, not the text, are what is recorded
+        fh.write(b"\x01")
+    assert kit_check(pack).returncode == 3
+    assert build(pack).returncode == 0 and kit_json(pack)["version"] == "1.4" and (kit_of(pack) / "brand/assets/masters/ad/ad.png").read_bytes() == MASTER_PNG + b"\x01"
+    (pack / "assets/masters/deck/notes.pdf").write_bytes(MASTER_PDF + b"more")          # a master added
+    assert kit_check(pack).returncode == 3 and check_report_rows(pack)["kit:sources"]["detail"].endswith("(masters); run `brand-creator kit build --yes`")
+    assert build(pack).returncode == 0 and kit_json(pack)["version"] == "1.5" and (kit_of(pack) / "brand/assets/masters/deck/notes.pdf").is_file()
+    (pack / "assets/masters/deck/deck.pptx").unlink()                                    # a master taken away: its copy is moved aside, as a logo taken away is
+    assert kit_check(pack).returncode == 3
+    assert build(pack).returncode == 0 and kit_json(pack)["version"] == "1.6"
+    assert not (kit_of(pack) / "brand/assets/masters/deck/deck.pptx").exists()
+    assert (pack / "removed-2026-10-17/.claude/skills/acme-brand/brand/assets/masters/deck/deck.pptx").read_bytes() == MASTER_PPTX
+    assert "brand/assets/masters/deck/deck.pptx" not in kit_json(pack)["generated"] and kit_check(pack).returncode == 0
+    shutil.rmtree(pack / "assets/masters")                                               # the whole folder gone: the key goes with it
+    assert build(pack).returncode == 0 and "masters" not in kit_json(pack)["sources"] and kit_json(pack)["version"] == "1.7"
+    assert kit_files(pack) == KIT_FILES and kit_check(pack).returncode == 0
+
+
+def test_a_font_in_the_masters_follows_the_font_rule(pack):
+    with_masters(pack)
+    put_licence_text(pack)
+    bring_font(pack, MASTER_FONT)
+    listed_font = f"{MASTER_FONT} sits in the masters folder"
+    # no fontcheck report: the font is listed with a reason that says to check the fonts, and is not copied; the rest of the masters are
+    r = build(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert kit_json(pack)["fonts"] == {"copied": [], "not_copied": [{"file": MASTER_FONT, "reason": f"no current fontcheck report: {CHECK_THEM}"}]}
+    assert kit_files(pack) == sorted([*KIT_FILES, *MASTERS_KIT]) and not (kit_of(pack) / "brand" / MASTER_FONT).exists()
+    row = masters_row(pack)
+    assert row["status"] == "warn" and listed_font in row["detail"] and "5 master files copied" in row["detail"], row
+    assert {MASTER_FONT, "assets/fonts/OFL.txt"} <= {i["path"] for i in report(pack, "kit")["inputs"]}       # the report of fontcheck is an input as soon as there is one
+    # a current report that has read another font only: this one is a font fontcheck has not read
+    with_font(pack)
+    assert build(pack).returncode == 0
+    assert kit_json(pack)["fonts"]["not_copied"] == [{"file": MASTER_FONT, "reason": f"fontcheck has not read it: {CHECK_THEM}"}]
+    # fontcheck reads both and the licence is OFL with its text in assets/fonts/: copied at its project path, with the licence text
+    read_fonts(pack, "assets/fonts/TestFont-subset.ttf", MASTER_FONT)
+    r = build(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "assets/_checks/fontcheck.json" in {i["path"] for i in report(pack, "kit")["inputs"]}
+    assert kit_json(pack)["fonts"] == {"copied": [copied_font("brand/assets/fonts/TestFont-subset.ttf"), copied_font(f"brand/{MASTER_FONT}")], "not_copied": []}
+    assert kit_files(pack) == sorted([*KIT_FILES, *FONT_KIT, *MASTERS_KIT, f"brand/{MASTER_FONT}"])
+    assert filecmp.cmp(TEST_FONT, kit_of(pack) / "brand" / MASTER_FONT, shallow=False)
+    assert (kit_of(pack) / "snippets" / "fonts.css").read_text(encoding="utf-8") == FONT_FACE      # fonts.css holds the fonts of assets/fonts/ only
+    assert masters_row(pack)["status"] == "pass" and masters_row(pack)["detail"] == "6 master files copied byte for byte from assets/masters/ to brand/assets/masters/"
+    # not OFL by the report: listed with the reason, not copied, and the kit does not keep the copy of the last build
+    mutate_json(pack / "assets" / "_checks" / "fontcheck.json",
+                lambda d: next(x for x in d["results"] if x["id"] == f"licence:{MASTER_FONT}").__setitem__("recognised", "Apache License"))
+    assert build(pack).returncode == 0
+    assert kit_json(pack)["fonts"]["not_copied"] == [{"file": MASTER_FONT, "reason": NOT_OFL}] and not (kit_of(pack) / "brand" / MASTER_FONT).exists()
+    assert (pack / MASTER_FONT).is_file()                                                # the project's own font is as it was
+    assert masters_row(pack)["status"] == "warn" and f"{listed_font} ({NOT_OFL})" in masters_row(pack)["detail"]
+    # OFL by its name table but the licence text is gone from assets/fonts/
+    read_fonts(pack, "assets/fonts/TestFont-subset.ttf", MASTER_FONT)
+    ofl = pack / "assets" / "fonts" / "OFL.txt"
+    mutate(ofl, "SIL Open Font License", "Some Licence", count=99)
+    mutate(ofl, "SIL OPEN FONT LICENSE", "SOME LICENCE", count=99)
+    assert build(pack).returncode == 0
+    assert kit_json(pack)["fonts"]["not_copied"] == [{"file": "assets/fonts/TestFont-subset.ttf", "reason": "OFL by its name table, but no OFL licence text in assets/fonts/: add the font's OFL.txt"},
+                                                     {"file": MASTER_FONT, "reason": "OFL by its name table, but no OFL licence text in assets/fonts/: add the font's OFL.txt"}]
+
+
+def unread_why(ext):
+    """The reason kit.json gives for a font file of a format fontcheck cannot read, written out by hand."""
+    return (f"a font format fontcheck cannot read ({ext}): only .ttf, .otf, .woff and .woff2 fonts are read, so its licence is unknown and it is not copied; "
+            "copy it into a product yourself, under its own licence")
+
+
+def test_a_font_format_fontcheck_cannot_read_is_never_copied_from_the_masters(pack):
+    """A collection (.ttc), an embedded-OpenType (.eot) and the other formats fontcheck cannot read have no licence the font rule could read, so they are held back and listed, like a font the rule refuses."""
+    with_masters(pack)
+    put_licence_text(pack)
+    bring_font(pack, MASTER_FONT)
+    collection, embedded = "assets/masters/fonts/Commercial.ttc", "assets/masters/fonts/Commercial.eot"
+    (pack / collection).write_bytes(b"ttcf\x00\x01\x00\x00commercial collection")
+    (pack / embedded).write_bytes(b"\x00\x00\x00\x00embedded commercial")
+    r = build(pack)                                                                      # no fontcheck report: the OFL font is held back too
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert kit_json(pack)["fonts"] == {"copied": [], "not_copied": [{"file": embedded, "reason": unread_why(".eot")}, {"file": collection, "reason": unread_why(".ttc")},
+                                                                   {"file": MASTER_FONT, "reason": f"no current fontcheck report: {CHECK_THEM}"}]}
+    assert kit_files(pack) == sorted([*KIT_FILES, *MASTERS_KIT])                         # neither is in the kit, and none is listed as generated
+    assert not any("Commercial" in rel for rel in kit_json(pack)["generated"]) and (pack / collection).is_file() and (pack / embedded).is_file()
+    row = masters_row(pack)
+    assert row["status"] == "warn" and "5 master files copied" in row["detail"], row
+    assert f"{collection} sits in the masters folder ({unread_why('.ttc')})" in row["detail"] and f"{embedded} sits in the masters folder ({unread_why('.eot')})" in row["detail"]
+    assert {collection, embedded} <= {i["path"] for i in report(pack, "kit")["inputs"]}
+    mutate(pack / collection, "commercial", "changed")                                   # a deliberate break: one of them changes, which makes the kit stale as any master does
+    kit_check(pack)
+    assert check_report_rows(pack)["kit:sources"]["status"] == "skipped" and check_report_rows(pack)["kit:sources"]["detail"].endswith("(masters); run `brand-creator kit build --yes`")
+    recorded = kit_json(pack)["sources"]["masters"]
+    assert build(pack).returncode == 0 and not (kit_of(pack) / "brand" / collection).exists()
+    assert kit_json(pack)["sources"]["masters"] != recorded and kit_json(pack)["version"] == "1.1"      # the sources are recorded again; nothing in the kit changed, so the version stays
+    # fontcheck reads the OFL font and it is copied; a format it cannot read stays held back, whatever the report says of the others
+    read_fonts(pack, MASTER_FONT)
+    assert build(pack).returncode == 0
+    assert kit_json(pack)["fonts"] == {"copied": [copied_font(f"brand/{MASTER_FONT}")],
+                                       "not_copied": [{"file": embedded, "reason": unread_why(".eot")}, {"file": collection, "reason": unread_why(".ttc")}]}
+    assert kit_files(pack) == sorted([*KIT_FILES, *MASTERS_KIT, f"brand/{MASTER_FONT}", "brand/assets/fonts/OFL.txt"])      # the font with the licence text it travels with
+    assert masters_row(pack)["status"] == "warn" and "6 master files copied" in masters_row(pack)["detail"]
+    # the other formats, in any letter case, in any folder of the masters
+    more = {"assets/masters/deck/Face.otc": ".otc", "assets/masters/deck/Mac.dfont": ".dfont", "assets/masters/deck/Print.PFB": ".pfb", "assets/masters/deck/Print.pfm": ".pfm",
+            "assets/masters/deck/Print.pfa": ".pfa", "assets/masters/deck/Loud.TTC": ".ttc"}
+    for rel in more:
+        (pack / rel).write_bytes(b"not a font fontcheck reads")
+    assert build(pack).returncode == 0
+    listed_files = [f["file"] for f in kit_json(pack)["fonts"]["not_copied"]]
+    assert listed_files == sorted([embedded, collection, *more]) and {f["reason"] for f in kit_json(pack)["fonts"]["not_copied"]} == {unread_why(e) for e in (".eot", ".ttc", *more.values())}
+    assert kit_files(pack) == sorted([*KIT_FILES, *MASTERS_KIT, f"brand/{MASTER_FONT}", "brand/assets/fonts/OFL.txt"]) and masters_row(pack)["status"] == "warn"
+    # a font file only: the folder is still masters, the row says none is copied
+    shutil.rmtree(pack / "assets" / "masters")
+    (pack / collection).parent.mkdir(parents=True)
+    (pack / collection).write_bytes(b"ttcf\x00\x01\x00\x00commercial collection")
+    assert build(pack).returncode == 0
+    assert kit_json(pack)["fonts"] == {"copied": [], "not_copied": [{"file": collection, "reason": unread_why(".ttc")}]} and kit_files(pack) == KIT_FILES
+    assert masters_row(pack)["status"] == "warn" and masters_row(pack)["detail"].startswith("0 master files copied byte for byte")
+
+
+def test_a_link_to_a_master_font_the_kit_does_not_copy_is_a_warning_in_kit_check(pack):
+    put_licence_text(pack)
+    bring_font(pack, MASTER_FONT)
+    with_masters(pack, {**MASTERS, "assets/masters/ad/ad.css": b'@font-face { font-family: "Master"; src: url("../fonts/Master.ttf") format("truetype"); }\n'})
+    filled_kit(pack)                                                                     # no fontcheck report: the font is listed, not copied
+    assert kit_json(pack)["fonts"]["not_copied"][0]["file"] == MASTER_FONT
+    r = kit_check(pack)
+    assert r.returncode == 0, r.stdout + r.stderr                                        # a warning, not a failure, and no silent pass
+    links = check_report_rows(pack)["kit:links"]
+    assert links["status"] == "warn" and f"brand/assets/masters/ad/ad.css:1 -> ../fonts/Master.ttf (brand/{MASTER_FONT}: no current fontcheck report: " in links["detail"], links
+    assert "the font must be supplied under its own licence" in links["detail"]
+    assert statuses(pack) == {**ALL_PASS, "kit:links": "warn"}
+    read_fonts(pack, MASTER_FONT)                                                        # fontcheck reads it: copied, and the link resolves
+    assert build(pack).returncode == 0 and (kit_of(pack) / "brand" / MASTER_FONT).is_file()
+    assert kit_check(pack).returncode == 0 and statuses(pack) == ALL_PASS
+
+
+def test_a_link_to_a_master_font_of_a_format_fontcheck_cannot_read_is_a_warning_in_kit_check(pack):
+    embedded = "assets/masters/fonts/Commercial.eot"
+    with_masters(pack, {**MASTERS, "assets/masters/ad/ad.css": b'@font-face { font-family: "Commercial"; src: url("../fonts/Commercial.eot"); }\n', embedded: b"embedded commercial"})
+    filled_kit(pack)
+    assert kit_json(pack)["fonts"]["not_copied"] == [{"file": embedded, "reason": unread_why(".eot")}] and not (kit_of(pack) / "brand" / embedded).exists()
+    r = kit_check(pack)
+    assert r.returncode == 0, r.stdout + r.stderr                                        # a warning, not a failure, and no silent pass
+    links = check_report_rows(pack)["kit:links"]
+    assert links["status"] == "warn" and f"brand/assets/masters/ad/ad.css:1 -> ../fonts/Commercial.eot (brand/{embedded}: a font format fontcheck cannot read (.eot)" in links["detail"], links
+    assert "the font must be supplied under its own licence" in links["detail"] and statuses(pack) == {**ALL_PASS, "kit:links": "warn"}
+
+
+def test_a_project_without_the_masters_folder_builds_the_same_bytes_as_before(pack):
+    """The eval kit snapshot (evals/_shared/acme-kit/) is the kit of this very Acme project, built before masters existed: a project without assets/masters/ must still build every generated file,
+    every source and kit.json's keys exactly as it holds them, with no `masters` key and no `kit:masters` row. A folder that holds no file is no masters either."""
+    filled_kit(pack)
+    plain = (kit_of(pack) / "kit.json").read_bytes()
+    snapshot = json.loads((EVAL_KIT / "kit.json").read_text(encoding="utf-8"))
+    got = kit_json(pack)
+    assert list(got) == ["schema", "kit", "version", "edition", "plugin_version", "content_sha", "generated", "owned", "fonts", "sources", "reference_pages"]
+    assert list(got["sources"]) == ["state_sha", "tokens", "tokens_css", "rules", "facts", "motion", "logos", "fonts", "pages"]
+    assert got["generated"] == snapshot["generated"] and got["sources"] == snapshot["sources"] and got["fonts"] == snapshot["fonts"] and got["version"] == snapshot["version"] == "1.2"
+    assert not any(r["id"] == "kit:masters" for r in report(pack, "kit")["results"])
+    rep_before = report(pack, "kit")
+    (pack / "assets" / "masters" / "ad").mkdir(parents=True)                             # a folder with no file in it, and a Finder file
+    (pack / "assets" / "masters" / ".DS_Store").write_bytes(b"Finder")
+    (pack / "assets" / "masters" / "ad" / ".DS_Store").write_bytes(b"Finder")
+    r = bc("kit", "build", "--plan", project=pack)
+    assert r.returncode == 0 and r.stdout.splitlines()[0] == "would write 15 generated files into .claude/skills/acme-brand/ (version 1.2)", r.stdout
+    assert build(pack).returncode == 0
+    assert (kit_of(pack) / "kit.json").read_bytes() == plain and kit_json(pack)["version"] == "1.2"
+    assert not any(r["id"] == "kit:masters" for r in report(pack, "kit")["results"]) and report(pack, "kit")["kit_sources_sha"] == rep_before["kit_sources_sha"]
+    assert kit_check(pack).returncode == 0 and statuses(pack) == ALL_PASS
+    mutate(pack / "FACTS.md", "tools are made in batches of 200", "tools are made in batches of 300")      # the control: a changed fact does move kit.json, so the equality above would have caught a changed key
+    assert build(pack).returncode == 0 and (kit_of(pack) / "kit.json").read_bytes() != plain and kit_json(pack)["sources"]["facts"] != snapshot["sources"]["facts"]
+
+
+def test_a_link_in_the_masters_is_never_followed(pack, tmp_path):
+    from helpers import symlink_or_skip
+    with_masters(pack)
+    outside = tmp_path / "outside.png"
+    outside.write_bytes(b"outside the project")
+    symlink_or_skip(pack / "assets/masters/ad/leak.png", outside)                        # a file that leads out of the project
+    for args in (("--yes",), ("--plan",)):
+        r = bc("kit", "build", *args, project=pack)
+        assert r.returncode == 2 and "outside the project" in r.stderr and "Traceback" not in r.stderr, (args, r.stdout + r.stderr)
+    assert not (pack / ".claude").exists() and outside.read_bytes() == b"outside the project"
+    (pack / "assets/masters/ad/leak.png").unlink()
+    here = pack / "assets" / "masters" / "ad-again"
+    symlink_or_skip(here, pack / "assets/masters/ad")                                    # a link to a folder, even one that stays inside the project, is not copied: the kit copies files
+    r = build(pack)
+    assert r.returncode == 1 and "assets/masters/ad-again is a link to a folder" in r.stderr and not (pack / ".claude").exists(), r.stdout + r.stderr
+    here.unlink()
+    real = pack / "assets" / "real-masters"
+    shutil.move(str(pack / "assets" / "masters"), str(real))
+    symlink_or_skip(pack / "assets" / "masters", real)                                   # the folder itself a link to a folder of the project: exit 1, the kit copies files
+    r = build(pack)
+    assert r.returncode == 1 and "assets/masters is a link" in r.stderr and not (pack / ".claude").exists(), r.stdout + r.stderr
+    (pack / "assets" / "masters").unlink()
+    shutil.move(str(real), str(pack / "assets" / "masters"))
+    folder = tmp_path / "far-masters"
+    shutil.move(str(pack / "assets" / "masters"), str(folder))
+    symlink_or_skip(pack / "assets" / "masters", folder)                                 # the masters folder itself is a link leading out
+    r = build(pack)
+    assert r.returncode == 2 and "outside the project" in r.stderr and not (pack / ".claude").exists(), r.stdout + r.stderr
+    (pack / "assets" / "masters").unlink()
+    shutil.move(str(folder), str(pack / "assets" / "masters"))
+    assert build(pack).returncode == 0 and kit_files(pack) == sorted([*KIT_FILES, *MASTERS_KIT])
+
+
+def test_a_master_that_is_a_link_to_nothing_stops_the_build_in_the_words_of_a_master_not_a_page(pack):
+    from pathlib import Path
+
+    from helpers import symlink_or_skip
+    with_masters(pack)
+    symlink_or_skip(pack / "assets/masters/ad/gone.png", Path("nowhere.png"))            # a link to nothing, spelled relative to the folder it sits in
+    for args in (("--yes",), ("--plan",)):
+        r = bc("kit", "build", *args, project=pack)
+        assert r.returncode == 1 and "Traceback" not in r.stderr, (args, r.stdout + r.stderr)
+        assert ("master file assets/masters/ad/gone.png cannot be read (a link to nothing, a folder, or no plain file): "
+                "a master is copied as it is, so put the real file back or take the link out of assets/masters/") in r.stderr, r.stderr
+        assert "page" not in r.stderr and "approved" not in r.stderr, r.stderr            # the reference-page sentence ("the page was approved with it") is no word about a master
+    assert not (pack / ".claude").exists()
+
+
+def test_a_master_svg_with_live_text_fails_check_like_any_svg_under_assets(pack):
+    """`check` lints every SVG under assets/ as pure vector (mark_lint), the masters folder included: the kit copies the file, and `check` fails the project for it. Pinned as it is today."""
+    with_masters(pack, {**MASTERS, "assets/masters/ad/banner.svg": b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><text x="1" y="5">Sale</text></svg>\n'})
+    assert build(pack).returncode == 0 and (kit_of(pack) / "brand/assets/masters/ad/banner.svg").is_file()
+    row = check_rows(pack)["mark_lint:assets/masters/ad/banner.svg"]
+    assert row["status"] == "fail" and "<text> element" in row["detail"], row
+
+
+def test_a_file_where_the_masters_folder_belongs_stops_the_build(pack):
+    (pack / "assets" / "masters").write_text("not a folder\n", encoding="utf-8")
+    r = build(pack)
+    assert r.returncode == 1 and "assets/masters is not a folder" in r.stderr and not (pack / ".claude").exists(), r.stdout + r.stderr
+
+
+def test_a_master_that_a_reference_page_loads_is_one_file_in_the_kit(pack):
+    """A page of site/ may load a file of assets/masters/: the kit holds one copy of it, at its project path, for the page and for the masters."""
+    with_site(pack)
+    with_masters(pack, {"assets/masters/ad/ad.png": MASTER_PNG})
+    css = pack / "site" / "start" / "site.css"
+    css.write_text(css.read_text(encoding="utf-8") + '.ad { background: url("../../assets/masters/ad/ad.png"); }\n', encoding="utf-8")
+    settle_page(pack)
+    r = build(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (kit_of(pack) / "brand/assets/masters/ad/ad.png").read_bytes() == MASTER_PNG
+    assert kit_files(pack).count("brand/assets/masters/ad/ad.png") == 1 and kit_json(pack)["version"] == "1.1"
+    assert kit_json(pack)["sources"]["masters"] and kit_json(pack)["sources"]["pages"]
+
+
+# ---------------------------------------------------------------- the owner's own files travel (K-02)
+# Every file of the kit folder that is no generated file, no kit.json and no Finder `.DS_Store` is an owner file: hashed in kit.json `owned` at the next build (so the version moves when one is
+# added, changed or taken away), checked by `kit:owned`, judged by `kit:fill`, `kit:tags` and `kit:numbers` when it is Markdown (voice.md and EXTENDING.md apart, as before), and on the copy list of
+# `kit status`: copied into a repository only where the repository has none. A file of another kind travels and is never judged. A link among them is refused like a kit.json that is a link.
+EMAIL = "# Email\n\n1. Say who the mail is from.\n- Short subject lines. [example]\n"
+EMAIL_KIT = "recipes/email.md"
+
+
+def owner_listed(p) -> list[str]:
+    return sorted(kit_json(p)["owned"])
+
+
+def test_a_recipe_the_owner_adds_is_hashed_moves_the_version_is_on_the_copy_list_and_is_judged(pack, tmp_path):
+    filled_kit(pack)
+    repo = install(pack, tmp_path)                                                       # a product repository that holds the kit of version 1.2
+    kd = kit_of(pack)
+    email = kd / "recipes" / "email.md"
+    email.write_text(EMAIL + "[[fill: the sign-off]]\n", encoding="utf-8")
+    before = kit_json(pack)
+    r = kit_check(pack)                                                                  # judged before the build records it: a fill marker in it fails kit:fill
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert statuses(pack) == {**ALL_PASS, "kit:fill": "fail", "kit:owned": "warn"}
+    assert check_report_rows(pack)["kit:fill"]["detail"].startswith("1 fill marker(s) left: recipes/email.md:5;")
+    assert check_report_rows(pack)["kit:owned"]["detail"] == "recipes/email.md was added since the last build: `brand-creator kit build --yes` records it and moves the version on"
+    mutate(email, "[[fill: the sign-off]]", "End with the name. [example]")
+    r = build(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    kj = kit_json(pack)
+    assert sorted(kj["owned"]) == sorted([*OWNER_FILES, EMAIL_KIT]) and kj["owned"][EMAIL_KIT] == file_sha(email)
+    assert {k: v for k, v in kj["owned"].items() if k != EMAIL_KIT} == before["owned"]     # the five are as they were
+    assert kj["version"] == "1.3" and kj["content_sha"] != before["content_sha"] and "Kit version 1.3 (kit.json)." in (kd / "SKILL.md").read_text(encoding="utf-8")
+    assert email.read_text(encoding="utf-8") == EMAIL + "End with the name. [example]\n" and not list(pack.glob("removed-*"))     # never overwritten, never moved
+    assert owned_row(pack) == "0 owner files scaffolded this run, 6 kept as they are"
+    assert EMAIL_KIT not in kj["generated"] and EMAIL_KIT not in report(pack, "kit")["outputs"]
+    assert build(pack).returncode == 0 and kit_json(pack)["version"] == "1.3"             # recorded: the same content keeps the version
+    assert kit_check(pack).returncode == 0 and statuses(pack) == ALL_PASS
+    assert check_report_rows(pack)["kit:owned"]["detail"] == "the 6 owner files are as the last build recorded them"
+    # the copy list: the generated files that changed (SKILL.md carries the version, kit.json last), then the owner file the repository lacks
+    r = kit_status(pack, repo)
+    assert r.returncode == 1, r.stdout + r.stderr
+    items = listed(r.stdout, "copy list")
+    assert paths_of(items) == ["SKILL.md", "kit.json", EMAIL_KIT] and items[-1] == f"{EMAIL_KIT} (owner file, the repository has none)"
+    res = json.loads(kit_status(pack, repo, extra=("--json",)).stdout)["repos"][0]
+    assert res["copy"] == ["SKILL.md", "kit.json", EMAIL_KIT] and res["copy_owner"] == [EMAIL_KIT]
+    for rel in ("SKILL.md", "kit.json", EMAIL_KIT):                                       # the copy the list asks for
+        (installed_of(repo) / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(kd / rel, installed_of(repo) / rel)
+    r = kit_status(pack, repo)
+    assert r.returncode == 0 and "site: current (version 1.3)" in r.stdout.splitlines() and "copy list" not in r.stdout
+    # D11, unchanged for the file the owner added: where the repository has its own, it is reported and not copied, and the copy is current all the same
+    (installed_of(repo) / EMAIL_KIT).write_text("The repository's own email recipe.\n", encoding="utf-8")
+    r = kit_status(pack, repo)
+    assert r.returncode == 0 and listed(r.stdout, "owner files that differ (kept on update)") == [EMAIL_KIT] and "copy list" not in r.stdout
+    assert (installed_of(repo) / EMAIL_KIT).read_text(encoding="utf-8") == "The repository's own email recipe.\n"
+    (installed_of(repo) / EMAIL_KIT).unlink()                                             # and where it has none, it is on the list again
+    r = kit_status(pack, repo)
+    assert r.returncode == 0 and paths_of(listed(r.stdout, "copy list")) == [EMAIL_KIT]
+
+
+def test_a_page_the_owner_adds_is_never_judged_for_words_but_its_dead_link_fails_kit_links(pack):
+    """EXTENDING.md, the changelog and the manual say it so: a file of another kind is not read for fill markers, tags or values, but the links in its .html or .css must lead to a file inside the kit."""
+    filled_kit(pack)
+    kd = kit_of(pack)
+    (kd / "notes").mkdir()
+    (kd / "notes" / "page.html").write_text('<a href="missing.html">gone</a> [[fill: x]] 16px\n', encoding="utf-8")
+    (kd / "notes" / "style.css").write_text('.a { background: url("gone.png"); }\n', encoding="utf-8")
+    assert build(pack).returncode == 0                                                   # the build only records them
+    r = kit_check(pack)
+    assert r.returncode == 1, r.stdout + r.stderr
+    rows = statuses(pack)
+    assert rows["kit:links"] == "fail" and {i: s for i, s in rows.items() if i != "kit:links"} == {i: s for i, s in ALL_PASS.items() if i != "kit:links"}    # the words (a marker, a size) are judged by no row
+    detail = check_report_rows(pack)["kit:links"]["detail"]
+    assert "notes/page.html:1 -> missing.html (no such file in the kit)" in detail and "notes/style.css:1 -> gone.png (no such file in the kit)" in detail, detail
+
+
+def test_a_file_the_owner_adds_that_is_not_markdown_travels_and_is_never_judged(pack, tmp_path):
+    filled_kit(pack)
+    kd = kit_of(pack)
+    (kd / "notes").mkdir()
+    (kd / "notes" / "palette.txt").write_text("[[fill: the swatches]] 16px #ffffff\n", encoding="utf-8")                  # a fill marker, a size and a colour: none is judged
+    (kd / "notes" / "page.html").write_text('<a href="../brand/assets/logo/mark.svg">mark</a> [[fill: x]] 16px\n', encoding="utf-8")   # a marker and a size: not judged; its link is, as in any .html of the kit
+    (kd / "notes" / "brief.pdf").write_bytes(b"%PDF-1.4\n\x00\x01 binary \xff")
+    before = kit_json(pack)
+    build_r = build(pack)
+    assert build_r.returncode == 0, build_r.stdout + build_r.stderr
+    kj = kit_json(pack)
+    wanted = ["notes/brief.pdf", "notes/page.html", "notes/palette.txt"]
+    assert sorted(kj["owned"]) == sorted([*OWNER_FILES, *wanted]) and all(kj["owned"][r] == file_sha(kd / r) for r in wanted)
+    assert kj["version"] == "1.3" and kj["generated"].keys() == before["generated"].keys()
+    r = kit_check(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert statuses(pack) == ALL_PASS                                                    # kit:fill, kit:tags and kit:numbers read none of the three
+    assert check_report_rows(pack)["kit:links"]["detail"] == f"{FRESH_LINKS + 1} relative links in {FRESH_FILES + 1} .md, .html and .css files resolve inside the kit"      # the .html is read for its links, as any in the kit
+    assert check_report_rows(pack)["kit:tags"]["detail"] == "no bullet or numbered line needs a tag" and check_report_rows(pack)["kit:numbers"]["detail"] == NO_VALUES
+    assert check_report_rows(pack)["kit:fill"]["detail"] == "no [[fill marker is left"
+    # the three travel: a repository with no copy is told to copy the five, then the files of the owner, sorted
+    repo = tmp_path / "site"
+    repo.mkdir()
+    r = kit_status(pack, repo)
+    assert paths_of(listed(r.stdout, "copy list")) == COPY_ORDER + OWNER_ORDER + wanted
+    assert all(i.endswith("(owner file, the repository has none)") for i in listed(r.stdout, "copy list")[len(COPY_ORDER):])
+    # a changed one is a changed owner file: kit:owned warns, the next build records it and moves the version
+    mutate(kd / "notes" / "palette.txt", "16px", "17px")
+    assert kit_check(pack).returncode == 0 and check_report_rows(pack)["kit:owned"]["detail"].startswith("notes/palette.txt changed since the last build")
+    assert build(pack).returncode == 0 and kit_json(pack)["version"] == "1.4" and kit_json(pack)["owned"]["notes/palette.txt"] == file_sha(kd / "notes" / "palette.txt")
+    with (kd / "notes" / "brief.pdf").open("ab") as fh:
+        fh.write(b"\x02")
+    assert build(pack).returncode == 0 and kit_json(pack)["version"] == "1.5" and kit_json(pack)["owned"]["notes/brief.pdf"] == file_sha(kd / "notes" / "brief.pdf")
+    # taken away: kit:owned says so, and the next build moves the version and forgets it
+    (kd / "notes" / "brief.pdf").unlink()
+    assert kit_check(pack).returncode == 0
+    assert check_report_rows(pack)["kit:owned"]["detail"] == "notes/brief.pdf was removed since the last build: `brand-creator kit build --yes` records it and moves the version on"
+    assert build(pack).returncode == 0
+    assert kit_json(pack)["version"] == "1.6" and "notes/brief.pdf" not in kit_json(pack)["owned"] and sorted(kit_json(pack)["owned"]) == sorted([*OWNER_FILES, *wanted[1:]])
+    assert not list(pack.glob("removed-*")) and kit_check(pack).returncode == 0 and statuses(pack) == ALL_PASS
+
+
+def test_a_markdown_file_the_owner_adds_is_judged_like_the_recipes(pack):
+    """notes/ideas.md is the owner's own Markdown file: kit:fill, kit:tags and kit:numbers read it, a bullet needs a tag and a value a citation. voice.md and EXTENDING.md are not judged for tags and values."""
+    filled_kit(pack)
+    kd = kit_of(pack)
+    (kd / "notes").mkdir()
+    (kd / "notes" / "ideas.md").write_text("# Ideas\n\n- A bullet with no tag.\n- Use 12px. [example]\n- Use 20px.\n1. A numbered step needs none.\n[[fill: more]]\n", encoding="utf-8")
+    assert build(pack).returncode == 0
+    r = kit_check(pack)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert check_report_rows(pack)["kit:fill"]["detail"].startswith("1 fill marker(s) left: notes/ideas.md:7;")
+    assert check_report_rows(pack)["kit:tags"]["detail"] == lack_a_tag(2, 3, "notes/ideas.md:3 untagged", "notes/ideas.md:5 untagged")
+    assert check_report_rows(pack)["kit:numbers"]["detail"] == cites_nothing("notes/ideas.md:5 (20px has no citation)")
+    (kd / "notes" / "ideas.md").write_text("# Ideas\n\n- A bullet. [example]\n- Use 12px. [example]\n- Use 20px. [rule: " + CLEAR_SPACE + "]\n1. A numbered step needs none.\n", encoding="utf-8")
+    assert build(pack).returncode == 0
+    record_rules(pack, "The mark keeps its clear space")
+    assert build(pack).returncode == 0
+    r = kit_check(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert statuses(pack) == ALL_PASS
+
+
+def test_a_file_in_a_generated_folder_is_still_foreign_and_never_an_owner_file(pack):
+    assert build(pack).returncode == 0
+    kd = kit_of(pack)
+    (kd / "recipes" / "email.md").write_text(EMAIL, encoding="utf-8")
+    foreign = ["brand/notes.md", "snippets/mine.css", "reference-pages/start/mine.md"]
+    for rel in foreign:
+        (kd / rel).parent.mkdir(parents=True, exist_ok=True)
+        (kd / rel).write_text("mine\n", encoding="utf-8")
+    mutate(kd / "snippets" / "logo.html", "<img", "<img data-x=\"1\"")                    # a hand edit of a generated file stops the build as well
+    kit_before = (kd / "kit.json").read_bytes()
+    r = build(pack)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "snippets/logo.html (edited by hand)" in r.stderr
+    assert all(f"{rel} (not written by the kit)" in r.stderr for rel in foreign) and (kd / "kit.json").read_bytes() == kit_before and not list(pack.glob("removed-*"))
+    r = build(pack, "--replace")                                                         # --replace moves them aside, as it always did; they were never the owner's
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert all(not (kd / rel).exists() and (pack / "removed-2026-10-17" / ".claude/skills/acme-brand" / rel).read_text(encoding="utf-8") == "mine\n" for rel in foreign)
+    assert owner_listed(pack) == sorted([*OWNER_FILES, EMAIL_KIT]) and kit_json(pack)["version"] == "1.2"
+    assert (pack / "removed-2026-10-17" / ".claude/skills/acme-brand/snippets/logo.html").read_text(encoding="utf-8").count('data-x="1"') >= 1 and b'data-x' not in (kd / "snippets" / "logo.html").read_bytes()
+
+
+def test_a_link_among_the_owners_files_is_refused_the_way_a_kit_json_link_is(pack, tmp_path):
+    from helpers import symlink_or_skip
+    filled_kit(pack)
+    kd = kit_of(pack)
+    target = pack / "elsewhere.md"                                                       # a file of the project, outside the kit, and a folder of it
+    target.write_text("Kept in the project. [[fill: never read]]\n", encoding="utf-8")
+    folder = pack / "elsewhere"
+    folder.mkdir()
+    (folder / "page.md").write_text("- untagged and never read\n", encoding="utf-8")
+    symlink_or_skip(kd / "recipes" / "email.md", target)
+    symlink_or_skip(kd / "notes", folder)
+    kit_before = (kd / "kit.json").read_bytes()
+    r = build(pack)
+    assert r.returncode == 1 and "notes (a link among your own files: never read through)" in r.stderr and f"{EMAIL_KIT} (a link among your own files: never read through)" in r.stderr, r.stdout + r.stderr
+    assert bc("kit", "build", "--plan", project=pack).returncode == 0                      # the plan only says what would be written
+    assert (kd / "kit.json").read_bytes() == kit_before and (kd / "recipes" / "email.md").is_symlink() and not list(pack.glob("removed-*"))
+    r = kit_check(pack)                                                                  # kit check never reads through it: the files it leads to are not judged, and kit:owned says what it is
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert statuses(pack) == {**ALL_PASS, "kit:owned": "warn"}
+    assert check_report_rows(pack)["kit:owned"]["detail"] == ("notes, recipes/email.md is no file the kit can read (a folder, or a link): "
+                                                              "move it away yourself, then run `brand-creator kit build --yes`")
+    repo = tmp_path / "site"
+    repo.mkdir()
+    r = kit_status(pack, repo)                                                           # kit status cannot list what it must not read: the kit is not whole
+    assert r.returncode == 3 and "link" in r.stderr and "notes" in r.stderr and EMAIL_KIT in r.stderr, r.stdout + r.stderr
+    r = build(pack, "--replace")                                                         # --replace moves the links themselves, never what they point at
+    assert r.returncode == 0, r.stdout + r.stderr
+    moved = pack / "removed-2026-10-17" / ".claude/skills/acme-brand"
+    assert (moved / "notes").is_symlink() and (moved / EMAIL_KIT).is_symlink() and not (kd / "notes").exists() and not (kd / "recipes" / "email.md").exists()
+    assert target.read_text(encoding="utf-8").startswith("Kept in the project.") and (folder / "page.md").is_file()
+    assert owner_listed(pack) == OWNER_FILES and kit_json(pack)["version"] == "1.2"
+    # one of the five as a link to a file of the project: refused too, and --replace puts the scaffold in its place
+    voice = kd / "voice.md"
+    mine = voice.read_bytes()
+    voice.unlink()
+    symlink_or_skip(voice, target)
+    r = build(pack)
+    assert r.returncode == 1 and "voice.md (a link among your own files: never read through)" in r.stderr, r.stdout + r.stderr
+    r = build(pack, "--replace")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert voice.is_file() and not voice.is_symlink() and voice.read_text(encoding="utf-8").startswith("# Acme voice\n") and mine != voice.read_bytes()
+    assert (moved / "voice.md").is_symlink() and target.is_file()                                           # the same removed-<date> folder: it holds no voice.md yet
+    # the folder an owner file belongs in is a link to a folder: the same
+    shutil.rmtree(kd / "recipes")
+    symlink_or_skip(kd / "recipes", folder)
+    r = build(pack)
+    assert r.returncode == 1 and "recipes (a link among your own files: never read through)" in r.stderr and (folder / "page.md").is_file() and not (folder / "web-page.md").exists(), r.stdout + r.stderr
+
+
+def test_a_link_among_the_owners_files_is_exit_1_and_replace_moves_it_whatever_it_points_at(pack, tmp_path):
+    """The rule of a kit.json that is a link: a link to nothing and a link leading out of the project are refused like one to a file of the project (exit 1, never exit 2), and --replace moves the link
+    itself aside in every case, for the five scaffolded files and the folder they belong in as well as for a file of the owner's own. Nothing a link leads to is read, moved or written."""
+    from helpers import symlink_or_skip
+    filled_kit(pack)
+    kd = kit_of(pack)
+    outside = tmp_path / "outside.txt"
+    outside.write_text("outside the project\n", encoding="utf-8")
+    far = tmp_path / "far"
+    far.mkdir()
+    (far / "x.md").write_text("- never read\n", encoding="utf-8")
+
+    def moved(rel):                                                                       # where --replace put the link itself
+        return next(d / ".claude/skills/acme-brand" / rel for d in sorted(pack.glob("removed-*")) if (d / ".claude/skills/acme-brand" / rel).is_symlink())
+
+    def refused(*rels):
+        r = build(pack)
+        assert r.returncode == 1, r.stdout + r.stderr
+        assert all(f"{rel} (a link among your own files: never read through)" in r.stderr for rel in rels) and "outside the project" not in r.stderr and "Traceback" not in r.stderr, r.stderr
+        r = bc("kit", "build", "--plan", project=pack)
+        assert r.returncode == 0 and "would write" in r.stdout, r.stdout + r.stderr          # the plan only says what would be written
+        assert not list(pack.glob("removed-*")) and outside.read_text(encoding="utf-8") == "outside the project\n" and (far / "x.md").is_file()
+
+    # files of the owner's own: to nothing, out of the project (a file and a folder), and --replace clears all three
+    (kd / "notes").mkdir()
+    symlink_or_skip(kd / "notes" / "out.txt", outside)
+    symlink_or_skip(kd / "notes" / "far", far)
+    (kd / "notes" / "gone.md").symlink_to("nowhere.md")                                   # a link to nothing, spelled relative to the folder it sits in
+    before = (kd / "kit.json").read_bytes()
+    refused("notes/gone.md", "notes/out.txt", "notes/far")
+    assert (kd / "kit.json").read_bytes() == before
+    r = kit_check(pack)                                                                   # kit check never reads through them, and says what they are
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert check_report_rows(pack)["kit:owned"]["detail"] == ("notes/far, notes/gone.md, notes/out.txt is no file the kit can read (a folder, or a link): "
+                                                              "move it away yourself, then run `brand-creator kit build --yes`")
+    r = build(pack, "--replace")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert all(moved(f"notes/{n}").is_symlink() and not (kd / "notes" / n).exists() and not (kd / "notes" / n).is_symlink() for n in ("gone.md", "out.txt", "far"))
+    assert os.readlink(moved("notes/gone.md")) == "nowhere.md" and moved("notes/out.txt").resolve() == outside.resolve() and moved("notes/far").resolve() == far.resolve()
+    assert owner_listed(pack) == OWNER_FILES and kit_json(pack)["version"] == "1.2" and kit_check(pack).returncode == 0
+    shutil.rmtree(pack / "removed-2026-10-17")
+    # one of the five as a link to nothing, and as a link out of the project: the scaffold is written once the link is moved
+    for rel, target in (("voice.md", "nowhere.md"), ("golden-rules.md", outside)):
+        (kd / rel).unlink()
+        if isinstance(target, str):
+            (kd / rel).symlink_to(target)
+        else:
+            symlink_or_skip(kd / rel, target)
+        refused(rel)
+        r = build(pack, "--replace")
+        assert r.returncode == 0, (rel, r.stdout + r.stderr)
+        assert (kd / rel).is_file() and not (kd / rel).is_symlink() and (kd / rel).read_text(encoding="utf-8").startswith("# Acme ") and moved(rel).is_symlink(), rel
+        shutil.rmtree(pack / "removed-2026-10-17")
+        fill_owned(kd)                                                                    # the scaffold has its fill marker again
+        assert build(pack).returncode == 0
+    # the folder the five belong in: a link to nothing, and a link to a folder outside the project
+    for target in ("nowhere", far):
+        shutil.rmtree(kd / "recipes")
+        if isinstance(target, str):
+            (kd / "recipes").symlink_to(target)
+        else:
+            symlink_or_skip(kd / "recipes", target)
+        refused("recipes")
+        r = build(pack, "--replace")
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert (kd / "recipes").is_dir() and not (kd / "recipes").is_symlink() and (kd / "recipes" / "web-page.md").is_file() and moved("recipes").is_symlink()
+        assert not (far / "web-page.md").exists() and (far / "x.md").is_file()
+        shutil.rmtree(pack / "removed-2026-10-17")
+    assert kit_check(pack).returncode == 0
+    assert owner_listed(pack) == OWNER_FILES
+
+
+def test_kit_json_names_its_owner_files_as_plain_paths_of_the_owner_part_of_the_kit(pack):
+    import kitlib
+    from _common import CliError
+    assert build(pack).returncode == 0
+    f = kit_of(pack) / "kit.json"
+    for where, change, needle in (("a file of the owner in a folder of her own", lambda d: d["owned"].__setitem__("notes/mine.txt", "0" * 64), None),
+                                  ("a generated folder", lambda d: d["owned"].__setitem__("brand/assets/x.md", "0" * 64), "owned.brand/assets/x.md: not an owner file"),
+                                  ("kit.json itself", lambda d: d["owned"].__setitem__("kit.json", "0" * 64), "owned.kit.json: not an owner file"),
+                                  ("a generated file at the top", lambda d: d["owned"].__setitem__("rules.json", "0" * 64), "owned.rules.json: not an owner file"),
+                                  ("a path that climbs out", lambda d: d["owned"].__setitem__("../x.md", "0" * 64), "owned.../x.md: not an owner file"),
+                                  ("the folder above", lambda d: d["owned"].__setitem__("..", "0" * 64), "owned...: not an owner file"),
+                                  ("an absolute path", lambda d: d["owned"].__setitem__("/etc/hosts", "0" * 64), "owned./etc/hosts: not an owner file"),
+                                  ("a Finder file", lambda d: d["owned"].__setitem__("notes/.DS_Store", "0" * 64), "owned.notes/.DS_Store: not an owner file"),
+                                  ("a hash that is none", lambda d: d["owned"].__setitem__("notes/mine.txt", "x"), "owned.notes/mine.txt: must be a sha256")):
+        good = f.read_bytes()
+        mutate_json(f, change)
+        if needle is None:
+            assert "notes/mine.txt" in kitlib.load(pack)["owned"], where
+        else:
+            with pytest.raises(CliError) as e:
+                kitlib.load(pack)
+            assert e.value.code == 2 and needle in e.value.message, where
+        f.write_bytes(good)

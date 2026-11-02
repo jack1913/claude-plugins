@@ -115,6 +115,21 @@ def test_fonts_under_assets_fonts_are_found_without_a_flag(proj):
     assert report(proj, "fontcheck")["fonts"] == ["assets/fonts/a.ttf"]
 
 
+def test_a_named_font_is_checked_together_with_the_fonts_under_assets_fonts(proj):
+    # naming a font outside assets/fonts/ (a master's or a page's) used to narrow the one fontcheck report to it, so the next
+    # kit build found no licence row for the brand's own fonts and left them out of the kit
+    d = proj / "assets" / "fonts"
+    d.mkdir(parents=True)
+    font_variant(d / "a.ttf", static=True)
+    extra = proj / "assets" / "masters" / "deck"
+    extra.mkdir(parents=True)
+    font_variant(extra / "b.ttf", static=True)
+    r = bc("fontcheck", "--lang", "pl", "--no-platform", "--font", str(extra / "b.ttf"), "--font", str(d / "a.ttf"), project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert report(proj, "fontcheck")["fonts"] == ["assets/fonts/a.ttf", "assets/masters/deck/b.ttf"]   # each once, assets/fonts/ first
+    assert {"licence:assets/fonts/a.ttf", "licence:assets/masters/deck/b.ttf"} <= set(results(proj))
+
+
 # ---------------------------------------------------------------- licence hint and budget
 
 def test_licence_hint_reads_the_name_table(proj, tmp_path):

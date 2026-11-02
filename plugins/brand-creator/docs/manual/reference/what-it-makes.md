@@ -159,20 +159,23 @@ yes. The steps are in [Use your brand kit](../use/use-your-brand-kit.md).
   instructions Claude reads before it works on your brand), so it takes the place of the small brand skill.
 - **Made for you, never edited by hand:** copies of your design tokens (your colours, fonts and sizes, written so a
   program can read them), your logo files, your open-licence fonts with their licence text (OFL: a licence that lets
-  you share a font with your product), and your decision on motion; your rules and facts, without contact details;
+  you share a font with your product), the masters you approved (the files in `assets/masters/` of your brand project,
+  such as an ad or a deck template with its pictures, PDFs and fonts), and your decision on motion; your rules and facts,
+  without contact details;
   ready-made bits of code for your fonts, your logo in light and dark, and text on each background colour you named;
   and your approved reference pages, each with a note on its layout and its choices. A reference page goes in only when
   it passes its page check and its pictures are up to date.
 - **Yours:** `voice.md`, `visual.md` and `golden-rules.md` (how your brand sounds, how it looks beyond the colours, and
   the few rules every piece keeps), `recipes/web-page.md` (the steps for building a web page in your brand), and
   `EXTENDING.md` (how to add to the kit). Claude writes each once, never over it, and drafts the first three with you.
+  A recipe or file you add yourself is yours too and travels with the kit.
 - **Its version,** such as 1.3: your brand book's edition, then a build number that goes up by one when a made-for-you
-  file or one of your five own files changed. A copy in your product shows its version, but it is judged by comparing
+  file changed or a file of yours was added, changed or taken away. A copy in your product shows its version, but it is judged by comparing
   every file exactly, so a copy can be out of date at the same version.
 - **The commands, which Claude runs when you ask:** `kit build` writes the kit, after showing you the plan. `kit check`
   proves it whole: no made-for-you file edited by hand, and no file added among them; every link leads to a file inside
-  the kit; every note in double square brackets is replaced; in `visual.md`, `golden-rules.md`, the recipes and the
-  notes on each reference page, every list line is tagged as a rule or an example, and every size, colour or ratio names
+  the kit; every note in double square brackets is replaced; in `visual.md`, `golden-rules.md`, the recipes, any note of
+  your own written in Markdown and the notes on each reference page, every list line is tagged as a rule or an example, and every size, colour or ratio names
   its source (a token, a rule or `[example]`); the version matches your approved book's edition; and each reference page
   is still the one you approved, with a passing, up-to-date page check. After a brand change it says "not verified"
   until you build again. `kit status` only reads, and says whether the copy in each product repository (the folder on

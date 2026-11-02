@@ -162,7 +162,7 @@ def kit_rows(project: Path, rep: Report, kit: str) -> None:
             return
         if (r.get("adapter_state_sha"), r.get("kit_sources_sha")) != now:
             rep.add("kit:state", "skipped", "the kit was made from the brand as it is now",
-                    detail="not verified: the name, rules, facts, tokens, logos, band drawings, fonts, reference pages or motion spec changed since the kit report; run `brand-creator kit build --yes` again")
+                    detail="not verified: the name, rules, facts, tokens, logos, band drawings, fonts, reference pages, masters or motion spec changed since the kit report; run `brand-creator kit build --yes` again")
 
 
 def kit_check_rows(project: Path, rep: Report) -> None:

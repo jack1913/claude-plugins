@@ -102,8 +102,8 @@ More: [Check a page against your brand](../use/check-a-page.md).
 ## 5. Get your brand kit
 
 The kit is your brand in one folder: your colours, fonts and logo files, your rules and facts, ready-made bits of code,
-and a step-by-step recipe for building a page. Your website's code gets a copy of it, so whoever builds the next page
-has everything at hand.
+the masters you approved (such as an ad or a deck template), and a step-by-step recipe for building a page. Your
+website's code gets a copy of it, so whoever builds the next page has everything at hand.
 
 1. When you approve your brand book, Claude asks whether you want the kit. Say yes. Missed it? Ask:
 
@@ -111,10 +111,14 @@ has everything at hand.
 
 2. Claude shows what it will write. Say go.
 3. Three short pages in the kit are yours to write: how your brand sounds, how it looks beyond the colours, and the few
-   rules every piece keeps. Claude drafts them with you from your brand book. You correct them.
+   rules every piece keeps. Claude drafts them with you from your brand book. You correct them. A recipe you add
+   yourself travels with the kit too.
 4. Then ask:
 
    > Build the kit again, then check it
+
+Masters go in from the `assets/masters/` folder of your brand project. Put only approved ones there: Claude can't tell
+which you approved.
 
 When your brand changes later, change it in your project as usual and ask for the kit again. Then ask
 `/brand-creator:brand-adopt status`: Claude compares your website's copy with the new kit, file by file, and tells you

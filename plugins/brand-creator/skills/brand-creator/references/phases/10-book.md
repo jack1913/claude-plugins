@@ -129,7 +129,8 @@ Ask once, at G5, whether the owner wants either. Nothing below is written withou
 
 The kit is a folder around the applied skill that a product repository can carry. It is offered in the same G5 question as the
 adapters and the applied skill, in every tier, and recommended when the brief lists a site or INVENTORY.md lists product
-repositories. Nothing is written without the owner's yes, and it needs G5 recorded and an approved edition.
+repositories. Nothing is written without the owner's yes, and it needs G5 recorded and an approved edition. Approved masters (ads,
+decks and other templates) go into `assets/masters/` first, and only approved ones: the kit copies everything there.
 
 1. `brand-creator kit build` prints the plan and writes nothing (exit 2). Show it, then `kit build --yes` writes
    `.claude/skills/<slug>-brand/`: `SKILL.md` (the applied skill, from the same builder, with its paths inside the kit and a "The kit"
