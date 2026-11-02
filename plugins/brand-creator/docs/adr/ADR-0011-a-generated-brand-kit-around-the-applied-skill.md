@@ -151,3 +151,21 @@ repository only by a byte copy the owner asked for.
   `skills/taste-skill/references/research.md` (pages built with and without the skill, compared side by side). They shaped the
   recipe's idea line and built-page check, and the kit test baseline's third run and blind pick. No library, rule, threshold,
   word list, photograph or code was taken, and neither project is installed, bundled, forked or bridged.
+
+## Update 2026-11-02
+
+The kit test is built in the thread, and no agent is launched for it. This replaces what the bullet "The kit test is optional and
+runs in the thread by default (D7)" says about an agent (it runs "only after the fleet gate (count, models, size, cost, a yes)"),
+and the last default under Consequences (the kit test "runs in the thread, and an agent runs only after the fleet gate (D7)").
+Everything else in that bullet stands: the kit test is optional and never started unasked, a builder works in a scratch folder
+outside the project from a copy of the kit alone, the page check scores it in both tiers, a cold read answers ship or fix, the
+gaps flow back to the tokens, the G4 rules, FACTS and the owner files and never into a generated kit file, and the eval case
+runs the same job in a real session, billed and done by hand. No workflow is added.
+
+Why: no agent of the plugin can build it. [The agents](../../skills/brand-creator/references/fleet.md#the-agents) lists what each
+may write: `brand-designer` only its `rounds/rN/<direction>/` (and it builds a board from the board template), and
+`brand-implementer` one product repository, after G6. The scratch folder of the kit test is neither, so the option to run an
+agent after the fleet gate had no agent to run. A record that still offered it would send a reader to a gate that cannot be passed
+for this job. The change is written in the [book phase](../../skills/brand-creator/references/phases/10-book.md#kit-test-optional),
+in the manual page [Use your brand kit](../manual/use/use-your-brand-kit.md#test-your-kit) and in the
+[changelog](../../CHANGELOG.md).

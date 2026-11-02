@@ -1788,6 +1788,7 @@ NO_TAG = "untagged"
 TAG_HINT = ("tag each with `[example]` or `[rule: <id>]`, an id of rules.json (a rule of the brand written bare, `page:<id>`, `site:<id>`)")
 VALUE_HINT = ("cite a token (`var(--name)` of tokens.css, `{dotted.path}` of tokens.json) or a known `[rule: <id>]`, or tag the line `[example]`")
 _RULE_TAG = re.compile(r"\[rule:([^\]\n]*)\]")
+_PLACEHOLDER_ID = re.compile(r"(?:(?:page|site):)?<[^<>]*>")   # `<id>`, `<rule id>`, `page:<id>`: the syntax of a tag, written as an example; no id of D12 holds an angle bracket
 _BULLET = re.compile(r"^\s*[-*]\s")
 _NUMBERED = re.compile(r"^\s*\d+[.)]\s")
 _THEMATIC_BREAK = re.compile(r"^\s*([-*_])(?:\s*\1){2,}\s*$")   # `* * *` and `- - -` start with a bullet marker and are no bullet
@@ -1820,8 +1821,11 @@ def judged_files(project: Path) -> list[tuple[str, str]]:
 
 
 def rule_tags(line: str) -> list[str]:
-    """The ids named by the `[rule: <id>]` tags of a line, each trimmed, in order (an empty tag gives an empty id)."""
-    return [m.group(1).strip() for m in _RULE_TAG.finditer(line)]
+    """The ids named by the `[rule: <id>]` tags of a line, each trimmed, in order (an empty tag gives an empty id). A tag whose id is a placeholder in angle brackets (`[rule: <id>]`,
+    `[rule: <rule id>]`, `[rule: page:<id>]`, `[rule: site:<id>]`: a whole `<...>`, after `page:` or `site:` or not) names no id and is no citation: it shows the syntax, and a real id never holds an angle
+    bracket (D12). It is left out here, so `kit:tags` and `kit:numbers` read it as the plain text it is."""
+    ids = (m.group(1).strip() for m in _RULE_TAG.finditer(line))
+    return [i for i in ids if not _PLACEHOLDER_ID.fullmatch(i)]
 
 
 def needs_tag(line: str, kind: str) -> bool:

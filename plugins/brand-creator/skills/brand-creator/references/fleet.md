@@ -81,11 +81,15 @@ fully: BRAND-STATE.md, brief/BRIEF.md, FACTS.md, research/cliches.md, the approv
   technical, legal, platform, accessibility), `decisions`.
 - `naming`: `profile` (`software`, `consumer`, `personal`), `region` (two letters), `territories` (3 to 5), optional
   `hunters` (style groups), `shortlist` (3 to 12), `lookups_ok` (true only after the owner's privacy OK).
-- `adopt`: `g6` (the G6 record), `repos` (`{label, path, branch, create_branch, rows, build, findings}`), optional
+- `adopt`: `g6` (the G6 record), `repos` (`{label, path, branch, create_branch, rows, build, findings, pages}`), optional
   `mode: "fix"` (a second run with the reviewer's no-decision findings), `parallel_repos: true` (separate working
   trees only). `repos[].label` must be the label the survey gave the repository (the one in `ADOPTION.md`): the
   reviewer's `adoption wiring --repo "<label>" --compare` looks the repository up by it, and another label ends in
   "not a surveyed repository", which the review reports as a failure, not as "no loss".
+  `repos[].pages` (optional) are the addresses the owner gave for the pages of a redesigned site on their own local
+  server (`http://localhost:3000/`, one word each, no quote): the implementer ends with `adoption wiring --after` and the
+  reviewer runs `--compare` with the same `--page "<address>"` for each, and with none they read the pages of the before
+  record, which are the old addresses.
 
 Example arguments (with placeholder paths) are in the plugin's `tests/fixtures/fleet/`.
 

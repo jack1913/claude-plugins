@@ -247,6 +247,49 @@ test("adopt asks the reviewer to run the wiring compare and report every unrecor
   assert.match(skill, /--drop "<item>::<the owner's reason>"/);
 });
 
+test("adopt gives the implementer's --after and the reviewer's --compare the same local page addresses of a redesign, quoted, and refuses an address that cannot be quoted", async () => {
+  const base = fixture("adopt");
+  const pages = ["http://localhost:4321/", "http://127.0.0.1:4321/pricing"];
+  const two = { ...base, approved_agents: 4, repos: [{ ...base.repos[0], pages }, { ...base.repos[0], label: "my app", path: "/REPOS/app" }] };   // the second repository has no pages: its prompts stay as they were
+  const r = await run("adopt", two);
+  assert.equal(r.error, null);
+  const compare = (label, flags) => `For a redesign of an existing site (the repository has a wiring before record), brand-creator --data "/DATA" adoption wiring --repo "${label}" --compare --project "/PROJECT"${flags} must exit 0; quote it with its exit code. `;
+  const reviewLines = (label) => r.calls.find((c) => c.label === `review ${label}`).prompt.split("\n");
+  const applyLines = (label, call = r) => call.calls.find((c) => c.label === `apply ${label}`).prompt.split("\n");
+  const wiring = reviewLines("shop").filter((l) => l.startsWith("For a redesign of an existing site"));
+  assert.equal(wiring.length, 1);
+  assert.ok(wiring[0].startsWith(compare("shop", ' --page "http://localhost:4321/" --page "http://127.0.0.1:4321/pricing"')), wiring[0].slice(0, 300));
+  const bare = reviewLines("my app").filter((l) => l.startsWith("For a redesign of an existing site"));
+  assert.equal(bare.length, 1);
+  assert.ok(bare[0].startsWith(compare("my app", "")) && !bare[0].includes("--page"), "a repository with no pages compares as it always did");
+  assert.equal(wiring[0].replace(/ --page "[^"]*"/g, ""), bare[0].split("my app").join("shop"), "only the --page flags differ: the rest of the line is the same words");
+  assert.deepEqual(reviewLines("shop").filter((l) => l.startsWith("The --page addresses")), [
+    "The --page addresses of that command are the pages of the redesigned site on the owner's local server, the same ones the implementer's --after read: run it as written, with none changed or left out. Without them it would read the addresses of the before record, which are not the redesigned site's.",
+  ]);
+  assert.deepEqual(reviewLines("my app").filter((l) => l.startsWith("The --page addresses")), []);
+  const owner = applyLines("shop").filter((l) => l.startsWith("The owner gave"));
+  assert.deepEqual(owner, [
+    'The owner gave these pages of the redesigned site on the local server for the wiring record: when the last row is done (and again at the end of a fix run) run brand-creator --data "/DATA" adoption wiring --repo "shop" --after --project "/PROJECT" --page "http://localhost:4321/" --page "http://127.0.0.1:4321/pricing", with exactly these --page addresses; the reviewer compares with the same ones. A page that cannot be read is reported, never skipped.',
+  ]);
+  assert.ok(applyLines("shop").indexOf(owner[0]) < applyLines("shop").indexOf(RULES), "the line sits before RULES, and RULES stays verbatim");
+  assert.deepEqual(applyLines("my app").filter((l) => l.startsWith("The owner gave")), []);
+  assert.ok(!applyLines("my app").join("\n").includes("adoption wiring"), "the implementer of a repository with no pages is told nothing new: its wiring rule is in its agent file");
+  const fix = await run("adopt", { ...base, mode: "fix", repos: [{ ...base.repos[0], pages, findings: ["1 header logo still points at the old file"] }] });
+  assert.equal(fix.error, null);
+  assert.deepEqual(applyLines("shop", fix).filter((l) => l.startsWith("The owner gave")), owner, "a fix run records --after again with the same addresses");
+  assert.ok(fix.calls.find((c) => c.label === "review shop").prompt.includes(' --compare --project "/PROJECT" --page "http://localhost:4321/" --page "http://127.0.0.1:4321/pricing" must exit 0'));
+  for (const bad of [["http://localhost:4321/ x"], ['http://localhost:4321/"'], [""], ["http://localhost:4321/\nnext"], "http://localhost:4321/", [4321]]) {
+    const refused = await run("adopt", { ...base, repos: [{ ...base.repos[0], pages: bad }] });
+    assert.equal(refused.calls.length, 0, `nothing may start for pages ${JSON.stringify(bad)}`);
+    assert.match(refused.error, /adopt: repository shop: pages must be a list of local page addresses, each one word with no quote/, JSON.stringify(bad));
+  }
+  const empty = await run("adopt", { ...base, repos: [{ ...base.repos[0], pages: [] }] });
+  assert.equal(empty.error, null);
+  assert.ok(!empty.calls.find((c) => c.label === "review shop").prompt.includes("--page"), "an empty list is no addresses");
+  const fleet = fs.readFileSync(path.join(ROOT, "skills/brand-creator/references/fleet.md"), "utf8").replace(/\s+/g, " ");
+  assert.match(fleet, /`repos\[\]\.pages` \(optional\)/);
+});
+
 test("inventory: true adds one read-only stage first and needs the owner's approval for 5 agents", async () => {
   const a = { ...fixture("directions"), inventory: { repos: [{ label: "shop", path: "/REPOS/shop" }] } };
   const refused = await run("directions", a);
