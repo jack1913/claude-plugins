@@ -379,7 +379,7 @@ lints the board of the latest round again before `check`, so an edit of the fact
   form field, handler, test hook, id or script that is gone and that you did not drop with your reason fails the review.
   Only you decide a drop, and it is recorded in your words. The adopt workflow's review reports the losses in a
   `wiring_losses` list and tells the lead such a review is not ready for a commit ask. The manual's "Apply the brand to
-  your product" page has a new section, "Redesigning a site: keep what it is wired to".
+  your product" page has a new section, "If it's a redesign of a site you already have".
   The workflow quotes the repository's label in the commands it gives the agents, so a label with a space works. The
   label must be the one the survey gave the repository: a review that finds none by that label reports a failure, never
   "no loss".

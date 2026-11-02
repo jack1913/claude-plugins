@@ -16,7 +16,7 @@ To change something generated, change the brand project (the tokens, the logo, t
 
 ## How to extend
 
-- A new recipe is a new file under `recipes/`, for example `recipes/email.md`. Write numbered steps and no values; take the shape of `recipes/web-page.md`.
+- A new recipe is a new file under `recipes/`, for example `recipes/email.md`. Write numbered steps and no values; take the shape of `recipes/web-page.md`. A file you add stays in the brand project: it is not on the copy list a product repository gets.
 - A folder of your own sits beside the generated ones, for example `notes/`. Do not put a file into `brand/`, `snippets/` or `reference-pages/`: the build treats it as foreign and stops.
 - A link inside the kit points at a file inside the kit, so that it still resolves in a product repository.
 

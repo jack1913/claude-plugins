@@ -116,8 +116,9 @@ has everything at hand.
 
    > Build the kit again, then check it
 
-When your brand changes later, change it in your project as usual and ask for the kit again. Claude compares your
-website's copy with the new kit, file by file, and tells you when the copy is out of date.
+When your brand changes later, change it in your project as usual and ask for the kit again. Then ask
+`/brand-creator:brand-adopt status`: Claude compares your website's copy with the new kit, file by file, and tells you
+whether the copy is out of date.
 
 More: [Use your brand kit](../use/use-your-brand-kit.md).
 

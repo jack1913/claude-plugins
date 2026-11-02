@@ -60,7 +60,7 @@ Only if you told Claude your brand goes into a site that already works.
 
 | You see | Do this |
 | --- | --- |
-| The review, or `/brand-creator:check`, says something from your old site is gone | It lists each item, such as a link or a form field, and the files it was in. For each, tell Claude to put it back, or say in your own words why it goes. Claude never decides for you |
+| The review, or `/brand-creator:check`, says something from your old site is gone | The review lists each item, such as a link or a form field, and the files it was in; `/brand-creator:check` names the first few and how many more. For each, tell Claude to put it back, or say in your own words why it goes. Claude never decides for you |
 | Claude can't read your local pages | Start your site on your computer, or ask whoever builds it to, keep it running, and ask Claude again. If its address changed, send the new one |
 
 More: [Apply the brand to your product](../use/apply-the-brand-to-your-product.md#if-its-a-redesign-of-a-site-you-already-have).
