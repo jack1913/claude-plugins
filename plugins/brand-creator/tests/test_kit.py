@@ -753,8 +753,9 @@ def test_the_report_records_the_state_and_the_sources_so_that_a_later_check_can_
     assert build(pack).returncode == 0
     first = report(pack, "kit")
     kj = json.loads((kit_of(pack) / "kit.json").read_text(encoding="utf-8"))
-    assert set(kj["sources"]) == {"state_sha", "tokens", "tokens_css", "rules", "facts", "motion", "logos", "fonts"}
+    assert set(kj["sources"]) == {"state_sha", "tokens", "tokens_css", "rules", "facts", "motion", "logos", "fonts", "pages"}
     assert kj["sources"]["fonts"] is None and kj["fonts"] == {"copied": [], "not_copied": []}                  # Acme has no font
+    assert kj["sources"]["pages"] is None and kj["reference_pages"] == []                                      # and no site/site.json
     assert kj["sources"]["tokens"] == file_sha(pack / "assets/tokens/tokens.json") and kj["sources"]["tokens_css"] == file_sha(pack / "assets/tokens/tokens.css")
     assert kj["sources"]["rules"] == file_sha(pack / "qa/rules.json") and kj["sources"]["facts"] == file_sha(pack / "FACTS.md")
     assert kj["sources"]["motion"] is None and kj["sources"]["state_sha"] == first["adapter_state_sha"]       # no motion/motion.json in Acme
@@ -895,7 +896,7 @@ def test_check_names_the_fonts_among_the_causes_of_a_kit_made_from_another_brand
     mutate(pack / "assets" / "fonts" / "OFL.txt", "SIL Open Font License", "SIL Open Font License, as shipped")      # a licence text is a source of the fonts, and of nothing else
     row = check_rows(pack)["kit:state"]
     assert row["status"] == "skipped"
-    assert row["detail"] == ("not verified: the name, rules, facts, tokens, logos, band drawings, fonts or motion spec changed since the kit report; "
+    assert row["detail"] == ("not verified: the name, rules, facts, tokens, logos, band drawings, fonts, reference pages or motion spec changed since the kit report; "
                              "run `brand-creator kit build --yes` again")
     assert build(pack).returncode == 0
     assert "kit:state" not in check_rows(pack)
@@ -3175,3 +3176,569 @@ def test_tag_rows_are_not_verified_when_the_rule_ids_cannot_be_read(pack):
     (pack / "site" / "site.json").write_text(json.dumps({"schema": 1, "approved": "2026-10-17 (test)", "round": 1, "hero": "a", "pages": [], "choices": []}), encoding="utf-8")
     kit_check(pack)
     assert statuses(pack)["kit:tags"] == "pass" and statuses(pack)["kit:numbers"] == "pass"
+
+
+# ---------------------------------------------------------------- reference pages: the approved pages of site/ go into the kit
+# tests/fixtures/kit/ is an overlay for the Acme project: one approved page, `start` (site/site.json in the format of `site approve`, its sha256 that of the page), the stylesheet and
+# images it loads. Its page-check report and its stills are made by hand (`page_check_report`, `capture_record` of helpers.py), so no browser is needed.
+SITE_FIXTURE = ROOT / "tests" / "fixtures" / "kit"
+START = "site/start/index.html"
+SHOTS = ["1440-light.png", "1440-dark.png", "390-light.png", "390-dark.png", "1440-light-full.png", "capture.json"]
+PAGE_KIT = sorted(["brand/site/start/index.html", "brand/site/start/site.css", "brand/site/start/img/pic.svg", *[f"brand/site/start/shots/{n}" for n in SHOTS],
+                   "brand/assets/web/base.css", "brand/assets/web/dot.svg", "reference-pages/start/notes.md"])   # what the fixture adds to the fifteen files of a kit
+START_NOTES = """# start
+
+Layout: walkthrough (structure only)
+Approved: 2026-10-17 approved start; rules c1
+
+Page: [index.html](../../brand/site/start/index.html)
+Stills: [1440-light](../../brand/site/start/shots/1440-light.png), [1440-dark](../../brand/site/start/shots/1440-dark.png), [390-light](../../brand/site/start/shots/390-light.png), [390-dark](../../brand/site/start/shots/390-dark.png), [full page](../../brand/site/start/shots/1440-light-full.png)
+
+## Choices
+
+- The stamp appears once per view [rule: site:c1] (decided in the stamp appears once per view)
+- Plans sit under the steps [example]
+"""
+NOTHING_WRITTEN = "nothing was written"
+
+
+def settle_page(p, pid="start"):
+    """The page-check report and the stills `brand-creator page-check` and `brand-creator capture` leave for a page of site/, made by hand."""
+    from helpers import capture_record, page_check_report
+    page_check_report(p, f"site/{pid}/index.html", "pass")
+    capture_record(p, f"site/{pid}/index.html")
+
+
+def with_site(p, *, settle=True):
+    for sub in ("site", "assets"):
+        shutil.copytree(SITE_FIXTURE / sub, p / sub, dirs_exist_ok=True)
+    if settle:
+        settle_page(p)
+
+
+def edit_page(p, old, new, pid="start"):
+    """`mutate` an approved page, record its new sha256 in site/site.json as an approval does, and check and capture it again: a page that was approved again."""
+    page = p / "site" / pid / "index.html"
+    mutate(page, old, new)
+    sha = file_sha(page)
+    mutate_json(p / "site" / "site.json", lambda d: next(x for x in d["pages"] if x["id"] == pid).__setitem__("sha256", sha))
+    settle_page(p, pid)
+
+
+def untouched(p):
+    """A refusal writes nothing: no kit folder, no `kit` report."""
+    assert not (p / ".claude").exists() and not (p / "assets" / "_checks" / "kit.json").exists()
+
+
+def page_report(p, pid="start"):
+    """The path of the page-check report of a page of site/ (assets/_checks/page-check/<file stem>-<hash6>.json: every page file is index.html, so the stem is `index`)."""
+    import pagecheck
+    return p / "assets" / "_checks" / f"{pagecheck.report_tool(f'site/{pid}/index.html')}.json"
+
+
+def inputs_hash(doc) -> str:
+    h = hashlib.sha256()
+    for r in doc["inputs"]:
+        h.update(f"{r['path']}\0{r['sha256']}\n".encode())
+    return h.hexdigest()
+
+
+def pages_row(p) -> dict:
+    return next(r for r in report(p, "kit")["results"] if r["id"] == "kit:reference-pages")
+
+
+def test_an_approved_reference_page_and_what_it_loads_are_copied_with_notes(pack):
+    with_site(pack)
+    r = bc("kit", "build", "--plan", project=pack)
+    assert r.returncode == 0 and r.stdout.splitlines()[0] == "would write 27 generated files into .claude/skills/acme-brand/ (version 1.1)", r.stdout + r.stderr
+    untouched(pack)
+    r = build(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert kit_files(pack) == sorted([*KIT_FILES, *PAGE_KIT])
+    for rel in PAGE_KIT:                                                                # a byte copy at the project path, under brand/
+        if rel.startswith("brand/"):
+            assert filecmp.cmp(pack / rel.removeprefix("brand/"), kit_of(pack) / rel, shallow=False), rel
+    assert (kit_of(pack) / "reference-pages" / "start" / "notes.md").read_text(encoding="utf-8") == START_NOTES
+    assert not (kit_of(pack) / "brand" / "site" / "site.json").exists()                  # the record is not a page: it is not copied
+    checked = json.loads(page_report(pack).read_text(encoding="utf-8"))
+    capture = json.loads((pack / "site" / "start" / "shots" / "capture.json").read_text(encoding="utf-8"))
+    record = {"id": "start", "page": "brand/site/start/index.html", "source_sha": file_sha(pack / START), "page_check_inputs_sha": checked["inputs_sha"],
+              "capture_inputs_sha": inputs_hash(capture)}
+    assert record["source_sha"] == json.loads((pack / "site" / "site.json").read_text(encoding="utf-8"))["pages"][0]["sha256"]
+    assert kit_json(pack)["reference_pages"] == [record]
+    loaded = ["assets/tokens/tokens.css", "assets/logo/mark.svg", "assets/web/base.css", "assets/web/dot.svg"]       # outside the page folder: the first two are in the kit anyway
+    folder = [rel.removeprefix("brand/") for rel in PAGE_KIT if rel.startswith("brand/site/")]
+    assert kit_json(pack)["sources"]["pages"] == motion_hash(pack, ["site/site.json", *folder, *loaded])
+    skill = (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
+    assert all(f"- `{rel}`" in skill for rel in PAGE_KIT)
+    row = pages_row(pack)
+    assert row["status"] == "pass" and row["detail"] == ("1 approved reference page copied with its stills and the files it loads (start); "
+                                                         "notes in reference-pages/<id>/notes.md"), row
+    rep = report(pack, "kit")
+    assert rep["status"] == "pass" and sorted(rep["outputs"]) == sorted([*KIT_FILES, *PAGE_KIT])
+    assert {"site/site.json", START, "site/start/shots/capture.json", "assets/web/base.css", "assets/web/dot.svg", page_report(pack).relative_to(pack).as_posix()} <= {i["path"] for i in rep["inputs"]}
+    first = kit_state(pack)
+    assert build(pack).returncode == 0 and kit_state(pack) == first and kit_json(pack)["version"] == "1.1"      # a second build writes nothing
+    # the kit holds the page whole: every link of the notes and of the copied page resolves inside it, and every tag and value is cited
+    fill_owned(kit_of(pack))
+    assert build(pack).returncode == 0 and kit_json(pack)["version"] == "1.2"
+    r = kit_check(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert statuses(pack) == ALL_PASS
+    # the 7 links of snippets/logo.html; 6 in the notes (the page and 5 stills); 5 in the page (3 stylesheets, the mark, the picture; `#plans` and `mailto:` are no relative link); 1 in site.css; 1 in base.css.
+    # The files: the 8 of a fresh kit, and the page, site.css, base.css and the notes.
+    assert check_report_rows(pack)["kit:links"]["detail"] == f"{FRESH_LINKS + 6 + 5 + 1 + 1} relative links in {FRESH_FILES + 4} .md, .html and .css files resolve inside the kit"
+
+
+def test_a_project_without_a_site_record_has_an_info_row_and_no_reference_pages(pack):
+    assert build(pack).returncode == 0
+    row = pages_row(pack)
+    assert row["status"] == "info" and row["detail"] == "no approved reference pages"
+    assert kit_json(pack)["reference_pages"] == [] and kit_json(pack)["sources"]["pages"] is None
+    assert not (kit_of(pack) / "reference-pages").exists() and not list(kit_of(pack).glob("brand/site"))
+
+
+def test_a_reference_page_without_a_passing_page_check_stops_the_build(pack):
+    with_site(pack)
+    tool = page_report(pack)
+    name = tool.name
+    cmd = "run `brand-creator page-check site/start/index.html`"
+    # no report at all
+    saved = tool.read_bytes()
+    tool.unlink()
+    for args in (("--yes",), ("--plan",)):
+        r = bc("kit", "build", *args, project=pack)
+        assert r.returncode == 1, (args, r.stdout, r.stderr)
+        assert "site/start/index.html has no page-check report" in r.stderr and cmd in r.stderr and NOTHING_WRITTEN in r.stderr
+    untouched(pack)
+    # the page is changed so that group 1's own check fails it (a colour that is no token), approved again (the record follows it), and the REAL page-check is run: no report made by hand stands in for it,
+    # so the build is judged on the report `page-check` writes (its target, its inputs, its status, its inputs_sha)
+    tool.write_bytes(saved)
+    edit_page(pack, "<h1>One calm place", '<style>h1 { color: #ff00ff; }</style><h1>One calm place')
+    checked = bc("page-check", START, project=pack)
+    assert checked.returncode == 1, checked.stdout + checked.stderr
+    assert tool.is_file() and json.loads(tool.read_text(encoding="utf-8"))["status"] == "fail"
+    r = build(pack)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "site/start/index.html fails its page check (page:colours:" in r.stderr and "; see assets/_checks/page-check/" in r.stderr and name in r.stderr
+    assert "approve it again (`brand-creator site approve --replace`)" in r.stderr
+    untouched(pack)
+    from helpers import page_check_report
+    # a report that is no verdict
+    page_check_report(pack, START, "not-verified")
+    r = build(pack)
+    assert r.returncode == 1 and "has a page-check report that gives no verdict (status 'not-verified'; see assets/_checks/page-check/" in r.stderr
+    untouched(pack)
+    # a report that was current and the page changed after it (the record follows the page, the check does not)
+    page_check_report(pack, START, "pass")
+    page = pack / "site" / "start" / "index.html"
+    mutate(page, "One calm place", "One calmer place")
+    mutate_json(pack / "site" / "site.json", lambda d: d["pages"][0].__setitem__("sha256", file_sha(page)))
+    r = build(pack)
+    assert r.returncode == 1 and "has a page-check report that is stale (site/start/index.html changed)" in r.stderr and cmd in r.stderr, r.stderr
+    untouched(pack)
+    # a report of another target
+    page_check_report(pack, START, "pass")
+    mutate_json(page_report(pack), lambda d: d["target"].__setitem__("page", "site/other/index.html"))
+    r = build(pack)
+    assert r.returncode == 1 and "has a page-check report of another target" in r.stderr and cmd in r.stderr
+    untouched(pack)
+    # the page is checked and captured again, and passes: the kit goes in
+    settle_page(pack)
+    r = build(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_a_reference_page_without_current_stills_stops_the_build(pack):
+    with_site(pack)
+    shots = pack / "site" / "start" / "shots"
+    cmd = "run `brand-creator capture site/start/index.html`"
+    record = (shots / "capture.json").read_bytes()
+    (shots / "capture.json").unlink()
+    r = build(pack)
+    assert r.returncode == 1 and "site/start/index.html has no stills (site/start/shots/capture.json is missing)" in r.stderr and cmd in r.stderr and NOTHING_WRITTEN in r.stderr
+    untouched(pack)
+    (shots / "capture.json").write_bytes(record)
+    mutate_json(shots / "capture.json", lambda d: d["source"].__setitem__("page", "site/other/index.html"))        # the capture of another page
+    r = build(pack)
+    assert r.returncode == 1 and "has stills that are stale (" in r.stderr and cmd in r.stderr
+    untouched(pack)
+    from helpers import capture_record
+    capture_record(pack, START)
+    (shots / "390-dark.png").write_bytes(b"not the still the record lists")
+    r = build(pack)
+    assert r.returncode == 1 and "has stills that are not the ones capture.json lists" in r.stderr and cmd in r.stderr
+    assert "site/start/shots/390-dark.png is not the 390-dark still site/start/shots/capture.json lists (its sha256 differs)" in r.stderr
+    untouched(pack)
+    capture_record(pack, START)
+    mutate(pack / "assets" / "tokens" / "tokens.css", ":root", ":root /* edited */")                                # the tokens changed after the stills were taken: the record is stale
+    r = build(pack)
+    assert r.returncode == 1 and "has a page-check report that is stale (assets/tokens/tokens.css changed)" in r.stderr and "has stills that are stale (assets/tokens/tokens.css changed" in r.stderr
+    untouched(pack)
+
+
+def test_a_reference_page_that_loads_a_file_outside_the_project_stops_the_build(pack, tmp_path):
+    from helpers import symlink_or_skip
+    with_site(pack)
+    far = tmp_path / "outside.png"
+    far.write_bytes(b"SECRET-OUTSIDE")
+
+    def refused(why, *where):
+        for args in (("--yes",), ("--plan",)):
+            r = bc("kit", "build", *args, project=pack)
+            assert r.returncode == 2, (why, args, r.stdout, r.stderr)
+            assert "outside the project" in r.stderr and all(w in r.stderr for w in where) and "Traceback" not in r.stderr, (why, r.stderr)
+            assert b"SECRET-OUTSIDE" not in r.stdout.encode()
+        untouched(pack)
+        nothing_secret_in(pack)
+
+    # a name that leaves the project
+    edit_page(pack, 'src="img/pic.svg"', 'src="../../../outside.png"')
+    refused("a path that climbs out", "site/start/index.html:", "'../../../outside.png' leads outside the project")
+    edit_page(pack, 'src="../../../outside.png"', 'src="img/pic.svg"')
+    # a file of the project that is a link to a file beyond it, loaded by name
+    symlink_or_skip(pack / "assets" / "web" / "far.png", far)
+    edit_page(pack, 'src="img/pic.svg"', 'src="../../assets/web/far.png"')
+    refused("a link", "site/start/index.html:", "assets/web/far.png")
+    edit_page(pack, 'src="../../assets/web/far.png"', 'src="img/pic.svg"')
+    # a stylesheet the page loads, and the file that stylesheet loads, one level deeper
+    mutate(pack / "assets" / "web" / "base.css", 'url("dot.svg")', 'url("far.png")')
+    refused("a link, loaded by a stylesheet", "assets/web/base.css:", "assets/web/far.png")
+    mutate(pack / "assets" / "web" / "base.css", 'url("far.png")', 'url("../../../outside.png")')
+    refused("a path that climbs out, loaded by a stylesheet", "assets/web/base.css:", "'../../../outside.png' leads outside the project")
+    mutate(pack / "assets" / "web" / "base.css", 'url("../../../outside.png")', 'url("dot.svg")')
+    (pack / "assets" / "web" / "far.png").unlink()
+    # a file in the page folder that is a link to a file beyond the project, and a link to a folder beyond it
+    symlink_or_skip(pack / "site" / "start" / "linked.png", far)
+    refused("a link in the page folder", "site/start/linked.png")
+    (pack / "site" / "start" / "linked.png").unlink()
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "x.png").write_bytes(b"SECRET-OUTSIDE")
+    symlink_or_skip(pack / "site" / "start" / "folder", elsewhere)
+    refused("a link to a folder in the page folder", "site/start/folder")
+    (pack / "site" / "start" / "folder").unlink()
+    # the page folder itself is a link to a folder beyond the project
+    shutil.move(str(pack / "site" / "start"), str(tmp_path / "moved-start"))
+    symlink_or_skip(pack / "site" / "start", tmp_path / "moved-start")
+    refused("the page folder is a link", "site/start")
+    (pack / "site" / "start").unlink()
+    shutil.move(str(tmp_path / "moved-start"), str(pack / "site" / "start"))
+    # the record itself is a link to a file beyond the project
+    shutil.move(str(pack / "site" / "site.json"), str(tmp_path / "record.json"))
+    symlink_or_skip(pack / "site" / "site.json", tmp_path / "record.json")
+    refused("the record is a link", "site/site.json")
+    (pack / "site" / "site.json").unlink()
+    shutil.move(str(tmp_path / "record.json"), str(pack / "site" / "site.json"))
+    r = build(pack)                                                                                                    # the page as it was: it goes in
+    assert r.returncode == 0, r.stdout + r.stderr
+    nothing_secret_in(pack)
+
+
+def test_a_link_in_a_page_folder_that_leaves_the_project_is_not_read_even_to_be_hashed(pack, tmp_path):
+    """`check` and `kit check` hash the files the pages are made from. A file of a page folder that is a link to a file beyond the project is none of them: it is not hashed, it does not move the
+    sources and it is no input of the report, whatever the file beyond holds (the build refuses it, exit 2, above)."""
+    import kitlib
+    from helpers import symlink_or_skip
+    with_site(pack)
+    before = kitlib.pages_source(pack)
+    far = tmp_path / "outside.png"
+    far.write_bytes(b"ONE")
+    symlink_or_skip(pack / "site" / "start" / "linked.png", far)
+    assert "site/start/linked.png" not in kitlib.page_sources(pack) and "site/start/linked.png" not in kitlib.page_input_rels(pack)
+    assert os.path.realpath(far) not in [os.path.realpath(f) for f in kitlib.input_paths(pack)]
+    assert kitlib.pages_source(pack) == before
+    far.write_bytes(b"TWO")
+    assert kitlib.pages_source(pack) == before                                                                        # what is beyond the project moves nothing
+    assert "linked.png" in bc("kit", "build", "--yes", project=pack).stderr                                          # and the build still refuses it
+    (pack / "site" / "start" / "linked.png").unlink()
+    assert kitlib.pages_source(pack) == before
+
+
+def test_a_page_that_changes_between_the_record_check_and_the_read_is_not_copied(pack, monkeypatch):
+    """`sitedata.validate_site` finds the page as it was approved and the bytes read after it are other bytes: the page changed in between. The race is made by hand: the record check is patched to
+    find nothing while the page is no longer the approved one (its report and stills are those of the new bytes). Exit 1, and the page is not copied."""
+    import kitlib
+    import sitedata
+    from _common import CliError
+    with_site(pack)
+    mutate(pack / "site" / "start" / "index.html", "One calm place", "One calmer place")                              # the record keeps the old sha256
+    settle_page(pack)
+    assert sitedata.validate_site(pack)                                                                                # as it is, the record check says so
+    monkeypatch.setattr(sitedata, "validate_site", lambda project: [])
+    with pytest.raises(CliError) as e:
+        kitlib.reference_plan(pack, kitlib.font_plan(pack))
+    assert e.value.code == 1 and "site/start/index.html changed since it was approved" in e.value.message, e.value.message
+
+
+def test_a_reference_page_is_read_from_the_path_that_was_checked_whichever_way_a_link_is_resolved(pack, tmp_path):
+    """The page loads `assets/web/L/../E`. L is a link to deep/dir and E (beside L) a link to a file beyond the project; deep/E is a file inside it. An operating system that follows L first
+    opens deep/E. The kit names the plain path assets/web/E, and that is the path it checks and reads: it is the link to the outside, and nothing outside reaches the kit."""
+    from helpers import symlink_or_skip
+    with_site(pack)
+    (pack / "deep" / "dir").mkdir(parents=True)
+    (pack / "deep" / "E").write_bytes(b"inside")
+    far = tmp_path / "outside.png"
+    far.write_bytes(SECRET)
+    symlink_or_skip(pack / "assets" / "web" / "L", pack / "deep" / "dir")
+    symlink_or_skip(pack / "assets" / "web" / "E", far)
+    edit_page(pack, 'src="img/pic.svg"', 'src="../../assets/web/L/../E"')
+    for args in (("--yes",), ("--plan",)):
+        r = bc("kit", "build", *args, project=pack)
+        assert r.returncode == 2 and "outside the project" in r.stderr and "assets/web/E" in r.stderr and "Traceback" not in r.stderr, (args, r.stdout, r.stderr)
+    untouched(pack)
+    nothing_secret_in(pack)
+
+
+def test_a_page_that_loads_a_missing_file_a_folder_or_an_absolute_path_stops_the_build(pack):
+    with_site(pack)
+    cases = [("a missing file", "img/pic.svg", "img/gone.svg", "leads to site/start/img/gone.svg, which the project does not have"),
+             ("a folder", "img/pic.svg", "img/", "leads to site/start/img, a folder, not a file"),
+             ("the letter case of the file", "img/pic.svg", "img/PIC.svg", "which the project holds as site/start/img/pic.svg"),
+             ("an absolute path", "img/pic.svg", "/img/pic.svg", "is an absolute path, which will not resolve in a product repository"),
+             ("a file: address", "img/pic.svg", "file:///img/pic.svg", "is an absolute path")]
+    for why, old, new, said in cases:
+        edit_page(pack, f'src="{old}"', f'src="{new}"')
+        for args in (("--yes",), ("--plan",)):
+            r = bc("kit", "build", *args, project=pack)
+            assert r.returncode == 1 and said in r.stderr and "site/start/index.html:" in r.stderr and "Traceback" not in r.stderr, (why, args, r.stdout, r.stderr)
+        untouched(pack)
+        edit_page(pack, f'src="{new}"', f'src="{old}"')
+    # what loads nothing from the project is left alone: network addresses, data:, mailto:, tel:, a fragment, a query and an empty href
+    edit_page(pack, '<a class="action" href="#plans">', '<a class="action" href="#plans"><img src="https://cdn.example.invalid/x.png" alt=""><img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" alt="">'
+              '<a href="tel:+000">t</a><a href="?x=1">q</a><a href="">e</a><a href="//cdn.example.invalid/y.css">n</a>')
+    r = build(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert kit_files(pack) == sorted([*KIT_FILES, *PAGE_KIT])
+
+
+def test_every_place_a_page_names_a_file_in_is_read_and_the_file_is_copied(pack):
+    """src, srcset (with its descriptors), poster, the data of an object, url() in a style attribute and in a style element, and href: each file a page names is copied once, at its project path."""
+    with_site(pack)
+    extra = {"two.svg": "<svg xmlns='http://www.w3.org/2000/svg'/>", "poster.svg": "<svg xmlns='http://www.w3.org/2000/svg' width='2'/>", "obj.svg": "<svg xmlns='http://www.w3.org/2000/svg' width='3'/>",
+             "styled.svg": "<svg xmlns='http://www.w3.org/2000/svg' width='4'/>", "block.svg": "<svg xmlns='http://www.w3.org/2000/svg' width='5'/>", "more.txt": "a text file a link names\n"}
+    for name, text in extra.items():
+        (pack / "assets" / "web" / name).write_text(text, encoding="utf-8")
+    (pack / "site" / "start" / ".DS_Store").write_bytes(b"what Finder leaves")
+    edit_page(pack, "<main>", '<style>.s { background: url(../../assets/web/block.svg) }</style>\n<main>')
+    edit_page(pack, '<img class="art" src="img/pic.svg" alt="">',
+              '<img class="art" src="img/pic.svg" srcset="img/pic.svg 1x, ../../assets/web/two.svg 2x" alt="">\n'
+              '<video poster="../../assets/web/poster.svg"></video><object data="../../assets/web/obj.svg"></object>\n'
+              '<div style="background: url(\'../../assets/web/styled.svg\')"></div><a href="../../assets/web/more.txt">more</a>')
+    r = build(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert kit_files(pack) == sorted([*KIT_FILES, *PAGE_KIT, *[f"brand/assets/web/{n}" for n in extra]])
+    for name in extra:
+        assert filecmp.cmp(pack / "assets" / "web" / name, kit_of(pack) / "brand" / "assets" / "web" / name, shallow=False)
+    assert not (kit_of(pack) / "brand" / "site" / "start" / ".DS_Store").exists()
+
+
+def test_a_file_two_steps_from_a_pages_stylesheet_is_not_copied_and_kit_check_names_the_link(pack):
+    """The steps are counted from a stylesheet the page loads (base.css): what base.css loads, dot.svg and deeper.css, is one step away and is copied; deeper.css is copied but not read, so three.svg, which it loads,
+    is two steps away and is not copied."""
+    with_site(pack)
+    (pack / "assets" / "web" / "deeper.css").write_text(".d { background: url(three.svg); }\n", encoding="utf-8")
+    (pack / "assets" / "web" / "three.svg").write_text("<svg xmlns='http://www.w3.org/2000/svg'/>\n", encoding="utf-8")
+    mutate(pack / "assets" / "web" / "base.css", ".dot {", '@import "deeper.css";\n.dot {')                                  # base.css loads deeper.css (copied), which loads three.svg (not)
+    assert build(pack).returncode == 0
+    kit = kit_of(pack)
+    assert (kit / "brand" / "assets" / "web" / "deeper.css").is_file() and not (kit / "brand" / "assets" / "web" / "three.svg").exists()
+    fill_owned(kit)
+    assert build(pack).returncode == 0
+    r = kit_check(pack)
+    assert r.returncode == 1, r.stdout + r.stderr
+    detail = check_report_rows(pack)["kit:links"]["detail"]
+    assert detail.startswith("1 of ") and "brand/assets/web/deeper.css:1 -> three.svg (no such file in the kit)" in detail, detail
+
+
+def test_each_choice_of_a_reference_page_is_tagged_in_its_notes(pack):
+    with_site(pack)
+    pricing = (pack / "site" / "start" / "index.html").read_text(encoding="utf-8").replace('data-page="start"', 'data-page="pricing"')
+    (pack / "site" / "pricing").mkdir()
+    (pack / "site" / "pricing" / "index.html").write_text(pricing, encoding="utf-8")
+    shutil.copy2(pack / "site" / "start" / "site.css", pack / "site" / "pricing" / "site.css")
+    shutil.copytree(pack / "site" / "start" / "img", pack / "site" / "pricing" / "img")
+    site = json.loads((pack / "site" / "site.json").read_text(encoding="utf-8"))
+    site["pages"].append({"id": "pricing", "path": "site/pricing/index.html", "layout": "own:ledger", "sha256": file_sha(pack / "site" / "pricing" / "index.html")})
+    site["choices"] = [
+        {"id": "c1", "text": "The stamp appears once per view", "tag": "rule", "source": "the stamp appears once per view", "pages": ["start", "pricing"]},
+        {"id": "c2", "text": "Plans sit under the steps", "tag": "example", "source": "", "pages": ["start"]},
+        {"id": "c3", "text": "Prices keep two decimals", "tag": "rule", "source": "DECISIONS.md, the pricing page", "pages": ["pricing"]},
+        {"id": "c4", "text": "Every page ends with the contact line", "tag": "example", "source": "", },               # no `pages`: it names every page
+        {"id": "c5", "text": "The hero image is 640px wide", "tag": "example", "source": "", "pages": ["pricing"]}]
+    (pack / "site" / "site.json").write_text(json.dumps(site, indent=2) + "\n", encoding="utf-8")
+    settle_page(pack, "pricing")
+    r = build(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    notes = lambda pid: (kit_of(pack) / "reference-pages" / pid / "notes.md").read_text(encoding="utf-8")        # noqa: E731
+    start, pricing = notes("start"), notes("pricing")
+    assert start.split("## Choices\n\n")[1] == ("- The stamp appears once per view [rule: site:c1] (decided in the stamp appears once per view)\n"
+                                              "- Plans sit under the steps [example]\n"
+                                              "- Every page ends with the contact line [example]\n")
+    assert pricing.split("## Choices\n\n")[1] == ("- The stamp appears once per view [rule: site:c1] (decided in the stamp appears once per view)\n"
+                                                "- Prices keep two decimals [rule: site:c3] (decided in DECISIONS.md, the pricing page)\n"
+                                                "- Every page ends with the contact line [example]\n"
+                                                "- The hero image is 640px wide [example]\n")
+    assert "Layout: own:ledger (structure only)" in pricing and "Layout: walkthrough (structure only)" in start
+    assert [r["id"] for r in kit_json(pack)["reference_pages"]] == ["start", "pricing"]                              # the record's order
+    assert "2 approved reference pages copied with their stills" in pages_row(pack)["detail"] and "(start, pricing)" in pages_row(pack)["detail"]
+    fill_owned(kit_of(pack))
+    assert build(pack).returncode == 0
+    r = kit_check(pack)
+    assert r.returncode == 0, r.stdout + r.stderr                                                                    # every bullet is tagged with an id the kit knows, and its value is cited
+    assert statuses(pack) == ALL_PASS
+    # a page with no choice of its own
+    site["choices"] = [site["choices"][2]]
+    (pack / "site" / "site.json").write_text(json.dumps(site, indent=2) + "\n", encoding="utf-8")
+    assert build(pack).returncode == 0
+    assert notes("start").endswith("## Choices\n\nThe site round recorded no choice for this page.\n")
+    assert kit_check(pack).returncode == 0 and statuses(pack) == ALL_PASS
+
+
+NASTY = ["The tile is {color.bg} under {props.title} and {{kept.double}} and ${kept.dollar}",
+         "Use var(--nope) for the hero, or var( --color-bg ) on the panel",
+         "Keep it [example] and [rule: nope] and [rule: the-mark-keeps-its-clear-space] and [[fill: more]] out of the text",
+         "See [the page](../../../../etc/shadow) and ![x](missing.png)",
+         "Padding 48px, 4.5:1, #1a2b3c, rgb(1 2 3), 100% and 3 em dashes"]
+
+
+def test_a_choice_text_that_kit_check_would_read_as_a_citation_is_written_so_it_is_not(pack):
+    """A choice is the owner's free text. Whatever it holds, the generated notes pass `kit check` as written: a token reference, a tag, a fill marker or a link in a choice is shown
+    as the Markdown reader shows it and is not read by the checks (the doubled braces, the numeric references)."""
+    with_site(pack)
+    record_rules(pack, "The mark keeps its clear space")
+    site = json.loads((pack / "site" / "site.json").read_text(encoding="utf-8"))
+    site["approved"] = "2026-10-17 approved start with 3 em dashes and {color.bg}; [[fill: x]] [example]"
+    site["choices"] = [{"id": f"c{i}", "text": text, "tag": tag, "source": f"decided in [rule: nope] and var(--nope), 48px", "pages": ["start"]}
+                       for i, (text, tag) in enumerate(((t, tag) for t in NASTY for tag in ("rule", "example")), 1)]
+    (pack / "site" / "site.json").write_text(json.dumps(site, indent=2) + "\n", encoding="utf-8")
+    assert build(pack).returncode == 0
+    notes = (kit_of(pack) / "reference-pages" / "start" / "notes.md").read_text(encoding="utf-8")
+    assert "{{color.bg}} under {{props.title}} and {{kept.double}} and ${kept.dollar}" in notes                  # the doubled braces are the spelling `kit check` leaves alone; one already doubled stays
+    assert "var&#40;--nope) for the hero, or var&#40; --color-bg ) on the panel" in notes
+    assert "&#91;example] and &#91;rule: nope] and &#91;rule: the-mark-keeps-its-clear-space] and &#91;[fill: more]] out of the text" in notes
+    assert "[the page]&#40;../../../../etc/shadow) and ![x]&#40;missing.png)" in notes
+    assert "Padding 48px, 4.5:1, #1a2b3c, rgb(1 2 3), 100% and 3 em dashes" in notes                              # a value on a tagged line is cited by the tag, so it stays as written
+    assert "Approved: 2026-10-17 approved start with 3 &#101;m dashes and {{color.bg}}; &#91;[fill: x]] &#91;example]" in notes     # the approval has no tag: its value is broken
+    fill_owned(kit_of(pack))
+    assert build(pack).returncode == 0
+    r = kit_check(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert statuses(pack) == ALL_PASS
+    tags = check_report_rows(pack)["kit:tags"]["detail"]
+    assert tags.startswith(f"{len(NASTY) * 2} line(s) carry")                                                         # the ten bullets of the notes
+
+
+def test_a_site_record_that_does_not_validate_stops_the_build(pack):
+    with_site(pack)
+    site = pack / "site" / "site.json"
+    good = site.read_bytes()
+    mutate_json(site, lambda d: (d["pages"][0].__setitem__("layout", "no-such-layout"), d["choices"][0].__setitem__("source", ""), d["choices"][1].__setitem__("tag", "maybe"),
+                                 d.__setitem__("hero", "")))
+    for args in (("--yes",), ("--plan",)):
+        r = bc("kit", "build", *args, project=pack)
+        assert r.returncode == 1, (args, r.stdout, r.stderr)
+        assert "site/site.json does not validate, so no reference page can go into the kit: " in r.stderr
+        first = r.stderr.split("into the kit: ")[1]
+        assert first.startswith("hero is empty: it names the hero variant the pages were built from; start: the layout 'no-such-layout' is no id of page-layouts.json (one-step, "), first
+        assert "; c1: a rule says where it was decided (source is empty)" in first, first
+        assert "and 1 more. Fix it" in first and "maybe" not in first, first                                                  # the first three are quoted, the fourth is only counted
+    untouched(pack)
+    site.write_bytes(good)
+    page = pack / "site" / "start" / "index.html"                                                                         # a page edited by hand after it was approved
+    mutate(page, "One calm place", "One calmer place")
+    r = build(pack)
+    assert r.returncode == 1 and "site/start/index.html changed since it was approved" in r.stderr and "site approve --replace" in r.stderr
+    untouched(pack)
+    mutate(page, "One calmer place", "One calm place")
+    site.write_text("{not json", encoding="utf-8")                                                                        # a record that cannot be read
+    r = build(pack)
+    assert r.returncode == 1 and "site/site.json cannot be read" in r.stderr
+    untouched(pack)
+    site.write_bytes(good)
+    (pack / "site" / "start" / "index.html").unlink()                                                                     # a page that is gone
+    r = build(pack)
+    assert r.returncode == 1 and "site/start/index.html is missing" in r.stderr
+    untouched(pack)
+
+
+def test_a_reference_page_that_is_changed_is_copied_again_and_the_sources_say_so(pack):
+    with_site(pack)
+    filled_kit(pack)                                                                                                      # built, the owner's files filled in, built again: version 1.2
+    before = kit_json(pack)
+    assert kit_check(pack).returncode == 0
+    edit_page(pack, "One calm place for your orders", "One calm place for all your orders")
+    r = kit_check(pack)                                                                                                     # the kit was built from the page as it was
+    assert r.returncode == 3, r.stdout + r.stderr
+    assert check_report_rows(pack)["kit:sources"]["status"] == "skipped" and "(pages)" in check_report_rows(pack)["kit:sources"]["detail"]
+    state = check_rows(pack)["kit:state"]                                                                                   # and `check` says the same, naming the reference pages
+    assert state["status"] == "skipped" and "fonts, reference pages or motion spec changed since the kit report" in state["detail"], state
+    assert build(pack).returncode == 0
+    after = kit_json(pack)
+    assert after["version"] == "1.3" and after["sources"]["pages"] != before["sources"]["pages"]
+    assert after["reference_pages"][0]["source_sha"] == file_sha(pack / START) != before["reference_pages"][0]["source_sha"]
+    assert "calm place for all your orders" in (kit_of(pack) / "brand" / "site" / "start" / "index.html").read_text(encoding="utf-8")
+    assert filecmp.cmp(pack / START, kit_of(pack) / "brand" / START, shallow=False)
+    assert kit_check(pack).returncode == 0
+    # a file the page loads from outside its folder is a source too
+    mutate(pack / "assets" / "web" / "dot.svg", "circle", "ellipse")
+    assert kit_check(pack).returncode == 3 and "(pages)" in check_report_rows(pack)["kit:sources"]["detail"]
+    assert build(pack).returncode == 0 and kit_json(pack)["version"] == "1.4"
+    assert (kit_of(pack) / "brand" / "assets" / "web" / "dot.svg").read_text(encoding="utf-8") == (pack / "assets" / "web" / "dot.svg").read_text(encoding="utf-8")
+    # the pages leave the project: their files leave the kit, moved to removed-<date>/ and never deleted
+    shutil.rmtree(pack / "site")
+    assert build(pack).returncode == 0
+    assert kit_files(pack) == KIT_FILES and kit_json(pack)["reference_pages"] == [] and kit_json(pack)["sources"]["pages"] is None
+    assert (pack / KIT_REMOVED / "brand" / "site" / "start" / "index.html").is_file() and (pack / KIT_REMOVED / "reference-pages" / "start" / "notes.md").is_file()
+
+
+def test_a_font_a_page_loads_follows_the_font_rule(pack):
+    with_site(pack)
+    with_font(pack)
+    css = pack / "site" / "start" / "site.css"
+    css.write_text(css.read_text(encoding="utf-8") + '@font-face { font-family: "Inter"; src: url("../../assets/fonts/TestFont-subset.ttf") format("truetype"); }\n', encoding="utf-8")
+    r = build(pack)                                                                                                   # an OFL font is copied by the font rule, once, with its licence
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert kit_files(pack) == sorted([*KIT_FILES, *FONT_KIT, *PAGE_KIT])
+    assert pages_row(pack)["status"] == "pass"
+    fill_owned(kit_of(pack))
+    assert build(pack).returncode == 0 and kit_check(pack).returncode == 0
+    # a font that is not OFL is listed and not copied, a page that loads it is told so, and the link would not resolve in the kit
+    mutate_json(pack / "assets" / "_checks" / "fontcheck.json",
+                lambda d: next(x for x in d["results"] if x["id"] == "licence:assets/fonts/TestFont-subset.ttf").__setitem__("recognised", "Apache License"))
+    r = build(pack, "--replace")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert not (kit_of(pack) / "brand" / "assets" / "fonts" / "TestFont-subset.ttf").exists()
+    row = pages_row(pack)
+    assert row["status"] == "warn" and "assets/fonts/TestFont-subset.ttf loaded at site/start/site.css:" in row["detail"] and NOT_OFL in row["detail"], row
+    assert report(pack, "kit")["status"] == "pass"
+    r = kit_check(pack)
+    assert r.returncode == 1 and "-> ../../assets/fonts/TestFont-subset.ttf (no such file in the kit)" in check_report_rows(pack)["kit:links"]["detail"], r.stdout
+
+
+def test_kit_json_must_describe_its_reference_pages(pack):
+    import kitlib
+    from _common import CliError
+    with_site(pack)
+    assert build(pack).returncode == 0
+    f = kit_of(pack) / "kit.json"
+    sha = "a" * 64
+    cases = [("no key", lambda d: d.pop("reference_pages"), "reference_pages: missing"),
+             ("not a list", lambda d: d.__setitem__("reference_pages", {}), "reference_pages: must be a list"),
+             ("an unknown key", lambda d: d["reference_pages"][0].__setitem__("hero", "x"), "reference_pages[0].hero: unknown key"),
+             ("a key left out", lambda d: d["reference_pages"][0].pop("capture_inputs_sha"), "reference_pages[0].capture_inputs_sha: missing"),
+             ("not a sha", lambda d: d["reference_pages"][0].__setitem__("source_sha", "x"), "reference_pages[0].source_sha: must be a sha256"),
+             ("another page path", lambda d: d["reference_pages"][0].__setitem__("page", "brand/site/other/index.html"), "reference_pages[0].page: must be brand/site/<id>/index.html of its id"),
+             ("a page listed twice", lambda d: d["reference_pages"].append(dict(d["reference_pages"][0])), "'start' is listed twice"),
+             *[(f"the id {pid!r}", lambda d, pid=pid: d["reference_pages"][0].update(id=pid, page=f"brand/site/{pid}/index.html"), "reference_pages[0].id: must be a page id")
+               for pid in (".", "..", "Start", "a b", "s", "start/")],                                          # the ids of sitedata.SITE_PAGE_ID only: G3-17 reads site/<id>/ from them
+             ("an unknown source", lambda d: d["sources"].__setitem__("pagess", sha), "sources.pagess: unknown key"),
+             ("a source left out", lambda d: d["sources"].pop("pages"), "sources.pages: missing")]
+    for why, change, said in cases:
+        good = f.read_bytes()
+        mutate_json(f, change)
+        with pytest.raises(CliError) as e:
+            kitlib.load(pack)
+        assert e.value.code == 2 and said in "\n".join(kitlib.problems(json.loads(f.read_text(encoding="utf-8")))), (why, e.value.message)
+        f.write_bytes(good)
+    assert kitlib.load(pack)["reference_pages"][0]["id"] == "start"

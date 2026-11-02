@@ -2221,9 +2221,11 @@ section. That section says the kit works beside the owner's web-design skill and
     assets/logo/*.svg, *.png, and every band drawing qa/rules.json names, top-level and per mark (at its own path)
     assets/fonts/<the OFL fonts> and their licence texts (see Fonts below)
     motion/motion.json, motion/SPEC.md, and the page of each page case of motion/proof.json when the brand moves (see Motion below)
+    site/<id>/ (the page, its folder and its stills) and every project file an approved reference page loads (see Reference pages below)
   snippets/fonts.css   generated: an @font-face for each copied font
   snippets/on-ground.css   generated: one [data-ground] scope for each ground the owner named, after the page ground (see Grounds below)
   snippets/logo.html   generated: the logo in light and dark, switched as tokens.css switches them
+  reference-pages/<id>/notes.md   generated: an approved reference page's layout (structure only), approval, stills and choices, each tagged
   EXTENDING.md  voice.md  visual.md  golden-rules.md   the owner's: scaffolded once from templates/kit/, never overwritten (see Owner files below)
   recipes/web-page.md   the owner's: the web-page recipe
 ```
@@ -2346,6 +2348,44 @@ holds the page's colour. If the page ground itself lacks a colour, or no other g
 listed, and when only the page ground is listed; warn when a ground is left out or the page ground lacks a colour; pass when every other ground has its scope. It never changes the report's status.
 `sources.tokens` already covers the grounds, so `kit.json` has no key for them.
 
+**Reference pages.** The pages the owner approved with `site approve` (`site/site.json`, [ADR-0010](../docs/adr/ADR-0010-the-site-round-makes-reference-pages-not-templates.md)) go into the kit, each only when it can
+be trusted, and the build reads nothing for them until the checks pass. A project with no `site/site.json` has no reference page: row `kit:reference-pages` (info) says "no approved reference pages", `reference_pages` is `[]` and `sources.pages` is `null`.
+`kitlib.reference_plan(project, fonts)` is the plan, and nothing in it writes:
+
+- `sitedata.validate_site(project)` must find nothing. Otherwise exit 1, "site/site.json does not validate, so no reference page can go into the kit", quoting the first three problems and counting the rest (a page edited
+  after it was approved, a record that cannot be read and a page that is gone are problems of the record). A `site/site.json` that is a link to a file outside the project is exit 2.
+- Each page in `pages` needs a current, passing page-check report and current stills. The report is `assets/_checks/<pagecheck.report_tool("site/<id>/index.html")>.json`: no file it was made from is gone or changed
+  (`_common.stale_inputs`), `target` is this project page, the page is among its inputs, `status` is `pass` and it holds an `inputs_sha`. The stills are `site/<id>/shots/capture.json` (`brand-creator capture`): current by the same
+  rule, `source.page` is this page, the page is among its inputs, and the four first screens (`1440-light`, `1440-dark`, `390-light`, `390-dark`), and the full page when it lists one, are the files there with the sha256 it
+  lists. Otherwise exit 1 before anything is written, naming every page and its command (`brand-creator page-check site/<id>/index.html` or `brand-creator capture site/<id>/index.html`); a failing report says that the page fails its
+  page check, names the failing rows and says to change the page, approve it again (`site approve --replace`) and check it.
+- Copied to `brand/<project path>`, byte for byte: every file below `site/<id>/` (the stills and `capture.json` too; a Finder `.DS_Store` is none; `site/site.json` is not copied), and every project file the pages load from outside their folders:
+  `src`, `href`, `poster`, `srcset`, the `data` of an `<object>`, `url()` and `@import` in a `<style>`, a `style` attribute and a `.css` file (`sitedata.urls_in`, the places `site approve` rewrites; a comment, a script and a
+  form's `action` are not read). The `.html` and `.css` files of the page folders are read for what they load, and so is each `.css` file they load from outside the folders, **one level deep**: what that stylesheet loads is
+  copied and read no further, so a file two steps from a page's stylesheet is not in the kit, and `kit check` names the link in the copied stylesheet that then does not resolve (`kit:links`). A URL with a scheme (`http:`, `https:`,
+  `data:`, `mailto:`, `tel:`), `//host`, a fragment and a query alone load nothing from the project. The path is percent-decoded and resolved from the folder of the file that holds it, as a browser does. The file that is
+  copied is read from the path `confine` resolved for exactly that project path (a file already read, such as the page being parsed, is not read twice), so the bytes that were parsed are the bytes that are copied.
+- A path that leaves the project, by its name (`../../../x.png`) or through a link (a loaded file, a file in a page folder, a page folder, or a stylesheet's file, whatever the link points at), is exit 2, naming the file and line, and
+  nothing is written. A link to a folder inside a page folder is exit 1 (the kit copies files, not links). Exit 1 too, naming the file and line: a file the project does not have, a folder named where a file belongs, a path spelled
+  in other letter case than the project holds it (a Linux checkout tells them apart), an absolute path (a leading `/`, `file:`) and a path with a control character: `kit check` would fail each of those links. A page file that is
+  not UTF-8 text cannot be read for its paths: exit 1. The bytes of each page's `index.html` must be the `sha256` the record holds, or exit 1.
+- A font under `assets/fonts/` is the font rule's (only OFL fonts are copied, with their licence text): a page that loads one gets the copy the font rule made, and a page that loads a font the rule does not copy is not given one.
+  Row `kit:reference-pages` then warns, naming the font, where it is loaded and why it is not copied, and `kit check` fails the link (`kit:links`) until the page no longer loads it.
+- `reference-pages/<id>/notes.md` is generated (`kitlib.notes_md`): `# <id>`; `Layout: <the page's layout> (structure only)` (an id of `page-layouts.json`, or `own:<word>`); `Approved: <site.json approved>`; `Page: [index.html](../../brand/site/<id>/index.html)`;
+  `Stills: ` the links to the stills (`[1440-light](...)`, `[full page](...)`, each percent-encoded where a URL needs it); and `## Choices`, one bullet for each choice whose `pages` names the page (a choice with no `pages` names every
+  page): `- <text> [rule: site:<id>] (decided in <source>)` for a rule and `- <text> [example]` for an example, in the record's order; a page no choice names says so in one plain line. The words are the owner's, so they are
+  written (`kitlib.note_text`) so that `kit check` reads in a note only what the note says, as Markdown shows it: white space is collapsed and a control character is a space; the first bracket of `[[fill`, `[rule:` and `[example]` is
+  `&#91;`, the `(` after `]` and after `var` is `&#40;`, and `{a.b}` is `{{a.b}}` (the doubled braces are the placeholder spelling `kit:numbers` leaves alone). A value on a bullet is cited by the bullet's own tag. On the lines that have no
+  tag (the title, the layout, the approval) a value is broken the same way (`48px` as `48&#112;x`), so that a note passes `kit check` whatever the owner wrote in a choice or at G4p.
+- `kit.json` `reference_pages` has an entry for each page, in the record's order: `{id, page, source_sha, page_check_inputs_sha, capture_inputs_sha}`: the id, the kit path of its `index.html` (`brand/site/<id>/index.html`), the record's
+  `sha256` for it, the `inputs_sha` of its page-check report and the sha256 over the `inputs` of its `capture.json` (the `path` and `sha256` of each, as a report's `inputs_sha` is made). `kitlib.load()` refuses a key it does not know
+  and one that is missing, in `reference_pages` and in `sources`, whose `pages` is one sha256 over `site/site.json`, the files of the page folders and the files they load (the sorted pairs `<project path>\0<sha256>\n`, as `logos`
+  and `fonts` are made), or `null` while the project has no `site/site.json`. A page, a file it loads or the record changed after the build is `kit:sources` not verified in `kit check`, naming `pages`, and `kit:state` of `check` not verified too.
+  The content hash covers the copied files and the notes, not the record of `reference_pages`, so a page checked again with nothing else changed re-records its hashes and keeps the version.
+- The report's inputs add `site/site.json`, the files of the page folders, the files they load and the page-check report of each page, so a page checked, captured or approved again makes the `kit` report stale. Row `kit:reference-pages`: pass,
+  with the number of pages and their ids, when each is copied; warn when a page loads a font that is not copied (above); info "no approved reference pages" while the project has none. A reference page's notes are judged by `kit check`
+  like a recipe (`kit:tags`, `kit:numbers`: their bullets are the page's choices).
+
 Report `kit` (`assets/_checks/kit.json`), renderer `n/a (generated files)`. Inputs: the token files, the logo files, the band drawings, `qa/rules.json`, `FACTS.md` and `motion/motion.json`, each
 when the project has it. Row `kit:written` passes, with the detail `<n> generated files: <w> written, <u> unchanged, <r> moved to removed-<date>/; version <v>`. Row `kit:owned` (info): `<k> owner files scaffolded this run, <m> kept as they are`. Extra keys: `outputs` (every generated
 path with its sha256, `kit.json` included), `kit_version` (the report's own `version` stays the plugin's), `content_sha`, `adapter_state_sha` (`adapt.state_sha`) and `kit_sources_sha` (sha256 over
@@ -2358,7 +2398,7 @@ path with its sha256, `kit.json` included), `kit_version` (the report's own `ver
   `(missing)`) and saying they were edited by hand or removed: change the brand project and run `brand-creator kit build --yes`. A report with no `outputs`, or one whose `outputs` hold a record that
   cannot be compared with a file of the kit (a path that climbs out of the kit, a value that is not a sha256: 64 lower-case hex characters), also fails the row and says so; it never crashes `check`. A file that is not in `outputs` (an owner's file, a foreign file) is not read by this row.
 - `kit:state`: only when the report passed. Not verified (`skipped`) when its `adapter_state_sha` or `kit_sources_sha` is not the one the project has now: the name, rules, facts, tokens, logos,
-  band drawings, fonts (the font files, their licence texts or the `fontcheck` report) or motion spec changed after the kit was built. There is no row while they match.
+  band drawings, fonts (the font files, their licence texts or the `fontcheck` report), approved reference pages (`site/site.json`, the page folders with their stills, the files the pages load) or motion spec changed after the kit was built. There is no row while they match.
 
 `check --cascade` searches the kit like any other text file of the project: `SKILL.md` and the text files under `brand/`.
 
@@ -2370,7 +2410,7 @@ and writes the report `kit-check` (`assets/_checks/kit-check.json`), renderer `n
 that is a link (a link is never read through; `kit build --yes --replace` moves it aside). Both stop the run before the report is created, so the earlier report stands, and `check` sees it stale.
 
 Inputs: every file under the kit folder (a link is no input), the files the kit is made from (`kitlib.input_paths`: the token files, the logo files and band drawings, `qa/rules.json`, `FACTS.md`, the motion files, the font files,
-their licence texts and the `fontcheck` report), `BRAND-STATE.md` and the `kit` report, so a file that changed or went makes the report stale. Extra keys: `kit_version` and `kit_tree_sha`, the sha256 over the sorted paths of every
+their licence texts and the `fontcheck` report, and for the approved reference pages `site/site.json`, the files of the page folders, the files they load and each page's page-check report: `kitlib.page_input_rels`), `BRAND-STATE.md` and the `kit` report, so a file that changed or went makes the report stale. Extra keys: `kit_version` and `kit_tree_sha`, the sha256 over the sorted paths of every
 file and link below the kit folder, each marked file or link (`kitlib.tree_sha`), because a file added since is no recorded input. Every row reads a plain file of the kit only: a link to a file or to a folder is never followed,
 read or hashed, and a link where a generated file belongs is not that file.
 

@@ -8,7 +8,8 @@ plugin and a damaged install is the only way.
 
 The pages the owner approved are kept in site/ with a record, site/site.json (schema 1, scripts/CONTRACT.md "site/site.json"). `load_site` reads it, `validate_site` says what is wrong with it
 (the record itself, and each page file against the sha256 the record holds), and `rewrite_urls` is the rule that keeps a page's paths true when its folder moves from rounds/r<N>/<id>/ to
-site/<id>/ (`brand-creator site approve`, scripts/site_pages.py); the same function carries a page into another folder later.
+site/<id>/ (`brand-creator site approve`, scripts/site_pages.py); the same function carries a page into another folder later. `urls_in` lists the URLs such a file loads, read from the same places (the brand kit
+copies the files an approved page loads, scripts/adaptlib/kitlib.py).
 
 This folder is outside scripts/lib/, so a change here does not make every pack stale. Standard library only (plus _common for the error); no clock and no network.
 The reads are the named files: the layout file, site/site.json and the pages it lists, and, for rewrite_urls, the existence of the files a page points at.
@@ -416,6 +417,12 @@ def _decide(url: str, project: Path, file_dir: str, new_file_dir: str, moves: di
     if new == path_part:
         return None, None
     return new + suffix, None
+
+
+def urls_in(text: str, kind: str) -> list[tuple[int, str]]:
+    """Every URL an .html (`kind` "html") or .css (`kind` "css") text loads, as (line from 1, the URL as written), in the order they are written: the ones `rewrite_urls` reads, so a tool that must
+    know which files a page loads (the brand kit copies them) reads the same places and no others. A comment, the text of a <script>, a form's `action` and a URL built by a script are not read."""
+    return [(text.count("\n", 0, start) + 1, text[start:end]) for start, end in sorted(_html_spans(text) if kind == "html" else _css_spans(text))]
 
 
 def rewrite_urls(text: str, kind: str, *, project, file_dir: str, new_file_dir: str, moves: dict[str, str] | None = None, label: str = "") -> tuple[str, list[UrlProblem]]:
