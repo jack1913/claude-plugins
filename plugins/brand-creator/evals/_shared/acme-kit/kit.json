@@ -4,7 +4,7 @@
   "version": "1.2",
   "edition": "1",
   "plugin_version": "0.4.2",
-  "content_sha": "0223c9a198571b54c82e1dc46b6b4f45407b5c0a7c6d889f74bff0df3262face",
+  "content_sha": "9238564cb4508724f0ffeed5f80a2c274741fce7c40d3ba5c677532189f60916",
   "generated": {
     "SKILL.md": "24668d56d2dfa8c6f154348555f5d7bcc7bd59ddc2cd920f3172d30ab99baa74",
     "brand/assets/logo/grid-mark-dark.svg": "a4354fc3d461119c54b155018c92d03be7c2bd3b5d87d34c60c2d3adc31d2f21",
@@ -22,7 +22,7 @@
     "snippets/logo.html": "71627d0ff922544924c7ba52a8c5cbf1e34acde2429fc1cdb7ae2a12774dcf83"
   },
   "owned": {
-    "EXTENDING.md": "f027d29feece70f91f6a2a490d61f9da278bc06652b2d6b8d98d40009d975558",
+    "EXTENDING.md": "0d049648c0501e34420cc0f15ec0149f97526af2f19c1de61b2335c15ea04825",
     "golden-rules.md": "44f766a99cddcb953f78e7941fe895198887a75392ed4f40a0cc7b6e3fc39a75",
     "recipes/web-page.md": "563dd61f18ec9987cfe6f5691d00af2787a1af32a4b7139e946c92da498274f4",
     "visual.md": "9498f424fa5ffeef9bac272fce456520c5c484db52623895dbbfaa8682a61a95",
