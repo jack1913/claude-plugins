@@ -2439,6 +2439,10 @@ Rows, in this order:
   that names an id the kit does not know fails even beside `[example]`. Fails with `<file>:<line> untagged` or `<file>:<line> unknown rule id <id>` (`(empty)` for `[rule: ]`), up to 6 listed, with the tag syntax. The count in the detail
   is of the lines judged: those that need a tag and those that name a rule. The generated notes are judged like a recipe (their bullets are the page's choices, tagged from `site/site.json`), so a failure there means the record and
   the kit disagree.
+  A tag whose id is a placeholder in angle brackets (`[rule: <id>]`, `[rule: <rule id>]`, `[rule: page:<id>]`, `[rule: site:<id>]`: a whole `<...>`, after `page:` or `site:` or not) names no id, because a real id holds no
+  angle bracket (D12): `kitlib.rule_tags` leaves it out, so it is never looked up and it shows the syntax in a sentence, a code span or a code fence. It is also no citation: a bullet that holds only a placeholder is untagged
+  (it needs `[example]` or a real tag), and a value on its line still needs a real citation (its words are no values, as those of any tag). Anything else that is not an id of `kitlib.known_rule_ids` fails as above,
+  `[rule: <id>x]` and `[rule: other:<id>]` included.
 - `kit:numbers`: in the same files, code fences included, every value has a citation on its own line. A value is a number with a unit (`px`, `rem`, `em`, `ms`, `s`, `%`, `vh`, `vw`, `svh`, `dvh`, `ch`, `fr`, `deg`, `pt`; an optional space
   between them; `.5rem` and `-8px` count), a ratio such as `4.5:1`, a hex colour of 3, 4, 6 or 8 digits, or `rgb(`, `rgba(`, `hsl(`, `hsla(`, `oklch(` (`kitlib.find_values`). A range is a value: in `32-48px`, `400-700ms` and
   `60-75ch` the last number carries the unit, and the line holds `48px`, `700ms` and `75ch`; when both ends carry a unit (`16px-24px`, `2em-3em`) the line holds both. A clock time such as `9:00 to 17:00` reads as a ratio and needs `[example]` too. The words of a `[rule: ...]` tag, a Markdown link target,

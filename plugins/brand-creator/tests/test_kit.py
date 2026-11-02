@@ -2965,6 +2965,72 @@ def test_a_rule_tag_that_names_no_rule_fails_on_any_line_even_one_that_needs_no_
     assert statuses(pack) == ALL_PASS                                                                         # both files are as the build recorded them again
 
 
+def test_a_rule_tag_whose_id_is_a_placeholder_in_angle_brackets_shows_the_syntax_and_is_no_citation(pack):
+    record_rules(pack, "The mark keeps its clear space")
+    filled_kit(pack)
+    golden = kit_of(pack) / "golden-rules.md"
+    before = mutate(golden, KEPT, KEPT + "\n")                                                                                # line 5 is KEPT; the lines to try follow a blank line 6
+    # a placeholder shows the syntax: the tag with `<id>` (or any `<...>`, with a `page:` or `site:` before it) names no id, so it is never judged against the rules the kit knows
+    shown = ["- Write a tag as `[rule: <id>]` or `[rule: <rule id>]`. [example]",
+             "- A page rule is `[rule: page:<id>]`, a choice of a reference page `[rule: site:<id>]`, any other `[rule: <...>]` and `[rule: <>]`. [example]",
+             "Write [rule:<id>] after the line it backs, or [rule:  <the rule's id>  ].",
+             "```\n[rule: <id>]\n- [rule: <id>] [example]\n```"]
+    golden.write_text(before + "\n" + "\n".join(shown) + "\n", encoding="utf-8")                                              # lines 7 and 8 are bullets; 9 is a sentence; 10 to 13 a fence
+    r = kit_check(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert check_report_rows(pack)["kit:tags"]["detail"] == "2 line(s) carry `[example]` or a rule id the kit knows"          # only the two bullets are judged
+    assert statuses(pack)["kit:tags"] == "pass" and statuses(pack)["kit:numbers"] == "pass"
+    # a real rule next to a placeholder still counts, and an unknown one still fails, on a line of any kind
+    golden.write_text(before + f"\n- Mind it. [rule: <id>] [rule: {CLEAR_SPACE}]\n", encoding="utf-8")
+    assert kit_check(pack).returncode == 0 and check_report_rows(pack)["kit:tags"]["detail"] == "1 line(s) carry `[example]` or a rule id the kit knows"
+    for line, where in (("- Mind it. [rule: <id>] [example] [rule: nope]", 7), ("Write [rule: <id>] or [rule: nope].", 7), ("## Tags [rule: nope] [rule: <id>]", 7),
+                        ("```\n[rule: <id>] [rule: nope]\n```", 8), ("- [rule: page:<id> ] [rule: nope]", 7)):
+        golden.write_text(before + "\n" + line + "\n", encoding="utf-8")
+        assert kit_check(pack).returncode == 1, line
+        assert check_report_rows(pack)["kit:tags"]["detail"] == lack_a_tag(1, 1, f"golden-rules.md:{where} unknown rule id nope"), line
+    for line in ("[rule: page:]", "[rule: id>]", "[rule: <id>x]", "[rule: x<id>]", "[rule: site:<id>x]", "[rule: <<id>]", "[rule: <a><b>]", "[rule: other:<id>]"):
+        golden.write_text(before + "\n" + line + "\n", encoding="utf-8")                                                      # not a placeholder: a whole `<...>`, or `page:` or `site:` and then one
+        assert kit_check(pack).returncode == 1, line
+        assert "unknown rule id" in check_report_rows(pack)["kit:tags"]["detail"], line
+    golden.write_text(before, encoding="utf-8")
+    kit_check(pack)
+    assert statuses(pack) == ALL_PASS
+
+
+def test_a_placeholder_tag_is_no_citation_for_a_bullet_or_a_value(pack):
+    record_rules(pack, "The mark keeps its clear space")
+    filled_kit(pack)
+    golden = kit_of(pack) / "golden-rules.md"
+    before = mutate(golden, KEPT, KEPT + "\n")
+    golden.write_text(before + "\n- Write a tag as `[rule: <id>]`.\n", encoding="utf-8")                                      # a bullet that only shows the syntax still needs its own tag
+    r = kit_check(pack)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert check_report_rows(pack)["kit:tags"]["detail"] == lack_a_tag(1, 1, "golden-rules.md:7 untagged")
+    golden.write_text(before + "\n- Write a tag as `[rule: <id>]`. [example]\n", encoding="utf-8")
+    assert kit_check(pack).returncode == 0 and statuses(pack)["kit:tags"] == "pass"
+    golden.write_text(before + "\n- Hero padding 48px [rule: <id>]\n", encoding="utf-8")                                       # a value is cited by a rule the kit knows, not by the syntax of one
+    assert kit_check(pack).returncode == 1
+    assert check_report_rows(pack)["kit:tags"]["detail"] == lack_a_tag(1, 1, "golden-rules.md:7 untagged")
+    assert check_report_rows(pack)["kit:numbers"]["detail"] == cites_nothing("golden-rules.md:7 (48px has no citation)")
+    golden.write_text(before + "\n```\npadding: 48px; /* [rule: <id>] */\n```\n", encoding="utf-8")
+    assert kit_check(pack).returncode == 1
+    assert check_report_rows(pack)["kit:numbers"]["detail"] == cites_nothing("golden-rules.md:8 (48px has no citation)")
+    assert statuses(pack)["kit:tags"] == "pass"                                                                              # a line of a code fence needs no tag
+    golden.write_text(before + "\n```\npadding: 48px; /* [rule: <id>] [example] */\n```\n", encoding="utf-8")
+    assert kit_check(pack).returncode == 0 and statuses(pack)["kit:numbers"] == "pass"
+    golden.write_text(before + f"\n- Hero padding 48px [rule: <id>] [rule: {CLEAR_SPACE}]\n", encoding="utf-8")                # a real rule beside the syntax cites it
+    assert kit_check(pack).returncode == 0 and statuses(pack)["kit:numbers"] == "pass"
+    golden.write_text(before + "\nPad it. [rule: <the 48px rule, at 4.5:1>]\n", encoding="utf-8")                           # the words of a tag are no values, those of a placeholder too
+    assert kit_check(pack).returncode == 0
+    assert check_report_rows(pack)["kit:numbers"]["detail"] == NO_VALUES
+    (pack / "site").mkdir()
+    (pack / "site" / "site.json").write_text("{not json", encoding="utf-8")                                                  # the ids cannot be read, but a placeholder names none: nothing is left unjudged
+    golden.write_text(before + "\n- Write a tag as `[rule: <id>]`. [example]\n", encoding="utf-8")
+    kit_check(pack)                                                                                                          # the record is a source of the kit, so the run as a whole is not verified; the tag rows are
+    assert statuses(pack)["kit:tags"] == "pass" and statuses(pack)["kit:numbers"] == "pass"
+    assert check_report_rows(pack)["kit:tags"]["detail"] == "1 line(s) carry `[example]` or a rule id the kit knows"
+
+
 def test_a_value_in_a_recipe_needs_a_token_a_rule_or_the_example_tag(pack):
     record_rules(pack, "The mark keeps its clear space")
     filled_kit(pack)

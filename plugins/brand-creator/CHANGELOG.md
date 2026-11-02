@@ -332,8 +332,10 @@ lints the board of the latest round again before `check`, so an edit of the fact
   value. A token that does not exist fails too: anywhere outside a code sample, and inside one on a line with a value.
   Only a name that ends at a token counts (`{color.bg}`, never a group such as `{modes.light}`). A `[rule: <id>]` that
   names no rule fails wherever it stands, on a plain sentence or in a code sample too. A `{word.word}` in a sentence is
-  read as a token even between backticks: to show a placeholder of your own, write it without the dot or put it in a
-  code block.
+  read as a token even between backticks: to show a placeholder of your own, write it without the dot, or put it in a
+  code block on a line with no value. To show the tag itself, put a placeholder in angle brackets, as in
+  `[rule: <id>]`: it names no rule, so it is not looked up, and it is not a citation either (a bullet that shows it
+  still needs a real tag or `[example]`).
 - `brand-creator kit check` also marks a reference page stale when the tokens or rules change: a page whose check or
   screenshots were made against other tokens or rules than the ones in the kit, or that was changed or
   approved again after the kit was built, is "not verified" and says which commands to run before the next
