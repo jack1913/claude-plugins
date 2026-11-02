@@ -2814,6 +2814,8 @@ def test_the_eval_kit_snapshot_is_what_kit_build_writes_for_acme(pack):
         assert "[[fill:" not in (EVAL_KIT / rel).read_text(encoding="utf-8"), rel
     for rel in ("voice.md", "visual.md", "golden-rules.md"):
         assert "Keep it short. [example]" in (EVAL_KIT / rel).read_text(encoding="utf-8"), rel
+
+
 # ---------------------------------------------------------------- kit check, part 2: tags and values
 # `kit check` judges the owner's recipes (recipes/**/*.md), golden-rules.md, visual.md and the generated reference-pages/<id>/notes.md in two rows. kit:tags: a bullet (and, in golden-rules.md and
 # visual.md, a numbered line) outside a code fence carries `[example]` or a `[rule: <id>]` of a rule the kit knows. kit:numbers: a value (a number with a unit, a ratio, a hex colour, rgb( hsl( oklch()
