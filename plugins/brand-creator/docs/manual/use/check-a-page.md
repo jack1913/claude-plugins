@@ -1,165 +1,104 @@
 # Check a page against your brand
 
-Open a page in a real browser and see where it breaks your brand: a colour that is not yours, a font that is not yours, a
-squeezed logo, a number nobody backed. Use it on a page built with Claude or by hand, in your project or anywhere else on
-your computer.
+Built a page yourself, or had someone build one? The page check opens it in a browser on your computer and shows where
+it breaks your brand. Use it before you publish, and again after each fix.
 
 ## Before you start
 
-- You have a brand project whose colours and fonts are built into [design tokens](../reference/glossary.md). If they are not,
-  the check stops and says so (see [If something goes wrong](#if-something-goes-wrong)). New here? See
-  [Start a brand](start-a-brand.md).
-- brand-creator is set up, so the browser it uses is installed. `/brand-creator:setup` does that.
-- The page is on your computer. A page on another website is not checked: build it here first.
+- You have a brand project, the folder Claude made when you started, with your design tokens in it: your colours,
+  fonts and sizes, written so a program can read them. New here? Start with [Start a brand](start-a-brand.md).
+- The tools are installed. If you have never done it, type `/brand-creator:setup` once.
+- The page is on your computer. The check never opens pages on the internet, such as a page in a website builder.
+  Save its files to your computer first, if you can.
 
 ## What it checks
 
-The page is opened at six widths, from a phone to a wide desktop, in the light and in the dark theme. Every request to
-another website is stopped, so the check runs offline. It reports on:
+The check opens your page at several sizes, from a phone to a wide screen, in light and dark. It fails the page for:
 
-- **Colours:** every colour the page paints is one of your brand's colours for that theme.
-- **Contrast:** every text on its background is a pair your brand declares, or is measured for contrast.
-- **Type:** every text is set in your brand's fonts, the browser really drew them, and your display face is not too small.
-- **Logo:** it is one of your logo files, the drawing made for its size, with clear space around it.
-- **Motion:** every duration and easing is one of your motion tokens.
-- **Claims:** every number and status word, such as "coming soon", is backed by `FACTS.md` or marked as a sample.
-- **Your page rules:** rules you added for pages, such as one logo per screen or at most three words on a button.
+- a colour or font that isn't yours, or an animation that doesn't move the way your brand does;
+- text that is hard to read, or your heading font set too small;
+- a logo that isn't one of your logo files, is the wrong version for its size, or is crowded;
+- a claim such as "500 happy customers" or "coming soon" that is not in `FACTS.md`, the list of facts you confirmed in
+  your brand project, and not marked as a sample;
+- a page rule you asked Claude for and approved, such as one logo per screen or at most three words on a button.
 
-A failure in any of these fails the check.
-
-It also warns about patterns that make a page look like any other template: a small capital label above a heading, an arrow
-glued to a button label, a line of items joined by dots, a stock label such as "Learn more" on the second button of the
-hero, a hero with too much text, a mock-up built from styled boxes instead of a picture, and a row of three equal tiles. A
-table, a checklist or a timeline is not a mock-up, but a drawn panel with a header, figures or a footer around a list is.
-A warning never fails the page. Stock labels are checked in English and Polish; on a page in another language the check says
-"not verified" for them.
+Failing blocks nothing: it gives you things to fix. The check also warns about patterns that make a page look like any
+template, such as a small label in capitals over a heading. Warnings never fail the page. The exact rules are in
+[Page check](../reference/page-check.md).
 
 ## Check a page
 
-1. Type the command with the page:
+1. In your chat with Claude, in your brand project, type the command and your page:
 
    > /brand-creator:check --page pages/index.html
 
-   - A page in your project: give its path.
-   - A site built somewhere else on your computer: give the page, and say where the site's folder is if Claude asks. The
-     folder is copied into a scratch area and only the copy is opened, so your site is never touched. Every check keeps
-     its copy: see [Old copies of a built site](#old-copies-of-a-built-site).
-   - A page your computer serves while you work on it: give its address, such as `http://localhost:3000/`. Only addresses
-     on your own machine work (`localhost`, `127.0.0.1` or `[::1]`).
+   That is the home page, `index.html`, in the folder `pages`. Your page can be:
 
-2. Claude opens the page at each width and theme, which takes a little while. To go faster, ask for fewer widths, for
-   example "only 390 and 1440".
-3. Claude reports the result: 0 if the page passes (warnings allowed), 1 if a row failed, 2 if the command was used wrongly
-   and 3 if the check could not run. Each failing row names what it found, where on the page and the fix.
+   - **in your brand project:** give its file, as above;
+   - **a site built somewhere else on your computer:** give its page. Claude asks for the site's folder, often called
+     `dist` or `build`. The check opens only a copy, so your site is never touched;
+   - **shown by your computer while someone works on the site:** give its address, such as `http://localhost:3000/`.
+     `localhost` means your own computer; addresses on the internet are refused.
 
-You'll see something like this:
+2. Wait while Claude opens the page at each size. In a hurry? Ask for fewer, such as "only 390 and 1440" (a phone and
+   a desktop, in pixels).
+3. Read the reply. It starts with the result: the page passed (warnings may remain), something failed, or Claude could
+   not check everything and says why. Then come the problems with their fixes, the warnings, and what Claude could not
+   check.
+   [Page check](../reference/page-check.md#the-result) explains every part.
+4. Say which fixes you want, failures first. Claude changes nothing until you say. Then check again.
 
-```text
-[INFO] page:target (what was checked): project page pages/index.html; widths 390, 1440; schemes light, dark; …
-[PASS] page:load:390-light (390px light): loaded at 390x844, … no page or console error, no failed or outside request
-[PASS] page:colours:light (light theme colours): 3 distinct colour(s) painted, each a semantic colour of the light theme
-[WARN] tell:eyebrow (An eyebrow over a heading): 1 found: body > main > small: "NEW", in capitals, 11 px over the h1 … (at 390, 1440 px); …
-[WARN] tell:stock-second-action (A stock label on the hero's second action): 1 found: … the second action of the hero says "Learn more" …
-page-check/index-6afd7f: PASS  (16 pass, 0 fail, 2 warn, 0 not verified)  renderer: chromium
-report: …/assets/_checks/page-check/index-6afd7f.json
-```
-
-One report is kept per page, in `assets/_checks/page-check/`. Checking the same page again replaces its report.
-
-## Old copies of a built site
-
-Each time you check a site built somewhere else, Claude makes a new copy of its folder and opens that copy. Nothing
-deletes the copies, so they pile up. A page in your project makes no copy.
-
-- **Where they are:** in the plugin's data folder (on a normal install `~/.claude/plugins/data/brand-creator-jack1913/`),
-  under `scratch/<your project>-<code>/page-check/<code>/`. Each check has a numbered folder there: `1`, `2`, `3` and so
-  on, holding the copy of your site.
-- **What to do:** delete the numbered folders you no longer need, or the whole `page-check` folder under `scratch`. Your
-  site and your reports are not there, and the next check makes a new copy.
+The check uses no extra agents, so it costs no more than any other chat with Claude. It sends nothing online and never
+changes your page.
 
 ## Mark what is only a sample
 
-A page built before the real content exists is full of made-up numbers and names. Mark each made-up piece with a label, so
-the check passes it and lists it for you:
+Made-up prices on an unfinished page would each fail. Ask Claude to mark them as samples, or do it in the page's code,
+with a label saying what each one stands for:
 
 ```html
 <p data-sample="price from the pricing table">From 49 a month</p>
 ```
 
-The check passes a labelled sample and lists every one of them in the row `page:samples`: that is your list of what to
-replace before you publish. An unmarked number or status word that `FACTS.md` does not hold fails. The fix is to add the
-fact to `FACTS.md` (only a fact you confirm) or to mark the text as a sample.
+A labelled sample passes, and goes on your list of what to replace before you publish.
 
-Some numbers are not claims, so you do not need a fact for them:
-
-- A year after a copyright sign or the word, such as "© 2026" or "Copyright 2024–2026".
-- The code of an error page. A page is an error page when its file is named after the code (`404.html`), or when its
-  title or main heading holds the code and no other number, with no "+" before or after it, and the same text has an
-  error word in the language of the page, such as "Błąd", "Nie znaleziono" or "nie istnieje" on a Polish page and
-  "Error", "Not found" or "Gone" on an English one. Then the code can stand anywhere on it, such as a small "Błąd 404" label and a
-  large "404". A heading such as "Ponad 400 projektów", "Zaufało nam 500 firm", "Over 400 clients", "500+ firm nam
-  ufa" or "5 lat, 500 klientów" is a count, so it does not make an error page. For a page in another language, or one
-  that does not say its language (`lang` on its `html` tag), only the file name counts.
-
-A date is read as its numbers, in either form. The fact "premiera 2026-11-15" backs "Premiera 15.11.2026", and "Wypłata
-30.10" needs a fact that holds 30 and 10. A number with spaces between thousands, such as "13 205,20 zł", counts as one
-number.
-
-A date written with a month name is one date, not numbers, when the page is in Polish or English: "21 października
-2026", "Październik 2026", "October 21, 2026", "21 October 2026". The fact "premiera 2026-11-15" backs "15 listopada 2026"
-and "November 15, 2026" too. A date with a month name is a claim even when its day has one digit ("5 maja"), so a
-street such as "ul. 3 Maja" needs a fact, like any address. A date with dots is a date when it has a year ("5.11.2026")
-or two digits each way ("30.10", "05.11"); "12.5" or "2.10" is a plain number, and the fact has to hold that number.
-
-A number right after a month name stays a number when it is not a day. In "March 15% of users" the claim is "15%", and
-in "May 3.5 kg" it is "3.5 kg". A day with a year after a comma, such as "October 21,2026", is still one date. In
-Polish, "21 października" is a date; "21 październik" is read as the number 21.
-
-Phone numbers, postal codes and street numbers are still claims. Each one needs a fact in `FACTS.md`, or a sample label.
-
-To have your logo judged, mark it with `data-brand-mark` on its `img` or inline `svg`, or name its file `logo`, `mark` or
-`wordmark`, alone or followed by `-`, `_` or `@` and more: `logo.svg`, `mark.svg`, `mark-dark.svg`, `logo@2x.png`,
-`logo.jpg` and `wordmark_light.svg` all work. `mark` and `wordmark` count only for an `.svg` file, so a team photo called
-`mark.jpg`, `Mark.png` or `mark-kowalski.jpg` is not taken for your logo; `logo` counts for any image type. A file such
-as `partner-logo.svg`, `bookmark.svg` or `marker.svg` is not taken for your logo either. An image that is taken for your
-logo by its name, or that you marked with `data-brand-mark`, has to be one of your logo files, so a different drawing
-called `mark.svg` fails the logo row. An image that is byte for byte one of your logo files is always taken for your
-logo, whatever it is called.
+For a real number, tell Claude the fact and its source, and Claude adds it to `FACTS.md`. A copyright year, or the
+"404" on a "page not found" page, needs no fact. Phone numbers, postal codes and street numbers do: to the check they
+are numbers like any other.
 
 ## Turn a warning into a brand rule
 
-If a pattern should never appear on your pages, make it a rule:
+To keep a warning off every page from now on, make it a rule:
 
-1. Ask Claude, for example "make the eyebrow a rule".
-2. Claude adds the rule to `qa/rules.json` and ties it to the words of one of your system rules, such as "no eyebrow over
-   a heading".
-3. Until that system rule is among the ones you approved, a page that breaks it only gets a warning that says so. Once it
-   is approved, the same page fails the check.
+1. Ask Claude, for example: "make the eyebrow a rule". An eyebrow is that small label in capitals over a heading.
+2. Claude ties it to one of your system rules, such as "no eyebrow over a heading": the short list of brand rules you
+   approve once your colours and fonts are set.
+3. Until you approve that system rule, a page that breaks it only gets a warning. After that, the page fails.
 
-The same works for your own rules about pages: one logo per screen, at most three words on a button, or how many words
-sit around an accent.
+## Old copies of a built site
+
+Each check of a site built somewhere else leaves a copy of it in the plugin's data folder, and the copies pile up.
+Old ones are safe to delete: your site and your reports are not there.
+[Page check](../reference/page-check.md#old-copies-of-a-built-site) says where they are.
 
 ## Check it worked
 
-- The reply ends with the exit code and the report path, and no row you did not expect is failing.
-- Every row either passed, warned, or says "not verified" and why. A row that did not run is never counted as a pass.
-- After you fix a page, run the same command again. A report goes stale when the page or a file it loads, a token, your page rules, `FACTS.md` or the system rules you approved changes. A later step, such as approving the book, does not.
+- The reply says the page passed.
+- Anything Claude could not check says "not verified" and why. It never counts as a pass.
 
 ## If something goes wrong
 
 | You see | Do this |
 | --- | --- |
-| Code 3 and "assets/tokens/tokens.json is missing" | Your tokens are not built yet. Ask Claude to build them, then check again |
-| Code 3 and a message about Chromium or setup | Run `/brand-creator:setup`, then check again |
-| Code 2 and "page-check runs offline" | The address is not on your computer. Build the site here and give its folder, or serve it locally |
-| A colour row fails and names a colour | The page paints a colour that is not one of your colours for that theme. The row gives the nearest brand colour. Use the token, or change the token if the brand changed |
-| A claims row fails | A number or status word has no fact behind it. Add the fact to `FACTS.md`, or mark the text as a sample. A phone number, postal code or street number needs one too. A copyright year and the code of an error page do not. A date is one claim, written with dots or a month name |
-| A font row says "not verified" | The check could not tell which font the browser drew, for example a system font this computer does not have. Load the font with the page and check again |
+| `assets/tokens/tokens.json` is missing | Your design tokens aren't made yet. Ask Claude to build them |
+| A message about the browser or setup | Type `/brand-creator:setup`, then check again |
+| The check won't start and says "page-check runs offline" | The address is not on your computer. Give the site's folder, or a `localhost` address |
+| A problem names another website | The page fetches a font or picture from the internet. Keep that file with the site's files |
+| A font marked "not verified" | This computer lacks a common font your brand uses. Have the page bring its own copy of the font |
 
 More: [Troubleshooting](../reference/troubleshooting.md).
 
 ## Related
 
-- [Check your project](check-your-project.md): the checks for the whole project, and leftover searches
-- [Apply the brand to your product](apply-the-brand-to-your-product.md): change your product repositories, only when you say go
-- [Commands](../reference/commands.md): the `check` arguments
+- [Page check](../reference/page-check.md): the exact rules, the result, and where files are kept
+- [Check your project](check-your-project.md): the checks for the whole project

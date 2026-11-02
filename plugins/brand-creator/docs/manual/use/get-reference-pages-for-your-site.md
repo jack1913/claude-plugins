@@ -1,148 +1,145 @@
 # Get reference pages for your site
 
-See how the best sites for your kind of visitor are put together, then get the first screen of your home page and your
-other pages built in your brand. The pages are references for whoever builds your real site: they show what the brand
-decided and what was only one example.
+Get sample pages of your website, in your brand, before anyone builds the real one. You see how the best sites for your
+kind of visitor work, then Claude builds the first screen of your home page and your other pages. You don't need a
+website yet.
+
+These are reference pages, not your live website: they stay on your computer, and Claude never publishes anything. They show whoever
+builds your real site, you or someone you hire, what your brand decided and what was only one example.
 
 ## Before you start
 
-- Your tier is Standard or Full. Quick does not include this. See [Choose a tier](../getting-started/choose-a-tier.md).
-- Your brief lists a site. Claude reads only the "Required surfaces" line of `brief/BRIEF.md`, in English and Polish, so a
-  site mentioned anywhere else in the brief does not count. To add one, put it on that line, in your own words. In
-  another language, add the word `site` to that line.
-- You settled motion and said go to your system rules, the written plan that Claude shows you after the motion answer. The
-  steps before it are in [Pick and refine a direction](pick-and-refine-a-direction.md).
-- For the research, Claude needs web access and the browser brand-creator uses (`/brand-creator:setup` installs it).
-  Without web access you can send links or screenshots instead.
+- **Your tier is Standard or Full**, not Quick. Your tier is how far your project goes. `/brand-creator:status` shows
+  yours. [Choose a tier](../getting-started/choose-a-tier.md) explains them, and how to move up.
+- **Your brief lists a site.** The brief (`brief/BRIEF.md`) holds the notes about your business that Claude wrote from
+  your answers at the start. Its "Required surfaces:" line lists where your brand must show up, such as a site or an app
+  icon. No site there? Ask Claude to add it.
+- **You said go to your brand's rules:** the one list, such as which colours text may sit on, that Claude showed you
+  after you settled whether your logo moves. `/brand-creator:status` shows whether that is done.
+- **Setup is done.** If you never ran it, type `/brand-creator:setup` once. It asks first, then downloads a separate
+  browser into brand-creator's own folder, for taking pictures of sites and pages. Your own browser stays as it is.
+- **For the research, Claude can go online.** If not, send links or screenshots.
 
-## Step 1: pick references
+Everything lands in your brand project: the folder Claude made when you started, the one holding `BRAND-STATE.md`. It
+takes at least three rounds (a round is one board and your answer), and runs in your own Claude session, so it costs
+what any session that long costs.
 
-Nothing on your site is built until you have seen how other sites do the same job and picked the ways you like.
+## 1. Show Claude sites you like
 
-1. Type the command, or ask for references for your site in your own words:
+Nothing on your site is built until you have seen how other sites do the same job.
+
+1. Type this, or ask for references for your site in your own words:
 
    > /brand-creator:round site-refs
 
-2. Claude asks once whether it may research sites online. Searching tells search services what your brand makes, and
-   opening a site tells its owner that someone looked, so the choice is yours. You can say:
-   - Research the best real sites for this kind of visitor, and open the sites you name. Claude recommends this.
-   - Use only the sites you give. Claude searches nothing.
-   - No web. You send screenshots, or you skip the references.
+2. Claude asks once whether it may look at sites online. Searching tells search services what your business does, and
+   opening a site tells its owner that someone looked. So you choose:
+   - **Research the best real sites for this kind of visitor, and open the ones I name.** Claude recommends this.
+   - **Only the sites I give you.** Claude searches nothing.
+   - **No web.** You send screenshots, or skip the references.
 
-   Your answer is kept in your project, so Claude does not ask again. Say so if you change your mind.
-3. Claude also asks which sites you like and which you dislike, and why. Send links, or screenshots. "None" is an answer.
-4. Claude opens the sites and shows you a board of four to six groups of real sites. A group is a way of doing the
-   visitor's job, such as one step with nothing to compare, or stages as the visitor lives them. It is not a look. Each
-   site has a screenshot, what to take (its structure and rhythm) and what to leave (its look and its words). The board
-   also lists the habits most sites in your category share by reflex, so your first screen can avoid them unless it has a
-   reason.
-5. Tick one or more groups, or say "none: research again". Claude restates your pick before it builds anything.
+   Claude keeps your answer and does not ask again. Tell it if you change your mind.
+3. Name sites you like and sites you don't, and say why. Links or screenshots both work. "None" is fine.
+4. Claude shows you a board with four to six groups of real sites. They are grouped by how they help
+   a visitor get what they came for, not by how they look: one simple step to sign up, say, or a catalogue to browse.
+   Each site shows a screenshot, what to take (how the page is organised) and what to leave (its colours, fonts,
+   pictures and words). The board also lists habits most sites like yours share, so your first screen can avoid them.
+5. Tick one or more groups and copy the reply the board writes for you into the chat, or type your own. If none fits,
+   say "none: research again". Claude says back your pick before it builds anything.
 
-To go straight to your pages, say "skip the references". Claude records that you skipped and never skips for you. Then
-the pages are built from your brief and the layout references alone.
+In a hurry? Say "skip the references", and Claude builds from your brief instead. Claude never skips this step for you.
 
-## Step 2: pick a first screen
+## 2. Pick the first screen of your home page
 
-1. Claude builds the top of your home page in two or three ways, each built from the structure of the references you
-   picked and from your own colours, fonts and logo. Type the command, or ask for it in your own words:
+The first screen, what a visitor sees before they scroll, sets the tone for everything else. So it comes first.
 
-   > /brand-creator:round site
-
-2. Read the board. Each version comes with:
-   - four pictures of the first screen: phone and desktop, light and dark;
-   - a check against your brand rules, which a version that fails shows as failing;
-   - the generic patterns Claude found and what it will do about them;
-   - a cold review that says "ship" or "fix". It reads only the four pictures, your brief and your facts, and gives its
-     verdict before any reason.
-3. Pick one, combine two ("Ledger, with the ending of Atlas"), or say that none fits and what was missing. Claude
-   restates your pick and writes it down with your words.
-
-By default Claude does the cold review itself, in the same conversation, so it is not blind. The board says so. A separate
-reviewer agent runs only after you see the size and cost and say yes.
-
-Each page also records which layout reference it used: a short recipe for how a page is organised for one visitor job,
-such as "understand how a service will run for them before handing it something important". It is a starting point,
-never a template.
-
-## Step 3: the other pages and your choices
-
-1. After your pick, Claude builds your other pages from the chosen first screen, in the next round. Type the command again,
-   or ask for the other pages:
+1. Type this, or ask for it in your own words:
 
    > /brand-creator:round site
 
-2. Read the board. It lists every choice the pages make, such as the order of the sections, where the action sits and how
-   a page ends. Each choice is tagged:
-   - **Brand rule:** you decided it, and the brand keeps it wherever it shows a site. The board says where you decided
-     it.
-   - **Example:** one way the pages did it. It may change.
-3. Check the tags. Claude proposes a rule only when you already decided it, and a default it chose is never a rule. To
-   turn an example into a rule, say so. Claude writes your decision down first, then changes the tag.
+2. Claude builds two or three versions. Each is organised like the references you picked (or built from your brief,
+   if you skipped them), in your colours, fonts and logo. For each one the board shows:
+   - four pictures: on a phone and a desktop, in light and dark;
+   - whether it keeps your brand's rules. A version that breaks one is marked as failing, never hidden;
+   - anything that makes it look generic, like countless other sites (such as a small label in capitals over a
+     heading), and what Claude will change or why it keeps it;
+   - a verdict, "ship" (good to go) or "fix", from a review that judges only the four pictures, your brief and your
+     facts (`FACTS.md`: the true things your pages may say, such as your prices).
+3. Pick one, mix two ("this one, with the ending of that one"), or say that none fits and what was missing. Claude says
+   back your pick and writes it down in your words.
 
-## Step 4: approve the pages
+Claude does that review itself by default, in the same chat. It built the page, so this is not a stranger's fresh look,
+and the board says so. For one, ask for a separate reviewer: an extra agent, at extra cost. Claude says how many and
+roughly what they cost, and waits for your yes.
 
-1. Say that you approve the pages and whether the tags are right. A bare "ok" is not enough: Claude asks you to confirm
-   the pages and the tags. Your approval covers every page on the board. To leave a page out, ask Claude to take it off
-   the board first.
-2. Claude restates what you approved and records it. Then it saves the round in `history/` and copies each page on the
-   board into your project, checks it again where it now lives, and takes its pictures again:
+## 3. Get your other pages, and say which choices are rules
 
-   ```text
-   site/
-     site.json              the pages, the layout each used, and every choice with its tag
-     <page>/index.html      one approved page
-     <page>/shots/          the pictures of that page
-   ```
+1. Type the same command again. Claude builds your other pages from the first screen you picked:
 
-3. Run the checks:
+   > /brand-creator:round site
 
-   > /brand-creator:check
+2. The board lists every choice the pages make, such as the order of the sections or where the main button sits. Each
+   choice has a tag:
+   - **Brand rule:** you decided it, so your site keeps it, on every page unless the rule names certain pages. The board
+     says where you decided it.
+   - **Example:** one way the pages did it, free to change.
+3. Check the tags. Claude tags a choice as a rule only when you already decided it, never for something it chose itself.
+   To make an example a rule, say so. Claude first writes your decision into your list of decisions (`DECISIONS.md`),
+   then changes the tag.
 
-   They confirm that no approved page changed since you approved it, that each one passes your brand rules, and that its
-   pictures match the page.
+## 4. Approve the pages
 
-The brand book can show these pages in an optional Site chapter, with every choice and its tag. Ask for it when you
+1. Tell Claude you approve the pages and that the tags are right. A bare "ok" is not enough: Claude asks you to confirm
+   both. Your yes covers every page on the board: to leave one out, ask Claude to take it off first.
+2. Claude says back what you approved and writes it down. It locks a copy of the round in `history/`, so it can't
+   quietly change. Then it copies each page into `site/` in your brand project, with a record of the pages and every
+   choice and its tag (`site/site.json`), and checks and photographs each page again there.
+3. Type `/brand-creator:check`. It confirms that no approved page changed since you approved it, that each one keeps
+   your brand's rules, and that its pictures show the page as it is now.
+
+The pages in `site/` are for whoever builds your real site: the rules are what to keep, the examples one way to follow
+them. Your brand book can show them, with the tag on each choice, in an optional Site chapter. Ask for it when you
 [make the brand book](make-the-brand-book.md).
 
 ## What it never does
 
-- Build or publish your real site. The pages here are references. The real site is built in your product repository, from
-  your design tokens and your rules.
-- Copy another site's look. Colours, type, images and words always come from your brand.
-- Make up a site. Claude only shows sites it opened, and a site without a screenshot does not count.
-- Research online without your yes, or open a page behind a login.
-- Reuse another site's screenshot in anything it builds. The screenshots stay on the references board, for private
-  research.
-- Skip a step for you. Only you skip, in your own words.
+- Build or publish your real site. That is built with your website's code, from your brand's colours, fonts and rules.
+- Make a page that needs the internet. Each one uses only files in your brand project.
+- Copy another site's look. Colours, fonts, pictures and words always come from your brand.
+- Make up a site. Claude shows only sites it opened, and a site without a screenshot does not count.
+- Look online without your yes, or open a page behind a login.
+- Use another site's screenshots in anything it builds. They stay on the references board, for your own research.
+- Skip a step for you.
 
 ## Check it worked
 
-- The references board shows four to six groups, and `research/site-refs/` holds a folder with pictures for each site
+- The references board shows four to six groups, and `research/site-refs/` holds a folder of pictures for each site
   Claude opened.
-- After your pick of references, `/brand-creator:status` shows the decision as recorded.
-- After approval, `site/site.json` exists, and `/brand-creator:check` passes the site rows or says "not verified" and why.
+- After you pick references, or skip them, `/brand-creator:status` shows it as recorded.
+- After you approve the pages, `site/site.json` exists, and `/brand-creator:check` passes the lines about your site, or
+  says "not verified" (it could not confirm something) and why.
 
 ## If something goes wrong
 
 | You see | Do this |
 | --- | --- |
-| Claude says the references need web access and stops | Allow web access, send links or screenshots of sites you like, or say "skip the references" |
-| A site did not load, and Claude leaves it out | Send a screenshot of it, or let Claude pick another. A site that cannot be opened is never described from memory |
-| A message about the browser or `/brand-creator:setup` | Run `/brand-creator:setup`, then try again. Claude never runs it without your yes |
-| The round is refused because your brief lists no site | Add the site to the "Required surfaces" line of `brief/BRIEF.md`, in your own words. In a language other than English or Polish, add the word `site` to that line |
-| The round is refused because the system rules are not approved | Say go to the written plan of your brand's rules that Claude shows after the motion answer. If you have not seen it, ask Claude where your project stands. The steps before it are in [Pick and refine a direction](pick-and-refine-a-direction.md) |
-| Claude says the references come first and stops | Pick references, or say "skip the references". The first screen waits for one of the two |
-| A version shows "fix" | Ask Claude to fix what the cold review found, or to say on the card why it keeps it |
-| Claude says the pages need a first screen you picked | Pick a first screen first. The other pages are built from it |
-| `check` says the pictures or the page check of an approved page are "not verified" | Something the check stands on changed after the last run: the page or a file it loads, your tokens, your page rules, your facts, or the system rules you approved. Approving a later step, such as the book, does not. Ask Claude to take the pictures and run the page check again |
-| `check` fails an approved page | The row names the page. Either it was edited after you approved it (put the approved page back, or approve it again from the round), or it breaks your brand rules (fix it and approve again) |
-| Claude says `site/` already holds approved pages | Approving again moves the old pages to a `removed-<date>` folder, never deletes them, and only when you say to replace them |
+| Claude says the references need web access | Let Claude go online, send links or screenshots of sites you like, or say "skip the references" |
+| A site did not load, and Claude leaves it out | Send a screenshot of it, or let Claude pick another |
+| A message about the browser or setup | Type `/brand-creator:setup`, then try again. Claude never runs it without your yes |
+| Claude says your brief lists no site | Ask Claude to add your site to the "Required surfaces" line of `brief/BRIEF.md`. It needs a word for a site in English or Polish; in another language, add the word `site` |
+| Claude says your brand's rules are not approved | Say go to the list of rules Claude shows after asking whether your logo moves. `/brand-creator:status` shows where you are |
+| Claude says the references come first | Pick some references, or say "skip the references" |
+| A version shows "fix" | Ask Claude to fix what the review found, or to say on the board why not |
+| Claude says the pages need a first screen you picked | Pick a first screen. The other pages are built from it |
+| `check` says an approved page is "not verified" | Not a failure: something the page depends on changed since its last check, such as a file it loads, your colours, your facts or your rules. Ask Claude to take its pictures and check it again |
+| `check` fails an approved page | It names the page. It was changed after you approved it (put it back, or approve it again), or it breaks one of your brand's rules (fix it, then approve it again) |
+| Claude says `site/` already holds approved pages | Say you want to replace them. The old pages move to a folder named `removed-` plus the date. Nothing is deleted |
 
 More: [Troubleshooting](../reference/troubleshooting.md).
 
 ## Related
 
-- [Check a page against your brand](check-a-page.md): the page check, for any page you built
-- [What it makes](../reference/what-it-makes.md#website-references-and-reference-pages-standard-and-full): the files each
-  step writes
-- [Commands](../reference/commands.md): the `round` arguments
+- [Check a page against your brand](check-a-page.md): check any page you built
+- [What it makes](../reference/what-it-makes.md#website-references-and-reference-pages-standard-and-full): the files
+  each step writes
+- [Commands](../reference/commands.md): what you can type after `round`

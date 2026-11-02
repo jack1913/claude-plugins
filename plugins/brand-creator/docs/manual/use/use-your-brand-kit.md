@@ -1,187 +1,210 @@
 # Use your brand kit
 
-Get your brand in one folder that a product repository can carry: your colours, fonts and logo files, your rules and
-facts, ready-made snippets, and a few pages of your own about how the brand sounds and looks. Whoever builds a page in
-that repository, you or an agent, finds the brand in one place. Asking Claude to check the kit catches a file someone
-edited by hand, a link that leads nowhere and a brand change the kit does not have yet.
+Your brand kit is your brand in one folder: your colours, fonts and logo files, your rules and facts, ready-made bits
+of code, and a few short files in your own words.
+
+Your product is your website, app or online shop. When you, a developer or Claude build a page for it, a copy of the
+kit inside its code puts your whole brand at hand, so nobody guesses a colour or a rule. Claude also uses the kit
+whenever it makes something for your brand, such as a page or a post. Ask Claude to check the kit, and it catches a
+hand edit, a dead link or a brand change the kit doesn't have yet.
 
 ## Before you start
 
-- You have approved your brand files: the [brand book](make-the-brand-book.md) is approved and `/brand-creator:check`
-  passes. Any tier works.
-- Your colours and fonts are built into design tokens. The steps before the book do that.
-- Your project has font files? Ask Claude to check the fonts first. The kit copies a font only when that check reads it as
-  open-licence (OFL) and its licence text sits beside it.
+- Your [brand book](make-the-brand-book.md) is approved.
+- Your design tokens are built: your colours, fonts and sizes, saved as files a program can read. Claude makes them
+  before the book, and says so if they are missing.
+- Any tier can have a kit. Putting it into your product's code needs the Full tier. `/brand-creator:status` shows your
+  tier.
+- Your brand has font files of its own? Claude can tell you. Ask it to check your fonts first. The kit takes only fonts
+  under the SIL Open Font License (OFL), a free licence that lets you pass a font on with your product, each with its
+  licence text in your project's `assets/fonts/` folder.
 
 ## What is in the kit
 
-The kit is a folder in your project, `.claude/skills/<your brand>-brand/`. It is also your brand's skill: it includes the
-per-brand skill, so you do not need both.
+The kit is a folder in your brand project (the folder Claude made when you started, the one holding `BRAND-STATE.md`),
+named after your brand: `.claude/skills/acme-brand/` for Acme. Finder hides folders whose name starts with a dot: press
+Command-Shift-period to see them. The hidden `.DS_Store` file Finder may leave there is ignored.
 
-Made for you. Never edit these; they come from your project:
+The kit is also your brand's skill: the instructions Claude reads when it works for your brand. So you don't need the
+brand skill on its own.
 
-- `SKILL.md`: the brand skill, with the kit's version.
-- `brand/`: copies of your token files, logo files, open-licence fonts with their licence text, and, when your brand
-  moves, the motion spec. Byte for byte, at the same paths as in your project.
-- `rules.json` and `facts.json`: your rules, with a short id for each, and the facts you confirmed. Contact details never.
-- `snippets/`: ready-made fonts, logo and text-on-each-ground code to copy into a page.
-- `kit.json`: the version and a fingerprint of every file above.
+**Made for you.** Claude builds these from your brand project. Never edit them: change your project, then build again.
 
-Yours. Claude writes each once and never overwrites it:
+- exact copies of your tokens, logo files, OFL fonts with their licence texts, and your motion files if you have any;
+- your brand rules, each with a short name, and the facts you confirmed, never contact details;
+- ready-made code for your fonts, your logo in light and dark, and text on each background colour you named;
+- your approved site pages, with their screenshots and a note on each page's choices;
+- `kit.json`: the version, and a fingerprint of every file so a changed one gets caught.
 
-- `EXTENDING.md`: how to extend the kit.
-- `voice.md`, `visual.md` and `golden-rules.md`: how the brand sounds, how it looks beyond the tokens, and the few rules
-  every piece keeps.
-- `recipes/web-page.md`: the steps for building a page in your brand.
+Approved site pages go in only when each has a passing, up-to-date page check and up-to-date screenshots. Otherwise
+the build stops, writes nothing and names the page. Links between pages keep working, also one to a page's folder,
+such as `../menu/`. A font a page carries or loads follows the same font rule. One that isn't copied is listed, and
+the kit check warns that whoever builds your product must get it under its own licence.
 
-The kit has a version, `<edition>.<build>`. The build number goes up by one when anything in the kit changes, yours
-included, and stays the same when nothing does.
+**Yours.** Claude writes each once, as a starter file, and never overwrites it. Delete one, and the next build writes
+the starter again.
+
+- `voice.md`, `visual.md` and `golden-rules.md`: how your brand sounds, how it looks beyond colours and fonts, and the
+  few rules every piece keeps.
+- `recipes/web-page.md`: the steps for building a web page in your brand. Change it to fit how you work.
+- `EXTENDING.md`: how to add to the kit.
+
+A recipe or folder you add yourself, such as `recipes/email.md`, stays in your brand project. It doesn't change the
+version, and it isn't copied into your product.
 
 ## Ask for it
 
-1. When you approve your brand files, Claude asks once what you want: `BRAND.md` and `DESIGN.md`, the brand skill, and the
-   brand kit. Claude recommends the kit when your brief lists a site or you have product repositories. Answer yes to the
-   kit. Skipped it? Ask later, in your own words:
+1. When you approve your brand book, Claude asks once which extra files you want, the kit among them. It recommends
+   the kit when your brief lists a website or your project lists your product's code. Say yes. Missed it? Ask:
 
    > Write the brand kit
 
-2. Claude shows the plan first and writes nothing:
+2. Claude shows what it would write, and writes nothing yet. You'll see something like this, where "generated" is a
+   made-for-you file and "scaffold" a starter file of yours:
 
    ```text
    would write 15 generated files into .claude/skills/acme-brand/ (version 1.1)
-   generated SKILL.md (…)
-   generated brand/assets/logo/mark.svg (…)
    …
    scaffold voice.md (…, written once, never overwritten)
    …
    ```
 
-3. Say go. Claude writes the kit.
+3. Say go. Claude writes the kit. It starts no helper agents and sends nothing anywhere.
 
-## Fill your parts
+## Fill your three files
 
-A new kit is not done. `voice.md`, `visual.md` and `golden-rules.md` each start as a heading, one sentence and a note in
-double square brackets that says what to write. Claude fills them with you:
+A new kit isn't finished. `voice.md`, `visual.md` and `golden-rules.md` each start with a note in double square
+brackets that says what to write, and the kit check fails until every note is replaced. Claude drafts the three with
+you from your brand book, and you correct them:
 
-1. `voice.md`: three sentences on how the brand sounds, with one right and one wrong example. They come from the tone
-   chapter of your book and your voice facts.
-2. `visual.md`: your layout habits, image style and what to keep out of a picture, from the book.
+1. `voice.md`: three sentences on how your brand sounds, with one right and one wrong example.
+2. `visual.md`: your layout habits, your image style and what to keep out of a picture.
 3. `golden-rules.md`: up to ten rules every piece keeps.
-4. In `visual.md` and `golden-rules.md`, mark each bullet or numbered line as one of your brand's rules, by its short id in
-   `rules.json`, or as an example. `voice.md` needs no marks. The bullets of a recipe get the same marks; its numbered
-   steps need none. A number, a ratio or a colour in any of these names the token or rule it comes from, or its line
-   says it is an example.
-5. Ask Claude to build the kit again, so it records your text, then to check it:
 
-   > Build the kit again, then check it
+In `visual.md` and `golden-rules.md`, each list line carries a tag that tells whoever builds a page what to keep:
+`[rule: <name>]` for one of your brand rules, by the short name the kit gives it, or `[example]` for one way of doing
+it, free to change:
 
-Your kit is whole when every note is replaced, every link points at a file inside the kit and the versions agree. The
-web-page recipe is ready to use. Change it to fit how you build pages, or add a recipe of your own under `recipes/`.
+```markdown
+- Photos use daylight, never flash. [rule: photos-use-daylight-never-flash]
+- A loaf on a wooden table, seen from above. [example]
+```
+
+A line with a size, a colour or a ratio, such as `48px`, also says where it comes from: a token, a rule, or `[example]`.
+Claude writes the tags as it drafts; you check them. In a recipe, tag the bullet points too; numbered steps need none.
+The kit's `EXTENDING.md` has every form of tag. Then ask:
+
+> Build the kit again, then check it
+
+The kit is whole when every note is replaced, every list line tagged, every link inside the kit, and the kit is of
+your approved book's edition.
+
+## The version number
+
+Each kit has a version, such as 1.3. The first number is your approved brand book's edition. The second goes up by one
+at the next build when a made-for-you file or one of your five files changed, and stays put when nothing did. A new
+edition starts again at 1. The number tells you which kit a copy holds. Whether a copy is up to date, Claude decides by
+comparing the files themselves.
 
 ## Test your kit
 
-Want to know whether the kit is enough on its own? Once it is whole, ask for a kit test. It is optional, and Claude never
-starts it unasked:
+The test shows whether someone with only the kit can build a page in your brand. It is optional, and Claude never
+starts it unasked. Once the kit passes its check, ask:
 
 > Test my brand kit
 
-1. Claude builds a hero and one other piece of a page in a temporary folder outside your project. It works from a copy of
-   the kit alone, as someone in a product repository would.
-2. The [page check](check-a-page.md) scores both against your brand. Then Claude reads the hero cold: a verdict, ship or
-   fix, before any reason.
-3. Each gap goes back where it belongs. A missing value goes to your tokens, a guessed rule to your brand rules, a missing
-   claim to your facts, an unclear step to your own kit files. Claude never patches a file the kit made. It changes your
-   project and builds the kit again.
-4. Claude writes the result in your project's `BRAND-STATE.md` and lists the gaps still open.
+1. Claude copies the kit into a temporary folder outside your project and, from the kit alone, builds a hero (the first
+   screen of a page) and one other piece.
+2. The [page check](check-a-page.md) scores both. Then Claude looks at the hero as a newcomer would, seeing only its
+   screenshots, your brief's one line and your facts: a verdict first, ship or fix, then the reasons.
+3. Each gap goes where it belongs: your tokens, rules, facts or own files. Claude never patches a made-for-you file:
+   it fixes your project and builds the kit again.
+4. Claude notes the result, and the gaps still open, in `BRAND-STATE.md`.
 
-The test runs in your conversation and starts no separate agent. The reader is not blind, because the same session wrote
-the kit, so take the verdict as a first signal and not as proof.
+The test runs in your conversation and starts no helper agents. The same session wrote the kit, so take the verdict as
+a first signal, not proof.
 
-## Put the kit in a product repository
+## Put the kit into a product
 
-The kit goes into a repository the same way the rest of your brand does, through `/brand-creator:brand-adopt`. That is for the
-Full tier.
+Skip this while nobody works on your website's or app's code. That code lives in a repository: the folder on your
+computer that holds it. [Apply the brand to your product](apply-the-brand-to-your-product.md) has the general steps.
+For the kit:
 
-1. Look at the repository first, as in [Apply the brand to your product](apply-the-brand-to-your-product.md):
+1. After Claude's first look at your code, ask for the kit:
 
-   > /brand-creator:brand-adopt survey
+   > Add the brand kit to my website
 
-2. Ask for the kit to go into that repository:
+   It joins the list of changes as one line: the whole kit folder.
 
-   > Add the brand kit for the repository `<label>`
+2. Ask Claude to apply the changes on a branch: a side copy of your code where they wait until you accept them. Claude
+   suggests a name; say yes or give your own. It copies the kit's files one at a time into the same folder inside your
+   code. It never overwrites your own files there from an earlier copy, and never puts the kit in Claude's settings
+   folder, which all your projects share.
+3. Before anything else, a separate review checks that every copied file is identical to your kit.
 
-3. Ask for the repository to be applied and name your branch. Claude copies the kit's files one at a time. It never
-   overwrites a file of yours that the repository already has, never copies into a global skills folder, and never commits.
-4. A review compares the copy with your kit byte for byte before anything else happens.
+Claude never saves the changes into your code's history for you. You look at them first, then keep them or throw them
+away. A published site doesn't serve the kit's folder, so whoever builds a page copies the tokens, fonts and logo it
+uses from the kit's `brand/` folder into the site's own files, as the web-page recipe says.
 
-## Check a copy is current
+## Check a copy is up to date
 
 Type:
 
 > /brand-creator:brand-adopt status
 
-Under "kit copies" each repository reads `current`, `not installed` or `not current`. For the detail, ask Claude to check
-the copy in a folder. It only reads, so the check changes nothing in the repository or in your project. You'll see
-something like this:
+Under "kit copies", each website or app reads:
 
-```text
-kit acme-brand, version 1.1
-repo: not installed
-  copy list, paths relative to .claude/skills/acme-brand/ (the generated files, kit.json last, then the owner files the repository lacks):
-    SKILL.md
-    brand/assets/logo/mark.svg
-    …
-    kit.json
-    voice.md (owner file, the repository has none)
-    …
-read only: nothing in the installed kit folders changed while they were read
-```
+- **current**: its copy matches your kit, file for file;
+- **not installed**: it has no copy yet;
+- **not current**: its copy is older, or a file in it differs, is missing or is left over.
 
-A copy that is not current lists the files that differ, are missing or are left over from an older kit. It also lists
-your own files in the copy that differ: they belong to the repository, and an update keeps them.
+For the detail, ask Claude to check the copy in that folder. It only reads, and names the files that differ, are
+missing or are left over, and what to copy. Your own files in a copy may differ: they belong to that code now, and an
+update keeps them.
 
-A file left over is one your brand no longer has, such as a logo you took out. It is not on the copy list. Move it
-to a `removed-<date>` folder in that repository, keeping the path it had, and delete nothing. Then the copy reads
-`current`.
+A file left over is one your brand dropped, such as a logo you took out. It is never deleted: when Claude applies the
+kit again, it moves the file into a `removed-` folder with the date, inside that code, keeping its path. Then the copy
+reads current.
+
+A copy that isn't current usually shows its older number, such as "installed version 1.1, project version 1.2". The
+same number on both sides means the new files are in but something still differs, for example after an update that
+stopped half way. The check says what: "version 1.2 on both sides, but 1 file is left over from an older kit".
 
 ## When the brand changes
 
-1. Change the brand in your project, as you always do: the tokens, the logo, the rules or the facts. Never change a file
-   under `brand/`, `snippets/` or `reference-pages/`, or `rules.json` and `facts.json`: the next build stops on it.
-2. Until you rebuild, the check says "not verified" and names what changed.
-3. Ask Claude to build the kit again. The version goes up by one.
-4. Put the new version in each repository with `/brand-creator:brand-adopt`. Until you do, its copy reads `not current`.
-   If the new kit dropped a file the old one had, Claude moves that file into a `removed-<date>` folder in the repository,
-   deletes nothing, and checks the copy again.
+1. Change your brand in your project as usual. Never change a made-for-you file: the next build stops on it.
+2. Until you build again, the kit check says "not verified" and names what changed.
+3. Ask Claude to build the kit again, then to check it. The version goes up by one. A file the kit no longer needs
+   moves into a `removed-` folder in your brand project. Nothing is deleted.
+4. Put the new kit into each website or app with `/brand-creator:brand-adopt`. Until then, its copy reads not current.
+
+In the kit check, an approved site page changed after the build, or checked before your tokens or rules changed,
+shows as "not verified", with what to run again.
 
 ## Check it worked
 
-- `.claude/skills/<your brand>-brand/kit.json` exists in your project.
-- Asking Claude to check the kit passes, and `/brand-creator:check` lists no kit row as failing.
-- In a repository, the copy reads `current`.
+- The kit folder in your brand project holds `kit.json`.
+- Asking Claude to check the kit passes. `/brand-creator:check` asks for that check too, and shows no failing kit line.
+- In each website or app, the copy reads current.
 
 ## If something goes wrong
 
 | You see | Do this |
 | --- | --- |
-| Claude shows the plan and says it needs your OK | That is the plan. Say go and Claude writes the kit |
-| Claude says your brand files are not approved yet | Approve them first: [Make the brand book](make-the-brand-book.md) |
-| Claude says the tokens are not built | Ask Claude to build your tokens, then the kit again |
-| The kit is written but without fonts, and Claude says to check the fonts | Ask Claude to check the fonts, then to build the kit again |
-| A font is listed in the kit as not copied | It is not open-licence, or its licence text is missing from `assets/fonts/`. A font under another licence goes into a product only by your decision, under its own licence |
-| A font in a reference page's folder, or one a page loads, is listed as not copied, and the check warns about a link to it | The same rule holds: the font check has to read that font (ask Claude to check it by name, together with the fonts in `assets/fonts/`), it has to be open-licence, and its licence text has to be in `assets/fonts/`. A font the kit does not copy goes into a product under its own licence |
-| The check fails and names `voice.md`, `visual.md` or `golden-rules.md` | A note in double square brackets is still there. Replace it with your own text |
-| The build stops because a file was edited by hand, or put into `brand/`, `snippets/` or `reference-pages/` | The message names the files. Change your project instead and build again. To keep a file, move it to `recipes/` or a folder of your own, or ask Claude to build with replace: it moves each file to a `removed-<date>` folder first, and deletes nothing |
-| The check says "not verified" and names what changed | The brand changed after the kit was built. Ask Claude to build the kit again |
-| A copy reads `not current` | Ask for the kit to be applied to that repository again with `/brand-creator:brand-adopt` |
-| Claude refuses a folder when it checks a copy | It refuses your home folder, anything inside `~/.claude` and your brand project. The kit goes into one product repository at a time |
-| Claude says there is no kit when you add it to a repository | Build the kit first |
+| Claude says your brand book is not approved yet | Approve it first |
+| Claude says the tokens are not built | Ask Claude to build them, then the kit again |
+| The kit has no fonts, and Claude says to check them | Ask Claude to check your fonts, then build again |
+| A font is listed as not copied | Claude says why. Not checked yet: ask Claude to check it with your other fonts, then build again. OFL without its licence text: add the text to `assets/fonts/`. Another licence: it goes into your product only by your decision, under its own licence |
+| The check names `voice.md`, `visual.md` or `golden-rules.md` | A note in double square brackets is left, or a line lacks its tag or a value's source. Ask Claude to fix it |
+| The build stops on a file edited by hand, or added to `brand/`, `snippets/` or `reference-pages/` | Make the change in your brand project and build again. Move a file you added to `recipes/` or a folder of your own. Or ask Claude to set the named files aside, into a `removed-` folder |
+| The build stops and names an approved site page | Its page check or screenshots fail or are out of date, it changed after you approved it, or it uses a file that isn't in your brand project. Do what the message says |
+| Claude says there is no kit when you add it to your code | Build the kit first |
+| Claude refuses a folder when it checks a copy | It refuses your home folder, Claude's settings folder and your brand project. Give it one website's or app's folder |
 
 More: [Troubleshooting](../reference/troubleshooting.md).
 
 ## Related
 
-- [Make the brand book](make-the-brand-book.md)
 - [Apply the brand to your product](apply-the-brand-to-your-product.md)
 - [Check a page against your brand](check-a-page.md): the check the web-page recipe ends with
 - [What it never does](../reference/what-it-never-does.md)
