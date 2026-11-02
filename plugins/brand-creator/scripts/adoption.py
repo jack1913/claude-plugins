@@ -578,8 +578,9 @@ KIT_COPIES_HEAD = "kit copies (read only; `brand-creator kit status` has the cop
 
 
 def kit_copies(project: Path, doc: dict) -> tuple[list[dict], str | None]:
-    """What `brand-creator kit status` says about the copy of the kit in each repository that has a kit row: ([{label, state, installed_version, project_version}] in the order of the
-    kit rows, None), or ([], why it could not be read: no kit in the project, a kit that is not whole, a repository it refuses). ([], None) when no row is a kit row. It is `kit.py status`
+    """What `brand-creator kit status` says about the copy of the kit in each repository that has a kit row: ([{label, state, installed_version, project_version, differ, missing, left_over}] in the
+    order of the kit rows, None), or ([], why it could not be read: no kit in the project, a kit that is not whole, a repository it refuses). ([], None) when no row is a kit row. The three lists are
+    what `kit status` found in the copy, kept so that `kit_line` can say what differs when the two versions are the same; `KIT_JSON_KEYS` are the four that `--json` prints. It is `kit.py status`
     itself that reads (so the copy is judged by the one rule, and read only, as `kit status` proves); anything it says on stderr while it still gave an answer is passed on."""
     if not any(r["category"] == "kit" for r in doc["rows"]):
         return [], None
@@ -596,16 +597,20 @@ def kit_copies(project: Path, doc: dict) -> tuple[list[dict], str | None]:
         return [], " ".join(said.removeprefix("error: ").split()) or f"`kit status` exited {cp.returncode} and said nothing"
     if said:
         print(said, file=sys.stderr)
-    return [{k: r[k] for k in ("label", "state", "installed_version", "project_version")} for r in shown], None
+    return [{**{k: r[k] for k in KIT_JSON_KEYS}, **{k: r.get(k) or [] for k in ("differ", "missing", "left_over")}} for r in shown], None
+
+
+KIT_JSON_KEYS = ("label", "state", "installed_version", "project_version")   # what `adoption status --json` prints for a kit copy
 
 
 def kit_line(k: dict) -> str:
-    """One repository's kit copy as `kit status` words it."""
+    """One repository's kit copy as `kit status` words it, by the same wording (`kitlib.not_current_text`): with two versions that differ it names both, with the same version on both sides it says
+    so and counts what differs, so that `not current (installed version 1.1, project version 1.1)` is never printed."""
     if k["state"] == kitlib.CURRENT:
         return f"{k['label']}: current (version {k['project_version']})"
     if k["state"] == kitlib.NOT_INSTALLED:
         return f"{k['label']}: not installed"
-    return f"{k['label']}: not current (installed version {k['installed_version'] or 'unknown'}, project version {k['project_version']})"
+    return f"{k['label']}: " + kitlib.not_current_text(k["installed_version"], k["project_version"], k.get("differ", []), k.get("missing", []), k.get("left_over", []))
 
 
 def do_status(a, project: Path, name: str) -> int:
@@ -633,7 +638,8 @@ def do_status(a, project: Path, name: str) -> int:
     c = ad.counts(doc)
     kits, unread = kit_copies(project, doc)   # after the counts, and a copy that is not current does not change the exit code
     if a.json:
-        print(json.dumps({"headline": ad.headline(doc), "counts": c, "rows": len(doc["rows"]), **({"kit": kits} if kits else {}), **({"kit_unread": unread} if unread else {})}, indent=2))
+        shown = [{k: r[k] for k in KIT_JSON_KEYS} for r in kits]
+        print(json.dumps({"headline": ad.headline(doc), "counts": c, "rows": len(doc["rows"]), **({"kit": shown} if kits else {}), **({"kit_unread": unread} if unread else {})}, indent=2))
     else:
         print(f"{ad.headline(doc)}: {ad.sentence(doc)}")
         todo = [r["n"] for r in doc["rows"] if ad.status_of(doc, r["n"]) != "done"]
