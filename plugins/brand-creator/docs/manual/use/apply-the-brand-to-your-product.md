@@ -45,8 +45,8 @@ changes anything, and checks again afterwards.
    as `http://localhost:3000/`. Claude then reads the pages as the browser shows them. Only addresses on your own
    computer are opened.
 3. Apply the brand as usual. When the last row is done, Claude records the wiring again.
-4. The review compares the two records. Anything that was there before and is gone now fails the review, with the files
-   it was in.
+4. The review reads your repository as it is now and checks it against the record from before. Anything that was there
+   before and is gone now fails the review, with the files it was in.
 5. For each item that is gone, you decide. Claude puts it back, or you say why it goes, for example "the pricing page
    moved to /plans". Claude records your reason in your own words. It never makes that call for you, not even in the
    review.

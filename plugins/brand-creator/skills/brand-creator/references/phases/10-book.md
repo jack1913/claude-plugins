@@ -153,7 +153,8 @@ repositories. Nothing is written without the owner's yes, and it needs G5 record
 
 After the kit is written the owner may ask for a kit test: a hero and one other piece of the page, built from the kit alone and
 checked against the brand. Offer it when `kit check` passes; never start it unasked. It runs in the thread. It is not blind (the
-session that wrote the kit builds from it), so say so, and read only the kit's own files. The steps, in order:
+session that wrote the kit builds from it), so say so. The builder reads only the kit's own files; the cold read also reads `FACTS.md`
+(step 2). The steps, in order:
 
 1. **Build.** Make a scratch folder outside the project (`mktemp -d`) and copy the kit folder `.claude/skills/<slug>-brand/` into
    it, as a product repository would carry it. One builder works there from the kit alone, following `recipes/web-page.md`: the
@@ -174,10 +175,9 @@ session that wrote the kit builds from it), so say so, and read only the kit's o
 4. **Record.** One line in BRAND-STATE.md Notes: `kit test <date>: page-check <status>; gaps: <the gaps, and the cold read's
    verdict>`. List each gap still open under "Still open".
 
-One builder agent may do step 1 instead of the thread, only after the fleet gate ([fleet.md](../fleet.md)): the agent count, the
-models that will run, the size, the cost, and the owner's yes. Its prompt is the skeleton of
-[prompt-fragments.md](../prompt-fragments.md) with the scratch folder as its only folder and the kit's files as its only
-CONTEXT. No workflow is added for the kit test.
+The thread builds step 1 and no agent is launched for it, because none of the plugin's agents fits ([fleet.md](../fleet.md) lists
+what each may write): `brand-designer` writes only its `rounds/rN/<direction>/` and builds a board from the board template, and
+`brand-implementer` writes only a product repository, after G6. No workflow is added for the kit test.
 
 ## Gate
 

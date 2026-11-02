@@ -55,7 +55,10 @@ corner. The agent surveys read only, lists, and changes nothing until the owner 
    to time: a row marked done that still matches is flagged.
    A Brand kit row (added when the project has a kit and the owner wants it in a repository: `adoption add --repo <label> --kit`):
    run `kit status --repo <path>` and copy exactly the files of its copy list (`mkdir -p` then `cp`, one file at a time; an owner
-   file the repository already has is never overwritten), then `kit status --repo <path>` must say current. Never copy into
+   file the repository already has is never overwritten). When the brand changed and dropped a generated file, `kit status`
+   also names files left over from the older kit; they are not on the copy list: move each to `removed-<date>/` in that
+   repository, keeping its path inside that folder (`removed-<date>-2/` when a file is already there; never delete one),
+   then run `kit status --repo <path>` again, and it must say current. Never copy into
    `~/.claude/skills` or any global folder. The kit is not committed.
    A redesign of an existing site: the implementer ends with `adoption wiring --repo <label> --after` (the same `--page` URLs, or none to
    read the pages of the before record again; the owner's local server must be running, and a page that cannot be read is reported, never
