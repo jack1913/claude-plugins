@@ -40,7 +40,7 @@ brand/, snippets/ or reference-pages/ that the kit did not write (a file named e
 (exit 1, up to 6 paths named) unless --replace, which moves each to removed-<date>[-n]/<its project path>. A file the last build wrote that the project no longer has (a logo taken away) is moved there too, and said so. Nothing is deleted.
 A SKILL.md that `applied-skill` wrote is taken over; one edited by hand stops the first build the same way.
 
-`kit check` reads the kit and writes the report `kit-check`; no kit is exit 2. Its inputs are every file under the kit folder, the files the kit is made from, BRAND-STATE.md and the `kit` report, so any change
+`kit check` reads the kit and writes the report `kit-check`; no kit is exit 2. Its inputs are every file under the kit folder (a Finder `.DS_Store` is none), the files the kit is made from, BRAND-STATE.md and the `kit` report, so any change
 makes it stale. Rows: kit:files (every generated file is what kit.json lists, kit.json is the bytes the `kit` report recorded, no file in a generated folder is unlisted; with no `kit` report: not verified), kit:links (every
 relative link in a .md, .html or .css file resolves to a file inside the kit: one that points outside it, an absolute path or a missing file fails), kit:fill (no `[[fill` marker is left in a text file), kit:versions (SKILL.md holds
 `Kit version <kit.json version> (kit.json).` exactly once, and the kit's edition is the approved one), kit:plugin (warns on another plugin version), kit:sources (not verified when the brand changed after the kit was built, naming
@@ -52,7 +52,9 @@ project; a band drawing that is not written as a plain path; a scaffold with a p
 
 `kit status` reads <DIR>/.claude/skills/<slug>-brand/ of each repository and writes nothing, in the repository or in the project (no report either). Per repository it says `not installed`
 (no kit.json there), `current (version V)` (every generated file and kit.json are the project's bytes) or `not current` (the installed and the project version, then the generated files that
-differ, are missing, or are left over from an older kit). It also lists the owner files that differ (the repository's own, kept on update) and the copy list: the generated files to copy
+differ, are missing, or are left over from an older kit; when both versions are the same it says so and counts what differs). A file left over is not on the copy list: the implementer moves it
+to removed-<date>/<kit folder>/ in the repository, keeping its path, and deletes nothing (--json: `left_over` lists them, `left_over_to` says where they go). It also lists the owner files that
+differ (the repository's own, kept on update) and the copy list: the generated files to copy
 (kit.json last), then the owner files the repository lacks, as paths relative to the kit folder. Without --repo it reads each repository that has a `kit` row in adoption.json (none: exit 2).
 Exit 0 when every copy is current, 1 when one is not installed or not current, or when a repository's kit folder changed while it was read (its files, sizes and times are listed before
 and after). Exit 2: no kit in the project; a folder that does not exist; the project itself or a folder inside it; your home folder or any path inside ~/.claude (the kit goes into one product
@@ -386,6 +388,22 @@ def adoption_repos(project: Path) -> list[str]:
     return out
 
 
+def left_over_to(kd_rel: str) -> str:
+    """Where a file left over from an older kit goes in the repository (the implementer moves it there; nothing is deleted): removed-<date>/, then the kit folder, then its path in the kit."""
+    return f"removed-<date>/{kd_rel}/"
+
+
+def not_current_line(res: dict) -> str:
+    """The first line of a copy that is not current. With two versions that differ it names both. With the same version on both sides it says so and what differs, so that it does
+    not read as a contradiction: the version is the same, the files are not."""
+    a, v, label = res["installed_version"], res["project_version"], res["label"]
+    if a != v:
+        return f"{label}: not current (installed version {a or 'unknown'}, project version {v})"
+    counts = ((len(res["differ"]), "file differs", "files differ"), (len(res["missing"]), "file is missing", "files are missing"),
+              (len(res["left_over"]), "file is left over from an older kit", "files are left over from an older kit"))
+    return f"{label}: not current (version {v} on both sides, but " + ", ".join(f"{n} {one if n == 1 else many}" for n, one, many in counts if n) + ")"
+
+
 def status_lines(res: dict, kd_rel: str) -> list[str]:
     """The text of one repository: its state, what differs, and the copy list."""
     v, label = res["project_version"], res["label"]
@@ -394,12 +412,13 @@ def status_lines(res: dict, kd_rel: str) -> list[str]:
     elif res["state"] == kitlib.CURRENT:
         L = [f"{label}: current (version {v})"]
     else:
-        L = [f"{label}: not current (installed version {res['installed_version'] or 'unknown'}, project version {v})"]
+        L = [not_current_line(res)]
     if res["note"]:
         L.append(f"  {res['note']}")
     for title, items in (("generated files that differ", [f"{rel} ({why})" for rel, why in res["differ"]]),
                          ("generated files that are missing", res["missing"]),
-                         ("left over from an older kit (not in this kit)", res["left_over"]),
+                         (f"left over from an older kit (not in this kit, so not on the copy list; move each to {left_over_to(kd_rel)} in the repository, keeping its path; nothing is deleted)",
+                          res["left_over"]),
                          ("owner files that differ (kept on update)", [rel for rel, _why in res["owner_differ"]])):
         if items:
             L += [f"  {title}:", *(f"    {i}" for i in items)]
@@ -444,7 +463,9 @@ def status(project: Path, a) -> int:
     kept = all(r["read_only"] for r in results)
     ok = kept and all(r["state"] == kitlib.CURRENT for r in results)
     if a.json:
-        keys = ("label", "path", "state", "installed_version", "project_version", "differ", "missing", "left_over", "owner_differ", "copy", "copy_owner", "read_only")
+        keys = ("label", "path", "state", "installed_version", "project_version", "differ", "missing", "left_over", "left_over_to", "owner_differ", "copy", "copy_owner", "read_only")
+        for r in results:   # where the files left over go, in the repository: only said when there are some
+            r["left_over_to"] = left_over_to(kd_rel) if r["left_over"] else None
         shown = [{k: ([{"file": rel, "why": why} for rel, why in r[k]] if k in ("differ", "owner_differ") else r[k]) for k in keys} for r in results]
         print(json.dumps({"kit": name, "version": doc["version"], "repos": shown, "current": ok}, indent=2, ensure_ascii=False))
     else:

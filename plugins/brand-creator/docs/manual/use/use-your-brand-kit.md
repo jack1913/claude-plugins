@@ -138,6 +138,10 @@ read only: nothing in the installed kit folders changed while they were read
 A copy that is not current lists the files that differ, are missing or are left over from an older kit. It also lists
 your own files in the copy that differ: they belong to the repository, and an update keeps them.
 
+A file left over is one your brand no longer has, such as a logo you took out. It is not on the copy list. Move it
+to a `removed-<date>` folder in that repository, keeping the path it had, and delete nothing. Then the copy reads
+`current`.
+
 ## When the brand changes
 
 1. Change the brand in your project, as you always do: the tokens, the logo, the rules or the facts. Never change a file
