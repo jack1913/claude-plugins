@@ -2,7 +2,8 @@
 
 Get your brand in one folder that a product repository can carry: your colours, fonts and logo files, your rules and
 facts, ready-made snippets, and a few pages of your own about how the brand sounds and looks. Whoever builds a page in
-that repository, you or an agent, finds the brand in one place, in files that cannot drift from your project.
+that repository, you or an agent, finds the brand in one place. Asking Claude to check the kit catches a file someone
+edited by hand, a link that leads nowhere and a brand change the kit does not have yet.
 
 ## Before you start
 
@@ -66,8 +67,10 @@ double square brackets that says what to write. Claude fills them with you:
    chapter of your book and your voice facts.
 2. `visual.md`: your layout habits, image style and what to keep out of a picture, from the book.
 3. `golden-rules.md`: up to ten rules every piece keeps.
-4. Mark each line as one of your brand's rules, by its short id in `rules.json`, or as an example. A number, a ratio or a
-   colour names the token or rule it comes from, or the line says it is an example.
+4. In `visual.md` and `golden-rules.md`, mark each bullet or numbered line as one of your brand's rules, by its short id in
+   `rules.json`, or as an example. `voice.md` needs no marks. The bullets of a recipe get the same marks; its numbered
+   steps need none. A number, a ratio or a colour in any of these names the token or rule it comes from, or its line
+   says it is an example.
 5. Ask Claude to build the kit again, so it records your text, then to check it:
 
    > Build the kit again, then check it
@@ -91,9 +94,8 @@ starts it unasked:
    project and builds the kit again.
 4. Claude writes the result in your project's `BRAND-STATE.md` and lists the gaps still open.
 
-The test runs in your conversation. Claude uses a separate agent to do the building only if you say yes after it has told
-you how many agents, which models and roughly what it costs. In your conversation the reader is not blind, because the
-same session wrote the kit, so take the verdict as a first signal and not as proof.
+The test runs in your conversation and starts no separate agent. The reader is not blind, because the same session wrote
+the kit, so take the verdict as a first signal and not as proof.
 
 ## Put the kit in a product repository
 
@@ -145,6 +147,8 @@ your own files in the copy that differ: they belong to the repository, and an up
 2. Until you rebuild, the check says "not verified" and names what changed.
 3. Ask Claude to build the kit again. The version goes up by one.
 4. Put the new version in each repository with `/brand-creator:brand-adopt`. Until you do, its copy reads `not current`.
+   If the new kit dropped a file the old one had, Claude moves that file into a `removed-<date>` folder in the repository,
+   deletes nothing, and checks the copy again.
 
 ## Check it worked
 

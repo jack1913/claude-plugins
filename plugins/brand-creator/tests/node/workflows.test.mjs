@@ -182,13 +182,13 @@ test("adopt tells the implementer how a kit row is copied and the reviewer how i
     const implLines = r.calls.find((c) => c.label === `apply ${label}`).prompt.split("\n");
     const kitCopy = implLines.filter((l) => l.startsWith("A Brand kit row"));
     assert.deepEqual(kitCopy, [
-      `A Brand kit row (its file is a .claude/skills/<slug>-brand/ folder, Find kit.json) is copied by the list brand-creator --data "/DATA" kit status --repo "${path}" --project "/PROJECT" prints: mkdir -p, then cp one file at a time, exactly those files; an owner file the repository already has is never overwritten; never into ~/.claude/skills or any global skills folder; the kit is not committed; kit status --repo must then say current.`,
+      `A Brand kit row (its file is a .claude/skills/<slug>-brand/ folder, Find kit.json) is copied by the list brand-creator --data "/DATA" kit status --repo "${path}" --project "/PROJECT" prints: mkdir -p, then cp one file at a time, exactly those files; an owner file the repository already has is never overwritten; never into ~/.claude/skills or any global skills folder; files kit status names as left over from an older kit are not on that list: move each to removed-<date>/ in the repository, keeping its path inside that folder (removed-<date>-2/ when a file is already there; never delete one), and list them in moved_to_removed; the kit is not committed; run kit status --repo again, it must then say current.`,
     ], label);
     assert.ok(implLines.indexOf(kitCopy[0]) < implLines.indexOf(RULES), "the kit line sits before RULES, and RULES stays verbatim");
     const revLines = r.calls.find((c) => c.label === `review ${label}`).prompt.split("\n");
     const kitCheck = revLines.filter((l) => l.startsWith("For a Brand kit row"));
     assert.deepEqual(kitCheck, [
-      `For a Brand kit row, brand-creator --data "/DATA" kit status --repo "${path}" --project "/PROJECT" must exit 0; quote it with its exit code.`,
+      `For a Brand kit row, brand-creator --data "/DATA" kit status --repo "${path}" --project "/PROJECT" must exit 0; quote it with its exit code. Files it names as left over from an older kit mean the row is not done: put each in no_decision_fixes (the implementer moves it to removed-<date>/ in the repository, never deletes it, then runs kit status again); you move nothing.`,
     ], label);
     assert.ok(revLines.indexOf(kitCheck[0]) < revLines.indexOf(RULES), "the kit line sits before RULES, and RULES stays verbatim");
   }
@@ -198,24 +198,36 @@ test("adopt tells the implementer how a kit row is copied and the reviewer how i
   assert.match(agents["brand-implementer"].body, /A Brand kit row is copied by the list `brand-creator kit status --repo <path>` prints/);
   assert.match(agents["brand-implementer"].body, /nothing goes into\s+`~\/\.claude\/skills` or any global folder/);
   assert.match(agents["brand-reviewer"].body, /`brand-creator --data "<data>" kit status --repo <path> --project "<project>"` must exit 0/);
+  // a brand change that drops a generated file leaves files behind: every place that tells the copy says how they go (moved, never deleted), then kit status again
+  const flatOf = (t) => t.replace(/\s+/g, " ");
+  const leftOver = /names\s+files left over from the older kit; they are not on the copy list: move each to `removed-<date>\/` in (that|the) repository, keeping its path inside that folder \(`removed-<date>-2\/` when a file is already there; never delete one\)/;
+  assert.match(flatOf(agents["brand-implementer"].body), leftOver);
+  assert.match(flatOf(agents["brand-implementer"].body), /Then run `kit status --repo <path>` again; it must say current/);
+  assert.match(flatOf(fs.readFileSync(path.join(ROOT, "skills/brand-adopt/SKILL.md"), "utf8")), leftOver);
+  assert.match(flatOf(fs.readFileSync(path.join(ROOT, "skills/brand-creator/references/phases/11-adoption.md"), "utf8")), leftOver);
+  assert.match(flatOf(agents["brand-reviewer"].body), /left over from an older kit mean the row is not done: .* move each to `removed-<date>\/` in the repository \(never delete one\) and run `kit status` again\. List each file as a no-decision fix, and never move one yourself/);
 });
 
 test("adopt asks the reviewer to run the wiring compare and report every unrecorded loss, and the lead is told such a review is not ready for a commit ask", async () => {
   const base = fixture("adopt");
-  const two = { ...base, approved_agents: 4, repos: [base.repos[0], { ...base.repos[0], label: "app", path: "/REPOS/app" }] };
+  const two = { ...base, approved_agents: 4, repos: [base.repos[0], { ...base.repos[0], label: "my app", path: "/REPOS/app" }] };   // a label with a space must stay one argument
   const r = await run("adopt", two);
   assert.equal(r.error, null);
-  for (const label of ["shop", "app"]) {
+  for (const label of ["shop", "my app"]) {
     const call = r.calls.find((c) => c.label === `review ${label}`);
     const lines = call.prompt.split("\n");
     const wiring = lines.filter((l) => l.startsWith("For a redesign of an existing site"));
     assert.deepEqual(wiring, [
-      `For a redesign of an existing site (the repository has a wiring before record), brand-creator --data "/DATA" adoption wiring --repo ${label} --compare --project "/PROJECT" must exit 0; quote it with its exit code. Every item it lists as lost, not recorded as dropped, fails the review and goes into wiring_losses (an empty list when nothing is lost, or when it exits 2 because the repository has no before record). Any other exit (3: a page of the before record cannot be read because the owner's local server is not running) is not verified: say so in not_verified, never count it as no loss. You record no drop: a drop is the owner's decision, in the owner's words.`,
+      `For a redesign of an existing site (the repository has a wiring before record), brand-creator --data "/DATA" adoption wiring --repo "${label}" --compare --project "/PROJECT" must exit 0; quote it with its exit code. Every item it lists as lost, not recorded as dropped, fails the review and goes into wiring_losses (an empty list when nothing is lost, or when it exits 2 with the message "no before record", which means no redesign was recorded). Exit 2 with "not a surveyed repository" means the label ${label} is not the label of the survey (ADOPTION.md). That is a failure, not "no loss": put it first in no_decision_fixes with the labels the message lists (the lead relaunches with the survey label), list the wiring in not_verified, and never answer it with an empty wiring_losses. Any other exit (3: a page of the before record cannot be read because the owner's local server is not running) is not verified: say so in not_verified, never count it as no loss. You record no drop: a drop is the owner's decision, in the owner's words.`,
     ], label);
     assert.ok(lines.indexOf(wiring[0]) < lines.indexOf(RULES), "the wiring line sits before RULES, and RULES stays verbatim");
     assert.equal(JSON.stringify(call.schema.properties.wiring_losses), JSON.stringify({ type: "array", items: { type: "string" } }));   // the schema comes out of the workflow sandbox: other realm, so compare as JSON
     assert.ok(call.schema.required.includes("wiring_losses"), "a review states its wiring losses, an empty list when there are none");
     assert.ok(!r.calls.find((c) => c.label === `apply ${label}`).prompt.includes("adoption wiring"), "the implementer's prompt is unchanged: its wiring rule is in its agent file");
+    const snapshot = r.calls.find((c) => c.label === `apply ${label}`).prompt.split("\n").filter((l) => l.startsWith("Before your first change run"));
+    assert.deepEqual(snapshot, [
+      `Before your first change run brand-creator --data "/DATA" snapshot take "/PROJECT/assets" --name "adopt-${label}" --project "/PROJECT"; at the end run snapshot verify on that file and report the exit code (the pack must not change).`,
+    ], label);   // the name is quoted: a label with a space is still one argument
   }
   assert.match(r.result.next, /A review whose wiring_losses is not empty is not ready for a commit ask: .*adoption wiring --repo <label> --drop "<item>::<reason>"/);
   const flat = (n) => agents[n].body.replace(/\s+/g, " ");
@@ -225,6 +237,9 @@ test("adopt asks the reviewer to run the wiring compare and report every unrecor
   assert.match(flat("brand-reviewer"), /`brand-creator --data "<data>" adoption wiring --repo <label> --compare --project "<project>"`/);
   assert.match(flat("brand-reviewer"), /Any item it lists as lost, not recorded as dropped, fails the review/);
   assert.match(flat("brand-reviewer"), /never records a drop/);
+  assert.match(flat("brand-reviewer"), /exit 2 with "not a surveyed repository" means the label is not the survey's, which is a failure and never "no loss"/);
+  const fleet = fs.readFileSync(path.join(ROOT, "skills/brand-creator/references/fleet.md"), "utf8").replace(/\s+/g, " ");
+  assert.match(fleet, /`repos\[\]\.label` must be the label the survey gave the repository/);
   const skill = fs.readFileSync(path.join(ROOT, "skills/brand-adopt/SKILL.md"), "utf8").replace(/\s+/g, " ");
   assert.match(skill, /adoption wiring --repo <label> --before \[--page <local URL>\]/);
   assert.match(skill, /adoption wiring --repo <label> --after/);
@@ -371,14 +386,14 @@ test("R6-2: fix mode says the branch exists, expects the dirty tree and uses its
   const a = apply.calls.find((c) => c.label === "apply shop").prompt;
   assert.match(a, /branch brand\/acme \(create it\)/);
   assert.match(a, /MODE: apply\./);
-  assert.match(a, /--name adopt-shop /);
+  assert.match(a, /--name "adopt-shop" /);
   const fix = await run("adopt", { ...base, mode: "fix", repos: [{ ...base.repos[0], findings: ["1 header logo still points at the old file"] }] });
   assert.equal(fix.error, null);
   const f = fix.calls.find((c) => c.label === "apply shop").prompt;
   assert.doesNotMatch(f, /\(create it\)/);
   assert.match(f, /exists: the apply run created it/);
   assert.match(f, /MODE: fix \(the working tree is expected to hold the apply run's changes\)/);
-  assert.match(f, /--name adopt-fix-shop /);
+  assert.match(f, /--name "adopt-fix-shop" /);
   const body = agents["brand-implementer"].body;
   assert.match(body, /`MODE: fix` run the tree is expected to hold the apply run's uncommitted changes/);
   assert.doesNotMatch(body, /must be clean before you start/);

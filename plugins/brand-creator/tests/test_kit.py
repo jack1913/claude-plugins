@@ -2742,6 +2742,19 @@ def test_a_kit_row_needs_a_kit_in_the_project_and_is_one_per_repository(pack, tm
 
 
 @pytest.mark.requires_rg
+def test_a_kit_row_refuses_an_empty_value_of_each_flag_it_does_not_take_lines_included(pack, tmp_path):
+    surveyed(pack, tmp_path, "site")
+    assert build(pack).returncode == 0
+    before = (pack / "adoption.json").read_bytes()
+    for flag in ("--file", "--find", "--change", "--lines"):                                                 # an empty value is a value that would be dropped, not "no value"
+        r = bc("adoption", "add", "--repo", "site", "--kit", flag, "", project=pack)
+        assert r.returncode == 2 and f"argument {flag}: not allowed with argument --kit" in r.stderr, (flag, r.stdout + r.stderr)
+    assert (pack / "adoption.json").read_bytes() == before                                                   # nothing was added
+    assert bc("adoption", "add", "--repo", "site", "--kit", project=pack).returncode == 0                    # without any of them the row is still added
+    assert [r["category"] for r in adoption_doc(pack)["rows"]] == ["kit"]
+
+
+@pytest.mark.requires_rg
 def test_adoption_status_says_whether_each_kit_copy_is_current(pack, tmp_path):
     assert build(pack).returncode == 0
     repos = surveyed(pack, tmp_path, "site", "app", "web")

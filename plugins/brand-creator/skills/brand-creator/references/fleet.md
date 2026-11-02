@@ -83,7 +83,9 @@ fully: BRAND-STATE.md, brief/BRIEF.md, FACTS.md, research/cliches.md, the approv
   `hunters` (style groups), `shortlist` (3 to 12), `lookups_ok` (true only after the owner's privacy OK).
 - `adopt`: `g6` (the G6 record), `repos` (`{label, path, branch, create_branch, rows, build, findings}`), optional
   `mode: "fix"` (a second run with the reviewer's no-decision findings), `parallel_repos: true` (separate working
-  trees only).
+  trees only). `repos[].label` must be the label the survey gave the repository (the one in `ADOPTION.md`): the
+  reviewer's `adoption wiring --repo "<label>" --compare` looks the repository up by it, and another label ends in
+  "not a surveyed repository", which the review reports as a failure, not as "no loss".
 
 Example arguments (with placeholder paths) are in the plugin's `tests/fixtures/fleet/`.
 

@@ -307,7 +307,7 @@ def main() -> int:
     ad_.add_argument("--file", help="the file in that repository")
     ad_.add_argument("--find", help="a text to find the place by (line numbers drift)")
     ad_.add_argument("--change", help="what to change there, in a sentence")
-    ad_.add_argument("--lines", default="", help="line numbers as read now: N, N-M, N,M")
+    ad_.add_argument("--lines", default=None, help="line numbers as read now: N, N-M, N,M")
     ad_.add_argument("--kit", action="store_true", help="add the row that copies the project's brand kit into the repository (no --file, --find, --change or --lines; one row per repository)")
     st = sub.add_parser("status", help="show the counts, or set the progress of rows")
     add_project_arg(st)
@@ -331,8 +331,8 @@ def main() -> int:
     a = ap.parse_args()
     if a.cmd == "add":   # --file, --find and --change are needed together, unless the row is the kit's, which takes none of the four
         if a.kit:
-            for flag, unset in (("file", None), ("find", None), ("change", None), ("lines", "")):   # even an empty value is a value that would be dropped
-                if getattr(a, flag) != unset:
+            for flag in ("file", "find", "change", "lines"):   # even an empty value is a value that would be dropped
+                if getattr(a, flag) is not None:
                     ad_.error(f"argument --{flag}: not allowed with argument --kit")
         elif missing := [f"--{flag}" for flag in ("file", "find", "change") if getattr(a, flag) is None]:
             ad_.error("the following arguments are required: " + ", ".join(missing))
@@ -532,7 +532,7 @@ def do_add(a, project: Path, name: str) -> int:
     for k in ("file", "find", "change"):
         if not getattr(a, k).strip():
             fail(EXIT_USAGE, f"--{k} is empty")
-    lines = parse_rows(a.lines, 10 ** 7) if a.lines.strip() else []
+    lines = parse_rows(a.lines, 10 ** 7) if (a.lines or "").strip() else []
     n = len(doc["rows"]) + 1
     row = {"n": n, "category": "change", "repo": rid, "file": a.file.strip(), "lines": lines[:MAX_LINES], "find": a.find.strip(), "change": a.change.strip()}
     doc["rows"].append(row)

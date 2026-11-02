@@ -416,6 +416,15 @@ def test_adding_a_row_needs_a_surveyed_repository_and_all_the_words(proj, repo):
     assert len(load(proj)["rows"]) == load(proj)["nrows"]
 
 
+def test_a_code_change_row_without_lines_has_no_lines(proj, repo):
+    assert survey(proj, repo).returncode == 0
+    n0 = len(load(proj)["rows"])
+    r = bc("adoption", "add", "--repo", "shop", "--file", "src/main/app.rs", "--find", "fn main", "--change", "Show the tray state in words.", project=proj)
+    assert r.returncode == 0, r.stderr
+    row = load(proj)["rows"][-1]
+    assert row["n"] == n0 + 1 and row["category"] == "change" and row["lines"] == []
+
+
 def test_adoption_md_is_rendered_through_the_template_frame_and_a_broken_frame_is_an_error(proj, repo, tmp_path, monkeypatch):
     """templates/ADOPTION.md holds the fixed text (the apply rules); the data parts stay in their order; a frame without a placeholder fails."""
     assert survey(proj, repo).returncode in (0, 1)

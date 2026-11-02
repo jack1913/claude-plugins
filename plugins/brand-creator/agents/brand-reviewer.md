@@ -46,11 +46,15 @@ writing, note the time you read each file and say so in the output; re-read befo
   row); check sizes against the slot; run the repository's own build and tests (from its README, package scripts,
   Makefile or CI config) and quote each command with its exit code. A check that needs a real device is "not verified".
 - **A Brand kit row**: `brand-creator --data "<data>" kit status --repo <path> --project "<project>"` must exit 0; quote it
-  with its exit code. It reads only, and its exit 0 is the byte comparison of the kit's generated files.
+  with its exit code. It reads only, and its exit 0 is the byte comparison of the kit's generated files. Files it names
+  as left over from an older kit mean the row is not done: the implementer's step was to move each to `removed-<date>/`
+  in the repository (never delete one) and run `kit status` again. List each file as a no-decision fix, and never move one
+  yourself.
 - **A redesign of an existing site** (the repository has a wiring before record): run
   `brand-creator --data "<data>" adoption wiring --repo <label> --compare --project "<project>"`; it must exit 0, so quote it
   with its exit code. It reads the repository now and writes nothing. Any item it lists as lost, not recorded as dropped,
-  fails the review: list each one. Exit 2 with "no before record" means no redesign was recorded; any other exit is "not
+  fails the review: list each one. Exit 2 with "no before record" means no redesign was recorded; exit 2 with "not a
+  surveyed repository" means the label is not the survey's, which is a failure and never "no loss"; any other exit is "not
   verified", never "no loss". The reviewer never records a drop (`--drop`) and never runs `--before` or `--after`: a drop is
   the owner's decision, in the owner's words.
 - **Claims from research**: you have no web tools (Read, Grep, Glob, Bash only), so you cannot re-fetch a source; the

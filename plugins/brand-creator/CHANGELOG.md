@@ -305,8 +305,8 @@ lints the board of the latest round again before `check`, so an edit of the fact
   a web-page recipe in `recipes/`. `kit build --yes` writes each of them once, with a note where you write, and never
   overwrites or moves it; delete one and the next build writes it again. The plan lists the files a build would add.
   An edit of yours moves the kit's version at the next build.
-  The web-page recipe starts from the visitor's job and the page's idea, builds the hero first, copies the brand's
-  files into the product's own public or static folder and links them from there, works beside your web-design skill
+  The web-page recipe starts from the visitor's job and the page's idea, builds the hero first, tells you to copy the brand's
+  files into the product's own public or static folder and link them from there, works beside your web-design skill
   and not instead of it, and checks the built page against the brand, with every sample figure marked as a sample.
 - `brand-creator kit check` proves the kit is whole: every link in it resolves inside it, no fill marker is left, the
   versions agree, and it says when the brand changed after the kit was built. A fresh kit fails it until you have
@@ -324,10 +324,14 @@ lints the board of the latest round again before `check`, so an edit of the fact
   (it needs a kit in your project and takes no other words), a survey leaves it alone, `ADOPTION.md` shows it as "the
   whole folder", and `brand-creator adoption status` says for each such repository whether its copy of the kit is
   current. An adoption list without a kit row looks exactly as it did.
+  An empty `--lines ""` is refused, like any other word a kit row does not take.
 - `/brand-creator:brand-adopt` installs the brand kit in a repository you name, on your branch, and checks the copy byte
   for byte. The implementer copies exactly the files `brand-creator kit status --repo <folder>` lists, one at a time,
   never over a file of your own in the repository and never into a global skills folder; the review passes when
   `kit status` says the copy is current. The adopt workflow's agents get the same two rules. The kit is left uncommitted.
+  When a brand change dropped a generated file, `kit status` names the files left over from the older kit and the
+  implementer moves each to `removed-<date>/` in the repository, keeping its path inside that folder (nothing is
+  deleted), before it runs `kit status` again.
 - A brand-adopt review fails a redesign that lost wiring you did not agree to drop. For a redesign of an existing site,
   `/brand-creator:brand-adopt` records the site's wiring before any change (`brand-creator adoption wiring --before`),
   the implementer records it again when the last row is done (`--after`), and the reviewer runs `--compare`: any link,
@@ -335,6 +339,9 @@ lints the board of the latest round again before `check`, so an edit of the fact
   Only you decide a drop, and it is recorded in your words. The adopt workflow's review reports the losses in a
   `wiring_losses` list and tells the lead such a review is not ready for a commit ask. The manual's "Apply the brand to
   your product" page has a new section, "Redesigning a site: keep what it is wired to".
+  The workflow quotes the repository's label in the commands it gives the agents, so a label with a space works. The
+  label must be the one the survey gave the repository: a review that finds none by that label reports a failure, never
+  "no loss".
 - You are now offered the brand kit when you approve your brand files, beside `BRAND.md`, `DESIGN.md` and the brand
   skill, and it is recommended when your brief lists a site or you have product repositories. A new manual page,
   [Use your brand kit](docs/manual/use/use-your-brand-kit.md), shows how to ask for it, fill in your own parts, put it
@@ -342,8 +349,7 @@ lints the board of the latest round again before `check`, so an edit of the fact
 - After the kit is written you can ask for a kit test: a hero built from the kit alone and checked against the brand. A
   builder works in a folder outside your project from a copy of the kit, the page check scores what it makes, a cold read
   says ship or fix, and each gap goes back to your tokens, rules, facts or your own kit files (a file the kit made is
-  never patched). The result is noted in `BRAND-STATE.md`. It runs in your conversation; a separate agent builds only
-  after you have said yes to its count, models and cost.
+  never patched). The result is noted in `BRAND-STATE.md`. It runs in your conversation; no agent is launched for it.
 
 ### Changed
 
