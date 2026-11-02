@@ -334,6 +334,10 @@ lints the board of the latest round again before `check`, so an edit of the fact
   names no rule fails wherever it stands, on a plain sentence or in a code sample too. A `{word.word}` in a sentence is
   read as a token even between backticks: to show a placeholder of your own, write it without the dot or put it in a
   code block.
+- `brand-creator kit check` also marks a reference page stale when the tokens or rules change: a page whose check or
+  screenshots were made against other tokens or rules than the ones in the kit, or that was changed or
+  approved again after the kit was built, is "not verified" and says which commands to run before the next
+  `kit build --yes`. A page whose check is current and failing fails it.
 - `brand-creator kit status --repo <folder>` tells whether a product repository's copy of the kit is current, and what
   to copy. It says `not installed`, `current` or `not current` (with both versions, and the files that differ, are
   missing or are left over from an older kit), lists your own files in the copy that differ (they are the repository's

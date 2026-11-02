@@ -60,6 +60,9 @@ number with a unit, a ratio, a hex colour or rgb( hsl( oklch( needs `[example]`,
 that ends at a token: `color.bg`, `modes.light.color.bg`, never a group such as `modes.light`; a token reference that does not exist fails outside a code fence on any line, a code span included, and inside
 a fence on a line with a value; a reference inside a fence on a line with no value, as in a component sample, is not judged). When the rule ids cannot be read (a site/site.json that does not parse) and a
 line names one, that line is not judged: a row with a failure that needs no rule id still fails, and says how many lines it left, otherwise it is not verified.
+A row kit:reference-page:<id> for each reference page kit.json lists (none while it lists none) says whether the kit's copy still stands for the brand: not verified when the page changed in the project since the kit
+was built (site/site.json, or the page file, is no longer the sha256 kit.json recorded), or when the tokens or rules changed since the page was checked (its page-check report or its capture.json is stale, or was made from
+other files than the kit's copy was); fail when its page-check report is current and failing; pass otherwise. The kit is downstream of the pack (lib/stale.py does not see it), so it records its own sources.
 
 Writes the report `kit` (rows kit:written and kit:owned; outputs lists every generated path with its sha256, kit.json included, and no owner file). Exit 0 written. Exit 1: G5 not recorded, no approved
 edition, a band drawing the project does not have, or a hand edit or foreign file without --replace. Exit 2: no --yes (the plan is printed first); a path that leaves the
@@ -341,6 +344,14 @@ def numbers_row(rep, project: Path, known) -> None:
         rep.add("kit:numbers", "pass", label, detail="no value (a number with a unit, a ratio or a colour) needs a citation")
 
 
+def reference_page_rows(rep, project: Path, doc: dict) -> None:
+    """Rows kit:reference-page:<id>, one for each page kit.json lists: skipped (not verified) when the page changed in the project since the kit was built, or the tokens or rules changed since it was
+    checked (its page-check report or its capture.json is stale, or was made from other files than the kit's copy), or a record cannot be used; fail when its page-check report is current and failing;
+    pass otherwise. No row while the kit holds no reference page."""
+    for pid, status, detail in kitlib.reference_page_states(project, doc):
+        rep.add(f"{kitlib.PAGE_ROW}{pid}", status, f"reference page {pid} is current and passes its page check", detail=detail)
+
+
 def check(project: Path, a) -> int:
     if not kitlib.exists(project):
         fail(EXIT_USAGE, "no kit in this project: `brand-creator kit build --yes` (opt-in at G5)")
@@ -359,6 +370,7 @@ def check(project: Path, a) -> int:
     known = functools.cache(lambda: frozenset(kitlib.known_rule_ids(project)))   # read at the first tag that names a rule, once
     tags_row(rep, project, known)
     numbers_row(rep, project, known)
+    reference_page_rows(rep, project, doc)
     rep.extra.update({"kit_version": doc["version"], "kit_tree_sha": kitlib.tree_sha(project)})
     return rep.finish()
 

@@ -2451,6 +2451,30 @@ Rows, in this order:
   with no dot (`{props}`), with doubled braces or after a dollar sign (these three are no reference), or put it in a code fence on a line of its own. Inside a code fence only a line that holds a value is judged for a reference, so a code sample
   is left alone (`<h1>{props.title}</h1>`, `--pad: var(--dimension-space-2); padding: var(--pad)`); a sample that holds a value keeps its custom properties and its braces on lines of their own. A `[rule: <id>]` of an unknown id on a line
   with a value fails too (`kit:tags` also fails it, as it fails one on every line). Fails with `<file>:<line> (<reasons>)`, up to 6 listed, with what counts as a citation.
+- `kit:reference-page:<id>`: one row for each page in `kit.json` `reference_pages`, in its order (`kitlib.reference_page_states`), and none while the kit holds none. It asks whether the kit's copy of a page still stands for
+  the brand. It is the exception to "every row reads a plain file of the kit only" above: it reads the project's records, not the kit's copies (`kit:files` judges those): `site/site.json`, the page, its
+  page-check report (`assets/_checks/page-check/<stem>-<hash6>.json`, found by `pagecheck.report_tool`) and `site/<id>/shots/capture.json`. Each of the four is read only as a file inside the project: a link that leads out is
+  "cannot be used" and is never read (the page: rule 1; the page-check report and `capture.json`: rules 3 and 5; `site/site.json`: every page is skipped, "the approved pages cannot be read"). The files a page-check report or
+  `capture.json` lists are compared by `stale_inputs`, as `check` compares them. The inputs of the `kit-check` report include `site/site.json`, the page-check reports and every `capture.json`, so a new page check or a new
+  capture makes `kit-check` stale. The first rule that applies wins:
+  1. Skipped, "not verified: the page changed in the project since the kit was built: `brand-creator kit build --yes`": `site/site.json`'s `sha256` for the page, or the sha256 of `site/<id>/index.html` itself, is not the
+     `source_sha` of `kit.json` (a page edited and not approved again counts too). This goes first: a page approved again has a new page-check report and new stills whose inputs differ because of the page, and the
+     tokens did not change. When `site/site.json` no longer lists the page the message adds "(site/site.json no longer lists it)"; when it cannot be read every page is skipped, "not verified: the approved pages cannot be read (...)".
+     The page file is hashed only when `site/site.json`'s `sha256` is the `source_sha` and the file is inside the project: a page that is a link leading out is skipped, "not verified: the page site/<id>/index.html cannot be
+     used (... is outside the project ...): `brand-creator kit build --yes` after fixing it", and not hashed, even when the file it leads to holds the same bytes.
+  2. Skipped, "not verified: the tokens or rules changed since this page was checked: run `brand-creator page-check site/<id>/index.html` and `brand-creator capture site/<id>/index.html`, then `brand-creator kit build --yes`":
+     the page-check report is stale, that is a file it was made from is gone or changed (`stale_inputs`, the one rule `check` applies, over every file the report lists: the built tokens, `qa/rules.json`, `FACTS.md`, the G4 rules
+     of `BRAND-STATE.md`, the logo files, the page, and each project file the browser was served for it, such as its stylesheets, images and fonts; so an edit of the page's own `site.css` gives this message too).
+  3. Skipped, "not verified: the page-check report of site/<id>/index.html cannot be used (...)": it is missing, cannot be read, is the report of another target (`target.page`) or does not list the page among its inputs.
+  4. Fail, "site/<id>/index.html fails its page check (<the failing rows>; see <report>)": the report is current and its status is `fail`. A failure is not hidden behind a stale `capture.json`, nor behind inputs that differ from the kit's.
+  5. The same two skips for `capture.json` ("not verified: the stills of site/<id>/index.html cannot be used (...)": missing, unreadable, the capture of another page, or the page not among its inputs).
+  6. Skipped, "not verified: the page-check report of site/<id>/index.html gives no verdict (status ...)": the report is neither a pass nor a fail.
+  7. Skipped, as 2: the report and `capture.json` are current, but the `inputs_sha` of either differs from `page_check_inputs_sha` or `capture_inputs_sha`, which `kit.json` recorded at the build. The page was checked against other
+     tokens or rules than the ones the kit's copy was made from.
+  8. Pass otherwise: "site/<id>/index.html is the page the kit holds, its page check passes, and its report and stills were made from the files the kit was built from".
+
+  `lib/stale.py` does not see the kit. The kit is downstream of the pack, so the kit records its own sources: `sources` (read by `kit:sources` and `check`'s `kit:state`) and, for each page, the two `inputs_sha` values above.
+  The `site:pages` and `site:stills` rows of `check` keep gating the pages in the project; these rows gate the kit's copies. The stills' own bytes are not read again here (`site:stills` reads them in the project, `kit:files` the kit's copies).
 
 The rule ids `kit:tags` and `kit:numbers` judge are read (`known_rule_ids`) only when a line names one. If `site/site.json` cannot be read then, the lines that name a rule are not judged and the rest are: a row with a failure that needs
 no rule id (an untagged line, a value with no citation, a token that does not exist) still fails, lists it and adds how many lines were left and why, and a row with none is skipped (not verified), naming why. `site/site.json`

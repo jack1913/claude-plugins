@@ -3260,6 +3260,11 @@ def pages_row(p) -> dict:
     return next(r for r in report(p, "kit")["results"] if r["id"] == "kit:reference-pages")
 
 
+def pages_pass(*ids) -> dict:
+    """The rows of a `kit check` that passes everything, with the one row each reference page of the kit gets."""
+    return {**ALL_PASS, **{f"kit:reference-page:{i}": "pass" for i in ids}}
+
+
 def test_an_approved_reference_page_and_what_it_loads_are_copied_with_notes(pack):
     with_site(pack)
     r = bc("kit", "build", "--plan", project=pack)
@@ -3297,7 +3302,7 @@ def test_an_approved_reference_page_and_what_it_loads_are_copied_with_notes(pack
     assert build(pack).returncode == 0 and kit_json(pack)["version"] == "1.2"
     r = kit_check(pack)
     assert r.returncode == 0, r.stdout + r.stderr
-    assert statuses(pack) == ALL_PASS
+    assert statuses(pack) == pages_pass("start")                                                  # and one row for the page it holds
     # the 7 links of snippets/logo.html; 6 in the notes (the page and 5 stills); 5 in the page (3 stylesheets, the mark, the picture; `#plans` and `mailto:` are no relative link); 1 in site.css; 1 in base.css.
     # The files: the 8 of a fresh kit, and the page, site.css, base.css and the notes.
     assert check_report_rows(pack)["kit:links"]["detail"] == f"{FRESH_LINKS + 6 + 5 + 1 + 1} relative links in {FRESH_FILES + 4} .md, .html and .css files resolve inside the kit"
@@ -3599,13 +3604,13 @@ def test_each_choice_of_a_reference_page_is_tagged_in_its_notes(pack):
     assert build(pack).returncode == 0
     r = kit_check(pack)
     assert r.returncode == 0, r.stdout + r.stderr                                                                    # every bullet is tagged with an id the kit knows, and its value is cited
-    assert statuses(pack) == ALL_PASS
+    assert statuses(pack) == pages_pass("start", "pricing")
     # a page with no choice of its own
     site["choices"] = [site["choices"][2]]
     (pack / "site" / "site.json").write_text(json.dumps(site, indent=2) + "\n", encoding="utf-8")
     assert build(pack).returncode == 0
     assert notes("start").endswith("## Choices\n\nThe site round recorded no choice for this page.\n")
-    assert kit_check(pack).returncode == 0 and statuses(pack) == ALL_PASS
+    assert kit_check(pack).returncode == 0 and statuses(pack) == pages_pass("start", "pricing")
 
 
 NASTY = ["The tile is {color.bg} under {props.title} and {{kept.double}} and ${kept.dollar}",
@@ -3637,7 +3642,7 @@ def test_a_choice_text_that_kit_check_would_read_as_a_citation_is_written_so_it_
     assert build(pack).returncode == 0
     r = kit_check(pack)
     assert r.returncode == 0, r.stdout + r.stderr
-    assert statuses(pack) == ALL_PASS
+    assert statuses(pack) == pages_pass("start")
     tags = check_report_rows(pack)["kit:tags"]["detail"]
     assert tags.startswith(f"{len(NASTY) * 2} line(s) carry")                                                         # the ten bullets of the notes
 
@@ -3755,3 +3760,255 @@ def test_kit_json_must_describe_its_reference_pages(pack):
         assert e.value.code == 2 and said in "\n".join(kitlib.problems(json.loads(f.read_text(encoding="utf-8")))), (why, e.value.message)
         f.write_bytes(good)
     assert kitlib.load(pack)["reference_pages"][0]["id"] == "start"
+
+
+# ---------------------------------------------------------------- kit check, reference pages: a row for each page the kit holds
+# `kit:reference-page:<id>` says whether the kit's copy of a page still stands for the brand. The reports and stills here are made by hand (settle_page); `settle_with_rules` makes a page-check
+# report from the rules too (qa/rules.json and the G4 rules of BRAND-STATE.md), as a real `page-check` report is. A real run is the one in test_a_reference_page_without_a_passing_page_check_stops_the_build.
+from helpers import capture_record, page_check_report  # noqa: E402
+
+RULES_INPUTS = ("qa/rules.json", "BRAND-STATE.md#g4-rules")
+PASS_DETAIL = "site/start/index.html is the page the kit holds, its page check passes, and its report and stills were made from the files the kit was built from"
+CHANGED_PAGE = "not verified: the page changed in the project since the kit was built: `brand-creator kit build --yes`"
+
+
+def page_row(p, pid="start") -> dict:
+    return check_report_rows(p)[f"kit:reference-page:{pid}"]
+
+
+def redo(pid="start") -> str:
+    page = f"site/{pid}/index.html"
+    return f"run `brand-creator page-check {page}` and `brand-creator capture {page}`, then `brand-creator kit build --yes`"
+
+
+def tokens_changed(pid="start") -> str:
+    return f"not verified: the tokens or rules changed since this page was checked: {redo(pid)}"
+
+
+def cannot_use(what, why, pid="start") -> str:
+    return f"not verified: the {what} of site/{pid}/index.html cannot be used ({why}): {redo(pid)}"
+
+
+def settle_with_rules(p, pid="start", status="pass"):
+    page_check_report(p, f"site/{pid}/index.html", status, also=RULES_INPUTS)
+    capture_record(p, f"site/{pid}/index.html")
+
+
+def test_a_token_change_makes_a_reference_page_not_verified(pack):
+    with_site(pack)
+    filled_kit(pack)
+    r = kit_check(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert statuses(pack) == pages_pass("start") and page_row(pack)["detail"] == PASS_DETAIL
+    assert [x["id"] for x in report(pack, "kit-check")["results"]][-1] == "kit:reference-page:start"           # after the rows of the kit itself
+    assert {"site/site.json", "site/start/shots/capture.json", page_report(pack).relative_to(pack).as_posix()} <= {i["path"] for i in report(pack, "kit-check")["inputs"]}
+    mutate(pack / "assets" / "tokens" / "tokens.css", ":root", ":root /* edited */")                           # the tokens changed after the kit was built and the page was checked
+    r = kit_check(pack)
+    assert r.returncode == 3, r.stdout + r.stderr
+    assert page_row(pack)["status"] == "skipped" and page_row(pack)["detail"] == tokens_changed()
+    assert report(pack, "kit-check")["status"] == "not-verified" and "[SKIP] kit:reference-page:start" in r.stdout
+    page_check_report(pack, START, "pass")                                                                        # the page is checked again, the stills are not
+    assert kit_check(pack).returncode == 3 and page_row(pack)["detail"] == tokens_changed()
+    capture_record(pack, START)                                                                                   # and the stills are taken again: the kit still holds the old tokens
+    assert kit_check(pack).returncode == 3 and page_row(pack)["detail"] == tokens_changed()
+    assert build(pack).returncode == 0 and kit_json(pack)["version"] == "1.3"                                     # build: the kit holds the new tokens and what the page was checked against
+    assert kit_json(pack)["reference_pages"][0]["page_check_inputs_sha"] == json.loads(page_report(pack).read_text(encoding="utf-8"))["inputs_sha"]
+    r = kit_check(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert statuses(pack) == pages_pass("start")
+
+
+def test_a_change_of_the_rules_makes_a_reference_page_not_verified(pack):
+    assert bc("state", "--record", "G4", "approved (test)", project=pack).returncode == 0                            # a page check reads the G4 rule lines once G4 is recorded
+    with_site(pack)
+    settle_with_rules(pack)
+    filled_kit(pack)
+    assert kit_check(pack).returncode == 0 and statuses(pack) == pages_pass("start")
+    mutate_json(pack / "qa" / "rules.json", lambda d: d.__setitem__("page", {"rules": [{"id": "one-mark", "kind": "max-marks-per-view", "max": 1, "g4": "one mark per screen"}]}))
+    assert kit_check(pack).returncode == 3 and page_row(pack)["detail"] == tokens_changed()                      # the page rules are rules
+    settle_with_rules(pack)
+    assert kit_check(pack).returncode == 3 and page_row(pack)["detail"] == tokens_changed()                      # checked against the new rules; the kit holds the old ones
+    assert build(pack).returncode == 0 and kit_check(pack).returncode == 0 and statuses(pack) == pages_pass("start")
+    record_rules(pack, "The mark keeps its clear space")                                                          # a G4 rule recorded after the page was checked
+    assert kit_check(pack).returncode == 3 and page_row(pack)["detail"] == tokens_changed()
+    settle_with_rules(pack)
+    assert build(pack).returncode == 0 and kit_check(pack).returncode == 0 and statuses(pack) == pages_pass("start")
+
+
+def test_a_reference_page_approved_again_makes_its_kit_copy_not_verified(pack):
+    with_site(pack)
+    filled_kit(pack)
+    assert kit_check(pack).returncode == 0
+    site, page = pack / "site" / "site.json", pack / "site" / "start" / "index.html"
+    edit_page(pack, "One calm place for your orders", "One calm place for all your orders")                      # approved again: the record follows, and the page is checked and captured again
+    r = kit_check(pack)
+    assert r.returncode == 3, r.stdout + r.stderr
+    assert page_row(pack)["status"] == "skipped" and page_row(pack)["detail"] == CHANGED_PAGE                    # the page, not the tokens: the new report's inputs differ for that reason
+    assert build(pack).returncode == 0 and kit_json(pack)["version"] == "1.3"
+    assert kit_check(pack).returncode == 0 and statuses(pack) == pages_pass("start")
+    mutate(page, "for all your orders", "for just your orders")                                                   # edited and not approved again: the record still holds the sha256 of the build
+    assert kit_check(pack).returncode == 3 and page_row(pack)["detail"] == CHANGED_PAGE                          # and its report is stale as well: the page is named first
+    mutate(page, "for just your orders", "for all your orders")
+    assert kit_check(pack).returncode == 0 and statuses(pack) == pages_pass("start")
+    good = site.read_bytes()
+    mutate_json(site, lambda d: d["pages"][0].__setitem__("sha256", "0" * 64))                                    # a record that holds another sha256 than the kit was built from
+    assert kit_check(pack).returncode == 3 and page_row(pack)["detail"] == CHANGED_PAGE
+    site.write_bytes(good)
+    mutate_json(site, lambda d: d.__setitem__("pages", []))                                                       # a page the record no longer lists
+    assert kit_check(pack).returncode == 3
+    assert page_row(pack)["detail"] == "not verified: the page changed in the project since the kit was built (site/site.json no longer lists it): `brand-creator kit build --yes`"
+    site.write_bytes(good)
+    site.write_text("{not json", encoding="utf-8")                                                                # a record that cannot be read: every page is not verified, naming why
+    r = kit_check(pack)
+    assert r.returncode == 3, r.stdout + r.stderr
+    assert page_row(pack)["status"] == "skipped" and page_row(pack)["detail"].startswith("not verified: the approved pages cannot be read (site/site.json cannot be read (")
+    assert page_row(pack)["detail"].endswith(")): `brand-creator kit build --yes` after fixing it") and "Traceback" not in r.stderr
+    site.write_bytes(good)
+    assert kit_check(pack).returncode == 0 and statuses(pack) == pages_pass("start")
+
+
+def test_stills_taken_again_make_the_kit_copy_not_verified(pack):
+    with_site(pack)
+    filled_kit(pack)
+    assert kit_check(pack).returncode == 0
+    shots, base = pack / "site" / "start" / "shots", pack / "assets" / "web" / "base.css"
+    checked = page_report(pack).read_bytes()
+    mutate_json(shots / "capture.json", lambda d: d["inputs"].append({"path": "assets/web/base.css", "sha256": file_sha(base)}))   # stills taken again, the browser served one more file
+    r = kit_check(pack)
+    assert r.returncode == 3, r.stdout + r.stderr
+    assert page_row(pack)["status"] == "skipped" and page_row(pack)["detail"] == tokens_changed()
+    assert page_report(pack).read_bytes() == checked and json.loads(checked)["inputs_sha"] == kit_json(pack)["reference_pages"][0]["page_check_inputs_sha"]     # the page check is as it was
+    assert build(pack).returncode == 0
+    capture = json.loads((shots / "capture.json").read_text(encoding="utf-8"))
+    assert kit_json(pack)["reference_pages"][0]["capture_inputs_sha"] == inputs_hash(capture) and kit_json(pack)["version"] == "1.3"
+    assert kit_check(pack).returncode == 0 and statuses(pack) == pages_pass("start")
+    mutate_json(shots / "capture.json", lambda d: d["inputs"][0].__setitem__("sha256", "0" * 64))                    # stills whose record no longer stands for the page
+    assert kit_check(pack).returncode == 3 and page_row(pack)["detail"] == tokens_changed()
+
+
+def test_a_failing_page_check_fails_the_reference_page_row(pack):
+    with_site(pack)
+    settle_with_rules(pack)
+    filled_kit(pack)
+    assert kit_check(pack).returncode == 0
+    mutate_json(pack / "qa" / "rules.json", lambda d: d.__setitem__("page", {"rules": [{"id": "one-mark", "kind": "max-marks-per-view", "max": 1, "g4": "one mark per screen"}]}))
+    settle_with_rules(pack, status="fail")                                                                          # the page is checked against the new rules and fails: current, and failing
+    r = kit_check(pack)
+    assert r.returncode == 1, r.stdout + r.stderr
+    row = page_row(pack)
+    assert row["status"] == "fail" and report(pack, "kit-check")["status"] == "fail" and "[FAIL] kit:reference-page:start" in r.stdout
+    assert row["detail"].startswith("site/start/index.html fails its page check (page:load:390-light; see assets/_checks/page-check/")
+    assert row["detail"].endswith(f"a reference page is a page that passes, so change it, approve it again (`brand-creator site approve --replace`), then {redo()}")
+    assert check_report_rows(pack)["kit:sources"]["status"] == "skipped"                                           # the rules changed after the kit was built: a failure still wins the exit code
+    mutate_json(pack / "site" / "start" / "shots" / "capture.json", lambda d: d["inputs"][0].__setitem__("sha256", "0" * 64))   # a stale record of the stills does not hide it
+    assert kit_check(pack).returncode == 1 and page_row(pack)["status"] == "fail"
+    settle_with_rules(pack, status="not-verified")                                                                  # a report that gives no verdict is not a pass, and not a fail
+    r = kit_check(pack)
+    assert r.returncode == 3, r.stdout + r.stderr
+    assert page_row(pack)["status"] == "skipped" and page_row(pack)["detail"].startswith("not verified: the page-check report of site/start/index.html gives no verdict (status 'not-verified'; see assets/_checks/page-check/")
+    settle_with_rules(pack)                                                                                         # passes now; the kit still holds the old rules
+    assert kit_check(pack).returncode == 3 and page_row(pack)["detail"] == tokens_changed()
+    assert build(pack).returncode == 0 and kit_check(pack).returncode == 0 and statuses(pack) == pages_pass("start")
+
+
+def test_a_failing_report_written_after_the_check_makes_check_ask_for_kit_check_again(pack):
+    with_site(pack)
+    filled_kit(pack)
+    assert kit_check(pack).returncode == 0 and check_rows(pack)["report:kit-check"]["status"] == "pass"
+    mutate_json(page_report(pack), lambda d: d.__setitem__("status", "fail"))                                      # the page-check report changed after `kit check` ran
+    row = check_rows(pack)["report:kit-check"]
+    assert row["status"] == "skipped" and "stale" in row["detail"], row
+    r = kit_check(pack)                                                                                             # and the new report is judged by the next `kit check`
+    assert r.returncode == 1 and page_row(pack)["status"] == "fail"
+    assert check_rows(pack)["report:kit-check"]["status"] == "fail"
+
+
+def test_a_record_the_row_cannot_use_is_not_verified_and_never_a_pass(pack, tmp_path):
+    from helpers import symlink_or_skip
+    with_site(pack)
+    filled_kit(pack)
+    assert kit_check(pack).returncode == 0
+    tool = page_report(pack)
+    where = tool.relative_to(pack).as_posix()
+    shots = pack / "site" / "start" / "shots" / "capture.json"
+    good_report, good_shots = tool.read_bytes(), shots.read_bytes()
+
+    def row_is(detail, *, startswith=False):
+        r = kit_check(pack)
+        assert r.returncode == 3, (detail, r.stdout, r.stderr)
+        got = page_row(pack)
+        assert got["status"] == "skipped" and (got["detail"].startswith(detail) if startswith else got["detail"] == detail), got
+        assert "Traceback" not in r.stderr
+
+    tool.unlink()
+    row_is(cannot_use("page-check report", f"{where} is missing"))
+    tool.write_text("{not json", encoding="utf-8")
+    row_is(cannot_use("page-check report", f"{where} cannot be read"))
+    doc = json.loads(good_report)
+    doc["target"]["page"] = "site/other/index.html"
+    tool.write_text(json.dumps(doc), encoding="utf-8")
+    row_is(cannot_use("page-check report", f"{where} is the report of another target"))
+    doc = json.loads(good_report)
+    doc["inputs"] = [x for x in doc["inputs"] if x["path"] != START]
+    tool.write_text(json.dumps(doc), encoding="utf-8")
+    row_is(cannot_use("page-check report", f"{where} does not list the page among the files it was made from"))
+    tool.write_text(json.dumps({"inputs": "not a list"}), encoding="utf-8")
+    row_is(cannot_use("page-check report", f"{where} cannot be read"))
+    tool.unlink()
+    far = tmp_path / "outside.json"
+    far.write_bytes(good_report)
+    symlink_or_skip(tool, far)                                                                                      # a link to a report beyond the project is never read through
+    row_is("not verified: the page-check report of site/start/index.html cannot be used (", startswith=True)
+    assert "outside the project" in page_row(pack)["detail"]
+    tool.unlink()
+    tool.write_bytes(good_report)
+    shots.unlink()
+    row_is(cannot_use("stills", "site/start/shots/capture.json is missing"))
+    shots.write_text("[]", encoding="utf-8")
+    row_is(cannot_use("stills", "site/start/shots/capture.json cannot be read"))
+    doc = json.loads(good_shots)
+    doc["source"]["page"] = "site/other/index.html"
+    shots.write_text(json.dumps(doc), encoding="utf-8")
+    row_is(cannot_use("stills", "site/start/shots/capture.json is the capture of another page"))
+    doc = json.loads(good_shots)
+    doc["inputs"] = [x for x in doc["inputs"] if x["path"] != START]
+    shots.write_text(json.dumps(doc), encoding="utf-8")
+    row_is(cannot_use("stills", "site/start/shots/capture.json does not list the page among the files it was made from"))
+    shots.write_bytes(good_shots)
+    assert kit_check(pack).returncode == 0 and statuses(pack) == pages_pass("start")                                # both records back as they were: a pass again
+    page = pack / "site" / "start" / "index.html"
+    good_page, beyond = page.read_bytes(), tmp_path / "outside.html"
+    beyond.write_bytes(good_page)                                                                                   # byte for byte the page the kit holds: a read through the link would pass
+    page.unlink()
+    symlink_or_skip(page, beyond)                                                                                   # a page that is a link to a file beyond the project is never hashed
+    row_is("not verified: the page site/start/index.html cannot be used (", startswith=True)
+    assert "outside the project" in page_row(pack)["detail"] and page_row(pack)["detail"].endswith("): `brand-creator kit build --yes` after fixing it")
+    page.unlink()
+    page.write_bytes(good_page)
+    assert kit_check(pack).returncode == 0 and statuses(pack) == pages_pass("start")                                # a plain file again: a pass
+
+
+def test_each_reference_page_gets_its_own_row_and_a_change_marks_only_its_page(pack):
+    with_site(pack)
+    text = (pack / "site" / "start" / "index.html").read_text(encoding="utf-8").replace('data-page="start"', 'data-page="pricing"')
+    (pack / "site" / "pricing").mkdir()
+    (pack / "site" / "pricing" / "index.html").write_text(text, encoding="utf-8")
+    shutil.copy2(pack / "site" / "start" / "site.css", pack / "site" / "pricing" / "site.css")
+    shutil.copytree(pack / "site" / "start" / "img", pack / "site" / "pricing" / "img")
+    site = json.loads((pack / "site" / "site.json").read_text(encoding="utf-8"))
+    site["pages"].append({"id": "pricing", "path": "site/pricing/index.html", "layout": "own:ledger", "sha256": file_sha(pack / "site" / "pricing" / "index.html")})
+    (pack / "site" / "site.json").write_text(json.dumps(site, indent=2) + "\n", encoding="utf-8")
+    settle_page(pack, "pricing")
+    filled_kit(pack)
+    assert kit_check(pack).returncode == 0
+    assert statuses(pack) == pages_pass("start", "pricing")
+    assert [x["id"] for x in report(pack, "kit-check")["results"] if x["id"].startswith("kit:reference-page:")] == ["kit:reference-page:start", "kit:reference-page:pricing"]   # kit.json's order
+    mutate(pack / "site" / "pricing" / "index.html", "One calm place for your orders", "One calm place for all your orders")
+    mutate_json(pack / "site" / "site.json", lambda d: next(x for x in d["pages"] if x["id"] == "pricing").__setitem__("sha256", file_sha(pack / "site" / "pricing" / "index.html")))
+    settle_page(pack, "pricing")
+    assert kit_check(pack).returncode == 3
+    assert statuses(pack) == {**pages_pass("start", "pricing"), "kit:reference-page:pricing": "skipped", "kit:sources": "skipped"}
+    assert page_row(pack, "pricing")["detail"] == CHANGED_PAGE
+    page_check_report(pack, "site/start/index.html", "fail")                                                         # and a failure of one page is the failure of that page
+    assert kit_check(pack).returncode == 1
+    assert (page_row(pack)["status"], page_row(pack, "pricing")["status"]) == ("fail", "skipped")

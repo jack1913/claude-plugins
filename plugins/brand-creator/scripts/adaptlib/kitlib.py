@@ -1841,6 +1841,117 @@ def number_check(project: Path, known) -> dict:
     return {"files": files, "lines": lines, "values": values, "bad": bad, "unjudged": unjudged, "unread": state.get("unread")}
 
 
+# ---------------------------------------------------------------- kit check: one row for each reference page
+# `kit check` writes the row `kit:reference-page:<id>` for each page kit.json lists (`reference_page_states`). The kit is downstream of the pack: lib/stale.py hashes scripts/lib/*.py and the pack's
+# own files, so a change of the tokens or the rules does not make the kit stale by itself. The kit records its own sources instead, and for each page what its page-check report and its capture.json
+# were made from (`page_check_inputs_sha`, `capture_inputs_sha`); the row compares those with the two records now. It reads the project's records, not the kit's copies (`kit:files` does),
+# and writes nothing.
+
+PAGE_ROW = "kit:reference-page:"                            # + the page id
+BUILD_AGAIN = "`brand-creator kit build --yes`"
+
+
+def _redo(page: str) -> str:
+    """What brings a reference page's check and stills up to date, and then the kit."""
+    return f"run `brand-creator page-check {page}` and `brand-creator capture {page}`, then {BUILD_AGAIN}"
+
+
+def _record_state(project: Path, where: str, page: str) -> tuple[dict | None, str, str]:
+    """(document, "ok" | "stale" | "unusable", why) of the JSON record at `where` (a page-check report or a capture.json) as it stands for `page`. "unusable": it is not a plain file inside the project,
+    is missing, cannot be read, or does not list the page among the files it was made from (a change to the page would never make it stale). "stale": a file it was made from is gone or changed
+    (`stale_inputs`, the one rule `check` applies). The document is returned for "ok" and "stale" only, None for "unusable"."""
+    try:
+        f = confine(project, where, what="record", read=True)
+    except CliError as e:
+        return None, "unusable", e.message
+    if not f.is_file():
+        return None, "unusable", f"{where} is missing"
+    try:
+        doc = json.loads(f.read_text(encoding="utf-8"))
+        stale = stale_inputs(project, doc)
+        listed = {r.get("path") for r in doc["inputs"] if isinstance(r, dict)}
+        Report.inputs_sha(doc["inputs"])
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return None, "unusable", f"{where} cannot be read"
+    if stale:
+        return doc, "stale", "; ".join(stale[:2])
+    if page not in listed:
+        return None, "unusable", f"{where} does not list the page among the files it was made from"
+    return doc, "ok", ""
+
+
+def _reference_page_state(project: Path, record: dict, entry: dict | None) -> tuple[str, str]:
+    """(status, detail) of one page of kit.json `reference_pages`; `entry` is the page as site/site.json holds it now ({id, path, layout, sha256}), None when it no longer lists the page.
+    The first that applies wins:
+
+    1. skipped, "the page changed in the project since the kit was built": the record's sha256 for the page, or the page file itself, is not `source_sha`. This goes first: a page approved again has a
+       new page-check report and new stills whose inputs differ because of the page, and the tokens did not change. The page file is read only as a file inside the project: a page that is a link
+       leading out is skipped, "the page cannot be used", and never hashed (when the record's sha256 already differs, the page is not read at all).
+    2. skipped, "the tokens or rules changed since this page was checked": its page-check report is stale (a file it was made from changed).
+    3. skipped, "cannot be used": the page-check report is missing, cannot be read, is of another target or does not list the page.
+    4. fail: the page-check report is current and failing. A definite failure is not hidden behind a stale capture.json or behind inputs that differ from the kit's.
+    5. skipped, as 2 and 3, for capture.json.
+    6. skipped, "gives no verdict": the page-check report is neither a pass nor a fail.
+    7. skipped, as 2: the report or capture.json is current but made from other files than the ones the kit was built from (`page_check_inputs_sha`, `capture_inputs_sha`).
+    8. pass."""
+    import pagecheck   # scripts/pagelib, on the path of `kit` and `check`: the one rule that names the report of a page
+    pid = record["id"]
+    page = f"{SITE_DIR}/{pid}/index.html"
+    redo, changed = _redo(page), "the tokens or rules changed since this page was checked"
+    note = " (site/site.json no longer lists it)" if entry is None else ""
+    page_changed = f"not verified: the page changed in the project since the kit was built{note}: {BUILD_AGAIN}"
+    if entry is None or entry.get("sha256") != record["source_sha"]:
+        return "skipped", page_changed                                                      # decided from the record alone: the page is not read
+    try:
+        confine(project, page, what="page", read=True)                                      # a page that is a link leading out of the project is never hashed
+    except CliError as e:
+        return "skipped", f"not verified: the page {page} cannot be used ({e.message}): {BUILD_AGAIN} after fixing it"
+    if _sha_or_none(project, page) != record["source_sha"]:
+        return "skipped", page_changed
+    where = f"assets/_checks/{pagecheck.report_tool(page)}.json"
+    checked, state, why = _record_state(project, where, page)
+    if state == "stale":
+        return "skipped", f"not verified: {changed}: {redo}"
+    target = checked.get("target") if checked is not None else None
+    if state == "ok" and not (isinstance(target, dict) and target.get("kind") == "project" and target.get("page") == page):
+        state, why = "unusable", f"{where} is the report of another target"
+    if state != "ok":
+        return "skipped", f"not verified: the page-check report of {page} cannot be used ({why}): {redo}"
+    if checked.get("status") == "fail":
+        return "fail", (f"{page} fails its page check ({_failing(checked)}; see {where}): a reference page is a page that passes, so change it, approve it again "
+                        f"(`brand-creator site approve --replace`), then {redo}")
+    shots = f"{SITE_DIR}/{pid}/shots/capture.json"
+    stills, state, why = _record_state(project, shots, page)
+    if state == "stale":
+        return "skipped", f"not verified: {changed}: {redo}"
+    source = stills.get("source") if stills is not None else None
+    if state == "ok" and not (isinstance(source, dict) and source.get("page") == page):
+        state, why = "unusable", f"{shots} is the capture of another page"
+    if state != "ok":
+        return "skipped", f"not verified: the stills of {page} cannot be used ({why}): {redo}"
+    if checked.get("status") != "pass":
+        return "skipped", f"not verified: the page-check report of {page} gives no verdict (status {checked.get('status')!r}; see {where}): {redo}"
+    if checked.get("inputs_sha") != record["page_check_inputs_sha"] or Report.inputs_sha(stills["inputs"]) != record["capture_inputs_sha"]:
+        return "skipped", f"not verified: {changed}: {redo}"
+    return "pass", f"{page} is the page the kit holds, its page check passes, and its report and stills were made from the files the kit was built from"
+
+
+def reference_page_states(project: Path, doc: dict) -> list[tuple[str, str, str]]:
+    """(page id, status, detail) for each page of kit.json `reference_pages`, in its order; [] when it holds none (the project's site/site.json is not read then). The record is read once: when it
+    cannot be read, every page is skipped, naming why."""
+    records = doc["reference_pages"]
+    if not records:
+        return []
+    import sitedata   # scripts/boardlib, on the path of `kit` and `check`
+    try:
+        confine(project, SITE_RECORD, what="site record", read=True)
+        sitedata.load_site(project)
+    except CliError as e:
+        return [(r["id"], "skipped", f"not verified: the approved pages cannot be read ({e.message}): {BUILD_AGAIN} after fixing it") for r in records]
+    listed = {p["id"]: p for p in site_pages(project)}
+    return [(r["id"], *_reference_page_state(project, r, listed.get(r["id"]))) for r in records]
+
+
 # ---------------------------------------------------------------- what is on disk
 
 def on_disk(project: Path) -> list[str]:
