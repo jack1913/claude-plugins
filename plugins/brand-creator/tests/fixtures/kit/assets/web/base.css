@@ -1,0 +1,2 @@
+.top { border-bottom: 1px solid var(--color-border); }
+.dot { background: url("dot.svg") no-repeat; }

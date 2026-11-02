@@ -292,6 +292,17 @@ lints the board of the latest round again before `check`, so an edit of the fact
   `applied-skill` leaves a project that has a kit to `kit build`.
   A brand that moves also gets its motion spec and demo page in the kit.
 - Open-licence (OFL) fonts go into the kit with their licence; any other font is listed, never copied.
+- The pages you approved for your site go into the kit too. When you have approved pages (`brand-creator site approve`),
+  `kit build --yes` copies each one with its screenshots and every file it loads, at the same paths so its links still
+  work, and writes a note for each page in `reference-pages/<page>/notes.md`: its layout (structure only), when you
+  approved it, links to the page and its screenshots, and its choices, each marked as a rule (with where you decided it)
+  or as an example. A page goes in only when your page check on it passes and its screenshots are current; otherwise the
+  build stops before it writes anything and names the page and the command to run. A page that loads a file from outside
+  your project stops the build, and so does one that loads a file your project does not have. A stylesheet the page loads
+  is copied with what it loads, and no further; `kit check` names a link that then leads nowhere. A font a page loads
+  follows the font rule: open-licence fonts are copied, and the build warns about any other. Whatever you wrote in a
+  choice, the notes pass `kit check`: a placeholder like `{a.b}`, a tag or a link in it is shown as text and never read
+  as a citation.
 - The kit carries your rules and facts as data: `rules.json` (your recorded rules, each with a short id, the size rule
   and the drawing for each size, the contrast pairs with their ratios, the words never to use and your page rules) and
   `facts.json` (the facts you confirmed; contact details never).

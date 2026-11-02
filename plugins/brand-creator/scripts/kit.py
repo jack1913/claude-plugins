@@ -31,6 +31,14 @@ on-action, focus and border variables at the ground's own colours. While the gro
 tokens give no colour for, one that gives two roles different colours where the page ground uses one token for both (a rule that sets a variable twice keeps only
 the later value), one that uses a variable its own scope sets, or one whose data-ground name is taken, is left out and named.
 
+Reference pages: when the project has site/site.json (the pages the owner approved with `site approve`), each page goes into the kit at its project path under brand/ with everything in its folder
+(its stills too) and every project file it loads (src, href, poster and srcset in the HTML, url() in a <style>, a style attribute and a css file; a css file the page loads is read for what it loads
+too, and no further), and gets a generated reference-pages/<id>/notes.md: its layout (structure only), the approval, links to the page and its stills, and its choices, each tagged
+[rule: site:<id>] or [example]. The build stops (exit 1, nothing written) when site/site.json does not validate (the first three problems are quoted) or when a page has no current, passing
+page-check report or no current stills (the page and the command to run are named); a path that leaves the project, by name or by a link, is exit 2. A font under assets/fonts/ that the
+fonts rule does not copy (only OFL fonts are) is not copied for a page either: row kit:reference-pages warns and `kit check` fails the link. kit.json records for each page its
+source_sha, the inputs_sha of its page-check report and of its capture.json (`reference_pages`) and, under sources, one sha256 over everything the pages are made from (`pages`).
+
 The owner's files (EXTENDING.md, voice.md, visual.md, golden-rules.md, recipes/web-page.md) are scaffolded from templates/kit/ (the placeholders {{brand}} and {{skill}} filled; any
 other {{...}} is exit 2 and nothing is written) only when the file is absent. They are never overwritten or moved. kit.json records the sha256 of each one (`owned`) and the version's
 content hash covers them, so an edit of yours moves the version at the next build. The plan lists the scaffolds the build would write as `scaffold <path> (<bytes> bytes, ...)`.
@@ -79,6 +87,7 @@ sys.path.insert(0, str(HERE / "lib"))
 sys.path.insert(0, str(HERE / "booklib"))
 sys.path.insert(0, str(HERE / "adaptlib"))
 sys.path.insert(0, str(HERE / "boardlib"))   # kitlib.known_rule_ids reads the choices of site/site.json with boardlib/sitedata.py
+sys.path.insert(0, str(HERE / "pagelib"))    # kitlib names the page-check report of an approved reference page with pagelib/pagecheck.py (pagecheck.report_tool)
 import adapt  # noqa: E402
 import adoptdata  # noqa: E402
 import kitlib  # noqa: E402
@@ -166,6 +175,25 @@ def ground_row(rep, grounds: dict) -> None:
         rep.add("kit:grounds", "pass", label, detail=f"{n} ground{'s' if n != 1 else ''} scoped in {snippet}; the page ground is {grounds['page']}")
     else:
         rep.add("kit:grounds", "info", label, detail=f"only the page ground ({grounds['page']}) is listed, so there is no other ground to scope: {snippet} is not written")
+
+
+def reference_row(rep, pages: dict) -> None:
+    """Row kit:reference-pages: pass with the number of approved reference pages copied (and their ids), warn when a page loads a font the kit does not copy (the link would fail in the
+    kit, so the row says which font and why), info "no approved reference pages" when the project has none."""
+    label = "approved reference pages"
+    n = len(pages["records"])
+    if not n:
+        rep.add("kit:reference-pages", "info", label, detail="no approved reference pages")
+        return
+    ids = ", ".join(r["id"] for r in pages["records"])
+    copied = (f"{n} approved reference page{'s' if n != 1 else ''} copied with {'their' if n != 1 else 'its'} stills and the files {'they load' if n != 1 else 'it loads'} ({ids}); "
+              "notes in reference-pages/<id>/notes.md")
+    left = pages["not_copied"]
+    if left:
+        shown = "; ".join(f"{font} loaded at {where} ({why})" for font, where, why in left[:SHOWN]) + (f"; and {len(left) - SHOWN} more" if len(left) > SHOWN else "")
+        rep.add("kit:reference-pages", "warn", label, detail=f"{copied}; a font a page loads is not copied, so `kit check` fails the link: {shown}")
+    else:
+        rep.add("kit:reference-pages", "pass", label, detail=copied)
 
 
 def named(items: list[str]) -> str:
@@ -344,14 +372,15 @@ def build(project: Path, a) -> int:
     kd_rel = kitlib.kit_rel(project)
     confine(project, kd_rel, what="kit folder")
     fonts = kitlib.font_plan(project)                      # OFL fonts and their licence text are planned files; any other font is only listed
-    generated = kitlib.plan(project, fonts)                # SKILL.md with the literal <version>: the version is decided from what the plan holds
+    pages = kitlib.reference_plan(project, fonts)          # the approved reference pages: checked and read first, so that a page that cannot go stops the build before anything is written
+    generated = kitlib.plan(project, fonts, pages)         # SKILL.md with the literal <version>: the version is decided from what the plan holds
     owner = kitlib.owner_plan(project)                     # the owner's files: every scaffold is filled now, so an unknown placeholder stops the run before anything is written
     csha = kitlib.content_sha({rel: sha256_bytes(data) for rel, data in generated.items()}, owner["owned"])
     prev = kitlib.previous(project)
     version = kitlib.next_version(prev, edition, csha)
     files = kitlib.with_version(generated, version)
     src = kitlib.sources(project)
-    files[kitlib.KIT_FILE] = kitlib.kit_json_bytes(project, files, version, edition, csha, src, fonts, owner["owned"])
+    files[kitlib.KIT_FILE] = kitlib.kit_json_bytes(project, files, version, edition, csha, src, fonts, owner["owned"], pages)
     if a.plan or not a.yes:
         print(f"would write {len(files)} generated files into {kd_rel}/ (version {version})")
         for rel in sorted(files):
@@ -389,6 +418,7 @@ def build(project: Path, a) -> int:
     owner_row(rep, scaffolded, kept)
     font_row(rep, fonts)
     ground_row(rep, kitlib.ground_plan(project))
+    reference_row(rep, pages)
     rep.extra.update({"outputs": {rel: sha256_bytes(data) for rel, data in sorted(files.items())}, "kit_version": version, "content_sha": csha,
                       "adapter_state_sha": src["state_sha"], "kit_sources_sha": kitlib.sources_sha(project, src)})
     return rep.finish()
