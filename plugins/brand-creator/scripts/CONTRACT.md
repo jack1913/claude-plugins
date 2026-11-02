@@ -2392,6 +2392,29 @@ Rows, in this order:
 - `kit:sources`: skipped (not verified) when `kitlib.sources(project)` differs from `kit.json` `sources`, naming the keys that changed and "run `brand-creator kit build --yes`"; also when a source cannot be read.
 - `kit:owned`: warn when an owner file differs from `kit.json` `owned`: "changed since the last build: `brand-creator kit build --yes` records it and moves the version on", "is missing" (the build writes the scaffold again), or
   "is no file the kit can read" (a folder or a link). It never changes the status.
+- `kit:tags`: the owner's recipes, `golden-rules.md`, `visual.md` and the generated notes of the reference pages are the judged files (`kitlib.judged_files`: every `.md` below `recipes/` at any depth, `golden-rules.md`, `visual.md`,
+  `reference-pages/<id>/notes.md`; a link is never followed). Outside code fences, every bullet line of a judged file (`- ` or `* `, indented or not; a thematic break such as `* * *` is none) carries `[example]` or `[rule: <id>]`, and
+  so does every numbered line (`1. ` or `1) `) of `golden-rules.md` and `visual.md`. A numbered step of a recipe, or of the notes, needs no tag. Every `[rule: <id>]` in a judged file is checked, on any line: a bullet, a numbered
+  step that needs no tag, a sentence, a heading, a quote and a line inside a code fence too. `<id>` is matched exactly against `kitlib.known_rule_ids(project)` (D12: a G4 slug written bare, `page:<id>`, `site:<id>`), one id to a tag; a tag
+  that names an id the kit does not know fails even beside `[example]`. Fails with `<file>:<line> untagged` or `<file>:<line> unknown rule id <id>` (`(empty)` for `[rule: ]`), up to 6 listed, with the tag syntax. The count in the detail
+  is of the lines judged: those that need a tag and those that name a rule. The generated notes are judged like a recipe (their bullets are the page's choices, tagged from `site/site.json`), so a failure there means the record and
+  the kit disagree.
+- `kit:numbers`: in the same files, code fences included, every value has a citation on its own line. A value is a number with a unit (`px`, `rem`, `em`, `ms`, `s`, `%`, `vh`, `vw`, `svh`, `dvh`, `ch`, `fr`, `deg`, `pt`; an optional space
+  between them; `.5rem` and `-8px` count), a ratio such as `4.5:1`, a hex colour of 3, 4, 6 or 8 digits, or `rgb(`, `rgba(`, `hsl(`, `hsla(`, `oklch(` (`kitlib.find_values`). A range is a value: in `32-48px`, `400-700ms` and
+  `60-75ch` the last number carries the unit, and the line holds `48px`, `700ms` and `75ch`; when both ends carry a unit (`16px-24px`, `2em-3em`) the line holds both. A clock time such as `9:00 to 17:00` reads as a ratio and needs `[example]` too. The words of a `[rule: ...]` tag, a Markdown link target,
+  a URL and the number inside a name, a custom property such as `--space-8px` or a word such as `fs-16px` (a dash that follows a letter), are not values. A citation is `[example]`, a `[rule: <id>]` the kit knows, or a token reference
+  that exists: `var(--name)` declared in the kit's own `brand/assets/tokens/tokens.css`, or `{dotted.path}` (at least one dot) in the kit's own `brand/assets/tokens/tokens.json`. Only a path that ends at a token counts
+  (`kitlib.json_token_paths`): a token by its key as its group holds it (`color.bg`, `dimension.space-1`: a key of `primitives`, of `other` or of a mode) or by its path from the top (`primitives.color.ink`, `other.dimension.space-1`,
+  `modes.light.color.bg`, `motion.durations_ms.duration.fast`). A group (`modes.light`, `motion.durations_ms`), a part of a token (`modes.light.color.bg.hex`) and the rest of the file (`pairs`, `touching`, `grounds`) name no token.
+  A token reference that does not exist fails, and `[example]` does not excuse it. Outside a code fence every line is judged for it, with a value or not (`Use var(--nope) for the hero.` fails; a reference that exists on a line with no
+  value is fine), and a code span of the prose is no exception: `` `{props.title}` `` in a sentence is read as a reference to a token named `props.title`, which is none, so the line fails. To show a placeholder of your own in prose, write it
+  with no dot (`{props}`), with doubled braces or after a dollar sign (these three are no reference), or put it in a code fence on a line of its own. Inside a code fence only a line that holds a value is judged for a reference, so a code sample
+  is left alone (`<h1>{props.title}</h1>`, `--pad: var(--dimension-space-2); padding: var(--pad)`); a sample that holds a value keeps its custom properties and its braces on lines of their own. A `[rule: <id>]` of an unknown id on a line
+  with a value fails too (`kit:tags` also fails it, as it fails one on every line). Fails with `<file>:<line> (<reasons>)`, up to 6 listed, with what counts as a citation.
+
+The rule ids `kit:tags` and `kit:numbers` judge are read (`known_rule_ids`) only when a line names one. If `site/site.json` cannot be read then, the lines that name a rule are not judged and the rest are: a row with a failure that needs
+no rule id (an untagged line, a value with no citation, a token that does not exist) still fails, lists it and adds how many lines were left and why, and a row with none is skipped (not verified), naming why. `site/site.json`
+is an input of the report.
 
 **What `check` gates.** A kit makes `check` expect the `kit-check` report as well as the `kit` report: `report:kit-check`, the generic report gate (the fix it names is `brand-creator kit check`), so a failing, stale or missing
 report is a failing or not verified `check`. The row `kit:checked` says not verified when the report passed but its `kit_tree_sha` is not the kit's now: a file was added to the kit, or taken out of it, after `kit check` ran. There is no row while they match.

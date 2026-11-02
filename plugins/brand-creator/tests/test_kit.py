@@ -1931,7 +1931,8 @@ def test_kit_json_must_list_every_owner_file_and_no_other(pack):
 # `kit check` writes the report kit-check. A fresh kit fails it on the fill markers of the owner's files; every other row of a fresh kit passes. The Acme kit holds eight Markdown, HTML and CSS
 # files (SKILL.md, EXTENDING.md, voice.md, visual.md, golden-rules.md, recipes/web-page.md, snippets/logo.html and brand/assets/tokens/tokens.css), and seven relative links, all in
 # snippets/logo.html: an <img src> for each of its seven logo images (grid-mark, mark and wordmark with their dark twins, and mark-animated alone).
-ALL_PASS = {"kit:files": "pass", "kit:links": "pass", "kit:fill": "pass", "kit:versions": "pass", "kit:plugin": "pass", "kit:sources": "pass", "kit:owned": "pass"}
+ALL_PASS = {"kit:files": "pass", "kit:links": "pass", "kit:fill": "pass", "kit:versions": "pass", "kit:plugin": "pass", "kit:sources": "pass", "kit:owned": "pass",
+            "kit:tags": "pass", "kit:numbers": "pass"}
 FRESH_LINKS = 7
 FRESH_FILES = 8
 OUTSIDE_KIT = "points outside the kit: it will not resolve in a product repository"
@@ -2813,3 +2814,362 @@ def test_the_eval_kit_snapshot_is_what_kit_build_writes_for_acme(pack):
         assert "[[fill:" not in (EVAL_KIT / rel).read_text(encoding="utf-8"), rel
     for rel in ("voice.md", "visual.md", "golden-rules.md"):
         assert "Keep it short. [example]" in (EVAL_KIT / rel).read_text(encoding="utf-8"), rel
+# ---------------------------------------------------------------- kit check, part 2: tags and values
+# `kit check` judges the owner's recipes (recipes/**/*.md), golden-rules.md, visual.md and the generated reference-pages/<id>/notes.md in two rows. kit:tags: a bullet (and, in golden-rules.md and
+# visual.md, a numbered line) outside a code fence carries `[example]` or a `[rule: <id>]` of a rule the kit knows. kit:numbers: a value (a number with a unit, a ratio, a hex colour, rgb( hsl( oklch()
+# has a citation on its own line, code fences included: `[example]`, a known rule id, or a token that exists in the kit's own tokens.css (`var(--name)`) or tokens.json (`{dotted.path}`).
+# After `filled_kit` the owner files hold the one line `Keep it short. [example]` at line 5 (golden-rules.md, visual.md, voice.md), and the Acme recipe is 19 lines long, ending
+# "The other pages follow the same steps." The tokens Acme builds include --dimension-space-1 (4px), --dimension-space-2 (8px) and --color-bg, and tokens.json names dimension.space-2 and color.bg.
+TAG_HINT = "tag each with `[example]` or `[rule: <id>]`, an id of rules.json (a rule of the brand written bare, `page:<id>`, `site:<id>`)"
+VALUE_HINT = "cite a token (`var(--name)` of tokens.css, `{dotted.path}` of tokens.json) or a known `[rule: <id>]`, or tag the line `[example]`"
+KEPT = "Keep it short. [example]"
+CLEAR_SPACE = "the-mark-keeps-its-clear-space"
+RECIPE_LAST = "The other pages follow the same steps."
+NO_TAGS = "no bullet or numbered line needs a tag"
+NO_VALUES = "no value (a number with a unit, a ratio or a colour) needs a citation"
+
+
+def lack_a_tag(n_bad, n_all, *items):
+    return f"{n_bad} of {n_all} line(s) lack a valid tag: {', '.join(items)}; {TAG_HINT}"
+
+
+def cites_nothing(*items):
+    return f"{len(items)} line(s) hold a value with no citation or a token that does not exist: {', '.join(items)}; {VALUE_HINT}"
+
+
+def test_an_untagged_rule_in_golden_rules_fails_and_a_tagged_one_passes(pack):
+    record_rules(pack, "The mark keeps its clear space")
+    filled_kit(pack)
+    assert kit_check(pack).returncode == 0 and statuses(pack) == ALL_PASS
+    assert check_report_rows(pack)["kit:tags"]["detail"] == NO_TAGS
+    rules = kit_of(pack) / "golden-rules.md"
+    mutate(rules, KEPT, KEPT + "\n\n- Never stretch the mark.\n1. Keep the clear space.\n```\n- inside a fence\n```")
+    r = kit_check(pack)
+    assert r.returncode == 1, r.stdout + r.stderr
+    row = check_report_rows(pack)["kit:tags"]
+    assert row["status"] == "fail" and "[FAIL] kit:tags" in r.stdout
+    assert row["detail"] == lack_a_tag(2, 2, "golden-rules.md:7 untagged", "golden-rules.md:8 untagged")      # the bullet and the numbered line; the line in the fence is none
+    assert statuses(pack) == {**ALL_PASS, "kit:tags": "fail", "kit:owned": "warn"}                             # the lines hold no value, and the owner's edit is only a warning
+    mutate(rules, "- Never stretch the mark.", "- Never stretch the mark. [example]")
+    assert kit_check(pack).returncode == 1
+    assert check_report_rows(pack)["kit:tags"]["detail"] == lack_a_tag(1, 2, "golden-rules.md:8 untagged")
+    mutate(rules, "1. Keep the clear space.", f"1. Keep the clear space. [rule: {CLEAR_SPACE}]")
+    r = kit_check(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert check_report_rows(pack)["kit:tags"]["detail"] == "2 line(s) carry `[example]` or a rule id the kit knows"
+    assert statuses(pack) == {**ALL_PASS, "kit:owned": "warn"}
+    assert build(pack).returncode == 0 and kit_check(pack).returncode == 0 and statuses(pack) == ALL_PASS      # the build records the owner's words; the tags stay
+
+
+def test_which_lines_need_a_tag_and_which_do_not(pack):
+    filled_kit(pack)
+    rules = kit_of(pack) / "golden-rules.md"
+    mutate(rules, KEPT, KEPT + "\n\n* A star bullet.\n   - A nested bullet.\n* * *\n- - -\n---\n**Bold** words.\n-dash-first words.\n2) A numbered line.\n10. Another.\n1.5 is no list.\n"
+                              "| - | table |\n> - quoted\n")
+    # lines 7 and 8 are bullets (a star, an indented one), 9 to 11 thematic breaks, 12 bold text, 13 no space after the dash, 14 and 15 numbered lines ("2)" and "10."),
+    # 16 a decimal, 17 a table row and 18 a quote: only 7, 8, 14 and 15 need a tag
+    assert kit_check(pack).returncode == 1
+    assert check_report_rows(pack)["kit:tags"]["detail"] == lack_a_tag(
+        4, 4, "golden-rules.md:7 untagged", "golden-rules.md:8 untagged", "golden-rules.md:14 untagged", "golden-rules.md:15 untagged")
+    for line in ("* A star bullet.", "   - A nested bullet.", "2) A numbered line.", "10. Another."):
+        mutate(rules, line, line + " [example]")
+    r = kit_check(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert check_report_rows(pack)["kit:tags"]["detail"] == "4 line(s) carry `[example]` or a rule id the kit knows"
+    visual = kit_of(pack) / "visual.md"                                       # visual.md is judged like golden-rules.md: a numbered line needs a tag there too
+    mutate(visual, KEPT, KEPT + "\n\n1. Tall pictures.\n- Wide pictures. [example]")
+    assert kit_check(pack).returncode == 1
+    assert check_report_rows(pack)["kit:tags"]["detail"] == lack_a_tag(1, 6, "visual.md:7 untagged")
+    mutate(visual, "1. Tall pictures.", "1. Tall pictures. [example]")
+    assert kit_check(pack).returncode == 0 and check_report_rows(pack)["kit:tags"]["detail"] == "6 line(s) carry `[example]` or a rule id the kit knows"
+
+
+def test_a_rule_tag_must_name_a_rule_the_kit_knows(pack):
+    record_rules(pack, "The mark keeps its clear space", "Never stretch the mark")                # the ids: the-mark-keeps-its-clear-space and never-stretch-the-mark
+    mutate_json(pack / "qa" / "rules.json", lambda d: d.__setitem__("page", {"rules": [
+        {"id": "one-mark", "kind": "max-marks-per-view", "max": 1, "g4": "one mark per screen"}]}))                        # page:one-mark
+    filled_kit(pack)
+    site = {"schema": 1, "approved": "2026-10-17 (test)", "round": 1, "hero": "a", "pages": [],
+            "choices": [{"id": "c1", "text": "the footer repeats the contact line", "tag": "rule", "source": "DECISIONS.md"},
+                        {"id": "c2", "text": "a calm blue", "tag": "example", "source": ""}]}
+    (pack / "site").mkdir()
+    (pack / "site" / "site.json").write_text(json.dumps(site), encoding="utf-8")                                           # read at check time: site:c1 is a rule, site:c2 is an example
+    rules = kit_of(pack) / "golden-rules.md"
+    good = [f"- Keep the clear space. [rule: {CLEAR_SPACE}]", "- Never stretch. [rule: never-stretch-the-mark]", "- One mark. [rule: page:one-mark]",
+            "- The footer. [rule: site:c1]", "- Both tags. [example] [rule: page:one-mark]", "-  Spaces inside. [rule:  site:c1 ]"]
+    mutate(rules, KEPT, KEPT + "\n\n" + "\n".join(good))                                                                 # lines 7 to 12
+    kit_check(pack)
+    assert statuses(pack)["kit:tags"] == "pass" and statuses(pack)["kit:numbers"] == "pass"
+    assert check_report_rows(pack)["kit:tags"]["detail"] == "6 line(s) carry `[example]` or a rule id the kit knows"
+    good_text = rules.read_text(encoding="utf-8")
+    for line, said in (("- A calm blue. [rule: site:c2]", "site:c2"),                                                      # a choice tagged example is no rule
+                       ("- A typo. [rule: the-mark-keeps-its-clear-spac]", "the-mark-keeps-its-clear-spac"),
+                       ("- The case. [rule: Never-Stretch-The-Mark]", "Never-Stretch-The-Mark"),
+                       ("- A page rule. [rule: page:nope]", "page:nope"),
+                       ("- A choice. [rule: site:c9]", "site:c9"),
+                       ("- Empty. [rule: ]", "(empty)"),
+                       ("- Beside an example. [example] [rule: nope]", "nope"),
+                       ("- Two tags. [rule: never-stretch-the-mark] [rule: nope-either]", "nope-either"),
+                       ("1. A numbered line. [rule: page:one-mark, site:c1]", "page:one-mark, site:c1")):                  # one id to a tag
+        rules.write_text(good_text + line + "\n", encoding="utf-8")
+        assert kit_check(pack).returncode == 1, line
+        assert check_report_rows(pack)["kit:tags"]["detail"] == lack_a_tag(1, 7, f"golden-rules.md:13 unknown rule id {said}"), line
+    rules.write_text(good_text, encoding="utf-8")
+    kit_check(pack)
+    assert statuses(pack)["kit:tags"] == "pass"
+    (pack / "site" / "site.json").unlink()                                                                                 # without the record, site:c1 is no rule the kit knows
+    kit_check(pack)
+    assert check_report_rows(pack)["kit:tags"]["detail"] == lack_a_tag(
+        2, 6, "golden-rules.md:10 unknown rule id site:c1", "golden-rules.md:12 unknown rule id site:c1")
+
+
+def test_a_rule_tag_that_names_no_rule_fails_on_any_line_even_one_that_needs_no_tag_and_holds_no_value(pack):
+    record_rules(pack, "The mark keeps its clear space")
+    filled_kit(pack)
+    recipe, golden = kit_of(pack) / "recipes" / "web-page.md", kit_of(pack) / "golden-rules.md"
+    kit_check(pack)
+    assert statuses(pack) == ALL_PASS
+    recipe_was, golden_was = recipe.read_text(encoding="utf-8"), golden.read_text(encoding="utf-8")      # the recipe ends on line 19, golden-rules.md on line 5: the line to try is 21, or 7
+    for file, was, last, body, where in ((recipe, recipe_was, RECIPE_LAST, "8. Keep the clear space. [rule: nope]", "recipes/web-page.md:21"),              # a numbered step of a recipe: no tag needed, no value
+                                         (golden, golden_was, KEPT, "Keep the clear space. [rule: nope]", "golden-rules.md:7"),                              # a plain sentence: no bullet, no value
+                                         (golden, golden_was, KEPT, "## Clear space [rule: nope]", "golden-rules.md:7"),                                    # a heading
+                                         (golden, golden_was, KEPT, "> Keep the clear space. [rule: nope]", "golden-rules.md:7"),                           # a quote
+                                         (recipe, recipe_was, RECIPE_LAST, "```\nKeep the clear space. [rule: nope]\n```", "recipes/web-page.md:22")):    # a line of a code fence, where no bullet needs a tag
+        mutate(file, last, last + "\n\n" + body)
+        r = kit_check(pack)
+        assert r.returncode == 1, (body, r.stdout + r.stderr)
+        assert check_report_rows(pack)["kit:tags"]["status"] == "fail" and "[FAIL] kit:tags" in r.stdout, body
+        assert check_report_rows(pack)["kit:tags"]["detail"] == lack_a_tag(1, 1, f"{where} unknown rule id nope"), body
+        assert statuses(pack)["kit:numbers"] == "pass", body                                                  # the line holds no value: the value row has nothing to say about it
+        mutate(file, "nope", CLEAR_SPACE)                                                                     # the same line with a rule the kit knows
+        assert kit_check(pack).returncode == 0, body
+        assert check_report_rows(pack)["kit:tags"]["detail"] == "1 line(s) carry `[example]` or a rule id the kit knows", body
+        file.write_text(was, encoding="utf-8")
+    kit_check(pack)
+    assert statuses(pack) == ALL_PASS                                                                         # both files are as the build recorded them again
+
+
+def test_a_value_in_a_recipe_needs_a_token_a_rule_or_the_example_tag(pack):
+    record_rules(pack, "The mark keeps its clear space")
+    filled_kit(pack)
+    assert kit_check(pack).returncode == 0 and statuses(pack) == ALL_PASS
+    assert check_report_rows(pack)["kit:numbers"]["detail"] == NO_VALUES
+    recipe = kit_of(pack) / "recipes" / "web-page.md"
+    mutate(recipe, RECIPE_LAST, RECIPE_LAST + "\n\n- Hero padding 48px")                                                      # line 21
+    r = kit_check(pack)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert check_report_rows(pack)["kit:tags"]["detail"] == lack_a_tag(1, 1, "recipes/web-page.md:21 untagged")
+    assert check_report_rows(pack)["kit:numbers"]["detail"] == cites_nothing("recipes/web-page.md:21 (48px has no citation)")
+    assert statuses(pack) == {**ALL_PASS, "kit:tags": "fail", "kit:numbers": "fail", "kit:owned": "warn"}
+    mutate(recipe, "- Hero padding 48px", "- Hero padding 48px [example]")
+    r = kit_check(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert check_report_rows(pack)["kit:numbers"]["detail"] == "1 value(s) on 1 line(s) cite a token, a known rule or `[example]`"
+    assert statuses(pack) == {**ALL_PASS, "kit:owned": "warn"}
+    mutate(recipe, "48px [example]", f"48px [rule: {CLEAR_SPACE}]")                                                           # a rule of the brand cites the value as well
+    assert kit_check(pack).returncode == 0 and statuses(pack) == {**ALL_PASS, "kit:owned": "warn"}
+    mutate(recipe, f"48px [rule: {CLEAR_SPACE}]", "48px [rule: page:nope]")                                                   # an id the kit does not know cites nothing
+    assert kit_check(pack).returncode == 1
+    assert check_report_rows(pack)["kit:tags"]["detail"] == lack_a_tag(1, 1, "recipes/web-page.md:21 unknown rule id page:nope")
+    assert check_report_rows(pack)["kit:numbers"]["detail"] == cites_nothing("recipes/web-page.md:21 (48px has no citation; unknown rule id page:nope)")
+    mutate(recipe, "- Hero padding 48px [rule: page:nope]", "Hero padding 48px")                                                # a plain line is no bullet, but its value still needs a citation
+    assert kit_check(pack).returncode == 1
+    assert check_report_rows(pack)["kit:tags"]["detail"] == NO_TAGS
+    assert check_report_rows(pack)["kit:numbers"]["detail"] == cites_nothing("recipes/web-page.md:21 (48px has no citation)")
+    mutate(recipe, "Hero padding 48px", "Hero padding 48px (var(--dimension-space-2) doubled)")                              # a token cites it
+    assert kit_check(pack).returncode == 0 and statuses(pack) == {**ALL_PASS, "kit:owned": "warn"}
+
+
+def test_a_token_reference_must_exist_in_the_kit_tokens(pack):
+    filled_kit(pack)
+    recipe = kit_of(pack) / "recipes" / "web-page.md"
+    before = mutate(recipe, RECIPE_LAST, RECIPE_LAST + "\n\nA placeholder line.")                                             # the line to try is line 21, after a blank line 20
+    for line in ("Pad the hero with 8px: var(--dimension-space-2).", "Pad the hero with 8px: {dimension.space-2}.", "Text on {color.bg} in dark, {modes.dark.color.bg}, 8px.",
+                 "Pad the hero with 4px: var( --dimension-space-1 ) and 8px.", "- Pad the hero with 8px: {other.dimension.space-2}. [example]", "A {{placeholder.name}} and ${a.b} and {nothing} are no references.",
+                 "```jsx\nexport const Hero = (props) => <h1>{props.title}</h1>;\n```",                                          # a component sample with no value on the line: braces are the language
+                 "```css\n.card { --pad: var(--dimension-space-2); padding: var(--pad); }\n```",                                # a custom property of the sample is no token
+                 "```css\n.card { color: var(--nope); }\n```",                                                                  # inside a fence a line with no value is not judged, whatever it references
+                 "- Show `{props}` or `{{props.title}}` or `${props.title}` in the h1. [example]",                                 # a placeholder in a code span is no reference when it has no dot, or its braces are doubled or follow a dollar
+                 "Pad the hero with 8px: {modes.dark.color.bg}, {other.dimension.space-2} and {primitives.color.ink}."):
+        recipe.write_text(before + f"\n{line}\n", encoding="utf-8")
+        assert kit_check(pack).returncode == 0, (line, check_report_rows(pack)["kit:numbers"]["detail"])
+        assert statuses(pack)["kit:numbers"] == "pass", line
+    css_gone = "is not declared in brand/assets/tokens/tokens.css"
+    json_gone = "is not a path in brand/assets/tokens/tokens.json"
+    for line, why in (("Pad the hero with 8px: var(--space-99).", f"8px has no citation; var(--space-99) {css_gone}"),
+                      ("Pad the hero with 8px: {dimension.space-99}.", f"8px has no citation; {{dimension.space-99}} {json_gone}"),
+                      ("Pad the hero with 8px: var(--dimension-space).", f"8px has no citation; var(--dimension-space) {css_gone}"),
+                      ("Pad the hero with 8px: {dimension}.", "8px has no citation"),                                            # one name is no dotted path, so it is no reference
+                      ("Use var(--nope) for the hero.", f"var(--nope) {css_gone}"),                                              # outside a code fence a reference is judged on every line: no value on it, still no token
+                      ("- Use {color.nope} here. [example]", f"{{color.nope}} {json_gone}"),                                     # and the example tag does not excuse it
+                      ("A {color.bg} and {color.nope} and var(--nope) and var(--color-bg).", f"var(--nope) {css_gone}; {{color.nope}} {json_gone}"),   # every one that does not exist is named, the ones that do are not
+                      ("- Pad 8px of {color.nope} here. [example]", f"{{color.nope}} {json_gone}"),                             # on a line with a value the example tag does not save a reference that does not exist
+                      ("```css\n.card { padding: 8px var(--pad); } /* [example] */\n```", f"var(--pad) {css_gone}"),                 # nor in a code fence: a sample with a value keeps its custom properties on lines of their own
+                      ("Pad 8px: var(--dimension-space-2) and var(--space-99).", f"var(--space-99) {css_gone}"),                # one that exists does not excuse one that does not
+                      ("Pad 8px [example] var(--nope) {color.bg}.", f"var(--nope) {css_gone}"),
+                      ("- Use `{props.title}` in the h1. [example]", f"{{props.title}} {json_gone}"),                           # a {dotted.path} in a code span of prose is a reference too: braces are read wherever no code fence is
+                      ("Pad the hero with 8px: {modes.light}.", f"8px has no citation; {{modes.light}} {json_gone}"),            # a group of tokens.json is no token ...
+                      ("Pad the hero with 8px: {modes.dark}.", f"8px has no citation; {{modes.dark}} {json_gone}"),
+                      ("Pad the hero with 8px: {modes.light.color.bg.hex}.", f"8px has no citation; {{modes.light.color.bg.hex}} {json_gone}"),   # ... nor is a part of one
+                      ("Pad the hero with 8px: {modes.light.color.bg.ref}.", f"8px has no citation; {{modes.light.color.bg.ref}} {json_gone}"),
+                      ("Pad the hero with 8px: {primitives.nope}.", f"8px has no citation; {{primitives.nope}} {json_gone}")):
+        recipe.write_text(before + f"\n{line}\n", encoding="utf-8")
+        at = 22 if line.startswith("```") else 21                                                                                # a fence opens on line 21, its sample is line 22
+        assert kit_check(pack).returncode == 1, line
+        assert check_report_rows(pack)["kit:numbers"]["detail"] == cites_nothing(f"recipes/web-page.md:{at} ({why})"), line
+    recipe.write_text(before + "\nPad the hero with 8px: var(--dimension-space-2).\n", encoding="utf-8")
+    (kit_of(pack) / "brand" / "assets" / "tokens" / "tokens.css").unlink()                                                   # it is the kit's copy that is read, not the project's
+    assert kit_check(pack).returncode == 1
+    assert check_report_rows(pack)["kit:numbers"]["detail"] == cites_nothing(
+        f"recipes/web-page.md:21 (8px has no citation; var(--dimension-space-2) {css_gone} (that file is missing))")
+
+
+def test_numbered_steps_need_no_tag_but_their_values_do(pack):
+    filled_kit(pack)
+    recipe = kit_of(pack) / "recipes" / "web-page.md"
+    mutate(recipe, RECIPE_LAST, RECIPE_LAST + "\n\n8. Pad the hero with 48px.\n   1) Then look at it.")                         # lines 21 and 22
+    r = kit_check(pack)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert check_report_rows(pack)["kit:tags"]["status"] == "pass" and check_report_rows(pack)["kit:tags"]["detail"] == NO_TAGS      # a numbered step of a recipe needs no tag
+    assert check_report_rows(pack)["kit:numbers"]["detail"] == cites_nothing("recipes/web-page.md:21 (48px has no citation)")
+    mutate(recipe, "8. Pad the hero with 48px.", "8. Pad the hero with 48px, that is var(--dimension-space-2) six times.")
+    assert kit_check(pack).returncode == 0 and statuses(pack) == {**ALL_PASS, "kit:owned": "warn"}
+    mutate(recipe, "var(--dimension-space-2) six times.", "a lot.")
+    assert kit_check(pack).returncode == 1
+    assert check_report_rows(pack)["kit:numbers"]["detail"] == cites_nothing("recipes/web-page.md:21 (48px has no citation)")
+    mutate(recipe, "a lot.", "a lot. [example]")
+    assert kit_check(pack).returncode == 0
+    step = "8. Pad the hero with 48px, that is a lot. [example]"                                                              # line 21 as it stands
+    for written, value in (("8. Pad the hero 32-48px.", "48px"), ("8. Pad the hero 400-700ms.", "700ms"), ("8. Keep the measure to 60-75ch.", "75ch"), ("8. Pad the hero 1-2rem.", "2rem")):
+        mutate(recipe, step, written)                                                                                         # a value written as a range is a value: the last number carries the unit
+        step = written
+        assert kit_check(pack).returncode == 1, written
+        assert check_report_rows(pack)["kit:numbers"]["detail"] == cites_nothing(f"recipes/web-page.md:21 ({value} has no citation)"), written
+        assert check_report_rows(pack)["kit:tags"]["detail"] == NO_TAGS
+    mutate(recipe, step, step + " [example]")
+    assert kit_check(pack).returncode == 0 and statuses(pack) == {**ALL_PASS, "kit:owned": "warn"}
+    visual = kit_of(pack) / "visual.md"                                                                                       # in visual.md and golden-rules.md a numbered line needs its tag as well
+    mutate(visual, KEPT, KEPT + "\n\n1. Pad the picture with 48px.")
+    assert kit_check(pack).returncode == 1
+    assert check_report_rows(pack)["kit:tags"]["detail"] == lack_a_tag(1, 1, "visual.md:7 untagged")
+    assert check_report_rows(pack)["kit:numbers"]["detail"] == cites_nothing("visual.md:7 (48px has no citation)")
+    mutate(visual, "48px.", "48px. [example]")
+    assert kit_check(pack).returncode == 0 and statuses(pack) == {**ALL_PASS, "kit:owned": "warn"}
+
+
+def test_a_value_in_a_code_fence_needs_a_citation_on_its_own_line(pack):
+    filled_kit(pack)
+    recipe = kit_of(pack) / "recipes" / "web-page.md"
+    mutate(recipe, RECIPE_LAST, RECIPE_LAST + "\n\n```css\n.hero { padding: 48px; }\n.hero { margin: var(--dimension-space-2); }\n.hero { gap: 2rem; } /* [example] */\n- keep 3px\n```")
+    r = kit_check(pack)                                                                                                       # lines 22 to 25 sit in the fence opened on line 21
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert check_report_rows(pack)["kit:tags"]["detail"] == NO_TAGS                                                           # a bullet in a fence is no bullet
+    assert check_report_rows(pack)["kit:numbers"]["detail"] == cites_nothing("recipes/web-page.md:22 (48px has no citation)", "recipes/web-page.md:25 (3px has no citation)")
+    mutate(recipe, ".hero { padding: 48px; }", ".hero { padding: 48px; } /* [example] */")                                  # the tag of another line would not have counted
+    mutate(recipe, "- keep 3px", "- keep 3px [example]")
+    assert kit_check(pack).returncode == 0 and statuses(pack) == {**ALL_PASS, "kit:owned": "warn"}
+    assert check_report_rows(pack)["kit:numbers"]["detail"] == "3 value(s) on 3 line(s) cite a token, a known rule or `[example]`"
+
+
+def test_every_kind_of_value_is_found_and_names_links_and_tags_are_not_values():
+    import kitlib
+    found = {"Hero padding 48px": ["48px"], "gap .5rem and 1.5em": [".5rem", "1.5em"], "wait 200ms or 3 s, 100% or 50 %": ["200ms", "3 s", "100%", "50 %"],
+             "80vh 100dvh 20svh 10vw 2ch 1fr 45deg 12pt": ["80vh", "100dvh", "20svh", "10vw", "2ch", "1fr", "45deg", "12pt"],
+             "contrast 4.5:1 or 16:9": ["4.5:1", "16:9"], "colours #1a2b3c #FFF #abcd #11223344": ["#1a2b3c", "#FFF", "#abcd", "#11223344"],
+             "rgb(0 0 0) rgba(0,0,0,.5) hsl(1 2% 3%) oklch(0.5 0.1 200) HSLA(": ["rgb(", "rgba(", "hsl(", "2%", "3%", "oklch(", "HSLA("],
+             "margin -8px": ["8px"], "Hero PADDING 48PX": ["48PX"],
+             "Hero padding 32-48px": ["48px"], "range 400-700ms": ["700ms"], "1-2rem gap": ["2rem"], "1.5-2em": ["2em"], "line length 60-75ch": ["75ch"],   # a range: the dash follows a number, not a name
+             "2em-3em": ["2em", "3em"], "pad 16px-24px": ["16px", "24px"], "1.5rem-2rem": ["1.5rem", "2rem"], "10s-20s": ["10s", "20s"], "50%-75%": ["50%", "75%"],   # a unit on both ends: the dash follows a value
+             "Open 9:00 to 17:00": ["9:00", "17:00"]}                                                                                            # a clock time reads as a ratio: the owner tags the line
+    for line, values in found.items():
+        assert kitlib.find_values(line) == values, line
+    for line in ("--space-8px and var(--fs-16px) and fs-16px", "--space-2-8px and var(--space-2-8px)", "x-2rem and my_var-3px", "[rule: page:3s-delay] and [rule: x-2rem]", "[a](brand/x-48px.png) and https://example.com/a#abc123 and &#8212;",
+                 "## Heading # 1", "step 2 of 3, 10 seconds, 5th, 22nd", "page:claims and tell:hero-text-budget", "section 2.1 and version 1.2", "a#fff and x1.5rem", "width=\"48\"",
+                 "2026-10-30", "4.5 and 1."):
+        assert kitlib.find_values(line) == [], line
+    assert kitlib.token_refs("var(--a-b) var( --c ) {color.bg} {{brand.name}} ${a.b} {x} {a-b.c-d.9}") == (["--a-b", "--c"], ["color.bg", "a-b.c-d.9"])
+    doc = {"$generator": "x", "primitives": {"color.ink": {"hex": "#000000"}}, "other": {"dimension.space-1": "4px"}, "modes": {"light": {"color.bg": {"hex": "#ffffff"}}, "dark": {"color.bg": {}}},
+           "motion": {"durations_ms": {"duration.fast": 150}, "curves": {"curve.out": [0, 0, 0.2, 1]}}, "pairs": [], "touching": {"default": 3.0}, "grounds": {"named_by_owner": "", "list": []}}
+    assert kitlib.json_token_paths(doc) == {"primitives.color.ink", "color.ink", "other.dimension.space-1", "dimension.space-1", "modes.light.color.bg", "modes.dark.color.bg", "color.bg",   # a token, by its key or by its path from the top
+                                            "motion.durations_ms.duration.fast", "motion.curves.curve.out"}                                                                                  # and no group, no part of a token, nothing else of the file
+    assert kitlib.json_token_paths({"modes": ["light"], "primitives": 3, "other": None, "motion": {"curves": "x"}}) == set()                                                                  # a file of another shape names no token and never crashes
+
+
+def test_tags_and_values_are_judged_only_in_the_recipes_golden_rules_visual_and_reference_page_notes(pack):
+    filled_kit(pack)
+    kd = kit_of(pack)
+    say = "- Say 48px loudly."
+    mutate(kd / "voice.md", KEPT, KEPT + "\n\n" + say)                                                                         # the other owner files are not judged
+    mutate(kd / "EXTENDING.md", "# Extending the Acme brand kit", "# Extending the Acme brand kit\n\n" + say)
+    (kd / "notes").mkdir()
+    (kd / "notes" / "own.md").write_text(say + "\n", encoding="utf-8")
+    (kd / "recipes" / "deep").mkdir()
+    (kd / "recipes" / "deep" / "more.md").write_text("- A deep bullet.\n", encoding="utf-8")                                    # recipes/** : any depth
+    (kd / "recipes" / "email.md").write_text("# Email\n\n" + say + "\n1. Write 48px.\n", encoding="utf-8")                      # a numbered step needs no tag, its value a citation
+    (kd / "recipes" / "notes.txt").write_text(say + "\n", encoding="utf-8")                                                     # .md only
+    (kd / "reference-pages" / "start").mkdir(parents=True)
+    (kd / "reference-pages" / "start" / "notes.md").write_text("# start\n\n" + say + "\n", encoding="utf-8")                    # the generated notes of a page
+    (kd / "reference-pages" / "start" / "other.md").write_text(say + "\n", encoding="utf-8")                                    # notes.md only
+    r = kit_check(pack)
+    assert r.returncode == 1, r.stdout + r.stderr                                                                             # kit:files fails too: nobody generated these notes
+    assert check_report_rows(pack)["kit:tags"]["detail"] == lack_a_tag(
+        3, 3, "recipes/deep/more.md:1 untagged", "recipes/email.md:3 untagged", "reference-pages/start/notes.md:3 untagged")
+    assert check_report_rows(pack)["kit:numbers"]["detail"] == cites_nothing(
+        "recipes/email.md:3 (48px has no citation)", "recipes/email.md:4 (48px has no citation)", "reference-pages/start/notes.md:3 (48px has no citation)")
+
+
+def test_a_rule_tag_on_a_line_that_needs_no_tag_is_not_verified_when_the_rule_ids_cannot_be_read(pack):
+    record_rules(pack, "The mark keeps its clear space")
+    filled_kit(pack)
+    (pack / "site").mkdir()
+    (pack / "site" / "site.json").write_text("{not json", encoding="utf-8")
+    recipe = kit_of(pack) / "recipes" / "web-page.md"
+    mutate(recipe, RECIPE_LAST, RECIPE_LAST + f"\n\n8. Keep the clear space. [rule: {CLEAR_SPACE}]")
+    r = kit_check(pack)
+    assert r.returncode == 3, r.stdout + r.stderr                                                              # a numbered step needs no tag, but the id it names cannot be judged: never a pass
+    tags = check_report_rows(pack)["kit:tags"]
+    assert tags["status"] == "skipped" and tags["detail"].startswith("not verified: the rule ids a tag may name cannot be read (") and "site/site.json" in tags["detail"]
+    assert statuses(pack)["kit:numbers"] == "pass" and report(pack, "kit-check")["status"] == "not-verified"
+
+
+def test_tag_rows_are_not_verified_when_the_rule_ids_cannot_be_read(pack):
+    record_rules(pack, "The mark keeps its clear space")
+    filled_kit(pack)
+    (pack / "site").mkdir()
+    (pack / "site" / "site.json").write_text("{not json", encoding="utf-8")
+    kit_check(pack)                                                                                                           # no line names a rule: the ids are never needed
+    assert statuses(pack)["kit:tags"] == "pass" and statuses(pack)["kit:numbers"] == "pass"
+    assert any(i["path"].endswith("site/site.json") for i in report(pack, "kit-check")["inputs"])                                # the report goes stale when the site record changes
+    golden = kit_of(pack) / "golden-rules.md"
+    mutate(golden, KEPT, KEPT + f"\n\n- Keep the clear space. [rule: {CLEAR_SPACE}]")
+    kit_check(pack)
+    tags = check_report_rows(pack)["kit:tags"]
+    assert tags["status"] == "skipped" and tags["detail"].startswith("not verified: the rule ids a tag may name cannot be read (")
+    assert "site/site.json" in tags["detail"] and tags["detail"].endswith("); fix it and run `brand-creator kit check` again")
+    assert statuses(pack)["kit:numbers"] == "pass"                                                                            # no value on that line
+    mutate(golden, f"[rule: {CLEAR_SPACE}]", f"[rule: {CLEAR_SPACE}]\n\nPad 48px [rule: {CLEAR_SPACE}]")
+    kit_check(pack)
+    assert statuses(pack)["kit:tags"] == "skipped" and statuses(pack)["kit:numbers"] == "skipped"
+    assert check_report_rows(pack)["kit:numbers"]["detail"].startswith("not verified: the rule ids a tag may name cannot be read (")
+    assert report(pack, "kit-check")["status"] == "not-verified"
+    mutate(golden, f"Pad 48px [rule: {CLEAR_SPACE}]", f"Pad 48px [rule: {CLEAR_SPACE}]\n\n- Keep it loud.\n\nPad 8px.")                    # lines 11 and 13: a failure that needs no rule id
+    r = kit_check(pack)
+    assert r.returncode == 1, r.stdout + r.stderr                                                                             # is not hidden behind the lines that cannot be judged: the owner fixes both at once
+    note = "; 1 line(s) that name a rule were not judged, because the rule ids cannot be read ("
+    again = "); fix it and run `brand-creator kit check` again"
+    tags, numbers = check_report_rows(pack)["kit:tags"], check_report_rows(pack)["kit:numbers"]
+    assert tags["status"] == "fail" and numbers["status"] == "fail"
+    assert tags["detail"].startswith(lack_a_tag(1, 3, "golden-rules.md:11 untagged") + note.replace("1 line", "2 line")) and "site/site.json" in tags["detail"] and tags["detail"].endswith(again)   # the bullet and the sentence both name a rule
+    assert numbers["detail"].startswith(cites_nothing("golden-rules.md:13 (8px has no citation)") + note) and "site/site.json" in numbers["detail"] and numbers["detail"].endswith(again)
+    assert report(pack, "kit-check")["status"] == "fail"
+    mutate(golden, "\n\n- Keep it loud.\n\nPad 8px.", f"\n\nPad 8px var(--nope) [rule: {CLEAR_SPACE}]")                                 # line 11: a token that does not exist needs no rule id to be found either
+    r = kit_check(pack)
+    assert r.returncode == 1, r.stdout + r.stderr
+    numbers = check_report_rows(pack)["kit:numbers"]
+    assert statuses(pack)["kit:tags"] == "skipped" and numbers["status"] == "fail"                                            # the tag on the line stays unjudged
+    assert numbers["detail"].startswith(cites_nothing("golden-rules.md:11 (var(--nope) is not declared in brand/assets/tokens/tokens.css)") + "; 2 line(s) that name a rule were not judged, because the rule ids cannot be read (")
+    assert "site/site.json" in numbers["detail"] and numbers["detail"].endswith(again)
+    mutate(golden, f"\n\nPad 8px var(--nope) [rule: {CLEAR_SPACE}]", "")
+    (pack / "site" / "site.json").write_text(json.dumps({"schema": 1, "approved": "2026-10-17 (test)", "round": 1, "hero": "a", "pages": [], "choices": []}), encoding="utf-8")
+    kit_check(pack)
+    assert statuses(pack)["kit:tags"] == "pass" and statuses(pack)["kit:numbers"] == "pass"

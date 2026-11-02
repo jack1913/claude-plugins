@@ -45,6 +45,13 @@ makes it stale. Rows: kit:files (every generated file is what kit.json lists, ki
 relative link in a .md, .html or .css file resolves to a file inside the kit: one that points outside it, an absolute path or a missing file fails), kit:fill (no `[[fill` marker is left in a text file), kit:versions (SKILL.md holds
 `Kit version <kit.json version> (kit.json).` exactly once, and the kit's edition is the approved one), kit:plugin (warns on another plugin version), kit:sources (not verified when the brand changed after the kit was built, naming
 what changed) and kit:owned (warns when an owner file changed since the last build). Exit 0 pass, 1 a row failed, 3 not verified. A link inside the kit is never followed.
+Two rows read the owner's recipes (recipes/**/*.md), golden-rules.md, visual.md and the generated reference-pages/<id>/notes.md: kit:tags (every bullet, and in golden-rules.md and visual.md every numbered
+line too, outside code fences, carries `[example]` or `[rule: <id>]`; a numbered step of a recipe needs no tag. Every id a `[rule: <id>]` names, on any line of those files, a numbered step, a sentence or
+a code fence included, is one `known_rule_ids` lists: a rule of BRAND-STATE.md written bare, `page:<id>`, `site:<id>`) and kit:numbers (every value, code fences included, has a citation on its own line: a
+number with a unit, a ratio, a hex colour or rgb( hsl( oklch( needs `[example]`, a known rule id or a token that exists, `var(--name)` of the kit's tokens.css or `{dotted.path}` of its tokens.json, a path
+that ends at a token: `color.bg`, `modes.light.color.bg`, never a group such as `modes.light`; a token reference that does not exist fails outside a code fence on any line, a code span included, and inside
+a fence on a line with a value; a reference inside a fence on a line with no value, as in a component sample, is not judged). When the rule ids cannot be read (a site/site.json that does not parse) and a
+line names one, that line is not judged: a row with a failure that needs no rule id still fails, and says how many lines it left, otherwise it is not verified.
 
 Writes the report `kit` (rows kit:written and kit:owned; outputs lists every generated path with its sha256, kit.json included, and no owner file). Exit 0 written. Exit 1: G5 not recorded, no approved
 edition, a band drawing the project does not have, or a hand edit or foreign file without --replace. Exit 2: no --yes (the plan is printed first); a path that leaves the
@@ -59,6 +66,7 @@ and after). Exit 2: no kit in the project; a folder that does not exist; the pro
 repository at a time, never into a global skills folder); a kit folder that is a link. Exit 3: the kit in the project is not whole (`kit check` says what).
 """
 import argparse
+import functools
 import json
 import os
 import re
@@ -257,6 +265,54 @@ def owned_check_row(rep, project: Path, doc: dict) -> None:
         rep.add("kit:owned", "pass", label, detail=f"the {len(kitlib.OWNED_FILES)} owner files are as the last build recorded them")
 
 
+IDS_HINT = "fix it and run `brand-creator kit check` again"
+
+
+def unreadable_ids_row(rep, row_id: str, label: str, e: CliError) -> None:
+    """A `[rule: <id>]` tag cannot be judged because the rule ids cannot be read (a site record that does not parse), and nothing else is wrong: not verified, never a pass."""
+    rep.add(row_id, "skipped", label, detail=f"not verified: the rule ids a tag may name cannot be read ({e.message}); {IDS_HINT}")
+
+
+def unjudged_note(got: dict) -> str:
+    """What a failing row adds when the rule ids could not be read as well: the failures listed need no rule id, and the lines that name one were left unjudged. Empty when the ids were read."""
+    if got["unread"] is None:
+        return ""
+    return f"; {got['unjudged']} line(s) that name a rule were not judged, because the rule ids cannot be read ({got['unread'].message}); {IDS_HINT}"
+
+
+def tags_row(rep, project: Path, known) -> None:
+    """Row kit:tags: every bullet of a recipe and of the reference-page notes, and every bullet or numbered line of golden-rules.md and visual.md, carries `[example]` or a `[rule: <id>]`, and every rule id
+    named on any line of those files (a numbered step, a sentence, a heading, a code fence too) is one the kit knows. An untagged line fails whether or not the rule ids can be read; with only lines that
+    name a rule left, an unreadable site record is not verified."""
+    label = "every rule line in the owner's files says what it is: an example or a rule the kit knows"
+    got = kitlib.tag_check(project, known)
+    if got["bad"]:
+        listed = [f"{f}:{line} {why}" for f, line, why in got["bad"]]
+        rep.add("kit:tags", "fail", label, detail=f"{len(listed)} of {got['lines']} line(s) lack a valid tag: {named(listed)}; {kitlib.TAG_HINT}{unjudged_note(got)}")
+    elif got["unread"] is not None:
+        unreadable_ids_row(rep, "kit:tags", label, got["unread"])
+    elif got["lines"]:
+        rep.add("kit:tags", "pass", label, detail=f"{got['lines']} line(s) carry `{kitlib.TAG_EXAMPLE}` or a rule id the kit knows")
+    else:
+        rep.add("kit:tags", "pass", label, detail="no bullet or numbered line needs a tag")
+
+
+def numbers_row(rep, project: Path, known) -> None:
+    """Row kit:numbers: every value in the owner's files (code fences too) cites a token, a known rule or `[example]` on its own line, and a token reference exists (outside a code fence on any line, inside one on a line with a value).
+    A failure that needs no rule id is found whether or not the rule ids can be read; with none, an unreadable site record is not verified."""
+    label = "every value in the owner's files cites a token or a rule, or says it is an example"
+    got = kitlib.number_check(project, known)
+    if got["bad"]:
+        listed = [f"{f}:{line} ({why})" for f, line, why in got["bad"]]
+        rep.add("kit:numbers", "fail", label, detail=f"{len(listed)} line(s) hold a value with no citation or a token that does not exist: {named(listed)}; {kitlib.VALUE_HINT}{unjudged_note(got)}")
+    elif got["unread"] is not None:
+        unreadable_ids_row(rep, "kit:numbers", label, got["unread"])
+    elif got["values"]:
+        rep.add("kit:numbers", "pass", label, detail=f"{got['values']} value(s) on {got['lines']} line(s) cite a token, a known rule or `{kitlib.TAG_EXAMPLE}`")
+    else:
+        rep.add("kit:numbers", "pass", label, detail="no value (a number with a unit, a ratio or a colour) needs a citation")
+
+
 def check(project: Path, a) -> int:
     if not kitlib.exists(project):
         fail(EXIT_USAGE, "no kit in this project: `brand-creator kit build --yes` (opt-in at G5)")
@@ -272,6 +328,9 @@ def check(project: Path, a) -> int:
     plugin_row(rep, doc)
     sources_row(rep, project, doc)
     owned_check_row(rep, project, doc)
+    known = functools.cache(lambda: frozenset(kitlib.known_rule_ids(project)))   # read at the first tag that names a rule, once
+    tags_row(rep, project, known)
+    numbers_row(rep, project, known)
     rep.extra.update({"kit_version": doc["version"], "kit_tree_sha": kitlib.tree_sha(project)})
     return rep.finish()
 
@@ -469,7 +528,7 @@ def main() -> int:
     b.add_argument("--replace", action="store_true",
                    help="a file edited by hand, or put into a generated folder, is moved to removed-<date>/ and the kit is written (nothing is deleted)")
     b.add_argument("--project", default=argparse.SUPPRESS, help="brand project folder")   # also after the subcommand
-    c = sub.add_parser("check", help="prove the kit is whole: files, links, fill markers, versions, sources and the owner's files (writes the report kit-check)")
+    c = sub.add_parser("check", help="prove the kit is whole: files, links, fill markers, versions, sources, the owner's files, their tags and values (writes the report kit-check)")
     c.add_argument("--project", default=argparse.SUPPRESS, help="brand project folder")
     st = sub.add_parser("status", help="is the copy of the kit in a product repository current, and what to copy (reads only; writes nothing)")
     st.add_argument("--repo", action="append", default=[], metavar="DIR[=LABEL]",

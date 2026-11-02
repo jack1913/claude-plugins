@@ -27,9 +27,10 @@ To find out whether the kit is enough on its own, ask in the brand project for a
 ## Tags and values
 
 - A bullet in a recipe, and a bullet or a numbered line in `visual.md` and `golden-rules.md`, carries a tag: `[rule: <id>]` or `[example]`. Numbered steps in a recipe need no tag.
-- `[rule: <id>]` names a rule the kit knows. A rule of the brand is written bare, with the id it has in `rules.json`. A page rule is written `page:<id>`, and a choice of a reference page `site:<id>`.
+- `[rule: <id>]` names a rule the kit knows. A rule of the brand is written bare, with the id it has in `rules.json`. A page rule is written `page:<id>`, and a choice of a reference page `site:<id>`. The kit checks every such tag on every line of those files, bullet or not, in a code block too.
 - `[example]` says the line shows one case and is not a rule.
-- A value (a number with a unit, a ratio, a colour) cites a token or a known rule on its line, or the line is tagged `[example]`. A token is a CSS variable from `brand/assets/tokens/tokens.css`, written `var(--name)`, or a path in `brand/assets/tokens/tokens.json`, written `{dotted.path}`.
+- A value (a number with a unit, a ratio, a colour) cites a token or a known rule on its line, or the line is tagged `[example]`. A token is a CSS variable from `brand/assets/tokens/tokens.css`, written `var(--name)`, or a path in `brand/assets/tokens/tokens.json`, written `{dotted.path}`; the path ends at a token, such as `{color.bg}`, never at a group.
+- A `{dotted.path}` that is no token fails, even between backticks in a sentence: `kit check` reads it as a token reference. To show a placeholder of your own, write it without the dot, or put it in a code block on a line with no value.
 
 ## The version
 
