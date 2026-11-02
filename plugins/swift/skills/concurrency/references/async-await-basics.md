@@ -45,7 +45,12 @@ Use `Task` to bridge from sync to async:
 
 ```swift
 Task {
-    let data = try await fetchData()
+    do {
+        let data = try await fetchData()
+        // use data
+    } catch {
+        // handle error
+    }
 }
 ```
 
@@ -209,6 +214,47 @@ func fetchData() async throws(NetworkError) -> Data {
 ```
 
 Callers know exactly which errors to handle.
+
+## await inside defer (Swift 6.4)
+
+With the Swift 6.4 toolchain (Xcode 27), a `defer` block in an async function can `await`. It runs in the isolation of the enclosing scope.
+
+```swift
+func upload(using connection: Connection) async throws {
+    defer { await connection.close() }
+    try await connection.send(payload)
+}
+```
+
+In a cancelled task `Task.isCancelled` is still `true` inside the `defer`; wrap the cleanup in `withTaskCancellationShield` when it must run in full (see `tasks.md`). Toolchains older than Swift 6.4 need an explicit call on each exit path.
+
+## Noncopyable Continuation (Swift 6.4, iOS 27 / macOS 27)
+
+`Continuation<Success, Failure>` and `withContinuation(of:throwing:_:)` replace `withChecked*Continuation` where the deployment target allows. `resume` consumes the continuation: a second `resume` is a compile error, and dropping it without resuming traps at runtime.
+
+```swift
+@available(anyAppleOS 27.0, *)
+@MainActor
+final class Loader {
+    private var pending: Continuation<Data, any Error>?
+
+    func load() async throws -> Data {
+        try await withContinuation(of: Data.self, throwing: (any Error).self) { continuation in
+            pending = consume continuation
+            startRequest()
+        }
+    }
+
+    // Called from the legacy delegate.
+    func finish(_ result: Result<Data, any Error>) {
+        pending.take()?.resume(with: result)
+    }
+}
+```
+
+The compiler rejects consuming the continuation inside an escaping closure (`noncopyable 'continuation' cannot be consumed when captured by an escaping closure`), so a plain completion-handler bridge still uses `withCheckedThrowingContinuation`. Omit `throwing:` for a non-throwing continuation.
+
+`await Result { try await fetch() }` (SE-0530) turns an async throwing call into a `Result`; it is available on older OS versions too.
 
 ## Migration Strategy
 

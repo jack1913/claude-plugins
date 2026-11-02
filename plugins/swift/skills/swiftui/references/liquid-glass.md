@@ -314,15 +314,15 @@ struct GlassCard: View {
 ```swift
 struct GlassSegmentedControl: View {
     @Binding var selection: Int
-    let options: [String]
+    let options: [String] // unique labels: each one is its segment's identity
     @Namespace private var animation
 
     var body: some View {
         if #available(iOS 26, macOS 26, *) {
             GlassEffectContainer(spacing: 4) {
                 HStack(spacing: 4) {
-                    ForEach(options.indices, id: \.self) { index in
-                        Button(options[index]) {
+                    ForEach(Array(options.enumerated()), id: \.element) { index, option in
+                        Button(option) {
                             withAnimation(.smooth) {
                                 selection = index
                             }
@@ -342,8 +342,8 @@ struct GlassSegmentedControl: View {
             }
         } else {
             Picker("Options", selection: $selection) {
-                ForEach(options.indices, id: \.self) { index in
-                    Text(options[index]).tag(index)
+                ForEach(Array(options.enumerated()), id: \.element) { index, option in
+                    Text(option).tag(index)
                 }
             }
             .pickerStyle(.segmented)

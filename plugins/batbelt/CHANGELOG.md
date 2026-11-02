@@ -19,6 +19,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `puppet-master` remembers a closed session by name and prints its resume command when you mention it again.
 - The analyst's day starts at 05:00, so work past midnight stays with its day (`PUPPET_DAY_START_HOUR` changes the hour). It also records your answers to Claude's question dialogs, and no longer logs an idle notification as an empty message.
 
+## [0.3.0] - 2026-11-01
+
+This release changes how the docs of a repository you set up are kept. While batbelt is `0.y.z`, a minor
+release may break things: the stamped `update-docs` and `changelog-release` now do more on their own (see
+Changed). Run `/batbelt:onboard-repo --sync` in each repository you set up; it lists what changes before it
+writes anything.
+
+### Added
+
+- A Local deviations list in the docs standard. `--sync` fills it from how your docs are already built, so a
+  repository's own layout, reading tour and output blocks are kept instead of reported.
+- A getting-started page shape, and a how-to shape that shows each command with its PowerShell twin, the real
+  output with a note on how it was captured, what it means, a `You see | Do this` table and a Next link.
+- `check-docs` checks that the manual's Next links follow the index (`NEXT_CHAIN`), that the index's page count
+  matches its list (`TOC_COUNT`), and that every shell command has a PowerShell twin (`PLATFORM_TWIN`, an error
+  with `--platform-pairs`).
+- `check-docs --forbidden-allow`, to check that a fact another repository owns is linked, not restated.
+- `check.py shrink-check`, so the stamped `update-docs` can stop a rewrite that guts a page.
+- `/batbelt:onboard-repo` asks which README voice you want before it writes the README, and the README starts
+  with an Install section.
+- `--sync` adds any section the template gained (such as Local deviations or the README list) to your existing
+  docs standard, as a diff for you to confirm, instead of only showing the whole file as changed.
+- A deferred row in the coverage record now says why it is deferred.
+
+### Changed
+
+- Your repository's own choices outrank the docs standard: REPO SPECIFICS first, then the Local deviations, then
+  the standard, then built-in defaults. The standard no longer sets the README voice.
+- The default docs voice is commands-first again: one concept per page, each showing what you'll actually see.
+- How-to pages sit directly in `docs/manual/` by default. An existing manual is never moved or regrouped, and one
+  that uses `use/` keeps it.
+- The README keeps its install command whatever its voice, and every `update-docs` run checks the README's fixed
+  rules.
+- `update-docs` fixes a claim it can re-derive from the code, such as a count or a flag name, instead of only
+  reporting it. New pages, decision records and captures still wait for you.
+- `update-docs` checks the claims on the pages a run changed, with one reviewer per angle, at most 8 readers and
+  2 rounds, then reports what is left.
+- `update-docs` lists stale captures once and re-takes them after one yes, with read-only commands only.
+- `update-docs` reports unchanged niche deferrals and known baselines as one line, and offers the decision-record
+  check only when a record's sources changed.
+- `changelog-release` prints the commit, push and tag commands, then runs them one by one after one yes. Your own
+  permission rules still apply to each command.
+- Before 1.0, `changelog-release` bumps the minor version for a feature: 0.1.2 becomes 0.2.0.
+- With a release script, `changelog-release` stops before the cut when `--suggest` prints a version other than
+  the one you approved.
+- `changelog-release` asks for an entry, or a reason to skip, for every merge in the release. Both skills commit by
+  explicit path and name any unrelated changes they left out.
+- `changelog-release` cuts a SemVer version only when you ask for a release; a routine run only updates
+  `[Unreleased]`. It tags and pushes the tag only from the release branch.
+- The manual index is renumbered one list at a time, unless you numbered on from one group to the next, which is
+  kept. Its page count names the tour's last number, and a tour whose numbers skip is reported.
+- `PLATFORM_TWIN` accepts only a PowerShell command block as the twin, not captured PowerShell output; twins pair
+  in order within a section, with output blocks between them. The tour checks report on the pages `--only` names.
+- The tour checks read a list item whose text wraps onto the next line, and a Do a task section with
+  subsections, as one tour. A malformed `--forbidden-allow` pattern is refused with a usage error.
+- A tour entry's page is the link its line starts with. An index whose only list is plain numbered steps still gets
+  its page count fixed, a total is left alone when the index is ambiguous, numbering is judged list by list the way
+  `renumber-toc` writes it (an auto-numbered list, 1. 1. 1., is valid), and a bold range in a table cell is no
+  longer taken for the count. A renamed Do a task group is found by its links to how-to pages.
+- PowerShell twins may come before or after their shell command, and pair by script name. Only a command that runs
+  a `.sh` front-end with a `.ps1` sibling (a remote install one-liner for this repo included; a third-party
+  installer is not) needs one; a block that runs both scripts is its own twin, names compare without case, and a
+  CLI, `git` or `npm` command needs none.
+- A numbered list that starts at 0 (an opt-in step 0) keeps its zero start when the index is renumbered.
+- Platform pairs come only from a `.sh` the README or the manual names whose `.ps1` sibling exists, the same rule
+  the twin check uses; `uninstall.sh` no longer counts as naming `install.sh`.
+- `--forbidden-allow` globs are paths from the repo root, a `[...]` class never matches a `/`, and a glob that
+  matches no file is reported (`FORBIDDEN_ALLOW_UNUSED`).
+- `--sync` asks whether a missing tour feature (no numbered list, no Next links, no New here? pointer) is
+  deliberate before recording it, so an unfinished manual is not excused for good.
+- `--forbidden-allow` patterns are anchored: `*` stays within one folder, `**` crosses folders, and `README.md`
+  matches only the README at that level.
+- The README and the manual carry the jack1913 brand header.
+
 ## [0.2.1] - 2026-10-20
 
 ### Added

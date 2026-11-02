@@ -14,9 +14,9 @@ Every file in this folder, and what to open it for. `SKILL.md` has the same poin
 | `environment-patterns.md` | `@Environment`, `EnvironmentValues`, `@Entry`, `@FocusedValue` |
 | `focus-patterns.md` | `@FocusState`, focusable views, focused values, default focus, focus effects |
 | `image-optimization.md` | `AsyncImage`, request control, image decoding and downsampling, memory |
-| `iphone-duo.md` | iPhone Duo and foldable layouts: displays, fold and camera regions, hinge effects |
+| `iphone-duo.md` | iPhone Duo, foldable and large-display screens: choosing the technique by screen structure, displays, fold and camera regions, hinge effects, verifying layouts |
 | `latest-apis.md` | The current replacement for each deprecated SwiftUI API |
-| `layout-best-practices.md` | Resizable layout, safe areas, arrangements, reserved regions |
+| `layout-best-practices.md` | Resizable layout, safe areas, two-column reflow, arrangements and their tuning modifiers, reserved regions, sizing a layout around a fold |
 | `liquid-glass.md` | Liquid Glass APIs for iOS 26 and later, and their fallbacks |
 | `list-patterns.md` | `ForEach` identity, reorderable lists, swipe actions outside `List`, refresh, empty states, `Table` |
 | `localization.md` | User-facing text: String Catalogs, `LocalizedStringResource`, formatting, right-to-left layout |
@@ -28,12 +28,12 @@ Every file in this folder, and what to open it for. `SKILL.md` has the same poin
 | `platform-availability.md` | Which platform each Liquid Glass and 26-era API exists on (generated table) |
 | `previews.md` | `#Preview`, mock data, `@Previewable`, previews inside `#if DEBUG`, diagnostics |
 | `scroll-patterns.md` | `ScrollView`, scroll position, scroll geometry |
-| `sheet-navigation-patterns.md` | Sheets, item-driven alerts, navigation, split views and inspectors |
+| `sheet-navigation-patterns.md` | Sheets, item-driven alerts, navigation, split views on large displays, the tab bar and sidebar, inspectors |
 | `soft-deprecation.md` | What to do when you meet a soft-deprecated API |
 | `state-management.md` | Choosing a property wrapper: `@State`, `@Binding`, `@Bindable`, `@Observable` and data flow |
 | `styled-text-editing.md` | Attributed `TextEditor`, text selection and formatting definitions |
 | `text-patterns.md` | Verbatim vs localized `Text` |
-| `toolbar-patterns.md` | Customizable toolbars, search, adaptive vertical bars, overflow and visibility |
+| `toolbar-patterns.md` | Customizable toolbars, search, adaptive vertical bars, overflow and visibility, navigation title alignment |
 | `trace-analysis.md` | Reading an Instruments `.trace` file |
 | `trace-recording.md` | Recording a new Instruments trace |
 | `view-structure.md` | View structure: extracting subviews, `@ViewBuilder`, `@ContentBuilder`, a cheap `body` and `init` |

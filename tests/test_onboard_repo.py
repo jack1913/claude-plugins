@@ -161,6 +161,8 @@ _DELEGATED = [
     ["check-instructions", "rules", "more"],
     ["redact", "raw.txt", "--home", "/h", "--user", "bob", "--stamp", "S"],
     ["redact", "raw.txt", "--home", "/h", "--user", "bob", "--stamp", "S", "--extra", "sekret"],
+    ["shrink-check", "old.md", "new.md"],
+    ["shrink-check", "old.md", "new.md", "--cleared"],
 ]
 
 
@@ -228,6 +230,10 @@ def _delegation_fixture(tmp_path):
     # `sekret` is what makes the two redact variants differ: only the --extra form
     # strips it, so a delegation that drops trailing args shows up as identical output.
     _seed(tmp_path, "raw.txt", "bob ran it from /h and pasted sekret at S\n")
+    # shrink-check: a 40-word page cut to 4 words and a dropped heading, so both the
+    # error and the --cleared variant change the output.
+    _seed(tmp_path, "old.md", "# Keep\n\n" + "word " * 40 + "\n\n## Gone\n\nmore\n")
+    _seed(tmp_path, "new.md", "# Keep\n\nword word word word\n")
 
 
 def _run(mod, argv, capsys, tmp_path):
@@ -589,7 +595,8 @@ def test_changelog_release_body_pins_key_rules():
     assert "repo specifics" in t
     assert "compare" in t and ("dead link" in t or "unless" in t)
     assert "dash" in t or "punctuation" in t
-    assert "stage" in t and ("do not commit" in t or "never commit" in t)
+    # v5: it stages and commits only on the one yes; a no leaves the commands printed
+    assert "on a yes, stage only the paths this run edited" in t and "a no leaves them printed" in t
 
 
 def test_changelog_release_body_pins_calver_rules():
@@ -1034,8 +1041,8 @@ def test_move_manifest_roundtrips():
     assert got_dirs == dirs
 
 
-def test_template_version_is_four():
-    assert lib.TEMPLATE_VERSION == 4
+def test_template_version_is_five():
+    assert lib.TEMPLATE_VERSION == 5
 
 
 # ---- Phase 1: heading_slugs -------------------------------------------------
@@ -3824,11 +3831,12 @@ def test_update_docs_can_actually_run_what_it_prescribes():
     assert "Bash(mv:*)" in front, "capture-then-mv needs mv"
 
 
-def test_update_docs_hands_the_capture_run_to_the_operator():
+def test_update_docs_runs_only_confirmed_read_only_captures():
     t = _norm(UPD)
-    # it may PROPOSE a capture, but it carries no arbitrary-shell grant, so the
-    # operator runs it -- exactly as onboard-repo §3.7 does
-    assert "operator runs it" in t
+    # v5: it re-takes a stale capture only on one confirmation, and only with a
+    # read-only command; anything that writes elsewhere stays the operator's to run
+    assert "ask one confirmation" in t and "only read-only commands go on the plan" in t
+    assert "stays the operator's to run" in t
     assert "redact" in t and "not a secret scanner" in t
     # and the honest failure mode: leave the stale block, never fake the evidence
     assert "leave the stale block alone and report it" in t
@@ -3981,7 +3989,7 @@ def test_docs_standard_is_listed_in_internals_readme_and_agents_index():
     assert "(docs-standard.md)" in readme
     agents = (DOCSIA / "AGENTS.md").read_text(encoding="utf-8")
     assert "`docs/internals/docs-standard.md`" in agents
-    assert "commands-first" not in agents
+    assert "task-first" not in agents and "commands-first" in agents
 
 
 def test_manual_readme_seed_has_the_three_task_headings():
@@ -4011,11 +4019,11 @@ def test_manual_page_templates_exist_and_author_manual_points_at_them():
     assert "manual-page-how-to.md" in index and "manual-page-reference.md" in index
 
 
-def test_update_docs_template_is_task_first_and_defers_to_the_standard():
+def test_update_docs_template_is_commands_first_and_defers_to_the_standard():
     t = _norm(UPD)
-    assert "commands-first" not in t
-    assert "task-first" in t
-    assert "docs/internals/docs-standard.md" in t and "the standard wins" in t
+    assert "task-first" not in t
+    assert "commands-first" in t
+    assert "docs/internals/docs-standard.md" in t and "local deviations" in t
 
 
 def test_provenance_accepts_the_old_and_the_new_source():
@@ -4052,3 +4060,1445 @@ def test_check_mode_reports_a_missing_docs_standard():
     text = (ONBOARD / "references" / "check-mode.md").read_text(encoding="utf-8")
     assert "docs-standard.md: ABSENT" in text
     assert "never\n  reported as drift" in text
+
+
+# ---- template v5: the repo's own choices outrank the standard ---------------
+
+PRECEDENCE = (
+    "REPO SPECIFICS → the standard's Local deviations → the standard's body → built-in defaults"
+)
+STD_V5 = DOCSIA / "internals-docs-standard.md"
+
+
+def _flat(path):
+    # whitespace-collapsed text (case and markup kept), so a pinned phrase still
+    # matches when the line wraps
+    return " ".join(pathlib.Path(path).read_text(encoding="utf-8").split())
+
+
+def test_docs_standard_defers_the_readme_voice():
+    t = _flat(STD_V5)
+    assert "Storefront" not in t and "storefront" not in t
+    assert "the README voice recorded in REPO SPECIFICS" in t
+
+
+def test_docs_standard_has_local_deviations():
+    raw = STD_V5.read_text(encoding="utf-8")
+    assert "\n## Local deviations\n" in raw
+    assert PRECEDENCE in _flat(STD_V5)
+    assert "an unfinished principal page is still reported" in _flat(STD_V5)
+
+
+def test_update_docs_uses_the_precedence_ladder():
+    t = _flat(UPD)
+    assert "The standard wins" not in t and PRECEDENCE in t
+    assert "never report a recorded deviation" in t
+
+
+# ---- template v5: a manual keeps its layout and its tour ---------------------
+
+
+def test_docs_standard_layout_is_flat_by_default():
+    t = _flat(STD_V5)
+    assert "docs/manual/<task>.md" in t
+    assert "an existing manual's layout, index order and Next tour are kept" in t
+    assert "Numbered lists for steps and for the manual's reading order" in t
+
+
+def test_manual_index_seed_is_a_numbered_tour():
+    t = (DOCSIA / "docs-manual-README.md").read_text(encoding="utf-8")
+    assert "**New here?**" in t
+    assert t.index("## Get started") < t.index("## Do a task") < t.index("## Look it up")
+    do_a_task = t.split("## Do a task", 1)[1].split("## Look it up", 1)[0]
+    assert "\n1. {{TODO:" in do_a_task and "**Next:**" in do_a_task
+
+
+def test_adoption_never_moves_pages():
+    t = _flat(ONBOARD / "references" / "adopt-docs.md")
+    assert "only on first adoption" in t and "never moves a page" in t
+
+
+def test_no_template_text_files_new_pages_into_use():
+    for rel in ("SKILL.md", "references/author-manual.md", "references/rubric.md",
+                "references/adopt-docs.md"):
+        t = _flat(ONBOARD / rel)
+        assert "use/` (one how-to per task)" not in t, rel
+        assert "task pages in `docs/manual/use/`" not in t, rel
+        assert "The new manual layout (`docs/manual/use/`) is created" not in t, rel
+    assert "the order under Local deviations decides" in _flat(ONBOARD / "references" / "author-manual.md")
+    assert "**Next:**" in _flat(ONBOARD / "references" / "author-manual.md")
+
+
+# ---- template v5: page shapes ----------------------------------------------
+
+
+def _shape(name):
+    return (ONBOARD / "references" / name).read_text(encoding="utf-8")
+
+
+def _skeleton(name):
+    # the illustrative page skeleton inside a shape file (between its ```` fences)
+    return _shape(name).split("````markdown illustrative", 1)[1].split("\n````", 1)[0]
+
+
+def test_how_to_shape_order():
+    t = _skeleton("manual-page-how-to.md")
+    order = ["```bash", "```powershell", "capture=<slug>", "*(", "## What it means",
+             "## Check it worked", "## If something goes wrong", "**Next:** ["]
+    pos = [t.index(s) for s in order]
+    assert pos == sorted(pos)
+    assert "## Related" not in _shape("manual-page-how-to.md")
+    assert "a how-to keeps the explanation its output needs" in " ".join(_shape("manual-page-how-to.md").split())
+
+
+def test_reference_shape_has_a_column_per_front_end():
+    t = _shape("manual-page-reference.md")
+    assert "| sh | PowerShell | Effect |" in t and "## See also" in t and "**Next:**" not in t
+
+
+def test_getting_started_shape_is_registered():
+    t = _skeleton("manual-page-getting-started.md")
+    order = ["By the end of this page", "## Prerequisites", "```bash", "```powershell",
+             "capture=<slug>", "## Check it worked", "**Next:** ["]
+    pos = [t.index(s) for s in order]
+    assert pos == sorted(pos)
+    assert "manual-page-getting-started.md" in _shape("_index.md")
+    assert "manual-page-getting-started.md" in _shape("author-manual.md")
+
+
+# ---- template v5: voice rules and stamping defaults --------------------------
+
+VOICE = "commands-first, one concept per page, each showing what you'll actually see"
+
+
+def test_default_docs_voice_is_commands_first():
+    st = " ".join(_shape("stamping.md").split())
+    assert VOICE in st and "task-first" not in st
+    assert "task-first" not in _flat(UPD) and "task-first" not in _flat(STD_V5)
+    assert VOICE in _flat(STD_V5)
+
+
+def test_user_pages_link_reasons_by_title():
+    st = " ".join(_shape("stamping.md").split())
+    assert "cite ADRs" not in st
+    assert "link the explanation by its title, never its number" in _flat(STD_V5)
+
+
+def test_upgrade_notes_keep_past_versions():
+    std = _flat(STD_V5)
+    assert "upgrade notes keep the versions they name" in std
+    assert "a how-to keeps the explanation its output needs" in std
+
+
+def test_capture_fence_shape_is_recorded_never_converted():
+    st = " ".join(_shape("stamping.md").split())
+    assert "converts pages" not in st and "never converts a page" in st
+
+
+def test_standard_voice_has_captions_callouts_twins_and_troubleshooting():
+    std = _flat(STD_V5)
+    for phrase in ("an italic caption saying how it was taken", "at most one per section",
+                   "every command block that runs a `.sh` front-end has its PowerShell twin",
+                   "If something goes wrong table"):
+        assert phrase in std, phrase
+    assert "**platform pairs:**" in _shape("stamping.md")
+
+
+# ---- template v5: README anatomy ---------------------------------------------
+
+
+def test_readme_keeps_its_install_block():
+    std = _flat(STD_V5)
+    assert "The README keeps the install command and its platform twin" in std
+    assert "every run checks the README invariants" in std
+    assert "For manual pages and READMEs" not in std
+
+
+def test_readme_seed_has_an_install_slot():
+    t = (DOCSIA / "README.md").read_text(encoding="utf-8")
+    assert "## Install" in t and "## Documentation" in t
+    assert t.index("## Install") < t.index("## Documentation")
+    assert "```bash" in t.split("## Install", 1)[1].split("## Documentation", 1)[0]
+
+
+def test_onboard_asks_the_readme_voice_before_the_seed():
+    t = _flat(ONBOARD / "SKILL.md")
+    assert "Ask the README voice before the README seed is written" in t
+    assert t.index("Ask the README voice before the README seed is written") < t.index("## 3.5 Scaffold")
+    assert "readme voice:" in _shape("stamping.md").lower()
+
+
+def test_deferred_readme_voice_imposes_nothing():
+    assert "With no README voice recorded, no voice is imposed" in _flat(STD_V5)
+
+
+# ---- template v5: --sync records a repo's manual conventions -----------------
+
+
+def _flat_manual(tmp_path):
+    _seed(tmp_path, "update.sh", "#!/bin/sh\n")
+    _seed(tmp_path, "update.ps1", "# ps\n")
+    _seed(tmp_path, "docs/manual/README.md",
+          "# Manual\n\nThe manual: commands-first, one concept per page.\n\n"
+          "1. [Update](updating.md)\n2. [Remove](uninstalling.md)\n")
+    _seed(tmp_path, "docs/manual/updating.md",
+          "# Update\n\n```bash\n./update.sh\n```\n\n```powershell\n.\\update.ps1\n```\n\n"
+          "```text capture=update\n$ ./update.sh\nok\n```\n\n**Next:** [Remove](uninstalling.md)\n")
+    _seed(tmp_path, "docs/manual/uninstalling.md", "# Remove\n\nThat's the tour.\n")
+    return tmp_path
+
+
+def test_sync_conventions_for_a_flat_numbered_manual(tmp_path):
+    conv = lib.detect_manual_conventions(_flat_manual(tmp_path))
+    assert conv == {"layout": "flat", "numbered_tour": True, "next_tour": True,
+                    "capture_fence": "text",
+                    "docs_voice": "The manual: commands-first, one concept per page.",
+                    "platform_pairs": True, "manual_has_powershell": True,
+                    "has_manual": True, "has_index": True, "index_groups": [], "new_here": False,
+                    "unreadable": []}
+    out = lib.render_local_deviations(conv)
+    assert "`text capture=`" in out and "use/" not in out
+
+
+def test_sync_conventions_keep_an_existing_use_layout(tmp_path):
+    _seed(tmp_path, "docs/manual/README.md", "# Manual\n\n## Do a task\n\n- [Grill](use/grill.md)\n")
+    _seed(tmp_path, "docs/manual/use/grill.md", "# Grill\n")
+    conv = lib.detect_manual_conventions(tmp_path)
+    assert conv["layout"] == "use" and conv["numbered_tour"] is False
+    out = lib.render_local_deviations(conv)
+    assert "`docs/manual/use/`" in out and "not numbered" not in out
+    assert any("not numbered" in q for q in lib.tour_questions(conv))
+
+
+def test_sync_conventions_without_a_manual(tmp_path):
+    conv = lib.detect_manual_conventions(tmp_path)
+    assert conv["layout"] is None and lib.render_local_deviations(conv) == ""
+
+
+def test_cli_manual_conventions(tmp_path):
+    cli = _load_cli()
+    import contextlib
+    import io
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rc = cli.main(["manual-conventions", str(_flat_manual(tmp_path))])
+    out = json.loads(buf.getvalue())
+    assert rc == 0 and out["layout"] == "flat" and "`text capture=`" in out["local_deviations"]
+
+
+def test_sync_fills_local_deviations_and_the_voice_lines():
+    t = _flat(ONBOARD / "SKILL.md")
+    assert "onboard.py manual-conventions" in t
+    assert "fills its Local deviations list" in t
+    assert "`docs voice:` and `platform pairs:`" in t
+
+
+def test_sync_conventions_read_a_wrapped_voice_lead_whole(tmp_path):
+    _seed(tmp_path, "docs/manual/README.md",
+          "# Manual\n\nHow to use it day to day — commands-first, one concept per page,\n"
+          "each showing you what you'll actually see.\n\n1. [Update](updating.md)\n")
+    _seed(tmp_path, "docs/manual/updating.md", "# Update\n")
+    conv = lib.detect_manual_conventions(tmp_path)
+    assert conv["docs_voice"] == ("How to use it day to day — commands-first, one concept per page, "
+                                  "each showing you what you'll actually see.")
+
+
+# ---- template v5: tour, count and platform-twin checks ----------------------
+
+
+def _tour(tmp_path, next_of_a="b.md"):
+    _seed(tmp_path, "docs/manual/README.md",
+          "# Manual\n\nRead pages **1 → 2** in order.\n\n1. [A](a.md)\n2. [B](b.md)\n")
+    _seed(tmp_path, "docs/manual/a.md", "# A\n\n**Next:** [B](%s)\n" % next_of_a)
+    _seed(tmp_path, "docs/manual/b.md", "# B\n\nThat's the tour.\n")
+
+
+def test_next_chain_flags_an_out_of_order_link(tmp_path, capsys):
+    cli = _load_cli()
+    _tour(tmp_path, next_of_a="a.md")
+    rc, codes, lines = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check"])
+    assert rc == 0 and "NEXT_CHAIN" in codes
+    assert any("a.md" in ln and "NEXT_CHAIN" in ln for ln in lines)
+
+
+def test_next_chain_quiet_on_a_correct_tour(tmp_path, capsys):
+    cli = _load_cli()
+    _tour(tmp_path)
+    _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check"])
+    assert "NEXT_CHAIN" not in codes and "TOC_COUNT" not in codes
+
+
+def test_toc_count_flags_a_wrong_lead_count(tmp_path, capsys):
+    cli = _load_cli()
+    _tour(tmp_path)
+    idx = tmp_path / "docs/manual/README.md"
+    idx.write_text(idx.read_text(encoding="utf-8").replace("**1 → 2**", "**1 → 3**"), encoding="utf-8")
+    rc, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check"])
+    assert rc == 0 and "TOC_COUNT" in codes
+
+
+def _twin_pages(tmp_path, paired_second=False):
+    _seed(tmp_path, "run.ps1", "# ps\n")
+    _seed(tmp_path, "run.sh", "#!/bin/sh\n")  # run.sh's PowerShell sibling: a front-end per platform
+    _seed(tmp_path, "docs/manual/one.md", "# One\n\n```bash\n./run.sh\n```\n\n```powershell\n.\\run.ps1\n```\n")
+    two = "# Two\n\n```bash\n./run.sh --all\n```\n"
+    if paired_second:
+        two += "\n```powershell\n.\\run.ps1 -All\n```\n"
+    _seed(tmp_path, "docs/manual/two.md", two)
+
+
+def test_platform_twin_errors_with_platform_pairs(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "run.ps1", "# ps\n")
+    _seed(tmp_path, "run.sh", "#!/bin/sh\n")
+    _seed(tmp_path, "docs/manual/two.md", "# Two\n\n```bash\n./run.sh --all\n```\n")
+    rc, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
+    assert rc == 1 and "PLATFORM_TWIN" in codes
+
+
+def test_platform_twin_warns_when_the_manual_has_powershell(tmp_path, capsys):
+    cli = _load_cli()
+    _twin_pages(tmp_path)
+    rc, codes, lines = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check"])
+    assert rc == 0 and codes.count("PLATFORM_TWIN") == 1
+    assert any("two.md" in ln for ln in lines if "PLATFORM_TWIN" in ln)
+
+
+def test_platform_twin_silent_without_signal(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "docs/manual/two.md", "# Two\n\n```bash\n./run.sh --all\n```\n")
+    _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check"])
+    assert "PLATFORM_TWIN" not in codes
+
+
+def test_platform_twin_skips_output_and_illustrative_fences(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "docs/manual/two.md",
+          "# Two\n\n```bash illustrative\n./run.sh\n```\n\n```text capture=x\n$ ./run.sh\nok\n```\n")
+    _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
+    assert "PLATFORM_TWIN" not in codes
+
+
+def test_forbidden_allow_exempts_matching_files(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "docs/manual/skills.md", "# Skills\n\nUse grill-me.\n")
+    _seed(tmp_path, "docs/manual/reference/plugins.md", "# Plugins\n\nIt ships grill-me.\n")
+    rc, codes, lines = _run_check(cli, capsys, [str(tmp_path / "docs")],
+                                  ["--no-tier-check", "--forbidden", "grill-me",
+                                   "--forbidden-allow", "manual/reference/*"])
+    hits = [ln for ln in lines if "FORBIDDEN_TOKEN" in ln]
+    assert rc == 1 and len(hits) == 1 and "skills.md" in hits[0]
+
+
+def test_check_py_serves_shrink_check(tmp_path, capsys):
+    chk = _load_check()
+    old = _seed(tmp_path, "old.md", "# T\n\n" + "word " * 40 + "\n")
+    new = _seed(tmp_path, "new.md", "# T\n\nword word\n")
+    assert chk.main(["shrink-check", str(old), str(new)]) == 1
+    assert "ERROR" in capsys.readouterr().out
+    assert chk.main(["shrink-check", str(old), str(new), "--cleared"]) == 0
+
+
+def test_onboard_lib_reexports_shrink_violations():
+    chk = _load_check()
+    assert lib.shrink_violations is chk.shrink_violations
+
+
+def test_docs_standard_has_the_cross_repo_rule():
+    std = _flat(STD_V5)
+    assert "A fact another repository owns" in std and "never restate it" in std
+    assert "--forbidden-allow" in std
+
+
+# ---- template v5: update-docs applies verified fixes, bounded, protected -----
+
+BOUND = "changed pages first, one reviewer per lens, at most 8 readers and 2 rounds, then report what remains"
+
+
+def test_update_docs_applies_verified_fixes():
+    t = _flat(UPD)
+    assert "A claim re-derived from the code is fixed in place" in t
+    assert "`--apply` acts only on the universal" not in t
+    assert "--apply" not in t.split("<!-- stamped by onboard-repo")[0]
+
+
+def test_update_docs_bounds_verification():
+    t = _flat(UPD)
+    assert BOUND in t and "a third round is never run" in t
+
+
+def test_update_docs_has_a_capture_plan():
+    t = _flat(UPD)
+    assert "List the stale captures once and ask one confirmation" in t
+    assert "no shell-execution grant" not in t
+
+
+def test_update_docs_quiets_known_deferred_items():
+    t = _flat(UPD)
+    assert "one count line" in t and "an unfinished principal page is named every run" in t
+    assert "Restate every parked surface each run" not in t
+
+
+def test_update_docs_protection_rules():
+    raw = UPD.read_text(encoding="utf-8")
+    assert "\n## 7.10 Never degrade an existing structure\n" in raw
+    t = _flat(UPD)
+    for rule in ("install block", "never moves or renames a page", "the twin", "upgrade notes",
+                 "check.py shrink-check", "NEXT_CHAIN", "--platform-pairs",
+                 "every run checks the README invariants"):
+        assert rule in t, rule
+
+
+def test_update_docs_commits_by_path():
+    t = _flat(UPD)
+    assert "git add -- <paths>" in t and "name every unrelated dirty file" in t
+    assert "Bash(git status:*)" in UPD.read_text(encoding="utf-8").split("---", 2)[1]
+
+
+# ---- template v5: changelog-release asks once, then runs ---------------------
+
+CR = ONBOARD / "templates" / "changelog-release" / "SKILL.md"
+
+
+def test_changelog_release_runs_on_one_yes():
+    t = _flat(CR)
+    assert "never run them yourself" not in t
+    assert "On a yes, stage only the paths this run edited" in t and "run the commands one at a time" in t
+    fm = CR.read_text(encoding="utf-8").split("---", 2)[1]
+    for grant in ("Bash(git commit", "Bash(git push", "Bash(git tag:", "Bash(gh release"):
+        assert grant not in fm, grant  # `Bash(git tag -l:*)` (read-only) stays
+
+
+def test_pre_1_0_feature_bumps_the_minor():
+    raw = CR.read_text(encoding="utf-8")
+    assert "a feature bumps `y` and resets `z`" in _flat(CR)
+    assert "a feature or\n  fix bumps `z`" not in raw
+
+
+def test_every_merge_has_an_entry():
+    t = _flat(CR)
+    assert "git log --merges --first-parent" in t and "or state a skip" in t
+
+
+def test_changelog_release_commits_by_path():
+    t = _flat(CR)
+    assert 'git commit -m "<message>" -- <paths>' in t
+    assert "every unrelated dirty file you will leave out" in t
+    assert "Bash(git status:*)" in CR.read_text(encoding="utf-8").split("---", 2)[1]
+
+
+def test_run_on_yes_never_tags_with_a_release_script():
+    t = _flat(CR)
+    assert "a yes runs the script's own cut command, never a hand-made `git tag`" in t
+    assert "with a `ci` bake, a yes runs the commit and push only" in t
+
+
+# ---- template v5: the version, and what --sync says changed ------------------
+
+
+def test_sync_names_each_behaviour_change_of_version_5():
+    t = _flat(ONBOARD / "SKILL.md")
+    assert "name each behaviour change" in t
+    for change in ("Local deviations", "commands-first", "never moved or regrouped",
+                   "re-derive from the code", "on one yes", "PLATFORM_TWIN"):
+        assert change in t.split("name each behaviour change", 1)[1][:1600], change
+
+
+# ---- template v5: fixes from the GREEN eval, round 1 --------------------------
+
+
+def test_foreign_facts_bake_drives_the_cross_repo_check():
+    st = _flat(ONBOARD / "references" / "stamping.md")
+    assert "**foreign facts:**" in _shape("stamping.md")
+    assert "--forbidden <names> --forbidden-allow <globs>" in _flat(UPD)
+    assert "foreign facts" in _flat(ONBOARD / "references" / "detection.md")
+    assert "or `none`" in st.split("**foreign facts:**", 1)[1][:600]
+
+
+def test_release_pushes_the_tag_it_makes():
+    t = _flat(CR)
+    order = ['git commit -m "<message>" -- <paths>', "the tag command", "`git push`", "git push origin <tag>"]
+    pos = [t.index(s) for s in order]
+    assert pos == sorted(pos)
+
+
+def test_unmatched_merges_are_shown_in_the_one_ask_and_staging_waits_for_yes():
+    t = _flat(CR)
+    assert "by SHA and subject" in t and "keep the draft, change it, or state a skip" in t
+    assert t.index("On a yes, stage only the paths this run edited") > t.index("Ask once")
+    assert "this skill stages, never commits" not in t
+
+
+def test_update_docs_needs_no_memory_between_runs():
+    t = _flat(UPD)
+    assert "since the last run" not in t
+    assert "the last commit that touched `docs/`" in t
+    assert "Bash(git log:*)" in UPD.read_text(encoding="utf-8").split("---", 2)[1]
+
+
+def test_v5_text_agrees_with_itself():
+    std = _flat(STD_V5)
+    assert "- §3 Layout: how-to pages sit directly in docs/manual/" not in std
+    assert "Lead with the task" not in std
+    assert "a flat manual, a numbered tour or" not in _flat(ONBOARD / "SKILL.md")
+    ud = _flat(UPD)
+    assert "the index and `NEXT_CHAIN` win" in ud
+    assert "or the standard's Local deviations" in ud
+    assert "each reader checks one lens" in ud
+    assert "--platform-pairs" in _flat(ONBOARD / "references" / "author-manual.md")
+    ref = _skeleton("manual-page-reference.md")
+    assert ref.index("```bash") < ref.index("```powershell")
+    assert "except If something goes wrong" in _flat(ONBOARD / "references" / "manual-page-how-to.md")
+    assert "On first adoption" in _flat(ONBOARD / "references" / "adopt-docs.md")
+
+
+# ---- template v5: fixes from the GREEN eval, round 2 (no third eval round) ---
+
+
+def test_release_prints_what_it_runs():
+    t = _flat(CR)
+    order = ["git add -- CHANGELOG.md <version homes>", 'git commit -m "<message>" -- <paths>',
+             "`git push`", "git push origin <tag>", "gh release create"]
+    intro = t.split("Repo-specific facts", 1)[0]
+    pos = [intro.index(s) for s in order]
+    assert pos == sorted(pos)
+    assert "REPO SPECIFICS' release tags" not in t
+    assert "this skill never runs another skill's commit" in t
+
+
+def test_archive_link_errors_are_a_baseline_not_a_failed_run():
+    t = _flat(UPD)
+    assert "Broken links outside `docs/archive/` fail the run" in t
+
+
+def test_link_out_page_carries_the_name_and_a_link_only():
+    st = _flat(ONBOARD / "references" / "stamping.md")
+    assert "its captures" not in st.split("**foreign facts:**", 1)[1][:700]
+    assert "the plugin's name and a link, never its skill list" in st
+
+
+def test_v5_text_agrees_with_itself_round_2():
+    ud, std = _flat(UPD), _flat(STD_V5)
+    assert "the `readme voice` bake" in ud
+    assert "console capture=<slug>" in std
+    assert "may relax a §2 README rule other than the install command" in std
+    assert "the latest release tag when the repo has no manifest" in std
+    assert "report it instead; moving content to its home is a human call" in ud
+    assert ".onboard-repo-retired/<stamp>/captures-raw/<slug>.txt" in ud
+    assert "That's the tour." in _flat(ONBOARD / "references" / "author-manual.md")
+    assert "--forbidden" in _flat(ONBOARD / "references" / "author-manual.md")
+    assert "illustrative" in _flat(ONBOARD / "references" / "manual-page-getting-started.md").split("````", 1)[0]
+    assert "in the voice chosen at §2" in _flat(ONBOARD / "SKILL.md")
+    seed = (DOCSIA / "README.md").read_text(encoding="utf-8")
+    assert "```powershell" in seed
+
+
+# ---- template v5: final review fix pass -------------------------------------
+
+
+def test_platform_twin_and_index_use_paths_relative_to_the_root(tmp_path, capsys):
+    cli = _load_cli()
+    repo = tmp_path / "manual" / "repo"   # a checkout that merely sits under a folder named manual
+    _seed(repo, "docs/internals/README.md", "# Internals\n\n```bash\n./build.sh\n```\n")
+    _seed(repo, "README.md", "# Repo\n\nRead **1 → 5**.\n\n1. [A](a.md)\n")
+    rc, codes, _ = _run_check(cli, capsys, [str(repo / "docs"), str(repo / "README.md")],
+                              ["--no-tier-check", "--platform-pairs"])
+    assert "PLATFORM_TWIN" not in codes and "TOC_COUNT" not in codes
+
+
+def _grouped_index(tmp_path, heading="## Do a task"):
+    _seed(tmp_path, "docs/manual/README.md",
+          "# Manual\n\nRead the tour, **1 → 2**.\n\n## Get started\n\n1. [Install](getting-started/install.md)\n\n"
+          + heading + "\n\n1. [A](a.md)\n   1. [A, the details](a.md#details)\n2. [B](b.md)\n\n"
+          "## Look it up\n\n1. [Flags](reference/flags.md)\n2. [Bundles](reference/bundles.md)\n3. [Glossary](reference/glossary.md)\n")
+    _seed(tmp_path, "docs/manual/getting-started/install.md", "# Install\n\n**Next:** [A](../a.md)\n")
+    _seed(tmp_path, "docs/manual/a.md", "# A\n\n**Next:** [B](b.md)\n")
+    _seed(tmp_path, "docs/manual/b.md", "# B\n\nThat's the tour.\n")
+
+
+def test_the_tour_is_the_do_a_task_list_only(tmp_path, capsys):
+    cli = _load_cli()
+    _grouped_index(tmp_path)
+    _, codes, lines = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check"])
+    assert "TOC_COUNT" not in codes and "NEXT_CHAIN" not in codes, lines
+
+
+def test_without_a_do_a_task_heading_the_longest_list_is_the_tour(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "docs/manual/README.md",
+          "# Manual\n\n## Start\n\n1. [Install](install.md)\n\n## The daily manual\n\n"
+          "1. [A](a.md)\n2. [B](b.md)\n3. [C](c.md)\n")
+    _seed(tmp_path, "docs/manual/install.md", "# Install\n")
+    _seed(tmp_path, "docs/manual/a.md", "# A\n\n**Next:** [B](b.md)\n")
+    _seed(tmp_path, "docs/manual/b.md", "# B\n\n**Next:** [A](a.md)\n")
+    _seed(tmp_path, "docs/manual/c.md", "# C\n")
+    _, codes, lines = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check"])
+    hits = [ln for ln in lines if "NEXT_CHAIN" in ln]
+    assert len(hits) == 1 and "b.md" in hits[0]
+    assert str(tmp_path) not in hits[0].split("\t", 3)[3]  # the detail names pages, not absolute paths
+
+
+def test_conventions_read_bold_links_and_paren_lists(tmp_path):
+    _seed(tmp_path, "docs/manual/README.md", "# Manual\n\n1) **[Update](updating.md)** — keep it current\n")
+    _seed(tmp_path, "docs/manual/updating.md", "# Update\n\n**Next:** **[Remove](uninstalling.md)**\n")
+    conv = lib.detect_manual_conventions(tmp_path)
+    assert conv["numbered_tour"] is True and conv["next_tour"] is True
+
+
+def test_platform_pairs_come_from_the_front_end_pair(tmp_path):
+    _seed(tmp_path, "docs/manual/win.md", "# Win\n\n```powershell\nGet-Item x\n```\n")
+    conv = lib.detect_manual_conventions(tmp_path)
+    assert conv["platform_pairs"] is False and conv["manual_has_powershell"] is True
+    _seed(tmp_path, "install.sh", "#!/bin/sh\n")
+    _seed(tmp_path, "install.ps1", "# ps\n")
+    _seed(tmp_path, "README.md", "# R\n\n```bash\n./install.sh\n```\n")  # a documented front-end
+    assert lib.detect_manual_conventions(tmp_path)["platform_pairs"] is True
+
+
+def test_full_local_deviations_state_every_convention(tmp_path):
+    conv = lib.detect_manual_conventions(_flat_manual(tmp_path))
+    full = lib.render_local_deviations(conv, full=True)
+    assert "directly in `docs/manual/`" in full and "numbered reading tour" in full
+    assert "**Next:**" in full and "`text capture=`" in full
+    cli = _load_cli()
+    import contextlib
+    import io
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rc = cli.main(["manual-conventions", str(tmp_path), "--full"])
+    assert rc == 0 and "numbered reading tour" in json.loads(buf.getvalue())["local_deviations"]
+
+
+def test_sync_upgrades_a_v4_standard_and_never_copies_an_old_voice_word():
+    t = _flat(ONBOARD / "SKILL.md")
+    assert "has no `## Local deviations` section" in t and "manual-conventions . --full" in t
+    assert "else the voice word in the old template region" not in t
+    assert "never copy a voice word from the old template region" in t
+    assert "a documented `.sh`/`.ps1` front-end pair" in t
+
+
+def test_release_tags_only_from_the_release_branch_and_orders_a_script():
+    t = _flat(CR)
+    assert "in place of the hand-made commit and tag when the script does those" in t
+    assert "only on the release branch" in t and "git status --short --branch" in t
+
+
+def test_known_baselines_are_recorded_not_guessed():
+    assert "**known baselines:**" in _shape("stamping.md")
+    ud = _flat(UPD)
+    assert "REPO SPECIFICS' `known baselines` line" in ud
+    assert "(read it with `git log -1 -- docs/`) is named in full" not in ud
+
+
+# ---- template v5: nothing deferred -------------------------------------------
+
+
+def test_conventions_record_index_groups_and_the_new_here_pointer(tmp_path):
+    _seed(tmp_path, "docs/manual/README.md",
+          "# Manual\n\n**New here?** Start with [Install](getting-started/install.md).\n\n"
+          "## Getting started\n\n- [Install](getting-started/install.md)\n\n"
+          "## The daily-use manual\n\n1. [A](a.md)\n\n## Reference (tables)\n\n- [Flags](reference/flags.md)\n")
+    _seed(tmp_path, "docs/manual/a.md", "# A\n")
+    conv = lib.detect_manual_conventions(tmp_path)
+    assert conv["index_groups"] == ["Getting started", "The daily-use manual", "Reference (tables)"]
+    assert conv["new_here"] is True
+    out = lib.render_local_deviations(conv)
+    assert "Getting started, The daily-use manual, Reference (tables)" in out and "New here" not in out
+
+
+def test_conventions_seed_groups_are_no_deviation_and_a_missing_pointer_is(tmp_path):
+    _seed(tmp_path, "docs/manual/README.md",
+          "# Manual\n\n## Get started\n\n- [I](i.md)\n\n## Do a task\n\n1. [A](a.md)\n\n## Look it up\n\n- [R](r.md)\n")
+    _seed(tmp_path, "docs/manual/a.md", "# A\n")
+    conv = lib.detect_manual_conventions(tmp_path)
+    out = lib.render_local_deviations(conv)
+    assert "groups" not in out and "New here?" not in out
+    assert any("New here?" in q for q in lib.tour_questions(conv))
+    assert "Get started, Do a task, Look it up" in lib.render_local_deviations(conv, full=True)
+
+
+def test_conventions_any_subfolder_layout_is_recorded(tmp_path):
+    _seed(tmp_path, "docs/manual/README.md", "# Manual\n\n1. [A](guides/a.md)\n")
+    _seed(tmp_path, "docs/manual/guides/a.md", "# A\n\n```text capture=a\n$ a\nok\n```\n")
+    conv = lib.detect_manual_conventions(tmp_path)
+    assert conv["layout"] == "guides"
+    out = lib.render_local_deviations(conv)
+    assert "`docs/manual/guides/`" in out and "`text capture=`" in out
+
+
+def test_conventions_without_how_to_pages_still_record_the_fence(tmp_path):
+    _seed(tmp_path, "docs/manual/README.md", "# Manual\n\n- [Install](getting-started/install.md)\n")
+    _seed(tmp_path, "docs/manual/getting-started/install.md",
+          "# Install\n\n```text capture=i\n$ i\nok\n```\n")
+    conv = lib.detect_manual_conventions(tmp_path)
+    assert conv["has_manual"] is True and conv["layout"] is None
+    assert "`text capture=`" in lib.render_local_deviations(conv)
+
+
+def test_next_chain_reports_a_missing_link_at_the_page_end(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "docs/manual/README.md", "# M\n\n1. [A](a.md)\n2. [B](b.md)\n3. [C](c.md)\n")
+    _seed(tmp_path, "docs/manual/a.md", "# A\n\nText.\n\nMore text.\n")
+    _seed(tmp_path, "docs/manual/b.md", "# B\n\n**Next:** [C](c.md)\n")
+    _seed(tmp_path, "docs/manual/c.md", "# C\n")
+    _, _, lines = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check"])
+    hit = [ln for ln in lines if "NEXT_CHAIN" in ln and "a.md" in ln]
+    assert len(hit) == 1 and hit[0].split("\t")[2].endswith("a.md:5")
+
+
+def test_forbidden_allow_globs_are_anchored(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "README.md", "# R\n\nUses grill-me.\n")
+    _seed(tmp_path, "docs/manual/README.md", "# M\n\nUses grill-me.\n")
+    _seed(tmp_path, "docs/manual/reference/deep/plugins.md", "# P\n\nUses grill-me.\n")
+    rc, _, lines = _run_check(cli, capsys, [str(tmp_path / "README.md"), str(tmp_path / "docs")],
+                              ["--no-tier-check", "--forbidden", "grill-me",
+                               "--forbidden-allow", "README.md,**/reference/**"])
+    hits = [ln.split("\t")[2] for ln in lines if "FORBIDDEN_TOKEN" in ln]
+    assert len(hits) == 1 and "docs/manual/README.md" in hits[0]
+
+
+def test_renumber_toc_numbers_each_list_on_its_own_and_totals_the_tour():
+    text = ("# M\n\nRead **1 → 9**.\n\n## Get started\n\n4. [I](i.md)\n\n## Do a task\n\n"
+            "1. [A](a.md)\n   7. [A detail](a.md#x)\n   9. [A more](a.md#y)\n1. [B](b.md)\n2. [C](c.md)\n\n"
+            "## Look it up\n\n1. [R](r.md)\n8. [S](s.md)\n")
+    out = lib.renumber_toc(text)
+    assert "**1 → 3**" in out
+    assert "1. [I](i.md)" in out
+    assert "1. [A](a.md)\n   1. [A detail](a.md#x)\n   2. [A more](a.md#y)\n2. [B](b.md)\n3. [C](c.md)" in out
+    assert "1. [R](r.md)\n2. [S](s.md)" in out
+    assert lib.renumber_toc(out) == out
+
+
+def test_update_docs_says_what_it_can_and_cannot_run():
+    ud = _flat(UPD)
+    assert "captured command this skill cannot run" not in ud
+    internals = _flat(ONBOARD.parent.parent / "docs" / "internals" / "onboard-repo-docs.md")
+    assert "captured command it has no grant to run" not in internals
+
+
+def test_readme_rules_fit_every_voice():
+    std = _flat(STD_V5)
+    assert "a repo with nothing to install" in std
+    assert "A Documentation section links the manual, internals and decisions" in std
+    assert "a voice's signature rule that departs from the README list wins" in std
+    assert "**New here?**" in std
+
+
+def test_command_fences_carry_no_prompt():
+    st = " ".join(_shape("stamping.md").split())
+    assert "with each line marked `$`" not in st and "no `$` prompt" in st
+    assert "MD014 cannot model the split" not in st
+
+
+def test_update_docs_defines_k():
+    t = _flat(UPD)
+    assert "`K` is the number of sections in the index doc's pointer index" in t
+
+
+def test_coverage_rows_carry_a_reason():
+    for rel in ("references/detection.md", "references/rubric.md", "references/author-manual.md",
+                "templates/update-docs/SKILL.md"):
+        t = _flat(ONBOARD / rel)
+        assert "{surface, slug, tier, page, status, reason}" in t, rel
+        assert "{surface, slug, tier, page, status}" not in t, rel
+
+
+def test_sync_appends_missing_standard_sections_and_check_never_calls_it_drift():
+    t = _flat(ONBOARD / "SKILL.md")
+    assert "propose appending each template section (by heading) the repo's standard lacks" in t
+    assert "a differing one is only reported, as a `diff`" not in t
+    cm = _flat(ONBOARD / "references" / "check-mode.md")
+    assert "--platform-pairs" in cm and "--forbidden" in cm
+
+
+def test_changelog_release_says_when_a_semver_run_cuts_a_version():
+    assert "A SemVer run cuts a version only when the operator asks for a release" in _flat(CR)
+
+
+def test_capture_plan_names_where_each_command_comes_from_and_claims_use_one_commit():
+    ud = _flat(UPD)
+    assert "the command block right above its fence" in ud
+    assert "`git log -1 --format=%H -- docs/`" in ud
+
+
+def test_onboard_records_the_readme_voice_in_the_run_record():
+    assert "run-set --confirm readme_voice=" in _flat(ONBOARD / "SKILL.md")
+
+
+# ---- /code-review findings ------------------------------------------------------
+
+
+def test_next_chain_honours_only_both_ways(tmp_path, capsys):
+    cli = _load_cli()
+    _tour(tmp_path, next_of_a="a.md")  # a.md's Next points back at itself
+    docs = str(tmp_path / "docs")
+    _, codes, _ = _run_check(cli, capsys, [docs], ["--no-tier-check", "--only", str(tmp_path / "docs/manual/README.md")])
+    assert "NEXT_CHAIN" not in codes
+    _, codes, lines = _run_check(cli, capsys, [docs], ["--no-tier-check", "--only", str(tmp_path / "docs/manual/a.md")])
+    assert "NEXT_CHAIN" in codes and all("a.md" in ln for ln in lines if "NEXT_CHAIN" in ln)
+
+
+def test_an_indented_top_level_list_is_still_the_tour():
+    chk = _load_check()
+    text = "# M\n\nRead **1 → 9**.\n\n 1. [A](a.md)\n    1. [A1](a.md#1)\n 1. [B](b.md)\n    1. [B1](b.md#1)\n"
+    assert chk.tour_items(text) == ["a.md", "b.md"]
+    out = lib.renumber_toc(text)
+    assert "**1 → 2**" in out and " 2. [B](b.md)" in out
+
+
+def test_renumber_toc_keeps_numbering_that_continues_across_groups():
+    text = ("# M\n\nRead **1 → 6**.\n\n## Get started\n\n1. [A](a.md)\n2. [B](b.md)\n3. [C](c.md)\n\n"
+            "## Do a task\n\n4. [D](d.md)\n5. [E](e.md)\n6. [F](f.md)\n")
+    assert lib.renumber_toc(text) == text
+
+
+def test_toc_count_accepts_a_total_that_continues_across_groups(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "docs/manual/README.md",
+          "# M\n\nRead **1 → 4**.\n\n## Get started\n\n1. [I](i.md)\n2. [J](j.md)\n\n## Do a task\n\n3. [A](a.md)\n4. [B](b.md)\n")
+    for p in ("i", "j", "a", "b"):
+        _seed(tmp_path, "docs/manual/%s.md" % p, "# %s\n" % p)
+    _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check"])
+    assert "TOC_COUNT" not in codes
+
+
+def test_manual_conventions_refuses_a_missing_root(tmp_path, capsys):
+    cli = _load_cli()
+    assert cli.main(["manual-conventions", str(tmp_path / "nope")]) == 2
+
+
+def test_platform_twin_needs_a_powershell_command_not_its_output(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "run.ps1", "# ps\n")
+    _seed(tmp_path, "run.sh", "#!/bin/sh\n")
+    _seed(tmp_path, "docs/manual/two.md",
+          "# Two\n\n```bash\n./run.sh\n```\n\n```powershell capture=win\nPS> done\n```\n")
+    rc, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
+    assert rc == 1 and "PLATFORM_TWIN" in codes
+
+
+def test_manual_conventions_skips_excluded_dirs_and_names_unreadable_pages(tmp_path):
+    _seed(tmp_path, "docs/manual/README.md", "# M\n\n1. [A](a.md)\n")
+    _seed(tmp_path, "docs/manual/a.md", "# A\n")
+    _seed(tmp_path, "docs/manual/node_modules/pkg/x.md", "# X\n\n```powershell\nGet-Item\n```\n")
+    (tmp_path / "docs/manual/odd.md").mkdir()  # a directory with a .md name
+    (tmp_path / "docs/manual/gone.md").symlink_to(tmp_path / "missing.md")  # dangling
+    conv = lib.detect_manual_conventions(tmp_path)
+    assert conv["manual_has_powershell"] is False and conv["layout"] == "flat"
+    assert conv["unreadable"] == ["gone.md"]
+
+
+def test_index_group_headings_keep_a_trailing_hash():
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        root = pathlib.Path(d)
+        _seed(root, "docs/manual/README.md", "# M\n\n## Use C#\n\n1. [A](a.md)\n\n## Closed ##\n")
+        _seed(root, "docs/manual/a.md", "# A\n")
+        assert lib.detect_manual_conventions(root)["index_groups"] == ["Use C#", "Closed"]
+
+
+def test_platform_twin_warns_under_only_from_powershell_elsewhere(tmp_path, capsys):
+    cli = _load_cli()
+    _twin_pages(tmp_path)  # one.md has a pair, two.md a lone bash block
+    _, codes, lines = _run_check(cli, capsys, [str(tmp_path / "docs")],
+                                 ["--no-tier-check", "--only", str(tmp_path / "docs/manual/two.md")])
+    assert codes.count("PLATFORM_TWIN") == 1
+
+
+def test_render_local_deviations_reads_manual_defaults(monkeypatch, tmp_path):
+    conv = lib.detect_manual_conventions(_flat_manual(tmp_path))
+    assert "directly in `docs/manual/`" not in lib.render_local_deviations(conv)
+    monkeypatch.setitem(lib.MANUAL_DEFAULTS, "layout", "use")
+    assert "directly in `docs/manual/`" in lib.render_local_deviations(conv)
+
+
+def test_onboard_lib_reuses_checks_prose_helper():
+    chk = _load_check()
+    assert lib._prose_text is chk._prose_text and not hasattr(lib, "_prose")
+
+
+# ---- /code-review, second pass ----------------------------------------------------
+
+
+def test_renumber_toc_keeps_running_on_after_an_entry_is_removed():
+    text = ("# M\n\nRead **1 → 5**.\n\n## Get started\n\n1. [A](a.md)\n2. [B](b.md)\n\n"
+            "## Do a task\n\n4. [D](d.md)\n5. [E](e.md)\n")
+    out = lib.renumber_toc(text)
+    assert "3. [D](d.md)\n4. [E](e.md)" in out and "**1 → 4**" in out
+
+
+def test_layout_follows_where_most_how_to_pages_sit(tmp_path):
+    for i in range(4):
+        _seed(tmp_path, "docs/manual/use/p%d.md" % i, "# P\n")
+    _seed(tmp_path, "docs/manual/glossary.md", "# G\n")
+    assert lib.detect_manual_conventions(tmp_path)["layout"] == "use"
+
+
+def test_unfinished_tours_are_questions_not_deviations(tmp_path):
+    _seed(tmp_path, "docs/manual/a.md", "# A\n")  # no index at all
+    conv = lib.detect_manual_conventions(tmp_path)
+    out = lib.render_local_deviations(conv)
+    assert "New here" not in out and "not numbered" not in out and "Next" not in out
+    assert lib.tour_questions(conv) == []  # nothing to ask without an index
+    _seed(tmp_path, "docs/manual/README.md", "# M\n\n- [A](a.md)\n")
+    conv = lib.detect_manual_conventions(tmp_path)
+    assert "Next" not in lib.render_local_deviations(conv)
+    qs = lib.tour_questions(conv)
+    assert len(qs) == 3 and all(q.startswith("- §3 Layout:") for q in qs)
+
+
+def test_cli_manual_conventions_prints_the_questions(tmp_path):
+    cli = _load_cli()
+    _seed(tmp_path, "docs/manual/README.md", "# M\n\n- [A](a.md)\n")
+    _seed(tmp_path, "docs/manual/a.md", "# A\n")
+    import contextlib
+    import io
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        assert cli.main(["manual-conventions", str(tmp_path)]) == 0
+    assert len(json.loads(buf.getvalue())["ask"]) == 3
+    assert "ask" in _flat(ONBOARD / "SKILL.md") and "ask the operator whether each is deliberate" in _flat(ONBOARD / "SKILL.md")
+
+
+def test_platform_twin_skips_output_between_a_command_and_its_twin(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "build.ps1", "# ps\n")
+    _seed(tmp_path, "build.sh", "#!/bin/sh\n")
+    _seed(tmp_path, "check.ps1", "# ps\n")
+    _seed(tmp_path, "check.sh", "#!/bin/sh\n")
+    _seed(tmp_path, "docs/manual/a.md",
+          "# A\n\n```bash\n./build.sh\n```\n\n```console capture=a\nok\n```\n\n```powershell\n.\\build.ps1\n```\n")
+    _seed(tmp_path, "docs/manual/b.md",
+          "# B\n\n```bash\n./build.sh\n```\n\n```bash\n./check.sh\n```\n\n```powershell\n.\\build.ps1\n```\n\n```powershell\n.\\check.ps1\n```\n")
+    _seed(tmp_path, "docs/manual/c.md",
+          "# C\n\n```bash\n./build.sh\n```\n\n```bash\n./check.sh\n```\n\n```powershell\n.\\build.ps1\n```\n")
+    _, _, lines = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
+    hits = [ln.split("\t")[2] for ln in lines if "PLATFORM_TWIN" in ln]
+    assert len(hits) == 1 and hits[0].endswith("c.md:7")
+
+
+def test_no_tour_when_do_a_task_is_a_bullet_list_and_fallback_needs_links():
+    chk = _load_check()
+    text = ("# M\n\nRead **1 → 3**.\n\n## Get started\n\n1. Install it\n2. Run it\n3. Check it\n\n"
+            "## Do a task\n\n- [A](a.md)\n- [B](b.md)\n")
+    assert chk.tour_entries(text) == []
+    plain = "# M\n\n1. Install it\n2. Run it\n3. Check it\n\n## More\n\n1. [A](a.md)\n2. [B](b.md)\n"
+    assert chk.tour_items(plain) == ["a.md", "b.md"]
+
+
+def test_next_chain_pairs_neighbours_in_index_order(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "docs/manual/README.md",
+          "# M\n\n1. [A](a.md)\n2. [Guide](https://example.org/guide)\n3. [C](c.md)\n")
+    _seed(tmp_path, "docs/manual/a.md", "# A\n\n**Next:** [C](c.md)\n")
+    _seed(tmp_path, "docs/manual/c.md", "# C\n")
+    _, _, lines = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check"])
+    hits = [ln for ln in lines if "NEXT_CHAIN" in ln]
+    assert len(hits) == 1 and "a.md" in hits[0] and "https://example.org/guide" in hits[0]
+
+
+def test_only_runs_read_the_same_powershell_signal_as_full_runs(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "run.ps1", "# ps\n")
+    _seed(tmp_path, "run.sh", "#!/bin/sh\n")
+    _seed(tmp_path, "docs/manual/two.md", "# Two\n\n```bash\n./run.sh\n```\n")
+    # a frozen page under a manual folder: the full run never reads it for the signal
+    _seed(tmp_path, "docs/archive/manual/old.md", "# Old\n\n```powershell\nGet-Item\n```\n")
+    _, full, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check"])
+    _, scoped, _ = _run_check(cli, capsys, [str(tmp_path / "docs")],
+                              ["--no-tier-check", "--only", str(tmp_path / "docs/manual/two.md")])
+    assert ("PLATFORM_TWIN" in full) == ("PLATFORM_TWIN" in scoped)
+
+
+def test_forbidden_allow_globs_compile_once_and_support_classes(tmp_path, capsys, monkeypatch):
+    chk = _load_check()
+    calls = []
+    real = chk._glob_regex
+    monkeypatch.setattr(chk, "_glob_regex", lambda g: calls.append(g) or real(g))
+    for name in ("a", "b", "c"):
+        _seed(tmp_path, "docs/manual/%s.md" % name, "# %s\n\nUses grill-me.\n" % name)
+    rc = chk.main(["check-docs", str(tmp_path / "docs"), "--no-tier-check", "--forbidden", "grill-me",
+                   "--forbidden-allow", "manual/[ab].md"])
+    out = capsys.readouterr().out
+    assert calls == ["manual/[ab].md"]
+    assert rc == 1 and out.count("FORBIDDEN_TOKEN") == 1 and "c.md" in out
+
+
+def _count_walks(chk, monkeypatch):
+    calls = []
+    real = chk._iter_markdown_files
+    monkeypatch.setattr(chk, "_iter_markdown_files", lambda roots: calls.append(1) or real(roots))
+    return calls
+
+
+def test_an_unscoped_run_walks_the_tree_once(tmp_path, capsys, monkeypatch):
+    chk = _load_check()
+    _tour(tmp_path)
+    _twin_pages(tmp_path)
+    calls = _count_walks(chk, monkeypatch)
+    assert chk.main(["check-docs", str(tmp_path / "docs"), "--no-tier-check"]) == 0
+    assert "PLATFORM_TWIN" in capsys.readouterr().out and len(calls) == 1
+
+
+def test_an_only_run_walks_the_tree_twice_at_most(tmp_path, capsys, monkeypatch):
+    chk = _load_check()
+    _tour(tmp_path, next_of_a="a.md")
+    _twin_pages(tmp_path)
+    calls = _count_walks(chk, monkeypatch)
+    chk.main(["check-docs", str(tmp_path / "docs"), "--no-tier-check", "--only", str(tmp_path / "docs/manual/two.md")])
+    out = capsys.readouterr().out
+    assert "PLATFORM_TWIN" in out and "NEXT_CHAIN" not in out and len(calls) == 2
+
+
+def test_no_dead_tour_regex():
+    chk = _load_check()
+    assert not hasattr(chk, "_TOUR_ITEM_RE")
+
+
+# ---- /code-review, third pass (high) ------------------------------------------------
+
+
+def test_a_wrapped_item_line_keeps_the_tour_open():
+    chk = _load_check()
+    text = "## Do a task\n\n1. [a](a.md) long\nwrapped text\n2. [b](b.md)\n3. [c](c.md)\n\n**1 → 9**\n"
+    assert chk.tour_items(text) == ["a.md", "b.md", "c.md"]
+    assert "**1 → 3**" in lib.renumber_toc(text)
+
+
+def test_do_a_task_subsections_form_one_tour(tmp_path):
+    chk = _load_check()
+    text = "## Do a task\n### Setup\n1. [a](a.md)\n2. [b](b.md)\n### Daily\n3. [c](c.md)\n\nRead **1 → 9**\n"
+    assert chk.tour_items(text) == ["a.md", "b.md", "c.md"]
+    assert "Read **1 → 3**" in lib.renumber_toc(text)
+    _seed(tmp_path, "docs/manual/README.md", text)
+    _seed(tmp_path, "docs/manual/a.md", "# a\n")
+    assert lib.detect_manual_conventions(tmp_path)["numbered_tour"] is True
+
+
+def test_a_bad_allow_glob_is_a_usage_error(tmp_path, capsys):
+    chk = _load_check()
+    _seed(tmp_path, "docs/manual/a.md", "# A\n")
+    for glob in ("[z-a]", "[!]"):
+        assert chk.main(["check-docs", str(tmp_path / "docs"), "--forbidden", "x", "--forbidden-allow", glob]) == 2
+
+
+def test_sync_text_records_structure_and_asks_about_tour_gaps():
+    t = _flat(ONBOARD / "SKILL.md")
+    assert "an unnumbered index" not in t
+    assert "renamed index groups or a `text capture=` fence is recorded rather than reported" in t
+
+
+def test_platform_twin_ignores_hash_lines_that_are_not_headings(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "build.ps1", "# ps\n")
+    _seed(tmp_path, "build.sh", "#!/bin/sh\n")
+    _seed(tmp_path, "docs/manual/a.md",
+          "# A\n\n```bash\n./build.sh\n```\n\n    # an indented code line\n#!/bin/sh is a shebang\n\n```powershell\n.\\build.ps1\n```\n")
+    _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
+    assert "PLATFORM_TWIN" not in codes
+
+
+def test_manual_defaults_holds_only_live_keys():
+    assert set(lib.MANUAL_DEFAULTS) == {"layout", "capture_fence"}
+
+
+# ---- /code-review, fourth pass ------------------------------------------------------
+
+
+def test_renumber_toc_rewrites_the_total_when_links_are_not_first():
+    text = "# M\n\nRead (read 1 → 9) below.\n\n1. Install: see [a](a.md)\n2. Use: see [b](b.md)\n"
+    assert "(read 1 → 2)" in lib.renumber_toc(text)
+
+
+def test_a_total_without_any_tour_links_still_counts_its_list(tmp_path, capsys):
+    text = "# M\n\nRead **1 → 9**.\n\n1. Install it\n2. Run it\n"
+    assert "**1 → 2**" in lib.renumber_toc(text)
+    cli = _load_cli()
+    _seed(tmp_path, "docs/manual/README.md", text)
+    _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check"])
+    assert "TOC_COUNT" in codes
+
+
+def test_a_bold_range_in_a_table_cell_is_not_the_total(tmp_path, capsys):
+    text = "# M\n\n| steps | **1 → 5** |\n| --- | --- |\n\n1. [a](a.md)\n2. [b](b.md)\n"
+    assert "**1 → 5**" in lib.renumber_toc(text)
+    cli = _load_cli()
+    _seed(tmp_path, "docs/manual/README.md", text)
+    _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check"])
+    assert "TOC_COUNT" not in codes
+
+
+def test_shrink_check_on_a_non_utf8_file_is_a_usage_error(tmp_path, capsys):
+    chk = _load_check()
+    old = tmp_path / "old.md"
+    old.write_bytes(b"# T\n\ncaf\xe9\n")
+    new = _seed(tmp_path, "new.md", "# T\n\nok\n")
+    assert chk.main(["shrink-check", str(old), str(new)]) == 2
+    assert "Traceback" not in capsys.readouterr().err
+
+
+def test_forbidden_allow_matches_repo_relative_paths(tmp_path, capsys, monkeypatch):
+    chk = _load_check()
+    _seed(tmp_path, "README.md", "# R\n\nUses grill-me.\n")
+    _seed(tmp_path, "docs/README.md", "# D\n\nUses grill-me.\n")
+    monkeypatch.chdir(tmp_path)
+    rc = chk.main(["check-docs", "docs", "README.md", "--no-tier-check", "--forbidden", "grill-me",
+                   "--forbidden-allow", "README.md"])
+    out = capsys.readouterr().out
+    assert rc == 1 and out.count("FORBIDDEN_TOKEN") == 1 and "docs/README.md" in out
+
+
+def test_glob_classes_stay_inside_one_segment():
+    chk = _load_check()
+    assert not chk._glob_regex("[!a]b").match("/b")
+    assert not chk._glob_regex("a[/]b").match("a/b")
+    assert chk._glob_regex("[^]x").match("^x")  # a leading ^ is a literal in a glob class
+
+
+def test_platform_twin_accepts_powershell_first(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "build.ps1", "# ps\n")
+    _seed(tmp_path, "build.sh", "#!/bin/sh\n")
+    _seed(tmp_path, "docs/manual/a.md", "# A\n\n```powershell\n.\\build.ps1\n```\n\n```bash\n./build.sh\n```\n")
+    _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
+    assert "PLATFORM_TWIN" not in codes
+
+
+def test_platform_pairs_need_a_documented_front_end(tmp_path):
+    _seed(tmp_path, "bench.sh", "#!/bin/sh\n")
+    _seed(tmp_path, "bench.ps1", "# ps\n")
+    _seed(tmp_path, "README.md", "# R\n\nRun the tool.\n")
+    assert lib.detect_manual_conventions(tmp_path)["platform_pairs"] is False
+    _seed(tmp_path, "scripts/install.sh", "#!/bin/sh\n")
+    _seed(tmp_path, "scripts/install.ps1", "# ps\n")
+    _seed(tmp_path, "README.md", "# R\n\n```bash\n./scripts/install.sh\n```\n")
+    assert lib.detect_manual_conventions(tmp_path)["platform_pairs"] is True
+    assert "named in the README or the manual" in _flat(ONBOARD / "references" / "detection.md")
+
+
+def test_read_doc_reports_the_size_it_read(tmp_path):
+    chk = _load_check()
+    big = _seed(tmp_path, "big.md", "x" * (chk._MAX_DOC_BYTES + 1))
+    text, size = chk._read_doc(big)
+    assert text is None and size == chk._MAX_DOC_BYTES + 1
+
+
+def test_render_local_deviations_tolerates_a_partial_conv():
+    assert "`docs/manual/use/`" in lib.render_local_deviations({"has_manual": True, "layout": "use"})
+
+
+def test_check_docs_takes_compiled_allow_patterns_only():
+    import inspect
+    chk = _load_check()
+    assert "hasattr(p, \"match\")" not in inspect.getsource(chk._check_docs)
+
+
+# ---- real-repo sweep (23 manuals on the maintainer's machine) ---------------------
+
+
+def test_platform_twin_only_asks_twins_for_front_end_scripts(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "install.sh", "#!/bin/sh\n")
+    _seed(tmp_path, "install.ps1", "# ps\n")
+    _seed(tmp_path, "vendor/tool.sh", "#!/bin/sh\n")  # no PowerShell sibling: not a front-end
+    _seed(tmp_path, "docs/manual/a.md",
+          "# A\n\n```bash\nmytool sync --list\n```\n\n```bash\nbash vendor/tool.sh\n```\n\n"
+          "```bash\n./install.sh --yes\n```\n\n## B\n\n```powershell\nGet-Item x\n```\n")
+    _, _, lines = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
+    hits = [ln.split("\t")[2] for ln in lines if "PLATFORM_TWIN" in ln]
+    assert len(hits) == 1 and hits[0].endswith("a.md:11")
+
+
+def test_renumber_toc_keeps_a_zero_start():
+    tour = ("# M\n\n## The daily-use manual (read 1 → 4)\n\n0. [A](a.md) — opt-in\n1. [B](b.md)\n2. [C](c.md)\n"
+            "3. [D](d.md)\n4. [E](e.md)\n")
+    assert lib.renumber_toc(tour) == tour
+    groups = ("<!-- the 1→0 reading order -->\n# M\n\n## Getting started\n\n1. [S](s.md)\n2. [V](v.md)\n\n"
+              "## Daily\n\n3. [B](b.md)\n4. [T](t.md)\n5. [U](u.md)\n\n## Hardware\n\n0. [Q](q.md)\n")
+    out = lib.renumber_toc(groups)
+    assert "the 1→5 reading order" in out and "0. [Q](q.md)" in out and "3. [B](b.md)\n4. [T](t.md)" in out
+
+
+def test_a_block_that_names_the_ps1_sibling_carries_its_own_twin(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "install.sh", "#!/bin/sh\n")
+    _seed(tmp_path, "install.ps1", "# ps\n")
+    _seed(tmp_path, "docs/manual/install.md",
+          "# Install\n\n```sh\nsh install.sh                    # macOS / Linux\n"
+          "powershell -File install.ps1     # Windows\n```\n")
+    _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
+    assert "PLATFORM_TWIN" not in codes
+
+
+# ---- /code-review of the last two commits (ba03833..40c34ea) ----------------------
+
+
+def _front_end_repo(tmp_path):
+    _seed(tmp_path, "install.sh", "#!/bin/sh\n")
+    _seed(tmp_path, "install.ps1", "# ps\n")
+
+
+def test_a_remote_install_one_liner_needs_its_twin(tmp_path, capsys):
+    cli = _load_cli()
+    _front_end_repo(tmp_path)
+    _git_remote(tmp_path)  # the URL points at this repo (me/tool)
+    one_liner = "curl -fsSL https://raw.githubusercontent.com/me/tool/main/install.sh | bash"
+    _seed(tmp_path, "docs/manual/a.md", "# A\n\n```bash\n" + one_liner + "\n```\n")
+    rc, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
+    assert rc == 1 and "PLATFORM_TWIN" in codes
+    _seed(tmp_path, "docs/manual/a.md", "# A\n\n```bash\n" + one_liner + "\n```\n\n"
+          "```powershell\nirm https://raw.githubusercontent.com/me/tool/main/install.ps1 | iex\n```\n")
+    _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
+    assert "PLATFORM_TWIN" not in codes
+
+
+def test_lazy_numbering_is_valid(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "docs/manual/README.md", "# M\n\n1. Install it\n1. Run it\n1. Check it\n")
+    _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check"])
+    assert "TOC_COUNT" not in codes
+    _seed(tmp_path, "docs/manual/README.md", "# M\n\nRead **1 → 3**.\n\n1. [A](a.md)\n1. [B](b.md)\n1. [C](c.md)\n")
+    _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check"])
+    assert "TOC_COUNT" not in codes
+
+
+def test_steps_with_incidental_links_are_not_a_tour(tmp_path):
+    chk = _load_check()
+    text = ("# M\n\n1. Install [Python](https://python.org)\n2. Run it\n"
+            "3. Edit it (see [settings](reference/settings.md))\n")
+    assert chk.tour_items(text) == []
+    _seed(tmp_path, "docs/manual/README.md", text)
+    _seed(tmp_path, "docs/manual/a.md", "# A\n")
+    assert lib.detect_manual_conventions(tmp_path)["numbered_tour"] is False
+
+
+def test_twins_pair_by_script_name(tmp_path, capsys):
+    cli = _load_cli()
+    _front_end_repo(tmp_path)
+    _seed(tmp_path, "docs/manual/a.md",
+          "# A\n\n```bash\nnpm install\n```\n\n```powershell\nnpm install\n```\n\n```bash\n./install.sh\n```\n")
+    _, _, lines = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
+    hits = [ln.split("\t")[2] for ln in lines if "PLATFORM_TWIN" in ln]
+    assert len(hits) == 1 and hits[0].endswith("a.md:11")
+
+
+def test_an_allow_glob_that_matches_nothing_is_reported(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "docs/manual/a.md", "# A\n\nUses grill-me.\n")
+    _, codes, lines = _run_check(cli, capsys, [str(tmp_path / "docs")],
+                                 ["--no-tier-check", "--forbidden", "grill-me", "--forbidden-allow", "nowhere/*.md"])
+    assert "FORBIDDEN_ALLOW_UNUSED" in codes and any("nowhere/*.md" in ln for ln in lines)
+
+
+def test_a_negated_class_keeps_a_literal_dash():
+    chk = _load_check()
+    assert chk._glob_regex("docs/[!-z]*.md").match("docs/a.md")
+    assert not chk._glob_regex("docs/[!-z]*.md").match("docs/-a.md")
+    assert not chk._glob_regex("docs/[!-z]*.md").match("docs//a.md")
+
+
+def test_renumber_toc_leaves_a_total_alone_when_the_index_is_ambiguous():
+    text = ("# M\n\nThe guide has **1 → 7** chapters.\n\n## Set up\n\n1. Install\n2. Configure\n3. Run\n4. Check\n\n"
+            "## Other\n\n1. Read\n2. Write\n")
+    assert "**1 → 7**" in lib.renumber_toc(text)
+
+
+def test_front_end_detection_names_the_documented_script_exactly(tmp_path):
+    _front_end_repo(tmp_path)
+    _seed(tmp_path, "README.md", "# R\n\nRun ./scripts/install.sh, or uninstall.sh to remove it.\n")
+    assert lib.detect_manual_conventions(tmp_path)["platform_pairs"] is False
+    _git_remote(tmp_path)  # the URL points at this repo (me/tool)
+    _seed(tmp_path, "README.md", "# R\n\n```bash\ncurl -fsSL https://raw.githubusercontent.com/me/tool/main/install.sh | bash\n```\n")
+    assert lib.detect_manual_conventions(tmp_path)["platform_pairs"] is True
+
+
+def test_detection_and_enforcement_share_one_notion_of_a_front_end(tmp_path, capsys):
+    _seed(tmp_path, "tools/gen.sh", "#!/bin/sh\n")
+    _seed(tmp_path, "tools/gen.ps1", "# ps\n")
+    _seed(tmp_path, "docs/manual/a.md", "# A\n\n```bash\ntools/gen.sh\n```\n")
+    assert lib.detect_manual_conventions(tmp_path)["platform_pairs"] is True
+    cli = _load_cli()
+    _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
+    assert "PLATFORM_TWIN" in codes
+
+
+def test_docstrings_describe_the_current_rules():
+    import inspect
+    chk = _load_check()
+    assert "at the root" not in inspect.getdoc(lib.detect_manual_conventions)
+    assert "only top-level list" in inspect.getdoc(lib.renumber_toc)
+    assert "leading link" in inspect.getdoc(chk.tour_items)
+
+
+def test_a_block_that_runs_a_script_twice_needs_one_twin(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "update.sh", "#!/bin/sh\n")
+    _seed(tmp_path, "update.ps1", "# ps\n")
+    _seed(tmp_path, "docs/manual/a.md",
+          "# A\n\n```bash\nbash update.sh\nbash update.sh --plan\n```\n\n```powershell\n.\\update.ps1\n```\n\n"
+          "## Lone\n\n```bash\nbash update.sh\nbash update.sh --yes\n```\n")
+    _, _, lines = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
+    hits = [ln.split("\t")[2] for ln in lines if "PLATFORM_TWIN" in ln]
+    assert hits == [str(tmp_path / "docs/manual/a.md") + ":14"]
+
+
+# ---- /code-review max (whole branch, with the settled file) -----------------------
+
+HOMEBREW = '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
+
+
+def _git_remote(root, url="git@github.com:me/tool.git"):
+    _seed(root, ".git/config", '[remote "origin"]\n\turl = %s\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n' % url)
+
+
+def test_a_third_party_installer_url_is_not_this_repos_front_end(tmp_path, capsys):
+    cli = _load_cli()
+    _front_end_repo(tmp_path)
+    _git_remote(tmp_path)
+    _seed(tmp_path, "docs/manual/getting-started/install.md", "# Install\n\n```bash\n" + HOMEBREW + "\n```\n")
+    _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
+    assert "PLATFORM_TWIN" not in codes
+    own = "curl -fsSL https://raw.githubusercontent.com/me/tool/main/install.sh -o i.sh"
+    _seed(tmp_path, "docs/manual/getting-started/install.md", "# Install\n\n```bash\n" + own + "\n```\n")
+    _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
+    assert "PLATFORM_TWIN" in codes
+
+
+def test_a_front_end_needs_both_scripts_in_the_repo(tmp_path):
+    _seed(tmp_path, "install.ps1", "# ps\n")  # no install.sh
+    _seed(tmp_path, "README.md", "# R\n\n```bash\n./install.sh\n```\n")
+    assert lib.detect_manual_conventions(tmp_path)["platform_pairs"] is False
+
+
+def test_an_own_repo_url_to_a_subfolder_front_end_counts(tmp_path):
+    _seed(tmp_path, "scripts/install.sh", "#!/bin/sh\n")
+    _seed(tmp_path, "scripts/install.ps1", "# ps\n")
+    _git_remote(tmp_path, "https://github.com/me/tool.git")
+    _seed(tmp_path, "README.md", "# R\n\nGet https://raw.githubusercontent.com/me/tool/main/scripts/install.sh and run it.\n")
+    assert lib.detect_manual_conventions(tmp_path)["platform_pairs"] is True
+
+
+def _toc_round_trip(tmp_path, capsys, text):
+    cli = _load_cli()
+    once = lib.renumber_toc(text)
+    assert lib.renumber_toc(once) == once
+    _seed(tmp_path, "docs/manual/README.md", once)
+    _, codes, lines = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check"])
+    assert "TOC_COUNT" not in codes, lines
+    return once
+
+
+def test_renumber_and_toc_count_agree_on_restarting_subsections(tmp_path, capsys):
+    a = ("# M\n\nRead **1 → 6**.\n\n## Do a task\n\n### Install\n\n1. [a](a.md)\n1. [b](b.md)\n1. [c](c.md)\n\n"
+         "### Use\n\n1. [d](d.md)\n1. [e](e.md)\n1. [f](f.md)\n")
+    assert "**1 → 3**" in _toc_round_trip(tmp_path, capsys, a)
+    b = "# M\n\nRead **1 → 9**.\n\n## Do a task\n\n### One\n\n1. [a](a.md)\n\n### Two\n\n1. [b](b.md)\n"
+    assert "**1 → 1**" in _toc_round_trip(tmp_path, capsys, b)
+    c = ("# M\n\nRead **1 → 2**.\n\n## Do a task\n\n### One\n\n1. [a](a.md)\n2. [b](b.md)\n\n"
+         "### Two\n\n1. [c](c.md)\n2. [d](d.md)\n")
+    assert _toc_round_trip(tmp_path, capsys, c) == c
+
+
+def test_negated_glob_classes_keep_every_dash_literal():
+    chk = _load_check()
+    assert chk._glob_regex("docs/manual/[!_-]*.md").match("docs/manual/a.md")
+    assert not chk._glob_regex("docs/manual/[!_-]*.md").match("docs/manual/-a.md")
+    assert chk._glob_regex("docs/x[!+-]y.md").match("docs/x.y.md")
+    assert not chk._glob_regex("docs/x[!+-]y.md").match("docs/x+y.md")
+
+
+def test_a_renamed_do_a_task_group_is_still_the_tour(tmp_path, capsys):
+    chk = _load_check()
+    text = ("# M\n\nRead **1 → 5**.\n\n## Start\n\n- [Install](install.md)\n\n## Use it\n\n"
+            "### Daily\n\n1. [a](a.md)\n2. [b](b.md)\n3. [c](c.md)\n\n### Weekly\n\n4. [d](d.md)\n5. [e](e.md)\n\n"
+            "## Look it up\n\n- [Flags](reference/flags.md)\n")
+    assert chk.tour_items(text) == ["a.md", "b.md", "c.md", "d.md", "e.md"]
+    assert lib.renumber_toc(text) == text
+    cli = _load_cli()
+    _seed(tmp_path, "docs/manual/README.md", text)
+    _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check"])
+    assert "TOC_COUNT" not in codes
+
+
+def test_twin_names_compare_without_case(tmp_path, capsys):
+    cli = _load_cli()
+    _seed(tmp_path, "build.sh", "#!/bin/sh\n")
+    _seed(tmp_path, "Build.ps1", "# ps\n")
+    _seed(tmp_path, "docs/manual/a.md", "# A\n\n```bash\n./build.sh\n```\n\n```powershell\n.\\Build.ps1\n```\n")
+    _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
+    assert "PLATFORM_TWIN" not in codes
+
+
+def test_a_powershell_twin_may_reach_its_script_through_a_variable(tmp_path, capsys):
+    cli = _load_cli()
+    _front_end_repo(tmp_path)
+    for twin in ('& "$PSScriptRoot\\install.ps1"', "powershell -File:.\\install.ps1"):
+        _seed(tmp_path, "docs/manual/a.md", "# A\n\n```bash\n./install.sh\n```\n\n```powershell\n" + twin + "\n```\n")
+        _, codes, _ = _run_check(cli, capsys, [str(tmp_path / "docs")], ["--no-tier-check", "--platform-pairs"])
+        assert "PLATFORM_TWIN" not in codes, twin
+
+
+def test_a_too_long_script_name_does_not_abort_the_run(tmp_path, capsys, monkeypatch):
+    chk = _load_check()
+    real = chk.pathlib.Path.is_file
+
+    def is_file(self):
+        if len(self.name) > 255:
+            raise OSError(63, "File name too long")
+        return real(self)
+
+    monkeypatch.setattr(chk.pathlib.Path, "is_file", is_file)
+    _seed(tmp_path, "docs/manual/a.md", "# A\n\n```bash\n./" + "a" * 300 + ".sh\n```\n\n[gone](missing.md)\n")
+    rc = chk.main(["check-docs", str(tmp_path / "docs"), "--no-tier-check", "--platform-pairs"])
+    assert rc == 1 and "BROKEN_LINK" in capsys.readouterr().out
+
+
+def test_sync_text_names_the_shared_front_end_rule_and_json_confirms():
+    t = _flat(ONBOARD / "SKILL.md")
+    assert "in the root, `scripts/` or `bin/`" not in t and "`front_end_scripts`" in t
+    assert "run-set --confirm readme_voice=" in t and "as JSON" in t
+
+
+def test_a_plain_text_confirm_file_is_named_in_the_error(tmp_path, capsys):
+    import contextlib
+    import io
+
+    cli = _load_cli()
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        assert cli.main(["run-init", "S1", str(tmp_path)]) == 0
+    run = _seed(tmp_path, "run.json", buf.getvalue())
+    voice = _seed(tmp_path, "voice.txt", "Minimal Hacker\n")
+    capsys.readouterr()
+    assert cli.main(["run-set", str(run), "--confirm", "readme_voice=" + str(voice)]) == 2
+    err = capsys.readouterr().err
+    assert "--confirm" in err and "voice.txt" in err and "manifest" not in err
+
+
+def test_a_differing_suggest_version_stops_the_cut():
+    assert "If `--suggest` prints a version other than the one shown, stop" in _flat(CR)
+
+
+def test_no_dead_allow_wrapper_and_one_fence_tag_parser():
+    import inspect
+    chk = _load_check()
+    assert not hasattr(chk, "_forbidden_allowed")
+    assert "info.split()" not in inspect.getsource(chk._command_lang)
+    assert "info.split()" not in inspect.getsource(chk._has_powershell_fence)
+    assert "info.split()" not in inspect.getsource(lib.detect_manual_conventions)
+
+
+def test_the_tour_group_is_found_by_its_how_to_links_not_its_position():
+    chk = _load_check()
+    use_llm_like = ("# M\n\n1. [Install](getting-started/install.md)\n2. [Quick start](getting-started/quickstart.md)\n\n"
+                    "## I want to…\n\n- [Update](updating.md)\n- [Configure](configure.md)\n\n"
+                    "## Reference\n\n1. [Flags](reference/flags.md)\n2. [Settings](reference/settings.md)\n\n"
+                    "## Going deeper\n\n- [How it works](../internals/README.md)\n")
+    assert chk.tour_items(use_llm_like) == []
+    renamed_first = ("# M\n\n## Daily use\n\n1. [A](a.md)\n2. [B](b.md)\n\n## Start\n\n1. [I](getting-started/i.md)\n\n"
+                     "## Look up\n\n- [F](reference/f.md)\n")
+    assert chk.tour_items(renamed_first) == ["a.md", "b.md"]

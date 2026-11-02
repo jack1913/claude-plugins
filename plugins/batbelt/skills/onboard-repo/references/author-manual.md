@@ -9,13 +9,18 @@ Section 3.7 of [SKILL.md](../SKILL.md), moved here; only citations of another re
 (create-only-missing per page); a page that already exists is shown as a `diff`
 and confirmed before overwrite — never a silent rewrite.
 
-**Page kinds and layout.** The manual has three folders: `getting-started/` (first run),
-`use/` (one how-to per task) and `reference/` (commands, settings, troubleshooting). A
-how-to or getting-started page follows [manual-page-how-to.md](manual-page-how-to.md); a
+**Page kinds and layout.** First-run pages go in `getting-started/`, how-to pages directly in
+`docs/manual/` (one per task), and commands, settings and troubleshooting in `reference/`. A
+how-to page follows [manual-page-how-to.md](manual-page-how-to.md), a getting-started page
+[manual-page-getting-started.md](manual-page-getting-started.md), and a
 reference page follows [manual-page-reference.md](manual-page-reference.md). When the repo
-has `docs/internals/docs-standard.md`, its voice and layout rules apply on top, and the
-standard wins where this guidance differs. Create a folder only when it gets its first page,
-and link every page from `docs/manual/README.md` under Get started, Do a task or Look it up.
+has `docs/internals/docs-standard.md`, its voice and layout rules apply on top; where they and
+this guidance differ, the order under Local deviations decides. Create a folder only when it gets
+its first page, and link every page from `docs/manual/README.md` under Get started, Do a task or
+Look it up. Do a task is the tour: number it in reading order, end each how-to and getting-started
+page with `**Next:** [title](page.md) — reason` pointing at the next entry (the last page in the
+tour says "That's the tour." instead), and when you add a page,
+renumber the list and relink the neighbours on both sides.
 
 **For each principal surface**, author a **showcase-first** page — lead with
 rendered output, per `references/stamping.md`'s show-don't-tell voice. **Ground
@@ -57,8 +62,9 @@ captured). Record **niche** surfaces as `status: deferred` in the coverage recor
 that's a clean, intentional decision, not a finding.
 
 **Emit the committed coverage record** at `docs/.onboard-coverage.json` — a JSON
-array of `{surface, slug, tier, page, status}` objects, one per enumerated
-surface (`tier` is `principal` or `niche`; `status` is `covered` or `deferred`).
+array of `{surface, slug, tier, page, status, reason}` objects, one per enumerated
+surface (`tier` is `principal` or `niche`; `status` is `covered` or `deferred`; `reason`
+says why a parked or deferred surface is deferred, and is empty otherwise).
 Commit it alongside the authored pages — it's how a later `--check` and the
 mechanical loop both know what's already been decided.
 
@@ -72,6 +78,11 @@ python3 "$SKILL_DIR/scripts/check.py" check-docs docs README.md <index> \
   --captures docs/.onboard-captures --coverage docs/.onboard-coverage.json \
   --only <the page under work> --no-tier-check
 ```
+
+Add `--platform-pairs` to this command and to the closing unscoped run when the `platform pairs`
+bake is `sh+powershell`, so a missing twin is fixed while the page is written, not reported later.
+Add `--forbidden <names> --forbidden-allow <globs>` from the `foreign facts` bake when it has a
+value.
 
 **Pass the FULL roots plus `--only` — never a single-file root.** `--only` scopes which
 files *report*; the roots still resolve links and tiers. Narrowing the roots instead

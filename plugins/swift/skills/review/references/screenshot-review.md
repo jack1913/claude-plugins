@@ -23,6 +23,7 @@ Check these against `checklist.md`, limited to what is visible in the frame:
 | Motion and Reduce Motion | A screen recording, or the code |
 | VoiceOver labels and reading order | The code, or an Accessibility Inspector pass |
 | Toolbars, tab bars, sheets or menus outside the frame | A capture that includes them |
+| Other iPhone Duo poses and displays (closed, partly open as a book or table-top, fully open; portrait, landscape, Split View) | A capture per pose, or the code; `swift:swiftui` → `iphone-duo.md` (Verifying Layouts) |
 | Target platform | The platform, if the image doesn't make it plain |
 
 ## Estimating Sizes from Pixels

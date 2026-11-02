@@ -133,6 +133,21 @@ parent.cancel() // Both children notified
 
 Children must still check `Task.isCancelled` to stop work.
 
+### Cleanup that must run after cancellation (Swift 6.4, iOS 27 / macOS 27)
+
+Code that checks `Task.isCancelled` or calls `Task.sleep` stops early in a cancelled task, which breaks cleanup. `withTaskCancellationShield` hides the cancellation for the duration of its closure:
+
+```swift
+@available(anyAppleOS 27.0, *)
+func close(_ connection: Connection) async {
+    await withTaskCancellationShield {
+        await connection.flushAndClose() // runs in full, even if the task was cancelled
+    }
+}
+```
+
+Inside the shield `Task.isCancelled` reads `false`, and child tasks started there are not cancelled by the outer task. The task stays cancelled: the flag is visible again after the closure returns. A synchronous overload also exists. Before iOS 27 / macOS 27, keep the old workaround of running the cleanup in a new `Task` and awaiting its `value`.
+
 > **Course Deep Dive**: This topic is covered in detail in [Lesson 3.2: Task cancellation](https://www.swiftconcurrencycourse.com?utm_source=github&utm_medium=agent-skill&utm_campaign=lesson-reference)
 
 ## Error Handling
@@ -171,6 +186,19 @@ let safeTask: Task<String, Never> = Task {
         return "Fallback value"
     }
 }
+```
+
+### Unused throwing tasks (Swift 6.4)
+
+Since Swift 6.4 (SE-0520), an unstructured `Task`, `Task.detached` or `Task.immediate` whose closure throws and whose result is neither stored nor discarded warns with `unstructured throwing task ... is not used [#NoUseUnstructuredThrowingTask]`. The error would otherwise vanish. Choose one:
+
+```swift
+Task {
+    do { try await save() } catch { report(error) } // handle the error inside the task
+}
+
+let task = Task { try await save() } // keep the task, read `task.value` later
+_ = Task { try await save() }        // explicitly ignore the error
 ```
 
 > **Course Deep Dive**: This topic is covered in detail in [Lesson 3.3: Error handling in Tasks](https://www.swiftconcurrencycourse.com?utm_source=github&utm_medium=agent-skill&utm_campaign=lesson-reference)

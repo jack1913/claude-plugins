@@ -191,6 +191,15 @@ question](#the-update-deps-question-always-asked) here, so its answer is part of
 the plan the operator confirms rather than a surprise mid-write. Confirm before
 writing.
 
+Ask the README voice before the README seed is written: show the README voice menu from the
+`update-docs` template (nine voices), recommend one for this repo's type, and let the operator
+pick one, describe their own, or defer. Save the answer in the run record (`run-set --confirm
+readme_voice=<file>`, the file holding the answer as JSON, such as `{"voice": "Minimal
+Hacker"}`, so `--resume` does not ask again) and record it as the `readme voice` bake
+(`references/stamping.md`); a deferred voice records "no voice", and nothing is imposed until a
+styling run asks again. Write the README seed (§3.5) in the chosen voice, keeping the README
+list in the docs standard's §2.
+
 ## 3. Stamp (read `references/stamping.md`)
 
 For each stamped skill (`changelog-release`, `update-docs`, `update-rules`, and
@@ -280,16 +289,17 @@ Read [references/rule-mining.md](references/rule-mining.md) and follow it as wri
 
 For a repo without the IA, create **only what's absent** (create-only-missing):
 `docs/manual/`, `docs/internals/`, `docs/adr/`, `docs/archive/` (the manual's
-subfolders `getting-started/`, `use/` and `reference/` are not made here: each is created
-with its first page, so no folder is ever empty), and copy the seeds from `$SKILL_DIR/templates/docs-ia/` to their
-targets — `CLAUDE.md`→`CLAUDE.md`, `AGENTS.md`→`AGENTS.md`, `README.md`→`README.md`,
+subfolders `getting-started/` and `reference/` are not made here: each is created
+with its first page; how-to pages sit directly in `docs/manual/`, so no folder is ever empty), and copy the seeds from `$SKILL_DIR/templates/docs-ia/` to their
+targets — `CLAUDE.md`→`CLAUDE.md`, `AGENTS.md`→`AGENTS.md`, `README.md`→`README.md` (written in the voice chosen at §2),
 `docs-README.md`→`docs/README.md`, `docs-manual-README.md`→`docs/manual/README.md`,
 `internals-README.md`→`docs/internals/README.md`,
 `ADR-TEMPLATE.md`→`docs/adr/ADR-TEMPLATE.md`,
 `docs-archive-README.md`→`docs/archive/README.md`,
 `internals-agent-instructions.md`→`docs/internals/agent-instructions.md`,
 `internals-docs-standard.md`→`docs/internals/docs-standard.md` — filling each `<placeholder>`
-from confirmed detection. These are the **repo's own files**: never mark them with
+from confirmed detection. When the repo already has a manual, the standard's Local deviations list
+comes from `onboard.py manual-conventions` as in §5. These are the **repo's own files**: never mark them with
 an installer's ownership/deletion marker (such a marker licenses removal by that
 installer's uninstall and would target a repo's real docs). Populate the
 `AGENTS.md` pointer index **cite-or-defer**.
@@ -356,6 +366,22 @@ When the `update-docs` diff shows the mode change, **call it out explicitly**: t
 template now **applies edits by default** (it was report-first) — a behavioral
 change for this repo's collaborators; `--dry-run` restores preview.
 
+When the stamps being replaced are version 4 or older, name each behaviour change of version 5
+before asking, so the operator confirms what changes for collaborators, not only a diff:
+
+- the repo's own choices outrank the docs standard, in this order: REPO SPECIFICS → the
+  standard's Local deviations → the standard's body → built-in defaults; `--sync` fills the Local
+  deviations list from how the docs are already built;
+- the default docs voice is commands-first again, and the README voice comes only from REPO
+  SPECIFICS;
+- an existing manual is never moved or regrouped; new how-to pages sit directly in `docs/manual/`;
+- `update-docs` fixes prose claims it can re-derive from the code, re-takes stale captures on one
+  confirmation, checks claims within limits, and refuses the edits its §7.10 lists;
+- `changelog-release` runs the commands it prints on one yes, and before 1.0 a feature bumps the
+  minor version;
+- `check-docs` gains `NEXT_CHAIN`, `TOC_COUNT` and `PLATFORM_TWIN`, plus `--platform-pairs`,
+  `--forbidden-allow` and a `shrink-check` verb.
+
 A stamped `update-deps` (when present) syncs via the same single-file `preserve`
 call — the `parse_regions` / `preserve_repo_specifics` machinery is
 skill-agnostic; it regenerates the template region and preserves the REPO
@@ -398,10 +424,34 @@ like any other missing canonical skill, so the pass is create-or-update, never s
 `docs/internals/docs-standard.md`: `--sync` copies `templates/docs-ia/internals-docs-standard.md`
 there (filling `<repo>`) and shows the two one-line additions it implies, a row in
 `docs/internals/README.md` and a row in the `AGENTS.md` pointer index, as a diff to confirm.
-It never overwrites an existing `docs-standard.md`: a differing one is only reported, as a `diff`,
-and left as it is. Like the other docs-ia seeds it is the repo's own file, so nothing marks it as
-owned by the installer. The new manual layout (`docs/manual/use/`) is
-created when its first page is.
+It never overwrites an existing `docs-standard.md`, and never reports the repo's own text in it:
+instead, propose appending each template section (by heading) the repo's standard lacks (an H2
+or H3 such as the README list), as a diff to confirm. When it has no `## Local deviations`
+section (a version 4 standard), the appended one is filled from
+`python3 "$SKILL_DIR/scripts/onboard.py" manual-conventions . --full` (every convention stated,
+so the list outranks the old body).
+
+**A new standard starts out agreeing with the repo.** Before copying it, run `python3
+"$SKILL_DIR/scripts/onboard.py" manual-conventions .` and read the JSON: the copy then fills its
+Local deviations list with the printed `local_deviations` (in place of `- None.`), so a `use/`
+layout, renamed index groups or a `text capture=` fence is recorded rather than reported (a flat
+manual is already the standard's default; a missing tour feature is asked about, below). The
+same pass writes `docs voice:` and `platform pairs:` into the `update-docs` REPO SPECIFICS when
+they are missing: the voice from `docs_voice` (with none found, leave the line out so the
+default applies; never copy a voice word from the old template region), and `sh+powershell` when
+`platform_pairs` is true, that is when the repo has a documented `.sh`/`.ps1` front-end pair:
+the README or the manual names a `.sh` whose `.ps1` sibling exists (check.py's
+`front_end_scripts`, the rule PLATFORM_TWIN uses; a URL counts only when it points at this
+repo). A PowerShell block in the manual without such a pair (`manual_has_powershell`) is only
+mentioned to the operator. `preserve` carries REPO SPECIFICS verbatim, so these two lines are a
+separate edit shown as their own diff; all of it is confirmed together. Like the other docs-ia
+seeds it is the repo's own file, so nothing marks it as owned by the installer. `--sync` never
+moves or regroups a page: a new page goes where the repo's existing pages are.
+
+The JSON's `ask` list holds tour features the standard expects and this manual lacks (no numbered
+Do a task list, no Next links, no **New here?** pointer). Each may be deliberate or only mean the
+manual is unfinished: ask the operator whether each is deliberate, and add only the confirmed ones
+to Local deviations. An unconfirmed one stays a finding, so the tour still gets finished.
 
 **The permission plan syncs too.** Run `settings-audit` on `.claude/settings.json`;
 when it exits `1`, show the `settings-migrate` dry run beside the skill diffs and

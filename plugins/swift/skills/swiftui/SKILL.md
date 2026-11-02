@@ -2,12 +2,13 @@
 name: swiftui
 description: >-
   Writes, reviews and refactors SwiftUI with current APIs for iOS, iPadOS, macOS and visionOS. Use when
-  building or changing SwiftUI views, state and data flow, layout, animation or Liquid Glass, or migrating
-  off deprecated APIs.
+  building or changing SwiftUI views and their Xcode previews, layout, animation or Liquid Glass, or
+  migrating off deprecated APIs.
 when_to_use: >-
   State and `@Observable` data flow, view composition, resizable layouts, safe areas, display scale,
-  performance, lists, environment, localization. iPhone Duo or foldable layouts, `ArrangementView`,
-  `ReservedRegion`, hinge effects, vertical bars. `@State` initialization or synthesized-property
+  performance, lists, environment, localization. iPhone Duo, foldable or large-display layouts
+  (`NavigationSplitView`, iPhone tab sidebar, two-column reflow, foldable grids, `ArrangementView`,
+  `ReservedRegion`), hinge effects, vertical bars. `@State` initialization or synthesized-property
   diagnostics, `@ContentBuilder` ambiguity, `reorderable` drag/drop, custom `AsyncImage` `URLSession`,
   swipe actions outside List, item-bound `alert`/`confirmationDialog`, `ToolbarOverflowMenu`,
   `AnimatableValues`, Document APIs (`Document`/`DocumentReader`), Instruments `.trace` capture or
@@ -117,9 +118,9 @@ Consult the reference file for each topic relevant to the current task:
 | View modifiers and identity | `references/modifier-patterns.md` |
 | Performance | `references/performance-patterns.md` |
 | Lists and ForEach | `references/list-patterns.md` |
-| Resizable layout, safe areas, arrangements, and reserved regions | `references/layout-best-practices.md` |
-| iPhone Duo form-factor behavior | `references/iphone-duo.md` |
-| Sheets and navigation | `references/sheet-navigation-patterns.md` |
+| Resizable layout, safe areas, two-column reflow, foldable grids, arrangements, and reserved regions | `references/layout-best-practices.md` |
+| iPhone Duo, foldable, or large-display screens (read first to choose the technique) | `references/iphone-duo.md` |
+| Sheets, navigation, `NavigationSplitView` on large displays, and tab bar/sidebar (`sidebarAdaptable`) | `references/sheet-navigation-patterns.md` |
 | ScrollView, scroll position, and scroll geometry | `references/scroll-patterns.md` |
 | Focus management | `references/focus-patterns.md` |
 | Animations (basics) | `references/animation-basics.md` |

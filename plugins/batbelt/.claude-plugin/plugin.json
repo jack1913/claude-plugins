@@ -1,8 +1,8 @@
 {
   "name": "batbelt",
   "displayName": "batbelt",
-  "version": "0.2.1",
-  "description": "Grill a plan, prove a claim against real sources, set up a repository for Claude, and run background workers.",
+  "version": "0.3.0",
+  "description": "Grill a plan, prove a claim against real sources, set up a repository for Claude, and run background workers.",
   "author": {
     "name": "Jacek Pytlik"
   },

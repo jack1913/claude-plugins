@@ -19,7 +19,7 @@ Per-repo-type examples:
 - **Full-stack app** — feature walkthroughs → consumer; data model / deploy pipeline → technical; superseded RFCs → historical.
 
 Getting-started (per target), task how-tos and pure reference tables are consumer subpages
-(`docs/manual/getting-started/`, `docs/manual/use/`, `docs/manual/reference/`).
+(`docs/manual/getting-started/`, `docs/manual/<task>.md`, `docs/manual/reference/`).
 
 **Not documentation at all — an agent working directory.** A markdown tree written by
 a *tool* rather than authored for a reader has no tier and is skipped by the docs walk
@@ -50,7 +50,7 @@ let the operator move a surface between tiers before it's confirmed.
 ## Surface → page coverage
 
 Every surface from the enumerator ends up in exactly one row of the committed
-`docs/.onboard-coverage.json` (`{surface, slug, tier, page, status}`). A
+`docs/.onboard-coverage.json` (`{surface, slug, tier, page, status, reason}`). A
 principal surface must have a real `page`: a principal row whose `page` is
 null, absent, or empty is exactly what `check-docs`'s `EMPTY_TIER` finding flags
 (it keys on `page`, not `status`). `deferred` is only a clean state for a niche

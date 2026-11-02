@@ -84,6 +84,13 @@ editing manifests directly.
   `prebuild` hook that rewrites a generated file) so the bake records it.
 - Seed the section→source SET map from the **index doc**'s existing pointers
   (cite-or-defer: only where the source verifies).
+- **Front-ends** — a `.sh` the README or the manual names (a remote install URL only when it points
+  at this repo, by its git remote) whose `.ps1` sibling exists, such as `install.sh` beside `install.ps1`, means a front-end per
+  platform, named in the README or the manual: bake `platform pairs: sh+powershell`, and the README
+  seed's Install section gets both blocks. A helper pair nobody documents is not a front-end.
+- **Foreign facts** — plugins or packages the repo installs from another repository (a plugin
+  list in its config, a marketplace entry). Propose their skill or command names, and the globs
+  where they may appear, as the `foreign facts` bake; the operator confirms or answers `none`.
 
 ## Consumer surfaces (for the manual)
 
@@ -105,9 +112,10 @@ must eventually cover.
     between tiers before it's confirmed.
 - **Persist the confirmed split** to the committed coverage record,
   `docs/.onboard-coverage.json` — a JSON array of objects shaped
-  `{surface, slug, tier, page, status}`, where `tier` is `principal` or
+  `{surface, slug, tier, page, status, reason}`, where `tier` is `principal` or
   `niche`, `page` is the authored page's path (or `null` before it's
-  written), and `status` is `covered` or `deferred`. §3.7 reads and updates
+  written), `status` is `covered` or `deferred`, and `reason` says why a deferred
+  row is deferred (empty otherwise). §3.7 reads and updates
   this file across authoring rounds; `check-docs --coverage` reads it too.
 
 ## Predecessor artifacts (by content, not name)

@@ -7,8 +7,8 @@ description: >-
 when_to_use: >-
   Information hierarchy and layout, typography and Dynamic Type, color and dark mode, SF Symbols, when and
   how to use Liquid Glass, platform idioms (tab bar vs sidebar vs ornaments, toolbars, inspectors, sheets
-  vs windows), motion, design tokens. A view that looks like a web page, choosing between native
-  primitives, a project with no design tokens yet.
+  vs windows), iPhone Duo (vertical bars, the fold) and other resizable displays, motion, design tokens. A view that looks like a web
+  page, choosing between native primitives, a project with no design tokens yet.
 ---
 
 # Apple-Native Design
@@ -20,6 +20,7 @@ This skill decides *what* to build: which native primitive fits, how a screen ra
 - When the task writes or changes SwiftUI code, load `swift:swiftui` as well before writing it: it holds the code rules this skill leaves out (availability gates, `#if DEBUG` around previews, deprecated APIs)
 - If the project has its own design layer (tokens, a project design skill), translate every literal in these examples into it; the project layer wins on conflict
 - With no project layer (no token types, no colour sets beyond the template's AccentColor set, and no project design skill in the repo), use system text styles, semantic colours, default padding and spacing, standard control shapes and `.smooth` instead of literals, and end your reply with one sentence saying the project has no design tokens yet and offering the starter set of named spacing, radius and motion values in `references/tokens.md`
+- When the screen is for iPhone Duo or must resize, also read `swift:swiftui` → `references/iphone-duo.md`; this skill owns the design rules, that file owns APIs and technique
 - When glass is in scope (the user asked for it, or the project's design layer makes it the default), adopt it where `references/liquid-glass-design.md` says it fits; `swift:swiftui` keeps the API rules and its opt-in rule
 
 ## Design Thinking
@@ -57,7 +58,8 @@ Before coding, understand the context and commit to an Apple-native direction:
 - **Settings**: keep them few, with defaults that suit most people; an option that affects one task lives on that task's screen; don't copy system-wide choices into the app; on Mac, a `Settings` scene opened from the app menu (Command-Comma), not from a toolbar button ([HIG: Settings](https://developer.apple.com/design/human-interface-guidelines/settings))
 - **Top-level sections**: a `TabView`, shown as a tab bar on iPhone and iPad, whose tabs switch sections and never run actions; `.tabViewStyle(.sidebarAdaptable)` (iOS 18, macOS 15, visionOS 2) lets people turn the iPad tab bar into a sidebar and shows a sidebar on Mac; a sidebar-only app, or a hierarchy deeper than two levels, uses `NavigationSplitView` ([HIG: Tab bars](https://developer.apple.com/design/human-interface-guidelines/tab-bars), [HIG: Sidebars](https://developer.apple.com/design/human-interface-guidelines/sidebars), [SwiftUI: sidebarAdaptable](https://developer.apple.com/documentation/swiftui/tabviewstyle/sidebaradaptable))
 - **visionOS**: system toolbars and tab bars become ornaments on their own; add a custom ornament only for controls people need all the time, no wider than its window; supplementary content goes in a split view or an adjacent window, not an ornament ([HIG: Ornaments](https://developer.apple.com/design/human-interface-guidelines/ornaments), [HIG: Layout](https://developer.apple.com/design/human-interface-guidelines/layout), [HIG: Split views](https://developer.apple.com/design/human-interface-guidelines/split-views)); APIs: `visionos.md`
-- **Toolbars**: actions on the current view go here; one primary action (Done, Submit), tinted, at the trailing end; items grouped by function and frequency, three groups at most, with text buttons kept apart from symbol buttons; no custom bar backgrounds or borders ([HIG: Toolbars](https://developer.apple.com/design/human-interface-guidelines/toolbars), [WWDC25 356](https://developer.apple.com/videos/play/wwdc2025/356/))
+- **Toolbars**: actions on the current view go here; one primary action (Done, Submit), tinted, at the trailing end (on an iPhone Duo side bar, below Back/Close at the top); items grouped by function and frequency, three groups at most, with text buttons kept apart from symbol buttons; no custom bar backgrounds or borders ([HIG: Toolbars](https://developer.apple.com/design/human-interface-guidelines/toolbars), [WWDC25 356](https://developer.apple.com/videos/play/wwdc2025/356/))
+- **iPhone Duo**: one app on both displays and in every pose, laid out with size classes and safe areas rather than per-pose layouts; the same functionality, state and hierarchy everywhere, with at most one more hierarchy level on the inner display; when the fold forces a change, move only what is needed; system bars with their default placement, since they move to the side edge on the outer display and in inner landscape; where bars compete for space, a browsing screen keeps its tab bar and overflows toolbar items, and a task screen keeps its toolbar and lets the tab bar minimise; the actions used most, and any badged item, get a higher toolbar visibility priority, because items overflow from the bottom up; related items go in system groups, not hand-spaced; every item that is not text-only has a title and a symbol (a `Label`), because the system shows the title in overflow; extra actions go in the system overflow menu, and the ellipsis symbol is kept for overflow, so any other menu uses a different symbol; controls for one pane stay with that pane ([HIG: Designing for iPhone Duo](https://developer.apple.com/design/human-interface-guidelines/designing-for-iphone-duo)); technique and APIs: `swift:swiftui` → `iphone-duo.md`, `toolbar-patterns.md`
 - **Buttons**: a tappable area no smaller than 44x44 pt, or 60x60 pt on visionOS; the likeliest action gets the prominent style, one or two per view, and alternatives differ by style rather than size; destructive actions take `role: .destructive` and are never the default button ([HIG: Buttons](https://developer.apple.com/design/human-interface-guidelines/buttons))
 - **Sheets**: one short, scoped task, and one sheet at a time; Done never stands alone but comes with Cancel, or Back in a multi-step flow (on iOS and iPadOS, Cancel leading, Done trailing); a long or self-contained task gets its own window on Mac or a full-screen presentation on iPhone and iPad ([HIG: Sheets](https://developer.apple.com/design/human-interface-guidelines/sheets))
 - **Liquid Glass**: only on bars, sidebars and controls floating above the content; standard components adopt it by themselves, so custom glass is for your own floating controls, used sparingly, and never for content such as lists, tables or backgrounds ([HIG: Materials](https://developer.apple.com/design/human-interface-guidelines/materials), [WWDC25 219](https://developer.apple.com/videos/play/wwdc2025/219/)); APIs: `liquid-glass.md`, `platform-availability.md`
@@ -75,6 +77,7 @@ Before coding, understand the context and commit to an Apple-native direction:
 - [ ] Settings are few, per-task options sit on their own screen, and Mac settings open from the app menu
 - [ ] Tabs switch top-level sections and hold no actions; Mac shows a sidebar; deep hierarchies use `NavigationSplitView`
 - [ ] visionOS: system bars appear as ornaments, custom ornaments hold only always-needed controls, and supplementary content is not in an ornament
+- [ ] iPhone: one layout that resizes across the outer display, the inner display and Split View, with the same controls everywhere, system bars at their default placement, a title and a symbol on each toolbar item, a visibility priority on the most-used action and any badged item, and only small shifts at the fold
 - [ ] Sheets: one at a time, Done paired with Cancel or Back; long tasks get a window or a full-screen presentation
 
 **Controls**
@@ -97,6 +100,6 @@ Before coding, understand the context and commit to an Apple-native direction:
 | System and semantic colour, dark mode, contrast | `references/color.md` |
 | SF Symbols: rendering modes, variants, effects | `references/sf-symbols.md` |
 | When Liquid Glass fits, regular vs clear, tinting, concentric corners | `references/liquid-glass-design.md` |
-| iPhone, iPad, Mac, Vision Pro idioms and hit targets | `references/platform-idioms.md` |
+| iPhone (including iPhone Duo), iPad, Mac, Vision Pro idioms and hit targets | `references/platform-idioms.md` |
 | Springs, meaningful motion, Reduce Motion | `references/motion.md` |
 | Every reference file, with what to open it for | `references/_index.md` |

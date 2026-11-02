@@ -53,6 +53,11 @@ import Testing
 - Optional unwrap checks -> `try #require(optionalValue)`.
 - Early-stop semantics -> `#require` instead of global `continueAfterFailure = false`.
 - `XCTFail("...")` -> `Issue.record("...")`.
+- A test that must end early without failing (`throw XCTSkip("...")`) -> `try Test.cancel("...")` (Swift 6.3, Xcode 26.4). The test is reported as cancelled, not passed. For a condition known before the test starts, use `.enabled(if:)` or `.disabled(if:)` instead.
+- A failure that should only warn -> `Issue.record("...", severity: .warning)` (Swift 6.3, Xcode 26.4); the test still passes.
+- `XCTExpectFailure { ... }` -> `withKnownIssue { ... }`; the form without a closure has no equivalent, so wrap the test body instead.
+- `XCTAttachment` -> `Attachment.record(...)` (see `xcode-workflows.md`).
+- Tests of `precondition`, `fatalError` or `exit` -> an exit test (`#expect(processExitsWith:)`, Swift 6.2; see `expectations.md`). Apple lists exit tests for macOS, Linux, FreeBSD, OpenBSD and Windows, not for iOS, tvOS, watchOS or visionOS.
 
 ### Table-style quick mappings
 
@@ -68,6 +73,9 @@ import Testing
 
 // try XCTUnwrap(user)
 let user = try #require(user)
+
+// throw XCTSkip("Backend not reachable")
+try Test.cancel("Backend not reachable")
 ```
 
 ## Suite model differences

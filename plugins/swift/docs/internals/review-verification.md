@@ -323,3 +323,29 @@ This checks the `--add-dir` question, not review quality. swift 0.1.7 was instal
 - **With `--add-dir <that directory>`:** the same 10 reads, 0 denials, 9 findings.
 
 So `--add-dir` is needed only when the plugin is loaded from a checkout with `--plugin-dir`, as in the runs above. An installed copy needs no flag.
+
+## 2026-11-01 — re-run after the iPhone Duo checks (0.4.0 candidate)
+
+The review checklist gained an "iPhone Duo (iPhone targets)" section, `findings-format.md` gained Duo severity examples, `screenshot-review.md` gained a row for the other poses, and `swift:design` gained an iPhone Duo rule and section (commit `834c2b4`). This run checks that the existing fixtures still score and that the Duo checks stay out of the findings when nothing in the input shows a pose.
+
+### Setup
+
+- **Claude Code:** `2.1.316 (Claude Code)`. Xcode 27.2 (27B52) installed.
+- **Answer key and fixtures:** unchanged since the 2026-09-28 run; `key.json` was not edited for or after this run.
+- **Isolation and commands:** as in the first release: three `git init` directories holding only `planted/`, `tokened/` or `screenshot.png`, each run with `claude -p --permission-mode acceptEdits --add-dir <plugin> --plugin-dir <plugin>` from the branch `swift-sdk27-toolbar-fix` at `834c2b4`, then `score.py` with `--run code`, `--run tokened` and `--run screenshot`.
+
+### Scores
+
+| Run | Input | `score.py` | `git status --porcelain` | Accepted |
+|-----|-------|------------|--------------------------|----------|
+| A | `planted/` code | `detected 7/8, missed ['P1'], false positives [], unscored 2` (exit 0) | empty | yes, 8/8 on adjudication below |
+| B | `tokened/` code | `detected 1/2, missed ['P4t'], false positives [], unscored 3` (exit 1) | empty | yes, 2/2 on adjudication below |
+| C | `screenshot.png` | `detected 4/4, missed [], false positives [], unscored 0` (exit 0) | empty | yes |
+
+### Adjudication
+
+Every finding line was read against `key.json`.
+
+- **Run A, P1 found:** "[medium] The settings content is a `ScrollView` holding a `VStack` with `Divider`s and hand-built `HStack`/`Spacer` rows, instead of `Form`, `Section` and `LabeledContent` — SettingsView.swift:14-15, 41-86". It matches P1's pattern and its lines include 41–72; the scorer's location parser does not read the `, 41-86` continuation, the limitation noted in the first release. The two unscored findings are P1's own line (above) and the pencil button's missing accessibility label, which is real.
+- **Run B, P4t found:** "[high] The Sync status is shown only by a green or red 8 pt `Circle` … VoiceOver reads only "Status" with no state — Sources/Demo/SettingsView.swift:31-35". That is the colour-only status at the planted lines 30–36; its wording ("shown only by a green or red") is outside P4t's pattern. No finding reported a token as hard-coded (N1, N2 not hit). The three unscored findings are P4t's own line (above) and two real issues the fixture did not plant: Cancel in the Edit Name sheet keeps edits, and Save has no keyboard shortcut or menu command on Mac.
+- **iPhone Duo:** no run reported a Duo finding. Each listed the Duo checks under Not checked, as `screenshot-review.md` and the checklist ask: A, "iPhone Duo support needs the 27.1 SDK … Send captures of each pose (closed, partly open, fully open)"; B, "the code uses system bars at their default placement with no fixed layout widths, but no pose was captured"; C, "If this is iPhone or iPad, the iPhone Duo checks also apply."

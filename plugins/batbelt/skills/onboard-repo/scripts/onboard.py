@@ -6,6 +6,7 @@ Usage:
   onboard.py check-markers <file>                       # exit 0 if well-formed, else 2
   onboard.py find-predecessors <claude_dir>             # JSON list -> stdout
   onboard.py renumber-toc <file>                        # reflow manual ToC -> stdout
+  onboard.py manual-conventions <repo_root> [--full]    # how docs/manual/ is built, JSON -> stdout
   onboard.py rewrite-links <file> <manifest>            # apply manifest moves -> stdout
   onboard.py rebase-links <file> <page_old> <page_new> <manifest>  # re-anchor a moved page
   onboard.py write-move-manifest <pairs.json> <dirs.json>  # build a move manifest -> stdout
@@ -390,14 +391,19 @@ def _run_verb(cmd, rest):
             key, _sep, src = spec.partition("=")
             if not key or not src:
                 return _usage("ERROR: --confirm takes KEY=FILE")
-            confirmed = {key: json.loads(pathlib.Path(src).read_text(encoding="utf-8"))}
+            confirmed = _read_confirm(key, src)
+            if confirmed is None:
+                return _usage("ERROR: --confirm file is not JSON: " + src)
         lib.run_set_phase(run, str(opts["--phase"]), confirmed)
     elif "--confirm" in opts:
         spec = str(opts["--confirm"])
         key, _sep, src = spec.partition("=")
         if not key or not src:
             return _usage("ERROR: --confirm takes KEY=FILE")
-        run["confirmed"][key] = json.loads(pathlib.Path(src).read_text(encoding="utf-8"))
+        confirmed = _read_confirm(key, src)
+        if confirmed is None:
+            return _usage("ERROR: --confirm file is not JSON: " + src)
+        run["confirmed"][key] = confirmed[key]
     elif "--add" in opts:
         if "--kind" not in opts:
             return _usage("ERROR: --add requires --kind")
@@ -423,6 +429,14 @@ def _run_verb(cmd, rest):
         )
     sys.stdout.write(lib.write_run(run))
     return 0
+
+
+def _read_confirm(key, src):
+    """{key: the JSON in src}, or None when src is not JSON (the caller names the file)."""
+    try:
+        return {key: json.loads(pathlib.Path(src).read_text(encoding="utf-8"))}
+    except ValueError:
+        return None
 
 
 def main(argv):
@@ -457,6 +471,18 @@ def main(argv):
                 return _usage("usage: onboard.py renumber-toc <file>")
             sys.stdout.write(lib.renumber_toc(pathlib.Path(rest[0]).read_text(encoding="utf-8")))
             return 0
+        if cmd == "manual-conventions":
+            full = "--full" in rest
+            args = [a for a in rest if a != "--full"]
+            if len(args) != 1:
+                return _usage("usage: onboard.py manual-conventions <repo_root> [--full]")
+            if not pathlib.Path(args[0]).is_dir():
+                return _usage("ERROR: not a directory: " + args[0])
+            conv = lib.detect_manual_conventions(args[0])
+            conv["local_deviations"] = lib.render_local_deviations(conv, full=full)
+            conv["ask"] = lib.tour_questions(conv)
+            print(json.dumps(conv, indent=2))
+            return 0
         if cmd == "rewrite-links":
             if len(rest) != 2:
                 return _usage("usage: onboard.py rewrite-links <file> <manifest>")
@@ -490,18 +516,7 @@ def main(argv):
             )
             return 0
         if cmd == "shrink-check":
-            cleared = "--cleared" in rest
-            files = [a for a in rest if a != "--cleared"]
-            if len(files) != 2:
-                return _usage("usage: onboard.py shrink-check <old_file> <new_file> [--cleared]")
-            viols = lib.shrink_violations(
-                pathlib.Path(files[0]).read_text(encoding="utf-8"),
-                pathlib.Path(files[1]).read_text(encoding="utf-8"),
-                cleared,
-            )
-            for sev, msg in viols:
-                sys.stdout.write("%s\t%s\n" % (sev.upper(), msg))
-            return 1 if any(sev == "error" for sev, _ in viols) else 0
+            return check.run("shrink-check", rest, prog="onboard.py")
         if cmd == "redact":
             return check.run("redact", rest, prog="onboard.py")
         if cmd == "deps-detect":

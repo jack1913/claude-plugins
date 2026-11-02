@@ -27,7 +27,8 @@ In order, top to bottom:
    <!-- END REPO SPECIFICS -->
    ```
 
-   **Carried forward verbatim on `--sync`.** Exactly one well-formed pair per
+   **Carried forward verbatim on `--sync`** (the one exception: `--sync` proposes the missing
+   `docs voice:` and `platform pairs:` lines as their own diff). Exactly one well-formed pair per
    file — `--sync` fails closed otherwise (`scripts/onboard.py check-markers`).
 
 ## Stamped gate script (`update-docs`, `update-rules`)
@@ -131,19 +132,36 @@ with `check.py` and removes the two orphans, shown in the plan like any other ch
   `established` without having run the bootstrap (update-docs recounts pointers at
   runtime anyway, so a false claim only misleads the operator).
 - **capture fence convention:** how a grounded `docs/manual/` page shows a command
-  and its output. Recommended: the COMMAND in a ```` ```bash ```` fence with each line
-  marked `$`, the OUTPUT in a separate ```` ```console capture=<slug> ```` fence whose
-  lines are a verbatim, in-order subsequence of `docs/.onboard-captures/<slug>.txt`.
-  Separate fences copy-paste cleanly; note that markdownlint's MD014 cannot model the
-  split and is disabled per grounded page. Record the convention the repo actually
-  uses — a single `text capture=<slug>` fence holding both is the older shape — so a
-  later run converts pages consistently rather than mixing the two.
+  and its output. Recommended: the COMMAND in a ```` ```bash ```` fence with bare lines
+  (no `$` prompt, so they copy-paste cleanly and markdownlint's MD014 stays quiet), the
+  OUTPUT in a separate ```` ```console capture=<slug> ```` fence whose lines are a
+  verbatim, in-order subsequence of `docs/.onboard-captures/<slug>.txt`. The page shapes
+  show this split. Record the convention the repo actually
+  uses (a single `text capture=<slug>` fence holding both is the other common shape).
+  Every later run follows the recorded convention and never converts a page from one
+  shape to the other.
 - **docs voice:** the tone `update-docs` enforces on `docs/manual/` pages —
-  default "task-first, one-concept-per-page, scannable, operator-voiced; cite
-  ADRs, don't inline rationale", or aligned to the README voice when that voice is
+  default "commands-first, one concept per page, each showing what you'll actually see;
+  link the explanation by its title, never its number", or aligned to the README voice when that voice is
   docs-natural (Field Notes / Lab Notebook / Workshop / The Index). On defer, the
-  task-first default is baked. (The README voice, by contrast, has no default —
+  commands-first default is baked. (The README voice, by contrast, has no default —
   a deferred README voice records "no voice" and re-prompts on the first styling run.)
+
+- **readme voice:** the voice the operator picked at §2 and its signature rules (the README
+  style guide), or "no voice" when deferred. With no voice, `update-docs` checks only the README
+  list in the docs standard's §2 and asks again on the first styling run.
+- **foreign facts:** names this repo's docs mention that another repository owns (the skill or
+  command names of a plugin it installs, say) and the globs where they may appear (the one page
+  that names that repository and links to it: the plugin's name and a link, never its skill
+  list), or `none`. Globs are paths from the repo root (`docs/manual/reference/*`). With a
+  value, `update-docs` runs `check-docs --forbidden <names> --forbidden-allow <globs>`, so a
+  restated fact is an error.
+- **known baselines:** dated counts the docs gate accepts as known, such as the frozen archive's
+  link errors (`docs/archive/: 13 link errors, 2026-11-01`), or `none`. `update-docs` compares each
+  run against this line and proposes an updated line when a count drops.
+- **platform pairs:** `sh+powershell` when the repo ships a front-end per platform (an `install.sh`
+  and an `install.ps1`, say): every manual command that runs the `.sh` front-end then has its PowerShell twin, and `update-docs` runs
+  `check-docs` with `--platform-pairs`, which makes a missing twin an error. `none` otherwise.
 
 ## REPO SPECIFICS schema — `update-rules`
 

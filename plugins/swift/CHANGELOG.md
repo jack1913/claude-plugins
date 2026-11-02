@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-01
+
+This release brings the plugin up to Xcode 27.2 and the shipping iPhone Duo. `swift:swiftui` takes in the upstream 5.2.1 Duo and large-display guidance, checked against the 27.2 SDKs and on the iPhone Duo simulator in every pose; `swift:design` and `/swift:review` gain iPhone Duo rules from Apple's new HIG page; and `swift:concurrency` and `swift:testing` cover what Swift 6.4 and Swift Testing add.
+
+### Added
+
+- `swift:swiftui` takes in upstream SwiftUI Agent Skill 5.2.1's iPhone Duo and large-display guidance:
+  - pick the technique by screen structure before reaching for `ArrangementView` or reserved regions;
+  - reflow card screens into two columns, and size a custom layout around the fold;
+  - resizing advice: no device-sized frames, size classes for what to show, no swapping of containers that adapt on their own;
+  - `NavigationSplitView` on large displays;
+  - the iPhone tab sidebar with `defaultTabBarPlacement(_:)` and `isTabViewSidebarAvailable`;
+  - the arrangement tuning modifiers, and checking layouts in every pose.
+- A `duo-player-split` eval case: two peer regions on the iPhone Duo become an `ArrangementView` split behind an iOS and macOS 27.1 check, with no device or orientation checks. Graders check the split arrangement, the version check and that the old layout stays as the earlier-OS branch.
+- The new tab sidebar example compiles for every platform: `.defaultTabBarPlacement(.sidebar)` is limited to iOS, iPadOS, Mac Catalyst and visionOS, and the example is left out on watchOS. Upstream's `@available(iOS 27.0, *)` form fails to compile for macOS, tvOS, visionOS and watchOS.
+- `swift:concurrency` covers the Swift 6.4 features that ship in Xcode 27.2: cancellation shields (`withTaskCancellationShield`), `await` inside `defer`, the noncopyable `Continuation` and `withContinuation`, `~Sendable`, `@diagnose` and the diagnostic group ids, and synchronous continuous observation (`withContinuousObservation`). The skill says to gate the OS 27 APIs with `if #available(anyAppleOS 27.0, *)`.
+- `swift:testing` covers what Swift Testing added in Swift 6.2 to 6.4 and Xcode 27.2 ships: exit tests for code that must trap (`#expect(processExitsWith:)`, with the platforms Apple lists), the thrown error that `#expect(throws:)` returns, warning-severity issues, `Test.cancel` as the replacement for `XCTSkip`, attachments (strings, data, `Encodable` types, files, images and `Transferable` values), `CustomTestReflectable` for failure output, and which expectations on detached tasks are attributed to the test. The migration page maps `XCTSkip`, `XCTExpectFailure`, `XCTAttachment` and crash tests.
+- `swift:swiftui` covers the SwiftUI 27.2 additions: `toolbarTitleAlignment(_:)` (iOS, iPadOS and Mac Catalyst only, so behind `#if os(iOS)`) and the title-alignment environment value, and `ToolbarContent.hidden(_:)` with its per-platform versions. It lists the 27.2 deprecations of `background(_:alignment:)` and `mask(_:)` next to `overlay(_:alignment:)`, and notes the Xcode 27.2 known issues about the 27.1 deployment target and Mac Catalyst.
+- `swift:design` and `/swift:review` cover iPhone Duo, following Apple's new "Designing for iPhone Duo" page:
+  - design: a Decision Rule and an iPhone Duo section in the platform idioms (one app in every pose, the same functionality on both displays, bars at the side, toolbar order, overflow priority, groups, titles with symbols, the system overflow menu, controls beside their content), plus safe-area and fold rules in hierarchy and layout;
+  - review: an "iPhone Duo (iPhone targets)" checklist section, severity examples, and a note that a single screenshot cannot show the other poses.
+
+### Changed
+
+- The README and the manual carry the jack1913 brand header.
+- `swift:swiftui`'s inspector advice follows what the Xcode 27.2 simulator shows: on the iPhone Duo inner display in portrait the inspector overlays the content wherever it is attached, and pushes keep working; the list-tint quirk is confirmed on 27.2.
+- The iPhone Duo guidance now states what the iPhone Duo simulator reports in each pose, checked with Xcode 27.2: size classes on each display, the fold as a 40-point region that stays in place whether active or not, the hinge statuses and angles, where a split arrangement puts its two regions, and that Device Hub's pose buttons can be scripted.
+- `swift:concurrency` states what the Xcode 27.2 project templates set: `SWIFT_VERSION = 5.0`, Approachable Concurrency on and MainActor default isolation, so a fresh app is in Swift 5 language mode. The skill no longer says strict checking is on by default outside Swift 6 mode.
+
+### Fixed
+
+- `swift:swiftui` now loads reliably when you ask for an Xcode preview: its description names previews. Before, "Add an Xcode preview …" loaded it in only 1 of 3 runs, and the preview came out without `#if DEBUG`.
+- The Liquid Glass segmented-control example uses each label as its `ForEach` id instead of its position, and the list checklist ties the `Array(...)`-free `enumerated()` form to an OS 26 deployment target, as the list guidance already did.
+- Four vertical-bar toolbar values exist only on iOS, iPadOS and Mac Catalyst, and `swift:swiftui` now puts them inside `#if os(iOS)`: `ToolbarItemAxisBehavior.horizontalOnly` and `.verticalPreferred`, and `ToolbarVerticalCompressionBehavior.prefersToolbarItems` and `.prefersTabBar`. Earlier text said every vertical-bar API needed only the all-platform 27.1 availability check; for these four values that does not compile for macOS, tvOS, visionOS or watchOS.
+- The same holds for the SDK 27 toolbar minimization values (`.onScrollDown`, `.onScrollUp`, `.never`, `.enabled`, `.disabled`, `.atScrollEdge`), now inside `#if os(iOS)`, and for the `.low` and `.high` visibility priorities, now inside `#if os(iOS) || os(macOS)`. `.topBarPinnedTrailing` and `ToolbarOverflowMenu` are documented as missing on tvOS and watchOS as well as macOS.
+- `DocumentCreationSource` is documented as available on macOS 27 too; only `NewDocumentButton`'s `source:` is iOS and visionOS only.
+- The other 27.1 APIs (`ArrangementView`, reserved regions, `onHingeChange`, `toolbarVerticalEdge` and the vertical-bar modifiers) now compile against the Xcode 27.2 SDKs on every platform, so `latest-apis.md` no longer asks you to recheck them against the 27.1 SDK.
+- `swift:concurrency` examples no longer trigger Swift 6.4's new warning for an unused throwing `Task` (`[#NoUseUnstructuredThrowingTask]`): they catch errors inside the task, and the stream examples finish with the error. A short note in the tasks reference lists the three ways to handle it.
+
 ## [0.3.2] - 2026-10-20
 
 ### Added

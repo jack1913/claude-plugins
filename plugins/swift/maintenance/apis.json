@@ -23,7 +23,9 @@
     "coredata",
     "xctest",
     "testing",
-    "xcuiautomation"
+    "xcuiautomation",
+    "observation",
+    "coreimage"
   ],
   "apis": [
     {
@@ -346,7 +348,10 @@
       "claims": {
         "iOS": "18.0",
         "macOS": "15.0",
-        "visionOS": "2.0"
+        "visionOS": "2.0",
+        "Mac Catalyst": "18.0",
+        "tvOS": "18.0",
+        "watchOS": false
       }
     },
     {
@@ -803,7 +808,9 @@
         "iOS": "27.0",
         "Mac Catalyst": "27.0",
         "visionOS": "27.0",
-        "macOS": false
+        "macOS": false,
+        "tvOS": false,
+        "watchOS": false
       }
     },
     {
@@ -813,7 +820,105 @@
         "iOS": "27.0",
         "Mac Catalyst": "27.0",
         "visionOS": "27.0",
-        "macOS": false
+        "macOS": false,
+        "tvOS": false,
+        "watchOS": false
+      }
+    },
+    {
+      "name": "ToolbarMinimizationBehavior.onScrollDown",
+      "path": "swiftui/toolbarminimizationbehavior/onscrolldown",
+      "claims": {
+        "iOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": false,
+        "visionOS": false,
+        "tvOS": false,
+        "watchOS": false
+      }
+    },
+    {
+      "name": "ToolbarMinimizationBehavior.onScrollUp",
+      "path": "swiftui/toolbarminimizationbehavior/onscrollup",
+      "claims": {
+        "iOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": false,
+        "visionOS": false,
+        "tvOS": false,
+        "watchOS": false
+      }
+    },
+    {
+      "name": "ToolbarMinimizationBehavior.never",
+      "path": "swiftui/toolbarminimizationbehavior/never",
+      "claims": {
+        "iOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": false,
+        "visionOS": false,
+        "tvOS": false,
+        "watchOS": false
+      }
+    },
+    {
+      "name": "ToolbarMinimizationSafeAreaAdjustment.enabled",
+      "path": "swiftui/toolbarminimizationsafeareaadjustment/enabled",
+      "claims": {
+        "iOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": false,
+        "visionOS": false,
+        "tvOS": false,
+        "watchOS": false
+      }
+    },
+    {
+      "name": "ToolbarMinimizationSafeAreaAdjustment.disabled",
+      "path": "swiftui/toolbarminimizationsafeareaadjustment/disabled",
+      "claims": {
+        "iOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": false,
+        "visionOS": false,
+        "tvOS": false,
+        "watchOS": false
+      }
+    },
+    {
+      "name": "ToolbarMinimizationRestoration.atScrollEdge",
+      "path": "swiftui/toolbarminimizationrestoration/atscrolledge",
+      "claims": {
+        "iOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": false,
+        "visionOS": false,
+        "tvOS": false,
+        "watchOS": false
+      }
+    },
+    {
+      "name": "ToolbarItemVisibilityPriority.high",
+      "path": "swiftui/toolbaritemvisibilitypriority/high",
+      "claims": {
+        "iOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": "26.1",
+        "visionOS": false,
+        "tvOS": false,
+        "watchOS": false
+      }
+    },
+    {
+      "name": "ToolbarItemVisibilityPriority.low",
+      "path": "swiftui/toolbaritemvisibilitypriority/low",
+      "claims": {
+        "iOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": "26.1",
+        "visionOS": false,
+        "tvOS": false,
+        "watchOS": false
       }
     },
     {
@@ -886,6 +991,54 @@
         "visionOS": "27.1",
         "tvOS": "27.1",
         "watchOS": "27.1"
+      }
+    },
+    {
+      "name": "ToolbarItemAxisBehavior.horizontalOnly",
+      "path": "swiftui/toolbaritemaxisbehavior/horizontalonly",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": "27.1",
+        "macOS": false,
+        "visionOS": false,
+        "tvOS": false,
+        "watchOS": false
+      }
+    },
+    {
+      "name": "ToolbarItemAxisBehavior.verticalPreferred",
+      "path": "swiftui/toolbaritemaxisbehavior/verticalpreferred",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": "27.1",
+        "macOS": false,
+        "visionOS": false,
+        "tvOS": false,
+        "watchOS": false
+      }
+    },
+    {
+      "name": "ToolbarVerticalCompressionBehavior.prefersToolbarItems",
+      "path": "swiftui/toolbarverticalcompressionbehavior/preferstoolbaritems",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": "27.1",
+        "macOS": false,
+        "visionOS": false,
+        "tvOS": false,
+        "watchOS": false
+      }
+    },
+    {
+      "name": "ToolbarVerticalCompressionBehavior.prefersTabBar",
+      "path": "swiftui/toolbarverticalcompressionbehavior/preferstabbar",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": "27.1",
+        "macOS": false,
+        "visionOS": false,
+        "tvOS": false,
+        "watchOS": false
       }
     },
     {
@@ -973,7 +1126,11 @@
       "path": "swiftui/documentcreationsource",
       "claims": {
         "iOS": "27.0",
-        "visionOS": "27.0"
+        "visionOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": "27.0",
+        "tvOS": false,
+        "watchOS": false
       }
     },
     {
@@ -1017,6 +1174,337 @@
         "watchOS": false,
         "visionOS": false
       }
+    },
+    {
+      "name": "defaultTabBarPlacement(_:)",
+      "path": "swiftui/view/defaulttabbarplacement(_:)",
+      "claims": {
+        "iOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": "27.0",
+        "visionOS": "27.0",
+        "tvOS": "27.0",
+        "watchOS": "27.0"
+      }
+    },
+    {
+      "name": "isTabViewSidebarAvailable",
+      "path": "swiftui/environmentvalues/istabviewsidebaravailable",
+      "claims": {
+        "iOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": "27.0",
+        "visionOS": "27.0",
+        "tvOS": "27.0",
+        "watchOS": "27.0"
+      }
+    },
+    {
+      "name": "AdaptableTabBarPlacement.sidebar",
+      "path": "swiftui/adaptabletabbarplacement/sidebar",
+      "claims": {
+        "iOS": "18.0",
+        "Mac Catalyst": "18.0",
+        "visionOS": "2.0",
+        "macOS": false,
+        "tvOS": false,
+        "watchOS": false
+      }
+    },
+    {
+      "name": "splitArrangementLayoutRatio(_:)",
+      "path": "swiftui/view/splitarrangementlayoutratio(_:)",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": "27.1",
+        "macOS": "27.1",
+        "visionOS": "27.1",
+        "tvOS": "27.1",
+        "watchOS": "27.1"
+      }
+    },
+    {
+      "name": "splitArrangementLayoutSize(minWidth:idealWidth:maxWidth:minHeight:idealHeight:maxHeight:)",
+      "path": "swiftui/view/splitarrangementlayoutsize(minwidth:idealwidth:maxwidth:minheight:idealheight:maxheight:)",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": "27.1",
+        "macOS": "27.1",
+        "visionOS": "27.1",
+        "tvOS": "27.1",
+        "watchOS": "27.1"
+      }
+    },
+    {
+      "name": "splitArrangementFixedLayoutSize(horizontal:vertical:)",
+      "path": "swiftui/view/splitarrangementfixedlayoutsize(horizontal:vertical:)",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": "27.1",
+        "macOS": "27.1",
+        "visionOS": "27.1",
+        "tvOS": "27.1",
+        "watchOS": "27.1"
+      }
+    },
+    {
+      "name": "overlayArrangementEdge(_:)",
+      "path": "swiftui/view/overlayarrangementedge(_:)",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": "27.1",
+        "macOS": "27.1",
+        "visionOS": "27.1",
+        "tvOS": "27.1",
+        "watchOS": "27.1"
+      }
+    },
+    {
+      "name": "splitArrangementAxis",
+      "path": "swiftui/environmentvalues/splitarrangementaxis",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": "27.1",
+        "macOS": "27.1",
+        "visionOS": "27.1",
+        "tvOS": "27.1",
+        "watchOS": "27.1"
+      }
+    },
+    {
+      "name": "overlayArrangementZIndex",
+      "path": "swiftui/environmentvalues/overlayarrangementzindex",
+      "claims": {
+        "iOS": "27.1",
+        "Mac Catalyst": "27.1",
+        "macOS": "27.1",
+        "visionOS": "27.1",
+        "tvOS": "27.1",
+        "watchOS": "27.1"
+      }
+    },
+    {
+      "name": "toolbarTitleAlignment(_:)",
+      "path": "swiftui/view/toolbartitlealignment(_:)",
+      "claims": {
+        "iOS": "27.2",
+        "iPadOS": "27.2",
+        "Mac Catalyst": "27.2",
+        "macOS": false,
+        "visionOS": false,
+        "tvOS": false,
+        "watchOS": false
+      }
+    },
+    {
+      "name": "ToolbarTitleAlignment",
+      "path": "swiftui/toolbartitlealignment",
+      "claims": {
+        "iOS": "27.2",
+        "iPadOS": "27.2",
+        "Mac Catalyst": "27.2",
+        "macOS": "27.2",
+        "visionOS": "27.2",
+        "tvOS": "27.2",
+        "watchOS": "27.2"
+      }
+    },
+    {
+      "name": "toolbarTitleAlignment",
+      "path": "swiftui/environmentvalues/toolbartitlealignment",
+      "claims": {
+        "iOS": "27.2",
+        "iPadOS": "27.2",
+        "Mac Catalyst": "27.2",
+        "macOS": "27.2",
+        "visionOS": "27.2",
+        "tvOS": "27.2",
+        "watchOS": "27.2"
+      }
+    },
+    {
+      "name": "hidden(_:)",
+      "path": "swiftui/toolbarcontent/hidden(_:)",
+      "claims": {
+        "iOS": "26.4",
+        "iPadOS": "26.4",
+        "Mac Catalyst": "26.4",
+        "macOS": "15.0",
+        "visionOS": "26.4",
+        "tvOS": "27.2",
+        "watchOS": "27.2"
+      }
+    },
+    {
+      "name": "background(_:alignment:)",
+      "path": "swiftui/view/background(_:alignment:)",
+      "claims": {
+        "deprecated": true
+      }
+    },
+    {
+      "name": "background(alignment:content:)",
+      "path": "swiftui/view/background(alignment:content:)",
+      "claims": {
+        "iOS": "15.0",
+        "macOS": "12.0",
+        "deprecated": false
+      }
+    },
+    {
+      "name": "mask(_:)",
+      "path": "swiftui/view/mask(_:)",
+      "claims": {
+        "deprecated": true
+      }
+    },
+    {
+      "name": "mask(alignment:_:)",
+      "path": "swiftui/view/mask(alignment:_:)",
+      "claims": {
+        "iOS": "15.0",
+        "macOS": "12.0",
+        "deprecated": false
+      }
+    },
+    {
+      "name": "withTaskCancellationShield",
+      "path": "swift/withtaskcancellationshield(operation:)-8zlgh",
+      "claims": {
+        "iOS": "27.0",
+        "iPadOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": "27.0",
+        "visionOS": "27.0",
+        "tvOS": "27.0",
+        "watchOS": "27.0"
+      }
+    },
+    {
+      "name": "Continuation",
+      "path": "swift/continuation",
+      "claims": {
+        "iOS": "27.0",
+        "iPadOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": "27.0",
+        "visionOS": "27.0",
+        "tvOS": "27.0",
+        "watchOS": "27.0"
+      }
+    },
+    {
+      "name": "withContinuation",
+      "path": "swift/withcontinuation(of:throwing:_:)",
+      "claims": {
+        "iOS": "27.0",
+        "iPadOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": "27.0",
+        "visionOS": "27.0",
+        "tvOS": "27.0",
+        "watchOS": "27.0"
+      }
+    },
+    {
+      "name": "withContinuousObservation",
+      "path": "observation/withcontinuousobservation(options:apply:)",
+      "claims": {
+        "iOS": "27.0",
+        "iPadOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": "27.0",
+        "visionOS": "27.0",
+        "tvOS": "27.0",
+        "watchOS": "27.0"
+      }
+    },
+    {
+      "name": "withObservationTracking(options:_:onChange:)",
+      "path": "observation/withobservationtracking(options:_:onchange:)",
+      "claims": {
+        "iOS": "27.0",
+        "iPadOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": "27.0",
+        "visionOS": "27.0",
+        "tvOS": "27.0",
+        "watchOS": "27.0"
+      }
+    },
+    {
+      "name": "ObservationTracking.Token",
+      "path": "observation/observationtracking/token",
+      "claims": {
+        "iOS": "27.0",
+        "iPadOS": "27.0",
+        "Mac Catalyst": "27.0",
+        "macOS": "27.0",
+        "visionOS": "27.0",
+        "tvOS": "27.0",
+        "watchOS": "27.0"
+      }
+    },
+    {
+      "name": "Observations",
+      "path": "observation/observations",
+      "claims": {
+        "iOS": "26.0",
+        "iPadOS": "26.0",
+        "Mac Catalyst": "26.0",
+        "macOS": "26.0",
+        "visionOS": "26.0",
+        "tvOS": "26.0",
+        "watchOS": "26.0"
+      }
+    },
+    {
+      "name": "ExitTest",
+      "path": "testing/exittest"
+    },
+    {
+      "name": "expect(processExitsWith:observing:_:sourceLocation:performing:)",
+      "path": "testing/expect(processexitswith:observing:_:sourcelocation:performing:)"
+    },
+    {
+      "name": "require(processExitsWith:observing:_:sourceLocation:performing:)",
+      "path": "testing/require(processexitswith:observing:_:sourcelocation:performing:)"
+    },
+    {
+      "name": "Issue.Severity",
+      "path": "testing/issue/severity-swift.enum"
+    },
+    {
+      "name": "Issue.record(_:severity:sourceLocation:)",
+      "path": "testing/issue/record(_:severity:sourcelocation:)"
+    },
+    {
+      "name": "Test.cancel(_:sourceLocation:)",
+      "path": "testing/test/cancel(_:sourcelocation:)"
+    },
+    {
+      "name": "CustomTestReflectable",
+      "path": "testing/customtestreflectable"
+    },
+    {
+      "name": "Attachment",
+      "path": "testing/attachment"
+    },
+    {
+      "name": "Attachment.record(_:named:sourceLocation:)",
+      "path": "testing/attachment/record(_:named:sourcelocation:)"
+    },
+    {
+      "name": "Attachment.init(exporting:as:named:sourceLocation:)",
+      "path": "testing/attachment/init(exporting:as:named:sourcelocation:)"
+    },
+    {
+      "name": "Attachment.init(contentsOf:named:sourceLocation:)",
+      "path": "testing/attachment/init(contentsof:named:sourcelocation:)"
+    },
+    {
+      "name": "AttachableImageFormat",
+      "path": "testing/attachableimageformat"
     }
   ],
   "ignore": {
@@ -1074,6 +1562,7 @@
       "ExpensiveRow",
       "ExpensiveView",
       "ExportButton",
+      "FavoritesView",
       "FileEvent",
       "FileTreeView",
       "FontSizeSlider",
@@ -1206,7 +1695,8 @@
       "LibraryView",
       "ProfileModel",
       "Saver",
-      "StageView"
+      "StageView",
+      "Connection"
     ],
     "SwiftUI runtime symbols named in Instruments output": [
       "EnvironmentWriter",
@@ -1228,7 +1718,9 @@
     ],
     "words from compiler diagnostics quoted verbatim": [
       "Main",
-      "Sending"
+      "Sending",
+      "NoUseUnstructuredThrowingTask",
+      "SendableClosureCaptures"
     ],
     "example test-plan names": [
       "Core",
@@ -1248,7 +1740,8 @@
       "textFormattingDefinition"
     ],
     "Apple generic parameter names (not index entries)": [
-      "CollectionID"
+      "CollectionID",
+      "Success"
     ],
     "Swift compiler feature flags and build settings (not doc index entries)": [
       "DisableOutwardActorInference",

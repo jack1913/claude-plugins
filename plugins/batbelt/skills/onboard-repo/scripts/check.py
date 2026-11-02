@@ -13,9 +13,11 @@ what makes a plain `cp` of this single file sound, and a test pins it.
 
 Usage:
   check.py check-docs <roots...> [--captures DIR] [--coverage FILE] [--forbidden a,b]
-                                 [--only PATH]... [--no-tier-check]
+                                 [--forbidden-allow g,h] [--only PATH]... [--no-tier-check]
+                                 [--platform-pairs]
   check.py check-instructions <roots...> [--repo-root DIR]...
   check.py redact <raw_file> --home H --user U --stamp S [--extra a,b]
+  check.py shrink-check <old_file> <new_file> [--cleared]
 
 Both checkers print SEVERITY\tCODE\tfile:lineno\tdetail to stdout, exit 1 on an
 error-level finding, 0 for warnings or a clean tree, and 2 on bad args -- never a
@@ -1350,6 +1352,62 @@ def _check_empty_tier(roots, coverage):
     return findings
 
 
+def _glob_regex(glob):
+    """An anchored regex for a path glob: `*` and `?` stay inside one path segment,
+    `**` crosses segments, and `**/` also matches nothing (`**/x.md` matches `x.md`)."""
+    out, i = [], 0
+    while i < len(glob):
+        if glob.startswith("**/", i):
+            out.append("(?:.*/)?")
+            i += 3
+        elif glob.startswith("**", i):
+            out.append(".*")
+            i += 2
+        elif glob[i] == "*":
+            out.append("[^/]*")
+            i += 1
+        elif glob[i] == "?":
+            out.append("[^/]")
+            i += 1
+        elif glob[i] == "[":
+            j = glob.find("]", i + 1)
+            body = glob[i + 1 : j] if j != -1 else ""
+            if j == -1 or body in ("", "!"):
+                raise ValueError("unclosed or empty [...] in %r" % glob)
+            body = body.replace("\\", "\\\\")
+            if body.startswith("!"):
+                rest = body[1:]
+                if rest.startswith("-"):
+                    rest = "\\" + rest  # an edge - is a literal, not a range
+                if rest.endswith("-") and not rest.endswith("\\-"):
+                    rest = rest[:-1] + "\\-"
+                out.append("[^/" + rest + "]")  # a negated class never matches /
+            else:
+                if body.startswith("^"):
+                    body = "\\" + body  # ^ is a literal in a glob class
+                out.append("(?!/)[" + body + "]")
+            i = j + 1
+        else:
+            out.append(re.escape(glob[i]))
+            i += 1
+    return re.compile("".join(out) + r"\Z")
+
+
+def _allow_hits(f, relparts, patterns):
+    """The `--forbidden-allow` globs that exempt this file (an empty set: none). Each glob is anchored and
+    matched against the file's path from where check-docs runs, the repo root
+    (`docs/manual/reference/*`; `README.md` exempts only the root README). A file
+    outside the working directory falls back to its path below the scanned root."""
+    if f.is_absolute():
+        try:
+            path = f.resolve().relative_to(pathlib.Path.cwd().resolve()).as_posix()
+        except (OSError, ValueError):
+            path = "/".join(relparts or ())
+    else:
+        path = f.as_posix()
+    return {glob for glob, regex in patterns if regex.match(path)}
+
+
 def _check_forbidden(f, text, forbidden):
     """Opt-in via --forbidden a,b; error for each token found in the raw file
     text. Scans raw text (not just fenced blocks) since secrets sit in code
@@ -1657,7 +1715,42 @@ def _resolve_only(only):
     return out
 
 
-def _check_docs(roots, captures_dir, coverage, forbidden, only=None, tier_check=True):
+def _read_doc(f):
+    """(text, size) for a docs file: its text, or None when it cannot be read or is
+    larger than _MAX_DOC_BYTES, and the size the one stat read (None when even that
+    failed). The one per-file read guard every check-docs pass shares."""
+    try:
+        size = f.stat().st_size
+    except OSError:
+        return None, None
+    if size > _MAX_DOC_BYTES:
+        return None, size
+    try:
+        return f.read_text(encoding="utf-8", errors="replace"), size
+    except OSError:
+        return None, size
+
+
+def _fill_manual_cache(roots, cache):
+    """Add every live manual page under the roots that `cache` (resolved path ->
+    (path, relparts, text)) does not hold yet: the one extra walk an `--only` run
+    needs, because the tour and the PowerShell signal are judged tree-wide."""
+    for f, relparts in _iter_markdown_files(roots):
+        if not _in_manual(relparts) or _is_frozen_tier(relparts):
+            continue
+        try:
+            key = f.resolve()
+        except OSError:
+            continue
+        if key in cache:
+            continue
+        text, _size = _read_doc(f)
+        if text is not None:
+            cache[key] = (f, relparts, text)
+
+
+def _check_docs(roots, captures_dir, coverage, forbidden, only=None, tier_check=True,
+                platform_pairs=False, forbidden_allow=()):
     """Return (findings, exit_code). findings = list of (severity, code, file,
     lineno, detail). `coverage` is the already-parsed coverage record (or None).
     Read-only; per-file OSError skipped. A file larger than _MAX_DOC_BYTES is
@@ -1670,6 +1763,9 @@ def _check_docs(roots, captures_dir, coverage, forbidden, only=None, tier_check=
     sweep, which is noise while authoring is still in progress."""
     findings = []
     only_set = _resolve_only(only)
+    twin_candidates, manual = [], {}
+    allow_patterns = list(forbidden_allow)  # (glob, regex) pairs, compiled by cmd_check_docs
+    allow_used = set()
     for f, relparts in _iter_markdown_files(roots):
         if only_set is not None:
             try:
@@ -1677,23 +1773,19 @@ def _check_docs(roots, captures_dir, coverage, forbidden, only=None, tier_check=
                     continue
             except OSError:
                 continue
-        try:
-            size = f.stat().st_size
-        except OSError:
+        text, size = _read_doc(f)
+        if size is not None and size > _MAX_DOC_BYTES:
+            findings.append(("warn", "FILE_TOO_LARGE", str(f), 1, "%d bytes; skipped content checks" % size))
             continue
-        if size > _MAX_DOC_BYTES:
-            findings.append(
-                ("warn", "FILE_TOO_LARGE", str(f), 1, "%d bytes; skipped content checks" % size)
-            )
-            continue
-        try:
-            text = f.read_text(encoding="utf-8", errors="replace")
-        except OSError:
+        if text is None:
             continue
         findings += _check_links(f, text, roots)
         findings += _check_tables(f, text)
         findings += _check_placeholders(f, text, coverage is not None)
-        findings += _check_forbidden(f, text, forbidden)
+        hits = _allow_hits(f, relparts, allow_patterns)
+        allow_used |= hits
+        if not hits:
+            findings += _check_forbidden(f, text, forbidden)
         findings += _check_unresolved_command(f, text, captures_dir)
         findings += _check_leaked_paths(f, text)
         findings += _check_adr(f, text, relparts)
@@ -1701,10 +1793,460 @@ def _check_docs(roots, captures_dir, coverage, forbidden, only=None, tier_check=
         if not _is_frozen_tier(relparts):
             findings += _check_grounding(f, text, captures_dir)
             findings += _check_showcase(f, text, relparts)
+            if _in_manual(relparts):
+                manual[f.resolve()] = (f, relparts, text)
+                twin_candidates += _check_platform_twin(f, text, "warn")
+    if only_set is not None:
+        _fill_manual_cache(roots, manual)
+    if twin_candidates:
+        if platform_pairs:
+            findings += [("error",) + c[1:] for c in twin_candidates]
+        elif any(_has_powershell_fence(text) for _f, _r, text in manual.values()):
+            findings += twin_candidates
+
+    def _cached(path):
+        try:
+            hit = manual.get(path.resolve())
+        except OSError:
+            return None
+        return hit[2] if hit else _read_doc(path)[0]
+
+    index_findings = []
+    for f, relparts, text in manual.values():
+        if _is_manual_index(relparts):
+            index_findings += _check_toc_count(f, text) + _check_next_chain(f, text, _cached)
+    for finding in index_findings:
+        if only_set is None:
+            findings.append(finding)
+            continue
+        try:
+            if pathlib.Path(finding[2]).resolve() in only_set:
+                findings.append(finding)
+        except OSError:
+            continue
+    if only_set is None:
+        for glob, _regex in allow_patterns:
+            if glob not in allow_used:
+                findings.append(("warn", "FORBIDDEN_ALLOW_UNUSED", "--forbidden-allow", 0,
+                                 "%s matches no scanned file (globs are paths from the repo root)" % glob))
     if tier_check:
         findings += _check_empty_tier(roots, coverage)
     has_error = any(sev == "error" for sev, *_ in findings)
     return findings, (1 if has_error else 0)
+
+
+# --- tour, count, platform twins (template v5) -----------------------------------
+
+# The ToC total. Each cue is FULLY delimited so a look-alike prose range does not
+# match (review C1): bold on BOTH sides ("**1 → N**"), the literal "(read 1 → N)",
+# or the MD029 "1→N reading order" comment. A bare "(1 to 5)" / "steps 1 to 7." is
+# left alone, and callers skip table rows, so a "**1 → 5**" cell is not a total.
+_TOTAL_RE = re.compile(
+    r"(\*\*1\s*(?:→|->|to)\s*)\d+(?=\*\*)"  # **1 → N**
+    r"|(\(read\s+1\s*(?:→|->|to)\s*)\d+(?=\))"  # (read 1 → N)
+    r"|(\b1\s*(?:→|->|to)\s*)\d+(?=\s*reading order)"  # 1→N reading order
+)
+
+_NEXT_TARGET_RE = re.compile(r"\*\*Next:\*\*\s*(?:\*\*)?\[[^\]]*\]\(<?([^)>\s#]+)")
+_ANY_ITEM_RE = re.compile(r"^( *)(\d+)[.)]\s+")
+_ITEM_LINK_RE = re.compile(r"^\s*\d+[.)]\s+(?:\*\*)?\[[^\]]*\]\(<?([^)>\s#]+)")
+_DO_A_TASK_RE = re.compile(r"^#{1,6}\s+do a task\s*#*\s*$", re.IGNORECASE)
+_SH_LANGS = {"bash", "sh", "shell", "zsh"}
+_PS_LANGS = {"powershell", "pwsh", "ps1"}
+
+
+def _prose_text(text):
+    return "".join(seg for seg, is_fence in _split_fences(text) if not is_fence)
+
+
+def _is_manual_index(relparts):
+    """The manual's index, judged on the path RELATIVE to the scanned root (a
+    checkout under a folder called `manual` is not the manual tier)."""
+    return relparts is not None and tuple(relparts[-2:]) == ("manual", "README.md")
+
+
+def _in_manual(relparts):
+    return relparts is not None and "manual" in relparts[:-1]
+
+
+def _top_level_lists(text):
+    """The top-level ordered lists in `text`'s prose, in order, and whether a "Do a
+    task" heading exists. Each list is a dict: `h2` (the line of the H2 group it sits
+    in, or None before the first one), `do_a_task` (it sits in that heading's section, which runs to the next heading of the same or a higher
+    level, so its subsections count) and `items`, each a dict with `target` (its
+    leading link, or None: a link later in the line is not the entry's page) and
+    `number` (as written). A list starts at an item
+    indented at most three spaces; an item indented deeper than the list's first
+    item is nested and skipped. Blank and indented lines keep a list open, and so
+    does an unindented line right after an item (a wrapped line of its text); a
+    heading, or a paragraph after a blank line, closes it."""
+    prose = [raw.expandtabs(4) for raw in _prose_text(text).split("\n")]
+    lists, cur, do_level, saw_do, prev_blank, h2 = [], None, None, False, True, None
+    for k, line in enumerate(prose):
+        heading = _ATX_RE.match(line)
+        if heading:
+            cur, prev_blank = None, False
+            level = len(heading.group(1))
+            if level == 2:
+                h2 = k
+            if _DO_A_TASK_RE.match(line.strip()):
+                do_level, saw_do = level, True
+            elif do_level is not None and level <= do_level:
+                do_level = None
+            continue
+        m = _ANY_ITEM_RE.match(line)
+        if m:
+            prev_blank = False
+            indent = len(m.group(1))
+            if cur is None:
+                if indent > 3:
+                    continue
+                cur = {"do_a_task": do_level is not None, "base": indent, "items": [], "h2": h2}
+                lists.append(cur)
+            if indent > cur["base"]:
+                continue
+            cur["base"] = indent
+            link = _ITEM_LINK_RE.match(line)
+            cur["items"].append({"target": link.group(1) if link else None, "number": int(m.group(2)),
+                                 "list": len(lists) - 1})
+        elif not line.strip():
+            prev_blank = True
+        elif line[:1] == " " or (cur is not None and not prev_blank):
+            prev_blank = False
+        else:
+            cur, prev_blank = None, False
+    return lists, saw_do
+
+
+def _is_how_to_link(target):
+    """A link to a how-to page: a local `.md` in the manual, not a getting-started or
+    reference page and not outside the manual."""
+    return (_is_local_target(target) and target.endswith(".md") and not target.startswith("../")
+            and not target.startswith(("getting-started/", "reference/")))
+
+
+def tour_entries(text):
+    """The manual index's tour as written. With a "Do a task" heading, it is every
+    ordered list in that section (subsections included); none when that group is
+    not numbered. Otherwise, when the index has H2 groups, it is the group whose
+    ordered lists hold the most links to how-to pages (a renamed Do a task group),
+    or none. With no H2 groups, it is the longest top-level ordered list whose items
+    are mostly leading links (the first, on a tie). Each entry is a dict with
+    `target`, `number` and `list`; [] when there is none."""
+    lists, saw_do = _top_level_lists(text)
+    if saw_do:
+        return [e for lst in lists if lst["do_a_task"] for e in lst["items"]]
+    if any(_ATX_RE.match(ln.expandtabs(4)) and len(_ATX_RE.match(ln.expandtabs(4)).group(1)) == 2
+           for ln in _prose_text(text).split("\n")):
+        score = {}
+        for lst in lists:
+            if lst["h2"] is not None:
+                score[lst["h2"]] = score.get(lst["h2"], 0) + sum(1 for e in lst["items"] if _is_how_to_link(e["target"]))
+        best = max(sorted(score), key=lambda k: score[k], default=None)
+        if best is None or score[best] == 0:
+            return []
+        return [e for lst in lists if lst["h2"] == best for e in lst["items"]]
+    best = []
+    for lst in lists:
+        linked = sum(1 for e in lst["items"] if e["target"])
+        if linked and linked * 2 >= len(lst["items"]) and len(lst["items"]) > len(best):
+            best = lst["items"]
+    return best
+
+
+def toc_entries(text):
+    """What a `**1 → N**` total counts: the tour, or, when the index has no tour, its
+    only top-level ordered list (plain steps included). With several lists and no
+    tour the total is ambiguous, and [] is returned."""
+    tour = tour_entries(text)
+    if tour:
+        return tour
+    lists, _saw_do = _top_level_lists(text)
+    return lists[0]["items"] if len(lists) == 1 else []
+
+def is_table_row(line):
+    return line.lstrip().startswith("|")
+
+
+def tour_items(text):
+    """The tour's entries as their leading link targets, in order (None for an entry
+    whose line does not start with a link)."""
+    return [e["target"] for e in tour_entries(text)]
+
+def _effective_numbers(entries):
+    """The numbers a reader sees, list by list: Markdown auto-numbers a list written
+    1. 1. 1., so such a list counts up from its first number."""
+    out, by_list = [], {}
+    for e in entries:
+        by_list.setdefault(e.get("list", 0), []).append(e["number"])
+    for numbers in by_list.values():
+        if len(numbers) > 1 and len(set(numbers)) == 1:
+            numbers = [numbers[0] + i for i in range(len(numbers))]
+        out.append(numbers)
+    return out
+
+def _check_toc_count(f, text):
+    """TOC_COUNT (warn): a `**1 → N**`-style total in the manual index that differs
+    from the number its list's last entry carries (the tour, else the index's only
+    list), or a tour list whose numbers do not count up by one. Numbering is judged
+    list by list, as renumber-toc writes it; an auto-numbered list (1. 1. 1.) is
+    valid. A total may count across groups (1-3 under Get started,
+    4-6 under Do a task): it names the last number either way."""
+    out = []
+    tour = tour_entries(text)
+    for numbers in _effective_numbers(tour):
+        if any(b != a + 1 for a, b in zip(numbers, numbers[1:])):
+            out.append(("warn", "TOC_COUNT", str(f), 1,
+                        "a tour list's numbers do not count up by one: %s" % ", ".join(map(str, numbers))))
+    counted = toc_entries(text)
+    if not counted:
+        return out
+    last = _effective_numbers(counted)[-1][-1]
+    fenced = _fenced_line_numbers(text)
+    for i, line in enumerate(text.split("\n"), start=1):
+        if i in fenced or is_table_row(line):
+            continue
+        for m in _TOTAL_RE.finditer(line):
+            total = int(re.search(r"(\d+)$", m.group(0)).group(1))
+            if total != last:
+                out.append(("warn", "TOC_COUNT", str(f), i, "says 1 → %d; the list ends at %d" % (total, last)))
+    return out
+
+def _is_local_target(t):
+    return bool(t) and "://" not in t and not t.startswith("/")
+
+
+def _check_next_chain(index, text, read=None):
+    """NEXT_CHAIN (warn): each local page of the index's tour ends with a `**Next:**`
+    link to the entry the index puts after it, in index order (an external entry
+    is matched by its URL; a page whose next entry has no link is not judged).
+    Checked only once the tour is in use (some page has a Next link); the last
+    entry is free. Findings name pages as the index links them."""
+    base = index.parent
+    read = read or (lambda p: _read_doc(p)[0])
+    entries = tour_items(text)
+    bodies = [read(base / t) if _is_local_target(t) else None for t in entries]
+    if not any(b and _NEXT_TARGET_RE.search(_prose_text(b)) for b in bodies):
+        return []
+    out = []
+    for k in range(len(entries) - 1):
+        target, body, expected = entries[k], bodies[k], entries[k + 1]
+        if body is None or expected is None:
+            continue
+        page = base / target
+        m = _NEXT_TARGET_RE.search(_prose_text(body))
+        if not m:
+            last = max((i for i, ln in enumerate(body.split("\n"), start=1) if ln.strip()), default=1)
+            out.append(("warn", "NEXT_CHAIN", str(page), last, "no Next link; the index puts %s next" % expected))
+            continue
+        got = m.group(1)
+        if _is_local_target(expected):
+            same = (page.parent / got).resolve() == (base / expected).resolve()
+        else:
+            same = got == expected
+        if not same:
+            fenced = _fenced_line_numbers(body)
+            line = next((i for i, ln in enumerate(body.split("\n"), start=1)
+                         if "**Next:**" in ln and i not in fenced), 1)
+            out.append(("warn", "NEXT_CHAIN", str(page), line,
+                        "Next points to %s; the index puts %s next" % (got, expected)))
+    return out
+
+
+def _has_powershell_fence(text):
+    return any(_first_token_lang(info) in _PS_LANGS for info, _b, _l in iter_fenced_blocks(text))
+
+def _command_lang(info):
+    """'sh' or 'ps' for a shell or PowerShell COMMAND fence, else None. Output
+    fences (`capture=` or `illustrative`) and other languages are not commands."""
+    tags, illustrative = _tags_of(info)
+    if "capture" in tags or illustrative:
+        return None
+    lang = _first_token_lang(info)
+    return "sh" if lang in _SH_LANGS else ("ps" if lang in _PS_LANGS else None)
+
+_SH_PATH_RE = re.compile(r"(https?://\S*?/)?(?:\./)?((?:[\w.-]+/)*[\w.-]+\.sh)(?![\w.-])")
+_SCRIPT_LEAD = " \t\n`'\"(=;|&"
+
+
+def _repo_slugs(root):
+    """`owner/repo` for each remote in the repo's git config (a worktree's or a
+    submodule's `.git` file is followed to its config), lower-cased; empty when
+    there is none. Used to tell this repo's install URL from a third-party one."""
+    git = pathlib.Path(root) / ".git"
+    try:
+        if git.is_file():
+            gitdir = pathlib.Path(git.read_text(encoding="utf-8").split(":", 1)[1].strip())
+            if not gitdir.is_absolute():
+                gitdir = pathlib.Path(root) / gitdir
+            common = gitdir / "commondir"
+            base = gitdir / common.read_text(encoding="utf-8").strip() if common.is_file() else gitdir
+            config = base / "config"
+        else:
+            config = git / "config"
+        text = config.read_text(encoding="utf-8", errors="replace")
+    except (OSError, IndexError):
+        return set()
+    slugs = set()
+    for m in re.finditer(r"^\s*url\s*=\s*(\S+)", text, re.MULTILINE):
+        parts = [s for s in re.split(r"[:/]", re.sub(r"\.git$", "", m.group(1).rstrip("/"))) if s]
+        if len(parts) >= 2:
+            slugs.add((parts[-2] + "/" + parts[-1]).lower())
+    return slugs
+
+
+def _script_paths(regex, text):
+    """The (url, path) pairs `text` names for a script: `url` is the URL prefix or
+    None; a relative path is as written (`./` dropped, backslashes as `/`). A
+    relative name glued to other text (`uninstall.sh` is not `install.sh`) counts
+    as itself."""
+    out = []
+    for m in regex.finditer(text):
+        url, path = m.group(1), m.group(2).replace("\\", "/")
+        if url:
+            out.append((url, path))
+        elif m.start() == 0 or text[m.start() - 1] in _SCRIPT_LEAD:
+            out.append((None, path))
+    return out
+
+
+def _ps1_names(text):
+    """Every `.ps1` file name `text` mentions, lower-cased: however PowerShell
+    reaches it (`.\\x.ps1`, `-File:x.ps1`, `"$PSScriptRoot\\x.ps1"`, a URL)."""
+    return [n.lower() for n in re.findall(r"(?<![\w.-])([\w.-]+\.ps1)(?![\w.-])", text)]
+
+
+def _pair_exists(root, sh_path):
+    """True when `root/sh_path` is a file and a `.ps1` of the same stem sits beside
+    it (compared without case, as PowerShell does). Never raises."""
+    try:
+        sh = pathlib.Path(root) / sh_path
+        if not sh.is_file():
+            return False
+        want = sh.with_suffix(".ps1").name.lower()
+        return any(p.name.lower() == want and p.is_file() for p in sh.parent.iterdir())
+    except OSError:
+        return False
+
+
+def _repo_paths_in_url(url, path, slugs):
+    """The repo-relative paths a URL may name, longest first, when it points at this
+    repo (one of `slugs` appears in it); [] for a third-party URL."""
+    full = url + path
+    low = full.lower()
+    for slug in slugs:
+        k = low.find("/" + slug + "/")
+        if k != -1:
+            segs = full[k + len(slug) + 2 :].split("/")
+            return ["/".join(segs[n:]) for n in range(len(segs))]
+    return []
+
+
+def front_end_scripts(text, roots):
+    """The `.sh` front-ends `text` runs or names: each `.sh` path that is a file
+    under one of `roots` with a `.ps1` sibling (a front-end per platform). A URL
+    counts only when it points at this repo (its git remote's owner/repo is in it);
+    its path inside the repo is then tried longest tail first. Detection
+    (`manual-conventions`) and PLATFORM_TWIN share this one rule."""
+    out, slugs = [], None
+    for url, path in _script_paths(_SH_PATH_RE, text):
+        if url:
+            if slugs is None:
+                slugs = set().union(*(_repo_slugs(r) for r in roots))
+            candidates = _repo_paths_in_url(url, path, slugs)
+        else:
+            candidates = [path]
+        for cand in candidates:
+            if any(_pair_exists(r, cand) for r in roots):
+                out.append(cand)
+                break
+    return out
+
+
+def _twin_roots(f):
+    """Where a manual page's scripts are looked up: the repo it sits in (the parent
+    of the nearest `docs` folder above it) and the working directory."""
+    roots = []
+    try:
+        for parent in f.resolve().parents:
+            if parent.name == "docs":
+                roots.append(parent.parent)
+                break
+    except OSError:
+        pass
+    roots.append(pathlib.Path.cwd())
+    return roots
+
+
+def _check_platform_twin(f, text, severity):
+    """PLATFORM_TWIN: within each section of a manual page (up to the next heading),
+    every shell command fence that runs a `.sh` front-end (`front_end_scripts`)
+    needs a PowerShell command fence that runs its `.ps1`, before or after it.
+    Twins pair by script name, so an unrelated PowerShell block (an `npm` twin)
+    never stands in; a shell block that also names the `.ps1` is its own twin, and
+    output fences are skipped. The caller decides that `f` is a manual page."""
+    lines = text.split("\n")
+    fenced = _fenced_line_numbers(text)
+    headings = [i for i, ln in enumerate(lines, start=1) if _ATX_RE.match(ln.expandtabs(4)) and i not in fenced]
+    roots = _twin_roots(f)
+    out, needed, shown = [], [], []
+
+    def _flush():
+        for start, ps1 in needed:
+            if ps1 in shown:
+                shown.remove(ps1)
+            else:
+                out.append((severity, "PLATFORM_TWIN", str(f), start, "no PowerShell twin (%s) for this command" % ps1))
+        needed.clear()
+        shown.clear()
+
+    hi = 0
+    for info, body, start in iter_fenced_blocks(text):
+        while hi < len(headings) and headings[hi] < start:
+            _flush()
+            hi += 1
+        kind = _command_lang(info)
+        if kind == "sh":
+            own = set(_ps1_names(body))
+            wanted = {sh.rsplit("/", 1)[-1][:-3].lower() + ".ps1" for sh in front_end_scripts(body, roots)}
+            for ps1 in sorted(wanted - own):  # one twin per script per block, however often it runs
+                needed.append((start, ps1))
+        elif kind == "ps":
+            shown.extend(_ps1_names(body))
+    _flush()
+    return out
+
+# --- shrink guard (moved here from onboard_lib so update-docs can run it) -------
+
+def _non_fence_word_count(text):
+    n = 0
+    for seg, is_fence in _split_fences(text):
+        if not is_fence:
+            n += len(seg.split())
+    return n
+
+
+def shrink_violations(old_text, new_text, cleared_finding):
+    """Guard a loop rewrite (spec 4.1). warn: an ATX heading in old_text is gone
+    from new_text. error: non-fence word count cut by > 25% UNLESS cleared_finding
+    (a rewrite that clears >=1 gate/reviewer finding may legitimately shrink, e.g.
+    deleting a fabricated paragraph). Pure."""
+    out = []
+    old_h = set(heading_slugs(old_text))
+    new_h = set(heading_slugs(new_text))
+    for slug in sorted(old_h - new_h):
+        out.append(("warn", "heading dropped: %s" % slug))
+    ow = _non_fence_word_count(old_text)
+    nw = _non_fence_word_count(new_text)
+    if ow > 0 and nw < ow * 0.75 and not cleared_finding:
+        out.append(
+            (
+                "error",
+                "non-fence word count cut %d%% (%d -> %d)"
+                % (round((ow - nw) * 100.0 / ow), ow, nw),
+            )
+        )
+    return out
 
 
 # --- CLI verbs -----------------------------------------------------------------
@@ -1932,10 +2474,10 @@ def cmd_check_docs(rest, prog="check.py"):
         return _usage(m, prog)
 
     roots, captures_dir, coverage_file, forbidden = [], None, None, []
-    only, tier_check = [], True
+    only, tier_check, platform_pairs, forbidden_allow = [], True, False, []
     it = iter(rest)
     for a in it:
-        if a in ("--captures", "--coverage", "--forbidden", "--only"):
+        if a in ("--captures", "--coverage", "--forbidden", "--forbidden-allow", "--only"):
             value = next(it, _MISSING)
             if value is _MISSING:
                 return _usage_p("ERROR: %s needs a value" % a)
@@ -1945,17 +2487,21 @@ def cmd_check_docs(rest, prog="check.py"):
                 coverage_file = value
             elif a == "--forbidden":
                 forbidden = [t for t in value.split(",") if t]
+            elif a == "--forbidden-allow":
+                forbidden_allow = [g for g in value.split(",") if g]
             else:
                 only.append(value)
         elif a == "--no-tier-check":
             tier_check = False
+        elif a == "--platform-pairs":
+            platform_pairs = True
         else:
             roots.append(a)
     if not roots:
         return _usage_p(
             "usage: check.py check-docs <roots...> "
-            "[--captures DIR] [--coverage FILE] [--forbidden a,b] "
-            "[--only PATH]... [--no-tier-check]"
+            "[--captures DIR] [--coverage FILE] [--forbidden a,b] [--forbidden-allow g,h] "
+            "[--only PATH]... [--no-tier-check] [--platform-pairs]"
         )
     # A root that does not exist is a USAGE error, not an empty scan. check-docs used
     # to skip it silently and exit 0, so the stamped recipe's unresolved `<index>`
@@ -1988,12 +2534,34 @@ def cmd_check_docs(rest, prog="check.py"):
         coverage = _load_coverage(coverage_file)
     except (ValueError, OSError):
         return _usage_p("ERROR: malformed coverage record: " + str(coverage_file))
+    try:
+        allow_patterns = [(g, _glob_regex(g)) for g in forbidden_allow]
+    except (ValueError, re.error) as exc:
+        return _usage_p("ERROR: bad --forbidden-allow glob: %s" % exc)
     findings, code = _check_docs(
-        roots, captures_dir, coverage, forbidden, only=only, tier_check=tier_check
+        roots, captures_dir, coverage, forbidden, only=only, tier_check=tier_check,
+        platform_pairs=platform_pairs, forbidden_allow=allow_patterns,
     )
     for sev, fcode, fpath, lineno, detail in findings:
         sys.stdout.write("%s\t%s\t%s:%d\t%s\n" % (sev.upper(), fcode, fpath, lineno, detail))
     return code
+
+
+def cmd_shrink_check(rest, prog="check.py"):
+    """`shrink-check <old_file> <new_file> [--cleared]`: guard a rewrite. Prints
+    SEVERITY\tdetail per violation; exit 1 on an error-level one."""
+    cleared = "--cleared" in rest
+    files = [a for a in rest if a != "--cleared"]
+    if len(files) != 2:
+        return _usage("usage: %s shrink-check <old_file> <new_file> [--cleared]" % prog, prog)
+    viols = shrink_violations(
+        pathlib.Path(files[0]).read_text(encoding="utf-8"),
+        pathlib.Path(files[1]).read_text(encoding="utf-8"),
+        cleared,
+    )
+    for sev, msg in viols:
+        sys.stdout.write("%s\t%s\n" % (sev.upper(), msg))
+    return 1 if any(sev == "error" for sev, _ in viols) else 0
 
 
 def main(argv):
@@ -2022,6 +2590,8 @@ def run(cmd, rest, prog="check.py"):
             return cmd_check_instructions(rest, prog=prog)
         if cmd == "redact":
             return cmd_redact(rest, prog=prog)
+        if cmd == "shrink-check":
+            return cmd_shrink_check(rest, prog=prog)
     except OSError as exc:  # missing/unreadable file -> clean exit 2
         sys.stderr.write("ERROR: " + str(exc) + "\n")
         return 2

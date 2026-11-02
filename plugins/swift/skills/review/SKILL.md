@@ -3,7 +3,7 @@ name: review
 description: >-
   Reviews a SwiftUI screen against Apple's Human Interface Guidelines, from its code and/or screenshots, and
   reports findings with the HIG source and a fix. Checks hierarchy, typography, colour, SF Symbols, controls
-  and hit targets, platform idioms, Liquid Glass placement, motion and accessibility. Runs only when typed
+  and hit targets, platform idioms, iPhone Duo adaptation (resizing, vertical bars, the fold), Liquid Glass placement, motion and accessibility. Runs only when typed
   as /swift:review.
 argument-hint: "<view files or screenshot paths>"
 disable-model-invocation: true
@@ -25,6 +25,7 @@ Review what `$ARGUMENTS` names: SwiftUI view files, screenshot image paths, or b
 - Missing Liquid Glass is never a finding; glass stays opt-in. Glass on content (lists, tables, cards, backgrounds) is a finding
 - Report only: never edit, create or delete a file, and never offer a patch as a file change. Fixes are described in the finding
 - Review for the platforms the project targets: read `Package.swift`, the Xcode project or the file's `#if os(...)` branches; a rule for another platform is not a finding
+- iPhone Duo checks apply only to a project that targets iPhone. A fix that needs an API from a newer SDK is named only when the project builds with that SDK; availability is in `swift:swiftui` → `iphone-duo.md` and `toolbar-patterns.md`
 - Load `swift:design` and apply its Decision Rules; when a check needs code detail (availability, accessibility modifiers), `swift:swiftui` has it
 - A finding needs a HIG basis. Taste without one is not a finding
 

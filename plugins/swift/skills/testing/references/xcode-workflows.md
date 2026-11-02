@@ -44,6 +44,30 @@ Use this file when debugging failures quickly in Xcode, configuring focused test
 - `Integration` plan: include `integration`, exclude `flaky`.
 - `ReleaseGate` plan: include `core` and `regression`.
 
+## Attachments
+
+- Attach evidence to the result of a test with `Attachment.record(_:named:)` (Swift 6.2, Xcode 26). It replaces `XCTAttachment`.
+- Attachable out of the box: `String`, `Substring`, `[UInt8]` and `Data`. With Foundation imported, any `Encodable` type that declares `Attachable` conformance is attachable too; `Attachment(contentsOf:)` attaches a file.
+- Images (Swift 6.3, Xcode 26.4): `CGImage`, `CIImage`, `NSImage` and `UIImage` attach with `Attachment.record(image, named:, as: .png)`; `.jpeg` and `.jpeg(withEncodingQuality:)` are the other formats.
+- Transferable values (Swift 6.4, Xcode 27): `try await Attachment(exporting: value, as: .json, named: "state")`, then `Attachment.record(attachment)`. The initializer needs macOS 15.2, iOS 18.2, tvOS 18.2, watchOS 11.2 or visionOS 2.2.
+- Prefer attaching on the failure path, and keep payloads small; the attachment shows in the report next to the failing test.
+
+### Example: attach what you need to triage
+
+```swift
+import Foundation
+import Testing
+
+struct Snapshot: Codable, Attachable {
+ let items: [String]
+}
+
+@Test func attachesEvidence() {
+ Attachment.record("{\"status\": 503}", named: "response.json")
+ Attachment.record(Snapshot(items: ["a"]), named: "state.json")
+}
+```
+
 ## Report triage
 
 - Review distribution insights for failure clustering by tags/bugs/destinations.

@@ -13,7 +13,8 @@ opens with the section number it came from.
 | [rule-mining.md](rule-mining.md) | Section 3.4c: offering to mine rules from the codebase, with validation |
 | [adopt-docs.md](adopt-docs.md) | Section 3.6: moving existing docs into the four tiers and fixing their links |
 | [author-manual.md](author-manual.md) | Section 3.7: writing the consumer manual, grounding each output block, the review pass |
-| [manual-page-how-to.md](manual-page-how-to.md) | Section 3.7: the shape of a how-to or getting-started page |
+| [manual-page-how-to.md](manual-page-how-to.md) | Section 3.7: the shape of a how-to page |
+| [manual-page-getting-started.md](manual-page-getting-started.md) | Section 3.7: the shape of a getting-started page |
 | [manual-page-reference.md](manual-page-reference.md) | Section 3.7: the shape of a reference page |
 | [adr-mining.md](adr-mining.md) | Section 3.7b: offering to mine decision records from git history |
 | [check-mode.md](check-mode.md) | Section 6: what `--check` reports |

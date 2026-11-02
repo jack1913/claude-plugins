@@ -256,7 +256,7 @@ struct ContentView: View {
 ### Configuration
 
 - **Column visibility**: `NavigationSplitView(columnVisibility: $visibility)` with `NavigationSplitViewVisibility` (`.detailOnly`, `.doubleColumn`, `.all`)
-- **Column widths**: `.navigationSplitViewColumnWidth(min:ideal:max:)` on each column
+- **Column widths**: `.navigationSplitViewColumnWidth(min:ideal:max:)` on each column; leave out `max:` on a sidebar that should widen to the fold on iPhone Duo (see [Large Displays](#large-displays))
 - **Compact column**: `NavigationSplitView(preferredCompactColumn: $column)` to control which column shows on narrow devices
 - **Style**: `.navigationSplitViewStyle(.balanced)` or `.prominentDetail` (default)
 
@@ -272,6 +272,41 @@ struct ContentView: View {
 
 Do not infer split-view behavior from the device family. Respond to the space SwiftUI offers: an iPhone can provide a regular-width context, including the inner display of iPhone Duo, where `NavigationSplitView` can show multiple columns. The same scene can later become compact and collapse, so keep selection and navigation state consistent through the transition.
 
+### Large Displays
+
+When rows push further screens (settings, mailboxes, folders), `NavigationSplitView` shows the next level beside the list on large displays and collapses on compact width; see [the screen-structure rule](iphone-duo.md#choose-the-technique-by-screen-structure).
+
+- Keep the sidebar visible with `columnVisibility` `.all` plus `toolbar(removing: .sidebarToggle)` when hiding the list would strand the user.
+- Use `navigationSplitViewColumnWidth(min:ideal:)` if sidebar cards or buttons wrap at the default width. Avoid `max:`: in a fold-aligned pose the system can widen the sidebar to the fold, and a maximum caps it short.
+- Consider choosing the default detail by importance, not position. When pushed pages are secondary, a regular-width-only overview page selected from a summary row atop the sidebar (as in Settings) can beat auto-selecting the first row.
+- The split view can reset selection to `nil` on expand: re-fill it on regular width, and clear regular-only selections on collapse so compact width returns to the list.
+- Use a `NavigationStack` in the detail column for deeper pushes.
+- A selectable `List` renders `Link` and `Button` rows in the primary color rather than the tint (seen in Xcode 27.1 and again on the Xcode 27.2 simulator).
+
+### Tab Bar and Sidebar (SDK 27)
+
+On iPadOS, a `TabView` with `.tabViewStyle(.sidebarAdaptable)` morphs between a tab bar and a sidebar. On iPhone the bar cannot morph, so only one representation is shown. On iOS 27 and later an iPhone app can opt into the sidebar representation with `defaultTabBarPlacement(_:)`, which Apple says also applies on macOS, tvOS and visionOS; on iPadOS the modifier has no effect and `defaultAdaptableTabBarPlacement(_:)` applies instead.
+
+```swift
+#if !os(watchOS)
+@available(iOS 27.0, macOS 15.0, macCatalyst 27.0, tvOS 18.0, visionOS 27.0, *)
+struct RootTabs: View {
+    var body: some View {
+        TabView {
+            Tab("Home", systemImage: "house") { HomeView() }
+            Tab("Favorites", systemImage: "star") { FavoritesView() }
+        }
+        .tabViewStyle(.sidebarAdaptable)
+        #if os(iOS) || os(visionOS)
+        .defaultTabBarPlacement(.sidebar)
+        #endif
+    }
+}
+#endif
+```
+
+The system decides between tab bar and sidebar from the space available, and people cannot toggle it. Read `@Environment(\.isTabViewSidebarAvailable)` inside the tab content to learn whether a sidebar is (or can become) visible; it returns `false` outside a sidebar-capable `TabView`'s content. Use it rather than inspecting size classes for this question. When no sidebar is available, make sure content that lives behind nested tabs or sections stays reachable some other way. Keep a plain `TabView` fallback for earlier systems, selected behind `#available` with the same platforms as the declaration. `defaultTabBarPlacement(_:)` and `isTabViewSidebarAvailable` are SDK 27 on every platform, but `AdaptableTabBarPlacement.sidebar` exists only on iOS, iPadOS, Mac Catalyst and visionOS, so the call sits inside `#if os(iOS) || os(visionOS)` (macOS and tvOS can pass only `.tabBar` or `.automatic`), and the `.sidebarAdaptable` style has no watchOS release, so the type sits inside `#if !os(watchOS)`, and so must the code that selects it: put the `if #available` call site inside the same `#if` and give watchOS its own branch, because no availability check brings back a type that `#if` removed. Name every platform the target builds for: iOS, Mac Catalyst and visionOS need 27.0 for the modifier, while macOS and tvOS, which skip the call, need only 15.0 and 18.0 for `Tab` and `.sidebarAdaptable`. A call site behind a bare `#available(iOS 27.0, *)` fails on visionOS below 27, because the `*` admits it at its deployment target.
+
 ## Inspector
 
 > **Availability:** iOS 17.0+, macOS 14.0+
@@ -279,6 +314,8 @@ Do not infer split-view behavior from the device family. Respond to the space Sw
 A trailing-edge panel for supplementary information.
 
 On wider size classes (macOS, iPad landscape), it appears as a **trailing column**. On compact size classes (iPhone), it **adapts to a sheet** automatically.
+
+On the iPhone Duo inner display in portrait (669 points wide), the inspector overlays the content instead of narrowing it: a pushed screen's frame stays the full width and its centred content sits partly under the inspector, whether `inspector(isPresented:content:)` is attached to the pushed screen or around the `NavigationStack`, and with or without a full-bleed background. Pushes kept working in both placements. Keep essential content clear of the trailing edge or let people hide the inspector, and check both orientations.
 
 ### Basic Inspector
 
@@ -381,8 +418,9 @@ For older `alert` and `confirmationDialog` API patterns, see `latest-apis.md`. P
 - [ ] Use `NavigationStack` with `navigationDestination(for:)` for type-safe navigation
 - [ ] Use `NavigationPath` for programmatic navigation
 - [ ] Use `NavigationSplitView` for sidebar-driven multi-column layouts
+- [ ] `sidebarAdaptable` tab sidebars on iPhone use `defaultTabBarPlacement(_:)` behind an SDK 27 availability check, with nested-tab content reachable when no sidebar is shown
 - [ ] Use `inspector(isPresented:content:)` for trailing-edge supplementary panels
-- [ ] Set column widths with `navigationSplitViewColumnWidth(min:ideal:max:)` or `inspectorColumnWidth(min:ideal:max:)`
+- [ ] Set column widths with `navigationSplitViewColumnWidth(min:ideal:max:)` (no `max:` on a sidebar that should reach the fold) or `inspectorColumnWidth(min:ideal:max:)`
 - [ ] Use appropriate presentation modifiers (sheet, fullScreenCover, popover)
 - [ ] Alerts and confirmation dialogs use modern API with actions; prefer the SDK 27 `item:` overload for an optional value
 - [ ] Avoid passing dismiss/save callbacks to sheets

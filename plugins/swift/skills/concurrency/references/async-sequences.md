@@ -358,7 +358,7 @@ let stream = AsyncStream(bufferingPolicy: .bufferingNewest(0)) { continuation in
     continuation.yield(1) // Discarded
     
     Task {
-        try await Task.sleep(for: .seconds(2))
+        try? await Task.sleep(for: .seconds(2))
         continuation.yield(2) // Received
         continuation.finish()
     }

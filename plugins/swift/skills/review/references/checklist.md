@@ -34,7 +34,7 @@ Each check is a question. When the answer is no, it's a finding. After the quest
 
 ## Toolbars, Tabs and Navigation
 
-- Does the toolbar hold one tinted primary action at the trailing end, with items in three groups at most and text buttons kept apart from symbol buttons? — **Toolbars** · toolbars
+- Does the toolbar hold one tinted primary action at the trailing end (on an iPhone Duo side bar, below Back/Close at the top), with items in three groups at most and text buttons kept apart from symbol buttons? — **Toolbars** · toolbars
 - Does the toolbar use the system bar background, with no custom background or border? — **Toolbars** · toolbars
 - Do tabs switch top-level sections and never run actions? Does the Mac show a sidebar, and does a hierarchy deeper than two levels use `NavigationSplitView`? — **Top-level sections** · tab-bars, sidebars
 - Is navigation a `NavigationStack` or `NavigationSplitView` with system bars, not a custom header bar? — `../../design/SKILL.md` (Apple-Native Means) · layout
@@ -50,6 +50,25 @@ Each check is a question. When the answer is no, it's a finding. After the quest
 - Does each target platform get its own form (tab bar on iPhone, sidebar on iPad and Mac, ornaments on visionOS), rather than one layout stretched across all? — `../../design/references/platform-idioms.md` (Design Once, Adapt the Form) · layout
 - visionOS: do system bars appear as ornaments, does a custom ornament hold only controls people always need, and does supplementary content sit in a split view or window instead of an ornament? — **visionOS** · ornaments, split-views
 - Mac: is every command in the menu bar (toolbar items included), with keyboard shortcuts for the most frequent ones, and a sidebar people can show and hide? — `../../design/references/platform-idioms.md` (Mac) · designing-for-macos, keyboards
+
+## iPhone Duo (iPhone targets)
+
+Ask these only when the project targets iPhone. A single screenshot shows one pose, so list the other poses under `## Not checked`. Technique and APIs for the fixes: `swift:swiftui` → `iphone-duo.md`, `toolbar-patterns.md`.
+
+- Does the layout rely on fixed widths, a device or orientation check, or anything tied to one display, instead of size classes, layout margins and safe areas? — **iPhone Duo** · `../../design/references/hierarchy-layout.md` (Rank and Reading Order) · designing-for-iphone-duo
+- Is any control or content available only on the inner display or in one pose, rather than the same functionality everywhere (one more hierarchy level on the inner display is fine)? — **iPhone Duo** · `../../design/references/platform-idioms.md` (iPhone Duo) · designing-for-iphone-duo
+- Does the layout change drastically between sizes or poses (controls vanish or move far, or a pose gets its own screen)? — **iPhone Duo** · `../../design/references/platform-idioms.md` (iPhone Duo) · designing-for-iphone-duo
+- Is a two-pane screen a system split view or arrangement view, rather than a hand-built stack of panes, and is any tab view or navigation container outside the arrangement view? — **iPhone Duo** · `../../design/references/platform-idioms.md` (iPhone Duo) · designing-for-iphone-duo
+- Are the bars the system's, with default placement (no hand-built top or bottom bar, no overridden placement), so they can move to the side edge? — **iPhone Duo** · `../../design/references/platform-idioms.md` (iPhone Duo) · designing-for-iphone-duo
+- Are leading and trailing insets taken from the safe area for each edge, with no symmetric hard-coded padding that a side bar would cover? — **iPhone Duo** · `../../design/references/hierarchy-layout.md` (Margins and Safe Areas) · designing-for-iphone-duo
+- In a grid, is the column count even, and is no important content or control placed where the fold will cross it? — **iPhone Duo** · `../../design/references/hierarchy-layout.md` (Margins and Safe Areas) · designing-for-iphone-duo
+- In a multi-pane screen, do the controls that affect one pane sit with that pane, rather than in the toolbar that serves the other? — **iPhone Duo** · `../../design/references/platform-idioms.md` (iPhone Duo) · designing-for-iphone-duo
+- Do the most-used toolbar action and any badged item have a higher visibility priority, so overflow removes less important items first? — **iPhone Duo** · `../../design/references/platform-idioms.md` (iPhone Duo) · designing-for-iphone-duo
+- Does each toolbar item that is not text-only have a title as well as a symbol (a `Label`, not an icon-only `Image`)? A screenshot cannot show the title; ask for the code — **iPhone Duo** · `../../design/references/platform-idioms.md` (iPhone Duo) · designing-for-iphone-duo
+- Are toolbar items grouped with the system group types, with no fixed spacing added by hand? — **iPhone Duo** · `../../design/references/platform-idioms.md` (iPhone Duo) · designing-for-iphone-duo
+- Does the app use the system overflow menu rather than its own, and is the ellipsis symbol used only for overflow? — **iPhone Duo** · `../../design/references/platform-idioms.md` (iPhone Duo) · designing-for-iphone-duo
+- On a screen with both a tab bar and a toolbar, does the compression choice match the screen's job (tab bar kept for browsing, toolbar kept for a task)? — **iPhone Duo** · `../../design/references/platform-idioms.md` (iPhone Duo) · designing-for-iphone-duo
+- Does an edge-to-edge screen have no bars to lose and keep its content clear of the Dynamic Island and the status bar? — **iPhone Duo** · `../../design/references/platform-idioms.md` (iPhone Duo) · designing-for-iphone-duo
 
 ## Liquid Glass Placement
 

@@ -22,8 +22,8 @@ Examples:
 ## Severity
 
 - **high:** breaks a HIG requirement a person runs into. Examples: a hit region under 44×44 pt on iPhone or iPad (60×60 pt on visionOS), or a Mac control under the 20×20 pt minimum; meaning carried by colour alone; a destructive action that is the default or unmarked; text that can't scale with Dynamic Type.
-- **medium:** goes against HIG guidance and has a clear fix. Examples: stacks with dividers instead of a `Form`; more than one tinted primary action; Done without Cancel; glass on content.
-- **low:** polish. Examples: symbol weight not matching its label; a toolbar group that could merge.
+- **medium:** goes against HIG guidance and has a clear fix. Examples: stacks with dividers instead of a `Form`; more than one tinted primary action; Done without Cancel; glass on content; on iPhone Duo, fixed widths or per-pose layouts that clip or hide controls on the inner display or at the fold, a hand-built bar, or a feature available on one display only.
+- **low:** polish. Examples: symbol weight not matching its label; a toolbar group that could merge; on iPhone Duo, the most-used action or a badged item left at the default visibility priority, hand-spaced toolbar items, or the ellipsis symbol on a menu that is not the overflow menu.
 
 ## Not a Finding
 
@@ -42,6 +42,7 @@ Examples:
 
 ## Not checked
 - Dynamic Type: no accessibility-size capture; send one to check truncation.
+- iPhone Duo: only the outer display was captured; send the inner display open and partially open captures.
 ```
 
 With no findings, say so under `## Findings` and still list `## Not checked`.

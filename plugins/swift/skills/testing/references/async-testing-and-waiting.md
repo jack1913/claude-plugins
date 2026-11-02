@@ -121,6 +121,13 @@ actor EventCounter {
 }
 ```
 
+### Expectations on other threads and detached tasks
+
+- With Xcode 27 (Swift Testing 6.4), an `#expect` inside `Task.detached`, a dispatch queue or a thread belongs to the running test when the expectation sits inside that test function's body.
+- The match is by source location. An expectation in a helper function outside the test body is not attributed: it is reported on an unknown test, the run fails, and the test that called the helper still shows as passed.
+- Issues without a source location, such as an error that escapes a detached task, are not attributed.
+- Prefer awaiting the work and asserting in the test's own task.
+
 ## Avoid legacy waiting anti-patterns
 
 - Do not return from test before async callback work completes.

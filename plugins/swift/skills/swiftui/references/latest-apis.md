@@ -12,6 +12,7 @@
 - [When Targeting iOS 26+](#when-targeting-ios-26)
 - [When Targeting iOS 27+](#when-targeting-ios-27)
 - [When Targeting iOS 27.1+](#when-targeting-ios-271)
+- [When Targeting iOS 27.2+](#when-targeting-ios-272)
 
 ---
 
@@ -267,6 +268,8 @@ On iOS 18.4+ / macOS 15.4+, use the typed customization accessors:
 - `customization[tab: id].sidebarVisibility`
 - `customization[section: id].resetTabOrder()`
 
+In SDK 27 (every platform), `defaultTabBarPlacement(_:)` chooses a sidebar or tab bar on platforms where a `.sidebarAdaptable` `TabView` cannot morph (iPhone, macOS, tvOS and visionOS; it has no effect on iPadOS, and its `.sidebar` value exists only on iOS, iPadOS, Mac Catalyst and visionOS), and `@Environment(\.isTabViewSidebarAvailable)` reports whether a tab sidebar is available inside the tab content. See [`sheet-navigation-patterns.md`](sheet-navigation-patterns.md#tab-bar-and-sidebar-sdk-27).
+
 ### Previews
 
 **Use `@Previewable` for dynamic properties in previews.** `@Previewable` works from iOS 17 / macOS 14 (Xcode 16), not only iOS 18.
@@ -509,6 +512,8 @@ On iOS 27+, use `toolbarVisibility(_:for: .statusBar)` instead of `statusBarHidd
 
 Use `overlay(alignment:content:)` instead of `overlay(_:alignment:)`: SDK 27.2 deprecates the overload that takes the overlay view as an argument, and the view-builder form has shipped since iOS 15, so switching needs no availability check.
 
+Likewise use `background(alignment:content:)` instead of `background(_:alignment:)` when the background is a view, and `mask(alignment:_:)` with a view-builder closure instead of `mask(_:)` with a view. Apple's documentation lists all three view-argument overloads as deprecated in 27.2, but the SDK marks them `deprecated: 100000.0` (see [`soft-deprecation.md`](soft-deprecation.md)), so the compiler does not warn. The builder forms have shipped since iOS 15 and need no availability check. `background(_:)` with a `ShapeStyle` is unaffected.
+
 ### Additional SDK 27 soft-deprecated families
 
 Use `Menu` / `MenuStyle` instead of `MenuButton`, `MenuButtonStyle`, and the legacy menu-button styles (`PullDownMenuButtonStyle`, `BorderlessPullDownMenuButtonStyle`, `BorderlessButtonMenuButtonStyle`, `DefaultMenuButtonStyle`, `BorderedButtonMenuStyle`, and `BorderlessButtonMenuStyle`). Use `.menuStyle(.menu)` or `.menuStyle(.button)` with a button style instead of `PopUpButtonPickerStyle`.
@@ -533,12 +538,21 @@ Search this file's lookup table when migrating an API that the 27 SDK marks soft
 
 ## When Targeting iOS 27.1+
 
-- `ArrangementView`, `.split` / `.overlay`, and arrangement axis constraints provide adaptive two-region layout. See [`layout-best-practices.md`](layout-best-practices.md).
+- `ArrangementView`, `.split` / `.overlay`, and arrangement axis constraints provide adaptive two-region layout and tuning modifiers such as `splitArrangementLayoutRatio`. See [`layout-best-practices.md`](layout-best-practices.md).
 - `ReservedRegion` and `GeometryProxy.reservedRegions(kind:options:layoutDirectionBehavior:)` expose division and occlusion geometry for custom layouts. See [`layout-best-practices.md`](layout-best-practices.md).
 - `ToolbarContent.axisBehavior(_:)`, `toolbarVerticalEdge`, `toolbarVerticalCompressionBehavior(_:)`, and `toolbarVerticalBehavior(_:)` support adaptive vertical bars. See [`toolbar-patterns.md`](toolbar-patterns.md).
 - `onHingeChange` and the optional `DeviceHingeContext.hinge` support live effects and interactions, not layout decisions. For iPhone Duo-specific use, see [`iphone-duo.md`](iphone-duo.md).
 
-Apple lists 27.1 as the introduction release of these APIs on every platform: iOS, iPadOS, Mac Catalyst, macOS, tvOS, visionOS and watchOS. Gate runtime use with `#available(iOS 27.1, macOS 27.1, macCatalyst 27.1, tvOS 27.1, visionOS 27.1, watchOS 27.1, *)` and mark declarations `@available` the same way, provide an earlier-system fallback, and recheck semantics against the 27.1 SDK. Name 27.1 for each platform the target builds for: the `*` admits every platform the check does not name at its deployment target, so `#available(iOS 27.1, *)` alone does not compile these APIs for a macOS or visionOS target below 27.1. With each platform named, no `#if os(...)` guard is needed.
+Apple lists 27.1 as the introduction release of these APIs on every platform: iOS, iPadOS, Mac Catalyst, macOS, tvOS, visionOS and watchOS. Gate runtime use with `#available(iOS 27.1, macOS 27.1, macCatalyst 27.1, tvOS 27.1, visionOS 27.1, watchOS 27.1, *)` and mark declarations `@available` the same way, and provide an earlier-system fallback. Name 27.1 for each platform the target builds for: the `*` admits every platform the check does not name at its deployment target, so `#available(iOS 27.1, *)` alone does not compile these APIs for a macOS or visionOS target below 27.1. With each platform named, no `#if os(...)` guard is needed. The exception is four toolbar values that exist only on iOS, iPadOS and Mac Catalyst, which go inside `#if os(iOS)`: `ToolbarItemAxisBehavior.horizontalOnly` and `.verticalPreferred`, and `ToolbarVerticalCompressionBehavior.prefersToolbarItems` and `.prefersTabBar` (see [`toolbar-patterns.md`](toolbar-patterns.md#adaptive-vertical-bars-271)).
+
+Xcode 27.2's release notes list two known issues that touch this: the macOS, tvOS, visionOS and watchOS SDKs wrongly report 27.1 as a valid deployment target (187160501), and projects that use iOS 27.1 APIs can fail to compile for Mac Catalyst (185924957; the workaround is `#if !targetEnvironment(macCatalyst)` around the affected code). The 27.1 snippets in this skill built for Mac Catalyst against the 27.2 SDK in our checks, so isolate code only if a Catalyst build of your own fails on a 27.1 symbol.
+
+---
+
+## When Targeting iOS 27.2+
+
+- `toolbarTitleAlignment(_:)` sets the alignment of the navigation bar's title. The modifier exists only on iOS, iPadOS and Mac Catalyst 27.2+; `@Environment(\.toolbarTitleAlignment)` reports the resolved alignment on every platform. See [`toolbar-patterns.md`](toolbar-patterns.md#navigation-title-alignment-272).
+- `ToolbarContent.hidden(_:)` reaches tvOS and watchOS in 27.2; it shipped on iOS, macOS and visionOS earlier. See [`toolbar-patterns.md`](toolbar-patterns.md#dynamic-toolbar-content).
 
 ---
 
@@ -555,6 +569,8 @@ Apple lists 27.1 as the introduction release of these APIs on every platform: iO
 | `foregroundColor(_:)` | `foregroundStyle(_:)` | iOS 15+; except `Text`-in-`Text` interpolation below iOS 17 / macOS 14 (see [Text](#text)) |
 | `cornerRadius(_:)` | `clipShape(.rect(cornerRadius:))` | iOS 15+ |
 | `overlay(_:alignment:)` | `overlay(alignment:content:)` | iOS 15+; old form deprecated in SDK 27.2 |
+| `background(_:alignment:)` (view argument) | `background(alignment:content:)` | iOS 15+; old form deprecated in SDK 27.2 |
+| `mask(_:)` (view argument) | `mask(alignment:_:)` with a view-builder closure | iOS 15+; old form deprecated in SDK 27.2 |
 | `Text + Text` | `Text` interpolation: `Text("\(a)\(b)")` | iOS 14+; `+` deprecated in SDK 26 |
 | `actionSheet(...)` | `confirmationDialog(...)` | iOS 15+ |
 | `alert(isPresented:content:)` | `alert(_:isPresented:actions:message:)` | iOS 15+ |
