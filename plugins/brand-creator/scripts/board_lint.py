@@ -11,7 +11,27 @@ on BRAND-STATE.md (incumbent, reset_rounds, tier, architecture, inventory, gates
 (pick: round 1 or a round listed in reset_rounds; refine: the later rounds; style: the style research page of round 0, or of a round
 listed in reset_rounds; motion: a round from 2 on, after G3, that tries the signature move as variants; see scripts/CONTRACT.md).
 A motion board is no pick, style, reset or rejected round: it has its own rows (motion:g3, motion:off, motion:variants, motion:files, motion:proof,
-motion:stills, motion:fields; boardlib/motionboard.py), the kept masters are not measured on it, and the style gate never counts it.
+motion:stills, motion:fields, and the warning motion:timelines; boardlib/motionboard.py), the kept masters are not measured on it, and the style gate never counts it.
+A website references board (site-refs: a round from 2 on, in the Standard and Full tiers, after G4, when brief/BRIEF.md lists a site) is no pick, style, reset or rejected round either, and the style gate never counts it. It has the rows
+site-refs:tier, site-refs:brief, site-refs:g4, site-refs:research and site-refs:cliches-file (boardlib/siteboard.py), the sections visitor-job, norm, owner-sites, site-cliches, none-of-these, my-call, questions and reply,
+and groups:count (4 to 6 groups of sites: fewer fails, more warns). Each group also gets group:<name>:name, :idea, :references (3 or more sites, each with a link, an inlined screenshot with alt text and a caption,
+what to take and what to avoid), :layout (when it names one: an id of page-layouts.json, or own:<word> with a warning) and, per reference, :shot:<k>: the screenshot must be a thumbnail or a view of a
+`capture --url` of the address it links (research/site-refs/*/capture.json, inputs of the report), else a warning. The page gets owner-sites:items (liked or disliked, a link or an image, why) and images:inlined (boardlib/siteboard.py).
+A site board (site: a round from 2 on, in the Standard and Full tiers, after G4 and the pick of website references G4w, when brief/BRIEF.md lists a site; data-site-stage="hero" or "pages") is no pick, style, reset or rejected
+round either, and the style gate never counts it. It has the rows site:tier, site:brief, site:g4 and site:g4w, and page:site-stage; the sections what-changed and weak-points (from the second board of a stage), hardest-surface, my-call,
+questions and reply; and, at the hero stage, one card per variant (site:variants, site:files, site:layout, site:fields; boardlib/siteboard.py) and the proof each brings: the page-check report of its page (site:check),
+the tells in it (site:tells) and the stills `capture` took (site:stills).
+At the pages stage the page cards are read instead (site:hero-first: data-hero names a variant card of an earlier hero board; site:pages: a page id each; the rows of a hero card that fit a page; site:cold only for a page that has a cold review)
+and the choices section is required: site:choices holds every choice to a tag, rule or example, and a rule to the line of BRAND-STATE.md, DECISIONS.md or decisions/*.md that says where the owner decided it.
+Each hero card also gets the reflex rows of a style board's direction (site:<name>:reflex, the required line, then :reflex-format|reflex-ids|reflex-count|reflex-grounded|reflex-measured, and across cards site:reflex-shared), site:refs (what the card takes from is what
+the owner picked in G4w) and site:cold (rounds/rN/<name>/cold-review.md: its verdict, its inputs with sha256, and the card saying the same); boardlib/siteboard.py.
+A pick board also gets, for each direction, direction:<name>:reflex-format|reflex-ids|reflex-count|reflex-grounded and, across directions,
+directions:reflex-shared (the rules are in boardlib/reflex.py): two hits in one direction, or one hit that every direction shares, fail; a free-text line,
+an unknown id or an argument that shares no word with FACTS.md or brief/BRIEF.md warns. When the my-call section says data-judge="ran", each direction
+also needs the judge's list beside its reflex line (data-field="reflex-seen", listing patterns or saying "none seen": direction:<name>:reflex-seen), and a pattern on that list that the reflex
+line neither hits nor names as a near miss warns (direction:<name>:reflex-unargued, one warning per pattern).
+A pick board also gets directions:divergence (boardlib/divergence.py): from each direction's style attribute (--d-paper, --d-ink, --d-accent as #rgb or #rrggbb), a warning
+names each pair of directions whose paper and ink are both within 0.04 and whose accents are within 0.06 OKLab distance ("they look alike in colour"); it never fails.
 Every kind of board also gets page:votes: the vote of each card (<fieldset data-vote="<name>">) is a radio group of its own, its radios named vote-<name>
 (two cards that share a radio name are one group, and a vote on one clears the vote on the other).
 Exit 1 lists every missing or empty requirement.
@@ -28,14 +48,23 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "boardlib"))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "marklib"))
+sys.path.insert(0, str(Path(__file__).resolve().parent / "pagelib"))   # boardlib/siteboard.py names the page-check report of a page with pagelib/pagecheck.py
 from _common import (EXIT_USAGE, CliError, Parser, Report, add_project_arg, confine, fail, find_project, gate_recorded,  # noqa: E402
                      list_rounds, main_guard, read_state, rel)
 import svgtools  # noqa: E402
-from boardpage import (DATA_IMAGE, FILL, GENERIC_NAME, KINDS, MIN_TERRITORIES, PLACEHOLDER, WORD_NAME, Node, declared_round,  # noqa: E402
-                       is_style_board, page_kind, parse_dom, read_page, sections, territory_count)
+from boardpage import (DATA_IMAGE, FILL, GENERIC_NAME, KINDS, MIN_GROUPS, MIN_TERRITORIES, WORD_NAME, Node, declared_round,  # noqa: E402
+                       group_count, is_style_board, page_kind, parse_dom, read_page, sections, territory_count)
+import divergence  # noqa: E402
 import motionboard  # noqa: E402
+import reflex  # noqa: E402
+import siteboard  # noqa: E402
+from boardpage import thumb_problems  # noqa: E402
 from _color import parse_hex, wcag_ratio  # noqa: E402
 from marks import ground_contacts, ground_target, outline_width, tokens_ground  # noqa: E402
+
+
+SEEN_LABEL = "the judge's list sits beside the reflex line"   # labels of the rows a judged pick board earns per direction
+UNARGUED_LABEL = "every pattern the judge saw is a hit or a near miss of the reflex line"
 
 
 def srcset_urls(value: str) -> list[str]:
@@ -107,7 +136,7 @@ def style_rearmed(project: Path, rnd: int, reset_rounds: list[int], g1s_round: i
     asks. G1s must have been recorded when that round or a later style board was on disk (g1s_round, written by `state --record G1s`).
     Returns (ok, detail)."""
     pages = {n: read_page(path / "board.html") for n, path in list_rounds(project) if n < rnd}
-    pages = {n: root for n, root in pages.items() if page_kind(root) != "motion"}   # a motion round is not a round the owner rejected, and no style board lies in it
+    pages = {n: root for n, root in pages.items() if page_kind(root) not in ("motion", "site-refs", "site")}   # a motion round, a website references round or a site round is not a round the owner rejected, and no style board lies in it
     last = max((n for n, root in pages.items() if page_kind(root) != "style"), default=-1)
     declared = [n for n, root in pages.items() if page_kind(root) == "style" and n > last and n in reset_rounds]
     styles = [n for n in declared if is_style_board(pages[n], n)]
@@ -257,8 +286,16 @@ def main() -> int:
     style_round = rnd == 0 or rnd in reset_rounds   # the style research runs before round 1, and again after a full rejection
     kind = page_kind(root)
     if kind not in KINDS:
-        rep.add("page:data-board", "fail", "page declares its kind", detail='<body data-board="pick|refine|style|motion"> is missing or invalid')
+        rep.add("page:data-board", "fail", "page declares its kind", detail='<body data-board="pick|refine|style|motion|site-refs|site"> is missing or invalid')
         kind = "pick" if map_round else "refine"
+    elif kind == "site-refs" and (rnd < 2 or rnd in reset_rounds):
+        rep.add("page:data-board", "fail", "page declares its kind",
+                detail=("a website references board is a round of its own from round 2 on (round 0 is the style board, round 1 the first pick board)" if rnd < 2 else
+                        f"round {rnd} is listed in reset_rounds: a style board or a pick board belongs there; a website references board is a round of its own from round 2 on"))
+    elif kind == "site" and (rnd < 2 or rnd in reset_rounds):
+        rep.add("page:data-board", "fail", "page declares its kind",
+                detail=("a site board is a round of its own from round 2 on (round 0 is the style board, round 1 the first pick board)" if rnd < 2 else
+                        f"round {rnd} is listed in reset_rounds: a style board or a pick board belongs there; a site board is a round of its own from round 2 on"))
     elif kind == "motion" and (rnd < 2 or rnd in reset_rounds):
         rep.add("page:data-board", "fail", "page declares its kind",
                 detail=("a motion board is round 2 or later (round 0 is the style board, round 1 the first pick board)" if rnd < 2 else
@@ -338,28 +375,12 @@ def main() -> int:
     def check_thumb(im: Node, tid: str) -> None:
         """An optional thumbnail of a reference's real mark (data-field="thumb"): an <img> inlined as a data: image, so the picture
         needs no network, with alt text, in a <figure> with a non-empty <figcaption> (its words are the author's)."""
-        src, alt = im.attrs.get("src", "").strip(), im.attrs.get("alt", "").strip()
-        problems = []
-        if im.tag != "img":
-            problems.append(f'data-field="thumb" belongs on an <img>, not on <{im.tag}>')
-        if not DATA_IMAGE.match(src):
-            problems.append('src must be an inlined data:image/... URI (no network): ' + (f"got {src[:40]!r}" if src else "src is missing"))
-        if im.attrs.get("srcset", "").strip():
-            problems.append("srcset is not allowed (it would ask the network for another file)")
-        if not alt:
-            problems.append("alt text is missing or empty")
-        fig = im.parent
-        while fig is not None and fig.tag != "figure":
-            fig = fig.parent
-        if fig is None:
-            problems.append("the thumbnail is not inside a <figure>: its <figcaption> names the owner of the mark")
-        elif not any((t := c.text().strip()) and not PLACEHOLDER.match(t) for c in fig.walk() if c.tag == "figcaption"):
-            problems.append("its <figure> has no non-empty <figcaption>: name the owner of the mark and where the image is from")
+        problems = thumb_problems(im)   # the rule is boardpage's, shared with the screenshots of a website references board (boardlib/siteboard.py)
         rep.add(tid, "fail" if problems else "pass", "thumbnail is inlined (no network), has alt text and a caption",
                 detail="; ".join(problems) if problems else "data: image with alt text and a caption")
 
     def check_images() -> None:
-        """Every <img src> and every srcset (on <img> or <source>) of a style board is an inlined data:image/ URI, so no picture
+        """Every <img src> and every srcset (on <img> or <source>) of a style board or a website references board is an inlined data:image/ URI, so no picture
         needs the network. A thumbnail (data-field="thumb") is held to the same and to more by check_thumb, with a result of its own."""
         problems = []
         for n in root.walk():
@@ -434,8 +455,65 @@ def main() -> int:
         need("reply", True, "how to answer: a variant name or letter and one sentence")
         motionboard.variant_rows(rep, project, rnd, root, page, first)
 
+    def check_site_refs(rnd: int) -> None:
+        """A website references board (data-board="site-refs"): the gates of the site work (boardlib/siteboard.py), the sections every board has, the sections of its own, and 4 to 6 groups of sites.
+        No map, no directions, no kept masters; after the sections and the count come the rows of the sites the owner named, of each group and of each reference (boardlib/siteboard.py), and images:inlined."""
+        siteboard.refs_gate_rows(rep, project)
+        if a.min_directions:
+            rep.add("directions:count", "info", "not required here", detail="a website references board shows groups of sites, not directions; --min-directions is not used")
+        need("visitor-job", True, "who visits, the job they came to do and the one action that serves it")
+        need("norm", True, "what most sites in the category do")
+        need("owner-sites", True, "the sites the owner likes and dislikes, or one line saying they named none")
+        need("site-cliches", True, "the category's site clichés")
+        need("none-of-these", True, "the way out: none of these, research again")
+        check_my_call()
+        check_questions(need("questions", True, "numbered questions with lettered options, answerable by number from a phone"))
+        need("reply", True, "how to answer: a group name or letter and one sentence")
+        counted = group_count(root)   # named, with content: the same count as is_site_refs_board's
+        rep.add("groups:count", "fail" if counted < MIN_GROUPS else "warn" if counted > 6 else "pass", "enough groups of sites",
+                detail=(f"{counted} found with a name and content, need at least {MIN_GROUPS} (and 6 at most is the aim)" if counted < MIN_GROUPS else
+                        f"{counted} found with a name and content: more than 6 is a menu, not a choice; cut to the 6 that differ most in how they serve the job" if counted > 6 else
+                        f"{counted} found with a name and content"))
+        siteboard.owner_rows(rep, root)               # owner-sites:items
+        siteboard.group_rows(rep, project, page, root)   # group:<name>:name|idea|references|layout|shot:<k>, and the capture records the screenshots are compared with (inputs of this report)
+        check_images()                                # images:inlined: no picture on the board needs the network
+
+    def check_site(rnd: int) -> None:
+        """A site board (data-board="site"): the gates of the site round (boardlib/siteboard.py), the stage the page declares, the sections every board has, and at the hero stage one card per variant.
+        The first board of a stage shows 2 or 3 variants and needs no What changed and Weak points; a later one (the refine loop on the picked or combined variant) shows 1 or more and needs both, as a refine
+        board does. No map, no directions, no kept masters. At the pages stage (the page cards, the hero pick, the choices) the choices section is required too and boardlib/siteboard.py reads the cards (pages_rows)."""
+        stage = siteboard.stage_of(root)
+        if stage in siteboard.STAGES:
+            rep.add("page:site-stage", "pass", "page declares its stage", detail=stage)
+        else:
+            rep.add("page:site-stage", "fail", "page declares its stage",
+                    detail=('<body data-site-stage="hero|pages"> is missing: the hero stage shows 2 or 3 variants of the first screen, the pages stage the other pages' if not stage else
+                            f'data-site-stage="{stage}" is not "hero" or "pages"'))
+        first = siteboard.is_first(project, rnd, stage)
+        siteboard.site_gate_rows(rep, project, rnd)
+        if a.min_directions:
+            rep.add("directions:count", "info", "not required here", detail="a site board shows variants of a page, not directions; --min-directions is not used")
+        need("what-changed", not first, "from the second site board of a stage: what changed since the review")
+        need("hardest-surface", True, "the one view where the page is hardest to get right")
+        need("weak-points", not first, "from the second site board of a stage: honest weak points")
+        if stage == "pages":
+            need("choices", True, "every structural and visual choice the pages make, tagged rule or example")
+        check_my_call()
+        check_questions(need("questions", True, "numbered questions with lettered options, answerable by number from a phone"))
+        need("reply", True, "how to answer: a variant name or letter and one sentence" if stage != "pages" else "how to answer: a page id or the letter of an option and one sentence")
+        if stage == "hero":
+            siteboard.variant_rows(rep, project, rnd, root, page, first)
+        elif stage == "pages":
+            siteboard.pages_rows(rep, project, rnd, root, page)   # site:hero-first|pages|files|layout|fields|check|tells|stills|cold|choices
+
     if kind == "style":
         check_style(rnd)
+        return rep.finish()
+    if kind == "site":
+        check_site(rnd)
+        return rep.finish()
+    if kind == "site-refs":
+        check_site_refs(rnd)
         return rep.finish()
     if kind == "motion":
         check_motion(rnd)
@@ -467,12 +545,61 @@ def main() -> int:
     need("reply", True, "how to answer: a name or letter and one sentence")
     q_items = list(qs.find_all(data_section="question")) if qs is not None else []
 
+    def check_judge_list(d: Node, label: str, parsed: reflex.Parsed | None) -> None:
+        """The judge ran: the direction carries the judge's list (data-field="reflex-seen") beside its reflex line, and every pattern on it is argued there,
+        as a hit or as a near miss. Warnings only. Without a reflex line (its own failure) there is nothing to compare the list with."""
+        lists = [n for n in d.find_all(data_field="reflex-seen") if n.nonempty()]
+        if not lists:
+            rep.add(f"direction:{label}:reflex-seen", "warn", SEEN_LABEL,
+                    detail=f'the judge ran, but this direction has no non-empty data-field="reflex-seen": put the ai-defaults ids and research/cliches.md items '
+                           f'the judge listed for it beside the reflex line, or "none seen"; a warning now, {reflex.NEXT_RELEASE}')
+            return
+        node = lists[0]
+        texts = [li.text() for li in node.walk() if li.tag == "li"] or [node.text()]
+        seen = reflex.parse_seen(texts)
+        if not seen and not reflex.says_none_seen(texts):   # only the label, or empty items: no answer
+            rep.add(f"direction:{label}:reflex-seen", "warn", SEEN_LABEL,
+                    detail=f'the judge ran, but this direction\'s data-field="reflex-seen" lists no pattern and does not say "none seen": put the ai-defaults ids '
+                           f'and research/cliches.md items the judge listed for it, or "none seen"; a warning now, {reflex.NEXT_RELEASE}')
+            return
+        rep.add(f"direction:{label}:reflex-seen", "pass", SEEN_LABEL, detail=f"{len(seen)} pattern(s): {', '.join(seen)}" if seen else "none seen")
+        if parsed is None:
+            return
+        argued = {reflex.norm(e.name) for e in parsed.entries}
+        unargued = [i for i in seen if reflex.norm(i) not in argued]
+        for item in unargued:
+            rep.add(f"direction:{label}:reflex-unargued", "warn", UNARGUED_LABEL,
+                    detail=f"the judge saw {item!r} and the reflex line neither hits it nor names it as a near miss: argue it as a hit, or say why it is a "
+                           f"near miss ('near miss: {item} (why)'); a warning now, {reflex.NEXT_RELEASE}")
+        if not unargued:
+            rep.add(f"direction:{label}:reflex-unargued", "pass", UNARGUED_LABEL,
+                    detail="every pattern the judge listed is a hit or a near miss of the line" if seen else "the judge listed nothing")
+
     # ---- directions
     dirs = sections(root, "direction")
     min_dirs = a.min_directions or (3 if kind == "pick" else 1)
     rep.add("directions:count", "pass" if len(dirs) >= min_dirs else "fail", "enough directions",
             detail=f"{len(dirs)} found, need at least {min_dirs}")
     names, letters, registers = [], [], []
+    reflex_ids: list[str] = []
+    reflex_cliches: list[str] = []
+    reflex_sources = reflex.SOURCES
+    reflex_lines: list[reflex.Parsed] = []   # the parsed reflex line of each direction that has one
+    reflex_ground: set[str] = set()
+    direction_styles: list[tuple[str, str]] = []   # (name, style attribute) of each direction, for the colour divergence row
+    judge_ran = False
+    if kind == "pick":
+        reflex_ids = reflex.ai_default_ids()
+        cliche_file = project / "research" / "cliches.md"
+        reflex_cliches = reflex.cliche_items(project)
+        if cliche_file.is_file():
+            rep.inputs.append(cliche_file)   # a changed cliché list changes what a hit may name, so the lint goes stale
+        else:
+            reflex_sources = "ai-defaults.json (the project has no research/cliches.md, so no cliché of its category can be named)"
+        reflex_ground = reflex.ground_words(project)
+        rep.inputs.extend(f for f in (project / "FACTS.md", project / "brief" / "BRIEF.md") if f.is_file())   # a changed fact changes what an argument shares
+        calls = [n for n in sections(root, "my-call") if n.nonempty()]
+        judge_ran = bool(calls) and calls[0].attrs.get("data-judge") == "ran"   # the section check_my_call reads
     for i, d in enumerate(dirs, 1):
         nm = d.attrs.get("data-name", "").strip()
         label = nm or f"#{i}"
@@ -499,7 +626,28 @@ def main() -> int:
             registers.append(reg)
         field(d, "idea", True, f"direction:{label}")
         if kind == "pick":
-            field(d, "reflex", True, f"direction:{label}")  # reflex test against references/ai-defaults.json
+            direction_styles.append((label, d.attrs.get("style", "")))
+            parsed: reflex.Parsed | None = None
+            if field(d, "reflex", True, f"direction:{label}"):   # reflex test against references/ai-defaults.json and research/cliches.md
+                line = next(n for n in d.find_all(data_field="reflex") if n.nonempty())
+                parsed = reflex.parse(line.text())
+                reflex_lines.append(parsed)
+                for suffix, status, detail in reflex.line_rows(parsed, reflex_ids, reflex_cliches, ground=reflex_ground, sources=reflex_sources):
+                    rep.add(f"direction:{label}:{suffix}", status, reflex.LABELS[suffix], detail=detail)
+            if judge_ran:
+                check_judge_list(d, label, parsed)
+    if kind == "pick":
+        shared = reflex.shared_hit(reflex_lines)
+        shared_label = "the directions do not all hit one pattern"
+        if len(reflex_lines) < 2:
+            rep.add("directions:reflex-shared", "info", "not required here", detail=f"{len(reflex_lines)} direction(s) with a reflex line; two are needed to compare them")
+        elif shared:
+            rep.add("directions:reflex-shared", "fail", shared_label,
+                    detail=f"every direction hits {shared!r}: they are not divergent, so replace one of them")
+        else:
+            rep.add("directions:reflex-shared", "pass", shared_label, detail=f"{len(reflex_lines)} reflex lines, no pattern hit by all")
+        status, detail = divergence.row(direction_styles)   # the colours the directions are drawn in: a warning, never a failure
+        rep.add("directions:divergence", status, divergence.LABEL, detail=detail)
     if letters and q_items:
         # A direction letter that is also an option letter of a question that does not list the directions makes
         # "B" ambiguous in a phone reply ("B" the direction, or option b of question 2).

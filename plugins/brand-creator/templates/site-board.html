@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="[[fill: language code of the owner, e.g. en]]">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>[[fill: Brand]]: round [[fill: N]], site</title>
+<!--
+  brand-creator site board template (P7p). Copy to <project>/rounds/rN/board.html (round 2 or later, after G4 and the website references pick G4w;
+  Standard and Full, when brief/BRIEF.md lists a site) and fill every [[fill: ...]] marker; `brand-creator board-lint` fails while any marker is left in
+  text or attributes (HTML comments are ignored). The data-section / data-field vocabulary is defined in scripts/CONTRACT.md ("Board contract") and explained in
+  skills/brand-creator/references/board-contract.md. Built on templates/motion-board.html: the same tokens, header, hardest surface, My call, questions and reply.
+  Nothing here is a production page: the pages are references for whoever builds the real site in the product repository.
+  <body data-site-stage="hero"> is the hero stage: 2 or 3 variants of the home page's first screen, each a folder rounds/rN/<name>/ made before this page:
+  index.html (<body data-layout="<id of references/page-layouts.json, or own:word>" data-page="start">, built from the picked references and the tokens),
+  shots/ (the four stills of `brand-creator capture rounds/rN/<name>/index.html`: 1440-light, 1440-dark, 390-light, 390-dark) and cold-review.md.
+  <body data-site-stage="pages" data-hero="<name of the variant the owner picked>"> is the pages stage that follows the picked hero: one folder rounds/rN/<page id>/ and one card per page (index.html,
+  shots/, optionally cold-review.md) and a choices section that tags every choice rule or example. Its blocks are in three comments at the end of the page, above the footer (the choices, the pages, the questions): the hero's blocks they
+  replace are named there. The hero board must come first: the lint fails a pages board whose data-hero names no variant card of an earlier hero board.
+  The first hero board of a project shows 2 or 3 variants; a later one (the refine loop on the picked or combined variant) shows 1 or more and needs What changed and
+  Weak points. Blocks marked OPTIONAL: delete them when they do not apply (never leave them empty).
+  The pictures are the project's own files by relative path (board-lint compares the bytes the card shows with the stills `capture` took); a copy of this page that is
+  published somewhere else (review/index.html) holds them as data: URIs instead. Self-contained: no network, no web fonts unless inlined as data: URIs, system font
+  stack for the page chrome. The live page of each variant is one click away.
+  Query parameters: ?t=light|dark forces a theme; ?v=Name shows only the card of that variant (data-site-variant="Name") or page (data-site-page="Name").
+-->
+<style>
+:root{
+  --bg:#f5f6f8;--surface:#ffffff;--sunk:#eceef1;--text:#16191d;--muted:#565d66;--line:#d9dce1;
+  --accent:#3b5b8c;--accent-ink:#ffffff;--good:#2f6b4f;--warn:#8a5a14;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans","Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --r:6px;color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#111316;--surface:#191c20;--sunk:#0c0e10;--text:#e7e9ec;--muted:#9aa1ab;--line:#2d3137;
+  --accent:#8fb0e3;--accent-ink:#0c1320;--good:#7fc4a2;--warn:#e0b26a;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111316;--surface:#191c20;--sunk:#0c0e10;--text:#e7e9ec;--muted:#9aa1ab;--line:#2d3137;
+  --accent:#8fb0e3;--accent-ink:#0c1320;--good:#7fc4a2;--warn:#e0b26a;color-scheme:dark}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.55 var(--sans)}
+main{max-width:1120px;margin:0 auto;padding:32px 16px 80px;counter-reset:sec}
+h1,h2,h3{line-height:1.2;margin:0}
+h1{font-size:clamp(28px,5vw,40px);letter-spacing:-.01em}
+h2{font-size:22px;margin-bottom:12px}
+h3{font-size:18px}
+p,li,dd{overflow-wrap:anywhere}
+p{margin:0 0 10px}
+a{color:var(--accent)}
+.eyebrow,.num{font:600 12px/1.4 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
+.num{display:block}
+.n>h2 .num::before{counter-increment:sec;content:counter(sec)}
+.lede{color:var(--muted);max-width:68ch;margin-top:10px}
+.muted{color:var(--muted)}
+.toc{display:flex;flex-wrap:wrap;gap:6px;margin:20px 0 8px;padding:0;list-style:none}
+.toc a{display:inline-block;padding:4px 10px;border:1px solid var(--line);border-radius:999px;font-size:13px;color:var(--text);text-decoration:none;background:var(--surface)}
+.block{margin-top:40px;padding-top:20px;border-top:1px solid var(--line)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr))}
+.variant,.page{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.variant[hidden]{display:none}
+.page[hidden]{display:none}
+.dhead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.stills{display:grid;gap:8px;grid-template-columns:repeat(2,minmax(0,1fr))}
+.still{margin:0;min-width:0}
+.still img{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:4px;background:var(--sunk)}
+.still.phone img{max-width:160px}
+figcaption{font-size:13px;color:var(--muted);margin-top:4px}
+.live{margin:0}
+.check,.cold{margin:0;font-size:14px;background:var(--sunk);border-radius:4px;padding:8px 10px;border-left:4px solid var(--muted)}
+.check[data-check="pass"],.cold[data-cold="ship"]{border-left-color:var(--good)}
+.check[data-check="fail"],.cold[data-cold="fix"]{border-left-color:var(--warn)}
+.layout-line{margin:0;font-size:14px}
+.fit{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;margin:0}
+.fit dt{font-weight:600}.fit dd{margin:0}
+.vote{border:0;padding:0;margin:0;display:flex;gap:6px;flex-wrap:wrap}
+.vote legend{font-size:13px;color:var(--muted);margin-bottom:4px}
+.vote label,.options label{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:14px;cursor:pointer}
+.views{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));margin-top:12px}
+.callout{border-left:4px solid var(--accent);background:var(--surface);padding:14px 16px;border-radius:0 var(--r) var(--r) 0}
+.questions{margin:0;padding-left:22px}
+.questions>li{margin-bottom:16px}
+.questions .q{font-weight:600;margin-bottom:6px}
+.options{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.options .rec{font-size:12px;color:var(--good);font-weight:600;white-space:nowrap;overflow-wrap:normal}
+.options label{border-radius:14px}
+.reply-out{font:15px/1.4 var(--mono);background:var(--sunk);border-radius:4px;padding:10px 12px;margin:8px 0;min-height:42px}
+button{font:inherit;font-size:14px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:6px 14px;cursor:pointer}
+footer{margin-top:56px;font-size:13px;color:var(--muted)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body data-round="[[fill: N]]" data-board="site" data-site-stage="hero">
+
+<main>
+  <header>
+    <p class="eyebrow">Round [[fill: N]] · site board · hero · [[fill: YYYY-MM-DD]]</p>
+    <h1>[[fill: Brand]]: round [[fill: N]], the site's first screen</h1>
+    <p class="lede">[[fill: one sentence: what this page asks the owner to decide, for example which of the two heroes the other pages are built from]]</p>
+    <ul class="toc">
+      <li><a href="#changed">What changed</a></li><!-- OPTIONAL: delete with its section below (the first hero board) -->
+      <li><a href="#variants">Heroes</a></li><li><a href="#hardest">Hardest surface</a></li>
+      <li><a href="#weak">Weak points</a></li><!-- OPTIONAL: delete with its section below (the first hero board) -->
+      <li><a href="#call">My call</a></li><li><a href="#questions">Questions</a></li>
+    </ul>
+  </header>
+
+  <!-- OPTIONAL (required from the second site board of a stage; delete in the first one) -->
+  <section class="block" id="changed" data-section="what-changed">
+    <h2><span class="num">00</span>What changed since the review</h2>
+    <ol><li>[[fill: owner's numbered item → what changed on the page, checked where possible]]</li></ol>
+  </section>
+
+  <section class="block n" id="variants">
+    <h2><span class="num"></span>[[fill: Two or three heroes built from the references you picked / the hero after the review]]</h2>
+    <div class="grid">
+      <!-- Repeat this article for every variant (2 or 3 on the first hero board, 1 or more on a later one). data-site-variant: a word of 3 letters or more,
+           identical in chat, and the name of the folder rounds/rN/<name>/ (letters, digits, - and _; not "Variant 2"). The four stills are the files
+           `brand-creator capture rounds/rN/<name>/index.html` wrote to rounds/rN/<name>/shots/. -->
+      <article class="variant" data-site-variant="[[fill: Name one]]">
+        <div class="dhead"><h3>[[fill: Name one]]</h3></div>
+        <div class="stills">
+          <figure class="still desktop"><img data-field="still" data-view="1440-light" src="[[fill: Name one]]/shots/1440-light.png" alt="[[fill: Name one]] on a 1440 px screen, light: [[fill: the first screen in words, for someone who cannot see it]]"><figcaption>1440 px, light</figcaption></figure>
+          <figure class="still desktop"><img data-field="still" data-view="1440-dark" src="[[fill: Name one]]/shots/1440-dark.png" alt="[[fill: Name one]] on a 1440 px screen, dark"><figcaption>1440 px, dark</figcaption></figure>
+          <figure class="still phone"><img data-field="still" data-view="390-light" src="[[fill: Name one]]/shots/390-light.png" alt="[[fill: Name one]] on a 390 px phone, light"><figcaption>390 px, light</figcaption></figure>
+          <figure class="still phone"><img data-field="still" data-view="390-dark" src="[[fill: Name one]]/shots/390-dark.png" alt="[[fill: Name one]] on a 390 px phone, dark"><figcaption>390 px, dark</figcaption></figure>
+        </div>
+        <p class="live"><a data-field="live" href="[[fill: Name one]]/index.html">Open the live page</a> to scroll it, in both colour schemes.</p>
+        <p class="check" data-check="[[fill: pass or fail]]">[[fill: the check line, from the report of page-check: how many rows passed or which failed, for example "Page check: pass (brand rules at six widths, light and dark)"]]</p>
+        <dl class="fit">
+          <dt>What it is</dt><dd data-field="what-it-is">[[fill: the hero in a sentence or two: what leads, what the visitor can do from it, how it ends]]</dd>
+          <dt>Takes from</dt><dd data-field="from-refs">[[fill: the group of the references board, or the site the owner named, this hero takes its structure from, and what it takes (structure and rhythm, never their look)]]</dd>
+          <dt>Tells</dt><dd data-field="tells">[[fill: every tell page-check found, by its id, with what you will do about it; "none found" when it found none]]</dd>
+          <dt>Reflex test</dt><dd data-field="reflex">[[fill: no hits, or one hit: id | argument per hit (the ids of page-tells.json and ai-defaults.json, and the items of research/site-cliches.md)]]</dd>
+          <dt>Cost</dt><dd data-field="cost">[[fill: what it takes to build and keep in the product repository: the script, the pictures, the content the owner must supply]]</dd>
+        </dl>
+        <p class="layout-line" data-field="layout" data-layout="[[fill: layout id]]">Layout: <b>[[fill: layout id]]</b>. [[fill: why this structure serves the visitor's job; for own:word, why none of the layout references fit]]</p>
+        <p class="cold" data-cold="[[fill: ship or fix]]">Cold review: <b>[[fill: ship or fix]]</b>, [[fill: by in-thread or by agent]]. [[fill: its first finding in a line, from cold-review.md]]</p>
+        <fieldset class="vote" data-vote="[[fill: Name one]]"><legend>Your vote</legend>
+          <label><input type="radio" name="vote-[[fill: Name one]]" value="keep">keep</label><label><input type="radio" name="vote-[[fill: Name one]]" value="drop">drop</label><label><input type="radio" name="vote-[[fill: Name one]]" value="unsure">unsure</label></fieldset>
+      </article>
+      <!-- [[fill: articles for variants two and three, same structure; a later hero board may show one or more]] -->
+    </div>
+  </section>
+
+  <section class="block n" id="hardest" data-section="hardest-surface">
+    <h2><span class="num"></span>Hardest surface: [[fill: the view where the hero is hardest to get right, e.g. the 390 px phone in dark]]</h2>
+    <p>[[fill: what page-check and the stills show there for each variant, and what still goes wrong]]</p>
+  </section>
+
+  <!-- OPTIONAL (required from the second site board of a stage; delete in the first one) -->
+  <section class="block n" id="weak" data-section="weak-points">
+    <h2><span class="num"></span>Weak points</h2>
+    <ul><li>[[fill: honest weak point, with a number where possible]]</li></ul>
+  </section>
+
+  <!-- With a judge: add data-judge="ran" to this section and uncomment the views block. -->
+  <section class="block n" id="call" data-section="my-call">
+    <h2><span class="num"></span>My call</h2>
+    <p data-field="recommendation"><b>Recommendation:</b> [[fill: the hero you would take forward, and why in one sentence]]</p>
+    <p data-field="critique"><b>Honest critique:</b> [[fill: the weakest part of your own pick, or of the owner's earlier pick]]</p>
+    <!--
+    <div class="views">
+      <div class="panel" data-field="judge-view"><b>Judge</b><p>[[fill: ...]]</p></div>
+      <div class="panel" data-field="lead-view"><b>Lead</b><p>[[fill: ...]]</p></div>
+      <div class="panel" data-field="middle-option"><b>Middle option</b><p>[[fill: ...]]</p></div>
+    </div>
+    -->
+  </section>
+
+  <section class="block n" id="questions" data-section="questions">
+    <h2><span class="num"></span>Questions</h2>
+    <ol class="questions">
+      <li data-section="question" data-n="1" data-lists="variants"><p class="q">Which hero goes forward?</p>
+        <ol class="options">
+          <li data-option="a" data-recommended="true"><label><input type="radio" name="q1" value="a">[[fill: Name one]] <span class="rec">Recommended</span></label></li>
+          <li data-option="b"><label><input type="radio" name="q1" value="b">[[fill: Name two]]</label></li>
+          <li data-option="c"><label><input type="radio" name="q1" value="c">Combine two of them (say which in your reply)</label></li>
+          <li data-option="d"><label><input type="radio" name="q1" value="d">None of these (say what was missing: new heroes, or new references)</label></li>
+        </ol></li>
+      <!-- More questions: data-n="2", "3" ...; options lettered a, b, c ... in order (data-option); exactly one data-recommended. Question 1 (data-lists="variants") shows the variant names as its option labels and the composed reply names the variant; every other question keeps visible "a." prefixes so "2b" works. -->
+    </ol>
+  </section>
+
+  <section class="block" id="reply" data-section="reply">
+    <h2>Reply</h2>
+    <p>Answer with a variant name, or question number plus option (1a). Add one sentence on anything you want changed, for example "[[fill: Name one]], but [[fill: a change]]". Batched answers work: "1a, 2b".</p>
+    <div class="reply-out" id="reply-out" aria-live="polite">Pick options above to compose a reply, or type your own.</div>
+    <button type="button" id="copy-reply">Copy reply</button>
+  </section>
+
+  <!-- PAGES STAGE, the choices (data-site-stage="pages"): add this section after Weak points. Every structural and visual choice the pages make is one item, data-choice="c1", "c2" ...; data-tag is "rule"
+       (the owner decided it: data-source quotes, word for word, the line of BRAND-STATE.md, DECISIONS.md or decisions/*.md where they did; record the decision in DECISIONS.md first) or "example" (may change,
+       data-source empty); data-pages lists the page ids it applies to (leave the attribute out for every page). The questions ask the owner to confirm the tags.
+  <section class="block n" id="choices" data-section="choices">
+    <h2><span class="num"></span>Choices the pages make</h2>
+    <ul>
+      <li data-choice="c1" data-tag="rule" data-source="[[fill: where the owner decided it, quoted from DECISIONS.md]]" data-pages="[[fill: page ids]]">[[fill: the choice]]</li>
+      <li data-choice="c2" data-tag="example" data-source="" data-pages="[[fill: page ids]]">[[fill: the choice]]</li>
+    </ul>
+  </section>
+  -->
+
+  <!-- PAGES STAGE, the pages (data-site-stage="pages"): replace the whole "variants" section above (and the Heroes entry of the table of contents) with this one, and write the eyebrow, the heading and the Reply paragraph (it names a variant) for the pages.
+       One article per page, repeated: data-site-page is the page id, also the name of the folder rounds/rN/<id>/ (lowercase letters, digits and -, 2 to 32 characters, starting with a letter: start, pricing);
+       its index.html declares <body data-layout="<layout reference or own:word>" data-page="<the same id>">. The four stills are the files `brand-creator capture rounds/rN/<id>/index.html` wrote to
+       rounds/rN/<id>/shots/. Takes from and the cold review (data-cold, with rounds/rN/<id>/cold-review.md) are optional on a page; delete a line you do not use, never leave it empty. There is no reflex line:
+       the hero carried the reflex test.
+  <section class="block n" id="pages">
+    <h2><span class="num"></span>[[fill: The other pages, built from the hero you picked]]</h2>
+    <div class="grid">
+      <article class="page" data-site-page="[[fill: page id]]">
+        <div class="dhead"><h3>[[fill: page id]]</h3></div>
+        <div class="stills">
+          <figure class="still desktop"><img data-field="still" data-view="1440-light" src="[[fill: page id]]/shots/1440-light.png" alt="[[fill: page id]] on a 1440 px screen, light: [[fill: the first screen in words, for someone who cannot see it]]"><figcaption>1440 px, light</figcaption></figure>
+          <figure class="still desktop"><img data-field="still" data-view="1440-dark" src="[[fill: page id]]/shots/1440-dark.png" alt="[[fill: page id]] on a 1440 px screen, dark"><figcaption>1440 px, dark</figcaption></figure>
+          <figure class="still phone"><img data-field="still" data-view="390-light" src="[[fill: page id]]/shots/390-light.png" alt="[[fill: page id]] on a 390 px phone, light"><figcaption>390 px, light</figcaption></figure>
+          <figure class="still phone"><img data-field="still" data-view="390-dark" src="[[fill: page id]]/shots/390-dark.png" alt="[[fill: page id]] on a 390 px phone, dark"><figcaption>390 px, dark</figcaption></figure>
+        </div>
+        <p class="live"><a data-field="live" href="[[fill: page id]]/index.html">Open the live page</a> to scroll it, in both colour schemes.</p>
+        <p class="check" data-check="[[fill: pass or fail]]">[[fill: the check line, from the report of page-check: how many rows passed or which failed]]</p>
+        <dl class="fit">
+          <dt>What it is</dt><dd data-field="what-it-is">[[fill: the page in a sentence or two: what leads, what the visitor can do from it, how it ends]]</dd>
+          <dt>Takes from</dt><dd data-field="from-refs">[[fill: OPTIONAL: what this page takes from the hero or from the references (structure and rhythm, never their look); delete the line otherwise]]</dd>
+          <dt>Tells</dt><dd data-field="tells">[[fill: every tell page-check found, by its id, with what you will do about it; "none found" when it found none]]</dd>
+          <dt>Cost</dt><dd data-field="cost">[[fill: what it takes to build and keep in the product repository: the script, the pictures, the content the owner must supply]]</dd>
+        </dl>
+        <p class="layout-line" data-field="layout" data-layout="[[fill: layout id]]">Layout: <b>[[fill: layout id]]</b>. [[fill: why this structure serves the visitor's job; for own:word, why none of the layout references fit]]</p>
+        <p class="cold" data-cold="[[fill: ship or fix]]">Cold review: <b>[[fill: ship or fix]]</b>, [[fill: by in-thread or by agent]]. [[fill: OPTIONAL: its first finding in a line, from cold-review.md; delete the line when the page has no cold review]]</p>
+        <fieldset class="vote" data-vote="[[fill: page id]]"><legend>Your vote</legend>
+          <label><input type="radio" name="vote-[[fill: page id]]" value="keep">keep</label><label><input type="radio" name="vote-[[fill: page id]]" value="drop">drop</label><label><input type="radio" name="vote-[[fill: page id]]" value="unsure">unsure</label></fieldset>
+      </article>
+    </div>
+  </section>
+  -->
+
+  <!-- PAGES STAGE, the questions (data-site-stage="pages"): the hero is picked, so replace question 1 above (it asks which hero goes forward) with these two. Every question keeps visible "a." prefixes so "2b" works.
+      <li data-section="question" data-n="1"><p class="q">Do you approve these pages?</p>
+        <ol class="options">
+          <li data-option="a" data-recommended="true"><label><input type="radio" name="q1" value="a">a. Approve all of them <span class="rec">Recommended</span></label></li>
+          <li data-option="b"><label><input type="radio" name="q1" value="b">b. Leave a page out first (name it: Claude takes its card off the board, lints again and asks again)</label></li>
+          <li data-option="c"><label><input type="radio" name="q1" value="c">c. Change something first (say what)</label></li>
+        </ol></li>
+      <li data-section="question" data-n="2"><p class="q">Are the tags on the choices right? A rule holds wherever this brand shows a site; an example may change.</p>
+        <ol class="options">
+          <li data-option="a" data-recommended="true"><label><input type="radio" name="q2" value="a">a. Yes, as tagged <span class="rec">Recommended</span></label></li>
+          <li data-option="b"><label><input type="radio" name="q2" value="b">b. No, I will say which choices change (for example c2 to rule)</label></li>
+        </ol></li>
+  -->
+
+  <footer>Made with brand-creator · site round [[fill: N]] · checked with board-lint, page-check and four-view stills</footer>
+</main>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var t = q.get("t");
+  if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+  var v = q.get("v");
+  if (v) document.querySelectorAll("[data-site-variant],[data-site-page]").forEach(function (el) { el.hidden = (el.getAttribute("data-site-variant") || el.getAttribute("data-site-page")) !== v; });
+  var out = document.getElementById("reply-out");
+  function compose() {
+    var parts = [];
+    document.querySelectorAll("[data-section=question]").forEach(function (qq) {
+      var c = qq.querySelector("input:checked");
+      if (c) parts.push(qq.hasAttribute("data-lists") ? c.parentNode.textContent.replace("Recommended", "").trim() : qq.getAttribute("data-n") + c.value);
+    });
+    document.querySelectorAll("fieldset[data-vote]").forEach(function (f) {
+      var c = f.querySelector("input:checked");
+      if (c) parts.push(f.getAttribute("data-vote") + " " + c.value);
+    });
+    if (out && parts.length) out.textContent = parts.join(", ");
+  }
+  document.addEventListener("change", compose);
+  var btn = document.getElementById("copy-reply");
+  if (btn) btn.addEventListener("click", function () {
+    var text = out ? out.textContent : "";
+    var done = function () { btn.textContent = "Copied"; };
+    var fallback = function () { var r = document.createRange(); r.selectNodeContents(out); var s = getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = "Selected: copy it"; };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+  });
+})();
+</script>
+</body>
+</html>

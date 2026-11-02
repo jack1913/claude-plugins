@@ -12,9 +12,20 @@
       Run again to add rows (never to change or remove one). Never edits a repository: the survey proves its own read-only claim.
   adoption add --repo LABEL --file PATH --find TEXT --change TEXT [--lines 15-33]
       Appends one row for a change no search finds (logic, a platform rule the product repository gets wrong). Pinned like any row.
-  adoption status [--set N|N-M|N,M=to do|doing|done]...    show or update progress (doing and done need G6)
+  adoption add --repo LABEL --kit
+      Appends the row "Brand kit" for a repository: copy the project's brand kit into it (every generated file byte for byte, and the owner files it does not have), by the list
+      `brand-creator kit status --repo <path>` prints. Needs a kit in the project; one row per repository; takes no --file, --find, --change or --lines. Pinned like any row, and a
+      survey never adds, changes or removes it.
+  adoption status [--set N|N-M|N,M=to do|doing|done]...    show or update progress (doing and done need G6); with kit rows, also says per repository whether its kit copy is current (reads only)
   adoption verify                                          the pins, the numbering, the accounting and ADOPTION.md against adoption.json
   adoption render                                          write ADOPTION.md again from adoption.json
+  adoption wiring --repo LABEL (--before [--again] | --after | --compare | --drop "ITEM::REASON"...) [--page URL]...
+      Reads a surveyed repository's source for the links, form field names, handlers, test hooks, ids and scripts a redesign must not lose, and
+      stores them in adoption.json under `wiring` (the before record is the baseline; --after is the redesign as applied). Read only, and it proves it.
+      --before --again replaces the baseline and removes the after record that was taken against the old one (record --after again).
+      --page URL (repeatable, with --before, --after or --compare) reads a page of your own local server too, from the DOM, in Chromium (loopback URLs only).
+      --compare reads the repository now and prints what the redesign lost, writing nothing (exit 1 on a loss nobody dropped). --drop records, in the
+      owner's words, why an item of the before record goes; a loss is acceptable only so.
 """
 import fnmatch
 import hashlib
@@ -28,12 +39,19 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE / "lib"))
 sys.path.insert(0, str(HERE / "adaptlib"))
+sys.path.insert(0, str(HERE / "pagelib"))
+sys.path.insert(0, str(HERE / "booklib"))   # kitlib reads bookdata
 import adoptdata as ad  # noqa: E402
-from _common import (EXIT_CANNOT, EXIT_FAIL, EXIT_USAGE, Parser, Report, add_project_arg, confine, fail, find_project, main_guard,  # noqa: E402
-                     read_state, require_gate, today, write_bytes_if_changed)
+import kitlib  # noqa: E402  (where the kit is: `adoption add --kit`)
+import pagecheck  # noqa: E402  (is_loopback_url: the one loopback rule, shared with `page-check --url`)
+import wiring  # noqa: E402
+from _common import (EXIT_CANNOT, EXIT_FAIL, EXIT_USAGE, CliError, Parser, Report, add_project_arg, confine, fail, find_project, main_guard,  # noqa: E402
+                     plugin_root, read_state, require_gate, run, today, which_or_cannot, write_bytes_if_changed)
 
 RG_BASE = ["--no-config", "--hidden", "--glob", "!.git", "--no-require-git"]
 MAX_LINES = 200
+WIRING_RUN_TIMEOUT_S = 120   # one page: Chromium starts and the page has 15 s to load
+KIT_STATUS_TIMEOUT_S = 120   # `kit status` reads the kit folder of the project and of each repository
 HINT_RG = "Install ripgrep (macOS: brew install ripgrep; Linux: apt install ripgrep; Windows: winget install BurntSushi.ripgrep.MSVC)."
 
 KEEP_RULES = [   # (kind, pattern, reason): the first rule that matches decides
@@ -84,18 +102,21 @@ def rg_path() -> str:
     return p
 
 
-EXCLUDE: list[str] = []   # extra --glob arguments (the brand project itself, when it lives inside a repository)
+def brand_exclude(root: Path, repo: Path) -> list[str]:
+    """The extra ripgrep arguments that leave the brand project out of a repository it lives inside: a --glob for its folder, else none. `root` and `repo` are real paths.
+    The survey and the wiring scan both ask for it (a repository's slots and wiring are the product's, not the brand project's own boards and pages) and pass it to every ripgrep run."""
+    return ["--glob", "!" + root.relative_to(repo).as_posix() + "/**"] if repo in root.parents else []
 
 
-def run_rg(rg: str, repo: Path, label: str, args: list[str]) -> bytes:
-    cp = subprocess.run([rg, *RG_BASE, *EXCLUDE, *args, "."], cwd=repo, capture_output=True, stdin=subprocess.DEVNULL, timeout=600)
+def run_rg(rg: str, repo: Path, label: str, args: list[str], exclude: list[str]) -> bytes:
+    cp = subprocess.run([rg, *RG_BASE, *exclude, *args, "."], cwd=repo, capture_output=True, stdin=subprocess.DEVNULL, timeout=600)
     if cp.returncode not in (0, 1):
         fail(EXIT_CANNOT, f"ripgrep failed in {label} (exit {cp.returncode}): {cp.stderr.decode('utf-8', 'replace').strip()[:300]}")
     return cp.stdout
 
 
-def list_files(rg: str, repo: Path, label: str) -> list[str]:
-    out = run_rg(rg, repo, label, ["--files", "--null"])
+def list_files(rg: str, repo: Path, label: str, exclude: list[str]) -> list[str]:
+    out = run_rg(rg, repo, label, ["--files", "--null"], exclude)
     files = [p.decode("utf-8", "replace") for p in out.split(b"\0") if p]
     return sorted(f[2:] if f.startswith("./") else f for f in files)
 
@@ -119,14 +140,14 @@ def git_head(repo: Path) -> str:
     return cp.stdout.strip() if cp.returncode == 0 and cp.stdout.strip() else "no git head"
 
 
-def rg_matches(rg: str, repo: Path, label: str, patterns: list[str], fixed: bool) -> list[tuple[str, int, str]]:
+def rg_matches(rg: str, repo: Path, label: str, patterns: list[str], fixed: bool, exclude: list[str]) -> list[tuple[str, int, str]]:
     if not patterns:
         return []
     args = ["--json", "-n", "-i"] + (["-F"] if fixed else [])
     for p in patterns:
         args += ["-e", p]
     out = []
-    for ln in run_rg(rg, repo, label, args).splitlines():
+    for ln in run_rg(rg, repo, label, args, exclude).splitlines():
         rec = json.loads(ln)
         if rec.get("type") != "match":
             continue
@@ -142,7 +163,7 @@ def rg_matches(rg: str, repo: Path, label: str, patterns: list[str], fixed: bool
     return out
 
 
-def recount(rg: str, repo: Path, label: str, names: list[str], colours: list[str]) -> dict[str, int]:
+def recount(rg: str, repo: Path, label: str, names: list[str], colours: list[str], exclude: list[str]) -> dict[str, int]:
     """Matching lines of the name and colour searches, counted again with a second ripgrep run in another output mode (per-file counts for names,
     plain text lines for colours) and none of survey's own code (no --json parse, no row bookkeeping). The accounting row compares this with the hits."""
     out = {"name": 0, "colour": 0}
@@ -151,7 +172,7 @@ def recount(rg: str, repo: Path, label: str, names: list[str], colours: list[str
         args = ["--count", "--null", "-i", "-F"]
         for p in pats:
             args += ["-e", p]
-        for rec in run_rg(rg, repo, label, args).split(b"\n"):
+        for rec in run_rg(rg, repo, label, args, exclude).split(b"\n"):
             if rec:
                 out["name"] += int(rec.rsplit(b"\0", 1)[1])
     cpats = [p for c in colours for p in colour_patterns(c)]
@@ -160,7 +181,7 @@ def recount(rg: str, repo: Path, label: str, names: list[str], colours: list[str
         args = ["-n", "--null", "--no-heading", "--color", "never", "-i"]
         for r_, _py in cpats:
             args += ["-e", r_]
-        for rec in run_rg(rg, repo, label, args).split(b"\n"):
+        for rec in run_rg(rg, repo, label, args, exclude).split(b"\n"):
             if rec:
                 text = rec.split(b"\0", 1)[1].split(b":", 1)[1].decode("utf-8", "replace")
                 if any(x.search(text) for x in exact):
@@ -221,15 +242,20 @@ CHANGE = {
 }
 
 
-def survey_repo(rg: str, repo: Path, label: str, rid: str, names: list[str], colours: list[str], keeps: list[dict]):
+KIT_FIND = "kit.json"
+KIT_CHANGE = ("Copy the brand kit: every generated file byte for byte and the owner files the repository does not have, by the list `brand-creator kit status --repo <path>` prints; "
+              "it must then say current. Never into a global skills folder.")
+
+
+def survey_repo(rg: str, repo: Path, label: str, rid: str, names: list[str], colours: list[str], keeps: list[dict], exclude: list[str]):
     """-> (files, hits) where a hit is (category, file, line, text); path hits have line 0 and the directory as the file."""
-    files = list_files(rg, repo, label)
+    files = list_files(rg, repo, label, exclude)
     hits: list[tuple[str, str, int, str]] = []
-    for f, ln, text in rg_matches(rg, repo, label, [v for n in names for v in name_variants(n)], True):
+    for f, ln, text in rg_matches(rg, repo, label, [v for n in names for v in name_variants(n)], True, exclude):
         hits.append(("name", f, ln, text))
     cpats = [p for c in colours for p in colour_patterns(c)]
     exact = [re.compile(py, re.I) for _rg, py in cpats]
-    for f, ln, text in rg_matches(rg, repo, label, [r for r, _py in cpats], False):
+    for f, ln, text in rg_matches(rg, repo, label, [r for r, _py in cpats], False, exclude):
         if any(x.search(text) for x in exact):
             hits.append(("colour", f, ln, text))
     idents: list[dict] = []
@@ -278,13 +304,14 @@ def main() -> int:
     s.add_argument("--old-colours-file", metavar="FILE", help="one colour per line (lines starting // are comments)")
     s.add_argument("--keep", action="append", default=[], metavar="GLOB::REASON", help="a path pattern (repo-relative) to list as kept, not counted, with the reason")
     s.add_argument("--replace-terms", action="store_true", help="forget the names and colours of the earlier survey (they are otherwise kept and searched again)")
-    ad_ = sub.add_parser("add", help="append a hand-written row (a code change)")
+    ad_ = sub.add_parser("add", help="append a hand-written row (a code change), or with --kit the row that copies the brand kit")
     add_project_arg(ad_)
     ad_.add_argument("--repo", required=True, metavar="LABEL", help="the repository's label, as in ADOPTION.md")
-    ad_.add_argument("--file", required=True, help="the file in that repository")
-    ad_.add_argument("--find", required=True, help="a text to find the place by (line numbers drift)")
-    ad_.add_argument("--change", required=True, help="what to change there, in a sentence")
-    ad_.add_argument("--lines", default="", help="line numbers as read now: N, N-M, N,M")
+    ad_.add_argument("--file", help="the file in that repository")
+    ad_.add_argument("--find", help="a text to find the place by (line numbers drift)")
+    ad_.add_argument("--change", help="what to change there, in a sentence")
+    ad_.add_argument("--lines", default=None, help="line numbers as read now: N, N-M, N,M")
+    ad_.add_argument("--kit", action="store_true", help="add the row that copies the project's brand kit into the repository (no --file, --find, --change or --lines; one row per repository)")
     st = sub.add_parser("status", help="show the counts, or set the progress of rows")
     add_project_arg(st)
     st.add_argument("--set", action="append", default=[], metavar="ROWS=STATE", help="rows as N, N-M or N,M,..; state to do, doing or done (doing and done need G6)")
@@ -293,10 +320,29 @@ def main() -> int:
     add_project_arg(v)
     r = sub.add_parser("render", help="write ADOPTION.md from adoption.json")
     add_project_arg(r)
+    w = sub.add_parser("wiring", help="record the links, form fields, handlers, test hooks, ids and scripts of a repository's source (read only)")
+    add_project_arg(w)
+    w.add_argument("--repo", required=True, metavar="LABEL", help="the repository's label, as in ADOPTION.md (it must have been surveyed)")
+    wg = w.add_mutually_exclusive_group(required=True)
+    wg.add_argument("--before", action="store_true", help="record the wiring before the redesign: the baseline")
+    wg.add_argument("--after", action="store_true", help="record the wiring after the redesign is applied (needs the before record)")
+    wg.add_argument("--compare", action="store_true", help="read the repository now and list what the redesign lost against the before record (writes nothing; exit 1 on a loss nobody dropped)")
+    wg.add_argument("--drop", action="append", default=[], metavar="ITEM::REASON", help="record why an item of the before record goes, in the owner's words (repeatable)")
+    w.add_argument("--again", action="store_true", help="with --before: replace the baseline that is already recorded (the after record, taken against the old baseline, is removed; drops stay)")
+    w.add_argument("--page", action="append", default=[], metavar="URL", help="a page of your own local server to read from the DOM too (repeatable; http or https on localhost, 127.0.0.1 or [::1]; "
+                                                                             "with --before, --after or --compare). --after and --compare read the pages of the before record when none is given")
     a = ap.parse_args()
+    if a.cmd == "add":   # --file, --find and --change are needed together, unless the row is the kit's, which takes none of the four
+        if a.kit:
+            for flag in ("file", "find", "change", "lines"):   # even an empty value is a value that would be dropped
+                if getattr(a, flag) is not None:
+                    ad_.error(f"argument --{flag}: not allowed with argument --kit")
+        elif missing := [f"--{flag}" for flag in ("file", "find", "change") if getattr(a, flag) is None]:
+            ad_.error("the following arguments are required: " + ", ".join(missing))
     project = find_project(a.project)
     name = str(read_state(project).get("name", "") or read_state(project).get("slug", "") or "Brand")
-    return {"survey": do_survey, "add": do_add, "status": do_status, "verify": do_verify, "render": do_render}[a.cmd](a, project, name)
+    return {"survey": do_survey, "add": do_add, "status": do_status, "verify": do_verify, "render": do_render,
+            "wiring": do_wiring}[a.cmd](a, project, name)
 
 
 def write_both(project: Path, doc: dict, name: str) -> list[str]:
@@ -385,20 +431,18 @@ def do_survey(a, project: Path, name: str) -> int:
         repo = Path(os.path.realpath(root / e["path"]))
         if not repo.is_dir():
             fail(EXIT_USAGE, f"repository {e['label']} ({e['path']}) is not a folder; pass --repo again")
-        EXCLUDE.clear()
-        if repo in root.parents:   # the brand project lives inside this repository: its own files are not the repository's slots
-            EXCLUDE.extend(["--glob", "!" + root.relative_to(repo).as_posix() + "/**"])
-        before_files = list_files(rg, repo, e["label"])
+        exclude = brand_exclude(root, repo)   # the brand project lives inside this repository: its own files are not the repository's slots
+        before_files = list_files(rg, repo, e["label"], exclude)
         before = snapshot(repo, before_files)
-        files, hits, idents = survey_repo(rg, repo, e["label"], e["id"], names, colours, doc["keeps"])
-        after = snapshot(repo, list_files(rg, repo, e["label"]))
+        files, hits, idents = survey_repo(rg, repo, e["label"], e["id"], names, colours, doc["keeps"], exclude)
+        after = snapshot(repo, list_files(rg, repo, e["label"], exclude))
         rep.add(f"read-only:{e['label']}", "pass" if before == after else "fail", "the repository was not changed during the survey",
                 detail="the list of files, sizes and modification times is the same before and after" if before == after
                 else "files, sizes or modification times changed while the survey ran: something else wrote to the repository (the survey writes nothing there)")
         rep.add(f"survey:{e['label']}", "info", "repository read", detail=f"{len(files)} files listed, {len(hits)} slot matches")
         for cat in own:
             own[cat] += sum(1 for h in hits if h[0] == cat)
-        for cat, n in recount(rg, repo, e["label"], names, colours).items():
+        for cat, n in recount(rg, repo, e["label"], names, colours, exclude).items():
             indep[cat] += n
         heads[e["id"]] = git_head(repo)
         idents_all += [i for i in idents]
@@ -484,10 +528,12 @@ def do_add(a, project: Path, name: str) -> int:
     rid = next((r["id"] for r in doc["repos"] if r["label"] == a.repo), None)
     if rid is None:
         fail(EXIT_USAGE, f"--repo {a.repo!r} is not a surveyed repository (labels: {', '.join(r['label'] for r in doc['repos'])})")
+    if a.kit:
+        return add_kit_row(project, name, doc, rid, a.repo)
     for k in ("file", "find", "change"):
         if not getattr(a, k).strip():
             fail(EXIT_USAGE, f"--{k} is empty")
-    lines = parse_rows(a.lines, 10 ** 7) if a.lines.strip() else []
+    lines = parse_rows(a.lines, 10 ** 7) if (a.lines or "").strip() else []
     n = len(doc["rows"]) + 1
     row = {"n": n, "category": "change", "repo": rid, "file": a.file.strip(), "lines": lines[:MAX_LINES], "find": a.find.strip(), "change": a.change.strip()}
     doc["rows"].append(row)
@@ -495,6 +541,23 @@ def do_add(a, project: Path, name: str) -> int:
     doc["nrows"] = len(doc["rows"])
     write_both(project, doc, name)
     print(f"row {n} added (code change in {a.repo}: {row['file']})")
+    return 0
+
+
+def add_kit_row(project: Path, name: str, doc: dict, rid: str, label: str) -> int:
+    """Append the row that copies the project's brand kit into the repository `rid` (`label`): the whole folder, so no lines. Exit 2 with no kit in the project, or when the repository has a kit row."""
+    if not kitlib.exists(project):
+        fail(EXIT_USAGE, "no kit in this project, so there is nothing to copy into a repository: `brand-creator kit build --yes` (opt-in at G5)")
+    held = next((r["n"] for r in doc["rows"] if r["category"] == "kit" and r["repo"] == rid), None)
+    if held is not None:
+        fail(EXIT_USAGE, f"{label!r} already has a kit row (row {held}): a repository gets one, and an update is the same copy again")
+    n = len(doc["rows"]) + 1
+    row = {"n": n, "category": "kit", "repo": rid, "file": kitlib.kit_rel(project) + "/", "lines": [], "find": KIT_FIND, "change": KIT_CHANGE}
+    doc["rows"].append(row)
+    doc["pins"][str(n)] = ad.pin_of(row)
+    doc["nrows"] = len(doc["rows"])
+    write_both(project, doc, name)
+    print(f"row {n} added (brand kit for {label}: {row['file']})")
     return 0
 
 
@@ -510,6 +573,45 @@ def parse_rows(spec: str, n: int) -> list[int]:
             fail(EXIT_USAGE, f"rows {part!r}: the list has rows 1 to {n}")
         out += range(lo, hi + 1)
     return out
+
+
+KIT_COPIES_HEAD = "kit copies (read only; `brand-creator kit status` has the copy list):"
+
+
+def kit_copies(project: Path, doc: dict) -> tuple[list[dict], str | None]:
+    """What `brand-creator kit status` says about the copy of the kit in each repository that has a kit row: ([{label, state, installed_version, project_version, differ, missing, left_over}] in the
+    order of the kit rows, None), or ([], why it could not be read: no kit in the project, a kit that is not whole, a repository it refuses). ([], None) when no row is a kit row. The three lists are
+    what `kit status` found in the copy, kept so that `kit_line` can say what differs when the two versions are the same; `KIT_JSON_KEYS` are the four that `--json` prints. It is `kit.py status`
+    itself that reads (so the copy is judged by the one rule, and read only, as `kit status` proves); anything it says on stderr while it still gave an answer is passed on."""
+    if not any(r["category"] == "kit" for r in doc["rows"]):
+        return [], None
+    try:
+        cp = run([sys.executable, str(HERE / "kit.py"), "status", "--json", "--project", str(project)], timeout=KIT_STATUS_TIMEOUT_S, check=False)
+    except CliError as e:
+        return [], e.message
+    said = cp.stderr.decode("utf-8", "replace").strip()
+    try:
+        shown = json.loads(cp.stdout.decode("utf-8"))["repos"] if cp.returncode in (0, 1) else None
+    except (ValueError, KeyError):
+        shown = None
+    if shown is None:
+        return [], " ".join(said.removeprefix("error: ").split()) or f"`kit status` exited {cp.returncode} and said nothing"
+    if said:
+        print(said, file=sys.stderr)
+    return [{**{k: r[k] for k in KIT_JSON_KEYS}, **{k: r.get(k) or [] for k in ("differ", "missing", "left_over")}} for r in shown], None
+
+
+KIT_JSON_KEYS = ("label", "state", "installed_version", "project_version")   # what `adoption status --json` prints for a kit copy
+
+
+def kit_line(k: dict) -> str:
+    """One repository's kit copy as `kit status` words it, by the same wording (`kitlib.not_current_text`): with two versions that differ it names both, with the same version on both sides it says
+    so and counts what differs, so that `not current (installed version 1.1, project version 1.1)` is never printed."""
+    if k["state"] == kitlib.CURRENT:
+        return f"{k['label']}: current (version {k['project_version']})"
+    if k["state"] == kitlib.NOT_INSTALLED:
+        return f"{k['label']}: not installed"
+    return f"{k['label']}: " + kitlib.not_current_text(k["installed_version"], k["project_version"], k.get("differ", []), k.get("missing", []), k.get("left_over", []))
 
 
 def do_status(a, project: Path, name: str) -> int:
@@ -535,8 +637,10 @@ def do_status(a, project: Path, name: str) -> int:
         write_both(project, doc, name)
         print(f"progress updated for {len(changes)} row(s)")
     c = ad.counts(doc)
+    kits, unread = kit_copies(project, doc)   # after the counts, and a copy that is not current does not change the exit code
     if a.json:
-        print(json.dumps({"headline": ad.headline(doc), "counts": c, "rows": len(doc["rows"])}, indent=2))
+        shown = [{k: r[k] for k in KIT_JSON_KEYS} for r in kits]
+        print(json.dumps({"headline": ad.headline(doc), "counts": c, "rows": len(doc["rows"]), **({"kit": shown} if kits else {}), **({"kit_unread": unread} if unread else {})}, indent=2))
     else:
         print(f"{ad.headline(doc)}: {ad.sentence(doc)}")
         todo = [r["n"] for r in doc["rows"] if ad.status_of(doc, r["n"]) != "done"]
@@ -545,6 +649,10 @@ def do_status(a, project: Path, name: str) -> int:
         still, _gone = ad.drift(doc)
         if still:
             print(f"warning: row(s) {ad.ranges(still)} are done but still match at the last survey")
+        if kits:
+            print("\n".join([KIT_COPIES_HEAD, *(f"  {kit_line(k)}" for k in kits)]))
+    if unread:
+        print(f"warning: the kit copies were not read: {unread}", file=sys.stderr)
     return 0
 
 
@@ -572,6 +680,198 @@ def do_render(a, project: Path, name: str) -> int:
         fail(EXIT_FAIL, "adoption.json is not consistent, so it is not rendered: " + "; ".join(bad[:3]))
     ch = write_both(project, doc, name)
     print(f"{ad.DOC}: {'written' if ch else 'unchanged'}")
+    return 0
+
+
+def wiring_repo(project: Path, row: dict, label: str) -> tuple[Path, list[str]]:
+    """The folder of a surveyed repository and the ripgrep arguments to read it with. When the brand project lives inside it, its own files are not the repository's wiring."""
+    root = Path(os.path.realpath(project))
+    repo = Path(os.path.realpath(root / row["path"]))
+    if not repo.is_dir():
+        fail(EXIT_USAGE, f"repository {label} ({row['path']}) is not a folder; survey it again with --repo")
+    return repo, brand_exclude(root, repo)
+
+
+def wiring_scan(rg: str, repo: Path, label: str, exclude: list[str], rendered: list[tuple[str, list[str]]] = ()) -> dict:
+    """Read the repository's source for wiring and prove nothing in it changed meanwhile, then add what the rendered pages showed (`rendered`: [(file label, items)]):
+    {items: {item: up to 5 files}, sorted; read: the files read; left_out: files of those kinds the keep rules skipped; deep: values nested too deep; unchanged: bool}."""
+    listed = list_files(rg, repo, label, exclude)
+    before_snap = snapshot(repo, listed)
+    read, left_out = [], 0
+    for f in listed:
+        if not wiring.is_source(f):
+            continue
+        if keep_reason(f, []):   # the owner's --keep globs are about brand slots; lock files, history, licences, minified output, dist, build and vendor are not wiring
+            left_out += 1
+        else:
+            read.append(f)
+    found: dict[str, list[str]] = {}
+    deep = 0
+    for f in read:
+        try:
+            text = (repo / f).read_text(encoding="utf-8", errors="replace")
+        except OSError as e:
+            fail(EXIT_CANNOT, f"cannot read {label}/{f}: {e}")
+        items, d = wiring.scan_text(text)
+        deep += d
+        wiring.add(found, f, items)
+    unchanged = before_snap == snapshot(repo, list_files(rg, repo, label, exclude))
+    for source, items in rendered:
+        wiring.add(found, source, items)
+    return {"items": dict(sorted(found.items())), "read": read, "left_out": left_out, "deep": deep, "unchanged": unchanged}
+
+
+def need_loopback(pages: list[str]) -> None:
+    """Exit 2 for a page that is not on this machine: the wiring is read from the owner's own local server (render.mjs refuses it too, by the same rule)."""
+    for url in pages:
+        if not pagecheck.is_loopback_url(url):
+            fail(EXIT_USAGE, f"--page {url!r}: the wiring is read from your own local server (http or https on localhost, 127.0.0.1 or [::1])")
+
+
+def render_pages(pages: list[str], what: str) -> list[tuple[str, list[str]]]:
+    """Read each page's wiring from the DOM (`render.mjs wiring`, Chromium, loopback only) -> [(the file label of its items, its items)]. A page that cannot be read stops the run
+    with exit 3 before anything is stored or compared; `what` finishes the message."""
+    if not pages:
+        return []
+    node = which_or_cannot("node", "Install Node 22 or newer. Run: brand-creator prereq --for quick")
+    out = []
+    for url in pages:
+        cp = run([node, str(plugin_root() / "scripts" / "render.mjs"), "wiring", url], timeout=WIRING_RUN_TIMEOUT_S, check=False)
+        message = cp.stderr.decode("utf-8", "replace").strip().removeprefix("error: ")
+        if cp.returncode == EXIT_USAGE:
+            fail(EXIT_USAGE, message or "render.mjs wiring refused the page")
+        if cp.returncode != 0:
+            fail(EXIT_CANNOT, (message or f"render.mjs wiring exited {cp.returncode}") + f" ({what}: start your site's dev or preview server and run this again)")
+        try:
+            out.append((wiring.rendered_source(url), wiring.rendered_items(json.loads(cp.stdout.decode("utf-8")))))
+        except ValueError as e:
+            fail(EXIT_CANNOT, f"render.mjs wiring printed something that is not a page's wiring ({e}) for {url} ({what})")
+    return out
+
+
+def wiring_pages(a, held: dict) -> list[str]:
+    """The pages to read: the --page URLs, else (for --after and --compare) the pages of the before record, else none."""
+    pages = list(dict.fromkeys(a.page))
+    if not pages and (a.after or a.compare):
+        pages = list((held.get("before") or {}).get("pages") or [])
+    need_loopback(pages)   # also what an edited adoption.json lists
+    return pages
+
+
+def do_wiring(a, project: Path, name: str) -> int:
+    if a.page and a.drop:
+        fail(EXIT_USAGE, "--page goes with --before, --after or --compare: --drop reads no page")
+    need_loopback(a.page)
+    doc = need_doc(project)
+    bad = ad.verify(doc)
+    if bad:
+        what = "a wiring record is not added to it" if (a.before or a.after) else ("the wiring is not compared" if a.compare else "a drop is not recorded in it")
+        fail(EXIT_FAIL, f"adoption.json is not consistent, so {what}: " + "; ".join(bad[:3]))
+    row = next((r for r in doc["repos"] if r["label"] == a.repo), None)
+    if row is None:
+        fail(EXIT_USAGE, f"--repo {a.repo!r} is not a surveyed repository (labels: {', '.join(r['label'] for r in doc['repos'])})")
+    rid, label = row["id"], row["label"]
+    held = doc.get("wiring", {}).get(rid, {})
+    which = "before" if a.before else "after"
+    if a.again and not a.before:
+        fail(EXIT_USAGE, "--again goes with --before: it replaces the baseline")
+    if a.before and held.get("before") and not a.again:
+        fail(EXIT_FAIL, f"the before record of {label} ({held['before'].get('date')}) is the baseline: pass --again to replace it")
+    if not a.before and not held.get("before"):
+        fail(EXIT_USAGE, f"no before record for {label}: record the wiring before the redesign starts with `brand-creator adoption wiring --repo {label} --before`")
+    if a.drop:
+        return wiring_drop(a, project, name, doc, held, label)
+    rg = rg_path()
+    repo, exclude = wiring_repo(project, row, label)
+    pages = wiring_pages(a, held)
+    rendered = render_pages(pages, "nothing was compared" if a.compare else "nothing was stored")   # before the report and the read-only proof: a page that cannot be read leaves nothing behind
+    if a.compare:
+        return wiring_compare(rg, repo, label, exclude, held, pages, rendered)
+    rep = Report("adoption-wiring", project, renderer="n/a (read-only scan)")
+    got = wiring_scan(rg, repo, label, exclude, rendered)
+    read, deep = got["read"], got["deep"]
+    unchanged = got["unchanged"]
+    rep.add(f"read-only:{label}", "pass" if unchanged else "fail", "the repository was not changed during the scan",
+            detail="the list of files, sizes and modification times is the same before and after" if unchanged
+            else "files, sizes or modification times changed while the scan ran: something else wrote to the repository (the scan writes nothing there). Nothing was stored")
+    if not unchanged:
+        return rep.finish()
+    items = got["items"]
+    n = wiring.kind_counts(items)
+    rep.add(f"wiring:{label}", "info", f"the {which} record", detail=", ".join(f"{k} {v}" for k, v in n.items()) + f" ({len(items)} items)")
+    rep.add("wiring:scope", "info", "what the scan read and left out",
+            detail=f"{len(read)} source file(s) read; {got['left_out']} more of the same kinds left out by the keep rules (lock files, change history, licences, minified output, "
+                   "dist, build and vendored folders), and every file .gitignore hides" + (f"; {deep} value(s) nested deeper than three levels were not read" if deep else ""))
+    if pages:
+        rep.add("wiring:pages", "info", "what the rendered pages added",
+                detail=f"{len(pages)} page(s) read from your own local server, from the DOM: " + ", ".join(f"{src.removeprefix('rendered:')} ({len(its)} items)" for src, its in rendered)
+                + ". Listeners that a script adds are not visible in the DOM: they are read from the source only")
+    old = held.get(which) if a.before else None
+    record = {"date": today(), "head": git_head(repo), "files": len(read), **({"pages": pages} if pages else {}), "items": items}
+    entry = doc.setdefault("wiring", {}).setdefault(rid, {})
+    entry[which] = record
+    stale_after = entry.pop("after", None) if a.before else None   # --before --again removes the old after record: it was taken against the baseline that is gone, and kept, `check` would judge it against the new baseline. The drops stay: they are the owner's reasons for items of the before record
+    changed = write_both(project, doc, name)
+    rc = rep.finish()
+    print(f"\n{which} record of {label}: {len(items)} items from {len(read)} files" + (f" and {len(pages)} rendered page(s)" if pages else "")
+          + f"; wrote {', '.join(changed) or 'nothing (unchanged)'}. No repository was edited.")
+    if stale_after:
+        print(f"note: the after record of {label} ({stale_after.get('date')}) is removed: it was taken against the baseline this replaces. Record --after again when the redesign is applied "
+              f"(`brand-creator adoption wiring --repo {label} --after`)." + (f" The {len(entry['dropped'])} item(s) dropped with a reason stay recorded." if entry.get("dropped") else ""))
+    if old and old.get("pages") and not pages:
+        print(f"note: the baseline this replaces also read {len(old['pages'])} rendered page(s) ({', '.join(old['pages'])}); this one read none. Pass --page for each to read them again.")
+    return rc
+
+
+def wiring_compare(rg: str, repo: Path, label: str, exclude: list[str], entry: dict, pages: list[str], rendered: list[tuple[str, list[str]]]) -> int:
+    """Read the repository now (and the rendered pages) and say what the redesign lost against the before record. Writes nothing: no record, no report, no ADOPTION.md."""
+    got = wiring_scan(rg, repo, label, exclude, rendered)
+    if not got["unchanged"]:
+        fail(EXIT_FAIL, f"files, sizes or modification times in {label} changed while it was read: something else wrote to the repository (the comparison writes nothing there). Nothing was compared")
+    now, before = got["items"], entry["before"]
+    lost, _lost_dropped = ad.wiring_lost(entry, now)
+    dropped = entry.get("dropped") or {}
+    print(f"{label}: the repository now, against the before record of {before.get('date')} ({len(before['items'])} items recorded, {len(now)} found now)")
+    if pages:
+        print(f"rendered pages read again: {', '.join(src.removeprefix('rendered:') for src, _its in rendered)} (listeners that a script adds are not visible in the DOM: they are read from the source only)")
+    print(f"lost, not recorded as dropped: {len(lost)}")
+    for item in lost:
+        print(f"  {item} (was in {', '.join(before['items'][item])})")
+    print(f"dropped with a reason: {len(dropped)}")
+    for item in sorted(dropped):
+        print(f"  {item}: {dropped[item]}")
+    print(f"new items: {sum(1 for i in now if i not in before['items'])}")
+    if lost:
+        print(f"wiring compare: FAIL. {len(lost)} item(s) of the before record are gone and nobody dropped them: put each back, or record why it goes with "
+              f"`brand-creator adoption wiring --repo {label} --drop \"ITEM::REASON\"`.")
+        return EXIT_FAIL
+    print("wiring compare: PASS. Every item of the before record is still there or was dropped with a reason.")
+    return 0
+
+
+def split_drop(spec: str, items, label: str) -> tuple[str, str]:
+    """`ITEM::REASON` -> (item, reason). An item may hold `::` itself, so the item is the first start of the text, ending at a `::`, that is an item of the before record."""
+    ends = [i for i in range(len(spec)) if spec.startswith("::", i)]
+    if not ends:
+        fail(EXIT_USAGE, f"--drop needs ITEM::REASON, got {spec!r}")
+    for i in ends:
+        item = spec[:i].strip()
+        if item in items:
+            reason = " ".join(spec[i + 2:].split())
+            if not reason:
+                fail(EXIT_USAGE, f"--drop {item!r} has no reason: a loss is acceptable only with the reason, in the owner's words")
+            return item, reason
+    fail(EXIT_USAGE, f"--drop {spec[:ends[0]].strip()!r} is not an item of the before record of {label} (items are written kind:value, as --compare prints them)")
+
+
+def wiring_drop(a, project: Path, name: str, doc: dict, entry: dict, label: str) -> int:
+    """Record why items of the before record go. All or none: one bad spec stores nothing. Reads no repository."""
+    chosen = dict(split_drop(spec, entry["before"]["items"], label) for spec in a.drop)
+    entry["dropped"] = dict(sorted({**(entry.get("dropped") or {}), **chosen}.items()))
+    changed = write_both(project, doc, name)
+    for item, reason in sorted(chosen.items()):
+        print(f"{item}: dropped, {reason}")
+    print(f"wiring of {label}: {len(chosen)} item(s) dropped with a reason; wrote {', '.join(changed) or 'nothing (unchanged)'}. No repository was read or edited.")
     return 0
 
 

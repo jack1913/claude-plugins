@@ -16,7 +16,7 @@ Three separate answers per font file:
   3. The platform-font report: Chromium itself (`render.mjs fonts`, CSS.getPlatformFontsForNode) says which font it used
      for every character, with a control (a character the font does not hold must come back as another font). It needs
      the browser from `/brand-creator:setup`; `--no-platform` leaves it out on purpose and the report says so.
-Fonts: --font FILE (repeatable, .ttf .otf .woff .woff2) or every font under assets/fonts/ of the project.
+Fonts: every font under assets/fonts/ of the project, plus each --font FILE (repeatable, .ttf .otf .woff .woff2).
 Default font budget (owner-adjustable rule): at most two open-licence, self-hostable families.
 """
 import json
@@ -66,6 +66,24 @@ def wanted_languages(a, project: Path, known: dict) -> list[str]:
 
 def required(lang: dict) -> str:
     return (BASIC_LATIN if lang.get("basic_latin") else "") + lang["letters"] + lang["symbols"]
+
+
+def invalid_weight(font) -> int | None:
+    """The OS/2 usWeightClass a font stores when it is not a weight (CSS and OpenType take 1 to 1000), else None."""
+    stored = font["OS/2"].usWeightClass if "OS/2" in font else None
+    return stored if stored is not None and not 1 <= stored <= 1000 else None
+
+
+def face(font, stem: str) -> dict:
+    """-> {family, weight, style} of one font file: the family from name ID 16, else name ID 1, else the file stem; the weight from OS/2
+    usWeightClass (1 to 1000), else 400 (no OS/2 table, or a stored value that is no weight: `invalid_weight`); the style `italic` when OS/2
+    fsSelection bit 0 or head.macStyle bit 1 is set, else `normal`."""
+    nm = font["name"]
+    italic = bool(font["OS/2"].fsSelection & 1) if "OS/2" in font else False
+    italic = italic or ("head" in font and bool(font["head"].macStyle & 2))
+    return {"family": nm.getDebugName(16) or nm.getDebugName(1) or stem,
+            "weight": font["OS/2"].usWeightClass if "OS/2" in font and invalid_weight(font) is None else 400,
+            "style": "italic" if italic else "normal"}
 
 
 def licence_hint(font) -> tuple[str, str, dict]:
@@ -118,7 +136,7 @@ def main() -> int:
     from fontTools.ttLib import TTFont
     ap = Parser(prog="brand-creator fontcheck", description=__doc__, formatter_class=__import__("argparse").RawDescriptionHelpFormatter)
     add_project_arg(ap)
-    ap.add_argument("--font", action="append", default=[], metavar="FILE", help="font file (repeatable); default: every font under assets/fonts/")
+    ap.add_argument("--font", action="append", default=[], metavar="FILE", help="a font file to check as well (repeatable); every font under assets/fonts/ is always checked")
     ap.add_argument("--lang", help="language set code(s), comma separated (default: `content_languages:` in BRAND-STATE.md)")
     ap.add_argument("--text", default="", help="extra characters that must be covered (a brand name, a tagline)")
     ap.add_argument("--print-rules", action="store_true",
@@ -133,10 +151,11 @@ def main() -> int:
             for r in known[code].get("rules", []):
                 print(f"{code}: {r['id']}: {r['text']}")
         return 0
-    paths = [Path(p).expanduser().resolve() for p in a.font]
-    if not paths:
-        fdir = project / "assets" / "fonts"
-        paths = sorted(p for p in fdir.rglob("*") if p.suffix.lower() in FONT_EXT) if fdir.is_dir() else []
+    # every font under assets/fonts/, then each --font not among them: a check of extra fonts (those of a page or a master) must
+    # never drop the brand's own fonts from the one fontcheck report, or the kit, which copies only what this report reads, leaves them out
+    fdir = project / "assets" / "fonts"
+    paths = sorted(p.resolve() for p in fdir.rglob("*") if p.suffix.lower() in FONT_EXT) if fdir.is_dir() else []
+    paths += [q for q in dict.fromkeys(Path(f).expanduser().resolve() for f in a.font) if q not in paths]
     if not paths:
         fail(EXIT_USAGE, "no fonts to check: pass --font FILE, or put the brand's font files under assets/fonts/")
     for p in paths:
@@ -152,9 +171,8 @@ def main() -> int:
         except Exception as e:  # fontTools raises several types for unreadable fonts
             rep.add(f"font:{shown}", "fail", "readable font file", detail=f"cannot read {shown}: {e}")
             continue
-        names = font["name"]
-        fam = names.getDebugName(16) or names.getDebugName(1) or p.stem
-        families.setdefault(fam, []).append(shown)
+        identity = face(font, p.stem)
+        families.setdefault(identity["family"], []).append(shown)
         cmap = font.getBestCmap()
         all_required = ""
         for code in codes:
@@ -170,7 +188,9 @@ def main() -> int:
             if extras:
                 rep.add(f"extras:{shown}:{code}", "warn", f"typographic extras, {lang['name']} set", detail=f"not in the font: {''.join(extras)} (quotes, dashes or ellipsis the language sets with; the browser would fall back to another font for them)", missing=extras)
         status, detail, facts = licence_hint(font)
-        rep.add(f"licence:{shown}", status, "licence hint (from the name table)", detail=detail, **facts)
+        if (bad := invalid_weight(font)) is not None:
+            detail = f"OS/2 usWeightClass {bad} is not a valid weight (1 to 1000): taken as 400, as for a font with no OS/2 table; {detail}"
+        rep.add(f"licence:{shown}", status, "licence hint (from the name table)", detail=detail, **facts, **identity)
         if a.no_platform:
             continue
         chars = "".join(dict.fromkeys(all_required))

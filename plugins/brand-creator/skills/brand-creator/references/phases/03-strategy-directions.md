@@ -50,9 +50,13 @@ new pick recorded after it (a skip is for the first pick board only; see [04-sel
      can open a new territory;
    - each direction states a **named visual philosophy** in one line before anything is drawn;
    - each is placed on named spectrums with a visual gesture and a verbal one (a sample line).
-4. **Reflex test.** Check each direction against [ai-defaults.json](../ai-defaults.json). A hit is allowed only with
-   an argument written on the board (`data-field="reflex"`). If every direction shares one archetype, they are not
-   divergent; replace one.
+4. **Reflex test.** Check each direction against [ai-defaults.json](../ai-defaults.json) and the project's
+   `research/cliches.md` ("Avoid unless argued"). Write the result as one line in `data-field="reflex"`: `no hits`, or
+   one `hit: <id> | <argument>` per hit. A hit is allowed only with an argument that names something of this brand from
+   FACTS.md or the brief. A pattern that looks close and is not one is `near miss: <id> (why)`; it is not a hit. Two
+   hits in one direction: replace a part before showing it (`board-lint` fails it). If every direction hits the same
+   pattern, they are not divergent; replace one (`board-lint` fails that too). A line in another form, or a hit that names
+   no known pattern, warns now and fails from the next release.
 5. **Design systems, not marks.** Each direction shows mark, wordmark, type, colour and a real hero together; the cell
    list is in [board-contract.md](../board-contract.md). The mark is SVG. A generated image may sit beside it, labelled
    as exploration; it never stands in for the direction's mark. The marks are drawn on a drawing engine before the

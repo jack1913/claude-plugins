@@ -5,7 +5,9 @@ element is the <body> tag, or the <html> tag when the body declares neither data
 are both read from that one element, never one from each. A style board counts for the style gate (the pick board of a reset round, and
 g1s_round) only when it declares data-board="style" and the round of its own folder, and holds at least MIN_TERRITORIES named territory
 sections with content, so a stub page that only says "style", or a copy that still declares the round it came from, unlocks nothing
-(scripts/CONTRACT.md, "Board contract"). This folder is outside scripts/lib/ so that a change here does not make every pack stale.
+(scripts/CONTRACT.md, "Board contract"). A website references board counts the same way (is_site_refs_board: data-board="site-refs", its own round and at least
+MIN_GROUPS named groups with content). A picture that must show itself without the network, a mark's thumbnail on a style board or a site's screenshot on a references board, is held to one rule
+(thumb_problems). This folder is outside scripts/lib/ so that a change here does not make every pack stale.
 """
 from __future__ import annotations
 
@@ -19,7 +21,8 @@ SKIP_TEXT = {"script", "style", "template"}
 HEADINGS = {"h1", "h2", "h3", "h4", "h5", "h6"}
 PLACEHOLDER = re.compile(r"^\s*(todo|tbd|\.\.\.|\(\.\.\.\)|lorem ipsum.*)\s*$", re.I)
 MIN_TERRITORIES = 4   # a style board shows at least this many style territories (the style lint requires them)
-KINDS = ("pick", "refine", "style", "motion")   # the data-board values; a motion board (a round after G3 that tries the signature move) is no pick, style, reset or rejected round
+MIN_GROUPS = 4   # a website references board shows at least this many groups of sites (the references lint requires them)
+KINDS = ("pick", "refine", "style", "motion", "site-refs", "site")   # the data-board values; a motion board (a round after G3 that tries the signature move), a website references board (a round after G4) and a site board (a round after G4w) are no pick, style, reset or rejected round
 FILL = "[[fill"
 # "Option 2", "Style A", "Direction II", "Option #2", "Style-3": a label, not a word name. A label word alone, or followed by a number
 # (with or without a separator), or by one letter or a roman numeral after a space, "-" or "#". "Routes", "Looker" and "Moody" are words.
@@ -149,3 +152,47 @@ def is_style_board(root: Node | None, folder_round: int) -> bool:
     and holds at least MIN_TERRITORIES territories that count."""
     return (root is not None and page_kind(root) == "style" and declared_round(root) == folder_round
             and territory_count(root) >= MIN_TERRITORIES)
+
+
+def is_group(node: Node) -> bool:
+    """A group of a website references board that counts: it has a data-name and content beyond its heading."""
+    return bool(node.attrs.get("data-name", "").strip()) and node.nonempty()
+
+
+def group_count(root: Node) -> int:
+    return sum(1 for g in sections(root, "group") if is_group(g))
+
+
+def is_site_refs_board(root: Node | None, folder_round: int) -> bool:
+    """Does the page in rounds/r<folder_round>/ count as a website references board (for the site round, which waits for one when G4w names a pick)? It declares
+    data-board="site-refs" and that round, and holds at least MIN_GROUPS groups that count."""
+    return (root is not None and page_kind(root) == "site-refs" and declared_round(root) == folder_round
+            and group_count(root) >= MIN_GROUPS)
+
+
+def thumb_problems(im: Node, field: str = "thumb", subject: str = "the thumbnail", says: str = "the owner of the mark and where the image is from",
+                   template_tail: "re.Pattern[str] | None" = None) -> list[str]:
+    """What is wrong with a picture that must show itself without the network, as sentences ([] when it is sound): the element is an <img>, its src is an inlined data:image/ URI,
+    it has no srcset, it has alt text, and it sits in a <figure> with a non-empty <figcaption> (the words of the caption are the author's). A mark's thumbnail on a style board
+    (data-field="thumb": the caption names the owner of the mark) and a site's screenshot on a website references board (data-field="shot": it names whose site it is and when it
+    was captured) are held to this one rule. template_tail is words the template itself writes after the author's, which are no caption (a site's screenshot: " · shown for private research"): they are
+    dropped before the caption is tested, so a caption that kept only them is empty. The style board does not pass it."""
+    src, alt = im.attrs.get("src", "").strip(), im.attrs.get("alt", "").strip()
+    problems = []
+    if im.tag != "img":
+        problems.append(f'data-field="{field}" belongs on an <img>, not on <{im.tag}>')
+    if not DATA_IMAGE.match(src):
+        problems.append('src must be an inlined data:image/... URI (no network): ' + (f"got {src[:40]!r}" if src else "src is missing"))
+    if im.attrs.get("srcset", "").strip():
+        problems.append("srcset is not allowed (it would ask the network for another file)")
+    if not alt:
+        problems.append("alt text is missing or empty")
+    fig = im.parent
+    while fig is not None and fig.tag != "figure":
+        fig = fig.parent
+    if fig is None:
+        problems.append(f"{subject} is not inside a <figure>: its <figcaption> names {says}")
+    elif not any((t := (template_tail.sub("", c.text()) if template_tail is not None else c.text()).strip()) and not PLACEHOLDER.match(t)
+                 for c in fig.walk() if c.tag == "figcaption"):
+        problems.append(f"its <figure> has no non-empty <figcaption>: name {says}")
+    return problems

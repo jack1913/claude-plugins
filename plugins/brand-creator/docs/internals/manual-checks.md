@@ -9,16 +9,19 @@ proven.
 | Check | Last run | Result |
 |---|---|---|
 | [Behaviour evals](#behaviour-evals-claude-plugin-eval) | 2026-10-18, sonnet, one run per case, no baseline | first pass 8 of 17 (0.76); final sweep 15 of 17; the two failures fixed, one re-run alone and passed, one re-graded offline; full suite not re-run since |
-| [Trigger evals](#trigger-evals-for-the-skill-descriptions) | 2026-10-21, Haiku 5.5 and Sonnet 5.5, one run per query, one worker; brand-book re-run the same day after its listing text changed | sonnet passes 127 of 128 queries, haiku 120 of 128; precision 1.00 except brand-book on haiku (0.94) |
+| [Trigger evals](#trigger-evals-for-the-skill-descriptions) | 2026-10-21, Haiku 5.5 and Sonnet 5.5, one run per query, one worker; brand-book re-run the same day after its listing text changed | sonnet passes 127 of 128 queries, haiku 120 of 128; precision 1.00 except brand-book on haiku (0.94); the brand-creator description changed after this run, so brand-creator needs a re-run |
 | [Workflow trials](#workflow-trials) | 2026-10-18, all four workflows on sonnet | run; the fixes they found are in the 0.1.0 code (directions judge on unbuilt boards, adopt row-list syntax) |
 | [Linux run in Docker](#linux-run-in-docker) | 2026-10-18, Debian 13 image | suite and Acme smoke passed with only the macOS-only skips |
 | [Anonymisation denylist](#anonymisation-denylist) | author's own suite runs, last 2026-10-25 | private to the author; cannot run for anyone else, CI skips it |
 | [Hook guard in subagents](#hook-guard-applies-to-subagent-tool-calls) | 2026-10-20, Claude Code 2.1.305, a haiku subagent, the 0.2.2 hook | passed: four calls blocked, the latest-round write allowed; `rm` not tried |
 | [Hook guard in the main thread](#hook-guard-in-a-real-main-thread-session) | 2026-10-20, Claude Code 2.1.305, the 0.2.2 hook | passed: four calls blocked, the latest-round write allowed; `rm` not tried |
 | [Live name screening](#live-name-screening) | never run as a release check | |
+| [Website capture of a real site](#website-capture-of-a-real-site) | never run | |
 | [Trademark deep link](#trademark-deep-link-opens-a-result-page) | never run | |
-| [Applied skill in a real session](#the-applied-skill-is-picked-up-by-a-real-session) | never run | |
-| [DESIGN.md and BRAND.md in a real agent](#designmd-and-brandmd-in-a-real-agent) | never run | |
+| [Applied skill in a real session](#the-applied-skill-is-picked-up-by-a-real-session) | 2026-11-01, Claude Code 2.1.316, in the kit test baseline | passed: `<slug>-brand` was listed and was the first skill the session used |
+| [DESIGN.md and BRAND.md in a real agent](#designmd-and-brandmd-in-a-real-agent) | 2026-11-01, Claude Code 2.1.316, in the kit test baseline; `DESIGN.md` only | partly: colours and dark variants came from `DESIGN.md` and `tokens.css`; the font and logo files it linked were not in the folder |
+| [Kit test baseline](#kit-test-baseline-a-hero-from-the-applied-skill-and-from-a-kit) | 2026-11-01, Claude Code 2.1.316, Opus 5.5, frontend-design 1.1.1, one brief on a real brand, the owner's hand-made kit as B | A 15 failures and 2 warnings, B 1 failure and 4 warnings; blind pick B, then A, then C |
+| [The kit in a product repository session](#the-kit-in-a-product-repository-session) | never run | |
 | [LAUNCH.md links](#launchmd-links-open-the-register-pages) | never run | |
 | [Book, adoption, review and launch skills in a real session](#the-book-adoption-review-and-launch-skills-in-a-real-session) | never run | |
 | [Permission rule for the fallback form](#permission-rule-for-the-fallback-form) | never run | |
@@ -40,6 +43,9 @@ Code version, the model, the score, the cases that failed and the cost.
 each failure was diagnosed and fixed ([decisions log](../archive/decisions-log.md) 801 to 811). Final sweep 15 of 17. The judge fold-in case was then
 fixed and re-run alone (passed); the refine case's regexes were widened and its reply re-graded offline (matches). The full suite
 has not been re-run since those two fixes, and the baseline arm has never run.
+
+The next run also covers `kit-test-hero` (a hero built from the brand kit alone, page-checked, with the kit left unchanged), which was
+added with the kit test and has never run.
 
 ## Trigger evals for the skill descriptions
 
@@ -80,6 +86,12 @@ the lockup clean-up and still fires on the Polish query. Fourteen held-out queri
 did not see the new text, passed 14 of 14 on Sonnet (13 with the old text) and 11 of 14 on Haiku (9): Haiku missed a clean-up
 after choosing an accent colour, a tone of voice chapter rewrite in Polish and a new history chapter. They were added to the
 eval set afterwards, so brand-book now has 41 queries; the next run covers them all.
+
+**Changed since this run.** The `brand-creator` description changed after the run above: it now names the brand's website
+references and reference pages and says it is not for building production websites. Three positives (two English, one
+Polish) and two negatives about the site steps were added to `evals/trigger-evals.json`, so brand-creator now has 53
+queries. None of them has run, and the 48 above ran against the old text. The next run covers all 53 with the new
+description. The `check` description also gained `--page`; `check` is typed by the owner, so it has negatives only.
 
 ## Workflow trials
 
@@ -163,6 +175,84 @@ Check the `type` and `architecture` pairing of `BRAND.md` against the format's o
 
 **Last run:** never.
 
+## Kit test baseline: a hero from the applied skill and from a kit
+
+**Why manual.** It needs a real Claude Code session, a web-building skill and a brand's own files, which are read only. Every
+run is billed, and no test can start a session. The result is a baseline: how a hero built from the applied skill alone compares
+with one built from a brand kit, so the kit work has gaps to close and something to measure against.
+
+**Steps** (scratch copies only; the brand project itself is never written to):
+
+1. In a scratch folder outside every brand project, make folder A: copy the brand's applied skill folder, `DESIGN.md` and
+   `tokens.css` into it. Make folder B: copy a brand kit into it. Use the generated kit, or the owner's hand-made one where none is
+   generated.
+2. In a fresh session in A, with the owner's web skill (for example frontend-design) and no other plugin, ask for the home
+   page hero from the brief line and the facts only. Save the page.
+3. Do the same in B. Then run C in a fresh session in an empty folder: the same web skill, brief line and facts, and no brand
+   material at all.
+4. Score A and B with `brand-creator page-check`, both tiers, with `--project <a scratch copy of the brand project>` and
+   `--from <folder A or B> <page>` (or `--url`). The scratch copy is there because page-check writes its report into the project
+   it is given: never pass the brand project itself. Add the owner's own checklist if there is one. Count brand-rule failures,
+   reflex warnings and invented values (a colour, size or claim that is in no brand file). If the installed plugin has no
+   `page-check` command, score by hand and say so. C has no brand rules to break, so it is not scored here.
+5. The blind pick. Take a phone and a desktop screenshot of each of the three heroes, shuffle them and name them X, Y and Z. A
+   reader who did not watch the runs picks the one to ship, verdict first, then why. The reader is the owner, or a fresh
+   `brand-reviewer` agent after the fleet gate (it is billed), never the lead who ran the sessions. Only then say which run made
+   which. The counts of step 4 measure what breaks the brand's rules, not quality
+   ([ADR-0007](../adr/ADR-0007-brand-side-of-the-web.md)), so the pick is the quality signal. One brief is a first signal, not
+   proof.
+6. Record the date, the Claude Code version, the model, the web skill and its version, the scores of A and B, the blind pick
+   with its reasons, and the gaps. The gaps feed the kit work. Nothing in the brand project changes.
+7. The same run fills two existing rows:
+   - [Applied skill in a real session](#the-applied-skill-is-picked-up-by-a-real-session): was `<slug>-brand` listed by
+     `/skills` and used in A?
+   - [DESIGN.md and BRAND.md in a real agent](#designmd-and-brandmd-in-a-real-agent): did the agent take colours and dark
+     variants from `DESIGN.md`?
+
+**Last run:** 2026-11-01. Claude Code 2.1.316, model Opus 5.5, web skill frontend-design 1.1.1, one brief on a real brand, with
+the owner's hand-made kit as B. Each session ran headless (`claude -p`) with only the web skill loaded and file edits accepted;
+commands that needed approval were refused, the same in every run.
+
+- A, the applied skill: 15 failures and 2 warnings. Twelve failures have one cause: the font and logo files the page links are not
+  in the folder, because the applied skill and `DESIGN.md` name project paths. The rest: the browser's default link colour on the
+  empty logo slot, three step numbers as claims no fact backs, the brand fonts not drawn, and 49 words in the hero.
+- B, the hand-made kit: 1 failure and 4 warnings. Figures in a drawn app preview (a month and a payday) carry no sample label; the
+  second action has a stock label; the hero has 52 words; the preview is a mock-up made of styled boxes. The page links the fonts
+  inside the kit's own folder (`.claude/skills/<kit>/brand/fonts/`), a path a built site does not serve.
+- Both: the dark primary button's text pair is not declared in the brand's pairs (a gap in the brand's data, not in the kit).
+  Neither session used the web skill: the brand skill was the only one each loaded.
+- Blind pick, by the owner: B, because it carries everything the owner picked, the fonts included; then A, whose hero picture is
+  a little better; then C.
+- Gaps for the kit work: the brand's files have to resolve where the page is (the fonts and the logo per theme, with snippets
+  that say where the files go in a product); the recipe runs the page check and labels sample figures with `data-sample`; the
+  recipe names the hero's word budget and the stock labels, by pointing at the page check's warnings; the kit says it works
+  beside the web skill, not instead of it.
+
+## The kit in a product repository session
+
+**Why manual.** The tests prove the copy list, `kit status --repo` and the adopt prompts. Whether Claude Code lists a kit that sits in a
+repository's own `.claude/skills/`, and whether a session there builds a page from it, needs a real session. Every run is billed.
+
+**Steps** (scratch copies only; the brand project itself is never written to):
+
+1. Take a scratch copy of a brand project that has a kit (`kit build --yes`, the three owner files filled, `kit check` passing), and a
+   throwaway repository outside every brand project: a copy of `tests/fixtures/target-repo/`, or a small site with its own public folder.
+2. Install the kit the way an owner does: `/brand-creator:brand-adopt survey`, `adoption add --repo <label> --kit`, then apply on a
+   branch you name. `kit status --repo <the repository>` must say current. Nothing may be committed, and nothing may appear in
+   `~/.claude/skills`.
+3. Start a fresh session in the repository, with a web-design skill (for example frontend-design) and no other plugin. Run `/skills`
+   and confirm `<slug>-brand` is listed. Ask for the home page hero from the brief line and the facts only.
+4. Read what the session did. Did it load the kit skill and the web-page recipe? Did it take colours, fonts and the logo from the
+   tokens and snippets, copy the files it uses into the product's public folder and link them from there, never into
+   `.claude/skills/`? Did it run `page-check` on the built page and mark samples with `data-sample`?
+5. In the scratch brand project, change a token and run `kit build --yes`. `kit status --repo` must say not current. Update the
+   copy by the list it prints, with a change to one owner file in the repository first: afterwards `kit status --repo` says current
+   and lists that owner file as the repository's own, unchanged.
+6. Record the date, the Claude Code version, the model, the web skill and its version, what the session loaded and did, and every gap.
+   Gaps feed the kit's files and recipe, never a patch of a generated file.
+
+**Last run:** never.
+
 ## LAUNCH.md links open the register pages
 
 **Why manual.** The links are the names run's own (TMview, EUIPO eSearch, WIPO, USPTO, UPRP, UK IPO). Open each in a browser from LAUNCH.md and confirm it loads
@@ -241,6 +331,20 @@ registries and are deselected unless `BRAND_CREATOR_LIVE=1`.
 answer REGISTERED, NOT-FOUND or UNKNOWN with its control, and the memo must say "screening, not clearance".
 
 **Last run:** never as a release check.
+
+## Website capture of a real site
+
+**Why manual.** `brand-creator capture --url` is the one command that lets Chromium reach the network. The suite captures a server on this machine only and never
+visits a real website, so how real pages behave (cookie banners, redirects, slow or blocked pages, lazy images) is not checked.
+
+**Steps.** In a throwaway project, `brand-creator state --set site_research=online`, then
+`brand-creator capture --url <the address of a public page you may look at> --name <a word>`. Open `research/site-refs/<a word>/`: `1440.png` and `390.png` must show the
+page's first screen as a visitor sees it, `1440-full.png` the whole page, both thumbnails must be readable, and `capture.json` must name the address, where it ended,
+the status and the title. Then capture a page that answers 404 and one that never answers (`--timeout 5000`), each with a new `--name` (a name that already holds another
+address exits 2 before anything is fetched): each must exit 1, say `could not capture` with the address, and leave no folder behind. Last, set `site_research=auto` and try
+again: it must exit 2 and fetch nothing.
+
+**Last run:** never.
 
 ## Permission rule for the fallback form
 

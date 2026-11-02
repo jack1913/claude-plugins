@@ -10,11 +10,15 @@
   state --get tier               one value (dotted keys: gates.G3, fixes_per_area.logo)
   state --set tier=standard      set a frontmatter value (not gates.* or g1s_round; use --record). A list key is written as a real
                                  list: reset_rounds=2,3 (whole numbers from 1), book_chapters=tone,photography
+                                 site_research is the owner's answer to online research for website references: auto (not asked
+                                 yet) | online | links-only | none (capture --url needs online or links-only); anything else exits 2
   state --bump fixes_per_area.logo   add 1 to a counter
   state --record G3 "approved r3"    write "<date> <decision>" into gates.G3 (G5 also writes approved_edition = edition: the
                                  brand book shows APPROVED only for the edition G5 approved; G1s also writes g1s_round = the
                                  highest round whose board.html is a style board, r0 included, or removes it when there is none:
-                                 board-lint reads it to see that the style pick is newer than the new style board of a full rejection)
+                                 board-lint reads it to see that the style pick is newer than the new style board of a full rejection).
+                                 G4w (website references pick) and G4p (the site's reference pages approved) are the site work's
+                                 gates; a project made before them gets the key on its first --record
   state --require G3             exit 1 with a message naming the gate when it is not recorded
   state --project-auto           like the default, but exit 0 with a message when no project is found (for /status)
 """
@@ -38,6 +42,7 @@ ENUMS = {
     "architecture": ("standalone", "family-member", "product-in-family"),
     "mark_source": ("generated", "authored-vector", "existing"),
     "review_surface": ("auto", "artifact", "local"),
+    "site_research": ("auto", "online", "links-only", "none"),
 }
 PHASE_RE = re.compile(r"P(?:[0-9]|1[0-3])[a-z]?")  # P0..P13, with an optional sub-phase letter such as P1b or P1c
 # Keys the template holds as a flow list (`key: [a, b]`): --set writes a real list for them, never a quoted string. A new list key in

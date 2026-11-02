@@ -23,6 +23,43 @@ test("shot: the fixture board passes in four views with a report", (t) => {
   assert.ok(!doc.out_dir.startsWith(fs.realpathSync(p)), "shots must be written outside the project");
 });
 
+test("shot: --out may point into the project's specimens folder and nowhere else in it", (t) => {
+  if (needSetup(t)) return;
+  const p = makeProject();
+  const root = fs.realpathSync(p);
+  // a folder under specimens/, at any depth: exit 0, the slices are written there and the report records the folder
+  const deep = path.join(p, "specimens/hero/wide");
+  const r = bc(["shot", "rounds/r1/board.html", "--project", p, "--out", deep]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const doc = rep(p);
+  assert.equal(doc.out_dir, path.join(root, "specimens/hero/wide"));
+  assert.equal(doc.status, "pass");
+  for (const v of doc.results) for (const s of v.slices) assert.ok(s.startsWith(doc.out_dir + path.sep) && fs.existsSync(s), s);
+  assert.ok(fs.existsSync(path.join(deep, "1440-light-00.png")));
+  // a relative folder is read from the current folder, as before: run from the project, it lands in <project>/specimens/
+  const r2 = bc(["shot", "rounds/r1/board.html", "--out", "specimens/hero"], { cwd: p });
+  assert.equal(r2.status, 0, r2.stdout + r2.stderr);
+  assert.equal(rep(p).out_dir, path.join(root, "specimens/hero"));
+  assert.ok(fs.existsSync(path.join(p, "specimens/hero/390-dark-00.png")));
+  // anywhere else in the project exits 2 and writes nothing there: another folder, the project itself, a look-alike name, a way round it
+  for (const bad of ["assets/x", ".", "specimens-old/hero", "specimens/../assets/x"]) {
+    const dir = bad === "." ? p : `${p}/${bad}`;   // not path.join: "specimens/../assets/x" must reach the tool as written
+    const e = bc(["shot", "rounds/r1/board.html", "--project", p, "--out", dir]);
+    assert.equal(e.status, 2, `${bad}: ${e.stdout}${e.stderr}`);
+    assert.match(e.stderr, /--out .* must be outside the project, or under specimens\//, bad);
+  }
+  assert.ok(!fs.existsSync(path.join(p, "assets/x")) && !fs.existsSync(path.join(p, "specimens-old")));
+  // a link inside specimens/ that leads into the rest of the project is followed first, so it is refused too
+  fs.symlinkSync(path.join(root, "assets"), path.join(p, "specimens/sneaky"));
+  const s = bc(["shot", "rounds/r1/board.html", "--project", p, "--out", path.join(p, "specimens/sneaky/y")]);
+  assert.equal(s.status, 2, s.stdout + s.stderr);
+  assert.ok(!fs.existsSync(path.join(p, "assets/y")));
+  // outside the project is still allowed
+  const out = tmpdir();
+  assert.equal(bc(["shot", "rounds/r1/board.html", "--project", p, "--out", out]).status, 0);
+  assert.equal(rep(p).out_dir, fs.realpathSync(out));
+});
+
 test("shot: horizontal overflow, console errors and non-local requests each fail the gate", (t) => {
   if (needSetup(t)) return;
   const p = makeProject();

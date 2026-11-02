@@ -459,6 +459,9 @@ ok "the whole emit chain (web, social and every platform pack) is byte-identical
 ok "staleness recorded and current; specs-due lists the rows to recheck"
 
 step "check (every gate for the artefacts that exist)"
+# board-lint lists FACTS.md and the brief as inputs, and FACTS.md was replaced by the example's after the first lint (platform packs): lint the board again
+# (this check is run by hand; the chain of tools/finish.sh below lints the latest board itself before its own check, and its step is asserted there)
+"${BC[@]}" board-lint rounds/r1/board.html --project "$P" >/dev/null || die "the example board does not pass board-lint with the example's FACTS.md"
 "${BC[@]}" check --project "$P"
 
 step "freeze the approved round, then check again"
@@ -517,7 +520,7 @@ def at(name):
     i = [k for k, s in enumerate(steps) if s == name or s.startswith(name + " ")]
     assert i, (name, steps)
     return i[0]
-want = ["emit web", "emit social", "emit android", "emit chrome-ext", "emit msix", "emit profiles", "emit print", "print-check", "gates", "book", "book-pdf", "emit presskit"]
+want = ["emit web", "emit social", "emit android", "emit chrome-ext", "emit msix", "emit profiles", "emit print", "print-check", "gates", "book", "book-pdf", "emit presskit", "board-lint rounds/r1/board.html"]
 if sys.platform == "darwin":
     want.insert(want.index("emit android"), "emit apple")
 order = [at(n) for n in want]
@@ -530,7 +533,7 @@ if sys.platform == "darwin":
     assert (p / "assets/apple/watchos/Assets.xcassets/AppIcon.appiconset/AppIcon-watchOS-1024.png").is_file() and (p / "assets/apple/tvos/Assets.xcassets/Contents.json").is_file()
 print("   ok:", ", ".join(want))
 PY
-ok "finish.sh: generators, tokens, every emitter that applies (Tier B, profiles, print, posts), book, book-pdf, press kit, downscale gates, idempotence, staleness and check all ran from the template"
+ok "finish.sh: generators, tokens, every emitter that applies (Tier B, profiles, print, posts), book, book-pdf, press kit, downscale gates, idempotence, the lint of the latest board, staleness and check all ran from the template"
 fi
 if [ "$PART" = finish ]; then
   PASSED=1
@@ -1334,11 +1337,11 @@ for c in "$ROOT"/evals/*/; do
     w="$EV/$name"; mkdir -p "$w"; (cd "$w" && bash "$c/scaffold.sh") || die "evals/$name: the scaffold failed"
     if [ -f "$w/BRAND-STATE.md" ]; then "${BC[@]}" state --project "$w" >/dev/null || die "evals/$name: the fixture is not a brand project"; fi
     if [ -f "$w/.eval-verify/verify.sh" ]; then
-      out="$(bash "$w/.eval-verify/verify.sh")"; grep -Eq '^(ADOPTION-TARGET=UNCHANGED|GIT-STATE: COMMITS=1 STASHES=0 WORKTREES=1 BRANCHES=1)$' <<<"$out" || die "evals/$name: the verify script says '$out' on the untouched fixture"
+      out="$(bash "$w/.eval-verify/verify.sh")"; grep -Eq '^(ADOPTION-TARGET=UNCHANGED|KIT=UNCHANGED|GIT-STATE: COMMITS=1 STASHES=0 WORKTREES=1 BRANCHES=1)$' <<<"$out" || die "evals/$name: the verify script says '$out' on the untouched fixture"
     fi
   fi
 done
-[ "$n_cases" = 18 ] || die "expected 18 eval cases, found $n_cases"
+[ "$n_cases" = 20 ] || die "expected 20 eval cases, found $n_cases"
 ok "$n_cases cases: scaffolds ran, fixtures are brand projects, verify scripts pass on the untouched fixtures"
 if command -v claude >/dev/null; then
   python3 - "$ROOT" "$EV" <<'PY' || die "the real eval loader rejected a case"

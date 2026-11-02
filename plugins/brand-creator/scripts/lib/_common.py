@@ -17,11 +17,12 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Callable, NamedTuple
 
 EXIT_PASS, EXIT_FAIL, EXIT_USAGE, EXIT_CANNOT = 0, 1, 2, 3
 STATE_FILE = "BRAND-STATE.md"
 RENDERERS = ("resvg", "pillow")
-GATE_IDS = ("G0", "G1", "G1s", "G2", "G2b", "G3", "G4", "G5", "G6", "G7")
+GATE_IDS = ("G0", "G1", "G1s", "G2", "G2b", "G3", "G4", "G4w", "G4p", "G5", "G6", "G7")
 # One User-Agent for every outbound request any script ever makes. Generic on purpose: no personal data, no "@".
 USER_AGENT = "brand-creator/0.4.2 (+https://example.invalid/brand-creator)"
 
@@ -173,8 +174,9 @@ def _realpath_lenient(p: Path) -> Path:
     return Path(os.path.realpath(p)).joinpath(*reversed(tail))
 
 
-def confine(project: Path, path: str | Path, *, what: str = "path") -> Path:
-    """Resolve path (relative paths are relative to the project) and require it to stay inside the project."""
+def confine(project: Path, path: str | Path, *, what: str = "path", read: bool = False) -> Path:
+    """Resolve path (relative paths are relative to the project) and require it to stay inside the project.
+    `read=True` is for a caller that only reads the path: the refusal then ends "brand-creator only reads inside the project", where the wording for a path that may be written says "writes"."""
     root = Path(os.path.realpath(project))
     p = Path(path)
     if not p.is_absolute():
@@ -183,7 +185,7 @@ def confine(project: Path, path: str | Path, *, what: str = "path") -> Path:
     try:
         real.relative_to(root)
     except ValueError:
-        fail(EXIT_USAGE, f"{what} {path} is outside the project {root}; brand-creator only writes inside the project")
+        fail(EXIT_USAGE, f"{what} {path} is outside the project {root}; brand-creator only {'reads' if read else 'writes'} inside the project")
     return real
 
 
@@ -257,13 +259,82 @@ def sha256_file(p: Path) -> str:
     return h.hexdigest()
 
 
+class PartError(Exception):
+    """A part of a file that cannot be read; the message says why."""
+
+
+class PartInput(NamedTuple):
+    """A report input that stands for one named part of a file (a key of PART_READERS), not for all of its bytes: `Report("x", project, [PartInput(project / "BRAND-STATE.md", "g4-rules")])`.
+    The record is {"path", "part", "sha256"}, the sha256 that of the part's canonical text; a record without "part" is the whole file, as ever."""
+    path: Path
+    part: str
+
+
+class PartReader(NamedTuple):
+    file: str                       # the file the part belongs to (its name)
+    label: str                      # what the part is called in a sentence: "the G4 rules"
+    read: Callable[[Path], str]     # the canonical text of the part, from the file; raises PartError (with the reason) when it cannot be read
+
+
+def _adapt():
+    """scripts/adaptlib/adapt.py, imported when a part is read, so this module stays importable on its own (adapt itself imports it, and bookdata)."""
+    here = Path(__file__).resolve().parents[1]
+    for d in ("booklib", "adaptlib"):
+        if str(here / d) not in sys.path:
+            sys.path.append(str(here / d))
+    import adapt
+    return adapt
+
+
+def _read_g4_rules(path: Path) -> str:
+    """The part of BRAND-STATE.md that `page-check` reads: the G4 record (white space collapsed) and, once G4 is recorded, the recorded "(rule)" lines of Rules (G4) in file order
+    (`adapt.g4_rules`, the reading `adapt.view(project)["rules"]` makes), as one line of JSON. Before G4 is recorded the lines are not read, as page-check does not read them: they tie nothing."""
+    try:
+        st = State(path)
+        recorded = str((st.get("gates", {}) or {}).get("G4", "") or "").strip()
+        rules = _adapt().g4_rules(st) if recorded else []
+    except (CliError, OSError, ValueError) as e:   # CliError: no frontmatter, or a line of it the reader cannot parse
+        raise PartError(getattr(e, "message", None) or str(e)) from e
+    return json.dumps({"g4": " ".join(recorded.split()), "rules": [" ".join(r.split()) for r in rules]}, ensure_ascii=False)
+
+
+# The one registry of the parts a report input may stand for: name -> the file it belongs to, what to call it and how to read it. A new part is one entry.
+PART_READERS: dict[str, PartReader] = {
+    "g4-rules": PartReader("BRAND-STATE.md", "the G4 rules", _read_g4_rules),
+}
+
+
+def part_label(part) -> str:
+    reader = PART_READERS.get(part) if isinstance(part, str) else None
+    return reader.label if reader else f"part {part!r}"
+
+
+def part_sha256(path: Path, part) -> str:
+    """The sha256 of the canonical text of `part` of the file at `path`. PartError, with the reason, when the part is unknown, belongs to another file, or the file cannot be read."""
+    reader = PART_READERS.get(part) if isinstance(part, str) else None
+    if reader is None:
+        raise PartError(f"{part!r} is not a part this plugin can read (it reads: {', '.join(sorted(PART_READERS))})")
+    if path.name != reader.file:
+        raise PartError(f"{part!r} is a part of {reader.file}, not of {path.name}")
+    return sha256_bytes(reader.read(path).encode("utf-8"))
+
+
 def stale_inputs(project: Path, doc: dict) -> list[str]:
-    """Why a report no longer stands for the files it was made from: each file of its `inputs` that is gone or changed since (by sha256). One rule for `check` and board-lint."""
+    """Why a report no longer stands for the files it was made from: each file of its `inputs` that is gone or changed since (by sha256). One rule for `check`, board-lint and the book.
+    An input with a "part" stands for that part of the file only (PART_READERS): it is stale when the part changed, or cannot be read (the sentence says why), not when another part of the file did."""
     stale = []
     for rec in doc.get("inputs", []):
         p = project / rec["path"]
         if not p.is_file():
             stale.append(f"{rec['path']} is gone")
+        elif "part" in rec:
+            try:
+                now = part_sha256(p, rec["part"])
+            except PartError as e:
+                stale.append(f"{rec['path']} ({part_label(rec['part'])}) cannot be read: {e}")
+            else:
+                if now != rec["sha256"]:
+                    stale.append(f"{rec['path']} ({part_label(rec['part'])}) changed")
         elif sha256_file(p) != rec["sha256"]:
             stale.append(f"{rec['path']} changed")
     return stale
@@ -599,10 +670,10 @@ def forbidden_terms(project: Path) -> list[str]:
 class Report:
     """Collects results and writes <project>/assets/_checks/<tool>.json."""
 
-    def __init__(self, tool: str, project: Path, inputs: list[Path] | None = None, *, renderer: str | None = None):
+    def __init__(self, tool: str, project: Path, inputs: list[Path | PartInput] | None = None, *, renderer: str | None = None):
         self.tool = tool
         self.project = project
-        self.inputs = [Path(p) for p in (inputs or [])]
+        self.inputs = [p if isinstance(p, PartInput) else Path(p) for p in (inputs or [])]
         self.results: list[dict] = []
         self.extra: dict = {}
         self.renderer = renderer
@@ -628,8 +699,9 @@ class Report:
 
     def _inputs_record(self) -> list[dict]:
         recs, seen = [], set()
-        for p in sorted(self.inputs, key=lambda x: str(x)):
-            real = os.path.realpath(p)
+        for item in sorted(self.inputs, key=lambda x: (str(x.path), x.part) if isinstance(x, PartInput) else (str(x), "")):
+            p, part = (item.path, item.part) if isinstance(item, PartInput) else (item, None)
+            real = (os.path.realpath(p), part)
             if real in seen:   # an input named twice is recorded once
                 continue
             seen.add(real)
@@ -638,14 +710,21 @@ class Report:
                     shown = rel(self.project, p)
                 except ValueError:  # a read-only input outside the project (a sibling repository): recorded by absolute path
                     shown = str(Path(os.path.realpath(p)))
-                recs.append({"path": shown, "sha256": sha256_file(p)})
+                if part is None:
+                    recs.append({"path": shown, "sha256": sha256_file(p)})
+                    continue
+                try:
+                    sha = part_sha256(p, part)
+                except PartError as e:   # the part cannot be read now: recorded as that, so the report reads as stale (with the reason) whenever it is looked at, never as current
+                    sha = sha256_bytes(f"unreadable: {e}".encode("utf-8"))
+                recs.append({"path": shown, "part": part, "sha256": sha})
         return recs
 
     @staticmethod
     def inputs_sha(recs: list[dict]) -> str:
         h = hashlib.sha256()
         for r in recs:
-            h.update(f"{r['path']}\0{r['sha256']}\n".encode())
+            h.update((f"{r['path']}\0{r['part']}\0{r['sha256']}\n" if "part" in r else f"{r['path']}\0{r['sha256']}\n").encode())
         return h.hexdigest()
 
     def write(self) -> Path:

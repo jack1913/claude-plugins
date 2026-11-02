@@ -1,5 +1,5 @@
 {
-  "$description": "Semantic roles, light scheme. Contrast pairs live in $extensions; ui-* kinds gate on WCAG 2.2 AA, brand-rule pairs are owner-set (logos are WCAG-exempt). Theme behaviour: follow the system unless a G4 rule says otherwise. $extensions.brand-creator.touching sets the targets for colours that touch in the logo artwork (found in the pixels by `brand-creator contrast`).",
+  "$description": "Semantic roles, light scheme. Contrast pairs live in $extensions; ui-* kinds gate on WCAG 2.2 AA, brand-rule pairs are owner-set (logos are WCAG-exempt). Theme behaviour: follow the system unless a G4 rule says otherwise. $extensions.brand-creator.touching sets the targets for colours that touch in the logo artwork (found in the pixels by `brand-creator contrast`). $extensions.brand-creator.grounds lists the colours text sits on, each with its five roles (text, action, on-action, focus, border); the starter's entry is a proposal and named_by_owner stays empty until the owner names the grounds, with the date and their words (never guessed).",
   "color": {
     "$type": "color",
     "bg": {
@@ -15,6 +15,12 @@
       "$value": "{color.rule}"
     },
     "accent": {
+      "$value": "{color.signal}"
+    },
+    "on-accent": {
+      "$value": "{color.paper}"
+    },
+    "focus": {
       "$value": "{color.signal}"
     },
     "mark": {
@@ -46,7 +52,19 @@
           "min": 4.5
         },
         {
+          "fg": "color.on-accent",
+          "bg": "color.accent",
+          "kind": "ui-text",
+          "min": 4.5
+        },
+        {
           "fg": "color.border",
+          "bg": "color.bg",
+          "kind": "ui-component",
+          "min": 3.0
+        },
+        {
+          "fg": "color.focus",
           "bg": "color.bg",
           "kind": "ui-component",
           "min": 3.0
@@ -63,6 +81,19 @@
         "default": 3.0,
         "ground": 3.0,
         "pairs": []
+      },
+      "grounds": {
+        "named_by_owner": "",
+        "list": [
+          {
+            "ground": "color.bg",
+            "text": "color.text",
+            "action": "color.accent",
+            "on-action": "color.on-accent",
+            "focus": "color.focus",
+            "border": "color.border"
+          }
+        ]
       }
     }
   }

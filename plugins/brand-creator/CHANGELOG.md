@@ -6,6 +6,468 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+This release adds checks that can warn on a project you already have. A warning changes neither a result nor an exit
+code, and nothing that passed before fails because of a warning. Settle these now, because the first two groups become
+failures in the next release:
+
+- The reflex line of each direction on a pick board (`board-lint`): a line that is not in the format, a hit that names
+  no known pattern, an argument that shares no word with `FACTS.md` or the brief, a direction with no list from the
+  judge when the judge ran, and a pattern the judge saw that the line neither hits nor names as a near miss. Two hits in
+  one direction, and one hit that every direction shares, fail already.
+- The colours that text sits on (`contrast`): a project whose tokens list no grounds, grounds the owner has not named,
+  a ground with no colour for one of its text, action, text-on-action, focus ring or border roles, a role under its
+  contrast floor, and, with `--cvd`, an action or focus ring too close to its ground in colour-blind simulation (those
+  rows check colour distance, not a contrast floor). Ask the owner which colours text sits on and record the date and
+  their words; the model never guesses.
+
+Two more only ever warn and are not due to fail: `check` lists the values in `tokens/primitives.tokens.json` that are
+still the starter's proposal once the system rules are approved (keep one under `starter-kept`, or change it), and
+`board-lint` notes directions that look alike in colour and motion variants that try the same move.
+
+One change touches what already passes: the `board-lint` report of a pick board now lists `FACTS.md`,
+`brief/BRIEF.md` and `research/cliches.md` as inputs, so editing one of them makes that report stale and `check` says
+it is not verified until `board-lint` runs again. The `tools/finish.sh` of a new project (`templates/finish.sh.tpl`)
+lints the board of the latest round again before `check`, so an edit of the facts or the brief is picked up; a board the
+lint refuses (a board file that is a link to a file outside the project, for one) or a lint that stops without writing a
+report shows as a failed step with the lint's message, the chain still runs `check` and writes the pack report, and it
+ends with a non-zero exit code. A
+`tools/finish.sh` you copied earlier has no such step, so add the block at its end, before `staleness --write`, or run
+`board-lint` yourself.
+
+### Added
+
+- `page-check` opens one page at several widths (360, 390, 768, 1024, 1440 and 1920 px unless `qa/rules.json` or
+  `--widths` says otherwise) in the light and the dark colour scheme, and reports how it loads: a page or console
+  error, a file of its own that does not load, or a request to another website fails that view's row
+  (`page:load:<width>-<scheme>`). Every request to another website is stopped, a redirect to one and a WebSocket the
+  page opens included, so the check runs offline (one exception: a WebSocket opened inside a worker is not stopped; a
+  page's own WebSocket to the machine it is served from, a dev server's hot reload, goes through); a page that sends
+  the browser to another website is not measured, and its row fails. Name a page
+  of the project, `--from DIR <page>` for a built site anywhere (the folder is copied into the data folder and only
+  read; `.git`, `node_modules` and symlinks are left out, more than 5000 files or 200 MB is refused, and each check keeps
+  its copy until you delete it: the manual says where), or `--url`
+  for a page already served on this machine (`localhost`, `127.0.0.1` or `[::1]`, written like that; any other host,
+  `127.1` included, is refused, and on such a page a file that comes from another website is a warning). One report per
+  page, in `assets/_checks/page-check/`. `qa/rules.json` accepts a `page` section with `widths`, `display_min_px`,
+  `clear_space` and `rules`; a value of the wrong type, or a width outside 200 to 4000, is refused.
+- `board-lint` checks that the argument of a reflex hit is the brand's own. The argument has to share a word with
+  `FACTS.md` or `brief/BRIEF.md` (`reflex-grounded`; words of four letters or more, in any language, taken only from
+  what the owner wrote, not from the templates: the brand's name in the title line counts for nothing); a hit argued
+  with nothing of the brand warns, asking for the fact, place or craft that earns it, and a project with neither file
+  filled in is reported as not verified. When the judge ran, each direction also carries the judge's list of the
+  patterns it saw beside its reflex line (`data-field="reflex-seen"`; the board templates have the line in a comment
+  to uncomment), and `board-lint` warns about a direction without it, or with a list that names no pattern and does
+  not say "none seen" (`reflex-seen`), and about a pattern on the list that the reflex line neither hits nor names as
+  a near miss (`reflex-unargued`, one warning per pattern). All of these only warn in this release and become
+  failures in the next one. The report now lists `FACTS.md` and `brief/BRIEF.md`, so a changed fact makes the lint
+  stale.
+- `board-lint` warns when two directions of a pick board look alike in colour (`directions:divergence`). It reads the
+  paper, ink and accent each direction carries in its `style` attribute (`--d-paper`, `--d-ink`, `--d-accent`, as
+  `#rgb` or `#rrggbb`) and names every pair whose paper and ink are both within 0.04, and whose accents are within
+  0.06, of each other (distance in OKLab). A board that passes names the smallest distance of each colour; with fewer
+  than two readable directions the row says it did not measure. The two limits are a practice proposal, said in the
+  row, and the row only warns: it does not become a failure.
+- `board-lint` warns when two variants of a motion board try the same move (`motion:timelines`). It reads the length and
+  the number of animations that `shot --motion` found for each variant and names every pair that runs the same number of
+  animations with lengths within 5 % of the longer one, or within 20 ms, of each other: three variants should try three
+  moves. A variant whose motion report is missing or out of date is not compared (the proof row says why), and the row
+  then reports instead of passing. The two limits are a practice proposal, said in the row, and the row only warns: it
+  does not become a failure.
+- `brand-creator shot --out DIR` can now write the shots into the project's own `specimens/` folder, at any depth (for
+  example `--out specimens/hero`), so page shots you want to keep can sit beside the brand. Any other folder inside the
+  project is still refused (exit 2: `--out <DIR> must be outside the project, or under specimens/`, with the folder you
+  typed in place of `<DIR>`); a folder outside the project works as before.
+- A motion proof can now check how a component answers its states, not only how a mark moves. A `component` case in the proof
+  names a page, the component's element and the line of the motion rules it proves (`rule`), and `brand-creator shot
+  --motion` hovers it and presses it (and focuses it with the keyboard when the case lists `focus-visible` in `states`),
+  at 390 and 1440 px. It fails when the element, or anything after it, moves or resizes by more than half a pixel at any
+  point of entering or leaving the state (a lift or a press done with `transform` is fine; padding, a border or a size
+  change is not), when a duration or an easing of the state change is not one of the brand's motion tokens, when the
+  element or anything inside it animates under reduced motion, or when the box is not back where it was once the state is
+  left. A component that another element covers, that is hidden at a width or that cannot take focus fails with the
+  reason. A width it could not be put into under reduced motion is never skipped in silence: the reduced-motion row names
+  the width and why, and is not verified (it fails instead when an animation was found at another width). Without built
+  tokens the token row says it is not verified.
+- The starter tokens carry layout slots, as proposals until the owner approves the system rules: spacing steps 1 to 8
+  (4 to 64 px), corner radius (small, medium, large, pill), the content width and the gutter, four breakpoints, and line
+  height and letter spacing as plain numbers (letter spacing in em). They are built into `tokens.css` and `tokens.json` like
+  the other tokens, and the system-rules step offers one layout rule for a brand with a site or an app.
+- The starter tokens carry the two colours every interface needs besides the accent: the text on the accent
+  (`color.on-accent`) and the focus ring (`color.focus`), in light and dark, each with its contrast pair (text on the
+  accent at 4.5:1, the focus ring against the ground at 3:1). They also list, as a proposal, which colours text sits on:
+  `color.bg`, with the colour of its text, its action, the text on the action, its focus ring and its border, under
+  `grounds` in `tokens/semantic.light.tokens.json`. The line that records the owner naming the grounds stays empty until
+  the owner does; nothing is guessed. `brand-creator tokens` checks that block when it is there and writes it into `tokens.json`
+  (`grounds`) with every colour resolved in light and dark. A block of the wrong shape fails the build and writes
+  nothing; a role that names no colour token is a warning. A project without the block builds exactly as before.
+- `brand-creator contrast` checks the colours that text sits on. For each ground listed under `grounds` it wants a colour for
+  the text, the action (a button or link), the text on the action, the focus ring and the border, in light and dark, and
+  holds them to their floor: text 4.5:1 on the ground, the action, the focus ring and the border 3:1 against it, the text
+  on the action 4.5:1. With `--cvd` the action and the focus ring must also stay tellable apart from the ground for
+  colour-blind viewers. It warns, too, until the owner has named the grounds (a date and their words in
+  `named_by_owner`; the starter's proposal has none), and says to ask the owner and never to guess. All of these are
+  warnings in this release and do not change the result or the exit code; they become failures in the next release.
+  `contrast` reads the grounds exactly as `adapters` and the brand kit do: a ground they cannot read (one with no
+  `roles`, say) stops `contrast` too, with the same message, and never passes it.
+- Once the system rules are approved, `check` warns about every colour, size, spacing or motion value in
+  `tokens/primitives.tokens.json` that is still the starter's proposal, and lists them. Keep a value by listing its path
+  under `starter-kept` in the primitives, with the date and the owner's words (the same rule as `named_by_owner`: a real
+  date, then any words), or change it. It only warns; it never fails the check.
+- `DESIGN.md`, `BRAND.md` and the brand's applied skill now carry the grounds that text sits on, when the tokens list
+  them. `DESIGN.md` gets a component for the action on each ground (`action-on-<ground>`, with a `-dark` twin), pairing
+  the action colour with the text on it. `BRAND.md` (under Visual) and the applied skill (under Colour) get a Grounds
+  table with the text, action, text on the action, focus ring and border of each ground, in light and dark. A colour the
+  tokens do not give is left out and shown as "missing: ask the owner", never filled in, and the files say whether the
+  owner named the grounds or they are still a proposal. An action whose text is under 4.5:1 on it gets no component in
+  `DESIGN.md` (the format's own check fails a component like that, while `contrast` only warns about it in this release):
+  `DESIGN.md` names the ground and the pair instead, and the component comes back once the colours pass. A project with
+  no grounds gets the same files as before. Run `adapters` and `applied-skill` again to update files you already have.
+- `page-check` now checks the colours of a page against the brand, in the light and the dark theme separately. Every
+  colour the page paints (text, backgrounds, borders, outlines, underlines, and the fill and stroke of an inline SVG)
+  has to be a colour of the theme in the tokens: an opaque colour an opaque one, a see-through colour a see-through one
+  (`page:colours:<theme>`). The row names up to six that are not, with where they are, the nearest brand colour and how
+  far off it is, so a light background left in the dark theme fails the dark row only. Each text colour on the colour
+  behind it (`page:pairs:<theme>`) must be a declared pair, or measure at least 4.5:1 (3:1 for large text); a pair that
+  is not declared fails under that and warns when it passes ("declare them in pairs"), and text over an image or a
+  gradient is reported as not verified.
+- `page-check` now checks the motion and the claims of a page. Every duration and easing the page declares or runs
+  (transitions, animations and a script's animations, `::before` and `::after` included) has to be one of the brand's
+  motion tokens, and so has the motion a style sheet declares for a state (`:hover`, `:focus`, `:active` and the like,
+  read from the rule without hovering, `var()` resolved, nested rules, a declaration written after a nested rule, `@media` and `@layer` included): a duration that
+  equals no token, or an easing that no curve token equals, fails `page:motion` (`ease` and `linear` count only when a
+  token holds their curve), and a page that moves while the brand has no motion tokens fails and says so. A style sheet
+  the browser would not let it read is reported as not verified. Numbers and status words on the page have to come from
+  `FACTS.md`: outside a labelled sample, a number no fact holds (a single digit next to `%`, a currency sign or code
+  counts, `9 €` and `PLN 5` too), or a status word (English and Polish, such as "available" or "wkrótce") no fact
+  contains, fails `page:claims`. Mark sample content with `data-sample="<what it
+  stands for>"`: it is not a claim, it is listed in `page:samples` as what to replace before publishing, and the
+  report keeps the list as `samples`; a `data-sample` with no label fails. A page in another language than English or
+  Polish gets a warning that its status words are not verified (its numbers are still checked).
+- `page-check` reads numbers on a page more the way people write them. A date written with dots, such as "15.11.2026"
+  or "30.10", is its numbers, as "2026-11-15" is: the fact "premiera 2026-11-15" backs "Premiera 15.11.2026", and
+  "Wypłata 30.10" needs 30 and 10. Digits with spaces between thousands, such as "13 205,20 zł", are one number, but
+  "In 2026 200 tools" is the numbers 2026 and 200. A year after a copyright sign or the word ("© 2026", "Copyright
+  2024–2026") is not a claim, and neither is the code of an error page (next item). A phone number, a postal code and a street number are still claims and need a fact or a sample label.
+- `page-check` knows an error page and a date written with a month name. A page is an error page when its file is
+  named after the code (`404.html`, `500.html`), or when its title or main heading holds a code from 400 to 599 as the
+  only number in it (a single digit counts as one), with no "+" before or after it, and the same text holds an error
+  word of the page's language, such as "Błąd", "Nie znaleziono" or "nie istnieje" in Polish and "Error", "Not found"
+  or "Gone" in English. A heading such as "Ponad 400 projektów", "500+ firm nam ufa" or "5 lat, 500 klientów" is a
+  count and exempts nothing, and a page in another language, or one that sets no language, is an error page by its file
+  name only. The code is then no claim anywhere on the page, so a small "Błąd 404" label above the heading is not one.
+  A date written with a month name is one date in a Polish or English page, backed like a dotted date: "21 października
+  2026", "21 października", "Październik 2026", "October 21, 2026", "October 21,2026", "21 October 2026", "October
+  2026"; a number after a month name that is not a day stays its own claim ("March 15% of users" holds "15%"). A dotted "30.10" is a date only when the
+  day and the month have two digits each, or a year follows ("1.5.2026r."); "12.5", "2.10" and "10.1" are plain
+  numbers, on the page and in `FACTS.md`.
+- `page-check` now checks the brand mark on a page. Put `data-brand-mark` on the mark's `<img>` or inline `<svg>` (the
+  value may name the logo file, `data-brand-mark="assets/logo/mark.svg"`); an image whose file name is `logo`, alone or
+  followed by `-`, `_` or `@` and more (`logo.svg`, `logo@2x.png`, `logo.jpg`; `partner-logo.svg` is not), an `.svg` file
+  named `mark` or `wordmark` the same way (`mark-dark.svg`, `wordmark.svg`; `bookmark.svg`, `mark.jpg` and `Mark.png` are
+  not, so a team member's photo is never taken for the logo), and any image that is byte for byte a file of `assets/logo/`, is taken for the mark too. The
+  mark has to be a logo file of the project (`page:mark-file`: the same bytes, or for an inline SVG the same drawing,
+  whatever the order of its attributes, its spaces, its title or the size and label it is given); it has to be the
+  drawing your size bands name for the height it is shown at, or that drawing's `-dark.svg` twin (`page:mark-band`);
+  and nothing may stand nearer to it than a quarter of its height (`page:mark-clear-space`; `page.clear_space` in
+  `qa/rules.json` changes the share). A page with no mark gets an info row that says what counts as one, and an inline
+  `<svg>` that draws through `<use>` is reported as not verified, not failed.
+- `page-check` now checks the fonts of a page (`page:fonts`). The family each text is set in has to be one that a font
+  token names; a generic family such as `monospace` counts only when a token's list writes it, so a page that sets no
+  font and falls back to the browser's default fails. A named family must also be what the browser really drew: a font
+  file that does not load, a family the page never declares and this machine does not have, or a face that covers none
+  of the text fails (also when its stack fell to another web font of the page), and a face that lacks only a few
+  characters of the text warns with the glyph counts. Text set inline in another font (`code` in a paragraph) is not
+  charged to the text around it, and a system face such as Roboto that the page does not declare and this machine does
+  not have is reported as not verified instead of passing. When the brand has a display face (a `font.display` token),
+  no text set in it may be smaller than `page.display_min_px` in `qa/rules.json` (`page:display-size`); 20 px is a
+  proposal until you set it, and the row says so. A brand with no display face gets an info row instead, and so does
+  one whose display face is also its body face.
+- `page-check` can hold a page to your own brand rules. List them in `qa/rules.json` under `page.rules`: one mark per
+  screen (`max-marks-per-view`), a button says at most three words (`max-words-per-control`, for buttons, inputs of type
+  submit, button or reset, and anything a `selector` you give matches), or a number of words around an accent
+  (`words-under-accent`, with `min`, `max` or both). Each rule carries a `g4` text and is tied to the system rule you
+  approved: the page fails (`page:rule:<id>`) only once a "(rule)" line holding those words is in `BRAND-STATE.md`
+  and you have approved the system rules; until then a page that breaks the rule only gets a warning that says the rule
+  is not an approved system rule yet. The `g4` text has to be the whole "(rule)" line or at least two content words of it, written as whole words:
+  one word such as `mark`, or `rule`, ties nothing, and the row says the text is too short. A word is what Unicode word segmentation counts, in the page's language: a
+  hyphenated compound is two and an arrow is none. A selector the browser cannot read fails its row. An unknown kind or
+  key, a missing `g4` or a repeated `id` is refused before the page is opened.
+- `page-check` warns about generic patterns that make a page read as a template, in English and Polish (`tell:<name>`
+  rows): a small label in capitals over a heading (an eyebrow), an arrow glued to a link or button label, a line of
+  items joined by middle dots (a bulleted list is not one), a stock label such as "Learn more" or "Dowiedz się więcej"
+  on the hero's second action, more than 45 words in the hero's first screen, a mock-up built from many styled boxes
+  with no picture bigger than an icon (a table is not one, status badges or chips in its cells included, unless a styled
+  header or footer sits beside it; a list is not one unless it is the box or most of it, counting each item only as far as it lies in the box, so a panel
+  with its own header or footer beside a list is, and so is a carousel whose items run on past the box; a page, or a
+  band of it, with headings is not one),
+  and a row of three equal tiles. Each warning names where the pattern is and at which widths; none of
+  them ever fails a page. A page in another language is reported as not verified for the stock labels, and a page that
+  follows the stock order of a product page (hero, three tiles, FAQ, closing band) gets a note. To hold your pages to
+  one of the patterns, add a rule of kind `tell` to `page.rules` (`{"id": "no-eyebrow", "kind": "tell", "tell":
+  "eyebrow", "g4": "no eyebrow over a heading"}`): it is then tied to your approved system rule like the other page
+  rules, and a name that is not one of the patterns is refused before the page is opened. The social post template
+  that ships with the plugin has a small capital label above its headline; that counts as an eyebrow, and it is
+  reported, not changed.
+- `/brand-creator:check` takes `--page` to check one page against your brand instead of the whole project: a page in
+  your project, a page of a site built elsewhere on your computer, or a page your computer serves (`localhost`,
+  `127.0.0.1` or `[::1]`; a page on another website is refused). Claude reports the failing rows with their fix, the
+  generic patterns as warnings, and the labelled samples as your list of what to replace before you publish. A new
+  how-to, "Check a page against your brand", walks through it, including how to turn a warning into one of your brand
+  rules; the commands page, the check page and the troubleshooting page link to it. The adoption step now says to run
+  the page check on a product's pages once they are built.
+- `state` knows two more gates for the site work, G4w (website references) and G4p (the site's reference pages), and the
+  `site_research` answer (online research for website references): `auto` until you are asked, then `online`,
+  `links-only` or `none`; `state --set` refuses any other value and writes nothing. A project made before this update
+  gets the two gates the first time you record them.
+- `brand-creator capture <page>` takes stills of a page of your project: the first screen at 1440 and 390 px wide, in the
+  light and the dark theme, and the whole page at 1440 px. They go beside the page in a `shots/` folder, with a
+  `capture.json` that lists the files the page loaded and anything that went wrong while it loaded. A page in `history/`
+  or in a round before the latest is refused. With `--url <address> --name <name>` it captures a real website into
+  `research/site-refs/<name>/`: the first screen at both widths, the whole page and two small thumbnails. That form is the
+  only one that reaches the internet. It refuses until you have answered the online-research question (`site_research`
+  is `online` or `links-only`), and a site that does not load exits with 1 and writes nothing. Taking the same page or
+  site again leaves `capture.json` as it was when nothing changed, so a check that read it stays current.
+- Website references (Standard and Full, when your brief lists a site): after the system rules,
+  `/brand-creator:round site-refs` asks once whether Claude may research sites online, asks for sites you like and
+  dislike, and shows four to six groups of real sites, each captured, with what to take and what to leave. Your pick is
+  recorded before any page of your site is built; you can skip it in your own words. `board-lint` checks the board:
+  a site in your brief, the system rules approved, your online-research answer, at least three site clichés, and four to
+  six groups of three or more sites, each with a link, its captured screenshot, what to take and what to avoid.
+- The site round (Standard and Full, when your brief lists a site): `/brand-creator:round site` builds the first screen
+  of your home page in two or three ways from the references you picked, each checked against your brand rules, captured
+  in four views and read cold. You pick one; then the other pages follow, and you mark each choice on them as a brand rule
+  or just an example. The approved pages are references for whoever builds your site. `board-lint` checks the board: a
+  site in your brief, the system rules approved, your website references picked first (or skipped in your own words),
+  two or three heroes on the first board, and for each hero or page a page check and four captured views of the page as
+  it is now. A hero's cold review has to match those views too. The other pages follow a hero you picked, every choice
+  is tagged as a rule or an example, and a rule says where you decided it.
+  When `page-check` could not check a page for a tell (no `lang`, a language with no word list, a page with more
+  elements than it checks), `board-lint` says it could not verify that tell, not that it found it, and the card still
+  has to name it or argue it.
+- `brand-creator site approve` copies the approved pages of the site round into `site/`, with their paths fixed, and
+  writes `site/site.json`: each page, its layout, and every choice marked as a brand rule (with where it was decided)
+  or an example. It needs the pages approved (G4p recorded) and the pages board linted since its last change. It
+  refuses a page that loads from the internet or from outside your project, writes nothing when any page fails, and
+  never deletes an earlier `site/` (`--replace` moves it to `removed-<date>/site/`). It copies every page card of the
+  pages board, so an approval covers the whole board: to leave a page out, remove its card from the board and lint it
+  again first. The approved pages are references for whoever builds your site, not templates to fill in.
+- A new how-to, "Get reference pages for your site", walks through the website references and the site round, from your
+  answer on online research to the approved pages. The manual index and the commands page link to it, "Choose a tier"
+  and "What it makes" describe the new steps, and the glossary explains website references, reference page, cold review
+  and layout reference.
+- `check` now checks the approved pages in `site/`: unchanged since approval, each checked against your brand rules, with
+  current stills. A project without approved pages gets no new row; a page you edited after approving it fails the
+  check and names the command that approves the pages again.
+- An opt-in `site` chapter for the brand book (`book_chapters: [site]`) shows the approved pages of your site and
+  every choice on them as a rule or an example. Each page has its layout's job, its first screen at 1440 and 390 px
+  and a table of the choices on it, with where each rule was decided. It needs the pages approved (`site approve`)
+  and their stills (`capture site/<page>/index.html`); without the approved pages, or without a still, the book stops
+  and says what to run, and writes nothing. A book without the chapter is unchanged.
+- `site approve` refuses a page folder, a round folder, the `rounds/` folder or the pages board when it is a
+  symbolic link, wherever the link leads, and a folder link inside a page that leads out of your project; nothing is
+  written. The `site` chapter of the book takes pages and stills only from inside your project, and stops on a still
+  that is not a PNG picture, naming the file and the `capture` command that takes it again.
+- A behaviour eval, `site-refs-gate-before-site-round`: on a Standard project with the system rules approved and a brief
+  that lists a site, "build the home page" writes no page of the site and records neither the website references pick
+  nor a skip, and without web tools Claude says the website references need web access and stops.
+- Redesigning a site? `brand-creator adoption wiring --before` records its links, form fields, handlers, test hooks,
+  ids and scripts, so nothing is lost by accident. Name a repository you surveyed with `adoption survey`; the command
+  reads its source (`.html`, `.jsx`, `.tsx`, `.vue`, `.svelte`, `.php` and the other template and script files, with
+  `.gitignore` honoured and lock files, change history, minified output, `dist`, `build` and vendored folders left out)
+  and writes the record into `adoption.json`. It never edits the repository, and proves it: if anything in the
+  repository changes while it reads, the row `read-only:<label>` fails and nothing is stored. The first `--before` is the
+  baseline and is not replaced unless you pass `--again`, which also removes the `--after` record taken against the old
+  baseline (the run says so; record `--after` again); `--after` records the site once the redesign is applied and
+  needs the baseline. The reading is by pattern, so a link or id built when the page runs is missed or noisy.
+  `--compare` says what a redesign lost: it reads the repository again, writes nothing, and lists every item of the
+  baseline that is gone, with the files it was in. A loss is fine only when you record why, in your own words:
+  `--drop "link:/pricing::the pricing page moved to /plans"` (repeatable). `brand-creator check` fails a recorded
+  `--after` that lost wiring nobody dropped (the row `adoption:wiring:<label>`), and `ADOPTION.md` shows the wiring in
+  a "Wiring kept" section: the counts before and after, and each lost item as dropped with your reason or lost and not
+  recorded. A list without wiring is unchanged. Pass `--page <url>` (repeatable, with `--before`, `--after` or
+  `--compare`) to read the pages of your own local server too, as the browser shows them: only addresses on this
+  machine (`localhost`, `127.0.0.1` or `[::1]`) are opened, and a page that cannot be read stops the run and stores
+  nothing. Listeners that a script adds are not visible in the page, so they are read from the source only. A handler is
+  an attribute named after an event the browser knows (`onclick`, `onsubmit`), in the source and on the page alike; an
+  attribute that only starts with "on", such as `onboarding="intro"`, is not wiring.
+- A brand kit for your product repositories: `brand-creator kit build --yes` writes it around your brand skill, with the
+  brand's own files copied in byte for byte and locked (opt-in when you approve the brand). The kit gets a version
+  (`<edition>.<build>`) that goes up by one when anything in it changes and stays the same when nothing does. A kit
+  file you edited by hand, or a file you put into one of its generated folders (a link counts, to a file or to a folder,
+  also one at the place of a file the kit writes; a Finder `.DS_Store` does not), stops the next build; `--replace` moves it
+  to `removed-<date>/` and builds, moving a link itself and never what it points at. Nothing is deleted.
+  `brand-creator check` fails a kit file you edited by hand and says when the brand changed after the kit was built, and
+  `applied-skill` leaves a project that has a kit to `kit build`.
+  A brand that moves also gets its motion spec and demo page in the kit.
+- Open-licence (OFL) fonts go into the kit with their licence; any other font is listed, never copied.
+- The masters you approved go into the kit too. Put them in `assets/masters/` in your brand project (an ad or deck
+  template with its pictures, PDFs, PPTX and fonts; only approved ones, because the kit cannot tell which are approved):
+  `kit build --yes` copies everything under it, byte for byte, to `brand/assets/masters/`, and a master you change, add or
+  take away makes `kit check` say "not verified" until you build again. A font in it follows the font rule, and a font
+  file of a kind fontcheck cannot read (`.ttc`, `.eot` and similar) is never copied, only listed. A link
+  in a master's page must lead to a file inside the kit. An SVG master is checked like any SVG under `assets/`: `check`
+  fails one that still holds live text.
+- The pages you approved for your site go into the kit too. When you have approved pages (`brand-creator site approve`),
+  `kit build --yes` copies each one with its screenshots and every file it loads, at the same paths so its links still
+  work, and writes a note for each page in `reference-pages/<page>/notes.md`: its layout (structure only), when you
+  approved it, links to the page and its screenshots, and its choices, each marked as a rule (with where you decided it)
+  or as an example. A page goes in only when your page check on it passes and its screenshots are current; otherwise the
+  build stops before it writes anything and names the page and the command to run. A page that loads a file from outside
+  your project stops the build, and so does one that loads a file your project does not have. A stylesheet the page loads
+  is copied with what it loads, and no further; `kit check` names a link that then leads nowhere. A font a page loads
+  follows the font rule: open-licence fonts are copied, and the build warns about any other. Whatever you wrote in a
+  choice, the notes pass `kit check`: a placeholder like `{a.b}`, a tag or a link in it is shown as text and never read
+  as a citation.
+  A font file inside a page's folder, or one the page loads from anywhere in your project, follows the font rule too:
+  it is copied only when the font check has read it (`brand-creator fontcheck --font <file>`) as open-licence and the
+  licence text is in `assets/fonts/`; otherwise it is listed in `kit.json` as not copied, and the build warns. Two
+  approved pages that link to each other by a folder address (`../pricing/`) go in: the address is that folder's
+  `index.html`, as on a web server. A page folder or page file that is a link leading outside your project stops the
+  build as an outside path, whatever the file behind the link holds.
+- The kit carries your rules and facts as data: `rules.json` (your recorded rules, each with a short id, the size rule
+  and the drawing for each size, the contrast pairs with their ratios, the words never to use and your page rules) and
+  `facts.json` (the facts you confirmed; contact details never).
+- The kit has ready-made snippets: the fonts (`snippets/fonts.css`, one `@font-face` for each font it copies), the
+  logo per theme (`snippets/logo.html`, your logo and its dark version where you have one, switched the way your
+  colours switch) and text on each of your grounds (`snippets/on-ground.css`). Once you have named the colours your
+  text sits on, that last one holds one `data-ground` rule for each ground after the page colour, so text, buttons,
+  focus rings and borders switch to that ground's own colours. While the grounds are only a proposal the kit writes
+  no ground snippet and says so. A ground the tokens give no colour for is left out and named, never written half.
+- The kit has parts that are yours: `EXTENDING.md` (how to extend the kit), `voice.md`, `visual.md`, `golden-rules.md` and
+  a web-page recipe in `recipes/`. `kit build --yes` writes each of them once, with a note where you write, and never
+  overwrites or moves it; delete one and the next build writes it again. The plan lists the files a build would add.
+  A recipe or file you add yourself (`recipes/email.md`, a `notes/` folder) is yours too and travels with the kit: the
+  next build records it, `kit check` holds a Markdown note of yours to the same rules as your recipes (a file of another
+  kind is copied and never read for those, but the links in an `.html` or `.css` file of yours must still lead to a file
+  inside the kit), and the copy list gives it to a repository that has none. A shortcut (a symbolic link)
+  among your files is refused like a `kit.json` that is a link: the build stops, and `--replace` sets the shortcut aside.
+  A file of yours added, changed or taken away moves the kit's version at the next build.
+  The web-page recipe starts from the visitor's job and the page's idea, builds the hero first, tells you to copy the brand's
+  files into the product's own public or static folder and link them from there, works beside your web-design skill
+  and not instead of it, and checks the built page against the brand, with every sample figure marked as a sample.
+- `brand-creator kit check` proves the kit is whole: every link in it resolves inside it, no fill marker is left, the
+  versions agree, and it says when the brand changed after the kit was built. A fresh kit fails it until you have
+  filled in your own files (`voice.md`, `visual.md` and `golden-rules.md`). It also fails a generated file you edited
+  and a file you put into a generated folder (move it to `recipes/` or a folder of your own), and warns when one of your
+  own files changed since the last build. `brand-creator check` expects its report once you have a kit, and says
+  when a file was added to the kit after it.
+  A Finder `.DS_Store` in the kit is no file of the kit and never makes that report stale. A `srcset` written as
+  `a.svg 1x,b.svg 2x` is read the way HTML reads it, so it is no longer reported as a dead link.
+  A link to a folder counts when that folder has an `index.html` in the kit. A link to a font the kit lists as not
+  copied is a warning that you supply the font under its own licence, and no longer a failure.
+- `brand-creator kit check` also holds your own recipes, golden rules and visual notes to a source. Every bullet
+  there says `[example]` or names a rule the kit knows with `[rule: <id>]` (a rule of your brand, a page rule as
+  `page:<id>`, a choice of a reference page as `site:<id>`), and every value in them, such as `48px`, a ratio or a
+  colour, cites a token or a rule on its own line or says it is an example. A range such as `32-48px` counts as a
+  value. A token that does not exist fails too: anywhere outside a code sample, and inside one on a line with a value.
+  Only a name that ends at a token counts (`{color.bg}`, never a group such as `{modes.light}`). A `[rule: <id>]` that
+  names no rule fails wherever it stands, on a plain sentence or in a code sample too. A `{word.word}` in a sentence is
+  read as a token even between backticks: to show a placeholder of your own, write it without the dot, or put it in a
+  code block on a line with no value. To show the tag itself, put a placeholder in angle brackets, as in
+  `[rule: <id>]`: it names no rule, so it is not looked up, and it is not a citation either (a bullet that shows it
+  still needs a real tag or `[example]`).
+- `brand-creator kit check` also marks a reference page stale when the tokens or rules change: a page whose check or
+  screenshots were made against other tokens or rules than the ones in the kit, or that was changed or
+  approved again after the kit was built, is "not verified" and says which commands to run before the next
+  `kit build --yes`. A page whose check is current and failing fails it.
+- `brand-creator kit status --repo <folder>` tells whether a product repository's copy of the kit is current, and what
+  to copy. It says `not installed`, `current` or `not current` (with both versions, and the files that differ, are
+  missing or are left over from an older kit), lists your own files in the copy that differ (they are the repository's
+  and an update keeps them), and prints the copy list: the generated files that need copying, then your own files, the ones you
+  added too, that the repository does not have. It only reads: nothing is written in the repository or in your project, and it checks
+  that. It refuses your home folder, anything inside `~/.claude` and the brand project itself.
+  A file your brand dropped (a logo you took out) stays in a copy that was updated: `kit status` lists it as left
+  over, says it is not on the copy list and goes to `removed-<date>/` in that repository, and when both versions are
+  the same it says so and what differs, instead of naming the same version twice.
+- The adoption list can hold a brand kit row per repository. `brand-creator adoption add --repo <label> --kit` adds it
+  (it needs a kit in your project and takes no other words), a survey leaves it alone, `ADOPTION.md` shows it as "the
+  whole folder", and `brand-creator adoption status` says for each such repository whether its copy of the kit is
+  current. An adoption list without a kit row looks exactly as it did.
+  An empty `--lines ""` is refused, like any other word a kit row does not take.
+  A copy that is not current is worded as `kit status` words it: on the same version as your project it says so and
+  what differs, instead of naming the same version twice.
+- `/brand-creator:brand-adopt` installs the brand kit in a repository you name, on your branch, and checks the copy byte
+  for byte. The implementer copies exactly the files `brand-creator kit status --repo <folder>` lists, one at a time,
+  never over a file of your own in the repository and never into a global skills folder; the review passes when
+  `kit status` says the copy is current. The adopt workflow's agents get the same two rules. The kit is left uncommitted.
+  When a brand change dropped a generated file, `kit status` names the files left over from the older kit and the
+  implementer moves each to `removed-<date>/` in the repository, keeping its path inside that folder (nothing is
+  deleted), before it runs `kit status` again.
+- A brand-adopt review fails a redesign that lost wiring you did not agree to drop. For a redesign of an existing site,
+  `/brand-creator:brand-adopt` records the site's wiring before any change (`brand-creator adoption wiring --before`),
+  the implementer records it again when the last row is done (`--after`), and the reviewer runs `--compare`: any link,
+  form field, handler, test hook, id or script that is gone and that you did not drop with your reason fails the review.
+  Only you decide a drop, and it is recorded in your words. The adopt workflow's review reports the losses in a
+  `wiring_losses` list and tells the lead such a review is not ready for a commit ask. The manual's "Apply the brand to
+  your product" page has a new section, "If it's a redesign of a site you already have".
+  The workflow quotes the repository's label in the commands it gives the agents, so a label with a space works. The
+  label must be the one the survey gave the repository: a review that finds none by that label reports a failure, never
+  "no loss". The local page addresses you give for a redesign must be on this machine and written with plain URL
+  characters (`&` as `%26`); anything else is refused before an agent starts, and the message names the address.
+- You are now offered the brand kit when you approve your brand files, beside `BRAND.md`, `DESIGN.md` and the brand
+  skill, and it is recommended when your brief lists a site or you have product repositories. A new manual page,
+  [Use your brand kit](docs/manual/use/use-your-brand-kit.md), shows how to ask for it, fill in your own parts, put it
+  in a repository and keep it current.
+- After the kit is written you can ask for a kit test: a hero built from the kit alone and checked against the brand. A
+  builder works in a folder outside your project from a copy of the kit, the page check scores what it makes, a cold read
+  says ship or fix, and each gap goes back to your tokens, rules, facts or your own kit files (a file the kit made is
+  never patched). The result is noted in `BRAND-STATE.md`. It runs in your conversation; no agent is launched for it.
+
+### Changed
+
+- `brand-creator fontcheck --font <file>` checks the fonts you name together with every font under `assets/fonts/`.
+  Naming an extra font, such as one your ad or deck master ships, no longer leaves your brand's own fonts out of the font
+  report, and so out of your brand kit.
+- A pack recorded with `staleness --write` reads as stale after this update (the scripts it hashes changed); rebuild
+  it.
+- The list of generic first-idea patterns every direction is tested against has four new patterns, found in a real
+  brand's site: a pale ground with one timid accent, the display faces a generator names first (dated 2026-10), a
+  texture standing in for the idea (film grain, a stamp or badge, an engraving, a halftone) and the stock product page
+  (a label over every heading, a hero with two buttons, three equal tiles, an FAQ and a closing call-to-action band). It
+  also states the line each direction writes, `hit: <id> | <argument>`, and that layout patterns are judged on the
+  direction's own homepage frame, never on the board's chrome.
+- `board-lint` now checks the reflex line of each direction on a pick board, not only that it is there. The line is
+  `no hits`, or one `hit: <id> | <argument>` per hit, where the id is a pattern of the reflex list or an item of the
+  project's `research/cliches.md` under "Avoid unless argued"; `near miss: <id> (why)` records a pattern that looks
+  close and is never counted. Two hits in one direction now fail (`reflex-count`: replace a part before showing it), and
+  so does one hit that every direction shares (`directions:reflex-shared`: the directions are not divergent). Two
+  checks only warn in this release and become failures in the next one: a line that is not in the format
+  (`reflex-format`, which includes the free text earlier boards used) and a hit that names no known pattern
+  (`reflex-ids`; the row says when the project has no `research/cliches.md`). The report lists `research/cliches.md`
+  when it exists, so a changed list makes the lint stale. The example board of Acme, the Quick smoke's bakery board and
+  the board templates use the new line.
+- The judge of a direction round (the opt-in `directions` workflow) now lists the reflex patterns it sees. Before it
+  reads any argument, it names, for each direction, every pattern of the reflex list and every "Avoid unless argued"
+  item of the project's `research/cliches.md` that it sees on that direction's board, with where it saw it; layout
+  patterns are judged on the direction's own homepage frame, never on the board's chrome, and an empty list is an
+  answer. The lead puts each list beside the direction's reflex line (`data-field="reflex-seen"`), where `board-lint`
+  compares it with what the direction declared.
+- brand-creator's description now includes the brand's website references and reference pages, and still leaves building
+  production websites to other tools. `/brand-creator:check` says in its description that, with `--page`, it checks a
+  page built anywhere against the brand.
+- `fontcheck` names each font's family, weight and style in its licence row.
+
+### Fixed
+
+- The files written for other tools and agents now carry the type sizes, weights, line height and letter spacing, the
+  spacing steps and the corner radius that the tokens define, wherever the tokens name them (`size.text-*`, `weight.*`,
+  `space.*`, `radius.*`, `leading.*`, `tracking.*`, `layout.*`, `breakpoint.*`, or the older `dimension.space-*`). Before,
+  `DESIGN.md` said "Families only: the tokens define no sizes or weights" whatever the tokens held, and spacing and
+  radius were read from `dimension.*` tokens only. `DESIGN.md` now has them in its type, spacing and rounded entries and
+  in its Typography and Layout sections; `BRAND.md` lists them under Type and a new Layout block; the brand's applied skill
+  lists them under Type and a new Layout section. A value the tokens do not hold is still not invented, and a brand with
+  no sizes or weights keeps the sentence saying so. When the tokens give one step in the older and the new form
+  (`space.1` with `dimension.space-1`, `radius.sm` with `dimension.radius-sm`, `leading.sans` with `line-height.sans`),
+  `DESIGN.md` has one entry for it, or numbers the second when their values differ and says which token it is, so that no
+  key is written twice (a repeated key is not valid YAML and the format's check cannot read the file). Run `adapters`
+  and `applied-skill` again to update files you already have.
+- Finishing a site project no longer fails after the pages are approved. A page check used to depend on your whole
+  project record (`BRAND-STATE.md`), so approving the book or the adoption made the page checks of the round and of
+  `site/`, and the pages board's check with them, "not verified", and the finish chain turned that into a failure. A page
+  check now depends only on what it reads from that file: the system rules you approved. Changing one of those rules
+  still makes the checks stale, as it should. A rule on the pages board whose source is a line of `BRAND-STATE.md` and
+  of no other decision file makes the board's check go stale when that file changes: check the board again.
+
 ## [0.4.2] - 2026-10-24
 
 ### Fixed

@@ -1,7 +1,7 @@
 """Determinism rules for generated files, as code: the writers and the linter every emitter and `verify-idempotent` share.
 
 Two runs of a build chain must give byte-identical files (or an allowlisted, explained difference with a substitute
-check). The rules, from the plan:
+check). The rules:
 
   png     magick with `-define png:exclude-chunks=date,time` (magick_png_args), or Pillow; no tIME chunk, no date text chunk.
   zip     sorted entries, fixed mtime, fixed attributes (fixed_zip); never `zip -r` straight from a folder.

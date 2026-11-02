@@ -416,6 +416,15 @@ def test_adding_a_row_needs_a_surveyed_repository_and_all_the_words(proj, repo):
     assert len(load(proj)["rows"]) == load(proj)["nrows"]
 
 
+def test_a_code_change_row_without_lines_has_no_lines(proj, repo):
+    assert survey(proj, repo).returncode == 0
+    n0 = len(load(proj)["rows"])
+    r = bc("adoption", "add", "--repo", "shop", "--file", "src/main/app.rs", "--find", "fn main", "--change", "Show the tray state in words.", project=proj)
+    assert r.returncode == 0, r.stderr
+    row = load(proj)["rows"][-1]
+    assert row["n"] == n0 + 1 and row["category"] == "change" and row["lines"] == []
+
+
 def test_adoption_md_is_rendered_through_the_template_frame_and_a_broken_frame_is_an_error(proj, repo, tmp_path, monkeypatch):
     """templates/ADOPTION.md holds the fixed text (the apply rules); the data parts stay in their order; a frame without a placeholder fails."""
     assert survey(proj, repo).returncode in (0, 1)
@@ -435,3 +444,22 @@ def test_adoption_md_is_rendered_through_the_template_frame_and_a_broken_frame_i
     monkeypatch.setattr(ad, "TEMPLATE", broken)
     with pytest.raises(CliError, match=r"lacks the placeholders \['kept'\]"):
         ad.render(load(proj), "Acme")
+
+
+# ---------------------------------------------------------------- a list without a kit row renders the bytes it always did
+
+GOLDEN_NO_KIT = ROOT / "tests" / "fixtures" / "adoption"      # no-kit.json and no-kit.ADOPTION.md: recorded from the survey of tests/fixtures/target-repo (NAMES, COLOURS, 2026-10-17) before the `kit` category existed
+
+
+def test_adoption_md_of_a_list_without_a_kit_row_is_the_bytes_it_was(proj, tmp_path):
+    """The oracle is two files recorded before the category `kit` was added: the adoption.json a survey wrote and the ADOPTION.md that rendered. A list with no kit row must still
+    render to exactly those bytes, as the module and as the command, so that the adoption list of a project that never asked for a kit does not change."""
+    golden = json.loads((GOLDEN_NO_KIT / "no-kit.json").read_text(encoding="utf-8"))
+    assert [r["category"] for r in golden["rows"]].count("kit") == 0 and len(golden["rows"]) == 21 and ad.verify(golden) == []   # worked out from the fixture: 21 rows, none of them a kit
+    assert ad.render(golden, "Acme").encode("utf-8") == (GOLDEN_NO_KIT / "no-kit.ADOPTION.md").read_bytes()
+    shutil.copy2(GOLDEN_NO_KIT / "no-kit.json", proj / "adoption.json")
+    shutil.copy2(GOLDEN_NO_KIT / "no-kit.ADOPTION.md", proj / "ADOPTION.md")
+    r = bc("adoption", "verify", project=proj)                                      # the command compares the file with what the data renders
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert bc("adoption", "render", project=proj).stdout.strip() == "ADOPTION.md: unchanged"
+    assert (proj / "ADOPTION.md").read_bytes() == (GOLDEN_NO_KIT / "no-kit.ADOPTION.md").read_bytes() and (proj / "adoption.json").read_bytes() == (GOLDEN_NO_KIT / "no-kit.json").read_bytes()

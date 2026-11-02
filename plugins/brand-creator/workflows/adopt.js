@@ -44,6 +44,17 @@ function opts(type, extra) {
   return o
 }
 function norm(p) { return String(p).replace(/[\\/]+$/, '') + '/' }
+// The one loopback rule of isLoopbackUrl in scripts/lib/_common.mjs (a workflow imports nothing, so this is its copy; tests/node/workflows.test.mjs pins both to one table;
+// the CLI checks the address again), plus the characters the agents' shell reads inside double quotes: only URL-safe ones get through, never $, a backtick, \\, a quote, ; & | < > ( ) { } * !
+function isLoopback(u) {
+  if (typeof u !== 'string' || /[\s\u0000-\u001f\u007f\\]/.test(u)) return false
+  const host = /^https?:\/\/([^/?#@]*)(?:[/?#]|$)/i.exec(u)   // "@" in it would be a user name: refused
+  if (!host || !['localhost', '127.0.0.1', '[::1]'].includes(host[1].replace(/:\d*$/, '').toLowerCase())) return false
+  const port = /:(\d*)$/.exec(host[1])
+  return !(port && Number(port[1] || 0) > 65535)   // a port out of range: new URL() refuses it in the CLI
+}
+function isPageAddress(u) { return isLoopback(u) && /^[A-Za-z0-9._~:\/?#\[\]=+%,-]+$/.test(u) }
+function pageArgs(r) { return list(r.pages).map(u => ' --page "' + u + '"').join('') }
 
 const A = args
 if (!A || typeof A !== 'object') fail('args are required: run this from /brand-creator:brand-adopt after G6 and the fleet gate (see references/fleet.md)')
@@ -60,6 +71,10 @@ for (const r of REPOS) {
   if (!String(r.branch || '').trim()) fail('repository ' + r.label + ' needs the branch the owner named (never picked silently)')
   if (!list(r.rows).length) fail('repository ' + r.label + ' needs its ADOPTION.md rows (number and Find text)')
   if (MODE === 'fix' && !list(r.findings).length) fail('fix mode needs the reviewer\'s no-decision findings for ' + r.label)
+  if (r.pages !== undefined) {
+    if (!Array.isArray(r.pages) || r.pages.some(u => typeof u !== 'string' || !u)) fail('repository ' + r.label + ': pages must be a list of local page addresses (the owner\'s own server, for the wiring record of a redesign)')
+    for (const u of r.pages) if (!isPageAddress(u)) fail('repository ' + r.label + ': the page address ' + JSON.stringify(u) + ' is refused: it must be an http or https address on localhost, 127.0.0.1 or [::1] made only of letters, digits and - . _ ~ : / ? # [ ] = + % , (the agents paste it into a shell command inside double quotes; write any other character percent-encoded, for example %26 for &)')
+  }
 }
 for (const a of REPOS) for (const b of REPOS) {
   if (a !== b && (norm(a.path).startsWith(norm(b.path)) || a.label === b.label)) fail('repositories must be distinct working trees with distinct labels: ' + a.label + ', ' + b.label)
@@ -84,12 +99,13 @@ const IMPL = {
 }
 const REVIEW = {
   type: 'object',
-  required: ['repo', 'rows', 'commands', 'no_decision_fixes', 'decisions_for_you'],
+  required: ['repo', 'rows', 'commands', 'no_decision_fixes', 'decisions_for_you', 'wiring_losses'],
   properties: {
     repo: { type: 'string' },
     rows: { type: 'array', items: { type: 'object', required: ['row', 'status', 'evidence'], properties: { row: { type: 'string' }, status: { type: 'string', enum: ['done', 'partly', 'not done'] }, evidence: { type: 'string' } } } },
     commands: { type: 'array', items: { type: 'object', required: ['command', 'exit'], properties: { command: { type: 'string' }, exit: { type: 'integer' } } } },
     cmp_failures: { type: 'array', items: { type: 'string' } },
+    wiring_losses: { type: 'array', items: { type: 'string' } },
     no_decision_fixes: { type: 'array', items: { type: 'string' } },
     decisions_for_you: { type: 'array', items: { type: 'object', required: ['question', 'recommendation'], properties: { question: { type: 'string' }, recommendation: { type: 'string' } } } },
     not_verified: { type: 'array', items: { type: 'string' } },
@@ -105,8 +121,10 @@ function implement(r) {
   return agent([
     head(r),
     changes,
-    'Before your first change run brand-creator --data "' + A.data + '" snapshot take "' + A.project + '/assets" --name adopt-' + (MODE === 'fix' ? 'fix-' : '') + r.label + ' --project "' + A.project + '"; at the end run snapshot verify on that file and report the exit code (the pack must not change).',
+    'Before your first change run brand-creator --data "' + A.data + '" snapshot take "' + A.project + '/assets" --name "adopt-' + (MODE === 'fix' ? 'fix-' : '') + r.label + '" --project "' + A.project + '"; at the end run snapshot verify on that file and report the exit code (the pack must not change).',
     'Copy pack files byte for byte, cmp each one. Mark rows with brand-creator --data "' + A.data + '" adoption status --set <rows>=doing --project "' + A.project + '" (one argument: rows as N, N-M or N,M,..., for example --set 1,6,11-12=doing). Never pass --no-verify. Do not commit, merge, push or stash: leave the changes in the working tree.',
+    'A Brand kit row (its file is a .claude/skills/<slug>-brand/ folder, Find kit.json) is copied by the list brand-creator --data "' + A.data + '" kit status --repo "' + r.path + '" --project "' + A.project + '" prints: mkdir -p, then cp one file at a time, exactly those files; an owner file the repository already has is never overwritten; never into ~/.claude/skills or any global skills folder; files kit status names as left over from an older kit are not on that list: move each to removed-<date>/ in the repository, keeping its path inside that folder (removed-<date>-2/ when a file is already there; never delete one), and list them in moved_to_removed; the kit is not committed; run kit status --repo again, it must then say current.',
+    ...(list(r.pages).length ? ['The owner gave these pages of the redesigned site on the local server for the wiring record: when the last row is done (and again at the end of a fix run) run brand-creator --data "' + A.data + '" adoption wiring --repo "' + r.label + '" --after --project "' + A.project + '"' + pageArgs(r) + ', with exactly these --page addresses; the reviewer compares with the same ones. A page that cannot be read is reported, never skipped.'] : []),
     RULES,
     RESUME,
     'OUTPUT: the schema. Aim to finish within 40 minutes; keep turns short; tail-limit command output.',
@@ -119,6 +137,9 @@ async function review(impl, r) {
     'YOU DID NOT DO THIS WORK. The implementer reports (JSON): ' + JSON.stringify(impl),
     'ROWS TO CHECK: ' + list(r.rows).join(' | ') + (MODE === 'fix' ? ' and the fixes: ' + list(r.findings).join(' | ') : ''),
     'Check: cmp every file copied from the pack against ' + A.project + '/assets (any difference fails the row); sizes against the slot; the repository\'s own build and tests (from its README, package scripts, Makefile or CI config' + (r.build ? '; the owner named: ' + r.build : '') + '), quoting each command with its exit code; git status and git diff before and after your checks (report anything your commands changed). A check that needs a real device is not verified.',
+    'For a Brand kit row, brand-creator --data "' + A.data + '" kit status --repo "' + r.path + '" --project "' + A.project + '" must exit 0; quote it with its exit code. Files it names as left over from an older kit mean the row is not done: put each in no_decision_fixes (the implementer moves it to removed-<date>/ in the repository, never deletes it, then runs kit status again); you move nothing.',
+    'For a redesign of an existing site (the repository has a wiring before record), brand-creator --data "' + A.data + '" adoption wiring --repo "' + r.label + '" --compare --project "' + A.project + '"' + pageArgs(r) + ' must exit 0; quote it with its exit code. Every item it lists as lost, not recorded as dropped, fails the review and goes into wiring_losses (an empty list when nothing is lost, or when it exits 2 with the message "no before record", which means no redesign was recorded). Exit 2 with "not a surveyed repository" means the label ' + r.label + ' is not the label of the survey (ADOPTION.md). That is a failure, not "no loss": put it first in no_decision_fixes with the labels the message lists (the lead relaunches with the survey label), list the wiring in not_verified, and never answer it with an empty wiring_losses. Any other exit (3: a page of the before record cannot be read because the owner\'s local server is not running) is not verified: say so in not_verified, never count it as no loss. You record no drop: a drop is the owner\'s decision, in the owner\'s words.',
+    ...(list(r.pages).length ? ['The --page addresses of that command are the pages of the redesigned site on the owner\'s local server, the same ones the implementer\'s --after read: run it as written, with none changed or left out. Without them it would read the addresses of the before record, which are not the redesigned site\'s.'] : []),
     'Every row: done, partly or not done with evidence. Split the rest into no-decision fixes and numbered decisions for the owner with a recommendation each. Be honest: if something is fine, say so; do not invent problems to fill the list.',
     RULES,
     'OUTPUT: the schema. Aim to finish within 30 minutes; tail-limit command output.',
@@ -147,5 +168,5 @@ return {
   repos: pairs,
   complete: done.map(p => p.repo),
   incomplete,
-  next: 'Lead: show each repository\'s rows (done / partly / not done) with the evidence; a fix run (mode fix) only for no-decision findings; then the numbered decisions. Commit, merge and push are three separate asks of the owner; say what a push triggers first.',
+  next: 'Lead: show each repository\'s rows (done / partly / not done) with the evidence; a fix run (mode fix) only for no-decision findings; then the numbered decisions. Commit, merge and push are three separate asks of the owner; say what a push triggers first. A review whose wiring_losses is not empty is not ready for a commit ask: each lost item is put back (a fix run), or the owner says why it goes and you record it in their words (brand-creator adoption wiring --repo <label> --drop "<item>::<reason>"), and the review runs again.',
 }

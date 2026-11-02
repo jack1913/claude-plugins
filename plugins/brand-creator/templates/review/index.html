@@ -89,6 +89,7 @@ a{color:var(--accent)}
 .fit{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;margin:0}
 .fit dt{font-weight:600}.fit dd{margin:0}
 .reflex{font-size:14px;background:var(--sunk);border-radius:4px;padding:8px 10px;margin:0}
+.reflex-seen{font-size:14px;color:var(--muted);margin:0}
 .vote{border:0;padding:0;margin:0;display:flex;gap:6px;flex-wrap:wrap}
 .vote legend{font-size:13px;color:var(--muted);margin-bottom:4px}
 .vote label,.options label{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:14px;cursor:pointer}
@@ -211,7 +212,8 @@ footer{margin-top:56px;font-size:13px;color:var(--muted)}
         <div class="specimen"><div class="aa">Aa</div><p>[[fill: pangram in the audience's language, with its diacritics]]</p><p class="muted">[[fill: typeface names and licence]]</p></div>
         <ul class="voice"><li>[[fill: sample headline]]</li><li>[[fill: sample line]]</li><li>[[fill: error-page line]]</li></ul>
         <dl class="fit"><dt>Best for</dt><dd>[[fill: ...]]</dd><dt>Risk</dt><dd>[[fill: ...]]</dd></dl>
-        <p class="reflex" data-field="reflex">[[fill: reflex test against ai-defaults.json: "no hits", or each hit id with its argument]]</p>
+        <p class="reflex" data-field="reflex">[[fill: reflex test against ai-defaults.json and research/cliches.md: "no hits", or one "hit: &lt;id&gt; | &lt;argument from FACTS.md or the brief&gt;" per hit; "near miss: &lt;id&gt; (why)" is not a hit]]</p>
+        <!-- when the judge ran: <p class="reflex-seen" data-field="reflex-seen">judge saw: [[fill: the ai-defaults ids and research/cliches.md items the judge listed for this direction, or "none seen"]]</p> -->
         <fieldset class="vote" data-vote="[[fill: Name one]]"><legend>Your vote</legend>
           <label><input type="radio" name="vote-[[fill: Name one]]" value="keep">keep</label><label><input type="radio" name="vote-[[fill: Name one]]" value="drop">drop</label><label><input type="radio" name="vote-[[fill: Name one]]" value="unsure">unsure</label></fieldset>
       </article>

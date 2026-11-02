@@ -5,7 +5,7 @@ exclude_path = [
   "docs/archive",
   "plugins/.*/docs/archive",
   "\\.onboard-repo-retired",
-  "plugins/.*/evals",
+  "plugins/[^/]+/evals/",
   "plugins/.*/tests",
   "plugins/brand-creator/templates",
   "plugins/batbelt/skills/onboard-repo/templates",

@@ -155,6 +155,13 @@ export function outsideProject(project, p, what = "path") {
   if (isInside(root, abs)) die(EXIT.USAGE, `${what} ${p} must be outside the project (scratch output); use the data dir or a temp folder`);
   return abs;
 }
+/** Like outsideProject, but a folder under <project>/specimens/ (any depth) is allowed too: page shots the owner keeps as specimens. */
+export function outsideOrSpecimens(project, p, what = "path") {
+  const root = fs.realpathSync(project);
+  const abs = realLenient(p);
+  if (isInside(root, abs) && !isInside(path.join(root, "specimens"), abs)) die(EXIT.USAGE, `${what} ${p} must be outside the project, or under specimens/`);
+  return abs;
+}
 export const rel = (project, p) => path.relative(fs.realpathSync(project), p).split(path.sep).join("/");
 
 export function scratchDir(project, name) {
@@ -179,6 +186,18 @@ export function today() {
   }
   const d = new Date(), two = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}`;
+}
+
+/** The one loopback rule: true only for an `http:` or `https:` URL with no user name or password whose host, as written, is `localhost`, `127.0.0.1` or `[::1]`
+ *  (any letter case). The host is the text in the URL, not what a parser turns it into: `127.1`, `0x7f000001`, `2130706433`, `[0:0:0:0:0:0:0:1]` and `%6cocalhost`
+ *  are refused although a browser would go to this machine. Anything with whitespace, a control character or a backslash is refused outright (parsers disagree
+ *  on those). Twin of is_loopback_url in scripts/pagelib/pagecheck.py (a test pins both to one table of cases). */
+export function isLoopbackUrl(url) {
+  if (typeof url !== "string" || /[\s\u0000-\u001f\u007f\\]/.test(url)) return false;
+  const authority = /^https?:\/\/([^/?#@]*)(?:[/?#]|$)/i.exec(url);   // "@" in it would be a user name: refused
+  if (!authority || !["localhost", "127.0.0.1", "[::1]"].includes(authority[1].replace(/:\d*$/, "").toLowerCase())) return false;
+  try { new URL(url); } catch { return false; }   // a port that is no number, or out of range
+  return true;
 }
 
 export const sha256 = (buf) => crypto.createHash("sha256").update(buf).digest("hex");

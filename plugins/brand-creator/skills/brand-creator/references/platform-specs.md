@@ -596,4 +596,4 @@ UNVERIFIED. 3.5 x 2 in card, 8.5 x 11 in letter paper and the 9.5 x 4.125 in #10
 - Source: https://www.jisc.go.jp/eng/
 - Sizes: `{"business_card_mm": [91, 55], "paper": "A4", "paper_mm": [210, 297], "envelope": "DL", "envelope_mm": [220, 110], "bleed_mm": 3}`
 
-UNVERIFIED. 91 x 55 mm is the usual Japanese business card, A4 is the office paper. Japanese post also uses the long-format envelopes (for example nagagata 3, 120 x 235 mm); DL is used here because the plan names DL and #10 only, so pass --envelope-mm for a local format. The 3 mm bleed is a typical default: ask the printer.
+UNVERIFIED. 91 x 55 mm is the usual Japanese business card, A4 is the office paper. Japanese post also uses the long-format envelopes (for example nagagata 3, 120 x 235 mm); DL is used here because DL and #10 are the two envelopes the print templates come in, so pass --envelope-mm for a local format. The 3 mm bleed is a typical default: ask the printer.

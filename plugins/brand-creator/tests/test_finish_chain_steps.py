@@ -71,11 +71,11 @@ class Chain:
 
 
 def chain(tmp_path: Path, *, tier: str = "standard", decision: dict | None = None, proof: str | None = "page", book: bool = True,
-          answers: dict | None = None, targets: str = "web", **env: str) -> Chain:
+          answers: dict | None = None, targets: str = "web", rounds: dict[int, bool] | None = None, **env: str) -> Chain:
     """Fill the template (block 2's targets: `targets`; no apple line) into a bare project and run it against the stand-in. `decision` is what `motion --json`
     answers and what motion/motion.json says (the frames step reads the file itself); `proof` writes motion/proof.json with a page case ("page"),
     with a named-state case only ("states"), or not at all (None); `answers` maps a call ("shot", "frames", "emit presskit", ...) to
-    {"code": n, "out": text, "err": text, "write": [project files]}."""
+    {"code": n, "out": text, "err": text, "write": [project files]}. `rounds` maps a round number to whether rounds/r<N>/board.html is there (none: no rounds/ folder)."""
     decision = UNDECIDED if decision is None else decision
     p = tmp_path / "project"
     (p / "tools").mkdir(parents=True)
@@ -91,6 +91,10 @@ def chain(tmp_path: Path, *, tier: str = "standard", decision: dict | None = Non
         (p / "motion" / "proof.json").write_text(json.dumps({"schema": 1, "cases": [case]}))
     if book:
         (p / "book" / "chapters").mkdir(parents=True)
+    for n_, has_board in (rounds or {}).items():
+        (p / "rounds" / f"r{n_}").mkdir(parents=True)
+        if has_board:
+            (p / "rounds" / f"r{n_}" / "board.html").write_text("<html></html>\n")
     tpl = (ROOT / "templates" / "finish.sh.tpl").read_text()
     tpl, n = re.subn(r"^TARGETS=\(.*\)$", f"TARGETS=({targets})", tpl, flags=re.M)
     assert n == 1
@@ -239,6 +243,89 @@ def test_a_book_that_refuses_stops_the_chain_with_its_exit_code_before_its_pdf(t
     c = chain(tmp_path, decision=ON, answers={"book": {"code": 2, "err": "error: motion/motion.json: no token named motion.nowhere"}})
     assert c.code == 2 and c.steps[-1] == "book" and not c.ran("book-pdf") and not c.ran("check"), (c.steps, c.out)
     assert "error: motion/motion.json: no token named motion.nowhere" in c.out                                 # and its reason is shown
+
+
+# ---------------------------------------------------------------- the board of the latest round is linted again, so an edit of the facts or the brief is picked up
+
+LINT = "board-lint rounds/r2/board.html"
+LINT_REPORT = "assets/_checks/board-lint.json"
+
+
+def test_the_board_of_the_latest_round_is_linted_again_after_the_press_kit_and_before_staleness_and_check(tmp_path):
+    """board-lint lists FACTS.md and brief/BRIEF.md as inputs and `check` wants a current report of the latest round: without this step an edit of either
+    turns `check` not verified until board-lint is run by hand. The earlier rounds are not linted; the chain is the same as before apart from this step."""
+    c = chain(tmp_path, decision=OFF, rounds={0: True, 1: True, 2: True})
+    assert c.code == 0, c.out
+    assert c.calls.count(["board-lint", "rounds/r2/board.html"]) == 1 and sum(1 for x in c.calls if x[:1] == ["board-lint"]) == 1, c.calls
+    c.in_order(["gates", "book", "book-pdf", "emit presskit", LINT])
+    names = [x[0] if x[0] != "emit" else " ".join(x[:2]) for x in c.calls]
+    assert names.index("board-lint") < names.index("staleness") < names.index("check") and names.index("emit presskit") < names.index("board-lint"), names
+
+
+def test_the_latest_round_counts_by_its_number_not_by_its_name(tmp_path):
+    c = chain(tmp_path, decision=OFF, rounds={2: True, 10: True, 9: True})
+    assert c.code == 0 and [x for x in c.calls if x[:1] == ["board-lint"]] == [["board-lint", "rounds/r10/board.html"]], c.calls
+
+
+@pytest.mark.parametrize("what, rounds", [("no rounds folder", None), ("a latest round with no board.html", {1: True, 2: False})])
+def test_no_board_to_lint_means_no_lint_step(tmp_path, what, rounds):
+    """The board `check` looks for is rounds/rN/board.html of the highest N: when it is not there, `check` expects no board-lint report and the chain runs none."""
+    c = chain(tmp_path, decision=OFF, rounds=rounds)
+    assert c.code == 0 and not c.ran("board-lint") and not any(s.startswith("board-lint") for s in c.steps), (what, c.calls)
+    assert c.ran("staleness", "--write") and c.ran("check")
+
+
+def test_a_board_that_fails_its_lint_does_not_stop_the_chain_check_fails_the_report(tmp_path):
+    rep = tmp_path / "project" / LINT_REPORT
+    c = chain(tmp_path, decision=OFF, rounds={2: True}, answers={"board-lint": {"code": 1, "out": f"[FAIL] page:unfilled\nreport: {rep}", "write": [str(rep)]}})
+    assert c.code == 0, c.out
+    assert c.out.count(f"finish.sh: board-lint failed on rounds/r2/board.html (see above); the chain goes on and check fails the report") == 1, c.out
+    assert "[FAIL] page:unfilled" in c.out                                                              # the lint's own words are shown
+    assert c.ran("staleness", "--write") and c.ran("check") and c.steps[-1] == LINT, (c.steps, c.calls)
+
+
+def test_a_board_the_lint_could_not_verify_goes_on_because_it_wrote_its_report(tmp_path):
+    rep = tmp_path / "project" / LINT_REPORT
+    c = chain(tmp_path, decision=OFF, rounds={2: True}, answers={"board-lint": {"code": 3, "out": f"[SKIP] reflex-grounded\nreport: {rep}", "write": [str(rep)]}})
+    assert c.code == 0, c.out
+    assert c.out.count("finish.sh: board-lint could not verify rounds/r2/board.html (see above); the chain goes on and check says why") == 1, c.out
+    assert "[SKIP] reflex-grounded" in c.out and c.ran("staleness", "--write") and c.ran("check")
+
+
+REFUSED = "page rounds/r2/board.html is outside the project /tmp/project; brand-creator only writes inside the project"   # what the real lint says of a board.html that is a link to a file outside the project (exit 2)
+
+
+def failed_step(code: int, why: str = REFUSED) -> str:
+    return f"finish.sh: step failed: {LINT} stopped with exit {code} and left no report of this board: {why}. The chain goes on, so that check still writes the pack report"
+
+
+@pytest.mark.parametrize("what, answer, code, why", [
+    ("a board it refuses with a usage error (exit 2: a board.html that is a link to a file outside the project)", {"code": 2, "err": f"error: {REFUSED}"}, 2, REFUSED),
+    ("an exit 1 that wrote no report", {"code": 1, "out": "report: assets/_checks/board-lint.json"}, 1, "it printed no reason, see above"),
+    ("an exit 3 that wrote no report", {"code": 3}, 3, "it printed no reason, see above"),
+])
+def test_a_board_the_lint_refuses_does_not_stop_the_chain_before_check_and_is_reported_as_a_failed_step(tmp_path, what, answer, code, why):
+    """A lint that leaves no report of the latest board (it refuses the board, as with a board.html that is a link to a file outside the project, or it crashes) used to stop the
+    chain, so no pack report was written at all. Now the step is reported as failed, with the lint's own message, the chain goes on to staleness and `check` (which says the board is not verified), and it
+    ends with a non-zero exit code even if `check` passes: it never passes in silence."""
+    c = chain(tmp_path, decision=OFF, rounds={2: True}, answers={"board-lint": answer})
+    assert failed_step(code, why) in c.out, (what, c.out)
+    assert c.out.count("finish.sh: step failed:") == 1 and c.out.count("finish.sh: check passed, but a step failed") == 1, c.out
+    assert why in c.out and c.ran("staleness", "--write") and c.ran("check"), (what, c.calls)
+    assert c.code == code, (what, c.code, c.out)                                                      # check passed in the stand-in: the lint's own exit code ends the chain
+    assert [x[0] for x in c.calls][-2:] == ["staleness", "check"], c.calls
+    assert f"finish.sh: check passed, but a step failed (board-lint {LINT.split()[1]}): the chain ends with exit {code}" in c.out
+
+
+def test_when_check_fails_too_after_a_refused_board_the_chain_ends_with_the_exit_code_of_check(tmp_path):
+    c = chain(tmp_path, decision=OFF, rounds={2: True}, answers={"board-lint": {"code": 2, "err": f"error: {REFUSED}"}, "check": {"code": 1, "out": "check: FAIL report:board-lint"}})
+    assert c.code == 1 and "check: FAIL report:board-lint" in c.out and failed_step(2) in c.out, c.out
+    assert c.ran("staleness", "--write") and c.ran("check") and "check passed, but a step failed" not in c.out
+
+
+def test_a_board_that_lints_clean_ends_the_chain_with_the_exit_code_of_check_and_no_failed_step(tmp_path):
+    c = chain(tmp_path, decision=OFF, rounds={2: True}, answers={"check": {"code": 3, "out": "check: not verified"}})
+    assert c.code == 3 and "step failed" not in c.out and "check passed, but" not in c.out, c.out
 
 
 # ---------------------------------------------------------------- the book, the press kit, print and posts, by tier

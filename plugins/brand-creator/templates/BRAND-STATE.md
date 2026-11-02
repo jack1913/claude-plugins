@@ -12,11 +12,12 @@ content_languages: ""          # language set code(s) the brand's own text is wr
 renderer: resvg                # off macOS, after the owner agrees: resvg (opted in YYYY-MM-DD)
 review_surface: auto           # auto (not answered yet: boards stay local until the owner answers the one upload question) | artifact | local
 review_url: ""                 # the one stable review page (Artifact URL or local path)
+site_research: auto            # online research for website references: auto (not asked yet) | online | links-only | none
 incumbent: none                # none, or one line about today's mark or site; a set value makes the "today" board section required
 inventory: ""                  # path to INVENTORY.md, or: none (no target repo). Required before the first board in the Full tier or product-in-family.
 edition: 1                     # the brand book's edition (a whole number); a new edition needs a new G5 approval
 approved_edition: ""           # the edition G5 approved; written by `state --record G5`. The book shows APPROVED only when it equals edition.
-book_chapters: []              # extra chapters to include, from: tone, photography, components (the tier and architecture decide the rest)
+book_chapters: []              # extra chapters to include, from: tone, photography, components, site (the tier and architecture decide the rest)
 canonical_direction: ""        # the direction that is the visible baseline after the pick
 reset_rounds: []               # rounds that follow a full rejection, e.g. [4, 5]: the style board run again, then the pick board (the map is required again there)
 # g1s_round: written by the tool, never by hand. `brand-creator state --record G1s "<decision>"` stores the highest round whose board is a style board at that moment; board-lint compares it with the style board of a reset round.
@@ -29,6 +30,8 @@ gates:                         # date + decision, written by: brand-creator stat
   G2b: ""                      # reset or recover decision (only when used)
   G3: ""                       # refined approval (the approved round is frozen)
   G4: ""                       # system rules
+  G4w: ""                      # website references pick (or "skipped by owner"); the site round waits for it
+  G4p: ""                      # the site's reference pages approved (site approve needs it)
   G5: ""                       # pack and book
   G6: ""                       # adoption
   G7: ""                       # outward actions

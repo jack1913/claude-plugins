@@ -29,19 +29,28 @@ project
   freeze <round> --name N copy an approved round to history/ with a banner and update history/MANIFEST.sha256
   motion                  the motion decision (motion/motion.json): on, off (nothing moves) or not decided; --off "<reason>" records that nothing
                           moves, once (--json for data). Standard and Full decide it before G4: the motion round, or --off
+  site approve            put the approved pages of the site round (a pages board, G4p recorded, linted since its last change) into site/ with their paths
+                          fixed, and write site/site.json: each page, its layout and every choice as a brand rule or an example; --round N, --replace
+                          (moves an existing site/ to removed-<date>/site/)
 
 checks and renders
-  shot <page.html>        four-view page shots (1440/390 x light/dark) with an overflow/console/network report
+  shot <page.html>        four-view page shots (1440/390 x light/dark) with an overflow/console/network report; --out DIR keeps them outside the
+                          project or under specimens/ (the project's own folder for shots kept as specimens)
   shot --motion <proof>   motion proof: named states against the still, a page's animations seeked through (layout shift, whole pixels, edges at
                           phone widths, rest frame compared in the page itself), reduced motion; one report per proof file
   card <card.html>        render an HTML card to a PNG (OG, repo social, README header)
   frames <proof.json>     stills of a page case's mark along its motion (--case, --count N or --at 0,25,50,75,100): a strip and the reduced-motion
                           still too, into motion/frames/<case>/ (a try-out proof in the latest round or removed-*/: <its folder>/frames/<case>/; a proof in
                           history/ or an earlier round is refused: read-only), each written only when its bytes change
+  capture <page.html>     stills of a page of the project: the first screen at 1440 and 390, light and dark, and a full page, beside it in shots/, with
+                          capture.json (what the page loaded); --url URL --name NAME captures a real site into research/site-refs/NAME/ instead: the
+                          only command that reaches the network, and only after the owner answered the online-research question (site_research)
   logo-sheet              real-size logo sheet (16/20/32/64/128/180, light and dark, x4 favicon, header mock)
   contrast                WCAG 2.2 AA UI pairs, brand-rule pairs, colours that touch in the logo SVGs, APCA advisory
   board-lint <page.html>  required board sections (data-section attributes) for a round page; a motion round's variants too (folder, proof, stills, their reports)
   check                   all gates for the artefacts that exist; --cascade "<old value>" greps for leftovers
+  page-check <page.html>  open a page at several widths, light and dark, and report what it loads: a page of the project, --from DIR <page> (a built
+                          site anywhere, copied and read only) or --url URL (a page on this machine only); one report per page
 
 quality gates (assets, motion, fonts)
   downscale               what survives when one master is shrunk to the sizes systems show (sips on macOS; accent px, bbox, 4x4 rule)
@@ -67,9 +76,15 @@ brand book
 adoption, adapters, launch
   adoption survey|status  read product repositories (read only) for brand slots (old names and colours, icon files, metadata, README badges) into
                           adoption.json and ADOPTION.md: numbered rows, progress and pins kept apart, a "Kept, not counted" list, counts in sentences
+  adoption wiring         record a repository's links, form field names, handlers, test hooks, ids and scripts from its source (read only),
+                          --before a redesign and --after it, in adoption.json, so nothing the site is wired to is lost by accident;
+                          --compare lists what it lost (writes nothing, exit 1 on a loss nobody dropped), --drop "ITEM::REASON" records why
+                          an item goes, in your words; --page URL (repeatable) reads a page of your own local server from the DOM too
   adapters                opt-in at G5: BRAND.md (Strategy, Voice, Visual, Governance) and DESIGN.md generated from the tokens, BRAND-STATE and FACTS;
                           DESIGN.md is linted with the pinned @google/design.md when setup installed it, else "not verified"
   applied-skill           opt-in at G5, needs --yes: writes .claude/skills/<slug>-brand/SKILL.md into the project (colours, type, mark rules, claims)
+  kit build|check|status  the brand kit around the applied skill, opt-in at G5: build (needs --yes) writes .claude/skills/<slug>-brand/ with the brand's own
+                          files copied in byte for byte and locked by kit.json; check proves it whole, status that a product repository's copy is current
   launch-todo             LAUNCH.md for the owner: trademark first, domains with their check date, handles, e-mail, renames, print hand-off, decisions
                           (reads local files only; nothing outward is ever executed). check --cascade "<old value>" greps every project artefact
 
@@ -180,13 +195,16 @@ case "$sub" in
   state)      py_boot state.py "$@" ;;   # stdlib only: must work without uv (the status skill injects it)
   freeze)     py freeze.py "$@" ;;
   motion)     py motion.py "$@" ;;
+  site)       py site_pages.py "$@" ;;   # not site.py: a script of that name would shadow the standard library's site module wherever scripts/ is on sys.path
   shot)       js render.mjs shot "$@" ;;
   card)       js render.mjs card "$@" ;;
   frames)     js render.mjs frames "$@" ;;
+  capture)    js render.mjs capture "$@" ;;
   logo-sheet) py logo_sheet.py "$@" ;;
   contrast)   py contrast.py "$@" ;;
   board-lint) py board_lint.py "$@" ;;
   check)      py check.py "$@" ;;
+  page-check) py page_check.py "$@" ;;
   book)       py book.py "$@" ;;
   book-lint)  py book_lint.py "$@" ;;
   book-pdf)   py book_pdf.py "$@" ;;
@@ -196,6 +214,7 @@ case "$sub" in
   adoption)   py adoption.py "$@" ;;
   adapters)   py adapters.py "$@" ;;
   applied-skill) py applied_skill.py "$@" ;;
+  kit)        py kit.py "$@" ;;
   launch-todo) py launch.py "$@" ;;
   downscale)  py downscale_check.py "$@" ;;
   states-check) py states_check.py "$@" ;;

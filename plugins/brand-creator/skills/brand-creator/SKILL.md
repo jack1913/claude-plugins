@@ -1,6 +1,6 @@
 ---
 name: brand-creator
-description: Starts or continues a brand-identity project for a company, product or person (new brand, logo, visual identity, rebrand, brand guidelines) and runs it step by step, with the owner deciding at each step. Identity creation only; not for building web pages, UI components, slide themes, chart colours or colour conversions.
+description: Starts or continues a brand-identity project for a company, product or person and runs it step by step, with the owner deciding each step. Identity creation, plus the brand's own website references and reference pages; not for building production websites, UI components, slide themes, chart colours or colour conversions.
 when_to_use: Use whenever someone wants a logo, a look, a visual identity, a rebrand, brand guidelines or a brand book, even when the ask is small or casual ("a logo for my band", "a look for my Etsy shop"), for a business, product, shop, podcast or person. Also to go on with a brand project (a folder holding BRAND-STATE.md) and any work on its files (edit or lint a round board, fold in a judge report, change a rule, token or threshold such as an accent minimum), and for launch steps ("buy the domain", "file the trademark"), which are handed to the owner, never done for them. Polish triggers include "księga znaku", "identyfikacja wizualna", "zaprojektuj logo", "nowa marka", "rebranding", "logo dla firmy".
 compatibility: Claude Code only (uses the plugin's bin/ entry point and hooks). Needs Python 3.10+ with uv, Node 22+, resvg and a Playwright Chromium installed by /brand-creator:setup; macOS with Xcode only for Apple emitters.
 allowed-tools: Bash(brand-creator *)
@@ -100,6 +100,7 @@ Quick with an open or at-risk name runs the brand-naming skill (P2) before the b
 | P5 | refinement rounds | G3 (freeze) | [05-refinement](references/phases/05-refinement.md) | all |
 | P6 | mark and logo system at real sizes | thresholds go to G4 | [06-mark](references/phases/06-mark.md) | all |
 | P7 | motion round (S, F), then tokens and system rules | G4 | [07-tokens](references/phases/07-tokens.md) | all |
+| P7w, P7p | website references, then the site's reference pages, hero first (only when BRIEF lists a site) | G4w, G4p | [07w](references/phases/07w-website-references.md), [07p](references/phases/07p-site-round.md) | S, F |
 | P8 | asset packs: the brand-assets skill | needs G3 | [08-assets](references/phases/08-assets.md) | all (web, social in Quick) |
 | P9 | QA gates | `check` exit 0 | [09-qa](references/phases/09-qa.md) | all |
 | P10 | brand book or short guide: [the brand-book skill](../brand-book/SKILL.md) | G5 | [10-book](references/phases/10-book.md) | all (short in Quick) |
@@ -200,17 +201,14 @@ Read the phase file fully when entering a phase. Record every gate decision with
 
 ## Review surface
 
-The board is reviewed where the owner is. Order: what the owner says this turn ("I'm on my phone") > `review_surface`
-in BRAND-STATE.md (`auto` there counts as unset) > the plugin setting (`${user_config.review_surface}`) > `auto`.
-Uploading a board to claude.ai is the owner's choice. A resolved `auto` means not answered yet: when the Artifact tool
-exists in this session, ask once at G0, or before the first upload of a project that never answered (in the
-AskUserQuestion call, or in the plain-text message without the tool): "Show boards as a private Artifact page on claude.ai (uploaded), or as a local file on this
-machine?", with local marked (Recommended). Record the answer with `state --set review_surface=artifact` or
-`review_surface=local`, and never ask again. Until it is answered, and whenever the tool is missing, use the local file,
-opened with `open` / `xdg-open` / `start` (print the absolute path if that fails). The plugin setting `artifact` is the
-owner's yes already; `local` means never upload. If Artifact is asked for but the tool is missing, say so before
-falling back to the local file. Each round regenerates one stable page, `review/index.html`, published to the same Artifact
-URL, recorded as `review_url`. Round 0's page is a copy of the style board.
+Order: what the owner says this turn > `review_surface` in BRAND-STATE.md (`auto` counts as unset) >
+the plugin setting (`${user_config.review_surface}`) > `auto`. `auto` means not answered: with the Artifact tool, ask once
+(at G0, or before the first upload): "Show boards as a private Artifact page on claude.ai (uploaded), or as a local file on
+this machine?", local marked (Recommended). Record `state --set review_surface=artifact|local`; never ask again. Until
+then, or without the tool, use the local file, opened with `open` / `xdg-open` / `start` (print its absolute path if that
+fails). The setting `artifact` is the owner's yes, `local` means never upload; Artifact asked for but no tool: say so
+first. Each round regenerates one stable page, `review/index.html`, published to the same Artifact URL (`review_url`).
+Round 0's page is a copy of the style board.
 
 ---
 
@@ -288,12 +286,14 @@ arguments, resume and the refine loop: [fleet.md](references/fleet.md).
 <project>/
   BRAND-STATE.md  FACTS.md  brief/BRIEF.md  brief/canvas-round-<N>.md (drawing briefs)  INVENTORY.md (Full, product-in-family)
   research/ (research.md, cliches.md, positioning-map.md, dated notes, names/)
+  research/site-refs/<name>/ (captures)  research/site-cliches.md
   rounds/r0/board.html (style board)  rounds/r1/board.html  rounds/r1/<direction>/ (<item>.svg, -16/-32/-128.png, SOURCE.md)
   rounds/r<N>/<variant>/ (a motion round: index.html, proof.json, frames/<variant>/)
   motion/ (motion.json: the one record of the motion decision, absent = not decided; proof.json, frames/<case>/ of the approved move)
   .design/<slug>/ (the use-llm design canvas, when one is used)
   review/index.html                        tokens/*.tokens.json
   assets/logo/ assets/tokens/ assets/web/ assets/social/ assets/manifest.json assets/_checks/
+  site/<page>/  site/site.json (approved reference pages)
   history/<date>-<name>/  history/MANIFEST.sha256   decisions/
 ```
 
@@ -318,9 +318,11 @@ Full file contract: `${CLAUDE_PLUGIN_ROOT}/scripts/CONTRACT.md`. Templates: `${C
 | brand book (P10; method in [10-book](references/phases/10-book.md)) | generated: `book --init`, `book`, `book-lint --self-consistency`, `book-pdf` (RGB proof); authored-vector: `patch book.html --old .. --new .. --count N`, then `book-lint`; after a decision: `collapse --group <g> --keep <name>` (plan first, then `--apply`) |
 | adoption survey of product repositories (P11, Full tier; read only; method in [11-adoption](references/phases/11-adoption.md)) | `adoption survey --repo <dir>=<label> --old-name "<Old>" --old-colour "#rrggbb"`, `adoption add --repo <label> --file <path> --find "<text>" --change "<sentence>"`, `adoption status [--set 1-5=doing]` (doing and done need G6), `adoption verify` |
 | rule change: find the old value everywhere | `check --cascade "<old value or phrase>"` (repeatable; `--also <path>` for a parent brand's document; see [cascade](references/cascade.md)) |
-| BRAND.md, DESIGN.md and a per-brand skill (opt-in at G5) | `adapters --brand-md --design-md [--primary <role>]`; `applied-skill --yes` (without `--yes` it only prints the plan); both need G5 and are generated files ([10-book](references/phases/10-book.md)) |
+| BRAND.md, DESIGN.md, a per-brand skill and the brand kit around it (opt-in at G5) | `adapters --brand-md --design-md [--primary <role>]`; `applied-skill --yes` (without `--yes` it only prints the plan); `kit build` (the plan), `kit build --yes`, then `kit check` and `kit status --repo <dir>` (read only); the writers need G5 and what they write is generated ([10-book](references/phases/10-book.md)) |
 | launch checklist for the owner (P13; method in [13-launch](references/phases/13-launch.md)) | `launch-todo [--name <candidate>]` writes LAUNCH.md from local files; nothing outward is ever executed |
 | every gate that applies | `check --project <dir>` |
+| a page built anywhere, against the brand | `page-check <page>`, `page-check --from <dir> <page>`, `page-check --url http://localhost:<port>/<path>` |
+| website references and the site round (S, F; only when BRIEF lists a site) | `capture --url <url> --name <name>`, `capture <page>`, `site approve` ([07w](references/phases/07w-website-references.md), [07p](references/phases/07p-site-round.md)) |
 | name screening (P2, after the owner's privacy OK) | `names <name>... --project <dir> --profile <p> --region <CC> --plan`, then `--yes` |
 | freeze an approved round | `freeze r<N> --name approved-board --project <dir>` |
 
@@ -331,6 +333,8 @@ Full file contract: `${CLAUDE_PLUGIN_ROOT}/scripts/CONTRACT.md`. Templates: `${C
   [01s-style-research](references/phases/01s-style-research.md), [02-naming](references/phases/02-naming.md), [03-strategy-directions](references/phases/03-strategy-directions.md),
   [04-selection](references/phases/04-selection.md), [05-refinement](references/phases/05-refinement.md),
   [06-mark](references/phases/06-mark.md), [07-tokens](references/phases/07-tokens.md),
+  [07w-website-references](references/phases/07w-website-references.md),
+  [07p-site-round](references/phases/07p-site-round.md),
   [08-assets](references/phases/08-assets.md), [09-qa](references/phases/09-qa.md),
   [10-book](references/phases/10-book.md), [11-adoption](references/phases/11-adoption.md),
   [12-history](references/phases/12-history.md), [13-launch](references/phases/13-launch.md).
@@ -354,5 +358,7 @@ Full file contract: `${CLAUDE_PLUGIN_ROOT}/scripts/CONTRACT.md`. Templates: `${C
 - [prompt-fragments.md](references/prompt-fragments.md): the prompt skeleton for designer, judge and reviewer passes.
 - [fleet.md](references/fleet.md): the opt-in workflows and agents, the fleet gate in full, model ceiling, the refine loop, resume.
 - [ai-defaults.json](references/ai-defaults.json): the reflex list every direction is tested against.
+- [page-tells.json](references/page-tells.json): the generic page tells the page check warns about (English and Polish).
+- [page-layouts.json](references/page-layouts.json): layout references for the site round, keyed to the visitor's job (structure only).
 - [platform-specs.md](references/platform-specs.md): every platform size the emitters use, with source, date and status V, R or U (generated from `scripts/emitters/platform-specs.json`; never edited by hand).
 - [examples/acme/README.md](references/examples/acme/README.md): a synthetic worked brand (state, decisions, round 1 page, map).

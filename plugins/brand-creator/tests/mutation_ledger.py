@@ -27,6 +27,9 @@ ST = "tests/test_finish_chain_steps.py::"
 PR = "tests/test_emit_profiles.py::"
 BM = "tests/test_book_motion.py::"
 BL = "scripts/booklib/booklint.py"
+KT = "tests/test_kit.py::"
+KL = "scripts/adaptlib/kitlib.py"
+WT = "tests/test_adoption_wiring.py::"
 
 # group, id, file, the text, its replacement, the tests that must catch it (pytest node ids, relative to the plugin folder)
 LEDGER: list[dict] = [
@@ -117,6 +120,41 @@ LEDGER: list[dict] = [
     dict(group="finish-chain", id="print-not-opt-in", file=TPL,
          old='  standard|full) [ -z "$PRINT_REGION" ] || TARGETS+=(print) ;;\n', new="  standard|full) TARGETS+=(print) ;;\n",
          tests=[ST + "test_print_is_emitted_only_when_the_owner_opted_in_with_a_region"]),
+    dict(group="finish-chain", id="board-never-linted-again", file=TPL,
+         old='if [ -n "$BOARD" ]; then\n  step "board-lint $BOARD"\n', new='if false; then\n  step "board-lint $BOARD"\n',
+         tests=[ST + "test_the_board_of_the_latest_round_is_linted_again_after_the_press_kit_and_before_staleness_and_check",
+                FC + "test_the_standard_chain_runs_profiles_print_posts_book_and_press_kit_in_order_through_to_check"]),
+    dict(group="finish-chain", id="lint-of-the-first-round", file=TPL,
+         old='page = f"rounds/r{max(ns)}/board.html" if ns else ""', new='page = f"rounds/r{min(ns)}/board.html" if ns else ""',
+         tests=[ST + "test_the_latest_round_counts_by_its_number_not_by_its_name"]),
+    dict(group="finish-chain", id="lint-of-a-board-that-is-not-there", file=TPL,
+         old='print(page if page and os.path.isfile(page) else "")', new="print(page)",
+         tests=[ST + "test_no_board_to_lint_means_no_lint_step"]),
+    dict(group="finish-chain", id="failing-lint-stops", file=TPL,
+         old='(see above); the chain goes on and check fails the report" >&2\n  elif [ "$rc" -eq 3 ]', new='(see above); the chain goes on and check fails the report" >&2; exit 1\n  elif [ "$rc" -eq 3 ]',
+         tests=[ST + "test_a_board_that_fails_its_lint_does_not_stop_the_chain_check_fails_the_report"]),
+    dict(group="finish-chain", id="not-verified-lint-stops", file=TPL,
+         old='the chain goes on and check says why" >&2\n  elif [ "$rc" -ne 0 ]', new='the chain goes on and check says why" >&2; exit 3\n  elif [ "$rc" -ne 0 ]',
+         tests=[ST + "test_a_board_the_lint_could_not_verify_goes_on_because_it_wrote_its_report"]),
+    dict(group="finish-chain", id="lint-exit-1-without-report-goes-on", file=TPL,
+         old='if [ "$rc" -eq 1 ] && wrote_report "$LINT_OUT"; then', new='if [ "$rc" -eq 1 ]; then',
+         tests=[ST + "test_a_board_the_lint_refuses_does_not_stop_the_chain_before_check_and_is_reported_as_a_failed_step"]),
+    dict(group="finish-chain", id="refused-board-stops-the-chain", file=TPL,
+         old='The chain goes on, so that check still writes the pack report" >&2\n  fi\nfi\n"${BC[@]}" staleness --write',
+         new='The chain goes on, so that check still writes the pack report" >&2; exit "$rc"\n  fi\nfi\n"${BC[@]}" staleness --write',
+         tests=[ST + "test_a_board_the_lint_refuses_does_not_stop_the_chain_before_check_and_is_reported_as_a_failed_step"]),
+    dict(group="finish-chain", id="refused-board-passes-in-silence", file=TPL,
+         old='  echo "finish.sh: check passed, but a step failed (board-lint $BOARD): the chain ends with exit $LINT_FAILED" >&2; exit "$LINT_FAILED"\n', new="  true\n",
+         tests=[ST + "test_a_board_the_lint_refuses_does_not_stop_the_chain_before_check_and_is_reported_as_a_failed_step"]),
+    dict(group="finish-chain", id="refused-board-hides-the-lints-message", file=TPL,
+         old="LINT_WHY=\"$(printf '%s\\n' \"$LINT_OUT\" | sed -n 's/^error: //p' | tail -n 1)\"\n", new='LINT_WHY=""\n',
+         tests=[ST + "test_a_board_the_lint_refuses_does_not_stop_the_chain_before_check_and_is_reported_as_a_failed_step"]),
+    dict(group="finish-chain", id="check-exit-code-lost-after-a-refused-board", file=TPL,
+         old='  [ "$CHECK_RC" -eq 0 ] || exit "$CHECK_RC"\n', new="",
+         tests=[ST + "test_when_check_fails_too_after_a_refused_board_the_chain_ends_with_the_exit_code_of_check"]),
+    dict(group="finish-chain", id="lint-output-hidden", file=TPL,
+         old="  [ -z \"$LINT_OUT\" ] || printf '%s\\n' \"$LINT_OUT\"\n", new="  true\n",
+         tests=[ST + "test_a_board_that_fails_its_lint_does_not_stop_the_chain_check_fails_the_report"]),
     # ---- what the chain relies on from the CLI: a report written by a node tool is printed as "report: <path>" (finish.sh's wrote_report reads it)
     dict(group="finish-chain", id="report-path-not-printed", file="scripts/lib/_common.mjs",
          old="    console.log(`report: ${out}`);\n", new="",
@@ -407,6 +445,92 @@ LEDGER: list[dict] = [
     dict(group="profiles", id="proof-without-red-dashes", file="scripts/emitters/profiles.py",
          old='PROOF_STROKE = "crimson"\n', new='PROOF_STROKE = "black"\n',
          tests=[PR + "test_proof_images_draw_the_safe_areas_are_never_shipped_or_in_the_manifest_and_a_second_run_writes_nothing"]),
+    # ---- the brand kit (scripts/kit.py, scripts/adaptlib/kitlib.py): what stops a build, what `kit check` and `kit status` prove, and what is never written over
+    # a generated file changed by hand after the last build stops the next build (kit.json and the generated files alike): `scan` finds it for the build, `files_check` for `kit check`,
+    # and the `kit:file` row of `check` (scripts/adaptlib/gates.py) from the `kit` report
+    dict(group="kit", id="hand-edit-detection-off", file=KL,
+         old='    edited = sorted(rel for rel, data in files.items() if _plain_file(kd, rel) and (kd / rel).read_bytes() != data and sha256_file(kd / rel) != recorded.get(rel))\n',
+         new="    edited = []\n",
+         tests=[KT + "test_a_hand_edited_kit_file_stops_the_build_and_replace_moves_it_aside", KT + "test_a_hand_edited_kit_json_stops_the_build_too",
+                KT + "test_a_hand_edited_applied_skill_stops_the_first_kit_build", KT + "test_a_hand_edited_rules_json_or_facts_json_stops_the_build_and_check_fails_it"]),
+    dict(group="kit", id="kit-check-does-not-see-a-hand-edit", file=KL,
+         old='        elif sha256_file(kd / rel) != sha:\n            differ.append((rel, "edited by hand"))\n',
+         new='        elif False:\n            differ.append((rel, "edited by hand"))\n',
+         tests=[KT + "test_a_generated_file_edited_or_a_file_added_to_a_generated_folder_fails_kit_check"]),
+    dict(group="kit", id="check-does-not-see-a-hand-edit", file="scripts/adaptlib/gates.py",
+         old="            elif sha256_file(f) != sha:\n                differ.append(rel)\n",
+         new="            elif False:\n                differ.append(rel)\n",
+         tests=[KT + "test_check_fails_a_kit_file_edited_after_the_build", KT + "test_a_hand_edited_rules_json_or_facts_json_stops_the_build_and_check_fails_it"]),
+    # the marker a scaffold leaves where the owner writes (`[[fill: ...]]`) is looked for, in the owner's files and in a generated copy
+    dict(group="kit", id="fill-marker-not-looked-for", file=KL,
+         old='FILL_MARKER = "[[fill"', new='FILL_MARKER = "[[no-such-note"',
+         tests=[KT + "test_a_fresh_kit_fails_on_its_fill_markers_until_the_owner_files_are_filled",
+                KT + "test_a_deleted_or_replaced_owner_file_warns_and_a_marker_in_a_generated_copy_fails"]),
+    # a relative link that leaves the kit folder fails: the kit's own link rule, not the one a page folder is copied by (`_load_target`)
+    dict(group="kit", id="link-outside-the-kit-accepted", file=KL,
+         old='    if joined == ".." or joined.startswith("../"):\n        return True, None, OUTSIDE\n',
+         new='    if joined == ".." or joined.startswith("../"):\n        return False, None, None\n',
+         tests=[KT + "test_a_link_that_leaves_the_kit_fails"]),
+    # a value (a size, a colour, a ratio, a duration) in a recipe, golden rules, visual or reference page note needs a token, a rule or `[example]` on its own line
+    dict(group="kit", id="value-accepted-with-no-citation", file=KL,
+         old="            if not cited:\n                unique = list(dict.fromkeys(found))\n",
+         new="            if False:\n                unique = list(dict.fromkeys(found))\n",
+         tests=[KT + "test_a_value_in_a_recipe_needs_a_token_a_rule_or_the_example_tag", KT + "test_numbered_steps_need_no_tag_but_their_values_do",
+                KT + "test_a_value_in_a_code_fence_needs_a_citation_on_its_own_line"]),
+    # `[rule: <id>]` must name a rule the kit knows (a G4 slug, a page rule, a site choice): the one list both `kit:tags` and `kit:numbers` ask
+    dict(group="kit", id="unknown-rule-id-accepted", file=KL,
+         old="            return [i for i in ids if i not in known()]\n", new="            return []\n",
+         tests=[KT + "test_a_rule_tag_must_name_a_rule_the_kit_knows", KT + "test_a_rule_tag_that_names_no_rule_fails_on_any_line_even_one_that_needs_no_tag_and_holds_no_value"]),
+    # `kit status` judges a copy by its bytes: an edit that keeps the size (one hex digit of a colour) still makes the copy not current
+    dict(group="kit", id="kit-status-compares-sizes-not-bytes", file=KL,
+         old="            elif data != mine[rel]:\n",
+         new="            elif (len(data) if data is not None else -1) != len(mine[rel]):\n",
+         tests=[KT + "test_a_changed_generated_file_in_the_repository_is_not_current_and_owner_changes_are_kept", KT + "test_adoption_status_says_whether_each_kit_copy_is_current"]),
+    # the owner's files are written once: a build that scaffolds them again over what the owner wrote loses the owner's words
+    dict(group="kit", id="owner-files-overwritten", file="scripts/kit.py",
+         old="    scaffolded, kept = kitlib.write_owner(project, owner)",
+         new=('    for rel, data in owner["files"].items():\n        f = kitlib.kit_dir(project) / rel\n        f.parent.mkdir(parents=True, exist_ok=True)\n        f.write_bytes(data)\n'
+              "    scaffolded, kept = kitlib.write_owner(project, owner)"),
+         tests=[KT + "test_an_owner_file_is_never_overwritten_and_its_change_moves_the_version", KT + "test_a_deleted_owner_file_is_scaffolded_again"]),
+    # ---- the wiring record (scripts/adoption.py, scripts/adaptlib/adoptdata.py): what a redesign lost, what the cascade never searches, what the scan proves of itself
+    # `adoption wiring --compare` lists the items of the before record that the repository no longer holds and fails until each is put back or dropped with a reason
+    dict(group="wiring", id="compare-ignores-the-losses", file="scripts/adoption.py",
+         old="    lost, _lost_dropped = ad.wiring_lost(entry, now)\n", new="    lost = []\n",
+         tests=[WT + "test_compare_lists_what_a_redesign_lost_and_fails_until_it_is_dropped_with_a_reason"]),
+    # the record holds the old values of the repository by design, so the cascade search must not read it
+    dict(group="wiring", id="wiring-missing-from-target-keys", file="scripts/adaptlib/adoptdata.py",
+         old='TARGET_KEYS = ("find", "terms", "identifiers", "kept", "wiring")', new='TARGET_KEYS = ("find", "terms", "identifiers", "kept")',
+         tests=[WT + "test_the_wiring_record_is_not_searched_by_the_cascade"]),
+    # the scan lists the repository's files, sizes and times before and after reading it, and a change in between fails the row and stores nothing
+    dict(group="wiring", id="read-only-proof-skipped", file="scripts/adoption.py",
+         old="    unchanged = before_snap == snapshot(repo, list_files(rg, repo, label, exclude))\n", new="    unchanged = True\n",
+         tests=[WT + "test_the_wiring_scan_never_edits_the_repository_and_proves_it"]),
+    # a page is read only from the owner's own machine: the one loopback rule (shared with `page-check --url`), and the refusal that uses it before a browser starts
+    dict(group="wiring", id="non-loopback-url-accepted", file="scripts/pagelib/pagecheck.py",
+         old='    return parts.scheme in ("http", "https") and "@" not in parts.netloc and (parts.hostname or "") in LOOPBACK_HOSTS\n',
+         new='    return parts.scheme in ("http", "https")\n',
+         tests=[WT + "test_a_page_that_is_not_on_this_machine_is_refused_before_anything_is_read", "tests/test_page_check.py::test_is_loopback_url_accepts_this_machine_only"]),
+    dict(group="wiring", id="wiring-does-not-ask-the-loopback-rule", file="scripts/adoption.py",
+         old="        if not pagecheck.is_loopback_url(url):\n", new="        if False:\n",
+         tests=[WT + "test_a_page_that_is_not_on_this_machine_is_refused_before_anything_is_read"]),
+    # a name that only starts with "on" (onboarding, one, only) is no handler: the source reads the one list of event names the page side reads
+    dict(group="wiring", id="any-on-word-is-a-handler", file="scripts/adaptlib/wiring.py",
+         old="    if name in EVENT_HANDLERS or _HANDLER.fullmatch(name):\n", new='    if _HANDLER.fullmatch(name) or re.fullmatch(r"on[a-z]+", name):\n',
+         tests=[WT + "test_an_attribute_is_a_handler_when_it_is_in_the_one_list_of_event_names_so_the_source_and_the_page_agree"]),
+    # the brand project that lives inside a repository is no part of its slots or its wiring: one helper makes the glob, and both commands pass it on
+    dict(group="wiring", id="wiring-reads-the-brand-project-as-the-repository", file="scripts/adoption.py",
+         old="    return repo, brand_exclude(root, repo)\n", new="    return repo, []\n",
+         tests=[WT + "test_the_brand_projects_own_files_are_not_the_repositorys_wiring_when_it_lives_inside_it"]),
+    dict(group="wiring", id="survey-reads-the-brand-project-as-the-repository", file="scripts/adoption.py",
+         old="        exclude = brand_exclude(root, repo)   # the brand project lives inside this repository: its own files are not the repository's slots\n", new="        exclude = []\n",
+         tests=["tests/test_adoption.py::test_the_project_inside_the_repository_is_not_surveyed_as_the_repository"]),
+    # the grounds of tokens.json and the owner's naming of them have one reader and one rule (adapt), whoever asks: contrast, the adapters, the kit, check
+    dict(group="grounds", id="contrast-reads-grounds-by-its-own-shape", file="scripts/contrast.py",
+         old="    for e in adapt.grounds_of(tj)[1]:\n", new='    for e in (tj.get("grounds") or {}).get("list", []):\n',
+         tests=["tests/test_contrast_tokens.py::test_contrast_refuses_a_grounds_entry_the_way_adapt_does"]),
+    dict(group="grounds", id="starter-kept-decided-by-its-own-rule", file="scripts/check.py",
+         old="    if not (isinstance(decided, str) and adapt.owner_named(decided)):", new="    if not (isinstance(decided, str) and decided.strip()):",
+         tests=["tests/test_contrast_tokens.py::test_contrast_adapt_and_check_hold_the_owners_naming_to_one_rule"]),
 ]
 
 IGNORE = shutil.ignore_patterns("__pycache__", ".pytest_cache", "node_modules", "results")

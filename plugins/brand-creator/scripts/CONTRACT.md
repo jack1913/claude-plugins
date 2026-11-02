@@ -19,6 +19,8 @@ once; a script that does not use them is wrong, not special.
 - [Platform specs and emitters](#platform-specs-and-emitters)
 - [Name screening](#name-screening)
 - [QA gates and mark tooling](#qa-gates-and-mark-tooling)
+- [Page check](#page-check)
+- [Website references and reference pages](#website-references-and-reference-pages)
 - [Brand book](#brand-book)
 - [Print, press kit and social posts](#print-press-kit-and-social-posts)
 - [Adoption, cascade, adapters, applied skill and launch](#adoption-cascade-adapters-applied-skill-and-launch)
@@ -49,7 +51,10 @@ is ever written under the plugin root (it changes on every update).
 Every command takes `--project DIR`, or walks up from the cwd to the first folder holding `BRAND-STATE.md`. When there
 is none it exits 2 with: `no brand project found; pass --project`. All writes are confined to the project directory
 (a path that resolves outside it, including through symlinks, exits 2). Scratch output (page shots) goes outside the
-project, under `<data>/scratch/<slug>-<hash>/`, and `--out` for shots must point outside the project.
+project, under `<data>/scratch/<slug>-<hash>/`. `shot --out DIR` may point outside the project or into `<project>/specimens/` (any depth, the folder itself
+included), the one folder of the project where shots may be kept; anywhere else in the project it exits 2 with `--out <DIR> must be outside the project, or under
+specimens/` (`<DIR>` is the folder as typed; a symlink is followed first, so a link out of `specimens/` into the rest of the project is refused too). A relative `--out` is read from the current
+folder, as before. The report's `out_dir` records the folder the slices were written to.
 
 ## Reports
 
@@ -70,9 +75,18 @@ exit code) before it exits, so the previous passing report cannot survive a fail
 recorded once. `brand-creator check` reads these reports, recomputes each
 report's `inputs` hashes, and treats a stale report (inputs changed since) as not verified. Tool names: `tokens`,
 `contrast`, `logo-sheet`, `board-lint`, `shot`, `emit-web`, `emit-social`, `emit-apple`, `emit-windows`, `emit-linux`, `emit-tray`, `emit-tauri`, `emit-wallet`, `emit-developer`, `check`, `names`, `downscale`, `states`, `family`, `fontcheck`,
-`motion/<slug>-<hash6>` (from `shot --motion`, one per proof file; see Motion proof) and `frames/<slug>-<hash6>` (from `frames`), `idempotence` (from `verify-idempotent`), `staleness`, `book`, `book-lint`, `book-pdf`, `print-check`, `adoption`, `adapters`, `applied-skill`, `launch-todo`, and one `emit-<target>` per emitter (with several marks, `emit-<target>/<mark>` and `logo-sheet/<mark>` per mark)
+`motion/<slug>-<hash6>` (from `shot --motion`, one per proof file; see Motion proof) and `frames/<slug>-<hash6>` (from `frames`), `page-check/<slug>-<hash6>` (from `page-check`, one per page; see Page check), `idempotence` (from `verify-idempotent`), `staleness`, `book`, `book-lint`, `book-pdf`, `print-check`, `adoption`, `adoption-wiring`, `adapters`, `applied-skill`, `kit`, `kit-check`, `launch-todo`, and one `emit-<target>` per emitter (with several marks, `emit-<target>/<mark>` and `logo-sheet/<mark>` per mark)
 (`emit-web`, `emit-social`, `emit-apple`, `emit-windows`, `emit-linux`, `emit-tray`, `emit-tauri`, `emit-wallet`, `emit-developer`, `emit-print`, `emit-presskit`). The renderer in use is stored in the report and
 printed on every run.
+
+**An input may stand for a part of a file.** An entry of `inputs` is a whole file, `{"path", "sha256"}`, unless it also has `"part"`: `{"path": "BRAND-STATE.md", "part": "g4-rules", "sha256": "<hex>"}` stands for one named part of the file,
+and its `sha256` is that of the part's canonical text, not of the file. One registry reads the parts (`PART_READERS` in `scripts/lib/_common.py`: the part's name, the file it belongs to, what to call it in a sentence, how to read it);
+a `Report` takes `PartInput(path, "<part>")` among its inputs. The only part so far is `g4-rules` of `BRAND-STATE.md`: the G4 record (white space collapsed) and, once G4 is recorded, the recorded `(rule)` lines of Rules (G4) in file order
+(white space collapsed; `adapt.g4_rules`, the one reading `adapt.view(project)["rules"]` also makes), as one line of JSON. The rest of the file (the phase, the other gates, the Directions table, Still open, a line of Rules (G4) that is no `(rule)`
+line) is not in it. `_common.stale_inputs`, the rule `check`, the boards and the book apply, recomputes the part: the input is stale when the part changed (`BRAND-STATE.md (the G4 rules) changed`) and when it cannot be read, with a sentence that says why
+(`BRAND-STATE.md (the G4 rules) cannot be read: ...`: no frontmatter, a part this plugin does not know, a part of another file). A part that cannot be read when the report is written is recorded as unreadable, so the report reads as stale and never as
+current. `inputs_sha` hashes the part name after the path for a part input; a record without `part` is judged and hashed as it always was, so older reports keep their meaning. A board lint that copies the records of the reports it stands on
+(`board-lint` of a site board, from its page-check reports) copies a part as it is, so it follows.
 
 ## Exit codes
 
@@ -115,6 +129,7 @@ fontTools, Brotli and skia-pathops (`outline_glyphs.py`, `fontcheck.py`), Pillow
   BRAND-STATE.md  FACTS.md  brief/BRIEF.md
   research/research.md  research/YYYY-MM-DD-<topic>.md  research/positioning-map.md   P1 output (templates/research.md)
   research/cliches.md              (optional; "Forbidden" bullets feed the FORBIDDEN count in shots; templates/cliches.md)
+  research/site-cliches.md         (the website references: the category's site clichés under "Avoid unless argued", no Forbidden section; templates/site-cliches.md)
   research/names/<date>-check.md  research/names/<date>-verdict.md  research/names/raw/<date>/run-<n>/   P2 (names, brand-naming)
   INVENTORY.md                     P1c surface inventory (templates/INVENTORY.md); board-lint needs it in Full / product-in-family
   rounds/r0/board.html             round 0: the style board (P1s, from templates/style-board.html); no mark is drawn in it
@@ -123,6 +138,8 @@ fontTools, Brotli and skia-pathops (`outline_glyphs.py`, `fontcheck.py`), Pillow
                                    exported from them, and where they came from (templates/SOURCE.md; drawing-engines.md)
   rounds/r<N>/<variant>/           a motion round (data-board="motion", templates/motion-board.html; see Board contract): one folder per variant with index.html (the move where it
                                    will be seen), proof.json (a page case named <variant>) and frames/<variant>/ (the stills `frames` took of it)
+  rounds/r<N>/board.html           a website references round (data-board="site-refs", templates/site-refs-board.html; see Board contract): groups of real sites, from round 2 on
+  rounds/r<N>/<variant>/index.html a site round at the hero stage (data-board="site", templates/site-board.html; see Board contract): one folder per variant of the home page's first screen, beside rounds/r<N>/board.html
   brief/canvas-round-<N>.md        the drawing brief of round N (templates/canvas-brief.md)
   .design/<slug>/                  the use-llm design canvas, when the drawing session starts in the project folder
   research/YYYY-MM-DD-style.md  research/style-thumbs/   P1s notes behind the style board and the reference marks it shows as thumbnails
@@ -132,8 +149,13 @@ fontTools, Brotli and skia-pathops (`outline_glyphs.py`, `fontcheck.py`), Pillow
   assets/web/  assets/social/  assets/apple/  assets/windows/  assets/linux/  assets/tray/  assets/tauri/  assets/wallet/  assets/developer/   emitter output
   assets/print/  assets/presskit/  assets/social/posts/   print PDFs with their `.print.json` sidecars and the e-mail signature; the press-kit zip; social posts
   assets/fonts/                    the brand's font files (read by fontcheck)
+  assets/masters/                  the approved masters: the ad, deck and other templates the owner approved, with their pictures, PDFs, PPTX and the fonts they ship; copied whole into the kit (see kit)
   assets/manifest.json             artefacts written by emitters (put-on-byte-change)
   assets/_checks/                  JSON reports, the logo sheet and the guide overlay
+  specimens/<name>/                page shots kept as specimens (shot --out specimens/<name>); any depth, the only project folder `shot --out` may write
+  research/site-refs/<name>/       a real site's stills from `capture --url`: 1440.png 390.png 1440-full.png thumb-1440.jpg thumb-390.jpg capture.json (see capture)
+  research/site-refs/owner/        screenshots the owner sent (not captured; the board's caption says so; `capture --url --name owner` is refused)
+  <page folder>/shots/             a project page's stills from `capture <page>`: 1440-light.png 1440-dark.png 390-light.png 390-dark.png 1440-light-full.png capture.json
   qa/rules.json                    owner thresholds and size bands (see QA gates); optional, proposals apply without it
   qa/print.json                    owner thresholds of print-check (see Print); optional, stated defaults apply without it
   qa/states.json  qa/idempotence.json   state sets for states-check; the byte-difference allowlist for verify-idempotent
@@ -151,7 +173,8 @@ fontTools, Brotli and skia-pathops (`outline_glyphs.py`, `fontcheck.py`), Pillow
   adoption.json  ADOPTION.md       the adoption rows as data (progress and pins apart) and the document rendered from it; see Adoption
   LAUNCH.md                        the owner's launch checklist (templates/LAUNCH.md); see Adoption, cascade, adapters, applied skill and launch
   BRAND.md  DESIGN.md              generated adapters, opt-in at G5 (`adapters`)
-  .claude/skills/<slug>-brand/SKILL.md   the per-brand applied skill, written only by `applied-skill --yes`
+  .claude/skills/<slug>-brand/     the per-brand applied skill (its SKILL.md alone, written by `applied-skill --yes`), or the brand kit around it (a kit.json beside SKILL.md, written by `kit build --yes`;
+                                   its owner files are scaffolded once and are the owner's: see kit)
   tools/cascade.json                  documents outside the project that `check --cascade` searches too (optional)
   removed-<date>[-n]/              dated copies of what `collapse` changed and of slots an emitter retired (never deleted)
   FAMILY.md                        family modes only (templates/FAMILY.md); read by family-check
@@ -168,10 +191,14 @@ A `---` block of `key: value` lines, one level of nesting, trailing `# comments`
 Keys: `slug, name, created, plugin_version, tier (quick|standard|full), phase, architecture (standalone|family-member|
 product-in-family), mark_source (generated|authored-vector|existing), language (chat language), content_languages (language-set
 codes of the brand's own text, for example `pl` or `pl,en`; read by fontcheck, never defaulted from `language`), renderer, review_surface, review_url,
+site_research (auto|online|links-only|none: the owner's answer to online research for website references; `capture --url` needs online or links-only),
 incumbent (none or a line), inventory (path or "none (no target repo)"), edition (whole number, the brand book's), approved_edition (the edition G5 approved; `state --record G5` writes it), book_chapters (extra
-chapters: tone, photography, components), canonical_direction, reset_rounds ([4, 5]: the style board run again after a full rejection,
-then the pick board), g1s_round, fixes_per_area (map), gates (G0 G1 G1s G2 G2b G3 G4 G5 G6 G7)`. A recorded gate reads `"<date> <decision>"`;
+chapters: tone, photography, components, site), canonical_direction, reset_rounds ([4, 5]: the style board run again after a full rejection,
+then the pick board), g1s_round, fixes_per_area (map), gates (G0 G1 G1s G2 G2b G3 G4 G4w G4p G5 G6 G7)`. A recorded gate reads `"<date> <decision>"`;
 empty means not recorded. `brand-creator state --record G3 "<decision>"` writes it, `state --require G3` exits 1 when missing.
+`G4w` is the website references pick (or `skipped by owner`) and `G4p` the site's reference pages approved; `state` prints the gates in the
+order above, `--record` and `--require` accept both, and a project made before them gets the key on its first `--record`.
+`state --set site_research=...` takes only its four answers: any other value exits 2, names them and writes nothing.
 `state --set KEY=VALUE` trims the spaces around the key and the value (`"reset_rounds =2,3"` is `reset_rounds`, checked as one), and a
 key that is not one word (letters, digits, `_` and `-`, dots between parts) exits 2 with nothing written.
 A list key (`reset_rounds`, `book_chapters`) is a flow list: `state --set reset_rounds=4,5` writes `reset_rounds: [4, 5]` (whole numbers
@@ -219,6 +246,34 @@ DTCG 2025.10 is a Final Community Group Report. It is not a W3C Standard and not
   each other (a brand accent and a danger colour, two state colours): `{"distinct": [{"a": "color.accent", "b": "color.danger",
   "label": "..."}]}`. `tokens` resolves them in light and dark into `tokens.json` (an unknown role fails); `contrast --cvd` holds them
   to the colour-vision distance. A miss the owner accepts goes in `tokens/exceptions.json` like a touching-pair miss.
+- Text grounds: `$extensions["brand-creator"].grounds` of `semantic.light.tokens.json` lists the colours text sits on, each with its five roles:
+  `{"grounds": {"named_by_owner": "<YYYY-MM-DD> <the owner's words>", "list": [{"ground": "color.bg", "text": "color.text", "action": "color.accent",
+  "on-action": "color.on-accent", "focus": "color.focus", "border": "color.border"}]}}`. Every value is the name of a semantic colour token. `named_by_owner`
+  is the date and the owner's words naming the grounds and stays `""` while nobody has: the model never guesses which colours text sits on. The starter
+  carries the roles `color.on-accent` (light `{color.paper}`, dark `{color.night}`) and `color.focus` (light `{color.signal}`, dark `{color.signal-bright}`),
+  the pairs `color.on-accent`/`color.accent` (`ui-text`, 4.5) and `color.focus`/`color.bg` (`ui-component`, 3), and a proposal for `color.bg` with
+  `named_by_owner` empty. `tokens` checks the block only when it is present: `grounds` an object with a string `named_by_owner` and a `list` of objects
+  with a string `ground`, and each of the five roles a string or left out. A block of the wrong shape is a failing `grounds` row (exit 1) that
+  names every problem and writes nothing, as for a pair that names an unknown token. A name that is no semantic colour token (the ground included) is a
+  `grounds` warning that names it, and resolves as `null`; a role left out is `null` and `tokens` says nothing, because `contrast` is the check that
+  asks for all five. `tokens.json` then gains a last key `grounds`: `{"named_by_owner": "...", "list": [{"ground": "color.bg", "roles": {"text":
+  "color.text", "action": "color.accent", "on-action": "color.on-accent", "focus": "color.focus", "border": "color.border"}, "modes": {"light": {"ground":
+  "#f3f5f8", "text": "#16181d", "action": "#375587", "on-action": "#f3f5f8", "focus": "#375587", "border": "#565b63"}, "dark": {...}}}]}`: `roles` keeps
+  the names as written (`null` for a role left out), `modes` holds the six-digit hex of each in that mode (`null` when it did not resolve). Without the
+  block, `tokens.json` and every other output are byte for byte what they were, and the report has no `grounds` row.
+- Text-ground checks: `contrast` reads `grounds` of `tokens.json` (nothing when the key is absent but the one `grounds:named` row) and writes the section
+  `grounds`. It reads the block through `adapt.grounds_of`, as the adapters, the applied skill and the kit do, so a block they refuse (an entry with no `roles`, no
+  `modes` or no `light` and `dark` mode, or a `ground` that is no string) stops `contrast` too, with the same message (exit 2, `run brand-creator tokens again`),
+  and `adapt.owner_named` decides whether the owner named the grounds (`adapt.named_date` says which half is missing). Every row is a pass or a warning that says it is a failure from the next release; the report's status and the exit code never change because of
+  them. `grounds:named` warns when `tokens.json` has no `grounds` ("ask the owner which colours text sits on; record them in `grounds` with the date and their
+  words; never guess"), when `named_by_owner` does not start with a real `YYYY-MM-DD` date (the starter's `""`: "a proposal, not named by the owner"), when it is only
+  a date, and when `list` is empty; it passes naming the owner's words. A ground listed more than once keeps its rows apart by `#2`, `#3` after its id. For each ground and mode:
+  `grounds:<mode>:<ground>:roles` warns naming the role (or `ground`) that has no colour (left out, `null`, or a name that is no semantic colour token), and
+  the rows that need that colour are then not written, never invented; `grounds:<mode>:<ground>:<role>` is the WCAG 2.2 ratio of `text` on the ground (4.5:1),
+  `action` against the ground (3:1), `on-action` on the action (4.5:1), `focus` against the ground (3:1) and `border` against the ground (3:1), with `ratio`,
+  `required`, `fg`, `bg`, `ground`, `mode` and `role`. With `--cvd`, `cvd:<mode>:grounds:<ground>:<action|focus>` holds the action and the focus ring to the
+  colour-vision distance of the shared rule (`qa/rules.json` `cvd.min_delta_e`), in the fields of the other `cvd:` rows, in the same section; a missing colour is
+  said once, in the roles row. A `tokens.json` whose `grounds` has the wrong shape is a usage error (exit 2). The proposal in the starter is judged like the owner's grounds.
 - Emitters need the semantic tokens `color.bg` and `color.text`; `color.muted` and `color.accent` are used when present.
 - Motion tokens (primitives only: a semantic file carries colours only). A duration is `"$type": "duration"` with `{"value": 320, "unit": "ms"}`
   (`unit` is `ms` or `s`; the older `"320ms"` string is read too): a number of 0 or more that comes to whole milliseconds, because Android keeps a
@@ -226,6 +281,12 @@ DTCG 2025.10 is a Final Community Group Report. It is not a W3C Standard and not
   `y1` and `y2` unrestricted (a curve may overshoot); a duration is at most 2147483647 ms, the largest integer Android keeps. A group named `easing` gives `--easing-*`. A reference (`"{easing.standard}"`) resolves like any
   other. Anything else fails the build (exit 1, report row `motion-tokens`), names the token path and writes nothing. The starter tokens carry three
   curve proposals, `easing.standard` `[0.2, 0, 0, 1]`, `easing.enter` `[0, 0, 0, 1]` and `easing.exit` `[0.3, 0, 1, 1]`, which stay proposals until G4.
+- Layout slots in the starter tokens (`templates/tokens/primitives.tokens.json`; proposals until G4, each group's `$description` says so): `space.1` to
+  `space.8` (4, 8, 12, 16, 24, 32, 48, 64 px), `radius.sm`, `md`, `lg`, `pill` (4, 8, 16, 999 px), `layout.container` (1200 px) and `layout.gutter` (24 px),
+  `breakpoint.sm`, `md`, `lg`, `xl` (640, 768, 1024, 1280 px), all `"$type": "dimension"` with `{"value", "unit": "px"}`; and `leading.display` (1.1), `leading.body`
+  (1.5), `tracking.display` (-0.01) and `tracking.body` (0), `"$type": "number"` (tracking is in em, as DTCG 2025.10 dimensions are px or rem only:
+  `letter-spacing: calc(var(--tracking-display) * 1em)`). `dimension` and `number` tokens reach `tokens.css` (`--space-1: 4px;`, `--leading-display: 1.1;`) and
+  `tokens.json` under `other` only (`"space.1": "4px"`); they are not durations or curves and have no Swift or Android output.
 - Outputs of the motion tokens, written only when the sources have a duration or a curve (a project with neither gets no motion file and no `motion`
   entry in `tokens.json`, and its other outputs are byte for byte what they were):
   - `tokens.css`: `--<path>: 320ms;` and `--<path>: cubic-bezier(x1, y1, x2, y2);` with the other non-colour primitives (an alias is `var(--other)`).
@@ -264,7 +325,7 @@ carry them; a required section that is missing, empty or a placeholder (`TODO`, 
 `[[fill: ...]]` left anywhere in text or attribute values fail the page (`page:unfilled`); HTML comments are ignored,
 so optional blocks can wait in comments.
 
-Page: `<body data-round="N" data-board="pick|refine|style|motion">`. `data-round` must equal the folder `rounds/rN/` (catches a copied
+Page: `<body data-round="N" data-board="pick|refine|style|motion|site-refs|site">`. `data-round` must equal the folder `rounds/rN/` (catches a copied
 page that was not updated). Round 1 must be a `pick` board. Round 0 is always the style board (`data-board="style"`,
 `rounds/r0/board.html`, from `templates/style-board.html`), and a round listed in `reset_rounds` holds either a style board or a
 pick board: after a full rejection the style research runs again on a new style board (required, never skipped), and the round after
@@ -293,7 +354,7 @@ masters were NOT measured; a round with no masters gets an info row.
 | `today` | `incumbent` in BRAND-STATE is not `none` | the incumbent as variant 0 |
 | `positioning-map` | round 1 and rounds in `reset_rounds` | must contain an element `data-direction="<name>"` for every direction; at least one direction has `data-far="true"`; in reset rounds also a non-empty `data-field="failed-round"` showing where the failed round sat |
 | `strategy-core` | round 1 | shown for reaction |
-| `direction` (repeat) | always; at least 3 on pick boards, 1 otherwise | `data-name` (a word of 3+ letters, unique, identical on the board and in chat), optional `data-letter` (one unique capital; off by default, and `question:N:letters` warns when a letter equals an option letter of a question that does not list the directions), `data-register` (required on pick boards, unique per direction: one per emotional register), optional `data-far="true"`, a non-empty child `data-field="idea"`, and on pick boards a non-empty `data-field="reflex"` (the reflex test against `references/ai-defaults.json`: "no hits" or each hit with its argument) |
+| `direction` (repeat) | always; at least 3 on pick boards, 1 otherwise | `data-name` (a word of 3+ letters, unique, identical on the board and in chat), optional `data-letter` (one unique capital; off by default, and `question:N:letters` warns when a letter equals an option letter of a question that does not list the directions), `data-register` (required on pick boards, unique per direction: one per emotional register), optional `data-far="true"`, a non-empty child `data-field="idea"`, and on pick boards a non-empty `data-field="reflex"` (the reflex test against `references/ai-defaults.json` and the project's `research/cliches.md`: `no hits`, or one `hit: <id> \| <argument>` per hit; see Reflex test below) |
 | `hardest-surface` | always | the one surface where the mark is most likely to fail |
 | `weak-points` | round 2 and later (a motion board: from its second) | |
 | `losers` | round 2 and later | contains `data-section="loser"` items, each with a one-line (max 200 characters) `data-field="reason"` |
@@ -301,6 +362,51 @@ masters were NOT measured; a round with no masters gets an info row.
 | `my-call` | always | children `data-field="recommendation"` and `data-field="critique"`; with `data-judge="ran"` also `judge-view`, `lead-view`, `middle-option` |
 | `questions` | always | contains `data-section="question"` items with `data-n` = 1, 2, 3 ... in order; each holds at least two options `data-option="a"`, `"b"` ... in order, exactly one with `data-recommended="true"` (none or several fail `question:N:options`); a question that lists the directions carries `data-lists="directions"` in the template and shows their names |
 | `reply` | always | how to answer: "Answer with a direction name, or question number plus option (1a)" and one sentence |
+
+Reflex test (pick boards). The `data-field="reflex"` line of each direction is one parseable line: `no hits`, or one `hit: <id> | <argument>` per hit, and
+optionally `near miss: <id> (<why>)` for a pattern that looks close and is not one (recorded, never counted); an optional leading `Reflex test:` is allowed.
+`<id>` is an id of `references/ai-defaults.json` or an item of the project's `research/cliches.md` under "Avoid unless argued" (compared by casefolded name,
+a trailing parenthetical dropped). The rules are in `scripts/boardlib/reflex.py` (`parse`, `line_rows`, `shared_hit`), outside `scripts/lib/`, so another board can
+reuse them with its own cliché file. Five rows, the first four per direction as `direction:<name>:<suffix>`:
+
+| row | status | when |
+|---|---|---|
+| `reflex-format` | warn (else pass) | the line is not in the format: free text, a `hit:` with no `\|` or no argument, text before the first marker, `no hits` together with a hit; the detail quotes the problems and the format |
+| `reflex-ids` | warn (else pass) | a hit names neither an id of `ai-defaults.json` nor an item of `research/cliches.md`; the detail says when the project has no `research/cliches.md` |
+| `reflex-count` | **fail** (else pass) | two or more hits in one direction: replace a part before showing it |
+| `reflex-grounded` | warn (else pass; no row for a line with no hit) | the argument of a hit shares no word with the owner's own material (the detail names the hit and asks for the fact, place or craft that earns it); the pass names the shared words. With neither `FACTS.md` nor `brief/BRIEF.md` holding a word of the owner's own (missing, or still the templates; the title line with the brand's name filled in, as `brand-creator new` writes it, is still the template) the argument is checked against nothing: the warning says `NOT verified` |
+| `directions:reflex-shared` | **fail** (else pass; info with fewer than two directions that have a reflex line) | every direction hits the same name: the directions are not divergent |
+
+Grounding is a floor, not a judgement of the argument's quality. The words are runs of Unicode letters (digits and `_` excluded), casefolded, four letters or
+more, with no stop list of any language and no stemming. They are taken from the lines of `FACTS.md` and `brief/BRIEF.md` that are the owner's own: lines that
+are not lines of the plugin's `templates/FACTS.md` and `templates/BRIEF.md` (verbatim, or with a `{{...}}` placeholder filled in: the title line
+`# Acme: facts` is a template line, so the brand's name alone is no ground word), minus the words of those templates' prose (the lines that do not start with
+`|`). A hit's argument is grounded when it shares at least one such word; nothing else is read.
+
+A warning says "a failure from the next release": the three warnings become failures in the next release, so a board passes now that fails then.
+`research/cliches.md`, `FACTS.md` and `brief/BRIEF.md` are inputs of the report when they exist (a changed list, fact or brief makes the lint stale). A refine
+board has no reflex line and none of these rows.
+
+The judge's list (pick boards, only when `my-call` has `data-judge="ran"`). A judge lists, for each direction, the ids of `references/ai-defaults.json` and the
+items of `research/cliches.md` it sees, before it reads the argument; the lead puts that list beside the reflex line as `data-field="reflex-seen"` (a paragraph
+`judge saw: <id>; <id>` or `judge saw: none seen`, or a list with one `li` per pattern; the templates carry it in a comment to uncomment). Two warnings per
+direction, `direction:<name>:<suffix>`; both become failures in the next release. Without `data-judge="ran"` the list is not looked at and neither row exists.
+
+| row | status | when |
+|---|---|---|
+| `reflex-seen` | warn (else pass) | the judge ran and the direction has no non-empty `data-field="reflex-seen"`, or its list names no pattern and does not say `none seen` (a list that is only its label, `judge saw:`, is no answer); `none seen` is an answer |
+| `reflex-unargued` | warn, once per pattern (else one pass) | a pattern on the list is neither a hit nor a near miss of the reflex line (compared by `norm`: casefolded, a trailing parenthetical dropped); the detail names it and says to argue it as a hit, or to say why it is a near miss. No row without a list, or without a reflex line (that is its own failure) |
+
+Colour divergence (pick boards). Each `direction` carries its light-mode colours in its own `style` attribute: `--d-paper`, `--d-ink` and `--d-accent`, each
+`#rgb` or `#rrggbb` (the board templates and the Acme example write them so). A direction that does not carry all three as such values is not measured. The rule
+is in `scripts/boardlib/divergence.py` (`read_colours`, `oklab`, `distance`, `row`), outside `scripts/lib/`. One row, never a failure:
+
+| row | status | when |
+|---|---|---|
+| `directions:divergence` | warn (else pass; info when fewer than two directions carry all three) | two directions whose paper and ink are both within 0.04 and whose accents are within 0.06 of each other, as OKLab distance (Euclidean in L, a, b; L from 0 to 1): "they look alike in colour". The detail names each such pair with its three distances. The pass names, for each of paper, ink and accent, the smallest distance between two directions and which two. The info row says `not measured` and how many directions could be read |
+
+The two thresholds are a practice proposal, not a measured rule (a just-noticeable difference is about 0.02), and the detail of the row says so in every status.
+A refine board, a style board and a motion board have no such row.
 
 Style board (`data-board="style"`, round 0) vocabulary. It has its own required set; the pick-board sections above do not
 apply to it except where named here:
@@ -402,10 +508,168 @@ not used (an info row says so). Each row is one result for the whole board and n
 | `motion:proof` | a variant has no motion report of its proof, a stale one (a file it read changed) or one that is no verdict (not-verified), each naming `brand-creator shot --motion rounds/rN/<name>/proof.json` (the row quotes the rows of the report that are not verified, each with its id and detail; one that names `requestAnimationFrame` adds that such a move stays not verified however often the proof runs, and says to write it as CSS animations, CSS transitions or `element.animate()`; the other not-verified rows `shot --motion` writes, a percentage translation on a pseudo-element or a still that cannot be placed over the mark, are quoted and given no such advice); the card's `data-proof` is not `pass` or `fail`, is not the report's status (a failing proof shown as `fail` is honest and passes) or has no text |
 | `motion:stills` | a variant has no `frames` report of its proof (`assets/_checks/frames/<slug>-<hash6>.json`), a stale one (the proof, the page or a file the page loaded changed since the stills were taken: `shot --motion` run again does not make the stills current) or one with no passing `frames:<name>` row; the strip or the reduced still the card shows is not the file `frames.json` lists, by sha256; also the file on disk differs from `frames.json`, `frames.json` cannot be read or is of another proof or case (a folder copied from an earlier round), or the card has no, or two, `<img data-field="strip">` or `"reduced"`; each names `brand-creator frames rounds/rN/<name>/proof.json --count 25` |
 | `motion:fields` | What it is, Cost or Degrades to is missing, empty, a placeholder or still holds a `[[fill: ...]]` marker, in a card |
+| `motion:timelines` | never a failure. Warn when two variants have the same number of animations and lengths within 5 % of the longer one or within 20 ms ("they look alike in time": three variants should try three moves), read from the `sampling` row of each variant's current motion report (`length_ms`, `animations`); the detail names each such pair with its two timelines and says the limits are a practice proposal. Pass when every variant was compared and no two are alike. Info (never a pass) when a variant is not compared, never a guess: its motion report is missing or stale (`motion:proof` says why), or current but with no `sampling` row or no number in it (the detail says the report has no sampling row; `motion:proof` has nothing to say then), or its row says the motion was sampled in real time (`real_time`) or found no animation (`animations` 0, written with a length of 0), so no timeline was measured; the others are still compared, so a pair alike among them still warns. Info too when there is no variant card, or when the board shows one variant (nothing to compare) |
 
 `page:data-board` also fails a motion board in round 0 or 1 or in a round listed in `reset_rounds`. The `inputs` of the lint report are the page, `motion/motion.json` when it exists (`motion:off` reads it, so an answer changed after the lint makes the report stale) and, of each variant, `proof.json`, `index.html`, `frames.json`, the strip, the reduced still, the motion report and the frames report, and every file those two reports were made from (their own `inputs`:
 the files the page loaded, such as a stylesheet, `tokens.css` or a script, where the move may live), so `check` calls the report stale ("not verified") as soon
 as one of them changes: take the stills and the proofs first, lint, and shoot the board last (`shot` writes `assets/_checks/shot.json` for one page, and `check` wants the one of `rounds/r<latest>/board.html`).
+
+### The website references board (`data-board="site-refs"`)
+
+A website references round shows the owner groups of real sites to learn from, before any page of the site is built. It runs in the Standard and Full tiers, after G4, and only when `brief/BRIEF.md` lists a site; the owner's
+pick of a group is gate G4w. It is a round from 2 on: `rounds/rN/board.html`, from `templates/site-refs-board.html` (built on the frame of `templates/style-board.html`: the same tokens, header, theme switch, questions and reply).
+A website references board is no pick, style, reset or rejected round: the map and the style-round logic, `reset_rounds`, the kept masters and the style re-arming of a later pick board ignore it (the round "rejected" before a reset is never a
+references round), and a references board in round 0 or 1, or in a round listed in `reset_rounds`, fails `page:data-board` ("a website references board is a round of its own from round 2 on"). Its rows are in
+`scripts/boardlib/siteboard.py` (outside `scripts/lib/`, like `boardpage.py`), which also reads the brief; `boardpage.py` counts the groups (`is_site_refs_board`: the page declares `site-refs` and the round of its own folder, and holds at least four named
+groups with content, as a style board is counted by its territories).
+
+| `data-section` | required | notes |
+|---|---|---|
+| `visitor-job` | yes | who visits, the job they came to do, the one action that serves it; non-empty |
+| `norm` | yes | what most sites in the category do; non-empty |
+| `owner-sites` | yes | the sites the owner likes and dislikes (the template gives each an `<li data-like="like\|dislike">` with a link and `data-field="why"`), or one line saying the owner named none; non-empty |
+| `group` (repeat) | 4 to 6 (`groups:count`) | `data-name` (a word) and content beyond a heading: a group without a name or without content is not counted; the template gives each group a `data-field="idea"`, a `data-field="references"` list of three sites (a link, a screenshot `<img data-field="shot">`, `data-field="take"`, `data-field="avoid"`) and a vote |
+| `site-cliches` | yes | the category's site clichés, as in `research/site-cliches.md`; non-empty |
+| `none-of-these` | yes | the way out: research again |
+| `my-call` | yes | `data-field="recommendation"` and `data-field="critique"` (and the judge panels when `data-judge="ran"`) |
+| `questions` | yes | the same rules as every board; question 1 (which groups) is multi-pick: checkboxes in a question marked `data-multi="true"`, and the reply lists every ticked group |
+| `reply` | yes | |
+
+Hardest surface, directions, the positioning map, the strategy core, reflex lines, the incumbent "Today" and the kept masters are not asked of a references board; `--min-directions` is not used (an info row `directions:count` says so). The
+`[[fill: ...]]` marker rule and `page:votes` apply as on every board (a group's vote is `<fieldset data-vote="<name>">`, its radios named `vote-<name>`).
+
+| row | fails when |
+|---|---|
+| `site-refs:tier` | the tier is not `standard` or `full` ("the site work is Standard and Full") |
+| `site-refs:brief` | `brief/BRIEF.md` does not list a site on its `Required surfaces:` line (the first such line, in any letter case, the label bold or not). The value is read against a word list in English and Polish: `site`, `website`, `microsite`, `web page`, `landing page`, `www`, `strona` (with its endings, never `strong`) and `witryna` (with its endings). A value wrapped in parentheses is the untouched line of the template, "(site, app icon, ...)", and does not count; a brief in another language needs the word `site` on that line. The detail names the line it read |
+| `site-refs:g4` | G4 is not recorded ("website references come after the system rules (G4)") |
+| `site-refs:research` | `site_research` in `BRAND-STATE.md` is `auto` or missing: the owner has not answered the online-research question (`state --set site_research=online\|links-only\|none`); each of the three answers passes, `none` included (the owner sends screenshots) |
+| `site-refs:cliches-file` | `research/site-cliches.md` is missing, or holds fewer than three bullets under `## Avoid unless argued` that are not a placeholder such as `(...)` |
+| `groups:count` | fewer than four groups count (a warning, never a failure, above six: "more than 6 is a menu, not a choice") |
+| `group:<name>:name` | a group's `data-name` is not a word of three letters or more, is a label (`Option 2`, `Group B`, `Cluster 3`: the shared label words, and also `group`, `cluster`, `type`, `set`, `category`, `approach`, `pattern`, `layout`), or repeats another group's name in other letters. A group with no name is listed by its place (`group:#2:name`) |
+| `group:<name>:idea` | the group has no non-empty `data-field="idea"` (one sentence: how these sites serve the visitor's job) |
+| `group:<name>:references` | `data-field="references"` holds fewer than three `<li>`, or one of them lacks: a link `<a href="http(s)://...">` to the site (the first `<a href>` of the item is the site's: if it is not http(s), a later http link in the take or the caption does not stand in for it); a screenshot `<img data-field="shot">` that is an inlined `data:image/` URI with alt text, no `srcset`, in a `<figure>` with a non-empty `<figcaption>` (the rule of a style board's thumbnail, `thumb_problems` in `boardpage.py`; here the template's own ` · shown for private research` after the author's words is not a caption); a `data-field="take"` and a `data-field="avoid"` that hold words (the `Take:` and `Avoid:` the template puts inside the field are not words, so a field left with only its label, the bare word, or a dash or a dot after it is empty). The `<li>` counted are those of the list itself: a list inside a take or a why belongs to that item. The detail names each reference (by place and link text) and what it lacks |
+| `group:<name>:layout` | only when the group declares `data-layout`: the value is neither an id of `skills/brand-creator/references/page-layouts.json` (the detail names the ids) nor `own:<word>` (lower case letters, digits and hyphens). `own:<word>` is a warning: "say in the idea why none of the references fits" |
+| `group:<name>:shot:<k>` | never fails. One row per reference that has a screenshot (`k` is its place in the list). The picture's bytes (a `data:` URI decoded) must equal a `thumbs[].sha256` or a `views[].sha256` of a `research/site-refs/*/capture.json` whose `source.url` or `source.final_url` is the address the reference links to (compared with no fragment, one trailing slash dropped, scheme and host in lower case, and the default port of the scheme dropped: `:443` on https, `:80` on http); that passes. Anything else is a warning, "not matched to a capture of <address>: capture it (`brand-creator capture --url <address> --name <name>`), or say in the caption that the owner sent the screenshot", and the detail says whether the picture is a capture of another address, whether the address has a capture whose pictures this is not, or that there is none (and names a `capture.json` that could not be read) |
+| `owner-sites:items` | an `<li>` of the owner-sites section (each is a site the owner named) whose `data-like` is not `like` or `dislike` (or is missing), that has neither an http(s) link nor an inlined image, or has no non-empty `data-field="why"`. A section with no `<li>` passes when it has text (the owner named none); an empty section fails `section:owner-sites` and has no items row |
+| `images:inlined` | an `<img src>` or `srcset` anywhere on the board (a group's screenshots, a screenshot the owner sent) that is not an inlined `data:image/` URI: nothing on the page asks the network |
+
+The `inputs` of the lint report are the page, `brief/BRIEF.md` and `research/site-cliches.md` when they exist, and every `research/site-refs/*/capture.json`, so a changed brief or cliché list, or a capture made again, makes the report stale (`check` then calls `board-lint` not verified). A `capture.json` that did not exist when the board was linted is not an input yet: lint again after a first capture.
+
+### The site board (`data-board="site"`)
+
+The site round makes reference pages for the brand's site: the home page's first screen first, as two or three variants (the hero stage, `data-site-stage="hero"`), then the other pages (the pages stage, `data-site-stage="pages"`). It runs in
+the Standard and Full tiers, after G4 and after the owner's pick of website references (G4w, or their skip), and only when `brief/BRIEF.md` lists a site. It is a round from 2 on: `rounds/rN/board.html`, from `templates/site-board.html` (built on
+the frame of `templates/motion-board.html`: the same tokens, header, hardest surface, My call, questions and reply). A site board is no pick, style, reset or rejected round: the map and the style-round logic, `reset_rounds`, the kept masters and the
+style re-arming of a later pick board ignore it (the round "rejected" before a reset is never a site round), and a site board in round 0 or 1, or in a round listed in `reset_rounds`, fails `page:data-board` ("a site board is a round of its own
+from round 2 on"). The page declares its stage on the element that declares its kind, the `<body>`: a missing stage, or one that is not `hero` or `pages`, fails `page:site-stage`, and no variant row is read then. Its rows are in
+`scripts/boardlib/siteboard.py` (outside `scripts/lib/`, like `boardpage.py`).
+
+One folder per variant of the hero stage, `rounds/rN/<name>/`, made before the page:
+
+| in the folder | what it is |
+|---|---|
+| `index.html` | the home page's first screen, built from the picked references and the tokens. Its `<body>` declares `data-layout` (an id of `skills/brand-creator/references/page-layouts.json`, or `own:<word>`) and `data-page` (the page id: lowercase letters, digits and `-`, 2 to 32 characters, starting with a letter; `start` for the home page) |
+
+One card per variant: an element with `data-site-variant="<name>"` (the `<article class="variant">` of the template). The name is a word of 3 or more letters that is not a label ("Variant 2" and "Option B" fail: the rule of direction names), unique
+(capitals do not tell two apart), and also the name of the folder, so it keeps to letters, digits, `-` and `_`. Inside the card:
+
+| in the card | what it holds |
+|---|---|
+| `<img data-field="still" data-view="1440-light\|1440-dark\|390-light\|390-dark">` | the four stills of the first screen, `<name>/shots/<view>.png` |
+| `<a data-field="live" href="<name>/index.html">` | the live page, one click away (the board has no replay) |
+| an element with `data-check="pass"` or `"fail"`, and its text | the check line: what `page-check` found for this variant |
+| `data-field="what-it-is"`, `"from-refs"`, `"cost"` | What it is, Takes from (the group of the references board, or the owner's site, the structure comes from) and Cost, each with text |
+| `data-field="tells"`, `data-field="reflex"` | the tells `page-check` found and what will be done about them, and the reflex line of the variant |
+| `data-field="layout"` with `data-layout="<id>"` | the layout reference of the page, the same id the page declares |
+| an element with `data-cold="ship"` or `"fix"`, and its text | the cold review's verdict |
+| `<fieldset data-vote="<name>">` | the owner's vote, as on every board (the `page:votes` row); its radios are named `vote-<name>`, a group of their own per card |
+
+The pictures are the project's own files by a relative path, read from the page's folder as a browser reads it, or, in the copy published on a review surface (`review/index.html`, linted with `--round N`), `data:` URIs of the same bytes. The first hero
+board of a project (no earlier round has a site board at the same stage) shows 2 or 3 variants and needs no What changed and Weak points (info rows); a later one, the refine loop on the picked or combined variant, shows 1 or more and needs both,
+as a refine board does from round 2. Hardest surface, My call, questions and reply are required as on every board; there is no `positioning-map`, `strategy-core`, `today`, `losers`, `none-of-these` or `direction` section, no `project:*` row and no
+`masters:*` row, and `--min-directions` is not used (an info row says so). The pages stage is described after the rows (its page cards and choices). Each row below is one result for the whole board and names the variants it fails:
+
+| row | fails when |
+|---|---|
+| `page:site-stage` | `data-site-stage` is missing or is not `hero` or `pages` |
+| `site:tier` | the tier is not `standard` or `full` ("the site round is Standard and Full") |
+| `site:brief` | `brief/BRIEF.md` does not list a site on its `Required surfaces:` line (the same word list and the same reading as `site-refs:brief`; the detail names the line it read) |
+| `site:g4` | G4 is not recorded ("the site round comes after the system rules (G4)") |
+| `site:g4w` | G4w is not recorded; or it names a pick (it is anything but `skipped by owner`, read after the date `state --record` writes before the decision) and no round before this one holds a website references board that counts (`boardpage.is_site_refs_board`: `data-board="site-refs"`, the round of its own folder, at least four groups with a name and content): "G4w names a pick but no website references board came before this round". A skip needs no references board |
+| `site:variants` | the count (2 or 3 on the first hero board of a project, 1 or more on a later one) or a name (a word, not a label, a folder name, unique) |
+| `site:files` | a variant has no folder, or one that is not spelt as the card spells it (an entry of `rounds/rN/` equal to the card's name, letter case included: a disk that does not tell letter cases apart, macOS or Windows, opens `ledger/` for the card `Ledger`, but the reports of `page-check` and `capture` are named after the page's path, so a card spelt otherwise never finds them; the row says the card and its folder must be spelt alike, on every kind of disk); no `index.html`; an `index.html` with no `<body>` tag, or whose `<body>` declares no `data-layout` or no `data-page`, or a `data-page` that is no page id; a card with no link to the live page, or one that does not lead to `<name>/index.html` |
+| `site:layout` | the page's `data-layout` is missing, or is neither an id of `page-layouts.json` nor `own:<word>` (the detail lists the known ids); the card has no `data-field="layout"` line, or its `data-layout` differs from the page's. A layout of its own (`own:<word>`) is a warning, never a failure: "say on the card why none of the references fit" |
+| `site:fields` | What it is, Takes from or Cost is missing, empty, a placeholder or still holds a `[[fill: ...]]` marker, in a card |
+| `site:check` | a variant has no page-check report: `assets/_checks/<tool>.json` with `tool = pagecheck.report_tool("rounds/rN/<name>/index.html")` (`page-check/<slug>-<hash6>`, named after the page's path; `scripts/pagelib/pagecheck.py` owns the rule and the board imports it); the report is not that page's (its top-level `target` is not `{"kind": "project", "page": "rounds/rN/<name>/index.html"}`); it is stale (a file in its `inputs` is gone or changed, `_common.stale_inputs`, the rule `check` applies; or it does not list the page among them, so a change to the page would not show); its `status` is not `pass` or `fail` (`not-verified`: the detail quotes up to three of its rows that were not verified); the card has not exactly one check line (an element with `data-check`), its value is not `pass` or `fail`, it differs from the report's status, or it has no text. A failing check shown as `fail` is honest and passes the row. Every failure names `brand-creator page-check rounds/rN/<name>/index.html` |
+| `site:tells` | a `warn` row `tell:<id>` of a variant's page-check report (`<id>` an id of `page-tells.json`; the row `tell:<id>` is a `pass` when none was found) is not named, by its id, on the card's `data-field="tells"` line: "show every tell page-check found, with what you will do about it". An id counts as named when no letter, digit or `-` touches it (`eyebrows` is not `eyebrow`). A `tell:<id>` warning with `hits: []` is page-check saying it could not check the page for that tell (no `lang`, a language with no word list, past the element cap), not that it found one: the card must still name it, and the message says page-check could not verify it ("show every tell page-check found or could not verify"), never that it found it. Other warnings of the report, and the `page:rule:<id>` row of a tell the owner adopted as a brand rule, are not read here. A variant whose report is missing, stale or no verdict is not judged: when nothing else fails the row is "not verified" (`skipped`, exit 3), and `site:check` says why |
+| `site:stills` | `rounds/rN/<name>/shots/capture.json` (`brand-creator capture`) is missing or unreadable; it is not the capture of the variant's page (`source.page`); it is stale (a file in its `inputs` is gone or changed, or the page is not among them); it lists no sha256 for one of the four views `1440-light`, `1440-dark`, `390-light`, `390-dark`; the file it names for a view is not there or has other bytes than the listed sha256; the card has not exactly one `<img data-field="still">` per view (by `data-view`, and no other view), or the bytes of one of them are not the listed sha256: the project's file by a relative path read from the board's folder, or on the review copy a `data:` URI of the same bytes (an address, or a path outside the project, is no capture). Every failure names `brand-creator capture rounds/rN/<name>/index.html` |
+| `site:<name>:reflex` | the card `<name>` has no reflex line (`data-field="reflex"`), or it is empty or a placeholder: the same required field as `direction:<name>:reflex` on a style board. A card with no line is no way round `site:<name>:reflex-count` or `site:reflex-shared`; it earns this failure alone and no other `site:<name>:reflex-*` row but `reflex-measured` |
+| `site:<name>:reflex-format` | the reflex line of the card `<name>` (the first non-empty `data-field="reflex"`) is not `no hits` or one `hit: <id> \| <argument>` per hit (`near miss: <id> (<why>)` is allowed and never counted): free text, an empty line, a hit with no `\|` or no argument, text before the first marker, `no hits` together with a hit. A warning for now ("a failure from the next release"): the rule of `scripts/boardlib/reflex.py` (`reflex.parse`, `reflex.line_rows`), the same as on a style board's direction. |
+| `site:<name>:reflex-ids` | a hit names no tell of `page-tells.json`, no id of `ai-defaults.json` (its layout items name the stock product page) and no item under "Avoid unless argued" of `research/site-cliches.md` (compared by `reflex.norm`: letter case, spaces and one trailing parenthetical do not matter). A warning for now. A pass says where each name comes from: `(page-tells)`, `(ai-defaults)` or `(cliches)`. A project with no cliché file says so ("no cliché of the category's sites can be named") |
+| `site:<name>:reflex-count` | two or more hits on one card (near misses are not hits): "replace a part before showing it" |
+| `site:<name>:reflex-grounded` | only for a card with an argued hit, and a warning for now: the argument shares no word of four letters or more with the owner's own words in `FACTS.md` and `brief/BRIEF.md` (`reflex.ground_words`); "NOT verified" when those hold no words of the owner's own |
+| `site:<name>:reflex-measured` | a warning: the page-check report of the card's page has a `tell:<id>` warning that the reflex line neither hits nor names as a near miss ("page-check found <id>; argue it on the card or change the page"; a `tell:<id>` warning with `hits: []` reads "page-check could not verify <id>" instead, and asks the same). Not verified (`skipped`) for a card without a current page-check verdict (`site:check` says why). `site:tells` asks that the card name the tell; this row asks that the reflex line argue it |
+| `site:reflex-shared` | every card has a reflex line and one pattern (`reflex.shared_hit`) is hit by all of them: the heroes are not divergent. An info row ("not required here") with fewer than two cards, or when a card has no line (`site:<name>:reflex` has failed then) |
+| `site:refs` | G4w names a pick (not `skipped by owner`) and: it names none of the groups (`data-name`) of the references board, nor the text or the host of the link of a site the owner liked (`data-like="like"`; a disliked site is never a name) in its owner-sites section ("record the pick under their names"); or the `data-field="from-refs"` line of a card names none of those that the G4w record names (a whole word or whole words, any letter case): "take from what the owner picked (G4w)". The record is read up to the word `dislikes` (`picked <groups>; likes <...>; dislikes <...>`): a group or a site named after it is one the owner turned away from, and is no pick. An info row when G4w is `skipped by owner`; not verified (`skipped`) without a G4w, a references board to read the names from, or a variant card |
+| `site:cold` | a hero has no `rounds/rN/<name>/cold-review.md`; its first non-empty line is not `verdict: ship` or `verdict: fix` (letter case and spacing do not matter); it has no `by:` line; its `inputs:` list is missing, holds a line that is not `- <path> sha256:<hex>`, lists a file twice or is not exactly the four stills of the variant (`rounds/rN/<name>/shots/<view>.png`), `brief/BRIEF.md` and `FACTS.md`; one of those files is missing or has another sha256 than the review lists ("the page or its stills changed after the cold review: review again", or the brief or the facts); it has more than five findings (numbered lines); the card has not exactly one `data-cold`, its value is not `ship` or `fix`, or it differs from the verdict. A `fix` shown as `fix` is honest and passes |
+
+The `inputs` of the lint report are the page, `brief/BRIEF.md` when it exists, the website references board that G4w stands on (when it names a pick) and the `index.html` of each variant, so `check` calls the report stale ("not verified") as soon as one of
+them changes.
+
+The proof rows add to those inputs, for each variant: its page-check report, `shots/capture.json`, the four stills and the files named by `capture.json` for them, and every file the two records list as made from (the page, `tokens.css`, a stylesheet, a script; a page-check report also lists
+`BRAND-STATE.md` by its G4 rules (the part `g4-rules`, see Reports), `qa/rules.json` and `FACTS.md`, and the lint keeps those records as they are: a changed G4 record or `(rule)` line makes the page-check reports, and with them this lint report, stale; recording G4p, G5 or G6 or setting the phase does not, unless a rule of the choices cites a line only `BRAND-STATE.md` holds: see `site:choices` below). Without a variant card the three rows are "not verified" (`skipped`); the fixtures of `tests/test_site_board.py` write the reports and the stills by hand, in the shape
+`page-check` and `capture` give them, so the tests need no browser.
+
+The cold review of a hero is the file `rounds/rN/<name>/cold-review.md`:
+
+```text illustrative
+verdict: ship
+by: in-thread
+inputs:
+- rounds/r2/Ledger/shots/1440-light.png sha256:<hex>
+- rounds/r2/Ledger/shots/1440-dark.png sha256:<hex>
+- rounds/r2/Ledger/shots/390-light.png sha256:<hex>
+- rounds/r2/Ledger/shots/390-dark.png sha256:<hex>
+- brief/BRIEF.md sha256:<hex>
+- FACTS.md sha256:<hex>
+
+1. The finding that costs the visitor most, short enough for one line.
+```
+
+The reader sees only those six files, never the board, the references or the reasons (the prompt is in `skills/brand-creator/references/prompt-fragments.md`, **Review**). `by:` is `in-thread` (not blind: the same session that built the page reads it) or `agent`, and an agent
+only after the fleet gate. The reflex, references and cold rows add to the inputs of the lint report: `FACTS.md`, `research/site-cliches.md` (when it exists) and the `cold-review.md` of each variant, so a changed fact, cliché or review makes it stale.
+
+### The site board, pages stage (`data-site-stage="pages"`)
+
+Once the owner picked a hero, the next site round shows the other pages. The same board, `templates/site-board.html`, with the three comments at its end put to use (the pages in place of the variants, the choices section, the two questions of the pages), and `<body data-round="N" data-board="site"
+data-site-stage="pages" data-hero="<name>">`. The gates, `page:site-stage`, the sections (What changed and Weak points from the second pages board, Hardest surface, My call, questions and reply) and `--min-directions` are those of the hero stage; a pages board is the first of its own stage whatever came before.
+One folder per page, `rounds/rN/<id>/`, made before the board, with the files of a variant's folder (`index.html` declaring `data-layout` and `data-page`, `shots/` from `brand-creator capture`; `cold-review.md` is optional). One card per page: an element with `data-site-page="<id>"` (the
+`<article class="page">` of the template). The id is a page id, the pattern of `data-page` (`^[a-z][a-z0-9-]{1,31}$`: lowercase letters, digits and `-`, starting with a letter), unique, and also the name of the folder and what `<body data-page>` declares. The card holds what a variant's card holds
+(four stills, the live link, the check line, What it is and Cost, the tells line, the layout line, the vote), except that **Takes from** (`data-field="from-refs"`) and the **cold line** (`data-cold`) are optional (a line that is there is filled in) and there is **no reflex line**: the hero carried the reflex test,
+and a page is built from the hero, not from the references.
+
+The choices section (`data-section="choices"`) lists every structural and visual choice the pages make, one `<li data-choice="c1" data-tag="rule|example" data-source="..." data-pages="start pricing">text</li>` each:
+
+| attribute | what it holds |
+|---|---|
+| `data-choice` | the choice's id: `c` and a number (`c1`, `c2`), unique on the board |
+| `data-tag` | `rule` (the owner decided it: it holds wherever the brand shows a site) or `example` (may change) |
+| `data-source` | for a rule, where the owner decided it: text quoted from a line of `BRAND-STATE.md`, `DECISIONS.md` or a record under `decisions/*.md` (found there in any letter case, with white space collapsed; at least six characters). For an example, nothing |
+| `data-pages` | optional: the page ids the choice applies to, separated by white space or commas, all of them on this board; left out, the choice applies to every page |
+
+The rows of the pages stage (the gates and the sections above apply as well):
+
+| row | fails when |
+|---|---|
+| `site:hero-first` | no round before this one holds a site board at the hero stage ("hero first: show the hero variants and record the owner's pick before the other pages"); the `<body>` that declares the kind has no `data-hero`; or `data-hero` is none of the variant cards (`data-site-variant`, spelt alike, letter case included) of a hero board in an earlier round (the latest board that holds the name is the one read; the detail lists the names it looked at). The hero board it found is an input of the lint report |
+| `site:pages` | no page card; a page card whose `data-site-page` is not a page id, or is used twice; a page whose `<body data-page>` is not its card's id. A page whose folder or `index.html` is missing is `site:files`' to say |
+| `site:files`, `site:layout`, `site:fields`, `site:check`, `site:tells`, `site:stills` | the rows of the hero stage (see above), one result each for the whole board, read for the page cards: the same folder, `index.html`, `<body>` declarations and live link (`rounds/rN/<id>/index.html`), the same layout line, the same page-check report and four stills; `site:fields` asks for What it is and Cost, and for Takes from only where a card has the line. Without a page card they are "not verified" (`skipped`, "there is no page card to look at (site:pages says why)") |
+| `site:cold` | as at the hero stage, but only for a page that has a `cold-review.md` (or a card that claims one, which fails: "the card has a cold line (`data-cold`) but ... does not exist"): the file is held to the rules of a hero's, and the card's cold line says its verdict. No page with a review is an info row ("not required here") |
+| `section:choices` | the page has no `data-section="choices"` element, or it is empty |
+| `site:choices` | no item with `data-choice`; an id that is not `c` and a number, or is used twice; an item with no text; `data-tag` missing or neither `rule` nor `example`; a rule whose `data-source` is empty, is shorter than six characters, or is found in none of `BRAND-STATE.md`, `DECISIONS.md` and `decisions/*.md` ("a rule says where it was decided: record the owner's decision in DECISIONS.md, then cite it"); a `data-pages` that is empty, or names an id that is no page card of this board |
+
+The `inputs` of the lint report add the `index.html` of each page, `DECISIONS.md` and `decisions/*.md` (a changed decision makes it stale) and the rest the proof rows add (see above). `BRAND-STATE.md` is searched for the choices too, and the page-check reports hold only its G4 rules, so the lint lists the whole file itself (a record without `part`) when a rule's `data-source` is found in it and in none of the other files: deleting or changing the cited line, or recording a gate, makes the lint stale, and linting again settles it (the finish chain lints the board of the latest round again). A source that `DECISIONS.md` or a record under `decisions/` holds too does not add the file: those are inputs already. A changed G4 record or `(rule)` line makes the lint stale through the page-check reports, as above.
 
 ## Hook guard
 
@@ -439,7 +703,7 @@ personal data and no `@`.
 
 `assets/manifest.json` rows carry `path, sha256, bytes, emitter, specs`, and optionally `slot` (the surface the file serves), `inv` (its
 INVENTORY.md slot id), `size` (`WxH`), `resampled_by` (`OURS` our own master at the exact pixels, `SYS` a system downscale of one master, `PAGE`
-drawn by the page; the "who" of the plan), `note`, `band` (see QA gates), `exemption` and `qa` (the gates the file needs, from downscale, states, motion, family, fonts, idempotent, print; `check` requires a
+drawn by the page; it says who made the pixels), `note`, `band` (see QA gates), `exemption` and `qa` (the gates the file needs, from downscale, states, motion, family, fonts, idempotent, print; `check` requires a
 current passing report for each), and `downscale_source` (with `qa: ["downscale"]`: the project path of the master the downscale gate must have
 measured; `put_slot()` defaults it to the file itself, the Apple pack names its marketing master), and `superseded` (`true` on a row kept on purpose
 after a later run replaced its file: the earlier Open Graph card). A multi-size file (an `.ico`) carries `layers`
@@ -499,10 +763,10 @@ as used `FACTS.md` (store frames, AppStream, CLI identity), `INVENTORY.md` (Appl
 band drawings. Editing any of them makes the emit report stale.
 
 Chain: `templates/finish.sh.tpl` is the ordered build (`version --check`, generators, tokens, contrast, emitters, gates, `verify-idempotent`,
-`staleness --write`, `check`). `version --check` comes first: a session that still runs an older copy of the plugin than the one Claude Code
+`board-lint` on the board of the latest round, `staleness --write`, `check`). `version --check` comes first: a session that still runs an older copy of the plugin than the one Claude Code
 has installed (`installed_plugins.json` next to the plugin cache: a user install, or a project or local one for this folder) exits 1 there and
 says to start a new session; a copy that is not in a plugin cache (a checkout) or a record that cannot be read is "not checked" (exit 0). The
-chain runs `contrast --cvd` when `qa/rules.json` has a `cvd` section. It exports `BRAND_CREATOR_CHAIN=1`; a generator that rewrites a whole output folder calls `_common.require_chain()` and exits 1
+chain runs `contrast --cvd` when `qa/rules.json` has a `cvd` section. The `board-lint` step is "The last lint" below (which board, and what an exit other than 0 does). It exports `BRAND_CREATOR_CHAIN=1`; a generator that rewrites a whole output folder calls `_common.require_chain()` and exits 1
 outside the chain. The options of block 2 are variables (`TAGLINE`, `APP_ID`, `MASTER_BAND`, `EXEMPTION`, `ICON_CONTENT`, `VISIONOS_CONTENT`; an
 environment variable of the same name overrides) that reach each emitter as separate quoted arguments, and the idempotence commands are built
 with `printf %q`, so a tagline or an exemption with spaces stays one argument. `BRAND_CREATOR_ROOT` (for the generators) comes from
@@ -564,6 +828,7 @@ the numbers in `scripts/lib/qa_rules.py` are the agent's proposals, printed as p
  "guides":    {"tolerance_px": 1.5},
  "family":    {"tile_share_tolerance": 0.05},
  "favicon":   {"drawing": "assets/logo/favicon.svg"},
+ "page":      {"widths": [360, 390, 768, 1024, 1440, 1920], "display_min_px": 20, "clear_space": 0.25, "rules": []},
  "bands":     [{"name": "small", "max_px": 32, "drawing": "assets/logo/grid-mark.svg"}, {"name": "large", "drawing": "assets/logo/mark.svg"}]}
 ```
 
@@ -571,6 +836,11 @@ the numbers in `scripts/lib/qa_rules.py` are the agent's proposals, printed as p
 project (exit 2 otherwise) and pure vector (exit 1 otherwise), and so must its `-dark.svg` when there is one.
 
 An unknown section or key, a value of the wrong type or a number at or below 0 exits 2: a typo never falls back to the proposal.
+`page` is read by `page-check` (see Page check); `page.widths` is a non-empty list of different whole numbers from 200 to 4000, and `page.rules` is a list.
+`page.rules` holds the brand's own rules for pages (see "Brand rules" under Page check). Each entry is `{"id": "one-mark", "kind": "max-marks-per-view", "max": 1, "g4": "one mark per screen"}`: `id`
+(a lower-case slug, unique), `kind`, `g4` (a non-empty string of at most 500 characters: the words of a recorded "(rule)" line) and the keys of its kind. `max-marks-per-view`: `max`.
+`max-words-per-control`: `max` and, optionally, `selector`. `words-under-accent`: `selector` and `min`, `max` or both. `tell`: `tell`, a non-empty string. `max` and `min` are whole numbers, 0 or more, and
+`min` is not above `max`. An unknown kind, a key the kind does not have, a missing key, a repeated `id` or a value of the wrong type exits 2 (`qa_rules.validate_page_rules`).
 **Size bands:** `qa_rules.pick_band(bands, size_px)` is the one function that names the drawing for a body size (first band whose
 `max_px` covers it; every band but the last has a `max_px`, and the last has none: it covers every larger size, and a last band
 with one exits 2). `Manifest.put_slot()` records the band a slot used; a slot that uses another
@@ -656,13 +926,16 @@ the check "not verified" (exit 3). Paths are relative to FAMILY.md; a sibling re
 
 ### fontcheck, fonts and outline-glyphs
 
-- `fontcheck` answers three things per font file: glyph coverage per language set (cmap), a licence hint from the name table and OS/2
+- `fontcheck` reads every font under `assets/fonts/`, plus each `--font FILE` not among them (each once, `assets/fonts/` first), into the one
+  `fontcheck` report, so naming a font of a page or a master never drops the brand's own fonts from it. It answers three things per font file: glyph coverage per language set (cmap), a licence hint from the name table and OS/2
   `fsType` (a hint from the file, not legal advice; `fsType` restricted embedding fails), and Chromium's platform-font report with a
   control (`render.mjs fonts`: `CSS.getPlatformFontsForNode`; a character the font lacks must come back as another font, else the report
   is "not verified"). Language sets are data files, `scripts/data/languages/<code>.json` (`schema, code, name, letters, symbols, extras,
   basic_latin, rules`; en, pl, de, cs, fr, es, tr); the plugin has no default language. The sets come from `--lang` or
   `content_languages` in BRAND-STATE.md. A missing required letter fails, a missing typographic extra warns, more than two font families
-  warns (default budget, owner-adjustable).
+  warns (default budget, owner-adjustable). The `licence:<font>` row also carries `family` (name ID 16, else name ID 1, else the file
+  stem), `weight` (OS/2 `usWeightClass` when it is 1 to 1000, else 400: a font with no OS/2 table, or one that stores 0 or a value over 1000, is 400) and `style` (`italic` when OS/2 `fsSelection` bit 0 or `head.macStyle` bit 1 is
+  set, else `normal`); its status does not depend on them, and its detail changes only for a stored weight that is no weight: it then starts "OS/2 usWeightClass <n> is not a valid weight (1 to 1000): taken as 400".
 - `outline-glyphs` writes text as paths: fontTools instancer pins the variable axes, skia-pathops removes overlaps, `SVGPathPen` writes
   one `<path>` per glyph. The SVG has no `<text>` and no font reference (mark_lint checks) and carries `data-baseline`, `data-cap-height`
   and `data-x-height` that `logo-sheet --guides` draws. Layout is the font's advance widths plus `--tracking` and `--pair`; GPOS kerning
@@ -771,6 +1044,48 @@ that repeats forever is counted and shot where it is. Each view records `lazy_im
     is running when the proof first sees it fails), `reduced:raf` (no `requestAnimationFrame` call in the last 500 ms of the watch),
     `reduced:listeners` (no `pointermove`, `mousemove`, `touchmove`, `wheel`, `scroll`, `deviceorientation` or `devicemotion` listener,
     script-registered or inline), `cls:reduced`, and `reduced:rest=static` (compared in place as above).
+- `component` (it proves how a component answers a hover, a press and, when the case lists `focus-visible`, the keyboard, for one line of G4): `page`, `selector` (the component's
+  element), `rule` (a non-empty string: the G4 line the case proves; the report keeps it in `cases`, next to the case's `name` and `type`) and the optional keys `states` (different values from `hover`, `active` and `focus-visible`; default
+  `["hover", "active"]`), `widths` (different whole numbers from 200 to 4000; default `[390, 1440]`) and `settle_ms` (default 300: how long the page is
+  given after load). A missing or blank `page`, `selector` or `rule`, a bad value and any other key are a usage error (exit 2), raised before a browser
+  starts; a `selector` that matches nothing is exit 2 as for a page case. There is no still: a component case compares no rest frame with a drawing. The
+  page is loaded at each width (900 high), once with motion on and once with `prefers-reduced-motion: reduce` emulated, and the animations the page
+  starts on load are finished before the first state. For each state the element is put into it with the real input: `hover` moves the pointer onto the
+  element; `active` hovers it and then presses the mouse button (the button is let go over the element, and the click it ends in is cancelled, so no
+  handler of the page runs and no link is followed); `focus-visible` presses a key and focuses the element, as the keyboard does. The row says so when
+  the element does not match the state afterwards (another element covers it, it is hidden at that width, it cannot take focus). The Web Animations
+  the input starts on the element or inside it (CSS transitions, CSS animations, `element.animate()`; a pseudo-element's included) are paused where
+  they begin and stepped through the sample points of a page case (see `sampling` above), never waited for; the others the state starts elsewhere on the
+  page stay where they began, and the row says how many. The state is then left (the pointer moved to a corner of the view the element is not in, or out of the view when the element fills it, which hovers
+  nothing, and the `rest` row says so; the button let go; the element blurred) and what that starts is stepped through the same way. A report
+  starts with `page:errors` only when it fails (the page did not load cleanly at the first width: a console or page error, a request to anything but
+  the local server); it is no row of a state. Then come the rows of each state, in the order of the report:
+  - `shift:<state>:<width>` (one per width): the **layout box** of the element and of every element after it, at its own level and at each level above
+    it (what moves when the element grows), stays within 0.5 css px of where it was at rest, in position and in size, at every sample point of entering
+    and of leaving; and no animation on the element or inside it is of a layout property (the list of `cls:normal`). The element's own `transform`,
+    `translate`, `rotate` and `scale` are taken out of its box (a lift or a press by transform moves nothing), as long as they only move and scale it; an
+    element they rotate, skew, flip or take into 3D is not measured while they do, and the row names it (the elements after it still are; with nothing
+    left to measure the row is "not verified"). A failure names the box, how it moved or resized, how far and where in the motion
+    (`button#b grew wider by 16 px (entering, at 100% = 160 ms)`); a state the element cannot be put into fails the row with the reason.
+  - `tokens:<state>`: every duration and every easing of the animations the state starts on the element or inside it, on entering and on leaving, at every
+    width, is a motion token of the built `assets/tokens/tokens.json` (`motion.durations_ms`; `motion.curves`, a named easing or `linear` compared as its
+    four numbers). A transition's easing is its timing function, a CSS animation's is that of each interval between its keyframes, a script animation's
+    both. Delays are not checked. The row names what is no token and the tokens there are. With no animation on the state it passes and says so. Without
+    built tokens it is "not verified" (`skipped`) and names `brand-creator tokens`; the file is an input of the report, so a changed token makes it stale.
+    It judges the widths the element could be put into the state at (the normal-motion run); when that is not every width, the row says `judged at
+    1440 px only` and names the others, whose `shift` rows fail with the reason.
+  - `reduced:<state>`: under reduced motion the state change starts no transition or animation on the element or inside it, on entering or on leaving, at any
+    width (an animation that ended before the proof looked at it is still seen, from the browser's `transitionrun` and `animationstart` events). The row says
+    how many there were at normal motion. A shorter animation is still an animation: it fails. The reduced-motion run has no `shift` row of its own, so a width the
+    element could not be put into under reduced motion (another element covers it there, it is hidden there) is never left out in silence: when no animation was
+    found at the other widths the row is "not verified" (`skipped`) and names each such width and why (`under reduced motion at 390 px: <reason>`), and when one
+    was found it fails and names the width it could not judge beside it.
+  - `rest:<state>`: after the state is left and its animations finished, the element and the elements after it are where they were before the state (0.5 css
+    px), and the element no longer matches the state; a page that leaves a state behind fails here. Like `tokens` it judges the widths the element
+    could be put into the state at, and says `judged at … only` when that is not all of them. When no corner of the view is outside the element (it fills
+    the view) the pointer is moved out of the view, and the row names the widths where that happened.
+  A state the element could not be put into at a width, in the normal-motion run, fails that width's `shift` row with the reason; the `tokens` and `rest` rows
+  judge the other widths, and are "not verified" when there is none. Like the other cases it needs `brand-creator setup`; `frames` skips it (an info row), and the book lists its checks under `Case N`.
 - **One report per proof file**: `assets/_checks/motion/<slug>-<hash6>.json` (tool name `motion/<slug>-<hash6>`, the slug is the proof's
   file stem, the hash the first six hex of the sha256 of its project-relative posix path, as the disk spells it (on macOS `MOTION/PROOF.JSON`
   is `motion/proof.json`, and has its report); `motion_report_tool` in `_common.py` and
@@ -786,7 +1101,7 @@ that repeats forever is counted and shot where it is. Each view records `lazy_im
 
 ### Frames (`frames <proof.json> [--case NAME] [--count N | --at 0,25,50,75,100]`)
 
-For each page case of a proof (or the named one; a states case is skipped with an info row, or a usage error when named) the page is seeked as
+For each page case of a proof (or the named one; a states or component case is skipped with an info row, or a usage error when named) the page is seeked as
 above and the mark element's box (its box at rest, rounded outward to whole pixels) is screenshotted at device scale 2 on the page's own
 background, at each point: by default five, 0, 25, 50, 75 and 100 percent of the motion's length; `--count N` spreads N points evenly (1 to
 100), `--at` names percentages (0 to 100, in the order given). Written into the project, for a gated proof (a proof of the project: the only stills the book replays) in `motion/frames/<case>/`, and for a
@@ -925,6 +1240,494 @@ section), a passing contrast report without colour-vision rows (one `contrast` w
 (`report:contrast:cvd`, naming `contrast --cvd`). Slots off the band rule, platform-spec rows stamped stale or U, and
 `tools/inputs.json` differences are gated or warned as described above.
 
+Once G4 is recorded and `tokens/primitives.tokens.json` exists, `check` compares every token of it with the same path in the plugin's starter, `templates/tokens/primitives.tokens.json`
+(`$value`, as canonical JSON; a key starting with `$` is not a group), and the row `tokens:starter` warns: "still the starter's proposal: <paths> (N); ask the owner to keep them (list them in
+`$extensions["brand-creator"]["starter-kept"]` of tokens/primitives.tokens.json with the date and their words) or change them". The row's `left` lists those paths and `kept` the ones the owner kept. The owner keeps
+a value by listing its path in `{"decided": "<YYYY-MM-DD> <the owner's words>", "paths": ["motion.quick", ...]}` under `starter-kept`; a path listed there is kept only while its value is still the starter's, and the row passes
+("kept by the owner (<decided>): <paths> (N)") when every starter value left is kept. A `starter-kept` that is no object, whose `decided` is not a calendar date followed by words (`adapt.owner_named`, the rule that `grounds.named_by_owner` is held to: a date, then any words, a colon after the date included), or whose `paths` is not a list of
+strings, keeps nothing and the same row warns and says what is wrong. Before G4, or with no primitives file, there is no row; the row is never a failure and never an exit 2 (an unreadable primitives file is a warning that it was
+not compared; the `tokens` build is what fails it). `brand-creator tokens` skips `$extensions` of the primitives, so the entry changes no output.
+
+## Page check
+
+`brand-creator page-check` (`scripts/page_check.py`) opens one rendered page in Chromium at each width in each colour scheme, offline, and reports what it
+finds. The browser only measures (`render.mjs page-measure`, with the in-page collectors of `scripts/pagelib/page_measure.mjs`, the one Chromium driver); the
+judging is Python (`scripts/pagelib/pagecheck.py`) against the built tokens, `FACTS.md` and the `page` block of `qa/rules.json`.
+
+```text
+brand-creator page-check <page.html> [--project DIR] [--widths 360,390,...] [--schemes light,dark]
+brand-creator page-check --from DIR <page.html> [--project DIR] ...
+brand-creator page-check --url http://localhost:<port>/<path> [--project DIR] ...
+```
+
+- **Targets.** A page of the project (a path inside it). `--from DIR <page>`: a built site anywhere, the page written relative to DIR; DIR is copied into a new run
+  folder `<data>/scratch/<project>/page-check/<hash6>/<n>/` (`n` is one more than the highest run folder there; `.git`, `node_modules` and symlinks are not
+  copied) and the copy is served, so the site is only read; every run keeps its folder and nothing prunes them (the manual tells the owner that old ones can be deleted). `--url`: a page already served on this machine, `http` or `https` on `localhost`, `127.0.0.1` or
+  `[::1]` and nothing else, the host written as one of the three (`127.1` or `2130706433` reach this machine and are refused all the same: both functions of the loopback
+  rule read the host as written); a remote URL is a usage error (a remote page is built locally and given with `--from`).
+- **Exit codes.** 2, with nothing written: no target, two target forms, a page that does not exist or is not a file inside the project (or inside DIR), a `--from`
+  that is not a folder or holds more than 5000 files or 200 MB (the files and bytes that would be copied), a `--url` that is not a loopback URL, a width that is
+  not a whole number from 200 to 4000 or listed twice, a scheme other than `light` or `dark`, a bad `qa/rules.json` `page` block, a `tell` rule that names no generic tell. 3: `assets/tokens/tokens.json` or `assets/tokens/tokens.css`
+  missing (`brand-creator tokens`), `node` missing, `render.mjs` exiting 3 (setup missing, Chromium cannot start), or no view measured. 1: a row failed. 0: pass,
+  warnings allowed.
+- **Widths and schemes.** `--widths`, else `qa/rules.json` `page.widths`, else 360, 390, 768, 1024, 1440, 1920 css px; `--schemes`, else `light,dark`. One browser context per
+  width and scheme, with the viewport height 800 at 360, 844 at 390, 1024 at 768, 768 at 1024, 900 at 1440, 1080 at 1920 and 900 at any other width; device scale 1; service workers
+  blocked.
+- **The request.** `page_check.py` writes `<data>/scratch/<project>/page-check/<slug>-<hash6>/request.json` and runs
+  `node scripts/render.mjs page-measure --request <request.json> --out <measures.json> --project <project>`:
+
+  ```json
+  {"schema": 1, "root": "<the project, or a run folder of --from>", "page": "pages/index.html", "url": null,
+   "widths": [390, 1440], "schemes": ["light", "dark"], "selectors": [], "rules": [{"id": "short-buttons", "kind": "max-words-per-control"}],
+   "colours": ["oklch(0.52 0.12 185)"], "dsf": 1}
+  ```
+
+  `rules` (optional, default `[]`) are the brand rules whose facts the browser collects from the page's text (see "Brand rules"): `page_check.py` sends `{id, kind, selector?}` for each entry of `qa/rules.json`
+  `page.rules` of kind `max-words-per-control` or `words-under-accent`, with the rule's `selector` when it names one (`selectors` then holds it too, once); a rule of any other kind asks the browser for nothing. Up to 200
+  objects with a string `id` and `kind` and an optional non-empty string `selector`, else exit 2. The views then hold `rule_facts`.
+
+  `colours` (optional) are CSS colours the browser is asked to render for the judge: `page_check.py` sends the modern values (`oklch()`, `oklab()`, `color()`) that
+  `tokens.css` serves for the primitives. Up to 500 strings of up to 200 characters, else exit 2.
+
+  Either `root` with `page` (served by the local server) or `url`, never both (exit 2). `root` must be the project or a folder inside `<data>/scratch/`; `page`
+  must stay inside it; a `url` that is not a loopback URL is refused with exit 2 whatever `page_check.py` did (the second gate). `--out` must be outside the project.
+- **The measurements** (`measures.json`, outside the project): `{"schema": 1, "chromium": "<version>", "target": {"kind", "page", "url"}, "views": [...]}`. A view is
+  `{width, scheme, viewport: {width, height}, lang, height, errors, non_local, failed_local, resources, served, animations, ...collectors}`. `errors` are page and
+  console errors; `non_local` the requests to another origin, which are recorded and aborted (a WebSocket: closed before it connects); `failed_local` the answers of 400 and above from the page's own origin;
+  `resources` maps the path of every image and SVG file the page loaded from its own origin (the URL with its query, without its origin, which is left out because its
+  port changes with every view) to `{sha256, content_type}` (the bytes of the response, so a mark can be compared byte for byte with its file); `served` the files the local server answered
+  (empty for `--url`); `animations` what the settle step waited for or left running. A view that could not be rendered is `{width, scheme, viewport, error}`. The collectors add `document` (title, scroll and client width, scroll height) and `selectors`
+  (for each selector the request names: how many elements match and the first visible boxes). The facts are never a verdict.
+- **Redirects.** Chromium asks the route handler about the first URL of a redirect chain only, so `render.mjs` answers every request to the page's own origin itself:
+  the answer is fetched without following redirects and the chain is walked hop by hop (GET) before the browser is given the first response. A hop to another origin is
+  recorded in `non_local` and the request is aborted, so the other server is never asked; a chain of more than 10 hops is stopped and recorded in `failed_local`. A page
+  that sends the browser to another origin (a redirect, a refresh, a script) cannot be measured: the navigation is aborted and the view is `{error}`, with `--url` too.
+  Two checks stay behind: a redirect hop that went to another origin all the same (the server answered differently the second time) and a page that ends on another
+  origin make the view `{error}` ("not stopped", "ended on"). One limit: the answer is fetched in full, so a response from the page's own origin that never ends (an
+  event stream, a long poll) never reaches the page; the request waits up to 60 s and then fails.
+- **WebSockets.** A route does not see a WebSocket, so `render.mjs` takes the page's own in hand: one to the page's own origin goes through (a dev server's hot reload);
+  one to any other origin is recorded in `non_local` and closed before it connects, so that server hears nothing. A document `render.mjs` answers itself is taken by Chromium
+  for a public one, and its local-network check would block even the page's own socket to this machine (`net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS`, a console error
+  that fails every view), so the page's own origin is granted the `local-network-access` permission. One exception: a WebSocket opened inside a worker is not intercepted,
+  and connects to any host the machine can reach.
+- **The report.** Tool `page-check/<slug>-<hash6>` (`assets/_checks/page-check/<slug>-<hash6>.json`), one per page: the slug is the page's file stem (for a URL, the stem of the last
+  segment of its path), else `page`, and the hash is the first six hex of the sha256 of the ident, which is the project-relative posix path of a project page,
+  `from:<real DIR>/<page>`, or `url:<URL>`. Inputs: `assets/tokens/tokens.json`, `assets/tokens/tokens.css`, `qa/rules.json`, `FACTS.md` and `BRAND-STATE.md` by its G4 rules (the part `g4-rules`: the G4 record and the recorded `(rule)` lines, the only things the check reads from it; see Reports) (when they exist) and, for a
+  project page, the page and every project file the browser was served (`tokens.css` included), so a change to one makes the report stale; a `--from` or `--url`
+  report lists the brand's files only. The report holds these keys at its top level: `target` (`{"kind": "project"|"from"|"url", "page", "from", "url"}`), `widths`,
+  `schemes` and `measures` (the path of the measurements). `check` does not gate page-check reports.
+- **Rows.** `page:target` (info): what was checked, the widths, schemes, Chromium version and where the thresholds came from. `page:load:<width>-<scheme>`: fails on a
+  page or console error, an answer of 400 and above from the page's own origin, or (a project page or a built site) a request to another origin; with `--url` a request
+  to another origin is a warning ("aborted: page-check runs offline"). A view that cannot be rendered fails its row. When no view was measured the row `page:load` is
+  `skipped` and the exit code is 3. With `--url` only a file the page loads from another origin is a warning; a page that is itself sent to another origin fails its row.
+- **Colour and text facts.** Every view of the measurements also holds `colours` and `texts`, collected over the elements that are shown: not `display: none` (nor inside
+  one), not `content-visibility: hidden`, not the content of a closed `<details>` (the summary is shown), not cut to nothing (the visually hidden pattern for screen
+  readers: `clip: rect(0 0 0 0)`, `clip-path: inset(50%)`, or `overflow: hidden` on a box 1 css px by 1 or less, or under 1 css px on the cut axis, such as a collapsed
+  accordion; a hairline 1 css px high is still shown), not `visibility: hidden`, not fully transparent through `opacity`, and with a box that is not wholly above or left of the
+  page's origin (it cannot be scrolled to). `script`, `style`, `template`, `option` and the contents of an SVG definition (`defs`, `symbol`, `clipPath`, a gradient, a
+  pattern, a marker) are skipped. `colours` has one entry per distinct property, colour and alpha, `{sel, prop, hex, alpha, count, also}`: `sel` is the short selector of the first
+  element (tag, id or the first two classes, `:nth-of-type`, at most four levels), `count` the number of elements and `also` the selectors of up to four more. The properties are
+  `color` (an element with text of its own, an input's value or placeholder included), `background-color` (alpha above 0), `border-color` (all four sides alike) or
+  `border-<side>-color` (a side with a width and a style other than none), `outline-color` (a drawn outline whose style is neither `none` nor `auto`),
+  `text-decoration-color` (a line is drawn), `-webkit-text-fill-color` (when it differs from `color`) and `fill` and `stroke` of inline SVG shapes (`none` and a paint
+  server, `url(#...)`, are not colours; a fill or stroke opacity of 0 paints nothing and is not read; a horizontal or vertical `line` or `path` has a box of no height
+  or no width and is still read, for its stroke only: a `line` and a shape without an area have no fill; a `path` or `polyline` whose fill covers no point of a 24 by 24 grid
+  over its box, a straight diagonal stroke, has no fill either, so its default black is not read). A computed colour in any form (`rgb()`, `oklch()`, `lab()`, `color()`) is read as sRGB `#rrggbb` plus the alpha from its text. `texts` has one
+  entry per element with text of its own (an SVG `<text>` filled by a paint server, `url(#...)`, has `fg: null` and `fill_server: true`), `{sel, text (200 characters), fg, fg_alpha, opacity, ground, ground_kind, ground_sel, font_size_px, font_weight, font_family, rect,
+  sample_label, lang}`: `fg` is the colour the glyphs are painted in (`null` and `fill_clear: true` when `-webkit-text-fill-color` is transparent, so the background paints them),
+  `opacity` the product of the element's and its ancestors' opacities, `ground` what the text sits on and `ground_kind` is `colour` or `image`. The ground is the first
+  ancestor-or-self with a background colour of alpha above 0; a see-through one is composited over what is behind it (`ground_layered: true`), a background image or gradient on
+  the way makes it `image` (and `ground` null), and with nothing behind it the ground is the browser's canvas colour for the scheme (`ground_sel` is `(canvas)`).
+  `sample_label` is the `data-sample` of the closest element that has one (`null` outside one; `""` when it is empty), `lang` the closest `lang`. Limits: pseudo-elements,
+  iframes and shadow roots are not measured; the colours inside a gradient, a box or text shadow and `accent-color` are not read; a view holds at most 4000 texts, and
+  `texts_total` says how many there were when it held more; `colours_unreadable` lists a colour the browser gave in a form that could not be read.
+  An element and everything inside it is skipped when it is cut to nothing, an absolutely positioned descendant that is placed elsewhere included; the content of a closed
+  `<details>` is skipped unless the page makes it visible (`checkVisibility()` is what is asked), and a fill thinner than a cell of the 24 by 24 grid is not seen.
+  Also not read: an icon sprite (`<svg><use href="#id">`: `use` is not a shape and the contents of a `symbol` are skipped, so the sprite's colours are never checked);
+  the ground of an SVG `<text>` is the first background colour among its ancestors (the `<svg>` element's own included), never the SVG shape it is drawn on, and its `fill-opacity` is not applied to `fg`; the
+  `text-decoration-color` of an element whose text sits in a child element (`<a><span>...</span></a>`) is not read.
+- **Colour rows.** `page:colours:<scheme>`, one per scheme over all widths. Fails when a colour the page paints is not the colour of a semantic role of that scheme in
+  `tokens.json` `modes.<scheme>`: an opaque colour must equal an opaque role, a see-through colour (alpha under 1) a see-through role of the same colour and alpha (within
+  0.01). A role is two colours, and a page colour that is either one is the role: the `hex` of `tokens.json` (what a page that uses the hex fallback paints) and the
+  colour this browser renders for the role's modern value in `tokens.css`. The two differ when a token lies outside sRGB: `tokens.css` serves the real `oklch()` value,
+  which the browser clips channel by channel, while the `hex` was gamut-mapped by chroma reduction (an `oklch(0.7 0.25 30)` is `#ff412d` in the browser and `#ff5843` in
+  the hex: 23 units apart; the token build accepts such a token). The rendered colour is a fact of every view, `role_colours`: `{<css value>: "#rrggbb" | null}` for each of
+  the request's `colours`, drawn on the same canvas as the colours of the page (`null`: the browser could not read it). The judge takes the value of a role from
+  `tokens.css` through the `ref` of the role in `tokens.json`; a role with no modern value, or a view with no `role_colours`, is judged by the hex alone. Colours count as
+  equal when no channel differs by more than 2 of 255: that absorbs a hand-typed copy of a token (a hex, or an `oklch()` with fewer digits) a unit or two off; a page made of
+  the tokens matches exactly, in either form. The detail names up to six offenders, each with the selector, the property, the colour, the nearest role of the same kind with
+  its OKLab distance (to the nearer of the role's two colours), and the first width it was seen at; the row holds them all in `offenders` and the number of distinct colours in `colours_seen`. Pass: the number of distinct
+  colours, each a semantic colour of the theme. A colour that could not be read makes a pass a warning. `skipped` (not verified, exit 3 unless another row failed) when
+  `tokens.json` holds no semantic colours for the scheme or no view of the scheme was measured (the `page:load` rows say why).
+- **Pair rows.** `page:pairs:<scheme>`, one per scheme over all widths, judges each text's colour on its ground. A text whose colour and ground equal the two colours of a `pairs`
+  entry of `tokens.json` in that scheme (the direction counts) passes, whatever the entry's `kind` and `min`: `contrast` is the check of the pair itself. Each of the two
+  colours of an entry is its hex or the colour the browser renders for the role the entry names (`fg`, `bg`), as for the colour rows, so a pair of a token outside sRGB is
+  still declared. Any other pair is
+  measured: a ratio under 4.5:1 (3:1 for text of 24 px and up, or of 18.66 px and up at weight 700 or more) fails, a ratio above it warns "declare them in pairs". A see-through
+  text colour, or text in an element that is faded through `opacity`, is measured as painted (composited over its ground) and is never a declared pair. Text over an image or gradient,
+  text painted by its own background, and an SVG text filled by a paint server (`fill_server`), is "NOT verified" in a warning. Texts alike in colours, ground and floor are one entry (`texts` counts them, `also` names
+  up to six more selectors). The row holds `texts_checked`, `declared` and the lists `failing`, `undeclared` and `over_image` (up to 100 each). Not checked: whether the
+  `kind` of a declared pair suits the size of the text (an accent declared only for large text, `ui-text-large`, passes at 14 px), APCA and colour vision.
+- **Motion facts.** Every view also holds `motion_decls`, `motion_unread` and `motion_smil`, from two walks. One is over every element of the page, hidden ones too (a menu that is closed now animates when it opens),
+  and over the `::before` and `::after` of an element that generates them (`content` is not `none`): the computed style at rest. The other is over the style sheets' rules for a state, because a `:hover` rule matches nothing while the
+  page is measured. `motion_decls` has one entry per distinct source, name, duration and easing,
+  `{sel, source, name, duration_ms, easing, via, count, also, unset?}`. `source` is `transition` (the computed `transition-property`, `-duration` and `-timing-function`, paired the way CSS cycles a shorter list over the properties; `none` and a duration of 0 are no transition),
+  `animation` (`animation-name`, `-duration`, `-timing-function` likewise; `duration_ms: null` is `auto` on a scroll or view timeline; `auto` on a time-based animation, a name and no duration, is 0 and is not listed) or `script` (a Web Animation no CSS declared).
+  `via` is `style` (declared on an element: its computed style at rest), `state` or `running` (found in `document.getAnimations()` at rest: a script's, or a CSS one the walks did not see declared; its easing is the effect's, or that of
+  each interval between its keyframes). A `state` entry comes from a rule of a style sheet whose selector names `:hover`, `:active`, `:focus`, `:focus-visible`, `:focus-within`, `:checked`, `:target`, `:disabled`, `:open`, `:popover-open`,
+  `:modal`, `:fullscreen`, `:invalid`, `:user-invalid`, `:indeterminate` or `:placeholder-shown`, nested rules included, and the declarations written after a nested rule, which belong to the rule that holds it (`sel` is the rule's selector, a nested one written out with its parent's; `count` is the number of rules with the same values).
+  The walk reads the document's style sheets, its `adoptedStyleSheets` and the sheets it `@import`s, and goes into `@layer`, `@container`, `@scope` and CSS nesting; an `@media` rule counts when it matches the view or asks about `hover` or `pointer`
+  (the measuring browser's own input says nothing of the visitor's), an `@supports` rule when the browser supports its condition. The values are what the browser computes for the rule's declarations on a probe element that is not rendered, put
+  inside the first element the rule styles when there is one, so `var()` and a custom property of that element resolve; the probe is taken out again, and a rule counts whether or not an element on the page matches it. A rule that sets only a duration or
+  only an easing is judged on that part: `unset` then lists `duration` and `easing`, whichever it leaves to the rule at rest, and that key is absent. A state declaration with the same values as one read at rest is not listed twice.
+  A running CSS animation or transition with the same source, name, duration and easing as a declared one is not listed twice.
+  `motion_total` is set when there were more than 500 distinct entries; `motion_unread` is the number of style sheets the browser did not let the walk read (from another origin); `motion_smil` is the number of SVG SMIL animation elements (`animate`,
+  `animateTransform`, `animateMotion`), which are counted and not read. Not seen: motion a script starts on a user's input, or one driven by `requestAnimationFrame`; motion in a rule that is not for a state and matches nothing now (a class a
+  script adds, `[aria-expanded="true"]`); a rule inside a shadow tree.
+- **Motion row.** `page:motion`, once over all widths and schemes. Fails when a non-zero duration is not a duration token (`tokens.json` `motion.durations_ms`, within 0.001 ms) or an
+  easing is not a curve token (`motion.curves`, within 0.00001): a keyword (`ease`, `ease-in`, `ease-out`, `ease-in-out`, `linear`) is the curve CSS defines for it and counts
+  only when a token holds the same four numbers; `steps()`, `step-start` and `linear()` never do. A `state` entry that leaves its duration or its easing to the rule at rest is judged on the other part alone. The detail names up to six declarations, each with the selector
+  (the rule's, for a state), what is wrong and the first width it was seen at, and the row holds `declarations`, `offenders`, `used` (the tokens the page uses) and `durations_checked`. A page that moves while
+  `tokens.json` holds no duration and no curve fails and says so ("the page moves ... while the brand has no motion tokens"); a page that does not move passes. A scroll-driven animation (no
+  duration), a style sheet the browser would not let the walk read (`motion_unread`: the states it declares are not seen) and SVG SMIL animations are "NOT verified": a warning unless something fails. `skipped` when no view was measured.
+- **Claim facts.** Every view also holds `claim_text` and `samples`. `claim_text` is the visible text of the page in runs, `{sel, text, sample_label, lang}`: a run is the text of one
+  block, the nearest ancestor that is not `inline` or `inline-block`, so `€<b>5</b>` reads `€5` and a `<br>` is a break; it is cut where a `data-sample` begins or ends, so a sample is a
+  run of its own. `sample_label` is the value of the closest `data-sample` (`null` outside one, `""` when empty) and `lang` the closest `lang` (`""` for none: the document's is the view's
+  `lang`). Elements that are not shown are left out (`display: none`, a closed `<details>`, cut to nothing); an element with `opacity: 0` is kept, because a block that fades in
+  is still content. At most 3000 runs of 4000 characters per view (`claim_text_total` says when there were more). Attributes (`alt`, `title`, `aria-label`, `placeholder`, and the `value` of an `<input>`, so a button written `<input type="submit" value="Buy 48 zł">`), the text of an `<option>`, `<optgroup>` and `<datalist>`, the
+  document title and pseudo-element text are not read. `samples` is every shown `[data-sample]` element, `{sel, label, text (200 characters)}`. Every view also holds `claim_h1`, the text of each shown `<h1>` (at most 20, 300 characters each), which the claims row reads together with the view's `document.title` for one thing only, the status code of an error page (below). Text inside a shadow root is not read by the claims collector (it walks child nodes, which never enter a shadow root), as for colours and fonts.
+- **Claim rows.** `page:claims`, once over all widths and schemes, reads `claim_text` outside a non-empty `data-sample` and fails on (1) a number no `FACTS.md` value holds: the
+  table's `value` cells, a row labelled `(example ...` left out. A claim is a number of two digits or more (`1.5` has two), or a single digit next to `%`, a currency sign or
+  code (`€`, `$`, `£`, `zł`, `PLN`, `EUR`, `USD`, `GBP`, `CHF`: a sign before the number or after it, with or without a space, so `€5`, `5€` and `9 €`; a code before or after it, so `PLN 5` and `5 PLN`) or a unit (`mln`, `mld`, `tys.`, `km`, `kg`, `mm`, `cm`, `ml`, `min`, `ms`, `px`, `GB`, `MB`, `KB`, `TB`, and, written right against the number, `k`, `m`, `g`, `l`, `h`, `s`, `x`);
+  a bare single digit (a step label) is not a claim, and neither is a digit written against letters (`mp3`, `A4`, `3rd`) or in a dotted version. Numbers are compared as numbers
+  (`1 200`, `1,200`, `1.200` and `1200` are one; `12,5` and `12.50` are `12.5`; with both signs the last is the decimal point, so `100.000,50`, `100,000.50` and `100 000,50` are `100000.5`); a date is its numbers, in both forms: `2026-10-17` and `17.10.2026` need `2026`, `10` and `17` in the facts (a day or month with or without its leading `0` is one number: `5.11.2026` is backed by `2026-11-05`), and a dotted `17.10` (day 1 to 31, month 1 to 12, two digits each: `30.10`, `05.11`) needs `17` and `10`, or the decimal `17.1` that it also reads as; a dotted date with a year (`1.5.2026`, and glued as `17.10.2026r.` or `1.5.2026r.`) may have one digit in its day or month; `12.5`, `2.10` and `10.1`, a day or month of one digit and no year, are decimals only, on the page and in the facts, and so is a dotted number with a currency sign, code or unit (`4.5 kg`). A date written with a month name is one date, read only in a block whose language is `pl` or `en` (another language, or none, keeps its numbers): Polish `21 października 2026`, `21 października`, and a month with a year in the nominative, genitive or locative (`Październik 2026`, `w październiku 2026`) in any letter case; English `October 21, 2026`, `October 21st`, `21 October 2026`, `21 October`, `October 2026`, the month with a capital letter or in capitals (a lower-case `may` or `march` is a word), the abbreviated `Oct` not read. A day is part of a month-name date only when no number runs past it: a day followed by `%` (`March 15% of users` holds the percent `15%`, not the date March 15), or by a digit glued with `.` or `,` (`May 3.5 kg`, `October 12,5`, `March 15.11.2026`, a dotted date), is a number of its own, while a day followed by a comma and a four-digit year, with a space after the comma or without, is the full date (`October 21,2026` is `October 21, 2026`). After a day only the genitive of a Polish month makes a date: `21 październik` and `21 październiku` are the number `21`. It is one number of the check, a claim whatever the digits of its day, listed as written (`22 października 2026`), and backed as a dotted date is, by its day, month number and year (`premiera 2026-10-21` backs every form above); a month-name date in a `FACTS.md` value (the names of both languages) backs the other forms the same way. Digits grouped by spaces (a no-break space too) are one number only when the first group has 1 to 3 digits and each later group exactly 3, so `13 205,20 zł` is `13205.2` and `In 2026 200 tools` holds `2026` and `200`. Two numbers are never claims: a year of 19xx or 20xx right after a copyright sign (`©`, `(c)`) or the word `copyright` in any letter case, or after such a year and a dash (`© 2024–2026`), and the status code of an error page, a bare number from 400 to 599 (no sign, code or unit). A page is an error page when its file name without the extension is such a code (`404.html`, `500.html`; for `--url`, the last segment of the path), or its `<title>` or one of its shown `<h1>` holds one as the only number of that text, with no `+` before or after it (every number counts there: a single digit and a copyright year too) and the same text holds an error word of the page's language, the document's `lang` (`pagecheck.ERROR_WORDS`, whole words in any letter case: English `error`, `not found`, `forbidden`, `unauthorized`, `unavailable`, `gone`, `bad request`, `server error`; Polish `błąd`, `nie znaleziono`, `nie istnieje`, `brak dostępu`, `odmowa dostępu`, `niedostępna`, `niedostępny`): `Błąd 404 | Acme`, `404 · Nie znaleziono` and `Błąd 404 – strona nie istnieje` do on a Polish page and `Error 500` on an English one; a count in a heading (`Ponad 400 projektów`, `Zaufało nam 500 firm`, `Over 400 clients`), `500+ firm nam ufa`, `+500 klientów`, `5 lat, 500 klientów`, `Error 500 (1 of 3)`, `404 or 500` and `Acme 2026 – Błąd 404` do not, nor does an error word of the other listed language. A page in any other language, or one that sets no `lang`, is an error page by its file name only. On an error page that code is no claim anywhere on the page, a small `Błąd 404` label and a large `404` alike, and only that code: `500` still is. Phone numbers, postal codes and street numbers are claims and need a fact or a `data-sample`. (2) A status word no
+  `FACTS.md` value contains (as a lower-case substring, as `book-lint`'s `words:status`): English from `bookdata.LINT_DEFAULTS["status_words"]`, Polish from `pagecheck.STATUS_WORDS_PL`
+  (`wkrótce`, `dostępne`, `dostępny`, `dostępna`, `w przygotowaniu`, `w budowie`, `premiera`, `przedsprzedaż`, `nowość`), whole words in any letter case; the Polish list applies to text
+  whose language is Polish. (3) A `data-sample` whose label is empty or white space ("label the sample"). The language of a run is its closest `lang`, else the document's; any other than
+  English or Polish, or none, adds "status words NOT verified for <lang>" (the numbers are still checked): a warning unless something fails. The row holds `claims_checked`, `unbacked_numbers`,
+  `unbacked_status_words`, `unlabelled_samples` and `languages`. A block of text is judged and counted once however many views show it (the same selector, text and language), and a finding names the first view that has it: at the
+  default 6 widths and 2 schemes `claims_checked` and the pass detail count the numbers of the page, not 12 times as many. `skipped` when no view was measured.
+  `page:samples` (info, only when the page has a labelled sample) lists each one with its label, an excerpt, its selector and the first view it was seen in, `<width>-<scheme>`: the
+  before-publishing list. The report also holds it at its top level as `samples`, `[{label, text, selector, view}]` (always present, `[]` when there is none); a sample on the page
+  is never a failure, and must be replaced with real content before the page is published. Convention: `data-sample="<what it stands for>"` on any element marks sample content; its text,
+  and the text of everything inside it that has no `data-sample` of its own, is not checked as a claim.
+- **Mark facts.** Every view also holds `marks` and `images`, collected over the same shown elements. A mark is an element with `data-brand-mark`, or an image whose file name says
+  it is the logo: the name without its extension (its stem) is `logo`, `mark` or `wordmark`, alone or followed by `-`, `_` or `@` and more, in any case (`logo.svg`, `mark.svg`, `wordmark.svg`,
+  `logo@2x.png`, `mark-dark.svg`, `Wordmark_light.svg`). `mark` is also a person's name, and both are ordinary words (a team page holds photos of people named Mark), so they make a candidate
+  by name only for an `.svg` file: `mark.svg` and `wordmark-dark.svg` are candidates, `mark.jpg`, `Mark.png`, `mark-kowalski.jpg` and `wordmark.png` are not; `logo` makes one for any image type
+  (`logo.jpg`, `logo@2x.png`). A stem that only holds one of the words (`partner-logo.svg`, `ikona-logowanie.svg`, `logos.png`, `bookmark.svg`, `marker.svg`, `market-chart.png`)
+  or says something else (`site-mark.svg`, `lockup.svg`) is not a mark by its name, and a `data:` URL has no file name. A name only makes an image a candidate: the image is then judged as any mark
+  is, so a `mark.svg` that is no logo file of the project fails `page:mark-file`. Any other image is a
+  mark only by its bytes (equal to a logo file of the project: a `mark.png` that is one is found, whatever its name) or by `data-brand-mark`, which is also how a logo under another name opts in. The images are an `img` (what the browser chose to show, `currentSrc`, so the `source` of a `picture` is covered; `kind: "picture"` then), an SVG `image`, a CSS
+  `background-image` of an element and of its `::before` and `::after`, and an inline `<svg>` that has `data-brand-mark` (`kind: "inline-svg"`). **`data-brand-mark` convention:** put it
+  on the `<img>` or the inline `<svg>` of the brand mark; its value may name the logo file the mark shows (`data-brand-mark="assets/logo/mark.svg"`), or be empty. On any other
+  element it stands for the images inside it, and an element with none is reported as `kind: "other"`. `marks` holds the marked and the named ones, shown or not (`visible: false`, so a logo hidden at one width is known; up to 100 a view, `marks_total` says how
+  many there were when more; a mark over the cap is not measured), `images` the other visible images (up to 300; `images_total`): `pagecheck.identified_marks(view, hashes)` is the one place that decides what a
+  mark is, and it promotes an image of `images` whose bytes equal a logo file of the project (the node side hashed it, see `resources`). An entry is `{sel, kind, url, own, declared,
+  named, marked, visible, rect, nearest_px, nearest_sel, nearest_text}` plus `sha256` (a `data:` image, hashed in the page), `svg_markup` (an inline SVG serialised as XML, up to
+  60,000 characters, `svg_truncated: true` beyond) and `pseudo` with `height_px` (a pseudo-element has no box to read: `rect` is null and `height_px` is its computed height when that is a
+  length). `url` of a file of the page's own origin is its path with the query, the key of `resources`, and `own` is true; `declared` is the value of `data-brand-mark` (null when
+  the attribute is not on or above the element); `visible` says it is shown; `rect` is the box in page css px. `nearest_px` is the gap to the nearest other box that is shown: a line
+  of text, an `img`, a `canvas`, a `video` or an outer `svg`, none of them the mark, inside it or (a drawing) holding it; the text of an element that holds the mark counts. The gap is
+  the larger of the horizontal and the vertical distance between the two boxes (0 when they touch or overlap), because the clear space is a margin round the mark; null when nothing
+  else is on the page. Not measured: an inline `<svg>` that is a mark without `data-brand-mark` (and one that draws through `<use>` is compared as written: the drawing it points to is not followed, so it is "NOT verified" in a warning when it matches no logo file), an `<object>` or `<embed>`, `mask-image`, `border-image` and `list-style-image`, the box of
+  a pseudo-element, and the size a background is drawn at (`background-size`): a background mark is measured by its element's box.
+- **Mark rows.** Only a shown mark is judged (not `display: none`, hidden, transparent or off the page). `page:mark-file`, over all views: fails a mark whose bytes equal no file of
+  `assets/logo/` and no drawing `qa/rules.json` names (`bands`, `favicon.drawing`, `marks.<id>.bands` and `marks.<id>.favicon`, each with its `-dark.svg` twin). An inline SVG is
+  compared after canonicalisation (`pagecheck.canonical_svg`) with every SVG of that set, and the detail says so: namespaces and prefixes dropped, attributes sorted, white space
+  collapsed (so a space at the edge of a run of text is not told apart), comments and the `title`, `desc` and `metadata` elements left out, and on the root `<svg>` also `width`, `height`, `class`, `style`, `id`, `role`, `focusable`, `tabindex`,
+  `aria-*` and `data-*` (how a page sizes, styles and labels its copy); the `viewBox` and everything inside the root must be the same, in the same order, with the text that
+  follows a child element (`Ac<tspan>m</tspan>e`) as much a part of it as the text before. The root's `style` and `class` are not compared at all, and a recolour through them (or
+  through the page's CSS) is not caught here: `page:colours` still fails a colour that is no token colour, but not a swap to another token colour; the same colour as a `fill` attribute
+  on the root fails here. A `data-brand-mark` value names the file the mark shows: the mark must be that file or its twin,
+  and a name that is no logo file of the project fails. A mark whose bytes were not seen (its file is on another
+  origin, aborted, or was reached through a redirect), and an inline SVG that draws through `<use>` and matches no logo file, is "NOT verified" in a warning. With no logo file in the project the row is `skipped`; with no shown mark it is `info` and says
+  what counts as a mark, so a page with a logo the check cannot recognise is not passed in silence. `page:mark-band`, only for a page with a verified mark (`info` when `qa/rules.json` lists no
+  bands): fails a banded drawing (a file a band names, or its `-dark.svg` twin, in either theme, because a dark header on a light page shows the twin) that is not the drawing
+  `qa_rules.pick_band` names for the mark's rendered height, its box height rounded to a whole pixel; with `marks`, a mark is judged by the bands that name its file (a band's drawing is read as the project's path: `./assets/logo/x.svg` and a symlink are the file they lead to). A wordmark or a
+  lockup is in no band and is not judged (`info` when no mark on the page is a banded drawing); a mark whose box cannot be read is "NOT verified". `page:mark-clear-space`: fails a mark
+  with another box nearer than `page.clear_space` (0.25 until `qa/rules.json` sets it, and the row says it is a proposal) x its rendered height. The rows hold their offenders (up
+  to 100), each with where it was first seen. Once a view was measured the logo files are inputs of the report, whether or not a mark is shown (a logo is found by its bytes, so even "no mark shown" rests on them), so a changed
+  logo file makes it stale. `check` does not gate them.
+- **Font facts.** Every view also holds `font_faces` and `font_usage`, collected after `document.fonts.ready` over the shown elements of the colour facts (an input's value or
+  placeholder is a text; `display: contents`, `visibility: hidden` and what is not shown are not). `font_faces`: every `FontFace` of `document.fonts`,
+  `{family, weight, style, stretch, unicode_range, status}`, the family with its quotes taken off and the status `unloaded` (declared and not needed yet), `loading`,
+  `loaded` or `error` (at most 200; `font_faces_total` says how many there were). `font_usage`: one entry per distinct first family, weight and style of the computed
+  `font-family` of a text, in document order, `{family, weight, style, stack, count, sel, min_px, min_sel, min_text, platform}`. `family` is the first family of the computed
+  list with its quotes taken off (a comma inside quotes does not end it) and `stack` the whole computed list; `count` the elements; `min_px` the smallest computed font size
+  of the entry's elements, `min_sel` that element and `min_text` the start of its text. `sel` is the one element the browser is asked about, the probe. CDP
+  `CSS.getPlatformFontsForNode` answers for an element AND everything inside it (an inline `<code>` in a paragraph, a `<strong>`, a hidden span), so the probe is the element of
+  the entry with the fewest elements inside it that draw text of their own in another family, weight or style (none, where the page has one such element), then the one whose own
+  text holds the most different characters, the first on a tie; a text area comes last, because the debugger has no answer for one. When the probe still holds such elements,
+  the fonts of each (the outermost ones; what they hold is theirs) are asked the same way and taken off its answer, glyph for glyph, and `inline_other` says how many. `platform`
+  is that answer, as `render.mjs fonts` asks it: `[{family, postscript, custom, glyphs}]`, `custom` true for a web font (an `@font-face` of the page), `family` the name inside
+  the font file (it can differ from the name the CSS gives the face) and `glyphs` how many glyphs of the probe's own text were drawn in it. `platform_error` replaces `platform`
+  when the debugger could not answer, and when it cannot be asked for the probe: the entry's only element is a text area; the probe holds more than 12 elements in other fonts; one
+  of them is `display: contents`, which has no box of its own to ask about. The view does not fail. The elements are marked `data-bc-font-probe` while they are asked (a mark is
+  a word of a list: one element can be the probe of one entry and inside the probe of another), and the marks are taken off again whatever the debugger said. At most 60 entries
+  per view (`font_usage_total` says how many there were). Not measured: text in pseudo-elements, iframes and shadow roots, and a fallback glyph in an element that is not the
+  entry's probe.
+- **Font rows.** `page:fonts` (one row for all widths and both schemes) judges every view and reports each distinct first family, weight and style once, at the first width and scheme where
+  it went wrong (a later view that breaks what an earlier one passed is still caught). The families the brand names are those of every `font.*` stack in `tokens.json` `other` (quotes taken off, names compared
+  without case; `var(--font-x)` is followed; a `font.*` token that holds a size or number is no stack). Fails: (1) a first family no stack names, a generic family
+  (`serif`, `monospace`, `system-ui`, `ui-sans-serif` ...) included unless a stack writes it, so a page that sets no `font-family` and is drawn in the browser's default
+  fails; (2) a named family that the browser did not draw the text in. A family the page declares with `@font-face`, and any named family that is neither generic nor an alias,
+  must show in `platform` as an installed font of that name, or as a web font AND the page declares that family with at least one face `loaded`: a web font in the answer
+  for a family that is not declared, or whose faces all failed or never loaded, is the fallback of its stack (often the body face), not the family's own face. So a face that
+  did not load (`error`), a family the page does not declare and the machine does not have ("on this machine": the answer depends on the fonts installed where the check runs),
+  or faces that cover none of the text, fail the row whatever else the stack fell to, and the detail names what Chromium used instead. A generic family, or a browser alias
+  (`-apple-system`, `BlinkMacSystemFont`: the operating system's interface font, no font of that name exists), that a stack names and the page does not declare is the
+  browser's own font and is not asked for. A system face (`Segoe UI`, `Roboto`, `Cantarell`, `Ubuntu`, `Noto Sans`, `Helvetica Neue`, `Helvetica`, `Arial`: faces some
+  operating systems ship, several also brand web fonts) that a stack names and the page does not declare is asked for like any other family, but where this machine has no
+  installed font of that name the answer is "NOT verified" in a warning that names what Chromium used, never a pass and never a failure (the stack is meant to fall through to
+  its next family). Not checked: which face of a family the text needed (a family with one face `loaded` counts as drawn, so a bold face that failed while the regular one
+  loaded, with the text falling to another web font, is not told apart). A warning: a text of which only some glyphs are drawn in another font (the face lacks a character the text uses: `3 of 38 glyph(s)`; `fontcheck --lang` is the check of
+  coverage), a system face this machine does not have, a debugger that could not answer or reported no font, or a probe it cannot be asked about ("NOT verified"), and a view cut at 60 fonts. `skipped` (not verified, exit 3 unless another row failed) when the
+  tokens name no font family or no view was measured. Pass: the number of fonts and their families. The row holds `fonts` (family, weight, style, selector, elements, platform;
+  up to 100), `offenders` (each with `kind` `not-named` or `not-loaded`, and the `faces` statuses), `partly` and `token_families`.
+  `page:display-size` holds the text set in the first family of the `font.display` token to `qa/rules.json` `page.display_min_px` css px (the computed font size; 20 is the
+  proposal, and the detail says "a proposal" and the row `proposal: true` until the project sets the key): any text under it fails, naming up to six with the width and scheme.
+  Pass when every text in the face is at least that size, or when the page sets none in it. Info: no `font.display` token, or a display face that is also the first family of
+  another font token (the body face), whose text cannot be told from body text, so no size is held to it. The row holds `display_face`, `minimum_px`, `proposal`,
+  `smallest_px` and `small`.
+- **Brand rules.** `qa/rules.json` `page.rules` (validated as above) are the owner's own rules for pages. Each is tied by its `g4` words to a "(rule)" line of BRAND-STATE.md "Rules (G4)": the system
+  rules the owner approves at G4 stay the one place a rule is decided, and a page rule only enforces one of them. Three kinds are measured:
+  - `max-marks-per-view` (`max`): the most identified brand marks (the marks `page:mark-file` judges: `data-brand-mark`, an image named `logo`, `mark` or `wordmark`, alone or followed by `-`, `_` or `@` and more (`mark` and `wordmark` only for an `.svg` file), or an image with the bytes of a logo file; only a shown
+    mark) in one screen, over every width and scheme. A screen is a window one viewport high; the windows start at the top of the page and every half a viewport down, the last one reaching the end of the
+    page. A mark is in a window when the vertical middle of its box is, and one box found two ways counts once. It needs nothing from the browser beyond the marks every view holds. Not seen: a mark
+    that is `position: fixed` or `sticky` is placed where it is at rest at the top of the page, and two marks more than half a viewport apart are in one window only if a window starts between them; a
+    pseudo-element mark has no box to place and is reported "NOT verified".
+  - `max-words-per-control` (`max`, optional `selector`): no shown control says more words than `max`. A control is a `button`, a `[role=button]`, an `input[type=submit]`, `[type=button]` or `[type=reset]`,
+    or an element the rule's `selector` matches. Its words are those of its visible text (`innerText`; the value of an input) and, when it shows none, of its accessible name (`aria-label`,
+    `aria-labelledby`, the `alt` of an image or `<title>` of an SVG inside it, `title`).
+  - `words-under-accent` (`selector`, `min` and/or `max`): for each shown element the `selector` matches, the words of its parent's visible text minus the words of its own are within `min` and `max`.
+  - A word is what Unicode word segmentation (`Intl.Segmenter`, UAX #29, in the language of the closest `lang`, the browser's own when it does not know that one) calls word-like: a number is one word, an apostrophe inside a word does not split it, a
+    hyphen does (`e-mail` is two), and an arrow, a dot or a symbol is none. A `tell` rule names one of the generic tells below; its row is judged from the same candidates (see "Tell rows").
+- **Rule facts.** `page_check.py` sends the selectors the rules name, once each and in the order of the rules, in the request's `selectors` (so every view also holds their `selectors` boxes), and one
+  `{id, kind, selector?}` per rule measured in the page's text in `rules` (an optional list of up to 200; `render.mjs` refuses anything else with exit 2). A request with no rule asks for nothing and the
+  views hold no `rule_facts`. Otherwise every view also holds `rule_facts`: `{<id>: {kind, selector, matched, shown, items}}`, or `{kind, selector, error}` when the browser does not take the selector as CSS.
+  For `max-words-per-control`, `items` are `{sel, text (80 characters), words, via}` (`via`: `text`, `name` or `none`), the longest first and at most 300, `matched` the elements found and `shown` those
+  with a box; a control that is `display: none`, cut to nothing, `visibility: hidden` or fully transparent has no words to count and is left out. For `words-under-accent`, `items` are `{sel, parent_sel, text,
+  parent_text, own_words, parent_words, around_words}` in document order, at most 300. Nothing is judged in the browser.
+- **Rule rows.** `page:rule:<id>`, one per entry of `page.rules` in its order, none when there are none. A rule that holds passes, and its detail says whether it is a recorded G4 rule. A rule that is broken
+  fails when G4 is recorded in BRAND-STATE.md and one recorded "(rule)" line (`adapt.view(project)["rules"]`, the list the adapters read: a "(rule)" bullet of "Rules (G4)", the template's `(...)` placeholder
+  left out) holds the rule's `g4` words, white space collapsed and letter case ignored. The words must be a meaningful part of the line: the whole line (the "(rule)" marker may be left out) or a run of its whole words with at least two content words
+  (English and Polish function words such as `a`, `the`, `per`, `w` and `na` do not count; a piece of a longer word is not a word of the line), so `rule` (the marker of every line) or one word such as `mark` ties nothing and the row says the text is too short. When it is not tied the row warns and says "not a recorded G4 rule line yet": G4 not recorded, no line with those words, or
+  BRAND-STATE.md unreadable. So a proposal never fails a page; the owner's approval does. The row holds `rule` (the entry), `tied`, `g4_line` (the line or null) and, per kind, `max` (and `min`),
+  `most_in_one_screen`, `screen` (`{width, scheme, top, bottom}`) and `marks` for marks; `controls_checked`, `longest` and `offenders` for controls; `accents_checked` and `offenders` for accents. A
+  selector the browser does not take as CSS fails the row whether or not it is tied (the rule cannot be judged), and says so; a selector that matches nothing passes and says so. A rule that
+  could not be measured (no view rendered, a mark with no box) is `skipped` or "NOT verified" in a warning, never a pass. The rows read the G4 record and the `(rule)` lines of `BRAND-STATE.md`, which are already an input of the report (the part `g4-rules`). The
+  judging imports `scripts/adaptlib/adapt.py` (next to `pagelib`) only when a project has page rules.
+- **Generic tells.** `skills/brand-creator/references/page-tells.json` (`{"$description", "version": 1, "languages": ["en", "pl"], "tells": [...], "notes": [...]}`) lists the patterns that read as a template whatever
+  the brand. A tell is `{id, name, what, why, measure}` plus, where it has them, `threshold` (the numbers) and `words` (a list per language of `languages`). The browser reports candidates and
+  `pagecheck.find_tells` applies the numbers and the lists, so a number has one home. A tell is a warning, never a failure, until the owner adopts it as a brand rule.
+  - `eyebrow`: the text element directly before an `h1`, `h2` or `h3` (an empty box between them, such as a rule, is looked past; an image or an icon is not) with at most 4 words (`max_words`), in capitals (`text-transform:
+    uppercase`, small caps, or typed in capitals) or letter-spaced `min_letter_spacing_em` (0.05 em) or more, and set smaller than the heading.
+  - `arrow-glued`: a shown link, button or submit input whose label (its text, with the content of its `::before` and `::after`) starts or ends with an arrow, a chevron, a double angle, `->` or `=>`
+    next to other text, with at most `max_gap_chars` (1) white space characters between them. A run of spaces, tabs and line breaks is one character (the browser collapses it); a no-break space or an em space is
+    counted each, so `Spare parts&nbsp;&nbsp;&nbsp;&nbsp;→` has a gap of 4 and is not glued. An arrow alone is an icon button. A gap made with margin or a flex gap is not seen.
+  - `middot-run`: an element whose own text holds `min_separators` (2) or more middle dots or bullets (`· • ‧ ∙ ⋅ ●`) with text on both sides on the same line (an inline child element stands in the text as one
+    unit; a `<br>` and a block child end the line, so a dot that starts a line is a list marker and is not counted), or a parent whose children carry that many `::before` or `::after` that are one dot and sit side by
+    side in one row (a child with a sibling beside it, overlapping in height; a stacked list with a marker on every item is not a run, an inline breadcrumb or a flex row is).
+  - `stock-second-action`: the second action (link, button or submit input with a label, outside a `nav`, in the first screen) of the hero, the nearest `section`, `header`, `[role=banner]` or element named
+    hero around the first `h1`, else the `h1`'s parent. Its label, case, arrows, punctuation and white space ignored, is a word of the list for its language (`en` or `pl`, the closest `lang`).
+  - `hero-text-budget`: the hero shows more than `max_words` (45) words in the first screen (the top of the page to the viewport height); a `nav` and text below the fold are not counted.
+  - `styled-div-mock`: the innermost shown box of `min_width_px` x `min_height_px` (240 x 160) css px or more with `min_styled_descendants` (8) or more shown descendants that have a background colour or
+    image or a border (form controls, table parts and rules are not counted: the `table`, `thead`, `tbody`, `tfoot`, `tr`, `td` and `th` of a table are data, so a table of styled cells is not a mock-up), no `img`, `svg` or `picture` inside with a side over `max_icon_px` (48) css px (a smaller one is an icon and does not exempt
+    the box; a `picture` is as big as the `img` it draws), no `canvas` or `video`, and no non-empty `data-sample` on it or an ancestor. The items of a list, the `li` of a `ul` or `ol` with everything in them (the
+    outermost list in the box; a list inside one of its items is part of it), excuse a box only when the box is the list or the items are nearly all of it: at most `max_unlisted_styled` (1) of its styled
+    descendants are outside the items, or the items themselves (the boxes of the `li`, each clipped to the rectangle of the box, so a row of items that runs on past it fills no more of it than lies in it; not the room of the list round them, which may be stretched past them) take `min_list_area_ratio` (0.8) of its area. So a styled checklist or timeline is not a mock-up, but a panel with its own styled head, figures or footer beside
+    a list is judged on all its styled boxes, the items of the list each counted. Styled boxes inside a table cell (a status badge in a `td` or `th`) count as part of the table: a box that is a `table`, `thead`, `tbody`, `tfoot` or `tr`, or
+    whose styled descendants are all in cells (a cell itself too), is not judged, so an index table whose rows end in a badge is data; a table with a styled head or footer beside it is judged on all its styled boxes, the badges too, and a drawing in a cell is its own box. A box that holds an `h1`,
+    or more than `max_headings` (1) headings (`h1` to `h6`, `[role=heading]`), is a section of the page, not a drawing in it, and is not judged: the whole page, or a band of cards with icons, is not a mock-up,
+    while a figure drawn as a panel with a header, rows and small svg icons, with no heading or one, is.
+  - `three-equal-tiles`: in a view of `min_viewport_px` (1024) or more, an element with exactly three shown element children (a `<template>`, a `<script>` or a hidden child is not counted), side by side in one row, widths within `width_tolerance_px` (2), the shorter at
+    least `min_height_ratio` (0.8) of the taller, each holding a shown heading.
+  - Note `stock-anatomy` (info): in one view, from the top of the page down, the hero, a `three-equal-tiles` row, an FAQ (a `details` with a `summary`, or a heading that is a word of the note's lists) and a
+    closing band (the last block of `main`, or of the body without one: a heading, an action and at most `cta_max_words` (40) words).
+- **Tell facts.** Every view holds `tell_facts` from `page_measure.mjs`, whatever the rules: `viewport`; `eyebrow` (`{sel, text, words, uppercase, letter_spacing_em, font_size_px, heading_sel, heading_tag,
+  heading_font_size_px}`, the candidates of 1 to 12 words); `arrows` (`{sel, label, edge, glyph, gap_chars}`, `gap_chars` as counted above); `separators` (`{sel, text, count, via}`, `via` is `text` or `pseudo`); `hero` (`{found, sel, h1_sel, top,
+  words, viewport_height, lang, actions: [{sel, label, lang}]}`, at most 6 actions); `boxes` (`{id, parent, sel, width, height, styled, in_lists, in_cells, table, list_area, media_px, headings, h1, labelled}` for boxes of 120 x 80 css px with 4 styled
+  descendants or more, `parent` the id of the nearest box above that is in the list, at most 200; `in_lists` of the `styled` sit in the items of lists, and `list_area` is the area in css px squared of those items themselves, the sum of the part of each `li` box that lies in the rectangle of the box (not of the list, which may be stretched past them, and not what a row of items runs on past the box; a list with no styled item adds none); `in_cells` of the `styled` sit in a `td` or `th` (in the box, or the box itself) and `table` is true for a `table`, `thead`, `tbody`, `tfoot` or `tr` box; `media_px` is the
+  largest side in css px of the shown media inside by element name, `{"svg": 24, "img": 600}` or `{}` (a `picture` by the `img` it draws), and `page-tells.json` says which are icons; `headings` is the number of shown
+  headings inside and `h1` the number of shown `h1` among them); `tiles` (`{sel, tiles: [{sel, left, top, width, height}]}`, at most 40); `headings`, `details` and
+  `last_band` (where the pieces of a stock page are). The lists are capped (60 eyebrow candidates, 100 arrows, headings and details, 200 separators); `truncated` is true when the page has more than 8000 elements, which the walks over every element (`middot-run`,
+  `styled-div-mock`, `three-equal-tiles`) stop at. Nothing is judged in the browser.
+- **Tell rows.** `tell:<id>`, one per tell of the file in its order, none for a tell a brand rule has adopted. The thresholds are applied to every view and a place seen in several views is one hit with its `widths`.
+  Pass: "none found in N view(s)". Warn: "N found: <selector>: <what was seen> (at <widths> px)" (up to six named; the row's `hits` keeps up to 100 as `{selector, text, widths}`) and the tell's `why`. Skipped:
+  no view was measured. `tell:stock-second-action` also warns "NOT verified: no word list for <lang>" when the page's `lang`, or the closest `lang` of its second action, is not in `languages` (a page that sets
+  no `lang` too); the other tells need no word list. `middot-run`, `styled-div-mock` and `three-equal-tiles` warn "NOT verified beyond the first elements of a view" when a view was cut at 8000 elements.
+  `note:stock-anatomy` (info, with `anatomy`: `{view, hero, tiles, faq, closing_band}`, the tops in css px) appears only when one view shows the stock order. A `page.rules` entry of kind `tell` (`tell` is an id of the file;
+  any other id exits 2 before a page is opened) gives `page:rule:<id>` in place of `tell:<tell>`: the same hits, a warning while the rule is not tied to a recorded G4 line and a failure after, a pass when none are
+  found; the row holds `tell` and `hits`. `pagecheck.load_tells()`, `tell_ids()` and `check_tell_rules(rules)` are the readers other tools import; the file ships with the plugin (exit 3 if it cannot be read).
+- **Writing a collector.** `page_measure.mjs` installs `window.__bcMeasure` for the length of one view (`collect` removes it again): `selector(el)`, `shown(el)` (`{shown, opacity}`),
+  `walkable(el)`, `colour(css)` (`{r, g, b, a, hex}` or null), `canvas()`, `ground(el)` and `hex([r, g, b])`. A later collector calls them inside its own `page.evaluate`.
+- **For other tools.** `scripts/pagelib/pagecheck.py` imports only the standard library and `scripts/lib`, and the claims rows also load `scripts/booklib/bookdata.py` (the FACTS.md table and the English status words), found next to the module; a tool puts `scripts/pagelib` on `sys.path` and calls
+  `report_tool(ident)` (the report name above) and `is_loopback_url(url)` (the one loopback rule; `isLoopbackUrl(url)` in `scripts/lib/_common.mjs` is its twin and
+  a test pins both to one table of cases, the forms a parser turns into 127.0.0.1 among them). Each family of rows is a function `(rep, measures, ctx)` listed in `pagecheck.ROW_CHECKS`; a family adds its keys to the
+  report through `ctx.extra`.
+
+## Website references and reference pages
+
+The tools of the two optional steps after G4 in Standard and Full: the website references and the site round. Each has its own heading.
+
+### capture
+
+`brand-creator capture <page.html>` and `brand-creator capture --url <url> --name <name>` (`render.mjs capture`) take stills. They write no report in
+`assets/_checks/`: the record is `capture.json` beside the stills. Every refusal below comes before the browser starts, and every picture is taken before the
+first file is written, so a page or a site that does not load leaves nothing behind.
+
+**A page of the project:** `capture <page.html> [--project DIR] [--wait MS] [--timeout MS]`.
+
+- The page is confined to the project (a path outside it exits 2). The stills go to `<the page's folder>/shots/`, which is fixed. A page under `history/`, and a
+  page in a round before the latest (`rounds/r<K>/` with `K` below the latest round), exit 2 with `<page> is inside ..., which is read-only (capture writes its
+  stills beside the page): copy the page into the latest round and capture it there`; `frames` refuses the same folders with its own wording.
+- The project is served by `render.mjs`'s own local server. A request to another origin is recorded in `problems` and aborted, as in `shot`. The page is waited for
+  as `shot` waits: `load`, `document.fonts.ready`, lazy images loaded first, `--wait` (default 300 ms), then the running animations that have an end (at most 15 s).
+  `--timeout` (default 60000 ms) bounds the load. A page whose animation never ends is captured where it is, so its stills may differ from run to run.
+- Written, each only when its bytes change (`writeIfChanged`), at device scale 1: `1440-light.png` and `1440-dark.png` (viewport 1440 x 900), `390-light.png` and
+  `390-dark.png` (390 x 844), the first screen only, and `1440-light-full.png` (the whole page at 1440, light, at most 12000 css px tall; a taller page is cut and
+  `capture.json` says so).
+- `shots/capture.json`:
+
+  ```json
+  {"schema": 1, "tool": "capture", "source": {"page": "rounds/r2/Ledger/index.html"}, "date": "2026-11-04",
+   "views": [{"view": "1440-light", "width": 1440, "height": 900, "scheme": "light", "file": "1440-light.png", "sha256": "<hex>"}],
+   "full": {"file": "1440-light-full.png", "sha256": "<hex>", "height": 2725, "cut": false},
+   "inputs": [{"path": "rounds/r2/Ledger/index.html", "sha256": "<hex>"}],
+   "problems": ["non-local request: https://example.invalid/x.png"]}
+  ```
+
+  `views` holds the four first screens in the order above; `full.height` is the picture's height, and a cut page adds `full.page_height` (its real height).
+  `inputs` are the page and every project file the server answered (a stylesheet, a script, an image, a font, `tokens.css`), as project paths, sorted, each with its
+  hash, so a still is detectably stale when one of them changes; files inside `shots/` itself are left out, so a page that loads one of its own stills still comes
+  to rest. `problems` are what went wrong while the page loaded (a request to another origin, a page or console error, a failed request of the page's own),
+  sorted, at most 40 and then `"<n> more"`: they are recorded, never gated (`page-check` gates the page).
+- `capture.json` is rewritten only when a still, an input or a problem changed (for `--url`: a view, the full page, a thumbnail or what the site answered: its
+  final address, status or title). Otherwise the old file, its `date` included, stays byte for byte, so a run that finds nothing new does not make a report that read it
+  stale; the line it prints then says `0 of N file(s) written, the others unchanged`.
+- Exit 0 when written. Exit 1 when the page cannot be loaded or rendered (nothing is written). Exit 2 for a usage error, a page outside the project, a page in
+  `history/` or a round before the latest. Exit 3 when Chromium is missing.
+
+**A real site:** `capture --url <url> --name <name> [--project DIR] [--timeout MS]`. It takes no page and no `--wait`.
+
+- Refused with exit 2, in this order, before anything is fetched:
+  1. an address that does not parse or is not `http:` or `https:` (`capture takes an http(s) address`), or that holds a user name or password;
+  2. a `--name` that does not match `^[a-z0-9][a-z0-9-]{1,40}$`, or that is `owner` (reserved: `research/site-refs/owner/` holds the screenshots the owner sent, which a capture
+     would overwrite);
+  3. `site_research` in `BRAND-STATE.md` that is not `online` or `links-only`: the message says to ask the owner first, names the phase file
+     `07w-website-references` and gives the command `brand-creator state --set site_research=online` (or `links-only`);
+  4. a `research/site-refs/<name>/capture.json` that holds another address (`use another --name`) or cannot be read; or a `research/site-refs/<name>` that holds files (or is a
+     file) and has no `capture.json`: what is there was not written by a capture and is never overwritten (an empty folder is taken).
+
+  The same address again is taken again into the same folder.
+- **The only command that lets Chromium reach the network, and only with `--url`.** Nothing is blocked: a fresh browser context per view (no cookies or storage from
+  an earlier visit), `acceptDownloads: false`, default `--timeout` 45000 ms. The address is loaded at 1440 x 900 and again at 390 x 844 (light scheme); each load
+  waits for `load`, the fonts, the lazy images (at most 10 s; the output says how many were missing) and the animations that end, and pauses one second.
+- Written into `research/site-refs/<name>/`: `1440.png` (the first screen), `390.png`, `1440-full.png` (at most 12000 css px, cut and recorded as above),
+  `thumb-1440.jpg` (480 px wide) and `thumb-390.jpg` (160 px wide), JPEG at quality 0.75 on white, shrunk in a blank page with a canvas, and `capture.json`:
+
+  ```json
+  {"schema": 1, "tool": "capture",
+   "source": {"url": "<address>", "final_url": "<where it ended>", "status": 200, "title": "<document.title, at most 120 characters>"},
+   "date": "2026-11-04",
+   "views": [{"view": "1440", "width": 1440, "height": 900, "scheme": "light", "file": "1440.png", "sha256": "<hex>"}],
+   "full": {"file": "1440-full.png", "sha256": "<hex>", "height": 2725, "cut": false},
+   "thumbs": [{"file": "thumb-1440.jpg", "width": 480, "sha256": "<hex>"}, {"file": "thumb-390.jpg", "width": 160, "sha256": "<hex>"}]}
+  ```
+
+  The board inlines the thumbnails, and its provenance row matches their bytes with `thumbs[].sha256`. A record is rewritten when anything in it differs,
+  so a capture on a later day carries the later `date`.
+- An answer of 400 or more, a navigation error or a timeout exits 1 with `could not capture <url>: <why>; leave the reference out or ask the owner for a
+  screenshot`, and nothing is written. Exit 3 when Chromium is missing.
+- It never captures a page behind a login: the phase file says so, and the tool cannot tell.
+
+### site approve
+
+`brand-creator site approve [--round N] [--replace] [--project DIR]` (`scripts/site_pages.py`: the subcommand is `site`, and the script is never `site.py`, which would shadow the standard
+library's `site` module wherever `scripts/` is on `sys.path`) puts the pages the owner approved into `site/`. It writes no report in `assets/_checks/`: the record is `site/site.json`
+(below). Approved pages are references for whoever builds the real site, never fill-in templates.
+
+- Refused, in this order, before anything is written:
+  1. exit 1 when G4p is not recorded (`site approve needs the owner's approval of the pages (G4p) recorded first`, with the `state --record G4p` command);
+  2. exit 2 when `rounds/r<N>/board.html` (`N` is `--round`, else the latest round) does not exist, or is not a `data-board="site"` page at `data-site-stage="pages"`, or when `rounds`, `rounds/r<N>` or the board file is a symbolic link,
+     wherever it leads (`rounds/r3 is a symbolic link: the pages board is read as it is, and a link can lead out of the project`; this is looked at before the file is looked for or read);
+  3. exit 1 unless `assets/_checks/board-lint.json` is the lint of that very board, current and `pass` (`lint the pages board first: brand-creator board-lint rounds/r<N>/board.html`).
+     Current is `check`'s rule: no file the lint was made from is gone or changed. A page-check report holds `BRAND-STATE.md` by its G4 rules (the part `g4-rules`, see Reports) and the lint keeps
+     those records, so recording G4p, G5 or G6 leaves the lint current, and a changed G4 record or `(rule)` line makes it stale: the message then names `page-check` for each page and the lint, and both have to be
+     run again. One case differs: a lint of a board with a rule
+     whose source only `BRAND-STATE.md` holds lists the whole file itself (see `site:choices`), so recording G4p makes it stale and the message asks for the lint again alone;
+  4. exit 1 when `site/` exists and `--replace` is not given (`site/ holds approved pages already`).
+- **Pages.** One page per page card of the board (`data-site-page`); each needs its folder `rounds/r<N>/<id>/`, its `index.html` and a `data-layout` on `<body>`. The folder is copied into
+  `site/<id>/` except `shots/` and `cold-review.md` at the top of it (`capture` writes `shots/` again beside the approved page) and `.DS_Store`. A symbolic link anywhere in a page folder exits 2, and so does a page folder that is itself a symbolic link or has one above it, wherever it leads
+  (`rounds/r3/start is a symbolic link: a page folder is copied as it is, and a link can lead out of the project`), and a page folder whose real path (`confine`) is not inside the project: this is looked at after
+  refusals 1 to 4 and before any page is copied or its paths are read, for every page card (refusal 3 has hashed the page files by then, as inputs of the lint, but nothing from a page outside the project is ever copied), and is listed as `nothing was written: N problem(s) stop the pages of rounds/r<N>/board.html`. A link inside a page folder is named by its place in the
+  folder (`rounds/r3/start/img`), also when it leads out of the project.
+- **Paths.** In each `.html` and `.css` file (UTF-8; any other file is copied byte for byte) a relative URL is read in `src`, `href`, `poster`, `xlink:href`, `srcset` and `imagesrcset` (every URL in the
+  list), the `data` of an `<object>`, and `url()` and `@import` in a `<style>` element, a `style` attribute and a `.css` file. One that resolves to a file of the project outside the page's
+  folder is written again so that it leads to the same file from `site/<id>/` (`../../../assets/tokens/tokens.css` becomes `../../assets/tokens/tokens.css`); one that leads into the folder of another
+  page of the board leads to where that page goes (`../pricing/index.html` stays); one inside the page's own folder, `#...`, an empty value, `data:`, `mailto:` and `tel:` stay as written, and so do the
+  query and the fragment of a path. Not read: the text of a `<script>`, a comment, `action`, `content` and `data-*` attributes, a URL a script builds, and a bare string in `image-set()`.
+  - exit 1 on an `http(s)://`, `ftp(s)://`, `ws(s)://` or `//` address, on any other scheme, and on a path starting with `/`: `a reference page needs no network`;
+  - exit 1 on a URL whose file does not exist; exit 2 on a URL that resolves outside the project, or through a link to a place outside it.
+  Every problem is listed with its file and line, up to twelve, and nothing is written when there is one (exit 2 when any of them is exit 2, else 1).
+- **Writing.** The pages and `site.json` are written into a staging folder in the project and then take the place of `site/`, so a failure leaves no half-written `site/`. With `--replace`, an existing
+  `site/` is first moved to `removed-<date>/site/` (`removed-<date>-2/site/` when that folder has a `site/` already): it is never deleted, and it is put back when the new pages fail.
+- It prints what it wrote and, per page, `brand-creator capture site/<id>/index.html` and `brand-creator page-check site/<id>/index.html`, then `brand-creator check`.
+  The approved copy has no `shots/` until `capture` is run on it.
+
+### site/site.json
+
+The decision record of the approved pages (schema 1), written by `site approve`:
+
+```json
+{
+  "schema": 1,
+  "approved": "2026-11-04 approved start, pricing; rules c1 c3",
+  "round": 9,
+  "hero": "Ledger",
+  "pages": [{"id": "start", "path": "site/start/index.html", "layout": "walkthrough", "sha256": "<hex>"}],
+  "choices": [
+    {"id": "c1", "text": "The stamp appears once per view", "tag": "rule", "source": "DECISIONS.md 14", "pages": ["start", "pricing"]},
+    {"id": "c2", "text": "Pricing sits under the stages", "tag": "example", "source": "", "pages": ["start"]}
+  ]
+}
+```
+
+- `approved` is the G4p record as `state` holds it, `round` the round of the pages board, `hero` its `data-hero`. A page's `id` matches `^[a-z][a-z0-9-]{1,31}$` and is the folder `site/<id>/`
+  (the home page is `start`); `layout` is the `data-layout` of the page, an id of `page-layouts.json` or `own:<word>`; `sha256` is the hash of the `index.html` that was written, after its paths were
+  rewritten.
+- `choices` come from the choices section of the board, in its order: `id` is `c<number>`, `tag` is `rule` or `example`, a `rule` has a non-empty `source` (the words of the decision it cites, found in
+  `BRAND-STATE.md`, `DECISIONS.md` or `decisions/*.md` when the board was linted), `pages` names page ids of the record (the board's `data-pages`, else every page).
+- `scripts/boardlib/sitedata.py` is the one reading: `load_site(project)` (the record as written; exit 1 when the file is missing or is not a JSON object), `validate_site(project) -> list[str]` (sentences, `[]`
+  when sound: schema 1, the keys above, page ids and paths, a known layout, choices tagged and rules sourced, `pages` of a choice known, and each page file present with the sha256 the record holds; a page
+  edited after approval reads `changed since it was approved`) and `rewrite_urls(text, kind, project=, file_dir=, new_file_dir=, moves=, label=)`, the path rule above, which
+  `site approve` uses to carry a reference page into `site/`. A tool that reads the approved pages reads the record through `load_site` and `validate_site`, never by a parsing of its own.
+
+### check and the approved pages
+
+`brand-creator check` gates the approved pages with three rows, `site:record`, `site:pages` and `site:stills`, **only when G4p is recorded or `site/site.json` exists**. A project with neither (every project
+made before the site round, and a site round not yet approved) gets no `site:` row, and a `site/` folder without `site/site.json` and without G4p is the owner's own and is not read.
+
+- `site:record`: G4p recorded and `site/site.json` there. G4p without the file fails (`G4p is recorded but site/site.json does not exist: run brand-creator site approve`), and so does the file without G4p
+  (`exists but G4p, the owner's approval of the pages, is not recorded`): nothing but `site approve` after G4p puts pages in `site/`. Then `sitedata.validate_site(project)` must find nothing: a record that is not
+  schema 1, a layout that is no reference and no `own:<word>`, a choice without a tag, a rule without where it was decided, a choice naming a page the record does not hold, and a page that is gone or whose sha256 is
+  not the one approved (`changed since it was approved ... run brand-creator site approve --replace from the round, or put the approved page back`). The row fails; it is "not verified" only when the layout file
+  of the plugin cannot be used (a damaged install).
+- `site:pages`: one row for the pages the record can name (an id and the path `site/<id>/index.html`, each once, whatever else is wrong with the record). Each needs the page-check report of that very page,
+  `assets/_checks/<tool>.json` with `tool = pagecheck.report_tool("site/<id>/index.html")` (`scripts/pagelib/pagecheck.py`, which `check` puts on `sys.path`; the name is never rebuilt by hand), current by
+  `check`'s rule (no file it was made from is gone or changed), with `target` a `project` target whose `page` is that path, the page among its `inputs`, and a verdict. A report whose status is `fail` fails the
+  row (`<id>: page-check/<slug>-<hash6> report is failing (<failing rows>)`); the row fails whatever the other pages say, and the pages that are not verified are named after it. A page with no report, a stale
+  report, one of another target or page, one that does not list the page, or one that is no verdict (`not-verified`, with up to three of its skipped rows quoted) makes the row "not verified" and names
+  `brand-creator page-check site/<id>/index.html`. A report that is no JSON, or no report, fails like any other report `check` reads.
+- `site:stills`: each page has `site/<id>/shots/capture.json` (`brand-creator capture site/<id>/index.html`) that is the capture of that page (`source.page`), current by the same rule with the page among its
+  `inputs`, and lists the four first-screen stills (`1440-light`, `1440-dark`, `390-light`, `390-dark`) by file and sha256 where the files in `shots/` have those bytes. Otherwise the row is "not verified" and
+  names `brand-creator capture site/<id>/index.html` (a capture is a record of the page, not a gate on it, so it never fails the row).
+
+`site approve` writes no report, so right after it `site:pages` and `site:stills` are "not verified" until `page-check` and `capture` have run on each page, which is what its output asks for. The page-check report of a page
+in `site/` holds `BRAND-STATE.md` by its G4 rules only, so recording G5 or G6 or setting the phase afterwards leaves it current; a changed G4 record or `(rule)` line makes it stale. A page that `check` passes has not changed since approval, was checked against
+the brand rules as it is, and has stills of the page as it is.
+
 ## Brand book
 
 `brand-creator book`, `book-lint`, `book-pdf`, `patch` and `collapse` (scripts `book.py`, `book_lint.py`, `book_pdf.py`, `patch.py`,
@@ -944,7 +1747,7 @@ facts); `check` treats a report whose view changed as not verified. A change to 
 **Chapters.** Registry order, selected from `tier`, `architecture`, the project's files and `book_chapters`: quick `idea, mark, colour,
 files, changing` (plus `wordmark` when `assets/logo` has a wordmark or lockup); standard adds `motion` (when `motion/proof.json`,
 `motion/SPEC.md` or `motion/motion.json`, on or off, exists), `type`, `use`, `proof`, `donts`, `history`; full adds `adoption` and `launch`; `endorsement` and `family` in the
-family modes; `tone`, `photography`, `components` only when named in `book_chapters`. Each chapter is `book/chapters/<id>.md`
+family modes; `tone`, `photography`, `components`, `site` only when named in `book_chapters`. Each chapter is `book/chapters/<id>.md`
 (`<id>.<lang>.md` for each language when `content_languages` has several; every language is required). `book --init` copies the skeletons
 from `templates/book/` and never overwrites; `[[fill: ...]]` left in a chapter fails the build.
 
@@ -954,12 +1757,30 @@ links. Raw HTML is escaped. Anything else is an error with the line number. Comp
 `{{mark-sizes}}` (the drawing the size band rule picks, rendered at exactly the size on light and dark, the enlarged copy being the same
 pixels, plus the downscale reports' accent measurements), `{{colours}}`, `{{contrast}}` (WCAG ratios computed from the tokens), `{{type}}`,
 `{{motion}}`, `{{tokens}}`, `{{files}}` (one row per manifest row and source artwork file with `data-path` and `data-sha`; a row marked `superseded` carries a note saying so), `{{checks}}`,
-`{{decided}}`, `{{history}}`, `{{edition-log}}`, `{{donts}}` (five misuse drawings of the mark), `{{facts}}`. Inline: `{{count:NAME}}`
+`{{decided}}`, `{{history}}`, `{{edition-log}}`, `{{donts}}` (five misuse drawings of the mark), `{{facts}}`, `{{site}}` (the approved pages, below). Inline: `{{count:NAME}}`
 (`files, slots, colours, pairs, roles, sizes, artwork, emitters, chapters`), `{{fact:LABEL}}` (a FACTS.md row's value), `{{edition}}`,
 `{{name}}`, `{{approved}}`. `::: variant GROUP NAME` and `::: switcher GROUP` fences are open choices (see `collapse`). Settings in
 `book/book.json` (unknown keys are exit 2): `min_label_px` (default 12, stated in the book), `sizes`, `fonts` (`{family, file, weight, style}`,
 embedded as data URIs), `labels` (`{lang: {English label: translation}}`; a label with no translation is shown in English and warned),
 `output`, `lint` (`history_chapter, forbidden, scratch, round, status_words, count_nouns, allow_external_links, files_exclude`).
+
+**The site chapter.** Opt-in (`book_chapters: [site]`), Standard and Full; it sits after `components` and before `use`. `{{site}}` shows the approved pages of the site round (`site/site.json`, written by
+`site approve`, see "site/site.json"). It reads the record with `sitedata.validate_site` (`scripts/boardlib/sitedata.py`), the reading `check` shares, and stops the book with exit 1 and
+`the site chapter needs the approved pages (site/site.json, from site approve): run the site round, or drop site from book_chapters` when `site/site.json` is missing, when the record is not sound, or when
+a page file is gone or is not the one the record holds (that message then ends with the first problems, in parentheses), and with exit 1 and `the site chapter needs the stills of the approved pages: site/<id>/shots/ has no
+<file>` (one clause for each page that lacks a still, then the `brand-creator capture site/<id>/index.html` that takes them) when a still is missing; nothing is written. When `{{site}}` stands in a chapter of the book while `site` is not in `book_chapters`, the
+message begins `{{site}}` instead of `the site chapter` and ends with `take {{site}} out of the chapter that holds it`. For each page of the record, in record order: an
+`<h3 data-site-page="<id>">` with the page id; a `<p data-site-layout="<layout>">` with the `job` sentence of its layout in `page-layouts.json`, or `A layout of its own.` for an `own:<word>` layout; the
+1440 and 390 px light stills `site/<id>/shots/1440-light.png` and `390-light.png` (written by `capture site/<id>/index.html`) as `<figure class="pic" data-site-still="<view>">` with the picture as a `data:` URI
+and the alt text `The <id> page at 1440 px, light` (390 for the other; the alt is a label of `book/book.json` `labels`, written with `{id}` and `{px}` where the page id and the width go); and one table with
+the columns `Choice`, `Rule or example` and `Where it was decided`, one row (`data-choice`, `data-tag`) for each choice that names the page in `pages` or has no `pages`, in record order, the third
+cell the choice's `source` (`-` when it has none). A page whose choices are none gets the sentence `No choice is recorded for this page.` (a label of `book/book.json` `labels`) instead of the table. A still that is not there stops the build, as above:
+a book built without a picture would stay current for `check` when the still is taken later. Each still is resolved with `confine` before it is read (`site still <path> is outside the project ...`, exit 2: a link out of the project is never embedded). The page files are hashed first, by the
+check of the record that `check` shares, and then resolved the same way (`site page <path> is outside the project ...`, exit 2); nothing from a page outside the project is ever embedded. Those two refusals end
+`brand-creator only reads inside the project`, where the refusal of a path that may be written ends `only writes`. A still whose first eight bytes are not the PNG signature stops the build with exit 1 and
+`the site chapter needs the stills of the approved pages: site/<id>/shots/<view>-light.png is not a PNG picture (it does not start with the PNG signature)`, then the `brand-creator capture site/<id>/index.html` that takes it again. The inputs of the `book` report are `site/site.json`, each page file and each still shown, so a page, a record or a still
+that changes makes the report stale. `templates/book/site.md` holds the owner's prose: what the pages are for (references for whoever builds the real site; a rule is the brand's, an example may
+change) and how the real site is built (in the product repositories, from the tokens and the rules). A book without `site` in `book_chapters` is byte for byte what it was.
 
 **The motion chapter.** `{{motion}}` shows `motion/motion.json` ("Motion spec") and the project's tokens. With the spec `"on"`: the signature move
 (`Signature move: <name>.` and its description, then `Shown in:` as a list), the replay (below), a parts table (`Part`, `Description`), a timeline table
@@ -1100,7 +1921,7 @@ change does not make every pack stale). `emit print`, `emit presskit` and `--pos
 need G3. Print needs `gs` (Ghostscript, called as an external program only) and poppler (`pdfinfo`, `pdftoppm`); pikepdf 10.17.0 is pinned in the
 two print scripts (`requires-python >=3.11`).
 
-**Honest print (plan review MUST #12).** Chromium prints the page (`render.mjs pdf --size-mm WxH`, the only Chromium driver); the page is exactly
+**Honest print.** Chromium prints the page (`render.mjs pdf --size-mm WxH`, the only Chromium driver); the page is exactly
 trim + 2 x bleed with the crop marks drawn in the template, inside the bleed. Ghostscript outlines the text (`-dNoOutputFonts`); pikepdf sets the
 MediaBox to trim + 2 x bleed (anchored at the top left, because Chromium rounds the page to its own grid), TrimBox, BleedBox, the metadata, a fixed
 date and file ID and no object streams. What the file says about itself depends on `--icc` only:
@@ -1188,6 +2009,7 @@ files with sizes and modification times before and after. Slots (the category of
 | `path` | an icon, logo, favicon, wordmark, lockup, launcher or splash image file, or any file under a `.appiconset`, `.iconset`, `.icon`, `.imageset`, `.solidimagestack` or `.colorset` folder, grouped by folder |
 | `meta` | the slot lines of package.json, Cargo.toml, pyproject.toml, pubspec.yaml, plists, Tauri config, AppStream metainfo, web manifests, AndroidManifest.xml, .desktop and .nuspec files (name, description, icon, theme and background colour, identifier, author, homepage) |
 | `badge` | the badge and header-image lines of README files |
+| `kit` | the row `adoption add --repo LABEL --kit` writes: the copy of the project's brand kit into one repository (below); a survey never touches it |
 | `change` | a row written by hand with `adoption add` (a change no search finds); a survey never touches it |
 
 Every match is a row or is kept: lock files, change history, licence text, minified output and `dist`, `build`, `target`, `vendor`, `Pods` and similar folders
@@ -1202,9 +2024,107 @@ removed, moved or edited, a progress entry for a row that does not exist and an 
 carries `find`, a content excerpt, and `ADOPTION.md` says so; the live lines are in `seen`. `adoption status --set ROWS=STATE` (ROWS as `N`, `N-M`, `N,M`)
 changes progress; `doing` and `done` need G6, to do (the reversal) does not. `ADOPTION.md` is rendered from the data and every sentence about its state is
 built from the counts (`adoptdata.sentence`). Its fixed text (the section order and the "How this list is applied" rules) is the frame
-`templates/ADOPTION.md` (placeholders `{{name}}`, `{{status}}`, `{{repos}}`, `{{about}}`, `{{groups}}`, `{{drift}}`, `{{rows}}`, `{{kept}}`, filled in one pass;
+`templates/ADOPTION.md` (placeholders `{{name}}`, `{{status}}`, `{{repos}}`, `{{about}}`, `{{groups}}`, `{{drift}}`, `{{rows}}`, `{{wiring}}`, `{{kept}}`, filled in one pass;
 a missing frame or placeholder exits 2). `check` (`adoption:data`) fails an ADOPTION.md that is not what the data renders, and warns about a row marked done
 that still matches at the last survey (`adoption:drift`).
+
+`adoption add --repo LABEL --kit` appends the `kit` row of a surveyed repository ([ADR-0011](../docs/adr/ADR-0011-a-generated-brand-kit-around-the-applied-skill.md)): `file` is the project's kit folder
+(`.claude/skills/<slug>-brand/`), `find` is `kit.json`, `lines` is empty (the row covers the whole folder, and `ADOPTION.md` shows its Lines cell as "the whole folder") and `change` says to copy
+the brand kit, every generated file byte for byte and the owner files the repository does not have, by the list `brand-creator kit status --repo <path>` prints, until that says current, and never
+into a global skills folder. The row is pinned like every row. It is exit 2 when the project has no kit (no `kit.json` in its kit folder), when the repository already has a kit row (one per
+repository), when `LABEL` was never surveyed, or when `--file`, `--find`, `--change` or `--lines` is given with `--kit`; without `--kit` the first three are still all required. `kit` is not among
+the surveyed categories: a survey adds no kit row, changes none and never reports one as matching nothing. A list with no kit row renders to the bytes it did before the category existed
+(the golden files `tests/fixtures/adoption/no-kit.json` and `no-kit.ADOPTION.md`).
+
+`adoption status` with a kit row also says, after the counts and the warnings, whether each such repository's copy of the kit is current. It does not judge a copy itself: it runs `kit.py status --json`
+with no `--repo` (the command that reads the repositories of the kit rows, with its refusals and its read-only proof) and prints under `kit copies (read only; ...)` one line per repository,
+`<label>: current (version V)`, `<label>: not installed` or `<label>: not current (...)`, worded as `kit status` words it (the one function `kitlib.not_current_text`): `not current (installed version X, project version V)` when the two
+versions differ, and `not current (version V on both sides, but 1 file differs, 1 file is missing, 1 file is left over from an older kit)` when they are the same, naming only the kinds there are. With `--json` the same go into a
+`kit` list of `{label, state, installed_version, project_version}` (the counts are not printed). A copy that is not current does not change the exit code, which stays 0. When `kit status` cannot judge (no kit in the project, a kit that is not whole, a
+refused folder) the status says `warning: the kit copies were not read: <why>` on stderr (`--json`: a `kit_unread` string), still exits 0, and prints no copy line. A list with no kit row prints what it
+printed before.
+
+### adoption wiring
+
+`adoption wiring --repo LABEL (--before [--again] | --after | --compare | --drop "ITEM::REASON"...)` records the wiring of a surveyed repository's source: the links, form field names, handlers,
+test hooks, ids and scripts that a redesign can drop without the adoption list noticing ([ADR-0012](../docs/adr/ADR-0012-a-redesign-records-the-sites-wiring.md)).
+`LABEL` must be a repository of the survey (exit 2 otherwise), and exactly one of `--before`, `--after`, `--compare` and `--drop` is given (exit 2 otherwise). The command needs no gate, as the survey needs none:
+it changes nothing outside the project, and it proves that.
+
+Files are listed with ripgrep as the survey lists them (`.gitignore` honoured, `.git` left out, symlinks not followed, the brand project left out when it
+lives inside the repository). A file is read when its extension is one of `.html .htm .jsx .tsx .js .ts .mjs .vue .svelte .astro .erb .ejs .hbs .handlebars
+.njk .liquid .twig .php .mdx` and the survey's keep rules (`keep_reason(path, [])`) do not keep it: lock files, change history, licence text, minified output,
+and `dist`, `build`, `target`, `out`, `.next`, `.nuxt`, `coverage`, `vendor`, `Pods`, `DerivedData`, `__pycache__` and `node_modules` folders. The owner's `--keep` globs
+are about brand slots and do not apply here. HTML comments are removed first, and the body of a `<script>` or `<style>` is not read as markup. Attributes are read
+from tags (`<name ...>`, across lines); a value is a quoted string or a `{...}` expression kept with its braces, balanced to three levels, with white space
+squashed. An unquoted value is not read, and nor is a `{...}` nested deeper than three levels (the `wiring:scope` row counts them). An item is `kind:value`, with
+everything after the colon cut at 120 characters:
+
+| kind | what is an item |
+|---|---|
+| `link` | the value of `href`, `to`, `action` and `formAction` (`formaction` too); not an empty value or `#`, and not `href` on `link`, `script`, `base`, `use`, `image` and `style` tags |
+| `field` | `name` on any tag but `meta`, `link`, `a`, `iframe`, `param`, `slot`, `map` and `object`; and the string argument of `register("...")` (not of `x.register(...)`) |
+| `handler` | an attribute that has a value and whose name is on the one list of event names (`scripts/data/event-handlers.json`: `onclick`, `onsubmit`; not `one`, `only` or `onboarding`, which only start with "on"), a component prop `on[A-Z]...` (`onClick`), `@event`, `v-on:event` or `on:event`: `handler:<attribute>=<value>` |
+| `hook` | `data-testid`, `data-test`, `data-cy`, `data-qa` and `data-track*`, `data-analytics*`, `data-event*`, `data-gtm*`: `hook:<attribute>=<value>` |
+| `id` | a static `id="..."`: no braces and no white space in the value |
+| `script` | the `src` of a `<script>`, without its query and without a leading `./` |
+
+The record is `adoption.json` `wiring[<repository id>]["before" | "after"]` = `{"date", "head", "files", "items"}`: the day, the repository's git head (or `no git head`), the number of
+files read, and `items`, sorted, each mapped to up to five files that held it. A repository id is the survey's (`r1`, `r2`). `--before` is the baseline: over an existing
+before record it exits 1 ("pass --again to replace it"), and `--again` replaces the before record and removes that repository's after record: that record was taken against the baseline that is gone, and kept, `check` would compare the new baseline
+with an after record taken before it (a link added after the old `--after` and still in the repository would fail as "gone from the after record", and the verdict could as well be a false pass). The run says on stdout that it removed the after record (with its date) and that
+`--after` has to be recorded again; until then `check` gives the info row of a before record without an after. The drops stay: they are the owner's reasons for items of the before record, not part of the after record. `--after` needs a before record (exit 2) and replaces an earlier after record. The key
+`kept` of `adoption.json` is the survey's list of lines left out of the count, so the record has its own key. `verify` (and `check`, `adoption:data`) fails a `wiring` entry for a repository that was
+never surveyed, a record whose `items` are not an object of lists of strings and a `dropped` that is not an object of item to non-empty reason; `check --cascade` does not search the record.
+
+The report is `adoption-wiring` with the rows `read-only:<label>`, `wiring:<label>` (info: the count per kind) and `wiring:scope` (info: the files read, the files of
+those kinds the keep rules left out, and the values not read), and `wiring:pages` when a page was read (see below). The scan lists the files with sizes and modification times before and after reading; a difference fails
+`read-only:<label>`, exits 1 and stores nothing. Without ripgrep the command exits 3 with the install command and stores nothing; a file that cannot be read exits 3.
+The extraction is by pattern, so it is approximate (a value built at run time, a tag a template engine assembles): ADR-0012 says why a noisy item is dropped with a reason rather
+than hidden.
+
+**Rendered pages (`--page URL`).** `--page` is repeatable and goes with `--before`, `--after` or `--compare` (with `--drop`, which reads no page, it is exit 2). Each URL must be on this machine: http or
+https on `localhost`, `127.0.0.1` or `[::1]`, by the one loopback rule of the page check (`is_loopback_url` in `scripts/pagelib/pagecheck.py`, twin of `isLoopbackUrl` in `scripts/lib/_common.mjs`). Any
+other URL is exit 2 ("the wiring is read from your own local server") before the repository is read or a browser is started. `adoption wiring` runs `node scripts/render.mjs wiring <url>` for each page
+(`node` on PATH, else exit 3 with the install hint). That subcommand is not a `brand-creator` command; it refuses a URL that is not loopback with exit 2 too, starts Chromium as `shot` does, blocks
+service workers, stops every request to another origin and every redirect that leads to one (as `page-measure` does), waits for the load event (at most 15 s) and a short settle, and prints one line of JSON on
+stdout: `{"link": [...], "field": [...], "handler": [...], "hook": [...], "id": [...], "script": [...]}`, every kind present, values in document order without repeats. It writes nothing. A page that does not load
+(a server that is gone, an answer of 400 or more, a page that ends on another origin), a data directory that was never set up and a missing Chromium are exit 3 with nothing on stdout. The DOM is read
+with `getAttribute`, as written (never as the browser resolves it), with the rules of the source scan, so one item found in both places is one item:
+
+| kind | read from the DOM |
+|---|---|
+| `link` | `href` of `a` and `area`, `action` of `form`, `formaction` of any element; not an empty value or `#` |
+| `field` | `name` of `input`, `select`, `textarea` and `button` |
+| `handler` | an inline attribute with a value whose name is on the same list of event names (`scripts/data/event-handlers.json`, which `scripts/adaptlib/wiring.py` reads for the source too: `onclick`, `onsubmit`; not `one`, `only` or `onboarding`): `handler:<attribute>=<value>`. Listeners that a script adds are not attributes and are not seen: they are read from the source only |
+| `hook` | `data-testid`, `data-test`, `data-cy`, `data-qa`, `data-track*`, `data-analytics*`, `data-event*` and `data-gtm*` with a value: `hook:<attribute>=<value>` |
+| `id` | `id`, with no braces and no white space in the value |
+| `script` | `src` of `script`, without its query and without a leading `./` |
+
+`wiring.rendered_items` turns that into `kind:value` items (white space squashed, everything after the colon cut at 120 characters again). An item found on a page is recorded under the file label
+`rendered:<path of the URL>`, the path only, so a page keeps its label when the dev server comes up on another port; it joins the source's item of the same name (the source files first, then the pages, up to
+five files). The `before` or `after` record gets a key `pages` (the URLs as given, a repeat read once) when a page was read; a record without pages has no such key, as before. `--before` reads the pages
+of its `--page` options. `--after` and `--compare` read the `--page` options, else the pages of the before record, so a redesign that comes up on another port needs `--page` for each page. A baseline
+asked for again (`--before --again`) with no `--page` reads the source only and says that the replaced baseline read pages. The pages are read before the report is made and before the repository is
+listed, so a page that cannot be read leaves nothing behind: no record, no report change, and for `--compare` no verdict. Because of that order, anything the owner's own server writes into the repository while it serves the pages is outside the read-only proof, which brackets the reading of the source. A run that read pages adds the report row `wiring:pages` (info: the pages
+and their item counts, and that a script's listeners are read from the source only), and `--compare` prints `rendered pages read again: ...` under its first line. `verify` fails a `pages` that is not
+a list of strings; a page in an edited adoption.json that is not loopback is exit 2 when it would be read.
+
+A loss is an item of the before record that the repository no longer has and nobody dropped.
+
+- `--compare` reads the repository now with the same scan and the same read-only proof, and **writes nothing**: no record, no report, no ADOPTION.md. It needs a before record (exit 2 without
+  one) and ripgrep (exit 3). It prints the repository, the date of the before record and the item counts; `lost, not recorded as dropped: N` with one line per item and the files it was in;
+  `dropped with a reason: N` with one line per dropped item and its reason; `new items: N`; and a verdict line, `wiring compare: PASS` or `wiring compare: FAIL`. Exit 1 when a loss is not
+  recorded as dropped, 0 when none is. A repository that changed while it was read is exit 1 with no verdict.
+- `--drop "ITEM::REASON"` (repeatable) records, in `wiring[<id>]["dropped"]` as `{item: reason}`, why an item of the before record goes. The item must be in the before record and the reason
+  must not be empty, else exit 2 and nothing is stored (all or none). An item may hold `::` itself: the item is the first start of the text, ending at a `::`, that is an item of the before
+  record. White space in the reason is squashed; a second drop of an item replaces its reason; `--before --again` keeps the drops. Claude never writes the reason: it is the owner's. It reads
+  no repository, so it needs no ripgrep. It rewrites adoption.json and ADOPTION.md and writes no report.
+- `check` gives each repository with a before record the row `adoption:wiring:<label>`: **fail** when the after record lost an item that nobody dropped (it names up to five, then "and N more"),
+  **pass** otherwise, and **info** ("record --after when the redesign is applied") with a before record only. A record of the wrong shape gets no row; `adoption:data` names it.
+- `ADOPTION.md` shows the record in the section `## Wiring kept`, between the rows and "How this list is applied" (the placeholder `{{wiring}}`, empty when no repository has a before
+  record, so a list without wiring renders the bytes it always did). Per repository: one line of counts per kind, before and after; under it one line per lost item, `- <item>: dropped, <reason>`
+  or `- <item>: lost, not recorded`. Every line carries `<!-- target-repo -->`, so the cascade counts it as a record.
 
 ### check --cascade
 
@@ -1215,7 +2135,7 @@ are only read, and one that does not exist fails. A current file holding the val
 `cascade:scope` row: `history/`, `decisions/`, `BRAND-STATE.md`, `DECISIONS.md`, earlier rounds, `removed-*/`, `assets/_checks/`, `assets/manifest.json`, binary files
 and print PDFs (their text is outlines). `_build/` folders are searched: their HTML (OG card, social posts, App Store frames, print pieces) is the only text
 layer of an image made from a value given on the command line, which `emit` does not check against FACTS. A line that carries `<!-- target-repo -->` (an ADOPTION.md row, the rename list of LAUNCH.md) and the `find`, `terms`,
-`identifiers` and `kept` fields of adoption.json record what a product repository holds: they are counted apart and make a warning, never a failure; any other line
+`identifiers`, `kept` and `wiring` fields of adoption.json record what a product repository holds: they are counted apart and make a warning, never a failure; any other line
 of those files, including the text of an adoption row's `change`, is searched like the rest.
 
 ### adapters
@@ -1224,10 +2144,10 @@ of those files, including the text of an adoption row's `change`, is searched li
 tokens (`assets/tokens/tokens.json`), BRAND-STATE.md and FACTS.md. BRAND.md: frontmatter `type` and `architecture` (standalone: master, independent; family-member:
 master, endorsed; product-in-family: product, endorsed; these pairings are brand-creator's reading, not something the format defines, so they can be overridden),
 then Strategy (the facts, the canonical direction), Voice (only `voice` and `tone` facts and the FORBIDDEN list; "no voice facts are recorded" otherwise), Visual
-(colour roles in light and dark, type families, the mark files, the G4 rules, motion) and Governance (naming and renames, claims and verbatim legal facts,
+(colour roles in light and dark, type families with the sizes, weights, line height and tracking the tokens define, the spacing, radius and layout values, the mark files, the G4 rules, motion) and Governance (naming and renames, claims and verbatim legal facts,
 the accessibility commitments with the computed ratios, approval). Contact and postal-address facts are left out. DESIGN.md: frontmatter `version: alpha`, `name`,
-`colors` (the light roles, `-dark` variants, `primary` when `--primary` names a role), `typography` (families only), `spacing`, `components` (one entry per
-`ui-text` pair, light and dark, as `{colors.x}` references), then the sections in the spec's order that have content. A role whose colour is see-through
+`colors` (the light roles, `-dark` variants, `primary` when `--primary` names a role), `typography` (families, sizes, weights, line height and tracking), `spacing`, `rounded`, `components` (one entry per
+`ui-text` pair, light and dark, as `{colors.x}` references, and the action of each text ground, below), then the sections in the spec's order that have content. A role whose colour is see-through
 (alpha under 1 in `tokens.json`) is written `#rrggbbaa`, lower case, as `tokens.css` writes it, wherever a role is listed (BRAND.md, DESIGN.md `colors`, the applied
 skill); an opaque role stays `#rrggbb`. The pinned DESIGN.md format lists `#RRGGBBAA` as a colour, and its lint passes it. The report `adapters` records the sha256 of
 each output and `adapter_state_sha` (a hash of what the adapters read from BRAND-STATE.md and FACTS.md). DESIGN.md is linted with `@google/design.md` (the version
@@ -1236,6 +2156,37 @@ is `fail`, other warnings are `warn`, and a missing package is `skipped`, so the
 that is not the bytes the report recorded (a hand edit) and treats a changed source as not verified. A hand-edited file is replaced only with `--replace`, which
 moves it to `removed-<date>[-n]/`. When `tools/inputs.json` exists, the adapters add `BRAND.md` and `DESIGN.md` to its globs (the pack then reads as stale until
 `staleness --write`), and `staleness --write` includes both whenever they exist.
+
+Type and layout values are read wherever `tokens.json` `other` holds them, by the name of the key (`adaptlib/adapt.py` `layout_tokens`; a leading `dimension.` is dropped
+first). By its first segment, or for a one-segment name by the word it starts with before a hyphen: `space`/`spacing` are spacing steps, `radius`/`rounded` corner radius, `weight`
+weights, `leading`/`line-height` line height, `tracking`/`letter-spacing` tracking, `layout`/`container`/`gutter`/`breakpoint` layout values; a name with a segment starting `text-`
+(`size.text-sm`) is a text size. Fonts, durations and curves are read as before; an alias (`var(--space-3)`) is read as the value it names; every group is in name order. Nothing is
+invented: a kind the tokens do not hold is not written, and a brand with no size and no weight keeps the sentence "The tokens define no sizes or weights." in DESIGN.md.
+DESIGN.md `typography` has one entry per `font.*` family; a `leading.<n>` or `tracking.<n>` joins the entry of the family of that name (`lineHeight`, `letterSpacing` in em: a plain
+number such as `-0.01` is written `-0.01em`) or, when no family has that name, makes an entry `<n>`; each size is an entry `text-<step>` (`fontSize`) and each weight an entry
+`weight-<name>` (`fontWeight`). A weight that is not a whole number, a size that is not a px, em or rem dimension, and a line height or tracking that is neither a number nor such a dimension stay in the
+prose and out of the frontmatter, because the format holds nothing else. `spacing` entries are named `space-<rest>` (`space.1` and `dimension.space-1` are `space-1`) and `rounded` entries after the
+radius (`radius.sm` and `dimension.radius-sm` are `sm`). No key of the frontmatter is written twice (`adaptlib/adapt.py` `one_each`): YAML takes a repeated key for an error, and the pinned lint then
+reads nothing of the file and passes it. When two tokens give one name (`space.1` with `dimension.space-1`, `radius.sm` with `dimension.radius-sm`) or one property of one `typography` entry
+(`leading.sans` with `line-height.sans`, `size.text-sm` with `dimension.text-sm`) the same value, they make one entry; with different values the first in name order keeps the name and the next
+is numbered `<name>-2`, `-3` (a name no token has of its own), and the prose (`## Typography`, `## Layout`) says which token it is: "`space-2-2` is `space.2`". Every token is still listed in
+the prose with its own value. The DESIGN.md prose lists them: `## Typography` the families, sizes, weights, line heights and tracking, `## Layout` the groups the
+spacing steps come from and the radius, container, gutter and breakpoint values. BRAND.md `### Type` and the applied skill's `## Type` list the same, one bullet per token path; BRAND.md
+`### Layout` and the applied skill's `## Layout` list the spacing, radius and layout values, and are left out when there are none.
+
+Text grounds are read from `grounds` of `tokens.json` (see Token sources; absent, nothing changes and the three files are byte for byte what they were). DESIGN.md `components` gains
+`action-on-<ground>` for each listed ground (`<ground>` is the role name without `color.`): `backgroundColor` the action role and `textColor` the on-action role, as `{colors.x}`
+references, and an `action-on-<ground>-dark` twin when both roles have a colour in dark. A name already taken (a ground listed twice, a `ui-text` pair that makes the same name) takes
+`-2`, `-3`, so that no key repeats. A role the tokens give no colour for (`null`: left out of the block, or a name that is no semantic colour token) is left out and never filled in:
+a ground without its action or on-action in a mode has no entry for that mode (`action-on-<ground>` for light, the `-dark` twin for dark). An entry is also left out for a mode in which the
+on-action text is under 4.5:1 on the action (the ratio of `grounds:<mode>:<ground>:on-action` in `contrast`): the lint of the pinned format fails a component with such a pair (`contrast-ratio`), while
+`contrast` only warns about it in this release and exits 0, and `adapters --design-md` must not exit 1 for a pair that `contrast` passes. The other mode keeps its entry, and `## Components` lists
+each ground, mode, pair and ratio under "The text on the action is under 4.5:1"; once the colours pass, the entry is written. DESIGN.md `## Components` then also names the grounds and says whether the owner
+named them (`named_by_owner` starts with a real `YYYY-MM-DD` date and has words after it, the rule `contrast` holds it to) or they are the starter's proposal, and lists under "The tokens
+give no colour for the following" each ground and mode with the roles it lacks (`ground colour`, text, action, on-action, focus, border). BRAND.md `### Grounds` (after `### Colour`) and
+the applied skill (a `### Grounds` block appended to the `{{colours}}` fill, so under its `## Colour`; no new placeholder) hold the same block, a sentence on who named the grounds and one
+table, a row per ground and mode: ground, mode, text, action, on-action, focus, border. A cell is the role name and its colour as the colour table prints it (`#rrggbbaa` when see-through), or "missing: ask the
+owner". A `grounds` block of another shape in `tokens.json` stops `adapters` and `applied-skill` (exit 2) before anything is written.
 
 Motion is the same text in BRAND.md (`### Motion`), DESIGN.md (`## Motion`, prose between Components and Do's and Don'ts: the pinned format keeps a section it does
 not name, so no frontmatter key is invented) and the applied skill (`## Motion`): every duration token (by its type, the paths under `tokens.json`
@@ -1249,11 +2200,391 @@ the `adapters` and `applied-skill` reports, and the state hash covers it: a chan
 ### applied-skill
 
 `applied-skill --yes [--plan] [--replace]` writes `.claude/skills/<slug>-brand/SKILL.md` into the project from `templates/applied-skill/SKILL.md`: colours (light and
-dark) and the contrast pairs with their ratios, type families, the mark files (relative to the skill), the small-size rule (from `qa/rules.json`, or the plugin's
+dark) with the table of text grounds when the tokens list any (above), and the contrast pairs with their ratios, type families with the sizes, weights, line height and tracking the tokens define (`{{type}}`), the spacing, radius and layout values
+(the optional `## Layout` section, through the template's `{{layout}}`: a whole section or nothing, as for motion, and left out when the tokens hold none), the mark files (relative to the skill), the small-size rule (from `qa/rules.json`, or the plugin's
 proposal, said so), motion (the section above, through the template's `{{motion}}`: a whole section or nothing, so a brand without motion gets the file it always
 had), what is never done, the G4 rules, the facts that may be claimed (contact facts left out). It needs G5 and `--yes` (without it: the plan on stdout, a
 message on stderr, exit 2; `--plan` exits 0). The name is `<slug>-brand` (lower case, hyphens, at most 64 characters, no `claude` or `anthropic`). Gated by `check` like
 the adapters (`applied-skill:file`, `applied-skill:state`).
+The same builder (`adapt.applied_skill_md(project, template, kit=...)`) writes the kit's SKILL.md, with every path inside the kit (the tokens, the marks and the band drawings
+under `brand/`, and the template's `{{kit}}` line filled with the kit section; see `kit`). Without a kit the template's `{{kit}}` line is dropped, as `{{motion}}` is, and the file is the bytes it always was.
+A project whose skill folder holds a `kit.json` is handed over to `kit build --yes`: `applied-skill` then exits 2 before it writes anything (with `--plan` and `--replace` too), with "this project's brand skill is a kit (kit.json): run `brand-creator kit build --yes`". `check` gates such a project through the `kit` report and runs no `applied-skill:file` or `applied-skill:state` row for it.
+
+### kit
+
+`kit build --yes [--plan] [--replace]` (`scripts/kit.py`; the kit as data is `scripts/adaptlib/kitlib.py`) writes the brand kit into the applied skill's folder, `.claude/skills/<slug>-brand/`.
+The kit is the applied skill with more around it: its SKILL.md is still written by `adapt.applied_skill_md` (see `applied-skill`), now with every path inside the kit and a `## The kit`
+section. That section says the kit works beside the owner's web-design skill and not instead of it, and that a product copies the files it uses from `brand/` into its own public or static folder and links them from there. A project without a kit keeps the applied skill as it is: the same bytes, the same command and the same `check` rows.
+
+```text
+.claude/skills/<slug>-brand/
+  SKILL.md      generated: the applied skill, its paths inside the kit, plus the "## The kit" section (it holds the line `Kit version <version> (kit.json).`)
+  kit.json      generated: schema, version, edition, sources, the sha256 of every other generated file and of each owner file (`owned`)
+  rules.json    generated: the G4 rules with ids, the size rule and bands, the contrast pairs with their ratios, the forbidden words, the page block (see Rules and facts below)
+  facts.json    generated: the public rows of FACTS.md
+  brand/        generated: byte copies of the brand's files AT THEIR PROJECT PATHS, so a relative link in one of them still resolves
+    assets/tokens/tokens.css, tokens.json
+    assets/logo/*.svg, *.png, and every band drawing qa/rules.json names, top-level and per mark (at its own path)
+    assets/fonts/<the OFL fonts> and their licence texts (see Fonts below)
+    motion/motion.json, motion/SPEC.md, and the page of each page case of motion/proof.json when the brand moves (see Motion below)
+    site/<id>/ (the page, its folder and its stills) and every project file an approved reference page loads (see Reference pages below)
+    assets/masters/<every file of the approved masters, a font by the font rule> (see Masters below)
+  snippets/fonts.css   generated: an @font-face for each copied font
+  snippets/on-ground.css   generated: one [data-ground] scope for each ground the owner named, after the page ground (see Grounds below)
+  snippets/logo.html   generated: the logo in light and dark, switched as tokens.css switches them
+  reference-pages/<id>/notes.md   generated: an approved reference page's layout (structure only), approval, stills and choices, each tagged
+  EXTENDING.md  voice.md  visual.md  golden-rules.md   the owner's: scaffolded once from templates/kit/, never overwritten (see Owner files below)
+  recipes/web-page.md   the owner's: the web-page recipe
+  <any other file>      the owner's too: a recipe under recipes/, a folder of your own such as notes/ (see Owner files below)
+```
+
+Everything the build writes, except the five owner files it scaffolds once (see Owner files below), is generated and is never edited by hand: change the brand project and build again.
+`brand/`, `snippets/` and `reference-pages/` are the generated folders. Every file of the kit folder that is no generated file, is not `kit.json` and is no Finder `.DS_Store` is the owner's: the five the build
+scaffolds, a recipe the owner adds under `recipes/`, a file in a folder of her own. The build leaves each alone, and `kit.json` lists all of them (`owned`).
+
+`kit.json` (schema 1): `kit` (the folder's name), `version`, `edition`, `plugin_version`, `content_sha`, `generated` (path in the kit to sha256, every generated file except `kit.json`
+itself, SKILL.md with its version in it), `owned` (the owner's files, see Owner files below) and `sources` (`state_sha`, as `adapt.state_sha`, then the sha256 of `assets/tokens/tokens.json`, `assets/tokens/tokens.css`, `qa/rules.json`
+and `FACTS.md`, each `null` when the project has none; `motion`, see Motion below; and `logos`: one sha256 over the logo files and the band drawings; and `masters`, one sha256 over the files below `assets/masters/`, a key that is there only when the project has such a file, so that
+the `sources` of a project without masters are the bytes they always were). `kitlib.load()` is strict: a key it does not know, at any level, and a key that is missing, stop it (exit 2) naming the key
+(`sources.masters` is the one key that may be missing).
+
+The build needs G5 recorded (exit 1 without) and an approved edition (BRAND-STATE.md `approved_edition`, which `state --record G5` writes; empty: exit 1, "G5 is recorded but no edition is
+approved"). The tokens must be built: `tokens.json` or `tokens.css` missing is exit 3, naming `brand-creator tokens`. A band drawing that qa/rules.json names and the project lacks is exit 1,
+naming it. One that leaves the project, or is not written as a plain path (`assets/logo/./mark.svg`, an absolute path), is exit 2: the kit names a drawing by its project path, and SKILL.md
+names it the same way. Without `--yes` the plan goes to stdout (`would write <n> generated files into .claude/skills/<name>/ (version <v>)`, then one line `generated <path> (<bytes> bytes)`
+per file, then one line `scaffold <path> (<bytes> bytes, written once, never overwritten)` per owner file the build would write), the message to stderr and the exit is 2; `--plan` prints the same and exits 0. Nothing is written in either case.
+
+**The version** is `<edition>.<build>`, and `kit.json` `version` is its only home (SKILL.md prints it in the line `Kit version <version> (kit.json).`). The edition is `approved_edition`. The build number
+starts at 1 and goes up by 1 when a build changes any kit content. `content_sha` is sha256 over the sorted (path, sha256) pairs of every generated file except `kit.json`, SKILL.md hashed as
+rendered with the literal `<version>` in its version line, and the owner's files (`owned`), so the version is decided before it is written. Same edition and same `content_sha` as the last build keep the version; same edition and
+another `content_sha` add 1 to the build number; a new edition starts at `<edition>.1`. No clock, no randomness: a second build with nothing changed writes nothing and keeps the version.
+
+**Owner files.** The owner's files are every file of the kit folder that is no generated file (`SKILL.md`, `kit.json`, `rules.json` and `facts.json` at the top, and what sits in `brand/`, `snippets/` and
+`reference-pages/`) and no Finder `.DS_Store` (`kitlib.owner_paths`). Five of them, `EXTENDING.md`, `voice.md`, `visual.md`, `golden-rules.md` and `recipes/web-page.md`, are scaffolded from `templates/kit/<path>`
+into the kit folder only when the path is absent (`kitlib.owner_plan`, `kitlib.write_owner`): a file that is there is never overwritten or moved, whatever it holds, a build with `--replace` included, and a file
+the owner deleted is scaffolded again at the next build. Any other file (`recipes/email.md`, `notes/palette.txt`, a PDF in a folder of her own) is the owner's as it stands: the build only reads it. A scaffold is
+filled in one pass: `{{brand}}` is the brand's name and `{{skill}}` the kit folder's name, and any other `{{...}}` (a name with other letters, with
+spaces or across lines too) is exit 2 naming it and the template, and so is a `{{` or `}}` that is no placeholder at all (never closed, or never opened), before anything is written; filled-in text is never read for placeholders again. A scaffold the plugin lacks is exit 3. A path where an owner file belongs
+that holds a folder is exit 1, and so is a folder an owner file belongs in (`recipes/`) that is a file, before anything is written; the build moves neither. Every symbolic link among the owner's files,
+or as the folder one belongs in, whatever it points at (a file or a folder of the project, nothing, or a place outside the project), is refused the way a `kit.json` that is a link is: the build stops
+(exit 1, never exit 2, "<path> (a link among your own files: never read through)", up to 6 paths named) and `--replace` moves the link itself to
+`removed-<date>[-n]/<its project path>`, never what it points at; one of the five whose path was such a link is scaffolded again. `kit check` never reads through it (`kit:owned`: "is no file the kit can read") and
+`kit status` is exit 3, because a copy cannot be listed from a file that is never read. `EXTENDING.md` has no fill marker. `voice.md`,
+`visual.md` and `golden-rules.md` each hold a heading with the brand's name, one sentence and one `[[fill: ...]]` marker (the note between the brackets holds no square bracket); `recipes/web-page.md`
+is the web-page recipe: seven numbered steps (the visitor's job and the page's idea, references, tokens and the brand files copied into the product's own public or static folder, the hero first with the web-design skill beside the kit, the page check, a cold read, and the samples marked before publishing), with no value, no link, no bullet and no fill marker. `kit.json` `owned` is `{path in the kit: sha256}` for every owner file: the hash of the file on disk or, for one of the five that is absent, of the scaffold the build writes; the five are always in it. `kitlib.load()` refuses
+a path that is no owner file (`kitlib.is_owner_path`: a plain path in the kit folder, not `kit.json` or a file the build writes, not below a generated folder, not a `.DS_Store`), a hash that is no sha256, and one of the five that is missing. `content_sha` covers these hashes, so an owner file
+added, edited or taken away moves the version at the next build and the same bytes keep it; a kit whose owner has added nothing has the `owned` it always had. The files are
+written after the generated ones and before `kit.json`. They are not in the report's `outputs`: `check` does not gate them, and the SKILL.md kit section lists after the generated files only the five, under
+"Yours to extend; how: `EXTENDING.md`." (always the same five, whether they exist yet or not, so that its list of files does not depend on what the owner has written; a recipe or file she adds is named
+nowhere in SKILL.md, and a session in a product repository finds it through `EXTENDING.md`. SKILL.md still carries the version line, which moves when she adds, changes or takes away an owner file).
+
+**What the last build wrote** is the `kit` report's `outputs`, `kit_version` and `content_sha`. With no `kit` report (or one that records no outputs), `kit.json` stands in, because it is the version's only home:
+its `generated` hashes, its own bytes as they are on disk, its `version` and its `content_sha`. A deleted report therefore resets nothing: the version goes on, and a file the last build wrote is not "edited by hand".
+A `kit.json` that `kitlib.load` would refuse is no record, and neither is one that is a link (a link is never read through). With neither, the `applied-skill` report's `output.sha256` stands in for SKILL.md, so the kit takes over a skill file that `applied-skill` generated. Against that record:
+
+- A planned file on disk whose bytes differ from the plan and whose sha256 is not the recorded one was edited by hand (`kit.json` too). A file inside a generated folder that is neither planned nor
+  recorded is a foreign file. Either one stops the build (exit 1, up to 6 paths named, nothing written or moved) unless `--replace`, which moves each to `removed-<date>[-n]/<its project path>`
+  (for example `removed-2026-10-17/.claude/skills/acme-brand/SKILL.md`) and writes the kit. A SKILL.md edited by hand after `applied-skill` stops the first kit build the same way.
+  A file named exactly `.DS_Store` (what Finder leaves in a folder it opened) is neither: it is ignored in `brand/`, `snippets/` and `reference-pages/`, never moved, never reported as added, and in no record.
+  A symbolic link inside a generated folder, to a file or to a folder, a generated folder that is itself a link, and a link at the path of a file the kit writes (`SKILL.md`, `kit.json`, `rules.json` and
+  `facts.json` at the top of the kit folder too), are foreign files as any other, whatever they point at, even a file that holds the very bytes the last build wrote: a link is never followed (nothing
+  under a link to a folder is read, compared or listed, and no file is read or written through a link), and `--replace` moves the link itself to `removed-<date>[-n]/`, never what it points at; the kit then
+  holds a real file at that path. The kit folder itself and the folders above it are paths of the project, and the kit goes through a link there as long as it stays inside the project.
+- A file recorded before and no longer planned (a logo taken out of the project) is moved to `removed-<date>[-n]/` as well, and said so, with no `--replace` needed. A generated folder this
+  empties is removed (one that still holds a Finder `.DS_Store` stays). Nothing is ever deleted.
+- Files are written only when their bytes change, `kit.json` last.
+
+**Fonts.** Each `.ttf`, `.otf`, `.woff` or `.woff2` under `assets/fonts/` (found as `fontcheck` finds them) is copied to `brand/assets/fonts/<its path under assets/fonts/>` only when both hold:
+the `fontcheck` report (`assets/_checks/fontcheck.json`) is current (`_common.stale_inputs` is empty) and its `licence:assets/fonts/<file>` row has `recognised` `SIL Open Font License (OFL)` and a
+`family`; and a licence text under `assets/fonts/` contains "SIL OPEN FONT LICENSE" (any case). A licence text is a file named `OFL*`, `LICENSE*` or `LICENCE*` (any case) with no extension or
+`.txt` or `.md`; each one that contains the phrase is copied along to `brand/assets/fonts/`, once, when at least one font is copied. Any other font is never copied. It is listed in `kit.json`
+`fonts.not_copied` as `{file, reason}` (`file` is the project path), the reason being one of these sentences:
+
+- no current fontcheck report: run `brand-creator fontcheck`, then `kit build`
+- the fontcheck report reads no licence for it (no row for the file, or `recognised` empty)
+- licence: `<recognised>`; only OFL fonts are copied (a default you may change): copy it into a product yourself, under its own licence
+- OFL by its name table, but no OFL licence text in assets/fonts/: add the font's OFL.txt
+- the fontcheck report has no family name: run `brand-creator fontcheck` again (also said, with "weight or style" for "family name", when the row has no weight or no style; a weight that is not a whole number from 1 to 1000 is no weight)
+
+`kit.json` `fonts.copied` lists `{file, licence, licence_files}` with paths in the kit. `snippets/fonts.css` is written when one font or more is copied, sorted by path. It opens with the comment
+`/* generated by brand-creator from assets/fonts/ and the fontcheck report; paths are relative to this file */`, a second comment that says to copy `brand/assets/fonts/` into the product's own public or static folder and to point each font source at the path the site serves it from (a built site does not serve `.claude/skills/`), then one `@font-face` per copied font with `font-family` (the report's `family`),
+`src: url("../brand/assets/fonts/<file>") format("<woff2|woff|truetype|opentype>")` (the path percent-encoded where a URL needs it), `font-weight` and `font-style` (both from the row). Nothing else
+is set. `kit.json` always has the key `fonts` (both lists empty when there are no fonts) and `sources.fonts`: one sha256 over the font files, the licence texts and the `fontcheck` report, or `null`
+when `assets/fonts/` holds no font file. Row `kit:fonts`: pass when every font is copied; warn when one is not (the kit is still written); skipped when there is no current `fontcheck` report (the kit
+is written without any font and the build exits 3). No fonts means no row. The report's inputs add the font files, the licence texts and the `fontcheck` report, so a changed font makes the `kit`
+report stale.
+
+**Fonts a reference page brings.** A `.ttf`, `.otf`, `.woff` or `.woff2` file that is in a page folder (`site/<id>/fonts/X.ttf`) or that a page loads from outside `assets/fonts/` (`assets/web/X.ttf` through `url()` in a
+stylesheet) goes through the same rule as the fonts of `assets/fonts/` (`kitlib.page_font_plan`): it is copied, byte for byte, to `brand/<its project path>` (with the licence texts of `assets/fonts/`, once) only when
+the current `fontcheck` report has a `licence:<its project path>` row that passes the rule above, and an OFL licence text sits in `assets/fonts/`. Any other is listed in `kit.json` `fonts.not_copied` with its reason and is
+not copied, and a font file in a page folder is then left out of the page's copy. `fontcheck` always reads every font under `assets/fonts/`, and a font outside it is read with `brand-creator fontcheck --font FILE`
+(every such font the kit holds in one run: a run reads only the other fonts it names). The reasons are those of the list above, and these two where the report does not cover the font: "no current fontcheck report:
+run brand-creator fontcheck --font FILE naming every font the kit holds outside assets/fonts/, this one included (fontcheck always reads the fonts of assets/fonts/ too, and a run reads only the other fonts it names), then kit build", and the
+same advice after "fontcheck has not read it:" when there is a current report with no row for the font. A font that is copied is in `fonts.copied` with the licence texts; `snippets/fonts.css` holds the fonts of `assets/fonts/` only.
+The fonts of the masters go by the same rule (see Masters below). Such a font never makes the build exit 3: it is a warning of row `kit:reference-pages` (`kit:masters` for a master's). `sources.pages` covers the `fontcheck` report and the licence texts as soon as a page brings a font, so a report written later
+makes `kit check` say the brand changed after the kit was built.
+
+**Motion.** A brand that has decided about motion has its files in the kit, each a byte copy at its project path under `brand/` (so a relative link in the demo page still resolves):
+`motion/motion.json` when the project has it (the spec is read as `motionspec.load` reads it: an invalid one is exit 2, naming the field), and `motion/SPEC.md` when the project has it. When the
+spec says the brand moves (`"motion": "on"`) and `motion/proof.json` exists, the `page` file of each `"type": "page"` case of the proof is copied too, to `brand/<its plain path>` (`./motion/demo.html`,
+`motion/../motion/demo.html` and an absolute path inside the project all name `brand/motion/demo.html`; a page two cases share is copied once). A page outside the project is exit 2 and a page the
+project lacks is exit 1, naming the file and the case; a `motion/proof.json` that cannot be read as `{"cases": [...]}`, or a page case with no `page`, is exit 2. The proof itself is never copied.
+A brand whose spec says nothing moves (`"motion": "off"`) gets the spec, which holds the reason, and `motion/SPEC.md` if there is one, and no page; a brand that decided nothing gets no motion file.
+`sources.motion` is one sha256 over these files (the sorted pairs `<project path>\0<sha256>\n`, as `logos` and `fonts` are made), or `null` when the kit holds none. The report's inputs add them.
+
+**Logo snippet.** `snippets/logo.html` is written when `assets/logo/` holds an SVG whose name does not end in `-dark`, and not otherwise. Each `<name>.svg` that has a `<name>-dark.svg` twin gets two
+`<img>` lines with the classes `brand-logo brand-logo--light` and `brand-logo brand-logo--dark`; one with no twin gets one `<img class="brand-logo">`. A `-dark` file with no light twin and every PNG are
+left out. The `alt` is the brand name (HTML-escaped), the `src` is relative to the snippet (`../brand/assets/logo/<file>`, percent-encoded where a URL needs it), the entries are sorted by name and a
+`<!-- <name> -->` line comes before each. The file opens with `<!-- generated by brand-creator: the logo in light and dark, switched as tokens.css switches them; paths are relative to this file -->`, a second
+comment (`LOGO_NOTE`) that tells you to copy the kit's `brand/assets/logo/` into the product's own public or static folder and point each image at the path the site serves it from, then
+a `<style>` block that switches as `tokens.css` does: light shows by default, `:root[data-theme="dark"]` shows dark, and under `@media (prefers-color-scheme: dark)` so does
+`:root:not([data-theme="light"])`. The only declaration in it is `display: none` on the image that is not shown, so no size, colour, spacing or visible `display` value is set and the page's own
+rules keep the image that is shown. It adds no key to `kit.json`: the snippet is made from the logo file names and the brand name, which `sources.logos` and `adapter_state_sha` already cover.
+
+**Rules and facts.** `rules.json` and `facts.json` sit at the top of the kit folder, are generated like every other file (locked by `kit.json`, listed in the kit section of SKILL.md, covered by
+`kit:file`) and are written with `indent=2`, no ASCII escapes and a trailing newline. Both are always written.
+
+- `rules.json` (schema 1): `edition` (`approved_edition`, a string); `g4`, the recorded "(rule)" lines of BRAND-STATE.md "Rules (G4)" (the reading of `adapt.view`: a line with a `(...)` placeholder is no
+  rule) as `{id, text}` in file order, `text` without the "(rule)" marker and with white space collapsed; `downscale`, `{accent_min_px, accent_rule_max_size, from}`, where `from` is `qa/rules.json` when
+  that file sets `downscale.accent_min_px` (the reading of the size line in SKILL.md) and `plugin proposal` otherwise; `bands`, `{mark, name, max_px, drawing}` for the top-level bands (`mark` null) and
+  then each mark's, `max_px` null on the last band of a mark and `drawing` the path in the kit (`brand/<project path>`); `pairs`, `{fg, bg, kind, min, light, dark}` from the tokens (`adapt.pairs`), the
+  two ratios rounded to 2 decimals; `forbidden`, the words of the Forbidden sections of `brief/BRIEF.md` and `research/cliches.md` (a list, empty when there are none); and `page`, the `page` block of
+  the project's own `qa/rules.json` file verbatim, present only when that file has one. The merged defaults are never written: `qa_rules.load` always returns a `page` block, so the file itself is read.
+- `facts.json` (schema 1): `facts`, `{fact, value, source, confirmed}` for each row `adapt.public_facts` returns, in file order. A row whose label starts `contact`, or is `postal address`, is never in it.
+
+**Rule ids.** A G4 rule's id (`kitlib.rule_id`) is the ASCII slug of its first six words: the "(rule)" marker taken off (any case), accents folded away (NFKD, and the letters it leaves whole: `ł` becomes `l`,
+`ø` `o`, `đ` `d`, `ß` `ss`, `æ` `ae`), lower-case, apostrophes dropped, then the first six words joined by `-`. A word is a run of ASCII letters and digits; any other character, a dash or a letter with no
+ASCII form, ends a word. `The mark keeps its clear space` is `the-mark-keeps-its-clear-space`; `Znak zawsze na jasnym tle` is `znak-zawsze-na-jasnym-tle`. A line with no ASCII letter or digit gets `rule`. A
+repeat gets `-2`, `-3` in BRAND-STATE order (`kitlib.rule_ids`; the next number no other id has taken). `kitlib.known_rule_ids(project)` lists every id a rule can be named by, each once: the G4 slugs bare,
+`page:<id>` for each `page.rules[].id` of `qa/rules.json`, and `site:<id>` for each choice of `site/site.json` tagged `rule` (none while the project has no site record; a record that cannot be read is exit 1,
+naming the file, and one whose `choices` is not a list is exit 2, naming `site/site.json` and the key).
+
+**Grounds.** `brand-creator tokens` writes the text grounds into `tokens.json` `grounds` only (see Token sources: `tokens.css` has no per-ground scope), so the kit writes the snippet. `snippets/on-ground.css`
+is written only when `grounds.named_by_owner` is a real `YYYY-MM-DD` date followed by the owner's words (`adapt.owner_named`, the rule `contrast` holds it to). While the grounds are a proposal no
+snippet is written and the row `kit:grounds` (info) says "the grounds are a proposal until the owner names them", because the model never guesses which colours text sits on. The first listed ground
+is the page ground and its five roles (text, action, on-action, focus, border) are the base variables, named as `tokens.css` names a token: the dots become hyphens (`color.text` is `--color-text`).
+Each other listed ground, in the order listed, gets one rule `[data-ground="<its token name without color.>"]` that sets `background-color` to its own colour and points each base variable at
+the ground's own role (`--color-text: var(--color-on-panel);` and so on for the five); the file opens with a generated-by comment, sets nothing else and invents no value. A role that names the page
+ground's own token is not set again (a variable pointed at itself is invalid, and the element keeps what it inherits). A ground is left out of the snippet, and named in the row, when the tokens
+give no colour for its ground or one of its five roles (left out, `null`, or no colour token; `contrast` owns completeness, in its `grounds:<mode>:<ground>:roles` rows, and this only refuses to write half a scope); when its
+`data-ground` name is already used by a ground listed before it; when the page ground uses one token for two roles (focus and action both `color.accent`, say, so that both are `--color-accent`) and the
+ground gives those roles different colours: a rule that sets a variable twice keeps only the later value, so the ground would take one role's colour for the other (when the colours agree the variable is
+set once); and when it names a variable its own rule sets to something else (a ground that is the page's text colour while its text is another, say): inside the rule that name no longer
+holds the page's colour. If the page ground itself lacks a colour, or no other ground is whole, nothing is written, and a snippet an earlier build wrote is moved to `removed-<date>/` like any file the kit no longer plans. Row `kit:grounds`: none when `tokens.json` has no `grounds`; info when the grounds are a proposal, when none is
+listed, and when only the page ground is listed; warn when a ground is left out or the page ground lacks a colour; pass when every other ground has its scope. It never changes the report's status.
+`sources.tokens` already covers the grounds, so `kit.json` has no key for them.
+
+**Reference pages.** The pages the owner approved with `site approve` (`site/site.json`, [ADR-0010](../docs/adr/ADR-0010-the-site-round-makes-reference-pages-not-templates.md)) go into the kit, each only when it can
+be trusted, and the build reads nothing for them until the checks pass. A project with no `site/site.json` has no reference page: row `kit:reference-pages` (info) says "no approved reference pages", `reference_pages` is `[]` and `sources.pages` is `null`.
+`kitlib.reference_plan(project, fonts)` is the plan, and nothing in it writes:
+
+- `sitedata.validate_site(project)` must find nothing. Otherwise exit 1, "site/site.json does not validate, so no reference page can go into the kit", quoting the first three problems and counting the rest (a page edited
+  after it was approved, a record that cannot be read and a page that is gone are problems of the record). A `site/site.json` that is a link to a file outside the project is exit 2.
+- A page folder or an `index.html` of a page the record lists that is a link leading outside the project is exit 2, whatever bytes it leads to (`kitlib._confine_pages`, before `validate_site`, which hashes each page it
+  names through a link: with other bytes behind the link it would be exit 1, "changed since it was approved").
+- Each page in `pages` needs a current, passing page-check report and current stills. The report is `assets/_checks/<pagecheck.report_tool("site/<id>/index.html")>.json`: no file it was made from is gone or changed
+  (`_common.stale_inputs`), `target` is this project page, the page is among its inputs, `status` is `pass` and it holds an `inputs_sha`. The stills are `site/<id>/shots/capture.json` (`brand-creator capture`): current by the same
+  rule, `source.page` is this page, the page is among its inputs, and the four first screens (`1440-light`, `1440-dark`, `390-light`, `390-dark`), and the full page when it lists one, are the files there with the sha256 it
+  lists. Otherwise exit 1 before anything is written, naming every page and its command (`brand-creator page-check site/<id>/index.html` or `brand-creator capture site/<id>/index.html`); a failing report says that the page fails its
+  page check, names the failing rows and says to change the page, approve it again (`site approve --replace`) and check it.
+- Copied to `brand/<project path>`, byte for byte: every file below `site/<id>/` (the stills and `capture.json` too; a Finder `.DS_Store` is none; `site/site.json` is not copied), and every project file the pages load from outside their folders:
+  `src`, `href`, `poster`, `srcset`, the `data` of an `<object>`, `url()` and `@import` in a `<style>`, a `style` attribute and a `.css` file (`sitedata.urls_in`, the places `site approve` rewrites; a comment, a script and a
+  form's `action` are not read). The `.html` and `.css` files of the page folders are read for what they load, and so is each `.css` file they load from outside the folders, **one level deep**: what that stylesheet loads is
+  copied and read no further, so a file two steps from a page's stylesheet is not in the kit, and `kit check` names the link in the copied stylesheet that then does not resolve (`kit:links`). A URL with a scheme (`http:`, `https:`,
+  `data:`, `mailto:`, `tel:`), `//host`, a fragment and a query alone load nothing from the project. The path is percent-decoded and resolved from the folder of the file that holds it, as a browser does. The file that is
+  copied is read from the path `confine` resolved for exactly that project path (a file already read, such as the page being parsed, is not read twice), so the bytes that were parsed are the bytes that are copied.
+- A path that leaves the project, by its name (`../../../x.png`) or through a link (a loaded file, a file in a page folder, a page folder, or a stylesheet's file, whatever the link points at), is exit 2, naming the file and line, and
+  nothing is written. A link to a folder inside a page folder is exit 1 (the kit copies files, not links). Exit 1 too, naming the file and line: a file the project does not have, a folder named where a file belongs, a path spelled
+  in other letter case than the project holds it (a Linux checkout tells them apart), an absolute path (a leading `/`, `file:`) and a path with a control character: `kit check` would fail each of those links. A page file that is
+  not UTF-8 text cannot be read for its paths: exit 1. The bytes of each page's `index.html` must be the `sha256` the record holds, or exit 1.
+- A URL whose path names a folder is the folder's `index.html` when the project has one there (`kitlib._served`), as a web server answers it: `href="../pricing/"` and `href="../pricing"` from `site/start/index.html` lead to
+  `site/pricing/index.html`, which is copied like any file a page loads (an approved page's is in the kit already), and `kit check` accepts the link in the copy. A folder without an `index.html` is exit 1, "leads to
+  <folder>, a folder, not a file: it holds no index.html for a web server to answer with"; an `index.html` that is a link leading outside the project is exit 2.
+- Every font a page has goes through the font rule (the paragraph "Fonts a reference page brings" above), the fonts of `assets/fonts/` included: a page that loads one gets the copy the font rule made, and a font the rule
+  does not copy is not given a copy of its own. Row `kit:reference-pages` then warns, naming the font, how the page has it (`loaded at <file>:<line>`, or `sits in the page folder`) and why it is not copied. In the kit `kit check`
+  warns on the link (`kit:links`) instead of failing it: the font is listed in `kit.json` `fonts.not_copied`, so it must be supplied under its own licence.
+- `reference-pages/<id>/notes.md` is generated (`kitlib.notes_md`): `# <id>`; `Layout: <the page's layout> (structure only)` (an id of `page-layouts.json`, or `own:<word>`); `Approved: <site.json approved>`; `Page: [index.html](../../brand/site/<id>/index.html)`;
+  `Stills: ` the links to the stills (`[1440-light](...)`, `[full page](...)`, each percent-encoded where a URL needs it); and `## Choices`, one bullet for each choice whose `pages` names the page (a choice with no `pages` names every
+  page): `- <text> [rule: site:<id>] (decided in <source>)` for a rule and `- <text> [example]` for an example, in the record's order; a page no choice names says so in one plain line. The words are the owner's, so they are
+  written (`kitlib.note_text`) so that `kit check` reads in a note only what the note says, as Markdown shows it: white space is collapsed and a control character is a space; the first bracket of `[[fill`, `[rule:` and `[example]` is
+  `&#91;`, the `(` after `]` and after `var` is `&#40;`, and `{a.b}` is `{{a.b}}` (the doubled braces are the placeholder spelling `kit:numbers` leaves alone). A value on a bullet is cited by the bullet's own tag. On the lines that have no
+  tag (the title, the layout, the approval) a value is broken the same way (`48px` as `48&#112;x`), so that a note passes `kit check` whatever the owner wrote in a choice or at G4p.
+- `kit.json` `reference_pages` has an entry for each page, in the record's order: `{id, page, source_sha, page_check_inputs_sha, capture_inputs_sha}`: the id, the kit path of its `index.html` (`brand/site/<id>/index.html`), the record's
+  `sha256` for it, the `inputs_sha` of its page-check report and the sha256 over the `inputs` of its `capture.json` (the `path` and `sha256` of each, as a report's `inputs_sha` is made). `kitlib.load()` refuses a key it does not know
+  and one that is missing, in `reference_pages` and in `sources`, whose `pages` is one sha256 over `site/site.json`, the files of the page folders and the files they load (the sorted pairs `<project path>\0<sha256>\n`, as `logos`
+  and `fonts` are made), or `null` while the project has no `site/site.json`. A page, a file it loads or the record changed after the build is `kit:sources` not verified in `kit check`, naming `pages`, and `kit:state` of `check` not verified too.
+  The content hash covers the copied files and the notes, not the record of `reference_pages`, so a page checked again with nothing else changed re-records its hashes and keeps the version.
+- The report's inputs add `site/site.json`, the files of the page folders, the files they load and the page-check report of each page, so a page checked, captured or approved again makes the `kit` report stale. Row `kit:reference-pages`: pass,
+  with the number of pages and their ids, when each is copied; warn when a page loads a font that is not copied (above); info "no approved reference pages" while the project has none. A reference page's notes are judged by `kit check`
+  like a recipe (`kit:tags`, `kit:numbers`: their bullets are the page's choices).
+
+**Masters.** `assets/masters/` is a project folder the plugin knows: the masters the owner approved (an ad, a deck and other templates, with their pictures, PDFs, PPTX and the fonts they ship). Only approved masters belong in it:
+the plugin cannot know which are approved, so everything in the folder goes into the kit. Everything below it, at any depth, is copied byte for byte to `brand/<its project path>` (`brand/assets/masters/ad/index.html`),
+listed in `kit.json` `generated` like any copied file, and recorded in `sources.masters` (one sha256 over the sorted pairs `<project path>\0<sha256>\n` of the files, as `logos` and `fonts` are made, and, as soon as a font is
+among them, the `fontcheck` report and the licence texts of `assets/fonts/`). A master that changed, was added or taken away after the build is `kit:sources` not verified in `kit check`, naming `masters`, and
+`kit:state` of `check` not verified too; at the next build the copy is written again (a master taken away is moved to `removed-<date>/` like a logo taken away) and the version moves. A Finder `.DS_Store` is none.
+`kitlib.masters_plan` is the plan, and nothing in it writes:
+
+- A font (`.ttf`, `.otf`, `.woff`, `.woff2`) goes through the font rule (the paragraph "Fonts a reference page brings" above, `kitlib.page_font_plan`): copied, with the licence texts of `assets/fonts/`, only when the current `fontcheck`
+  report has a `licence:assets/masters/<file>` row that passes the rule and an OFL licence text sits in `assets/fonts/`; otherwise listed in `kit.json` `fonts.not_copied` with the reason (a font `fontcheck` has not read, read with
+  `brand-creator fontcheck --font FILE`, says to check the fonts) and not copied. A link to one is a warning of `kit:links`, never a failure. A font that a reference page loads from `assets/masters/` is listed once.
+- Any other font file (`.ttc`, `.otc`, `.eot`, `.dfont`, `.pfb`, `.pfm`, `.pfa`, in any letter case: `kitlib.UNREAD_FONT_FORMATS`) is a font `fontcheck` cannot read, so no licence can be found for it and the font rule can never
+  pass it: it is never copied, whatever else the folder holds, and is listed in `kit.json` `fonts.not_copied` with the reason "a font format fontcheck cannot read (<extension>): only .ttf, .otf, .woff and .woff2 fonts are
+  read, so its licence is unknown and it is not copied; copy it into a product yourself, under its own licence". It stays in `sources.masters` (a change to it is `kit:sources` not verified) and in the `kit:masters` warning,
+  and a link to it is a warning of `kit:links` like a link to any font that is not copied.
+- Links inside a master HTML or CSS file are the links of a file of the kit: `kit check` demands that each resolves to a file inside the kit (`kit:links`). A link to a project file the kit does not copy (a picture
+  outside `assets/masters/`, the logos and the tokens apart) fails there; the build does not copy files a master loads.
+- A link to a folder inside `assets/masters/` is exit 1 (the kit copies files, not links); a file that is a link leading outside the project, or `assets/masters` itself leading outside, is exit 2, except a font file (by its extension), which is never read: it goes through the font rule above and is listed in `fonts.not_copied`; `assets/masters` that is a file
+  or a link to a folder inside the project is exit 1. Nothing is written in either case.
+- A file that is a link to nothing, or is no plain file, is exit 1 in the words of a master: `master file <project path> cannot be read (a link to nothing, a folder, or no plain file): a master is copied as it is, so put the real file
+  back or take the link out of assets/masters/`. It is never worded as a reference page (`kitlib._page_bytes` takes the closing sentence from its caller). Nothing is written.
+- An SVG below `assets/masters/` is an SVG under `assets/` like any other: `check` lints it as pure vector (`mark_lint:assets/masters/<file>.svg`: no `<text>`, no font reference, no external reference), so an approved master
+  with live text is copied into the kit and fails `check`. The kit build does not lint.
+- A project without a file under `assets/masters/` (no folder, an empty one, one with a `.DS_Store` only) gets no change at all: no `sources.masters` key, no `kit:masters` row, the `kit.json` and the version it always had.
+  Row `kit:masters`: pass, "<n> master files copied byte for byte from assets/masters/ to brand/assets/masters/" (the files below the folder, the licence texts of fonts not counted); warn when a font is not copied, naming it, how
+  the folder has it (`sits in the masters folder`) and why; none while the project has no master.
+
+Report `kit` (`assets/_checks/kit.json`), renderer `n/a (generated files)`. Inputs: the token files, the logo files, the band drawings, `qa/rules.json`, `FACTS.md` and `motion/motion.json`, each
+when the project has it, and the files of the masters. Row `kit:written` passes, with the detail `<n> generated files: <w> written, <u> unchanged, <r> moved to removed-<date>/; version <v>`. Row `kit:owned` (info): `<k> owner files scaffolded this run, <m> kept as they are`. Extra keys: `outputs` (every generated
+path with its sha256, `kit.json` included), `kit_version` (the report's own `version` stays the plugin's), `content_sha`, `adapter_state_sha` (`adapt.state_sha`) and `kit_sources_sha` (sha256 over
+`sources`). A run that stops before the report is created (a hand edit, unbuilt tokens, a bad drawing) leaves the earlier report as it was.
+
+**What `check` gates.** A skill folder with a `kit.json` is gated as a kit, and the plain applied skill's rows are not run for it (`present()` in `scripts/adaptlib/gates.py` names the kit, or the skill, never both):
+
+- `report:kit`, the generic report gate: the `kit` report exists, passes and is current against its inputs, and the fix it names is `brand-creator kit build --yes`.
+- `kit:file`: every path in the report's `outputs` (SKILL.md and `kit.json` too) is still in the kit with the sha256 the build recorded. Otherwise it fails, naming up to 4 paths (a missing one is marked
+  `(missing)`) and saying they were edited by hand or removed: change the brand project and run `brand-creator kit build --yes`. A report with no `outputs`, or one whose `outputs` hold a record that
+  cannot be compared with a file of the kit (a path that climbs out of the kit, a value that is not a sha256: 64 lower-case hex characters), also fails the row and says so; it never crashes `check`. A file that is not in `outputs` (an owner's file, a foreign file) is not read by this row.
+- `kit:state`: only when the report passed. Not verified (`skipped`) when its `adapter_state_sha` or `kit_sources_sha` is not the one the project has now: the name, rules, facts, tokens, logos,
+  band drawings, fonts (the font files, their licence texts or the `fontcheck` report), approved reference pages (`site/site.json`, the page folders with their stills, the files the pages load), masters (the files below `assets/masters/`) or motion spec changed after the kit was built. There is no row while they match.
+
+`check --cascade` searches the kit like any other text file of the project: `SKILL.md` and the text files under `brand/`.
+
+### kit check
+
+`kit check` (`scripts/kit.py`; the checks are `scripts/adaptlib/kitlib.py`: `files_check`, `link_check`, `fill_markers`, `version_problems`, `source_changes`, `owned_changes`) proves that the kit in the project is whole,
+and writes the report `kit-check` (`assets/_checks/kit-check.json`), renderer `n/a (generated files)`. It reads the kit and the brand and writes nothing but that report. Exit 0 pass, 1 a row failed, 3 a row is not verified
+(skipped). Exit 2: no kit in the project, "no kit in this project: `brand-creator kit build --yes` (opt-in at G5)"; a `kit.json` that `kitlib.load()` refuses (a key it does not know or a key that is missing, named); a `kit.json`
+that is a link (a link is never read through; `kit build --yes --replace` moves it aside). Both stop the run before the report is created, so the earlier report is not rewritten and stands. What `check`
+then says of it depends on the file. A `kit.json` that `kitlib.load()` refuses has other bytes than the report read, so the report is stale. A `kit.json` that is a link leading to the same bytes leaves the report
+current (the staleness comparison reads the file the link leads to), and only the row `kit:checked` says not verified, because a file of the kit is a link now; a link leading to other bytes makes the report stale.
+
+Inputs: every file under the kit folder (a link is no input, and a Finder `.DS_Store` is no file of the kit: `kitlib.kit_paths` leaves a file with exactly that name out), the files the kit is made from (`kitlib.input_paths`: the token files, the logo files and band drawings, `qa/rules.json`, `FACTS.md`, the motion files, the font files,
+their licence texts and the `fontcheck` report, for the approved reference pages `site/site.json`, the files of the page folders, the files they load and each page's page-check report: `kitlib.page_input_rels`, and the files of the masters: `kitlib.masters_sources`), `BRAND-STATE.md` and the `kit` report, so a file that changed or went makes the report stale. Extra keys: `kit_version` and `kit_tree_sha`, the sha256 over the sorted paths of every
+file and link below the kit folder, each marked file or link and without a Finder `.DS_Store` (`kitlib.tree_sha`), because a file added since is no recorded input. Every row reads a plain file of the kit only: a link to a file or to a folder is never followed,
+read or hashed, and a link where a generated file belongs is not that file.
+
+Rows, in this order:
+
+- `kit:files`: fails when a path in `kit.json` `generated` is missing, is a link or a folder, or has another sha256 (a path that no kit holds, one that climbs out of the kit, is named and never opened); when `kit.json` is not the
+  bytes the `kit` report recorded in `outputs`; or when a file in `brand/`, `snippets/` or `reference-pages/` is not listed in `generated` (a link counts, a Finder `.DS_Store` does not): the detail says "move it to recipes/ or a folder
+  of your own". Up to 6 paths are named. Skipped ("not verified: there is no `kit` report that records what the build wrote") when there is no `kit` report or it records no outputs.
+- `kit:links`: every relative link of a `.md` file (`](target)`, outside fenced code blocks and code spans), a `.html` file (`src=`, `href=`, `xlink:href=` and `srcset=` of a tag, so not a comment or a script; a `srcset` is read by the HTML rule for it: a URL is the run up to the next white space, a comma ends the candidate when it ends the URL or follows its descriptor, so `a.svg 1x,b.svg 2x` and `a.svg, b.svg` hold two targets and `a.svg,b.svg 2x` one) and a `.css` file
+  (`url(...)`, comments left out) anywhere in the kit resolves to an existing file inside the kit, with the letter case that is there (a Mac finds `Mark.svg` for `mark.svg`, Linux does not) and no link on the way. The target is
+  percent-decoded and resolved from the folder of the file that holds it. A fragment, a `?query`, an empty target, `//host` and a target with a URL scheme (`http:`, `https:`, `mailto:`, `data:`, `tel:`) are not relative links and are
+  not judged. Fails for a target that "points outside the kit: it will not resolve in a product repository", an absolute path (a leading `/`, `file:`, a drive letter) and a missing file or a folder. A target that names a folder
+  (`../brand/site/pricing/`, with or without the last slash) is the folder's `index.html` when the kit has one there, as a web server answers it; a folder without one fails ("a folder, not a file"). The first 6 are listed as
+  `<file>:<line> -> <target>` with the reason. A link to a font that `kit.json` lists in `fonts.not_copied` (the path in the kit is `brand/<its project path>`, spelled letter for letter, and the font is not in the kit) is no broken
+  link and no pass: the row is a warning (exit 0) that says the font must be supplied under its own licence, copied into the product from where it was licensed, and lists the first 6 as
+  `<file>:<line> -> <target> (<path in the kit>: <reason>)`. A broken link beside it still fails the row. A master's HTML or CSS file (`brand/assets/masters/...`) is a file of the kit like any other: its links are judged here, and so is the `.html` or `.css` file of the owner's own.
+- `kit:fill`: fails on any `[[fill` (any case) in a text file of the kit (a file with a NUL byte in it is none, and neither is an owner file that is not Markdown: it travels with the kit and is never read here; `kit:links` still reads the links of its `.html` or `.css`), listed as `<file>:<line>`, up to 6. A fresh kit fails here until the owner has replaced the markers of `voice.md`,
+  `visual.md` and `golden-rules.md`; a Markdown file the owner adds is read like those.
+- `kit:versions`: fails unless SKILL.md holds `Kit version <kit.json version> (kit.json).` exactly once and no other such line, `kit.json` `version` is of its own `edition`, and `kit.json` `edition` equals BRAND-STATE.md
+  `approved_edition` ("the kit is of edition X, the brand is at Y: run `brand-creator kit build --yes`").
+- `kit:plugin`: warn when `plugin_version` is not the running plugin's (pass otherwise). It never changes the status.
+- `kit:sources`: skipped (not verified) when `kitlib.sources(project)` differs from `kit.json` `sources`, naming the keys that changed (`masters` when a master was changed, added or taken away) and "run `brand-creator kit build --yes`"; also when a source cannot be read.
+- `kit:owned`: warn when an owner file differs from `kit.json` `owned` (`kitlib.owned_changes`: the five scaffolded files first, then the others sorted): "changed since the last build: `brand-creator kit build --yes` records it and moves the version on", "was added since the last build"
+  (a file of the owner's `owned` does not list) and "was removed since the last build" (one of hers, other than the five, that `owned` lists and the kit lacks), both with the same advice, "is missing" (one of the five: the build writes the scaffold again), or
+  "is no file the kit can read" (a folder or a link, never read through). It never changes the status. Pass: "the <n> owner files are as the last build recorded them".
+- `kit:tags`: the owner's Markdown files, `golden-rules.md`, `visual.md` and the generated notes of the reference pages are the judged files (`kitlib.judged_files`: every `.md` file of the owner's, below `recipes/` at any depth or anywhere else
+  in the kit folder outside the generated folders, except `EXTENDING.md` and `voice.md`; `golden-rules.md`, `visual.md`, `reference-pages/<id>/notes.md`; a link is never followed). An owner file that is not Markdown is never judged by `kit:fill`, `kit:tags` or `kit:numbers` (`kit:links` still reads the links of its `.html` or `.css`). Outside code fences, every bullet line of a judged file (`- ` or `* `, indented or not; a thematic break such as `* * *` is none) carries `[example]` or `[rule: <id>]`, and
+  so does every numbered line (`1. ` or `1) `) of `golden-rules.md` and `visual.md`. A numbered step of a recipe, or of the notes, needs no tag. Every `[rule: <id>]` in a judged file is checked, on any line: a bullet, a numbered
+  step that needs no tag, a sentence, a heading, a quote and a line inside a code fence too. `<id>` is matched exactly against `kitlib.known_rule_ids(project)` (D12: a G4 slug written bare, `page:<id>`, `site:<id>`), one id to a tag; a tag
+  that names an id the kit does not know fails even beside `[example]`. Fails with `<file>:<line> untagged` or `<file>:<line> unknown rule id <id>` (`(empty)` for `[rule: ]`), up to 6 listed, with the tag syntax. The count in the detail
+  is of the lines judged: those that need a tag and those that name a rule. The generated notes are judged like a recipe (their bullets are the page's choices, tagged from `site/site.json`), so a failure there means the record and
+  the kit disagree.
+  A tag whose id is a placeholder in angle brackets (`[rule: <id>]`, `[rule: <rule id>]`, `[rule: page:<id>]`, `[rule: site:<id>]`: a whole `<...>`, after `page:` or `site:` or not) names no id, because a real id holds no
+  angle bracket (D12): `kitlib.rule_tags` leaves it out, so it is never looked up and it shows the syntax in a sentence, a code span or a code fence. It is also no citation: a bullet that holds only a placeholder is untagged
+  (it needs `[example]` or a real tag), and a value on its line still needs a real citation (its words are no values, as those of any tag). Anything else that is not an id of `kitlib.known_rule_ids` fails as above,
+  `[rule: <id>x]` and `[rule: other:<id>]` included.
+- `kit:numbers`: in the same files, code fences included, every value has a citation on its own line. A value is a number with a unit (`px`, `rem`, `em`, `ms`, `s`, `%`, `vh`, `vw`, `svh`, `dvh`, `ch`, `fr`, `deg`, `pt`; an optional space
+  between them; `.5rem` and `-8px` count), a ratio such as `4.5:1`, a hex colour of 3, 4, 6 or 8 digits, or `rgb(`, `rgba(`, `hsl(`, `hsla(`, `oklch(` (`kitlib.find_values`). A range is a value: in `32-48px`, `400-700ms` and
+  `60-75ch` the last number carries the unit, and the line holds `48px`, `700ms` and `75ch`; when both ends carry a unit (`16px-24px`, `2em-3em`) the line holds both. A clock time such as `9:00 to 17:00` reads as a ratio and needs `[example]` too. The words of a `[rule: ...]` tag, a Markdown link target,
+  a URL and the number inside a name, a custom property such as `--space-8px` or a word such as `fs-16px` (a dash that follows a letter), are not values. A citation is `[example]`, a `[rule: <id>]` the kit knows, or a token reference
+  that exists: `var(--name)` declared in the kit's own `brand/assets/tokens/tokens.css`, or `{dotted.path}` (at least one dot) in the kit's own `brand/assets/tokens/tokens.json`. Only a path that ends at a token counts
+  (`kitlib.json_token_paths`): a token by its key as its group holds it (`color.bg`, `dimension.space-1`: a key of `primitives`, of `other` or of a mode) or by its path from the top (`primitives.color.ink`, `other.dimension.space-1`,
+  `modes.light.color.bg`, `motion.durations_ms.duration.fast`). A group (`modes.light`, `motion.durations_ms`), a part of a token (`modes.light.color.bg.hex`) and the rest of the file (`pairs`, `touching`, `grounds`) name no token.
+  A token reference that does not exist fails, and `[example]` does not excuse it. Outside a code fence every line is judged for it, with a value or not (`Use var(--nope) for the hero.` fails; a reference that exists on a line with no
+  value is fine), and a code span of the prose is no exception: `` `{props.title}` `` in a sentence is read as a reference to a token named `props.title`, which is none, so the line fails. To show a placeholder of your own in prose, write it
+  with no dot (`{props}`), with doubled braces or after a dollar sign (these three are no reference), or put it in a code fence on a line of its own. Inside a code fence only a line that holds a value is judged for a reference, so a code sample
+  is left alone (`<h1>{props.title}</h1>`, `--pad: var(--dimension-space-2); padding: var(--pad)`); a sample that holds a value keeps its custom properties and its braces on lines of their own. A `[rule: <id>]` of an unknown id on a line
+  with a value fails too (`kit:tags` also fails it, as it fails one on every line). Fails with `<file>:<line> (<reasons>)`, up to 6 listed, with what counts as a citation.
+- `kit:reference-page:<id>`: one row for each page in `kit.json` `reference_pages`, in its order (`kitlib.reference_page_states`), and none while the kit holds none. It asks whether the kit's copy of a page still stands for
+  the brand. It is the exception to "every row reads a plain file of the kit only" above: it reads the project's records, not the kit's copies (`kit:files` judges those): `site/site.json`, the page, its
+  page-check report (`assets/_checks/page-check/<stem>-<hash6>.json`, found by `pagecheck.report_tool`) and `site/<id>/shots/capture.json`. Each of the four is read only as a file inside the project: a link that leads out is
+  "cannot be used" and is never read (the page: rule 1; the page-check report and `capture.json`: rules 3 and 5; `site/site.json`: every page is skipped, "the approved pages cannot be read"). The files a page-check report or
+  `capture.json` lists are compared by `stale_inputs`, as `check` compares them. The inputs of the `kit-check` report include `site/site.json`, the page-check reports and every `capture.json`, so a new page check or a new
+  capture makes `kit-check` stale. The first rule that applies wins:
+  1. Skipped, "not verified: the page changed in the project since the kit was built: `brand-creator kit build --yes`": `site/site.json`'s `sha256` for the page, or the sha256 of `site/<id>/index.html` itself, is not the
+     `source_sha` of `kit.json` (a page edited and not approved again counts too). This goes first: a page approved again has a new page-check report and new stills whose inputs differ because of the page, and the
+     tokens did not change. When `site/site.json` no longer lists the page the message adds "(site/site.json no longer lists it)"; when it cannot be read every page is skipped, "not verified: the approved pages cannot be read (...)".
+     The page file is hashed only when `site/site.json`'s `sha256` is the `source_sha` and the file is inside the project: a page that is a link leading out is skipped, "not verified: the page site/<id>/index.html cannot be
+     used (... is outside the project ...): `brand-creator kit build --yes` after fixing it", and not hashed, even when the file it leads to holds the same bytes.
+  2. Skipped, "not verified: the tokens or rules changed since this page was checked: run `brand-creator page-check site/<id>/index.html` and `brand-creator capture site/<id>/index.html`, then `brand-creator kit build --yes`":
+     the page-check report is stale, that is a file it was made from is gone or changed (`stale_inputs`, the one rule `check` applies, over every file the report lists: the built tokens, `qa/rules.json`, `FACTS.md`, the G4 rules
+     of `BRAND-STATE.md`, the logo files, the page, and each project file the browser was served for it, such as its stylesheets, images and fonts; so an edit of the page's own `site.css` gives this message too).
+  3. Skipped, "not verified: the page-check report of site/<id>/index.html cannot be used (...)": it is missing, cannot be read, is the report of another target (`target.page`) or does not list the page among its inputs.
+  4. Fail, "site/<id>/index.html fails its page check (<the failing rows>; see <report>)": the report is current and its status is `fail`. A failure is not hidden behind a stale `capture.json`, nor behind inputs that differ from the kit's.
+  5. The same two skips for `capture.json` ("not verified: the stills of site/<id>/index.html cannot be used (...)": missing, unreadable, the capture of another page, or the page not among its inputs).
+  6. Skipped, "not verified: the page-check report of site/<id>/index.html gives no verdict (status ...)": the report is neither a pass nor a fail.
+  7. Skipped, as 2: the report and `capture.json` are current, but the `inputs_sha` of either differs from `page_check_inputs_sha` or `capture_inputs_sha`, which `kit.json` recorded at the build. The page was checked against other
+     tokens or rules than the ones the kit's copy was made from.
+  8. Pass otherwise: "site/<id>/index.html is the page the kit holds, its page check passes, and its report and stills were made from the files the kit was built from".
+
+  `lib/stale.py` does not see the kit. The kit is downstream of the pack, so the kit records its own sources: `sources` (read by `kit:sources` and `check`'s `kit:state`) and, for each page, the two `inputs_sha` values above.
+  The `site:pages` and `site:stills` rows of `check` keep gating the pages in the project; these rows gate the kit's copies. The stills' own bytes are not read again here (`site:stills` reads them in the project, `kit:files` the kit's copies).
+
+The rule ids `kit:tags` and `kit:numbers` judge are read (`known_rule_ids`) only when a line names one. If `site/site.json` cannot be read then, the lines that name a rule are not judged and the rest are: a row with a failure that needs
+no rule id (an untagged line, a value with no citation, a token that does not exist) still fails, lists it and adds how many lines were left and why, and a row with none is skipped (not verified), naming why. `site/site.json`
+is an input of the report.
+
+**What `check` gates.** A kit makes `check` expect the `kit-check` report as well as the `kit` report: `report:kit-check`, the generic report gate (the fix it names is `brand-creator kit check`), so a failing, stale or missing
+report is a failing or not verified `check`. The row `kit:checked` says not verified when the report passed but its `kit_tree_sha` is not the kit's now: a file was added to the kit, or taken out of it, after `kit check` ran. There is no row while they match.
+
+### kit status
+
+`kit status [--repo DIR[=LABEL]]... [--json]` (`scripts/kit.py`; the comparison is `kitlib.compare(kit_dir, installed_dir)`) says whether the copy of the kit in each product repository is current. It reads
+`<DIR>/.claude/skills/<slug>-brand/` and writes nothing: no file in the repository, none in the project, no report (it has no report row and `check` does not gate it). The copy itself is made by the
+implementer from the copy list this command prints ([ADR-0011](../docs/adr/ADR-0011-a-generated-brand-kit-around-the-applied-skill.md)); a script never writes outside the project. `DIR` is read as `survey --repo` reads it
+(a label after the last `=`, the folder's name when there is none; a relative `DIR` is relative to the working folder). Without `--repo`, every repository that has a `kit` row in `adoption.json` is read, each once, at the
+path the adoption list stores for it; with no such row the exit is 2, "pass --repo DIR (repeatable)".
+
+Per repository, one of three states (`--json`: `state`):
+
+- `not installed`: the kit folder holds no `kit.json`. A folder that exists without one is named ("is there but holds no kit.json: it is not a kit, so look at it before you copy over it").
+- `current (version V)`: every generated file `kit.json` lists, and `kit.json` itself, is a plain file with the project's bytes. The comparison is byte for byte, never by size or time.
+- `not current (installed version A, project version B)`: A is `unknown` when the installed `kit.json` cannot be read. Listed after it: the generated files that differ (`not the same bytes`, or `is a link or a folder, not a file`),
+  the generated files that are missing, and the files left over from an older kit (any file in `brand/`, `snippets/` or `reference-pages/` that the project's kit does not list; a Finder `.DS_Store` is none).
+  When A and B are the same version (a copy that has the new `kit.json` and still holds a file the new kit dropped) the line says so and counts what differs, so that it does not read as a contradiction:
+  `not current (version V on both sides, but 1 file differs, 1 file is missing, 1 file is left over from an older kit)`, naming only the kinds there are.
+  The list of files left over says what to do with them: they are not on the copy list; the implementer moves each to `removed-<date>/<kit folder>/<its path in the kit>` in the repository, and nothing is deleted
+  (a script never writes there). A copy is current once that is done.
+
+Every state also prints the owner files that differ ("owner files that differ (kept on update)"), which never make a copy not current: an installed kit's owner files are the repository's own, and an update copies one only where the
+repository has none. The owner files are every owner file of the project's kit folder (`kitlib.owner_paths`: the five scaffolded ones and each file the owner added, in a recipe folder or one of her own), read from the folder as it is now, not
+from `kit.json`; a file of another kind than Markdown is among them. The copy list, as paths relative to the kit folder, is the generated files to copy (all of them when nothing is installed, otherwise those that differ or are missing; `kit.json` last, as the build writes it,
+so a copy that stops half way is not vouched for), then the owner files the repository lacks: the five in their order (`EXTENDING.md`, `voice.md`, `visual.md`, `golden-rules.md`, `recipes/web-page.md`), then the others sorted. A file of hers the repository has with other bytes is reported ("owner files that differ (kept on update)") and not copied, as for the five. Files left over are not on it: the implementer takes them out. `--json` prints one document, `{kit, version,
+repos: [{label, path, state, installed_version, project_version, differ: [{file, why}], missing, left_over, left_over_to, owner_differ: [{file, why}], copy, copy_owner, read_only}], current}`, where `copy` is the whole copy list
+and `copy_owner` names the owner files in it, and `left_over_to` says where the files in `left_over` go in the repository (`removed-<date>/<kit folder>/`, with the literal `<date>`), `null` when none is left over.
+
+It proves it read only, as the survey does: the installed kit folder is listed with the path, kind, size and modification time of every entry (`kitlib.folder_state`, no link followed) before and after the comparison, and a
+difference exits 1, naming the repository on stderr, without the "read only" line. Nothing in a link is read: a link where a generated file belongs is a file that differs, and a link in a generated folder is left over.
+
+Exit 0 when every repository is current (and unchanged while read). Exit 1 when one is not installed or not current, or its folder changed while it was read. Exit 2, before anything is read, for: no kit in the project (or a
+`kit.json` that is a link, or one `kitlib.load()` refuses); no `--repo` and no kit row; a folder that does not exist; the project itself or a folder inside it; the user's home folder (`Path.home()`) or any path inside
+`~/.claude` ("the kit goes into one product repository at a time, never into a global skills folder"), also when the repository's kit folder leads there through a link; a repository whose kit folder is a link. Exit 3: the kit
+in the project is not whole (a generated file `kit.json` lists is missing there, is no plain file, or is not the sha256 `kit.json` records, or a link sits among the owner's files), because a copy cannot be judged against a kit that is not what it says: run
+`kit check`, then `kit build --yes`.
 
 ### launch-todo
 
@@ -1370,6 +2701,14 @@ case folder that holds another proof's stills; 3: it could not run) leaves no fa
 idempotence reports (a book built before them is stale once they are rewritten, and `check` says "not verified") and the kit holds `book.pdf`; the book's file list leaves the kit out. A value set for a step the tier does
 not allow (`PRINT_REGION` or `POST_FACTS` in Quick) stops the chain with exit 2 before any step runs. Every emit step except the press kit is in the idempotence run.
 
+**The last lint.** After the press kit, the chain lints the board of the latest round again (`board-lint rounds/rN/board.html` of the highest N, the board `check` looks for; when that round has no `board.html`, no step), then runs `staleness --write` and `check`. The lint report of a pick
+board lists `FACTS.md`, `brief/BRIEF.md` and `research/cliches.md` as inputs and `check` wants a report that is current for the latest round, so an edit of the facts or the brief since the last lint would otherwise turn `check` not verified. A lint that exits 1 or 3
+after it printed `report: <path>` goes on (`finish.sh: board-lint failed on <page> (see above); ...` or `finish.sh: board-lint could not verify <page> (see above); ...`), and `check` fails the report or says why; any other exit (a board the lint refuses with exit 2, such as a `board.html` that is a link to a file outside the project,
+or a lint that wrote no report, such as one that crashes) leaves no report of this board for `check` to gate. That does not stop the chain, which would leave no pack report at all: it says
+`finish.sh: step failed: board-lint <page> stopped with exit N and left no report of this board: <the lint's own message>. The chain goes on, so that check still writes the pack report`,
+runs `staleness --write` and `check` (which says the board is not verified), and ends with the exit code of `check` when that is not 0, else (`finish.sh: check passed, but a step failed (board-lint <page>): the chain ends with exit N`) with the exit code of the lint,
+so a refused board never ends in a pass.
+
 ## Agents and workflows
 
 - `agents/*.md`: plugin agents, named `brand-creator:<file name>`. Frontmatter: `name`, `description` (starts with "Only for
@@ -1399,7 +2738,10 @@ not allow (`PRINT_REGION` or `POST_FACTS` in Quick) stops the chain with exit 2 
 - Designer snapshot: `snapshot take` and `snapshot verify` both get `--ignore '*rounds/<round>/*' --ignore '*assets/_checks/*'`; the designer's
   answer lists its `screenshots` (required, at least one), the judge reads those and never the shared `shot.json`.
 - `adopt`: the prompt names `MODE: apply|fix`; a fix run says the branch exists and snapshots as `adopt-fix-<label>`; the implementer may start on a
-  dirty tree only for a fix run or a resume of its own step.
+  dirty tree only for a fix run or a resume of its own step. Each `repos[].pages` address is pasted inside double quotes into the shell commands the
+  implementer and the reviewer run, so the script refuses to start (`adopt: repository <label>: the page address "<url>" is refused ...`, before any agent) unless
+  it is a loopback URL by the rule of `isLoopbackUrl` (the script holds a copy, since a workflow imports nothing; `node/workflows.test.mjs` pins it to that function on one table) and is written only with
+  letters, digits and `- . _ ~ : / ? # [ ] = + % ,`: a `$`, a backtick, a backslash, a quote, `;`, `&`, `|`, `<`, `>`, parentheses, braces, `*` and `!` never get in (percent-encode them). `adoption wiring` checks the loopback rule again.
 - Agent tools are the only enforced privacy boundary: `brand-namer` (Read, Grep, Glob, Bash) runs the naming hunters, and the screener while
   `lookups_ok` is false. Bash stays an instruction, not a tool limit. The refuting research verifier is `brand-researcher`; `brand-reviewer` has no web
   tools.
@@ -1412,12 +2754,12 @@ not allow (`PRINT_REGION` or `POST_FACTS` in Quick) stops the chain with exit 2 
 `case.yaml`. They are opt-in, billed and never run by `tests/run-all.sh` or the smoke test; the README ("Running the evals") has the
 commands. Conventions:
 
-- **Fixtures.** `evals/_shared/fixture.sh` holds the builders (`fx_r1_shown`, `fx_before_r1`, `fx_before_style`, `fx_refine`, `fx_judge`,
-  `fx_cascade`, `fx_adoption`, `fx_commit`, `fx_brief_family`, `fx_brief_solo`); each `scaffold.sh` sources it by its own path and calls one. They
+- **Fixtures.** `evals/_shared/fixture.sh` holds the builders (`fx_r1_shown`, `fx_before_r1`, `fx_before_style`, `fx_before_site_refs`, `fx_refine`, `fx_judge`,
+  `fx_cascade`, `fx_adoption`, `fx_commit`, `fx_brief_family`, `fx_brief_solo`, `fx_kit`); each `scaffold.sh` sources it by its own path and calls one. They
   copy the synthetic Acme worked brand (without its README, which narrates round 1), write `BRAND-STATE.md` from variables (G1s defaults to a
   recorded skip, so the cases that test the first board of directions are not stopped by the style gate; `ST_G1S=""` leaves it empty, which is
   what `fx_before_style` does) and use no network. A run's workspace is the project root, so step 0 finds `BRAND-STATE.md` at once.
-- **Harness note.** The two cases that must prove "nothing was written" (adoption target, git state) end their prompt with a note asking
+- **Harness note.** The three cases that must prove "nothing was written" (adoption target, git state, the kit) end their prompt with a note asking
   the run to execute `bash .eval-verify/verify.sh > verify-result.txt`; a regex grader reads the file (`cmp` of every file against
   the pristine copy; commit, stash, worktree and branch counts). The tool-call graders are the first line, the file is the proof.
 - **Graders.** `tool_used` matches `input_match` against the call's JSON-encoded input, so a quote inside a shell command is

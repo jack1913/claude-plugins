@@ -173,6 +173,168 @@ test("adopt tells the implementer the row-list syntax of adoption status (one co
   assert.match(r.calls[0].prompt, /adoption status --set <rows>=doing .* \(one argument: rows as N, N-M or N,M,\.\.\., for example --set 1,6,11-12=doing\)/);
 });
 
+test("adopt tells the implementer how a kit row is copied and the reviewer how it is checked", async () => {
+  const base = fixture("adopt");
+  const two = { ...base, approved_agents: 4, repos: [base.repos[0], { ...base.repos[0], label: "app", path: "/REPOS/app" }] };
+  const r = await run("adopt", two);
+  assert.equal(r.error, null);
+  for (const [label, path] of [["shop", "/REPOS/shop"], ["app", "/REPOS/app"]]) {
+    const implLines = r.calls.find((c) => c.label === `apply ${label}`).prompt.split("\n");
+    const kitCopy = implLines.filter((l) => l.startsWith("A Brand kit row"));
+    assert.deepEqual(kitCopy, [
+      `A Brand kit row (its file is a .claude/skills/<slug>-brand/ folder, Find kit.json) is copied by the list brand-creator --data "/DATA" kit status --repo "${path}" --project "/PROJECT" prints: mkdir -p, then cp one file at a time, exactly those files; an owner file the repository already has is never overwritten; never into ~/.claude/skills or any global skills folder; files kit status names as left over from an older kit are not on that list: move each to removed-<date>/ in the repository, keeping its path inside that folder (removed-<date>-2/ when a file is already there; never delete one), and list them in moved_to_removed; the kit is not committed; run kit status --repo again, it must then say current.`,
+    ], label);
+    assert.ok(implLines.indexOf(kitCopy[0]) < implLines.indexOf(RULES), "the kit line sits before RULES, and RULES stays verbatim");
+    const revLines = r.calls.find((c) => c.label === `review ${label}`).prompt.split("\n");
+    const kitCheck = revLines.filter((l) => l.startsWith("For a Brand kit row"));
+    assert.deepEqual(kitCheck, [
+      `For a Brand kit row, brand-creator --data "/DATA" kit status --repo "${path}" --project "/PROJECT" must exit 0; quote it with its exit code. Files it names as left over from an older kit mean the row is not done: put each in no_decision_fixes (the implementer moves it to removed-<date>/ in the repository, never deletes it, then runs kit status again); you move nothing.`,
+    ], label);
+    assert.ok(revLines.indexOf(kitCheck[0]) < revLines.indexOf(RULES), "the kit line sits before RULES, and RULES stays verbatim");
+  }
+  const fix = await run("adopt", { ...base, mode: "fix", repos: [{ ...base.repos[0], findings: ["1 header logo still points at the old file"] }] });
+  assert.equal(fix.error, null);
+  assert.match(fix.calls.find((c) => c.label === "apply shop").prompt, /kit status --repo "\/REPOS\/shop" --project "\/PROJECT" prints: mkdir -p, then cp one file at a time/);
+  assert.match(agents["brand-implementer"].body, /A Brand kit row is copied by the list `brand-creator kit status --repo <path>` prints/);
+  assert.match(agents["brand-implementer"].body, /nothing goes into\s+`~\/\.claude\/skills` or any global folder/);
+  assert.match(agents["brand-reviewer"].body, /`brand-creator --data "<data>" kit status --repo <path> --project "<project>"` must exit 0/);
+  // a brand change that drops a generated file leaves files behind: every place that tells the copy says how they go (moved, never deleted), then kit status again
+  const flatOf = (t) => t.replace(/\s+/g, " ");
+  const leftOver = /names\s+files left over from the older kit; they are not on the copy list: move each to `removed-<date>\/` in (that|the) repository, keeping its path inside that folder \(`removed-<date>-2\/` when a file is already there; never delete one\)/;
+  assert.match(flatOf(agents["brand-implementer"].body), leftOver);
+  assert.match(flatOf(agents["brand-implementer"].body), /Then run `kit status --repo <path>` again; it must say current/);
+  assert.match(flatOf(fs.readFileSync(path.join(ROOT, "skills/brand-adopt/SKILL.md"), "utf8")), leftOver);
+  assert.match(flatOf(fs.readFileSync(path.join(ROOT, "skills/brand-creator/references/phases/11-adoption.md"), "utf8")), leftOver);
+  assert.match(flatOf(agents["brand-reviewer"].body), /left over from an older kit mean the row is not done: .* move each to `removed-<date>\/` in the repository \(never delete one\) and run `kit status` again\. List each file as a no-decision fix, and never move one yourself/);
+});
+
+test("adopt asks the reviewer to run the wiring compare and report every unrecorded loss, and the lead is told such a review is not ready for a commit ask", async () => {
+  const base = fixture("adopt");
+  const two = { ...base, approved_agents: 4, repos: [base.repos[0], { ...base.repos[0], label: "my app", path: "/REPOS/app" }] };   // a label with a space must stay one argument
+  const r = await run("adopt", two);
+  assert.equal(r.error, null);
+  for (const label of ["shop", "my app"]) {
+    const call = r.calls.find((c) => c.label === `review ${label}`);
+    const lines = call.prompt.split("\n");
+    const wiring = lines.filter((l) => l.startsWith("For a redesign of an existing site"));
+    assert.deepEqual(wiring, [
+      `For a redesign of an existing site (the repository has a wiring before record), brand-creator --data "/DATA" adoption wiring --repo "${label}" --compare --project "/PROJECT" must exit 0; quote it with its exit code. Every item it lists as lost, not recorded as dropped, fails the review and goes into wiring_losses (an empty list when nothing is lost, or when it exits 2 with the message "no before record", which means no redesign was recorded). Exit 2 with "not a surveyed repository" means the label ${label} is not the label of the survey (ADOPTION.md). That is a failure, not "no loss": put it first in no_decision_fixes with the labels the message lists (the lead relaunches with the survey label), list the wiring in not_verified, and never answer it with an empty wiring_losses. Any other exit (3: a page of the before record cannot be read because the owner's local server is not running) is not verified: say so in not_verified, never count it as no loss. You record no drop: a drop is the owner's decision, in the owner's words.`,
+    ], label);
+    assert.ok(lines.indexOf(wiring[0]) < lines.indexOf(RULES), "the wiring line sits before RULES, and RULES stays verbatim");
+    assert.equal(JSON.stringify(call.schema.properties.wiring_losses), JSON.stringify({ type: "array", items: { type: "string" } }));   // the schema comes out of the workflow sandbox: other realm, so compare as JSON
+    assert.ok(call.schema.required.includes("wiring_losses"), "a review states its wiring losses, an empty list when there are none");
+    assert.ok(!r.calls.find((c) => c.label === `apply ${label}`).prompt.includes("adoption wiring"), "the implementer's prompt is unchanged: its wiring rule is in its agent file");
+    const snapshot = r.calls.find((c) => c.label === `apply ${label}`).prompt.split("\n").filter((l) => l.startsWith("Before your first change run"));
+    assert.deepEqual(snapshot, [
+      `Before your first change run brand-creator --data "/DATA" snapshot take "/PROJECT/assets" --name "adopt-${label}" --project "/PROJECT"; at the end run snapshot verify on that file and report the exit code (the pack must not change).`,
+    ], label);   // the name is quoted: a label with a space is still one argument
+  }
+  assert.match(r.result.next, /A review whose wiring_losses is not empty is not ready for a commit ask: .*adoption wiring --repo <label> --drop "<item>::<reason>"/);
+  const flat = (n) => agents[n].body.replace(/\s+/g, " ");
+  assert.match(flat("brand-implementer"), /end with `brand-creator adoption wiring --repo <label> --after`/);
+  assert.match(flat("brand-implementer"), /never record a before yourself/);
+  assert.match(flat("brand-implementer"), /never record a drop/);
+  assert.match(flat("brand-reviewer"), /`brand-creator --data "<data>" adoption wiring --repo <label> --compare --project "<project>"`/);
+  assert.match(flat("brand-reviewer"), /Any item it lists as lost, not recorded as dropped, fails the review/);
+  assert.match(flat("brand-reviewer"), /never records a drop/);
+  assert.match(flat("brand-reviewer"), /exit 2 with "not a surveyed repository" means the label is not the survey's, which is a failure and never "no loss"/);
+  const fleet = fs.readFileSync(path.join(ROOT, "skills/brand-creator/references/fleet.md"), "utf8").replace(/\s+/g, " ");
+  assert.match(fleet, /`repos\[\]\.label` must be the label the survey gave the repository/);
+  const skill = fs.readFileSync(path.join(ROOT, "skills/brand-adopt/SKILL.md"), "utf8").replace(/\s+/g, " ");
+  assert.match(skill, /adoption wiring --repo <label> --before \[--page <local URL>\]/);
+  assert.match(skill, /adoption wiring --repo <label> --after/);
+  assert.match(skill, /adoption wiring --repo <label> --compare/);
+  assert.match(skill, /--drop "<item>::<the owner's reason>"/);
+});
+
+test("adopt gives the implementer's --after and the reviewer's --compare the same local page addresses of a redesign, quoted, and refuses an address that cannot be quoted", async () => {
+  const base = fixture("adopt");
+  const pages = ["http://localhost:4321/", "http://127.0.0.1:4321/pricing"];
+  const two = { ...base, approved_agents: 4, repos: [{ ...base.repos[0], pages }, { ...base.repos[0], label: "my app", path: "/REPOS/app" }] };   // the second repository has no pages: its prompts stay as they were
+  const r = await run("adopt", two);
+  assert.equal(r.error, null);
+  const compare = (label, flags) => `For a redesign of an existing site (the repository has a wiring before record), brand-creator --data "/DATA" adoption wiring --repo "${label}" --compare --project "/PROJECT"${flags} must exit 0; quote it with its exit code. `;
+  const reviewLines = (label) => r.calls.find((c) => c.label === `review ${label}`).prompt.split("\n");
+  const applyLines = (label, call = r) => call.calls.find((c) => c.label === `apply ${label}`).prompt.split("\n");
+  const wiring = reviewLines("shop").filter((l) => l.startsWith("For a redesign of an existing site"));
+  assert.equal(wiring.length, 1);
+  assert.ok(wiring[0].startsWith(compare("shop", ' --page "http://localhost:4321/" --page "http://127.0.0.1:4321/pricing"')), wiring[0].slice(0, 300));
+  const bare = reviewLines("my app").filter((l) => l.startsWith("For a redesign of an existing site"));
+  assert.equal(bare.length, 1);
+  assert.ok(bare[0].startsWith(compare("my app", "")) && !bare[0].includes("--page"), "a repository with no pages compares as it always did");
+  assert.equal(wiring[0].replace(/ --page "[^"]*"/g, ""), bare[0].split("my app").join("shop"), "only the --page flags differ: the rest of the line is the same words");
+  assert.deepEqual(reviewLines("shop").filter((l) => l.startsWith("The --page addresses")), [
+    "The --page addresses of that command are the pages of the redesigned site on the owner's local server, the same ones the implementer's --after read: run it as written, with none changed or left out. Without them it would read the addresses of the before record, which are not the redesigned site's.",
+  ]);
+  assert.deepEqual(reviewLines("my app").filter((l) => l.startsWith("The --page addresses")), []);
+  const owner = applyLines("shop").filter((l) => l.startsWith("The owner gave"));
+  assert.deepEqual(owner, [
+    'The owner gave these pages of the redesigned site on the local server for the wiring record: when the last row is done (and again at the end of a fix run) run brand-creator --data "/DATA" adoption wiring --repo "shop" --after --project "/PROJECT" --page "http://localhost:4321/" --page "http://127.0.0.1:4321/pricing", with exactly these --page addresses; the reviewer compares with the same ones. A page that cannot be read is reported, never skipped.',
+  ]);
+  assert.ok(applyLines("shop").indexOf(owner[0]) < applyLines("shop").indexOf(RULES), "the line sits before RULES, and RULES stays verbatim");
+  assert.deepEqual(applyLines("my app").filter((l) => l.startsWith("The owner gave")), []);
+  assert.ok(!applyLines("my app").join("\n").includes("adoption wiring"), "the implementer of a repository with no pages is told nothing new: its wiring rule is in its agent file");
+  const fix = await run("adopt", { ...base, mode: "fix", repos: [{ ...base.repos[0], pages, findings: ["1 header logo still points at the old file"] }] });
+  assert.equal(fix.error, null);
+  assert.deepEqual(applyLines("shop", fix).filter((l) => l.startsWith("The owner gave")), owner, "a fix run records --after again with the same addresses");
+  assert.ok(fix.calls.find((c) => c.label === "review shop").prompt.includes(' --compare --project "/PROJECT" --page "http://localhost:4321/" --page "http://127.0.0.1:4321/pricing" must exit 0'));
+  for (const bad of ["http://localhost:4321/", [4321], [null], [""]]) {
+    const refused = await run("adopt", { ...base, repos: [{ ...base.repos[0], pages: bad }] });
+    assert.equal(refused.calls.length, 0, `nothing may start for pages ${JSON.stringify(bad)}`);
+    assert.match(refused.error, /adopt: repository shop: pages must be a list of local page addresses/, JSON.stringify(bad));
+  }
+  for (const bad of ["http://localhost:4321/ x", 'http://localhost:4321/"', "http://localhost:4321/\nnext"]) {
+    const refused = await run("adopt", { ...base, repos: [{ ...base.repos[0], pages: [bad] }] });
+    assert.equal(refused.calls.length, 0, `nothing may start for the page ${JSON.stringify(bad)}`);
+    assert.ok(refused.error.startsWith(`adopt: repository shop: the page address ${JSON.stringify(bad)} is refused`), refused.error);
+  }
+  const empty = await run("adopt", { ...base, repos: [{ ...base.repos[0], pages: [] }] });
+  assert.equal(empty.error, null);
+  assert.ok(!empty.calls.find((c) => c.label === "review shop").prompt.includes("--page"), "an empty list is no addresses");
+  const fleet = fs.readFileSync(path.join(ROOT, "skills/brand-creator/references/fleet.md"), "utf8").replace(/\s+/g, " ");
+  assert.match(fleet, /`repos\[\]\.pages` \(optional\)/);
+});
+
+test("adopt takes only a loopback page address made of URL-safe characters: the agents' shell pastes it inside double quotes, so $, backticks and quotes never get in", async () => {
+  const base = fixture("adopt");
+  const refused = async (u) => (await run("adopt", { ...base, repos: [{ ...base.repos[0], pages: [u] }] }));
+  // the exact URL of the review: a command substitution inside an otherwise loopback address
+  const sub = await refused("http://localhost:3000/$(touch /tmp/x)");
+  assert.equal(sub.calls.length, 0);
+  assert.ok(sub.error.startsWith('adopt: repository shop: the page address "http://localhost:3000/$(touch /tmp/x)" is refused'), sub.error);
+  const sub2 = await refused("http://localhost:3000/$(touch${IFS}/tmp/x)");   // one word: the old pattern let this one through
+  assert.equal(sub2.calls.length, 0);
+  assert.match(sub2.error, /adopt: repository shop: the page address "http:\/\/localhost:3000\/\$\(touch\$\{IFS\}\/tmp\/x\)" is refused/);
+  // every character the shell reads inside double quotes, and the other metacharacters, on a loopback address
+  for (const ch of ["$", "`", "\\", '"', "'", ";", "&", "|", "<", ">", "(", ")", "{", "}", "*", "!", "^"]) {
+    const u = `http://127.0.0.1:3000/a${ch}b`;
+    const r = await refused(u);
+    assert.equal(r.calls.length, 0, `nothing may start for ${JSON.stringify(u)}`);
+    assert.ok(r.error && r.error.includes(JSON.stringify(u)) && r.error.includes("is refused"), r.error);
+  }
+  // not on this machine: refused although every character is safe
+  for (const u of ["https://example.com/", "file:///etc/passwd", "http://localhost.evil.test/", "http://localhost@evil/", "http://127.1/", "http://[0:0:0:0:0:0:0:1]/", "http://localhost:99999999/", "//localhost/x", "localhost:8000"]) {
+    const r = await refused(u);
+    assert.equal(r.calls.length, 0, `nothing may start for ${JSON.stringify(u)}`);
+    assert.ok(r.error && r.error.includes(JSON.stringify(u)) && r.error.includes("is refused"), r.error);
+  }
+  // loopback and URL-safe: accepted, and pasted as written
+  for (const u of ["http://localhost:8000/x", "http://127.0.0.1/", "http://[::1]:3000/", "https://localhost/a?b=c", "HTTP://LOCALHOST:8080/x", "http://localhost", "http://localhost?q=1", "http://localhost:/", "http://localhost:3000/a-b_c.d~e/%24%28x%29?q=a%26b+c,d=e#frag"]) {
+    const r = await refused(u);
+    assert.equal(r.error, null, `${u}: ${r.error}`);
+    assert.ok(r.calls.find((c) => c.label === "review shop").prompt.includes(` --page "${u}" must exit 0`), u);
+  }
+  // the workflow's copy of the loopback rule answers as the CLI's own (scripts/lib/_common.mjs) on the same table
+  const { isLoopbackUrl } = await import(path.join(ROOT, "scripts/lib/_common.mjs"));
+  for (const [u, want] of [["http://localhost:8000/x", true], ["http://127.0.0.1/", true], ["http://[::1]:3000/", true], ["http://localhost:/", true], ["http://localhost:65535/", true], ["http://localhost:65536/", false],
+    ["http://localhost:99999999/", false], ["http://localhost:3000:80/", false], ["http://user:secret@localhost/", false], ["http://localhost./", false], ["http://127.0.0.2/", false], ["ftp://localhost/", false],
+    ["http:localhost/x", false], ["http:///localhost/x", false], ["http://[::ffff:127.0.0.1]/", false], ["http://%6cocalhost/", false], ["http://evil.test\\@localhost/", false]]) {
+    assert.equal(isLoopbackUrl(u), want, `the CLI rule for ${u}`);
+    const r = await refused(u);
+    assert.equal(r.error === null, want, `the workflow rule for ${u}: ${r.error}`);
+  }
+});
+
 test("inventory: true adds one read-only stage first and needs the owner's approval for 5 agents", async () => {
   const a = { ...fixture("directions"), inventory: { repos: [{ label: "shop", path: "/REPOS/shop" }] } };
   const refused = await run("directions", a);
@@ -283,20 +445,43 @@ test("R6-1: the designer's snapshot ignores the shot report it writes itself, an
   assert.doesNotMatch(judge.prompt, /see assets\/_checks\/shot\.json/, "the shared report is overwritten by the last designer");
 });
 
+test("the judge lists the reflex patterns it sees per direction, and the lead is told where they go", async () => {
+  const r = await run("directions", fixture("directions"));
+  assert.equal(r.error, null);
+  const judge = r.calls.find((x) => x.agentType === "brand-creator:brand-judge");
+  assert.ok(judge.schema.required.includes("reflex_seen"));
+  const seen = judge.schema.properties.reflex_seen.items;
+  assert.deepEqual([...seen.required], ["key", "items"]); // the schema comes out of the workflow sandbox: copy it into this realm first
+  assert.deepEqual([...seen.properties.items.items.required], ["id", "source", "where"]);
+  assert.deepEqual([...seen.properties.items.items.properties.source.enum], ["ai-defaults", "cliches"]);
+  const line = judge.prompt.split("\n").find((l) => l.startsWith("REFLEX LIST:"));
+  assert.ok(line, "the judge prompt has a REFLEX LIST line");
+  assert.ok(line.includes("/PLUGIN/skills/brand-creator/references/ai-defaults.json"), line);
+  assert.ok(line.includes("/PROJECT/research/cliches.md"), line);
+  assert.match(line, /before you read any argument/);
+  assert.match(line, /never on the board's chrome/);
+  assert.match(line, /An empty list is an answer/);
+  const lines = judge.prompt.split("\n");
+  assert.ok(lines.indexOf(line) < lines.indexOf(RULES), "the reflex line sits before RULES");
+  assert.deepEqual(r.result.judge.reflex_seen.map((e) => Object.keys(e).sort().join()), ["items,key"]);
+  assert.match(r.result.next, /judge\.reflex_seen beside each direction's reflex line \(data-field="reflex-seen"\)/);
+  assert.match(agents["brand-judge"].body, /\*\*Reflex list\*\*/);
+});
+
 test("R6-2: fix mode says the branch exists, expects the dirty tree and uses its own snapshot name; apply still creates", async () => {
   const base = fixture("adopt");
   const apply = await run("adopt", base);
   const a = apply.calls.find((c) => c.label === "apply shop").prompt;
   assert.match(a, /branch brand\/acme \(create it\)/);
   assert.match(a, /MODE: apply\./);
-  assert.match(a, /--name adopt-shop /);
+  assert.match(a, /--name "adopt-shop" /);
   const fix = await run("adopt", { ...base, mode: "fix", repos: [{ ...base.repos[0], findings: ["1 header logo still points at the old file"] }] });
   assert.equal(fix.error, null);
   const f = fix.calls.find((c) => c.label === "apply shop").prompt;
   assert.doesNotMatch(f, /\(create it\)/);
   assert.match(f, /exists: the apply run created it/);
   assert.match(f, /MODE: fix \(the working tree is expected to hold the apply run's changes\)/);
-  assert.match(f, /--name adopt-fix-shop /);
+  assert.match(f, /--name "adopt-fix-shop" /);
   const body = agents["brand-implementer"].body;
   assert.match(body, /`MODE: fix` run the tree is expected to hold the apply run's uncommitted changes/);
   assert.doesNotMatch(body, /must be clean before you start/);
