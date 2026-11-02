@@ -2939,7 +2939,7 @@ def test_adoption_status_says_whether_each_kit_copy_is_current(pack, tmp_path):
     lines = r.stdout.splitlines()
     assert lines[:2] == [lines[0], "not done: 1-3"] and lines[0].startswith("not started: 0 of 3 rows done, 0 doing, 3 to do.")      # the counts first
     assert lines[2:] == ["kit copies (read only; `brand-creator kit status` has the copy list):", "  site: current (version 1.1)", "  app: not installed",
-                         "  web: not current (installed version 1.1, project version 1.1)"], lines
+                         "  web: not current (version 1.1 on both sides, but 1 file differs)"], lines                        # the same wording as `kit status`: not "installed 1.1, project 1.1"
     for what, (folder, state) in watched.items():
         assert tree_of(folder) == state, f"{what} was written to"                                            # it reads only
     assert not list((pack / "assets" / "_checks").glob("*status*"))
@@ -2953,6 +2953,16 @@ def test_adoption_status_says_whether_each_kit_copy_is_current(pack, tmp_path):
     r = bc(*status, project=pack)
     assert r.returncode == 0 and r.stdout.splitlines()[2:] == ["kit copies (read only; `brand-creator kit status` has the copy list):", "  site: current (version 1.1)",
                                                                "  app: current (version 1.1)", "  web: current (version 1.1)"], r.stdout
+    # a copy whose kit.json states another version names both versions; one with a file missing and one left over, on the same version, counts what differs
+    mutate_json(installed_of(repos["app"]) / "kit.json", lambda d: d.__setitem__("version", "1.0"))
+    (installed_of(repos["web"]) / "snippets/logo.html").unlink()
+    (installed_of(repos["web"]) / "brand/old.txt").write_text("a file of an older kit", encoding="utf-8")
+    (installed_of(repos["web"]) / "brand/assets/tokens/tokens.css").write_text("edited", encoding="utf-8")
+    r = bc(*status, project=pack)
+    assert r.returncode == 0 and r.stdout.splitlines()[3:] == ["  site: current (version 1.1)", "  app: not current (installed version 1.0, project version 1.1)",
+                                                               "  web: not current (version 1.1 on both sides, but 1 file differs, 1 file is missing, 1 file is left over from an older kit)"], r.stdout
+    shown = json.loads(bc(*status, "--json", project=pack).stdout)["kit"]                                    # the JSON keeps its four keys
+    assert [list(k) for k in shown] == [["label", "state", "installed_version", "project_version"]] * 3 and [k["installed_version"] for k in shown] == ["1.1", "1.0", "1.1"]
     # a project kit that cannot be read is said, on stderr, and does not fail the status
     (kit_of(pack) / "snippets/logo.html").unlink()
     r = bc(*status, project=pack)
@@ -3886,7 +3896,7 @@ def test_a_font_a_page_loads_follows_the_font_rule(pack):
     assert pages_row(pack)["status"] == "pass"
     fill_owned(kit_of(pack))
     assert build(pack).returncode == 0 and kit_check(pack).returncode == 0
-    # a font that is not OFL is listed and not copied, a page that loads it is told so, and the link would not resolve in the kit
+    # a font that is not OFL is listed and not copied, a page that loads it is told so, and the link does not resolve in the kit: `kit check` warns that the font must be supplied under its own licence
     mutate_json(pack / "assets" / "_checks" / "fontcheck.json",
                 lambda d: next(x for x in d["results"] if x["id"] == "licence:assets/fonts/TestFont-subset.ttf").__setitem__("recognised", "Apache License"))
     r = build(pack, "--replace")
@@ -3896,7 +3906,11 @@ def test_a_font_a_page_loads_follows_the_font_rule(pack):
     assert row["status"] == "warn" and "assets/fonts/TestFont-subset.ttf loaded at site/start/site.css:" in row["detail"] and NOT_OFL in row["detail"], row
     assert report(pack, "kit")["status"] == "pass"
     r = kit_check(pack)
-    assert r.returncode == 1 and "-> ../../assets/fonts/TestFont-subset.ttf (no such file in the kit)" in check_report_rows(pack)["kit:links"]["detail"], r.stdout
+    assert r.returncode == 0, r.stdout + r.stderr                                                                     # a warning, never a pass in silence: the font is listed, not missing
+    links = check_report_rows(pack)["kit:links"]
+    assert links["status"] == "warn" and "-> ../../assets/fonts/TestFont-subset.ttf (brand/assets/fonts/TestFont-subset.ttf: " + NOT_OFL + ")" in links["detail"], links
+    assert "the font must be supplied under its own licence" in links["detail"] and "[WARN] kit:links" in r.stdout
+    assert statuses(pack) == {**pages_pass("start"), "kit:links": "warn"}
 
 
 def test_kit_json_must_describe_its_reference_pages(pack):
@@ -4151,6 +4165,16 @@ def test_a_record_the_row_cannot_use_is_not_verified_and_never_a_pass(pack, tmp_
     page.unlink()
     page.write_bytes(good_page)
     assert kit_check(pack).returncode == 0 and statuses(pack) == pages_pass("start")                                # a plain file again: a pass
+    site = pack / "site" / "site.json"
+    good_site, record_beyond = site.read_bytes(), tmp_path / "record.json"
+    record_beyond.write_bytes(good_site)                                                                            # byte for byte the record the kit was built from: a read through the link would pass
+    site.unlink()
+    symlink_or_skip(site, record_beyond)                                                                            # a record that is a link to a file beyond the project is never read through
+    row_is("not verified: the approved pages cannot be read (", startswith=True)
+    assert "outside the project" in page_row(pack)["detail"] and page_row(pack)["detail"].endswith("): `brand-creator kit build --yes` after fixing it")
+    site.unlink()
+    site.write_bytes(good_site)
+    assert kit_check(pack).returncode == 0 and statuses(pack) == pages_pass("start")                                # a plain file again: a pass
 
 
 def test_each_reference_page_gets_its_own_row_and_a_change_marks_only_its_page(pack):
@@ -4177,3 +4201,243 @@ def test_each_reference_page_gets_its_own_row_and_a_change_marks_only_its_page(p
     page_check_report(pack, "site/start/index.html", "fail")                                                         # and a failure of one page is the failure of that page
     assert kit_check(pack).returncode == 1
     assert (page_row(pack)["status"], page_row(pack, "pricing")["status"]) == ("fail", "skipped")
+
+
+# ---------------------------------------------------------------- fonts a page brings, links to folders, pages that are links leading out (F3-05)
+# A font in a page folder, or one a page loads from outside assets/fonts/, goes by the font rule of assets/fonts/ (D6): copied only when the fontcheck report has read it as OFL and an OFL text sits in
+# assets/fonts/, otherwise listed in kit.json fonts.not_copied. fontcheck reads assets/fonts/ alone unless `--font` names a font, so these fonts are read with `--font`.
+PAGE_FONT = "site/start/fonts/Brought.ttf"
+LOADED_FONT = "assets/web/Other.ttf"
+CHECK_THEM = ("run `brand-creator fontcheck --font FILE` for every font the kit holds, this one included (fontcheck reads assets/fonts/ alone unless fonts are named, "
+              "and a run that names fonts reads only those), then `kit build`")
+OFL_LABEL = "SIL Open Font License (OFL)"
+
+
+def bring_font(p, rel):
+    """A copy of the OFL test font at the project path `rel`."""
+    f = p / rel
+    f.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(TEST_FONT, f)
+
+
+def put_licence_text(p):
+    d = p / "assets" / "fonts"
+    d.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(OFL_TEXT, d / "OFL.txt")
+
+
+def read_fonts(p, *rels):
+    """fontcheck reads the named fonts, which gives each a `licence:<project path>` row, and reads no other."""
+    r = bc("fontcheck", "--lang", "en", "--no-platform", *[a for rel in rels for a in ("--font", str(p / rel))], project=p)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert all(f"licence:{rel}" in {x["id"] for x in report(p, "fontcheck")["results"]} for rel in rels)
+
+
+def copied_font(path):
+    return {"file": path, "licence": OFL_LABEL, "licence_files": ["brand/assets/fonts/OFL.txt"]}
+
+
+def test_a_font_inside_a_page_folder_follows_the_font_rule(pack):
+    with_site(pack)
+    put_licence_text(pack)
+    bring_font(pack, PAGE_FONT)
+    # no fontcheck report: the font is listed with a reason that says to check the fonts, and is not copied
+    r = build(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert kit_json(pack)["fonts"] == {"copied": [], "not_copied": [{"file": PAGE_FONT, "reason": f"no current fontcheck report: {CHECK_THEM}"}]}
+    assert kit_files(pack) == sorted([*KIT_FILES, *PAGE_KIT]) and not (kit_of(pack) / "brand" / PAGE_FONT).exists()
+    row = pages_row(pack)
+    assert row["status"] == "warn" and f"{PAGE_FONT} sits in the page folder (no current fontcheck report: " in row["detail"], row
+    assert report(pack, "kit")["status"] == "pass" and PAGE_FONT in {i["path"] for i in report(pack, "kit")["inputs"]}
+    # a current report that has read another font only: this one is a font fontcheck has not read
+    with_font(pack)
+    r = build(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert kit_json(pack)["fonts"] == {"copied": [copied_font("brand/assets/fonts/TestFont-subset.ttf")],
+                                       "not_copied": [{"file": PAGE_FONT, "reason": f"fontcheck has not read it: {CHECK_THEM}"}]}
+    assert not (kit_of(pack) / "brand" / PAGE_FONT).exists()
+    # fontcheck reads both: the page's font is copied at its project path, with the licence text, and fonts.css keeps the font of assets/fonts/ alone
+    read_fonts(pack, "assets/fonts/TestFont-subset.ttf", PAGE_FONT)
+    r = build(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert kit_json(pack)["fonts"] == {"copied": [copied_font("brand/assets/fonts/TestFont-subset.ttf"), copied_font(f"brand/{PAGE_FONT}")], "not_copied": []}
+    assert kit_files(pack) == sorted([*KIT_FILES, *FONT_KIT, *PAGE_KIT, f"brand/{PAGE_FONT}"])
+    assert filecmp.cmp(TEST_FONT, kit_of(pack) / "brand" / PAGE_FONT, shallow=False)
+    assert (kit_of(pack) / "snippets" / "fonts.css").read_text(encoding="utf-8") == FONT_FACE
+    assert pages_row(pack)["status"] == "pass"
+    fill_owned(kit_of(pack))
+    assert build(pack).returncode == 0
+    assert kit_check(pack).returncode == 0 and statuses(pack) == pages_pass("start")
+    # the licence of the page's font is not OFL: it is listed and not copied, and the kit does not keep the copy of the last build
+    mutate_json(pack / "assets" / "_checks" / "fontcheck.json",
+                lambda d: next(x for x in d["results"] if x["id"] == f"licence:{PAGE_FONT}").__setitem__("recognised", "Apache License"))
+    r = build(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert kit_json(pack)["fonts"] == {"copied": [copied_font("brand/assets/fonts/TestFont-subset.ttf")], "not_copied": [{"file": PAGE_FONT, "reason": NOT_OFL}]}
+    assert not (kit_of(pack) / "brand" / PAGE_FONT).exists() and (pack / PAGE_FONT).is_file()                           # moved aside from the kit, and the project's own file is as it was
+    assert pages_row(pack)["status"] == "warn" and f"{PAGE_FONT} sits in the page folder ({NOT_OFL})" in pages_row(pack)["detail"]
+    # a font that changed after fontcheck read it: the report is stale, so no font is copied and the build is not verified (the font of assets/fonts/ has no current report either)
+    read_fonts(pack, "assets/fonts/TestFont-subset.ttf", PAGE_FONT)
+    with (pack / PAGE_FONT).open("ab") as fh:
+        fh.write(b"\0")
+    r = build(pack)
+    assert r.returncode == 3, r.stdout + r.stderr
+    assert kit_json(pack)["fonts"] == {"copied": [], "not_copied": [{"file": "assets/fonts/TestFont-subset.ttf", "reason": NO_FONTCHECK},
+                                                                     {"file": PAGE_FONT, "reason": f"no current fontcheck report: {CHECK_THEM}"}]}
+
+
+def test_a_font_a_page_loads_from_outside_assets_fonts_follows_the_font_rule(pack):
+    with_site(pack)
+    put_licence_text(pack)
+    bring_font(pack, LOADED_FONT)
+    css = pack / "site" / "start" / "site.css"
+    css.write_text(css.read_text(encoding="utf-8") + '@font-face { font-family: "Other"; src: url("../../assets/web/Other.ttf") format("truetype"); }\n', encoding="utf-8")
+    r = build(pack)                                                                                                   # fontcheck has read nothing: the font is listed, not copied
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert kit_json(pack)["fonts"] == {"copied": [], "not_copied": [{"file": LOADED_FONT, "reason": f"no current fontcheck report: {CHECK_THEM}"}]}
+    assert kit_files(pack) == sorted([*KIT_FILES, *PAGE_KIT]) and not (kit_of(pack) / "brand" / LOADED_FONT).exists()
+    row = pages_row(pack)
+    assert row["status"] == "warn" and f"{LOADED_FONT} loaded at site/start/site.css:" in row["detail"] and "supply it under its own licence" in row["detail"], row
+    fill_owned(kit_of(pack))
+    assert build(pack).returncode == 0
+    r = kit_check(pack)                                                                                               # the link to the font is no broken link, and no silent pass
+    assert r.returncode == 0, r.stdout + r.stderr
+    links = check_report_rows(pack)["kit:links"]
+    assert links["status"] == "warn" and f"-> ../../assets/web/Other.ttf (brand/{LOADED_FONT}: no current fontcheck report: " in links["detail"], links
+    assert "the font must be supplied under its own licence" in links["detail"] and "[WARN] kit:links" in r.stdout
+    assert statuses(pack) == {**pages_pass("start"), "kit:links": "warn"}
+    # fontcheck reads it: OFL by its name table, with the OFL text in assets/fonts/: copied at its project path, and the link resolves
+    read_fonts(pack, LOADED_FONT)
+    r = build(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert kit_json(pack)["fonts"] == {"copied": [copied_font(f"brand/{LOADED_FONT}")], "not_copied": []}
+    assert filecmp.cmp(TEST_FONT, kit_of(pack) / "brand" / LOADED_FONT, shallow=False) and (kit_of(pack) / "brand" / "assets" / "fonts" / "OFL.txt").is_file()
+    assert not (kit_of(pack) / "snippets" / "fonts.css").exists()                                                       # no font of assets/fonts/: no snippet
+    assert pages_row(pack)["status"] == "pass"
+    assert kit_check(pack).returncode == 0 and statuses(pack) == pages_pass("start")
+    # not OFL: listed and not copied again, and the link is a warning again
+    mutate_json(pack / "assets" / "_checks" / "fontcheck.json",
+                lambda d: next(x for x in d["results"] if x["id"] == f"licence:{LOADED_FONT}").__setitem__("recognised", "Apache License"))
+    r = build(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert kit_json(pack)["fonts"] == {"copied": [], "not_copied": [{"file": LOADED_FONT, "reason": NOT_OFL}]} and not (kit_of(pack) / "brand" / LOADED_FONT).exists()
+    assert kit_check(pack).returncode == 0 and statuses(pack) == {**pages_pass("start"), "kit:links": "warn"}
+    # OFL by its name table but the licence text is gone from assets/fonts/: the same reason as for a font of assets/fonts/
+    read_fonts(pack, LOADED_FONT)
+    ofl = pack / "assets" / "fonts" / "OFL.txt"
+    mutate(ofl, "SIL Open Font License", "Some Licence", count=99)
+    mutate(ofl, "SIL OPEN FONT LICENSE", "SOME LICENCE", count=99)
+    r = build(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert kit_json(pack)["fonts"] == {"copied": [], "not_copied": [{"file": LOADED_FONT, "reason": "OFL by its name table, but no OFL licence text in assets/fonts/: add the font's OFL.txt"}]}
+
+
+def test_a_link_to_a_font_the_kit_does_not_copy_is_judged_by_its_exact_path_and_a_broken_link_still_fails(pack):
+    """The warning is for a font kit.json lists. A link that spells the listed path in another letter case, a link to a font kit.json does not list, and a broken link beside a listed font still fail."""
+    with_site(pack)
+    put_licence_text(pack)
+    bring_font(pack, LOADED_FONT)
+    css = pack / "site" / "start" / "site.css"
+    css.write_text(css.read_text(encoding="utf-8") + '@font-face { font-family: "Other"; src: url("../../assets/web/Other.ttf") format("truetype"); }\n', encoding="utf-8")
+    filled_kit(pack)
+    assert kit_check(pack).returncode == 0 and check_report_rows(pack)["kit:links"]["status"] == "warn"
+    page = kit_of(pack) / "brand" / "site" / "start" / "site.css"
+    other = page.read_text(encoding="utf-8")
+    for why, link in (("another letter case", "../../assets/web/other.ttf"), ("an unlisted font", "../../assets/web/Third.ttf"), ("a folder", "../../assets/web/")):
+        page.write_text(other + f'@font-face {{ font-family: "X"; src: url("{link}"); }}\n', encoding="utf-8")
+        r = kit_check(pack)
+        links = check_report_rows(pack)["kit:links"]
+        assert links["status"] == "fail" and f"-> {link} (" in links["detail"] and "1 more leads to a font the kit does not copy" in links["detail"], (why, links)
+        assert r.returncode == 1, (why, r.stdout)
+    page.write_text(other, encoding="utf-8")
+    assert kit_check(pack).returncode == 0                                                                           # the kit as it was built: a warning only
+
+
+def second_page(p, pid="pricing"):
+    """A second approved page, a copy of `start` (its record in site/site.json, its page check and stills as `settle_page` makes them)."""
+    text = (p / "site" / "start" / "index.html").read_text(encoding="utf-8").replace('data-page="start"', f'data-page="{pid}"')
+    (p / "site" / pid).mkdir()
+    (p / "site" / pid / "index.html").write_text(text, encoding="utf-8")
+    shutil.copy2(p / "site" / "start" / "site.css", p / "site" / pid / "site.css")
+    shutil.copytree(p / "site" / "start" / "img", p / "site" / pid / "img")
+    site = json.loads((p / "site" / "site.json").read_text(encoding="utf-8"))
+    site["pages"].append({"id": pid, "path": f"site/{pid}/index.html", "layout": "own:ledger", "sha256": file_sha(p / "site" / pid / "index.html")})
+    (p / "site" / "site.json").write_text(json.dumps(site, indent=2) + "\n", encoding="utf-8")
+    settle_page(p, pid)
+
+
+def test_pages_that_link_to_each_other_by_a_folder_url_go_into_the_kit(pack, tmp_path):
+    """`href="../pricing/"` is accepted by `site approve` and is the folder's index.html, as a web server answers it. In the project that file is copied (an approved page is in the kit anyway), and in the kit
+    `kit check` accepts a link to a folder that holds an index.html. A folder without one still fails, in the project and in the kit."""
+    from helpers import symlink_or_skip
+    with_site(pack)
+    second_page(pack)
+    (pack / "assets" / "web" / "more").mkdir()
+    (pack / "assets" / "web" / "more" / "index.html").write_text("<!doctype html><title>More</title>\n", encoding="utf-8")
+    edit_page(pack, '<a class="action" href="#plans">', '<a href="../pricing/">Prices</a> <a href="../pricing">Prices again</a> <a href="../../assets/web/more/">More</a> <a href="./">Here</a><a class="action" href="#plans">')
+    r = build(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    pricing = ["brand/site/pricing/index.html", "brand/site/pricing/site.css", "brand/site/pricing/img/pic.svg", *[f"brand/site/pricing/shots/{n}" for n in SHOTS], "reference-pages/pricing/notes.md"]
+    assert kit_files(pack) == sorted([*KIT_FILES, *PAGE_KIT, *pricing, "brand/assets/web/more/index.html"])           # a folder that is no approved page is copied as its index.html
+    assert filecmp.cmp(pack / "assets" / "web" / "more" / "index.html", kit_of(pack) / "brand" / "assets" / "web" / "more" / "index.html", shallow=False)
+    fill_owned(kit_of(pack))
+    assert build(pack).returncode == 0
+    r = kit_check(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert statuses(pack) == pages_pass("start", "pricing")
+    # the kit side: a link to a folder in the kit is its index.html when the kit has one there
+    recipe = kit_of(pack) / "recipes" / "web-page.md"
+    recipe.write_text(recipe.read_text(encoding="utf-8") + "\nSee [the pricing page](../brand/site/pricing/) and [the pricing page again](../brand/site/pricing).\n", encoding="utf-8")
+    assert build(pack).returncode == 0                                                                                # the owner's edit is recorded
+    assert kit_check(pack).returncode == 0 and statuses(pack) == pages_pass("start", "pricing")
+    mutate(recipe, "(../brand/site/pricing)", "(../brand/site/pricing/img/)")                                          # a folder in the kit without an index.html fails
+    mutate(recipe, "(../brand/site/pricing/)", "(../brand/assets/logo/)")
+    assert build(pack).returncode == 0
+    r = kit_check(pack)
+    assert r.returncode == 1, r.stdout + r.stderr
+    links = check_report_rows(pack)["kit:links"]["detail"]
+    assert "recipes/web-page.md:" in links and "-> ../brand/assets/logo/ (a folder, not a file)" in links and "-> ../brand/site/pricing/img/ (a folder, not a file)" in links, links
+    # in the project a folder without an index.html stops the build, as it did, and says why
+    mutate(recipe, "(../brand/assets/logo/)", "(../brand/site/pricing/)")
+    mutate(recipe, "(../brand/site/pricing/img/)", "(../brand/site/pricing/)")
+    edit_page(pack, 'href="../pricing/"', 'href="../"')
+    for args in (("--yes",), ("--plan",)):
+        r = bc("kit", "build", *args, project=pack)
+        assert r.returncode == 1 and "leads to site, a folder, not a file: it holds no index.html" in r.stderr and "site/start/index.html:" in r.stderr, (args, r.stdout, r.stderr)
+    edit_page(pack, 'href="../"', 'href="../pricing/"')
+    assert build(pack).returncode == 0
+    # and a folder URL whose index.html is a link leading out of the project is exit 2, never read
+    far = tmp_path / "outside-index.html"
+    far.write_bytes(SECRET)
+    (pack / "assets" / "web" / "more" / "index.html").unlink()
+    symlink_or_skip(pack / "assets" / "web" / "more" / "index.html", far)
+    r = bc("kit", "build", "--yes", project=pack)
+    assert r.returncode == 2 and "outside the project" in r.stderr and "assets/web/more/index.html" in r.stderr, r.stdout + r.stderr
+    nothing_secret_in(pack)
+
+
+@pytest.mark.parametrize("bytes_differ", [False, True], ids=["same-bytes", "other-bytes"])
+def test_a_page_folder_or_index_that_is_a_link_leading_out_is_exit_2_whatever_the_bytes(pack, tmp_path, bytes_differ):
+    """validate_site hashes each page, through a link too. A page folder or an index.html that is a link leading outside the project is exit 2 before that, so it is never exit 1 because the bytes behind
+    the link are not the approved ones."""
+    from helpers import symlink_or_skip
+    with_site(pack)
+    page, folder = pack / "site" / "start" / "index.html", pack / "site" / "start"
+    for what in ("index.html", "folder"):
+        outside = tmp_path / ("moved-index.html" if what == "index.html" else "moved-start")
+        shutil.move(str(page if what == "index.html" else folder), str(outside))
+        symlink_or_skip(page if what == "index.html" else folder, outside)
+        beyond = outside if what == "index.html" else outside / "index.html"
+        if bytes_differ:
+            mutate(beyond, "One calm place", "One calmer place")                                                      # not the bytes the record holds
+        for args in (("--yes",), ("--plan",)):
+            r = bc("kit", "build", *args, project=pack)
+            assert r.returncode == 2, (what, args, r.stdout, r.stderr)
+            assert "outside the project" in r.stderr and "site/start" in r.stderr and "Traceback" not in r.stderr and "changed since it was approved" not in r.stderr, (what, r.stderr)
+        untouched(pack)
+        (page if what == "index.html" else folder).unlink()
+        if bytes_differ:
+            mutate(beyond, "One calmer place", "One calm place")
+        shutil.move(str(outside), str(page if what == "index.html" else folder))
+    r = build(pack)                                                                                                   # the pages as they were: the kit goes in
+    assert r.returncode == 0, r.stdout + r.stderr

@@ -303,6 +303,12 @@ lints the board of the latest round again before `check`, so an edit of the fact
   follows the font rule: open-licence fonts are copied, and the build warns about any other. Whatever you wrote in a
   choice, the notes pass `kit check`: a placeholder like `{a.b}`, a tag or a link in it is shown as text and never read
   as a citation.
+  A font file inside a page's folder, or one the page loads from anywhere in your project, follows the font rule too:
+  it is copied only when the font check has read it (`brand-creator fontcheck --font <file>`) as open-licence and the
+  licence text is in `assets/fonts/`; otherwise it is listed in `kit.json` as not copied, and the build warns. Two
+  approved pages that link to each other by a folder address (`../pricing/`) go in: the address is that folder's
+  `index.html`, as on a web server. A page folder or page file that is a link leading outside your project stops the
+  build as an outside path, whatever the file behind the link holds.
 - The kit carries your rules and facts as data: `rules.json` (your recorded rules, each with a short id, the size rule
   and the drawing for each size, the contrast pairs with their ratios, the words never to use and your page rules) and
   `facts.json` (the facts you confirmed; contact details never).
@@ -327,6 +333,8 @@ lints the board of the latest round again before `check`, so an edit of the fact
   when a file was added to the kit after it.
   A Finder `.DS_Store` in the kit is no file of the kit and never makes that report stale. A `srcset` written as
   `a.svg 1x,b.svg 2x` is read the way HTML reads it, so it is no longer reported as a dead link.
+  A link to a folder counts when that folder has an `index.html` in the kit. A link to a font the kit lists as not
+  copied is a warning that you supply the font under its own licence, and no longer a failure.
 - `brand-creator kit check` also holds your own recipes, golden rules and visual notes to a source. Every bullet
   there says `[example]` or names a rule the kit knows with `[rule: <id>]` (a rule of your brand, a page rule as
   `page:<id>`, a choice of a reference page as `site:<id>`), and every value in them, such as `48px`, a ratio or a
@@ -354,6 +362,8 @@ lints the board of the latest round again before `check`, so an edit of the fact
   whole folder", and `brand-creator adoption status` says for each such repository whether its copy of the kit is
   current. An adoption list without a kit row looks exactly as it did.
   An empty `--lines ""` is refused, like any other word a kit row does not take.
+  A copy that is not current is worded as `kit status` words it: on the same version as your project it says so and
+  what differs, instead of naming the same version twice.
 - `/brand-creator:brand-adopt` installs the brand kit in a repository you name, on your branch, and checks the copy byte
   for byte. The implementer copies exactly the files `brand-creator kit status --repo <folder>` lists, one at a time,
   never over a file of your own in the repository and never into a global skills folder; the review passes when

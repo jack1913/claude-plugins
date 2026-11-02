@@ -24,6 +24,9 @@ Fonts: each .ttf, .otf, .woff or .woff2 in assets/fonts/ is copied to brand/asse
 as SIL Open Font License (OFL) and a licence text with "SIL OPEN FONT LICENSE" in it sits in assets/fonts/ (the text is copied along); snippets/fonts.css then holds an
 @font-face for each copied font. Any other font is listed in kit.json (fonts.not_copied) with the reason and never copied. With no current fontcheck report no font is
 copied, the rest is written and the build exits 3 (run `brand-creator fontcheck`, then `kit build` again).
+A font a reference page brings, a .ttf, .otf, .woff or .woff2 file in a page folder or one a page loads from outside assets/fonts/, goes by the same rule: it is copied (at its project path under brand/, with
+the licence text) only when the current fontcheck report has read it as OFL (`brand-creator fontcheck --font FILE` for it; fontcheck reads assets/fonts/ alone unless fonts are named) and an OFL licence text sits
+in assets/fonts/. Any other, a font fontcheck has not read included, is listed in fonts.not_copied with the reason and not copied. snippets/fonts.css holds the fonts of assets/fonts/ only.
 
 Grounds: once the owner has named the colours text sits on (tokens.json `grounds`, `named_by_owner` a real date and the owner's words), snippets/on-ground.css holds one
 [data-ground="<name>"] scope for each ground after the first, which is the page ground: the scope sets the ground's own background and points the page ground's text, action,
@@ -35,8 +38,10 @@ Reference pages: when the project has site/site.json (the pages the owner approv
 (its stills too) and every project file it loads (src, href, poster and srcset in the HTML, url() in a <style>, a style attribute and a css file; a css file the page loads is read for what it loads
 too, and no further), and gets a generated reference-pages/<id>/notes.md: its layout (structure only), the approval, links to the page and its stills, and its choices, each tagged
 [rule: site:<id>] or [example]. The build stops (exit 1, nothing written) when site/site.json does not validate (the first three problems are quoted) or when a page has no current, passing
-page-check report or no current stills (the page and the command to run are named); a path that leaves the project, by name or by a link, is exit 2. A font under assets/fonts/ that the
-fonts rule does not copy (only OFL fonts are) is not copied for a page either: row kit:reference-pages warns and `kit check` fails the link. kit.json records for each page its
+page-check report or no current stills (the page and the command to run are named); a path that leaves the project, by name or by a link, is exit 2, and so is a page folder or index.html that is a link
+leading out of the project, whatever the bytes behind the link are (it is judged before the record's sha256 is). A URL that names a folder is the folder's index.html when the project has one, as a web server
+answers it; a folder without index.html stops the build. A font a page has that the fonts rule does not copy is listed in kit.json (fonts.not_copied) and not copied: row kit:reference-pages warns and `kit check`
+warns on the link too. kit.json records for each page its
 source_sha, the inputs_sha of its page-check report and of its capture.json (`reference_pages`) and, under sources, one sha256 over everything the pages are made from (`pages`).
 
 The owner's files (EXTENDING.md, voice.md, visual.md, golden-rules.md, recipes/web-page.md) are scaffolded from templates/kit/ (the placeholders {{brand}} and {{skill}} filled; any
@@ -50,7 +55,8 @@ A SKILL.md that `applied-skill` wrote is taken over; one edited by hand stops th
 
 `kit check` reads the kit and writes the report `kit-check`; no kit is exit 2. Its inputs are every file under the kit folder (a Finder `.DS_Store` is none), the files the kit is made from, BRAND-STATE.md and the `kit` report, so any change
 makes it stale. Rows: kit:files (every generated file is what kit.json lists, kit.json is the bytes the `kit` report recorded, no file in a generated folder is unlisted; with no `kit` report: not verified), kit:links (every
-relative link in a .md, .html or .css file resolves to a file inside the kit: one that points outside it, an absolute path or a missing file fails), kit:fill (no `[[fill` marker is left in a text file), kit:versions (SKILL.md holds
+relative link in a .md, .html or .css file resolves to a file inside the kit: one that points outside it, an absolute path or a missing file fails; a link to a folder is its index.html when the kit has one there;
+a link to a font that kit.json lists in fonts.not_copied is a warning: the font must be supplied under its own licence), kit:fill (no `[[fill` marker is left in a text file), kit:versions (SKILL.md holds
 `Kit version <kit.json version> (kit.json).` exactly once, and the kit's edition is the approved one), kit:plugin (warns on another plugin version), kit:sources (not verified when the brand changed after the kit was built, naming
 what changed) and kit:owned (warns when an owner file changed since the last build). Exit 0 pass, 1 a row failed, 3 not verified. A link inside the kit is never followed.
 Two rows read the owner's recipes (recipes/**/*.md), golden-rules.md, visual.md and the generated reference-pages/<id>/notes.md: kit:tags (every bullet, and in golden-rules.md and visual.md every numbered
@@ -183,8 +189,9 @@ def ground_row(rep, grounds: dict) -> None:
 
 
 def reference_row(rep, pages: dict) -> None:
-    """Row kit:reference-pages: pass with the number of approved reference pages copied (and their ids), warn when a page loads a font the kit does not copy (the link would fail in the
-    kit, so the row says which font and why), info "no approved reference pages" when the project has none."""
+    """Row kit:reference-pages: pass with the number of approved reference pages copied (and their ids), warn when a page has a font the kit does not copy (a font file in its folder, or one it loads;
+    the font rule decides, as for assets/fonts/: the row says which font, how the page has it and why it is left out, and `kit check` warns on the link instead of failing it), info "no approved
+    reference pages" when the project has none."""
     label = "approved reference pages"
     n = len(pages["records"])
     if not n:
@@ -195,8 +202,9 @@ def reference_row(rep, pages: dict) -> None:
               "notes in reference-pages/<id>/notes.md")
     left = pages["not_copied"]
     if left:
-        shown = "; ".join(f"{font} loaded at {where} ({why})" for font, where, why in left[:SHOWN]) + (f"; and {len(left) - SHOWN} more" if len(left) > SHOWN else "")
-        rep.add("kit:reference-pages", "warn", label, detail=f"{copied}; a font a page loads is not copied, so `kit check` fails the link: {shown}")
+        shown = "; ".join(f"{font} {how} ({why})" for font, how, why in left[:SHOWN]) + (f"; and {len(left) - SHOWN} more" if len(left) > SHOWN else "")
+        rep.add("kit:reference-pages", "warn", label,
+                detail=f"{copied}; a font the kit does not copy is listed in kit.json (fonts.not_copied), and a link to it is a warning in `kit check`: supply it under its own licence: {shown}")
     else:
         rep.add("kit:reference-pages", "pass", label, detail=copied)
 
@@ -227,13 +235,21 @@ def files_row(rep, project: Path, doc: dict) -> None:
         rep.add("kit:files", "pass", label, detail=f"{got['count']} generated files are the bytes kit.json lists, kit.json is the bytes the `kit` report recorded, and nothing unlisted sits in {', '.join(kitlib.GENERATED_DIRS)}")
 
 
-def links_row(rep, project: Path) -> None:
-    """Row kit:links: every relative link of a .md, .html or .css file of the kit resolves to a file inside the kit."""
+def links_row(rep, project: Path, doc: dict) -> None:
+    """Row kit:links: every relative link of a .md, .html or .css file of the kit resolves to a file inside the kit (a link to a folder is its index.html, when the kit has one). A link to a font that
+    kit.json lists as not copied (fonts.not_copied) is no broken link but is never a silent pass: the row warns that the font must be supplied under its own licence. A broken link fails."""
     label = "every relative link in the kit resolves to a file inside it"
-    got = kitlib.link_check(project)
+    got = kitlib.link_check(project, doc)
+    loose = [f"{f}:{line} -> {target} ({font}: {reason})" for f, line, target, font, reason in got["unsupplied"]]
     if got["bad"]:
         listed = [f"{f}:{line} -> {target} ({why})" for f, line, target, why in got["bad"]]
-        rep.add("kit:links", "fail", label, detail=f"{len(listed)} of {got['links']} relative links {'does' if len(listed) == 1 else 'do'} not resolve inside the kit: {named(listed)}")
+        rep.add("kit:links", "fail", label, detail=f"{len(listed)} of {got['links']} relative links {'does' if len(listed) == 1 else 'do'} not resolve inside the kit: {named(listed)}"
+                + (f"; {len(loose)} more lead{'s' if len(loose) == 1 else ''} to a font the kit does not copy" if loose else ""))
+    elif loose:
+        rep.add("kit:links", "warn", label,
+                detail=(f"{len(loose)} of {got['links']} relative links lead{'s' if len(loose) == 1 else ''} to a font the kit does not copy (listed in kit.json fonts.not_copied), so "
+                        f"{'it does' if len(loose) == 1 else 'they do'} not resolve inside the kit: the font must be supplied under its own licence, copied into the product from where you licensed it: {named(loose)}; "
+                        f"the other {got['links'] - len(loose)} resolve inside the kit"))
     else:
         rep.add("kit:links", "pass", label, detail=f"{got['links']} relative link{'s' if got['links'] != 1 else ''} in {got['files']} .md, .html and .css files resolve inside the kit")
 
@@ -363,7 +379,7 @@ def check(project: Path, a) -> int:
     rep = Report(kitlib.CHECK_TOOL, project, renderer="n/a (generated files)")
     rep.inputs.extend(kitlib.check_inputs(project))
     files_row(rep, project, doc)
-    links_row(rep, project)
+    links_row(rep, project, doc)
     fill_row(rep, project)
     versions_row(rep, project, doc)
     plugin_row(rep, doc)
@@ -497,12 +513,7 @@ def left_over_to(kd_rel: str) -> str:
 def not_current_line(res: dict) -> str:
     """The first line of a copy that is not current. With two versions that differ it names both. With the same version on both sides it says so and what differs, so that it does
     not read as a contradiction: the version is the same, the files are not."""
-    a, v, label = res["installed_version"], res["project_version"], res["label"]
-    if a != v:
-        return f"{label}: not current (installed version {a or 'unknown'}, project version {v})"
-    counts = ((len(res["differ"]), "file differs", "files differ"), (len(res["missing"]), "file is missing", "files are missing"),
-              (len(res["left_over"]), "file is left over from an older kit", "files are left over from an older kit"))
-    return f"{label}: not current (version {v} on both sides, but " + ", ".join(f"{n} {one if n == 1 else many}" for n, one, many in counts if n) + ")"
+    return f"{res['label']}: " + kitlib.not_current_text(res["installed_version"], res["project_version"], res["differ"], res["missing"], res["left_over"])
 
 
 def status_lines(res: dict, kd_rel: str) -> list[str]:

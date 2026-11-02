@@ -400,9 +400,52 @@ def font_plan(project: Path) -> dict:
     return {"copied": copied, "not_copied": not_copied, "files": files, "fonts": paths, "current": rows is not None}
 
 
-def fonts_record(fonts: dict) -> dict:
-    """The `fonts` key of kit.json for a `font_plan`."""
-    return {"copied": fonts["copied"], "not_copied": fonts["not_copied"]}
+def fonts_record(fonts: dict, pages: dict | None = None) -> dict:
+    """The `fonts` key of kit.json for a `font_plan`, and for the fonts the approved reference pages bring (`pages` is the `reference_plan`; `page_font_plan` decided them by the same rule), sorted by path."""
+    extra = (pages or {}).get("fonts") or {}
+    if not (extra.get("copied") or extra.get("not_copied")):
+        return {"copied": fonts["copied"], "not_copied": fonts["not_copied"]}
+    return {key: sorted([*fonts[key], *extra.get(key, [])], key=lambda f: f["file"]) for key in FONT_KEYS}
+
+
+# ---------------------------------------------------------------- fonts an approved reference page brings: the same rule as assets/fonts/
+# A page folder can hold a font (site/<id>/fonts/X.ttf) and a page can load one from anywhere in the project (assets/web/X.ttf through url() in a stylesheet). D6 holds for these as well: such a font is
+# copied only when the current fontcheck report has read it (a `licence:<project path>` row) as SIL Open Font License (OFL) and an OFL text sits in assets/fonts/ (`_why_not`, the rule of `font_plan`); any
+# other is listed in kit.json `fonts.not_copied` with the reason and is not copied. A font under assets/fonts/ stays the font plan's, and snippets/fonts.css holds those fonts only.
+
+FONTCHECK_FONTS = ("run `brand-creator fontcheck --font FILE` for every font the kit holds, this one included (fontcheck reads assets/fonts/ alone unless fonts are named, "
+                   "and a run that names fonts reads only those), then `kit build`")   # fontcheck's own default would leave a font outside assets/fonts/ unread
+
+
+def is_font(rel: str) -> bool:
+    """True for a path that names a .ttf, .otf, .woff or .woff2 file (any letter case), the files the font rule is about."""
+    return Path(rel).suffix.lower() in FONT_FORMATS
+
+
+def page_font_plan(project: Path, found: dict[str, str]) -> dict:
+    """The fonts the approved pages bring (`found`: project path -> how the page has it, as `_gather` reads them) by the rule of `font_plan`: {"copied": [kit.json `fonts.copied` entries], "not_copied": [kit.json
+    `fonts.not_copied` entries], "files": {path in the kit: bytes} of the licence texts of the copied fonts (the font files are the page's own, read by `_gather`), "left": {project path: why} of the fonts not copied}.
+    A font fontcheck has not read is not copied, and its reason says to check the fonts. Nothing is written."""
+    out: dict = {"copied": [], "not_copied": [], "files": {}, "left": {}}
+    if not found:
+        return out
+    rows = fontcheck_rows(project)
+    texts = [t for t in licence_texts(project) if OFL_PHRASE in _font_file(project, t, "licence text").decode("utf-8", errors="replace").upper()]
+    for rel in sorted(found):
+        row = (rows or {}).get(f"licence:{rel}")
+        if rows is None:
+            why = f"no current fontcheck report: {FONTCHECK_FONTS}"
+        elif row is None:
+            why = f"fontcheck has not read it: {FONTCHECK_FONTS}"
+        else:
+            why = _why_not(rows, row, bool(texts))
+        if why:
+            out["not_copied"].append({"file": rel, "reason": why})
+            out["left"][rel] = why
+            continue
+        out["copied"].append({"file": PREFIX + rel, "licence": OFL, "licence_files": [PREFIX + t for t in texts]})
+        out["files"].update({PREFIX + t: _font_file(project, t, "licence text") for t in texts})
+    return out
 
 
 # ---------------------------------------------------------------- motion: the spec, its hand-off text and the demo page
@@ -789,6 +832,8 @@ def write_owner(project: Path, plan: dict) -> tuple[list[str], list[str]]:
 # `reference_plan` copies each approved page (site/<id>/, stills included) and the project files it loads, at their project paths under brand/, and writes reference-pages/<id>/notes.md.
 # The page folder is read file by file and each file the pages load is read from the path `confine` resolved for it, never from another spelling of it; a path that leaves the project is exit 2.
 # The record (`sitedata.validate_site`), the page check and the stills (`_page_check_state`, `_capture_state`) must be sound and current before anything is read. Nothing here writes.
+# A page folder or an index.html that is a link leading out is exit 2 before the record hashes it (`_confine_pages`). A URL that names a folder is the folder's index.html when it has one (`_served`).
+# A font a page folder holds or a page loads goes through the font rule of assets/fonts/ (`page_font_plan`): only an OFL font the fontcheck report has read is copied, any other is listed in kit.json.
 
 REFERENCE_DIR = "reference-pages"                           # the kit folder of the generated notes: reference-pages/<id>/notes.md
 NOTES_FILE = "notes.md"
@@ -925,20 +970,23 @@ def _page_urls(rel: str, data: bytes, strict: bool) -> list[tuple[str, str, str]
 
 def _gather(project: Path, pages: list[dict], fonts: dict | None, strict: bool) -> dict:
     """What the approved pages hold and load: {"paths": the project paths of the files to copy, sorted, "loads": {project path: `<file>:<line>` that names it} of the files loaded from outside the page
-    folders, "not_copied": [(font path, where it is loaded, why)] of the fonts a page loads that the kit does not copy, "cache": {project path: bytes} of the files read so far}.
+    folders, "not_copied": [(font path, how a page has it, why)] of the fonts under assets/fonts/ a page loads that the kit does not copy, "fonts": {project path: how a page has it} of the fonts a page
+    brings from outside assets/fonts/ (a font file in a page folder, or one a page loads: `page_font_plan` decides whether the kit copies it, and they stay in "paths" so that they are sources), "cache":
+    {project path: bytes} of the files read so far}.
 
     The files of a page folder are all copied (stills included). The html and css files of the folders are read for the URLs they load, and so is every css file they load from outside the
     folders, one level deep: what that css loads is copied and read no further (a file two steps from a page's stylesheet is not in the kit, and `kit check` names the link that then does not resolve). A font under assets/fonts/ is the font
-    plan's (`font_plan`: only OFL fonts are copied, D6), so a page that loads one is not given a copy of its own; `fonts` is that plan (None: not read, as `page_sources` has it). With `strict`
-    false a file that cannot be read is left out instead of stopping the run."""
+    plan's (`font_plan`: only OFL fonts are copied, D6), so a page that loads one is not given a copy of its own; `fonts` is that plan (None: not read, as `page_sources` has it). A URL that names a
+    folder is the folder's index.html when it has one (`_served`). With `strict` false a file that cannot be read is left out instead of stopping the run."""
     cache: dict[str, bytes] = {}
-    out: dict = {"paths": [], "loads": {}, "not_copied": [], "cache": cache}
+    out: dict = {"paths": [], "loads": {}, "not_copied": [], "fonts": {}, "cache": cache}
     try:
         font_paths = set(font_files(project))
     except CliError:
         font_paths = set()
     folder = [rel for page in pages for rel in _folder_files(project, f"{SITE_DIR}/{page['id']}", strict)]
     have = set(folder)
+    out["fonts"].update({rel: "sits in the page folder" for rel in folder if is_font(rel)})
 
     def read(rel: str, what: str) -> bytes | None:
         try:
@@ -949,13 +997,15 @@ def _gather(project: Path, pages: list[dict], fonts: dict | None, strict: bool) 
             return None
 
     def take(path: str, where: str) -> bool:
-        """One file a page names, `path`, named at `where`: copy it unless it is in a page folder already or is a font. True when it was added."""
+        """One file a page names, `path`, named at `where`: copy it unless it is in a page folder already or is a font of assets/fonts/. True when it was added. A path that names a folder is its
+        index.html when it has one. A font from anywhere else is added like any file and noted in `out["fonts"]`: whether it is copied is `page_font_plan`'s to say."""
+        path = _served(project, path)
         if path in have:
             return False
         if path in font_paths:
             if strict and fonts is not None and PREFIX + path not in fonts["files"]:
                 why = next((f["reason"] for f in fonts["not_copied"] if f["file"] == path), "it is not copied")
-                out["not_copied"].append((path, where, why))
+                out["not_copied"].append((path, f"loaded at {where}", why))
             return False
         if strict:
             _load_checked(project, path, where)
@@ -963,6 +1013,8 @@ def _gather(project: Path, pages: list[dict], fonts: dict | None, strict: bool) 
             return False
         have.add(path)
         out["loads"][path] = where
+        if is_font(path):
+            out["fonts"][path] = f"loaded at {where}"
         return True
 
     named: dict[str, str] = {}
@@ -982,6 +1034,17 @@ def _gather(project: Path, pages: list[dict], fonts: dict | None, strict: bool) 
     return out
 
 
+def _served(project: Path, path: str) -> str:
+    """The project file a URL's path leads to. A path that names a folder holding an index.html is that index.html, the way a web server answers a folder (a link or a file that is there but cannot
+    be read is `_load_checked`'s to refuse); any other path stands as it is. It never raises: a path that leaves the project is `_load_checked`'s exit 2."""
+    try:
+        real = confine(project, path, what="file", read=True)
+    except CliError:
+        return path
+    index = posixpath.normpath(posixpath.join(path, "index.html"))
+    return index if real.is_dir() and os.path.lexists(project / index) else path
+
+
 def _load_checked(project: Path, path: str, where: str) -> None:
     """Exit 1 when the file a page names, `path` (named at `where`), is not there, is a folder, or is spelled in another letter case than the project holds it; exit 2 when it leads outside the project."""
     try:
@@ -991,7 +1054,7 @@ def _load_checked(project: Path, path: str, where: str) -> None:
     if not os.path.lexists(project / path):
         fail(EXIT_FAIL, f"{where}: leads to {path}, which the project does not have: the kit copies every file a page loads, and `kit check` would fail the link")
     if real.is_dir():
-        fail(EXIT_FAIL, f"{where}: leads to {path}, a folder, not a file: `kit check` fails a link to a folder, so the page cannot go into the kit as it is")
+        fail(EXIT_FAIL, f"{where}: leads to {path}, a folder, not a file: it holds no index.html for a web server to answer with, and `kit check` fails a link to a folder, so the page cannot go into the kit as it is")
     alike = _exact_case(project, path)
     if alike is not None:
         fail(EXIT_FAIL, f"{where}: leads to {path}, which the project holds as {alike}: a product repository on Linux tells the letter case apart, so write the path as it is")
@@ -1123,20 +1186,39 @@ def notes_md(page: dict, site: dict, stills: list[tuple[str, str]]) -> str:
     return "\n".join(L) + "\n"
 
 
-def reference_plan(project: Path, fonts: dict) -> dict:
-    """What the approved reference pages add to the kit: {"records": [kit.json `reference_pages`], "files": {path in the kit: bytes}, "not_copied": [(font, where, why)]}. All empty while the
-    project has no site/site.json. Nothing is written, and nothing is read before the checks pass:
+def _confine_pages(project: Path) -> None:
+    """Exit 2 when the folder or the index.html of a page the record lists is a link that leads outside the project, before anything hashes the page: `sitedata.validate_site` hashes each page it names, through a link
+    too, and a page that leads out must be exit 2 whatever its bytes are, never exit 1 because they differ. A record that cannot be read lists no page here (`validate_site` says what is wrong with it). The pages
+    checked are the ones `sitedata.file_problems` hashes: the id is a string and the path is site/<id>/index.html."""
+    import sitedata   # scripts/boardlib: the record of the approved pages
+    try:
+        pages = sitedata.load_site(project).get("pages")
+    except CliError:
+        return
+    for page in pages if isinstance(pages, list) else []:
+        pid = page.get("id") if isinstance(page, dict) else None
+        if isinstance(pid, str) and page.get("path") == f"{SITE_DIR}/{pid}/index.html":
+            confine(project, posixpath.dirname(page["path"]), what="reference page folder", read=True)
+            confine(project, page["path"], what="reference page", read=True)
 
+
+def reference_plan(project: Path, fonts: dict) -> dict:
+    """What the approved reference pages add to the kit: {"records": [kit.json `reference_pages`], "files": {path in the kit: bytes}, "not_copied": [(font, how a page has it, why)], "fonts": {"copied": [...],
+    "not_copied": [...]} (kit.json `fonts` entries of the fonts the pages bring from outside assets/fonts/, by the rule of `font_plan`: `page_font_plan`)}. All empty while the project has no site/site.json.
+    Nothing is written, and nothing is read before the checks pass:
+
+    - A page folder or index.html that is a link leading outside the project is exit 2, whatever the bytes behind the link are (`_confine_pages`).
     - `sitedata.validate_site(project)` finds nothing (the record is sound and each page is the one that was approved); otherwise exit 1 quoting the first three problems.
     - Every page has a current, passing page-check report and current stills (`_page_check_state`, `_capture_state`); otherwise exit 1 naming each page and the command to run.
     - Then `_gather` reads the page folders and what they load (a path that leaves the project is exit 2), the page's index.html must be the bytes the record holds, and the files are copied to
       `brand/<project path>`. A page's notes are `notes_md` (generated, `reference-pages/<id>/notes.md`). `records` is, per page, its id, the kit path of its page, the record's `source_sha`, the
       page-check report's `inputs_sha` and the sha256 over the inputs of capture.json."""
-    out = {"records": [], "files": {}, "not_copied": []}
+    out = {"records": [], "files": {}, "not_copied": [], "fonts": {"copied": [], "not_copied": []}}
     if not os.path.lexists(project / SITE_RECORD):
         return out
     confine(project, SITE_RECORD, what="site record", read=True)
     import sitedata   # scripts/boardlib: the record of the approved pages
+    _confine_pages(project)
     bad = sitedata.validate_site(project)
     if bad:
         fail(EXIT_FAIL, f"{SITE_RECORD} does not validate, so no reference page can go into the kit: {'; '.join(bad[:3])}"
@@ -1152,7 +1234,8 @@ def reference_plan(project: Path, fonts: dict) -> dict:
     if stopped:
         fail(EXIT_FAIL, f"{len(stopped)} reference page problem(s) stop the kit, and nothing was written: " + "; ".join(stopped[:6]) + (f"; and {len(stopped) - 6} more" if len(stopped) > 6 else ""))
     got = _gather(project, pages, fonts, True)
-    files = {rel: _page_bytes(project, rel, "file a page loads" if rel in got["loads"] else "reference page file", got["cache"]) for rel in got["paths"]}
+    brought = page_font_plan(project, got["fonts"])   # a font a page folder holds or a page loads, outside assets/fonts/: the font rule decides whether it goes in
+    files = {rel: _page_bytes(project, rel, "file a page loads" if rel in got["loads"] else "reference page file", got["cache"]) for rel in got["paths"] if rel not in brought["left"]}
     for page in pages:
         index = f"{SITE_DIR}/{page['id']}/index.html"
         if sha256_bytes(files[index]) != page["sha256"]:
@@ -1161,7 +1244,9 @@ def reference_plan(project: Path, fonts: dict) -> dict:
         out["records"].append({"id": page["id"], "page": f"{PREFIX}{index}", "source_sha": page["sha256"], "page_check_inputs_sha": check_sha, "capture_inputs_sha": inputs_sha})
         out["files"][f"{REFERENCE_DIR}/{page['id']}/{NOTES_FILE}"] = notes_md(page, site, stills).encode("utf-8")
     out["files"].update({PREFIX + rel: data for rel, data in files.items()})
-    out["not_copied"] = got["not_copied"]
+    out["files"].update(brought["files"])
+    out["fonts"] = {"copied": brought["copied"], "not_copied": brought["not_copied"]}
+    out["not_copied"] = got["not_copied"] + [(rel, got["fonts"][rel], why) for rel, why in brought["left"].items()]
     return out
 
 
@@ -1175,7 +1260,14 @@ def page_sources(project: Path) -> list[str]:
         got = _gather(project, site_pages(project), None, False)
     except CliError:
         got = {"paths": []}
-    return sorted({SITE_RECORD, *got["paths"]})
+    out = {SITE_RECORD, *got["paths"]}
+    if got.get("fonts"):   # whether a font a page brings is copied depends on the fontcheck report and the licence texts: they are sources of the pages too
+        out.add(FONTCHECK_REPORT)
+        try:
+            out.update(licence_texts(project))
+        except CliError:
+            pass
+    return sorted(out)
 
 
 def pages_source(project: Path) -> str | None:
@@ -1302,9 +1394,9 @@ def next_version(prev: dict | None, edition: str, csha: str) -> str:
 def kit_json_bytes(project: Path, files: dict[str, bytes], version: str, edition: str, csha: str, src: dict, fonts: dict, owned: dict[str, str],
                    pages: dict | None = None) -> bytes:
     """kit.json for the generated files `files` (SKILL.md with the version in it); `fonts` is the `font_plan`, `owned` the owner's files with their sha256 (`owner_plan`), `pages` the
-    `reference_plan` (none: the project has no approved reference page)."""
+    `reference_plan` (none: the project has no approved reference page); the fonts it brings are in kit.json `fonts` too (`fonts_record`)."""
     doc = {"schema": SCHEMA, "kit": adapt.skill_name(project), "version": version, "edition": edition, "plugin_version": plugin_version(), "content_sha": csha,
-           "generated": {rel: sha256_bytes(data) for rel, data in sorted(files.items())}, "owned": dict(sorted(owned.items())), "fonts": fonts_record(fonts), "sources": src,
+           "generated": {rel: sha256_bytes(data) for rel, data in sorted(files.items())}, "owned": dict(sorted(owned.items())), "fonts": fonts_record(fonts, pages), "sources": src,
            "reference_pages": pages["records"] if pages is not None else []}
     return (json.dumps(doc, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
 
@@ -1555,48 +1647,74 @@ def css_links(text: str) -> list[tuple[int, str]]:
 _LINK_READERS = {"md": md_links, "html": html_links, "css": css_links}
 OUTSIDE = "points outside the kit: it will not resolve in a product repository"
 ABSOLUTE = "an absolute path: it will not resolve in a product repository"
+NO_SUCH_FILE = "no such file in the kit"
 
 
-def _not_a_file(kd: Path, rel: str) -> str | None:
-    """None when `rel` (a plain path in the kit) is a file of the kit, found with the exact letter case a Linux checkout needs and with no link on the way; else why not."""
+def _not_a_file(kd: Path, rel: str, serve: bool = True) -> str | None:
+    """None when `rel` (a plain path in the kit) is a file of the kit, found with the exact letter case a Linux checkout needs and with no link on the way; else why not. A folder is the file its
+    index.html is when it holds one (the way a web server answers a link to a folder, with `serve`); a folder without one is "a folder, not a file"."""
     cur = kd
     for part in rel.split("/"):
         try:
             names = os.listdir(cur)
         except OSError:
-            return "no such file in the kit"
+            return NO_SUCH_FILE
         if part not in names:
             alike = [n for n in names if n.lower() == part.lower()]
-            return f"no such file in the kit ({alike[0]} is there: a product repository on Linux tells the letter case apart)" if alike else "no such file in the kit"
+            return f"{NO_SUCH_FILE} ({alike[0]} is there: a product repository on Linux tells the letter case apart)" if alike else NO_SUCH_FILE
         cur = cur / part
         if cur.is_symlink():
             return "behind a link in the kit: a link is never followed"
-    return None if cur.is_file() else "a folder, not a file"
+    if cur.is_file():
+        return None
+    if serve and cur.is_dir() and _not_a_file(kd, posixpath.join(rel, "index.html"), serve=False) is None:
+        return None
+    return "a folder, not a file"
+
+
+def link_path(from_rel: str, target: str) -> tuple[bool, str | None, str | None]:
+    """(is it a relative link, the plain path in the kit it leads to, what is wrong with it before the kit is looked at). A fragment, a `?query`, an empty target, a network address (`//host`) and a
+    link with a URL scheme (`http:`, `https:`, `mailto:`, `data:`, `tel:`, ...) are not relative links: (False, None, None). A relative link is percent-decoded and resolved from the folder of the
+    file that holds it; it is an absolute path (a leading `/`, `file:`, a drive letter) or one that points outside the kit (no path then), or the path (`.` for the kit folder)."""
+    path = target.strip().split("#")[0].split("?")[0]
+    if not path or path.startswith("//"):
+        return False, None, None
+    m = _SCHEME.match(path)
+    if m and len(m.group(1)) > 1 and m.group(1).lower() != "file":
+        return False, None, None
+    path = unquote(path)
+    if path.startswith("/") or m:
+        return True, None, ABSOLUTE
+    joined = posixpath.normpath(posixpath.join(posixpath.dirname(from_rel), path))
+    if joined == ".." or joined.startswith("../"):
+        return True, None, OUTSIDE
+    return True, joined, None
 
 
 def link_problem(project: Path, from_rel: str, target: str) -> tuple[bool, str | None]:
-    """(is it a relative link, what is wrong with it). A fragment, a `?query`, an empty target, a network address (`//host`) and a link with a URL scheme (`http:`, `https:`, `mailto:`,
-    `data:`, `tel:`, ...) are not relative links: (False, None). A relative link is percent-decoded, resolved from the folder of the file that holds it, and must be an existing file inside the
-    kit: otherwise it is an absolute path (a leading `/`, `file:`, a drive letter), one that points outside the kit, or a missing file."""
-    path = target.strip().split("#")[0].split("?")[0]
-    if not path or path.startswith("//"):
-        return False, None
-    m = _SCHEME.match(path)
-    if m and len(m.group(1)) > 1 and m.group(1).lower() != "file":
-        return False, None
-    path = unquote(path)
-    if path.startswith("/") or m:
-        return True, ABSOLUTE
-    joined = posixpath.normpath(posixpath.join(posixpath.dirname(from_rel), path))
-    if joined == ".." or joined.startswith("../"):
-        return True, OUTSIDE
-    return True, "a folder, not a file" if joined == "." else _not_a_file(kit_dir(project), joined)
+    """(is it a relative link, what is wrong with it). A relative link (`link_path`) must be an existing file inside the kit: otherwise it is an absolute path, one that points outside the kit, or a
+    missing file. A link to a folder is the folder's index.html when the kit has one there, as a web server answers it; a folder without one fails."""
+    relative, joined, why = link_path(from_rel, target)
+    if not relative or why:
+        return relative, why
+    kd = kit_dir(project)
+    if joined == ".":
+        return True, None if _not_a_file(kd, "index.html", serve=False) is None else "a folder, not a file"
+    return True, _not_a_file(kd, joined)
 
 
-def link_check(project: Path) -> dict:
-    """Every relative link of the kit's Markdown, HTML and CSS files (`LINK_KINDS`): {"files": files read, "links": relative links judged, "bad": [(file, line, target, why)]}."""
+def unsupplied_fonts(doc: dict) -> dict[str, str]:
+    """{path in the kit: reason} of every font kit.json lists as not copied (`fonts.not_copied`): a link to one of these can not resolve inside the kit, and is not a broken link either."""
+    return {PREFIX + f["file"]: f["reason"] for f in doc["fonts"]["not_copied"]}
+
+
+def link_check(project: Path, doc: dict | None = None) -> dict:
+    """Every relative link of the kit's Markdown, HTML and CSS files (`LINK_KINDS`): {"files": files read, "links": relative links judged, "bad": [(file, line, target, why)], "unsupplied": [(file, line,
+    target, path in the kit, reason)]}. With kit.json (`doc`), a link to a font it lists as not copied (`unsupplied_fonts`) is no broken link: it goes to "unsupplied" instead of "bad", so that the row
+    can say the font must be supplied under its own licence. The font has to be missing from the kit and the link has to spell its path letter for letter."""
     files = links = 0
-    bad = []
+    bad, unsupplied = [], []
+    listed = unsupplied_fonts(doc) if doc else {}
     for rel in kit_paths(project):
         kind = LINK_KINDS.get(Path(rel).suffix.lower())
         text = kit_text(project, rel) if kind else None
@@ -1607,8 +1725,12 @@ def link_check(project: Path) -> dict:
             relative, why = link_problem(project, rel, target)
             links += relative
             if why:
-                bad.append((rel, line, target, why))
-    return {"files": files, "links": links, "bad": bad}
+                at = link_path(rel, target)[1]
+                if why == NO_SUCH_FILE and at in listed:
+                    unsupplied.append((rel, line, target, at, listed[at]))
+                else:
+                    bad.append((rel, line, target, why))
+    return {"files": files, "links": links, "bad": bad, "unsupplied": unsupplied}
 
 
 def version_problems(project: Path, doc: dict) -> list[str]:
@@ -2140,3 +2262,16 @@ def compare(kit: Path, installed: Path) -> dict:
             out["owner_differ"].append((rel, WHY_BYTES if data is not None else why))
     out["copy"] += out["copy_owner"]
     return out
+
+
+def not_current_text(installed_version: str | None, project_version: str, differ, missing, left_over) -> str:
+    """What a copy that is not current is called, after its label: `not current (installed version A, project version B)` when the two versions differ (A is `unknown` when the installed kit.json states
+    none), and, when they are the same (a copy that has the new kit.json and still differs from the kit in a file), `not current (version V on both sides, but 1 file differs, 1 file is missing, 1 file is left
+    over from an older kit)`, naming only the kinds there are, so that it does not read as a contradiction. `differ`, `missing` and `left_over` are the lists `compare` returns (only their length is used).
+    The one wording of `kit status` (scripts/kit.py) and of `adoption status` (scripts/adoption.py)."""
+    if installed_version != project_version:
+        return f"not current (installed version {installed_version or 'unknown'}, project version {project_version})"
+    counts = ((len(differ), "file differs", "files differ"), (len(missing), "file is missing", "files are missing"),
+              (len(left_over), "file is left over from an older kit", "files are left over from an older kit"))
+    said = ", ".join(f"{n} {one if n == 1 else many}" for n, one, many in counts if n)
+    return f"not current (version {project_version} on both sides, but {said})" if said else f"not current (version {project_version} on both sides)"

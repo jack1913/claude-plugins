@@ -2033,8 +2033,9 @@ the surveyed categories: a survey adds no kit row, changes none and never report
 
 `adoption status` with a kit row also says, after the counts and the warnings, whether each such repository's copy of the kit is current. It does not judge a copy itself: it runs `kit.py status --json`
 with no `--repo` (the command that reads the repositories of the kit rows, with its refusals and its read-only proof) and prints under `kit copies (read only; ...)` one line per repository,
-`<label>: current (version V)`, `<label>: not installed` or `<label>: not current (installed version X, project version V)`. With `--json` the same go into a `kit` list of `{label, state,
-installed_version, project_version}`. A copy that is not current does not change the exit code, which stays 0. When `kit status` cannot judge (no kit in the project, a kit that is not whole, a
+`<label>: current (version V)`, `<label>: not installed` or `<label>: not current (...)`, worded as `kit status` words it (the one function `kitlib.not_current_text`): `not current (installed version X, project version V)` when the two
+versions differ, and `not current (version V on both sides, but 1 file differs, 1 file is missing, 1 file is left over from an older kit)` when they are the same, naming only the kinds there are. With `--json` the same go into a
+`kit` list of `{label, state, installed_version, project_version}` (the counts are not printed). A copy that is not current does not change the exit code, which stays 0. When `kit status` cannot judge (no kit in the project, a kit that is not whole, a
 refused folder) the status says `warning: the kit copies were not read: <why>` on stderr (`--json`: a `kit_unread` string), still exits 0, and prints no copy line. A list with no kit row prints what it
 printed before.
 
@@ -2298,6 +2299,16 @@ when `assets/fonts/` holds no font file. Row `kit:fonts`: pass when every font i
 is written without any font and the build exits 3). No fonts means no row. The report's inputs add the font files, the licence texts and the `fontcheck` report, so a changed font makes the `kit`
 report stale.
 
+**Fonts a reference page brings.** A `.ttf`, `.otf`, `.woff` or `.woff2` file that is in a page folder (`site/<id>/fonts/X.ttf`) or that a page loads from outside `assets/fonts/` (`assets/web/X.ttf` through `url()` in a
+stylesheet) goes through the same rule as the fonts of `assets/fonts/` (`kitlib.page_font_plan`): it is copied, byte for byte, to `brand/<its project path>` (with the licence texts of `assets/fonts/`, once) only when
+the current `fontcheck` report has a `licence:<its project path>` row that passes the rule above, and an OFL licence text sits in `assets/fonts/`. Any other is listed in `kit.json` `fonts.not_copied` with its reason and is
+not copied, and a font file in a page folder is then left out of the page's copy. `fontcheck` reads `assets/fonts/` alone unless fonts are named, so a font outside it is read with `brand-creator fontcheck --font FILE`
+(every font the kit holds in one run: a run that names fonts reads only those). The reasons are those of the list above, and these two where the report does not cover the font: "no current fontcheck report:
+run brand-creator fontcheck --font FILE for every font the kit holds, this one included (fontcheck reads assets/fonts/ alone unless fonts are named, and a run that names fonts reads only those), then kit build", and the
+same advice after "fontcheck has not read it:" when there is a current report with no row for the font. A font that is copied is in `fonts.copied` with the licence texts; `snippets/fonts.css` holds the fonts of `assets/fonts/` only.
+Such a font never makes the build exit 3: it is a warning of row `kit:reference-pages`. `sources.pages` covers the `fontcheck` report and the licence texts as soon as a page brings a font, so a report written later
+makes `kit check` say the brand changed after the kit was built.
+
 **Motion.** A brand that has decided about motion has its files in the kit, each a byte copy at its project path under `brand/` (so a relative link in the demo page still resolves):
 `motion/motion.json` when the project has it (the spec is read as `motionspec.load` reads it: an invalid one is exit 2, naming the field), and `motion/SPEC.md` when the project has it. When the
 spec says the brand moves (`"motion": "on"`) and `motion/proof.json` exists, the `page` file of each `"type": "page"` case of the proof is copied too, to `brand/<its plain path>` (`./motion/demo.html`,
@@ -2354,6 +2365,8 @@ be trusted, and the build reads nothing for them until the checks pass. A projec
 
 - `sitedata.validate_site(project)` must find nothing. Otherwise exit 1, "site/site.json does not validate, so no reference page can go into the kit", quoting the first three problems and counting the rest (a page edited
   after it was approved, a record that cannot be read and a page that is gone are problems of the record). A `site/site.json` that is a link to a file outside the project is exit 2.
+- A page folder or an `index.html` of a page the record lists that is a link leading outside the project is exit 2, whatever bytes it leads to (`kitlib._confine_pages`, before `validate_site`, which hashes each page it
+  names through a link: with other bytes behind the link it would be exit 1, "changed since it was approved").
 - Each page in `pages` needs a current, passing page-check report and current stills. The report is `assets/_checks/<pagecheck.report_tool("site/<id>/index.html")>.json`: no file it was made from is gone or changed
   (`_common.stale_inputs`), `target` is this project page, the page is among its inputs, `status` is `pass` and it holds an `inputs_sha`. The stills are `site/<id>/shots/capture.json` (`brand-creator capture`): current by the same
   rule, `source.page` is this page, the page is among its inputs, and the four first screens (`1440-light`, `1440-dark`, `390-light`, `390-dark`), and the full page when it lists one, are the files there with the sha256 it
@@ -2369,8 +2382,12 @@ be trusted, and the build reads nothing for them until the checks pass. A projec
   nothing is written. A link to a folder inside a page folder is exit 1 (the kit copies files, not links). Exit 1 too, naming the file and line: a file the project does not have, a folder named where a file belongs, a path spelled
   in other letter case than the project holds it (a Linux checkout tells them apart), an absolute path (a leading `/`, `file:`) and a path with a control character: `kit check` would fail each of those links. A page file that is
   not UTF-8 text cannot be read for its paths: exit 1. The bytes of each page's `index.html` must be the `sha256` the record holds, or exit 1.
-- A font under `assets/fonts/` is the font rule's (only OFL fonts are copied, with their licence text): a page that loads one gets the copy the font rule made, and a page that loads a font the rule does not copy is not given one.
-  Row `kit:reference-pages` then warns, naming the font, where it is loaded and why it is not copied, and `kit check` fails the link (`kit:links`) until the page no longer loads it.
+- A URL whose path names a folder is the folder's `index.html` when the project has one there (`kitlib._served`), as a web server answers it: `href="../pricing/"` and `href="../pricing"` from `site/start/index.html` lead to
+  `site/pricing/index.html`, which is copied like any file a page loads (an approved page's is in the kit already), and `kit check` accepts the link in the copy. A folder without an `index.html` is exit 1, "leads to
+  <folder>, a folder, not a file: it holds no index.html for a web server to answer with"; an `index.html` that is a link leading outside the project is exit 2.
+- Every font a page has goes through the font rule (the paragraph "Fonts a reference page brings" above), the fonts of `assets/fonts/` included: a page that loads one gets the copy the font rule made, and a font the rule
+  does not copy is not given a copy of its own. Row `kit:reference-pages` then warns, naming the font, how the page has it (`loaded at <file>:<line>`, or `sits in the page folder`) and why it is not copied. In the kit `kit check`
+  warns on the link (`kit:links`) instead of failing it: the font is listed in `kit.json` `fonts.not_copied`, so it must be supplied under its own licence.
 - `reference-pages/<id>/notes.md` is generated (`kitlib.notes_md`): `# <id>`; `Layout: <the page's layout> (structure only)` (an id of `page-layouts.json`, or `own:<word>`); `Approved: <site.json approved>`; `Page: [index.html](../../brand/site/<id>/index.html)`;
   `Stills: ` the links to the stills (`[1440-light](...)`, `[full page](...)`, each percent-encoded where a URL needs it); and `## Choices`, one bullet for each choice whose `pages` names the page (a choice with no `pages` names every
   page): `- <text> [rule: site:<id>] (decided in <source>)` for a rule and `- <text> [example]` for an example, in the record's order; a page no choice names says so in one plain line. The words are the owner's, so they are
@@ -2424,8 +2441,11 @@ Rows, in this order:
 - `kit:links`: every relative link of a `.md` file (`](target)`, outside fenced code blocks and code spans), a `.html` file (`src=`, `href=`, `xlink:href=` and `srcset=` of a tag, so not a comment or a script; a `srcset` is read by the HTML rule for it: a URL is the run up to the next white space, a comma ends the candidate when it ends the URL or follows its descriptor, so `a.svg 1x,b.svg 2x` and `a.svg, b.svg` hold two targets and `a.svg,b.svg 2x` one) and a `.css` file
   (`url(...)`, comments left out) anywhere in the kit resolves to an existing file inside the kit, with the letter case that is there (a Mac finds `Mark.svg` for `mark.svg`, Linux does not) and no link on the way. The target is
   percent-decoded and resolved from the folder of the file that holds it. A fragment, a `?query`, an empty target, `//host` and a target with a URL scheme (`http:`, `https:`, `mailto:`, `data:`, `tel:`) are not relative links and are
-  not judged. Fails for a target that "points outside the kit: it will not resolve in a product repository", an absolute path (a leading `/`, `file:`, a drive letter) and a missing file or folder. The first 6 are listed as
-  `<file>:<line> -> <target>` with the reason.
+  not judged. Fails for a target that "points outside the kit: it will not resolve in a product repository", an absolute path (a leading `/`, `file:`, a drive letter) and a missing file or a folder. A target that names a folder
+  (`../brand/site/pricing/`, with or without the last slash) is the folder's `index.html` when the kit has one there, as a web server answers it; a folder without one fails ("a folder, not a file"). The first 6 are listed as
+  `<file>:<line> -> <target>` with the reason. A link to a font that `kit.json` lists in `fonts.not_copied` (the path in the kit is `brand/<its project path>`, spelled letter for letter, and the font is not in the kit) is no broken
+  link and no pass: the row is a warning (exit 0) that says the font must be supplied under its own licence, copied into the product from where it was licensed, and lists the first 6 as
+  `<file>:<line> -> <target> (<path in the kit>: <reason>)`. A broken link beside it still fails the row.
 - `kit:fill`: fails on any `[[fill` (any case) in a text file of the kit (a file with a NUL byte in it is none), listed as `<file>:<line>`, up to 6. A fresh kit fails here until the owner has replaced the markers of `voice.md`,
   `visual.md` and `golden-rules.md`.
 - `kit:versions`: fails unless SKILL.md holds `Kit version <kit.json version> (kit.json).` exactly once and no other such line, `kit.json` `version` is of its own `edition`, and `kit.json` `edition` equals BRAND-STATE.md
