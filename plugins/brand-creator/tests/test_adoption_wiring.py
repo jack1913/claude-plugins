@@ -154,6 +154,36 @@ def test_what_counts_as_wiring_is_decided_by_the_tag_the_attribute_and_the_value
     assert item == "link:" + long[:120] and len(item) == len("link:") + 120
 
 
+EVENTS_FILE = ROOT / "scripts" / "data" / "event-handlers.json"   # the one list of event-handler attribute names; pagelib/wiring.mjs reads the same file (tests/node/wiring.test.mjs)
+HANDLER_MARKUP = '<Step onboarding="intro" one="1" only="x" onlyOnce={y} onclick="a()" onsubmit="b()" onkeydown={k} ontouchstart="t()" onClick={go} @click.stop="c" v-on:input="d" on:change={e}>'
+
+
+def test_an_attribute_is_a_handler_when_it_is_in_the_one_list_of_event_names_so_the_source_and_the_page_agree():
+    """onclick and onsubmit are events the browser knows; onboarding, one and only only start with "on" and are no handlers, in the source as in the DOM
+    (the DOM side is tested with the same markup in tests/node/wiring.test.mjs). The camelCase of a component prop (onClick) and the framework forms
+    (@click, v-on:input, on:change) are read in the source only: the DOM never shows them."""
+    items = wiring.scan_text(HANDLER_MARKUP)[0]
+    assert items == ["handler:onclick=a()", "handler:onsubmit=b()", "handler:onkeydown={k}", "handler:ontouchstart=t()", "handler:onClick={go}", "handler:@click.stop=c", "handler:v-on:input=d", "handler:on:change={e}"]
+    assert not [i for i in items if re.search(r"onboarding|handler:one=|handler:only", i)]
+    for one in ("onclick", "onsubmit", "onkeydown", "onmouseover", "onerror", "onload"):
+        assert wiring.scan_text(f'<div {one}="x()">')[0] == [f"handler:{one}=x()"], one
+    for none in ("onboarding", "one", "only", "onward", "onlyonce", "onn", "on"):
+        assert wiring.scan_text(f'<div {none}="x">')[0] == [], none
+    # a .jsx file: a prop that merely starts with "on" is not wiring, so renaming it fails nothing
+    assert wiring.scan_text('<Step onboarding="intro">x</Step>')[0] == []
+
+
+def test_the_one_list_of_event_names_is_a_file_both_sides_read():
+    doc = json.loads(EVENTS_FILE.read_text(encoding="utf-8"))
+    names = doc["events"]
+    assert names == sorted(set(names)) and all(re.fullmatch(r"on[a-z]+", n) for n in names)
+    for known in ("onclick", "onsubmit", "onchange", "oninput", "onkeydown", "onmouseover", "onfocus", "onblur", "onload", "onerror", "onscroll", "ontouchstart", "onpointerdown", "ondragstart"):
+        assert known in names, known
+    for not_an_event in ("onboarding", "one", "only", "online", "onward", "on"):
+        assert not_an_event not in names, not_an_event
+    assert wiring.EVENT_HANDLERS == frozenset(names)
+
+
 def test_braces_are_balanced_to_three_levels_and_a_deeper_value_is_counted_not_read():
     items, deep = wiring.scan_text('<a to={a({ b: { c: 1 } })} id="three">')
     assert items == ["link:{a({ b: { c: 1 } })}", "id:three"] and deep == 0
@@ -239,6 +269,16 @@ def test_the_brand_projects_own_files_are_not_the_repositorys_wiring_when_it_liv
     assert wire(proj, "--after").returncode == 0 and record(proj, "after")["items"] == EXPECTED
     r = wire(proj, "--compare")                                                                   # the comparison reads the repository the same way
     assert r.returncode == 0 and "(37 items recorded, 37 found now)" in r.stdout and "new items: 0" in r.stdout, r.stdout + r.stderr
+
+
+def test_the_survey_and_the_wiring_scan_leave_the_brand_project_out_by_one_helper():
+    """The two used to hold a copy of the same rule each (a module-global glob list, cleared and refilled), so a fix in one could miss the other. Now `brand_exclude` is the one
+    place that writes the glob, it returns the list instead of changing a global, and both callers hand it to every ripgrep run (the two behaviours are the tests above and
+    tests/test_adoption.py::test_the_project_inside_the_repository_is_not_surveyed_as_the_repository)."""
+    src = (ROOT / "scripts" / "adoption.py").read_text(encoding="utf-8")
+    assert src.count('"!" + root.relative_to(repo)') == 1 and "def brand_exclude(root: Path, repo: Path) -> list[str]:" in src
+    assert not re.search(r"^EXCLUDE\b", src, re.M) and "EXCLUDE.clear()" not in src and "EXCLUDE.extend(" not in src
+    assert re.search(r"def do_survey\b.*?exclude = brand_exclude\(root, repo\)", src, re.S) and "return repo, brand_exclude(root, repo)" in src
 
 
 # ---------------------------------------------------------------- the baseline

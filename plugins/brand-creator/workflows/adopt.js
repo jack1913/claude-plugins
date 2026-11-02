@@ -44,6 +44,16 @@ function opts(type, extra) {
   return o
 }
 function norm(p) { return String(p).replace(/[\\/]+$/, '') + '/' }
+// The one loopback rule of isLoopbackUrl in scripts/lib/_common.mjs (a workflow imports nothing, so this is its copy; tests/node/workflows.test.mjs pins both to one table;
+// the CLI checks the address again), plus the characters the agents' shell reads inside double quotes: only URL-safe ones get through, never $, a backtick, \\, a quote, ; & | < > ( ) { } * !
+function isLoopback(u) {
+  if (typeof u !== 'string' || /[\s\u0000-\u001f\u007f\\]/.test(u)) return false
+  const host = /^https?:\/\/([^/?#@]*)(?:[/?#]|$)/i.exec(u)   // "@" in it would be a user name: refused
+  if (!host || !['localhost', '127.0.0.1', '[::1]'].includes(host[1].replace(/:\d*$/, '').toLowerCase())) return false
+  const port = /:(\d*)$/.exec(host[1])
+  return !(port && Number(port[1] || 0) > 65535)   // a port out of range: new URL() refuses it in the CLI
+}
+function isPageAddress(u) { return isLoopback(u) && /^[A-Za-z0-9._~:\/?#\[\]=+%,-]+$/.test(u) }
 function pageArgs(r) { return list(r.pages).map(u => ' --page "' + u + '"').join('') }
 
 const A = args
@@ -61,7 +71,10 @@ for (const r of REPOS) {
   if (!String(r.branch || '').trim()) fail('repository ' + r.label + ' needs the branch the owner named (never picked silently)')
   if (!list(r.rows).length) fail('repository ' + r.label + ' needs its ADOPTION.md rows (number and Find text)')
   if (MODE === 'fix' && !list(r.findings).length) fail('fix mode needs the reviewer\'s no-decision findings for ' + r.label)
-  if (r.pages !== undefined && !(Array.isArray(r.pages) && r.pages.every(u => typeof u === 'string' && /^[^\s"]+$/.test(u)))) fail('repository ' + r.label + ': pages must be a list of local page addresses, each one word with no quote (the owner\'s own server, for the wiring record of a redesign)')
+  if (r.pages !== undefined) {
+    if (!Array.isArray(r.pages) || r.pages.some(u => typeof u !== 'string' || !u)) fail('repository ' + r.label + ': pages must be a list of local page addresses (the owner\'s own server, for the wiring record of a redesign)')
+    for (const u of r.pages) if (!isPageAddress(u)) fail('repository ' + r.label + ': the page address ' + JSON.stringify(u) + ' is refused: it must be an http or https address on localhost, 127.0.0.1 or [::1] made only of letters, digits and - . _ ~ : / ? # [ ] = + % , (the agents paste it into a shell command inside double quotes; write any other character percent-encoded, for example %26 for &)')
+  }
 }
 for (const a of REPOS) for (const b of REPOS) {
   if (a !== b && (norm(a.path).startsWith(norm(b.path)) || a.label === b.label)) fail('repositories must be distinct working trees with distinct labels: ' + a.label + ', ' + b.label)

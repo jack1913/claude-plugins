@@ -117,6 +117,7 @@ and why. And the record is not proof that your site works: your code's own build
 | Claude stops: your brand isn't approved | Approve your brand book first: [Make the brand book](make-the-brand-book.md) |
 | Claude says an automatic check in your code (a hook) failed | Claude reports it and never skips it. If it has nothing to do with the brand, fixing it is a separate change, made only if you agree |
 | Claude can't read your local pages | Start your local site, then ask again |
+| Claude refuses a page address and shows it back | Send an address on your own computer made of letters, digits and plain marks such as `/`, `?`, `=` and `-`. Write `&` as `%26` |
 
 ## Related
 

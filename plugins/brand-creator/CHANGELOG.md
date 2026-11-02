@@ -27,7 +27,10 @@ still the starter's proposal once the system rules are approved (keep one under 
 One change touches what already passes: the `board-lint` report of a pick board now lists `FACTS.md`,
 `brief/BRIEF.md` and `research/cliches.md` as inputs, so editing one of them makes that report stale and `check` says
 it is not verified until `board-lint` runs again. The `tools/finish.sh` of a new project (`templates/finish.sh.tpl`)
-lints the board of the latest round again before `check`, so an edit of the facts or the brief is picked up; a
+lints the board of the latest round again before `check`, so an edit of the facts or the brief is picked up; a board the
+lint refuses (a board file that is a link to a file outside the project, for one) or a lint that stops without writing a
+report shows as a failed step with the lint's message, the chain still runs `check` and writes the pack report, and it
+ends with a non-zero exit code. A
 `tools/finish.sh` you copied earlier has no such step, so add the block at its end, before `staleness --write`, or run
 `board-lint` yourself.
 
@@ -104,10 +107,12 @@ lints the board of the latest round again before `check`, so an edit of the fact
   colour-blind viewers. It warns, too, until the owner has named the grounds (a date and their words in
   `named_by_owner`; the starter's proposal has none), and says to ask the owner and never to guess. All of these are
   warnings in this release and do not change the result or the exit code; they become failures in the next release.
+  `contrast` reads the grounds exactly as `adapters` and the brand kit do: a ground they cannot read (one with no
+  `roles`, say) stops `contrast` too, with the same message, and never passes it.
 - Once the system rules are approved, `check` warns about every colour, size, spacing or motion value in
   `tokens/primitives.tokens.json` that is still the starter's proposal, and lists them. Keep a value by listing its path
-  under `starter-kept` in the primitives, with the date and the owner's words, or change it. It only warns; it never
-  fails the check.
+  under `starter-kept` in the primitives, with the date and the owner's words (the same rule as `named_by_owner`: a real
+  date, then any words), or change it. It only warns; it never fails the check.
 - `DESIGN.md`, `BRAND.md` and the brand's applied skill now carry the grounds that text sits on, when the tokens list
   them. `DESIGN.md` gets a component for the action on each ground (`action-on-<ground>`, with a `-dark` twin), pairing
   the action colour with the text on it. `BRAND.md` (under Visual) and the applied skill (under Colour) get a Grounds
@@ -220,7 +225,8 @@ lints the board of the latest round again before `check`, so an edit of the fact
   or in a round before the latest is refused. With `--url <address> --name <name>` it captures a real website into
   `research/site-refs/<name>/`: the first screen at both widths, the whole page and two small thumbnails. That form is the
   only one that reaches the internet. It refuses until you have answered the online-research question (`site_research`
-  is `online` or `links-only`), and a site that does not load exits with 1 and writes nothing.
+  is `online` or `links-only`), and a site that does not load exits with 1 and writes nothing. Taking the same page or
+  site again leaves `capture.json` as it was when nothing changed, so a check that read it stays current.
 - Website references (Standard and Full, when your brief lists a site): after the system rules,
   `/brand-creator:round site-refs` asks once whether Claude may research sites online, asks for sites you like and
   dislike, and shows four to six groups of real sites, each captured, with what to take and what to leave. Your pick is
@@ -281,7 +287,9 @@ lints the board of the latest round again before `check`, so an edit of the fact
   recorded. A list without wiring is unchanged. Pass `--page <url>` (repeatable, with `--before`, `--after` or
   `--compare`) to read the pages of your own local server too, as the browser shows them: only addresses on this
   machine (`localhost`, `127.0.0.1` or `[::1]`) are opened, and a page that cannot be read stops the run and stores
-  nothing. Listeners that a script adds are not visible in the page, so they are read from the source only.
+  nothing. Listeners that a script adds are not visible in the page, so they are read from the source only. A handler is
+  an attribute named after an event the browser knows (`onclick`, `onsubmit`), in the source and on the page alike; an
+  attribute that only starts with "on", such as `onboarding="intro"`, is not wiring.
 - A brand kit for your product repositories: `brand-creator kit build --yes` writes it around your brand skill, with the
   brand's own files copied in byte for byte and locked (opt-in when you approve the brand). The kit gets a version
   (`<edition>.<build>`) that goes up by one when anything in it changes and stays the same when nothing does. A kit
@@ -382,7 +390,8 @@ lints the board of the latest round again before `check`, so an edit of the fact
   your product" page has a new section, "If it's a redesign of a site you already have".
   The workflow quotes the repository's label in the commands it gives the agents, so a label with a space works. The
   label must be the one the survey gave the repository: a review that finds none by that label reports a failure, never
-  "no loss".
+  "no loss". The local page addresses you give for a redesign must be on this machine and written with plain URL
+  characters (`&` as `%26`); anything else is refused before an agent starts, and the message names the address.
 - You are now offered the brand kit when you approve your brand files, beside `BRAND.md`, `DESIGN.md` and the brand
   skill, and it is recommended when your brief lists a site or you have product repositories. A new manual page,
   [Use your brand kit](docs/manual/use/use-your-brand-kit.md), shows how to ask for it, fill in your own parts, put it

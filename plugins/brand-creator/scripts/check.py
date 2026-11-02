@@ -49,9 +49,7 @@
 A check that cannot be established is "not verified" (exit 3), never "pass". A failing gate is exit 1.
 """
 import json
-import re
 import sys
-from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
@@ -69,6 +67,7 @@ from stale import INPUTS_FILE, check_project as check_staleness  # noqa: E402
 from mark_lint import lint_svg_file, svg_files_under_assets  # noqa: E402
 import bookdata  # noqa: E402
 import cascade as cascade_mod  # noqa: E402
+import adapt  # noqa: E402
 import gates as adapt_gates  # noqa: E402
 import motionspec  # noqa: E402
 import motionboard  # noqa: E402
@@ -79,7 +78,6 @@ from _common import EXIT_CANNOT, EXIT_USAGE, CliError, fail  # noqa: E402
 
 APPROVED_PROOF = "motion/proof.json"   # the proof of the approved move: finish.sh proves it, and frames takes the stills the book replays of it
 PRIMITIVES = "tokens/primitives.tokens.json"   # compared with the plugin's starter once G4 is recorded (tokens:starter)
-KEPT_DATE = re.compile(r"^(\d{4}-\d{2}-\d{2})\s+\S")   # starter-kept `decided`: a calendar date, then the owner's words
 EMITTERS = ("web", "social", "apple", "windows", "linux", "tray", "tauri", "wallet", "developer", "android", "chrome-ext", "msix", "profiles", "print", "presskit")   # each writes assets/_checks/emit-<name>.json
 # manifest `qa` value -> (report tool, the command that writes it)
 QA_GATES = {
@@ -262,13 +260,7 @@ def starter_kept(doc: dict) -> tuple[list[str], str, str | None]:
         return [], "", "it is no object {\"decided\": \"<YYYY-MM-DD> <the owner's words>\", \"paths\": [...]}"
     wrong = []
     decided, paths = entry.get("decided"), entry.get("paths")
-    found = KEPT_DATE.match(decided) if isinstance(decided, str) else None
-    try:
-        if found:
-            date.fromisoformat(found.group(1))
-    except ValueError:
-        found = None
-    if not found:
+    if not (isinstance(decided, str) and adapt.owner_named(decided)):   # the one rule for "a calendar date, then the owner's words" (also contrast's, for grounds.named_by_owner)
         wrong.append("decided is not a date YYYY-MM-DD followed by the owner's words")
     if not (isinstance(paths, list) and all(isinstance(p, str) and p for p in paths)):
         wrong.append("paths is not a list of token paths such as \"motion.quick\"")

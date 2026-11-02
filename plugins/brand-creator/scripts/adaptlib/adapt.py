@@ -241,17 +241,23 @@ def ground_colours(doc: dict, e: dict, mode: str) -> dict[str, str | None]:
     return {r: n if isinstance(n, str) and e["modes"][mode].get(r) is not None and n in doc["modes"][mode] else None for r, n in names.items()}
 
 
-def owner_named(text: str) -> bool:
-    """True when `text` is a real YYYY-MM-DD date followed by the owner's words (the rule `contrast` holds `named_by_owner` to)."""
-    text = text.strip()
-    m = re.match(r"(\d{4}-\d{2}-\d{2})(?!\d)", text)
-    if m is None or not text[10:].strip():
-        return False
+def named_date(text: str) -> str | None:
+    """The real calendar date `text` starts with, written YYYY-MM-DD (white space before it is ignored), or None."""
+    m = re.match(r"(\d{4}-\d{2}-\d{2})(?!\d)", text.strip())
+    if m is None:
+        return None
     try:
         datetime.date.fromisoformat(m.group(1))
     except ValueError:
-        return False
-    return True
+        return None
+    return m.group(1)
+
+
+def owner_named(text: str) -> bool:
+    """True when `text` is a real YYYY-MM-DD date followed by the owner's words: the one rule for what the owner recorded and when. `contrast` holds `grounds.named_by_owner` to it,
+    the kit and the adapters write the grounds as named only by it, and `check` holds the `decided` of `starter-kept` to it. (Of the three, only `contrast` says which half is missing,
+    with `named_date`.)"""
+    return named_date(text) is not None and bool(text.strip()[10:].strip())
 
 
 def named_sentence(named: str) -> str:

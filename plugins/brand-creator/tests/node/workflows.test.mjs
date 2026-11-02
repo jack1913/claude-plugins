@@ -278,16 +278,61 @@ test("adopt gives the implementer's --after and the reviewer's --compare the sam
   assert.equal(fix.error, null);
   assert.deepEqual(applyLines("shop", fix).filter((l) => l.startsWith("The owner gave")), owner, "a fix run records --after again with the same addresses");
   assert.ok(fix.calls.find((c) => c.label === "review shop").prompt.includes(' --compare --project "/PROJECT" --page "http://localhost:4321/" --page "http://127.0.0.1:4321/pricing" must exit 0'));
-  for (const bad of [["http://localhost:4321/ x"], ['http://localhost:4321/"'], [""], ["http://localhost:4321/\nnext"], "http://localhost:4321/", [4321]]) {
+  for (const bad of ["http://localhost:4321/", [4321], [null], [""]]) {
     const refused = await run("adopt", { ...base, repos: [{ ...base.repos[0], pages: bad }] });
     assert.equal(refused.calls.length, 0, `nothing may start for pages ${JSON.stringify(bad)}`);
-    assert.match(refused.error, /adopt: repository shop: pages must be a list of local page addresses, each one word with no quote/, JSON.stringify(bad));
+    assert.match(refused.error, /adopt: repository shop: pages must be a list of local page addresses/, JSON.stringify(bad));
+  }
+  for (const bad of ["http://localhost:4321/ x", 'http://localhost:4321/"', "http://localhost:4321/\nnext"]) {
+    const refused = await run("adopt", { ...base, repos: [{ ...base.repos[0], pages: [bad] }] });
+    assert.equal(refused.calls.length, 0, `nothing may start for the page ${JSON.stringify(bad)}`);
+    assert.ok(refused.error.startsWith(`adopt: repository shop: the page address ${JSON.stringify(bad)} is refused`), refused.error);
   }
   const empty = await run("adopt", { ...base, repos: [{ ...base.repos[0], pages: [] }] });
   assert.equal(empty.error, null);
   assert.ok(!empty.calls.find((c) => c.label === "review shop").prompt.includes("--page"), "an empty list is no addresses");
   const fleet = fs.readFileSync(path.join(ROOT, "skills/brand-creator/references/fleet.md"), "utf8").replace(/\s+/g, " ");
   assert.match(fleet, /`repos\[\]\.pages` \(optional\)/);
+});
+
+test("adopt takes only a loopback page address made of URL-safe characters: the agents' shell pastes it inside double quotes, so $, backticks and quotes never get in", async () => {
+  const base = fixture("adopt");
+  const refused = async (u) => (await run("adopt", { ...base, repos: [{ ...base.repos[0], pages: [u] }] }));
+  // the exact URL of the review: a command substitution inside an otherwise loopback address
+  const sub = await refused("http://localhost:3000/$(touch /tmp/x)");
+  assert.equal(sub.calls.length, 0);
+  assert.ok(sub.error.startsWith('adopt: repository shop: the page address "http://localhost:3000/$(touch /tmp/x)" is refused'), sub.error);
+  const sub2 = await refused("http://localhost:3000/$(touch${IFS}/tmp/x)");   // one word: the old pattern let this one through
+  assert.equal(sub2.calls.length, 0);
+  assert.match(sub2.error, /adopt: repository shop: the page address "http:\/\/localhost:3000\/\$\(touch\$\{IFS\}\/tmp\/x\)" is refused/);
+  // every character the shell reads inside double quotes, and the other metacharacters, on a loopback address
+  for (const ch of ["$", "`", "\\", '"', "'", ";", "&", "|", "<", ">", "(", ")", "{", "}", "*", "!", "^"]) {
+    const u = `http://127.0.0.1:3000/a${ch}b`;
+    const r = await refused(u);
+    assert.equal(r.calls.length, 0, `nothing may start for ${JSON.stringify(u)}`);
+    assert.ok(r.error && r.error.includes(JSON.stringify(u)) && r.error.includes("is refused"), r.error);
+  }
+  // not on this machine: refused although every character is safe
+  for (const u of ["https://example.com/", "file:///etc/passwd", "http://localhost.evil.test/", "http://localhost@evil/", "http://127.1/", "http://[0:0:0:0:0:0:0:1]/", "http://localhost:99999999/", "//localhost/x", "localhost:8000"]) {
+    const r = await refused(u);
+    assert.equal(r.calls.length, 0, `nothing may start for ${JSON.stringify(u)}`);
+    assert.ok(r.error && r.error.includes(JSON.stringify(u)) && r.error.includes("is refused"), r.error);
+  }
+  // loopback and URL-safe: accepted, and pasted as written
+  for (const u of ["http://localhost:8000/x", "http://127.0.0.1/", "http://[::1]:3000/", "https://localhost/a?b=c", "HTTP://LOCALHOST:8080/x", "http://localhost", "http://localhost?q=1", "http://localhost:/", "http://localhost:3000/a-b_c.d~e/%24%28x%29?q=a%26b+c,d=e#frag"]) {
+    const r = await refused(u);
+    assert.equal(r.error, null, `${u}: ${r.error}`);
+    assert.ok(r.calls.find((c) => c.label === "review shop").prompt.includes(` --page "${u}" must exit 0`), u);
+  }
+  // the workflow's copy of the loopback rule answers as the CLI's own (scripts/lib/_common.mjs) on the same table
+  const { isLoopbackUrl } = await import(path.join(ROOT, "scripts/lib/_common.mjs"));
+  for (const [u, want] of [["http://localhost:8000/x", true], ["http://127.0.0.1/", true], ["http://[::1]:3000/", true], ["http://localhost:/", true], ["http://localhost:65535/", true], ["http://localhost:65536/", false],
+    ["http://localhost:99999999/", false], ["http://localhost:3000:80/", false], ["http://user:secret@localhost/", false], ["http://localhost./", false], ["http://127.0.0.2/", false], ["ftp://localhost/", false],
+    ["http:localhost/x", false], ["http:///localhost/x", false], ["http://[::ffff:127.0.0.1]/", false], ["http://%6cocalhost/", false], ["http://evil.test\\@localhost/", false]]) {
+    assert.equal(isLoopbackUrl(u), want, `the CLI rule for ${u}`);
+    const r = await refused(u);
+    assert.equal(r.error === null, want, `the workflow rule for ${u}: ${r.error}`);
+  }
 });
 
 test("inventory: true adds one read-only stage first and needs the owner's approval for 5 agents", async () => {

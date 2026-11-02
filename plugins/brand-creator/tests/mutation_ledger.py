@@ -138,10 +138,20 @@ LEDGER: list[dict] = [
          tests=[ST + "test_a_board_the_lint_could_not_verify_goes_on_because_it_wrote_its_report"]),
     dict(group="finish-chain", id="lint-exit-1-without-report-goes-on", file=TPL,
          old='if [ "$rc" -eq 1 ] && wrote_report "$LINT_OUT"; then', new='if [ "$rc" -eq 1 ]; then',
-         tests=[ST + "test_a_lint_that_wrote_no_report_stops_the_chain_with_its_exit_code"]),
-    dict(group="finish-chain", id="other-lint-exit-goes-on", file=TPL,
-         old='so the chain stops here" >&2; exit "$rc"; fi\nfi\n"${BC[@]}" staleness --write', new='so the chain stops here" >&2; fi\nfi\n"${BC[@]}" staleness --write',
-         tests=[ST + "test_a_lint_that_wrote_no_report_stops_the_chain_with_its_exit_code"]),
+         tests=[ST + "test_a_board_the_lint_refuses_does_not_stop_the_chain_before_check_and_is_reported_as_a_failed_step"]),
+    dict(group="finish-chain", id="refused-board-stops-the-chain", file=TPL,
+         old='The chain goes on, so that check still writes the pack report" >&2\n  fi\nfi\n"${BC[@]}" staleness --write',
+         new='The chain goes on, so that check still writes the pack report" >&2; exit "$rc"\n  fi\nfi\n"${BC[@]}" staleness --write',
+         tests=[ST + "test_a_board_the_lint_refuses_does_not_stop_the_chain_before_check_and_is_reported_as_a_failed_step"]),
+    dict(group="finish-chain", id="refused-board-passes-in-silence", file=TPL,
+         old='  echo "finish.sh: check passed, but a step failed (board-lint $BOARD): the chain ends with exit $LINT_FAILED" >&2; exit "$LINT_FAILED"\n', new="  true\n",
+         tests=[ST + "test_a_board_the_lint_refuses_does_not_stop_the_chain_before_check_and_is_reported_as_a_failed_step"]),
+    dict(group="finish-chain", id="refused-board-hides-the-lints-message", file=TPL,
+         old="LINT_WHY=\"$(printf '%s\\n' \"$LINT_OUT\" | sed -n 's/^error: //p' | tail -n 1)\"\n", new='LINT_WHY=""\n',
+         tests=[ST + "test_a_board_the_lint_refuses_does_not_stop_the_chain_before_check_and_is_reported_as_a_failed_step"]),
+    dict(group="finish-chain", id="check-exit-code-lost-after-a-refused-board", file=TPL,
+         old='  [ "$CHECK_RC" -eq 0 ] || exit "$CHECK_RC"\n', new="",
+         tests=[ST + "test_when_check_fails_too_after_a_refused_board_the_chain_ends_with_the_exit_code_of_check"]),
     dict(group="finish-chain", id="lint-output-hidden", file=TPL,
          old="  [ -z \"$LINT_OUT\" ] || printf '%s\\n' \"$LINT_OUT\"\n", new="  true\n",
          tests=[ST + "test_a_board_that_fails_its_lint_does_not_stop_the_chain_check_fails_the_report"]),
@@ -493,7 +503,7 @@ LEDGER: list[dict] = [
          tests=[WT + "test_the_wiring_record_is_not_searched_by_the_cascade"]),
     # the scan lists the repository's files, sizes and times before and after reading it, and a change in between fails the row and stores nothing
     dict(group="wiring", id="read-only-proof-skipped", file="scripts/adoption.py",
-         old="    unchanged = before_snap == snapshot(repo, list_files(rg, repo, label))\n", new="    unchanged = True\n",
+         old="    unchanged = before_snap == snapshot(repo, list_files(rg, repo, label, exclude))\n", new="    unchanged = True\n",
          tests=[WT + "test_the_wiring_scan_never_edits_the_repository_and_proves_it"]),
     # a page is read only from the owner's own machine: the one loopback rule (shared with `page-check --url`), and the refusal that uses it before a browser starts
     dict(group="wiring", id="non-loopback-url-accepted", file="scripts/pagelib/pagecheck.py",
@@ -503,6 +513,24 @@ LEDGER: list[dict] = [
     dict(group="wiring", id="wiring-does-not-ask-the-loopback-rule", file="scripts/adoption.py",
          old="        if not pagecheck.is_loopback_url(url):\n", new="        if False:\n",
          tests=[WT + "test_a_page_that_is_not_on_this_machine_is_refused_before_anything_is_read"]),
+    # a name that only starts with "on" (onboarding, one, only) is no handler: the source reads the one list of event names the page side reads
+    dict(group="wiring", id="any-on-word-is-a-handler", file="scripts/adaptlib/wiring.py",
+         old="    if name in EVENT_HANDLERS or _HANDLER.fullmatch(name):\n", new='    if _HANDLER.fullmatch(name) or re.fullmatch(r"on[a-z]+", name):\n',
+         tests=[WT + "test_an_attribute_is_a_handler_when_it_is_in_the_one_list_of_event_names_so_the_source_and_the_page_agree"]),
+    # the brand project that lives inside a repository is no part of its slots or its wiring: one helper makes the glob, and both commands pass it on
+    dict(group="wiring", id="wiring-reads-the-brand-project-as-the-repository", file="scripts/adoption.py",
+         old="    return repo, brand_exclude(root, repo)\n", new="    return repo, []\n",
+         tests=[WT + "test_the_brand_projects_own_files_are_not_the_repositorys_wiring_when_it_lives_inside_it"]),
+    dict(group="wiring", id="survey-reads-the-brand-project-as-the-repository", file="scripts/adoption.py",
+         old="        exclude = brand_exclude(root, repo)   # the brand project lives inside this repository: its own files are not the repository's slots\n", new="        exclude = []\n",
+         tests=["tests/test_adoption.py::test_the_project_inside_the_repository_is_not_surveyed_as_the_repository"]),
+    # the grounds of tokens.json and the owner's naming of them have one reader and one rule (adapt), whoever asks: contrast, the adapters, the kit, check
+    dict(group="grounds", id="contrast-reads-grounds-by-its-own-shape", file="scripts/contrast.py",
+         old="    for e in adapt.grounds_of(tj)[1]:\n", new='    for e in (tj.get("grounds") or {}).get("list", []):\n',
+         tests=["tests/test_contrast_tokens.py::test_contrast_refuses_a_grounds_entry_the_way_adapt_does"]),
+    dict(group="grounds", id="starter-kept-decided-by-its-own-rule", file="scripts/check.py",
+         old="    if not (isinstance(decided, str) and adapt.owner_named(decided)):", new="    if not (isinstance(decided, str) and decided.strip()):",
+         tests=["tests/test_contrast_tokens.py::test_contrast_adapt_and_check_hold_the_owners_naming_to_one_rule"]),
 ]
 
 IGNORE = shutil.ignore_patterns("__pycache__", ".pytest_cache", "node_modules", "results")

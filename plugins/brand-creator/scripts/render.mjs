@@ -2285,7 +2285,7 @@ async function jpegThumb(diff, png, width) {
   return Buffer.from(b64, "base64");
 }
 
-/** capture.json of a page: rewritten only when a still, an input or a problem changed. A run that finds everything as it was leaves the file, its date included, byte for byte,
+/** capture.json of a page or of a site reference (`capture --url`): rewritten only when a still, an input, a problem or what the site answered changed. A run that finds everything as it was leaves the file, its date included, byte for byte,
  *  so a report that read it (board-lint) does not turn stale because someone ran capture again. */
 function writeCaptureRecord(file, doc) {
   let old = null;
@@ -2437,7 +2437,7 @@ async function captureSite(project, values) {
     };
     const files = [...taken.map((s) => ({ file: s.file, buf: s.png })), { file: full.file, buf: full.png }, ...thumbs.map((t) => ({ file: t.file, buf: t.buf }))];
     const written = files.filter((f) => writeIfChanged(confine(project, `${dir}/${f.file}`, "capture file"), f.buf)).length
-      + (writeIfChanged(recordFile, JSON.stringify(doc, null, 2) + "\n") ? 1 : 0);
+      + (writeCaptureRecord(recordFile, doc) ? 1 : 0);   // as for a page of the project: the file stays byte for byte as it was when only the day changed
     console.log(`capture ${url}: ${files.length} pictures and capture.json in ${dir}/ (${written} of ${files.length + 1} file(s) written, the others unchanged)`
       + (source.final_url !== url ? `; the site led on to ${source.final_url}` : "")
       + (full.cut ? `; the full page is ${full.page_height} px tall and was cut at ${CAPTURE_FULL_MAX} px` : "")

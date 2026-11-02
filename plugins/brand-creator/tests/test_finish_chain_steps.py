@@ -292,16 +292,40 @@ def test_a_board_the_lint_could_not_verify_goes_on_because_it_wrote_its_report(t
     assert "[SKIP] reflex-grounded" in c.out and c.ran("staleness", "--write") and c.ran("check")
 
 
-@pytest.mark.parametrize("what, answer, code", [
-    ("a usage error (exit 2)", {"code": 2, "err": "error: page not found: rounds/r2/board.html"}, 2),
-    ("an exit 1 that wrote no report", {"code": 1, "out": "report: assets/_checks/board-lint.json"}, 1),
-    ("an exit 3 that wrote no report", {"code": 3}, 3),
+REFUSED = "page rounds/r2/board.html is outside the project /tmp/project; brand-creator only writes inside the project"   # what the real lint says of a board.html that is a link to a file outside the project (exit 2)
+
+
+def failed_step(code: int, why: str = REFUSED) -> str:
+    return f"finish.sh: step failed: {LINT} stopped with exit {code} and left no report of this board: {why}. The chain goes on, so that check still writes the pack report"
+
+
+@pytest.mark.parametrize("what, answer, code, why", [
+    ("a board it refuses with a usage error (exit 2: a board.html that is a link to a file outside the project)", {"code": 2, "err": f"error: {REFUSED}"}, 2, REFUSED),
+    ("an exit 1 that wrote no report", {"code": 1, "out": "report: assets/_checks/board-lint.json"}, 1, "it printed no reason, see above"),
+    ("an exit 3 that wrote no report", {"code": 3}, 3, "it printed no reason, see above"),
 ])
-def test_a_lint_that_wrote_no_report_stops_the_chain_with_its_exit_code(tmp_path, what, answer, code):
+def test_a_board_the_lint_refuses_does_not_stop_the_chain_before_check_and_is_reported_as_a_failed_step(tmp_path, what, answer, code, why):
+    """A lint that leaves no report of the latest board (it refuses the board, as with a board.html that is a link to a file outside the project, or it crashes) used to stop the
+    chain, so no pack report was written at all. Now the step is reported as failed, with the lint's own message, the chain goes on to staleness and `check` (which says the board is not verified), and it
+    ends with a non-zero exit code even if `check` passes: it never passes in silence."""
     c = chain(tmp_path, decision=OFF, rounds={2: True}, answers={"board-lint": answer})
-    assert c.code == code, (what, c.out)
-    assert f"finish.sh: board-lint stopped with exit {code} (see above); check has no report of this board to gate, so the chain stops here" in c.out, c.out
-    assert c.steps[-1] == LINT and not c.ran("staleness") and not c.ran("check"), (what, c.steps)
+    assert failed_step(code, why) in c.out, (what, c.out)
+    assert c.out.count("finish.sh: step failed:") == 1 and c.out.count("finish.sh: check passed, but a step failed") == 1, c.out
+    assert why in c.out and c.ran("staleness", "--write") and c.ran("check"), (what, c.calls)
+    assert c.code == code, (what, c.code, c.out)                                                      # check passed in the stand-in: the lint's own exit code ends the chain
+    assert [x[0] for x in c.calls][-2:] == ["staleness", "check"], c.calls
+    assert f"finish.sh: check passed, but a step failed (board-lint {LINT.split()[1]}): the chain ends with exit {code}" in c.out
+
+
+def test_when_check_fails_too_after_a_refused_board_the_chain_ends_with_the_exit_code_of_check(tmp_path):
+    c = chain(tmp_path, decision=OFF, rounds={2: True}, answers={"board-lint": {"code": 2, "err": f"error: {REFUSED}"}, "check": {"code": 1, "out": "check: FAIL report:board-lint"}})
+    assert c.code == 1 and "check: FAIL report:board-lint" in c.out and failed_step(2) in c.out, c.out
+    assert c.ran("staleness", "--write") and c.ran("check") and "check passed, but a step failed" not in c.out
+
+
+def test_a_board_that_lints_clean_ends_the_chain_with_the_exit_code_of_check_and_no_failed_step(tmp_path):
+    c = chain(tmp_path, decision=OFF, rounds={2: True}, answers={"check": {"code": 3, "out": "check: not verified"}})
+    assert c.code == 3 and "step failed" not in c.out and "check passed, but" not in c.out, c.out
 
 
 # ---------------------------------------------------------------- the book, the press kit, print and posts, by tier

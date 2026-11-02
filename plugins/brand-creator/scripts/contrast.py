@@ -37,14 +37,15 @@ its reason; an exception that matches nothing, or a pair that passes anyway, is 
 Exit 1 when any pair misses its target and is not excepted (the text-grounds rows never change the status or the exit code);
 exit 3 when the logo SVG is missing (skip it explicitly with --skip-marks, which is printed).
 """
-import datetime
 import json
-import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "marklib"))
+sys.path.insert(0, str(Path(__file__).resolve().parent / "booklib"))   # adapt reads bookdata
+sys.path.insert(0, str(Path(__file__).resolve().parent / "adaptlib"))
+import adapt  # noqa: E402  (grounds_of and owner_named: the shape of `grounds` and the owner's naming are adapt's, so that contrast and the adapters cannot disagree on one file)
 import qa_rules  # noqa: E402
 import svgtools  # noqa: E402
 from _color import wcag_ratio  # noqa: E402
@@ -226,34 +227,14 @@ NEXT_RELEASE = "this is a warning now and a failure from the next release"
 
 def ground_entries(tj: dict) -> list[tuple[str, str, str, dict]]:
     """The grounds of tokens.json as (id, ground token, mode, {ground, text, action, on-action, focus, border -> hex or None}), light then dark of
-    each ground. A ground named twice gets `#2`, `#3` after its id, so that no two rows share one. [] when tokens.json has no `grounds`."""
-    g = tj.get("grounds")
-    if g is None:
-        return []
-    ok = (isinstance(g, dict) and isinstance(g.get("named_by_owner"), str) and isinstance(g.get("list"), list)
-          and all(isinstance(e, dict) and isinstance(e.get("ground"), str) and isinstance(e.get("modes"), dict)
-                  and all(isinstance(e["modes"].get(m), dict) for m in ("light", "dark")) for e in g["list"]))
-    if not ok:
-        fail(EXIT_USAGE, 'tokens.json: grounds must be {"named_by_owner": "...", "list": [{"ground": ..., "modes": {"light": {...}, "dark": {...}}}]}; '
-                         "run `brand-creator tokens` again")
+    each ground. A ground named twice gets `#2`, `#3` after its id, so that no two rows share one. [] when tokens.json has no `grounds`. The shape is
+    `adapt.grounds_of`'s, the one the adapters, the applied skill and the kit read: a block it refuses (an entry with no `roles` too) stops this run too (exit 2)."""
     out, count = [], {}
-    for e in g["list"]:
+    for e in adapt.grounds_of(tj)[1]:
         count[e["ground"]] = n = count.get(e["ground"], 0) + 1
         gid = e["ground"] if n == 1 else f"{e['ground']}#{n}"
         out += [(gid, e["ground"], mode, e["modes"][mode]) for mode in ("light", "dark")]
     return out
-
-
-def starts_with_date(text: str) -> bool:
-    """True when `text` starts with a real calendar date written YYYY-MM-DD."""
-    m = re.match(r"(\d{4}-\d{2}-\d{2})(?!\d)", text)
-    if m is None:
-        return False
-    try:
-        datetime.date.fromisoformat(m.group(1))
-    except ValueError:
-        return False
-    return True
 
 
 def check_grounds(rep: Report, tj: dict) -> None:
@@ -267,12 +248,12 @@ def check_grounds(rep: Report, tj: dict) -> None:
         return
     ground_entries(tj)                                    # the shape is checked once, whichever rows follow
     named = g["named_by_owner"].strip()
-    if not starts_with_date(named):
+    if adapt.named_date(named) is None:
         rep.add("grounds:named", "warn", GROUNDS_LABEL, section="grounds", named_by_owner=False,
                 detail=("grounds.named_by_owner is empty: " if not named else f"grounds.named_by_owner {named!r} does not start with a YYYY-MM-DD date: ")
                        + f"these grounds are a proposal, not named by the owner. Ask the owner which colours text sits on and record the date "
                          f"and their words; never guess; {NEXT_RELEASE}")
-    elif not named[10:].strip():
+    elif not adapt.owner_named(named):
         rep.add("grounds:named", "warn", GROUNDS_LABEL, section="grounds", named_by_owner=False,
                 detail=f"grounds.named_by_owner is only the date {named[:10]}: record the owner's words too; {NEXT_RELEASE}")
     elif not g["list"]:

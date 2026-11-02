@@ -261,7 +261,9 @@ DTCG 2025.10 is a Final Community Group Report. It is not a W3C Standard and not
   the names as written (`null` for a role left out), `modes` holds the six-digit hex of each in that mode (`null` when it did not resolve). Without the
   block, `tokens.json` and every other output are byte for byte what they were, and the report has no `grounds` row.
 - Text-ground checks: `contrast` reads `grounds` of `tokens.json` (nothing when the key is absent but the one `grounds:named` row) and writes the section
-  `grounds`. Every row is a pass or a warning that says it is a failure from the next release; the report's status and the exit code never change because of
+  `grounds`. It reads the block through `adapt.grounds_of`, as the adapters, the applied skill and the kit do, so a block they refuse (an entry with no `roles`, no
+  `modes` or no `light` and `dark` mode, or a `ground` that is no string) stops `contrast` too, with the same message (exit 2, `run brand-creator tokens again`),
+  and `adapt.owner_named` decides whether the owner named the grounds (`adapt.named_date` says which half is missing). Every row is a pass or a warning that says it is a failure from the next release; the report's status and the exit code never change because of
   them. `grounds:named` warns when `tokens.json` has no `grounds` ("ask the owner which colours text sits on; record them in `grounds` with the date and their
   words; never guess"), when `named_by_owner` does not start with a real `YYYY-MM-DD` date (the starter's `""`: "a proposal, not named by the owner"), when it is only
   a date, and when `list` is empty; it passes naming the owner's words. A ground listed more than once keeps its rows apart by `#2`, `#3` after its id. For each ground and mode:
@@ -1240,7 +1242,7 @@ Once G4 is recorded and `tokens/primitives.tokens.json` exists, `check` compares
 (`$value`, as canonical JSON; a key starting with `$` is not a group), and the row `tokens:starter` warns: "still the starter's proposal: <paths> (N); ask the owner to keep them (list them in
 `$extensions["brand-creator"]["starter-kept"]` of tokens/primitives.tokens.json with the date and their words) or change them". The row's `left` lists those paths and `kept` the ones the owner kept. The owner keeps
 a value by listing its path in `{"decided": "<YYYY-MM-DD> <the owner's words>", "paths": ["motion.quick", ...]}` under `starter-kept`; a path listed there is kept only while its value is still the starter's, and the row passes
-("kept by the owner (<decided>): <paths> (N)") when every starter value left is kept. A `starter-kept` that is no object, whose `decided` is not a calendar date followed by words, or whose `paths` is not a list of
+("kept by the owner (<decided>): <paths> (N)") when every starter value left is kept. A `starter-kept` that is no object, whose `decided` is not a calendar date followed by words (`adapt.owner_named`, the rule that `grounds.named_by_owner` is held to: a date, then any words, a colon after the date included), or whose `paths` is not a list of
 strings, keeps nothing and the same row warns and says what is wrong. Before G4, or with no primitives file, there is no row; the row is never a failure and never an exit 2 (an unreadable primitives file is a warning that it was
 not compared; the `tokens` build is what fails it). `brand-creator tokens` skips `$extensions` of the primitives, so the entry changes no output.
 
@@ -1599,8 +1601,9 @@ first file is written, so a page or a site that does not load leaves nothing beh
   hash, so a still is detectably stale when one of them changes; files inside `shots/` itself are left out, so a page that loads one of its own stills still comes
   to rest. `problems` are what went wrong while the page loaded (a request to another origin, a page or console error, a failed request of the page's own),
   sorted, at most 40 and then `"<n> more"`: they are recorded, never gated (`page-check` gates the page).
-- `capture.json` is rewritten only when a still, an input or a problem changed. Otherwise the old file, its `date` included, stays byte for byte, so a run that
-  finds nothing new does not make a report that read it stale.
+- `capture.json` is rewritten only when a still, an input or a problem changed (for `--url`: a view, the full page, a thumbnail or what the site answered: its
+  final address, status or title). Otherwise the old file, its `date` included, stays byte for byte, so a run that finds nothing new does not make a report that read it
+  stale; the line it prints then says `0 of N file(s) written, the others unchanged`.
 - Exit 0 when written. Exit 1 when the page cannot be loaded or rendered (nothing is written). Exit 2 for a usage error, a page outside the project, a page in
   `history/` or a round before the latest. Exit 3 when Chromium is missing.
 
@@ -2059,7 +2062,7 @@ everything after the colon cut at 120 characters:
 |---|---|
 | `link` | the value of `href`, `to`, `action` and `formAction` (`formaction` too); not an empty value or `#`, and not `href` on `link`, `script`, `base`, `use`, `image` and `style` tags |
 | `field` | `name` on any tag but `meta`, `link`, `a`, `iframe`, `param`, `slot`, `map` and `object`; and the string argument of `register("...")` (not of `x.register(...)`) |
-| `handler` | an attribute `on[A-Z]...` or `on[a-z]...`, `@event`, `v-on:event` or `on:event` that has a value: `handler:<attribute>=<value>` |
+| `handler` | an attribute that has a value and whose name is on the one list of event names (`scripts/data/event-handlers.json`: `onclick`, `onsubmit`; not `one`, `only` or `onboarding`, which only start with "on"), a component prop `on[A-Z]...` (`onClick`), `@event`, `v-on:event` or `on:event`: `handler:<attribute>=<value>` |
 | `hook` | `data-testid`, `data-test`, `data-cy`, `data-qa` and `data-track*`, `data-analytics*`, `data-event*`, `data-gtm*`: `hook:<attribute>=<value>` |
 | `id` | a static `id="..."`: no braces and no white space in the value |
 | `script` | the `src` of a `<script>`, without its query and without a leading `./` |
@@ -2091,7 +2094,7 @@ with `getAttribute`, as written (never as the browser resolves it), with the rul
 |---|---|
 | `link` | `href` of `a` and `area`, `action` of `form`, `formaction` of any element; not an empty value or `#` |
 | `field` | `name` of `input`, `select`, `textarea` and `button` |
-| `handler` | an inline attribute `on[a-z]+` with a value, for an event the browser knows (`onclick`, `onsubmit`; not `one`): `handler:<attribute>=<value>`. Listeners that a script adds are not attributes and are not seen: they are read from the source only |
+| `handler` | an inline attribute with a value whose name is on the same list of event names (`scripts/data/event-handlers.json`, which `scripts/adaptlib/wiring.py` reads for the source too: `onclick`, `onsubmit`; not `one`, `only` or `onboarding`): `handler:<attribute>=<value>`. Listeners that a script adds are not attributes and are not seen: they are read from the source only |
 | `hook` | `data-testid`, `data-test`, `data-cy`, `data-qa`, `data-track*`, `data-analytics*`, `data-event*` and `data-gtm*` with a value: `hook:<attribute>=<value>` |
 | `id` | `id`, with no braces and no white space in the value |
 | `script` | `src` of `script`, without its query and without a leading `./` |
@@ -2660,8 +2663,11 @@ not allow (`PRINT_REGION` or `POST_FACTS` in Quick) stops the chain with exit 2 
 
 **The last lint.** After the press kit, the chain lints the board of the latest round again (`board-lint rounds/rN/board.html` of the highest N, the board `check` looks for; when that round has no `board.html`, no step), then runs `staleness --write` and `check`. The lint report of a pick
 board lists `FACTS.md`, `brief/BRIEF.md` and `research/cliches.md` as inputs and `check` wants a report that is current for the latest round, so an edit of the facts or the brief since the last lint would otherwise turn `check` not verified. A lint that exits 1 or 3
-after it printed `report: <path>` goes on (`finish.sh: board-lint failed on <page> (see above); ...` or `finish.sh: board-lint could not verify <page> (see above); ...`), and `check` fails the report or says why; any other exit leaves no report of this board for
-`check` to gate, so the chain says `finish.sh: board-lint stopped with exit N ...` and stops with that exit code.
+after it printed `report: <path>` goes on (`finish.sh: board-lint failed on <page> (see above); ...` or `finish.sh: board-lint could not verify <page> (see above); ...`), and `check` fails the report or says why; any other exit (a board the lint refuses with exit 2, such as a `board.html` that is a link to a file outside the project,
+or a lint that wrote no report, such as one that crashes) leaves no report of this board for `check` to gate. That does not stop the chain, which would leave no pack report at all: it says
+`finish.sh: step failed: board-lint <page> stopped with exit N and left no report of this board: <the lint's own message>. The chain goes on, so that check still writes the pack report`,
+runs `staleness --write` and `check` (which says the board is not verified), and ends with the exit code of `check` when that is not 0, else (`finish.sh: check passed, but a step failed (board-lint <page>): the chain ends with exit N`) with the exit code of the lint,
+so a refused board never ends in a pass.
 
 ## Agents and workflows
 
@@ -2692,7 +2698,10 @@ after it printed `report: <path>` goes on (`finish.sh: board-lint failed on <pag
 - Designer snapshot: `snapshot take` and `snapshot verify` both get `--ignore '*rounds/<round>/*' --ignore '*assets/_checks/*'`; the designer's
   answer lists its `screenshots` (required, at least one), the judge reads those and never the shared `shot.json`.
 - `adopt`: the prompt names `MODE: apply|fix`; a fix run says the branch exists and snapshots as `adopt-fix-<label>`; the implementer may start on a
-  dirty tree only for a fix run or a resume of its own step.
+  dirty tree only for a fix run or a resume of its own step. Each `repos[].pages` address is pasted inside double quotes into the shell commands the
+  implementer and the reviewer run, so the script refuses to start (`adopt: repository <label>: the page address "<url>" is refused ...`, before any agent) unless
+  it is a loopback URL by the rule of `isLoopbackUrl` (the script holds a copy, since a workflow imports nothing; `node/workflows.test.mjs` pins it to that function on one table) and is written only with
+  letters, digits and `- . _ ~ : / ? # [ ] = + % ,`: a `$`, a backtick, a backslash, a quote, `;`, `&`, `|`, `<`, `>`, parentheses, braces, `*` and `!` never get in (percent-encode them). `adoption wiring` checks the loopback rule again.
 - Agent tools are the only enforced privacy boundary: `brand-namer` (Read, Grep, Glob, Bash) runs the naming hunters, and the screener while
   `lookups_ok` is false. Bash stays an instruction, not a tool limit. The refuting research verifier is `brand-researcher`; `brand-reviewer` has no web
   tools.

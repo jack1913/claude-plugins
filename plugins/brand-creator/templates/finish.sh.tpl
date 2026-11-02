@@ -17,7 +17,8 @@
 #     so that the Motion chapter replays fresh stills, with FRAMES_ARGS of block 2, and a line says whenever it takes none; a failure that writes a failing report (exit 1) does
 #     not stop the chain, exit 2 or 3 does; then book, book-pdf: they read the reports of steps 4 and 5), then the press kit (Standard and Full): the kit holds book.pdf
 #   8 board-lint on the board of the latest round (the report of a pick board lists FACTS.md and brief/BRIEF.md as inputs, and check wants a current one: an edit of the facts or the brief
-#     made since the last lint is picked up here; a failing or not-verified lint that wrote its report does not stop the chain, check gates it), then staleness --write
+#     made since the last lint is picked up here; a failing or not-verified lint that wrote its report does not stop the chain, check gates it; a lint that refuses the board is a failed
+#     step, said with its message, and does not stop the chain either: check still runs, and the chain ends with a non-zero exit code), then staleness --write
 #     (records the inputs, the plugin version and the emitter code the pack was built from), then check
 #
 # The chain sets BRAND_CREATOR_CHAIN=1. A generator that clears or rewrites a whole output folder calls
@@ -223,21 +224,33 @@ case "$TIER" in
 esac
 # ---- the board of the latest round is linted again, as `check` wants a board-lint report that is current for it: the report of a pick board lists FACTS.md and brief/BRIEF.md among its inputs,
 # so an edit of the facts or the brief since the last lint would turn `check` not verified. The board is the one `check` looks for (rounds/rN/board.html of the highest N); when that round has no board.html, no step.
-# Like the motion proof: a lint that fails (exit 1) or cannot verify (exit 3) after it wrote its report goes on, `check` gates that report and says why; any other exit leaves no report
-# of this board to gate (a page that is not there, a round it cannot tell), so it stops the chain with that exit code.
+# Like the motion proof: a lint that fails (exit 1) or cannot verify (exit 3) after it wrote its report goes on, `check` gates that report and says why. Any other exit leaves no report of
+# this board to gate: a board the lint refuses (exit 2: a board.html that is a link to a file outside the project, for one), or a lint that wrote none (one that crashed, say). That is a failed step, said with the
+# lint's own message, but it does not stop the chain: `check` still runs, writes the pack report and says the board is not verified. The chain then ends with check's exit code, or, when
+# check passes, with the exit code of the lint, so a refused board never ends in a pass.
 BOARD="$(python3 -c '
 import os, re
 ns = [int(m.group(1)) for d in (os.listdir("rounds") if os.path.isdir("rounds") else []) for m in [re.fullmatch(r"r(\d+)", d)] if m and os.path.isdir("rounds/" + d)]
 page = f"rounds/r{max(ns)}/board.html" if ns else ""
 print(page if page and os.path.isfile(page) else "")
 ')"
+LINT_FAILED=0
 if [ -n "$BOARD" ]; then
   step "board-lint $BOARD"
-  rc=0; LINT_OUT="$("${BC[@]}" board-lint "$BOARD")" || rc=$?
+  rc=0; LINT_OUT="$("${BC[@]}" board-lint "$BOARD" 2>&1)" || rc=$?   # stderr too: the lint's refusal is an `error: ...` line there
   [ -z "$LINT_OUT" ] || printf '%s\n' "$LINT_OUT"
   if [ "$rc" -eq 1 ] && wrote_report "$LINT_OUT"; then echo "finish.sh: board-lint failed on $BOARD (see above); the chain goes on and check fails the report" >&2
   elif [ "$rc" -eq 3 ] && wrote_report "$LINT_OUT"; then echo "finish.sh: board-lint could not verify $BOARD (see above); the chain goes on and check says why" >&2
-  elif [ "$rc" -ne 0 ]; then echo "finish.sh: board-lint stopped with exit $rc (see above); check has no report of this board to gate, so the chain stops here" >&2; exit "$rc"; fi
+  elif [ "$rc" -ne 0 ]; then
+    LINT_FAILED="$rc"
+    LINT_WHY="$(printf '%s\n' "$LINT_OUT" | sed -n 's/^error: //p' | tail -n 1)"
+    echo "finish.sh: step failed: board-lint $BOARD stopped with exit $rc and left no report of this board: ${LINT_WHY:-it printed no reason, see above}. The chain goes on, so that check still writes the pack report" >&2
+  fi
 fi
 "${BC[@]}" staleness --write
+if [ "$LINT_FAILED" -ne 0 ]; then   # a board the lint refused: check still runs and writes the pack report, but the chain never ends in a pass
+  CHECK_RC=0; "${BC[@]}" check || CHECK_RC=$?
+  [ "$CHECK_RC" -eq 0 ] || exit "$CHECK_RC"
+  echo "finish.sh: check passed, but a step failed (board-lint $BOARD): the chain ends with exit $LINT_FAILED" >&2; exit "$LINT_FAILED"
+fi
 "${BC[@]}" check

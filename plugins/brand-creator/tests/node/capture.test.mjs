@@ -26,9 +26,9 @@ function jpeg(file) {
 }
 const record = (dir) => JSON.parse(fs.readFileSync(path.join(dir, "capture.json"), "utf8"));
 
-function bcAsync(args) {
+function bcAsync(args, env = {}) {
   return new Promise((resolve, reject) => {
-    const c = spawn(BIN, ["--data", DATA, ...args], { env: { ...process.env, BRAND_CREATOR_TODAY: "2026-10-17" } });
+    const c = spawn(BIN, ["--data", DATA, ...args], { env: { ...process.env, BRAND_CREATOR_TODAY: "2026-10-17", ...env } });
     let stdout = "", stderr = "";
     c.stdout.on("data", (d) => { stdout += d; });
     c.stderr.on("data", (d) => { stderr += d; });
@@ -186,6 +186,42 @@ test("capture --url: a page served over http is captured into research/site-refs
     assert.equal(other.status, 2, other.stdout + other.stderr);
     assert.match(other.stderr, /research\/site-refs\/local-demo\/ already holds a capture of http:\/\/127\.0\.0\.1:\d+\/: use another --name/);
     assert.equal(record(dir).source.url, address);
+  } finally {
+    await site.close();
+  }
+});
+
+test("capture --url: a second run on an unchanged reference keeps capture.json byte for byte, whatever the day, and a changed reference rewrites it with the new date", async (t) => {
+  if (needSetup(t)) return;
+  let title = "A local reference";
+  const site = await listen((req, res) => {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    res.end(`<!doctype html><html><head><meta charset=utf-8><title>${title}</title><style>${CSS}</style></head><body><h1>A local reference</h1><div class=tall></div><p>The bottom.</p></body></html>`);
+  });
+  try {
+    const p = makeProject();
+    assert.equal(bc(["state", "--set", "site_research=links-only", "--project", p]).status, 0);
+    const args = ["capture", "--url", `http://127.0.0.1:${site.port}/`, "--name", "local-demo", "--project", p];
+    const dir = path.join(p, "research/site-refs/local-demo"), file = path.join(dir, "capture.json");
+    const first = await bcAsync(args);                                                    // 2026-10-17
+    assert.equal(first.status, 0, first.stdout + first.stderr);
+    assert.match(first.stdout, /\(6 of 6 file\(s\) written, the others unchanged\)/);
+    const before = fs.readFileSync(file), mtime = fs.statSync(file).mtimeMs;
+    const files = fs.readdirSync(dir).sort();
+    const again = await bcAsync(args, { BRAND_CREATOR_TODAY: "2026-11-30" });             // another day, the same reference: nothing is rewritten
+    assert.equal(again.status, 0, again.stdout + again.stderr);
+    assert.match(again.stdout, /\(0 of 6 file\(s\) written, the others unchanged\)/);
+    assert.ok(Buffer.compare(fs.readFileSync(file), before) === 0, "capture.json must be byte for byte what it was");
+    assert.equal(fs.statSync(file).mtimeMs, mtime, "capture.json must not be rewritten");
+    assert.equal(record(dir).date, "2026-10-17");
+    assert.deepEqual(fs.readdirSync(dir).sort(), files);
+    // the reference changes (its title, which no still shows): the record is rewritten, with the new day
+    title = "Another title";
+    const changed = await bcAsync(args, { BRAND_CREATOR_TODAY: "2026-12-24" });
+    assert.equal(changed.status, 0, changed.stdout + changed.stderr);
+    assert.match(changed.stdout, /\(1 of 6 file\(s\) written, the others unchanged\)/);
+    assert.equal(record(dir).date, "2026-12-24");
+    assert.equal(record(dir).source.title, "Another title");
   } finally {
     await site.close();
   }

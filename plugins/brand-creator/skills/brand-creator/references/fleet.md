@@ -87,7 +87,9 @@ fully: BRAND-STATE.md, brief/BRIEF.md, FACTS.md, research/cliches.md, the approv
   reviewer's `adoption wiring --repo "<label>" --compare` looks the repository up by it, and another label ends in
   "not a surveyed repository", which the review reports as a failure, not as "no loss".
   `repos[].pages` (optional) are the addresses the owner gave for the pages of a redesigned site on their own local
-  server (`http://localhost:3000/`, one word each, no quote): the implementer ends with `adoption wiring --after` and the
+  server (`http://localhost:3000/`: http or https on `localhost`, `127.0.0.1` or `[::1]`, written only with letters, digits and
+  `- . _ ~ : / ? # [ ] = + % ,`, so a `$`, backtick, quote or `&` is refused before any agent starts, naming the address; write
+  `%26` for `&`): the implementer ends with `adoption wiring --after` and the
   reviewer runs `--compare` with the same `--page "<address>"` for each, and with none they read the pages of the before
   record, which are the old addresses.
 

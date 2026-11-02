@@ -102,18 +102,21 @@ def rg_path() -> str:
     return p
 
 
-EXCLUDE: list[str] = []   # extra --glob arguments (the brand project itself, when it lives inside a repository)
+def brand_exclude(root: Path, repo: Path) -> list[str]:
+    """The extra ripgrep arguments that leave the brand project out of a repository it lives inside: a --glob for its folder, else none. `root` and `repo` are real paths.
+    The survey and the wiring scan both ask for it (a repository's slots and wiring are the product's, not the brand project's own boards and pages) and pass it to every ripgrep run."""
+    return ["--glob", "!" + root.relative_to(repo).as_posix() + "/**"] if repo in root.parents else []
 
 
-def run_rg(rg: str, repo: Path, label: str, args: list[str]) -> bytes:
-    cp = subprocess.run([rg, *RG_BASE, *EXCLUDE, *args, "."], cwd=repo, capture_output=True, stdin=subprocess.DEVNULL, timeout=600)
+def run_rg(rg: str, repo: Path, label: str, args: list[str], exclude: list[str]) -> bytes:
+    cp = subprocess.run([rg, *RG_BASE, *exclude, *args, "."], cwd=repo, capture_output=True, stdin=subprocess.DEVNULL, timeout=600)
     if cp.returncode not in (0, 1):
         fail(EXIT_CANNOT, f"ripgrep failed in {label} (exit {cp.returncode}): {cp.stderr.decode('utf-8', 'replace').strip()[:300]}")
     return cp.stdout
 
 
-def list_files(rg: str, repo: Path, label: str) -> list[str]:
-    out = run_rg(rg, repo, label, ["--files", "--null"])
+def list_files(rg: str, repo: Path, label: str, exclude: list[str]) -> list[str]:
+    out = run_rg(rg, repo, label, ["--files", "--null"], exclude)
     files = [p.decode("utf-8", "replace") for p in out.split(b"\0") if p]
     return sorted(f[2:] if f.startswith("./") else f for f in files)
 
@@ -137,14 +140,14 @@ def git_head(repo: Path) -> str:
     return cp.stdout.strip() if cp.returncode == 0 and cp.stdout.strip() else "no git head"
 
 
-def rg_matches(rg: str, repo: Path, label: str, patterns: list[str], fixed: bool) -> list[tuple[str, int, str]]:
+def rg_matches(rg: str, repo: Path, label: str, patterns: list[str], fixed: bool, exclude: list[str]) -> list[tuple[str, int, str]]:
     if not patterns:
         return []
     args = ["--json", "-n", "-i"] + (["-F"] if fixed else [])
     for p in patterns:
         args += ["-e", p]
     out = []
-    for ln in run_rg(rg, repo, label, args).splitlines():
+    for ln in run_rg(rg, repo, label, args, exclude).splitlines():
         rec = json.loads(ln)
         if rec.get("type") != "match":
             continue
@@ -160,7 +163,7 @@ def rg_matches(rg: str, repo: Path, label: str, patterns: list[str], fixed: bool
     return out
 
 
-def recount(rg: str, repo: Path, label: str, names: list[str], colours: list[str]) -> dict[str, int]:
+def recount(rg: str, repo: Path, label: str, names: list[str], colours: list[str], exclude: list[str]) -> dict[str, int]:
     """Matching lines of the name and colour searches, counted again with a second ripgrep run in another output mode (per-file counts for names,
     plain text lines for colours) and none of survey's own code (no --json parse, no row bookkeeping). The accounting row compares this with the hits."""
     out = {"name": 0, "colour": 0}
@@ -169,7 +172,7 @@ def recount(rg: str, repo: Path, label: str, names: list[str], colours: list[str
         args = ["--count", "--null", "-i", "-F"]
         for p in pats:
             args += ["-e", p]
-        for rec in run_rg(rg, repo, label, args).split(b"\n"):
+        for rec in run_rg(rg, repo, label, args, exclude).split(b"\n"):
             if rec:
                 out["name"] += int(rec.rsplit(b"\0", 1)[1])
     cpats = [p for c in colours for p in colour_patterns(c)]
@@ -178,7 +181,7 @@ def recount(rg: str, repo: Path, label: str, names: list[str], colours: list[str
         args = ["-n", "--null", "--no-heading", "--color", "never", "-i"]
         for r_, _py in cpats:
             args += ["-e", r_]
-        for rec in run_rg(rg, repo, label, args).split(b"\n"):
+        for rec in run_rg(rg, repo, label, args, exclude).split(b"\n"):
             if rec:
                 text = rec.split(b"\0", 1)[1].split(b":", 1)[1].decode("utf-8", "replace")
                 if any(x.search(text) for x in exact):
@@ -244,15 +247,15 @@ KIT_CHANGE = ("Copy the brand kit: every generated file byte for byte and the ow
               "it must then say current. Never into a global skills folder.")
 
 
-def survey_repo(rg: str, repo: Path, label: str, rid: str, names: list[str], colours: list[str], keeps: list[dict]):
+def survey_repo(rg: str, repo: Path, label: str, rid: str, names: list[str], colours: list[str], keeps: list[dict], exclude: list[str]):
     """-> (files, hits) where a hit is (category, file, line, text); path hits have line 0 and the directory as the file."""
-    files = list_files(rg, repo, label)
+    files = list_files(rg, repo, label, exclude)
     hits: list[tuple[str, str, int, str]] = []
-    for f, ln, text in rg_matches(rg, repo, label, [v for n in names for v in name_variants(n)], True):
+    for f, ln, text in rg_matches(rg, repo, label, [v for n in names for v in name_variants(n)], True, exclude):
         hits.append(("name", f, ln, text))
     cpats = [p for c in colours for p in colour_patterns(c)]
     exact = [re.compile(py, re.I) for _rg, py in cpats]
-    for f, ln, text in rg_matches(rg, repo, label, [r for r, _py in cpats], False):
+    for f, ln, text in rg_matches(rg, repo, label, [r for r, _py in cpats], False, exclude):
         if any(x.search(text) for x in exact):
             hits.append(("colour", f, ln, text))
     idents: list[dict] = []
@@ -428,20 +431,18 @@ def do_survey(a, project: Path, name: str) -> int:
         repo = Path(os.path.realpath(root / e["path"]))
         if not repo.is_dir():
             fail(EXIT_USAGE, f"repository {e['label']} ({e['path']}) is not a folder; pass --repo again")
-        EXCLUDE.clear()
-        if repo in root.parents:   # the brand project lives inside this repository: its own files are not the repository's slots
-            EXCLUDE.extend(["--glob", "!" + root.relative_to(repo).as_posix() + "/**"])
-        before_files = list_files(rg, repo, e["label"])
+        exclude = brand_exclude(root, repo)   # the brand project lives inside this repository: its own files are not the repository's slots
+        before_files = list_files(rg, repo, e["label"], exclude)
         before = snapshot(repo, before_files)
-        files, hits, idents = survey_repo(rg, repo, e["label"], e["id"], names, colours, doc["keeps"])
-        after = snapshot(repo, list_files(rg, repo, e["label"]))
+        files, hits, idents = survey_repo(rg, repo, e["label"], e["id"], names, colours, doc["keeps"], exclude)
+        after = snapshot(repo, list_files(rg, repo, e["label"], exclude))
         rep.add(f"read-only:{e['label']}", "pass" if before == after else "fail", "the repository was not changed during the survey",
                 detail="the list of files, sizes and modification times is the same before and after" if before == after
                 else "files, sizes or modification times changed while the survey ran: something else wrote to the repository (the survey writes nothing there)")
         rep.add(f"survey:{e['label']}", "info", "repository read", detail=f"{len(files)} files listed, {len(hits)} slot matches")
         for cat in own:
             own[cat] += sum(1 for h in hits if h[0] == cat)
-        for cat, n in recount(rg, repo, e["label"], names, colours).items():
+        for cat, n in recount(rg, repo, e["label"], names, colours, exclude).items():
             indep[cat] += n
         heads[e["id"]] = git_head(repo)
         idents_all += [i for i in idents]
@@ -682,22 +683,19 @@ def do_render(a, project: Path, name: str) -> int:
     return 0
 
 
-def wiring_repo(project: Path, row: dict, label: str) -> Path:
-    """The folder of a surveyed repository. When the brand project lives inside it, its own files are not the repository's wiring."""
+def wiring_repo(project: Path, row: dict, label: str) -> tuple[Path, list[str]]:
+    """The folder of a surveyed repository and the ripgrep arguments to read it with. When the brand project lives inside it, its own files are not the repository's wiring."""
     root = Path(os.path.realpath(project))
     repo = Path(os.path.realpath(root / row["path"]))
     if not repo.is_dir():
         fail(EXIT_USAGE, f"repository {label} ({row['path']}) is not a folder; survey it again with --repo")
-    EXCLUDE.clear()
-    if repo in root.parents:
-        EXCLUDE.extend(["--glob", "!" + root.relative_to(repo).as_posix() + "/**"])
-    return repo
+    return repo, brand_exclude(root, repo)
 
 
-def wiring_scan(rg: str, repo: Path, label: str, rendered: list[tuple[str, list[str]]] = ()) -> dict:
+def wiring_scan(rg: str, repo: Path, label: str, exclude: list[str], rendered: list[tuple[str, list[str]]] = ()) -> dict:
     """Read the repository's source for wiring and prove nothing in it changed meanwhile, then add what the rendered pages showed (`rendered`: [(file label, items)]):
     {items: {item: up to 5 files}, sorted; read: the files read; left_out: files of those kinds the keep rules skipped; deep: values nested too deep; unchanged: bool}."""
-    listed = list_files(rg, repo, label)
+    listed = list_files(rg, repo, label, exclude)
     before_snap = snapshot(repo, listed)
     read, left_out = [], 0
     for f in listed:
@@ -717,7 +715,7 @@ def wiring_scan(rg: str, repo: Path, label: str, rendered: list[tuple[str, list[
         items, d = wiring.scan_text(text)
         deep += d
         wiring.add(found, f, items)
-    unchanged = before_snap == snapshot(repo, list_files(rg, repo, label))
+    unchanged = before_snap == snapshot(repo, list_files(rg, repo, label, exclude))
     for source, items in rendered:
         wiring.add(found, source, items)
     return {"items": dict(sorted(found.items())), "read": read, "left_out": left_out, "deep": deep, "unchanged": unchanged}
@@ -784,13 +782,13 @@ def do_wiring(a, project: Path, name: str) -> int:
     if a.drop:
         return wiring_drop(a, project, name, doc, held, label)
     rg = rg_path()
-    repo = wiring_repo(project, row, label)
+    repo, exclude = wiring_repo(project, row, label)
     pages = wiring_pages(a, held)
     rendered = render_pages(pages, "nothing was compared" if a.compare else "nothing was stored")   # before the report and the read-only proof: a page that cannot be read leaves nothing behind
     if a.compare:
-        return wiring_compare(rg, repo, label, held, pages, rendered)
+        return wiring_compare(rg, repo, label, exclude, held, pages, rendered)
     rep = Report("adoption-wiring", project, renderer="n/a (read-only scan)")
-    got = wiring_scan(rg, repo, label, rendered)
+    got = wiring_scan(rg, repo, label, exclude, rendered)
     read, deep = got["read"], got["deep"]
     unchanged = got["unchanged"]
     rep.add(f"read-only:{label}", "pass" if unchanged else "fail", "the repository was not changed during the scan",
@@ -812,7 +810,7 @@ def do_wiring(a, project: Path, name: str) -> int:
     record = {"date": today(), "head": git_head(repo), "files": len(read), **({"pages": pages} if pages else {}), "items": items}
     entry = doc.setdefault("wiring", {}).setdefault(rid, {})
     entry[which] = record
-    stale_after = entry.pop("after", None) if a.before else None   # an after record was taken against the baseline that --again replaces: kept, `check` would compare it with the new one. The drops stay: they are the owner's reasons for items of the before record
+    stale_after = entry.pop("after", None) if a.before else None   # --before --again removes the old after record: it was taken against the baseline that is gone, and kept, `check` would judge it against the new baseline. The drops stay: they are the owner's reasons for items of the before record
     changed = write_both(project, doc, name)
     rc = rep.finish()
     print(f"\n{which} record of {label}: {len(items)} items from {len(read)} files" + (f" and {len(pages)} rendered page(s)" if pages else "")
@@ -825,9 +823,9 @@ def do_wiring(a, project: Path, name: str) -> int:
     return rc
 
 
-def wiring_compare(rg: str, repo: Path, label: str, entry: dict, pages: list[str], rendered: list[tuple[str, list[str]]]) -> int:
+def wiring_compare(rg: str, repo: Path, label: str, exclude: list[str], entry: dict, pages: list[str], rendered: list[tuple[str, list[str]]]) -> int:
     """Read the repository now (and the rendered pages) and say what the redesign lost against the before record. Writes nothing: no record, no report, no ADOPTION.md."""
-    got = wiring_scan(rg, repo, label, rendered)
+    got = wiring_scan(rg, repo, label, exclude, rendered)
     if not got["unchanged"]:
         fail(EXIT_FAIL, f"files, sizes or modification times in {label} changed while it was read: something else wrote to the repository (the comparison writes nothing there). Nothing was compared")
     now, before = got["items"], entry["before"]

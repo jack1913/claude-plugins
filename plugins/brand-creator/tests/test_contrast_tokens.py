@@ -485,6 +485,45 @@ def test_a_date_with_no_words_or_words_with_no_date_or_a_list_of_no_ground_is_no
     assert list(rows) == ["grounds:named"] and rows["grounds:named"]["status"] == "warn" and "grounds.list holds none" in rows["grounds:named"]["detail"]
 
 
+# (what the owner wrote, whether it names the grounds): the one rule of adapt.owner_named, written out by hand. contrast, adapters and check each decide on it.
+OWNER_NAMING = [
+    ("2026-10-30 text sits on the page colour", True),
+    ("2026-10-31: text sits on the page colour", True),                 # a date, then words: the colon is part of the words
+    ("  2026-11-01 text sits on the page colour  ", True),              # white space around it is not the owner's words
+    ("2026-12-31 x", True),
+    ("2026-13-45 text sits on the page colour", False),               # not a day of the calendar
+    ("2026-02-30 text sits on the page colour", False),
+    ("2026-11-02", False),                                              # a date and no words
+    ("2026-11-03   ", False),
+    ("text sits on the page colour", False),                           # words and no date
+    ("20261104 text sits on the page colour", False),
+    ("", False),
+]
+
+
+def test_contrast_adapt_and_check_hold_the_owners_naming_to_one_rule(tmp_path):
+    """`grounds.named_by_owner` (contrast, and adapt for the adapters) and `starter-kept` `decided` (check) are the same thing: a real YYYY-MM-DD date, then the owner's
+    words. adapt.owner_named is the one rule; the two commands answer as it does on a valid value, a bad date and a date with no words."""
+    import adapt
+    p = starter_project(tmp_path)
+    assert tokens(p).returncode == 0
+    built = p / "assets" / "tokens" / "tokens.json"
+    assert bc("state", "--record", "G4", "the owner approved the system rules", project=p).returncode == 0
+    primitives = p / "tokens" / "primitives.tokens.json"
+    for value, named in OWNER_NAMING:
+        assert adapt.owner_named(value) is named, value
+        mutate_json(built, lambda d: d["grounds"].__setitem__("named_by_owner", value))
+        assert contrast(p, "--skip-marks").returncode == 0
+        row = grounds_rows(p)["grounds:named"]
+        assert (row["status"], row["named_by_owner"]) == (("pass", True) if named else ("warn", False)), (value, row["detail"])
+        kept = {"decided": value, "paths": ["motion.quick"]}
+        mutate_json(primitives, lambda d: d.setdefault("$extensions", {}).setdefault("brand-creator", {}).__setitem__("starter-kept", kept))
+        assert bc("check", project=p).stdout is not None
+        starter = next(x for x in report(p, "check")["results"] if x["id"] == "tokens:starter")
+        assert ("is wrong" not in starter["detail"]) is named, (value, starter["detail"])
+        assert (starter["kept"] == ["motion.quick"]) is named, (value, starter["kept"])
+
+
 def test_a_button_that_vanishes_into_its_dark_ground_warns_by_role(tmp_path):
     """The action of a ground has the ground's own colour in dark: that role warns in dark, not in light, and `contrast` still exits 0."""
     p = starter_project(tmp_path)
@@ -502,6 +541,32 @@ def test_a_button_that_vanishes_into_its_dark_ground_warns_by_role(tmp_path):
     assert rows["grounds:light:color.bg:action"]["status"] == "pass"
     assert rows["grounds:named"]["status"] == "pass" and report(p, "contrast")["status"] == "pass"
     assert "grounds:dark:color.bg:action" not in failing(report(p, "contrast"))
+
+
+@pytest.mark.parametrize("break_it, why", [
+    (lambda e: e.pop("roles"), "an entry with no roles"),
+    (lambda e: e.__setitem__("roles", ["text"]), "roles that are no object"),
+    (lambda e: e.pop("modes"), "an entry with no modes"),
+    (lambda e: e["modes"].pop("dark"), "an entry with no dark mode"),
+    (lambda e: e.__setitem__("ground", 7), "a ground that is no name"),
+])
+def test_contrast_refuses_a_grounds_entry_the_way_adapt_does(tmp_path, break_it, why):
+    """`contrast` and `adapt.grounds_of` (the adapters, the applied skill and the kit) read the same `grounds`: an entry one of them cannot read stops the other too,
+    with the same message (exit 2, nothing judged half-way). A ground with no `roles` used to pass `contrast` and stop `adapters`."""
+    import adapt
+    from _common import CliError
+    p = starter_project(tmp_path)
+    assert tokens(p).returncode == 0
+    built = p / "assets" / "tokens" / "tokens.json"
+    assert contrast(p, "--skip-marks").returncode == 0 and "grounds" in json.loads(built.read_text())      # as built, both read it
+    adapt.grounds_of(json.loads(built.read_text()))
+    mutate_json(built, lambda d: break_it(d["grounds"]["list"][0]))
+    with pytest.raises(CliError) as e:
+        adapt.grounds_of(json.loads(built.read_text()))
+    assert e.value.code == 2 and "grounds must be" in e.value.message, why
+    r = contrast(p, "--skip-marks")
+    assert r.returncode == 2 and "grounds must be" in r.stderr and "brand-creator tokens" in r.stderr, (why, r.stdout, r.stderr)
+    assert e.value.message in r.stderr, "the same words as adapt"
 
 
 def test_a_ground_missing_a_role_warns_and_named_grounds_pass(tmp_path):

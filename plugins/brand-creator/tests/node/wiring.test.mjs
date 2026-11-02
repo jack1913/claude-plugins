@@ -2,8 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 import http from "node:http";
+import fs from "node:fs";
 import { spawn } from "node:child_process";
 import { needSetup, tmpdir, ROOT, DATA } from "./_helpers.mjs";
+import { loadDep, readSetup } from "../../scripts/lib/_common.mjs";
+import { EVENT_HANDLERS } from "../../scripts/pagelib/wiring.mjs";
 
 // `render.mjs wiring <url>`: the wiring of a page of the owner's own local server, read from the DOM (scripts/pagelib/wiring.mjs). The server is one of this process on
 // 127.0.0.1, port 0: loopback is this machine, not the network these tests must stay off, and nothing here reaches another machine. The command is run asynchronously
@@ -83,6 +86,51 @@ test("wiring: a page on 127.0.0.1 gives its links, fields, ids, hooks, scripts a
       assert.deepEqual(JSON.parse(e.stdout), { link: [], field: [], handler: [], hook: [], id: [], script: [] });
     } finally { await empty.close(); }
   } finally { await srv.close(); }
+});
+
+// The one list of event-handler attribute names, read by this side and by scripts/adaptlib/wiring.py (tests/test_adoption_wiring.py checks the same file from there).
+const EVENTS_FILE = path.join(ROOT, "scripts", "data", "event-handlers.json");
+const eventNames = () => JSON.parse(fs.readFileSync(EVENTS_FILE, "utf8")).events;
+
+test("wiring: the handler names are those of scripts/data/event-handlers.json, the file wiring.py reads too", () => {
+  const names = eventNames();
+  assert.deepEqual(names, [...new Set(names)].sort());
+  assert.ok(names.every((n) => /^on[a-z]+$/.test(n)));
+  for (const known of ["onclick", "onsubmit", "onchange", "oninput", "onkeydown", "onmouseover", "onfocus", "onblur", "onload", "onerror", "onscroll", "ontouchstart", "onpointerdown", "ondragstart"]) assert.ok(names.includes(known), known);
+  for (const none of ["onboarding", "one", "only", "online", "onward", "on"]) assert.ok(!names.includes(none), none);
+  assert.deepEqual([...EVENT_HANDLERS].sort(), names);
+});
+
+test("wiring: onclick and onsubmit are handlers; onboarding, one and only are not (the source side reads the same markup the same way)", async (t) => {
+  if (needSetup(t)) return;
+  const srv = await listen((req, res) => {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    res.end('<!doctype html><title>t</title><div onboarding="intro" one="1" only="x" onclick="a()" onsubmit="b()" onkeydown="k" ontouchstart="t()" onmouseover="">events</div>');
+  });
+  try {
+    const r = await render(["wiring", `http://127.0.0.1:${srv.port}/`]);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.deepEqual(JSON.parse(r.stdout).handler, ["onclick=a()", "onsubmit=b()", "onkeydown=k", "ontouchstart=t()"]);
+  } finally { await srv.close(); }
+});
+
+test("wiring: every event attribute the installed Chromium knows is in the list (a browser that learns a new one needs a line in scripts/data/event-handlers.json)", async (t) => {
+  if (needSetup(t)) return;
+  process.env.PLAYWRIGHT_BROWSERS_PATH = readSetup().browsers_path;
+  const browser = await (await loadDep("playwright-core")).chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    await page.setContent("<p>x</p>");
+    const known = await page.evaluate(() => {
+      const svg = (n) => document.createElementNS("http://www.w3.org/2000/svg", n);
+      const els = ["div", "body", "frameset", "img", "script", "input", "video", "audio", "form", "a", "button", "details", "dialog", "select", "textarea", "iframe", "canvas", "slot", "html"].map((n) => document.createElement(n));
+      const all = new Set();
+      for (const el of [...els, svg("svg"), svg("circle")]) for (const k in el) if (/^on[a-z]+$/.test(k)) all.add(k);
+      return [...all].sort();
+    });
+    assert.ok(known.length > 50 && known.includes("onclick"), known.length);
+    assert.deepEqual(known.filter((k) => !eventNames().includes(k)), []);
+  } finally { await browser.close(); }
 });
 
 test("wiring: a long value is cut at 120 characters and a redirect that stays home is followed", async (t) => {

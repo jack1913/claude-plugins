@@ -9,7 +9,9 @@ An item is `kind:value`, with everything after the colon cut at 120 characters. 
   link     the value of href, to, action, formAction (formaction too); an empty value and `#` are skipped, and so is href on link, script,
            base, use, image and style (they load a file, they are not a way to move)
   field    name="..." on any tag but meta, link, a, iframe, param, slot, map and object; and the string argument of register("...")
-  handler  an attribute `on[A-Z]...` or `on[a-z]...`, `@event`, `v-on:event` or `on:event` that has a value: `handler:<attribute>=<value>`
+  handler  an attribute that has a value and is an event name of the one list (scripts/data/event-handlers.json: `onclick`, `onsubmit` ...; `onboarding`,
+           `one` and `only` only start with "on" and are not), a component prop `on[A-Z]...` (`onClick`), `@event`, `v-on:event` or `on:event`:
+           `handler:<attribute>=<value>`. The page side (pagelib/wiring.mjs) reads the same list, so the two sides agree on the names the DOM can show
   hook     data-testid, data-test, data-cy, data-qa and data-track*, data-analytics*, data-event*, data-gtm*: `hook:<attribute>=<value>`
   id       a static id="..." (no braces, no white space)
   script   the src of a <script>, without its query and without a leading ./
@@ -24,7 +26,9 @@ recorded under is `rendered:<path of the URL>` (`rendered_source`).
 """
 from __future__ import annotations
 
+import json
 import re
+from pathlib import Path
 from urllib.parse import urlsplit
 
 EXTENSIONS = (".html", ".htm", ".jsx", ".tsx", ".js", ".ts", ".mjs", ".vue", ".svelte", ".astro", ".erb", ".ejs", ".hbs", ".handlebars",
@@ -38,6 +42,8 @@ SPAN = 50000         # characters a single tag is followed for: a `<` that is no
 LINK_ATTRS = {"href", "to", "action", "formAction", "formaction"}
 LINK_NOT_ON = {"link", "script", "base", "use", "image", "style"}
 FIELD_NOT_ON = {"meta", "link", "a", "iframe", "param", "slot", "map", "object"}
+EVENTS_FILE = Path(__file__).resolve().parent.parent / "data" / "event-handlers.json"
+EVENT_HANDLERS = frozenset(json.loads(EVENTS_FILE.read_text(encoding="utf-8"))["events"])   # the one list of event-handler attribute names; pagelib/wiring.mjs reads the same file
 
 _COMMENT = re.compile(r"<!--.*?-->", re.S)
 _RAW = re.compile(r"(<(script|style)\b[^>]*>)(.*?)(</\2\s*>)", re.S | re.I)
@@ -45,7 +51,7 @@ _TAG = re.compile(r"<([A-Za-z][\w:.\-]*)")
 _NAME = re.compile(r"[^\s=<>\"'{}/]+")
 _LOOSE = re.compile(r"[^\s>]*")
 _BRACE = re.compile(r"[{}]")
-_HANDLER = re.compile(r"on[A-Z]\w*|on[a-z]+|@[^\s]+|v-on:[^\s]+|on:[^\s]+")
+_HANDLER = re.compile(r"on[A-Z]\w*|@[^\s]+|v-on:[^\s]+|on:[^\s]+")   # the forms the DOM never shows; a plain lowercase name (onclick) is a handler only when EVENT_HANDLERS has it
 _HOOK = re.compile(r"data-(?:testid|test|cy|qa)|data-(?:track|analytics|event|gtm)[\w\-]*")
 _REGISTER = re.compile(r"(?<![\w$])register\(\s*(?P<q>[\"'`])(?P<v>[^\"'`\n]+?)(?P=q)")
 _SPACE = re.compile(r"\s+")
@@ -140,7 +146,7 @@ def _kind(tag: str, name: str) -> str | None:
         return "link"
     if name == "name" and tag not in FIELD_NOT_ON:
         return "field"
-    if _HANDLER.fullmatch(name):
+    if name in EVENT_HANDLERS or _HANDLER.fullmatch(name):
         return "handler"
     if _HOOK.fullmatch(name):
         return "hook"
