@@ -41,7 +41,7 @@ KIT_FILE = "kit.json"
 SCHEMA = 1
 SKILL_FILE = "SKILL.md"
 GENERATED_DIRS = ("brand", "snippets", "reference-pages")   # a file in one of these that the kit did not write is a foreign file
-FINDER_FILE = ".DS_Store"                                   # what Finder puts into a folder it opened: a file with exactly this name is no foreign file, in any generated folder
+FINDER_FILE = ".DS_Store"                                   # what Finder puts into a folder it opened: a file with exactly this name is no foreign file, in any generated folder, and `kit_paths` leaves it out of the whole kit
 PREFIX = "brand/"                                           # where the project's files sit inside the kit: project path = PREFIX + path
 TOKENS_JSON = "assets/tokens/tokens.json"
 TOKENS_CSS = "assets/tokens/tokens.css"
@@ -1378,7 +1378,7 @@ _MD_LINK = re.compile(r"\]\(\s*(<[^>\n]*>|[^\s)]*)")
 _CSS_URL = re.compile(r"""url\(\s*(?:"([^"]*)"|'([^']*)'|([^)'"\s]*))\s*\)""", re.I)
 _CSS_COMMENT = re.compile(r"/\*.*?\*/", re.S)
 _SCHEME = re.compile(r"^([A-Za-z][A-Za-z0-9+.\-]*):")
-_DESCRIPTOR = re.compile(r"\d+(?:\.\d+)?[wx],?")
+_ASCII_SPACE = "\t\n\f\r "                                  # ASCII whitespace as the HTML Standard defines it: TAB, LF, FF, CR and SPACE (not every Unicode space)
 
 
 def kit_report(project: Path) -> dict | None:
@@ -1388,11 +1388,12 @@ def kit_report(project: Path) -> dict | None:
 
 def kit_paths(project: Path) -> list[str]:
     """The path in the kit of every file and every link below the kit folder, sorted. A link to a folder is listed as the one path it is and never followed; a folder with nothing
-    in it is not listed."""
+    in it is not listed. A file named exactly `.DS_Store` (what Finder leaves in a folder it opened) is left out, anywhere in the kit, as `on_disk` leaves it out of the generated
+    folders: it is no file of the kit, so it is no input of the `kit-check` report, is not in the tree, and is not read for links or fill markers."""
     kd, out = kit_dir(project), []
     for root, dirs, names in os.walk(kd):
         base = Path(root)
-        out += [(base / n).relative_to(kd).as_posix() for n in names]
+        out += [(base / n).relative_to(kd).as_posix() for n in names if n != FINDER_FILE]
         out += [(base / n).relative_to(kd).as_posix() for n in dirs if (base / n).is_symlink()]
     return sorted(out)
 
@@ -1489,8 +1490,35 @@ def md_links(text: str) -> list[tuple[int, str]]:
 
 
 def _srcset_urls(value: str) -> list[str]:
-    """The URLs of a srcset value: every word that is not a width or density descriptor, a trailing comma taken off."""
-    return [u for u in (w.rstrip(",") for w in value.split() if not _DESCRIPTOR.fullmatch(w)) if u]
+    """The URLs of a srcset value, read by the rule of the HTML Standard's "parse a srcset attribute" (WHATWG HTML, "Images": the splitting loop and the descriptor tokenizer):
+    - Commas and ASCII whitespace in front of a candidate are skipped. The candidate's URL is the run of characters up to the next ASCII whitespace, so a comma inside it stays in it:
+      `a.svg,b.svg 2x` is the one URL `a.svg,b.svg`, and a `data:` URI keeps its comma.
+    - A URL that ends with a comma (a comma followed by whitespace or the end of the value, as in `a.svg, b.svg`) loses all its trailing commas and has no descriptor.
+    - After any other URL, its descriptor runs up to the first comma outside parentheses, and that comma ends the candidate: `a.svg 1x,b.svg 2x` is `a.svg` with `1x`, then `b.svg` with `2x`."""
+    urls, i, n = [], 0, len(value)
+    while True:
+        while i < n and (value[i] in _ASCII_SPACE or value[i] == ","):
+            i += 1
+        if i >= n:
+            return urls
+        j = i
+        while j < n and value[j] not in _ASCII_SPACE:
+            j += 1
+        url, i = value[i:j], j
+        if url.endswith(","):
+            url = url.rstrip(",")
+        else:
+            in_parens = False
+            while i < n:
+                ch = value[i]
+                i += 1
+                if in_parens:
+                    in_parens = ch != ")"
+                elif ch == "(":
+                    in_parens = True
+                elif ch == ",":
+                    break
+        urls.append(url)
 
 
 class _LinkParser(HTMLParser):

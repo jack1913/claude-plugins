@@ -2407,11 +2407,13 @@ path with its sha256, `kit.json` included), `kit_version` (the report's own `ver
 `kit check` (`scripts/kit.py`; the checks are `scripts/adaptlib/kitlib.py`: `files_check`, `link_check`, `fill_markers`, `version_problems`, `source_changes`, `owned_changes`) proves that the kit in the project is whole,
 and writes the report `kit-check` (`assets/_checks/kit-check.json`), renderer `n/a (generated files)`. It reads the kit and the brand and writes nothing but that report. Exit 0 pass, 1 a row failed, 3 a row is not verified
 (skipped). Exit 2: no kit in the project, "no kit in this project: `brand-creator kit build --yes` (opt-in at G5)"; a `kit.json` that `kitlib.load()` refuses (a key it does not know or a key that is missing, named); a `kit.json`
-that is a link (a link is never read through; `kit build --yes --replace` moves it aside). Both stop the run before the report is created, so the earlier report stands, and `check` sees it stale.
+that is a link (a link is never read through; `kit build --yes --replace` moves it aside). Both stop the run before the report is created, so the earlier report is not rewritten and stands. What `check`
+then says of it depends on the file. A `kit.json` that `kitlib.load()` refuses has other bytes than the report read, so the report is stale. A `kit.json` that is a link leading to the same bytes leaves the report
+current (the staleness comparison reads the file the link leads to), and only the row `kit:checked` says not verified, because a file of the kit is a link now; a link leading to other bytes makes the report stale.
 
-Inputs: every file under the kit folder (a link is no input), the files the kit is made from (`kitlib.input_paths`: the token files, the logo files and band drawings, `qa/rules.json`, `FACTS.md`, the motion files, the font files,
+Inputs: every file under the kit folder (a link is no input, and a Finder `.DS_Store` is no file of the kit: `kitlib.kit_paths` leaves a file with exactly that name out), the files the kit is made from (`kitlib.input_paths`: the token files, the logo files and band drawings, `qa/rules.json`, `FACTS.md`, the motion files, the font files,
 their licence texts and the `fontcheck` report, and for the approved reference pages `site/site.json`, the files of the page folders, the files they load and each page's page-check report: `kitlib.page_input_rels`), `BRAND-STATE.md` and the `kit` report, so a file that changed or went makes the report stale. Extra keys: `kit_version` and `kit_tree_sha`, the sha256 over the sorted paths of every
-file and link below the kit folder, each marked file or link (`kitlib.tree_sha`), because a file added since is no recorded input. Every row reads a plain file of the kit only: a link to a file or to a folder is never followed,
+file and link below the kit folder, each marked file or link and without a Finder `.DS_Store` (`kitlib.tree_sha`), because a file added since is no recorded input. Every row reads a plain file of the kit only: a link to a file or to a folder is never followed,
 read or hashed, and a link where a generated file belongs is not that file.
 
 Rows, in this order:
@@ -2419,7 +2421,7 @@ Rows, in this order:
 - `kit:files`: fails when a path in `kit.json` `generated` is missing, is a link or a folder, or has another sha256 (a path that no kit holds, one that climbs out of the kit, is named and never opened); when `kit.json` is not the
   bytes the `kit` report recorded in `outputs`; or when a file in `brand/`, `snippets/` or `reference-pages/` is not listed in `generated` (a link counts, a Finder `.DS_Store` does not): the detail says "move it to recipes/ or a folder
   of your own". Up to 6 paths are named. Skipped ("not verified: there is no `kit` report that records what the build wrote") when there is no `kit` report or it records no outputs.
-- `kit:links`: every relative link of a `.md` file (`](target)`, outside fenced code blocks and code spans), a `.html` file (`src=`, `href=`, `xlink:href=` and `srcset=` of a tag, so not a comment or a script) and a `.css` file
+- `kit:links`: every relative link of a `.md` file (`](target)`, outside fenced code blocks and code spans), a `.html` file (`src=`, `href=`, `xlink:href=` and `srcset=` of a tag, so not a comment or a script; a `srcset` is read by the HTML rule for it: a URL is the run up to the next white space, a comma ends the candidate when it ends the URL or follows its descriptor, so `a.svg 1x,b.svg 2x` and `a.svg, b.svg` hold two targets and `a.svg,b.svg 2x` one) and a `.css` file
   (`url(...)`, comments left out) anywhere in the kit resolves to an existing file inside the kit, with the letter case that is there (a Mac finds `Mark.svg` for `mark.svg`, Linux does not) and no link on the way. The target is
   percent-decoded and resolved from the folder of the file that holds it. A fragment, a `?query`, an empty target, `//host` and a target with a URL scheme (`http:`, `https:`, `mailto:`, `data:`, `tel:`) are not relative links and are
   not judged. Fails for a target that "points outside the kit: it will not resolve in a product repository", an absolute path (a leading `/`, `file:`, a drive letter) and a missing file or folder. The first 6 are listed as
@@ -2497,12 +2499,16 @@ Per repository, one of three states (`--json`: `state`):
 - `current (version V)`: every generated file `kit.json` lists, and `kit.json` itself, is a plain file with the project's bytes. The comparison is byte for byte, never by size or time.
 - `not current (installed version A, project version B)`: A is `unknown` when the installed `kit.json` cannot be read. Listed after it: the generated files that differ (`not the same bytes`, or `is a link or a folder, not a file`),
   the generated files that are missing, and the files left over from an older kit (any file in `brand/`, `snippets/` or `reference-pages/` that the project's kit does not list; a Finder `.DS_Store` is none).
+  When A and B are the same version (a copy that has the new `kit.json` and still holds a file the new kit dropped) the line says so and counts what differs, so that it does not read as a contradiction:
+  `not current (version V on both sides, but 1 file differs, 1 file is missing, 1 file is left over from an older kit)`, naming only the kinds there are.
+  The list of files left over says what to do with them: they are not on the copy list; the implementer moves each to `removed-<date>/<kit folder>/<its path in the kit>` in the repository, and nothing is deleted
+  (a script never writes there). A copy is current once that is done.
 
 Every state also prints the owner files that differ ("owner files that differ (kept on update)"), which never make a copy not current: an installed kit's owner files are the repository's own, and an update copies one only where the
 repository has none. The copy list, as paths relative to the kit folder, is the generated files to copy (all of them when nothing is installed, otherwise those that differ or are missing; `kit.json` last, as the build writes it,
 so a copy that stops half way is not vouched for), then the owner files the repository lacks. Files left over are not on it: the implementer takes them out. `--json` prints one document, `{kit, version,
-repos: [{label, path, state, installed_version, project_version, differ: [{file, why}], missing, left_over, owner_differ: [{file, why}], copy, copy_owner, read_only}], current}`, where `copy` is the whole copy list
-and `copy_owner` names the owner files in it.
+repos: [{label, path, state, installed_version, project_version, differ: [{file, why}], missing, left_over, left_over_to, owner_differ: [{file, why}], copy, copy_owner, read_only}], current}`, where `copy` is the whole copy list
+and `copy_owner` names the owner files in it, and `left_over_to` says where the files in `left_over` go in the repository (`removed-<date>/<kit folder>/`, with the literal `<date>`), `null` when none is left over.
 
 It proves it read only, as the survey does: the installed kit folder is listed with the path, kind, size and modification time of every entry (`kitlib.folder_state`, no link followed) before and after the comparison, and a
 difference exits 1, naming the repository on stderr, without the "read only" line. Nothing in a link is read: a link where a generated file belongs is a file that differs, and a link in a generated folder is left over.

@@ -325,6 +325,8 @@ lints the board of the latest round again before `check`, so an edit of the fact
   and a file you put into a generated folder (move it to `recipes/` or a folder of your own), and warns when one of your
   own files changed since the last build. `brand-creator check` expects its report once you have a kit, and says
   when a file was added to the kit after it.
+  A Finder `.DS_Store` in the kit is no file of the kit and never makes that report stale. A `srcset` written as
+  `a.svg 1x,b.svg 2x` is read the way HTML reads it, so it is no longer reported as a dead link.
 - `brand-creator kit check` also holds your own recipes, golden rules and visual notes to a source. Every bullet
   there says `[example]` or names a rule the kit knows with `[rule: <id>]` (a rule of your brand, a page rule as
   `page:<id>`, a choice of a reference page as `site:<id>`), and every value in them, such as `48px`, a ratio or a
@@ -344,6 +346,9 @@ lints the board of the latest round again before `check`, so an edit of the fact
   and an update keeps them), and prints the copy list: the generated files that need copying, then your own files the
   repository does not have. It only reads: nothing is written in the repository or in your project, and it checks
   that. It refuses your home folder, anything inside `~/.claude` and the brand project itself.
+  A file your brand dropped (a logo you took out) stays in a copy that was updated: `kit status` lists it as left
+  over, says it is not on the copy list and goes to `removed-<date>/` in that repository, and when both versions are
+  the same it says so and what differs, instead of naming the same version twice.
 - The adoption list can hold a brand kit row per repository. `brand-creator adoption add --repo <label> --kit` adds it
   (it needs a kit in your project and takes no other words), a survey leaves it alone, `ADOPTION.md` shows it as "the
   whole folder", and `brand-creator adoption status` says for each such repository whether its copy of the kit is

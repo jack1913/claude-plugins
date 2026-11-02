@@ -434,18 +434,20 @@ def test_a_dangling_link_at_a_path_the_kit_writes_is_a_foreign_file(pack):
 
 
 def test_a_kit_json_that_is_a_link_is_no_record_of_the_last_build(pack, tmp_path):
-    """With the kit report gone, kit.json stands in for it (`kitlib.previous`), but never through a link: a link that leads out of the project gives neither its version nor its hashes."""
+    """With the kit report gone, kit.json stands in for it (`kitlib.previous`), but never through a link: a link that leads out of the project gives neither its version nor its hashes.
+    The version behind the link is 1.7, of the kit's own edition, with the content the kit has now: read as a record it would be kept (`next_version`), so only the guard against a
+    link in `_kit_json_record` holds the plan at 1.1. A version of another edition (7.7) starts again at 1.1 as a new edition does, with or without the guard."""
     from helpers import symlink_or_skip
     assert build(pack).returncode == 0
     kd, far = kit_of(pack), tmp_path / "far-kit.json"
     far.write_bytes((kd / "kit.json").read_bytes())
-    mutate(far, '"version": "1.1"', '"version": "7.7"')
+    mutate(far, '"version": "1.1"', '"version": "1.7"')
     (kd / "kit.json").unlink()
     symlink_or_skip(kd / "kit.json", far)
     (pack / "assets" / "_checks" / "kit.json").unlink()
     far_before = far.read_bytes()
     r = build(pack, "--plan")
-    assert r.returncode == 0 and "version 1.1)" in r.stdout and "7.7" not in r.stdout + r.stderr
+    assert r.returncode == 0 and "version 1.1)" in r.stdout and "1.7" not in r.stdout + r.stderr
     r = build(pack)
     assert r.returncode == 1 and "kit.json (not written by the kit)" in r.stderr and far.read_bytes() == far_before
 
@@ -1033,7 +1035,10 @@ def nothing_secret_in(p) -> None:
 
 def test_a_proof_page_read_through_a_link_that_leaves_the_project_is_never_copied(pack, tmp_path):
     """The page `L/../E` (L a link to deep/dir, E a link to a file outside the project, deep/E a normal file) must not make the kit read E as if the check had been made on deep/E.
-    The kit mirrors the plain path E, so E is what is checked and what is read, and the outside bytes never reach the kit."""
+    The kit mirrors the plain path E, so E is what is checked and what is read, and the outside bytes never reach the kit.
+    This is the real layout, and it does not tell the fix apart: `confine` takes `..` out of the path before it follows a link, so `L/../E` is E at the very first check and is refused
+    with or without the two later checks (the plain path checked again in `_proof_page`, and the page read from the path `confine` returns in `motion_files`). The test below, which
+    makes `confine` follow links first, is the one that tells them apart: it fails when both are taken out (either one alone still refuses the page)."""
     moving(pack)
     link_layout(pack, tmp_path / "outside.html", "E")
     mutate_json(pack / "motion" / "proof.json", lambda d: d["cases"][1].__setitem__("page", "L/../E"))
@@ -2068,6 +2073,59 @@ def test_links_are_read_from_markdown_html_and_css_and_only_relative_ones_are_ju
     assert kit_check(pack).returncode == 0
 
 
+@pytest.mark.parametrize("value, urls", [
+    ("a.svg 1x,b.svg 2x", ["a.svg", "b.svg"]),                                      # minified: the comma that follows a descriptor ends the candidate
+    ("a.svg 1x, b.svg 2x", ["a.svg", "b.svg"]),
+    ("a.svg 1x , b.svg 2x", ["a.svg", "b.svg"]),
+    ("a.svg 480w,b.svg 960w,c.svg 1440w", ["a.svg", "b.svg", "c.svg"]),
+    ("  a.svg\n\t480w ,\n  b.svg 960w  ", ["a.svg", "b.svg"]),                       # any ASCII whitespace, and some before the first and after the last candidate
+    ("a.svg, b.svg", ["a.svg", "b.svg"]),                                           # a comma that ends the URL: no descriptor
+    ("a.svg,\nb.svg 2x", ["a.svg", "b.svg"]),
+    ("a.svg,b.svg 2x", ["a.svg,b.svg"]),                                            # a comma inside a URL, with no whitespace after it, belongs to the URL
+    ("data:image/svg+xml,%3Csvg%2F%3E 1x,b.svg 2x", ["data:image/svg+xml,%3Csvg%2F%3E", "b.svg"]),
+    ("a.svg 1x,,, b.svg", ["a.svg", "b.svg"]),
+    ("a.svg 1x (x, y), b.svg", ["a.svg", "b.svg"]),                                 # a comma inside parentheses is part of the descriptor
+    ("a.svg", ["a.svg"]),
+    ("", []),
+    (" , \n,", []),
+])
+def test_srcset_urls_are_read_by_the_html_rule(value, urls):
+    """The expected URLs are written out by hand from the HTML Standard's "parse a srcset attribute": a URL is the run up to the next ASCII whitespace, one that ends with a comma
+    loses its commas and has no descriptor, any other URL is followed by a descriptor that runs to the first comma outside parentheses."""
+    import kitlib
+    assert [u for _line, u in kitlib.html_links(f'<img srcset="{value}">')] == urls
+
+
+def test_a_valid_srcset_written_without_spaces_is_no_dead_link(pack):
+    """`srcset="a.svg 1x,b.svg 2x"` is valid HTML, and the targets are `a.svg` and `b.svg`, never `1x,b.svg` (a word of the value up to the next white space)."""
+    filled_kit(pack)
+    notes = kit_of(pack) / "notes"
+    notes.mkdir()
+    logo = "../brand/assets/logo"
+    page = notes / "page.html"
+    page.write_text(f"""<img src="{logo}/mark.svg" srcset="{logo}/mark.svg 1x,{logo}/mark-dark.svg 2x" alt="">
+<img srcset="{logo}/mark.svg 1x , {logo}/mark-dark.svg 2x" alt="">
+<picture><source srcset="{logo}/wordmark.svg 480w,
+  {logo}/wordmark-dark.svg 960w"><img src="{logo}/mark.svg" alt=""></picture>
+<img srcset="{logo}/mark.svg, {logo}/mark-dark.svg 2x" alt="">
+<img srcset="data:image/svg+xml,%3Csvg%2F%3E 1x,{logo}/mark.svg 2x" alt="">
+""", encoding="utf-8")                                                                      # eleven relative links; the data: URI is no relative link
+    r = kit_check(pack)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert check_report_rows(pack)["kit:links"]["detail"] == f"{FRESH_LINKS + 11} relative links in {FRESH_FILES + 1} .md, .html and .css files resolve inside the kit"
+    mutate(page, f"{logo}/mark.svg 1x,{logo}/mark-dark.svg 2x", f"{logo}/mark.svg 1x,{logo}/gone.svg 2x")      # one candidate of the minified form dies
+    r = kit_check(pack)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert check_report_rows(pack)["kit:links"]["detail"] == (f"1 of {FRESH_LINKS + 11} relative links does not resolve inside the kit: "
+                                                              f"notes/page.html:1 -> {logo}/gone.svg (no such file in the kit)")
+    mutate(page, f"{logo}/mark.svg 1x,{logo}/gone.svg 2x", f"{logo}/mark.svg 1x,{logo}/mark-dark.svg 2x")
+    mutate(page, f"{logo}/wordmark.svg 480w,\n  {logo}/wordmark-dark.svg 960w", f"{logo}/wordmark.svg 480w,\n  {logo}/wordmark-gone.svg 960w")     # and one of the spaced form, on the next line
+    r = kit_check(pack)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert check_report_rows(pack)["kit:links"]["detail"] == (f"1 of {FRESH_LINKS + 11} relative links does not resolve inside the kit: "
+                                                              f"notes/page.html:3 -> {logo}/wordmark-gone.svg (no such file in the kit)")
+
+
 def test_a_generated_file_edited_or_a_file_added_to_a_generated_folder_fails_kit_check(pack):
     filled_kit(pack)
     assert kit_check(pack).returncode == 0 and statuses(pack) == ALL_PASS
@@ -2177,6 +2235,24 @@ def test_check_asks_for_kit_check_once_a_kit_exists(pack):
     assert rows["report:kit-check"]["status"] == "fail" and "kit:fill" in rows["report:kit-check"]["detail"]       # a failing kit check is a failing check
 
 
+def test_the_kit_check_report_lists_the_sources_of_the_kit_as_inputs(pack):
+    """The kit is made from the brand, so a change of the brand after `kit check` makes its report stale for `check`, not only a change inside the kit."""
+    filled_kit(pack)
+    assert kit_check(pack).returncode == 0
+    inputs = {i["path"] for i in report(pack, "kit-check")["inputs"]}
+    for rel in ("FACTS.md", "BRAND-STATE.md", "qa/rules.json", "assets/tokens/tokens.json", "assets/tokens/tokens.css", "assets/logo/mark.svg", "assets/logo/wordmark.svg",
+                "assets/_checks/kit.json", ".claude/skills/acme-brand/kit.json", ".claude/skills/acme-brand/voice.md"):
+        assert rel in inputs, rel                                                          # the brand's files, the build's report, and the kit's own files
+    rows = check_rows(pack)
+    assert rows["report:kit-check"]["status"] == "pass" and "kit:checked" not in rows
+    mutate(pack / "FACTS.md", "tools are made in batches of 200", "tools are made in batches of 300")
+    rows = check_rows(pack)
+    assert rows["report:kit-check"]["status"] == "skipped"
+    assert "stale" in rows["report:kit-check"]["detail"] and "FACTS.md changed" in rows["report:kit-check"]["detail"]
+    assert kit_check(pack).returncode == 3                                                 # read again: the kit no longer matches the brand, so it is not verified
+    assert check_rows(pack)["report:kit-check"]["status"] == "skipped"                     # and a report that is not verified is not a pass for check either
+
+
 def test_a_file_added_to_the_kit_after_kit_check_makes_check_say_not_verified(pack):
     filled_kit(pack)
     assert kit_check(pack).returncode == 0
@@ -2192,6 +2268,34 @@ def test_a_file_added_to_the_kit_after_kit_check_makes_check_say_not_verified(pa
     (notes / "new.md").unlink()                                                # taken out again: the input is gone, so the report is stale
     rows = check_rows(pack)
     assert rows["report:kit-check"]["status"] == "skipped" and "notes/new.md is gone" in rows["report:kit-check"]["detail"]
+
+
+def test_a_finder_ds_store_in_the_kit_leaves_the_kit_check_current(pack):
+    """Finder puts a `.DS_Store` into every folder the owner opens, the top of the kit and `brand/` too, and writes it again whenever the window changes. `kit_paths` leaves a file with
+    exactly that name out, as `on_disk` does for the generated folders: it is no input of the `kit-check` report, is not in the kit's tree, and is not read for links or fill markers."""
+    filled_kit(pack)
+    assert kit_check(pack).returncode == 0
+    kd = kit_of(pack)
+    finder = [".DS_Store", "brand/.DS_Store", "notes/.DS_Store"]
+    (kd / "notes").mkdir()
+    for rel in finder:
+        (kd / rel).write_text("Finder was here\n[[fill: a note]] [dead](gone.md)\n", encoding="utf-8")       # text, so that a reader that did not skip it would find a marker and a dead link
+    rows = check_rows(pack)
+    assert rows["report:kit-check"]["status"] == "pass" and "kit:checked" not in rows
+    assert kit_check(pack).returncode == 0 and statuses(pack) == ALL_PASS                  # nothing in them is read
+    assert not [i["path"] for i in report(pack, "kit-check")["inputs"] if i["path"].endswith(".DS_Store")]
+    for rel in finder:                                                                     # Finder writes them again
+        mutate(kd / rel, "Finder was here", "Finder was here again")
+    rows = check_rows(pack)
+    assert rows["report:kit-check"]["status"] == "pass" and "kit:checked" not in rows
+    (kd / ".DS_Store").unlink()
+    (kd / "brand" / ".DS_Store").unlink()
+    (kd / "notes" / ".DS_Store").unlink()
+    rows = check_rows(pack)                                                                # and taking them away is no change either
+    assert rows["report:kit-check"]["status"] == "pass" and "kit:checked" not in rows
+    (kd / ".DS_Store.bak").write_text("mine\n", encoding="utf-8")                          # only the exact name is Finder's: any other name is a file of the kit
+    rows = check_rows(pack)
+    assert rows["kit:checked"]["status"] == "skipped" and "added to the kit, or taken out of it" in rows["kit:checked"]["detail"]
 
 
 def test_a_demo_page_whose_files_are_in_the_kit_has_no_dead_link(pack):
@@ -2248,6 +2352,27 @@ def test_kit_check_reads_kit_json_strictly_and_a_kit_json_that_is_a_link_is_refu
     kj.symlink_to(outside)
     r = kit_check(pack)
     assert r.returncode == 2 and "is a link, and a link is never read through" in r.stderr and not (pack / "assets" / "_checks" / "kit-check.json").exists()
+
+
+def test_a_kit_json_that_is_a_link_stops_kit_check_and_check_says_what_holds_of_the_earlier_report(pack, tmp_path):
+    """`kit check` stops on a kit.json that is a link before it writes a report, so the report of the earlier run stands. Whether `check` still takes it for current depends on the
+    bytes the link leads to: the same bytes leave it current (only `kit:checked` sees that kit.json is a link now), other bytes make it stale."""
+    filled_kit(pack)
+    assert kit_check(pack).returncode == 0
+    kj, outside = kit_of(pack) / "kit.json", tmp_path / "kit.json"
+    outside.write_bytes(kj.read_bytes())
+    kj.unlink()
+    kj.symlink_to(outside)
+    earlier = (pack / "assets" / "_checks" / "kit-check.json").read_bytes()
+    r = kit_check(pack)
+    assert r.returncode == 2 and "is a link, and a link is never read through" in r.stderr
+    assert (pack / "assets" / "_checks" / "kit-check.json").read_bytes() == earlier           # no new report
+    rows = check_rows(pack)
+    assert rows["report:kit-check"]["status"] == "pass"                                     # the bytes are the ones the report read
+    assert rows["kit:checked"]["status"] == "skipped" and "added to the kit, or taken out of it" in rows["kit:checked"]["detail"]
+    mutate_json(outside, lambda d: d.__setitem__("plugin_version", "0.0.1"))                 # other bytes behind the link
+    rows = check_rows(pack)
+    assert rows["report:kit-check"]["status"] == "skipped" and "kit.json changed" in rows["report:kit-check"]["detail"]
 
 
 def test_kit_check_never_reads_through_a_link(pack, tmp_path):
@@ -2434,7 +2559,7 @@ def test_a_changed_generated_file_in_the_repository_is_not_current_and_owner_cha
     (kd / "visual.md").unlink()                                                           # an owner file the repository lacks
     r = kit_status(pack, repo)
     assert r.returncode == 1, r.stdout + r.stderr
-    assert "site: not current (installed version 1.1, project version 1.1)" in r.stdout.splitlines()
+    assert "site: not current (version 1.1 on both sides, but 1 file differs, 1 file is missing, 1 file is left over from an older kit)" in r.stdout.splitlines()
     assert listed(r.stdout, "generated files that differ") == ["brand/assets/tokens/tokens.css (not the same bytes)"]
     assert listed(r.stdout, "generated files that are missing") == ["snippets/logo.html"]
     assert listed(r.stdout, "left over from an older kit") == ["brand/assets/logo/old-mark.svg"]
@@ -2445,15 +2570,54 @@ def test_a_changed_generated_file_in_the_repository_is_not_current_and_owner_cha
         shutil.copy2(kit_of(pack) / rel, kd / rel)
     r = kit_status(pack, repo)                                                             # the copy is whole now, and only the old file is left: that alone is not current
     assert r.returncode == 1, r.stdout + r.stderr
-    assert "site: not current (installed version 1.1, project version 1.1)" in r.stdout.splitlines()
+    assert "site: not current (version 1.1 on both sides, but 1 file is left over from an older kit)" in r.stdout.splitlines()
     assert listed(r.stdout, "left over from an older kit") == ["brand/assets/logo/old-mark.svg"]
-    assert "copy list" not in r.stdout and "generated files that differ" not in r.stdout and "generated files that are missing" not in r.stdout
+    assert not any(ln.startswith("  copy list") for ln in r.stdout.splitlines()) and "generated files that differ" not in r.stdout and "generated files that are missing" not in r.stdout
     (kd / "brand/assets/logo/old-mark.svg").unlink()
     r = kit_status(pack, repo)
     assert r.returncode == 0, r.stdout + r.stderr
     assert "site: current (version 1.1)" in r.stdout.splitlines() and "copy list" not in r.stdout
     assert listed(r.stdout, "owner files that differ (kept on update)") == ["voice.md"]    # still the repository's own, and current all the same
     assert "Our own words." in voice.read_text(encoding="utf-8")
+
+
+def test_a_copy_becomes_current_again_after_a_brand_change_removed_a_generated_file(pack, tmp_path):
+    """A logo taken out of the project leaves a file in the repository's copy that the new kit does not have. The copy list names the changed files only, so once it is copied the
+    two versions are the same and the old file is all that is left: `kit status` says which file it is, that it is not on the copy list, that it goes to removed-<date>/ in the
+    repository, and that the versions are the same, not that they differ. The copy is current when the implementer has moved the file there."""
+    assert build(pack).returncode == 0
+    repo = install(pack, tmp_path)
+    kd, gone = installed_of(repo), "brand/assets/logo/wordmark-dark.svg"
+    assert kit_status(pack, repo).returncode == 0
+    (pack / "assets" / "logo" / "wordmark-dark.svg").unlink()                              # the brand drops a logo file
+    assert build(pack).returncode == 0 and kit_json(pack)["version"] == "1.2" and not (kit_of(pack) / gone).exists()
+    r = kit_status(pack, repo)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "site: not current (installed version 1.1, project version 1.2)" in r.stdout.splitlines()
+    assert listed(r.stdout, "left over from an older kit") == [gone]
+    assert ("  left over from an older kit (not in this kit, so not on the copy list; move each to removed-<date>/.claude/skills/acme-brand/ in the repository, "
+            "keeping its path; nothing is deleted):") in r.stdout.splitlines()
+    copy = paths_of(listed(r.stdout, "copy list"))
+    assert gone not in copy and copy == ["SKILL.md", "snippets/logo.html", "kit.json"]            # the files that changed, kit.json last: the old file is not among them
+    shown = json.loads(kit_status(pack, repo, extra=("--json",)).stdout)["repos"][0]
+    assert shown["left_over"] == [gone] and shown["left_over_to"] == "removed-<date>/.claude/skills/acme-brand/" and shown["copy"] == copy
+    for rel in copy:                                                                       # exactly the copy list
+        shutil.copy2(kit_of(pack) / rel, kd / rel)
+    r = kit_status(pack, repo)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "site: not current (version 1.2 on both sides, but 1 file is left over from an older kit)" in r.stdout.splitlines()     # not "installed 1.2, project 1.2"
+    assert "installed version" not in r.stdout and not any(ln.startswith("  copy list") for ln in r.stdout.splitlines())          # nothing left to copy
+    assert listed(r.stdout, "left over from an older kit") == [gone]
+    moved = repo / "removed-2026-10-17" / ".claude" / "skills" / "acme-brand" / gone         # what the implementer does with it, and says
+    moved.parent.mkdir(parents=True)
+    shutil.move(str(kd / gone), str(moved))
+    r = kit_status(pack, repo)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "site: current (version 1.2)" in r.stdout.splitlines() and "left over" not in r.stdout
+    assert json.loads(kit_status(pack, repo, extra=("--json",)).stdout)["repos"][0]["left_over_to"] is None
+    mutate(kd / "brand/assets/tokens/tokens.css", "#4cd7c8", "#4cd7c9")                       # and a file edited in the repository is still caught
+    r = kit_status(pack, repo)
+    assert r.returncode == 1 and "site: not current (version 1.2 on both sides, but 1 file differs)" in r.stdout.splitlines(), r.stdout + r.stderr
 
 
 def test_an_older_installed_version_is_not_current_and_names_both_versions(pack, tmp_path):
@@ -2511,7 +2675,7 @@ def test_kit_status_reads_and_never_writes_the_repository(pack, tmp_path):
         assert tree_of(pack) == project_before and [tree_of(d) for d in (fresh, copied, stale)] == repos_before
     r = kit_status(pack, fresh, copied, stale)
     assert [ln for ln in r.stdout.splitlines() if ln.startswith(("fresh:", "copied:", "stale:"))] == [
-        "fresh: not installed", "copied: current (version 1.1)", "stale: not current (installed version 1.1, project version 1.1)"]
+        "fresh: not installed", "copied: current (version 1.1)", "stale: not current (version 1.1 on both sides, but 1 file differs)"]
 
 
 def test_kit_status_proves_it_read_only_by_the_sizes_and_times_of_the_installed_folder(tmp_path):
@@ -2656,6 +2820,7 @@ def test_kit_status_json_holds_the_same_facts_as_the_text(pack, tmp_path):
     assert (b["label"], b["state"], b["installed_version"], b["project_version"]) == ("stale", "not current", "1.1", "1.1")
     assert b["differ"] == [{"file": "brand/assets/tokens/tokens.css", "why": "not the same bytes"}] and b["missing"] == ["snippets/logo.html"]
     assert b["left_over"] == ["brand/old.svg"] and b["owner_differ"] == [{"file": "voice.md", "why": "not the same bytes"}]
+    assert b["left_over_to"] == "removed-<date>/.claude/skills/acme-brand/" and a["left_over_to"] is None      # where the files left over go in the repository; none left over, none said
     assert b["copy"] == ["brand/assets/tokens/tokens.css", "snippets/logo.html", "visual.md"] and b["copy_owner"] == ["visual.md"]
     assert os.path.realpath(b["path"]) == os.path.realpath(stale)
     r = kit_status(pack, install(pack, tmp_path, "same"), extra=("--json",))
