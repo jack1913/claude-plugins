@@ -37,7 +37,10 @@ BRAND_CREATOR_DATA=<set-up data dir> tests/run-all.sh
   every break must still be caught. For example the finish chain's branches moved from whole chains
   (`test_finish_chain.py`, which keeps two real ones) to `test_finish_chain_steps.py`, which runs the same template against
   a stand-in for `brand-creator`; `--group finish-chain` replays its breaks. The other groups are `motion-stills`,
-  `profiles` (`test_emit_profiles.py`) and `book-motion` (`test_book_motion.py`); `--list` prints every break.
+  `profiles` (`test_emit_profiles.py`), `book-motion` (`test_book_motion.py`), `kit` (`test_kit.py`: a hand edit,
+  a fill marker, a link out of the kit, a value with no citation, an unknown rule id, a status that compares sizes,
+  an owner file written over) and `wiring` (`test_adoption_wiring.py`: a compare that ignores losses, `wiring` left
+  out of `TARGET_KEYS`, a skipped read-only proof, a URL that is not on this machine); `--list` prints every break.
 - A test that cannot run prints "NOT VERIFIED". `BRAND_CREATOR_REQUIRE_ALL=1` turns every such skip into a failure.
 - Tests that talk to real services (`requires_network`) run only with `BRAND_CREATOR_LIVE=1`.
 - The anonymisation test needs a private denylist (`BRAND_CREATOR_DENYLIST`) and skips without it.
