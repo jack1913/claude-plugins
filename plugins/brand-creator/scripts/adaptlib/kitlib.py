@@ -11,7 +11,7 @@ rules.json and facts.json (the G4 rules with ids, the pairs, the public facts) a
 snippets/logo.html (the logo in light and dark, switched as tokens.css switches them) is made here too: `logo_html`.
 The owner's files (EXTENDING.md, voice.md, visual.md, golden-rules.md, recipes/web-page.md) are scaffolded once from templates/kit/ and never overwritten: `owner_plan`, `write_owner`.
 kit.json records each one's sha256 (`owned`) and `content_sha` covers them, so an owner edit moves the version at the next build.
-`kit check` reads the kit with `files_check`, `link_check`, `fill_markers`, `version_problems`, `source_changes` and `owned_changes`, and only ever from a plain file of the kit.
+`kit check` reads the kit with `files_check`, `link_check`, `fill_markers`, `version_problems`, `source_changes`, `owned_changes`, `tag_check` and `number_check`, and only ever from a plain file of the kit.
 
 `plan(project)` is every generated file except kit.json, as {path in the kit: bytes}, with SKILL.md carrying the literal `<version>` in its version line. The
 version is decided from what the plan holds (`content_sha`, `next_version`) and then put into SKILL.md (`with_version`), so SKILL.md never has to be written twice.
@@ -913,6 +913,7 @@ from _common import STATE_FILE  # noqa: E402
 CHECK_TOOL = "kit-check"                                    # the report of `kit check`: assets/_checks/kit-check.json
 LINK_KINDS = {".md": "md", ".html": "html", ".htm": "html", ".css": "css"}   # the files whose relative links are checked, by their extension
 FILL_MARKER = "[[fill"                                      # the note a scaffold leaves where the owner writes, any case
+SITE_RECORD = "site/site.json"                              # the record of the approved reference pages: its choices tagged `rule` are rule ids (sitedata.SITE_FILE)
 OWNED_CHANGED = "changed since the last build"              # why an owner file is not what the last build recorded ...
 OWNED_MISSING = "is missing"
 OWNED_NOT_FILE = "is no file the kit can read (a folder, or a link)"
@@ -951,10 +952,10 @@ def tree_sha(project: Path) -> str:
 
 def check_inputs(project: Path) -> list[Path]:
     """The files a `kit-check` report lists as inputs, so that any change makes it stale: every file under the kit folder (a link is no input), the files the kit is made from
-    (`input_paths`), BRAND-STATE.md (the approved edition) and the `kit` report (what the build wrote)."""
+    (`input_paths`), BRAND-STATE.md (the approved edition and the rules), site/site.json (the site choices that are rules; `known_rule_ids` reads it) and the `kit` report (what the build wrote)."""
     kd = kit_dir(project)
     own = [kd / rel for rel in kit_paths(project) if _plain_file(kd, rel)]
-    return [*own, *(p for p in (project / STATE_FILE, project / REPORT) if p.is_file()), *input_paths(project)]
+    return [*own, *(p for p in (project / STATE_FILE, project / REPORT, project / SITE_RECORD) if p.is_file()), *input_paths(project)]
 
 
 def kit_bytes(project: Path, rel: str) -> bytes | None:
@@ -1168,6 +1169,222 @@ def owned_changes(project: Path, doc: dict) -> list[tuple[str, str]]:
         else:
             out.append((rel, OWNED_MISSING))
     return out
+
+
+# ---------------------------------------------------------------- kit check, part 2: tags and values
+# `tag_check` and `number_check` read the owner's recipes, `golden-rules.md`, `visual.md` and the generated `reference-pages/<id>/notes.md` (`judged_files`), as text from a plain file of the kit.
+# A rule id is judged against `known_rule_ids` of the project, and only when a line names one: `known` is a function the caller gives, so a project that cites no rule needs no site record.
+# When `known` cannot read the ids (a CliError), the lines that name a rule are left unjudged and counted (`unjudged`, `unread`); every other line is judged as always.
+
+TAG_EXAMPLE = "[example]"                                    # the tag that says a line shows one case and is no rule
+KIT_TOKENS_CSS = PREFIX + TOKENS_CSS                         # the token files as the kit holds them: a token reference is judged against these copies
+KIT_TOKENS_JSON = PREFIX + TOKENS_JSON
+ITEM_FILES = ("golden-rules.md", "visual.md")                # every bullet and every numbered line of these carries a tag
+NO_TAG = "untagged"
+TAG_HINT = ("tag each with `[example]` or `[rule: <id>]`, an id of rules.json (a rule of the brand written bare, `page:<id>`, `site:<id>`)")
+VALUE_HINT = ("cite a token (`var(--name)` of tokens.css, `{dotted.path}` of tokens.json) or a known `[rule: <id>]`, or tag the line `[example]`")
+_RULE_TAG = re.compile(r"\[rule:([^\]\n]*)\]")
+_BULLET = re.compile(r"^\s*[-*]\s")
+_NUMBERED = re.compile(r"^\s*\d+[.)]\s")
+_THEMATIC_BREAK = re.compile(r"^\s*([-*_])(?:\s*\1){2,}\s*$")   # `* * *` and `- - -` start with a bullet marker and are no bullet
+_NOTES = re.compile(r"^reference-pages/[^/]+/notes\.md$")
+_NUMBER = r"(?:\d+(?:\.\d+)?|\.\d+)"
+_AFTER_VALUE = r"(?:(?<=\d(?:px|em|ms|vh|vw|ch|fr|pt)-)|(?<=\d(?:rem|svh|dvh|deg)-)|(?<=\d[s%]-))"   # a dash that follows a value: `2em-3em`, `16px-24px` (the lookbehinds are of one width each)
+_VALUE = re.compile(                                          # what the owner's files must cite
+    rf"(?<![\w.#])(?:(?<![A-Za-z_]-)|{_AFTER_VALUE}){_NUMBER}\s?(?:(?:px|rem|em|ms|s|vh|vw|svh|dvh|ch|fr|deg|pt)\b|%)"   # 48px, 0.5rem, 200ms, 100 %, -8px, and 48px of the range 32-48px or 24px of 16px-24px (not the end of a name such as `fs-16px`)
+    rf"|(?<![\w.]){_NUMBER}:{_NUMBER}(?![\w:])"               # a ratio: 4.5:1
+    r"|(?<![\w&])#(?:[0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{4}|[0-9a-f]{3})(?![\w-])"   # a hex colour (not an HTML entity)
+    r"|(?<![\w-])(?:rgba?|hsla?|oklch)\(", re.I)              # rgb( hsl( oklch(, and their alpha forms
+_LINK_TARGET = re.compile(r"\]\([^)]*\)")
+_PROPERTY_NAME = re.compile(r"(?<![\w-])--[A-Za-z_][\w-]*")      # `--space-8px`, `--space-2-8px`: a custom property name holds numbers and is no value
+_URL = re.compile(r"\b[A-Za-z][A-Za-z0-9+.\-]*://\S+")
+_CSS_REF = re.compile(r"var\(\s*(--[A-Za-z0-9_-]+)")
+_JSON_REF = re.compile(r"(?<![{$])\{([A-Za-z_][\w-]*(?:\.[\w-]+)+)\}(?!\})")
+_CUSTOM_PROPERTY = re.compile(r"(?<![\w-])(--[A-Za-z0-9_-]+)\s*:")
+
+
+def judged_files(project: Path) -> list[tuple[str, str]]:
+    """The files of the kit whose lines need a tag and whose values need a citation, as (path in the kit, kind), sorted: every `.md` under `recipes/`, the generated
+    `reference-pages/<id>/notes.md` (kind `bullets`: a bullet carries a tag, a numbered step needs none) and `golden-rules.md` and `visual.md` (kind `items`: a numbered line carries one too)."""
+    out = []
+    for rel in kit_paths(project):
+        if rel in ITEM_FILES:
+            out.append((rel, "items"))
+        elif (rel.startswith("recipes/") and Path(rel).suffix.lower() == ".md") or _NOTES.match(rel):
+            out.append((rel, "bullets"))
+    return out
+
+
+def rule_tags(line: str) -> list[str]:
+    """The ids named by the `[rule: <id>]` tags of a line, each trimmed, in order (an empty tag gives an empty id)."""
+    return [m.group(1).strip() for m in _RULE_TAG.finditer(line)]
+
+
+def needs_tag(line: str, kind: str) -> bool:
+    """Whether a line outside a code fence must carry a tag: a bullet (`- ` or `* `, indented or not, a thematic break such as `* * *` is none) in any judged file, and a numbered line (`1. ` or `1) `) in an `items` file."""
+    if _THEMATIC_BREAK.match(line):
+        return False
+    return bool(_BULLET.match(line) or (kind == "items" and _NUMBERED.match(line)))
+
+
+def _unknown_ids(ids: list[str], known, state: dict) -> list[str] | None:
+    """The ids of `ids` that `known()` does not list, or None when the rule ids cannot be read (the CliError is kept in `state["unread"]`, and `known` is not asked again)."""
+    if state.get("unread") is None:
+        try:
+            return [i for i in ids if i not in known()]
+        except CliError as e:
+            state["unread"] = e
+    return None
+
+
+def tag_check(project: Path, known) -> dict:
+    """Every line that needs a tag (`needs_tag`, outside code fences) carries `[example]` or `[rule: <id>]`, and every id a line names, on any line (a numbered step of a recipe, a plain
+    sentence, a heading, a line inside a code fence), is one of `known()` (a function returning the ids; it is called only for a line that names one). Returns {"files": judged files read,
+    "lines": lines judged (those that need a tag, and those that name a rule), "bad": [(path, line, why)], "unjudged": lines that name a rule and were not judged, "unread": the CliError of
+    `known()` or None}: why is "untagged" or "unknown rule id <id>" (an id listed once per tag; an empty tag is "(empty)"). A tag that names an unknown id fails even when `[example]` is on the
+    line too. When `known()` raises CliError the lines that name a rule are not judged (`unjudged`); the untagged ones still are."""
+    files = lines = unjudged = 0
+    state: dict = {}
+    bad = []
+    for rel, kind in judged_files(project):
+        text = kit_text(project, rel)
+        if text is None:
+            continue
+        files += 1
+        outside = {n for n, _ in outside_fences(text)}
+        for n, raw in enumerate(text.split("\n"), 1):
+            line = raw.rstrip("\r")
+            ids = rule_tags(line)
+            if not ids and not (n in outside and needs_tag(line, kind)):
+                continue
+            lines += 1
+            unknown = _unknown_ids(ids, known, state) if ids else []
+            if unknown is None:
+                unjudged += 1
+            elif unknown:
+                bad.append((rel, n, "unknown rule id " + ", ".join(i or "(empty)" for i in unknown)))
+            elif not ids and TAG_EXAMPLE not in line:
+                bad.append((rel, n, NO_TAG))
+    return {"files": files, "lines": lines, "bad": bad, "unjudged": unjudged, "unread": state.get("unread")}
+
+
+def find_values(line: str) -> list[str]:
+    """The values in a line of text, in order, as written: a number with a unit (`px`, `rem`, `em`, `ms`, `s`, `%`, `vh`, `vw`, `svh`, `dvh`, `ch`, `fr`, `deg`, `pt`), a ratio like `4.5:1` (a clock
+    time such as `9:00` reads as one), a hex colour (3, 4, 6 or 8 digits) and `rgb(`, `rgba(`, `hsl(`, `hsla(` or `oklch(`. A range such as `32-48px` is the value `48px`: the dash follows a number; `16px-24px` is both, the dash follows a value. The words
+    of a `[rule: ...]` tag, a link target and a URL are no values, and neither is the number inside a name such as `--space-8px` or `fs-16px`: a dash that follows a letter."""
+    for rx in (_RULE_TAG, _LINK_TARGET, _URL, _PROPERTY_NAME):
+        line = rx.sub(lambda m: " " * len(m.group(0)), line)
+    return [m.group(0) for m in _VALUE.finditer(line)]
+
+
+def token_refs(line: str) -> tuple[list[str], list[str]]:
+    """The token references of a line: (the names of `var(--name)`, the paths of `{dotted.path}` with at least one dot), each in order."""
+    return _CSS_REF.findall(line), _JSON_REF.findall(line)
+
+
+def css_token_names(project: Path) -> set[str] | None:
+    """The custom properties (`--name`) tokens.css of the kit declares, or None when the kit has no such file."""
+    css = kit_text(project, KIT_TOKENS_CSS)
+    return None if css is None else set(_CUSTOM_PROPERTY.findall(_CSS_COMMENT.sub(" ", css)))
+
+
+def json_token_paths(doc: dict) -> set[str]:
+    """The paths `{dotted.path}` may name in the kit's tokens.json: only a path that ends at a token, never at a group or at a part of a token. The tokens are the keys of `primitives`, of `other`,
+    of each mode of `modes`, and of `motion.durations_ms` and `motion.curves` (build_tokens writes them so; a key may hold dots itself: `color.bg`). A token is named by its key as its group holds it
+    (`color.bg`, `dimension.space-1`; a motion token by its key in `other`, which holds the same names) or by the path from the top (`primitives.color.ink`, `other.dimension.space-1`,
+    `modes.light.color.bg`, `motion.durations_ms.duration.fast`). A group (`modes.light`, `motion.durations_ms`), a part of a token (`modes.light.color.bg.hex`) and the rest of the file
+    (`pairs`, `touching`, `grounds`, `$generator`) name no token."""
+    def keys(*path: str) -> list[str]:
+        node = doc
+        for key in path:
+            node = node.get(key) if isinstance(node, dict) else None
+        return list(node) if isinstance(node, dict) else []
+
+    groups = [("primitives",), ("other",), ("motion", "durations_ms"), ("motion", "curves"), *(("modes", mode) for mode in keys("modes"))]
+    out: set[str] = set()
+    for group in groups:
+        for key in keys(*group):
+            out.add(".".join((*group, key)))
+            if group[0] in ("primitives", "other", "modes"):
+                out.add(key)
+    return out
+
+
+def json_token_names(project: Path) -> set[str] | None:
+    """`json_token_paths` of the kit's tokens.json, or None when the kit has no such file or it holds no JSON object."""
+    text = kit_text(project, KIT_TOKENS_JSON)
+    try:
+        doc = json.loads(text) if text is not None else None
+    except ValueError:
+        return None
+    return json_token_paths(doc) if isinstance(doc, dict) else None
+
+
+def number_check(project: Path, known) -> dict:
+    """Every value (`find_values`) in a judged file, code fences included, has a citation on its own line: `[example]`, a `[rule: <id>]` of `known()`, or a token reference that exists
+    (`var(--name)` declared in the kit's tokens.css, `{dotted.path}` in the kit's tokens.json). A token reference that does not exist fails and never counts as a citation: `[example]` does not
+    excuse it. Outside a code fence it is judged on every line, with a value or not (prose is no place for a token that was never made); inside a code fence only on a line that holds a value, where it
+    is the citation (a component sample is full of braces and custom properties of its own). A `[rule: <id>]` of an unknown id on a line with a value fails too. `known` is as for `tag_check`; when
+    it cannot read the ids, a line that names a rule is not judged for its rule (`unjudged`), the failures that need no rule id are still found. Returns {"files": judged files read, "lines": lines
+    with a value, "values": values found, "bad": [(path, line, why)], "unjudged": lines with a value that name a rule and were not judged, "unread": the CliError of `known()` or None}: why
+    joins the reasons with "; "."""
+    seen: dict[str, set[str] | None] = {}
+    state: dict = {}
+
+    def tokens() -> tuple[set[str] | None, set[str] | None]:
+        if not seen:
+            seen["css"], seen["json"] = css_token_names(project), json_token_names(project)
+        return seen["css"], seen["json"]
+
+    files = lines = values = unjudged = 0
+    bad = []
+    for rel, _kind in judged_files(project):
+        text = kit_text(project, rel)
+        if text is None:
+            continue
+        files += 1
+        outside = {n for n, _ in outside_fences(text)}
+        for n, raw in enumerate(text.split("\n"), 1):
+            line = raw.rstrip("\r")
+            found = find_values(line)
+            css_refs, json_refs = token_refs(line) if found or n in outside else ([], [])   # a reference is judged on a line with a value, and on any line outside a code fence
+            if not found and not css_refs and not json_refs:
+                continue
+            if found:
+                lines, values = lines + 1, values + len(found)
+            why, cited = [], TAG_EXAMPLE in line
+            if css_refs or json_refs:
+                css, js = tokens()
+                for ref in css_refs:
+                    if css is not None and ref in css:
+                        cited = True
+                    else:
+                        why.append(f"var({ref}) is not declared in {KIT_TOKENS_CSS}" + (" (that file is missing)" if css is None else ""))
+                for ref in json_refs:
+                    if js is not None and ref in js:
+                        cited = True
+                    else:
+                        why.append(f"{{{ref}}} is not a path in {KIT_TOKENS_JSON}" + (" (that file is missing or holds no JSON object)" if js is None else ""))
+            if not found:                            # a line with no value has nothing to cite: only a token that does not exist is wrong
+                if why:
+                    bad.append((rel, n, "; ".join(why)))
+                continue
+            ids = rule_tags(line)
+            unknown = _unknown_ids(ids, known, state) if ids else []
+            if unknown is None:                      # the ids cannot be read: what the rule tags might cite is not known, what everything else says still is
+                unjudged += 1
+                if why:
+                    bad.append((rel, n, "; ".join(why)))
+                continue
+            cited = cited or len(ids) > len(unknown)
+            if unknown:
+                why.insert(0, "unknown rule id " + ", ".join(i or "(empty)" for i in unknown))
+            if not cited:
+                unique = list(dict.fromkeys(found))
+                why.insert(0, f"{_and(unique)} {'has' if len(unique) == 1 else 'have'} no citation")
+            if why:
+                bad.append((rel, n, "; ".join(why)))
+    return {"files": files, "lines": lines, "values": values, "bad": bad, "unjudged": unjudged, "unread": state.get("unread")}
 
 
 # ---------------------------------------------------------------- what is on disk

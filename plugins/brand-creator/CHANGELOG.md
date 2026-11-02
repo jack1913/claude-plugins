@@ -314,6 +314,15 @@ lints the board of the latest round again before `check`, so an edit of the fact
   and a file you put into a generated folder (move it to `recipes/` or a folder of your own), and warns when one of your
   own files changed since the last build. `brand-creator check` expects its report once you have a kit, and says
   when a file was added to the kit after it.
+- `brand-creator kit check` also holds your own recipes, golden rules and visual notes to a source. Every bullet
+  there says `[example]` or names a rule the kit knows with `[rule: <id>]` (a rule of your brand, a page rule as
+  `page:<id>`, a choice of a reference page as `site:<id>`), and every value in them, such as `48px`, a ratio or a
+  colour, cites a token or a rule on its own line or says it is an example. A range such as `32-48px` counts as a
+  value. A token that does not exist fails too: anywhere outside a code sample, and inside one on a line with a value.
+  Only a name that ends at a token counts (`{color.bg}`, never a group such as `{modes.light}`). A `[rule: <id>]` that
+  names no rule fails wherever it stands, on a plain sentence or in a code sample too. A `{word.word}` in a sentence is
+  read as a token even between backticks: to show a placeholder of your own, write it without the dot or put it in a
+  code block.
 
 ### Changed
 
