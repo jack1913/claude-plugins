@@ -151,6 +151,16 @@ reviews only after that line, and starts on it without waiting for a new brief f
   language of texts, and so on. Take them only from the user's instructions files, memory and
   answers today. A harness default, such as a session scratchpad, is not a standing rule. When the
   user hasn't said where scratch goes, it goes inside the repository or the job's folder.
+  Restate each recurring constraint (local-only files, token handling) in every brief, word for
+  word: it lives in `{{standing_rules}}`, never left to a summary or an earlier brief.
+- Write every path in a brief with forward slashes: backslashes get lost on the way.
+- Fill these lines in every worker brief:
+  - `{{deliverable}}`: code, a document or a browser run. "Check it in the browser" is a browser
+    run, not tests to write.
+  - `{{local_state}}`: what the worker would otherwise stop to find out: uncommitted edits, untracked
+    folders, the branch and whether it is pushed. Write "none known" when there is none.
+  - `{{approvals}}`: the writes the job will need the user to approve (paths, commands), so the
+    user approves them in the worker's window up front. "None" when it needs none.
 - Fill each conditional line of the worker brief, or delete it when it doesn't apply:
   - `{{write_scope}}`: the folders of `--scope`, and "run no git command" with `--no-git`.
   - `{{peers}}`: the sessions it may message directly; `{{owners}}`: who owns each shared file or

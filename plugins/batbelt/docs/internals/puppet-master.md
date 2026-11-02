@@ -14,8 +14,8 @@ sounds like coordinating sessions never starts it.
 - [`skills/puppet-master/SKILL.md`](../../skills/puppet-master/SKILL.md) holds the master's start-up, rules, relay
   protocol, wrap-up and the helper reference.
 - [`worker-brief.md`](../../skills/puppet-master/worker-brief.md) is the brief every worker gets, with the placeholders
-  `{{master_name}}`, `{{job}}`, `{{commit_rules}}` and `{{standing_rules}}`, and the conditional ones that `SKILL.md`
-  explains under Briefs: `{{tier_check}}`, `{{write_scope}}`, `{{peers}}`, `{{owners}}`, `{{handoffs}}`,
+  `{{master_name}}`, `{{job}}`, `{{commit_rules}}` and `{{standing_rules}}`, the ones `SKILL.md` explains under Briefs
+  for every brief: `{{deliverable}}`, `{{local_state}}` and `{{approvals}}`, and the conditional ones: `{{tier_check}}`, `{{write_scope}}`, `{{peers}}`, `{{owners}}`, `{{handoffs}}`,
   `{{references}}`, `{{fetch}}` and `{{open_premises}}`.
 - [`analyst-brief.md`](../../skills/puppet-master/analyst-brief.md) is the analyst's brief, with `{{master_name}}`,
   `{{helper}}` and `{{logs_args}}`, the closed tag list and the report's shape.

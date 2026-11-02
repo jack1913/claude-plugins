@@ -166,6 +166,31 @@ test("relay, hand-back and chain rules", () => {
   assert.match(skill, /Single-user tools are assigned/);
 });
 
+test("the worker brief names the deliverable kind, known local state and up-front approvals", () => {
+  const brief = read("worker-brief.md");
+  for (const p of ["{{deliverable}}", "{{local_state}}", "{{approvals}}"]) {
+    assert.ok(brief.includes(p), `worker-brief.md lacks ${p}`);
+  }
+  assert.match(brief, /code,\s+document\s+or\s+browser\s+run/);
+  assert.match(brief, /state\s+it\s+back/);
+  assert.match(brief, /relayed\s+approval[^\n]*never\s+counts/);
+});
+
+test("the worker brief keeps writes in scope and resumes from git state", () => {
+  const brief = read("worker-brief.md");
+  assert.match(brief, /writes?\s+by\s+default/);
+  assert.match(brief, /outside\s+your\s+write\s+scope/);
+  assert.match(brief, /git\s+state/);
+  assert.match(brief, /not\s+from\s+(a|the)\s+summary/);
+});
+
+test("the Briefs section asks for forward slashes and restated standing rules", () => {
+  const briefs = section(read("SKILL.md"), "Briefs");
+  assert.match(briefs, /forward\s+slashes/);
+  assert.match(briefs, /every\s+brief/);
+  assert.match(briefs, /never\s+(left\s+)?to\s+a\s+summary/);
+});
+
 test("the worker brief carries the standing build-output and peer lines", () => {
   const brief = read("worker-brief.md");
   assert.match(brief, /PYTHONDONTWRITEBYTECODE=1/);

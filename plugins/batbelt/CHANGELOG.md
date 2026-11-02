@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `puppet-master` shows each session's model and effort, and every job names a tier: `creative` (an Opus model at high effort or more) or `mechanical` (another model at medium effort or less). When a session doesn't match, Claude gives you the `/model` and `/effort` lines to paste. It never changes a session's settings itself.
 - `puppet-master` warns before a session auto-compacts: from 80% of the size where it has seen your sessions compact, or the one you set in `PUPPET_COMPACT_AT`.
 - `puppet-master` can give a finished session another job while it is under 30% of that size, and can run two jobs in one repository when each names the folders it writes and only one of them runs git.
+- A `puppet-master` worker's brief names the kind of deliverable (code, a document or a browser run), which the worker states back first, the local state it would otherwise stop to ask about, and the writes you can approve in its window up front. It reminds the worker that files its tools write by default count against its write scope, and that after a compaction it takes its place from git, not from the summary.
 - `puppet-master` remembers a closed session by name and prints its resume command when you mention it again.
 - The analyst's day starts at 05:00, so work past midnight stays with its day (`PUPPET_DAY_START_HOUR` changes the hour). It also records your answers to Claude's question dialogs, and no longer logs an idle notification as an empty message.
 
