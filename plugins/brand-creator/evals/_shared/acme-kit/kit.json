@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "kit": "acme-brand",
+  "version": "1.2",
+  "edition": "1",
+  "plugin_version": "0.4.2",
+  "content_sha": "0223c9a198571b54c82e1dc46b6b4f45407b5c0a7c6d889f74bff0df3262face",
+  "generated": {
+    "SKILL.md": "24668d56d2dfa8c6f154348555f5d7bcc7bd59ddc2cd920f3172d30ab99baa74",
+    "brand/assets/logo/grid-mark-dark.svg": "a4354fc3d461119c54b155018c92d03be7c2bd3b5d87d34c60c2d3adc31d2f21",
+    "brand/assets/logo/grid-mark-master.png": "5cc76acd488c20da7a3cda17360ff6db0222f5bd5b44089ab25597c296886654",
+    "brand/assets/logo/grid-mark.svg": "435e6815517f458fea97bac5fb777d712032b0bcff32f2ea7e223479e2e56c88",
+    "brand/assets/logo/mark-animated.svg": "46c262236435a7416a9125a27aba55aa357dfcd977f055215202f43b9b994d83",
+    "brand/assets/logo/mark-dark.svg": "ebf34cfa09551ec91df2693561e15b3caac39c273083650fe096daa92d277564",
+    "brand/assets/logo/mark.svg": "bd6b10b88addd705b71a2a131495e8af90f51c41cd6643b90cba71ea46adf6ff",
+    "brand/assets/logo/wordmark-dark.svg": "91afd5e43163b2a5e9b10f43e30d4cbd520701eec3c6519fec2999bc5470b3ee",
+    "brand/assets/logo/wordmark.svg": "161dedabf56299cdacc9021d46f10a8931177f50690c79a6a68c03f62d147151",
+    "brand/assets/tokens/tokens.css": "601623035d6fe68e7d7146fe93b0f2bf59a3f635b6747cd87db6ea84aef2e587",
+    "brand/assets/tokens/tokens.json": "8bbe3d894895363dcb5ce47c6f035b36d3ff6baa9419c82f8be528cbb41e9c43",
+    "facts.json": "15ab8ad3e2caa901c0b2bd94e9106fcbe2caa4f1097ada18ce35f1294b8ae924",
+    "rules.json": "8d05bfc7947b843ace2544184d8864a77f65744fb054837ee7b5bd8e6537678a",
+    "snippets/logo.html": "71627d0ff922544924c7ba52a8c5cbf1e34acde2429fc1cdb7ae2a12774dcf83"
+  },
+  "owned": {
+    "EXTENDING.md": "f027d29feece70f91f6a2a490d61f9da278bc06652b2d6b8d98d40009d975558",
+    "golden-rules.md": "44f766a99cddcb953f78e7941fe895198887a75392ed4f40a0cc7b6e3fc39a75",
+    "recipes/web-page.md": "563dd61f18ec9987cfe6f5691d00af2787a1af32a4b7139e946c92da498274f4",
+    "visual.md": "9498f424fa5ffeef9bac272fce456520c5c484db52623895dbbfaa8682a61a95",
+    "voice.md": "4b4b3d6d38f18a005665a95bf35f1f6e01ba82f7081d5419b3df6d43d021aafe"
+  },
+  "fonts": {
+    "copied": [],
+    "not_copied": []
+  },
+  "sources": {
+    "state_sha": "add72cf77eb686459ef153518695bef61c0f1a4ce91fefed6f2e2df8406c072e",
+    "tokens": "8bbe3d894895363dcb5ce47c6f035b36d3ff6baa9419c82f8be528cbb41e9c43",
+    "tokens_css": "601623035d6fe68e7d7146fe93b0f2bf59a3f635b6747cd87db6ea84aef2e587",
+    "rules": "7ccef3710c52d044b8278018e1391398483049d4f042d704f0975f6f2a70f89e",
+    "facts": "4edef6e96f1b80dc4c2ebdfd883a2cec14e905061dcba8c290325f7d102444bb",
+    "motion": null,
+    "logos": "4029c883e59c41f18607b355f6b28f92d8de9037b819aac1cb6abee5b895c145",
+    "fonts": null
+  }
+}

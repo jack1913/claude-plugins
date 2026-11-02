@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "facts": [
+    {
+      "fact": "spare parts",
+      "value": "every tool has a published spare-parts list",
+      "source": "owner, intake",
+      "confirmed": "2026-10-17"
+    },
+    {
+      "fact": "batch size",
+      "value": "tools are made in batches of 200",
+      "source": "owner, intake",
+      "confirmed": "2026-10-17"
+    },
+    {
+      "fact": "repair guide",
+      "value": "a repair guide is in every box",
+      "source": "owner, intake",
+      "confirmed": "2026-10-17"
+    },
+    {
+      "fact": "status",
+      "value": "the online shop is in development",
+      "source": "owner, intake",
+      "confirmed": "2026-10-17"
+    },
+    {
+      "fact": "AppStream summary",
+      "value": "Hand tools with a published spare-parts list",
+      "source": "owner, intake",
+      "confirmed": "2026-10-17"
+    },
+    {
+      "fact": "AppStream description",
+      "value": "Acme makes small-batch hand tools. Every tool has a published spare-parts list and a repair guide in the box.",
+      "source": "owner, intake",
+      "confirmed": "2026-10-17"
+    },
+    {
+      "fact": "project license",
+      "value": "MIT",
+      "source": "owner, intake",
+      "confirmed": "2026-10-17"
+    },
+    {
+      "fact": "metadata license",
+      "value": "CC0-1.0",
+      "source": "owner, intake",
+      "confirmed": "2026-10-17"
+    },
+    {
+      "fact": "website",
+      "value": "https://example.com",
+      "source": "owner, intake",
+      "confirmed": "2026-10-17"
+    }
+  ]
+}

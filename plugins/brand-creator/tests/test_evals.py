@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from helpers import ROOT, bc, mutate
+from helpers import ROOT, bc, mutate, report
 
 EVALS = ROOT / "evals"
 SKILLS = ROOT / "skills"
@@ -57,6 +57,7 @@ PLAN_BULLETS = {   # plan-v2 evals row (and the three GAP resolutions) -> the ca
     "buy the domain / file the trademark (S2-P13-t2, S2-P2-g1, S7-F13)": "outward-actions-hand-off",
     "style research before the first board (G1s); without web tools it says so and stops": "style-gate-before-first-board",
     "website references before any site page (G4w); without web tools it says so and stops": "site-refs-gate-before-site-round",
+    "kit test: a hero built from the kit alone is page-checked and the kit is left unchanged": "kit-test-hero",
 }
 
 
@@ -301,6 +302,7 @@ EXPECT = {   # case -> (phase, tier, gates recorded, incumbent is set, rounds)
     "single-thread-no-agent-before-fleet-approval": ("P3", "standard", {"G0", "G1s"}, True, []),
     "style-gate-before-first-board": ("P1s", "quick", {"G0"}, False, []),   # the one fixture whose G1s is empty
     "site-refs-gate-before-site-round": ("P7", "standard", {"G0", "G1s", "G2", "G3", "G4"}, False, ["r1"]),   # G4 recorded, G4w and G4p empty
+    "kit-test-hero": ("P10", "quick", {"G0", "G1s", "G3", "G5"}, False, ["r1"]),   # the book is approved and the kit is written; no site, no page of the kit test
 }
 
 
@@ -473,6 +475,76 @@ def test_the_commit_fixture_is_dirty_and_its_verify_script_sees_a_commit(tmp_pat
     assert "COMMITS=2" in verify() and not re.search(pattern, verify())
 
 
+def test_the_kit_fixture_holds_the_committed_kit_and_its_verify_script_detects_every_kind_of_change(tmp_path):
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    scaffold(EVALS / "kit-test-hero", ws)
+    snapshot, kit = EVALS / "_shared" / "acme-kit", ws / ".claude" / "skills" / "acme-brand"
+    pattern = graders(EVALS / "kit-test-hero")["kit-unchanged"][0]["pattern"]
+    verify = lambda: subprocess.run(["bash", ".eval-verify/verify.sh"], cwd=ws, capture_output=True, text=True).stdout  # noqa: E731
+    assert re.search(pattern, verify()), verify()
+    assert tree(kit) == tree(snapshot) and (kit / "kit.json").is_file()
+    assert all((kit / f).read_bytes() == (snapshot / f).read_bytes() for f in tree(snapshot) if (snapshot / f).is_file() and f != "kit.json"), "the kit is the committed snapshot, byte for byte"
+    # kit.json is the snapshot's apart from `plugin_version`, which the fixture sets to the running plugin's (a release moves it, and then `kit check` must not warn and a rebuild must not rewrite kit.json)
+    version = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))["version"]
+    fixture_json, snapshot_json, pristine_json = (json.loads(f.read_text(encoding="utf-8")) for f in (kit / "kit.json", snapshot / "kit.json", ws / ".eval-verify" / "pristine" / "kit.json"))
+    assert fixture_json.pop("plugin_version") == version and pristine_json.pop("plugin_version") == version and snapshot_json.pop("plugin_version"), "the fixture's kit.json names the running plugin"
+    assert fixture_json == snapshot_json == pristine_json, "kit.json differs from the snapshot in more than plugin_version"
+    for f in ("tokens.css", "tokens.json"):                                                                   # the page check reads the built tokens from the project
+        assert (ws / "assets" / "tokens" / f).read_bytes() == (snapshot / "brand" / "assets" / "tokens" / f).read_bytes(), f
+    assert (ws / "assets" / "logo" / "mark.svg").read_bytes() == (snapshot / "brand" / "assets" / "logo" / "mark.svg").read_bytes()
+    assert not (ws / "kit-test").exists() and not (ws / "verify-result.txt").exists(), "nothing the run writes exists yet"
+    assert not (ws / ".git").exists() and (ws / ".eval-verify" / "pristine" / "kit.json").is_file()
+    mutations = [
+        lambda: mutate(kit / "voice.md", "Keep it short.", "Keep it long."),                                    # an edit of an owner file
+        lambda: mutate(kit / "rules.json", '"schema": 1', '"schema": 2'),                                       # an edit of a generated file
+        lambda: (kit / "notes.md").write_text("x"),                                                             # a new file in the kit
+        lambda: (kit / "brand" / "assets" / "logo" / "mark.svg").unlink(),                                      # a file taken away
+    ]
+    for i, m in enumerate(mutations):
+        shutil.rmtree(kit)                                                                                      # each mutation starts from the pristine kit
+        shutil.copytree(ws / ".eval-verify" / "pristine", kit)
+        assert re.search(pattern, verify()), (i, verify())
+        m()
+        out = verify()
+        assert not re.search(pattern, out) and "KIT=CHANGED" in out, (i, out)
+
+
+def test_the_kit_fixture_names_the_running_plugin_whatever_version_the_snapshot_was_built_by(tmp_path):
+    """A release moves plugin.json's version; the snapshot's kit.json keeps the version of its last regen. A copy of the plugin whose plugin.json is ahead of the snapshot
+    must still give a fixture whose kit.json (and pristine copy) name the copy's version, with nothing else changed, and a verify script that sees no change."""
+    plug = tmp_path / "plug"
+    (plug / "skills" / "brand-creator" / "references").mkdir(parents=True)
+    shutil.copytree(EVALS, plug / "evals", ignore=shutil.ignore_patterns("__pycache__"))
+    shutil.copytree(ROOT / ".claude-plugin", plug / ".claude-plugin")
+    shutil.copytree(ROOT / "skills" / "brand-creator" / "references" / "examples", plug / "skills" / "brand-creator" / "references" / "examples", ignore=shutil.ignore_patterns("__pycache__"))
+    now = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))["version"]
+    mutate(plug / ".claude-plugin" / "plugin.json", f'"version": "{now}"', '"version": "9.8.7"')
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    scaffold(plug / "evals" / "kit-test-hero", ws)
+    snapshot_json = json.loads((plug / "evals" / "_shared" / "acme-kit" / "kit.json").read_text(encoding="utf-8"))
+    assert snapshot_json.pop("plugin_version") != "9.8.7"
+    for f in (ws / ".claude" / "skills" / "acme-brand" / "kit.json", ws / ".eval-verify" / "pristine" / "kit.json"):
+        doc = json.loads(f.read_text(encoding="utf-8"))
+        assert doc.pop("plugin_version") == "9.8.7" and doc == snapshot_json, f
+    assert "KIT=UNCHANGED" in subprocess.run(["bash", ".eval-verify/verify.sh"], cwd=ws, capture_output=True, text=True).stdout
+
+
+@pytest.mark.requires_setup
+def test_the_kit_in_the_kit_fixture_is_current_for_the_project_it_sits_in(tmp_path):
+    """The kit records what it was made from. The fixture's state is the one the snapshot was built from, so `kit check` finds the sources current and does not send the run
+    off to rebuild the kit. (`kit:files` is not verified: the fixture has no `kit` report, which is the build's output and not part of the kit.)"""
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    scaffold(EVALS / "kit-test-hero", ws)
+    bc("kit", "check", project=ws)
+    rows = {r["id"]: r["status"] for r in report(ws, "kit-check")["results"]}
+    assert rows["kit:sources"] == "pass" and rows["kit:fill"] == "pass" and rows["kit:links"] == "pass" and rows["kit:versions"] == "pass" and rows["kit:owned"] == "pass", rows
+    assert rows["kit:plugin"] == "pass", rows   # the fixture names the running plugin: after a release `kit check` does not send the run off to rebuild the kit
+    assert rows["kit:files"] == "skipped", rows
+
+
 def test_graders_that_read_fixture_files_are_not_vacuous(tmp_path):
     """A regex over a file the scaffold made must NOT already match the pristine file (else the case passes with no work), except the
     sentinel graders, which must match it (the file is supposed to stay as it is)."""
@@ -588,6 +660,11 @@ SAMPLES = {   # (case, grader): (inputs that must match, inputs that must not)
         [cmd('brand-creator --data "/d" state --project . --set site_research=online'), cmd('brand-creator state --set site_research=none --project .'),
          cmd('brand-creator state --set phase=P7w site_research=links-only --project .')],
         [cmd('brand-creator --data "/d" state --project . --get site_research'), cmd('brand-creator state --set phase=P7w --project .'), cmd("grep -n site_research BRAND-STATE.md")]),
+    ("kit-test-hero", "page-check-ran"): (
+        [cmd('brand-creator --data "/d" page-check kit-test/hero.html --project .'), cmd("brand-creator page-check kit-test/hero.html"),
+         cmd('cd /ws && brand-creator --data "$CLAUDE_PLUGIN_DATA" page-check --from kit-test kit-test/hero.html --project .')],
+        [cmd('brand-creator --data "/d" check --project .'), cmd('brand-creator --data "/d" kit check --project .'), cmd("cat kit-test/hero.html"), cmd("ls .claude/skills/acme-brand"),
+         cmd('brand-creator --data "/d" shot kit-test/hero.html --project .'), cmd("grep -rn page-check .claude/skills/acme-brand/recipes/web-page.md")]),
 }
 TEXT_SAMPLES = {   # regex graders over text: (texts the pattern finds, texts it does not find); for not_contains graders "finds" = the grader fails
     ("never-says-available", "no-available-verdict"): (
@@ -641,6 +718,19 @@ TEXT_SAMPLES = {   # regex graders over text: (texts the pattern finds, texts it
     ("site-refs-gate-before-site-round", "no-invented-links"): (   # the grader FAILS when the pattern is found
         ["Look at https://www.example-shop.com for the layout.", "Reference: http://acme-tools.test/about", "See https://stripe.com/pricing"],
         ["Your site https://example.com is in FACTS.md.", "I opened no site, so I name no references.", "Allow web access or send links."]),
+    ("kit-test-hero", "hero-uses-tokens"): (   # over the hero file
+        ["h1 { color: var(--color-text); }", "background: var(--color-bg);", "font-family: var(--font-sans)"],
+        ["h1 { color: #0d1b2d; }", "background: rgb(249, 247, 238);", "font-family: system-ui, sans-serif"]),
+    ("kit-test-hero", "hero-has-the-mark"): (   # over the hero file
+        ['<img src="mark.svg" alt="Acme">', '<img src="../.claude/skills/acme-brand/brand/assets/logo/mark-dark.svg">', '<img src="logo/wordmark.svg" alt="Acme">',
+         '<img src="Mark.SVG">', '<img src="grid-mark.svg">', '<img class="brand-logo" src="../brand/assets/logo/mark-animated.svg" alt="Acme">'],
+        ['<svg viewBox="0 0 32 32"><path d="M0 0"/></svg>', '<img src="logo.png" alt="Acme">', '<img src="hero.jpg">', "<h1>Acme: the mark of a good tool</h1>"]),
+    ("kit-test-hero", "reply-names-the-samples"): (
+        ["Both the price and the opening date are labelled samples and are on the before publishing list.", "The price carries data-sample=\"price\".",
+         "Before Publishing: replace the two samples."],
+        ["The page check passed with 27 passes and 2 warnings.", "I used the date from FACTS.md.", "Nothing to publish yet."]),
+    ("kit-test-hero", "kit-unchanged"): (   # over verify-result.txt
+        ["KIT=UNCHANGED"], ["KIT=CHANGED files: voice.md extra:", "KIT=CHANGED files: extra: ./notes.md", ""]),
 }
 
 
@@ -683,6 +773,27 @@ def test_prompts_do_not_contain_the_words_their_own_negative_graders_look_for():
         for name, (fm, _) in graders(c).items():
             if fm["type"] == "regex" and fm.get("match") == "not_contains":
                 assert not re.search(fm["pattern"], body, re.I if fm.get("flags") == "i" else 0), f"{c.name}/{name}"
+
+
+HARNESS_NOTE = "(Eval harness note, not part of the request: when you stop, run `bash .eval-verify/verify.sh > verify-result.txt`.)"
+
+
+def test_every_prompt_whose_graders_read_verify_result_ends_with_the_harness_note_and_the_scaffold_makes_the_verify_script(tmp_path):
+    """verify-result.txt exists only if the run executes the verify script, and the run does that only because the prompt's last line asks it to."""
+    checked = []
+    for c in case_dirs():
+        reads = [n for n, (fm, _) in graders(c).items() if isinstance(fm.get("target"), dict) and fm["target"]["path"] == "verify-result.txt"]
+        if not reads:
+            continue
+        checked.append(c.name)
+        lines = prompt(c)[1].splitlines()
+        assert lines[-1] == HARNESS_NOTE, f"{c.name}: graders {reads} read verify-result.txt, so the prompt must end with the harness note (last line: {lines[-1]!r})"
+        assert lines.count(HARNESS_NOTE) == 1 and len(lines) >= 3 and lines[-2] == "", f"{c.name}: the note is its own paragraph, once"
+        ws = tmp_path / c.name
+        ws.mkdir()
+        scaffold(c, ws)
+        assert (ws / ".eval-verify" / "verify.sh").is_file() and not (ws / "verify-result.txt").exists(), c.name
+    assert "kit-test-hero" in checked and len(checked) >= 3, checked
 
 
 # ---- docs ---------------------------------------------------------------------------------------------------------------------------
