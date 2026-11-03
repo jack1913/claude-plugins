@@ -6,6 +6,8 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-03
+
 The `/` menu is shorter. It now lists `brand-creator`, `setup`, `status`, `check`, `round` and `brand-adopt`, plus the four
 workflows. Nothing you could do is gone: what lost its command is something you ask for in your own words, or a flag of
 `check`.
@@ -52,6 +54,8 @@ Breaking changes, each with what to do:
   time. Full still plans it by default.
 - When no brand project is found, `/brand-creator:status` and the `brand-creator state` message no longer point to
   `/brand-creator:new`. They say to tell Claude what the brand is for.
+- A pack recorded with `staleness --write` reads as stale after this update (the scripts it hashes changed); rebuild
+  it.
 
 ### Removed
 
