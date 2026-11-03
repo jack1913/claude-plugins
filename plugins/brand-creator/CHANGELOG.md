@@ -84,6 +84,10 @@ stage, and why, is in the [archive](docs/archive/README.md).
   a word. A font the earlier report lists, that still sits in your project outside `assets/fonts/` and that this run does not name,
   is a warning (`fonts:dropped`) that names it and says to name every font in one run. The report is not merged: it still lists
   only the fonts of the run that wrote it. A font you took away, or one outside the project, is not counted.
+- A new project now comes with a `.gitignore` that keeps the whole-page picture of each captured site
+  (`research/site-refs/*/1440-full.png`) out of git. Those pictures are large, and the boards use the smaller stills and the
+  thumbnails. `brand-creator new` never overwrites a `.gitignore` (it still refuses a folder that holds anything). A project made
+  before this has none: add that line to its `.gitignore` yourself, as the manual's page on reference pages for your site says.
 
 ### Fixed
 

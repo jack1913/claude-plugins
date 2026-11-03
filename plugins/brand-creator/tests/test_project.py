@@ -3,6 +3,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -44,6 +45,55 @@ def test_new_reads_projects_root_from_the_plugin_setting(tmp_path):
     root.mkdir()
     r = bc("new", "viaconfig", env={"CLAUDE_PLUGIN_OPTION_PROJECTS_ROOT": str(root)}, cwd=tmp_path, data=tmp_path / "d")
     assert r.returncode == 0 and (root / "viaconfig" / "BRAND-STATE.md").is_file()
+
+
+_NO_GIT_SETTINGS = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}   # the answer must come from the project's own file
+
+
+def _git_ignores(repo: Path, rel: str) -> bool:
+    """Whether git ignores the path in `repo` (exit 0: ignored, 1: not ignored; anything else is an error, not an answer)."""
+    r = subprocess.run(["git", "-C", str(repo), "check-ignore", "-q", rel], capture_output=True, text=True, env=_NO_GIT_SETTINGS)
+    assert r.returncode in (0, 1), r.stderr
+    return r.returncode == 0
+
+
+def test_new_writes_a_gitignore_that_keeps_the_full_page_site_captures_out_of_git(tmp_path):
+    """G4-13 (O8): the whole-page still of every captured site is large and is not a file the owner works from; the boards use the smaller
+    stills and the thumbnails, so a new project ignores `research/site-refs/*/1440-full.png` and nothing else."""
+    r = bc("new", "acme", "--root", str(tmp_path), data=tmp_path / "d")
+    assert r.returncode == 0, r.stderr
+    assert "\n  .gitignore\n" in r.stdout                      # the run lists it with the other files it wrote
+    p = tmp_path / "acme"
+    text = (p / ".gitignore").read_text(encoding="utf-8")
+    assert "{{" not in text and "research/site-refs/*/1440-full.png" in text.splitlines()
+    # what git itself does with it, not only what the file says
+    assert subprocess.run(["git", "-C", str(p), "init", "-q"], capture_output=True, env=_NO_GIT_SETTINGS).returncode == 0
+    site = p / "research" / "site-refs" / "example-com"
+    site.mkdir(parents=True)
+    for name in ("1440.png", "390.png", "1440-full.png", "thumb-1440.jpg", "thumb-390.jpg", "capture.json"):
+        (site / name).write_bytes(b"x")
+    assert _git_ignores(p, "research/site-refs/example-com/1440-full.png")
+    for name in ("1440.png", "390.png", "thumb-1440.jpg", "thumb-390.jpg", "capture.json"):
+        assert not _git_ignores(p, f"research/site-refs/example-com/{name}"), name
+    assert not _git_ignores(p, "BRAND-STATE.md")
+
+
+def test_new_leaves_an_existing_gitignore_as_it_is(tmp_path):
+    """G4-13: an existing `.gitignore` is never overwritten. `new` refuses a folder that holds anything (this file included), so the file
+    keeps its bytes and nothing is written beside it."""
+    folder = tmp_path / "acme"
+    folder.mkdir()
+    mine = b"# the owner's own\r\n*.tmp\r\n"
+    (folder / ".gitignore").write_bytes(mine)
+    r = bc("new", "acme", "--root", str(tmp_path), data=tmp_path / "d")
+    assert r.returncode == 1 and "refusing to overwrite" in r.stderr
+    assert (folder / ".gitignore").read_bytes() == mine and [e.name for e in folder.iterdir()] == [".gitignore"]
+
+
+def test_the_manual_says_how_to_add_the_ignore_line_to_an_older_project():
+    """G4-13: a project made before this release has no `.gitignore` from `new`; the site references page says what to add by hand."""
+    page = (ROOT / "docs" / "manual" / "use" / "get-reference-pages-for-your-site.md").read_text(encoding="utf-8")
+    assert "`.gitignore`" in page and "research/site-refs/*/1440-full.png" in page
 
 
 def test_no_data_dir_is_a_clear_usage_error(tmp_path):
