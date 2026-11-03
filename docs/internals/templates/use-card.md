@@ -5,7 +5,7 @@ Copy the block below into `docs/manual/use/<name>.md` at the marketplace root an
 ````markdown illustrative
 # <name>
 
-<One sentence: what you can do with it. The same words as the marketplace description.>
+<One sentence: what you can do with it. The same words as `description` in the plugin's `plugin.json`.>
 
 ```text
 /plugin install <name>@jack1913

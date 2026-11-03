@@ -15,6 +15,10 @@ plugin plus `marketplace.yml` and `docs.yml`, one release-tag ruleset per plugin
 | `.github/rulesets/<plugin>-release-tags.json` | The tag ruleset that plugin's releases need on GitHub: a tag `<plugin>--v*` only on a commit where the checks `<plugin>` and `docs` passed, never deleted or moved once pushed ([Release a plugin](release.md#the-tag-rulesets)) |
 | `plugins/<name>/` | One plugin: `.claude-plugin/plugin.json`, docs, tests, `CHANGELOG.md`, version (batbelt: its tests are in the root `tests/`) |
 | `tests/` | batbelt's tests (brand-creator and swift keep theirs in their own folder) |
+| `.claude/` | The repo's own agent setup: `rules/`, `skills/` (`changelog-release`, `update-docs`, `update-rules`) and `settings.json`; see [Agent instruction layout](agent-instructions.md) |
+| `AGENTS.md`, `CLAUDE.md` | The index for agents (`CLAUDE.md` imports `AGENTS.md`) |
+| `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `LICENSE` | The landing page, how to contribute, how to report a security problem, the licence |
+| `.markdownlint-cli2.yaml`, `lychee.toml` | The settings of the docs checks ([docs standard, §8](docs-standard.md#8-checks)) |
 | `docs/` | The marketplace's manual, internals and decision records |
 
 Each folder under `plugins/` is self-contained (except batbelt's tests), versioned on its own, and tagged per release

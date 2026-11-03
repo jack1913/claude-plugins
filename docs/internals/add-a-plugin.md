@@ -1,13 +1,14 @@
 <!-- markdownlint-disable-file MD014 -->
 # Add a plugin
 
-A new plugin is a folder, a marketplace entry, a workflow and a release-tag ruleset. Three checks confirm the result before you push (step 4).
+A new plugin is a folder, a marketplace entry, a workflow and a release-tag ruleset. The checks in step 4 confirm the result before you push.
 Cutting its first release is on [Release a plugin](release.md).
 
 ## 1. Create the folder
 
 Create `plugins/<name>/` with `.claude-plugin/plugin.json` (its `name` equal to the folder name, and its `version`, the
-only place the version lives), its docs and its tests. Docs follow the [docs standard](docs-standard.md).
+only place the version lives; the other required fields are in the [docs standard, §5](docs-standard.md#5-skills-commands-agents-and-plugin-metadata)),
+a `CHANGELOG.md` whose first section is `## [Unreleased]`, its docs and its tests. Docs follow the [docs standard](docs-standard.md).
 
 ## 2. List it in the marketplace
 
@@ -60,6 +61,12 @@ Each validate command ends with:
 
 Then run the docs checks ([docs standard, §8](docs-standard.md#8-checks)), commit and push.
 
-## 5. Release it
+## 5. Add its card
+
+Copy the [marketplace card template](templates/use-card.md) to `docs/manual/use/<name>.md`, then add the plugin to the
+list in `docs/manual/README.md`, to [Choose a plugin](../manual/getting-started/choose-a-plugin.md) and to the plugin table of
+the root `README.md`. No check fails when a card is missing.
+
+## 6. Release it
 
 Releases are tagged per plugin from the repository root. See [Release a plugin](release.md).

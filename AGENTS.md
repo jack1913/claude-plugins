@@ -19,8 +19,10 @@ brand-creator, swift), each one self-contained and versioned on its own.
 | `docs/internals/` | Contributors only — layout, tests, adding a plugin, release, the docs standard |
 | `docs/adr/` | Architecture Decision Records for the marketplace (a plugin keeps its own) |
 | `docs/archive/` | Frozen point-in-time records |
+| `docs/assets/brand/` | The marks and header images the README and manual pages display (not docs pages) |
 | `.claude/rules/` | Path-scoped constraints, auto-loaded when a matching file is read |
 | `.claude/skills/` | Invoked procedures and reference packs |
+| `.claude/settings.json` | Agent permissions here: what runs unprompted, what asks, what is denied (`docs/internals/agent-instructions.md`) |
 
 ## 3. Pointer index (source-of-truth → path)
 
@@ -34,8 +36,8 @@ brand-creator, swift), each one self-contained and versioned on its own.
 | Secret scanning, push protection and Dependabot alerts: what is on, and how an alert is handled | `docs/adr/ADR-0007-secret-scanning-and-dependabot-alerts.md` |
 | A plugin's version (its only home) | `plugins/<name>/.claude-plugin/plugin.json` (`version`) |
 | How each plugin is tested in CI | `.github/workflows/<name>.yml` (`run:` lines) |
-| What the docs check enforces | `.github/scripts/check-docs-standard.py` (module docstring), `.markdownlint-cli2.yaml`, `lychee.toml` |
-| batbelt's tests | `tests/test_plugin.py`, `tests/test_onboard_repo.py`, `tests/test_permission_plan.py` |
+| What the docs check enforces | `.github/scripts/check-docs-standard.py` (module docstring), `.markdownlint-cli2.yaml`, `lychee.toml`; the root manual's recorded outputs and coverage record: `docs/.onboard-captures/`, `docs/.onboard-coverage.json` |
+| batbelt's tests | `tests/test_plugin.py`, `tests/test_onboard_repo.py`, `tests/test_permission_plan.py`, `tests/test_review_fixes.py` |
 | onboard-repo (source of truth for the stamped skills below) | `plugins/batbelt/skills/onboard-repo/` |
 | Working on swift | `plugins/swift/AGENTS.md` (it has its own `.claude/` skills, rules and settings) |
 | Working on brand-creator | `plugins/brand-creator/AGENTS.md` (script contract: `plugins/brand-creator/scripts/CONTRACT.md`; decisions: `plugins/brand-creator/docs/adr/README.md`, archived log: `plugins/brand-creator/docs/archive/decisions-log.md`) |

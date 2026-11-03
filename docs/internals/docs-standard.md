@@ -221,7 +221,7 @@ or one of its configs:
 Run them locally from the repo root:
 
 ```bash
-python3 .github/scripts/check-docs-standard.py
+python3 .github/scripts/check-docs-standard.py --strict
 npx markdownlint-cli2 "**/*.md"
 lychee --config lychee.toml --root-dir "$(pwd)" './**/*.md'
 ```

@@ -5,7 +5,8 @@ Each plugin has its own checks, run from the folder each section names. CI runs 
 or a pull request that changes its folder or its workflow (batbelt also `tests/**` and `.claude-plugin/**`), or when
 started by hand (`workflow_dispatch`); a tag push runs nothing
 ([ADR-0004](../adr/ADR-0004-ci-runs-on-main-and-pull-requests-never-on-tags.md)). See
-`.github/workflows/<plugin>.yml`. Test tools are pinned in each suite's `tests/requirements.txt`. The docs checks are in
+`.github/workflows/<plugin>.yml`. Test tools are pinned in the `tests/requirements.txt` of batbelt's and brand-creator's suites (swift's tests use only
+the Python standard library). The docs checks are in
 the [docs standard, §8](docs-standard.md#8-checks).
 
 ## Marketplace
