@@ -39,6 +39,8 @@ checks and renders
   shot --motion <proof>   motion proof: named states against the still, a page's animations seeked through (layout shift, whole pixels, edges at
                           phone widths, rest frame compared in the page itself), reduced motion; one report per proof file
   card <card.html>        render an HTML card to a PNG (OG, repo social, README header)
+  inline <page.html>      one self-contained copy of a page of the project (a try-out), to show to someone: stylesheets, scripts, images and fonts inside it,
+                          nothing loaded from anywhere; --out FILE.html goes outside the project or under tryout/ (a page that loads from another website: exit 2)
   frames <proof.json>     stills of a page case's mark along its motion (--case, --count N or --at 0,25,50,75,100): a strip and the reduced-motion
                           still too, into motion/frames/<case>/ (a try-out proof in the latest round or removed-*/: <its folder>/frames/<case>/; a proof in
                           history/ or an earlier round is refused: read-only), each written only when its bytes change
@@ -199,6 +201,7 @@ case "$sub" in
   site)       py site_pages.py "$@" ;;   # not site.py: a script of that name would shadow the standard library's site module wherever scripts/ is on sys.path
   shot)       js render.mjs shot "$@" ;;
   card)       js render.mjs card "$@" ;;
+  inline)     py inline_page.py "$@" ;;
   frames)     js render.mjs frames "$@" ;;
   capture)    js render.mjs capture "$@" ;;
   logo-sheet) py logo_sheet.py "$@" ;;

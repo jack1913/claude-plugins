@@ -117,6 +117,10 @@ ask for them in your own words.
 - **`site`**, after you pick references or say "skip the references", builds two or three versions of the first screen
   of your home page; typed again after your pick, it builds your other pages and marks each choice as a brand rule or an
   example. It never builds or publishes your real site, and marks a choice as a rule only when you decided it.
+- **Sharing a first-screen version.** While you try the versions, you can ask Claude to share one. Claude makes one
+  self-contained copy of it and, only with your yes to private claude.ai pages (the `review_surface`
+  [setting](settings.md)), publishes the copy as a private page and gives you its address. Without your yes, the version
+  stays on your computer.
 
 Steps: [Get reference pages for your site](../use/get-reference-pages-for-your-site.md).
 

@@ -155,8 +155,11 @@ review and the choices are in `references/phases/07p-site-round.md`; the board's
    an existing `rounds/r<N>/<name>/`) and copy each variant that stays into `rounds/r<N>/<name>/`, giving every relative path
    that leaves its folder one more `../` (the copy is one level deeper) and checking that each path of the copy leads to a
    file; then move the whole `tryout/` folder to `removed-<date>/tryout/` (never delete: `check --cascade` searches `tryout/`,
-   so a try-out left in place fails it after the first rename or price change); then steps 3 to 6 run as written. The step is
-   "The hero first", step 2a, in the phase file.
+   so a try-out left in place fails it after the first rename or price change); then steps 3 to 6 run as written. A try-out is
+   shared as a private Artifact page only when the owner asks and has said yes to claude.ai pages (`review_surface` `artifact`, or
+   the one upload question): `inline tryout/<name>/index.html --out <a file outside the project>` makes one self-contained copy,
+   you publish it and record its address with `state --set tryout_url=<url>` (never `review_url`), and clear it at the stage
+   gate; with no yes, nothing is published. The step is "The hero first", step 2a, in the phase file.
 
 3. For each folder, in this order: `brand-creator --data "${CLAUDE_PLUGIN_DATA}" capture rounds/r<N>/<name>/index.html
    --project <dir>`, then `... page-check rounds/r<N>/<name>/index.html --project <dir>` (fix a failing row in the page, or let

@@ -4,8 +4,9 @@ Get sample pages of your website, in your brand, before anyone builds the real o
 kind of visitor work, then Claude builds the first screen of your home page and your other pages. You don't need a
 website yet.
 
-These are reference pages, not your live website: they stay on your computer, and Claude never publishes anything. They show whoever
-builds your real site, you or someone you hire, what your brand decided and what was only one example.
+These are reference pages, not your live website. They stay on your computer, and nothing is published without your
+yes, and then only as a private page. They show whoever builds your real site, you or someone you hire, what your
+brand decided and what was only one example.
 
 ## Before you start
 
@@ -70,9 +71,12 @@ The first screen, what a visitor sees before they scroll, sets the tone for ever
    browser (they stay on your computer), say what to change, and Claude changes the page while you look. Nothing else
    runs while you try: no pictures, no checks, no board, so each change is quick. Ask for a quick check at phone and
    desktop width whenever you want one. What you say while you try is not your pick: you pick on the board, and nothing
-   Claude writes down mentions a try-out. When the versions look right, tell Claude to put them on the board. Claude
-   copies them into the round and moves the `tryout/` folder into a folder named `removed-` plus the date (nothing is
-   deleted), so the old copies do not make `/brand-creator:check` fail when you later change a name or a price.
+   Claude writes down mentions a try-out. Want someone else to see a version, or to see it on your phone? Ask Claude to share it.
+   If you already allowed private claude.ai pages (or say yes when Claude asks), Claude puts one self-contained copy of that
+   version online as a private page and gives you its address. Without your yes, nothing leaves your computer. Links to
+   other files don't work in the copy, and you can remove the page on claude.ai when you are done with it. When the
+   versions look right, tell Claude to put them on the board. Claude copies them into the round and moves the `tryout/`
+   folder into a folder named `removed-` plus the date (nothing is deleted), so the old copies do not make `/brand-creator:check` fail when you later change a name or a price.
 4. Claude puts the versions on a board. For each one the board shows:
    - the one idea it rests on, in a line (a version should be something you can remember, not only tidy);
    - four pictures: on a phone and a desktop, in light and dark;
@@ -136,6 +140,7 @@ them. Your brand book can show them, with the tag on each choice, in an optional
 - While you try the first-screen versions, `tryout/` in your brand project holds a folder for each. They are only for
   trying: your pick is the one you make on the board. Once the board is built, `tryout/` has moved into a `removed-`
   folder with the date, and nothing is deleted.
+- If you asked to share a version, Claude gave you the address of its private page. Open it to see the copy.
 - After you approve the pages, `site/site.json` exists, and `/brand-creator:check` passes the lines about your site, or
   says "not verified" (it could not confirm something) and why.
 
@@ -145,6 +150,7 @@ them. Your brand book can show them, with the tag on each choice, in an optional
 | --- | --- |
 | Claude says the references need web access | Let Claude go online, send links or screenshots of sites you like, or say "skip the references" |
 | A site did not load, and Claude leaves it out | Send a screenshot of it, or let Claude pick another |
+| Claude says a version cannot be shared because it loads something from another website | Ask Claude to take that out of the version (a font or picture it fetches from the web), then share again |
 | A message about the browser or setup | Type `/brand-creator:setup`, then try again. Claude never runs it without your yes |
 | Claude says your brief lists no site | Ask Claude to add your site to the "Required surfaces" line of `brief/BRIEF.md`. It needs a word for a site in English or Polish; in another language, add the word `site` |
 | Claude says your brand's rules are not approved | Say go to the list of rules Claude shows after asking whether your logo moves. `/brand-creator:status` shows where you are |

@@ -475,6 +475,38 @@ def test_an_older_project_without_the_website_gates_gets_them_on_record(tmp_path
     assert "G4 -  G4w recorded  G4p recorded  G5 -" in bc("state", project=p).stdout
 
 
+def test_a_tryout_url_is_a_key_of_its_own_apart_from_the_review_url(tmp_path):
+    """G4-17: the private page a shared try-out is on is `tryout_url`; `review_url` stays the one review page of the boards. Setting one never touches the other, the summary shows the try-out
+    page only while it is set, a project made before the key gets it on its first --set, and writing it leaves the G4 rules a page check holds (`--part g4-rules`) as they were."""
+    p = make_project(tmp_path)
+    assert re.match(r'tryout_url: ""(\s+#.*)?$', _state_line(p, "tryout_url")), _state_line(p, "tryout_url")        # the template carries the key, empty
+    review, tryout = "https://claude.example.invalid/artifact/review?v=1#top", "https://claude.example.invalid/artifact/atlas?v=2#top"
+    assert bc("state", "--set", f"review_url={review}", project=p).returncode == 0
+    rules = bc("state", "--part", "g4-rules", project=p).stdout
+    assert "try-out url" not in bc("state", project=p).stdout, "nothing to show while the key is empty"
+    r = bc("state", "--set", f"tryout_url={tryout}", project=p)
+    assert r.returncode == 0, r.stderr
+    assert bc("state", "--get", "tryout_url", project=p).stdout.strip() == tryout
+    assert bc("state", "--get", "review_url", project=p).stdout.strip() == review, "the review page is the one it was"
+    out = bc("state", project=p).stdout
+    assert f"review url: {review}" in out and f"try-out url: {tryout}" in out, out
+    data = json.loads(bc("state", "--json", project=p).stdout)["state"]
+    assert data["tryout_url"] == tryout and data["review_url"] == review
+    assert bc("state", "--part", "g4-rules", project=p).stdout == rules, "a page check holds the G4 rules only: this write leaves its reports current"
+    r = bc("state", "--set", f"review_url={review}x", project=p)                                                      # the other way round
+    assert r.returncode == 0 and bc("state", "--get", "tryout_url", project=p).stdout.strip() == tryout
+    assert bc("state", "--set", "tryout_url=", project=p).returncode == 0                                            # cleared at the stage gate
+    assert bc("state", "--get", "tryout_url", project=p).stdout.strip() == "" and "try-out url" not in bc("state", project=p).stdout
+    assert bc("state", "--get", "review_url", project=p).stdout.strip() == review + "x"
+    # a project made before the key: no such line, it still reads, and the first --set adds the key
+    state = p / "BRAND-STATE.md"
+    state.write_text(re.sub(r"(?m)^tryout_url:.*\n", "", state.read_text(encoding="utf-8")), encoding="utf-8")
+    assert "tryout_url" not in state.read_text(encoding="utf-8") and bc("state", project=p).returncode == 0
+    assert bc("state", "--get", "tryout_url", project=p).returncode == 1
+    assert bc("state", "--set", f"tryout_url={tryout}", project=p).returncode == 0
+    assert _common.State(state).data()["tryout_url"] == tryout and _common.State(state).data()["review_url"] == review + "x"
+
+
 def test_state_set_is_all_or_nothing_when_one_value_is_bad(tmp_path):
     p = make_project(tmp_path)
     before = (p / "BRAND-STATE.md").read_text()

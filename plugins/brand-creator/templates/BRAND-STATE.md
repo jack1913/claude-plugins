@@ -12,6 +12,7 @@ content_languages: ""          # language set code(s) the brand's own text is wr
 renderer: resvg                # off macOS, after the owner agrees: resvg (opted in YYYY-MM-DD)
 review_surface: auto           # auto (not answered yet: boards stay local until the owner answers the one upload question) | artifact | local
 review_url: ""                 # the one stable review page (Artifact URL or local path)
+tryout_url: ""                 # the private page a shared try-out of the site round is on (only with the owner's yes); never the review page
 site_research: auto            # online research for website references: auto (not asked yet) | online | links-only | none
 incumbent: none                # none, or one line about today's mark or site; a set value makes the "today" board section required
 inventory: ""                  # path to INVENTORY.md, or: none (no target repo). Required before the first board in the Full tier or product-in-family.
