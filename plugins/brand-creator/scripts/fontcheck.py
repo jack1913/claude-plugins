@@ -18,6 +18,8 @@ Three separate answers per font file:
      the browser from `/brand-creator:setup`; `--no-platform` leaves it out on purpose and the report says so.
 Fonts: every font under assets/fonts/ of the project, plus each --font FILE (repeatable, .ttf .otf .woff .woff2).
 Default font budget (owner-adjustable rule): at most two open-licence, self-hostable families.
+Every run writes the one report over the last, so a font an earlier run checked and this one does not name drops out of it and the
+kit leaves it out: such a font that still exists in the project is a `fonts:dropped` warning (no merge: name every font in one run).
 """
 import json
 import re
@@ -115,6 +117,29 @@ def licence_hint(font) -> tuple[str, str, dict]:
     return status, "; ".join(notes), facts
 
 
+def dropped_fonts(project: Path, now: list[Path]) -> tuple[list[str], str | None]:
+    """-> (the fonts the previous fontcheck report lists that this run leaves out, None), or ([], why that report could not be read).
+    A font is dropped when it is a font file inside the project that still exists and is not among `now` (the fonts of this run). A font
+    under assets/fonts/ is always in `now`, one taken away no longer exists, and one outside the project (the report keeps only its
+    file name, and the kit never holds it) cannot be told from a file of that name inside it, so none of these is judged. No earlier
+    report means nothing dropped."""
+    prev = project / "assets" / "_checks" / "fontcheck.json"
+    if not prev.is_file():
+        return [], None
+    try:
+        listed = json.loads(prev.read_text(encoding="utf-8"))["fonts"]
+        if not isinstance(listed, list) or not all(isinstance(f, str) for f in listed):
+            raise ValueError("`fonts` is not a list of file names")
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        return [], f"the earlier report {rel(project, prev)} cannot be read as a fontcheck report ({type(e).__name__}: {e})"
+    out = []
+    for name in dict.fromkeys(listed):
+        p = (project / name).resolve()
+        if p.is_relative_to(project) and p.suffix.lower() in FONT_EXT and p.is_file() and p not in now:
+            out.append(name)
+    return out, None
+
+
 def platform_report(font_path: Path, chars: str) -> tuple[dict | None, str | None]:
     """-> (report, None) or (None, why it could not run)."""
     cmd = ["node", str(plugin_root() / "scripts" / "render.mjs"), "fonts", "--font-file", str(font_path), "--text", chars, "--json"]
@@ -161,6 +186,7 @@ def main() -> int:
     for p in paths:
         if not p.is_file() or p.suffix.lower() not in FONT_EXT:
             fail(EXIT_USAGE, f"{p}: not a font file (.ttf .otf .woff .woff2)")
+    dropped, unread = dropped_fonts(project, paths)   # read before this run writes its own report over it
     rep = Report("fontcheck", project, [p for p in paths if p.is_relative_to(project)], renderer="chromium (platform report)" if not a.no_platform else "no platform report (--no-platform)")
     rep.extra = {"languages": codes, "fonts": [rel(project, p) if p.is_relative_to(project) else p.name for p in paths], "language_files": [f"scripts/data/languages/{c}.json" for c in codes]}
     families: dict[str, list[str]] = {}
@@ -211,6 +237,12 @@ def main() -> int:
     if len(families) > MAX_FAMILIES:
         rep.add("budget:families", "warn", f"font budget (default: at most {MAX_FAMILIES} families, owner-adjustable)",
                 detail=f"{len(families)} families: {', '.join(families)}")
+    if unread:
+        rep.add("fonts:earlier", "info", "fonts an earlier run checked", detail=f"not compared: {unread}")
+    elif dropped:
+        rep.add("fonts:dropped", "warn", "fonts an earlier run checked and this one leaves out",
+                detail=f"the earlier report lists {', '.join(dropped)}, which this run does not name, so the report no longer covers "
+                       f"{'it' if len(dropped) == 1 else 'them'}: name every font in one run, or kit build leaves it out", dropped=dropped)
     return rep.finish()
 
 

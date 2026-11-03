@@ -79,6 +79,11 @@ stage, and why, is in the [archive](docs/archive/README.md).
   none of these runs nothing and says so. A command that refuses (a file you edited by hand, a package that is not installed)
   is a failed step, said with its message; the chain still runs `check`, then ends with a non-zero exit code. A project that
   already has `tools/finish.sh` keeps its copy: take the step from `templates/finish.sh.tpl`.
+- `fontcheck` now warns when a run leaves out a font an earlier run checked. Each run writes the one report over the last, so
+  checking a font of a master or a page by itself dropped the other fonts from the report, and the kit then left them out without
+  a word. A font the earlier report lists, that still sits in your project outside `assets/fonts/` and that this run does not name,
+  is a warning (`fonts:dropped`) that names it and says to name every font in one run. The report is not merged: it still lists
+  only the fonts of the run that wrote it. A font you took away, or one outside the project, is not counted.
 
 ### Fixed
 

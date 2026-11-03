@@ -957,6 +957,14 @@ the check "not verified" (exit 3). Paths are relative to FAMILY.md; a sibling re
   warns (default budget, owner-adjustable). The `licence:<font>` row also carries `family` (name ID 16, else name ID 1, else the file
   stem), `weight` (OS/2 `usWeightClass` when it is 1 to 1000, else 400: a font with no OS/2 table, or one that stores 0 or a value over 1000, is 400) and `style` (`italic` when OS/2 `fsSelection` bit 0 or `head.macStyle` bit 1 is
   set, else `normal`); its status does not depend on them, and its detail changes only for a stored weight that is no weight: it then starts "OS/2 usWeightClass <n> is not a valid weight (1 to 1000): taken as 400".
+- Every `fontcheck` run writes the one report over the last and keeps no merge, so a font an earlier run checked and this run does not name
+  drops out of the report and `kit build` leaves it out. Before writing, the run reads the previous report's `fonts`: a font in it that is a
+  font file inside the project, outside `assets/fonts/` (those are always read), that still exists and is not among this run's fonts is one
+  `fonts:dropped` row (status `warn`, never a failure, key `dropped` the project paths in the order the earlier report listed them). Its detail names
+  each one and says "name every font in one run, or kit build leaves it out". A font taken away since is not dropped; a font outside the
+  project is not judged (the report keeps only its file name, and the kit never holds it). No earlier report, or one with no font left
+  out, adds no row; an earlier report that cannot be read (not JSON, or `fonts` not a list of file names) adds the row `fonts:earlier`
+  (status `info`, "not compared: ...") and the run goes on. The report's own `fonts` stays this run's fonts only.
 - `outline-glyphs` writes text as paths: fontTools instancer pins the variable axes, skia-pathops removes overlaps, `SVGPathPen` writes
   one `<path>` per glyph. The SVG has no `<text>` and no font reference (mark_lint checks) and carries `data-baseline`, `data-cap-height`
   and `data-x-height` that `logo-sheet --guides` draws. Layout is the font's advance widths plus `--tracking` and `--pair`; GPOS kerning

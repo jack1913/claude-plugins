@@ -130,6 +130,88 @@ def test_a_named_font_is_checked_together_with_the_fonts_under_assets_fonts(proj
     assert {"licence:assets/fonts/a.ttf", "licence:assets/masters/deck/b.ttf"} <= set(results(proj))
 
 
+# ---------------------------------------------------------------- a run that drops a font an earlier run checked
+
+ADVICE = "name every font in one run, or kit build leaves it out"
+
+
+def run_named(proj, *fonts):
+    """fontcheck with each of `fonts` named by --font (and the fonts under assets/fonts/ as always); the run must end 0."""
+    args = ["fontcheck", "--lang", "pl", "--no-platform"]
+    for f in fonts:
+        args += ["--font", str(f)]
+    r = bc(*args, project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    return r
+
+
+def test_a_run_that_leaves_out_a_font_an_earlier_run_checked_warns_naming_it(proj):
+    # the per-font trap: each run rewrites the one report, so the font of the run before drops out of it and kit build leaves it out
+    deck = proj / "assets" / "masters" / "deck"
+    deck.mkdir(parents=True)
+    a, b = font_variant(deck / "a.ttf", static=True), font_variant(deck / "b.ttf", static=True)
+    run_named(proj, a)
+    assert "fonts:dropped" not in results(proj)   # the first run has no earlier report to compare with
+    r = run_named(proj, b)
+    row = results(proj)["fonts:dropped"]
+    assert row["status"] == "warn" and row["dropped"] == ["assets/masters/deck/a.ttf"]
+    assert "assets/masters/deck/a.ttf" in row["detail"] and ADVICE in row["detail"] and "b.ttf" not in row["detail"]
+    assert "[WARN] fonts:dropped" in r.stdout
+    assert report(proj, "fontcheck")["fonts"] == ["assets/masters/deck/b.ttf"]   # no merge: the report holds this run's fonts only
+    assert report(proj, "fontcheck")["status"] == "pass"                          # a warning, never a failure
+    # a run that names both is silent, and so is the one that follows it with the same two
+    run_named(proj, a, b)
+    assert "fonts:dropped" not in results(proj)
+    assert report(proj, "fontcheck")["fonts"] == ["assets/masters/deck/a.ttf", "assets/masters/deck/b.ttf"]
+    run_named(proj, b, a)
+    assert "fonts:dropped" not in results(proj)
+    # a font taken away since is not dropped, it is gone
+    a.unlink()
+    run_named(proj, b)
+    assert "fonts:dropped" not in results(proj)
+
+
+def test_a_font_of_a_master_left_out_of_the_next_run_warns_and_the_fonts_under_assets_fonts_never_do(proj):
+    brand = proj / "assets" / "fonts"
+    brand.mkdir(parents=True)
+    font_variant(brand / "a.ttf", static=True)
+    deck = proj / "assets" / "masters" / "deck"
+    deck.mkdir(parents=True)
+    b = font_variant(deck / "b.ttf", static=True)
+    run_named(proj, b)
+    assert report(proj, "fontcheck")["fonts"] == ["assets/fonts/a.ttf", "assets/masters/deck/b.ttf"]
+    run_named(proj)   # no --font: assets/fonts/ again, the master's font left out
+    assert results(proj)["fonts:dropped"]["dropped"] == ["assets/masters/deck/b.ttf"]
+    assert report(proj, "fontcheck")["fonts"] == ["assets/fonts/a.ttf"]
+    run_named(proj)   # the run after it has nothing left to drop
+    assert "fonts:dropped" not in results(proj)
+
+
+def test_a_font_outside_the_project_is_recorded_by_name_and_never_counted_as_dropped(proj, tmp_path):
+    # the report keeps only the file name of a font outside the project, which the kit never holds: there is nothing to compare
+    outside = tmp_path / "elsewhere"
+    outside.mkdir()
+    x, y = font_variant(outside / "x.ttf", static=True), font_variant(outside / "y.ttf", static=True)
+    run_named(proj, x)
+    assert report(proj, "fontcheck")["fonts"] == ["x.ttf"]
+    run_named(proj, y)
+    assert "fonts:dropped" not in results(proj)
+
+
+def test_an_earlier_report_that_cannot_be_read_is_said_and_the_run_goes_on(proj):
+    run_named(proj, TEST_FONT)
+    path = proj / "assets" / "_checks" / "fontcheck.json"
+    path.write_text("{ not json", encoding="utf-8")
+    run_named(proj, TEST_FONT)
+    row = results(proj)["fonts:earlier"]
+    assert row["status"] == "info" and "not compared" in row["detail"] and "fonts:dropped" not in results(proj)
+    run_named(proj, TEST_FONT)   # the report just written reads fine, so the row is gone
+    assert "fonts:earlier" not in results(proj)
+    path.write_text(json.dumps({"tool": "fontcheck", "fonts": "assets/fonts/a.ttf"}), encoding="utf-8")   # `fonts` that is no list
+    run_named(proj, TEST_FONT)
+    assert "not compared" in results(proj)["fonts:earlier"]["detail"]
+
+
 # ---------------------------------------------------------------- licence hint and budget
 
 def test_licence_hint_reads_the_name_table(proj, tmp_path):
