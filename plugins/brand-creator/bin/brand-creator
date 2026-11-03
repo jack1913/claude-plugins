@@ -115,7 +115,8 @@ names
 fleets (opt-in)
   fleet-plan <workflow>   dry-run an opt-in workflow (directions, review-panel, naming, adopt) with stub agents: the agent count,
                           the models that will actually run (session model as the ceiling, FORCE env), the size guideline and
-                          a rough cost, before anything is launched; --check lints every workflow and agent file
+                          a rough cost in tokens (from measured runs, or "not measured"; --costs <file> names another table), before
+                          anything is launched; --check lints every workflow, agent file and the table of measured costs
 
 environment
   setup [--yes]           show what will be downloaded, then install dependencies into the data dir

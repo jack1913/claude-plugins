@@ -539,3 +539,136 @@ test("fleet-plan prints the count, the models and the guideline; refuses unknown
   assert.equal(bc(["fleet-plan", "nope", "--args", "{}"]).status, 2);
   assert.equal(bc(["fleet-plan", "naming"]).status, 2);
 });
+
+// ---- G4-06: the cost of a fleet is stated in tokens, from measured runs (skills/brand-creator/references/fleet-costs.json)
+
+const costsRow = (o = {}) => ({ id: "naming-judge", agent: "brand-judge", workflow: "naming", what: "the naming judge, one call", per: "call", tokens_k: [20, 35], measured: "2026-11-03", source: "a table made for this test", ...o });
+function costsFile(table) {
+  const f = path.join(tmpdir("bc-fleet-costs-"), "fleet-costs.json");
+  fs.writeFileSync(f, typeof table === "string" ? table : JSON.stringify(table));
+  return f;
+}
+function planWith(workflow, costs, extra = []) {
+  const a = path.join(tmpdir("bc-fleet-args-"), `${workflow}.json`);
+  fs.writeFileSync(a, JSON.stringify(fixture(workflow)));
+  return bc(["fleet-plan", workflow, "--args", `@${a}`, ...(costs ? ["--costs", costs] : []), ...extra]);
+}
+const agentLines = (out) => out.split("\n").filter((l) => /^\s+\d+\. /.test(l));
+
+test("fleet-plan prints a token range for an agent with a measured row and says not measured for one without", () => {
+  const r = planWith("naming", costsFile({ schema: 1, rows: [costsRow()] }));
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const lines = agentLines(r.stdout);
+  assert.equal(lines.length, 4);
+  assert.match(lines.find((l) => l.includes("brand-creator:brand-judge")), /tokens: about 20-35k \(measured 2026-11-03\)/);
+  const hunters = lines.filter((l) => l.includes("brand-creator:brand-namer"));
+  assert.equal(hunters.length, 3);
+  for (const l of hunters) assert.match(l, /tokens: not measured/);
+  assert.match(r.stdout, /rough cost: about 20-35k tokens for the 1 measured agent, 3 not measured; at most \d+ turns in total \(maxTurns\)/);
+  assert.match(r.stdout, /token estimates: naming-judge \(measured 2026-11-03: a table made for this test\)/);
+  assert.doesNotMatch(r.stdout, /pass\(es\)|each about what that step costs/);
+  // the same plan as data: a measured agent carries its row, an unmeasured one null
+  const j = JSON.parse(planWith("naming", costsFile({ schema: 1, rows: [costsRow()] }), ["--json"]).stdout);
+  assert.deepEqual(j.calls[3].tokens, { row: "naming-judge", low_k: 20, high_k: 35, measured: "2026-11-03", source: "a table made for this test" });
+  assert.equal(j.calls[0].tokens, null);
+  assert.deepEqual(j.tokens, { low_k: 20, high_k: 35, measured_agents: 1, not_measured_agents: 3 });
+});
+
+test("fleet-plan adds the ranges of every measured agent, prints one number when low and high are equal, and never uses a row of another workflow or a row that is no per-call figure", () => {
+  const all = costsFile({ schema: 1, rows: [costsRow({ tokens_k: [30, 30] }), costsRow({ id: "naming-namer", agent: "brand-namer", tokens_k: [10, 12] })] });
+  const r = planWith("naming", all);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /brand-judge .*tokens: about 30k \(measured 2026-11-03\)/);
+  assert.match(r.stdout, /brand-namer .*tokens: about 10-12k \(measured 2026-11-03\)/);
+  assert.match(r.stdout, /rough cost: about 60-66k tokens in total \(4 agents\); at most \d+ turns/);
+  const other = costsFile({ schema: 1, rows: [costsRow({ workflow: "adopt" }), costsRow({ id: "judge-round", workflow: null, per: "round", tokens_k: [400, 400] })] });
+  const o = planWith("naming", other);
+  assert.equal(o.status, 0, o.stdout + o.stderr);
+  for (const l of agentLines(o.stdout)) assert.match(l, /tokens: not measured/);
+  assert.match(o.stdout, /rough cost: tokens are not measured for any of the 4 agents \(no row of fleet-costs\.json fits\); at most \d+ turns/);
+});
+
+test("a malformed fleet-costs file exits 2 and names the file and the problem; the plan is not printed", () => {
+  const bad = [
+    ["{not json", /is not JSON/],
+    [{ schema: 2, rows: [] }, /schema must be 1/],
+    [{ schema: 1, rows: {} }, /rows must be a list/],
+    [{ schema: 1, rows: [], price: 1 }, /unknown key "price"/],
+    [{ schema: 1, rows: [costsRow({ agent: "brand-nobody" })] }, /row "naming-judge": agent "brand-nobody" is not an agent in agents\//],
+    [{ schema: 1, rows: [costsRow({ agent: "constructor" })] }, /row "naming-judge": agent "constructor" is not an agent in agents\//],
+    [{ schema: 1, rows: [costsRow({ agent: ["brand-judge"] })] }, /row "naming-judge": agent \["brand-judge"\] is not an agent in agents\//],
+    [{ schema: 1, rows: [costsRow({ workflow: "nope" })] }, /row "naming-judge": workflow "nope" is not a workflow/],
+    [{ schema: 1, rows: [costsRow({ tokens_k: [35, 20] })] }, /row "naming-judge": tokens_k must be \[low, high\] in thousands of tokens, 0 < low <= high/],
+    [{ schema: 1, rows: [costsRow({ tokens_k: [0, 5] })] }, /tokens_k must be \[low, high\]/],
+    [{ schema: 1, rows: [costsRow({ measured: "03-11-2026" })] }, /row "naming-judge": measured must be a date, YYYY-MM-DD/],
+    [{ schema: 1, rows: [costsRow({ measured: "2026-02-30" })] }, /measured must be a date/],
+    // a date that looks right but is out of range makes `new Date(...).toISOString()` throw: it must still be a problem, not a crash
+    [{ schema: 1, rows: [costsRow({ measured: "2026-13-01" })] }, /row "naming-judge": measured must be a date, YYYY-MM-DD/],
+    [{ schema: 1, rows: [costsRow({ measured: "2026-00-10" })] }, /measured must be a date/],
+    [{ schema: 1, rows: [costsRow({ measured: "2026-01-32" })] }, /measured must be a date/],
+    [{ schema: 1, rows: [costsRow({ measured: 20261101 })] }, /measured must be a date/],
+    [{ schema: 1, rows: [costsRow({ source: " " })] }, /row "naming-judge": source must be a sentence saying which run it came from/],
+    [{ schema: 1, rows: [costsRow({ per: "pass" })] }, /row "naming-judge": per must be "call" or "round"/],
+    [{ schema: 1, rows: [costsRow({ per: "round" })] }, /row "naming-judge": a row of a workflow must be per "call"/],
+    [{ schema: 1, rows: [costsRow({ calls: 0 })] }, /row "naming-judge": calls must be a whole number, 1 or more/],
+    [{ schema: 1, rows: [costsRow({ price: 3 })] }, /row "naming-judge": unknown key "price"/],
+    [{ schema: 1, rows: [{ ...costsRow(), id: undefined }] }, /row 1: id must be a lower-case slug/],
+    [{ schema: 1, rows: ["x"] }, /row 1: must be an object/],
+    [{ schema: 1, rows: [costsRow(), costsRow()] }, /row "naming-judge": the id is used twice/],
+    [{ schema: 1, rows: [costsRow(), costsRow({ id: "again" })] }, /row "again": brand-judge in naming already has a row/],
+  ];
+  for (const [table, problem] of bad) {
+    const f = costsFile(table);
+    const r = planWith("naming", f);
+    assert.equal(r.status, 2, `${JSON.stringify(table)}: ${r.stdout}${r.stderr}`);
+    assert.ok(r.stderr.includes(f), `the message names the file: ${r.stderr}`);
+    assert.match(r.stderr, problem);
+    assert.equal(r.stdout, "", "no plan is printed on a bad table");
+  }
+  const gone = path.join(tmpdir("bc-fleet-costs-"), "missing.json");
+  const m = planWith("naming", gone);
+  assert.equal(m.status, 2);
+  assert.ok(m.stderr.includes(gone) && /cannot read/.test(m.stderr), m.stderr);
+});
+
+test("the shipped fleet-costs.json is a valid table with every row dated and sourced, and fleet-plan --check fails a bad table", () => {
+  const file = path.join(ROOT, "skills/brand-creator/references/fleet-costs.json");
+  const { rows, problems } = F.loadCosts(file, agents, NAMES);
+  assert.deepEqual(problems, []);
+  assert.ok(rows.length >= 2);
+  for (const r of rows) assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(r.measured) && r.source.trim().length > 20, r.id);
+  // the two measured runs the group 4 plan names: the cold review of a site hero (a call of the reviewer) and the research fleet of a round
+  const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
+  assert.ok(byId["cold-review"] && byId["cold-review"].agent === "brand-reviewer" && byId["cold-review"].per === "call" && byId["cold-review"].workflow === null);
+  assert.ok(byId["research-fleet"] && byId["research-fleet"].agent === "brand-researcher" && byId["research-fleet"].per === "round");
+  const bad = costsFile({ schema: 1, rows: [costsRow({ agent: "brand-nobody" })] });
+  const c = bc(["fleet-plan", "--check", "--costs", bad]);
+  assert.equal(c.status, 1, c.stdout + c.stderr);
+  assert.match(c.stdout, /FAIL .*fleet-costs\.json: row "naming-judge": agent "brand-nobody" is not an agent in agents\//);
+  assert.match(c.stdout, /^FAIL: \d+ agents, \d+ workflows checked$/m);
+  const ok = bc(["fleet-plan", "--check"]);
+  assert.equal(ok.status, 0, ok.stdout + ok.stderr);
+  // a bad table never crashes the check: an out-of-range date, an agent that is a prototype key or an array each FAIL with exit 1
+  for (const [o, problem] of [[{ measured: "2026-13-01" }, /measured must be a date, YYYY-MM-DD/], [{ measured: "2026-01-32" }, /measured must be a date, YYYY-MM-DD/],
+    [{ agent: "constructor" }, /agent "constructor" is not an agent in agents\//], [{ agent: ["brand-judge"] }, /agent \["brand-judge"\] is not an agent in agents\//]]) {
+    const f = costsFile({ schema: 1, rows: [costsRow({ id: "x", ...o })] });
+    const r = bc(["fleet-plan", "--check", "--costs", f]);
+    assert.equal(r.status, 1, `${JSON.stringify(o)}: ${r.stdout}${r.stderr}`);
+    assert.match(r.stdout, /^FAIL .*fleet-costs\.json: row "x": /m);
+    assert.match(r.stdout, problem);
+    assert.doesNotMatch(r.stderr, /RangeError|at .*fleet_plan\.mjs/);
+  }
+});
+
+test("the plan of each of the four workflows prints a token range or says not measured for every agent, and never the old pass wording", () => {
+  for (const w of NAMES) {
+    const r = planWith(w);
+    assert.equal(r.status, 0, `${w}: ${r.stdout}${r.stderr}`);
+    const n = Number(/: (\d+) agent\(s\)/.exec(r.stdout)[1]);
+    const lines = agentLines(r.stdout);
+    assert.equal(lines.length, n, w);
+    for (const l of lines) assert.match(l, /tokens: (not measured|about [\d.]+(-[\d.]+)?k \(measured \d{4}-\d{2}-\d{2}\))/, `${w}: ${l}`);
+    assert.match(r.stdout, /^rough cost: (about [\d.]+(-[\d.]+)?k tokens|tokens are not measured)/m, w);
+    assert.doesNotMatch(r.stdout, /pass\(es\)|single-thread/, w);
+  }
+});

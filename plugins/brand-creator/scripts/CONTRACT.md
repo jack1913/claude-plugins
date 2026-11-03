@@ -2732,6 +2732,21 @@ so a refused board never ends in a pass.
   the arguments, an agent would run above the session model or an agent type is unknown, 2 = usage. `fleet-plan --check`
   runs the static checks over every workflow and agent file (exit 1 on any problem). It writes no report: it is a plan, not a
   gate over project artefacts.
+- **Costs in tokens** (`skills/brand-creator/references/fleet-costs.json`, schema 1; `fleet-plan --costs <file>` reads another table). The
+  table is `{"schema": 1, "note"?, "rows": [...]}`; a row is `{id, agent, workflow, what, per, tokens_k, calls?, measured, source}`: `id` a
+  lower-case slug used once; `agent` an agent of `agents/`; `workflow` one of `workflows/` or `null` (a fleet that runs in the thread, with no
+  plan to print); `what` the use that was measured; `per` `"call"` or `"round"` (a row of a workflow is `"call"`); `tokens_k` `[low, high]`
+  in thousands of tokens with `0 < low <= high` (one figure has both the same); `calls` the number of calls measured, a whole number from 1;
+  `measured` a real date `YYYY-MM-DD`; `source` the run it came from, in words (no client name or path: the table ships). An unknown key
+  anywhere, or two rows for one agent in one workflow, is a problem. The plan gives each call the row whose `workflow` is the planned
+  workflow, whose `agent` is the call's agent and whose `per` is `"call"`: its line ends `tokens: about <low>-<high>k (measured <date>)`
+  (`about <n>k` when low and high are equal), and every other call says `tokens: not measured`; a figure of one use of an agent is never
+  printed for another. The `rough cost:` line adds up the measured calls (`about <low>-<high>k tokens in total (<n> agents)`, or `... for
+  the <m> measured agents, <n-m> not measured`, or `tokens are not measured for any of the <n> agents`) and the plan names each row it used
+  (`token estimates: <id> (measured <date>: <source>)`). `--json` carries `calls[].tokens` (`{row, low_k, high_k, measured, source}` or
+  `null`) and `tokens` (`{low_k, high_k, measured_agents, not_measured_agents}`, the two figures `null` when nothing is measured). A table that
+  cannot be read, is not JSON, or breaks a rule above exits 2 naming the file and each problem, before any plan is printed;
+  `fleet-plan --check` reports each as `FAIL <file>: <problem>` (exit 1) and keeps its `PASS|FAIL: <n> agents, <m> workflows checked` line.
 
 ## Agents and workflows: snapshots, fix runs and the verifier
 

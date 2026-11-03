@@ -1,4 +1,5 @@
 """Static checks over agents/*.md and workflows/*.js (the dry runs live in tests/node/workflows.test.mjs)."""
+import json
 import re
 
 from helpers import ROOT, bc
@@ -177,3 +178,38 @@ def test_directions_needs_the_style_pick_and_the_fleet_reference_says_so():
     assert "needs the style pick (G1s) first" in fleet and "Nor is the style research (P1s)" in " ".join(fleet.split())
     orch = ORCH.read_text(encoding="utf-8")
     assert "`g1s`" in orch[orch.index("## Fleets and workflows"):], "SKILL.md tells the lead that directions takes the G1s record"
+
+
+def test_the_cost_of_a_fleet_is_in_tokens_from_measured_rows_and_no_doc_calls_it_a_pass():
+    """G4-06: the one home of a cost is fleet-costs.json (rows measured, dated, sourced); the gate, the skills and the manual point at the
+    printed estimate, and the old "about one pass per agent" wording is gone from every doc and from the script."""
+    table = json.loads((ROOT / "skills" / "brand-creator" / "references" / "fleet-costs.json").read_text(encoding="utf-8"))
+    assert table["schema"] == 1 and set(table) <= {"schema", "note", "rows"}
+    ids = [r["id"] for r in table["rows"]]
+    assert ids == sorted(set(ids), key=ids.index) and {"cold-review", "research-fleet"} <= set(ids)
+    for r in table["rows"]:
+        assert r["agent"] in PLAN, r["id"]
+        assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", r["measured"]) and r["source"].strip(), r["id"]
+        low, high = r["tokens_k"]
+        assert 0 < low <= high, r["id"]
+        assert not re.search(r"[/\\@]|https?:", r["source"] + r["what"]), f"{r['id']}: no path, address or e-mail in a shipped table"
+    fleet = " ".join(FLEET.read_text(encoding="utf-8").split())
+    for needle in ("## Measured costs (`fleet-costs.json`)", "[fleet-costs.json](fleet-costs.json)", "`tokens: about <low>-<high>k (measured <date>)`",
+                   "`tokens: not measured`", "An agent with no row is \"not measured\"", "never fill it in from what the step would cost in one thread",
+                   "`cold-review`", "`research-fleet`", "the only home of a cost in tokens"):
+        assert needle in fleet, needle
+    orch = ORCH.read_text(encoding="utf-8")
+    assert "a rough cost in tokens (the plan prints each agent's range from measured runs, or \"not measured\"" in " ".join(orch[orch.index("## Fleets and workflows"):].split())
+    check = " ".join((ROOT / "skills" / "check" / "SKILL.md").read_text(encoding="utf-8").split())
+    assert "a rough cost in tokens (the printed estimate of `fleet-plan`, or \"not measured\")" in check
+    manual = " ".join((ROOT / "docs" / "manual" / "reference" / "costs.md").read_text(encoding="utf-8").split())
+    assert "a rough cost in tokens" in manual and "For a step nobody has measured, Claude says \"not measured\" instead of guessing" in manual
+    contract = (ROOT / "scripts" / "CONTRACT.md").read_text(encoding="utf-8")
+    assert "**Costs in tokens** (`skills/brand-creator/references/fleet-costs.json`, schema 1;" in contract
+    for path in (FLEET, ORCH, ROOT / "skills" / "check" / "SKILL.md", ROOT / "docs" / "manual" / "reference" / "costs.md",
+                 ROOT / "docs" / "manual" / "reference" / "commands.md", ROOT / "docs" / "manual" / "reference" / "agents-and-workflows.md",
+                 ROOT / "README.md", ROOT / "scripts" / "fleet_plan.mjs"):
+        flat = " ".join(path.read_text(encoding="utf-8").lower().split())
+        for old in ("agent pass", "single-thread pass", "pass(es)", "each about what that step costs", "each agent costs about", "about what that step would cost",
+                    "about what the same step would cost"):
+            assert old not in flat, f"{path.name} still says {old!r}"
