@@ -69,7 +69,7 @@ Commands are written after `brand-creator --data "${CLAUDE_PLUGIN_DATA}"`.
 
 | Output | Path |
 |---|---|
-| A hero variant, one folder each, named by a word of 3 or more letters | `rounds/r<N>/<Name>/index.html` (the home page's first screen), `shots/` (from `capture`: `1440-light.png`, `1440-dark.png`, `390-light.png`, `390-dark.png`, `1440-light-full.png`, `capture.json`) and `cold-review.md` |
+| A hero variant, one folder each, named by a word of 3 or more letters | `rounds/r<N>/<Name>/index.html` (the home page's first screen), `shots/` (from `capture`: `1440-light.png`, `1440-dark.png`, `390-light.png`, `390-dark.png`, `1440-light-full.png`, `capture.json`; with `--frames` also `frame-1440-0.png`, `frame-1440-50.png`, `frame-1440-100.png`) and `cold-review.md` |
 | A page of the pages stage, one folder each, named by its page id (`start`, `pricing`) | `rounds/r<N>/<id>/index.html`, `shots/`, and `cold-review.md` when the page was read cold |
 | A try-out of a hero variant (the first hero board only), one folder each, named as its variant | `tryout/<Name>/index.html`: a plain local page the owner opens in their own browser; no `shots/`, no report, no record, and nothing cites it; the whole folder moves to `removed-<date>/tryout/` at the stage gate |
 | A shared copy of a try-out (only when the owner asks and said yes to claude.ai pages) | one self-contained `.html` file made by `inline`, outside the project; published as a private Artifact page; its address in `BRAND-STATE.md` → `tryout_url`, cleared at the stage gate |
@@ -179,6 +179,11 @@ is `start` (`<body data-page="start">`) in every project.
 3. **Per variant, in this order: `capture`, `page-check`, the cold review.**
    - `capture rounds/r<N>/<Name>/index.html --project <dir>` writes the four stills and the full page into `shots/`, with
      `capture.json`. Read all four stills.
+   - **A page that animates when it loads** (an entrance, a tear-off, a reveal) is taken with `capture rounds/r<N>/<Name>/index.html --project <dir> --frames`
+     instead. Beside the four stills it writes `shots/frame-1440-0.png`, `frame-1440-50.png` and `frame-1440-100.png`: the first screen at 1440, light, at the
+     start, the middle and the end of the longest animation that runs on load, and `capture.json` lists them. Read all three: the four stills show only where the
+     motion ends. A page that does not animate on load (no animation, or only ones that repeat forever) gets no frame, and the command says so; the cold review then
+     keeps its six inputs. `capture` without `--frames` leaves the frames of an earlier run where they are, but `capture.json` no longer lists them.
    - `page-check rounds/r<N>/<Name>/index.html --project <dir>` measures the page against the brand rules at six widths,
      light and dark (exit 1: a brand-rule row failed; fix the page, or let the card say `fail`, never `pass`), and warns of
      generic tells. Every tell it finds goes on the card, with what you will do about it; change the page where a tell is
@@ -244,6 +249,12 @@ inputs:
   finding. It still does not read the rest of `BRAND-STATE.md`, and the whole file is never listed, nor any other part of it.
   Lint accepts the six inputs alone (a review made before this release) or the six plus that line. A rule or the G4 record that
   changes after the review makes it stale (review again); another line of `BRAND-STATE.md` changing does not.
+- **The key frames, when the page animates on load.** Take the page with `capture --frames` (step 3). The three frames go into `inputs:` after the six, as
+  `- rounds/r<N>/<Name>/shots/frame-1440-0.png sha256:<hex>` and the same for `-50` and `-100`: all three or none. The reviewer Reads them to judge the motion
+  (a tear-off, a tab switch, a sheet left on screen) instead of guessing it from the end stills; the prompt says so. Lint accepts the six inputs alone, the six plus
+  the rules line, the six plus the three frames, or all of them. A frame that changes after the review, or one `capture.json` no longer lists (the page was taken
+  again without `--frames`), makes the review stale: run `capture --frames` and review again. A page with no animation on load has no frames and keeps its six
+  inputs. `site approve` never copies `shots/`, so the frames stay in the round.
 - **In-thread by default**, labelled `by: in-thread`. It is not blind: the same session that built the page reads it. Say
   so to the owner when you show the card, and read as little as the review allows (the six files, and the rules when you give them, nothing else).
 - **An agent only after the fleet gate** ([fleet.md](../fleet.md)): one `brand-creator:brand-reviewer` call per hero

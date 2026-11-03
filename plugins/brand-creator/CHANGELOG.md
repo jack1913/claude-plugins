@@ -15,6 +15,11 @@ stage, and why, is in the [archive](docs/archive/README.md).
   another website is refused (exit 2) with its address named, and nothing is written. The copy goes outside the project or
   under `tryout/`, never over the page. `BRAND-STATE.md` has a new `tryout_url` for the private page a shared try-out is on, kept
   apart from `review_url`, the page of your boards.
+- `brand-creator capture <page> --frames` takes three key frames of a page's first screen (1440 wide, light): at the start, the
+  middle and the end of the longest animation that runs when the page loads, as `shots/frame-1440-0.png`, `frame-1440-50.png` and
+  `frame-1440-100.png`, listed in `capture.json`. The four stills only show where a motion ends; a tear-off or a tab switch shows in
+  the frames. A page that does not animate on load, or only repeats an animation for ever, gets no frame, and the run says so. The
+  same page taken twice gives the same frames.
 
 ### Changed
 
@@ -61,6 +66,10 @@ stage, and why, is in the [archive](docs/archive/README.md).
   publishes a self-contained copy of it as a private page and gives you its address; without your yes nothing leaves your
   computer. The manual no longer says Claude never publishes anything: nothing is published without your yes, and then only as a
   private page.
+- A cold review may now also be given the three key frames of a page that animates on load, so it judges the motion and not only the
+  end stills. The board lint accepts the six inputs, the six plus the rules, the six plus the three frames, or all of them (all three
+  frames or none), and marks the review out of date when a frame changes or the page is taken again without `--frames`. `site approve`
+  does not copy the frames into the approved page.
 
 ### Fixed
 

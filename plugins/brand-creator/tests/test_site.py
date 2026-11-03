@@ -460,6 +460,19 @@ def test_site_approve_copies_pages_and_rewrites_project_paths(tmp_path):
     assert sitedata.validate_site(p) == []
 
 
+def test_site_approve_leaves_the_key_frames_in_the_round(tmp_path):
+    """G4-04: the key frames `capture --frames` writes are in shots/, which is not copied: the approved page has none until a capture is run on it, and a frame is never copied into site/<id>/shots/."""
+    p = ready(tmp_path, colds={"start": "ship"})
+    shots = p / "rounds/r3/start/shots"
+    for n in (0, 50, 100):
+        (shots / f"frame-1440-{n}.png").write_bytes(b"a key frame of the first screen")
+    r = approve(p)
+    assert r.returncode == 0, (r.stdout, r.stderr)
+    assert not (p / "site" / "start" / "shots").exists()
+    assert [f for f in (p / "site").rglob("*") if "frame-1440" in f.name] == []
+    assert all((shots / f"frame-1440-{n}.png").read_bytes() == b"a key frame of the first screen" for n in (0, 50, 100)), "the round is left as it was"
+
+
 def test_site_json_records_the_choices_and_layouts_of_the_board(tmp_path):
     p = ready(tmp_path)
     assert approve(p).returncode == 0

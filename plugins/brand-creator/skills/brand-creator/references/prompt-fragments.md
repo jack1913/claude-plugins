@@ -73,7 +73,11 @@ Generalised from prompts that worked; use them as written or close to it.
 - A cold review of a site hero reads only the four stills of the variant, `brief/BRIEF.md` and `FACTS.md`, never the
   board, the references or the reasons. It may also be given the approved G4 rules as text in the prompt (the output of
   `brand-creator state --part g4-rules`: the G4 record and the recorded rule lines, never the rest of `BRAND-STATE.md`);
-  its `inputs:` list then ends with `- BRAND-STATE.md#g4-rules sha256:<hex>`, the first line of that output. It writes
+  its `inputs:` list then ends with `- BRAND-STATE.md#g4-rules sha256:<hex>`, the first line of that output. For a page that
+  animates when it loads it may also be given the three key frames of the first screen (`shots/frame-1440-0.png`, `-50` and `-100`:
+  the start, the middle and the end of the longest animation that runs on load, each listed in `inputs:`); it reads the motion
+  from them (does the entrance carry the idea, does anything stay on screen after it ends) and does not guess it from the end
+  stills. It writes
   `rounds/r<N>/<name>/cold-review.md`: `verdict: ship` or `verdict: fix`
   first, a `by:` line (`by: in-thread`; in-thread it is not blind, and an agent only after the fleet gate), an `inputs:`
   list with the sha256 of each file (`- <path> sha256:<hex>`), then up to five numbered findings, the one that costs the

@@ -15,7 +15,7 @@ line of the template ("(site, app icon, ...)"), the owner's own words not yet wr
 
 Three more kinds of row close the card of a hero variant (reflex_rows, refs_rows, cold_rows). The reflex test of the card (data-field="reflex") is the one a style board's direction has, read by boardlib/reflex.py against the ids of page-tells.json and ai-defaults.json and the items of research/site-cliches.md:
 site:<name>:reflex (the line is there: a card with no reflex line fails, as a direction does) and site:<name>:reflex-format|reflex-ids|reflex-count|reflex-grounded for each card, site:<name>:reflex-measured (a tell page-check measured that the line does not argue) and site:reflex-shared across the cards. site:refs holds each card's "Takes from" to what the owner picked in G4w (a group of the references
-board, or a site the owner liked, that the G4w record names before its "dislikes"). site:cold reads rounds/rN/<name>/cold-review.md: the verdict first, `by:`, the inputs it was made from with their sha256 (the four stills, brief/BRIEF.md and FACTS.md, each equal to the file now), at most five findings, and the card's cold line saying the same verdict.
+board, or a site the owner liked, that the G4w record names before its "dislikes"). site:cold reads rounds/rN/<name>/cold-review.md: the verdict first, `by:`, the inputs it was made from with their sha256 (the four stills, brief/BRIEF.md and FACTS.md, each equal to the file now; optionally the G4 rules part and the three key frames `capture --frames` takes), at most five findings, and the card's cold line saying the same verdict.
 
 The pages stage (data-site-stage="pages", pages_rows) is read after the owner picked a hero: site:hero-first (an earlier round holds a hero board, and <body data-hero> names one of its variant cards), site:pages (one card per page,
 data-site-page, a page id equal to <body data-page> and to the folder rounds/rN/<id>/), the rows of a hero card that fit a page (site:files, site:layout, site:fields, site:check, site:tells, site:stills, and site:cold for a page that has a
@@ -587,6 +587,7 @@ COLD_INPUTS = re.compile(r"inputs[ \t]*:", re.I)                          # the 
 COLD_ITEM = re.compile(r"[-*][ \t]+(\S+)[ \t]+sha256:([0-9a-f]{64})", re.I)   # "- <path> sha256:<hex>"
 COLD_FINDING = re.compile(r"\s*\d+[.)]\s+\S")                             # a numbered line is a finding
 COLD_RULES = f"{STATE_FILE}#g4-rules"                                     # the one part of BRAND-STATE.md a cold review may list, as a seventh input (_common.PART_READERS)
+FRAME_NAMES = ("frame-1440-0", "frame-1440-50", "frame-1440-100")        # the key frames of the first screen `capture <page> --frames` takes (shots/<name>.png): a cold review lists all three or none
 
 
 def reflex_line(v: SiteVariant) -> str | None:
@@ -749,21 +750,44 @@ def cold_inputs(lines: list[str]) -> tuple[list[tuple[str, str]] | None, list[st
     return listed, bad
 
 
-def cold_lists_rules(project: Path, v: SiteVariant) -> bool:
-    """True when the cold-review.md of the card lists the G4 rules part of BRAND-STATE.md as an input (cold_problems judges the review itself; an unreadable file lists nothing)."""
+def cold_listed(project: Path, v: SiteVariant) -> list[str]:
+    """The paths the cold-review.md of the card lists as inputs (cold_problems judges the review itself; an unreadable or absent file lists none)."""
     try:
         lines = (Path(project) / v.dir / COLD_FILE).read_text(encoding="utf-8-sig", errors="replace").splitlines()
     except OSError:
-        return False
+        return []
     listed, _ = cold_inputs(lines)
-    return any(p == COLD_RULES for p, _ in listed or [])
+    return [p for p, _ in listed or []]
+
+
+def cold_lists_rules(project: Path, v: SiteVariant) -> bool:
+    """True when the cold-review.md of the card lists the G4 rules part of BRAND-STATE.md as an input."""
+    return COLD_RULES in cold_listed(project, v)
+
+
+def cold_frame_paths(v: SiteVariant) -> list[str]:
+    """The three key frames of the card's page as a cold review lists them: the project paths of shots/frame-1440-0.png, -50 and -100."""
+    return [f"{v.shots}/{name}.png" for name in FRAME_NAMES]
+
+
+def frame_record_problems(project: Path, v: SiteVariant, wanted: dict[str, str]) -> list[str]:
+    """The key frames a cold review lists (`wanted`: project path -> sha256) against what capture.json lists for the page now (its `frames`): a frame it does not list, or lists with another sha256 (the page was
+    captured again without --frames, or the frames are from an earlier run), is a problem. An unreadable capture.json lists none (site:stills says why it is unusable)."""
+    try:
+        frames = json.loads((Path(project) / v.capture).read_text(encoding="utf-8")).get("frames")
+    except (OSError, ValueError, AttributeError):
+        frames = None
+    got = {f"{v.shots}/{e['file']}": e.get("sha256") for e in frames if isinstance(e, dict) and isinstance(e.get("file"), str)} if isinstance(frames, list) else {}
+    off = [p for p, sha in wanted.items() if got.get(p) != sha]
+    return [f"{v.name}: the key frames {v.dir}/{COLD_FILE} lists are not the ones {v.capture} lists now ({', '.join(off)}): run `brand-creator capture {v.page} --frames`, then review again"] if off else []
 
 
 def cold_problems(project: Path, v: SiteVariant, required: bool = True, noun: str = "variant") -> tuple[list[str], str | None]:
     """site:cold for one card -> (the problems, the verdict when the file gives one). rounds/rN/<name>/cold-review.md exists (`required`; a page card of the pages stage may go without, and then must not claim a verdict);
     its first non-empty line is `verdict: ship` or `verdict: fix`; it has a `by:` line; its `inputs:` list is exactly the four stills of the variant (`noun` "page" on a pages board: of the page), brief/BRIEF.md and FACTS.md, each `- <path> sha256:<hex>` equal to
     the file now, and may add one seventh input, the G4 rules part of BRAND-STATE.md (`- BRAND-STATE.md#g4-rules sha256:<hex>`, the sha256 of the part as `_common.stale_inputs` reads it: a change of a rule or of
-    the G4 record makes the review stale, a change elsewhere in BRAND-STATE.md does not; the whole file is never an input); it has at most five findings (numbered lines); the card's cold line (data-cold) says the same verdict. A `fix` shown as `fix` passes."""
+    the G4 record makes the review stale, a change elsewhere in BRAND-STATE.md does not; the whole file is never an input), and may add the three key frames of the page's first screen (`shots/frame-1440-0.png`, `-50` and `-100`, from
+    `brand-creator capture <page> --frames`: all three or none, each equal to the file now and to what capture.json lists for it); it has at most five findings (numbered lines); the card's cold line (data-cold) says the same verdict. A `fix` shown as `fix` passes."""
     path = f"{v.dir}/{COLD_FILE}"
     cold_lines = [n for n in v.card.walk() if "data-cold" in n.attrs]
     f = Path(project) / path
@@ -795,23 +819,30 @@ def cold_problems(project: Path, v: SiteVariant, required: bool = True, noun: st
             said.append(f"{len(bad)} line(s) are not `- <path> sha256:<hex>` ({'; '.join(bad[:2])})")
         if [e for e in expected if e not in paths]:
             said.append(f"it does not list {', '.join(e for e in expected if e not in paths)}")
-        extra = [p for p in dict.fromkeys(paths) if p not in expected and p != COLD_RULES]
+        frames = cold_frame_paths(v)
+        extra = [p for p in dict.fromkeys(paths) if p not in expected and p != COLD_RULES and p not in frames]
+        in_list = [p for p in frames if p in paths]
+        if in_list and len(in_list) != len(frames):
+            said.append(f"it lists {len(in_list)} of the {len(frames)} key frames ({', '.join(in_list)}): list all three, or none")
         if extra:
             said.append(f"it lists {', '.join(extra)}, which a cold review does not read" + (f" (of {STATE_FILE} it takes the G4 rules alone: list {COLD_RULES})" if STATE_FILE in extra else ""))
         if len(paths) != len(set(paths)):
             said.append("a file is listed twice")
         if said:
             problems.append(f"{v.name}: the inputs of {path} must be exactly the four stills of the {noun}, {BRIEF_FILE} and {FACTS_FILE} ({'; '.join(said)}); "
-                            f"a seventh input may be the G4 rules, `- {COLD_RULES} sha256:<hex>` (`brand-creator state --part g4-rules` prints it)")
+                            f"a seventh input may be the G4 rules, `- {COLD_RULES} sha256:<hex>` (`brand-creator state --part g4-rules` prints it); "
+                            f"the three key frames of `brand-creator capture {v.page} --frames` may be added ({', '.join(cold_frame_paths(v))})")
         changed = []
         for p, sha in dict.fromkeys(listed):
-            if p in expected:
+            if p in expected or p in frames:
                 now = sha256_file(Path(project) / p) if (Path(project) / p).is_file() else None
                 if now != sha:
                     changed.append(p + (" (missing)" if now is None else ""))
         if changed:
             what = "the page or its stills" if any(c.startswith(v.shots) for c in changed) else f"{BRIEF_FILE} or {FACTS_FILE}"
             problems.append(f"{v.name}: {what} changed after the cold review: review again ({path} lists another sha256 for {', '.join(changed)})")
+        if len(in_list) == len(frames):   # a frame that changed is said above; one that is as it was must still be what capture.json lists
+            problems += frame_record_problems(project, v, {p: sha for p, sha in dict.fromkeys(listed) if p in frames and p not in {c.removesuffix(" (missing)") for c in changed}})
         rules = next((sha for p, sha in listed if p == COLD_RULES), None)
         if rules is not None:
             for why in stale_inputs(Path(project), {"inputs": [{"path": STATE_FILE, "part": "g4-rules", "sha256": rules}]}):   # the rule `check` applies to a part input: changed, gone, or unreadable (and why)
@@ -850,6 +881,7 @@ def cold_rows(rep: Report, project: Path, variants: list[SiteVariant], required:
     rep.inputs += [Path(project) / v.dir / COLD_FILE for v in variants] + [Path(project) / FACTS_FILE]
     if any(cold_lists_rules(project, v) for v in variants):   # a review that stands on the G4 rules goes stale with them, and so does the report
         rep.inputs.append(PartInput(Path(project) / STATE_FILE, "g4-rules"))
+    rep.inputs += [Path(project) / p for v in variants for p in cold_listed(project, v) if p in cold_frame_paths(v)]   # a review that lists key frames goes stale with them (a capture made again)
 
 
 def card_rows(rep: Report, project: Path, page_rel: str, rnd: int, variants: list[SiteVariant], noun: str = "variant", count_row: str = "site:variants", optional: tuple[str, ...] = (), idea: bool = False) -> None:

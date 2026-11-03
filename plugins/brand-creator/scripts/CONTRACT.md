@@ -155,7 +155,7 @@ fontTools, Brotli and skia-pathops (`outline_glyphs.py`, `fontcheck.py`), Pillow
   specimens/<name>/                page shots kept as specimens (shot --out specimens/<name>); any depth, the only project folder `shot --out` may write
   research/site-refs/<name>/       a real site's stills from `capture --url`: 1440.png 390.png 1440-full.png thumb-1440.jpg thumb-390.jpg capture.json (see capture)
   research/site-refs/owner/        screenshots the owner sent (not captured; the board's caption says so; `capture --url --name owner` is refused)
-  <page folder>/shots/             a project page's stills from `capture <page>`: 1440-light.png 1440-dark.png 390-light.png 390-dark.png 1440-light-full.png capture.json
+  <page folder>/shots/             a project page's stills from `capture <page>`: 1440-light.png 1440-dark.png 390-light.png 390-dark.png 1440-light-full.png capture.json (and, with `--frames`, frame-1440-0.png frame-1440-50.png frame-1440-100.png)
   qa/rules.json                    owner thresholds and size bands (see QA gates); optional, proposals apply without it
   qa/print.json                    owner thresholds of print-check (see Print); optional, stated defaults apply without it
   qa/states.json  qa/idempotence.json   state sets for states-check; the byte-difference allowlist for verify-idempotent
@@ -619,7 +619,7 @@ as a refine board does from round 2. Hardest surface, My call, questions and rep
 | `site:<name>:reflex-measured` | a warning: the page-check report of the card's page has a `tell:<id>` warning that the reflex line neither hits nor names as a near miss ("page-check found <id>; argue it on the card or change the page"; a `tell:<id>` warning with `hits: []` reads "page-check could not verify <id>" instead, and asks the same). Not verified (`skipped`) for a card without a current page-check verdict (`site:check` says why). `site:tells` asks that the card name the tell; this row asks that the reflex line argue it |
 | `site:reflex-shared` | every card has a reflex line and one pattern (`reflex.shared_hit`) is hit by all of them: the heroes are not divergent. An info row ("not required here") with fewer than two cards, or when a card has no line (`site:<name>:reflex` has failed then) |
 | `site:refs` | G4w names a pick (not `skipped by owner`) and: it names none of the groups (`data-name`) of the references board, nor the text or the host of the link of a site the owner liked (`data-like="like"`; a disliked site is never a name) in its owner-sites section ("record the pick under their names"); or the `data-field="from-refs"` line of a card names none of those that the G4w record names (a whole word or whole words, any letter case): "take from what the owner picked (G4w)". The record is read up to the word `dislikes` (`picked <groups>; likes <...>; dislikes <...>`): a group or a site named after it is one the owner turned away from, and is no pick. An info row when G4w is `skipped by owner`; not verified (`skipped`) without a G4w, a references board to read the names from, or a variant card |
-| `site:cold` | a hero has no `rounds/rN/<name>/cold-review.md`; its first non-empty line is not `verdict: ship` or `verdict: fix` (letter case and spacing do not matter); it has no `by:` line; its `inputs:` list is missing, holds a line that is not `- <path> sha256:<hex>`, lists a file twice or is not exactly the four stills of the variant (`rounds/rN/<name>/shots/<view>.png`), `brief/BRIEF.md` and `FACTS.md` (plus, allowed, the one seventh input `BRAND-STATE.md#g4-rules`: see "The cold review of a hero" below); one of those files is missing or has another sha256 than the review lists ("the page or its stills changed after the cold review: review again", or the brief or the facts), or the G4 rules part it lists is another one now ("the G4 rules of BRAND-STATE.md changed after the cold review: review again"; a part that cannot be read fails and says why); it has more than five findings (numbered lines); the card has not exactly one `data-cold`, its value is not `ship` or `fix`, or it differs from the verdict. A `fix` shown as `fix` is honest and passes |
+| `site:cold` | a hero has no `rounds/rN/<name>/cold-review.md`; its first non-empty line is not `verdict: ship` or `verdict: fix` (letter case and spacing do not matter); it has no `by:` line; its `inputs:` list is missing, holds a line that is not `- <path> sha256:<hex>`, lists a file twice or is not exactly the four stills of the variant (`rounds/rN/<name>/shots/<view>.png`), `brief/BRIEF.md` and `FACTS.md` (plus, allowed, the one seventh input `BRAND-STATE.md#g4-rules` and the three key frames `shots/frame-1440-0.png`, `-50.png` and `-100.png`: see "The cold review of a hero" below); one of those files is missing or has another sha256 than the review lists ("the page or its stills changed after the cold review: review again", or the brief or the facts), or the G4 rules part it lists is another one now ("the G4 rules of BRAND-STATE.md changed after the cold review: review again"; a part that cannot be read fails and says why); it has more than five findings (numbered lines); the card has not exactly one `data-cold`, its value is not `ship` or `fix`, or it differs from the verdict. A `fix` shown as `fix` is honest and passes |
 
 The `inputs` of the lint report are the page, `brief/BRIEF.md` when it exists, the website references board that G4w stands on (when it names a pick) and the `index.html` of each variant, so `check` calls the report stale ("not verified") as soon as one of
 them changes.
@@ -653,6 +653,13 @@ project record. A review that was given them lists one more input, the part reco
 and 1 when the part cannot be read. The list is the six inputs alone (a review made before this release) or the six plus that line, in any order, each once; the whole `BRAND-STATE.md`, another part and any other file still fail `site:cold`. The line is judged by
 `_common.stale_inputs`: another sha256 now, or a `BRAND-STATE.md` that is gone or cannot be read, fails the row, and another line of the file changing does not. When a review lists it, the lint report also stands on the part (an input with `part: g4-rules`),
 so a changed rule or G4 record makes the report stale too. The page-stage cold review (optional on a page) takes the same inputs.
+
+**The key frames the reader may be given.** For a page that animates when it loads, the reader may also be given the three key frames of its first screen (`capture <page> --frames`, see capture), so that it judges the motion (an entrance, a tear-off,
+a tab switch) from what the page does and not from the end stills alone. A review that was given them lists three more inputs, as lines of the list: `- rounds/rN/<name>/shots/frame-1440-0.png sha256:<hex>`, and the same for `frame-1440-50.png` and `frame-1440-100.png`.
+The list is the six inputs alone, the six plus the rules line, the six plus the three frames, or all of them, in any order, each once. One frame or two fail `site:cold` (`it lists 1 of the 3 key frames (...): list all three, or none`); so does a frame that is
+not one of those three. Each frame must be the file now (`the page or its stills changed after the cold review: review again`) and must be what the page's `shots/capture.json` lists for it in `frames` (`the key frames <review> lists are not the ones <capture.json> lists now (...):
+run brand-creator capture <page> --frames, then review again`), so a page taken again without `--frames` makes the review stale. A review that lists the frames puts them among the inputs of the lint report, so a frame taken again makes the report stale too.
+A page with no animation on load has no frames: its review keeps the six inputs, and so does every review made before this release.
 
 ### The site board, pages stage (`data-site-stage="pages"`)
 
@@ -1602,7 +1609,7 @@ The tools of the two optional steps after G4 in Standard and Full: the website r
 `assets/_checks/`: the record is `capture.json` beside the stills. Every refusal below comes before the browser starts, and every picture is taken before the
 first file is written, so a page or a site that does not load leaves nothing behind.
 
-**A page of the project:** `capture <page.html> [--project DIR] [--wait MS] [--timeout MS]`.
+**A page of the project:** `capture <page.html> [--project DIR] [--wait MS] [--timeout MS] [--frames]`.
 
 - The page is confined to the project (a path outside it exits 2). The stills go to `<the page's folder>/shots/`, which is fixed. A page under `history/`, and a
   page in a round before the latest (`rounds/r<K>/` with `K` below the latest round), exit 2 with `<page> is inside ..., which is read-only (capture writes its
@@ -1628,6 +1635,24 @@ first file is written, so a page or a site that does not load leaves nothing beh
   hash, so a still is detectably stale when one of them changes; files inside `shots/` itself are left out, so a page that loads one of its own stills still comes
   to rest. `problems` are what went wrong while the page loaded (a request to another origin, a page or console error, a failed request of the page's own),
   sorted, at most 40 and then `"<n> more"`: they are recorded, never gated (`page-check` gates the page).
+- **Key frames (`--frames`).** Beside the stills above, `shots/frame-1440-0.png`, `shots/frame-1440-50.png` and `shots/frame-1440-100.png`: the first screen at 1440 x 900, light,
+  device scale 1, with every Web Animation (a CSS animation, a CSS transition, `element.animate`) that was running when the page loaded paused where it was found and seeked
+  to 0, 50 and 100 % of the longest one that ends (`end`: its delay, iterations and end delay included), as the motion proof seeks a page (`shot --motion`). An animation the page held
+  paused, or one on a scroll or view timeline, is not moved, and one that repeats forever is only seeked over its first iteration. Each frame has a page load of its own and is
+  taken after the state it was seeked to is written into the page's style and the animations are dropped (what an animation draws is composited in layers that are not drawn to the
+  same pixel twice), with the `transition` of every element an animation moves turned off first (a state written over a live `transition` would start a new transition from the rest value, and
+  the picture would show the page at rest instead of the state seeked to: the entrance a script starts on load by adding a class is the common case), so a second `capture --frames` of the
+  same page writes the same bytes. The frame at 100 % is the first screen at rest, as `1440-light.png` takes it, only on a page whose motion on load all ends: beside an animation that repeats
+  forever (a spinner) the frame has it seeked over its first iteration while the still has it in real time, and beside `requestAnimationFrame` motion the frame has the page's script wherever it
+  is, so the two can differ there. A motion a script starts more than about 150 ms after load is seen only when the page had no animation running at its first look (with a spinner already
+  there it is missed, and the run says what it saw: only animations that repeat forever). A page with no
+  finite animation running on load writes no frame and the run says why (`key frames: none written: no animation runs on load`, `... every animation that runs on load repeats forever or has
+  no length, so there is no end to take frames up to`, `... its animations run on a scroll or view timeline, which cannot be seeked`, `... the page moves by requestAnimationFrame only, which cannot
+  be seeked`): never an error, exit 0, and `capture.json` has no `frames` key. A page that also moves by `requestAnimationFrame` gets its frames and a line saying they may differ from run to run. The
+  line `key frames: 3 of the first screen (1440, light) at 0, 50, 100 % of <length> ms` follows the usual one, and the usual one counts the frames among the stills. `--frames` is a usage error (exit 2)
+  with `--url`. `capture.json` then also holds `"frames": [{"percent": 0, "ms": 0, "file": "frame-1440-0.png", "sha256": "<hex>"}, {"percent": 50, ...}, {"percent": 100, ...}]`, after `full`. A run without `--frames`
+  writes no `frames` key and leaves the frame files of an earlier run where they are (nothing is deleted), and says so (`frame-1440-0.png, ... are from an earlier run and not part of this one`): a cold review that
+  lists them then fails until `capture --frames` is run again. The frames are not among the `inputs` of the page (they are inside `shots/`), and `site approve` never copies them (it copies no `shots/`).
 - `capture.json` is rewritten only when a still, an input or a problem changed (for `--url`: a view, the full page, a thumbnail or what the site answered: its
   final address, status or title). Otherwise the old file, its `date` included, stays byte for byte, so a run that finds nothing new does not make a report that read it
   stale; the line it prints then says `0 of N file(s) written, the others unchanged`.

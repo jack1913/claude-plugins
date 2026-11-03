@@ -1150,6 +1150,95 @@ def test_a_review_that_lists_rules_nobody_can_read_fails_and_says_why(proj):
     assert problems == ["Ledger: rounds/r2/Ledger/cold-review.md lists BRAND-STATE.md#g4-rules, which cannot be checked: BRAND-STATE.md is gone"], problems
 
 
+FRAMES = [f"frame-1440-{n}.png" for n in (0, 50, 100)]
+
+
+def frames_of(name: str) -> list[str]:
+    return [f"rounds/r2/{name}/shots/{f}" for f in FRAMES]
+
+
+def test_a_cold_review_may_list_the_three_key_frames_of_the_first_screen(proj):
+    """G4-04: six inputs, six plus the rules, six plus the three frames `capture --frames` took, or all of them pass; the lint report stands on the frames a review lists, and only on those."""
+    assert lint(proj).returncode == 0 and detail(proj, "site:cold") == "Ledger: ship; Atlas: ship"
+    held = lambda: [i["path"] for i in report(proj, "board-lint")["inputs"] if "/frame-1440-" in i["path"]]
+    assert held() == [], "no review lists a frame: the lint report stands on none"
+    capture_record(proj, page_of("Atlas"), frames=True)                                        # the page was captured with --frames: three frames and a `frames` list
+    cold_review_record(proj, page_of("Atlas"), frames=True)
+    listed = cold_of(proj, "Atlas").read_text(encoding="utf-8")
+    assert all(f"- {path} sha256:" in listed for path in frames_of("Atlas")), listed
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    assert detail(proj, "site:cold") == "Ledger: ship; Atlas: ship"                            # one review with the frames, one without
+    assert sorted(held()) == sorted(frames_of("Atlas")), held()
+    cold_review_record(proj, page_of("Atlas"), frames=True, rules=True)                        # all of them
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    assert len(held_rules(proj)) == 1 and sorted(held()) == sorted(frames_of("Atlas"))
+    cold_review_record(proj, page_of("Atlas"), frames=True, leave_out=("FACTS.md",))           # the frames do not stand in for one of the six
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:cold"] and "(it does not list FACTS.md)" in detail(proj, "site:cold"), r.stdout
+
+
+def test_a_cold_review_lists_all_three_key_frames_or_none(proj):
+    capture_record(proj, page_of("Atlas"), frames=True)
+    for some in (frames_of("Atlas")[:1], frames_of("Atlas")[1:]):
+        cold_review_record(proj, page_of("Atlas"), add=tuple(some))
+        r = lint(proj)
+        assert r.returncode == 1 and failed(proj) == ["site:cold"], r.stdout
+        why = detail(proj, "site:cold")
+        assert f"it lists {len(some)} of the 3 key frames ({', '.join(some)}): list all three, or none" in why and "Ledger" not in why, why
+        assert "the three key frames of `brand-creator capture rounds/r2/Atlas/index.html --frames` may be added" in why, why
+    cold_review_record(proj, page_of("Atlas"), frames=True, add=(frames_of("Atlas")[0],))      # a frame twice
+    r = lint(proj)
+    assert r.returncode == 1 and "(a file is listed twice)" in detail(proj, "site:cold"), r.stdout
+    (proj / "rounds/r2/Atlas/shots/frame-1440-25.png").write_bytes(b"not a frame capture takes")
+    cold_review_record(proj, page_of("Atlas"), add=("rounds/r2/Atlas/shots/frame-1440-25.png",))   # a frame the command does not take is no input
+    r = lint(proj)
+    assert r.returncode == 1 and "it lists rounds/r2/Atlas/shots/frame-1440-25.png, which a cold review does not read" in detail(proj, "site:cold"), r.stdout
+    cold_review_record(proj, page_of("Atlas"), frames=True)
+    assert lint(proj).returncode == 0
+
+
+def test_a_cold_review_with_key_frames_goes_stale_when_a_frame_changes_or_the_page_is_captured_again_without_them(proj):
+    from _common import stale_inputs
+    capture_record(proj, page_of("Atlas"), frames=True)
+    cold_review_record(proj, page_of("Atlas"), frames=True)
+    assert lint(proj).returncode == 0
+    frame = proj / frames_of("Atlas")[1]
+    frame.write_bytes(frame.read_bytes() + b"\0")                                              # a frame taken again, with other bytes
+    assert stale_inputs(proj, report(proj, "board-lint")) == [f"{frames_of('Atlas')[1]} changed"], "the lint report stands on the frames the review lists"
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:cold"], r.stdout
+    why = detail(proj, "site:cold")
+    assert (f"Atlas: the page or its stills changed after the cold review: review again (rounds/r2/Atlas/cold-review.md lists another sha256 for {frames_of('Atlas')[1]})") in why, why
+    assert "key frames" not in why, "a frame that changed is said once"
+    capture_record(proj, page_of("Atlas"), frames=True)                                        # the frames as they were
+    assert lint(proj).returncode == 0
+    capture_record(proj, page_of("Atlas"))                                                     # the page captured again without --frames: capture.json lists none, the files stay
+    assert all((proj / path).is_file() for path in frames_of("Atlas"))
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:cold"], r.stdout
+    why = detail(proj, "site:cold")
+    assert (f"Atlas: the key frames rounds/r2/Atlas/cold-review.md lists are not the ones rounds/r2/Atlas/shots/capture.json lists now ({', '.join(frames_of('Atlas'))}): "
+            "run `brand-creator capture rounds/r2/Atlas/index.html --frames`, then review again") in why and "Ledger" not in why, why
+    cold_review_record(proj, page_of("Atlas"))                                                 # a review without the frames does not care
+    assert lint(proj).returncode == 0
+    capture_record(proj, page_of("Atlas"), frames=True)                                        # frames listed by capture.json but not by the review: nothing to say
+    assert lint(proj).returncode == 0
+
+
+def test_a_page_without_key_frames_keeps_the_six_inputs(proj):
+    """Review focus 3: a page with no animation on load writes no frame (capture says so); its review lists the six inputs and passes, and no frame is asked for."""
+    import json
+    for name in NAMES:
+        assert not any((proj / path).exists() for path in frames_of(name))
+        assert "frames" not in json.loads((proj / f"rounds/r2/{name}/shots/capture.json").read_text(encoding="utf-8"))
+        assert "frame-1440" not in cold_of(proj, name).read_text(encoding="utf-8")
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    assert detail(proj, "site:cold") == "Ledger: ship; Atlas: ship"
+
+
 def test_state_prints_the_g4_rules_part_as_the_line_a_cold_review_lists_and_the_text_a_reviewer_is_given(proj):
     """`brand-creator state --part g4-rules`: the first line is the cold review's input line (without its dash), the second the part's text, the very text the sha256 is of."""
     import hashlib
