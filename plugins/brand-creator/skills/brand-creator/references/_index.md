@@ -20,6 +20,7 @@ whole list in one place.
 | [page-layouts.json](page-layouts.json) | Layout references for a site's pages, keyed to what the visitor came to do: structure only, never a look |
 | [cascade.md](cascade.md) | The checklist for when a rule, colour, lockup or threshold changes, and where the old look hides |
 | [fleet.md](fleet.md) | The opt-in helper agents and workflows: when to offer them, what to tell the owner, how to run them |
+| [fleet-costs.json](fleet-costs.json) | The measured token costs of agent runs, each dated with the run it came from; `fleet-plan` prints them and the fleet gate quotes them |
 | [print.md](print.md) | Stationery, press kit and social posts: the commands, what a print file is and is not, the owner's hand-off |
 | [platform-specs.md](platform-specs.md) | The icon and image sizes every platform needs, with where each one comes from (generated file, do not edit by hand) |
 | [prompt-fragments.md](prompt-fragments.md) | The skeleton prompt for a designer, judge or reviewer pass, in one thread or as a helper agent |

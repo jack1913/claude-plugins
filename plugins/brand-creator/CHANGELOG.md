@@ -6,6 +6,16 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+### Changed
+
+- The cost of an agent fleet is now stated in tokens, from measured runs. Before you say yes to a workflow, the dry run
+  (`fleet-plan`) shows each agent's tokens as a range with the date it was measured, and says "not measured" for an agent
+  nobody has measured, where it used to say "about one pass per agent". Claude does the same when it states the cost.
+  The figures live in one small table, `skills/brand-creator/references/fleet-costs.json`, each row from a dated, named
+  run (the cold review of a site hero, the research fleet of a round). A row counts only for the agent and the workflow it
+  was measured for. `fleet-plan --costs <file>` reads another table; a table that is malformed is refused with exit 2,
+  and `fleet-plan --check` fails it.
+
 ## [0.6.0] - 2026-11-03
 
 The `/` menu is shorter. It now lists `brand-creator`, `setup`, `status`, `check`, `round` and `brand-adopt`, plus the four

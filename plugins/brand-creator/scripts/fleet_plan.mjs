@@ -1,18 +1,21 @@
 // fleet-plan: what an opt-in brand-creator workflow will launch, before anything is launched (the fleet gate's numbers).
 //
-//   brand-creator fleet-plan <workflow> --args <json | @file> [--session-model opus|sonnet|haiku|<model id>] [--json]
-//   brand-creator fleet-plan --check
+//   brand-creator fleet-plan <workflow> --args <json | @file> [--session-model opus|sonnet|haiku|<model id>] [--costs <file>] [--json]
+//   brand-creator fleet-plan --check [--costs <file>]
 //
 // The workflow script (workflows/<name>.js) is executed in a sandbox where agent(), parallel(), pipeline(), phase() and
 // log() are stubs: no model is called, nothing is written, the clock and randomness throw as in the real runtime. The
 // stub agent answers with the smallest value its schema allows. The plan lists every agent the script would start with
 // these args, its agent type, the tier in the agent file, the model that will actually run (per-call model > agent
-// file > the session model; CLAUDE_CODE_SUBAGENT_MODEL_FORCE overrides both) and the size guideline it falls under.
+// file > the session model; CLAUDE_CODE_SUBAGENT_MODEL_FORCE overrides both) and the size guideline it falls under. Each agent
+// also carries its cost in tokens, from the table of measured runs (skills/brand-creator/references/fleet-costs.json, or the
+// file --costs names): a range with the date it was measured, or "not measured" when no row of the table fits that agent in
+// that workflow. Nothing is estimated.
 // --check runs the static checks over every workflow and agent file (literal meta, agent types that exist, tiers that
-// match the agent files, no clock or randomness, the RULES line verbatim).
+// match the agent files, no clock or randomness, the RULES line verbatim) and over the table of measured costs.
 //
 // Exit codes: 0 plan valid / checks pass, 1 the script refuses these args (for example more agents than approved), a
-// model above the session model, or a failed check, 2 usage error.
+// model above the session model, or a failed check, 2 usage error (a table of costs that is missing or malformed included).
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
@@ -20,8 +23,8 @@ import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
 import { EXIT, die, mainGuard, pluginRoot } from "./lib/_common.mjs";
 
-const USAGE = `usage: brand-creator fleet-plan <workflow> --args <json | @file> [--session-model opus|sonnet|haiku|<id>] [--json]
-       brand-creator fleet-plan --check`;
+const USAGE = `usage: brand-creator fleet-plan <workflow> --args <json | @file> [--session-model opus|sonnet|haiku|<id>] [--costs <file>] [--json]
+       brand-creator fleet-plan --check [--costs <file>]`;
 export const RANK = { haiku: 0, sonnet: 1, opus: 2 };
 const FAMILIES = Object.keys(RANK);
 
@@ -181,6 +184,77 @@ export async function dryRun(file, args, { respond } = {}) {
   return { meta, calls, logs, phases, result, error };
 }
 
+/** The table of measured costs shipped with the skill; --costs names another one. */
+export const costsPath = (root = pluginRoot()) => path.join(root, "skills", "brand-creator", "references", "fleet-costs.json");
+const COST_KEYS = ["id", "agent", "workflow", "what", "per", "tokens_k", "calls", "measured", "source"];
+const nonEmpty = (v) => typeof v === "string" && v.trim() !== "";
+const isDate = (v) => {
+  if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+  const d = new Date(`${v}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v; // 2026-13-01 is an invalid date, 2026-02-30 rolls over: neither is a date
+};
+
+/** Read a table of measured costs (schema 1): {rows, problems}. A file that cannot be read or is not valid has problems and no rows. */
+export function loadCosts(file, agents, workflows) {
+  let data;
+  try { data = JSON.parse(fs.readFileSync(file, "utf8")); } catch (e) {
+    return { rows: [], problems: [e.code === "ENOENT" || e.code === "EISDIR" || e.code === "EACCES" ? `cannot read it: ${e.message}` : `is not JSON: ${e.message}`] };
+  }
+  const problems = [];
+  if (!data || typeof data !== "object" || Array.isArray(data)) return { rows: [], problems: ["it must be an object with schema and rows"] };
+  for (const k of Object.keys(data)) if (!["schema", "note", "rows"].includes(k)) problems.push(`unknown key "${k}"`);
+  if (data.schema !== 1) problems.push("schema must be 1");
+  if (!Array.isArray(data.rows)) { problems.push("rows must be a list"); return { rows: [], problems }; }
+  const ids = new Set(), taken = new Set();
+  for (const [i, r] of data.rows.entries()) {
+    const at = r && typeof r === "object" && !Array.isArray(r) && nonEmpty(r.id) ? `row "${r.id}"` : `row ${i + 1}`;
+    if (!r || typeof r !== "object" || Array.isArray(r)) { problems.push(`${at}: must be an object`); continue; }
+    for (const k of Object.keys(r)) if (!COST_KEYS.includes(k)) problems.push(`${at}: unknown key "${k}"`);
+    if (typeof r.id !== "string" || !/^[a-z][a-z0-9-]*$/.test(r.id)) problems.push(`${at}: id must be a lower-case slug`);
+    else if (ids.has(r.id)) problems.push(`${at}: the id is used twice`);
+    else ids.add(r.id);
+    const agentOk = typeof r.agent === "string" && Object.hasOwn(agents, r.agent); // not a prototype key, not an array that coerces to a name
+    if (!agentOk) problems.push(`${at}: agent ${JSON.stringify(r.agent)} is not an agent in agents/`);
+    if (r.workflow !== null && !workflows.includes(r.workflow)) problems.push(`${at}: workflow ${JSON.stringify(r.workflow)} is not a workflow (null for a fleet with none)`);
+    if (!nonEmpty(r.what)) problems.push(`${at}: what must say which use of the agent was measured`);
+    if (r.per !== "call" && r.per !== "round") problems.push(`${at}: per must be "call" or "round"`);
+    else if (r.workflow && r.per !== "call") problems.push(`${at}: a row of a workflow must be per "call"`);
+    const t = r.tokens_k;
+    if (!Array.isArray(t) || t.length !== 2 || !t.every((n) => typeof n === "number" && Number.isFinite(n) && n > 0) || t[0] > t[1]) problems.push(`${at}: tokens_k must be [low, high] in thousands of tokens, 0 < low <= high`);
+    if (!isDate(r.measured)) problems.push(`${at}: measured must be a date, YYYY-MM-DD`);
+    if (!nonEmpty(r.source)) problems.push(`${at}: source must be a sentence saying which run it came from`);
+    if (r.calls !== undefined && !(Number.isInteger(r.calls) && r.calls >= 1)) problems.push(`${at}: calls must be a whole number, 1 or more`);
+    if (r.workflow && r.per === "call" && agentOk) {
+      const key = `${r.agent} ${r.workflow}`;
+      if (taken.has(key)) problems.push(`${at}: ${r.agent} in ${r.workflow} already has a row`);
+      taken.add(key);
+    }
+  }
+  return { rows: problems.length ? [] : data.rows, problems };
+}
+
+/** The measured row for the calls of one agent in one workflow, or null: only a per-call row of that very workflow fits. */
+export const costFor = (rows, workflow, agent) => rows.find((r) => r.workflow === workflow && r.agent === agent && r.per === "call") || null;
+
+const kfmt = (n) => String(Number(n.toFixed(1)));
+/** "about 29k" or "about 21-37k". */
+export const about = (low, high) => (low === high ? `about ${kfmt(low)}k` : `about ${kfmt(low)}-${kfmt(high)}k`);
+
+/** The measured calls of a plan added up: {low_k, high_k, measured_agents, not_measured_agents}; low and high are null when none is measured. */
+export function tokenTotal(rows) {
+  const m = rows.filter((r) => r.cost);
+  return {
+    low_k: m.length ? Number(m.reduce((s, r) => s + r.cost.tokens_k[0], 0).toFixed(1)) : null,
+    high_k: m.length ? Number(m.reduce((s, r) => s + r.cost.tokens_k[1], 0).toFixed(1)) : null,
+    measured_agents: m.length, not_measured_agents: rows.length - m.length,
+  };
+}
+function costLine(t, n) {
+  if (!t.measured_agents) return n ? `tokens are not measured for any of the ${n} agents (no row of fleet-costs.json fits)` : "no agent is planned, so no tokens";
+  const range = `${about(t.low_k, t.high_k)} tokens`;
+  return t.not_measured_agents ? `${range} for the ${t.measured_agents} measured agent${t.measured_agents === 1 ? "" : "s"}, ${t.not_measured_agents} not measured` : `${range} in total (${n} agents)`;
+}
+
 export function guideline(n) {
   if (n < 5) return "small (under 5)";
   if (n < 10) return "medium (under 10)";
@@ -286,17 +360,21 @@ async function main() {
   let values, positionals;
   try {
     ({ values, positionals } = parseArgs({ args: process.argv.slice(2), allowPositionals: true, strict: true, options: {
-      args: { type: "string" }, "session-model": { type: "string" }, json: { type: "boolean", default: false },
+      args: { type: "string" }, "session-model": { type: "string" }, costs: { type: "string" }, json: { type: "boolean", default: false },
       check: { type: "boolean", default: false }, help: { type: "boolean", short: "h", default: false } } }));
   } catch (e) { die(EXIT.USAGE, `${e.message}\n${USAGE}`); }
   if (values.help) { console.log(USAGE); return EXIT.PASS; }
   const root = pluginRoot();
   const agents = readAgents(root);
   const wfDir = path.join(root, "workflows");
+  const names = fs.readdirSync(wfDir).filter((f) => f.endsWith(".js")).map((f) => f.slice(0, -3)).sort();
+  const costsFile = values.costs ? path.resolve(values.costs) : costsPath(root);
+  const costsShown = path.relative(root, costsFile).startsWith("..") ? costsFile : path.relative(root, costsFile);
   if (values.check) {
     const problems = agentProblems(agents);
     const files = fs.readdirSync(wfDir).filter((f) => f.endsWith(".js")).sort();
     for (const f of files) for (const p of staticProblems(path.join(wfDir, f), agents)) problems.push(`workflows/${f}: ${p}`);
+    for (const p of loadCosts(costsFile, agents, names).problems) problems.push(`${costsShown}: ${p}`);
     for (const p of problems) console.log(`FAIL ${p}`);
     console.log(`${problems.length ? "FAIL" : "PASS"}: ${Object.keys(agents).length} agents, ${files.length} workflows checked`);
     return problems.length ? EXIT.FAIL : EXIT.PASS;
@@ -309,8 +387,10 @@ async function main() {
   const args = readArgs(values.args);
   const session = values["session-model"] || (args && args.ceiling);
   if (!family(session)) die(EXIT.USAGE, "--session-model (or args.ceiling) must name the session model: opus, sonnet, haiku or a model id");
+  const costs = loadCosts(costsFile, agents, names);
+  if (costs.problems.length) die(EXIT.USAGE, `${costsFile} is not a usable table of measured costs:\n${costs.problems.map((p) => `  - ${p}`).join("\n")}`);
   const run = await dryRun(file, args);
-  const rows = resolve(run.calls, agents, { session });
+  const rows = resolve(run.calls, agents, { session }).map((r) => ({ ...r, cost: r.known ? costFor(costs.rows, run.meta.name, r.agent) : null }));
   const counts = {};
   for (const r of rows) counts[r.runs] = (counts[r.runs] || 0) + 1;
   const above = rows.filter((r) => r.above);
@@ -320,16 +400,22 @@ async function main() {
     force: /^(1|true)$/i.test(String(process.env.CLAUDE_CODE_SUBAGENT_MODEL_FORCE || "")),
     models: counts, max_turns: rows.reduce((s, r) => s + (r.maxTurns || 0), 0),
     approved_agents: args ? args.approved_agents : null, refused: run.error,
-    calls: rows.map((r) => ({ n: r.n, phase: r.phase, label: r.label, agent: r.agentType, agent_file_model: r.fileModel, runs: r.exact, why: r.why })),
+    calls: rows.map((r) => ({ n: r.n, phase: r.phase, label: r.label, agent: r.agentType, agent_file_model: r.fileModel, runs: r.exact, why: r.why,
+      tokens: r.cost ? { row: r.cost.id, low_k: r.cost.tokens_k[0], high_k: r.cost.tokens_k[1], measured: r.cost.measured, source: r.cost.source } : null })),
+    tokens: tokenTotal(rows),
     above_session: above.map((r) => r.n), unknown_agents: unknown.map((r) => r.agentType),
   };
   if (values.json) console.log(JSON.stringify(plan, null, 2));
   else {
     console.log(`fleet plan: ${plan.workflow}: ${plan.agents} agent(s), size guideline ${plan.guideline}`);
-    for (const c of plan.calls) console.log(`  ${String(c.n).padStart(2)}. ${String(c.phase || "").padEnd(9)} ${String(c.label || "").padEnd(18)} ${c.agent}  ${c.runs}  (${c.why})`);
+    for (const c of plan.calls) console.log(`  ${String(c.n).padStart(2)}. ${String(c.phase || "").padEnd(9)} ${String(c.label || "").padEnd(18)} ${c.agent}  ${c.runs}  tokens: ${c.tokens ? `${about(c.tokens.low_k, c.tokens.high_k)} (measured ${c.tokens.measured})` : "not measured"}  (${c.why})`);
     console.log(`models that will run: ${Object.entries(counts).map(([m, n]) => `${n} x ${m}`).join(", ") || "none"}; session model ${session} is the ceiling`);
     console.log(`CLAUDE_CODE_SUBAGENT_MODEL_FORCE: ${plan.force ? "set (every agent runs on " + (process.env.CLAUDE_CODE_SUBAGENT_MODEL || "the session model") + ")" : "not set"}`);
-    console.log(`rough cost: ${plan.agents} agent pass(es), each about what that step costs single-thread, plus your coordination; at most ${plan.max_turns} turns in total (maxTurns). Watch /workflows for token use; stop early if it runs long.`);
+    console.log(`rough cost: ${costLine(plan.tokens, plan.agents)}; at most ${plan.max_turns} turns in total (maxTurns). Watch /workflows for token use; stop early if it runs long.`);
+    for (const id of [...new Set(plan.calls.filter((c) => c.tokens).map((c) => c.tokens.row))]) {
+      const t = plan.calls.find((c) => c.tokens && c.tokens.row === id).tokens;
+      console.log(`token estimates: ${id} (measured ${t.measured}: ${t.source})`);
+    }
     if (run.error) console.log(`REFUSED by the script before any agent started: ${run.error}`);
     else console.log(`approval needed: ${plan.agents} agents (args.approved_agents = ${plan.approved_agents})`);
     for (const r of above) console.log(`ABOVE THE SESSION MODEL: call ${r.n} would run ${r.runs} in a ${session} session; pass args.ceiling = "${family(session)}"`);

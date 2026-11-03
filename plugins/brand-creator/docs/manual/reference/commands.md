@@ -48,7 +48,7 @@ skill" or "use the brand-book skill". Each command has a how-to page:
 An agent is a separate helper Claude starts for one job, and a workflow runs several agents at once. These four appear in
 the `/` menu, but they are meant to be started by brand-creator, not typed: Claude starts each one from the step in the
 second column, and only after your yes, once it has told you how many agents, which models, how big and roughly what it
-costs. Each agent costs about what the same step would cost in your own session. If you type one yourself, you see its
+costs in tokens. That figure comes from measured runs, or Claude says "not measured". If you type one yourself, you see its
 phases and a "Yes, run it / No" prompt, without that cost estimate. Details: [Agents and workflows](agents-and-workflows.md).
 
 | Workflow | How it starts | What it does |

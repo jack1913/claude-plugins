@@ -6,8 +6,9 @@ What brand-creator costs you, and when.
   what any Claude Code session of that length costs.
 - **Extra agents only with your yes.** Standard and Full projects can use extra agents and workflows
   ([details](agents-and-workflows.md)). Before any of them run you see how many agents, which models (never above your
-  session's), the size and a rough cost, and you say yes or no. Each agent costs about what that step would cost in one
-  thread.
+  session's), the size and a rough cost in tokens, and you say yes or no. The tokens come from runs that were measured,
+  and Claude names the date. For a step nobody has measured, Claude says "not measured" instead of guessing, and you can
+  watch the real use in `/workflows` while it runs.
 - **Generated pictures only after you agree.** On a design canvas, Claude can generate pictures to explore ideas; they
   run through OpenRouter and each one costs money. Claude generates none until you agree to the limit in the drawing
   brief, and says the cost in each reply ([details](../use/get-your-marks-drawn.md)).
@@ -17,7 +18,8 @@ What brand-creator costs you, and when.
 ## Check a fleet before you agree
 
 Claude can show a dry run of any workflow with stand-in agents. No model is called, so it costs nothing. The command is
-`brand-creator --data <dir> fleet-plan <workflow> --args @<file> --session-model <model>`.
+`brand-creator --data <dir> fleet-plan <workflow> --args @<file> --session-model <model>`. It lists each agent with the
+model it will run on and its cost in tokens: a range from measured runs, or "not measured".
 
 ## Related
 

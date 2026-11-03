@@ -92,8 +92,8 @@ Lenses read; they never edit.
 - Default: single-thread. You run each lens in turn, then the judge pass, in this session.
 - A fleet (one read-only subagent per lens, then one judge) only after the fleet gate of the
   [orchestrator](../brand-creator/SKILL.md): state the agent count, the models that will actually run (the session model
-  is a ceiling), the size guideline (a cross-check is 2 to 4 agents) and a rough cost, and launch only after an explicit
-  yes. Every prompt carries the RULES line and the CONTEXT paths of
+  is a ceiling), the size guideline (a cross-check is 2 to 4 agents) and a rough cost in tokens (the printed estimate of
+  `fleet-plan`, or "not measured"), and launch only after an explicit yes. Every prompt carries the RULES line and the CONTEXT paths of
   [prompt-fragments](../brand-creator/references/prompt-fragments.md).
 - Panels advise. Show the judge's view, your own view and a middle option where they differ; the owner decides.
 
@@ -102,5 +102,5 @@ Lenses read; they never edit.
 With the fleet's yes, the panel runs as the `review-panel` workflow: one `brand-creator:brand-reviewer` per lens (they
 run checks and never edit), then one `brand-creator:brand-judge`; default design, content and technical plus the judge,
 4 agents. Before proposing it, run `brand-creator --data "${CLAUDE_PLUGIN_DATA}" fleet-plan review-panel --args @<file>
---session-model <your model>` and state its numbers. Do not edit the work under review while the panel runs. The
+--session-model <your model>` and state its numbers, the token estimate included. Do not edit the work under review while the panel runs. The
 result is advice: show it as the one approvable list above. Details: [fleet.md](../brand-creator/references/fleet.md).

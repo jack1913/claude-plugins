@@ -253,7 +253,8 @@ a naming fan-out, an adoption across repositories), propose it and wait:
    (nothing is launched; exit 1 = refused or above your model).
 2. State the agent count, the models that will actually run (your session model is the ceiling; `args.ceiling` caps
    every agent to it; `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` overrides the agent files), the size guideline and a rough
-   cost (about one single-thread pass per agent), and that you will do it here if they prefer.
+   cost in tokens (the plan prints each agent's range from measured runs, or "not measured"; never a guess), and that you
+   will do it here if they prefer.
 3. Only after an explicit yes, run the workflow `/brand-creator:<workflow>` with those arguments as its `args` and
    `approved_agents` set to the approved number. Read the result, then carry on at the gate the workflow stops before.
 
@@ -360,6 +361,7 @@ Full file contract: `${CLAUDE_PLUGIN_ROOT}/scripts/CONTRACT.md`. Templates: `${C
 - [regulated-industries.md](references/regulated-industries.md): professions with promotion or naming rules.
 - [prompt-fragments.md](references/prompt-fragments.md): the prompt skeleton for designer, judge and reviewer passes.
 - [fleet.md](references/fleet.md): the opt-in workflows and agents, the fleet gate in full, model ceiling, the refine loop, resume.
+- [fleet-costs.json](references/fleet-costs.json): the measured token costs of agent runs, each dated with its run; `fleet-plan` prints them and the fleet gate quotes them.
 - [ai-defaults.json](references/ai-defaults.json): the reflex list every direction is tested against.
 - [page-tells.json](references/page-tells.json): the generic page tells the page check warns about (English and Polish).
 - [page-layouts.json](references/page-layouts.json): layout references for the site round, keyed to the visitor's job (structure only).
