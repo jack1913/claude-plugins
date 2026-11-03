@@ -1,4 +1,4 @@
-# puppet-master
+# <picture><source media="(prefers-color-scheme: dark)" srcset="../../assets/brand/puppet-master-dark.svg"><img src="../../assets/brand/puppet-master.svg" alt="puppet-master mark" width="32" height="32"></picture> puppet-master
 
 Coordinate your Claude sessions from one session: hand each job to an open session or a background worker.
 
