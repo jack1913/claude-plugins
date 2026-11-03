@@ -16,7 +16,11 @@
 #   7 the brand book when book/chapters/ exists (frames first, Standard and Full, when the brand moves: motion/motion.json says on and motion/proof.json has a page case,
 #     so that the Motion chapter replays fresh stills, with FRAMES_ARGS of block 2, and a line says whenever it takes none; a failure that writes a failing report (exit 1) does
 #     not stop the chain, exit 2 or 3 does; then book, book-pdf: they read the reports of steps 4 and 5), then the press kit (Standard and Full): the kit holds book.pdf
-#   8 board-lint on the board of the latest round (the report of a pick board lists FACTS.md and brief/BRIEF.md as inputs, and check wants a current one: an edit of the facts or the brief
+#   8 the brand's generated adapter files, when the project has them (opt-in at G5): BRAND.md and DESIGN.md (`adapters` with ADAPTERS_ARGS of block 2; empty = not refreshed, and a line says why), the applied skill
+#     (`applied-skill --yes`) or, with a kit, the kit (`kit build --yes`, then `kit check`). They come after the tokens and every pack built from them and before staleness: a token, FACTS.md, BRAND-STATE.md or
+#     motion/motion.json that changed since they were written would leave `check` with a stale or not verified report. A command that refuses (a file edited by hand, a package that is not installed) is a failed step,
+#     said with its message, and does not stop the chain either: check still runs, and the chain ends with a non-zero exit code
+#   9 board-lint on the board of the latest round (the report of a pick board lists FACTS.md and brief/BRIEF.md as inputs, and check wants a current one: an edit of the facts or the brief
 #     made since the last lint is picked up here; a failing or not-verified lint that wrote its report does not stop the chain, check gates it; a lint that refuses the board is a failed
 #     step, said with its message, and does not stop the chain either: check still runs, and the chain ends with a non-zero exit code), then staleness --write
 #     (records the inputs, the plugin version and the emitter code the pack was built from), then check
@@ -55,6 +59,7 @@ PRINT_ICC="${PRINT_ICC:-}"        # YOUR printer's CMYK profile (.icc): with it 
 PRINT_BLEED="${PRINT_BLEED:-}"    # bleed in mm; empty = the region's default (printer-specific: ask your printer)
 IMAGE_BASE_URL="${IMAGE_BASE_URL:-}"   # https URL where the e-mail signature's PNGs will be hosted (print); empty = a placeholder, warned
 FRAMES_ARGS="${FRAMES_ARGS:---count 25}"   # the stills of the Motion chapter (Standard and Full, when the brand moves): --count N or --at 0,25,50,75,100; a wide mark may need fewer (frames says how many fit)
+ADAPTERS_ARGS="${ADAPTERS_ARGS:-}"   # the options you ran `brand-creator adapters` with (opt-in at G5), split on spaces, for example "--brand-md --design-md --primary accent": with a BRAND.md or DESIGN.md in the project the chain writes them again after the tokens; empty = they are not written again, and the chain says so
 POST_FACTS="${POST_FACTS:-}"      # labels of FACTS.md rows, one per post line, separated by semicolons, for example "spare parts;repair guide"; empty = no social posts
 POST_LABELS=(); [ -z "$POST_FACTS" ] || IFS=';' read -r -a POST_LABELS <<< "$POST_FACTS"
 case "$TIER" in
@@ -222,6 +227,46 @@ case "$TIER" in
       for m in "${MARKS[@]}"; do step "emit presskit --mark $m"; "${BC[@]}" emit presskit --mark "$m" ${EMIT_ARGS[@]+"${EMIT_ARGS[@]}"}; done
     fi ;;
 esac
+# ---- the brand's generated adapter files (opt-in at G5), written again now that the tokens and every pack built from them are done, and before `staleness --write`: BRAND.md and DESIGN.md (`adapters` with the options of ADAPTERS_ARGS in block 2),
+# then the applied skill (`applied-skill --yes`) or, when the skill folder holds a kit (kit.json), the kit (`kit build --yes`, and `kit check` once it was built). `check` treats each as generated: it fails a hand edit and says "not verified" (a stale
+# report) once a token, FACTS.md, BRAND-STATE.md or motion/motion.json changed since the file was written, so a change followed by this chain has to write them again. A project with none of them runs no command here and says so. The options of `adapters`
+# (--primary, --bm-type, ...) are the owner's choices and nothing records them: a BRAND.md or DESIGN.md with an empty ADAPTERS_ARGS is not written again, and the line says which variable to set. A command that refuses (a file edited by hand, a package
+# that is not installed, no approved edition) is a failed step, said with its own message, and does not stop the chain: check still runs and writes the pack report, and the chain ends with a non-zero exit code (the first failed step's), as with a board the lint refuses (below).
+REFRESH_FAILED=0; REFRESH_WHAT=""; REFRESH_RC=0
+refresh() {   # refresh <brand-creator words>: one command of this step. Its output is shown; REFRESH_RC is its exit code, and a non-zero one is a failed step (the first decides how the chain ends)
+  local out why
+  step "$*"
+  REFRESH_RC=0; out="$("${BC[@]}" "$@" 2>&1)" || REFRESH_RC=$?   # stderr too: a refusal is an `error: ...` line there
+  [ -z "$out" ] || printf '%s\n' "$out"
+  if [ "$REFRESH_RC" -ne 0 ]; then
+    why="$(printf '%s\n' "$out" | sed -n 's/^error: //p' | tail -n 1)"
+    echo "finish.sh: step failed: $* stopped with exit $REFRESH_RC: ${why:-the reason is printed above}. The chain goes on, so that check still writes the pack report" >&2
+    [ "$REFRESH_FAILED" -ne 0 ] || { REFRESH_FAILED="$REFRESH_RC"; REFRESH_WHAT="$*"; }
+  fi
+  return 0
+}
+ADAPTERS_OPTS=(); [ -z "$ADAPTERS_ARGS" ] || read -r -a ADAPTERS_OPTS <<< "$ADAPTERS_ARGS"
+SKILL_DIR=""   # .claude/skills/<slug>-brand, as `check` finds it; a project whose slug is not set or cannot name a skill has no skill folder, and neither does it for `check`
+SLUG="$("${BC[@]}" state --get slug 2>/dev/null)" || SLUG=""
+[ -z "$SLUG" ] || SKILL_DIR=".claude/skills/$SLUG-brand"
+REFRESHED=no
+if [ -f BRAND.md ] || [ -f DESIGN.md ]; then
+  REFRESHED=yes
+  if [ ${#ADAPTERS_OPTS[@]} -gt 0 ]; then
+    refresh adapters "${ADAPTERS_OPTS[@]}"
+  else
+    step "adapters: skipped (BRAND.md or DESIGN.md is in the project but ADAPTERS_ARGS in block 2 is empty: set it to the options you ran brand-creator adapters with, for example \"--brand-md --design-md\"; until then check says they are stale once a token changes)"
+  fi
+fi
+if [ -n "$SKILL_DIR" ] && [ -f "$SKILL_DIR/kit.json" ]; then
+  REFRESHED=yes
+  refresh kit build --yes
+  [ "$REFRESH_RC" -ne 0 ] || refresh kit check
+elif [ -n "$SKILL_DIR" ] && [ -f "$SKILL_DIR/SKILL.md" ]; then
+  REFRESHED=yes
+  refresh applied-skill --yes
+fi
+[ "$REFRESHED" = yes ] || step "adapters, applied skill, kit: skipped (the project has no BRAND.md, DESIGN.md, applied skill or kit: they are opt-in at G5)"
 # ---- the board of the latest round is linted again, as `check` wants a board-lint report that is current for it: the report of a pick board lists FACTS.md and brief/BRIEF.md among its inputs,
 # so an edit of the facts or the brief since the last lint would turn `check` not verified. The board is the one `check` looks for (rounds/rN/board.html of the highest N); when that round has no board.html, no step.
 # Like the motion proof: a lint that fails (exit 1) or cannot verify (exit 3) after it wrote its report goes on, `check` gates that report and says why. Any other exit leaves no report of
@@ -248,6 +293,11 @@ if [ -n "$BOARD" ]; then
   fi
 fi
 "${BC[@]}" staleness --write
+if [ "$REFRESH_FAILED" -ne 0 ]; then   # an adapter file, the applied skill or the kit that refused to be written again (the first failed step of the chain, so it comes before the lint's): check still runs and writes the pack report, but the chain never ends in a pass
+  RESULT_RC=0; "${BC[@]}" check || RESULT_RC=$?
+  if [ "$RESULT_RC" -ne 0 ]; then exit "$RESULT_RC"; fi
+  echo "finish.sh: check passed, but a step failed ($REFRESH_WHAT): the chain ends with exit $REFRESH_FAILED" >&2; exit "$REFRESH_FAILED"
+fi
 if [ "$LINT_FAILED" -ne 0 ]; then   # a board the lint refused: check still runs and writes the pack report, but the chain never ends in a pass
   CHECK_RC=0; "${BC[@]}" check || CHECK_RC=$?
   [ "$CHECK_RC" -eq 0 ] || exit "$CHECK_RC"

@@ -70,6 +70,15 @@ stage, and why, is in the [archive](docs/archive/README.md).
   end stills. The board lint accepts the six inputs, the six plus the rules, the six plus the three frames, or all of them (all three
   frames or none), and marks the review out of date when a frame changes or the page is taken again without `--frames`. `site approve`
   does not copy the frames into the approved page.
+- The finish chain (`tools/finish.sh` of a new project) now writes your brand's adapter files again after the tokens. Before, a
+  token you changed left `check` saying "not verified" about `BRAND.md`, `DESIGN.md`, the applied skill and the brand kit until
+  you ran `adapters`, `applied-skill` or `kit build` and `kit check` yourself. Now one step after the press kit and before the
+  chain records the pack does it: `adapters` with the options in the new `ADAPTERS_ARGS` line of block 2 (the options are your
+  choices and nothing records them, so a `BRAND.md` or `DESIGN.md` with that line empty is left alone and the chain says which
+  line to set), then `applied-skill --yes`, or, when the project has a kit, `kit build --yes` and `kit check`. A project with
+  none of these runs nothing and says so. A command that refuses (a file you edited by hand, a package that is not installed)
+  is a failed step, said with its message; the chain still runs `check`, then ends with a non-zero exit code. A project that
+  already has `tools/finish.sh` keeps its copy: take the step from `templates/finish.sh.tpl`.
 
 ### Fixed
 
