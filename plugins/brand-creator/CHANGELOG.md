@@ -30,6 +30,13 @@ stage, and why, is in the [archive](docs/archive/README.md).
   one memorable idea in one line, and the card carries it as an "Idea" line. A hero card with no Idea line, or an empty
   one, makes `board-lint` warn (`site:fields`) in this release and fail in the next, so boards made before this release
   still lint.
+- The site round now lets you try the first-screen versions live before the board. Claude builds each as a plain page in
+  `tryout/<Name>/`, you open it in your own browser and say what to change, and Claude changes it while you look, with no
+  pictures, page check, cold review or board per change. When you say the versions are ready, Claude copies them into the
+  round, with their relative paths made one level deeper so the tokens and fonts still load, moves `tryout/` into a
+  `removed-<date>/` folder (so `check --cascade` does not find the old copies after you change a name or a price), and the
+  hero board runs as before. Nothing cites a try-out, and a choice you make there is not your pick: you pick on the board.
+  On the round's board, a card that points into `tryout/` still fails `board-lint` (`site:files`).
 
 ### Fixed
 

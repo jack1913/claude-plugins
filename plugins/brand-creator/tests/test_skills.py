@@ -1333,6 +1333,80 @@ def test_the_site_round_phase_goes_hero_first_and_tags_every_choice():
         assert needle in changelog, needle
 
 
+def test_the_hero_is_tried_live_before_the_board_and_copied_into_the_round_with_its_paths_made_deeper():
+    """G4-08: between the references pick and the hero board the owner opens each variant as a plain page in `tryout/<Name>/` and iterates on it with no proof, record or board per change; at the stage gate the
+    variants are copied into `rounds/rN/<Name>/` with every relative path one level deeper, and the full hero board runs as before. Nothing cites a try-out; a choice made there is not the hero pick."""
+    flat = _flat(REFS / "phases" / "07p-site-round.md")
+    for needle in (
+            "2a. **The try-out (the first hero board only).**", "The owner tries the variants live before any proof is made.",
+            "Build each one as a plain page in `tryout/<Name>/index.html` (a folder of the project, beside `rounds/`, never inside it), to every rule of step 2",
+            "It loads what it needs from `assets/` by a path seen from `tryout/<Name>/` (`../../assets/tokens/tokens.css`) and from its own folder, never from another try-out's.",
+            "On this board steps 1 and 2 are built here and not in `rounds/r<N>/<Name>/`: no `rounds/r<N>/` exists until the stage gate below.",
+            "A name already used under `tryout/` is not reused.",
+            "they open the pages in their own browser (local files; nothing is published) and say what to change",
+            # no ceremony per change
+            "**Nothing runs per change:** no `capture`, `page-check`, cold review, board, lint, `shot` or review copy.",
+            "A `page-check tryout/<Name>/index.html --project <dir> --widths 390,1440` only when the owner asks for one", "its report is not the board's proof",
+            # nothing cites a try-out, and a choice made there is not the hero pick
+            "**Nothing cites a try-out.** No card, record, `cold-review.md` or `DECISIONS.md` entry names `tryout/`", "is not the hero pick: the pick is made on the board and written down from there (step 6)",
+            "The first hero board still shows 2 or 3 variants",
+            # the stage gate: the copy, and the paths made one level deeper
+            "**At the stage gate**, when the owner says in their words that the try-outs are ready for the board (never on your own)",
+            "make `rounds/r<N>/` (a new, empty folder, as for any first board of a stage; never `cp -R` onto a `rounds/r<N>/<Name>/` that exists, it nests the copy as `<Name>/<Name>/` and keeps the old page)",
+            "`cp -R tryout/<Name> rounds/r<N>/<Name>`",
+            "every relative path that leaves the variant's own folder gets one more `../`",
+            "(`../../assets/tokens/tokens.css` becomes `../../../assets/tokens/tokens.css`)", "`href`, `src`, `srcset`, `url()`, `@import`", "a path inside the folder stays as it is",
+            "check that every relative path of the copy leads to a file: a page with a wrong path still opens, but loads no tokens and no fonts",
+            # the try-out is moved aside after the copy: `check --cascade` searches tryout/ and skips removed-*/
+            "Last, move the whole `tryout/` folder (a variant the owner dropped too) to `removed-<date>/tryout/` (`removed-<date>-2/` when that name is taken; never delete)",
+            "`check --cascade` searches every folder but `history/`, `decisions/`, earlier rounds and `removed-*/`, so a try-out left in place would hold the old name, price or wording and fail the cascade after the first change",
+            "the full hero board runs as today (steps 3 to 6), its gates unchanged",
+            # the output, the ordering sentence, the pitfall and the enforcement line
+            "| A try-out of a hero variant (the first hero board only), one folder each, named as its variant | `tryout/<Name>/index.html`: a plain local page the owner opens in their own browser;",
+            "the whole folder moves to `removed-<date>/tryout/` at the stage gate |",
+            "On the first hero board the owner tries the variants live first (step 2a): steps 1 and 2 are built in `tryout/<Name>/`, not in `rounds/r<N>/<Name>/`, no `rounds/r<N>/` exists until the stage gate, and none of the proofs of step 3 is made until they say the variants are ready.",
+            "**A try-out treated as a round.**", "a card, a record or a `DECISIONS.md` entry that cites `tryout/` rests on nothing", "rewrite them for the depth",
+            "a variant also built in `rounds/r<N>/` before the gate ends as `<Name>/<Name>/` and puts the page from before the owner's live edits on the board", "so there is no `rounds/r<N>/` until the gate",
+            "a `tryout/` left in place after the gate fails `check --cascade` after the first rename, price or wording change: move it aside",
+            # the enforcement line says what the lint reads and what it does not, and that the cascade does read a try-out
+            "on the round's board (`rounds/r<N>/board.html`) a card that points into `tryout/` fails `site:files`", "`check --cascade` does search `tryout/`, which is why step 2a moves it to `removed-<date>/` at the stage gate"):
+        assert needle in flat, needle
+    assert "sketch" not in flat.split("2a. **The try-out")[1].split("3. **Per variant")[0], "named a try-out, never a sketch (anti-patterns.md keeps `sketch` for the logo rounds)"
+    # before the proofs of step 3 and before the board, after the page of step 2; the ordering sentence comes before step 0
+    assert flat.index("2. **The page.**") < flat.index("2a. **The try-out") < flat.index("3. **Per variant, in this order:") < flat.index("4. **The board**")
+    assert flat.index("Build the pages before the board, in this order") < flat.index("(step 2a)") < flat.index("0. **Which earlier site rules still stand.**")
+    # the round skill carries the step in its own words
+    skill = _flat(SKILLS / "round" / "SKILL.md")
+    section = skill[skill.index("## A site round"):]
+    for needle in ("2a. On the first hero board, build each variant as a try-out first: a plain page, `tryout/<name>/index.html` (beside `rounds/`), to the rules of step 2",
+                   "that the owner opens in their own browser and changes with you live (local files: nothing is published)", "Give the owner the paths and stop.",
+                   "No `capture`, `page-check`, cold review, board or lint runs per change", "only when the owner asks",
+                   "no card, record or `DECISIONS.md` entry cites a try-out, and a choice made there is not the hero pick",
+                   "On this board steps 1 and 2 are built in `tryout/<name>/`, not in `rounds/r<N>/<name>/`, and no `rounds/r<N>/` exists until the stage gate below.",
+                   "When the owner says in their words that the try-outs are ready for the board, make `rounds/r<N>/` (step 1; a new, empty folder, never a copy onto an existing `rounds/r<N>/<name>/`) and copy each variant that stays into `rounds/r<N>/<name>/`",
+                   "giving every relative path that leaves its folder one more `../` (the copy is one level deeper)", "checking that each path of the copy leads to a file",
+                   "then move the whole `tryout/` folder to `removed-<date>/tryout/` (never delete: `check --cascade` searches `tryout/`, so a try-out left in place fails it after the first rename or price change)",
+                   "then steps 3 to 6 run as written", 'The step is "The hero first", step 2a, in the phase file.'):
+        assert needle in section, needle
+    assert section.index("2. One folder per hero variant") < section.index("2a. On the first hero board") < section.index("3. For each folder, in this order:")
+    # the manual says it in the reader's words: where the pages are, that nothing else runs, that it is no pick, and no lint row or gate id
+    manual = _flat(ROOT / "docs" / "manual" / "use" / "get-reference-pages-for-your-site.md")
+    for needle in ("3. Before any board, Claude builds the two or three versions as plain pages for you to try.", "Each version is a folder in your brand project, `tryout/<Name>/`, with a page named `index.html`, and Claude tells you where they are.",
+                   "Open them in your own browser (they stay on your computer), say what to change, and Claude changes the page while you look.",
+                   "Nothing else runs while you try: no pictures, no checks, no board, so each change is quick.", "Ask for a quick check at phone and desktop width whenever you want one.",
+                   "What you say while you try is not your pick: you pick on the board, and nothing Claude writes down mentions a try-out.", "When the versions look right, tell Claude to put them on the board.",
+                   "Claude copies them into the round and moves the `tryout/` folder into a folder named `removed-` plus the date (nothing is deleted)",
+                   "4. Claude puts the versions on a board.", "5. Pick one, mix two",
+                   "While you try the first-screen versions, `tryout/` in your brand project holds a folder for each."):
+        assert needle in manual, needle
+    assert manual.index("3. Before any board") < manual.index("4. Claude puts the versions on a board.") < manual.index("5. Pick one, mix two")
+    # how the versions are made and the idea behind each belong to the step that builds them (3), not to the step that shows the board (4)
+    step3, step4 = manual[manual.index("3. Before any board"):manual.index("4. Claude puts the versions on a board.")], manual[manual.index("4. Claude puts the versions on a board."):manual.index("5. Pick one, mix two")]
+    for needle in ("Each is organised like the references you picked", "They start from what you already approved", "Before it builds one, Claude writes down the one idea the version rests on, in a line."):
+        assert needle in step3 and needle not in step4, needle
+    assert "sketch" not in manual and "G4p" not in manual and "site:files" not in manual
+
+
 def test_the_round_wrapper_has_a_site_kind():
     fm, body = frontmatter(SKILLS / "round" / "SKILL.md")
     assert fm["argument-hint"] == "[style|pick|refine|motion|site-refs|site] [what this round should answer]"

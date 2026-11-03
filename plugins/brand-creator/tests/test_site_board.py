@@ -338,6 +338,52 @@ def test_a_variant_needs_its_folder_and_its_page(tmp_path):
     assert r.returncode == 1 and "Atlas: rounds/r2/Atlas/ does not exist" in detail(p, "site:files"), r.stdout
 
 
+def test_a_card_pointing_into_a_tryout_fails_the_files_row_and_the_gates_are_the_same_as_before(tmp_path):
+    """G4-08: the owner tries a variant live as `tryout/<Name>/index.html`, and at the stage gate it is copied into `rounds/rN/<Name>/` with its relative paths made one level deeper. The try-out is no
+    variant of the board: a `tryout/` folder beside the round changes no row, a card that points into it fails `site:files` (the live link, and the folder when the variant was not copied), and the board
+    passes again once the variant is in its round, as for any hero."""
+    p = build(tmp_path)
+    assert lint(p).returncode == 0
+    before = {rid: row["status"] for rid, row in rows(p).items()}                             # the board's rows as they are with no try-out
+    tryout = p / "tryout" / "Atlas" / "index.html"
+    tryout.parent.mkdir(parents=True)
+    tryout.write_text(page_text("Atlas").replace("../../../assets/", "../../assets/"), encoding="utf-8")
+    sheet = "assets/tokens/tokens.css"
+    assert (tryout.parent / "../../" / sheet).resolve().is_file() and (p / "rounds" / "r2" / "Atlas" / "../../../" / sheet).resolve().is_file(), "one more ../ from the round leads to the same file"
+    assert lint(p).returncode == 0 and {rid: row["status"] for rid, row in rows(p).items()} == before, "a try-out beside the round is read by no row: the same rows, the same statuses"
+    mutate(board_of(p), '<a data-field="live" href="Atlas/index.html">', '<a data-field="live" href="../../tryout/Atlas/index.html">')
+    r = lint(p)
+    assert r.returncode == 1 and "site:files" in failed(p), r.stdout
+    assert "Atlas: the live link '../../tryout/Atlas/index.html' does not lead to rounds/r2/Atlas/index.html" in detail(p, "site:files")
+    assert [rid for rid in failed(p) if rid != "site:files"] == [], "only the files row fails: the try-out is not a variant, and no other row reads it"
+    shutil.rmtree(p / "rounds" / "r2" / "Atlas")                                              # the variant was never copied into the round: only its try-out exists
+    r = lint(p)
+    assert r.returncode == 1 and "Atlas: rounds/r2/Atlas/ does not exist" in detail(p, "site:files"), r.stdout
+    make_variant(p, 2, "Atlas")                                                               # copied into the round, its stills and checks made there
+    mutate(board_of(p), '<a data-field="live" href="../../tryout/Atlas/index.html">', '<a data-field="live" href="Atlas/index.html">')
+    assert lint(p).returncode == 0 and {rid: row["status"] for rid, row in rows(p).items()} == before, "the board is the same board as without a try-out"
+    assert tryout.is_file(), "the try-out stays where it was"
+
+
+def test_a_tryout_left_in_place_fails_the_cascade_and_moved_to_removed_it_does_not(tmp_path):
+    """G4-08: `check --cascade` searches every folder but history/, decisions/, earlier rounds and removed-*/, so a try-out that stays in `tryout/` holds the old name or price and fails the cascade after
+    the first change, while the page in the round (and the same try-out moved into `removed-<date>/tryout/` at the stage gate) does not."""
+    p = build(tmp_path)
+    old = "Every tool has a published spare-parts list"
+    tryout = p / "tryout" / "Atlas" / "index.html"
+    tryout.parent.mkdir(parents=True)
+    tryout.write_text(page_text("Atlas").replace("<h1>", f"<p>{old}</p><h1>").replace("../../../assets/", "../../assets/"), encoding="utf-8")
+    r = bc("check", "--cascade", old, project=p)
+    cas = next(x for x in report(p, "check")["results"] if x["id"].startswith("cascade:") and x["id"] != "cascade:scope")
+    assert r.returncode == 1 and cas["status"] == "fail" and any(h.startswith("tryout/Atlas/index.html:") for h in cas["hits"]), "a try-out left in place is found by the cascade"
+    (p / "removed-2026-11-03").mkdir()
+    shutil.move(str(p / "tryout"), str(p / "removed-2026-11-03" / "tryout"))                  # the move of the stage gate
+    bc("check", "--cascade", old, project=p)                                                   # other gates may fail here: only the cascade row is the point
+    cas = next(x for x in report(p, "check")["results"] if x["id"].startswith("cascade:") and x["id"] != "cascade:scope")
+    assert cas["status"] == "pass" and cas["hits"] == [], "moved to removed-<date>/tryout/, the old copy is skipped like any removed-*/ folder"
+    assert (p / "removed-2026-11-03" / "tryout" / "Atlas" / "index.html").is_file() and not (p / "tryout").exists(), "moved, never deleted, and no tryout/ is left"
+
+
 def test_a_variant_page_must_declare_its_layout_and_page(proj):
     page = proj / "rounds" / "r2" / "Atlas" / "index.html"
     mutate(page, 'data-layout="walkthrough" data-page="start"', 'data-page="start"')

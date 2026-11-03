@@ -71,6 +71,7 @@ Commands are written after `brand-creator --data "${CLAUDE_PLUGIN_DATA}"`.
 |---|---|
 | A hero variant, one folder each, named by a word of 3 or more letters | `rounds/r<N>/<Name>/index.html` (the home page's first screen), `shots/` (from `capture`: `1440-light.png`, `1440-dark.png`, `390-light.png`, `390-dark.png`, `1440-light-full.png`, `capture.json`) and `cold-review.md` |
 | A page of the pages stage, one folder each, named by its page id (`start`, `pricing`) | `rounds/r<N>/<id>/index.html`, `shots/`, and `cold-review.md` when the page was read cold |
+| A try-out of a hero variant (the first hero board only), one folder each, named as its variant | `tryout/<Name>/index.html`: a plain local page the owner opens in their own browser; no `shots/`, no report, no record, and nothing cites it; the whole folder moves to `removed-<date>/tryout/` at the stage gate |
 | The site board (the page the owner sees) | `rounds/r<N>/board.html`, from `${CLAUDE_PLUGIN_ROOT}/templates/site-board.html` (`data-board="site"`) |
 | The same page on the review surface | `review/index.html`, a copy of the board with the stills inlined as `data:` URIs and the live links seen from `review/`, linted with `board-lint review/index.html --round <N>` |
 | The check of a page | `assets/_checks/page-check/<slug>-<hash6>.json`, one per page (from `page-check`) |
@@ -90,8 +91,10 @@ so its `capture`, `page-check` and cold review are made again in the new round.
 
 ## The hero first
 
-Build the pages before the board, in this order, and only then the board. The home page is `start` (`<body
-data-page="start">`) in every project.
+Build the pages before the board, in this order, and only then the board. On the first hero board the owner tries the
+variants live first (step 2a): steps 1 and 2 are built in `tryout/<Name>/`, not in `rounds/r<N>/<Name>/`, no `rounds/r<N>/`
+exists until the stage gate, and none of the proofs of step 3 is made until they say the variants are ready. The home page
+is `start` (`<body data-page="start">`) in every project.
 
 0. **Which earlier site rules still stand.** Only when `site/site.json` exists, a `removed-*/site/` folder does, or the brief
    records an incumbent site. List the earlier choices tagged `rule` in each `site.json` (id, text, source), and name the
@@ -124,6 +127,36 @@ data-page="start">`) in every project.
    - It starts from what the brand approved (Inputs): an approved master or picture of `assets/masters/` is used as it stands,
      and when `motion/motion.json` says the brand moves, the signature move shows on the first screen, or the card's What it
      is line says why this variant leaves it out.
+
+2a. **The try-out (the first hero board only).** The owner tries the variants live before any proof is made. Build each one as
+   a plain page in `tryout/<Name>/index.html` (a folder of the project, beside `rounds/`, never inside it), to every rule of
+   step 2: its `<body>`, the tokens, the approved masters, the signature move, the words of `FACTS.md`, no network. On this
+   board steps 1 and 2 are built here and not in `rounds/r<N>/<Name>/`: no `rounds/r<N>/` exists until the stage gate below.
+   It loads what it needs from `assets/` by a path seen from `tryout/<Name>/` (`../../assets/tokens/tokens.css`) and from its
+   own folder, never from another try-out's. A name already used under `tryout/` is not reused. Then give the owner the paths
+   and stop: they open the pages in their own browser (local files; nothing is published) and say what to change, and each
+   change is made in the page for them to reload.
+
+   - **Nothing runs per change:** no `capture`, `page-check`, cold review, board, lint, `shot` or review copy. A `page-check
+     tryout/<Name>/index.html --project <dir> --widths 390,1440` only when the owner asks for one; its report is not the board's
+     proof (that is the report of the page in `rounds/r<N>/<Name>/`).
+   - **Nothing cites a try-out.** No card, record, `cold-review.md` or `DECISIONS.md` entry names `tryout/`, and a choice the
+     owner makes there ("this one, not that one") is not the hero pick: the pick is made on the board and written down from
+     there (step 6). The first hero board still shows 2 or 3 variants: leave out a variant the owner drops, and build another
+     when fewer than 2 remain.
+   - **At the stage gate**, when the owner says in their words that the try-outs are ready for the board (never on your own),
+     make `rounds/r<N>/` (a new, empty folder, as for any first board of a stage; never `cp -R` onto a `rounds/r<N>/<Name>/`
+     that exists, it nests the copy as `<Name>/<Name>/` and keeps the old page) and copy each variant that stays:
+     `cp -R tryout/<Name> rounds/r<N>/<Name>`. The copy sits one level deeper, so every relative path that leaves the variant's
+     own folder gets one more `../` (`../../assets/tokens/tokens.css` becomes `../../../assets/tokens/tokens.css`), in the page
+     and in each stylesheet or script of the folder (`href`, `src`, `srcset`, `url()`, `@import`); a path inside the folder stays
+     as it is. Then check that every relative path of the copy leads to a file: a page with a wrong path still opens, but loads no
+     tokens and no fonts. Last, move the whole `tryout/` folder (a variant the owner dropped too) to `removed-<date>/tryout/`
+     (`removed-<date>-2/` when that name is taken; never delete): `check --cascade` searches every folder but `history/`,
+     `decisions/`, earlier rounds and `removed-*/`, so a try-out left in place would hold the old name, price or wording and fail
+     the cascade after the first change, and it is not edited again. From here on every change goes to the page in
+     `rounds/r<N>/<Name>/`, and the full hero board runs as today (steps 3 to 6), its gates unchanged.
+
 3. **Per variant, in this order: `capture`, `page-check`, the cold review.**
    - `capture rounds/r<N>/<Name>/index.html --project <dir>` writes the four stills and the full page into `shots/`, with
      `capture.json`. Read all four stills.
@@ -302,6 +335,13 @@ board, the owner chooses between new variants or pages (a new site board) and a 
   page of the round, then `board-lint rounds/r<N>/board.html --project <dir>`). Other writes to `BRAND-STATE.md` (the
   phase, `review_url`, a gate, the Directions table, Still open) leave the `page-check` reports current; they make the
   lint stale only when a rule cites a line that only `BRAND-STATE.md` holds, and then the lint alone runs again.
+- **A try-out treated as a round.** A `capture`, a `page-check`, a cold review, a board or a lint per change is the ceremony the
+  try-out spares the owner; a card, a record or a `DECISIONS.md` entry that cites `tryout/` rests on nothing, because a choice
+  made there is not the hero pick; a try-out copied into a round with its paths as they were loads no tokens and no fonts:
+  rewrite them for the depth; a variant also built in `rounds/r<N>/` before the gate ends as `<Name>/<Name>/` and puts the page
+  from before the owner's live edits on the board (the lint passes, the folder and page exist), so there is no `rounds/r<N>/`
+  until the gate; and a `tryout/` left in place after the gate fails `check --cascade` after the first rename, price or
+  wording change: move it aside.
 - **Building the production site here.** The pages are references. The real site is built in the product repository.
 - **Capturing in an earlier round.** `capture` refuses a page in `history/` or in a round before the latest; work in the
   latest round.
@@ -317,6 +357,11 @@ board, the owner chooses between new variants or pages (a new site board) and a 
   `site:choices` (an id, a tag, a rule's source found in the decision files, `data-pages` naming pages of the board).
 - The Idea line of a hero card (`data-field="idea"`) is read by `site:fields`: missing or empty it warns in this release and
   fails in the next, so a board made before the line existed still lints. A page card has no Idea line.
+- No lint row reads a try-out, and none is added: a hero card's folder and live link are `rounds/r<N>/<Name>/`, so on the round's
+  board (`rounds/r<N>/board.html`) a card that points into `tryout/` fails `site:files` as any card without its folder does (the
+  review copy's live link is checked only for being there). `check --cascade` does search `tryout/`, which is why step 2a moves it
+  to `removed-<date>/` at the stage gate. The step itself (2a) is prose: that the pages were really tried live, and that their
+  paths were rewritten for the depth, is judgement and is not scripted.
 - `page-check` on each page: brand rules fail (`page:rule:<id>`, colours, fonts, the mark, claims), tells warn.
 - `capture` refuses a page in `history/` or a round before the latest, and `site approve` refuses without G4p, without a
   current passing lint of the pages board, on a network or root-relative address and on a missing file; `check` gates

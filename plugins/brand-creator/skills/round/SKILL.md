@@ -144,6 +144,20 @@ review and the choices are in `references/phases/07p-site-round.md`; the board's
    A hero starts from what the brand approved: the approved masters and pictures in `assets/masters/` as they are, and, when
    `motion/motion.json` says the brand moves, its signature move on the first screen, or the card says why a variant leaves
    it out. Before building, each hero variant states its one memorable idea in one line (the card's Idea line).
+
+2a. On the first hero board, build each variant as a try-out first: a plain page, `tryout/<name>/index.html` (beside `rounds/`),
+   to the rules of step 2, that the owner opens in their own browser and changes with you live (local files: nothing is
+   published). On this board steps 1 and 2 are built in `tryout/<name>/`, not in `rounds/r<N>/<name>/`, and no `rounds/r<N>/`
+   exists until the stage gate below. Give the owner the paths and stop. No `capture`, `page-check`, cold review, board or lint
+   runs per change (a `page-check tryout/<name>/index.html --project <dir> --widths 390,1440` only when the owner asks), no
+   card, record or `DECISIONS.md` entry cites a try-out, and a choice made there is not the hero pick. When the owner says in
+   their words that the try-outs are ready for the board, make `rounds/r<N>/` (step 1; a new, empty folder, never a copy onto
+   an existing `rounds/r<N>/<name>/`) and copy each variant that stays into `rounds/r<N>/<name>/`, giving every relative path
+   that leaves its folder one more `../` (the copy is one level deeper) and checking that each path of the copy leads to a
+   file; then move the whole `tryout/` folder to `removed-<date>/tryout/` (never delete: `check --cascade` searches `tryout/`,
+   so a try-out left in place fails it after the first rename or price change); then steps 3 to 6 run as written. The step is
+   "The hero first", step 2a, in the phase file.
+
 3. For each folder, in this order: `brand-creator --data "${CLAUDE_PLUGIN_DATA}" capture rounds/r<N>/<name>/index.html
    --project <dir>`, then `... page-check rounds/r<N>/<name>/index.html --project <dir>` (fix a failing row in the page, or let
    its card say `fail`; never `pass`), then the cold review: `rounds/r<N>/<name>/cold-review.md`, the verdict first
