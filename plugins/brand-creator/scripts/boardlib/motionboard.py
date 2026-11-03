@@ -5,7 +5,8 @@ page is that index.html and whose static is an approved master of assets/logo/) 
 they are of the page as it is now). The board shows one card per variant, an element with
 data-motion-variant="<name>": the strip and the reduced still (data-field="strip" and "reduced", both <img>), a link to the live page (data-field="live"), a proof line
 (data-proof="pass|fail" and its text) and the fields What it is, Cost and Degrades to (data-field="what-it-is", "cost", "degrades-to"). Each row is one result for the whole board
-and names the variants it fails (scripts/CONTRACT.md, "Board contract"). The folder of boardlib is outside scripts/lib/, so a change here does not make every pack stale.
+and names the variants it fails (scripts/CONTRACT.md, "Board contract"). After them comes motion:timelines, a warning: two variants whose motion reports show one timeline (almost the same length, the same
+number of animations) are one move tried twice. The folder of boardlib is outside scripts/lib/, so a change here does not make every pack stale.
 Standard library only; no clock and no network.
 """
 from __future__ import annotations
@@ -25,6 +26,9 @@ import motionspec
 ATTR = "data-motion-variant"
 FIRST_COUNT = 3   # the first motion board of a project shows exactly this many variants; a later one (the refine loop) shows one or more
 FIELDS = (("what-it-is", "What it is"), ("cost", "Cost"), ("degrades-to", "Degrades to"))
+TIMELINE_NEAR = 0.05      # motion:timelines: two lengths within this share of the longer one, or within TIMELINE_NEAR_MS, are one length (a practice proposal; the row says so)
+TIMELINE_NEAR_MS = 20
+UNSEEN_REPORT = "no current motion report with a sampling row; motion:proof says why"   # motion:timelines: why a variant with a missing, stale or unreadable report is not compared
 FOLDER_NAME = re.compile(r"[A-Za-z0-9_-]+")   # the name is also the folder rounds/rN/<name>/ and the case folder frames/<name>/ (`frames` keeps only these characters)
 
 
@@ -366,6 +370,74 @@ def field_problems(v: Variant) -> list[str]:
     return out
 
 
+# ---------------------------------------------------------------- the timelines of the variants
+
+def number(x) -> bool:
+    return isinstance(x, (int, float)) and not isinstance(x, bool) and x >= 0
+
+
+def timeline(project: Path, v: Variant) -> tuple[tuple[float, int] | None, str]:
+    """The variant's timeline and "", or None and why it is not compared. The timeline is (the length in ms, the number of animations) of the `sampling` row of its current motion report, as `shot --motion` wrote it
+    (render.mjs: length_ms, animations). Not compared, never a guess, when: the report is missing or stale (_common.stale_inputs, as everywhere on this board; motion:proof says which); it has no such row, or no number
+    in it; the row says `real_time` (a requestAnimationFrame move: its length is not known); or it found no animation (`animations` 0, written with a length of 0: two such variants would look alike, and nothing was measured)."""
+    if not (project / v.report).is_file():
+        return None, UNSEEN_REPORT
+    doc, stale = read_report(project, v.report, v.proof)
+    if doc is None or stale:
+        return None, UNSEEN_REPORT
+    rows = doc.get("results") if isinstance(doc.get("results"), list) else []
+    row = next((r for r in rows if isinstance(r, dict) and r.get("id") == f"motion:{v.name}:sampling"), None)
+    if row is None or not number(row.get("length_ms")) or not number(row.get("animations")):
+        return None, "the report has no sampling row with a length and a number of animations"
+    if row.get("real_time") is True:
+        return None, "the report sampled the motion in real time, which gives no length"
+    if int(row["animations"]) == 0:
+        return None, "the report found no animation to measure"
+    return (row["length_ms"], int(row["animations"])), ""
+
+
+def same_length(a: float, b: float) -> bool:
+    """Two lengths differ by 5 % of the longer one or less, or by 20 ms or less."""
+    return abs(a - b) <= max(TIMELINE_NEAR * max(a, b), TIMELINE_NEAR_MS)
+
+
+def shown_ms(ms: float) -> str:
+    return f"{ms:g} ms"
+
+
+def timeline_row(rep: Report, project: Path, variants: list[Variant]) -> None:
+    """motion:timelines (a warning): two variants whose lengths are within 5 % (or 20 ms) of each other and which run the same number of animations are one move tried twice; three variants should try three moves.
+    Read from each variant's current motion report (the `sampling` row). A variant that has no timeline to read is not compared, and the row says why (`timeline`): the row then cannot pass, it is info, unless
+    the variants that were compared already show a pair that looks alike (a warning). The thresholds are a practice proposal, said in the row."""
+    label = "the variants try different moves (their timelines differ)"
+    got, why_not = {}, {}
+    for v in variants:
+        t, why = timeline(project, v)
+        if t is not None:
+            got[v.name] = t
+        else:
+            why_not.setdefault(why, []).append(v.name)
+    missing = [n for names in why_not.values() for n in names]
+    unseen = "".join(f"; not compared ({why}): {', '.join(names)}" for why, names in why_not.items())
+    if not variants:
+        rep.add("motion:timelines", "info", label, detail="not compared: there is no variant card to look at (motion:variants says why)")
+        return
+    names = list(got)
+    alike = [(a, b) for i, a in enumerate(names) for b in names[i + 1:] if got[a][1] == got[b][1] and same_length(got[a][0], got[b][0])]
+    fact = lambda n: f"{n} {shown_ms(got[n][0])}, {got[n][1]} animation(s)"   # noqa: E731
+    rule = f"alike means the same number of animations and lengths within {TIMELINE_NEAR:.0%} or {TIMELINE_NEAR_MS} ms (a practice proposal, not a measured limit)"
+    if alike:
+        rep.add("motion:timelines", "warn", label, detail="they look alike in time: " + "; ".join(f"{a} and {b} ({fact(a)} against {fact(b)})" for a, b in alike)
+                + f". Three variants should try three moves: change the length or the number of animations of one of each pair, or drop one ({rule}){unseen}")
+    elif missing:
+        rep.add("motion:timelines", "info", label, detail=f"not all compared: {len(got)} of {len(variants)} variant(s) have a timeline to compare"
+                + (f" ({'; '.join(fact(n) for n in names)}; none of them alike)" if len(got) > 1 else "") + unseen)
+    elif len(got) < 2:
+        rep.add("motion:timelines", "info", label, detail=f"nothing to compare: {len(got)} variant on this board ({fact(names[0])})")
+    else:
+        rep.add("motion:timelines", "pass", label, detail=f"{len(got)} variant(s) compared, no two share a timeline: {'; '.join(fact(n) for n in names)} ({rule})")
+
+
 # ---------------------------------------------------------------- the board
 
 def variant_rows(rep: Report, project: Path, rnd: int, root: Node, page: Path, first: bool) -> None:
@@ -385,6 +457,7 @@ def variant_rows(rep: Report, project: Path, rnd: int, root: Node, page: Path, f
             rep.add(rid, "skipped", label, detail="not verified: there is no variant card to look at (motion:variants says why)")
             continue
         add_row(rep, rid, label, [p for v in variants for p in ask(v)], ok)
+    timeline_row(rep, project, variants)
     for v in variants:   # the report of the lint is stale as soon as one of these changes: `check` re-reads their hashes
         rep.inputs += [project / v.proof, project / v.dir / "index.html", project / v.frames / "frames.json", project / v.frames / "strip.png", project / v.frames / "reduced.png", project / v.report, project / v.frames_report]
         rep.inputs += made_from(project, v.report) + made_from(project, v.frames_report)   # and the files the two reports were made from: a move that lives in the page's stylesheet or script

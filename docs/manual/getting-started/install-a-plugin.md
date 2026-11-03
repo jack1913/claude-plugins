@@ -77,6 +77,7 @@ claude plugin uninstall batbelt@jack1913
 
 Installed for the team? `claude plugin uninstall swift@jack1913 --scope project` takes it out of the repository's
 `.claude/settings.json`, which removes it for everyone once you commit. In Claude Code, `/plugin uninstall` asks first:
-press **y** to turn it off just for you, or **u** to remove it for everyone.
+press **y** to turn it off just for you, or **u** to remove it for everyone. Installed just for you in one repository? Add
+`--scope local`.
 
 Something not working? See [Troubleshooting](../reference/troubleshooting.md).

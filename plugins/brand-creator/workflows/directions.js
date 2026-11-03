@@ -128,12 +128,13 @@ const BOARD_SCHEMA = {
 }
 const JUDGE_SCHEMA = {
   type: 'object',
-  required: ['ranking', 'take_forward', 'grafts', 'must_fix', 'certainty'],
+  required: ['ranking', 'take_forward', 'grafts', 'must_fix', 'reflex_seen', 'certainty'],
   properties: {
     ranking: { type: 'array', items: { type: 'object', required: ['key', 'rank', 'why', 'biggest_weakness', 'fix'], properties: { key: { type: 'string' }, rank: { type: 'integer' }, why: { type: 'string' }, scores: { type: 'object' }, biggest_weakness: { type: 'string' }, fix: { type: 'string' } } } },
     take_forward: { type: 'string' },
     grafts: { type: 'array', items: { type: 'string' } },
     must_fix: { type: 'array', items: { type: 'string' } },
+    reflex_seen: { type: 'array', description: 'one entry per direction: the reflex patterns the judge saw in its board, before reading any argument; an empty items list is an answer', items: { type: 'object', required: ['key', 'items'], properties: { key: { type: 'string' }, items: { type: 'array', items: { type: 'object', required: ['id', 'source', 'where'], properties: { id: { type: 'string' }, source: { type: 'string', enum: ['ai-defaults', 'cliches'] }, where: { type: 'string' } } } } } } },
     nice: { type: 'array', items: { type: 'string' } },
     vs_previous: { type: 'string' },
     not_seen: { type: 'array', items: { type: 'string' } },
@@ -211,6 +212,7 @@ if (JUDGE && boards.length >= 2) {
     'COMPARE these boards (open each board.html and Read every screenshot slice listed): ' + boards.map(b => b.name + ' [' + b.key + ']: ' + b.board + ' slices: ' + list(b.screenshots).join(', ')).join(' | '),
     (A.previous_round ? 'PREVIOUS ROUND and best so far: ' + A.previous_round + ' (score against both on the same rubric).' : 'This is the first round: say so instead of comparing with a previous one.'),
     'Rank them, say which one you would take forward and what you would graft from the others; return a numbered MUST-FIX list and an optional NICE list. Be honest: if something is fine, say so; do not invent problems to fill the list. You advise; the owner decides.',
+    'REFLEX LIST: for each direction, before you read any argument, list every pattern of ' + A.plugin_root + '/skills/brand-creator/references/ai-defaults.json and every "Avoid unless argued" item of ' + A.project + '/research/cliches.md (when the project has it) that you see in its board: the id or the cliche\'s words, its source (ai-defaults or cliches) and where you saw it. Judge layout patterns on the direction\'s own homepage frame, never on the board\'s chrome. An empty list is an answer. Return the lists as reflex_seen, one entry per direction, with the direction\'s key.',
     RULES,
     'OUTPUT: the schema. Aim to finish within 20 minutes.',
   ].join('\n'), opts('brand-judge', { label: 'judge', phase: 'Judge', schema: JUDGE_SCHEMA }))
@@ -227,5 +229,5 @@ return {
   violations,
   inventory,
   judge,
-  next: 'Lead: write INVENTORY.md from inventory (when present), assemble ' + ROUND_DIR + '/board.html from the boards (judge view + lead view + middle option when the judge ran), board-lint, shot, publish review/index.html, stop at G2.',
+  next: 'Lead: write INVENTORY.md from inventory (when present), assemble ' + ROUND_DIR + '/board.html from the boards (judge view + lead view + middle option when the judge ran), board-lint, shot, publish review/index.html, stop at G2. When the judge ran, put judge.reflex_seen beside each direction\'s reflex line (data-field="reflex-seen").',
 }

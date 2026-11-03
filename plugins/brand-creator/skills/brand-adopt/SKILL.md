@@ -31,6 +31,11 @@ RULES: work under the round/project dir only; never edit adoption targets before
 2. Add what no search finds, one row each: `adoption add --repo <label> --file <path> --find "<text>" --change "<sentence>"`
    (a platform rule the repository gets wrong, an icon picked at runtime, a size that drifted from the platform's page:
    the pack follows the platform, the drift becomes a row).
+   When the project has a kit and the owner wants it in a repository: `adoption add --repo <label> --kit`.
+   For a redesign of an existing site, before any change: `adoption wiring --repo <label> --before [--page <local URL>]`
+   records its links, form fields, handlers, test hooks, ids and scripts (read only, no gate; the repository is surveyed
+   first). A `--page` is a page of the owner's own dev or preview server, on this machine, and can be repeated. The record
+   is the baseline: replacing it (`--again`) is the owner's call.
 3. Show ADOPTION.md's counts and groups, and the rows that act on live services (step 5). Stop. Nothing is applied
    because a list exists.
 
@@ -45,6 +50,15 @@ RULES: work under the round/project dir only; never edit adoption targets before
 4. The implementer: create the owner's branch; work row by row, finding each place **by its content** (the Find
    column), never by the line number; a row whose text is gone is reported "not done", never guessed. Files from the
    pack are copied, never redrawn or re-exported. `adoption status --set <rows>=doing` as rows are made.
+   A Brand kit row: run `kit status --repo <path>` and copy exactly the files of its copy list (`mkdir -p` then `cp`, one
+   file at a time; an owner file the repository already has is never overwritten). When the brand changed and dropped a
+   generated file, `kit status` also names files left over from the older kit; they are not on the copy list: move each
+   to `removed-<date>/` in that repository, keeping its path inside that folder (`removed-<date>-2/` when a file is
+   already there; never delete one), then run `kit status --repo <path>` again, and it must say current. Never copy into
+   `~/.claude/skills` or any global folder. The kit is not committed.
+   A redesign of an existing site: the implementer ends with `adoption wiring --repo <label> --after`, with the same `--page`
+   URLs or none (it then reads the pages of the before record again, so the owner's local server must be running; if it
+   is not, report it, and the record is never skipped).
 5. Never pass `--no-verify` or any other hook skip. A hook that fails for an unrelated reason is reported; fixing it is a
    separate change, made only if the owner agrees.
 
@@ -54,6 +68,12 @@ A fresh pass that did not do the implementation (you after re-reading the diff, 
 gate). It writes nothing; it reports.
 
 - `cmp` every file copied from the pack against the pack's file; any difference fails the row.
+- `kit status --repo <path>` exit 0 is the byte comparison of a kit row.
+- For a redesign of an existing site, `adoption wiring --repo <label> --compare` (it reads the repository now and writes
+  nothing): any item it lists as lost and not recorded as dropped fails the review. Put the item back in the fix pass, or
+  list it under "Decisions for you" with a recommendation. A drop is the owner's decision, recorded with
+  `adoption wiring --repo <label> --drop "<item>::<the owner's reason>"`, in the owner's words, never by the implementer or
+  the reviewer.
 - Size-check the copied lockups and icons in the target (dimensions, the platform's slot).
 - Run the repository's own build and tests (from its README, package scripts, Makefile or CI config), and quote the
   commands and their exit codes. Build and run the product to see the real icon where the platform allows it; read the

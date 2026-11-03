@@ -7,6 +7,11 @@ Rows are numbered by position and are append-only. Progress (to do, doing, done)
 row put in the middle, taken out or moved would move statuses silently. Two pins stop that: `nrows` (the row count) and `pins` (the start of
 every row's identity, `repo|category|file`, keyed by number). `verify()` fails on any difference. Only `adoption survey` adds rows, at the end.
 Line numbers are the survey's: they may drift, so every row also carries `find`, a content excerpt to look for.
+`wiring` is the record of `brand-creator adoption wiring` (what a redesign must keep: links, form fields, handlers, test hooks, ids, scripts), one entry per
+repository id with a `before` and an `after` record and the owner's `dropped` items (item -> the reason, in the owner's words). It holds the repository's own
+values, so it is in TARGET_KEYS; `verify()` checks its shape, `wiring_lost()` says what a redesign lost, and ADOPTION.md shows it (`wiring_section()`).
+A `kit` row (`adoption add --repo LABEL --kit`) is the brand kit's copy into one repository: it covers the whole kit folder, so it has no lines, and a survey neither adds nor
+changes it (it is not in SURVEYED). ADOPTION.md shows its Lines cell as "the whole folder".
 """
 from __future__ import annotations
 
@@ -15,6 +20,7 @@ import re
 from pathlib import Path
 
 from _common import EXIT_USAGE, CliError
+from wiring import kind_counts
 
 FILE = "adoption.json"
 DOC = "ADOPTION.md"
@@ -28,17 +34,18 @@ CATEGORIES = [
     ("path", "Icon and logo files"),
     ("meta", "Package and platform metadata"),
     ("badge", "README badges and header images"),
+    ("kit", "Brand kit"),         # written by `adoption add --repo LABEL --kit` (the copy of the brand kit into a repository); never touched by a survey
     ("change", "Code change"),    # written by hand with `adoption add` (a change no search finds: logic, a platform rule); never touched by a survey
 ]
-SURVEYED = [c for c, _l in CATEGORIES if c != "change"]
+SURVEYED = [c for c, _l in CATEGORIES if c not in ("kit", "change")]
 CATEGORY_LABEL = dict(CATEGORIES)
 # keys that hold the old values of the target repos by design: the cascade search does not read them
-TARGET_KEYS = ("find", "terms", "identifiers", "kept")
+TARGET_KEYS = ("find", "terms", "identifiers", "kept", "wiring")
 
 
 def empty(slug: str) -> dict:
     return {"schema": SCHEMA, "slug": slug, "repos": [], "terms": {"names": [], "colours": []}, "survey": {}, "nrows": 0, "pins": {},
-            "rows": [], "progress": {}, "seen": {}, "kept": [], "identifiers": [], "accounting": {}}
+            "rows": [], "progress": {}, "seen": {}, "kept": [], "identifiers": [], "accounting": {}, "wiring": {}}
 
 
 def path(project: Path) -> Path:
@@ -148,7 +155,57 @@ def verify(doc: dict) -> list[str]:
     acc = doc.get("accounting") or {}
     if acc and acc.get("hits") != acc.get("in_rows", 0) + acc.get("kept", 0):
         bad.append(f"accounting: {acc.get('hits')} hits, {acc.get('in_rows')} in rows, {acc.get('kept')} kept: every hit must be a row or kept")
+    bad += verify_wiring(doc)
     return bad
+
+
+def verify_wiring(doc: dict) -> list[str]:
+    """The `wiring` record (`adoption wiring`): one entry per surveyed repository id, each holding a before and an after record whose `items` map an
+    item (`kind:value`) to the files that held it. Only the shape is checked here."""
+    wiring = doc.get("wiring", {})
+    if not isinstance(wiring, dict):
+        return [f"wiring is {type(wiring).__name__}, not an object keyed by repository id"]
+    bad: list[str] = []
+    known = {r.get("id") for r in doc.get("repos", []) if isinstance(r, dict)}
+    for rid, entry in wiring.items():
+        if rid not in known:
+            bad.append(f"wiring names repository {rid!r}, which was never surveyed")
+        elif not isinstance(entry, dict):
+            bad.append(f"wiring of {rid} is not an object")
+        else:
+            for which in ("before", "after"):
+                rec = entry.get(which)
+                if rec is None:
+                    continue
+                items = rec.get("items") if isinstance(rec, dict) else None
+                if not isinstance(items, dict):
+                    bad.append(f"wiring of {rid}: the {which} record has no `items` object")
+                elif not all(isinstance(files, list) and all(isinstance(f, str) for f in files) for files in items.values()):
+                    bad.append(f"wiring of {rid}: an item of the {which} record does not map to a list of strings")
+                pages = rec.get("pages") if isinstance(rec, dict) else None
+                if pages is not None and not (isinstance(pages, list) and all(isinstance(u, str) for u in pages)):
+                    bad.append(f"wiring of {rid}: the `pages` of the {which} record are not a list of strings")
+            dropped = entry.get("dropped")
+            if dropped is not None:
+                if not isinstance(dropped, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in dropped.items()):
+                    bad.append(f"wiring of {rid}: `dropped` is not an object of item to reason")
+                elif not all(v.strip() for v in dropped.values()):
+                    bad.append(f"wiring of {rid}: an item is dropped with an empty reason: a loss is acceptable only with the owner's reason")
+    return bad
+
+
+def wiring_records(doc: dict) -> list[tuple[str, str, dict]]:
+    """(repository id, label, entry) of each surveyed repository that has a before record, in the order of the survey. Call it when `verify_wiring` is empty."""
+    held = doc.get("wiring") or {}
+    return [(r["id"], r["label"], held[r["id"]]) for r in doc.get("repos", []) if isinstance(held.get(r["id"]), dict) and held[r["id"]].get("before")]
+
+
+def wiring_lost(entry: dict, now) -> tuple[list[str], list[str]]:
+    """The items of the entry's before record that `now` (the after record's items, or what the repository holds today) lacks:
+    (those nobody dropped, those the owner dropped with a reason), each in the order of the before record."""
+    dropped = entry.get("dropped") or {}
+    gone = [i for i in entry["before"]["items"] if i not in now]
+    return [i for i in gone if i not in dropped], [i for i in gone if i in dropped]
 
 
 # ---------------------------------------------------------------- rendering
@@ -157,13 +214,19 @@ def cell(text: str) -> str:
     return re.sub(r"\s+", " ", str(text)).replace("|", "\\|").strip()
 
 
+def span(text: str) -> str:
+    """text as one inline code span: white space squashed, a longer fence when it holds backticks."""
+    t = re.sub(r"\s+", " ", str(text)).strip()
+    fence = "`" * (max((len(m) for m in re.findall(r"`+", t)), default=0) + 1)
+    pad = " " if t.startswith("`") or t.endswith("`") else ""
+    return f"{fence}{pad}{t}{pad}{fence}"
+
+
 def code(text: str, limit: int = 90) -> str:
     t = re.sub(r"\s+", " ", str(text)).strip()
     if len(t) > limit:
         t = t[:limit - 1] + "…"
-    fence = "`" * (max((len(m) for m in re.findall(r"`+", t)), default=0) + 1)
-    pad = " " if t.startswith("`") or t.endswith("`") else ""
-    return cell(f"{fence}{pad}{t}{pad}{fence}")
+    return cell(span(t))
 
 
 def ranges(lines: list[int]) -> str:
@@ -186,7 +249,7 @@ def repo_label(doc: dict, rid: str) -> str:
 
 
 TEMPLATE = Path(__file__).resolve().parents[2] / "templates" / "ADOPTION.md"
-PLACEHOLDERS = ("name", "status", "repos", "about", "groups", "drift", "rows", "kept")
+PLACEHOLDERS = ("name", "status", "repos", "about", "groups", "drift", "rows", "wiring", "kept")
 
 
 def frame() -> str:
@@ -199,6 +262,28 @@ def frame() -> str:
     if missing:
         raise CliError(EXIT_USAGE, f"internal error: the template {TEMPLATE} lacks the placeholders {missing}")
     return tpl
+
+
+def wiring_section(doc: dict) -> str:
+    """The section "## Wiring kept": per repository with a before record one line of counts per kind (before and after), and under it one line per item the
+    redesign lost: dropped with the owner's reason, or lost and not recorded. Empty when no repository has a before record, or the record's shape is wrong (`verify` says so).
+    Every line holds the repository's values, so it carries MARK: the cascade reads it as a record."""
+    recs = [] if verify_wiring(doc) else wiring_records(doc)
+    if not recs:
+        return ""
+
+    def counts(which: str, rec: dict) -> str:
+        return f"{which} ({rec.get('date', 'undated')}) " + ", ".join(f"{k} {n}" for k, n in kind_counts(rec["items"]).items())
+    L = ["## Wiring kept", ""]
+    for _rid, label, entry in recs:
+        after = entry.get("after")
+        L.append(f"- `{label}`: {counts('before', entry['before'])}; " + (counts("after", after) if after else "no after record yet") + f" {MARK}")
+        if after:
+            lost, dropped = wiring_lost(entry, after["items"])
+            for item in (i for i in entry["before"]["items"] if i in lost or i in dropped):
+                fate = "dropped, " + " ".join(entry["dropped"][item].split()) if item in dropped else "lost, not recorded"
+                L.append(f"  - {span(item)}: {fate} {MARK}")
+    return "\n".join(L)
 
 
 def render(doc: dict, name: str) -> str:
@@ -226,6 +311,8 @@ def render(doc: dict, name: str) -> str:
             sn = seen_of(doc, r)
             if r["category"] == "change":
                 where = ranges(r.get("lines", [])) or "no line given"
+            elif r["category"] == "kit":
+                where = "the whole folder"
             else:
                 where = f"{sn['hits']} file(s)" if r["category"] == "path" else (ranges(sn["lines"]) or "no match now")
             L.append(f"| {r['n']} | {status_of(doc, r['n'])} | {cell(CATEGORY_LABEL[r['category']])} | {cell(repo_label(doc, r['repo']))} | "
@@ -247,6 +334,7 @@ def render(doc: dict, name: str) -> str:
     else:
         K.append("Nothing was kept out.")
     out["kept"] = "\n".join(K)
+    out["wiring"] = wiring_section(doc)
     # one pass over the frame: a value that happens to contain "{{...}}" (a file name, a Find excerpt) is never substituted again
     text = re.sub(r"\{\{(" + "|".join(PLACEHOLDERS) + r")\}\}", lambda m: out[m.group(1)], frame())
     return re.sub(r"\n{3,}", "\n\n", text).rstrip("\n") + "\n"

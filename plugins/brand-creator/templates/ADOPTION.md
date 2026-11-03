@@ -12,6 +12,8 @@
 
 {{rows}}
 
+{{wiring}}
+
 ## How this list is applied
 
 Nothing in a repository changes until the owner asks for it (gate G6), and then only on a branch the owner names.

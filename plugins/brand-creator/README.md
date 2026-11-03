@@ -10,6 +10,9 @@ describe what you need. Claude shows how brands like yours look and you pick the
 different directions on one page and you pick one. Claude builds it and checks it: it renders the logo at real sizes and
 measures colour contrast.
 
+Then it takes your brand onto the web: sample pages of your site in your brand, a check of any page against it, and a
+brand kit that your website's code carries, so the pages built there stay on brand.
+
 ## Install
 
 ```text illustrative
@@ -45,8 +48,11 @@ The whole walk-through: [Make your first brand](docs/manual/getting-started/make
 | "favicons from my logo.svg" | you or Claude | Icons and social images from a logo you already have, no project needed |
 | "name ideas for my bakery", "is the name X taken" | you or Claude | Name ideas, or a check on a name you have |
 | "generate the brand book" | you or Claude | A brand book page built from your project |
+| "sample pages for my website" | you or Claude | Real sites you like first, then your first screen and pages in your brand, each choice marked as a rule or an example |
+| "write the brand kit" | you or Claude | Your brand in one folder your website's code can carry, with a step-by-step recipe for a page |
 | `/brand-creator:round`, `status`, `check`, `review` | you only | The next round, where you are, every check, a review as one list |
-| `/brand-creator:brand-adopt` | you only | A read-only look at where the brand belongs in your repositories |
+| `/brand-creator:check --page <page>` | you only | Where a page you or someone else built breaks your brand: colours, fonts, logo, claims |
+| `/brand-creator:brand-adopt` | you only | A read-only look at where the brand belongs in your repositories, then, when you say go, the brand and its kit applied on a branch you name |
 | `/brand-creator:launch` | you only | Your launch checklist, one step at a time |
 
 Every command, with its arguments: [Commands](docs/manual/reference/commands.md). How far to go (Quick, Standard or
@@ -66,11 +72,14 @@ Full): [Choose a tier](docs/manual/getting-started/choose-a-tier.md).
   you agree. Boards go to claude.ai as a private page only if you allow it.
 - **Files it writes.** Your brand project folder, and the plugin's data folder for the tools. Your product repositories
   change only after you say go, on a branch you name.
+- **A brand kit, if you ask for one.** A skill for your brand (`.claude/skills/<brand>-brand/`) in your brand project and,
+  once you apply it, in your product repository, so Claude working there builds in your brand.
 - **Connectors.** None needed, and no MCP server ships: [CONNECTORS.md](CONNECTORS.md).
 
 ## What it never does
 
 - Buy a domain, file a trademark, register a handle or contact anyone. It hands you each step instead.
+- Build or publish your real website. It makes sample pages and a kit; your site is built in its own repository.
 - Commit, push or delete on its own. Replaced files move to a dated folder.
 - Call a name "available", or a print file "print-ready".
 
@@ -90,6 +99,8 @@ More: [Troubleshooting](docs/manual/reference/troubleshooting.md).
 ## Learn more
 
 - [Manual](docs/manual/README.md)
+- [Take your brand to the web](docs/manual/getting-started/take-your-brand-to-the-web.md): your site, a page check and your
+  brand kit, step by step
 - [Platform support](docs/manual/reference/platform-support.md): macOS full, Linux tested in a container, Windows untested
 - [Costs](docs/manual/reference/costs.md)
 - [Changelog](CHANGELOG.md)

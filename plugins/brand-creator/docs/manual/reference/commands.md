@@ -1,9 +1,17 @@
 # Commands
 
-Everything brand-creator adds to Claude Code. "You only" means it runs only when you type it; "you or Claude" means
-Claude can also start it when your request matches. [Glossary](glossary.md) explains words like tier, board and round.
+Everything brand-creator adds to Claude Code. A command is what you type in the Claude Code chat, starting with `/`.
+"You only" means it runs only when you type it; "you or Claude" means Claude can also start it when your request
+matches. [Glossary](glossary.md) explains words like tier, brief, board and round.
+
+You don't need most of this page. To start, say what you want, such as "a logo for my bakery". To pick up again later,
+open Claude Code in your project's folder and say "go on with my brand". `/brand-creator:status` shows where you are
+and what comes next.
 
 ## Commands and skills
+
+In the Arguments column, words in square brackets are optional, `|` separates choices you pick one of, and words in
+angle brackets stand for what you fill in. So `/brand-creator:round` and `/brand-creator:round refine` both work.
 
 | Command | Starts | What it does | Arguments |
 | --- | --- | --- | --- |
@@ -13,30 +21,35 @@ Claude can also start it when your request matches. [Glossary](glossary.md) expl
 | `/brand-creator:brand-book` | you or Claude | Builds, updates, reviews and exports the brand book | — |
 | `/brand-creator:setup` | you only | Installs the tools brand-creator needs, after showing what it will download and getting your yes | `[--force]` |
 | `/brand-creator:new` | you only | Starts a new brand project and asks up to three quick questions | `[slug]` |
-| `/brand-creator:round` | you only | Builds the next round of boards (the style board first, then directions, refinements and, in Standard and Full, a motion round) and stops for your decision | `[style\|pick\|refine\|motion] [what this round should answer]` |
+| `/brand-creator:round` | you only | Builds your next board and stops for your decision: the style board first, then directions and refinements (and, in Standard and Full, a motion round), then the boards for your website if your brief lists one | `[style\|pick\|refine\|motion\|site-refs\|site] [what this round should answer]` |
 | `/brand-creator:status` | you only | Shows where the project stands and what comes next | — |
-| `/brand-creator:check` | you only | Runs every check that applies, and optionally searches for leftovers of old values | `[<old value or phrase> ...]` |
+| `/brand-creator:check` | you only | Runs every check that applies, and optionally searches for leftovers of old values or checks one page against your brand | `[--page <file-or-folder-page-or-localhost-url>] [<old value or phrase> ...]` |
 | `/brand-creator:review` | you only | Reviews the latest work and gives you one list to approve | `[board\|book\|pack\|all] [panel]` |
-| `/brand-creator:brand-adopt` | you only | Looks at where your brand belongs in your product repositories, and changes them only when you ask | `[survey\|apply\|review\|status] [repository label]` |
+| `/brand-creator:brand-adopt` | you only | Looks at where your brand belongs in your product's code, and changes it only when you ask | `[survey\|apply\|review\|status] [repository label]` |
 | `/brand-creator:launch` | you only | Writes your launch checklist and hands it over one step at a time | `[--name <candidate>]` |
 
 Each command has a how-to page:
 
 - [Start a brand](../use/start-a-brand.md): `brand-creator`, `new`, `status`, `setup`
 - [Pick and refine a direction](../use/pick-and-refine-a-direction.md): `round`, `motion`
+- [Get reference pages for your site](../use/get-reference-pages-for-your-site.md): `round site-refs`, `round site`
 - [Name your brand](../use/name-your-brand.md): `brand-naming`
 - [Make icons and images from your logo](../use/make-icons-and-images.md): `brand-assets`
 - [Make the brand book](../use/make-the-brand-book.md): `brand-book`
-- [Apply the brand to your product](../use/apply-the-brand-to-your-product.md): `brand-adopt`
+- [Use your brand kit](../use/use-your-brand-kit.md): `kit`, and `brand-adopt status` for the copies of your kit
+- [Apply the brand to your product](../use/apply-the-brand-to-your-product.md): `brand-adopt`, and a redesign
 - [Launch your brand](../use/launch-your-brand.md): `launch`
 - [Check your project](../use/check-your-project.md): `check`, `review`
+- [Check a page against your brand](../use/check-a-page.md): `check --page`
 
 ## Workflows
 
-A workflow runs several agents at once. None starts without your yes: Claude first tells you how many agents, which
-models, how big and roughly what it costs. Details: [Agents and workflows](agents-and-workflows.md).
+An agent is a separate helper Claude starts for one job, and a workflow runs several agents at once. You don't type
+these names: Claude starts each one from the command in the second column, and only after your yes, once it has told
+you how many agents, which models, how big and roughly what it costs. Each agent costs about what the same step would
+cost in your own session. Details: [Agents and workflows](agents-and-workflows.md).
 
-| Command | How it starts | What it does |
+| Workflow | How it starts | What it does |
 | --- | --- | --- |
 | `/brand-creator:directions` | Claude, from the `brand-creator` skill, after your yes | One designer per direction, then one judge that advises. Ends before you pick |
 | `/brand-creator:review-panel` | Claude, when you type `/brand-creator:review panel`, after your yes | One read-only reviewer per angle, then one judge. Ends with one list for you to approve |
@@ -45,13 +58,14 @@ models, how big and roughly what it costs. Details: [Agents and workflows](agent
 
 ## Agents
 
-Agents are helpers that workflows start. They never start on their own, and none can start another agent.
+Agents are helpers that workflows start, or that Claude starts one at a time after your yes. They never start on their
+own, none can start another agent, and you don't need to start one yourself.
 
 | Agent | Used by | What it does |
 | --- | --- | --- |
 | `brand-creator:brand-designer` | directions | Builds one direction board in its own folder |
 | `brand-creator:brand-judge` | directions, review-panel, naming | Compares options and gives advice you decide on. Read only |
-| `brand-creator:brand-reviewer` | review-panel, adopt | Checks work and reports; never edits a file |
+| `brand-creator:brand-reviewer` | review-panel, adopt, and a refine, motion or site round after your yes | Checks work and reports; never edits a file. In a site round, it gives the cold review of each version of your first screen |
 | `brand-creator:brand-researcher` | naming | Screens name candidates against public sources, only after you agree to online lookups |
 | `brand-creator:brand-inventory` | directions | Lists where your brand appears in your product repositories. Read only |
 | `brand-creator:brand-implementer` | adopt | Applies the approved changes to one repository, on your branch |
@@ -71,23 +85,40 @@ Agents are helpers that workflows start. They never start on their own, and none
 
 | Argument | What it does | Default |
 | --- | --- | --- |
-| `slug` | The project's folder name | `brand-<date>` when you give none or the name is still open |
+| `slug` | A short name for the project's folder, such as `my-bakery` | `brand-<date>` when you give none or the name is still open |
 
 ## round
 
 > /brand-creator:round refine
+>
+> /brand-creator:round site-refs
 
 | Argument | What it does | Default |
 | --- | --- | --- |
-| `style`, `pick`, `refine` or `motion` | Which kind of board to build. `motion` is a round after you approve the design that tries your logo's move | Worked out from your project |
+| `style`, `pick`, `refine`, `motion`, `site-refs` or `site` | Which kind of board to build. `motion` is a round after you approve the design that tries your logo's move. `site-refs` and `site` are the two rounds for your website, below | Worked out from your project |
 | text | The question this round should answer | Worked out from your project |
+
+The two rounds for your website need the Standard or Full tier, a site in your brief, and your OK on your brand's
+rules: the one list, such as which colours text may sit on, that Claude shows once your logo is approved. You can also
+ask for them in your own words.
+
+- **`site-refs`** shows four to six groups of real websites that do the job your visitors come for, each site with what
+  to take (how the page is organised) and what to leave (its look and its words). It builds no page of your site, and
+  looks online only after your yes.
+- **`site`**, after you pick references or say "skip the references", builds two or three versions of the first screen
+  of your home page; typed again after your pick, it builds your other pages and marks each choice as a brand rule or an
+  example. It never builds or publishes your real site, and marks a choice as a rule only when you decided it.
+
+Steps: [Get reference pages for your site](../use/get-reference-pages-for-your-site.md).
 
 ## motion
 
 > brand-creator motion --off "We only show the logo on paper and in the shop window"
 
-Records, once, that nothing moves. This is a `brand-creator` command, not a slash command: Claude runs it when you say
-that nothing moves, and you can type it too. Without arguments it says where you stand: `motion: on (signature: <name>)`,
+Records, once, that nothing moves. In Standard and Full, Claude asks once whether your logo moves, such as a short
+animation on your site or in your app: you answer with a motion round, or by saying that nothing moves. This is a
+`brand-creator` command, not a slash command: you don't type it in the chat, Claude runs it for you when you say that
+nothing moves. Without arguments it says where you stand: `motion: on (signature: <name>)`,
 `motion: off (nothing moves: <reason>)` or `motion: not decided`. With `--off` it prints `recorded: nothing moves (<reason>)
 in motion/motion.json`.
 
@@ -99,10 +130,17 @@ in motion/motion.json`.
 ## check
 
 > /brand-creator:check "Old Name"
+>
+> /brand-creator:check --page pages/index.html
 
 | Argument | What it does | Default |
 | --- | --- | --- |
+| `--page <page>` | Checks one page against your brand instead of the project: a page in your project, a page of a site built elsewhere on your computer, or a page your own computer serves while someone works on the site (a local address, such as `http://localhost:3000/`). A page on the internet is refused. For other screen widths, in pixels, ask in words, such as "only 390 and 1440" | Off: the project's checks run |
 | an old value or phrase | Also searches the whole project for leftovers of it. Repeat for each one | Off: only the checks run |
+
+With `--page`, Claude opens the page at several sizes, from a phone to a wide screen, in light and dark, and lists what
+breaks your brand, each with its fix, plus warnings about what makes the page look like any template. It never changes
+your page, sends nothing online and starts no extra agents; [Page check](page-check.md) has every rule.
 
 ## review
 
@@ -113,17 +151,44 @@ in motion/motion.json`.
 | `board`, `book`, `pack` or `all` | What to review | The latest work |
 | `panel` | Also offers a review panel. A panel that uses extra agents starts only after you see the size and cost and say yes | Off |
 
+## kit
+
+> Write the brand kit
+
+The brand kit is your brand in one folder, and a copy of it goes into your website's or app's code. This is a
+`brand-creator` command, not a slash command: you ask in your own words, and Claude runs it. Claude offers the kit when
+you approve your brand book; it needs that approved book and your design tokens (your colours, fonts and sizes as files
+a program reads). Any tier can have a kit, but putting it into your product needs the Full tier. Steps:
+[Use your brand kit](../use/use-your-brand-kit.md).
+
+| You say | Claude runs | What it does | What it never does |
+| --- | --- | --- | --- |
+| "Write the brand kit" | `kit build` | Shows what it would write. After your go, it writes the kit into a hidden folder of your project, `.claude/skills/<your brand>-brand/`. Asked again after your brand changed, it writes the next version | Writes nothing before your go, and nothing outside your project. Never overwrites the files that are yours, and never deletes a file |
+| "Check the kit" | `kit check` | Says whether the kit is whole: the made-for-you files are as Claude built them, every link inside it works, your own pages are filled in with their rules and examples marked, and the version numbers agree. If your brand changed since the last build, it says "not verified" | Changes nothing in the kit |
+| "Is my website's copy of the kit current?" | `kit status` | Compares the copy in each of your product's code folders with your kit, file by file and exactly, and says `current`, `not installed` or `not current`, with the list of files to copy | Writes and copies nothing, in your product or your project: the kit goes in with `/brand-creator:brand-adopt`. It refuses your home folder itself, Claude's own settings folder (`~/.claude`) and your brand project |
+| "Test my brand kit" | a test build, then the page check | Builds a first screen and one more part of a page from the kit alone, in a temporary folder outside your project, then checks both against your brand | Starts only when you ask, and uses no extra agents |
+
 ## brand-adopt
 
 > /brand-creator:brand-adopt survey
+
+Puts your brand into your product's repository: the folder on your computer that holds your website's or app's code.
+It needs the Full tier, changes your code only after you ask, on a branch you name, and never saves the changes into
+your code's history (commit), joins them into your main version (merge) or sends them online (push) unless you ask for
+each one.
 
 | Argument | What it does | Default |
 | --- | --- | --- |
 | `survey` | Reads your repositories, changes nothing, and lists every place your brand belongs | Shows status and the next step when you give none |
 | `apply` | Applies the list, only when you ask, on a branch you name | — |
 | `review` | Reviews what was applied before anything is committed | — |
-| `status` | Shows which rows are done | — |
-| a repository label | Which repository | All of them |
+| `status` | Counts the places done, doing and to do, and, with your brand kit on the list, says whether each repository's copy of it is `current`, `not installed` or `not current`. It changes nothing | — |
+| a repository label | Which repository, by the short name it got in the survey | All of them |
+
+**A redesign.** Tell Claude it's a redesign before you ask to apply, and Claude keeps a redesign record: it reads your
+code before and after the change, without changing it, and notes what your site relies on that doesn't show on screen,
+such as where links go and the names of form fields. The review fails anything gone that you gave no reason for, and
+only you decide that something may go. Steps: [Apply the brand to your product](../use/apply-the-brand-to-your-product.md).
 
 ## launch
 

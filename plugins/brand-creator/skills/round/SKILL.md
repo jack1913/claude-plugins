@@ -1,7 +1,7 @@
 ---
 name: round
-description: Builds the next round of boards for the current brand project, starting with the style board before anything is drawn, then the boards of directions and refinements, and the motion board of a brand's signature move. It checks the board, takes screenshots in four views, publishes the review page and stops for the owner's decision. Runs only when typed as /brand-creator:round.
-argument-hint: "[style|pick|refine|motion] [what this round should answer]"
+description: Builds the next round of boards for the current brand project, starting with the style board before anything is drawn, then the boards of directions and refinements, and the motion board of a brand's signature move and, when the brief lists a site, the website references board and the site round's reference pages. It checks the board, takes screenshots in four views, publishes the review page and stops for the owner's decision. Runs only when typed as /brand-creator:round.
+argument-hint: "[style|pick|refine|motion|site-refs|site] [what this round should answer]"
 disable-model-invocation: true
 allowed-tools: Bash(brand-creator *)
 ---
@@ -11,19 +11,23 @@ allowed-tools: Bash(brand-creator *)
 Thin wrapper over the orchestrator's "Round mechanics". Arguments: `$ARGUMENTS` (board kind and the question this
 round answers; infer both from BRAND-STATE.md when empty). Kinds: `style` (round 0, the style research before anything
 is drawn), `pick` (round 1 and after a full rejection), `refine` and `motion` (a round after G3 that tries the signature
-move as variants; steps below, "A motion round").
+move as variants; steps below, "A motion round"), and `site-refs` (the website references board: a round after G4 in
+Standard and Full, only when the brief lists a site), and `site` (the site round: the hero in two or three variants, then the
+other pages; steps below, "A site round").
 
 1. Read `${CLAUDE_PLUGIN_ROOT}/skills/brand-creator/SKILL.md` (Round mechanics, Gates, Response template) and
    `${CLAUDE_PLUGIN_ROOT}/skills/brand-creator/references/board-contract.md`. Then the phase file for where the
    project is: `references/phases/01s-style-research.md` (round 0, the style board),
-   `references/phases/03-strategy-directions.md` (round 1 or a reset), `04-selection.md`, `05-refinement.md`, or
-   `07-tokens.md` ("The motion round", for a motion round).
+   `references/phases/03-strategy-directions.md` (round 1 or a reset), `04-selection.md`, `05-refinement.md`,
+   `07-tokens.md` ("The motion round", for a motion round), `07w-website-references.md` (a website references board) or
+   `07p-site-round.md` (a site board).
 2. Find the project: `brand-creator --data "${CLAUDE_PLUGIN_DATA}" state --project-auto`.
    Read BRAND-STATE.md, brief/BRIEF.md and FACTS.md fully. No project → say so and offer `/brand-creator:new`.
 3. Pick the round number N. The style board is round 0 (`rounds/r0/`): it comes first, while G1s is not recorded, even in
    a project that already has rounds (the hook keeps `rounds/r0/` writable while G1s is empty). Every other round is the
    highest `rounds/rK/` + 1. From round 2: `cp -R rounds/r<N-1> rounds/r<N>` first; never edit an earlier round. A motion
-   round is the exception (below).
+   round is the exception (below). A website references board is another: a new, empty folder (`mkdir rounds/r<N>`), not a
+   copy. So is the first site board of each stage (below, "A site round").
 4. Check the gate before drawing anything. Before a round 1 board, or the pick board of a reset round, run
    `brand-creator --data "${CLAUDE_PLUGIN_DATA}" state --project <dir> --require G1s`. Exit 1 means the owner has
    not picked a style yet: build the style board instead (round 0), or after a full rejection a new style board in the next
@@ -35,13 +39,26 @@ move as variants; steps below, "A motion round").
    board, run `state --project <dir> --require G3` (exit 1: the design is not approved yet; say so and stop) and
    `brand-creator --data "${CLAUDE_PLUGIN_DATA}" motion --project <dir>`: `motion: off` means the owner recorded that
    nothing moves, so say a motion round contradicts it and stop (changing it is an edit of `motion/motion.json`, then
-   `check --cascade`); `on` or `not decided` go on.
+   `check --cascade`); `on` or `not decided` go on. Before a website references board, run
+   `state --project <dir> --require G4` (exit 1: the system rules are not approved yet; say so and stop), and stop when the
+   tier is Quick or `brief/BRIEF.md` lists no site under `Required surfaces:` (the owner may add one in their own words).
+   Then read `state --project <dir> --get site_research`: `auto` or not set (an older project has no such key, and the
+   command exits 1) means the owner has not been asked yet, so ask the online-research question first and record the
+   answer, as the phase file says. Before a site board, run
+   `state --project <dir> --require G4w` (exit 1: the website references come first; say so and stop), and stop when the
+   tier is Quick or `brief/BRIEF.md` lists no site under `Required surfaces:`. A G4w that is `skipped by owner` goes on.
 5. Build `rounds/r<N>/board.html`: round 0 (and a reset round's style research) from
    `${CLAUDE_PLUGIN_ROOT}/templates/style-board.html` (`data-board="style"`); a motion round from
-   `${CLAUDE_PLUGIN_ROOT}/templates/motion-board.html` (`data-board="motion"`), once its variants are made; otherwise from
+   `${CLAUDE_PLUGIN_ROOT}/templates/motion-board.html` (`data-board="motion"`), once its variants are made; a website
+   references round from `${CLAUDE_PLUGIN_ROOT}/templates/site-refs-board.html` (`data-board="site-refs"`), once its sites
+   are captured; a site round from `${CLAUDE_PLUGIN_ROOT}/templates/site-board.html` (`data-board="site"`), once its pages are
+   made, captured and checked; otherwise from
    `${CLAUDE_PLUGIN_ROOT}/templates/round-page.html` (`data-board="pick"` in round 1 and after a full rejection, else
    `refine`); deep boards per direction from `templates/board.html`. Delete optional blocks that do not apply; fill every
    `[[fill: ...]]`. The style research needs web access: without web tools say so and stop, and never invent references.
+   The website references need web access too, and the owner's online-research answer first: without web tools say so and
+   stop, and never invent a site. A site round needs no web access: its pages are built from local files and make no request
+   to another address.
    Marks that need drawing are drawn before the board shows them, on a drawing engine, never silently by you:
    `${CLAUDE_PLUGIN_ROOT}/skills/brand-creator/references/drawing-engines.md` (the style board needs none).
 6. Lint until exit 0: `... board-lint rounds/r<N>/board.html --project <dir>`.
@@ -52,12 +69,21 @@ move as variants; steps below, "A motion round").
    this round's sections. Round 0, and a reset round's style board: copy the style board (`cp rounds/r<N>/board.html
    review/index.html`). A motion board: copy it the same way, then give each picture a `data:image/png;base64,...` src of
    the same file and each live-page link the path seen from `review/` (`../rounds/r<N>/<name>/index.html`; it opens from
-   this machine only). Lint it either way (`board-lint review/index.html --round <N>`). Upload only after the owner's yes: with `review_surface`
+   this machine only). A website references board: copy it the same way (its pictures are already inlined). A site board: copy it the same way,
+   then give each still a `data:image/png;base64,...` src of the same file and each live link the path seen from `review/`
+   (`../rounds/r<N>/<name>/index.html`; it opens from this machine only). Lint each copy
+   (`board-lint review/index.html --round <N>`). Upload only after the owner's yes: with `review_surface`
    still `auto`, ask the one upload question first and use the local file until it is answered (the orchestrator's
    Review surface). Record `review_url` with `state --set`.
 9. Update BRAND-STATE.md (phase, Directions table, Still open), then reply with the response template and stop at the
    gate. Do not start the next round in the same turn. After the owner answers the style board, restate the pick and
    record it with `state --record G1s "<decision>"` before the next pick board (round 1, or the pick board of a reset round).
+   After the owner answers a website references board, restate the pick and record it with `state --record G4w
+   "<decision>"` before any page of the site is built; a skip is recorded as `skipped by owner` only when the owner asked
+   for it in their own words, never on your own. After the owner picks a hero on a site board, restate the pick and write it
+   into `DECISIONS.md`; the pages come in the next turn. After the owner approves the pages and their tags, restate them and
+   record `state --record G4p "<decision>"`, then follow "Approval" in the phase file (`freeze r<N> --name approved-site`,
+   `site approve`).
 
 ## A motion round
 
@@ -93,3 +119,41 @@ what follows the approval are in `references/phases/07-tokens.md` ("The motion r
    (05-refinement's loop, at most one reviewer call). When the owner approves a variant, follow "The motion round" in
    `07-tokens.md`: build the tokens it needs, run the variants' proofs, stills and the lint again so that the round's record is
    current, freeze the round as `approved-motion`, then copy the variant into `motion/` and record `motion/motion.json`.
+
+## A site round
+
+The site's reference pages, after G4w, in Standard and Full, when the brief lists a site. The order of the step, the cold
+review and the choices are in `references/phases/07p-site-round.md`; the board's rules are in `references/board-contract.md`
+("Site board"). Make the pages before the board, in this order:
+
+1. The first board of each stage, the hero board and then the pages board, is a new, empty folder (`mkdir rounds/r<N>`):
+   never a copy of an earlier round. A later board of the same stage starts as `cp -R rounds/r<N-1> rounds/r<N>` of the
+   previous board of that stage; then make `capture`, `page-check` and the cold review again, because each is tied to the
+   page's path.
+2. One folder per hero variant, `rounds/r<N>/<Name>/`, or per page, `rounds/r<N>/<id>/`. A variant is named by a word of 3 or
+   more letters (letters, digits, `-` and `_`; never "Variant 2"); a page by its page id (`start`, `pricing`). The first hero
+   board shows 2 or 3 variants. Each folder holds an `index.html` that loads `assets/tokens/tokens.css`, uses the approved
+   mark from `assets/logo/` and the fonts in `assets/fonts/`, takes its words from `FACTS.md` only (a number or status word
+   that is not there goes in a labelled `[data-sample]` element) and makes no request to another address. Its `<body>`
+   declares `data-layout` (an id of `references/page-layouts.json`, or `own:<word>`) and `data-page` (`start` for the home page).
+3. For each folder, in this order: `brand-creator --data "${CLAUDE_PLUGIN_DATA}" capture rounds/r<N>/<name>/index.html
+   --project <dir>`, then `... page-check rounds/r<N>/<name>/index.html --project <dir>` (fix a failing row in the page, or let
+   its card say `fail`; never `pass`), then the cold review: `rounds/r<N>/<name>/cold-review.md`, the verdict first
+   (`verdict: ship` or `verdict: fix`), `by: in-thread` by default and not blind. An agent (one
+   `brand-creator:brand-reviewer` call per hero variant, with the prompt fragment under **Review** in
+   `references/prompt-fragments.md`) only after the fleet gate and the owner's yes. Read every still before you say what the
+   page does. A page changed after any of the three needs them again.
+4. Build the board from the template: one card per variant (`data-site-variant="<name>"`) or page (`data-site-page="<id>"`)
+   with its four stills, the live link, its check line (`data-check="pass"` or `"fail"`, as its report says), the tells
+   found, the layout, the cold verdict and a vote; a hero card also has the reflex line and what it takes from the
+   references. The pages stage has `data-hero="<the picked variant>"` and a choices section that tags every choice `rule`
+   (it quotes where the owner decided it) or `example`. Hardest surface, My call, questions and reply as on every board.
+5. Lint (steps 6 and 7 above), shoot the board last: `shot` keeps one report, and `check` wants the one of the latest board.
+   Taking a still, a check or a cold review again after the lint makes its report stale: lint again.
+   A write to `BRAND-STATE.md` (the phase, `review_url`, a gate, the Directions table, Still open) does not: a `page-check`
+   report holds only its G4 rules (the G4 record and the "(rule)" lines), so only a change to those needs `page-check` on each
+   page of the round and then `board-lint rounds/r<N>/board.html --project <dir>` again. After the writes of steps 8 and 9
+   above, lint a pages board again when a rule of it cites a line only `BRAND-STATE.md` holds.
+6. Reply and stop. The owner picks or combines a hero, or says none of these (new variants, or a new references board and a
+   new G4w). The pages are built in the turn after the pick. The approved pages are references for whoever builds the real
+   site, never fill-in templates.

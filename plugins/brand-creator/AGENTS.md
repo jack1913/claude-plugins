@@ -20,6 +20,7 @@ No `CLAUDE.md` at this folder's root: `claude plugin validate --strict` rejects 
 | Entry point the skills call | `bin/brand-creator` |
 | Scripts and emitters | `scripts/`, `scripts/emitters/` |
 | The script contract: reports, exit codes, every tool's rules | `scripts/CONTRACT.md` |
+| The page check (brand rules, generic tells) | `scripts/page_check.py`, `scripts/pagelib/`, `skills/brand-creator/references/page-tells.json` |
 | The safety hook and its guard | `hooks/hooks.json`, `scripts/guard.py` |
 | Files copied into brand projects (not docs) | `templates/` |
 | Tests | `tests/` (pytest in `tests/test_*.py`, `tests/node/`, `tests/smoke/`, `tests/docker/`) |

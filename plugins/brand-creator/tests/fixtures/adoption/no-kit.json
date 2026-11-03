@@ -1,0 +1,539 @@
+{
+  "schema": 1,
+  "slug": "acme",
+  "repos": [
+    {
+      "id": "r1",
+      "label": "shop",
+      "path": "../shop"
+    }
+  ],
+  "terms": {
+    "names": [
+      "Oldco",
+      "Old Co"
+    ],
+    "colours": [
+      "#123456",
+      "#0a0a0a"
+    ]
+  },
+  "survey": {
+    "date": "2026-10-17",
+    "heads": {
+      "r1": "no git head"
+    }
+  },
+  "nrows": 21,
+  "pins": {
+    "1": "r1|name|README.md",
+    "2": "r1|name|app.metainfo.xml",
+    "3": "r1|name|docs/notes.md",
+    "4": "r1|name|macos/Info.plist",
+    "5": "r1|name|package.json",
+    "6": "r1|name|public/manifest.webmanifest",
+    "7": "r1|name|src-tauri/tauri.conf.json",
+    "8": "r1|name|src/main/app.rs",
+    "9": "r1|colour|README.md",
+    "10": "r1|colour|public/manifest.webmanifest",
+    "11": "r1|colour|src/theme.css",
+    "12": "r1|path|assets/icons.appiconset",
+    "13": "r1|path|docs/img",
+    "14": "r1|path|public",
+    "15": "r1|path|src-tauri/icons",
+    "16": "r1|meta|app.metainfo.xml",
+    "17": "r1|meta|macos/Info.plist",
+    "18": "r1|meta|package.json",
+    "19": "r1|meta|public/manifest.webmanifest",
+    "20": "r1|meta|src-tauri/tauri.conf.json",
+    "21": "r1|badge|README.md"
+  },
+  "rows": [
+    {
+      "n": 1,
+      "category": "name",
+      "repo": "r1",
+      "file": "README.md",
+      "lines": [
+        1,
+        4,
+        6
+      ],
+      "find": "# Oldco App",
+      "change": "Replace the old name where people read it (titles, labels, copy). Identifiers (bundle id, package name, repository URL) are renames: see LAUNCH.md."
+    },
+    {
+      "n": 2,
+      "category": "name",
+      "repo": "r1",
+      "file": "app.metainfo.xml",
+      "lines": [
+        3,
+        4
+      ],
+      "find": "  <id>com.oldco.app</id>",
+      "change": "Replace the old name where people read it (titles, labels, copy). Identifiers (bundle id, package name, repository URL) are renames: see LAUNCH.md."
+    },
+    {
+      "n": 3,
+      "category": "name",
+      "repo": "r1",
+      "file": "docs/notes.md",
+      "lines": [
+        3,
+        4
+      ],
+      "find": "The old_co style name is only used in scripts. Nothing else to see; this file is also used to test that a plain mention counts.",
+      "change": "Replace the old name where people read it (titles, labels, copy). Identifiers (bundle id, package name, repository URL) are renames: see LAUNCH.md."
+    },
+    {
+      "n": 4,
+      "category": "name",
+      "repo": "r1",
+      "file": "macos/Info.plist",
+      "lines": [
+        5,
+        7
+      ],
+      "find": "  <string>Oldco</string>",
+      "change": "Replace the old name where people read it (titles, labels, copy). Identifiers (bundle id, package name, repository URL) are renames: see LAUNCH.md."
+    },
+    {
+      "n": 5,
+      "category": "name",
+      "repo": "r1",
+      "file": "package.json",
+      "lines": [
+        2,
+        4,
+        6
+      ],
+      "find": "  \"name\": \"oldco-app\",",
+      "change": "Replace the old name where people read it (titles, labels, copy). Identifiers (bundle id, package name, repository URL) are renames: see LAUNCH.md."
+    },
+    {
+      "n": 6,
+      "category": "name",
+      "repo": "r1",
+      "file": "public/manifest.webmanifest",
+      "lines": [
+        2,
+        3
+      ],
+      "find": "  \"name\": \"Oldco App\",",
+      "change": "Replace the old name where people read it (titles, labels, copy). Identifiers (bundle id, package name, repository URL) are renames: see LAUNCH.md."
+    },
+    {
+      "n": 7,
+      "category": "name",
+      "repo": "r1",
+      "file": "src-tauri/tauri.conf.json",
+      "lines": [
+        2,
+        3
+      ],
+      "find": "  \"productName\": \"Oldco App\",",
+      "change": "Replace the old name where people read it (titles, labels, copy). Identifiers (bundle id, package name, repository URL) are renames: see LAUNCH.md."
+    },
+    {
+      "n": 8,
+      "category": "name",
+      "repo": "r1",
+      "file": "src/main/app.rs",
+      "lines": [
+        2,
+        3,
+        4
+      ],
+      "find": "    println!(\"Welcome to Oldco App\");",
+      "change": "Replace the old name where people read it (titles, labels, copy). Identifiers (bundle id, package name, repository URL) are renames: see LAUNCH.md."
+    },
+    {
+      "n": 9,
+      "category": "colour",
+      "repo": "r1",
+      "file": "README.md",
+      "lines": [
+        8
+      ],
+      "find": "Colours: the accent is #123456 and the dark ground is #0a0a0a.",
+      "change": "Replace with the matching token value from assets/tokens/ (light and dark); check the contrast pair it sits in."
+    },
+    {
+      "n": 10,
+      "category": "colour",
+      "repo": "r1",
+      "file": "public/manifest.webmanifest",
+      "lines": [
+        4
+      ],
+      "find": "  \"theme_color\": \"#123456\",",
+      "change": "Replace with the matching token value from assets/tokens/ (light and dark); check the contrast pair it sits in."
+    },
+    {
+      "n": 11,
+      "category": "colour",
+      "repo": "r1",
+      "file": "src/theme.css",
+      "lines": [
+        2,
+        3,
+        4
+      ],
+      "find": "  --accent: #123456;",
+      "change": "Replace with the matching token value from assets/tokens/ (light and dark); check the contrast pair it sits in."
+    },
+    {
+      "n": 12,
+      "category": "path",
+      "repo": "r1",
+      "file": "assets/icons.appiconset",
+      "lines": [],
+      "find": "Contents.json, icon_16.png, icon_32.png",
+      "change": "Replace these 3 icon and logo file(s) with the pack's files and keep the file names the code refers to. No pack file has one of these names: map each to a slot in INVENTORY.md."
+    },
+    {
+      "n": 13,
+      "category": "path",
+      "repo": "r1",
+      "file": "docs/img",
+      "lines": [],
+      "find": "logo.png",
+      "change": "Replace these 1 icon and logo file(s) with the pack's files and keep the file names the code refers to. No pack file has one of these names: map each to a slot in INVENTORY.md."
+    },
+    {
+      "n": 14,
+      "category": "path",
+      "repo": "r1",
+      "file": "public",
+      "lines": [],
+      "find": "favicon.ico",
+      "change": "Replace these 1 icon and logo file(s) with the pack's files and keep the file names the code refers to. No pack file has one of these names: map each to a slot in INVENTORY.md."
+    },
+    {
+      "n": 15,
+      "category": "path",
+      "repo": "r1",
+      "file": "src-tauri/icons",
+      "lines": [],
+      "find": "icon.png",
+      "change": "Replace these 1 icon and logo file(s) with the pack's files and keep the file names the code refers to. No pack file has one of these names: map each to a slot in INVENTORY.md."
+    },
+    {
+      "n": 16,
+      "category": "meta",
+      "repo": "r1",
+      "file": "app.metainfo.xml",
+      "lines": [
+        3,
+        4,
+        5
+      ],
+      "find": "  <id>com.oldco.app</id>",
+      "change": "Check each slot against the new brand: name, description, icon path, theme and background colours, author, homepage."
+    },
+    {
+      "n": 17,
+      "category": "meta",
+      "repo": "r1",
+      "file": "macos/Info.plist",
+      "lines": [
+        4,
+        6,
+        8
+      ],
+      "find": "  <key>CFBundleName</key>",
+      "change": "Check each slot against the new brand: name, description, icon path, theme and background colours, author, homepage."
+    },
+    {
+      "n": 18,
+      "category": "meta",
+      "repo": "r1",
+      "file": "package.json",
+      "lines": [
+        2,
+        4,
+        5,
+        6
+      ],
+      "find": "  \"name\": \"oldco-app\",",
+      "change": "Check each slot against the new brand: name, description, icon path, theme and background colours, author, homepage."
+    },
+    {
+      "n": 19,
+      "category": "meta",
+      "repo": "r1",
+      "file": "public/manifest.webmanifest",
+      "lines": [
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "find": "  \"name\": \"Oldco App\",",
+      "change": "Check each slot against the new brand: name, description, icon path, theme and background colours, author, homepage."
+    },
+    {
+      "n": 20,
+      "category": "meta",
+      "repo": "r1",
+      "file": "src-tauri/tauri.conf.json",
+      "lines": [
+        2,
+        3,
+        5,
+        6
+      ],
+      "find": "  \"productName\": \"Oldco App\",",
+      "change": "Check each slot against the new brand: name, description, icon path, theme and background colours, author, homepage."
+    },
+    {
+      "n": 21,
+      "category": "badge",
+      "repo": "r1",
+      "file": "README.md",
+      "lines": [
+        3,
+        4
+      ],
+      "find": "[![build](https://img.shields.io/badge/build-passing-green)](https://example.com/ci)",
+      "change": "Check the header image and the badges: logo or banner from the pack, labels and colours for the new name."
+    }
+  ],
+  "progress": {},
+  "seen": {
+    "1": {
+      "hits": 3,
+      "lines": [
+        1,
+        4,
+        6
+      ]
+    },
+    "2": {
+      "hits": 2,
+      "lines": [
+        3,
+        4
+      ]
+    },
+    "3": {
+      "hits": 2,
+      "lines": [
+        3,
+        4
+      ]
+    },
+    "4": {
+      "hits": 2,
+      "lines": [
+        5,
+        7
+      ]
+    },
+    "5": {
+      "hits": 3,
+      "lines": [
+        2,
+        4,
+        6
+      ]
+    },
+    "6": {
+      "hits": 2,
+      "lines": [
+        2,
+        3
+      ]
+    },
+    "7": {
+      "hits": 2,
+      "lines": [
+        2,
+        3
+      ]
+    },
+    "8": {
+      "hits": 3,
+      "lines": [
+        2,
+        3,
+        4
+      ]
+    },
+    "9": {
+      "hits": 1,
+      "lines": [
+        8
+      ]
+    },
+    "10": {
+      "hits": 1,
+      "lines": [
+        4
+      ]
+    },
+    "11": {
+      "hits": 3,
+      "lines": [
+        2,
+        3,
+        4
+      ]
+    },
+    "12": {
+      "hits": 3,
+      "lines": []
+    },
+    "13": {
+      "hits": 1,
+      "lines": []
+    },
+    "14": {
+      "hits": 1,
+      "lines": []
+    },
+    "15": {
+      "hits": 1,
+      "lines": []
+    },
+    "16": {
+      "hits": 3,
+      "lines": [
+        3,
+        4,
+        5
+      ]
+    },
+    "17": {
+      "hits": 3,
+      "lines": [
+        4,
+        6,
+        8
+      ]
+    },
+    "18": {
+      "hits": 4,
+      "lines": [
+        2,
+        4,
+        5,
+        6
+      ]
+    },
+    "19": {
+      "hits": 5,
+      "lines": [
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    },
+    "20": {
+      "hits": 4,
+      "lines": [
+        2,
+        3,
+        5,
+        6
+      ]
+    },
+    "21": {
+      "hits": 2,
+      "lines": [
+        3,
+        4
+      ]
+    }
+  },
+  "kept": [
+    {
+      "repo": "r1",
+      "category": "name",
+      "file": "CHANGELOG.md",
+      "reason": "change history: it records what was true then and is not rewritten",
+      "hits": 1,
+      "lines": [
+        4
+      ]
+    },
+    {
+      "repo": "r1",
+      "category": "name",
+      "file": "LICENSE",
+      "reason": "legal text: it names its legal owner, which is not a brand slot",
+      "hits": 1,
+      "lines": [
+        1
+      ]
+    },
+    {
+      "repo": "r1",
+      "category": "name",
+      "file": "dist/bundle.js",
+      "reason": "generated or vendored output: fix the source and rebuild",
+      "hits": 1,
+      "lines": [
+        1
+      ]
+    },
+    {
+      "repo": "r1",
+      "category": "name",
+      "file": "package-lock.json",
+      "reason": "lock file: the package manager writes it, nobody edits it by hand",
+      "hits": 1,
+      "lines": [
+        1
+      ]
+    }
+  ],
+  "identifiers": [
+    {
+      "repo": "r1",
+      "file": "app.metainfo.xml",
+      "line": 3,
+      "what": "AppStream id",
+      "value": "com.oldco.app"
+    },
+    {
+      "repo": "r1",
+      "file": "macos/Info.plist",
+      "line": 7,
+      "what": "bundle identifier",
+      "value": "com.oldco.app"
+    },
+    {
+      "repo": "r1",
+      "file": "package.json",
+      "line": 2,
+      "what": "package name",
+      "value": "oldco-app"
+    },
+    {
+      "repo": "r1",
+      "file": "src-tauri/tauri.conf.json",
+      "line": 3,
+      "what": "app identifier",
+      "value": "com.oldco.app"
+    },
+    {
+      "repo": "r1",
+      "file": "src-tauri/tauri.conf.json",
+      "line": 2,
+      "what": "product name",
+      "value": "Oldco App"
+    }
+  ],
+  "accounting": {
+    "hits": 55,
+    "in_rows": 51,
+    "kept": 4
+  },
+  "wiring": {},
+  "keeps": []
+}

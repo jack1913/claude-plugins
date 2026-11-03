@@ -42,7 +42,7 @@ Each plugin releases on its own, and its tag is made with `claude plugin tag plu
 Run the docs checks yourself from the repository root:
 
 ```bash
-python3 .github/scripts/check-docs-standard.py
+python3 .github/scripts/check-docs-standard.py --strict
 npx markdownlint-cli2 "**/*.md"
 lychee --config lychee.toml --root-dir "$(pwd)" './**/*.md'
 python3 .github/scripts/check-marketplace.py

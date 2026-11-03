@@ -58,8 +58,15 @@ for a printer.
 
 ## Optional extras
 
-When you approve the book, you may opt into `BRAND.md` and `DESIGN.md` files for other agents, and a small per-brand
-skill in your project's `.claude/skills/`. Without a yes, Claude writes neither.
+When you approve the book, Claude asks once whether you want any of these:
+
+- `BRAND.md` and `DESIGN.md` files for other agents.
+- A small per-brand skill in your project's `.claude/skills/`.
+- A [brand kit](use-your-brand-kit.md): one folder a product repository can carry, with your brand's files, rules and facts
+  in it. It includes the per-brand skill, so you do not need both. Claude recommends it when your brief lists a site or you
+  have product repositories.
+
+Without a yes, Claude writes none of them.
 
 ## Check it worked
 

@@ -29,6 +29,7 @@ CHAPTERS = [
     ("tone", "Tone and voice", ("standard", "full"), "opt-in"),     # BRAND-STATE book_chapters
     ("photography", "Photography", ("standard", "full"), "opt-in"),
     ("components", "Components", ("standard", "full"), "opt-in"),
+    ("site", "Site", ("standard", "full"), "opt-in"),                # the approved reference pages of site/site.json (needs `site approve`)
     ("use", "In use", ("standard", "full"), "always"),
     ("files", "Files", ("quick", "standard", "full"), "always"),
     ("proof", "Proof", ("standard", "full"), "always"),

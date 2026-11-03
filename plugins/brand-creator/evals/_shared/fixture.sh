@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Shared fixture builders for the behaviour evals. Sourced by each case's scaffold.sh, which runs in the (empty) workspace
 # of one eval run (`claude plugin eval . --scaffold`). Everything is written under the current directory; the only
-# outside read is the plugin's synthetic worked brand ("Acme"). Nothing here touches the network or a real repository.
+# outside reads are the plugin's synthetic worked brand ("Acme") and, for fx_kit, its committed kit (_shared/acme-kit). Nothing here touches the network or a real repository.
 set -euo pipefail
 
 FX_HERE="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,13 +28,14 @@ fx_write_state() {
   local tier="${ST_TIER:-quick}" phase="${ST_PHASE:-P3}" canonical="${ST_CANONICAL:-}" incumbent="${ST_INCUMBENT:-none}"
   local inventory="${ST_INVENTORY:-}" lang="${ST_LANG:-en}" content="${ST_CONTENT:-en}" name="${ST_NAME:-Acme}" slug="${ST_SLUG:-acme}"
   local g0="${ST_G0:-$FX_DATE $tier tier, generated mark, name decided}" g1s="${ST_G1S-$FX_DATE skipped by owner}" g2="${ST_G2:-}" g3="${ST_G3:-}" g4="${ST_G4:-}" g5="${ST_G5:-}" g6="${ST_G6:-}"
+  local g4w="${ST_G4W:-}" g4p="${ST_G4P:-}" site_research="${ST_SITE_RESEARCH:-auto}"
   local approved="${ST_APPROVED:-}"
   cat > BRAND-STATE.md <<STATE
 ---
 slug: $slug
 name: "$name"
 created: $FX_DATE
-plugin_version: 0.4.2
+plugin_version: 0.5.0
 tier: $tier
 phase: $phase
 architecture: standalone
@@ -47,6 +48,7 @@ book_chapters: []
 renderer: resvg
 review_surface: local
 review_url: ""
+site_research: $site_research
 incumbent: $incumbent
 inventory: "$inventory"
 canonical_direction: "$canonical"
@@ -60,6 +62,8 @@ gates:
   G2b: ""
   G3: "$g3"
   G4: "$g4"
+  G4w: "$g4w"
+  G4p: "$g4p"
   G5: "$g5"
   G6: "$g6"
   G7: ""
@@ -89,7 +93,7 @@ ${ST_RULES:-- (rule) accent at least 4×4 px at 32 px and below (proposal)}
 
 ## Still open
 
-1. Which direction goes forward.
+${ST_OPEN:-1. Which direction goes forward.}
 
 ## Notes
 
@@ -132,6 +136,18 @@ fx_before_style() {
   fx_copy_acme rounds assets tokens tools tray motion qa research
   ST_G1S="" ST_PHASE=P1s ST_DIRS='| (none yet) | | | | | | |' \
   ST_NOTES="G0 is done. No round yet: the style research (G1s) comes before any board of directions." fx_write_state
+}
+
+# A Standard project right after the system rules (G3 and G4 recorded): Acme's brief lists a site ("Required surfaces: website, ..."), the owner has not been
+# asked about online research (site_research: auto) and the website references pick (G4w) is empty, so the references come before any page of the site.
+# Like every fixture that records G4 it holds the motion decision (off). The state note names no step: the case is about what the skill makes the agent do.
+fx_before_site_refs() {
+  fx_copy_acme
+  fx_motion_off
+  ST_TIER=standard ST_PHASE=P7 ST_CANONICAL=Compass ST_G2="$FX_DATE picked Compass (A)" ST_G3="$FX_DATE approved the refined board" \
+  ST_G4="$FX_DATE system rules approved" \
+  ST_DIRS='| Compass | A | calm | DECIDED | steadiness | | 2026-10-17 |' \
+  ST_RULES='- (rule) accent at least 4×4 px at 32 px and below' ST_NOTES="G4 recorded." fx_write_state
 }
 
 # The owner's reply is bare: round 1 is on the board (labels 1-3) and a numbered chat list is open.
@@ -306,4 +322,48 @@ Steady Steps is a one-person career coaching practice. There is no parent compan
 brands. Clients are mid-career professionals in one country; English only. The name Steady Steps is final. Today there
 is no logo at all.
 MD
+}
+
+# A Quick project whose book is approved (G5) and whose brand kit is written: the kit folder is .claude/skills/acme-brand/ (a copy of _shared/acme-kit/, the output of
+# `kit build --yes` on the golden Acme pack with the owner files filled: tests/tools/regen_eval_kit.py rebuilds it) and the built tokens are in assets/tokens/ (the page check
+# reads them there). The state is the golden pack's own (G3 and G5 recorded, no canonical direction, no recorded rules), so that the sources kit.json records still match the
+# project: `kit check` finds the kit current and does not send the run off to rebuild it. Nothing the kit test writes exists yet. A pristine copy of the kit and
+# .eval-verify/verify.sh let the harness tell whether any kit file changed. The Directions table and "Still open" read as those of a finished project (neither feeds the
+# kit's sources: only the row of the canonical direction does, and none is set). The one field of kit.json that moves with the plugin, `plugin_version`, is set to the version in
+# plugin.json (in the kit and in its pristine copy), so that after a release `kit check` does not warn "built by an older brand-creator" and a rebuild the run is sent to by
+# that warning would not rewrite kit.json: the snapshot's own value is only what the last regen_eval_kit.py run saw.
+fx_kit() {
+  local v
+  v="$(sed -n 's/^[[:space:]]*"version":[[:space:]]*"\([^"]*\)".*/\1/p' "$FX_ROOT/.claude-plugin/plugin.json" | head -n 1)"
+  [ -n "$v" ] || { echo "fixture: no version in $FX_ROOT/.claude-plugin/plugin.json" >&2; exit 1; }
+  fx_copy_acme
+  mkdir -p .claude/skills assets/tokens .eval-verify
+  cp -R "$FX_HERE/acme-kit" .claude/skills/acme-brand
+  sed "s/^\([[:space:]]*\"plugin_version\":[[:space:]]*\)\"[^\"]*\"/\1\"$v\"/" "$FX_HERE/acme-kit/kit.json" > .claude/skills/acme-brand/kit.json
+  grep -q "^[[:space:]]*\"plugin_version\": \"$v\"," .claude/skills/acme-brand/kit.json || { echo "fixture: could not set plugin_version in the kit's kit.json" >&2; exit 1; }
+  cp -R .claude/skills/acme-brand/brand/assets/tokens/. assets/tokens/
+  cp -R .claude/skills/acme-brand .eval-verify/pristine
+  cat > .eval-verify/verify.sh <<'SH'
+#!/usr/bin/env bash
+# Harness check: is every file of the kit byte-identical to its pristine copy, with none added?
+set -u
+here="$(cd -P "$(dirname "$0")" && pwd)"; cd "$here/.."
+kit=.claude/skills/acme-brand
+bad=""
+while IFS= read -r f; do
+  cmp -s ".eval-verify/pristine/$f" "$kit/$f" || bad="$bad $f"
+done < <(cd .eval-verify/pristine && find . -type f | sort)
+extra="$(cd "$kit" && find . -type f | sort | while read -r f; do [ -e "../../../.eval-verify/pristine/$f" ] || echo "$f"; done)"
+if [ -z "$bad" ] && [ -z "$extra" ]; then
+  echo "KIT=UNCHANGED"
+else
+  echo "KIT=CHANGED files:$bad extra:$extra"
+fi
+SH
+  ST_TIER=quick ST_PHASE=P10 ST_G3="$FX_DATE approved the refined board" ST_G5="$FX_DATE approved (test)" ST_APPROVED=1 ST_RULES="- (rule) (...)" \
+  ST_DIRS='| Compass | A | calm | DECIDED | steadiness | | 2026-10-17 |
+| Lantern | B | warm | liked | the warmth | too soft for the buyers | |
+| Keystone | C | bold | rejected | | closest to the category norm | |' ST_OPEN="Nothing is open: the book is approved and the kit is written." \
+  ST_NOTES="The book is approved (G5) and the brand kit is written in .claude/skills/acme-brand/." fx_write_state
+  printf '\n## Renames\n\n| date | from | to | why |\n|---|---|---|---|\n' >> BRAND-STATE.md       # the golden pack's state has this empty table, and the kit records a hash of it
 }

@@ -1,0 +1,3 @@
+body { background: var(--color-bg); color: var(--color-text); font-family: var(--font-sans); }
+a { color: var(--color-accent); }
+.art { background-image: url(img/pic.svg); }

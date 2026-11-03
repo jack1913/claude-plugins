@@ -33,12 +33,19 @@
     bytes `book` wrote (a hand edit fails); a book.pdf report that exists is gated like any other
   * --cascade "<old value or phrase>" (repeatable): no current project artefact may still contain it (text files, PDFs as text, the documents named by
     tools/cascade.json, --also and FAMILY.md parent_docs); lines that record a product repository's old value (ADOPTION.md, LAUNCH.md) warn, they do not fail
-  * adoption.json (pins, numbering, accounting) and ADOPTION.md as rendered from it; BRAND.md, DESIGN.md and the applied skill as generated files
+  * adoption.json (pins, numbering, accounting) and ADOPTION.md as rendered from it; BRAND.md, DESIGN.md, the applied skill and the brand kit as generated files
   * motion/motion.json, when it exists: valid against its schema, and every duration and curve it names is a built token (a failing row, never a crash)
   * Standard and Full decide motion before G4: once G4 is recorded, motion/motion.json must exist, on or off (motion:decided), and a brand that moves needs a current passing
     report of motion/proof.json, the proof of the approved move (motion:proof; the report of any other proof never counts, a try-out's and the one report of an earlier version included, and a
     current failing one fails the row). A current report that says not-verified is quoted, in its own row and in motion:proof:
     up to three of the rows it could not verify, and what to do about them (motionboard.unverified_why, the words board-lint uses for a variant). From G3 to G4 an undecided motion is an info row. Quick decides it at G4: no row
+  * Once G4 is recorded, tokens/primitives.tokens.json is compared with the plugin's starter (templates/tokens/primitives.tokens.json): a token still holding the starter's value
+    is a `tokens:starter` warning, never a failure, unless the owner kept it in $extensions["brand-creator"]["starter-kept"] (a dated decision and a list of paths). Before G4: no row
+  * The approved pages of the site round, when G4p is recorded or site/site.json exists (a project with neither gets no site: row). site:record: G4p is recorded and site/site.json exists (G4p
+    without it fails and says to run `site approve`; the record without G4p fails too), and sitedata.validate_site finds nothing (a page edited after it was approved fails, with the command that
+    approves it again). site:pages: every page the record lists has a current page-check report of that very page (assets/_checks/<pagecheck.report_tool>.json, target.page equal to its path):
+    a failing report fails the row; a missing, stale or no-verdict one is "not verified" and names `brand-creator page-check site/<id>/index.html`. site:stills: every page has a
+    site/<id>/shots/capture.json that is the capture of that page and current, whose four first-screen stills are the files it lists; otherwise "not verified", naming `brand-creator capture site/<id>/index.html`
 A check that cannot be established is "not verified" (exit 3), never "pass". A failing gate is exit 1.
 """
 import json
@@ -50,8 +57,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "emitters"))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "booklib"))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "adaptlib"))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "boardlib"))
+sys.path.insert(0, str(Path(__file__).resolve().parent / "pagelib"))   # boardlib/siteboard.py names the page-check report of a page with pagelib/pagecheck.py
 from _common import (Parser, Report, add_project_arg, downscale_report_tool, find_project, gate_recorded, latest_round, main_guard, motion_proof_kind,  # noqa: E402
-                     read_state, rel, sha256_file, stale_inputs, verify_history)
+                     plugin_root, read_state, rel, sha256_file, stale_inputs, verify_history)
 from manifest import band_problems, load_artefacts, verify as verify_manifest  # noqa: E402
 import qa_rules  # noqa: E402
 import tierb  # noqa: E402
@@ -59,12 +67,17 @@ from stale import INPUTS_FILE, check_project as check_staleness  # noqa: E402
 from mark_lint import lint_svg_file, svg_files_under_assets  # noqa: E402
 import bookdata  # noqa: E402
 import cascade as cascade_mod  # noqa: E402
+import adapt  # noqa: E402
 import gates as adapt_gates  # noqa: E402
 import motionspec  # noqa: E402
 import motionboard  # noqa: E402
+import siteboard  # noqa: E402
+import sitedata  # noqa: E402
+from pagecheck import report_tool  # noqa: E402
 from _common import EXIT_CANNOT, EXIT_USAGE, CliError, fail  # noqa: E402
 
 APPROVED_PROOF = "motion/proof.json"   # the proof of the approved move: finish.sh proves it, and frames takes the stills the book replays of it
+PRIMITIVES = "tokens/primitives.tokens.json"   # compared with the plugin's starter once G4 is recorded (tokens:starter)
 EMITTERS = ("web", "social", "apple", "windows", "linux", "tray", "tauri", "wallet", "developer", "android", "chrome-ext", "msix", "profiles", "print", "presskit")   # each writes assets/_checks/emit-<name>.json
 # manifest `qa` value -> (report tool, the command that writes it)
 QA_GATES = {
@@ -220,6 +233,192 @@ def motion_decision_rows(project: Path, rep: Report, gated: list[dict]) -> None:
         rep.add("motion:proof", "skipped", label, detail=f"not verified: the motion report of {APPROVED_PROOF} is {doc.get('status')!r}, not a verdict ({quoted}): {how}")
     else:   # no report of it, or a stale one
         rep.add("motion:proof", "skipped", label, detail=f"not verified: run `{cmd}`")
+
+
+def token_leaves(node, path: tuple = ()) -> dict[str, str]:
+    """{dotted path: the token's $value as canonical JSON} for every token of a DTCG document, in document order. A node that holds $value is a token; a key starting with $ is not a group."""
+    if not isinstance(node, dict):
+        return {}
+    if "$value" in node:
+        return {".".join(path): json.dumps(node["$value"], sort_keys=True, separators=(",", ":"))}
+    leaves: dict[str, str] = {}
+    for k, v in node.items():
+        if not k.startswith("$"):
+            leaves.update(token_leaves(v, (*path, k)))
+    return leaves
+
+
+def starter_kept(doc: dict) -> tuple[list[str], str, str | None]:
+    """-> (the token paths the owner kept, the owner's recorded words, what is wrong with the entry or None) from $extensions["brand-creator"]["starter-kept"] of the primitives:
+    {"decided": "<YYYY-MM-DD> <the owner's words>", "paths": ["motion.quick", ...]}. An entry that is wrong keeps nothing."""
+    ext = doc.get("$extensions")
+    ext = ext.get("brand-creator") if isinstance(ext, dict) else None
+    if not isinstance(ext, dict) or "starter-kept" not in ext:
+        return [], "", None
+    entry = ext["starter-kept"]
+    if not isinstance(entry, dict):
+        return [], "", "it is no object {\"decided\": \"<YYYY-MM-DD> <the owner's words>\", \"paths\": [...]}"
+    wrong = []
+    decided, paths = entry.get("decided"), entry.get("paths")
+    if not (isinstance(decided, str) and adapt.owner_named(decided)):   # the one rule for "a calendar date, then the owner's words" (also contrast's, for grounds.named_by_owner)
+        wrong.append("decided is not a date YYYY-MM-DD followed by the owner's words")
+    if not (isinstance(paths, list) and all(isinstance(p, str) and p for p in paths)):
+        wrong.append("paths is not a list of token paths such as \"motion.quick\"")
+    if wrong:
+        return [], "", "; ".join(wrong)
+    return paths, decided.strip(), None
+
+
+def starter_rows(project: Path, rep: Report) -> None:
+    """tokens:starter. Once G4 is recorded and tokens/primitives.tokens.json exists, every token that still holds the plugin's starter value (templates/tokens/primitives.tokens.json,
+    compared as canonical JSON) is a proposal nobody decided: a warning, never a failure. The owner keeps a value by listing its path in $extensions["brand-creator"]["starter-kept"] of
+    the primitives. Before G4 there is no row."""
+    f = project / PRIMITIVES
+    if not gate_recorded(project, "G4") or not f.is_file():
+        return
+    label = "the primitives are the owner's, not the starter's"
+    try:
+        doc = json.loads(f.read_text(encoding="utf-8"))
+        if not isinstance(doc, dict):
+            raise ValueError("it is no JSON object")
+    except (OSError, ValueError) as e:
+        rep.add("tokens:starter", "warn", label, detail=f"{PRIMITIVES} cannot be read as tokens ({e}), so it is not compared with the starter")
+        return
+    mine = token_leaves(doc)
+    same = [p for p, v in token_leaves(json.loads((plugin_root() / "templates" / "tokens" / "primitives.tokens.json").read_text(encoding="utf-8"))).items() if mine.get(p) == v]
+    kept_paths, words, wrong = starter_kept(doc)
+    left = [p for p in same if p not in kept_paths]
+    kept = [p for p in same if p in kept_paths]
+    say = []
+    if wrong:
+        say.append(f"starter-kept in {PRIMITIVES} is wrong ({wrong}), so it keeps nothing")
+    if left:
+        say.append(f"still the starter's proposal: {', '.join(left)} ({len(left)}); ask the owner to keep them (list them in $extensions[\"brand-creator\"][\"starter-kept\"] of {PRIMITIVES} "
+                   "with the date and their words) or change them")
+    if kept:
+        say.append(f"kept by the owner ({words}): {', '.join(kept)} ({len(kept)})")
+    if wrong or left:
+        rep.add("tokens:starter", "warn", label, detail="; ".join(say), left=left, kept=kept)
+    else:
+        rep.add("tokens:starter", "pass", label, detail="; ".join(say) or "every token differs from the starter's value", left=left, kept=kept)
+
+
+def site_pages(project: Path) -> list[str]:
+    """The paths (site/<id>/index.html) of the pages site/site.json lists that can be named: a page id and the path that goes with it, each once. [] when the record is missing or cannot be read
+    (site:record says so)."""
+    try:
+        pages = sitedata.load_site(project).get("pages")
+    except CliError:
+        return []
+    out: list[str] = []
+    for page in pages if isinstance(pages, list) else []:
+        pid = page.get("id") if isinstance(page, dict) else None
+        if isinstance(pid, str) and sitedata.SITE_PAGE_ID.fullmatch(pid) and page.get("path") == f"{sitedata.SITE_DIR}/{pid}/index.html" and page["path"] not in out:
+            out.append(page["path"])
+    return out
+
+
+def site_check_state(project: Path, page: str) -> tuple[str, str]:
+    """-> (pass | fail | skipped, why) for the page-check report of one approved page: the report `brand-creator page-check <page>` wrote (found by pagecheck.report_tool, the one rule that names it), current
+    (read_report_state: no file it was made from is gone or changed), the report of this very project page (`target`, not a built site or an address, nor another page), and a verdict. A failing report fails;
+    a report that is missing, stale, of another target, or no verdict is "not verified"."""
+    tool, cmd = report_tool(page), f"brand-creator page-check {page}"
+    st, detail, doc, current = read_report_state(project, tool, cmd)
+    if doc is None or not current:
+        return st, detail
+    target = doc.get("target")
+    if not (isinstance(target, dict) and target.get("kind") == "project" and target.get("page") == page):
+        return "skipped", f"not verified: {tool} report is the report of {siteboard.target_words(target)}, not of the project page {page}; re-run `{cmd}`"
+    if not any(isinstance(r, dict) and r.get("path") == page for r in doc.get("inputs", [])):
+        return "skipped", f"not verified: {tool} report does not list {page} among the files it was made from, so a change to the page would not show; re-run `{cmd}`"
+    if st == "skipped":   # current and no verdict: say which rows it could not verify, as board-lint does of a variant
+        return "skipped", f"not verified: {tool} report status is {doc.get('status')!r}, not a verdict ({siteboard.unverified_said(doc)}); change the page or the setup as the rows say, then run `{cmd}`"
+    return st, detail
+
+
+def site_still_state(project: Path, page: str) -> tuple[str, str]:
+    """-> (pass | skipped, why) for the stills of one approved page: site/<id>/shots/capture.json (`brand-creator capture <page>`) is there, it is the capture of this page (`source.page`), it is current (no file it
+    was made from is gone or changed, the page among them), and the four first-screen stills it lists are the files there now. Anything else is "not verified": the stills are a record of the page, not a gate on it."""
+    shots = f"{page.rsplit('/', 1)[0]}/shots"
+    where, cmd = f"{shots}/capture.json", f"brand-creator capture {page}"
+    if not (project / where).is_file():
+        return "skipped", f"not verified: no {where}; run `{cmd}`"
+    doc, stale = siteboard.read_record(project, where, page)
+    if doc is None:
+        return "skipped", f"not verified: {where} is unusable ({stale[0]}); run `{cmd}`"
+    source = doc.get("source")
+    if not (isinstance(source, dict) and source.get("page") == page):
+        stale.insert(0, f"it is the capture of {(source.get('page') or source.get('url')) if isinstance(source, dict) else None}, not of {page}")
+    if stale:
+        return "skipped", f"not verified: {where} is stale ({'; '.join(stale[:3])}); run `{cmd}`"
+    listed = {e.get("view"): e for e in doc.get("views", []) if isinstance(e, dict)} if isinstance(doc.get("views"), list) else {}
+    gaps: list[str] = []
+    for view in siteboard.VIEWS:
+        entry = listed.get(view, {})
+        want, name = entry.get("sha256"), entry.get("file")
+        if not (isinstance(want, str) and sitedata.SHA256.fullmatch(want) and isinstance(name, str) and name and "/" not in name and "\\" not in name and name not in (".", "..")):
+            gaps.append(f"{where} lists no {view} still with a file and a sha256")
+        elif not (project / shots / name).is_file():
+            gaps.append(f"{shots}/{name} (the {view} still) is not there")
+        elif sha256_file(project / shots / name) != want:
+            gaps.append(f"{shots}/{name} is not the {view} still {where} lists (its sha256 differs)")
+    if gaps:
+        return "skipped", f"not verified: {'; '.join(gaps[:3])}; run `{cmd}`"
+    return "pass", f"{where} is current and its four stills are the files there"
+
+
+def site_verdict(rep: Report, rid: str, label: str, results: list[tuple[str, str, str]], passing: str) -> None:
+    """One row for all the approved pages: a failing page fails it (a page not verified is named after), else a page not verified makes it "not verified", else it passes.
+    `results` are (page id, status, why); the why of a page that is not verified names the command that makes it so."""
+    bad, unsure = [r for r in results if r[1] == "fail"], [r for r in results if r[1] == "skipped"]
+
+    def say(items):
+        return "; ".join(f"{pid}: {why.removeprefix('not verified: ')}" for pid, _st, why in items)
+
+    if bad:
+        rep.add(rid, "fail", label, detail=say(bad) + (f"; not verified: {say(unsure)}" if unsure else ""))
+    elif unsure:
+        rep.add(rid, "skipped", label, detail=f"not verified: {say(unsure)}")
+    else:
+        rep.add(rid, "pass", label, detail=passing)
+
+
+def site_rows(project: Path, rep: Report) -> None:
+    """The approved pages of the site round (scripts/CONTRACT.md "check and the approved pages"). Rows only when G4p is recorded or site/site.json exists: a project with neither gets none.
+    site:record: G4p recorded and site/site.json there (G4p without it fails: run `site approve`; the record without G4p fails too), and sitedata.validate_site finds nothing (a page edited after approval fails).
+    site:pages: each page the record lists has a current page-check report of that page (a failing one fails; missing, stale or no verdict is "not verified"). site:stills: each has current stills (`capture`),
+    else "not verified". The two page rows are given for every page the record can name, whatever else is wrong with the record."""
+    g4p = gate_recorded(project, "G4p")
+    record = project / sitedata.SITE_FILE
+    present = record.exists() or record.is_symlink()
+    if not g4p and not present:
+        return
+    label = "the approved pages are as the owner approved them"
+    if not present:
+        rep.add("site:record", "fail", label, detail=f"G4p is recorded but {sitedata.SITE_FILE} does not exist: run `brand-creator site approve` (it needs a current passing `board-lint` of the pages board; "
+                                                       "--round N names the round)")
+        return
+    if not g4p:
+        rep.add("site:record", "fail", label, detail=f"{sitedata.SITE_FILE} exists but G4p, the owner's approval of the pages, is not recorded: if the owner approved them run "
+                                                      "`brand-creator state --record G4p \"<what was approved>\"`, else move site/ to removed-<date>/")
+        return
+    pages = site_pages(project)
+    try:
+        problems = sitedata.validate_site(project)
+    except CliError as e:   # a layout file that cannot be used (a damaged install) leaves the record unjudged: not verified, as motion:spec says it
+        rep.add("site:record", "skipped" if e.code == EXIT_CANNOT else "fail", label, detail=("not verified: " if e.code == EXIT_CANNOT else "") + e.message)
+    else:
+        if problems:
+            rep.add("site:record", "fail", label, detail="; ".join(problems[:4]) + (f"; and {len(problems) - 4} more" if len(problems) > 4 else ""))
+        else:
+            rep.add("site:record", "pass", label, detail=f"G4p is recorded; {sitedata.SITE_FILE} is sound and each of its {len(pages)} page(s) is as approved ({', '.join(p.split('/')[1] for p in pages)})")
+    if not pages:
+        return
+    ids = [p.split("/")[1] for p in pages]
+    site_verdict(rep, "site:pages", "each approved page has a current passing page-check report", [(pid, *site_check_state(project, p)) for pid, p in zip(ids, pages)],
+                 f"{len(pages)} page(s) have a current passing page-check report: {', '.join(ids)}")
+    site_verdict(rep, "site:stills", "each approved page has current stills", [(pid, *site_still_state(project, p)) for pid, p in zip(ids, pages)],
+                 f"{len(pages)} page(s) have current stills: {', '.join(ids)}")
 
 
 def main() -> int:
@@ -396,6 +595,8 @@ def main() -> int:
             rep.add("motion:spec", "skipped" if unbuilt else "fail", "motion/motion.json is valid", detail=("not verified: " if unbuilt else "") + e.message)
     motion_decision_rows(project, rep, gated)   # the report of an earlier version is in motion_passing (qa:motion), never among these
     adapt_gates.rows(project, rep)
+    starter_rows(project, rep)   # tokens:starter, from G4 on
+    site_rows(project, rep)   # site:record, site:pages, site:stills: only when G4p is recorded or site/site.json exists
     bprobs = band_problems(project)
     if any("band" in a_ or "layer_bands" in a_ for a_ in arts):
         rep.add("manifest:bands", "fail" if bprobs else "pass", "slots follow the size-band rule (or carry an exemption)",

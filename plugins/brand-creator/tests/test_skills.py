@@ -94,7 +94,7 @@ def test_orchestrator_frontmatter():
     fm, _ = frontmatter(ORCH)
     assert "disable-model-invocation" not in fm  # the one model-invocable skill in this stage
     assert fm["description"].startswith("Starts or continues a brand-identity project")
-    assert "not for building web pages" in fm["description"]
+    assert "not for building production websites" in fm["description"] and "website references" in fm["description"]
     for trig in ("księga znaku", "identyfikacja wizualna", "zaprojektuj logo", "nowa marka", "rebranding", "logo dla firmy",
                  "BRAND-STATE.md", "buy the domain", "file the trademark", "fold in a judge report", "accent minimum", "Etsy",
                  "shop", "podcast", "brand guidelines", "brand book"):
@@ -163,8 +163,8 @@ def test_long_references_start_with_a_table_of_contents():
 
 
 def test_phase_files_exist_and_stubs_are_short():
-    full = {"00-intake", "01-research", "01s-style-research", "03-strategy-directions", "04-selection", "05-refinement", "06-mark", "07-tokens", "09-qa", "10-book",
-            "11-adoption", "12-history", "13-launch"}
+    full = {"00-intake", "01-research", "01s-style-research", "03-strategy-directions", "04-selection", "05-refinement", "06-mark", "07-tokens", "07w-website-references", "07p-site-round",
+            "09-qa", "10-book", "11-adoption", "12-history", "13-launch"}
     stubs: set = set()
     # the phase's single source is another skill
     pointers = {"02-naming": "../../../brand-naming/SKILL.md", "08-assets": "../../../brand-assets/SKILL.md"}
@@ -240,6 +240,17 @@ def test_qa_phase_lists_every_check_command_and_cites_real_deliberate_break_test
         assert tag in text, tag
     for kind in ("**gate**", "**warning**", "**judgement**"):
         assert kind in text, kind
+
+
+def test_the_grounds_question_is_asked_of_every_brand():
+    """`contrast` warns `grounds:named` for every project and means to fail it from the next release, so 07-tokens (technique 8 and the Gate) asks "Which colours does text
+    sit on?" of every brand at G4, not only of one with a site or an app."""
+    flat = " ".join((REFS / "phases" / "07-tokens.md").read_text(encoding="utf-8").split())
+    asked = [m.start() for m in re.finditer(r'"Which colours does text sit on\?"', flat)]
+    assert len(asked) >= 2, "technique 8 and the Gate both ask the question"
+    for at in asked:
+        assert "site or an app" not in flat[max(0, at - 45):at], flat[max(0, at - 45):at + 40]     # the words that lead into the question
+    assert 'For every brand, ask the plain question "Which colours does text sit on?"' in flat
 
 
 def test_the_book_phase_does_not_ask_for_a_reduced_motion_view_of_the_book_because_no_command_offers_one():
@@ -355,10 +366,167 @@ def test_ai_defaults_is_a_generic_reflex_list():
     for i in d["items"]:
         assert set(i) == {"id", "kind", "pattern", "why_reflex", "argue_with"} and all(i.values()), i
     assert not re.search(r"#[0-9a-fA-F]{3,8}\b", json.dumps(d)), "patterns are described in words, never as colour values"
+    # version 2: four patterns of a real brand's site, and the one-line hit format board-lint parses
+    assert d["version"] >= 2
+    new = {"palette-pale-ground-timid-accent", "type-first-answer-display-face", "device-texture-as-identity",
+           "layout-stock-product-page"}
+    assert new <= set(ids), new - set(ids)
+    first_answer = next(i for i in d["items"] if i["id"] == "type-first-answer-display-face")
+    assert "as of 2026-10" in first_answer["pattern"], "the faces a generator names first are dated"
+    assert "hit: <id> | <argument>" in " ".join(d["how_to_use"])
+
+
+def test_page_tells_names_each_tell_with_its_keys_and_both_word_lists():
+    """The generic page tells `page-check` warns about: every tell says what it is, why, how it is measured and with which numbers; a tell with a word list has it in each language."""
+    d = json.loads((REFS / "page-tells.json").read_text(encoding="utf-8"))
+    assert d["version"] == 1 and d["$description"] and d["languages"] == ["en", "pl"]
+    assert [t["id"] for t in d["tells"]] == ["eyebrow", "arrow-glued", "middot-run", "stock-second-action", "hero-text-budget", "styled-div-mock", "three-equal-tiles"]
+    required = {"id", "name", "what", "why", "measure"}
+    for t in d["tells"]:
+        assert required <= set(t) and set(t) <= required | {"threshold", "words"}, t["id"]
+        assert all(isinstance(t[k], str) and t[k].strip() for k in required), t["id"]
+        assert re.fullmatch(r"[a-z]+(?:-[a-z]+)*", t["id"]), t["id"]
+        if "threshold" in t:
+            assert t["threshold"] and all(isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0 for v in t["threshold"].values()), t["id"]
+        if "words" in t:
+            assert set(t["words"]) == set(d["languages"]), t["id"]
+            for lang, words in t["words"].items():
+                assert len(words) >= 10 and len(words) == len({w.casefold() for w in words}) and all(isinstance(w, str) and w.strip() for w in words), (t["id"], lang)
+    assert {t["id"] for t in d["tells"] if "words" in t} == {"stock-second-action"}
+    (note,) = d["notes"]
+    assert note["id"] == "stock-anatomy" and note["what"] and note["measure"] and set(note["words"]) == set(d["languages"]) and note["threshold"]["cta_max_words"] > 0
+    assert not re.search(r"#[0-9a-fA-F]{3,8}\b", json.dumps(d)), "patterns are described in words, never as colour values"
+    index = (REFS / "_index.md").read_text(encoding="utf-8")
+    assert any(ln.startswith("| [page-tells.json](page-tells.json) | ") for ln in index.splitlines())
+    skill = ORCH.read_text(encoding="utf-8")
+    refs = skill[skill.index("## References"):]
+    assert "- [page-tells.json](references/page-tells.json): the generic page tells the page check warns about (English and Polish)." in refs
+    assert skill.index("## Round mechanics") < skill.index("- [page-tells.json]"), "the bullet is below the top of SKILL.md, which has no room"
+
+
+LAYOUT_IDS = ["one-step", "walkthrough", "catalogue", "single-product", "long-read", "letter", "workbench", "index", "schedule", "place", "portfolio", "questions"]
+
+
+def test_page_layouts_are_structure_only_and_keyed_to_the_visitors_job():
+    """The layout references of the site round: 8-12 items, each keyed to what the visitor came to do, with the same seven keys, and no look in any of them (the rules are `sitedata.layout_problems`)."""
+    import sitedata
+    d = json.loads((REFS / "page-layouts.json").read_text(encoding="utf-8"))
+    assert set(d) == {"version", "$description", "how_to_use", "items"} and d["version"] == 1 and d["$description"]
+    assert 8 <= len(d["items"]) <= 12
+    ids = [i["id"] for i in d["items"]]
+    assert len(ids) == len(set(ids)) and all(re.fullmatch(r"[a-z][a-z0-9-]{2,31}", x) for x in ids), ids
+    assert ids == LAYOUT_IDS
+    for i in d["items"]:
+        assert set(i) == {"id", "job", "leads_with", "parts", "action", "ends_with", "not_for"}, i["id"]
+        assert 2 <= len(i["parts"]) <= 8 and all(isinstance(p, str) and p.strip() for p in i["parts"]), i["id"]
+        assert all(isinstance(i[k], str) and i[k].strip() for k in ("job", "leads_with", "action", "ends_with", "not_for")), i["id"]
+    assert sitedata.layout_problems(d) == []
+    how = " ".join(d["how_to_use"])
+    assert "data-layout" in how and "own:<word>" in how and "BRIEF.md" in how
+    assert not re.search(r"#[0-9a-fA-F]{3,8}\b", json.dumps(d)), "a layout names no colour value"
+    loaded = sitedata.load_layouts()
+    assert list(loaded) == ids and loaded["walkthrough"] == next(i for i in d["items"] if i["id"] == "walkthrough")
+    index = (REFS / "_index.md").read_text(encoding="utf-8")
+    assert "| [page-layouts.json](page-layouts.json) | Layout references for a site's pages, keyed to what the visitor came to do: structure only, never a look |" in index.splitlines()
+    skill = ORCH.read_text(encoding="utf-8")
+    bullet = "- [page-layouts.json](references/page-layouts.json): layout references for the site round, keyed to the visitor's job (structure only)."
+    assert bullet in skill[skill.index("## References"):]
+    assert skill.index("## Round mechanics") < skill.index(bullet), "the bullet is below the top of SKILL.md, which has no room"
+
+
+def test_the_layout_check_catches_a_look_value(tmp_path):
+    """Break a scratch copy of the layouts four ways (a number with a unit, a look word, a fourth key, the stock three-and-steps parts) and the check names each; the shipped file stays sound."""
+    import sitedata
+    from helpers import mutate_json
+    assert sitedata.layout_problems(json.loads((REFS / "page-layouts.json").read_text(encoding="utf-8"))) == []
+    breaks = {
+        "a number with a unit": (lambda d: d["items"][0].update(leads_with=d["items"][0]["leads_with"] + " at 24px"), "a number with a unit"),
+        "a hex colour": (lambda d: d["items"][1]["parts"].append("The stamp in #1a2b3c"), "a hex colour"),
+        "a look word": (lambda d: d["items"][2].update(action=d["items"][2]["action"] + " in the brand colour"), "a look word"),
+        "a fourth key": (lambda d: d["items"][3].update(look="calm"), "extra ['look']"),
+        "a missing key": (lambda d: d["items"][4].pop("not_for"), "missing ['not_for']"),
+        "the stock band": (lambda d: d["items"][5].update(parts=["Three tiles", "Steps to begin"]), "'three' and 'steps'"),
+        "too few items": (lambda d: d.update(items=d["items"][:7]), "7 items"),
+        "one part": (lambda d: d["items"][6].update(parts=["Only this"]), "parts is not a list"),
+        "a repeated id": (lambda d: d["items"][7].update(id="one-step"), "the id is used twice"),
+    }
+    for name, (fn, expected) in breaks.items():
+        scratch = tmp_path / f"{name.replace(' ', '-')}.json"
+        scratch.write_text((REFS / "page-layouts.json").read_text(encoding="utf-8"), encoding="utf-8")
+        mutate_json(scratch, fn)
+        problems = sitedata.layout_problems(json.loads(scratch.read_text(encoding="utf-8")))
+        assert problems and any(expected in p for p in problems), (name, problems)
+
+
+def test_loading_the_layouts_stops_with_exit_3_naming_the_file_when_it_cannot_be_used(tmp_path, monkeypatch):
+    """The file ships with the plugin, so a missing, unreadable or damaged one is an install problem: exit 3, the file named, never an empty list of layouts."""
+    import pytest
+    import sitedata
+    from _common import EXIT_CANNOT, CliError
+    folder = tmp_path / "plugin" / "skills" / "brand-creator" / "references"
+    folder.mkdir(parents=True)
+    monkeypatch.setattr(sitedata, "PLUGIN_ROOT", tmp_path / "plugin")
+    with pytest.raises(CliError) as gone:
+        sitedata.load_layouts()
+    assert gone.value.code == EXIT_CANNOT and sitedata.LAYOUTS_FILE in gone.value.message
+    (folder / "page-layouts.json").write_text("{not json", encoding="utf-8")
+    with pytest.raises(CliError) as broken:
+        sitedata.load_layouts()
+    assert broken.value.code == EXIT_CANNOT and sitedata.LAYOUTS_FILE in broken.value.message and "reinstall" in broken.value.message
+    real = json.loads((REFS / "page-layouts.json").read_text(encoding="utf-8"))
+    real["items"] = real["items"][:3]
+    (folder / "page-layouts.json").write_text(json.dumps(real), encoding="utf-8")
+    with pytest.raises(CliError) as short:
+        sitedata.load_layouts()
+    assert short.value.code == EXIT_CANNOT and "3 items" in short.value.message
+
+
+RECIPE = ROOT / "templates" / "kit" / "recipes" / "web-page.md"
+RECIPE_LEADS = ("The visitor's job:", "References:", "Tokens and files:", "Hero first:", "Page check:", "Cold read:", "Before publishing:")
+RECIPE_VALUE = re.compile(r"(?i)\d(?:\.\d+)?\s*(?:%|(?:px|rem|em|ms|s|vh|vw|svh|dvh|ch|fr|deg|pt)\b)|\d\s*:\s*\d|#[0-9a-f]{3,8}\b|\b(?:rgba?|hsla?|oklch|oklab|hwb|lab|lch)\(")
+
+
+def test_the_web_page_recipe_is_steps_only_with_no_values():
+    """The kit's web-page recipe is seven numbered steps and no value: the brand's values live in its tokens and rules.json, and the recipe points at the page check's rows instead of
+    copying a word list or a threshold. Static, so no data directory is needed (tests/test_kit.py has a module-level mark that a test inside it cannot escape)."""
+    for sample in ("Hero padding 48px", "a 200ms ease", "a 60% ground", "1.5 rem", "contrast 4.5:1", "#0a0a0a", "rgb(0 0 0)", "oklch(0.5 0.1 200)"):
+        assert RECIPE_VALUE.search(sample), sample
+    for sample in ("step 3 of 7", "a phone and a desktop width", "tell:hero-text-budget", "# Web page"):
+        assert not RECIPE_VALUE.search(sample), sample
+    text = RECIPE.read_text(encoding="utf-8")
+    lines = text.splitlines()
+    assert lines[0] == "# Web page" and lines[1] == ""
+    assert lines[2] == "Steps only. The brand's values live in the tokens and rules.json; a line you add that pins a value cites a token or a rule, or is tagged `[example]`."
+    assert lines[-1] == "The other pages follow the same steps."
+    steps = re.findall(r"(?m)^(\d+)\. (.*)$", text)
+    assert [n for n, _ in steps] == [str(i) for i in range(1, 8)], "seven numbered steps"
+    assert all(step.startswith(lead) for (_, step), lead in zip(steps, RECIPE_LEADS)), "in this order: the visitor's job, references, tokens, hero, page check, cold read, before publishing"
+    body = re.sub(r"(?m)^\d+\. ", "", text)
+    assert not RECIPE_VALUE.search(body), RECIPE_VALUE.search(body)
+    assert not re.search(r"\d", body), "no digit anywhere: a value the brand has not decided is never pinned"
+    assert "[[fill" not in text and "{{" not in text and "}}" not in text, "complete as scaffolded: no marker, no placeholder"
+    assert "var(--" not in text, "a token name is the brand's; the recipe names none"
+    assert "](" not in text and not re.search(r"(?m)^\s*[-*+] ", text), "no link that could leave the kit, no untagged bullet: only numbered steps"
+    assert "[data-sample]" in text and "page-check" in text
+    # it points at the page check's rows, which exist, and copies none of its lists
+    tells = json.loads((REFS / "page-tells.json").read_text(encoding="utf-8"))
+    ids = {t["id"] for t in tells["tells"]}
+    pointed = set(re.findall(r"`tell:([a-z-]+)`", text))
+    assert pointed == {"hero-text-budget", "stock-second-action", "styled-div-mock"} and pointed <= ids
+    pagecheck = (ROOT / "scripts" / "pagelib" / "pagecheck.py").read_text(encoding="utf-8")
+    for row in ("page:claims", "page:samples"):
+        assert f"`{row}`" in text and f'"{row}"' in pagecheck, row
+    words = [w for t in tells["tells"] + tells["notes"] for ws in t.get("words", {}).values() for w in ws]
+    assert len(words) > 40 and not [w for w in words if w.casefold() in text.casefold()], "no stock label or word list is copied"
+    # the gaps the kit test baseline found
+    for needle in ("into the product's own public or static folder and link them from there", "Never link into `.claude/skills/`",
+                   "with the owner's web-design skill loaded beside this kit, never instead of it", "a plain placeholder marked as a sample",
+                   "mark every sample with the `[data-sample]` attribute and a label", "Run the page check again"):
+        assert needle in text, needle
 
 
 def test_templates_are_self_contained_and_avoid_the_ai_default_cluster():
-    for name in ("round-page.html", "board.html", "review/index.html", "card.html", "style-board.html"):
+    for name in ("round-page.html", "board.html", "review/index.html", "card.html", "style-board.html", "site-refs-board.html", "site-board.html"):
         text = (ROOT / "templates" / name).read_text(encoding="utf-8")
         assert not re.search(r"""(?:src|href)\s*=\s*["']?(?:https?:)?//""", text), name
         assert "@import" not in text and "url(http" not in text, name
@@ -380,8 +548,24 @@ def test_token_templates_carry_both_schemes_and_computed_hex():
     droles = {k for k in dark["color"] if not k.startswith("$")}
     assert lroles == droles and {"bg", "text", "muted", "accent"} <= lroles
     assert light["$extensions"]["brand-creator"]["pairs"]
+    # text grounds: the roles for text on the accent and the focus ring in both schemes, their two pairs, and a proposal for color.bg the owner has not named yet
+    assert {"on-accent", "focus"} <= lroles and {"on-accent", "focus"} <= droles
+    assert (light["color"]["on-accent"]["$value"], dark["color"]["on-accent"]["$value"]) == ("{color.paper}", "{color.night}")
+    assert (light["color"]["focus"]["$value"], dark["color"]["focus"]["$value"]) == ("{color.signal}", "{color.signal-bright}")
+    pairs = {(pr["fg"], pr["bg"]): (pr["kind"], pr["min"]) for pr in light["$extensions"]["brand-creator"]["pairs"]}
+    assert pairs[("color.on-accent", "color.accent")] == ("ui-text", 4.5) and pairs[("color.focus", "color.bg")] == ("ui-component", 3)
+    grounds = light["$extensions"]["brand-creator"]["grounds"]
+    assert grounds["named_by_owner"] == "" and len(grounds["list"]) == 1 and grounds["list"][0]["ground"] == "color.bg"
+    assert grounds["list"][0] == {"ground": "color.bg", "text": "color.text", "action": "color.accent", "on-action": "color.on-accent",
+                                  "focus": "color.focus", "border": "color.border"}
     for group in ("size", "font", "weight", "motion", "easing"):
         assert group in prim, group
+    # layout slots: six groups of proposals until G4 (tracking says it is in em)
+    for group in ("space", "radius", "layout", "breakpoint", "leading", "tracking"):
+        assert group in prim and "proposals until G4" in prim[group]["$description"], group
+    assert all(prim[g]["$type"] == "dimension" for g in ("space", "radius", "layout", "breakpoint"))
+    assert all(prim[g]["$type"] == "number" for g in ("leading", "tracking"))
+    assert "letter-spacing: calc(var(--tracking-display) * 1em)" in prim["tracking"]["$description"]
     # curves are tokens now: three proposals until G4, and the motion group no longer says they are only named in the book
     easing = prim["easing"]
     assert easing["$type"] == "cubicBezier" and {k: v["$value"] for k, v in easing.items() if not k.startswith("$")} == {
@@ -426,6 +610,11 @@ def test_trigger_evals_cover_english_polish_and_near_misses():
     for word in ("blurry on retina", "navbar", "chart", "landing page", "tailwind design system", "slide deck theme", "to rgb",
                  "taken"):
         assert word in bc_neg, f"brand-creator negatives miss the plan's near miss: {word}"
+    # the site steps: references and reference pages trigger the orchestrator (English and Polish), a production build does not
+    for q in ("pick references for the brand's website", "Build the reference pages for our site", "pokaż strony, które dobrze robią to"):
+        assert any(q in c["query"] and c["should_trigger"] for c in d["brand-creator"]), q
+    for q in ("Build the production website in Next.js from our brand kit", "Code the pricing page in our React app with the brand tokens"):
+        assert any(q in c["query"] and not c["should_trigger"] for c in d["brand-creator"]), q
     bn = d["brand-naming"]
     assert any(re.search(r"is the name \w+ (already )?taken", c["query"], re.I) and c["should_trigger"] for c in bn)
     assert any("czy nazwa" in c["query"] and c["should_trigger"] for c in bn)
@@ -530,6 +719,25 @@ def test_brand_book_skill_is_narrow_model_invocable_and_carries_the_method_per_m
                  "focus state", "minimum size", "390 px", "Counts and file rows"):
         assert any(item in r for r in rows), item
     assert "[the brand-book skill](../../../brand-book/SKILL.md)" in (REFS / "phases" / "10-book.md").read_text(encoding="utf-8")
+
+
+def test_the_kit_is_offered_at_g5_in_the_brand_book_skill_the_phase_file_and_the_command_table():
+    """G3-21: the one G5 question also offers the kit; each place names the commands in order and the pitfall of editing a generated kit file."""
+    book = _flat(SKILLS / "brand-book" / "SKILL.md")
+    for needle in ("The same question also offers the brand kit", "when the brief lists a site or INVENTORY.md lists product repositories",
+                   "Without a yes, write no kit", "`kit build` (it prints the plan and writes nothing)", "then `kit build --yes`",
+                   "needs no separate `applied-skill`", "`kit check` until it passes",
+                   "Editing a kit file under `brand/`, `snippets/` or `reference-pages/`: change the brand project, then rebuild"):
+        assert needle in book, needle
+    phase = _flat(REFS / "phases" / "10-book.md")
+    assert "- [The brand kit (opt-in at G5)](#the-brand-kit-opt-in-at-g5)" in (REFS / "phases" / "10-book.md").read_text(encoding="utf-8")
+    assert "## The brand kit (opt-in at G5)" in (REFS / "phases" / "10-book.md").read_text(encoding="utf-8")
+    for needle in ("`kit build --yes` writes", "an applied brand skill and the brand kit are written only on the owner's explicit yes at this gate",
+                   "never copied into `~/.claude/skills` or any global folder, and never committed"):
+        assert needle in phase, needle
+    row = next(ln for ln in ORCH.read_text(encoding="utf-8").splitlines() if ln.startswith("| BRAND.md, DESIGN.md, a per-brand skill and the brand kit"))
+    for needle in ("`kit build` (the plan)", "`kit build --yes`", "`kit check`", "`kit status --repo <dir>`"):
+        assert needle in row, needle
 
 
 def test_brand_adopt_is_user_invoked_and_states_every_safety_rule_of_the_apply():
@@ -645,10 +853,39 @@ def test_orchestrator_stays_under_the_line_limit_and_its_top_under_the_character
     assert len(top) < 20000, f"the top of SKILL.md is {len(top)} characters; only the top survives compaction, the limit is 20000"
 
 
+def test_the_phase_map_points_at_the_website_steps():
+    """(f) The phase map has one row for P7w and P7p whose links resolve, the layout and the commands table carry the new paths and
+    commands, and the top stays within the budget that leaves room for the next addition."""
+    text = ORCH.read_text(encoding="utf-8")
+    top = text[: text.index("## Round mechanics")]
+    assert len(top) <= 19850, f"the top of SKILL.md is {len(top)} characters; the budget for the website steps is 19850"
+    row = next((ln for ln in top.splitlines() if ln.startswith("| P7w, P7p |")), None)
+    assert row, "the phase map has no P7w, P7p row"
+    assert top.index("| P7 |") < top.index(row) < top.index("| P8 |"), "the row sits between P7 and P8"
+    assert "G4w, G4p" in row and "only when BRIEF lists a site" in row and row.rstrip().endswith("| S, F |"), row
+    links = re.findall(r"\]\(([^)#]+)\)", row)
+    assert links == ["references/phases/07w-website-references.md", "references/phases/07p-site-round.md"], links
+    for link in links:
+        assert (ORCH.parent / link).is_file(), link
+    below = text[text.index("## Round mechanics"):]
+    layout = below[below.index("## Project layout"):below.index("## Commands by phase")]
+    for needle in ("research/site-refs/<name>/ (captures)", "research/site-cliches.md", "site/<page>/  site/site.json (approved reference pages)"):
+        assert needle in layout, needle
+    commands = " ".join(below[below.index("## Commands by phase"):below.index("## References")].split())
+    assert ("| website references and the site round (S, F; only when BRIEF lists a site) | `capture --url <url> --name <name>`, "
+            "`capture <page>`, `site approve` ([07w](references/phases/07w-website-references.md), "
+            "[07p](references/phases/07p-site-round.md)) |") in commands
+    # the Review surface kept what the owner's choices rest on
+    flat = " ".join(top[top.index("## Review surface"):].split())
+    for needle in ("`state --set review_surface=artifact|local`", "never ask again", "local marked (Recommended)", "`review/index.html`", "`review_url`",
+                   "Round 0's page is a copy of the style board."):
+        assert needle in flat, needle
+
+
 def test_the_round_wrapper_builds_round_0_from_the_style_board_and_checks_the_gate_before_any_pick_board():
     p = SKILLS / "round" / "SKILL.md"
     fm, body = frontmatter(p)
-    assert fm["argument-hint"] == "[style|pick|refine|motion] [what this round should answer]"
+    assert fm["argument-hint"] == "[style|pick|refine|motion|site-refs|site] [what this round should answer]"
     assert ": " not in fm["description"] and "style board" in fm["description"] and len(fm["description"]) <= 1024
     flat = " ".join(body.split())
     for needle in ("references/phases/01s-style-research.md", "templates/style-board.html", '`data-board="style"`', "round 0", "`rounds/r0/`",
@@ -707,6 +944,170 @@ def test_the_style_research_phase_has_a_no_web_path_thumbnail_rules_and_the_rese
                    "a thumbnail also needs alt text and a non-empty caption, and the words of the caption are yours"):
         assert needle in flat, needle
     assert "embed images fetched from it" not in flat, "the old rule against showing the references' images is gone"
+
+
+def test_the_website_references_phase_mirrors_the_style_step():
+    """P7w is the style step's twin for sites: the same stop without web access, a skip only in the owner's words, no invented reference, a recorded gate; it adds the online-research question."""
+    raw = (REFS / "phases" / "07w-website-references.md").read_text(encoding="utf-8")
+    flat = " ".join(raw.split())
+    heads = ("## Contents", "## Goal", "## Inputs", "## Outputs and paths", "## No web access", "## The online-research question", "## Techniques", "## Gate", "## Pitfalls", "## Enforcement")
+    positions = [raw.index(h) for h in heads]
+    assert positions == sorted(positions), "the sections of a phase file come in the plan's order"
+    for needle in ("## No web access", "say that the website references need web access, and stop", "never write a site, an address or a description from memory",
+                   "skipped by owner", "`state --set site_research=`", "`capture --url`", "`state --record G4w", "never skip it yourself",
+                   # when it runs, and when it is never offered
+                   "Standard and Full, after G4 and the motion round, and **only when the brief lists a site**", "Never offer it otherwise",
+                   # the question: asked once, three options, each recorded, the first recommended
+                   "you **never ask again**", "one AskUserQuestion item", "(a) **Research the best real sites for this kind of visitor, and capture the sites you name** (Recommended)",
+                   "`state --set site_research=online`", "`state --set site_research=links-only`", "`state --set site_research=none`",
+                   "No web: I will send screenshots, or skip the step", "`capture --url` refuses to fetch anything (exit 2) until `site_research` is `online` or `links-only`",
+                   # the board and what a reference is
+                   "4 to 6 **groups**", "never a look", "3 or more real sites", "**take** (structure, rhythm, how it serves the job)", "**avoid** (their look: colours, type, imagery, their words)",
+                   "`research/site-refs/owner/`", "`research/site-cliches.md`", "`research/YYYY-MM-DD-site-refs.md`", "/templates/site-refs-board.html`",
+                   "byte for byte", "**Never capture a page behind a login**", "never reuse it, or a part of it, in anything you build",
+                   # the gate
+                   '"none: research again"', "Restate the pick in one line", '"skip the references"', "The site round (`data-board=\"site\"`) waits for G4w", "`state --project <dir> --require G4w`"):
+        assert needle in flat, needle
+    # the question is asked before anything is captured, and the stop for no web access comes before the question
+    assert flat.index("## No web access") < flat.index("## The online-research question") < flat.index("## Techniques")
+    assert flat.index("you **never ask again**") < flat.index("**Capture each site, then show it.**")
+    # the layout references are linked, and the page names every lint row of the board
+    assert "](../page-layouts.json)" in raw
+    for row in ("site-refs:tier", "site-refs:brief", "site-refs:g4", "site-refs:research", "site-refs:cliches-file", "groups:count", "group:<name>:references",
+                "group:<name>:shot:<k>", "owner-sites:items", "images:inlined"):
+        assert row in raw, row
+    # SKILL.md and the index list it
+    assert "[07w-website-references](references/phases/07w-website-references.md)" in ORCH.read_text(encoding="utf-8")
+    assert "(phases/07w-website-references.md)" in (REFS / "_index.md").read_text(encoding="utf-8")
+
+
+def test_the_round_wrapper_builds_a_references_board_after_g4():
+    fm, body = frontmatter(SKILLS / "round" / "SKILL.md")
+    assert "website references board" in fm["description"] and ": " not in fm["description"] and len(fm["description"]) <= 1024
+    flat = " ".join(body.split())
+    for needle in ("`site-refs` (the website references board: a round after G4 in Standard and Full, only when the brief lists a site)",
+                   "`07w-website-references.md` (a website references board)",
+                   "A website references board is another: a new, empty folder (`mkdir rounds/r<N>`), not a copy.",
+                   "--require G4` (exit 1: the system rules are not approved yet; say so and stop)",
+                   "stop when the tier is Quick or `brief/BRIEF.md` lists no site under `Required surfaces:`",
+                   "`state --project <dir> --get site_research`: `auto` or not set (an older project has no such key, and the command exits 1) means the owner has not been asked yet, so ask the online-research question first",
+                   "templates/site-refs-board.html` (`data-board=\"site-refs\"`), once its sites are captured",
+                   "without web tools say so and stop, and never invent a site",
+                   "A website references board: copy it the same way (its pictures are already inlined).",
+                   '`state --record G4w "<decision>"` before any page of the site is built', "never on your own"):
+        assert needle in flat, needle
+    # the gate and the answer are checked before the board is built, and the board before it is linted
+    assert flat.index("--require G4` (exit 1") < flat.index("Build `rounds/r<N>/board.html`") < flat.index("Lint until exit 0")
+    assert flat.index("--get site_research") < flat.index("Build `rounds/r<N>/board.html`")
+
+
+def test_the_site_round_phase_goes_hero_first_and_tags_every_choice():
+    """P7p: the hero in variants before any other page, each variant captured, checked and read cold, the owner's pick, then the pages and a choices section that tags each choice rule or example; G4p and `site approve`."""
+    raw = (REFS / "phases" / "07p-site-round.md").read_text(encoding="utf-8")
+    flat = " ".join(raw.split())
+    heads = ("## Contents", "## Goal", "## Inputs", "## Outputs and paths", "## The hero first", "## The cold review", "## The other pages", "## Approval", "## Gate", "## Pitfalls", "## Enforcement")
+    positions = [raw.index(h) for h in heads]
+    assert positions == sorted(positions), "the sections of a phase file come in the plan's order"
+    for needle in (
+            # when it runs, and what it waits for
+            "**When:** Standard and Full, after G4w, **only when the brief lists a site**", "`state --project <dir> --require G4w`", "Quick never runs it.",
+            # the hero first, in 2 or 3 variants, built in the brand's own terms
+            "## The hero first", "2 or 3 on the first hero board", "data-layout=\"<id of page-layouts.json, or own:<word>>\" data-page=\"start\">`",
+            "`assets/tokens/tokens.css`", "Words and numbers come from `FACTS.md` only", "`[data-sample]`", "No network",
+            "Per variant, in this order: `capture`, `page-check`, the cold review.", "Build the pages before the board, in this order",
+            # the cold review: fixed inputs, verdict first, in-thread by default, an agent only after the fleet gate
+            "`verdict: ship`", "`verdict: fix`", "`by: in-thread`", "It is not blind", "**An agent only after the fleet gate**",
+            "one `brand-creator:brand-reviewer` call per hero variant", "The reviewer reports and never writes", "`by: agent`",
+            "`brief/BRIEF.md` and `FACTS.md`", "at most five numbered findings",
+            # the pages, and the choices tagged rule or example
+            "`data-hero=\"<the picked variant>\"`", "The home page is a page like the others", "`rule`: the owner decided it", "`example`: a way the pages did it that may change",
+            "record the owner's decision in `DECISIONS.md` first, then cite it", "A default you chose is never a rule",
+            # the approval, in order
+            "`state --project <dir> --record G4p", "Recording a gate changes `BRAND-STATE.md`, but the `page-check` reports hold only its G4 rules", "`freeze r<N> --name approved-site", "`site approve --project <dir>`",
+            "`capture site/<id>/index.html` and `page-check site/<id>/index.html`",
+            # reference pages, not templates; production sites live in the product repository
+            "never fill-in templates", "The real site is built in the product repository",
+            # the G4 rules live in BRAND-STATE.md; qa/rules.json holds the thresholds and page.rules tied to those lines
+            "the \"(rule)\" lines of `BRAND-STATE.md` under \"Rules (G4)\", with the thresholds and the `page.rules` tied to those lines in `qa/rules.json`",
+            # a page-check report holds BRAND-STATE.md by its G4 rules only: a later write to the file leaves the reports and the lint current, a changed G4 record or "(rule)" line does not
+            "A `page-check` report holds `BRAND-STATE.md` by its G4 rules only", "only a changed G4 record or \"(rule)\" line makes them stale",
+            "Recording `review_url` and updating `BRAND-STATE.md` after that write it again, but the `page-check` reports hold only its G4 rules, so they stay current: before the reply run `board-lint rounds/r<N>/board.html --project <dir>` once more",
+            "every `board-lint` run writes the one report `assets/_checks/board-lint.json`, so the lint of the review copy took the place of the board's, and `check` wants the report of `rounds/r<N>/board.html`",
+            "or a changed G4 record or \"(rule)\" line of `BRAND-STATE.md` after the check, the capture or the lint",
+            "Other writes to `BRAND-STATE.md` (the phase, `review_url`, a gate, the Directions table, Still open) leave the `page-check` reports current",
+            "never a copy of an earlier round", "A later pages board (the refine loop on the pages, started as `cp -R` of the previous pages board) also has What changed and Weak points",
+            "**G4p The site's reference pages approved.**"):
+        assert needle in flat, needle
+    assert "rules of G4 in `qa/rules.json`" not in flat and "copy of the refine round" not in flat
+    assert "older release" not in flat, "page-check has never been released: no owner has a report from an older release"
+    assert "a lint of a board whose rule cites a line only `BRAND-STATE.md` holds lists the whole file, so it needs that run" not in flat, "a hero board has no choices: the review copy's lint replaced the board's report"
+    assert "Set the phase once" not in flat and "lists `BRAND-STATE.md` among its inputs" not in flat and "which every `page-check` report lists" not in flat, "the old rule: every write to BRAND-STATE.md makes the reports stale"
+    # the hero before the pages, the pick before the pages, and the proof of each page in its order
+    assert flat.index("## The hero first") < flat.index("## The cold review") < flat.index("## The other pages") < flat.index("## Approval")
+    step = flat[flat.index("Per variant, in this order:"):]
+    assert step.index("`capture rounds/r<N>/<Name>/index.html") < step.index("`page-check rounds/r<N>/<Name>/index.html") < step.index("[The cold review](#the-cold-review)")
+    approval = flat[flat.index("## Approval"):]
+    order = [approval.index(n) for n in ("`state --project <dir> --record G4p", "Make the proof current again", "`freeze r<N> --name approved-site", "`site approve --project <dir>`",
+                                          "Take the stills again where the pages now live")]
+    assert order == sorted(order), order
+    # the layout references are linked, and the page names every lint row of the site board
+    assert "](../page-layouts.json)" in raw and "](../../fleet.md)" not in raw and "](../fleet.md)" in raw
+    for row in ("page:site-stage", "site:tier", "site:brief", "site:g4", "site:g4w", "site:variants", "site:files", "site:layout", "site:fields", "site:check", "site:tells", "site:stills",
+                "site:<name>:reflex", "site:reflex-shared", "site:refs", "site:cold", "site:hero-first", "site:pages", "section:choices", "site:choices"):
+        assert row in raw, row
+    # SKILL.md, the index, the fleet reference and the QA phase carry it
+    assert "[07p-site-round](references/phases/07p-site-round.md)" in ORCH.read_text(encoding="utf-8")
+    assert "(phases/07p-site-round.md)" in (REFS / "_index.md").read_text(encoding="utf-8")
+    fleet = _flat(REFS / "fleet.md")
+    for needle in ("## The cold review of a site hero (main thread, one reviewer call per variant)", "the count is one `brand-creator:brand-reviewer` call per hero variant",
+                   "the model is the reviewer's tier capped at the session model", "an agent is the opt-in upgrade, only after the fleet gate", "so you write `rounds/r<N>/<name>/cold-review.md` from its reply"):
+        assert needle in fleet, needle
+    qa = _flat(REFS / "phases" / "09-qa.md")
+    assert "whether a reference group serves the visitor's job, and whether the hero variants truly differ. An in-thread cold review is not blind." in qa
+    # the CHANGELOG line says what `board-lint` checks on a site board (the obligation G2-08 left for this task)
+    changelog = _flat(ROOT / "CHANGELOG.md")
+    for needle in ("`/brand-creator:round site` builds the first screen of your home page", "`board-lint` checks the board: a site in your brief, the system rules approved, your website references picked first",
+                   "A hero's cold review has to match those views too.", "every choice is tagged as a rule or an example, and a rule says where you decided it."):
+        assert needle in changelog, needle
+
+
+def test_the_round_wrapper_has_a_site_kind():
+    fm, body = frontmatter(SKILLS / "round" / "SKILL.md")
+    assert fm["argument-hint"] == "[style|pick|refine|motion|site-refs|site] [what this round should answer]"
+    assert "the site round's reference pages" in fm["description"] and ": " not in fm["description"] and len(fm["description"]) <= 1024
+    flat = " ".join(body.split())
+    for needle in ("`site` (the site round: the hero in two or three variants, then the other pages; steps below, \"A site round\")",
+                   "`07p-site-round.md` (a site board)",
+                   "So is the first site board of each stage (below, \"A site round\").",
+                   "Before a site board, run `state --project <dir> --require G4w` (exit 1: the website references come first; say so and stop)",
+                   "A G4w that is `skipped by owner` goes on.",
+                   "a site round from `${CLAUDE_PLUGIN_ROOT}/templates/site-board.html` (`data-board=\"site\"`), once its pages are made, captured and checked",
+                   "A site round needs no web access", "A site board: copy it the same way, then give each still a `data:image/png;base64,...` src of the same file",
+                   "(`../rounds/r<N>/<name>/index.html`; it opens from this machine only)",
+                   "After the owner picks a hero on a site board, restate the pick and write it into `DECISIONS.md`; the pages come in the next turn.",
+                   '`state --record G4p "<decision>"`, then follow "Approval" in the phase file (`freeze r<N> --name approved-site`, `site approve`)'):
+        assert needle in flat, needle
+    # the gate and the answer are checked before the board is built, and the board before it is linted
+    assert flat.index("Before a site board, run") < flat.index("Build `rounds/r<N>/board.html`") < flat.index("Lint until exit 0")
+    section = flat[flat.index("## A site round"):]
+    for needle in ("The first board of each stage, the hero board and then the pages board, is a new, empty folder (`mkdir rounds/r<N>`): never a copy of an earlier round.",
+                   "A later board of the same stage starts as `cp -R rounds/r<N-1> rounds/r<N>` of the previous board of that stage; then make `capture`, `page-check` and the cold review again",
+                   "The first hero board shows 2 or 3 variants.", "`data-layout` (an id of `references/page-layouts.json`, or `own:<word>`) and `data-page` (`start` for the home page)",
+                   "a labelled `[data-sample]` element", "makes no request to another address",
+                   "fix a failing row in the page, or let its card say `fail`; never `pass`", "`verdict: ship` or `verdict: fix`", "`by: in-thread` by default and not blind",
+                   "`brand-creator:brand-reviewer` call per hero variant", "only after the fleet gate and the owner's yes",
+                   "`data-hero=\"<the picked variant>\"` and a choices section that tags every choice `rule`", "or `example`",
+                   "shoot the board last: `shot` keeps one report, and `check` wants the one of the latest board.",
+                   "Taking a still, a check or a cold review again after the lint makes its report stale: lint again.",
+                   "A write to `BRAND-STATE.md` (the phase, `review_url`, a gate, the Directions table, Still open) does not: a `page-check` report holds only its G4 rules (the G4 record and the \"(rule)\" lines)",
+                   "only a change to those needs `page-check` on each page of the round and then `board-lint rounds/r<N>/board.html --project <dir>` again",
+                   "lint a pages board again when a rule of it cites a line only `BRAND-STATE.md` holds",
+                   "never fill-in templates"):
+        assert needle in section, needle
+    # the pages are made, checked and read before the board is built from them, and the board is shot last
+    order = [section.index(n) for n in ("`brand-creator --data \"${CLAUDE_PLUGIN_DATA}\" capture rounds/r<N>/<name>/index.html", "`... page-check rounds/r<N>/<name>/index.html",
+                                        "then the cold review: `rounds/r<N>/<name>/cold-review.md`", "Build the board from the template", "shoot the board last")]
+    assert order == sorted(order), order
 
 
 def test_the_selection_phase_sends_a_full_rejection_through_the_style_research_again():
@@ -816,7 +1217,8 @@ def test_the_0_3_0_changelog_tells_the_last_fixes_and_what_an_older_project_sees
 
 def test_stale_pointers_name_the_style_step_in_the_contract_the_tier_page_and_the_state_template():
     contract = _flat(ROOT / "scripts" / "CONTRACT.md")
-    assert "gates (G0 G1 G1s G2 G2b G3 G4 G5 G6 G7)" in contract and "gates (G0 G1 G2 G2b" not in contract
+    assert "gates (G0 G1 G1s G2 G2b G3 G4 G4w G4p G5 G6 G7)" in contract and "gates (G0 G1 G2 G2b" not in contract
+    assert "site_research (auto|online|links-only|none: the owner's answer to online research for website references;" in contract
     assert "rounds/r0/board.html" in contract and "research/style-thumbs/" in contract
     # the state key, the lint rules and what the image rule checks, said exactly
     for needle in ("`state --record G1s` also writes `g1s_round`: the highest round number whose `rounds/rN/board.html` is a style board at that moment",
@@ -840,7 +1242,7 @@ def test_stale_pointers_name_the_style_step_in_the_contract_the_tier_page_and_th
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "style board" in readme
     commands = (ROOT / "docs" / "manual" / "reference" / "commands.md").read_text(encoding="utf-8")
-    assert "`[style\\|pick\\|refine\\|motion] [what this round should answer]`" in commands
+    assert "`[style\\|pick\\|refine\\|motion\\|site-refs\\|site] [what this round should answer]`" in commands
 
 
 # ---- the drawing engine step (ADR-0004): the use-llm design canvas, else Claude Code's /design, else Claude-drawn SVG on the owner's yes
@@ -1138,7 +1540,8 @@ def test_the_manual_explains_the_drawing_step_on_one_task_page_and_in_costs_and_
 # ---- motion is part of Standard and Full (ADR-0005): the decision before G4, the motion round, the motion board
 
 PHASES = REFS / "phases"
-MOTION_ROWS = ("motion:g3", "motion:off", "motion:variants", "motion:files", "motion:proof", "motion:stills", "motion:fields")   # written by hand: the rows a motion board's lint can write
+MOTION_ROWS = ("motion:g3", "motion:off", "motion:variants", "motion:files", "motion:proof", "motion:stills", "motion:fields")   # written by hand: the rows the motion release (0.4.0) added to a motion board's lint; its changelog section names each
+MOTION_BOARD_ROWS = MOTION_ROWS + ("motion:timelines",)   # and every row the lint can write today (motion:timelines, a warning, came after 0.4.0)
 INTERNAL_CODE = re.compile(r"\b(?:G\d[a-z]?|P\d{1,2}s?|ADR-\d+)\b")   # gate, phase and decision numbers: never on a user page
 
 
@@ -1187,7 +1590,7 @@ def test_the_orchestrator_says_standard_and_full_decide_motion_before_g4_and_qui
 
 def test_the_round_wrapper_has_a_motion_kind_whose_variants_are_made_before_the_board():
     fm, body = frontmatter(SKILLS / "round" / "SKILL.md")
-    assert fm["argument-hint"] == "[style|pick|refine|motion] [what this round should answer]"
+    assert fm["argument-hint"] == "[style|pick|refine|motion|site-refs|site] [what this round should answer]"
     assert "motion board" in fm["description"] and ": " not in fm["description"] and len(fm["description"]) <= 1024
     flat = " ".join(body.split())
     for needle in ("`refine` and `motion` (a round after G3 that tries the signature move as variants; steps below, \"A motion round\")",
@@ -1276,7 +1679,7 @@ def test_the_tokens_phase_has_the_motion_round_and_the_motion_rules_are_quick_on
                    "`motion:proof` (the report of any other proof never counts, a try-out's included, and a failing one fails the row); from G3 to G4 an undecided motion is an info row. Quick has neither row."):
         assert needle in flat, needle
     enforcement = flat[flat.index("## Enforcement"):]
-    for row in MOTION_ROWS:
+    for row in MOTION_BOARD_ROWS:
         assert f"`{row}`" in enforcement, row
     line = next(ln for ln in raw.splitlines() if ln.startswith("- (rule) reduced motion"))
     assert "easing.standard" in line and "`enter`" in line and "`exit`" in line and "`motion.quick`" in line
@@ -1317,7 +1720,7 @@ def test_the_phase_files_and_references_carry_the_motion_round():
 
 def test_the_board_contract_describes_the_motion_board_the_variant_card_and_every_row_the_lint_writes():
     src = (ROOT / "scripts" / "boardlib" / "motionboard.py").read_text(encoding="utf-8")
-    assert sorted(set(re.findall(r'"(motion:[a-z0-9]+)"', src))) == sorted(MOTION_ROWS), "the lint writes a row the docs do not know, or the docs name one it never writes"
+    assert sorted(set(re.findall(r'"(motion:[a-z0-9]+)"', src))) == sorted(MOTION_BOARD_ROWS), "the lint writes a row the docs do not know, or the docs name one it never writes"
     raw = (REFS / "board-contract.md").read_text(encoding="utf-8")
     assert "- [Motion board (a round after G3)](#motion-board-a-round-after-g3)" in raw and "## Motion board (a round after G3)" in raw
     assert raw.index("## Style board (round 0)") < raw.index("## Motion board (a round after G3)") < raw.index("## Per-direction cells")
@@ -1337,7 +1740,7 @@ def test_the_board_contract_describes_the_motion_board_the_variant_card_and_ever
                    "stale one names `brand-creator shot --motion rounds/r<N>/<name>/proof.json`", "are the files `frames.json` lists, by sha256",
                    "Taking a proof or its stills again after the lint makes the lint report stale: lint again, and shoot the board last."):
         assert needle in section, needle
-    for row in MOTION_ROWS:
+    for row in MOTION_BOARD_ROWS:
         assert f"`{row}`" in section, row
 
 
@@ -1345,7 +1748,7 @@ def test_the_contract_and_the_qa_phase_name_every_motion_row_and_the_motion_deci
     contract = _flat(ROOT / "scripts" / "CONTRACT.md")
     board = contract[contract.index("### The motion board"):contract.index("## Hook guard")]
     qa = _flat(PHASES / "09-qa.md")
-    for row in MOTION_ROWS:
+    for row in MOTION_BOARD_ROWS:
         assert f"`{row}`" in board and f"`{row}`" in qa, row
     assert "and `motion`, the decision of `brand-creator motion` (see The motion decision)." in contract
     for needle in ("### The motion decision (`brand-creator motion [--json] [--off \"<reason>\"]`)", "`state --json` has it as `\"motion\"`"):
@@ -1480,9 +1883,9 @@ def test_the_manual_says_standard_and_full_settle_motion_and_shows_no_internal_c
                    "In Standard and Full the book always has a Motion chapter once motion is settled."):
         assert needle in book, needle
     commands = flat["reference/commands.md"]
-    for needle in ("`[style\\|pick\\|refine\\|motion] [what this round should answer]`", "in Standard and Full, a motion round)", ": `round`, `motion`",
+    for needle in ("`[style\\|pick\\|refine\\|motion\\|site-refs\\|site] [what this round should answer]`", "in Standard and Full, a motion round)", ": `round`, `motion`",
                    "Records, once, that nothing moves.", "`motion` is a round after you approve the design that tries your logo's move",
-                   "| `style`, `pick`, `refine` or `motion` | Which kind of board to build.", "## motion", "This is a `brand-creator` command, not a slash command",
+                   "| `style`, `pick`, `refine`, `motion`, `site-refs` or `site` | Which kind of board to build.", "## motion", "This is a `brand-creator` command, not a slash command",
                    "| `--off \"<reason>\"` | Records that nothing moves, with your reason in your own words. It never writes over an earlier answer",
                    "| `--json` | Prints the answer as data. Not together with `--off` |"):
         assert needle in commands, needle

@@ -12,6 +12,7 @@ optional speed-up for Standard and Full projects, used only after the fleet gate
 - [The agents](#the-agents)
 - [Orchestration rules](#orchestration-rules)
 - [The refine loop (main thread, one reviewer call)](#the-refine-loop-main-thread-one-reviewer-call)
+- [The cold review of a site hero (main thread, one reviewer call per variant)](#the-cold-review-of-a-site-hero-main-thread-one-reviewer-call-per-variant)
 - [A fleet without a workflow](#a-fleet-without-a-workflow)
 - [Resume](#resume)
 
@@ -80,9 +81,17 @@ fully: BRAND-STATE.md, brief/BRIEF.md, FACTS.md, research/cliches.md, the approv
   technical, legal, platform, accessibility), `decisions`.
 - `naming`: `profile` (`software`, `consumer`, `personal`), `region` (two letters), `territories` (3 to 5), optional
   `hunters` (style groups), `shortlist` (3 to 12), `lookups_ok` (true only after the owner's privacy OK).
-- `adopt`: `g6` (the G6 record), `repos` (`{label, path, branch, create_branch, rows, build, findings}`), optional
+- `adopt`: `g6` (the G6 record), `repos` (`{label, path, branch, create_branch, rows, build, findings, pages}`), optional
   `mode: "fix"` (a second run with the reviewer's no-decision findings), `parallel_repos: true` (separate working
-  trees only).
+  trees only). `repos[].label` must be the label the survey gave the repository (the one in `ADOPTION.md`): the
+  reviewer's `adoption wiring --repo "<label>" --compare` looks the repository up by it, and another label ends in
+  "not a surveyed repository", which the review reports as a failure, not as "no loss".
+  `repos[].pages` (optional) are the addresses the owner gave for the pages of a redesigned site on their own local
+  server (`http://localhost:3000/`: http or https on `localhost`, `127.0.0.1` or `[::1]`, written only with letters, digits and
+  `- . _ ~ : / ? # [ ] = + % ,`, so a `$`, backtick, quote or `&` is refused before any agent starts, naming the address; write
+  `%26` for `&`): the implementer ends with `adoption wiring --after` and the
+  reviewer runs `--compare` with the same `--page "<address>"` for each, and with none they read the pages of the before
+  record, which are the old addresses.
 
 Example arguments (with placeholder paths) are in the plugin's `tests/fixtures/fleet/`.
 
@@ -140,6 +149,18 @@ Refinement (P5) is not a workflow. It runs in this thread, with at most one suba
    no-decision fixes and "Decisions for you". Without the yes, you do that review yourself, honestly.
 3. You fix the no-decision items (or argue against them in one line), then show the board with "What changed" and
    "Weak points" and the decisions; the owner decides at G3.
+
+## The cold review of a site hero (main thread, one reviewer call per variant)
+
+The site round ([07p-site-round](phases/07p-site-round.md)) has each hero variant read cold. It is not a workflow. In the
+thread it costs nothing but is not blind (the session that built the page reads it, and `cold-review.md` says `by:
+in-thread`), so an agent is the opt-in upgrade, only after the fleet gate: the count is one
+`brand-creator:brand-reviewer` call per hero variant (2 or 3 on the first hero board), the model is the reviewer's tier
+capped at the session model with the per-call `model`, and each call reads four pictures and two files. Each call gets the
+cold-review fragment of [prompt-fragments.md](prompt-fragments.md) and the six paths (the variant's four stills,
+`brief/BRIEF.md`, `FACTS.md`) and nothing else: not the board, the references or your reasons. The reviewer reports and
+never writes, so you write `rounds/r<N>/<name>/cold-review.md` from its reply, the verdict first and `by: agent`, with the
+sha256 of each input.
 
 ## A fleet without a workflow
 

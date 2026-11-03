@@ -1,0 +1,86 @@
+{
+  "$description": "The generic page tells that `brand-creator page-check` warns about: layout and copy patterns that read as a template whatever the brand. A tell is a warning (row tell:<id>), never a failure; it becomes a brand rule only when the owner adopts it in qa/rules.json page.rules (kind \"tell\", tied to a recorded G4 rule line). The browser collects the candidates (scripts/pagelib/page_measure.mjs); the thresholds below are applied by scripts/pagelib/pagecheck.py. Word lists are English and Polish; a page in another language is reported NOT verified for the tells that need one.",
+  "version": 1,
+  "languages": ["en", "pl"],
+  "tells": [
+    {
+      "id": "eyebrow",
+      "name": "An eyebrow over a heading",
+      "what": "A short label set small, in capitals or with wide letter spacing, directly above an h1, h2 or h3.",
+      "why": "It is the first thing a template adds to a heading: the label says a category the heading already says, and the pair reads the same on every product page.",
+      "measure": "The text element directly before an h1-h3 (an empty box such as a rule between them is looked past): at most threshold.max_words words, uppercase (text-transform or typed in capitals) or letter spacing of threshold.min_letter_spacing_em or more, and set smaller than the heading.",
+      "threshold": {"max_words": 4, "min_letter_spacing_em": 0.05}
+    },
+    {
+      "id": "arrow-glued",
+      "name": "An arrow glued to a link or button label",
+      "what": "A link or button whose label starts or ends with an arrow glyph, with no space or one space between them.",
+      "why": "The arrow stands in for a design decision about what the action does; it appears on the call to action of every generated page.",
+      "measure": "A shown link, button or submit input whose label (its text, with the content of its ::before and ::after) starts or ends with an arrow glyph (an arrow, a chevron, a double angle or -> and =>) and has other text, with at most threshold.max_gap_chars white space characters between them (a run of ordinary spaces, tabs and line breaks is one, as the browser draws it; each no-break or em space is one more, so a visible gap made of them is not glued). A gap made with margin or a flex gap is not seen.",
+      "threshold": {"max_gap_chars": 1}
+    },
+    {
+      "id": "middot-run",
+      "name": "A run of middle dots between items",
+      "what": "Two or more middle dots or bullets used to separate items in one line of text, or between sibling elements in one row. A bulleted list, with a dot at the start of each line or item, is not a run.",
+      "why": "A line of facts joined by dots (a price, a promise and a guarantee) fills a row without saying which fact matters.",
+      "measure": "An element whose own text holds threshold.min_separators or more middle dots or bullets with text on both sides on the same line (a br and a block child end a line, so a dot that starts a line is a list marker, not a separator), or whose children carry that many ::before or ::after separators while sitting side by side in one row (a stacked list with a marker on every item is not a run).",
+      "threshold": {"min_separators": 2}
+    },
+    {
+      "id": "stock-second-action",
+      "name": "A stock label on the hero's second action",
+      "what": "The hero offers two actions and the second one has a label every template uses, such as Learn more or How it works.",
+      "why": "The second button is there because the pattern has two buttons, not because the visitor has a second job.",
+      "measure": "The second action (link, button or submit input, outside a nav, with a label) in the first screen of the section, header or block that holds the h1: its label, with arrows and closing punctuation taken off and letter case ignored, is one of the words for the page's language.",
+      "words": {
+        "en": [
+          "Learn more", "Read more", "Find out more", "Discover more", "See more", "How it works", "See how it works", "Watch demo",
+          "Watch the demo", "See demo", "View demo", "Book a demo", "Request a demo", "Get a demo", "Take a tour", "Take the tour",
+          "See pricing", "View pricing", "Contact sales", "Talk to sales", "Get in touch", "Explore", "Explore more", "Explore features"
+        ],
+        "pl": [
+          "Dowiedz się więcej", "Czytaj więcej", "Zobacz więcej", "Poznaj więcej", "Jak to działa", "Zobacz jak to działa",
+          "Zobacz, jak to działa", "Sprawdź jak to działa", "Dowiedz się, jak to działa", "Zobacz demo", "Obejrzyj demo", "Umów demo",
+          "Umów prezentację", "Zobacz cennik", "Zobacz ofertę", "Skontaktuj się", "Skontaktuj się z nami", "Poznaj nas", "Odkryj więcej"
+        ]
+      }
+    },
+    {
+      "id": "hero-text-budget",
+      "name": "A hero that carries too much text",
+      "what": "The first screen of the hero shows more words than a visitor reads before deciding to stay.",
+      "why": "A hero that explains everything has not chosen what it is for; the rest of the page exists to explain.",
+      "measure": "The words of the first screen of the first section, header or block that holds the h1 (a nav and text below the fold are not counted), in the language of the text: more than threshold.max_words.",
+      "threshold": {"max_words": 45}
+    },
+    {
+      "id": "styled-div-mock",
+      "name": "A product mock-up made of styled boxes",
+      "what": "A large box that stands in for a screenshot or a diagram and is built from many small boxes with a background or border.",
+      "why": "A drawn imitation of an interface says what the product could look like and cannot be read, searched or kept true; a real screenshot or none is more honest.",
+      "measure": "The innermost box of threshold.min_width_px by threshold.min_height_px css px or more that holds threshold.min_styled_descendants or more shown descendants with a background or a border (form controls, table cells and rules are not counted, so a table is data and not a mock-up, and a table whose cells hold styled badges is not one either: a box that is a table or a table section, or whose styled descendants all sit in cells, is not judged; the items of a list, the li of a ul or ol with everything in them, excuse the box only when the box is the list or the items are nearly all of it, that is when at most threshold.max_unlisted_styled of its styled descendants are outside the items or the items themselves (their own boxes, not the room of the list round them) take threshold.min_list_area_ratio of its area, each item counted only as far as it lies in the box, so a row of items that runs on past it fills no more of it than lies in it, and a styled checklist or timeline is not a mock-up while a panel with its own head, figures or footer beside a list is), no img, svg or picture larger than threshold.max_icon_px css px on either side (a smaller one is an icon and does not count), no canvas or video, no data-sample label on it or an ancestor, and it is not a section of the page: a box that holds an h1, or more than threshold.max_headings headings, is the page or a band of it and is not judged.",
+      "threshold": {"min_width_px": 240, "min_height_px": 160, "min_styled_descendants": 8, "max_icon_px": 48, "max_headings": 1, "max_unlisted_styled": 1, "min_list_area_ratio": 0.8}
+    },
+    {
+      "id": "three-equal-tiles",
+      "name": "Three equal tiles in a row",
+      "what": "A row of exactly three blocks of the same width and about the same height, each with a heading.",
+      "why": "Three features, steps or prices of the same weight is the layout a template reaches for when the content has no order of its own.",
+      "measure": "At threshold.min_viewport_px wide or more: an element with exactly three shown element children (a template or a hidden child is not counted) laid out in one row, widths within threshold.width_tolerance_px, the shorter at least threshold.min_height_ratio of the taller, each holding a heading.",
+      "threshold": {"min_viewport_px": 1024, "width_tolerance_px": 2, "min_height_ratio": 0.8}
+    }
+  ],
+  "notes": [
+    {
+      "id": "stock-anatomy",
+      "what": "The page follows the stock order of a product page: a hero, three equal tiles, an FAQ and a closing call-to-action band. It is a note for the reader of the report, not a fault.",
+      "measure": "In one view, from the top of the page down: the hero (as for hero-text-budget), a three-equal-tiles row, an FAQ (a details element with a summary, or a heading that is one of the words) and a closing band (the last block of the main content: a heading, an action and at most threshold.cta_max_words words).",
+      "threshold": {"cta_max_words": 40},
+      "words": {
+        "en": ["FAQ", "FAQs", "Frequently asked questions", "Questions and answers"],
+        "pl": ["FAQ", "Pytania", "Najczęstsze pytania", "Częste pytania", "Pytania i odpowiedzi"]
+      }
+    }
+  ]
+}

@@ -506,6 +506,114 @@ test("build: the starter tokens carry three curve proposals next to the duration
   assert.match(built(p, "android/values/motion.xml"), /<integer name="brand_motion_stagger">120<\/integer>/);
 });
 
+// ---------------------------------------------------------------- text grounds ($extensions["brand-creator"].grounds)
+
+/** A project holding the three starter files (the grounds proposal for color.bg is in the light one). */
+function starterProject() {
+  const p = makeProject();
+  for (const f of fs.readdirSync(path.join(ROOT, "templates/tokens"))) fs.copyFileSync(path.join(ROOT, "templates/tokens", f), path.join(p, "tokens", f));
+  return p;
+}
+const reportOf = (p) => JSON.parse(fs.readFileSync(path.join(p, "assets/_checks/tokens.json"), "utf8"));
+
+test("build: grounds resolve into tokens.json in both modes, an unknown role warns and a project without them is unchanged", async (t) => {
+  if (needSetup(t)) return;
+  const p = starterProject();
+  const r = bc(["tokens", "--project", p]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /\[PASS\] grounds \(ground roles resolve\): 1 ground\(s\) resolved in light and dark/);
+  const withText = built(p, "tokens.json");
+  const tj = JSON.parse(withText);
+  const g = tj.grounds;
+  assert.equal(g.named_by_owner, "");
+  assert.equal(g.list.length, 1);
+  assert.deepEqual(g.list[0].roles, { text: "color.text", action: "color.accent", "on-action": "color.on-accent", focus: "color.focus", border: "color.border" });
+  assert.deepEqual(Object.keys(g.list[0].modes.light), ["ground", "text", "action", "on-action", "focus", "border"]);
+  // every hex is the one the semantic token has in that mode (tokens.json "modes"), and the starter's own values are the expected ones
+  for (const mode of ["light", "dark"]) {
+    const m = g.list[0].modes[mode];
+    assert.deepEqual(m, {
+      ground: tj.modes[mode]["color.bg"].hex, text: tj.modes[mode]["color.text"].hex, action: tj.modes[mode]["color.accent"].hex,
+      "on-action": tj.modes[mode]["color.on-accent"].hex, focus: tj.modes[mode]["color.focus"].hex, border: tj.modes[mode]["color.border"].hex });
+  }
+  assert.equal(g.list[0].modes.light["on-action"], "#f3f5f8");   // {color.paper}
+  assert.equal(g.list[0].modes.dark["on-action"], "#0e0f12");    // {color.night}
+  assert.equal(g.list[0].modes.light.focus, "#375587");          // {color.signal}
+  assert.equal(g.list[0].modes.dark.focus, "#90afe1");           // {color.signal-bright}
+  assert.match(built(p, "tokens.css"), /--color-on-accent: var\(--color-paper\);/);
+  assert.ok(reportOf(p).results.find((x) => x.id === "grounds" && x.status === "pass"));
+
+  // the same project without the block: no grounds in tokens.json (byte for byte the file above, less its last key), no grounds row
+  const q = starterProject();
+  editTokens(q, "semantic.light.tokens.json", (d) => { delete d.$extensions["brand-creator"].grounds; });
+  assert.equal(bc(["tokens", "--project", q]).status, 0);
+  const withoutText = built(q, "tokens.json");
+  assert.equal(JSON.parse(withoutText).grounds, undefined);
+  assert.ok(!reportOf(q).results.some((x) => x.id === "grounds"));
+  delete tj.grounds;
+  assert.equal(JSON.stringify(tj, null, 2) + "\n", withoutText);
+  // and a project that never had the block (Acme) has none either
+  const a = makeProject();
+  assert.equal(bc(["tokens", "--project", a]).status, 0);
+  assert.equal(JSON.parse(built(a, "tokens.json")).grounds, undefined);
+
+  // a role that is no semantic colour token: warns, names it, resolves as null in both modes, and the build still passes (exit 0) and writes
+  const w = starterProject();
+  editTokens(w, "semantic.light.tokens.json", (d) => { d.$extensions["brand-creator"].grounds.list[0].focus = "color.nope"; });
+  const rw = bc(["tokens", "--project", w]);
+  assert.equal(rw.status, 0, rw.stdout + rw.stderr);
+  assert.match(rw.stdout, /\[WARN\] grounds \(ground roles resolve\): .*color\.bg focus: color\.nope/);
+  const wj = JSON.parse(built(w, "tokens.json")).grounds.list[0];
+  assert.equal(wj.roles.focus, "color.nope");
+  assert.deepEqual([wj.modes.light.focus, wj.modes.dark.focus], [null, null]);
+  assert.equal(wj.modes.light.text, tj.modes.light["color.text"].hex);   // the other roles are untouched
+  // a role left out is null without a note (contrast is the one that warns about it); an unknown ground names itself
+  const m = starterProject();
+  editTokens(m, "semantic.light.tokens.json", (d) => { const e = d.$extensions["brand-creator"].grounds.list[0]; delete e.border; e.ground = "color.sunken"; });
+  const rm = bc(["tokens", "--project", m]);
+  assert.equal(rm.status, 0, rm.stdout + rm.stderr);
+  assert.match(rm.stdout, /\[WARN\] grounds .*color\.sunken ground: color\.sunken/);
+  assert.doesNotMatch(rm.stdout, /border:/);
+  const mj = JSON.parse(built(m, "tokens.json")).grounds.list[0];
+  assert.equal(mj.roles.border, null);
+  assert.deepEqual([mj.modes.light.border, mj.modes.dark.border, mj.modes.light.ground], [null, null, null]);
+  // the output is current for --check
+  assert.equal(bc(["tokens", "--project", p, "--check"]).status, 0);
+});
+
+test("build: a grounds block of the wrong shape fails the build and writes nothing", async (t) => {
+  if (needSetup(t)) return;
+  const entry = { ground: "color.bg", text: "color.text", action: "color.accent", "on-action": "color.on-accent", focus: "color.focus", border: "color.border" };
+  const cases = [
+    ["a list instead of an object", [entry], /grounds must be an object/],
+    ["null", null, /grounds must be an object/],
+    ["a string", "color.bg", /grounds must be an object/],
+    ["named_by_owner missing", { list: [entry] }, /grounds\.named_by_owner must be a string/],
+    ["named_by_owner not a string", { named_by_owner: 20261030, list: [entry] }, /grounds\.named_by_owner must be a string/],
+    ["list missing", { named_by_owner: "" }, /grounds\.list must be an array/],
+    ["list an object", { named_by_owner: "", list: entry }, /grounds\.list must be an array/],
+    ["an entry that is a string", { named_by_owner: "", list: ["color.bg"] }, /grounds\.list\[0\] must be an object/],
+    ["an entry without a ground", { named_by_owner: "", list: [{ ...entry, ground: undefined }] }, /grounds\.list\[0\]\.ground must be a semantic colour token name/],
+    ["a ground that is not a string", { named_by_owner: "", list: [{ ...entry, ground: 3 }] }, /grounds\.list\[0\]\.ground must be a semantic colour token name/],
+    ["a role that is not a string", { named_by_owner: "", list: [entry, { ...entry, action: ["color.accent"] }] }, /grounds\.list\[1\]\.action must be a semantic colour token name \(a string\), got \["color\.accent"\]/],
+  ];
+  for (const [what, value, expected] of cases) {
+    const p = starterProject();
+    editTokens(p, "semantic.light.tokens.json", (d) => { d.$extensions["brand-creator"].grounds = value; });
+    const r = bc(["tokens", "--project", p]);
+    assert.equal(r.status, 1, `${what}: ${r.stdout}${r.stderr}`);
+    assert.match(r.stdout, /\[FAIL\] grounds \(text grounds have the right shape\)/, what);
+    assert.match(r.stdout, expected, what);
+    assert.ok(!fs.existsSync(path.join(p, "assets/tokens")), `${what}: nothing is written from invalid sources`);
+  }
+  // every problem is named, not only the first
+  const p = starterProject();
+  editTokens(p, "semantic.light.tokens.json", (d) => { d.$extensions["brand-creator"].grounds = { named_by_owner: 1, list: "x" }; });
+  const r = bc(["tokens", "--project", p]);
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /named_by_owner must be a string.*grounds\.list must be an array/);
+});
+
 test("roundTrip: every motion output is parsed back, and a deliberate break in each one is a problem, never skipped", async (t) => {
   if (needSetup(t)) return;
   const b = await lib(t); if (!b) return;

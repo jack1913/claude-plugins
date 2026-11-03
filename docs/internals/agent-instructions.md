@@ -40,7 +40,7 @@ Two things that are easy to get backwards:
   converts free-until-invoked content into a per-read tax.
 - **`paths:` fires on Read, never on Write.** Authoring a brand-new file loads no
   rule, because nothing matching was read. A constraint that must hold while
-  *creating* a file therefore also needs a line in `CLAUDE.md` — the one sanctioned
+  *creating* a file therefore also needs a line in the always-loaded index (`AGENTS.md`, imported by `CLAUDE.md`) — the one sanctioned
   duplication, kept to a one-line summary that points at the owning rule.
 
 **One fact, one home.** If a fact already has an owner, another file may point at it
@@ -57,10 +57,11 @@ habits keep this honest:
   countable by an obvious one.
 - Re-check them periodically. `onboard-repo --check` runs the mechanical pass.
 
-## Permissions: why the Bash and PowerShell lists differ
+## Permissions: every git rule for both Bash and PowerShell
 
-`.claude/settings.json` deliberately allows fewer `Bash(git …)` entries than
-`PowerShell(git …)`. Do not "fix" the asymmetry by padding the Bash list.
+`.claude/settings.json` lists every `git` rule twice, as `Bash(git …)` and as
+`PowerShell(git …)`, and the two lists hold the same entries. Do not pad either list
+with read-only `git` commands.
 
 Claude Code recognises a **built-in set of read-only Bash commands** and runs them
 with no prompt in every mode — `ls`, `cat`, `grep`, `find`, `head`, `tail`, `wc`,
@@ -68,8 +69,8 @@ with no prompt in every mode — `ls`, `cat`, `grep`, `find`, `head`, `tail`, `w
 so `Bash(git log:*)` and friends are dead weight. Only genuinely mutating or
 networked git commands earn a Bash entry.
 
-The `PowerShell` tool has no equivalent carve-out, so its read-only git commands
-**do** need explicit allow entries. Hence the longer list.
+The `PowerShell` tool has no equivalent carve-out, and the settings add no read-only
+`git` entries for it, so a read-only `git` command run through PowerShell asks first.
 
 Permission rules are matched **per tool**: `Bash(git reset:*)` does **not** block
 `PowerShell(git reset …)`. Every `deny` and `ask` entry therefore needs both forms.

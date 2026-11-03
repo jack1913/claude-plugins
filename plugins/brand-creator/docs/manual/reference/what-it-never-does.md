@@ -8,6 +8,9 @@ The limits brand-creator keeps, so you know what stays yours.
   push you're told what it will trigger. Repository hooks are never skipped. Your product repositories change only after
   you say go, on a branch you name, one at a time, with a review first.
 - **No deletes.** Replaced files move to a dated `removed-<date>/` folder. Earlier rounds are locked.
+- **No global install of your brand kit.** The kit is written into your project, and a copy goes into a product
+  repository only on a branch you name, one file at a time. It is never put into a global skills folder, and never
+  committed. Your own files in a repository's copy are never overwritten.
 - **No "it's available".** A name check says REGISTERED, NOT-FOUND or UNKNOWN, never "available" or "clear". Names go to
   outside services only after you agree. Trademark searches and domain purchases are yours to do.
 - **No "print-ready".** Print files stay proofs until your printer checks them. Without your printer's colour profile a

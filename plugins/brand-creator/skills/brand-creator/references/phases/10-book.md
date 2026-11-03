@@ -10,6 +10,8 @@
 - [Self-review before G5](#self-review-before-g5)
 - [Collapse, edition and approval](#collapse-edition-and-approval)
 - [Adapters and the applied skill (opt-in at G5)](#adapters-and-the-applied-skill-opt-in-at-g5)
+- [The brand kit (opt-in at G5)](#the-brand-kit-opt-in-at-g5)
+  - [Kit test (optional)](#kit-test-optional)
 - [Gate](#gate)
 - [Pitfalls](#pitfalls)
 - [Enforcement](#enforcement)
@@ -30,6 +32,9 @@ runs the same self-review.
   once it is decided: it shows the signature move, the timeline and the rules, or `Nothing moves` with the owner's reason and no replay.
   When the brand moves, also the stills in `motion/frames/` that `brand-creator frames` writes (the chapter replays them).
 - BRAND-STATE.md: tier, architecture, `mark_source`, `content_languages`, `edition`, the Directions table, the Rules section, gates.
+- `site/site.json` and the stills in `site/<page>/shots/`, when `book_chapters` names `site`: the Site chapter shows
+  each approved page and tags every choice as a rule or an example. It needs the site round done (`site approve`,
+  then `capture site/<page>/index.html` for the stills); without the record or a still the book stops.
 - FACTS.md: every claim in the book's own words is a row there, or it is not written.
 - `book/chapters/*.md` (generated mode) or `book.html` (authored-vector mode).
 
@@ -120,11 +125,66 @@ Ask once, at G5, whether the owner wants either. Nothing below is written withou
 - Both are generated files: `check` fails a hand edit, treats a changed source as not verified, and `check --cascade` searches them. `staleness` reads
   both as inputs of the pack. `--replace` moves a hand-edited file to `removed-<date>/` before writing a new one.
 
+## The brand kit (opt-in at G5)
+
+The kit is a folder around the applied skill that a product repository can carry. It is offered in the same G5 question as the
+adapters and the applied skill, in every tier, and recommended when the brief lists a site or INVENTORY.md lists product
+repositories. Nothing is written without the owner's yes, and it needs G5 recorded and an approved edition. Approved masters (ads,
+decks and other templates) go into `assets/masters/` first, and only approved ones: the kit copies everything there.
+
+1. `brand-creator kit build` prints the plan and writes nothing (exit 2). Show it, then `kit build --yes` writes
+   `.claude/skills/<slug>-brand/`: `SKILL.md` (the applied skill, from the same builder, with its paths inside the kit and a "The kit"
+   section that prints the version), `kit.json`, `rules.json`, `facts.json`, the brand's own files copied byte for byte under `brand/`
+   at their project paths, and `snippets/`. The kit includes the per-brand skill, so a yes to the kit needs no separate
+   `applied-skill`: that command leaves a project with a kit to `kit build`.
+2. The owner's files are written once from `templates/kit/` and never overwritten or moved: `EXTENDING.md`, `voice.md`, `visual.md`,
+   `golden-rules.md` and `recipes/web-page.md`. Fill the three with a `[[fill: ...]]` marker with the owner: `voice.md` from the tone
+   chapter of the book and the FACTS voice rows, `visual.md` from the book, `golden-rules.md` citing rule ids from `rules.json`.
+3. `kit build --yes` again records the owner's text and moves the version on (until then `kit check` warns that owner files changed
+   since the last build), then `kit check` until it passes. A fresh kit fails `kit:fill` until those three files are filled; it also
+   fails a hand-edited generated file and a dead link, and says "not verified" when the brand changed after the kit was built.
+4. A brand change goes into the project (tokens, logo, rules, facts), then `kit build --yes` again, then `kit check`. A generated
+   file edited by hand, or a file put into `brand/`, `snippets/` or `reference-pages/`, stops the build (exit 1); `--replace` moves
+   it to `removed-<date>/` and builds. An edit of an owner file moves the kit's version at the next build.
+5. To put the kit in a repository: `adoption add --repo <label> --kit`, then [the brand-adopt skill](../../../brand-adopt/SKILL.md)
+   copies it on the owner's branch and `kit status --repo <path>` must say `current`. The scripts never write outside the project, and
+   the kit is never copied into `~/.claude/skills` or any global folder, and never committed.
+
+### Kit test (optional)
+
+After the kit is written the owner may ask for a kit test: a hero and one other piece of the page, built from the kit alone and
+checked against the brand. Offer it when `kit check` passes; never start it unasked. It runs in the thread. It is not blind (the
+session that wrote the kit builds from it), so say so. The builder reads only the kit's own files; the cold read also reads `FACTS.md`
+(step 2). The steps, in order:
+
+1. **Build.** Make a scratch folder outside the project (`mktemp -d`) and copy the kit folder `.claude/skills/<slug>-brand/` into
+   it, as a product repository would carry it. One builder works there from the kit alone, following `recipes/web-page.md`: the
+   visitor's job and the brief line in, a hero and one other piece out. It reads nothing else of the brand project (no book, no
+   rounds, no project tokens). It copies the brand files it uses from the kit's `brand/` into its own folder and links them from
+   there.
+2. **Score.** `brand-creator page-check --from <the scratch folder> <page> --project <the brand project>` for each page, both
+   tiers: the brand rules fail the page and the reflex tells warn. Each run writes a report into the brand project's
+   `assets/_checks/page-check/`, which `check` does not gate. Then a cold read with the cold-review bullet under **Review** in
+   [prompt-fragments.md](../prompt-fragments.md): the hero's stills, the brief line the builder had and `FACTS.md`, and nothing
+   else, with `verdict: ship` or `verdict: fix` first. `shot` and `capture` take a page of a project only, so take the stills in a
+   scratch copy of the brand project with the builder's folder copied into it (`capture <page> --project <the copy>`), never in
+   the brand project itself.
+3. **Gaps flow back.** Name where each gap belongs and fix it there: a value the tokens lacked goes to the tokens, a rule the
+   builder had to guess to the G4 rules, a claim it could not make to `FACTS.md`, a step it misread to the owner's files
+   (`recipes/web-page.md`, `voice.md`, `visual.md`, `golden-rules.md`, `EXTENDING.md`). Then `kit build --yes` and `kit check`. A
+   generated kit file is never patched: the next build stops on a hand edit.
+4. **Record.** One line in BRAND-STATE.md Notes: `kit test <date>: page-check <status>; gaps: <the gaps, and the cold read's
+   verdict>`. List each gap still open under "Still open".
+
+The thread builds step 1 and no agent is launched for it, because none of the plugin's agents fits ([fleet.md](../fleet.md) lists
+what each may write): `brand-designer` writes only its `rounds/rN/<direction>/` and builds a board from the board template, and
+`brand-implementer` writes only a product repository, after G6. No workflow is added for the kit test.
+
 ## Gate
 
 **G5** (every tier; in Quick it closes the project after the short guide): the edition is approved, the collapse step is done, `check`
-exits 0 with the book's reports current. BRAND.md and DESIGN.md adapters
-and an applied brand skill are written only on the owner's explicit yes at this gate.
+exits 0 with the book's reports current. BRAND.md and DESIGN.md adapters,
+an applied brand skill and the brand kit are written only on the owner's explicit yes at this gate.
 
 ## Pitfalls
 

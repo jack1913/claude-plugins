@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "approved": "2026-10-17 approved start; rules c1",
+  "round": 3,
+  "hero": "Ledger",
+  "pages": [
+    {
+      "id": "start",
+      "path": "site/start/index.html",
+      "layout": "walkthrough",
+      "sha256": "87666929772516f1617433a1f62bc870776ab4459e8cfd8cedd18465d950ae35"
+    }
+  ],
+  "choices": [
+    {
+      "id": "c1",
+      "text": "The stamp appears once per view",
+      "tag": "rule",
+      "source": "the stamp appears once per view",
+      "pages": [
+        "start"
+      ]
+    },
+    {
+      "id": "c2",
+      "text": "Plans sit under the steps",
+      "tag": "example",
+      "source": "",
+      "pages": [
+        "start"
+      ]
+    }
+  ]
+}

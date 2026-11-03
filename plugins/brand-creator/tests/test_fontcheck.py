@@ -115,6 +115,21 @@ def test_fonts_under_assets_fonts_are_found_without_a_flag(proj):
     assert report(proj, "fontcheck")["fonts"] == ["assets/fonts/a.ttf"]
 
 
+def test_a_named_font_is_checked_together_with_the_fonts_under_assets_fonts(proj):
+    # naming a font outside assets/fonts/ (a master's or a page's) used to narrow the one fontcheck report to it, so the next
+    # kit build found no licence row for the brand's own fonts and left them out of the kit
+    d = proj / "assets" / "fonts"
+    d.mkdir(parents=True)
+    font_variant(d / "a.ttf", static=True)
+    extra = proj / "assets" / "masters" / "deck"
+    extra.mkdir(parents=True)
+    font_variant(extra / "b.ttf", static=True)
+    r = bc("fontcheck", "--lang", "pl", "--no-platform", "--font", str(extra / "b.ttf"), "--font", str(d / "a.ttf"), project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert report(proj, "fontcheck")["fonts"] == ["assets/fonts/a.ttf", "assets/masters/deck/b.ttf"]   # each once, assets/fonts/ first
+    assert {"licence:assets/fonts/a.ttf", "licence:assets/masters/deck/b.ttf"} <= set(results(proj))
+
+
 # ---------------------------------------------------------------- licence hint and budget
 
 def test_licence_hint_reads_the_name_table(proj, tmp_path):
@@ -125,6 +140,106 @@ def test_licence_hint_reads_the_name_table(proj, tmp_path):
     assert fc(proj, "--lang", "pl", font=nolic).returncode == 0  # a warning, not a failure
     lic = results(proj)["licence:nolic.ttf"]
     assert lic["status"] == "warn" and lic["recognised"] is None and "no recognisable licence" in lic["detail"]
+
+
+def test_the_licence_row_names_the_family_weight_and_style_of_the_file(proj):
+    # The fixture read by hand with fontTools: name ID 16 absent, name ID 1 "Inter", OS/2 usWeightClass 400, fsSelection bit 0 clear, macStyle 0.
+    r = fc(proj, "--lang", "pl")
+    assert r.returncode == 0, r.stdout + r.stderr
+    lic = results(proj)[f"licence:{TEST_FONT.name}"]
+    assert (lic["family"], lic["weight"], lic["style"]) == ("Inter", 400, "normal")
+    assert lic["status"] == "info" and lic["recognised"] == "SIL Open Font License (OFL)"  # the status and the facts are as before
+
+
+FACE_VARIANTS = """
+import sys
+from fontTools.ttLib import TTFont
+out, src = sys.argv[1], sys.argv[2]
+
+def make(name, change):
+    f = TTFont(src)
+    change(f)
+    f.save(f"{out}/{name}.ttf")
+
+def by_fsselection(f):  # weight 700; italic by OS/2 fsSelection bit 0 alone
+    f["OS/2"].usWeightClass = 700
+    f["OS/2"].fsSelection |= 1
+    f["head"].macStyle &= ~2
+
+def by_macstyle(f):  # italic by head.macStyle bit 1 alone
+    f["OS/2"].fsSelection &= ~1
+    f["head"].macStyle |= 2
+
+def typographic_family(f):  # name ID 16 beats name ID 1
+    f["name"].setName("Inter Display", 16, 3, 1, 0x409)
+
+def no_os2(f):  # no OS/2 table: weight 400, style from head.macStyle
+    del f["OS/2"]
+    f["head"].macStyle |= 2
+
+def no_family(f):  # neither name ID 16 nor name ID 1: the file stem
+    f["name"].names = [n for n in f["name"].names if n.nameID not in (1, 16)]
+
+make("by-fsselection", by_fsselection)
+make("by-macstyle", by_macstyle)
+make("typographic-family", typographic_family)
+make("no-os2", no_os2)
+make("Brand-Sans", no_family)
+"""
+
+
+def test_the_licence_row_takes_the_family_weight_and_style_from_the_next_table_when_one_is_missing(proj, tmp_path):
+    from helpers import fonttools
+    made = fonttools(FACE_VARIANTS, str(tmp_path), str(TEST_FONT))
+    assert made.returncode == 0, made.stderr
+    names = ["by-fsselection", "by-macstyle", "typographic-family", "no-os2", "Brand-Sans"]
+    args = ["fontcheck", "--lang", "pl", "--no-platform"]
+    for n in names:
+        args += ["--font", str(tmp_path / f"{n}.ttf")]
+    r = bc(*args, project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    res = results(proj)
+    got = {n: (res[f"licence:{n}.ttf"]["family"], res[f"licence:{n}.ttf"]["weight"], res[f"licence:{n}.ttf"]["style"]) for n in names}
+    assert got == {
+        "by-fsselection": ("Inter", 700, "italic"),
+        "by-macstyle": ("Inter", 400, "italic"),
+        "typographic-family": ("Inter Display", 400, "normal"),
+        "no-os2": ("Inter", 400, "italic"),
+        "Brand-Sans": ("Brand-Sans", 400, "normal"),
+    }
+
+
+WEIGHT_VARIANTS = """
+import sys
+from fontTools.ttLib import TTFont
+out, src = sys.argv[1], sys.argv[2]
+for name, stored in (("w-zero", 0), ("w-over", 1001), ("w-max", 1000), ("w-min", 1), ("w-huge", 65535)):
+    f = TTFont(src)
+    f["OS/2"].usWeightClass = stored
+    f.save(f"{out}/{name}.ttf")
+"""
+
+
+def test_an_invalid_weight_class_is_taken_as_400_and_the_detail_says_the_stored_value_was_invalid(proj, tmp_path):
+    from helpers import fonttools
+    made = fonttools(WEIGHT_VARIANTS, str(tmp_path), str(TEST_FONT))
+    assert made.returncode == 0, made.stderr
+    names = ["w-zero", "w-over", "w-max", "w-min", "w-huge"]
+    args = ["fontcheck", "--lang", "pl", "--no-platform"]
+    for n in names:
+        args += ["--font", str(tmp_path / f"{n}.ttf")]
+    r = bc(*args, project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    res = results(proj)
+    assert {n: res[f"licence:{n}.ttf"]["weight"] for n in names} == {"w-zero": 400, "w-over": 400, "w-max": 1000, "w-min": 1, "w-huge": 400}      # 1 to 1000 is a weight
+    for n, stored in (("w-zero", 0), ("w-over", 1001), ("w-huge", 65535)):
+        lic = res[f"licence:{n}.ttf"]
+        assert f"OS/2 usWeightClass {stored} is not a valid weight (1 to 1000): taken as 400" in lic["detail"], lic["detail"]
+        assert lic["status"] == "info" and lic["recognised"] == "SIL Open Font License (OFL)" and "not legal advice" in lic["detail"]      # nothing else about the row changed
+    for n in ("w-max", "w-min"):
+        assert "usWeightClass" not in res[f"licence:{n}.ttf"]["detail"]
+    ok = fc(proj, "--lang", "pl")                                                  # the fixture's own 400 is valid and says nothing
+    assert ok.returncode == 0 and "usWeightClass" not in results(proj)[f"licence:{TEST_FONT.name}"]["detail"]
 
 
 def test_a_restricted_embedding_flag_fails_the_licence_hint(proj, tmp_path):

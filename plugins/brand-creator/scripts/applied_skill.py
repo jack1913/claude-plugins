@@ -5,13 +5,14 @@
 # ///
 """brand-creator applied-skill: a small per-brand skill written into the project's own .claude/skills/<slug>-brand/, only with --yes.
 
-The skill carries what an agent needs to apply the brand: colours with their contrast ratios, type, the mark files and the small-size rule,
+The skill carries what an agent needs to apply the brand: colours with their contrast ratios and the grounds text sits on, type, the mark files and the small-size rule,
 motion (the duration and curve tokens, and motion/motion.json: the signature move and the rules) when the brand has any, what is never done, the
 owner's G4 rules and the facts that may be claimed. It is generated from the built tokens, BRAND-STATE.md, FACTS.md and motion/motion.json
 (templates/applied-skill/SKILL.md fills it), so it never holds a second copy that can drift. Opt-in at gate G5: it needs G5 recorded and the
 owner's explicit OK, which is the flag --yes; without it the command prints what it would write and exits 2. --plan prints and exits 0.
 `check` treats the file as generated (a hand edit fails, a changed source makes the report not verified) and `check --cascade` searches it.
 A file that was edited by hand is replaced only with --replace, which moves the old one to removed-<date>/.
+A project whose skill folder holds a kit (kit.json) is handed over to `brand-creator kit build --yes`: this command exits 2 there before it writes anything (with --plan too).
 """
 import json
 import shutil
@@ -23,6 +24,7 @@ sys.path.insert(0, str(HERE / "lib"))
 sys.path.insert(0, str(HERE / "booklib"))
 sys.path.insert(0, str(HERE / "adaptlib"))
 import adapt  # noqa: E402
+import kitlib  # noqa: E402
 import motionspec  # noqa: E402
 from _common import (EXIT_FAIL, EXIT_USAGE, Parser, Report, add_project_arg, confine, fail, find_project, main_guard, plugin_root,  # noqa: E402
                      require_gate, sha256_bytes, sha256_file, today, write_bytes_if_changed)
@@ -40,6 +42,8 @@ def main() -> int:
     ap.add_argument("--replace", action="store_true", help="replace a skill file that was edited by hand (the old one is moved to removed-<date>/)")
     a = ap.parse_args()
     project = find_project(a.project)
+    if kitlib.exists(project):   # the kit's SKILL.md is the kit's to write: the same builder, with its paths inside the kit
+        fail(EXIT_USAGE, "this project's brand skill is a kit (kit.json): run `brand-creator kit build --yes`")
     require_gate(project, "G5", for_what="The applied brand skill")
     tpl = plugin_root() / "templates" / "applied-skill" / "SKILL.md"
     if not tpl.is_file():

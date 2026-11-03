@@ -13,15 +13,25 @@
 //   render.mjs pdf <page.html>  the page as a PDF (print media, RGB), with a label on its first page; book_pdf.py finishes the file
 //   render.mjs pdf <page.html> --size-mm WxH [--measure FILE.json]  print stationery: exact page size in mm, no margins, no label on the
 //                               page, and the geometry of every text, image and rule measured in the same render (emitters/print.py)
+//   render.mjs page-measure --request FILE --out FILE  the measuring half of `brand-creator page-check`: one page opened at each width and colour scheme, the raw facts
+//                               written to --out (page_check.py judges them)
+//   render.mjs capture <page.html>  four first-screen stills (1440 and 390 wide, light and dark) and a full page of a page of the project, beside it in shots/, and capture.json
+//                               (what it loaded); a page in history/ or in a round before the latest is refused
+//   render.mjs capture --url URL --name NAME  stills and thumbnails of a real site into research/site-refs/NAME/: the only command that lets Chromium reach the network, and
+//                               only after the owner answered the online-research question (site_research)
+//   render.mjs wiring <url>  the wiring of a page of the owner's own local server (loopback only), read from the DOM: JSON {kind: [values]} for `brand-creator adoption wiring --page`
 // Needs `brand-creator setup` (Playwright in <data>/node_modules, Chromium build recorded in <data>/setup.json).
 import fs from "node:fs";
 import path from "node:path";
 import http from "node:http";
 import { parseArgs } from "node:util";
 import {
-  EXIT, die, mainGuard, dataDir, readSetup, loadDep, findProject, confine, outsideProject, scratchDir, rel,
-  Report, forbiddenTerms, writeIfChanged, sha256, readStateTop, missingSharedLibs, findHeadlessShell, proofReportTool, pixelArt, motionProofKind,
+  EXIT, die, mainGuard, dataDir, readSetup, loadDep, findProject, confine, outsideProject, outsideOrSpecimens, scratchDir, rel,
+  Report, forbiddenTerms, writeIfChanged, sha256, readStateTop, missingSharedLibs, findHeadlessShell, proofReportTool, pixelArt, motionProofKind, today,
 } from "./lib/_common.mjs";
+import { isLoopbackUrl } from "./lib/_common.mjs";
+import { collect } from "./pagelib/page_measure.mjs";
+import { collectWiring } from "./pagelib/wiring.mjs";
 
 const ANIMATION_CAP_MS = 15000;   // shot waits at most this long for running animations and transitions to end
 
@@ -33,14 +43,22 @@ const USAGE = `usage:
   render.mjs fonts --text TEXT (--font-file FILE | --family NAME) [--json]
   render.mjs pdf <page.html> --out FILE.pdf --label TEXT [--project DIR] [--format A4|Letter] [--scheme light|dark] [--label-px N] [--timeout MS]
   render.mjs pdf <page.html> --out FILE.pdf --size-mm WxH [--bleed-mm N] [--measure FILE.json] [--project DIR] [--scheme light|dark] [--timeout MS]
+  render.mjs page-measure --request FILE.json --out FILE.json [--project DIR]
+  render.mjs capture <page.html> [--project DIR] [--wait MS] [--timeout MS]
+  render.mjs capture --url URL --name NAME [--project DIR] [--timeout MS]
+  render.mjs wiring <url>
   render.mjs selftest
-shots are written outside the project (default: <data>/scratch/...); the report goes to <project>/assets/_checks/shot.json.
+shots are written outside the project (default: <data>/scratch/...) or, with --out, under <project>/specimens/ (shots kept as specimens); the report goes to <project>/assets/_checks/shot.json.
 shot loads lazy images first, pauses --wait MS after load (default 300), then waits for running animations and transitions to end
 (at most ${ANIMATION_CAP_MS / 1000} s; one that repeats forever is shot where it is, and the report says so).
 shot --motion writes one report per proof file: <project>/assets/_checks/motion/<slug>-<hash6>.json. frames writes its stills inside the project, into
 motion/frames/<case>/ (a try-out proof, one in the latest round or a removed-*/ folder: <its folder>/frames/<case>/; a proof in history/ or in an earlier round is refused, those are read-only), each file only on a byte change, and its report to
 <project>/assets/_checks/frames/<slug>-<hash6>.json. Both reports take as inputs the proof, the pages and every project file the pages loaded (a stylesheet, tokens.css, a
-script, an image), so a change to one of them makes the report stale.`;
+script, an image), so a change to one of them makes the report stale.
+capture writes no report: its stills and capture.json go beside the page (<page folder>/shots/), or with --url into research/site-refs/NAME/; --url is refused until
+site_research in BRAND-STATE.md is online or links-only, and it is the only form that lets the browser reach the network.
+wiring opens one page of your own local server (http or https on localhost, 127.0.0.1 or [::1]; anything else is refused) and prints, as JSON on stdout, the links, form fields, ids, test hooks,
+scripts and inline handlers it carries as written in the DOM; a page that does not load is exit 3.`;
 
 const MIME = {
   ".html": "text/html; charset=utf-8", ".htm": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8",
@@ -120,17 +138,35 @@ function pageUrl(project, origin, file) {
   return { abs, url: origin + "/" + rel(project, abs).split("/").map(encodeURIComponent).join("/") };
 }
 
-/** Attach request/console collectors; non-local requests are recorded and aborted (a board never needs the network). */
-async function instrument(context, origin) {
+/** Attach request/console collectors; non-local requests are recorded and aborted (a board never needs the network).
+ *  `ownRedirects: true` (page-measure) answers every request to `origin` itself, so a redirect to another origin is stopped too (see answerWithoutLeaving),
+ *  and takes the WebSockets of the page in hand too (see stopForeignSockets). */
+async function instrument(context, origin, { ownRedirects = false } = {}) {
   const seen = { nonLocal: [], failedLocal: [], local: 0, errors: [], warnings: [] };
   await context.route("**/*", (route) => {
     const u = route.request().url();
     if (u.startsWith("data:") || u.startsWith("blob:") || u.startsWith("about:")) return route.continue();
-    if (u.startsWith(origin + "/")) { seen.local++; return route.continue(); }
+    if (u.startsWith(origin + "/")) { seen.local++; return ownRedirects ? answerWithoutLeaving(route, origin, seen) : route.continue(); }
     seen.nonLocal.push(u.slice(0, 160));
     return route.abort("blockedbyclient");
   });
+  if (ownRedirects) await stopForeignSockets(context, origin, seen);
   return seen;
+}
+/** A route does not see a WebSocket, so the page's own are handled here. One to the page's own origin goes through (a dev server's hot reload); one to any other origin is
+ *  recorded as a request to another origin and closed before it connects, so that server hears nothing. A WebSocket opened inside a worker is out of reach of this:
+ *  it connects, to any host the machine can reach.
+ *  Chromium takes a page whose document this script answered itself (route.fulfill) for a public one, because the answer has no address of its own, and its Local Network
+ *  Access check then blocks every WebSocket the page opens to this machine, its own origin included, with a console error (net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS).
+ *  The page's own origin is granted that permission, which is what a page served from this machine has anyway. */
+async function stopForeignSockets(context, origin, seen) {
+  await context.grantPermissions(["local-network-access"], { origin });
+  await context.routeWebSocket(() => true, (ws) => {
+    const u = ws.url();
+    if (u.replace(/^ws/, "http").startsWith(origin + "/")) { ws.connectToServer(); return; }
+    seen.nonLocal.push(u.slice(0, 160));
+    return ws.close({ code: 1008, reason: "page-check runs offline" });
+  });
 }
 function watch(page, seen, origin) {
   page.on("pageerror", (e) => seen.errors.push("pageerror: " + String(e.message || e).split("\n")[0]));
@@ -227,7 +263,7 @@ async function cmdShot(argv) {
   if (!(sliceH >= 200) || sliceH * dsf >= 16384) die(EXIT.USAGE, `--slice ${values.slice} css px at dsf ${dsf} gives ${sliceH * dsf} px; slices must stay under 16384 px (the Chromium texture limit)`);
   const pageFile = positionals[0];
   const name = values.name || rel(project, confine(project, pageFile, "page")).replace(/\.[a-z]+$/i, "").replace(/[^A-Za-z0-9._-]+/g, "-");
-  const outDir = values.out ? outsideProject(project, values.out, "--out") : scratchDir(project, path.join("shots", name));
+  const outDir = values.out ? outsideOrSpecimens(project, values.out, "--out") : scratchDir(project, path.join("shots", name));
   fs.mkdirSync(outDir, { recursive: true });
   let terms;
   if (values["forbidden-file"]) {
@@ -345,7 +381,7 @@ async function cmdCard(argv) {
 
 
 // ---------------------------------------------------------------- motion proof (shot --motion <proof.json>) and frames
-// proof.json: {"schema": 1, "cases": [ {type: "states", ...} | {type: "page", ...} ]}. See scripts/CONTRACT.md "Motion proof".
+// proof.json: {"schema": 1, "cases": [ {type: "states", ...} | {type: "page", ...} | {type: "component", ...} ]}. See scripts/CONTRACT.md "Motion proof".
 //  states: an animated mark file = the complete still, its moving part in <g data-motion> whose children <g data-state="name">
 //          are the named states (the stored file shows "rest"). Each state is rendered at dsf 1 and 2 (inline SVG screenshot and
 //          <img> drawn on a canvas); rest must equal the static SVG, a state with an "expected" file must equal it, and every
@@ -360,6 +396,7 @@ async function cmdCard(argv) {
 //          (prefers-reduced-motion: reduce): no running animation, no requestAnimationFrame loop, no motion listener, CLS = 0, rest frame =
 //          static SVG. A control: the normal pass must show motion, else the reduced result is vacuous.
 //  frames: the same seeking, to write stills of the mark (motion/frames/<case>/), see cmdFrames.
+//  component: the states (hover, press, keyboard focus) of one component of a page, see componentCase below.
 const MOTION_EVENTS = ["pointermove", "mousemove", "touchmove", "wheel", "scroll", "deviceorientation", "devicemotion"];
 const SAMPLE_STEPS = 32;          // the motion is stepped through at 0 and at every 1/32 of its length, plus every keyframe offset
 const MAX_SAMPLE_POINTS = 400;    // keyframe points past this are thinned (a finite animation of hundreds of iterations), and the row says so
@@ -1201,6 +1238,359 @@ async function pageCase(browser, project, server, c, report, inputs, scratch) {
   await R.ctx.close();
 }
 
+// ---------------------------------------------------------------- component motion proof (case type "component")
+// A component case proves the states of one component on a page (hover, press, keyboard focus) for one line of G4 (`rule`); it needs no mark and no still.
+// For each width and state the element is put into the state with the real input (the pointer, the mouse button, the keyboard), the transitions and animations
+// the change starts on the element and inside it are paused and stepped through their sample points as a page case's are (never waited for), the state is
+// left, and what that starts is stepped through too. Rows (see scripts/CONTRACT.md "Motion proof"): shift:<state>:<width>, tokens:<state>, reduced:<state>, rest:<state>.
+const COMPONENT_STATES = ["hover", "active", "focus-visible"];
+const COMPONENT_WIDTHS = [390, 1440];
+const COMPONENT_HEIGHT = 900;
+const COMPONENT_KEYS = ["name", "type", "page", "selector", "rule", "states", "widths", "settle_ms"];
+const COMPONENT_ACT_MS = 3000;   // how long Playwright waits for the element to be visible and to take the pointer
+const MAX_WATCHED = 400;         // the boxes watched for a shift: the element and what follows it
+
+/** The keys of a component case, checked: a bad one is a usage error, raised before a browser is started. -> {states, widths, settle}. */
+function componentOptions(c) {
+  const bad = (m) => die(EXIT.USAGE, `motion case ${c.name}: ${m}`);
+  for (const k of Object.keys(c)) if (!COMPONENT_KEYS.includes(k)) bad(`unknown key "${k}" (a component case takes ${COMPONENT_KEYS.join(", ")})`);
+  for (const k of ["page", "selector", "rule"]) {
+    if (typeof c[k] !== "string" || !c[k].trim()) bad(`a component case needs "${k}" as a non-empty string` + (k === "rule" ? " (the G4 line it proves)" : k === "selector" ? " (the component's element)" : ""));
+  }
+  const states = c.states ?? ["hover", "active"];
+  if (!Array.isArray(states) || !states.length || states.some((s) => !COMPONENT_STATES.includes(s)) || new Set(states).size !== states.length) {
+    bad(`"states" must be a list of different states from ${COMPONENT_STATES.join(", ")}`);
+  }
+  const widths = c.widths ?? COMPONENT_WIDTHS;
+  if (!Array.isArray(widths) || !widths.length || widths.some((w) => !Number.isInteger(w) || w < 200 || w > 4000) || new Set(widths).size !== widths.length) {
+    bad('"widths" must be a list of different whole numbers from 200 to 4000 (css px)');
+  }
+  const settle = c.settle_ms ?? 300;
+  if (typeof settle !== "number" || !Number.isFinite(settle) || settle < 0) bad('"settle_ms" must be a number of 0 or more');
+  return { states, widths, settle };
+}
+
+/** The motion tokens of the built tokens: {durations: [[path, ms]], curves: [[path, [x1, y1, x2, y2]]]}, or {why} when they cannot be read. */
+function componentTokens(project, inputs) {
+  const file = path.join(project, "assets", "tokens", "tokens.json");
+  if (!fs.existsSync(file)) return { why: "assets/tokens/tokens.json is not built: run `brand-creator tokens`" };
+  inputs.push(file);
+  let doc;
+  try { doc = JSON.parse(fs.readFileSync(file, "utf8")); } catch (e) { return { why: `assets/tokens/tokens.json cannot be read (${e.message}): run \`brand-creator tokens\`` }; }
+  const m = doc && typeof doc === "object" ? doc.motion ?? {} : {};
+  return { durations: Object.entries(m.durations_ms ?? {}), curves: Object.entries(m.curves ?? {}) };
+}
+
+/** An easing as four numbers (a named one as CSS defines it; linear as 0, 0, 1, 1), or null for one that is not a cubic-bezier (steps, linear()). */
+function bezierOf(s) {
+  const e = String(s ?? "").trim();
+  if (e === "linear") return [0, 0, 1, 1];
+  if (NAMED_EASINGS[e]) return NAMED_EASINGS[e];
+  const v = /^cubic-bezier\(([^)]*)\)$/.exec(e)?.[1].split(",").map(Number);
+  return v && v.length === 4 && v.every(Number.isFinite) ? v : null;
+}
+/** The easings that shape a component animation: a transition's is its timing function; a CSS animation's is that of each interval between two keyframes
+ *  (the effect's own is the default linear); one a script made has both (a keyframe left at its default linear is not one the author chose). */
+function easingsOf(a) {
+  const between = a.keyframes.slice(0, -1).map((k) => k.e);
+  return a.kind === "transition" ? [a.easing] : a.kind === "animation" ? between : [a.easing, ...between.filter((e) => e !== "linear")];
+}
+const ms3 = (x) => Math.round(x * 1000) / 1000;
+const animationWho = (a, names) => `${a.kind === "transition" ? "transition of" : a.kind === "animation" ? "animation" : "script animation"}${a.kind === "script" && names.every((n) => n === "animation") ? "" : ` ${names.join(", ")}`}${a.where ? ` on ${a.where}` : ""}`;
+/** The animations of a state change against the motion tokens. -> {bad: what is no token, used: the tokens that were used}. */
+function tokenProblems(items, tok) {
+  const near = (a, b) => Math.abs(a - b) < 1e-6, groups = new Map(), bad = [], used = new Set();
+  for (const a of items) {   // a transition of `all` is one transition per property, all alike: said once
+    const eases = easingsOf(a), key = JSON.stringify([a.kind, a.where, a.duration, eases]);
+    if (!groups.has(key)) groups.set(key, { a, eases, names: [] });
+    if (!groups.get(key).names.includes(a.name)) groups.get(key).names.push(a.name);
+  }
+  const durList = tok.durations.map(([k, ms]) => `${k} ${ms} ms`).join(", ") || "the built tokens hold none";
+  const curveList = tok.curves.map(([k, v]) => `${k} cubic-bezier(${v.join(", ")})`).join(", ") || "the built tokens hold none";
+  for (const { a, eases, names } of groups.values()) {
+    const who = animationWho(a, names), d = tok.durations.find(([, ms]) => near(ms, a.duration));
+    if (d) used.add(`${d[0]} (${d[1]} ms)`); else bad.push(`${who} lasts ${ms3(a.duration)} ms, which is no motion duration token (${durList})`);
+    for (const e of eases) {
+      const b = bezierOf(e), cur = b && tok.curves.find(([, v]) => v.length === 4 && v.every((x, i) => near(x, b[i])));
+      if (cur) used.add(`${cur[0]} (${e})`); else bad.push(`${who} eases with ${e}, which is no curve token (${curveList})`);
+    }
+  }
+  return { bad: [...new Set(bad)], used: [...used] };
+}
+
+/** In the page, once per pass: the helpers of a component pass, kept in window.__bc.cmp. Everything here is serialised into the page by page.evaluate, so nothing may
+ *  use anything of this module. The boxes watched are the element and every element after it at its own level and at each level above it (what moves when it grows);
+ *  each is read as its layout box (document coordinates), with the element's own transform taken out, so that a lift or a press by transform moves nothing. */
+function inPageCmpInstall({ el, max }) {
+  const bc = window.__bc, EPS = 0.5, cmp = (bc.cmp = { el, list: [], phase: [], rest: [], events: [] });
+  const name = (e) => {
+    const cls = (e.getAttribute("class") || "").trim().split(/\s+/).filter(Boolean).slice(0, 2);
+    return e.tagName.toLowerCase() + (e.id ? "#" + e.id : cls.length ? "." + cls.join(".") : "");
+  };
+  const watch = [el];
+  for (let n = el; n && n !== document.body && n !== document.documentElement; n = n.parentElement) {
+    for (let s = n.nextElementSibling; s && watch.length < max; s = s.nextElementSibling) if (!/^(SCRIPT|STYLE|LINK|META|TEMPLATE|NOSCRIPT)$/.test(s.tagName)) watch.push(s);
+  }
+  cmp.names = watch.map(name);
+  // how an element is drawn moved: its translate, rotate and scale properties, then its transform (CSS Transforms 2); null when it cannot be read
+  const ownMatrix = (e, cs) => {
+    let fns = "";
+    if (cs.translate && cs.translate !== "none") {
+      const [x, y = "0px", z = "0px"] = cs.translate.split(" "), ref = [e.offsetWidth, e.offsetHeight];
+      const len = (v, k) => (v.endsWith("%") ? (parseFloat(v) / 100) * ref[k] : parseFloat(v));
+      fns += `translate3d(${len(x, 0)}px, ${len(y, 1)}px, ${parseFloat(z) || 0}px) `;
+    }
+    if (cs.rotate && cs.rotate !== "none") {
+      const w = cs.rotate.split(" "), axis = { x: "1, 0, 0", y: "0, 1, 0", z: "0, 0, 1" };
+      fns += w.length === 1 ? `rotate(${w[0]}) ` : w.length === 2 ? `rotate3d(${axis[w[0]]}, ${w[1]}) ` : `rotate3d(${w.slice(0, 3).join(", ")}, ${w[3]}) `;
+    }
+    if (cs.scale && cs.scale !== "none") { const w = cs.scale.split(" "); fns += w.length === 3 ? `scale3d(${w.join(", ")}) ` : `scale(${w.join(", ")}) `; }
+    if (cs.transform && cs.transform !== "none") fns += cs.transform;
+    try { return new DOMMatrix(fns.trim() || undefined); } catch { return null; }
+  };
+  // [x, y, width, height] of the layout box in the document; null when the element's transform rotates, skews, flips or works in 3D (the box cannot be told from the drawn one)
+  const rect = (e) => {
+    const r = e.getBoundingClientRect(), x = r.left + scrollX, y = r.top + scrollY;
+    if (e instanceof SVGElement) return [x, y, r.width, r.height];
+    const cs = getComputedStyle(e), m = ownMatrix(e, cs);
+    if (!m) return null;
+    if (m.isIdentity) return [x, y, r.width, r.height];
+    if (!m.is2D || Math.abs(m.b) > 1e-9 || Math.abs(m.c) > 1e-9 || m.a <= 0 || m.d <= 0) return null;
+    const [ox, oy] = cs.transformOrigin.split(" ").map(parseFloat);   // x' = x + ox (1 - a) + e for the left edge of a box that is only scaled and moved
+    return [x - ox * (1 - m.a) - m.e, y - oy * (1 - m.d) - m.f, r.width / m.a, r.height / m.d];
+  };
+  const measure = () => watch.map(rect);
+  const WHAT = [["moved left", "moved right"], ["moved up", "moved down"], ["got narrower", "grew wider"], ["got shorter", "grew taller"]];
+  const diffs = (now, into, at) => {
+    now.forEach((b, j) => {
+      const r0 = cmp.rest[j];
+      if (!b || !r0) return;
+      for (let k = 0; k < 4; k++) { const d = b[k] - r0[k]; if (Math.abs(d) > EPS && (!into[j] || Math.abs(d) > Math.abs(into[j].d))) into[j] = { k, d, at }; }
+    });
+  };
+  const said = (into) => into.map((w, j) => w && { who: cmp.names[j], what: WHAT[w.k][w.d > 0 ? 1 : 0], px: Math.round(Math.abs(w.d) * 10) / 10, at: w.at }).filter(Boolean);
+  /** The boxes as they are now are the rest to compare with. -> the names of the boxes watched, and which of them (by place) cannot be read. */
+  cmp.baseline = () => { cmp.rest = measure(); return { names: cmp.names, unread: cmp.rest.flatMap((b, j) => (b ? [] : [j])) }; };
+  /** Set the animations of this phase to each point and say, for each box, the largest change from its rest box (more than half a pixel), and which boxes could not be read. */
+  cmp.sample = (points) => {
+    const worst = [], unread = new Set();
+    for (let i = 0; i < points.length; i++) {
+      for (const s of cmp.phase) if (s.seekable) s.a.currentTime = s.infinite ? Math.min(points[i], s.delay + s.duration) : points[i];
+      const now = measure();
+      now.forEach((b, j) => { if (!b) unread.add(j); });
+      diffs(now, worst, i);
+    }
+    return { moved: said(worst), unread: [...unread] };
+  };
+  /** The boxes now against the rest: what has not come back. */
+  cmp.deviation = () => { const w = []; diffs(measure(), w, 0); return said(w); };
+  // every Web Animation the page has that has not been adopted yet is paused where it is; the ones on the element or inside it are this phase's
+  const adoptNew = () => {
+    const have = new Set(cmp.list.map((s) => s.a)), fresh = [];
+    for (const a of document.getAnimations()) {
+      if (have.has(a) || !a.effect || typeof a.effect.getComputedTiming !== "function") continue;
+      const t = a.effect.getComputedTiming(), target = a.effect.target || null, pseudo = a.effect.pseudoElement || null;
+      const seekable = a.timeline === document.timeline && typeof t.endTime === "number";
+      const infinite = seekable && (t.iterations === Infinity || t.endTime === Infinity);
+      a.pause();
+      const kfs = typeof a.effect.getKeyframes === "function" ? a.effect.getKeyframes() : [];
+      const s = {
+        a, seekable, infinite, inside: !!target && el.contains(target), kind: a instanceof CSSTransition ? "transition" : a instanceof CSSAnimation ? "animation" : "script",
+        name: a.transitionProperty || a.animationName || a.id || "animation", where: target ? name(target) + (pseudo || "") : "",
+        delay: seekable ? t.delay : 0, duration: Number(t.duration) || 0, iterations: seekable && !infinite ? t.iterations : null, direction: t.direction,
+        end: seekable && !infinite ? t.endTime : null, easing: t.easing, keyframes: kfs.map((k) => ({ o: k.computedOffset, e: k.easing })),
+        props: [...new Set(kfs.flatMap((k) => Object.keys(k).filter((p) => !["offset", "computedOffset", "easing", "composite"].includes(p))))],
+      };
+      cmp.list.push(s); fresh.push(s);
+    }
+    return fresh;
+  };
+  const plain = (s) => ({ kind: s.kind, name: s.name, where: s.where, seekable: s.seekable, infinite: s.infinite, delay: s.delay, duration: s.duration, iterations: s.iterations,
+    direction: s.direction, end: s.end, easing: s.easing, keyframes: s.keyframes, props: s.props });
+  /** After the input of a phase: pause what it started. -> what is on the element or inside it, and how many are elsewhere (those stay where they began). */
+  cmp.adopt = () => {
+    const fresh = adoptNew();
+    cmp.phase = fresh.filter((s) => s.inside);
+    return { items: cmp.phase.map(plain), elsewhere: fresh.length - cmp.phase.length };
+  };
+  /** The end of this phase: finish what has an end, let two frames render. -> what refused to finish. */
+  cmp.finish = async () => {
+    const stuck = [];
+    for (const s of cmp.phase) if (s.seekable && !s.infinite) { try { s.a.finish(); } catch (e) { stuck.push(`${s.name}: ${e.name}`); } }
+    await bc.frame(); await bc.frame();
+    return stuck;
+  };
+  /** The start of a pass: what the page began on load is finished (an infinite one stays paused), so that the rest is the page as it stays. */
+  cmp.begin = async () => {
+    for (const s of adoptNew()) if (s.seekable && !s.infinite) { try { s.a.finish(); } catch {} }
+    await bc.frame(); await bc.frame();
+  };
+  // an animation that began and ended between two looks is still seen: the events of the element and what is inside it
+  for (const type of ["transitionrun", "animationstart"]) {
+    document.addEventListener(type, (e) => { if (e.target instanceof Node && el.contains(e.target)) cmp.events.push((e.propertyName || e.animationName || type) + (e.pseudoElement || "")); }, true);
+  }
+  // a press is let go over the element: the click it ends in must not run the page's handler or follow a link
+  for (const type of ["click", "auxclick", "dragstart"]) {
+    window.addEventListener(type, (e) => { if (e.target instanceof Node && el.contains(e.target)) { e.preventDefault(); e.stopImmediatePropagation(); } }, true);
+  }
+  return watch.length;
+}
+
+/** The first line of an error, with what Playwright says stands in the way, in plain words. */
+function whyNot(e) {
+  const lines = String(e?.message ?? e).replace(/\x1b\[[\d;]*m/g, "").split("\n"), hit = lines.find((l) => /intercepts pointer events|not visible|not stable|not enabled|not focusable/.test(l));
+  return lines[0].replace(/^[\w.]+: /, "") + (hit ? ` (${hit.trim().replace(/^-\s*/, "")})` : "");
+}
+
+/** One phase of a state: the input that changes it, then what the input started on the element and inside it, paused and stepped through its sample points,
+ *  then finished. -> {failed} when the input could not be given. */
+async function componentPhase(page, c, label, input) {
+  try { await input(); } catch (e) { return { label, failed: whyNot(e) }; }
+  const got = await stepped(c, page.evaluate(() => window.__bc.cmp.adopt()));
+  const plan = samplePoints(got.items);
+  const sampled = await stepped(c, page.evaluate((pts) => window.__bc.cmp.sample(pts), plan.points.map((p) => p.ms)));
+  const stuck = await stepped(c, page.evaluate(() => window.__bc.cmp.finish()));
+  return { label, items: got.items, elsewhere: got.elsewhere, plan, moved: sampled.moved.map((m) => ({ ...m, point: plan.points[m.at] })), unread: sampled.unread, stuck };
+}
+
+/** The element into a state and out of it, with the real input, from rest. -> {entered, why, left, viewExit (the pointer had to leave the view: no corner of it is outside the element), phases, rest (boxes that did not come back), watched, unread}. */
+async function componentState(page, el, c, state) {
+  const out = { state, entered: false, left: true, viewExit: false, why: "", phases: [], rest: [], names: [], unread: [] };
+  const matches = (sel) => page.evaluate((s) => window.__bc.cmp.el.matches(s), sel);
+  const hover = () => el.hover({ timeout: COMPONENT_ACT_MS });
+  const away = async () => {   // the pointer to a corner of the view the element is not in; with none (the element fills the view), out of the view, which hovers nothing
+    const at = await page.evaluate(() => {
+      const r = window.__bc.cmp.el.getBoundingClientRect();
+      return [[1, 1], [innerWidth - 2, 1], [1, innerHeight - 2], [innerWidth - 2, innerHeight - 2]].find(([x, y]) => x < r.left || x > r.right || y < r.top || y > r.bottom) ?? null;
+    });
+    if (!at) out.viewExit = true;   // said in the rest row
+    await page.mouse.move(...(at ?? [-1, -1]));
+  };
+  const how = {
+    hover: { into: [hover], match: ":hover", back: away },
+    active: { into: [hover, () => page.mouse.down()], match: ":active", back: async () => { await page.mouse.up(); await away(); } },
+    "focus-visible": {
+      into: [async () => {   // a key first, so that the focus a script gives is a keyboard focus (:focus-visible)
+        await page.keyboard.press("Shift");
+        if (!(await page.evaluate(() => { const e = window.__bc.cmp.el; e.focus(); return document.activeElement === e; }))) throw new Error("the element cannot take focus (a button, a link, an input or an element with a tabindex can)");
+      }],
+      match: ":focus-visible", back: () => page.evaluate(() => window.__bc.cmp.el.blur()),
+    },
+  }[state];
+  const base = await stepped(c, page.evaluate(() => window.__bc.cmp.baseline()));
+  out.names = base.names; out.unread = base.unread;
+  for (const input of how.into) {
+    const p = await componentPhase(page, c, "entering", input);
+    if (p.failed) { out.why = p.failed; break; }
+    out.phases.push(p);
+  }
+  if (!out.why) {
+    out.entered = await matches(how.match);
+    if (!out.entered) out.why = `the element does not match :${state} once the input is given (it is covered by another element, disabled, or cannot take focus)`;
+  }
+  const back = await componentPhase(page, c, "leaving", how.back);
+  if (back.failed) out.why ||= `could not leave the state: ${back.failed}`; else out.phases.push(back);
+  out.left = !(await matches(how.match));
+  if (out.entered) out.rest = await stepped(c, page.evaluate(() => window.__bc.cmp.deviation()));
+  out.events = await page.evaluate(() => window.__bc.cmp.events.splice(0));
+  return out;
+}
+
+async function componentCase(browser, project, server, c, report, inputs) {
+  const o = componentOptions(c), id = (s) => `motion:${c.name}:${s}`;
+  const { abs, url } = pageUrl(project, server.origin, c.page); inputs.push(abs);
+  const tok = componentTokens(project, inputs);
+  const runs = { normal: Object.fromEntries(o.states.map((s) => [s, []])), reduced: Object.fromEntries(o.states.map((s) => [s, []])) };
+  for (const mode of ["normal", "reduced"]) {
+    for (const w of o.widths) {
+      const P = await openPage(browser, server, url, { width: w, height: COMPONENT_HEIGHT, reduced: mode === "reduced" });
+      const el = await markElement(P.page, c);
+      await P.page.waitForTimeout(o.settle);
+      await el.scrollIntoViewIfNeeded({ timeout: COMPONENT_ACT_MS }).catch(() => {});   // an element that cannot be shown is said by the state rows
+      await stepped(c, P.page.evaluate(inPageCmpInstall, { el, max: MAX_WATCHED }));
+      await stepped(c, P.page.evaluate(() => window.__bc.cmp.begin()));
+      for (const state of o.states) runs[mode][state].push({ ...(await componentState(P.page, el, c, state)), width: w });
+      if (mode === "normal" && w === o.widths[0] && (P.seen.errors.length || P.seen.nonLocal.length)) {
+        report.add(id("page:errors"), "fail", "page loads cleanly", { detail: [...P.seen.errors, ...P.seen.nonLocal].slice(0, 3).join(" | ") });
+      }
+      await P.ctx.close();
+    }
+  }
+  const at = (m) => `${m.label}, at ${m.point.pct}% = ${m.point.ms} ms`;
+  const kebab = (p) => p.replace(/[A-Z]/g, (m) => "-" + m.toLowerCase());
+  for (const state of o.states) {
+    const N = runs.normal[state], R = runs.reduced[state], entered = N.filter((r) => r.entered), items = entered.flatMap((r) => r.phases.flatMap((p) => p.items));
+    const px = (rs) => rs.map((r) => r.width).join(", ") + " px";
+    // a row that judges the widths the element could be put into says so, naming the widths it could not (their shift rows fail with the reason)
+    const only = entered.length < N.length ? `judged at ${px(entered)} only: the element could not be put into :${state} at ${px(N.filter((r) => !r.entered))} (see the shift rows)` : "";
+    // ---- shift: nothing moves or resizes, at any point of entering and leaving
+    for (const r of N) {
+      const w = r.width, label = `${state}: nothing moves or resizes at ${w} px`, sid = id(`shift:${state}:${w}`);
+      if (!r.entered) { report.add(sid, "fail", label, { detail: `the element could not be put into :${state} at ${w} px: ${r.why}`, width: w, state }); continue; }
+      const all = r.phases.flatMap((p) => p.items), elsewhere = r.phases.reduce((n, p) => n + p.elsewhere, 0), stuck = r.phases.flatMap((p) => p.stuck);
+      const layout = [...new Set(all.flatMap((a) => a.props.filter((p) => LAYOUT_PROPS.test(p)).map((p) => `${kebab(p)} (${a.kind} on ${a.where || "the page"})`)))];
+      const moved = r.phases.flatMap((p) => p.moved.map((m) => ({ ...m, label: p.label }))).sort((a, b) => b.px - a.px);
+      const lines = [
+        ...moved.slice(0, 4).map((m) => `${m.who} ${m.what} by ${m.px} px (${at(m)})`), ...(moved.length > 4 ? [`and ${moved.length - 4} more`] : []),
+        ...(layout.length ? [`animates a layout property: ${layout.slice(0, 4).join(", ")}${layout.length > 4 ? ` and ${layout.length - 4} more` : ""}; it moves the page around it as it runs`] : []),
+        ...(stuck.length ? [`could not be finished: ${stuck.join(", ")}`] : []),
+      ];
+      const unread = [...new Set([...r.unread, ...r.phases.flatMap((p) => p.unread)])].map((j) => r.names[j]), watched = r.names.length;
+      const unmeasured = unread.length >= watched, steps = r.phases.map((p) => `${p.plan.points.length} sample point(s) over ${p.plan.length} ms ${p.label}`).join(", ");
+      report.add(sid, lines.length ? "fail" : unmeasured ? "skipped" : "pass", label, {
+        detail: lines.length ? lines.join("; ")
+          : (unmeasured ? `not verified: no box could be read, because the transform of ${unread.join(", ")} rotates or skews it; ` : "")
+            + `${steps}; the element${watched > 1 ? ` and the ${watched - 1} element(s) after it` : ""} stayed within 0.5 css px of where ${watched > 1 ? "they were" : "it was"}`
+            + (unread.length && !unmeasured ? `; not measured while its transform rotates or skews it: ${unread.join(", ")}` : "")
+            + (elsewhere ? `; ${elsewhere} animation(s) elsewhere on the page that the state started stay where they began` : ""),
+        width: w, state, sample_points: r.phases.map((p) => p.plan.points.length), length_ms: r.phases.map((p) => p.plan.length), watched, layout_properties: layout,
+        moved: moved.slice(0, 8).map(({ who, what, px, label: phase }) => ({ who, what, px, phase })),
+      });
+    }
+    // ---- tokens: every duration and easing of the state change is a motion token
+    if (!entered.length) report.add(id(`tokens:${state}`), "skipped", `${state}: durations and easings are motion tokens`, { detail: `not verified: the element could not be put into :${state} (see the shift rows)` });
+    else if (!items.length) report.add(id(`tokens:${state}`), "pass", `${state}: durations and easings are motion tokens`, { detail: `no transition or animation starts on the element or inside it when :${state} is entered or left, so there is no duration or easing to compare` + (only && `; ${only}`), animations: 0 });
+    else if (tok.why) report.add(id(`tokens:${state}`), "skipped", `${state}: durations and easings are motion tokens`, { detail: `not verified: ${tok.why}`, animations: items.length });
+    else {
+      const t = tokenProblems(items, tok);
+      report.add(id(`tokens:${state}`), t.bad.length ? "fail" : "pass", `${state}: durations and easings are motion tokens`, {
+        detail: (t.bad.length ? t.bad.slice(0, 4).join("; ") + (t.bad.length > 4 ? `; and ${t.bad.length - 4} more` : "")
+          : `${items.length} animation(s) on the state change; every duration and easing is a motion token: ${t.used.join(", ")}`) + (only && `; ${only}`),
+        animations: items.length, not_tokens: t.bad,
+      });
+    }
+    // ---- reduced: under prefers-reduced-motion nothing animates on the state change; a width the element could not be put into is not judged, and is said
+    const rOk = R.filter((r) => r.entered), rNot = R.filter((r) => !r.entered);
+    const notIn = rNot.map((r) => `at ${r.width} px: ${r.why}`).join("; ");
+    if (!rOk.length) report.add(id(`reduced:${state}`), "skipped", `${state}: no animation under reduced motion`, { detail: `not verified: the element could not be put into :${state} under reduced motion ${notIn}` });
+    else {
+      const ran = rOk.flatMap((r) => {
+        const items = r.phases.flatMap((p) => p.items), named = new Set(items.map((a) => a.name));
+        return [...new Set([...items.map((a) => animationWho(a, [a.name])), ...r.events.filter((n) => !named.has(n)).map((n) => `a transition or animation ${n}`)])].map((n) => `${n} (${r.width} px)`);
+      });
+      const seen = Math.max(0, ...entered.map((r) => r.phases.reduce((n, p) => n + p.items.length, 0)));
+      const unjudged = rNot.length ? `; not verified under reduced motion ${notIn}` : "";   // an animation found is a finding whatever the other widths gave; with none found, a width not judged leaves the row not verified
+      report.add(id(`reduced:${state}`), ran.length ? "fail" : rNot.length ? "skipped" : "pass", `${state}: no animation under reduced motion`, {
+        detail: ran.length ? `prefers-reduced-motion: reduce emulated; the state change starts ${ran.slice(0, 4).join(", ")}${ran.length > 4 ? ` and ${ran.length - 4} more` : ""}${unjudged}`
+          : rNot.length ? `not verified: the element could not be put into :${state} under reduced motion ${notIn}; no transition or animation on entering or leaving :${state} at ${px(rOk)} (${seen} at normal motion)`
+          : `prefers-reduced-motion: reduce emulated; no transition or animation on entering or leaving :${state} (${seen} at normal motion)`,
+        animations: ran.length, normal_animations: seen,
+      });
+    }
+    // ---- rest: the box after leaving the state is the box before it
+    if (!entered.length) report.add(id(`rest:${state}`), "skipped", `${state}: the box comes back`, { detail: `not verified: the element could not be put into :${state} (see the shift rows)` });
+    else {
+      const off = entered.flatMap((r) => [...r.rest.map((m) => `${m.who} ${m.what} by ${m.px} px at ${r.width} px`), ...(r.left ? [] : [`the element still matches :${state} at ${r.width} px`]), ...(r.why ? [`${r.why} (${r.width} px)`] : [])]);
+      const exit = entered.filter((r) => r.viewExit);   // no corner of the view is outside the element: the pointer left the view itself
+      report.add(id(`rest:${state}`), off.length ? "fail" : "pass", `${state}: the box comes back`, {
+        detail: (off.length ? `after leaving :${state}: ${off.slice(0, 4).join("; ")}${off.length > 4 ? `; and ${off.length - 4} more` : ""}`
+          : `after leaving :${state} the element and what follows it are where they were (within 0.5 css px)${only ? "" : ` at ${px(entered)}`}`)
+          + (only && `; ${only}`) + (exit.length ? `; at ${px(exit)} the pointer left the view, because no corner of it is outside the element` : ""),
+      });
+    }
+  }
+}
+
 /** Read and check a proof file (used before any browser starts). */
 function readProof(project, arg) {
   const specFile = confine(project, arg, "proof.json");
@@ -1212,8 +1602,9 @@ function readProof(project, arg) {
   for (const c of spec.cases) {
     if (!c.name || names.has(c.name)) die(EXIT.USAGE, `every motion case needs a unique name (${c.name ?? "missing"})`);
     names.add(c.name);
-    if (!["states", "page"].includes(c.type)) die(EXIT.USAGE, `motion case ${c.name}: type must be "states" or "page"`);
+    if (!["states", "page", "component"].includes(c.type)) die(EXIT.USAGE, `motion case ${c.name}: type must be "states", "page" or "component"`);
     if (c.type === "page") pageOptions(c);
+    if (c.type === "component") componentOptions(c);
   }
   // the proof's path as the disk spells it (macOS takes MOTION/PROOF.JSON for motion/proof.json): its report is named after it, so one file has one name
   const specRel = path.relative(fs.realpathSync.native(project), fs.realpathSync.native(specFile)).split(path.sep).join("/");
@@ -1228,12 +1619,13 @@ async function cmdMotion(values, positionals) {
   const report = new Report(proofReportTool(specRel), project, inputs);   // one report per proof file: assets/_checks/motion/<slug>-<hash6>.json
   const browser = await launch();
   const server = await startServer(project);
-  report.extra = { proof: specRel, cases: spec.cases.map((c) => ({ name: c.name, type: c.type })), engine: "Chromium (Playwright)" };
+  report.extra = { proof: specRel, cases: spec.cases.map((c) => ({ name: c.name, type: c.type, ...(c.type === "component" ? { rule: c.rule } : {}) })), engine: "Chromium (Playwright)" };
   let diff = null;
   const scratch = async () => (diff ??= await scratchPage(browser));
   try {
     for (const c of spec.cases) {
       if (c.type === "states") await statesCase(browser, project, c, report, inputs);
+      else if (c.type === "component") await componentCase(browser, project, server, c, report, inputs);
       else await pageCase(browser, project, server, c, report, inputs, scratch);
     }
   } finally {
@@ -1339,12 +1731,12 @@ async function framesCase(browser, server, project, c, slug, base, pcts, specRel
   if (old.length) report.add(`${rid}:stale`, "warn", "frames left from an earlier run", { detail: `${old.join(", ")} in ${dir}/ are not part of this run (other points, or fewer); move them to removed-<date>/` });
 }
 
-/** Why the folder of a proof is not written to (null when it can be). history/ is frozen and every round before the latest is read-only: the guard keeps both from an edit, but it cannot see what a
- *  command writes, and `frames` writes its stills beside the proof. */
-function readOnlyWhy(project, specRel) {
+/** Why the folder of a proof or a page is not written to (null when it can be). history/ is frozen and every round before the latest is read-only: the guard keeps both from an edit, but it cannot
+ *  see what a command writes, and `frames` writes its stills beside the proof, `capture` beside the page. `words` is how the command says it (FRAMES_READ_ONLY, CAPTURE_READ_ONLY). */
+const FRAMES_READ_ONLY = { tail: "(frames writes its stills beside the proof)", how: "copy the proof and its page into the latest round and run frames there" };
+function readOnlyWhy(project, specRel, words = FRAMES_READ_ONLY) {
   const [top, round] = specRel.split("/");
-  const tail = "(frames writes its stills beside the proof)";
-  const how = "copy the proof and its page into the latest round and run frames there";
+  const { tail, how } = words;
   if (top === "history") return `${specRel} is inside history/, which is read-only ${tail}: take the stills before \`freeze\`, or ${how}`;
   if (top !== "rounds" || !/^r\d+$/.test(round ?? "")) return null;
   const dir = path.join(project, "rounds");
@@ -1372,7 +1764,7 @@ async function cmdFrames(argv) {
   if (values.case !== undefined) {
     const named = spec.cases.find((c) => c.name === values.case);
     if (!named) die(EXIT.USAGE, `no case called ${values.case} in ${positionals[0]} (it has: ${spec.cases.map((c) => c.name).join(", ")})`);
-    if (named.type !== "page") die(EXIT.USAGE, `case ${values.case} is a states case; frames works on page cases`);
+    if (named.type !== "page") die(EXIT.USAGE, `case ${values.case} is a ${named.type} case; frames works on page cases`);
     picked = [named];
   }
   if (!picked.length) die(EXIT.USAGE, `${positionals[0]} has no page case: frames needs a page that moves the mark`);
@@ -1406,7 +1798,7 @@ async function cmdFrames(argv) {
     const diff = await scratchPage(browser);
     for (const c of spec.cases) {
       if (picked.includes(c)) await framesCase(browser, server, project, c, slugs[picked.indexOf(c)], base, pcts, specRel, report, inputs, diff);
-      else if (values.case === undefined) report.add(`frames:${c.name}`, "info", "frames of the mark's motion", { detail: "a states case has no page to seek; frames works on page cases" });
+      else if (values.case === undefined) report.add(`frames:${c.name}`, "info", "frames of the mark's motion", { detail: `a ${c.type} case has no page to seek; frames works on page cases` });
     }
   } finally {
     await browser.close();
@@ -1671,6 +2063,429 @@ async function cmdPdf(argv) {
   return EXIT.PASS;
 }
 
+// ---------------------------------------------------------------- page-measure
+// The measuring half of `brand-creator page-check` (scripts/page_check.py writes the request and judges what this writes). The request is
+// {schema: 1, root, page, url, widths, schemes, selectors, rules, colours, dsf}: `root` (the project, or a folder inside <data>/scratch/) with the `page` inside it, served by the
+// local server, or a `url` on this machine. One browser context per width and colour scheme; a request to another origin, a redirect to one included, is recorded and aborted. The answer is
+// {schema: 1, chromium, target, views: [{width, scheme, viewport, lang, height, errors, non_local, failed_local, resources, served, animations, ...collectors}]},
+// written outside the project. A view that cannot be rendered has {width, scheme, viewport, error} instead. Facts only: no verdict, and exit 0 whatever the page does.
+const PAGE_VIEWPORT_HEIGHT = { 360: 800, 390: 844, 768: 1024, 1024: 768, 1440: 900, 1920: 1080 };   // css px; any other width gets 900
+const PAGE_TIMEOUT_MS = 60000;
+const PAGE_SETTLE_MS = 100;
+const PAGE_MAX_REDIRECTS = 10;   // a chain longer than this is stopped (Chromium itself allows 20)
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+
+/** Answer one request to the page's own origin without letting a redirect take the browser elsewhere. Chromium asks a route handler about the first URL of a
+ *  redirect chain only, so `route.continue()` would follow a hop to another origin unseen (and the other server would be asked). Here the answer is fetched without
+ *  following redirects and the chain is walked hop by hop first (each hop with GET, whatever the first method was): a hop that leaves the origin is recorded as a request to
+ *  another origin and the request is aborted, so nothing reaches the other server. A chain that stays home is answered with its first response and the browser
+ *  follows it, so a hop of it is asked twice (here and by the browser). */
+async function answerWithoutLeaving(route, origin, seen) {
+  try {
+    const first = await route.fetch({ maxRedirects: 0, timeout: PAGE_TIMEOUT_MS });
+    let response = first;
+    for (let hop = 0; REDIRECT_STATUSES.has(response.status()) && response.headers()["location"]; hop++) {
+      let next;
+      try { next = new URL(response.headers()["location"], response.url()).href; } catch { break; }   // a Location no parser reads is a hop no browser follows
+      if (!next.startsWith(origin + "/")) {
+        seen.nonLocal.push(next.slice(0, 160));
+        return await route.abort("blockedbyclient");
+      }
+      if (hop >= PAGE_MAX_REDIRECTS) {
+        seen.failedLocal.push(`redirect chain of more than ${PAGE_MAX_REDIRECTS} hops from ${route.request().url().slice(origin.length, origin.length + 120)}`);
+        return await route.abort("failed");
+      }
+      response = await route.fetch({ url: next, method: "GET", maxRedirects: 0, timeout: PAGE_TIMEOUT_MS });
+    }
+    return await route.fulfill({ response: first });
+  } catch {
+    await route.abort("failed").catch(() => {});   // the server did not answer, or the page was closed meanwhile: the browser reports it as a failed load
+  }
+}
+
+function insideDir(root, p) {
+  const r = path.relative(root, p);
+  return r === "" || (!r.startsWith("..") && !path.isAbsolute(r));
+}
+
+function readPageRequest(project, file) {
+  let req;
+  try { req = JSON.parse(fs.readFileSync(file, "utf8")); } catch (e) { die(EXIT.USAGE, `--request ${file}: cannot read the request (${e.message})`); }
+  if (!req || typeof req !== "object" || req.schema !== 1) die(EXIT.USAGE, `--request ${file}: needs {"schema": 1, ...}`);
+  const bad = (what) => die(EXIT.USAGE, `--request ${file}: ${what}`);
+  if (Boolean(req.root) === Boolean(req.url)) bad("give either root with page, or url, not both and not neither");
+  if (!Array.isArray(req.widths) || !req.widths.length || req.widths.some((w) => !Number.isInteger(w) || w < 200 || w > 4000) || new Set(req.widths).size !== req.widths.length) {
+    bad("widths must be a list of different whole numbers from 200 to 4000");
+  }
+  if (!Array.isArray(req.schemes) || !req.schemes.length || req.schemes.some((s) => !["light", "dark"].includes(s)) || new Set(req.schemes).size !== req.schemes.length) {
+    bad("schemes must be a list of light and dark");
+  }
+  req.selectors = req.selectors ?? [];
+  if (!Array.isArray(req.selectors) || req.selectors.some((s) => typeof s !== "string")) bad("selectors must be a list of CSS selectors");
+  req.rules = req.rules ?? [];   // the brand rules (qa/rules.json page.rules) whose facts the browser collects: [{id, kind, selector?}]
+  if (!Array.isArray(req.rules) || req.rules.length > 200 || req.rules.some((r) => !r || typeof r !== "object" || typeof r.id !== "string" || typeof r.kind !== "string"
+      || (r.selector !== undefined && (typeof r.selector !== "string" || !r.selector)))) bad("rules must be a list of up to 200 objects with an id, a kind and an optional selector");
+  req.colours = req.colours ?? [];   // CSS colours the browser renders for the judge (the modern values of the project's tokens): each a short string
+  if (!Array.isArray(req.colours) || req.colours.length > 500 || req.colours.some((c) => typeof c !== "string" || !c || c.length > 200)) bad("colours must be a list of up to 500 CSS colours");
+  req.dsf = req.dsf ?? 1;
+  if (![1, 2, 3].includes(req.dsf)) bad("dsf must be 1, 2 or 3");
+  if (req.url) {
+    if (typeof req.url !== "string" || !isLoopbackUrl(req.url)) die(EXIT.USAGE, `page-measure opens only a page on this machine (http or https on localhost, 127.0.0.1 or [::1]), not ${JSON.stringify(req.url)}`);
+    req.openUrl = new URL(req.url).href;
+    return req;
+  }
+  if (typeof req.root !== "string" || typeof req.page !== "string" || !req.page) bad("root needs a page inside it");
+  let root;
+  try { root = fs.realpathSync(req.root); } catch { die(EXIT.USAGE, `--request ${file}: root ${req.root} does not exist`); }
+  let scratch = null;
+  try { scratch = fs.realpathSync(path.join(dataDir(), "scratch")); } catch { /* no scratch folder yet: only the project can be the root */ }
+  if (root !== fs.realpathSync(project) && !(scratch && root !== scratch && insideDir(scratch, root))) {
+    die(EXIT.USAGE, `--request ${file}: root ${req.root} must be the project or a folder inside the data folder's scratch area`);
+  }
+  let abs;
+  try { abs = fs.realpathSync(path.join(root, req.page)); } catch { die(EXIT.USAGE, `page not found: ${req.page}`); }
+  if (!insideDir(root, abs) || fs.statSync(abs).isDirectory()) die(EXIT.USAGE, `page not found in ${req.root}: ${req.page}`);
+  req.rootReal = root;
+  req.pageRel = path.relative(root, abs).split(path.sep).join("/");
+  return req;
+}
+
+async function measureView(browser, req, width, scheme) {
+  const viewport = { width, height: PAGE_VIEWPORT_HEIGHT[width] ?? 900 };
+  const server = req.rootReal ? await startServer(req.rootReal) : null;
+  const origin = server ? server.origin : new URL(req.openUrl).origin;
+  const url = server ? origin + "/" + req.pageRel.split("/").map(encodeURIComponent).join("/") : req.openUrl;
+  let ctx, seen;
+  try {
+    // no service worker: it could ask other origins in ways a route does not see
+    ctx = await browser.newContext({ viewport, colorScheme: scheme, deviceScaleFactor: req.dsf, serviceWorkers: "block" });
+    seen = await instrument(ctx, origin, { ownRedirects: true });
+    const page = await ctx.newPage();
+    watch(page, seen, origin);
+    // a hop of a redirect chain is not routed: one that was followed to another origin (the chain changed between the check and the browser's own follow) is not stopped, so it fails the view
+    const escaped = [];
+    page.on("request", (r) => { if (r.redirectedFrom() && !r.url().startsWith(origin + "/")) escaped.push(r.url().slice(0, 160)); });
+    // Image and SVG bodies are hashed as they arrive, so a mark can be compared byte for byte with the file it should be.
+    const resources = {}, hashing = [];
+    page.on("response", (r) => {
+      const type = (r.headers()["content-type"] || "").split(";")[0].trim().toLowerCase();
+      if (!r.url().startsWith(origin + "/") || !type.startsWith("image/")) return;
+      hashing.push(r.body().then((b) => { resources[r.url().slice(origin.length)] = { sha256: sha256(b), content_type: type }; }, () => {}));
+    });
+    await withTimeout(page.goto(url, { waitUntil: "load", timeout: PAGE_TIMEOUT_MS }), PAGE_TIMEOUT_MS + 5000, `loading ${url}`);
+    await withTimeout(page.evaluate(() => document.fonts.ready), PAGE_TIMEOUT_MS, "fonts.ready");
+    await withTimeout(page.evaluate(async () => {   // lazy images below the fold load first, as shot does, so they are drawn and measured
+      const imgs = [...document.images].filter((i) => i.loading === "lazy");
+      for (const i of imgs) i.loading = "eager";
+      await Promise.all(imgs.map((i) => (i.complete ? null : new Promise((r) => { i.addEventListener("load", r, { once: true }); i.addEventListener("error", r, { once: true }); }))));
+    }), PAGE_TIMEOUT_MS, "lazy images");
+    await page.waitForTimeout(PAGE_SETTLE_MS);
+    const animations = await waitAnimations(page);
+    await Promise.all(hashing);
+    if (escaped.length) throw new Error(`a redirect led to another origin and was not stopped (${escaped[0]})`);
+    if (!page.url().startsWith(origin + "/")) throw new Error(`the page ended on ${page.url().slice(0, 160)}, not on ${origin}`);
+    const base = await page.evaluate(() => ({ lang: document.documentElement.lang || "", height: document.documentElement.scrollHeight }));
+    const collected = await collect(page, req);
+    return {
+      width, scheme, viewport, ...base, errors: seen.errors, non_local: seen.nonLocal, failed_local: seen.failedLocal,
+      resources: Object.fromEntries(Object.entries(resources).sort(([a], [b]) => (a < b ? -1 : 1))),
+      served: server ? server.served().sort() : [], animations, ...collected,
+    };
+  } catch (e) {
+    const stopped = seen?.nonLocal.length ? ` (a request to another origin was stopped: ${seen.nonLocal[0]})` : "";
+    return { width, scheme, viewport, error: String(e.message).split("\n")[0] + stopped };
+  } finally {
+    if (ctx) await ctx.close();
+    if (server) await server.close();
+  }
+}
+
+async function cmdPageMeasure(argv) {
+  const { values, positionals } = parse(argv, { request: { type: "string" }, out: { type: "string" }, project: { type: "string" } });
+  if (positionals.length) die(EXIT.USAGE, "page-measure takes no page: it is named in the request\n" + USAGE);
+  if (!values.request || !values.out) die(EXIT.USAGE, "page-measure needs --request FILE.json and --out FILE.json\n" + USAGE);
+  const project = findProject(values.project);
+  const out = outsideProject(project, values.out, "--out");
+  const req = readPageRequest(project, values.request);
+  const browser = await launch();   // a missing setup fails before anything is opened
+  const views = [];
+  try {
+    for (const width of req.widths) for (const scheme of req.schemes) views.push(await measureView(browser, req, width, scheme));
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    fs.writeFileSync(out, JSON.stringify({
+      schema: 1, chromium: browser.version(), target: { kind: req.url ? "url" : "page", page: req.url ? null : req.pageRel, url: req.url ?? null }, views,
+    }, null, 1) + "\n");
+  } finally {
+    await browser.close();
+  }
+  console.log(`page-measure: ${views.filter((v) => !v.error).length} of ${views.length} view(s) measured -> ${out}`);
+  return EXIT.PASS;
+}
+
+// ---------------------------------------------------------------- capture
+// Stills, for two jobs (scripts/CONTRACT.md "capture"):
+//   capture <page.html>               a page of the project: four first-screen views (1440 x 900 and 390 x 844, light and dark) and a full page (1440, light), device scale 1, written beside
+//                                     the page in <page folder>/shots/ with capture.json (the stills' hashes, every project file the page loaded, what went wrong while it loaded). The browser
+//                                     reaches nothing but the project's own server: a request to another origin is recorded and aborted, as in shot.
+//   capture --url URL --name NAME     a real site, into research/site-refs/NAME/: the first screen at 1440 and at 390, a full page, two small JPEG thumbnails the references board inlines,
+//                                     and capture.json (the address, where it ended, its status and title). The only place where Chromium may reach the network, and only after the owner's
+//                                     answer to the online-research question (site_research is online or links-only). It never writes assets/_checks/.
+// Every refusal comes before the browser starts; every picture is taken before the first file is written, so a page or a site that does not load leaves nothing behind.
+const CAPTURE_VIEWS = [[1440, 900, "light"], [1440, 900, "dark"], [390, 844, "light"], [390, 844, "dark"]];   // a project page: width, height, colour scheme
+const CAPTURE_SITE_VIEWS = [[1440, 900], [390, 844]];                                                         // a real site: light only
+const CAPTURE_FULL_MAX = 12000;               // css px: a taller page is cut here, and capture.json says so (the Chromium texture limit is 16384)
+const CAPTURE_THUMBS = [["thumb-1440.jpg", 1440, 480], ["thumb-390.jpg", 390, 160]];   // file, the view it is made from, its width in px
+const CAPTURE_JPEG_QUALITY = 0.75;
+const CAPTURE_SITE_TIMEOUT_MS = 45000;
+const CAPTURE_SITE_SETTLE_MS = 1000;
+const CAPTURE_LAZY_CAP_MS = 10000;            // a real site's lazy images are given this long to load; the ones still missing are named in the output
+const CAPTURE_NAME = /^[a-z0-9][a-z0-9-]{1,40}$/;
+const CAPTURE_RESERVED_NAME = "owner";        // research/site-refs/owner/ holds the screenshots the owner sent: capture never writes there
+const CAPTURE_MAX_PROBLEMS = 40;
+const CAPTURE_READ_ONLY = { tail: "(capture writes its stills beside the page)", how: "copy the page into the latest round and capture it there" };
+
+const firstLine = (e) => String(e && e.message ? e.message : e).split("\n")[0].replace(/^page\.\w+: /, "");
+
+function wholeMs(value, flag, min) {
+  const n = Number(value);
+  if (value === "" || !Number.isInteger(n) || n < min) die(EXIT.USAGE, `${flag} needs a whole number of milliseconds, ${min} or more\n${USAGE}`);
+  return n;
+}
+
+/** The page is loaded: wait for its fonts, load its lazy images (a full page draws them), pause, then wait for the animations that end. `lazyCap` (a real site) stops waiting for
+ *  the images after that many ms; the number still missing is returned. */
+async function settleForStill(page, { timeout, waitMs, lazyCap = null }) {
+  await withTimeout(page.evaluate(() => document.fonts.ready), timeout, "fonts.ready");
+  const lazy = await withTimeout(page.evaluate(async (cap) => {
+    const imgs = [...document.images].filter((i) => i.loading === "lazy");
+    for (const i of imgs) i.loading = "eager";
+    const loaded = Promise.all(imgs.map((i) => (i.complete ? null : new Promise((r) => { i.addEventListener("load", r, { once: true }); i.addEventListener("error", r, { once: true }); }))));
+    if (cap !== null) await Promise.race([loaded, new Promise((r) => setTimeout(r, cap))]); else await loaded;
+    return { images: imgs.length, missing: imgs.filter((i) => !i.complete).length };
+  }, lazyCap), timeout, "lazy images");
+  await page.waitForTimeout(waitMs);
+  await waitAnimations(page);
+  return lazy;
+}
+
+/** A picture shrunk to `width` px in a blank page (a canvas, as pngDiff decodes pictures), as a JPEG on white. */
+async function jpegThumb(diff, png, width) {
+  const b64 = await diff.evaluate(async ([data, w, quality]) => {
+    const bmp = await createImageBitmap(await (await fetch("data:image/png;base64," + data)).blob());
+    const h = Math.round((bmp.height * w) / bmp.width);
+    const cv = new OffscreenCanvas(w, h), g = cv.getContext("2d");
+    g.fillStyle = "#fff"; g.fillRect(0, 0, w, h);
+    g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high";
+    g.drawImage(bmp, 0, 0, w, h);
+    const bytes = new Uint8Array(await (await cv.convertToBlob({ type: "image/jpeg", quality })).arrayBuffer());
+    let s = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return btoa(s);
+  }, [png.toString("base64"), width, CAPTURE_JPEG_QUALITY]);
+  return Buffer.from(b64, "base64");
+}
+
+/** capture.json of a page or of a site reference (`capture --url`): rewritten only when a still, an input, a problem or what the site answered changed. A run that finds everything as it was leaves the file, its date included, byte for byte,
+ *  so a report that read it (board-lint) does not turn stale because someone ran capture again. */
+function writeCaptureRecord(file, doc) {
+  let old = null;
+  try { old = JSON.parse(fs.readFileSync(file, "utf8")); } catch { /* none yet, or not readable: written */ }
+  if (old && JSON.stringify({ ...old, date: null }) === JSON.stringify({ ...doc, date: null })) return false;
+  return writeIfChanged(file, JSON.stringify(doc, null, 2) + "\n");
+}
+
+async function cmdCapture(argv) {
+  const { values, positionals } = parse(argv, {
+    project: { type: "string" }, wait: { type: "string" }, timeout: { type: "string" }, url: { type: "string" }, name: { type: "string" },
+  });
+  const project = findProject(values.project);
+  if (values.url !== undefined) {
+    if (positionals.length) die(EXIT.USAGE, `capture --url takes no page: ${positionals[0]}\n${USAGE}`);
+    if (values.wait !== undefined) die(EXIT.USAGE, `--wait goes with a page of the project, not with --url\n${USAGE}`);
+    return captureSite(project, values);
+  }
+  if (values.name !== undefined) die(EXIT.USAGE, `--name goes with --url\n${USAGE}`);
+  if (positionals.length !== 1) die(EXIT.USAGE, `capture needs exactly one page, or --url and --name\n${USAGE}`);
+  return captureProjectPage(project, positionals[0], values);
+}
+
+async function captureProjectPage(project, pageFile, values) {
+  const timeout = wholeMs(values.timeout ?? "60000", "--timeout", 1000), waitMs = wholeMs(values.wait ?? "300", "--wait", 0);
+  const abs = checkPage(project, pageFile);
+  const root = fs.realpathSync.native(project);
+  const diskRel = (p) => path.relative(root, fs.realpathSync.native(p)).split(path.sep).join("/");   // as the disk spells it (macOS is case-insensitive): history/ and rounds/ are told apart by name
+  const pageRel = diskRel(abs);
+  const frozen = readOnlyWhy(project, pageRel, CAPTURE_READ_ONLY);   // before the browser starts, before anything is written
+  if (frozen) die(EXIT.USAGE, frozen);
+  const dir = path.posix.dirname(pageRel) === "." ? "shots" : `${path.posix.dirname(pageRel)}/shots`;
+  const browser = await launch();   // a missing setup fails before anything is opened
+  const server = await startServer(project);
+  const stills = [], problems = new Set();
+  let full = null;
+  try {
+    const { url } = pageUrl(project, server.origin, pageFile);
+    for (const [width, height, scheme] of CAPTURE_VIEWS) {
+      const ctx = await browser.newContext({ viewport: { width, height }, colorScheme: scheme, deviceScaleFactor: 1 });
+      const seen = await instrument(ctx, server.origin);
+      const page = await ctx.newPage();
+      watch(page, seen, server.origin);
+      try {
+        await withTimeout(page.goto(url, { waitUntil: "load", timeout }), timeout + 5000, `loading ${url}`);
+        await settleForStill(page, { timeout, waitMs });
+        stills.push({ view: `${width}-${scheme}`, width, height, scheme, file: `${width}-${scheme}.png`, png: await page.screenshot() });
+        if (width === 1440 && scheme === "light") {
+          const total = await page.evaluate(() => document.documentElement.scrollHeight);
+          const h = Math.min(total, CAPTURE_FULL_MAX);
+          full = { file: "1440-light-full.png", height: h, cut: total > CAPTURE_FULL_MAX, page_height: total,
+            png: await page.screenshot({ fullPage: true, clip: { x: 0, y: 0, width, height: h } }) };
+        }
+      } catch (e) {
+        die(EXIT.FAIL, `capture could not take ${pageRel} at ${width}px ${scheme}: ${firstLine(e)}; nothing was written`);
+      } finally {
+        await ctx.close();
+      }
+      for (const u of seen.nonLocal) problems.add(`non-local request: ${u}`);
+      for (const m of seen.errors) problems.add(m);
+      for (const f of seen.failedLocal) problems.add(`failed local request: ${f}`);
+    }
+  } finally {
+    await browser.close();
+    await server.close();
+  }
+  const shots = path.join(root, ...dir.split("/"));
+  const inside = (p) => { const r = path.relative(shots, fs.realpathSync.native(p)); return r === "" || (!r.startsWith("..") && !path.isAbsolute(r)); };
+  // the page and what its server answered, except the stills themselves (a page that shows its own stills would never be at rest)
+  const inputs = [...new Set([abs, ...server.served()].filter((p) => !inside(p)).map(diskRel))].sort()
+    .map((p) => ({ path: p, sha256: sha256(fs.readFileSync(path.join(root, p))) }));
+  const kept = [...problems].sort();
+  const doc = {
+    schema: 1, tool: "capture", source: { page: pageRel }, date: today(),
+    views: stills.map((s) => ({ view: s.view, width: s.width, height: s.height, scheme: s.scheme, file: s.file, sha256: sha256(s.png) })),
+    full: { file: full.file, sha256: sha256(full.png), height: full.height, cut: full.cut, ...(full.cut ? { page_height: full.page_height } : {}) },
+    inputs, problems: kept.slice(0, CAPTURE_MAX_PROBLEMS).concat(kept.length > CAPTURE_MAX_PROBLEMS ? [`${kept.length - CAPTURE_MAX_PROBLEMS} more`] : []),
+  };
+  const files = [...stills, full].map((s) => ({ file: s.file, buf: s.png }));
+  const written = files.filter((f) => writeIfChanged(confine(project, `${dir}/${f.file}`, "capture file"), f.buf)).length
+    + (writeCaptureRecord(confine(project, `${dir}/capture.json`, "capture file"), doc) ? 1 : 0);
+  console.log(`capture ${pageRel}: ${files.length} stills and capture.json in ${dir}/ (${written} of ${files.length + 1} file(s) written, the others unchanged)`
+    + (full.cut ? `; the full page is ${full.page_height} px tall and was cut at ${CAPTURE_FULL_MAX} px` : ""));
+  for (const p of doc.problems) console.log(`  problem while loading: ${p}`);
+  return EXIT.PASS;
+}
+
+async function captureSite(project, values) {
+  const refuse = (why) => die(EXIT.USAGE, why);
+  let address;
+  try { address = new URL(String(values.url)); } catch { refuse(`capture takes an http(s) address, not ${JSON.stringify(values.url)}`); }
+  if (!["http:", "https:"].includes(address.protocol)) refuse(`capture takes an http(s) address, not ${JSON.stringify(values.url)}`);
+  if (address.username || address.password) refuse("capture takes an address without a user name or password (the address is written into capture.json)");
+  const name = values.name;
+  if (name === undefined || !CAPTURE_NAME.test(name)) refuse(`capture --url needs --name made of lowercase letters, digits and hyphens (2 to 41 characters, starting with a letter or digit), not ${JSON.stringify(name ?? null)}`);
+  if (name === CAPTURE_RESERVED_NAME) refuse(`--name ${CAPTURE_RESERVED_NAME} is reserved: research/site-refs/${CAPTURE_RESERVED_NAME}/ holds the screenshots the owner sent, which a capture would overwrite; use another --name`);
+  const timeout = wholeMs(values.timeout ?? String(CAPTURE_SITE_TIMEOUT_MS), "--timeout", 1000);
+  const answer = readStateTop(project).site_research;
+  if (answer !== "online" && answer !== "links-only") {
+    refuse("capture --url needs the owner's answer to online research first: ask it (07w-website-references), then `brand-creator state --set site_research=online` (or links-only)");
+  }
+  const url = address.href, dir = `research/site-refs/${name}`;
+  const folder = confine(project, dir, "capture folder"), recordFile = confine(project, `${dir}/capture.json`, "capture file");
+  if (fs.existsSync(recordFile)) {
+    let held;
+    try { held = JSON.parse(fs.readFileSync(recordFile, "utf8"))?.source?.url; } catch (e) { refuse(`${dir}/capture.json cannot be read (${e.message}): move ${dir}/ to removed-<date>/ first`); }
+    if (held !== url) refuse(`${dir}/ already holds a capture of ${typeof held === "string" ? held : "another address"}: use another --name for ${url}`);
+  } else if (fs.existsSync(folder) && (!fs.statSync(folder).isDirectory() || fs.readdirSync(folder).length)) {
+    // files that no capture of ours wrote (the owner's own, say): taking a site into this folder would replace them
+    refuse(`${dir} exists and holds no capture.json, so what is there is not a capture of ours and would be overwritten: use another --name, or move ${dir}/ to removed-<date>/ first`);
+  }
+  const fail = (why) => die(EXIT.FAIL, `could not capture ${url}: ${String(why).replace(/\.$/, "")}; leave the reference out or ask the owner for a screenshot`);
+  const browser = await launch();   // a missing setup fails before anything is fetched
+  const taken = [];
+  let source = null, full = null, missing = 0;
+  try {
+    for (const [i, [width, height]] of CAPTURE_SITE_VIEWS.entries()) {
+      // a fresh context per view: no cookies or storage from an earlier visit, nothing saved to disk
+      const ctx = await browser.newContext({ viewport: { width, height }, colorScheme: "light", deviceScaleFactor: 1, acceptDownloads: false });
+      try {
+        const page = await ctx.newPage();
+        let response;
+        try { response = await withTimeout(page.goto(url, { waitUntil: "load", timeout }), timeout + 5000, `loading ${url}`); } catch (e) { fail(firstLine(e)); }
+        if (!response) fail("the browser got no answer");
+        if (response.status() >= 400) fail(`the site answered ${response.status()}`);
+        try {
+          missing += (await settleForStill(page, { timeout, waitMs: CAPTURE_SITE_SETTLE_MS, lazyCap: CAPTURE_LAZY_CAP_MS })).missing;
+          taken.push({ view: String(width), width, height, scheme: "light", file: `${width}.png`, png: await page.screenshot() });
+          if (i === 0) {
+            const total = await page.evaluate(() => document.documentElement.scrollHeight);
+            const h = Math.min(total, CAPTURE_FULL_MAX);
+            full = { file: `${width}-full.png`, height: h, cut: total > CAPTURE_FULL_MAX, page_height: total,
+              png: await page.screenshot({ fullPage: true, clip: { x: 0, y: 0, width, height: h } }) };
+            source = { url, final_url: page.url(), status: response.status(), title: String(await page.title()).slice(0, 120) };
+          }
+        } catch (e) { fail(firstLine(e)); }
+      } finally {
+        await ctx.close();
+      }
+    }
+    const diff = await scratchPage(browser);
+    const thumbs = [];
+    for (const [file, from, width] of CAPTURE_THUMBS) thumbs.push({ file, width, buf: await jpegThumb(diff, taken.find((s) => s.width === from).png, width) });
+    const doc = {
+      schema: 1, tool: "capture", source, date: today(),
+      views: taken.map((s) => ({ view: s.view, width: s.width, height: s.height, scheme: s.scheme, file: s.file, sha256: sha256(s.png) })),
+      full: { file: full.file, sha256: sha256(full.png), height: full.height, cut: full.cut, ...(full.cut ? { page_height: full.page_height } : {}) },
+      thumbs: thumbs.map((t) => ({ file: t.file, width: t.width, sha256: sha256(t.buf) })),
+    };
+    const files = [...taken.map((s) => ({ file: s.file, buf: s.png })), { file: full.file, buf: full.png }, ...thumbs.map((t) => ({ file: t.file, buf: t.buf }))];
+    const written = files.filter((f) => writeIfChanged(confine(project, `${dir}/${f.file}`, "capture file"), f.buf)).length
+      + (writeCaptureRecord(recordFile, doc) ? 1 : 0);   // as for a page of the project: the file stays byte for byte as it was when only the day changed
+    console.log(`capture ${url}: ${files.length} pictures and capture.json in ${dir}/ (${written} of ${files.length + 1} file(s) written, the others unchanged)`
+      + (source.final_url !== url ? `; the site led on to ${source.final_url}` : "")
+      + (full.cut ? `; the full page is ${full.page_height} px tall and was cut at ${CAPTURE_FULL_MAX} px` : "")
+      + (missing ? `; ${missing} lazy image(s) had not loaded after ${CAPTURE_LAZY_CAP_MS / 1000} s` : ""));
+  } finally {
+    await browser.close();
+  }
+  return EXIT.PASS;
+}
+
+// ---------------------------------------------------------------- wiring
+// The wiring of a page the owner's own local server serves (`brand-creator adoption wiring --page URL`, scripts/CONTRACT.md "adoption wiring"): what the DOM carries that a redesign must
+// not lose, as JSON {link, field, handler, hook, id, script: [values]} on stdout (pagelib/wiring.mjs reads it). Loopback only, by the one rule of page-check (isLoopbackUrl), and the browser
+// reaches nothing else: a request to another origin is stopped, a redirect to one too, as in page-measure. Nothing is written.
+const WIRING_TIMEOUT_MS = 15000;   // the page has this long to load
+
+async function cmdWiring(argv) {
+  const { positionals } = parse(argv, {});
+  if (positionals.length !== 1) die(EXIT.USAGE, `wiring needs exactly one URL\n${USAGE}`);
+  const url = positionals[0];
+  if (!isLoopbackUrl(url)) die(EXIT.USAGE, `the wiring is read from your own local server (http or https on localhost, 127.0.0.1 or [::1]), not ${JSON.stringify(url)}`);
+  const origin = new URL(url).origin;
+  const browser = await launch();   // a missing setup fails before anything is opened
+  let ctx;
+  try {
+    ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: "block" });   // no service worker: it could ask other origins in ways a route does not see
+    const seen = await instrument(ctx, origin, { ownRedirects: true });
+    const page = await ctx.newPage();
+    const escaped = [];   // a hop of a redirect chain is not routed: one followed to another origin (the chain changed between the check and the browser's own follow) fails the read
+    page.on("request", (r) => { if (r.redirectedFrom() && !r.url().startsWith(origin + "/")) escaped.push(r.url().slice(0, 160)); });
+    const cannot = (why) => die(EXIT.CANNOT, `could not read the wiring of ${url}: ${why}`);
+    let response;
+    try { response = await withTimeout(page.goto(url, { waitUntil: "load", timeout: WIRING_TIMEOUT_MS }), WIRING_TIMEOUT_MS + 2000, `loading ${url}`); } catch (e) {
+      cannot(firstLine(e) + (seen.nonLocal.length ? ` (a request to another origin was stopped: ${seen.nonLocal[0]})` : ""));
+    }
+    if (!response) cannot("the browser got no answer");
+    if (response.status() >= 400) cannot(`the server answered ${response.status()}`);
+    if (escaped.length) cannot(`a redirect led to another origin and was not stopped (${escaped[0]})`);
+    if (!page.url().startsWith(origin + "/")) cannot(`the page ended on ${page.url().slice(0, 160)}, not on ${origin}`);
+    await page.waitForTimeout(PAGE_SETTLE_MS);   // a client-rendered page draws its markup a moment after the load event
+    console.log(JSON.stringify(await collectWiring(page)));
+  } finally {
+    if (ctx) await ctx.close();
+    await browser.close();
+  }
+  return EXIT.PASS;
+}
+
 // ---------------------------------------------------------------- selftest
 async function cmdSelftest() {
   const browser = await launch();
@@ -1695,6 +2510,9 @@ mainGuard(async () => {
     case "fonts": return cmdFonts(rest);
     case "pdf": return cmdPdf(rest);
     case "frames": return cmdFrames(rest);
+    case "page-measure": return cmdPageMeasure(rest);
+    case "capture": return cmdCapture(rest);
+    case "wiring": return cmdWiring(rest);
     case undefined: case "-h": case "--help": console.log(USAGE); return cmd ? EXIT.PASS : EXIT.USAGE;
     default: return die(EXIT.USAGE, `unknown command ${cmd}\n${USAGE}`);
   }

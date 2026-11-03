@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="[[fill: language code of the owner, e.g. en]]">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>[[fill: Brand]]: website references</title>
+<!--
+  brand-creator website references board template (P7w). Copy to <project>/rounds/r<N>/board.html (a new, empty round folder, N 2 or more,
+  never a round listed in reset_rounds) and fill every [[fill: ...]] marker; `brand-creator board-lint` fails while any marker is left in
+  text or attributes (HTML comments are ignored). The page shares its frame with the style research page (templates/style-board.html).
+  Nothing is built yet: this page shows what visitors of this kind of site come to do, what most sites in the category do about it, the
+  sites the owner named, and 4-6 groups of real sites, each group a way of serving that job, 3+ sites in a group, each with a captured
+  screenshot. The owner picks; only then does the site round start (gate G4w). Every site is real, opened today: never write one from
+  memory. Take = structure, rhythm and how the site serves the job. Avoid = their look (colours, type, imagery, their words).
+  Write the page in the OWNER'S language, visual first: short lines, no dense tables.
+  The data-section / data-field vocabulary is in scripts/CONTRACT.md ("Board contract") and references/board-contract.md.
+  Blocks marked OPTIONAL: delete them when they do not apply (never leave them empty).
+  Self-contained: no network, no web fonts. The only addresses on the page are the links to the sites themselves. A screenshot is the
+  small JPEG `brand-creator capture --url <address> --name <name>` writes (research/site-refs/<name>/thumb-1440.jpg), inlined as a data:
+  image with alt text, in a figure with a figcaption that names whose site it is and the date it was captured. A screenshot the owner
+  sent is inlined the same way and its caption says so (it lives in research/site-refs/owner/). Screenshots are for this private research
+  page: never reuse a part of a site's pictures, words or code in anything you build.
+  Query parameters: ?t=light|dark forces a theme.
+-->
+<style>
+:root{
+  --bg:#f5f6f8;--surface:#ffffff;--sunk:#eceef1;--text:#16191d;--muted:#565d66;--line:#d9dce1;
+  --accent:#3b5b8c;--accent-ink:#ffffff;--good:#2f6b4f;--warn:#8a5a14;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans","Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --outline:#8a9099;--r:6px;color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#111316;--surface:#191c20;--sunk:#0c0e10;--text:#e7e9ec;--muted:#9aa1ab;--line:#2d3137;
+  --accent:#8fb0e3;--accent-ink:#0c1320;--good:#7fc4a2;--warn:#e0b26a;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111316;--surface:#191c20;--sunk:#0c0e10;--text:#e7e9ec;--muted:#9aa1ab;--line:#2d3137;
+  --accent:#8fb0e3;--accent-ink:#0c1320;--good:#7fc4a2;--warn:#e0b26a;color-scheme:dark}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.55 var(--sans)}
+main{max-width:1120px;margin:0 auto;padding:32px 16px 80px}
+h1,h2,h3{line-height:1.2;margin:0}
+h1{font-size:clamp(28px,5vw,40px);letter-spacing:-.01em}
+h2{font-size:22px;margin-bottom:12px}
+h3{font-size:18px}
+p,li,dd{overflow-wrap:anywhere}
+p{margin:0 0 10px}
+a{color:var(--accent)}
+.eyebrow,.num{font:600 12px/1.4 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
+.num{display:block}
+.lede{color:var(--muted);max-width:68ch;margin-top:10px}
+.muted{color:var(--muted)}
+.toc{display:flex;flex-wrap:wrap;gap:6px;margin:20px 0 8px;padding:0;list-style:none}
+.toc a{display:inline-block;padding:4px 10px;border:1px solid var(--line);border-radius:999px;font-size:13px;color:var(--text);text-decoration:none;background:var(--surface)}
+.block{margin-top:40px;padding-top:20px;border-top:1px solid var(--line)}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr))}
+.idea{font-size:17px;margin:0}
+.vote{border:0;padding:0;margin:0;display:flex;gap:6px;flex-wrap:wrap}
+.vote legend{font-size:13px;color:var(--muted);margin-bottom:4px}
+.vote label,.options label{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:14px;cursor:pointer}
+.callout{border-left:4px solid var(--accent);background:var(--surface);padding:14px 16px;border-radius:0 var(--r) var(--r) 0}
+.questions{margin:0;padding-left:22px}
+.questions>li{margin-bottom:16px}
+.questions .q{font-weight:600;margin-bottom:6px}
+.options{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.options .rec{font-size:12px;color:var(--good);font-weight:600;white-space:nowrap;overflow-wrap:normal}
+.options label{border-radius:14px}
+.reply-out{font:15px/1.4 var(--mono);background:var(--sunk);border-radius:4px;padding:10px 12px;margin:8px 0;min-height:42px}
+button{font:inherit;font-size:14px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:6px 14px;cursor:pointer}
+footer{margin-top:56px;font-size:13px;color:var(--muted)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+.big-list{margin:0;padding-left:20px}
+.big-list li{margin-bottom:8px}
+.group{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.group .idea{font-size:18px}
+.layout-line{font-size:13px;color:var(--muted);margin:0}
+.refs{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.refs li{border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;background:var(--bg)}
+.refs .name{font-weight:600}
+.refs .seen{display:block;color:var(--muted);font-size:14px}
+.refs .take{display:block;color:var(--good);font-size:14px}
+.refs .avoid{display:block;color:var(--warn);font-size:14px}
+.shot{margin:6px 0;display:flex;flex-direction:column;gap:4px}
+.shot img{display:block;width:100%;max-width:480px;height:auto;border:1px solid var(--line);border-radius:4px;background:var(--sunk)}
+.shot figcaption{font-size:12px;color:var(--muted)}
+.owner-sites{list-style:none;margin:0;padding:0;display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))}
+.owner-sites li{border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;background:var(--surface)}
+.owner-sites .kind{font:600 12px/1.4 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);display:block}
+.owner-sites li[data-like="like"] .kind{color:var(--good)}
+.owner-sites li[data-like="dislike"] .kind{color:var(--warn)}
+</style>
+</head>
+<body data-round="[[fill: N]]" data-board="site-refs">
+
+<main>
+  <header>
+    <p class="eyebrow">Website references · before any page is built · [[fill: YYYY-MM-DD]]</p>
+    <h1>[[fill: Brand]]: which sites to learn from?</h1>
+    <p class="lede">[[fill: one sentence: no page is built yet; pick the groups of sites whose way of serving the visitor you want, and the hero of the site is built from them]]</p>
+    <ul class="toc">
+      <li><a href="#job">The visitor's job</a></li><li><a href="#norm">The norm</a></li><li><a href="#owner">Your sites</a></li>
+      <li><a href="#groups">Groups</a></li><li><a href="#cliches">Site clichés</a></li><li><a href="#none">None of these</a></li>
+      <li><a href="#call">My call</a></li><li><a href="#questions">Questions</a></li>
+    </ul>
+  </header>
+
+  <section class="block" id="job" data-section="visitor-job">
+    <h2><span class="num">1</span>The visitor's job</h2>
+    <ul class="big-list">
+      <li>[[fill: who visits the site, in their own words, and what they arrive knowing]]</li>
+      <li>[[fill: the job they came to do, in one sentence: what has to be true by the time they leave]]</li>
+      <li>[[fill: the one action that serves that job, and what stands in its way]]</li>
+    </ul>
+  </section>
+
+  <section class="block" id="norm" data-section="norm">
+    <h2><span class="num">2</span>What most sites in the category do</h2>
+    <ul class="big-list">
+      <li>[[fill: the norm, counted from sites opened today: how they open, what they put first, where the action sits, with 2 named examples]]</li>
+      <li>[[fill: what that norm costs this visitor, or where it serves them well]]</li>
+    </ul>
+  </section>
+
+  <section class="block" id="owner" data-section="owner-sites">
+    <h2><span class="num">3</span>Sites you named</h2>
+    <!-- One li per site the owner named: data-like is "like" or "dislike", a link (or an inlined screenshot the owner sent, with a figcaption that says so) and data-field="why": what the owner said about it, in their words.
+         When the owner named none, delete the list and write one line instead: "You named no sites, so these groups come from the research alone." -->
+    <ul class="owner-sites">
+      <li data-like="like"><span class="kind">Like</span>
+        <a href="[[fill: https://... the site the owner likes]]">[[fill: Site one]]</a>
+        <span data-field="why">[[fill: why, in the owner's words]]</span></li>
+      <li data-like="dislike"><span class="kind">Dislike</span>
+        <a href="[[fill: https://... the site the owner dislikes]]">[[fill: Site two]]</a>
+        <span data-field="why">[[fill: why, in the owner's words]]</span></li>
+    </ul>
+  </section>
+
+  <section class="block" id="groups">
+    <h2><span class="num">4</span>Groups of sites</h2>
+    <p class="muted">[[fill: one line: each group is a different way of serving the job above, not a different look; the sites are real, open them to see]]</p>
+    <div class="grid">
+      <!-- Repeat this article for every group (4-6). data-name: a word, identical in chat. At least 3 sites each, every one a link, a captured screenshot, a "take" and an "avoid".
+           OPTIONAL: when one of references/page-layouts.json fits how the group serves the job, add data-layout="<id>" to the article (or data-layout="own:<word>" with the reason in the idea) and uncomment the line under the idea:
+           <p class="layout-line">Layout: <b>[[fill: layout id]]</b></p> -->
+      <article class="group" data-section="group" data-name="[[fill: Name one]]">
+        <h3>[[fill: Name one]]</h3>
+        <p class="idea" data-field="idea">[[fill: how this group serves the visitor's job, in one sentence, in plain words]]</p>
+        <ol class="refs" data-field="references">
+          <li><span class="name"><a href="[[fill: https://... the site's own page]]">[[fill: Site one]]</a></span>
+            <figure class="shot"><img data-field="shot" src="[[fill: data:image/jpeg;base64,... thumb-1440.jpg of this site, inlined]]" alt="[[fill: the first screen in words, for someone who cannot see it]]">
+              <figcaption>[[fill: whose site, its address, captured on YYYY-MM-DD]] · shown for private research</figcaption></figure>
+            <span class="seen">[[fill: how the site serves the job: what leads, in what order, where the action sits]]</span>
+            <span class="take" data-field="take">Take: [[fill: structure, rhythm, how it serves the job]]</span>
+            <span class="avoid" data-field="avoid">Avoid: [[fill: their look: colours, type, imagery, their words]]</span></li>
+          <li><span class="name"><a href="[[fill: https://...]]">[[fill: Site two]]</a></span>
+            <figure class="shot"><img data-field="shot" src="[[fill: data:image/jpeg;base64,...]]" alt="[[fill: the first screen in words]]">
+              <figcaption>[[fill: whose site, address, captured on]] · shown for private research</figcaption></figure>
+            <span class="seen">[[fill: how the site serves the job]]</span>
+            <span class="take" data-field="take">Take: [[fill: ...]]</span>
+            <span class="avoid" data-field="avoid">Avoid: [[fill: ...]]</span></li>
+          <li><span class="name"><a href="[[fill: https://...]]">[[fill: Site three]]</a></span>
+            <figure class="shot"><img data-field="shot" src="[[fill: data:image/jpeg;base64,...]]" alt="[[fill: the first screen in words]]">
+              <figcaption>[[fill: whose site, address, captured on]] · shown for private research</figcaption></figure>
+            <span class="seen">[[fill: how the site serves the job]]</span>
+            <span class="take" data-field="take">Take: [[fill: ...]]</span>
+            <span class="avoid" data-field="avoid">Avoid: [[fill: ...]]</span></li>
+        </ol>
+        <fieldset class="vote" data-vote="[[fill: Name one]]"><legend>Your vote</legend>
+          <label><input type="radio" name="vote-[[fill: Name one]]" value="keep">keep</label><label><input type="radio" name="vote-[[fill: Name one]]" value="drop">drop</label><label><input type="radio" name="vote-[[fill: Name one]]" value="unsure">unsure</label></fieldset>
+      </article>
+      <!-- [[fill: articles for groups two to four (up to six), same structure, each vote group named after its group ...]] -->
+    </div>
+  </section>
+
+  <section class="block" id="cliches" data-section="site-cliches">
+    <h2><span class="num">5</span>Site clichés of this category</h2>
+    <p class="muted">What sites like this do by reflex. They are in research/site-cliches.md and go into the reflex test of every hero variant: a variant may still use one, but its card has to argue why.</p>
+    <ul class="big-list">
+      <li>[[fill: a cliché, in one line, with the layout, copy, imagery or interaction it is, and in how many of the sites opened it was seen]]</li>
+      <li>[[fill: a second cliché]]</li>
+      <li>[[fill: a third cliché]]</li>
+    </ul>
+  </section>
+
+  <section class="block" id="none" data-section="none-of-these">
+    <h2><span class="num">6</span>None of these</h2>
+    <div class="callout"><p>If none of these groups is right, say so and what was missing. I research again from new angles and rewrite this board before any page is built.</p></div>
+  </section>
+
+  <section class="block" id="call" data-section="my-call">
+    <h2><span class="num">7</span>My call</h2>
+    <p data-field="recommendation"><b>Recommendation:</b> [[fill: the group (or two) the hero should start from, and why in one sentence]]</p>
+    <p data-field="critique"><b>Honest critique:</b> [[fill: the weakest part of your own pick, and what the category norm would say against it]]</p>
+  </section>
+
+  <section class="block" id="questions" data-section="questions">
+    <h2><span class="num">8</span>Questions</h2>
+    <ol class="questions">
+      <!-- Question 1 is multi-pick (checkboxes): the reply lists every ticked group. One option per group, lettered in order; the last option is always "None of these: research again" (class none-pick: ticking it clears the others). -->
+      <li data-section="question" data-n="1" data-lists="groups" data-multi="true"><p class="q">Which groups do I build the hero from? <span class="muted">Tick one or more.</span></p>
+        <ol class="options">
+          <li data-option="a" data-recommended="true"><label><input type="checkbox" name="q1" value="a">[[fill: Name one]] <span class="rec">Recommended</span></label></li>
+          <li data-option="b"><label><input type="checkbox" name="q1" value="b">[[fill: Name two]]</label></li>
+          <li data-option="c"><label><input type="checkbox" name="q1" value="c">[[fill: Name three]]</label></li>
+          <li data-option="d"><label><input type="checkbox" name="q1" value="d">[[fill: Name four]]</label></li>
+          <li data-option="e"><label><input type="checkbox" name="q1" value="e" class="none-pick">None of these: research again</label></li>
+        </ol></li>
+      <li data-section="question" data-n="2"><p class="q">Are the sites you like and dislike (section 3) right, and did I keep them in mind?</p>
+        <ol class="options">
+          <li data-option="a" data-recommended="true"><label><input type="radio" name="q2" value="a">a. Yes, that is my list <span class="rec">Recommended</span></label></li>
+          <li data-option="b"><label><input type="radio" name="q2" value="b">b. No, I will change the list</label></li>
+        </ol></li>
+      <!-- More questions: data-n="3" ...; options lettered a, b, c ... in order (data-option); exactly one data-recommended. Question 1 shows the group names; every other question keeps visible "a." prefixes so "2b" works. -->
+    </ol>
+  </section>
+
+  <section class="block" id="reply" data-section="reply">
+    <h2>Reply</h2>
+    <p>Answer with one or more group names, or question number plus option (1a). Add one sentence on anything you want different, for example "[[fill: Name one]], but [[fill: a change]]". Or say "skip the references" to build the site without them. Batched answers work: "1a, 2a".</p>
+    <div class="reply-out" id="reply-out" aria-live="polite">Pick options above to compose a reply, or type your own.</div>
+    <button type="button" id="copy-reply">Copy reply</button>
+  </section>
+
+  <footer>Made with brand-creator · website references · checked with board-lint</footer>
+</main>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var t = q.get("t");
+  if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+  var out = document.getElementById("reply-out");
+  var placeholder = out ? out.textContent : "";
+  function pickName(input) {
+    var label = input.parentNode.cloneNode(true);
+    label.querySelectorAll(".rec").forEach(function (x) { x.remove(); });
+    return label.textContent.trim();
+  }
+  function compose() {
+    var parts = [];
+    document.querySelectorAll("[data-section=question]").forEach(function (qq) {
+      var picked = Array.prototype.slice.call(qq.querySelectorAll("input:checked"));
+      if (!picked.length) return;
+      if (qq.hasAttribute("data-lists")) parts.push(picked.map(pickName).join(", "));
+      else parts.push(qq.getAttribute("data-n") + picked.map(function (c) { return c.value; }).join(""));
+    });
+    document.querySelectorAll("fieldset[data-vote]").forEach(function (f) {
+      var c = f.querySelector("input:checked");
+      if (c) parts.push(f.getAttribute("data-vote") + " " + c.value);
+    });
+    if (out) out.textContent = parts.length ? parts.join(", ") : placeholder;
+  }
+  document.addEventListener("change", function (e) {
+    var el = e.target, qq = el.closest ? el.closest("[data-multi]") : null;
+    if (qq && el.checked) qq.querySelectorAll("input[type=checkbox]").forEach(function (o) {   // "None of these" excludes the groups, and the groups exclude it
+      if (o !== el && (el.classList.contains("none-pick") || o.classList.contains("none-pick"))) o.checked = false;
+    });
+    compose();
+  });
+  var btn = document.getElementById("copy-reply");
+  if (btn) btn.addEventListener("click", function () {
+    var text = out ? out.textContent : "";
+    var done = function () { btn.textContent = "Copied"; };
+    var fallback = function () { var r = document.createRange(); r.selectNodeContents(out); var s = getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = "Selected: copy it"; };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+  });
+})();
+</script>
+</body>
+</html>

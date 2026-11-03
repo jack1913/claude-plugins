@@ -135,6 +135,7 @@ P="$WORK/marlow-lane"
 expect_file "$P/BRAND-STATE.md"; expect_file "$P/FACTS.md"; expect_file "$P/brief/BRIEF.md"
 [ ! -e "$P/.git" ] || die "new created a .git in the project"
 cp "$FIX/brief.md" "$P/brief/BRIEF.md"; cp "$FIX/facts.md" "$P/FACTS.md"
+mkdir -p "$P/research"; cp "$FIX/research/cliches.md" "$P/research/cliches.md"
 grep -q "the neighbours queue out of the door" "$P/brief/BRIEF.md" || die "the brief does not carry the owner's words"
 
 step "G0: scope recorded (tier quick, generated mark, local review surface)"
