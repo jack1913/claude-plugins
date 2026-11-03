@@ -43,7 +43,8 @@ checks and renders
                           still too, into motion/frames/<case>/ (a try-out proof in the latest round or removed-*/: <its folder>/frames/<case>/; a proof in
                           history/ or an earlier round is refused: read-only), each written only when its bytes change
   capture <page.html>     stills of a page of the project: the first screen at 1440 and 390, light and dark, and a full page, beside it in shots/, with
-                          capture.json (what the page loaded); --url URL --name NAME captures a real site into research/site-refs/NAME/ instead: the
+                          capture.json (what the page loaded); --frames adds three key frames of the first screen (the start, middle and end of the
+                          animation that runs on load); --url URL --name NAME captures a real site into research/site-refs/NAME/ instead: the
                           only command that reaches the network, and only after the owner answered the online-research question (site_research)
   logo-sheet              real-size logo sheet (16/20/32/64/128/180, light and dark, x4 favicon, header mock)
   contrast                WCAG 2.2 AA UI pairs, brand-rule pairs, colours that touch in the logo SVGs, APCA advisory

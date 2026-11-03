@@ -10,6 +10,11 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 - `brand-creator state --part g4-rules` prints the G4 rules of `BRAND-STATE.md` (the G4 record and the rules you approved) as one
   line to give a reviewer, with the line that records them in a cold review.
+- `brand-creator capture <page> --frames` takes three key frames of a page's first screen (1440 wide, light): at the start, the
+  middle and the end of the longest animation that runs when the page loads, as `shots/frame-1440-0.png`, `frame-1440-50.png` and
+  `frame-1440-100.png`, listed in `capture.json`. The four stills only show where a motion ends; a tear-off or a tab switch shows in
+  the frames. A page that does not animate on load, or only repeats an animation for ever, gets no frame, and the run says so. The
+  same page taken twice gives the same frames.
 
 ### Changed
 
@@ -24,6 +29,10 @@ stage, and why, is in the [archive](docs/archive/README.md).
   still that equals the light one is right when a rule says so, without reading the rest of the project record. The board
   lint accepts a review made the old way (six inputs) or with the rules as a seventh, and marks the review out of date when a rule
   or the G4 record changes after it; another line of `BRAND-STATE.md` changing does not.
+- A cold review may now also be given the three key frames of a page that animates on load, so it judges the motion and not only the
+  end stills. The board lint accepts the six inputs, the six plus the rules, the six plus the three frames, or all of them (all three
+  frames or none), and marks the review out of date when a frame changes or the page is taken again without `--frames`. `site approve`
+  does not copy the frames into the approved page.
 
 ### Fixed
 

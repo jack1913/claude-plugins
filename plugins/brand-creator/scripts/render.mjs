@@ -16,7 +16,7 @@
 //   render.mjs page-measure --request FILE --out FILE  the measuring half of `brand-creator page-check`: one page opened at each width and colour scheme, the raw facts
 //                               written to --out (page_check.py judges them)
 //   render.mjs capture <page.html>  four first-screen stills (1440 and 390 wide, light and dark) and a full page of a page of the project, beside it in shots/, and capture.json
-//                               (what it loaded); a page in history/ or in a round before the latest is refused
+//                               (what it loaded); a page in history/ or in a round before the latest is refused; --frames adds three key frames of the first screen (1440, light)
 //   render.mjs capture --url URL --name NAME  stills and thumbnails of a real site into research/site-refs/NAME/: the only command that lets Chromium reach the network, and
 //                               only after the owner answered the online-research question (site_research)
 //   render.mjs wiring <url>  the wiring of a page of the owner's own local server (loopback only), read from the DOM: JSON {kind: [values]} for `brand-creator adoption wiring --page`
@@ -44,7 +44,7 @@ const USAGE = `usage:
   render.mjs pdf <page.html> --out FILE.pdf --label TEXT [--project DIR] [--format A4|Letter] [--scheme light|dark] [--label-px N] [--timeout MS]
   render.mjs pdf <page.html> --out FILE.pdf --size-mm WxH [--bleed-mm N] [--measure FILE.json] [--project DIR] [--scheme light|dark] [--timeout MS]
   render.mjs page-measure --request FILE.json --out FILE.json [--project DIR]
-  render.mjs capture <page.html> [--project DIR] [--wait MS] [--timeout MS]
+  render.mjs capture <page.html> [--project DIR] [--wait MS] [--timeout MS] [--frames]
   render.mjs capture --url URL --name NAME [--project DIR] [--timeout MS]
   render.mjs wiring <url>
   render.mjs selftest
@@ -57,6 +57,8 @@ motion/frames/<case>/ (a try-out proof, one in the latest round or a removed-*/ 
 script, an image), so a change to one of them makes the report stale.
 capture writes no report: its stills and capture.json go beside the page (<page folder>/shots/), or with --url into research/site-refs/NAME/; --url is refused until
 site_research in BRAND-STATE.md is online or links-only, and it is the only form that lets the browser reach the network.
+capture --frames also writes shots/frame-1440-0.png, frame-1440-50.png and frame-1440-100.png: the first screen at 1440, light, with every finite animation that runs on load
+paused at 0, 50 and 100 % of the longest one (a page with none writes no frame, and says so); it goes with a page of the project, not with --url.
 wiring opens one page of your own local server (http or https on localhost, 127.0.0.1 or [::1]; anything else is refused) and prints, as JSON on stdout, the links, form fields, ids, test hooks,
 scripts and inline handlers it carries as written in the DOM; a page that does not load is exit 3.`;
 
@@ -748,8 +750,12 @@ async function inPageFinish() {
  *  is what the page draws, read before anything is cancelled: the computed style of each property an animation moves, for an animation whose effect still
  *  applies (a fill holds it). One whose effect no longer applies (`animation: hide 1s 1s backwards` after its end) is only cancelled: commitStyles() would
  *  write its keyframe value (visibility: hidden) over the style the page has at rest. An animation on a pseudo-element, which has no inline style, and one
- *  with a value that reads empty stay, and are named. */
-function inPageSettle() {
+ *  with a value that reads empty stay, and are named.
+ *  `keepSeeked` (the key frames of `capture --frames`, which seek a state that is not the one the page rests in): after the values are read and before the animations are dropped, every
+ *  target gets `transition: none !important`. Written over a style that still has a `transition`, a state that differs from the rest one starts a new CSS transition from the rest value,
+ *  which has barely moved when the picture is taken (the common entrance: a class added on load that a `transition` moves). It has to be this task: turned off in an earlier one, the style
+ *  recalculation drops the page's own transition, the style without it is the rest state and nothing is written. The motion proof settles at the rest state, where nothing differs. */
+function inPageSettle(keepSeeked = false) {
   const left = [], plan = [];
   const kebab = (p) => (p.startsWith("--") ? p : p === "cssFloat" ? "float" : p === "cssOffset" ? "offset" : p.replace(/[A-Z]/g, (m) => "-" + m.toLowerCase()));
   for (const s of window.__bc.anims) {
@@ -761,6 +767,7 @@ function inPageSettle() {
     if (vals.some(([, v]) => v === "")) { left.push(name); continue; }                              // a value it cannot read is not written: it stays
     plan.push({ s, vals });
   }
+  if (keepSeeked) for (const { s, vals } of plan) if (vals.length) s.target.style.setProperty("transition", "none", "important");
   for (const { s } of plan) s.a.cancel();
   for (const { s, vals } of plan) for (const [p, v] of vals) s.target.style.setProperty(p, v);
   return left;
@@ -2230,6 +2237,8 @@ async function cmdPageMeasure(argv) {
 //   capture --url URL --name NAME     a real site, into research/site-refs/NAME/: the first screen at 1440 and at 390, a full page, two small JPEG thumbnails the references board inlines,
 //                                     and capture.json (the address, where it ended, its status and title). The only place where Chromium may reach the network, and only after the owner's
 //                                     answer to the online-research question (site_research is online or links-only). It never writes assets/_checks/.
+//   capture <page.html> --frames      also the key frames of the first screen (1440 x 900, light): the animations that run on load, paused and seeked to 0, 50 and 100 % of the longest finite one, as
+//                                     the motion proof seeks a page (shot --motion); capture.json lists them. A page with no finite animation on load gets none, and the run says so.
 // Every refusal comes before the browser starts; every picture is taken before the first file is written, so a page or a site that does not load leaves nothing behind.
 const CAPTURE_VIEWS = [[1440, 900, "light"], [1440, 900, "dark"], [390, 844, "light"], [390, 844, "dark"]];   // a project page: width, height, colour scheme
 const CAPTURE_SITE_VIEWS = [[1440, 900], [390, 844]];                                                         // a real site: light only
@@ -2242,6 +2251,9 @@ const CAPTURE_LAZY_CAP_MS = 10000;            // a real site's lazy images are g
 const CAPTURE_NAME = /^[a-z0-9][a-z0-9-]{1,40}$/;
 const CAPTURE_RESERVED_NAME = "owner";        // research/site-refs/owner/ holds the screenshots the owner sent: capture never writes there
 const CAPTURE_MAX_PROBLEMS = 40;
+const CAPTURE_FRAME_PERCENTS = [0, 50, 100];  // key frames (--frames): where in the longest finite animation that runs on load the first screen is taken
+const CAPTURE_FRAMES_SETTLE_MS = 1000;        // a page with no animation at load is looked at this long, for a script that starts one a moment later (startPass)
+const captureFrameFile = (percent) => `frame-1440-${percent}.png`;
 const CAPTURE_READ_ONLY = { tail: "(capture writes its stills beside the page)", how: "copy the page into the latest round and capture it there" };
 
 const firstLine = (e) => String(e && e.message ? e.message : e).split("\n")[0].replace(/^page\.\w+: /, "");
@@ -2296,17 +2308,85 @@ function writeCaptureRecord(file, doc) {
 
 async function cmdCapture(argv) {
   const { values, positionals } = parse(argv, {
-    project: { type: "string" }, wait: { type: "string" }, timeout: { type: "string" }, url: { type: "string" }, name: { type: "string" },
+    project: { type: "string" }, wait: { type: "string" }, timeout: { type: "string" }, url: { type: "string" }, name: { type: "string" }, frames: { type: "boolean", default: false },
   });
   const project = findProject(values.project);
   if (values.url !== undefined) {
     if (positionals.length) die(EXIT.USAGE, `capture --url takes no page: ${positionals[0]}\n${USAGE}`);
     if (values.wait !== undefined) die(EXIT.USAGE, `--wait goes with a page of the project, not with --url\n${USAGE}`);
+    if (values.frames) die(EXIT.USAGE, `--frames goes with a page of the project, not with --url\n${USAGE}`);
     return captureSite(project, values);
   }
   if (values.name !== undefined) die(EXIT.USAGE, `--name goes with --url\n${USAGE}`);
   if (positionals.length !== 1) die(EXIT.USAGE, `capture needs exactly one page, or --url and --name\n${USAGE}`);
   return captureProjectPage(project, positionals[0], values);
+}
+
+/** In the page: every animation that was running on load, to the time `t` (ms): a finite one to t, one that repeats forever only over its first iteration (as `__bc.seek`); an animation the page
+ *  held paused is not moved. Two frames are rendered after it, so that the style of the new time is the one the page draws. */
+async function inPageSeekRunning(t) {
+  const bc = window.__bc;
+  for (const s of bc.anims) if (s.seekable && s.wasRunning) s.a.currentTime = s.infinite ? Math.min(t, s.delay + s.duration) : t;
+  await bc.frame(); await bc.frame();
+  bc.drain();
+}
+
+/** One load of the page for the key frames (1440 x 900, light, device scale 1), as the motion proof loads a page: every Web Animation it has running on load is paused where it is found.
+ *  -> {ctx, page, snap: what the page's animations are, running: the seekable ones that ran on load, finite: those that end, sp: what startPass saw}. */
+async function openForFrames(browser, server, url, timeout) {
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: "light", deviceScaleFactor: 1 });
+  const seen = await instrument(ctx, server.origin);
+  await ctx.addInitScript(INIT_SCRIPT);
+  const page = await ctx.newPage();
+  watch(page, seen, server.origin);
+  try {
+    await withTimeout(page.goto(url, { waitUntil: "load", timeout }), timeout + 5000, `loading ${url}`);
+    await withTimeout(page.evaluate(() => document.fonts.ready), timeout, "fonts.ready");
+    const sp = await startPass(page, CAPTURE_FRAMES_SETTLE_MS);
+    const snap = await page.evaluate(inPageDescribe);
+    const running = snap.filter((a) => a.seekable && a.wasRunning);
+    return { ctx, page, snap, running, finite: running.filter((a) => !a.infinite && a.end > 0), sp };
+  } catch (e) {
+    await ctx.close();
+    throw e;
+  }
+}
+
+/** The key frames of the first screen (1440 x 900, light): the first screen with every finite animation that runs on load seeked to 0, 50 and 100 % of the longest one (its delay and iterations included).
+ *  Each frame has a load of its own: what an animation draws is composited in layers of its own, which are not drawn to the same pixel twice, so the state it is seeked to is written into the style and the
+ *  animations are dropped before the picture is taken (as the motion proof does for its rest frame), and a second capture of the same page gives the same bytes. A page with no finite animation running on load
+ *  (none at all, only ones that repeat forever, only ones on a scroll or view timeline) takes none and says why.
+ *  -> {frames: [{percent, ms, file, png}], length, why (when there is no frame), realTime (the page also moves by requestAnimationFrame, which cannot be seeked)}. */
+async function captureFrames(browser, server, url, timeout) {
+  let length = 0, realTime = false;
+  const frames = [];
+  for (const percent of CAPTURE_FRAME_PERCENTS) {
+    const N = await openForFrames(browser, server, url, timeout);
+    try {
+      if (!frames.length) {
+        if (!N.finite.length) {
+          const why = N.running.length ? "every animation that runs on load repeats forever or has no length, so there is no end to take frames up to"
+            : N.snap.some((a) => !a.seekable && a.wasRunning) ? "its animations run on a scroll or view timeline, which cannot be seeked"
+            : N.sp.realTime ? "the page moves by requestAnimationFrame only, which cannot be seeked" : "no animation runs on load";
+          return { frames: [], length: 0, why, realTime: N.sp.realTime };
+        }
+        length = Math.max(...N.finite.map((a) => a.end));
+      } else {   // each frame has a load of its own: a page whose animation on load is not the same every time cannot give frames of one motion
+        const again = N.finite.length ? Math.max(...N.finite.map((a) => a.end)) : 0;
+        if (again !== length) throw new Error(`the animation that runs on load was not the same in every load of the page (${length} ms, then ${again} ms)`);
+      }
+      const raf0 = await N.page.evaluate(() => window.__bc.raf);
+      const ms = Math.round(length * percent) / 100;
+      await N.page.evaluate(inPageSeekRunning, ms);
+      await N.page.evaluate(inPageSettle, true);   // true: no CSS transition may start from the rest value under the state seeked to
+      await N.page.evaluate(async () => { await window.__bc.frame(); await window.__bc.frame(); });
+      frames.push({ percent, ms, file: captureFrameFile(percent), png: await N.page.screenshot() });
+      realTime ||= N.sp.realTime || (await N.page.evaluate(() => window.__bc.raf)) - raf0 > 0;
+    } finally {
+      await N.ctx.close();
+    }
+  }
+  return { frames, length, why: null, realTime };
 }
 
 async function captureProjectPage(project, pageFile, values) {
@@ -2321,7 +2401,7 @@ async function captureProjectPage(project, pageFile, values) {
   const browser = await launch();   // a missing setup fails before anything is opened
   const server = await startServer(project);
   const stills = [], problems = new Set();
-  let full = null;
+  let full = null, taken = { frames: [], length: 0, why: null, realTime: false };
   try {
     const { url } = pageUrl(project, server.origin, pageFile);
     for (const [width, height, scheme] of CAPTURE_VIEWS) {
@@ -2348,6 +2428,9 @@ async function captureProjectPage(project, pageFile, values) {
       for (const m of seen.errors) problems.add(m);
       for (const f of seen.failedLocal) problems.add(`failed local request: ${f}`);
     }
+    if (values.frames) {
+      try { taken = await captureFrames(browser, server, url, timeout); } catch (e) { die(EXIT.FAIL, `capture could not take the key frames of ${pageRel}: ${firstLine(e)}; nothing was written`); }
+    }
   } finally {
     await browser.close();
     await server.close();
@@ -2362,14 +2445,24 @@ async function captureProjectPage(project, pageFile, values) {
     schema: 1, tool: "capture", source: { page: pageRel }, date: today(),
     views: stills.map((s) => ({ view: s.view, width: s.width, height: s.height, scheme: s.scheme, file: s.file, sha256: sha256(s.png) })),
     full: { file: full.file, sha256: sha256(full.png), height: full.height, cut: full.cut, ...(full.cut ? { page_height: full.page_height } : {}) },
+    ...(taken.frames.length ? { frames: taken.frames.map((f) => ({ percent: f.percent, ms: f.ms, file: f.file, sha256: sha256(f.png) })) } : {}),
     inputs, problems: kept.slice(0, CAPTURE_MAX_PROBLEMS).concat(kept.length > CAPTURE_MAX_PROBLEMS ? [`${kept.length - CAPTURE_MAX_PROBLEMS} more`] : []),
   };
-  const files = [...stills, full].map((s) => ({ file: s.file, buf: s.png }));
+  const files = [...stills, full, ...taken.frames].map((s) => ({ file: s.file, buf: s.png }));
   const written = files.filter((f) => writeIfChanged(confine(project, `${dir}/${f.file}`, "capture file"), f.buf)).length
     + (writeCaptureRecord(confine(project, `${dir}/capture.json`, "capture file"), doc) ? 1 : 0);
   console.log(`capture ${pageRel}: ${files.length} stills and capture.json in ${dir}/ (${written} of ${files.length + 1} file(s) written, the others unchanged)`
     + (full.cut ? `; the full page is ${full.page_height} px tall and was cut at ${CAPTURE_FULL_MAX} px` : ""));
   for (const p of doc.problems) console.log(`  problem while loading: ${p}`);
+  if (taken.frames.length) {
+    console.log(`  key frames: ${taken.frames.length} of the first screen (1440, light) at ${CAPTURE_FRAME_PERCENTS.join(", ")} % of ${taken.length} ms`
+      + (taken.realTime ? "; the page also moves by requestAnimationFrame, which cannot be seeked, so the frames may differ from run to run" : ""));
+  } else if (values.frames) {
+    console.log(`  key frames: none written: ${taken.why}`);
+  }
+  // frames of an earlier run are left where they are (nothing is deleted), and capture.json does not list them: say so
+  const left = CAPTURE_FRAME_PERCENTS.map(captureFrameFile).filter((n) => !taken.frames.some((f) => f.file === n) && fs.existsSync(path.join(shots, n)));
+  if (left.length) console.log(`  ${left.join(", ")} in ${dir}/ are from an earlier run and not part of this one (capture.json does not list them): move them to removed-<date>/, or run capture --frames again`);
   return EXIT.PASS;
 }
 

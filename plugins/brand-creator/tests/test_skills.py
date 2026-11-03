@@ -1310,6 +1310,38 @@ def test_the_site_round_phase_goes_hero_first_and_tags_every_choice():
         assert needle in changelog, needle
 
 
+def test_the_site_round_takes_key_frames_of_a_page_that_animates_on_load():
+    """G4-04: `capture --frames` in the phase file, the cold review's three more inputs, the prompt, the reviewer's brief, the contract and the command's usage text."""
+    flat = _flat(REFS / "phases" / "07p-site-round.md")
+    for needle in ("**A page that animates when it loads** (an entrance, a tear-off, a reveal) is taken with `capture rounds/r<N>/<Name>/index.html --project <dir> --frames` instead.",
+                   "`shots/frame-1440-0.png`, `frame-1440-50.png` and `frame-1440-100.png`: the first screen at 1440, light, at the start, the middle and the end of the longest animation that runs on load, and `capture.json` lists them.",
+                   "Read all three: the four stills show only where the motion ends.",
+                   "A page that does not animate on load (no animation, or only ones that repeat forever) gets no frame, and the command says so; the cold review then keeps its six inputs.",
+                   "**The key frames, when the page animates on load.**", "The three frames go into `inputs:` after the six", "all three or none.",
+                   "Lint accepts the six inputs alone, the six plus the rules line, the six plus the three frames, or all of them.",
+                   "A frame that changes after the review, or one `capture.json` no longer lists (the page was taken again without `--frames`), makes the review stale: run `capture --frames` and review again.",
+                   "`site approve` never copies `shots/`, so the frames stay in the round."):
+        assert needle in flat, needle
+    assert flat.index("`--frames`") < flat.index("## The cold review") < flat.index("**The key frames, when the page animates on load.**") < flat.index("## The other pages")
+    step = flat[flat.index("Per variant, in this order:"):]
+    assert step.index("`capture rounds/r<N>/<Name>/index.html --project <dir>` writes the four stills") < step.index("--frames") < step.index("`page-check rounds/r<N>/<Name>/index.html")
+    fragment = _flat(REFS / "prompt-fragments.md")
+    bullet = fragment[fragment.index("- A cold review of a site hero"):]
+    bullet = bullet[:bullet.index(" **Implementation and safety**")]
+    for needle in ("For a page that animates when it loads it may also be given the three key frames of the first screen (`shots/frame-1440-0.png`, `-50` and `-100`: the start, the middle and the end of the longest animation that runs on load, each listed in `inputs:`)",
+                   "it reads the motion from them (does the entrance carry the idea, does anything stay on screen after it ends) and does not guess it from the end stills"):
+        assert needle in bullet, needle
+    agent = _flat(ROOT / "agents" / "brand-reviewer.md")
+    assert "it may add three more paths, the key frames of the first screen (`shots/frame-1440-0.png`, `-50.png` and `-100.png`: the start, the middle and the end of the animation): Read them in that order and judge the motion from them" in agent
+    contract = _flat(ROOT / "scripts" / "CONTRACT.md")
+    for needle in ("`capture <page.html> [--project DIR] [--wait MS] [--timeout MS] [--frames]`", "**Key frames (`--frames`).**", "**The key frames the reader may be given.**",
+                   "One frame or two fail `site:cold`", "a page taken again without `--frames` makes the review stale"):
+        assert needle in contract, needle
+    usage = (ROOT / "bin" / "brand-creator").read_text(encoding="utf-8")
+    assert "--frames adds three key frames of the first screen" in " ".join(usage.split())
+    assert "[--frames]" in (ROOT / "scripts" / "render.mjs").read_text(encoding="utf-8")
+
+
 def test_the_round_wrapper_has_a_site_kind():
     fm, body = frontmatter(SKILLS / "round" / "SKILL.md")
     assert fm["argument-hint"] == "[style|pick|refine|motion|site-refs|site] [what this round should answer]"

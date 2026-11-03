@@ -522,9 +522,10 @@ def page_check_report(p: Path, page: str, status: str = "pass", tells: tuple[str
     return out
 
 
-def capture_record(p: Path, page: str) -> Path:
+def capture_record(p: Path, page: str, *, frames: bool = False) -> Path:
     """The stills and the record `brand-creator capture <page>` writes beside a page (<the page's folder>/shots/), made by hand so that no browser is needed: the four first-screen stills and the full
-    one, each its own bytes, and capture.json in the shape scripts/CONTRACT.md gives it, its inputs the page and the built tokens' stylesheet. -> the path of capture.json."""
+    one, each its own bytes, and capture.json in the shape scripts/CONTRACT.md gives it, its inputs the page and the built tokens' stylesheet. `frames` adds what `capture <page> --frames` writes too: the three
+    key frames (frame-1440-0.png, -50 and -100, each its own bytes) and the `frames` list of capture.json. -> the path of capture.json."""
     import hashlib
     import json as _json
 
@@ -544,22 +545,30 @@ def capture_record(p: Path, page: str) -> Path:
     full = picture("full", 16)
     (shots / "1440-light-full.png").write_bytes(full)
     inputs = [{"path": x, "sha256": sha256_file(p / x)} for x in sorted((page, "assets/tokens/tokens.css")) if (p / x).is_file()]
+    kept = []
+    for percent, ms in ((0, 0), (50, 300), (100, 600)) if frames else ():
+        data = picture(f"frame-{percent}")
+        (shots / f"frame-1440-{percent}.png").write_bytes(data)
+        kept.append({"percent": percent, "ms": ms, "file": f"frame-1440-{percent}.png", "sha256": sha256_bytes(data)})
     out = shots / "capture.json"
     out.write_text(_json.dumps({"schema": 1, "tool": "capture", "source": {"page": page}, "date": "2026-10-17", "views": views,
-                                "full": {"file": "1440-light-full.png", "sha256": sha256_bytes(full), "height": 16, "cut": False}, "inputs": inputs, "problems": []}, indent=2) + "\n", encoding="utf-8")
+                                "full": {"file": "1440-light-full.png", "sha256": sha256_bytes(full), "height": 16, "cut": False}, **({"frames": kept} if kept else {}),
+                                "inputs": inputs, "problems": []}, indent=2) + "\n", encoding="utf-8")
     return out
 
 
 def cold_review_record(p: Path, page: str, verdict: str = "ship", *, by: str = "in-thread", findings: tuple[str, ...] = ("The first screen says what only this brand could say.",),
-                       leave_out: tuple[str, ...] = (), add: tuple[str, ...] = (), rules: bool = False) -> Path:
+                       leave_out: tuple[str, ...] = (), add: tuple[str, ...] = (), rules: bool = False, frames: bool = False) -> Path:
     """The cold-review.md a reader of a page's four stills, brief/BRIEF.md and FACTS.md alone leaves beside the page: the verdict first, `by:`, the `inputs:` with the sha256 of each file as it is now, then the
     findings as numbered lines (the prompt fragment of references/prompt-fragments.md, Review). `leave_out` drops listed inputs and `add` lists more files of the project, for a test that breaks the rule;
-    `rules` adds the seventh input, the G4 rules part of BRAND-STATE.md as `- BRAND-STATE.md#g4-rules sha256:<hex>`, the sha256 of the part as it is now (what `brand-creator state --part g4-rules` prints).
+    `rules` adds the seventh input, the G4 rules part of BRAND-STATE.md as `- BRAND-STATE.md#g4-rules sha256:<hex>`, the sha256 of the part as it is now (what `brand-creator state --part g4-rules` prints);
+    `frames` adds the three key frames of the page (`shots/frame-1440-0.png`, `-50` and `-100`), which `capture_record(..., frames=True)` wrote.
     Call it after capture_record: the stills must be there. -> the review's path."""
     from _common import part_sha256, sha256_file
     folder = (p / page).parent
     base = folder.relative_to(p).as_posix()
     files = [f for f in [f"{base}/shots/{v}.png" for v in ("1440-light", "1440-dark", "390-light", "390-dark")] + ["brief/BRIEF.md", "FACTS.md"] if f not in leave_out] + list(add)
+    files += [f"{base}/shots/frame-1440-{n}.png" for n in (0, 50, 100)] if frames else []
     listed = [f"- {f} sha256:{sha256_file(p / f)}" for f in files] + ([f"- BRAND-STATE.md#g4-rules sha256:{part_sha256(p / 'BRAND-STATE.md', 'g4-rules')}"] if rules else [])
     body = [f"verdict: {verdict}", f"by: {by}", "inputs:"] + listed + [""] + [f"{i}. {t}" for i, t in enumerate(findings, 1)]
     out = folder / "cold-review.md"

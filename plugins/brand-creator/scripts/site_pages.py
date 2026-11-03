@@ -38,7 +38,7 @@ import siteboard  # noqa: E402
 import sitedata  # noqa: E402
 
 LINT_REPORT = "assets/_checks/board-lint.json"
-EXCLUDED_FILE = "cold-review.md"     # not copied from the top of a page folder, nor is the folder shots/ (capture writes it again beside the approved page)
+EXCLUDED_FILE = "cold-review.md"     # not copied from the top of a page folder, nor is the folder shots/ (capture writes it again beside the approved page; the key frames of `capture --frames` are in shots/ and stay in the round)
 EXCLUDED_DIR = "shots"
 JUNK = (".DS_Store",)
 SHOWN = 12                           # problems listed in a message before "and N more"

@@ -22,7 +22,10 @@ RULES: work under the round/project dir only; never edit adoption targets before
   gives the list and the paths. Report on every item, as "What you report" below says.
 - **A cold review of a site hero**: the prompt gives six files and no list, the variant's four stills, `brief/BRIEF.md`
   and `FACTS.md`. It may add the approved G4 rules as text in the prompt (the G4 record and the recorded rule lines of
-  `BRAND-STATE.md`, which you do not open: it is the project record, and the rules are all of it you need). Read those
+  `BRAND-STATE.md`, which you do not open: it is the project record, and the rules are all of it you need). For a page that
+  animates when it loads it may add three more paths, the key frames of the first screen (`shots/frame-1440-0.png`, `-50.png`
+  and `-100.png`: the start, the middle and the end of the animation): Read them in that order and judge the motion from them,
+  not from the end stills alone. Read those
   and nothing else: not the board, the references or the reasons. With the rules, judge the stills against them: a page
   that does what a rule says (a dark still that equals the light one, when a rule says so) is right and is not a finding;
   a page that breaks a rule is a finding, with the rule's own words. Without them, judge what the page shows. Start the reply with
