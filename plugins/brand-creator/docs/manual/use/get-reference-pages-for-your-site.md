@@ -61,11 +61,19 @@ The first screen, what a visitor sees before they scroll, sets the tone for ever
    own words, such as "keep the dark footer, drop the rest". Claude writes your answer in your list of decisions
    (`DECISIONS.md`). Only the rules you keep apply to the new pages, and a rule you drop is named as dropped. With no
    earlier site, there is no question.
-3. Claude builds two or three versions. Each is organised like the references you picked (or built from your brief,
-   if you skipped them), in your colours, fonts and logo. They start from what you already approved: the templates and
-   pictures you signed off (your masters) are used as they are, and if your logo moves, its signature move shows on the
-   first screen, or the board says why a version leaves it out. Before it builds one, Claude writes down the one idea the
-   version rests on, in a line. For each one the board shows:
+3. Before any board, Claude builds the two or three versions as plain pages for you to try. Each is organised like the
+   references you picked (or built from your brief, if you skipped them), in your colours, fonts and logo. They start from
+   what you already approved: the templates and pictures you signed off (your masters) are used as they are, and if your
+   logo moves, its signature move shows on the first screen, or the board says why a version leaves it out. Before it
+   builds one, Claude writes down the one idea the version rests on, in a line. Each version is a folder in your brand
+   project, `tryout/<Name>/`, with a page named `index.html`, and Claude tells you where they are. Open them in your own
+   browser (they stay on your computer), say what to change, and Claude changes the page while you look. Nothing else
+   runs while you try: no pictures, no checks, no board, so each change is quick. Ask for a quick check at phone and
+   desktop width whenever you want one. What you say while you try is not your pick: you pick on the board, and nothing
+   Claude writes down mentions a try-out. When the versions look right, tell Claude to put them on the board. Claude
+   copies them into the round and moves the `tryout/` folder into a folder named `removed-` plus the date (nothing is
+   deleted), so the old copies do not make `/brand-creator:check` fail when you later change a name or a price.
+4. Claude puts the versions on a board. For each one the board shows:
    - the one idea it rests on, in a line (a version should be something you can remember, not only tidy);
    - four pictures: on a phone and a desktop, in light and dark;
    - whether it keeps your brand's rules. A version that breaks one is marked as failing, never hidden;
@@ -73,7 +81,7 @@ The first screen, what a visitor sees before they scroll, sets the tone for ever
      heading), and what Claude will change or why it keeps it;
    - a verdict, "ship" (good to go) or "fix", from a review that judges only the four pictures, your brief and your
      facts (`FACTS.md`: the true things your pages may say, such as your prices).
-4. Pick one, mix two ("this one, with the ending of that one"), or say that none fits and what was missing. Claude says
+5. Pick one, mix two ("this one, with the ending of that one"), or say that none fits and what was missing. Claude says
    back your pick and writes it down in your words.
 
 Claude does that review itself by default, in the same chat. It built the page, so this is not a stranger's fresh look,
@@ -125,6 +133,9 @@ them. Your brand book can show them, with the tag on each choice, in an optional
   Claude opened.
 - After you pick references, or skip them, `/brand-creator:status` shows it as recorded.
 - If there was an earlier site, `DECISIONS.md` has an entry that names the rules you kept and the ones you dropped.
+- While you try the first-screen versions, `tryout/` in your brand project holds a folder for each. They are only for
+  trying: your pick is the one you make on the board. Once the board is built, `tryout/` has moved into a `removed-`
+  folder with the date, and nothing is deleted.
 - After you approve the pages, `site/site.json` exists, and `/brand-creator:check` passes the lines about your site, or
   says "not verified" (it could not confirm something) and why.
 
