@@ -20,6 +20,9 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ### Changed
 
+- Claude now starts brand-creator for launch steps asked in plain words, such as paying the trademark fee or what to do
+  before the brand goes public (still handed to you, never done for you), and for picking references for your website;
+  Polish asks such as "przed publikacją marki" and "znak towarowy" too.
 - The cost of an agent fleet is now stated in tokens, from measured runs. Before you say yes to a workflow, the dry run
   (`fleet-plan`) shows each agent's tokens as a range with the date it was measured, and says "not measured" for an agent
   nobody has measured, where it used to say "about one pass per agent". Claude does the same when it states the cost.

@@ -9,7 +9,7 @@ proven.
 | Check | Last run | Result |
 |---|---|---|
 | [Behaviour evals](#behaviour-evals-claude-plugin-eval) | 2026-10-18, sonnet, one run per case, no baseline | first pass 8 of 17 (0.76); final sweep 15 of 17; the two failures fixed, one re-run alone and passed, one re-graded offline; full suite not re-run since |
-| [Trigger evals](#trigger-evals-for-the-skill-descriptions) | 2026-10-21, Haiku 5.5 and Sonnet 5.5, one run per query, one worker; brand-book re-run the same day after its listing text changed | sonnet passes 127 of 128 queries, haiku 120 of 128; precision 1.00 except brand-book on haiku (0.94); the brand-creator description changed after this run, so brand-creator needs a re-run |
+| [Trigger evals](#trigger-evals-for-the-skill-descriptions) | 2026-11-03, Haiku 5.5 and Sonnet 5.5, one worker, brand-creator and brand-book; brand-naming and brand-assets last on 2026-10-21 | sonnet passes 120 of 124 queries, haiku 112 of 124; precision 0.98 for brand-creator on both (a sibling case), 1.00 for brand-book; the brand-creator text changed with this run and the table is the text as it ships |
 | [Workflow trials](#workflow-trials) | 2026-10-18, all four workflows on sonnet | run; the fixes they found are in the 0.1.0 code (directions judge on unbuilt boards, adopt row-list syntax) |
 | [Linux run in Docker](#linux-run-in-docker) | 2026-10-18, Debian 13 image | suite and Acme smoke passed with only the macOS-only skips |
 | [Anonymisation denylist](#anonymisation-denylist) | author's own suite runs, last 2026-10-25 | private to the author; cannot run for anyone else, CI skips it |
@@ -65,52 +65,53 @@ shows (`description` and `when_to_use` joined) with `--description`, because the
 them, and every other worker scores a miss (a first run with 8 workers fired on about 1 positive in 8 and was thrown away).
 The runner reports no cost: one probe call cost $0.0038 on Haiku 5.5 and $0.071 on Sonnet 5.5 before caching.
 
-**Last run:** 2026-10-21, Haiku 5.5 and Sonnet 5.5, one run per query, one worker, listing text as of the 0.3.0 work.
-brand-book was run again the same day, after its listing text changed (below).
+**Sibling run.** The runner lists only the skill under test, so a query that belongs to a sibling has nothing to lose to. For those,
+put the sibling's listing text in the scratch folder as a fixed `.claude/commands/<sibling>.md`: Claude choosing it counts as the
+skill under test not firing, as in a session that lists both.
+
+**Last run:** 2026-11-03, Haiku 5.5 and Sonnet 5.5, one worker, for `brand-creator` (81 queries, 48 positives) and `brand-book`
+(43, 25 positives), the two whose lists or listing text changed since 2026-10-21. The runner reports no cost; at the probe prices
+above, the four rounds below and the re-runs of the failures came to about 37 USD before caching, nearly all of it Sonnet.
 
 | Skill | Sonnet: pass, precision, recall | Haiku: pass, precision, recall |
 |---|---|---|
-| brand-creator | 47/48, 1.00, 0.96 | 46/48, 1.00, 0.93 |
-| brand-naming | 27/27, 1.00, 1.00 | 24/27, 1.00, 0.79 |
-| brand-assets | 26/26, 1.00, 1.00 | 25/26, 1.00, 0.93 |
-| brand-book | 27/27, 1.00, 1.00 | 25/27, 0.94, 0.94 |
+| brand-creator | 78/81, 0.98, 0.96 | 74/81, 0.98, 0.88 (three runs per query) |
+| brand-book | 42/43, 1.00, 0.96 | 38/43, 1.00, 0.80 (one run) |
+| brand-naming | 27/27, 1.00, 1.00 (2026-10-21) | 24/27, 1.00, 0.79 (2026-10-21) |
+| brand-assets | 26/26, 1.00, 1.00 (2026-10-21) | 25/26, 1.00, 0.93 (2026-10-21) |
 
-Missed on both models: brand-creator "The refined round didn't work for me; go back to the direction I liked and deepen that
-one" (no brand word and no project folder in the query).
+**brand-creator, four rounds.** The first, on the text of the slimmed menu, gave 76/81 on Sonnet and 71/81 on Haiku (one run
+each). Sonnet missed the launch hand-offs asked with no brand word ("Pay for the trademark filing", "Register the Instagram handle
+for me", "What do I need to do before the brand goes public?"); Haiku also missed the Polish ones and both queries for the
+website's references. Two longer texts (78/81 on Sonnet each) were over the docs standard's listing target of 1,024 characters,
+so the text as it ships is the fourth: it names launch steps "before the brand goes public, trademark fees too" and "pick site
+references", and gains the Polish triggers "przed publikacją marki" and "znak towarowy". To stay at 1,021 characters, the
+description lost "for a company, product or person and runs it" and "with" (the `when_to_use` names who), and says "Identity
+work" for "Identity creation" and "its" for "the brand's own"; the `when_to_use` lost "a look," and "even casual asks" before
+its examples, "work on" and "for", and says "when" for "whenever", "like" for "such as" and "a BRAND-STATE.md folder" for "a
+folder with BRAND-STATE.md" (checked against a word diff of the committed text). The table row is that text.
 
-brand-book, before its listing text changed: Sonnet 24/27 (0.93, 0.88), Haiku 23/27 (0.93, 0.81). Both missed "Write the tone
-of voice chapter for our brand guidelines" and "The guidelines still show both lockup options; we chose the stacked one, clean
-it up", and both fired on "Potrzebuję księgi znaku dla nowej marki kawiarni" (a book for a brand that does not exist yet is the
-orchestrator's; the runner shows only the skill under test, so this sibling case has no brand-creator to lose to). The new text
-names the optional chapters, the clean-up after a choice, and says such a book starts with brand-creator. Haiku still misses
-the lockup clean-up and still fires on the Polish query. Fourteen held-out queries, written for this re-run by an agent that
-did not see the new text, passed 14 of 14 on Sonnet (13 with the old text) and 11 of 14 on Haiku (9): Haiku missed a clean-up
-after choosing an accent colour, a tone of voice chapter rewrite in Polish and a new history chapter. They were added to the
-eval set afterwards, so brand-book now has 41 queries (43 after the slimmed menu, below); the next run covers them all.
+**brand-book** kept its text. Of its five Haiku misses, four missed again in three re-runs each: the lockup clean-up, taking
+the olive accent out, a new history chapter, and the Polish tone of voice rewrite (1 of 3); a Polish approval passed 2 of 3.
+Sonnet missed only the Polish tone of voice rewrite (1 of 3 in re-runs). A text with "rozdział wytycznych marki" among its
+Polish triggers passed 43/43 on Sonnet once, but it was 1,051 characters, over the target, so it did not ship.
 
-**Changed since this run.** The `brand-creator` description changed after the run above: it now names the brand's website
-references and reference pages and says it is not for building production websites. Three positives (two English, one
-Polish) and two negatives about the site steps were added to `evals/trigger-evals.json`, so brand-creator now has 53
-queries. None has run against the new text; the last run's 48 queries ran against the older text. The next run covers all of them with the new
-description (81 after the slimmed menu, below). The `check` description also gained `--page`; `check` is typed by the owner, so it has negatives only.
+Known misses, left as they are:
 
-**Changed since this run (the slimmed menu).** The lists for `new`, `launch` and `review` were removed with those skills, and their
-queries moved into the `brand-creator` list, each with the answer it deserves against the `brand-creator` text. The near misses stay
-negatives: a code project, a git branch, a website launch, business cards, a code review, and the review of a brand book that
-exists (that is `brand-book`'s). The queries that are `brand-creator`'s work now are positives, so positives did move: starting a
-brand, the launch hand-offs (handed over, never done) and, with a `BRAND-STATE.md` folder cue, a review of the round boards asked in
-words (`brand-creator` loads, then offers the typed `/brand-creator:check --review [panel]` for a review list or a panel, and runs a
-round's own self-review before it is shown itself). The `when_to_use` of `brand-creator` changed with them:
-it now names "start a brand called Acme", "help me launch" and "the launch checklist", with a Polish counterpart for the launch, because
-no command starts a project or the launch hand-off any more. To stay under the listing target of 1,024 characters it also lost a few words:
-"a logo for my band" as an example of a casual ask, "product" in "for a business, product, shop, podcast or person", and "token or threshold" after "change a rule". `brand-creator` has 81 queries now, 48 of them positives. None of them
-has run: the 48 above ran against the older text, so re-run the billed trigger evals for `brand-creator` (the next run covers all
-81 with the new text). `brand-naming`, `brand-assets` and `brand-book` are now `user-invocable: false` (hidden from the `/` menu,
-still started from the owner's words), with their descriptions unchanged, so their results above stand. Two sibling queries about a
-book that exists, "Give me feedback on the brand book before I approve it" and "Zrób przegląd księgi znaku", are near misses for
-`brand-creator` and are now positives in the `brand-book` list, which has 43 queries (25 of them positives). They have not run
-either: the next `brand-book` run covers them with its unchanged description. `check` takes `--review` and
-`--panel` and its description now says so; `check` is typed by the owner, so its list has negatives only.
+- "The refined round didn't work for me; go back to the direction I liked and deepen that one": missed by both models since
+  2026-10-21; no brand word and no project folder in the query.
+- "Register the Instagram handle for me": Sonnet 0 of 1, Haiku 0 of 3. Nothing in it says a brand project exists, and a text
+  that took every request about a social handle would fire outside brand work.
+- `brand-creator` fires on "Zrób przegląd księgi znaku", a review of a book that exists, which is `brand-book`'s. In the sibling
+  run `brand-book` took it on Sonnet 3 of 3, and also "Give me feedback on the brand book before I approve it": the miss is the
+  runner showing one skill alone.
+- Haiku only: "We're rebranding our accounting firm; the current logo is from 2009. Where do we start?", the Polish query for
+  the website's references, the Polish review of the direction boards (both with the `BRAND-STATE.md` cue) and "zarejestruj znak
+  towarowy za mnie" (1 of 3). Sonnet passes all four.
+
+Open: in the sibling run, "I have a logo already but no guidelines. Can you build the brand rules around it?" went to
+`brand-book` 3 of 3 on Sonnet. A logo with no brand project is `brand-creator`'s (it starts the project with the logo as the
+mark), and the `brand-book` text does not say so; deciding it changes a description, so it waits for the next text change.
 
 ## Workflow trials
 
