@@ -160,8 +160,15 @@ inputs:
 
 - The first non-empty line is `verdict: ship` or `verdict: fix`. Then `by:`, the `inputs:` list with the sha256 of each file
   as it is now (`shasum -a 256 <file>`), then at most five numbered findings, worst first, one line each.
+- **The brand's rules, when the review should judge against them.** Run `brand-creator state --part g4-rules`. Its first line,
+  `BRAND-STATE.md#g4-rules sha256:<hex>`, goes into `inputs:` with a dash in front, as the seventh input; its second line (the
+  G4 record and the recorded rule lines) you paste into the reviewer's prompt as text. The review then judges the stills against
+  the approved rules: a dark still that equals the light one is right when a rule says so, and a page that breaks a rule is a
+  finding. It still does not read the rest of `BRAND-STATE.md`, and the whole file is never listed, nor any other part of it.
+  Lint accepts the six inputs alone (a review made before this release) or the six plus that line. A rule or the G4 record that
+  changes after the review makes it stale (review again); another line of `BRAND-STATE.md` changing does not.
 - **In-thread by default**, labelled `by: in-thread`. It is not blind: the same session that built the page reads it. Say
-  so to the owner when you show the card, and read as little as the review allows (the six files, nothing else).
+  so to the owner when you show the card, and read as little as the review allows (the six files, and the rules when you give them, nothing else).
 - **An agent only after the fleet gate** ([fleet.md](../fleet.md)): one `brand-creator:brand-reviewer` call per hero
   variant, with the prompt fragment and the six paths, after the owner's yes to the count, the model and the cost. The
   reviewer reports and never writes: you write `cold-review.md` from its reply, with `by: agent`.

@@ -573,6 +573,7 @@ COLD_BY = re.compile(r"^by[ \t]*:[ \t]*\S", re.I | re.M)                  # "by:
 COLD_INPUTS = re.compile(r"inputs[ \t]*:", re.I)                          # the line that opens the list of what the review was made from
 COLD_ITEM = re.compile(r"[-*][ \t]+(\S+)[ \t]+sha256:([0-9a-f]{64})", re.I)   # "- <path> sha256:<hex>"
 COLD_FINDING = re.compile(r"\s*\d+[.)]\s+\S")                             # a numbered line is a finding
+COLD_RULES = f"{STATE_FILE}#g4-rules"                                     # the one part of BRAND-STATE.md a cold review may list, as a seventh input (_common.PART_READERS)
 
 
 def reflex_line(v: SiteVariant) -> str | None:
@@ -735,10 +736,21 @@ def cold_inputs(lines: list[str]) -> tuple[list[tuple[str, str]] | None, list[st
     return listed, bad
 
 
+def cold_lists_rules(project: Path, v: SiteVariant) -> bool:
+    """True when the cold-review.md of the card lists the G4 rules part of BRAND-STATE.md as an input (cold_problems judges the review itself; an unreadable file lists nothing)."""
+    try:
+        lines = (Path(project) / v.dir / COLD_FILE).read_text(encoding="utf-8-sig", errors="replace").splitlines()
+    except OSError:
+        return False
+    listed, _ = cold_inputs(lines)
+    return any(p == COLD_RULES for p, _ in listed or [])
+
+
 def cold_problems(project: Path, v: SiteVariant, required: bool = True, noun: str = "variant") -> tuple[list[str], str | None]:
     """site:cold for one card -> (the problems, the verdict when the file gives one). rounds/rN/<name>/cold-review.md exists (`required`; a page card of the pages stage may go without, and then must not claim a verdict);
     its first non-empty line is `verdict: ship` or `verdict: fix`; it has a `by:` line; its `inputs:` list is exactly the four stills of the variant (`noun` "page" on a pages board: of the page), brief/BRIEF.md and FACTS.md, each `- <path> sha256:<hex>` equal to
-    the file now; it has at most five findings (numbered lines); the card's cold line (data-cold) says the same verdict. A `fix` shown as `fix` passes."""
+    the file now, and may add one seventh input, the G4 rules part of BRAND-STATE.md (`- BRAND-STATE.md#g4-rules sha256:<hex>`, the sha256 of the part as `_common.stale_inputs` reads it: a change of a rule or of
+    the G4 record makes the review stale, a change elsewhere in BRAND-STATE.md does not; the whole file is never an input); it has at most five findings (numbered lines); the card's cold line (data-cold) says the same verdict. A `fix` shown as `fix` passes."""
     path = f"{v.dir}/{COLD_FILE}"
     cold_lines = [n for n in v.card.walk() if "data-cold" in n.attrs]
     f = Path(project) / path
@@ -770,12 +782,14 @@ def cold_problems(project: Path, v: SiteVariant, required: bool = True, noun: st
             said.append(f"{len(bad)} line(s) are not `- <path> sha256:<hex>` ({'; '.join(bad[:2])})")
         if [e for e in expected if e not in paths]:
             said.append(f"it does not list {', '.join(e for e in expected if e not in paths)}")
-        if [p for p in dict.fromkeys(paths) if p not in expected]:
-            said.append(f"it lists {', '.join(p for p in dict.fromkeys(paths) if p not in expected)}, which a cold review does not read")
+        extra = [p for p in dict.fromkeys(paths) if p not in expected and p != COLD_RULES]
+        if extra:
+            said.append(f"it lists {', '.join(extra)}, which a cold review does not read" + (f" (of {STATE_FILE} it takes the G4 rules alone: list {COLD_RULES})" if STATE_FILE in extra else ""))
         if len(paths) != len(set(paths)):
             said.append("a file is listed twice")
         if said:
-            problems.append(f"{v.name}: the inputs of {path} must be exactly the four stills of the {noun}, {BRIEF_FILE} and {FACTS_FILE} ({'; '.join(said)})")
+            problems.append(f"{v.name}: the inputs of {path} must be exactly the four stills of the {noun}, {BRIEF_FILE} and {FACTS_FILE} ({'; '.join(said)}); "
+                            f"a seventh input may be the G4 rules, `- {COLD_RULES} sha256:<hex>` (`brand-creator state --part g4-rules` prints it)")
         changed = []
         for p, sha in dict.fromkeys(listed):
             if p in expected:
@@ -785,6 +799,11 @@ def cold_problems(project: Path, v: SiteVariant, required: bool = True, noun: st
         if changed:
             what = "the page or its stills" if any(c.startswith(v.shots) for c in changed) else f"{BRIEF_FILE} or {FACTS_FILE}"
             problems.append(f"{v.name}: {what} changed after the cold review: review again ({path} lists another sha256 for {', '.join(changed)})")
+        rules = next((sha for p, sha in listed if p == COLD_RULES), None)
+        if rules is not None:
+            for why in stale_inputs(Path(project), {"inputs": [{"path": STATE_FILE, "part": "g4-rules", "sha256": rules}]}):   # the rule `check` applies to a part input: changed, gone, or unreadable (and why)
+                problems.append(f"{v.name}: the G4 rules of {STATE_FILE} changed after the cold review: review again ({path} lists another sha256 for {COLD_RULES})" if why.endswith(" changed")
+                                else f"{v.name}: {path} lists {COLD_RULES}, which cannot be checked: {why}")
     findings = [ln for ln in lines if COLD_FINDING.match(ln)]
     if len(findings) > MAX_FINDINGS:
         problems.append(f"{v.name}: {path} gives {len(findings)} findings, at most {MAX_FINDINGS}, the costliest to the visitor first")
@@ -816,6 +835,8 @@ def cold_rows(rep: Report, project: Path, variants: list[SiteVariant], required:
     else:
         rep.add("site:cold", "pass", label, detail="; ".join(f"{v.name}: {verdict}" for v, _, verdict in results if verdict))
     rep.inputs += [Path(project) / v.dir / COLD_FILE for v in variants] + [Path(project) / FACTS_FILE]
+    if any(cold_lists_rules(project, v) for v in variants):   # a review that stands on the G4 rules goes stale with them, and so does the report
+        rep.inputs.append(PartInput(Path(project) / STATE_FILE, "g4-rules"))
 
 
 def card_rows(rep: Report, project: Path, page_rel: str, rnd: int, variants: list[SiteVariant], noun: str = "variant", count_row: str = "site:variants", optional: tuple[str, ...] = ()) -> None:

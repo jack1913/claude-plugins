@@ -21,6 +21,9 @@
                                  gates; a project made before them gets the key on its first --record
   state --require G3             exit 1 with a message naming the gate when it is not recorded
   state --project-auto           like the default, but exit 0 with a message when no project is found (for /status)
+  state --part g4-rules          the G4 rules of BRAND-STATE.md (the G4 record and the recorded "(rule)" lines) as a cold review lists them: line 1 is
+                                 `BRAND-STATE.md#g4-rules sha256:<hex>` (the input line, after a dash), line 2 the text that sha256 is of, one line of JSON,
+                                 the text to give a reviewer; exit 2 for a part this plugin does not read, 1 when it cannot be read
 """
 import json
 import re
@@ -29,8 +32,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "boardlib"))
-from _common import (EXIT_FAIL, EXIT_USAGE, GATE_IDS, CliError, Parser, STATE_FILE, add_project_arg, fail, find_project,  # noqa: E402
-                     gate_recorded, latest_round, list_rounds, main_guard, read_state, today, try_find_project,
+from _common import (EXIT_FAIL, EXIT_USAGE, GATE_IDS, PART_READERS, CliError, PartError, Parser, STATE_FILE, add_project_arg, fail, find_project,  # noqa: E402
+                     gate_recorded, latest_round, list_rounds, main_guard, read_state, sha256_bytes, today, try_find_project,
                      verify_history)
 from boardpage import is_style_board, read_page  # noqa: E402
 import motionspec  # noqa: E402
@@ -156,6 +159,7 @@ def main() -> int:
     ap.add_argument("--bump", action="append", default=[], metavar="KEY")
     ap.add_argument("--record", nargs=2, metavar=("GATE", "DECISION"))
     ap.add_argument("--require", metavar="GATE")
+    ap.add_argument("--part", metavar="PART", help="print one part of BRAND-STATE.md the way a cold review lists it (g4-rules): its input line, then its text")
     a = ap.parse_args()
 
     if a.project_auto and not a.project:
@@ -177,6 +181,18 @@ def main() -> int:
             fail(EXIT_FAIL, f"gate {g} is not recorded in {STATE_FILE}. Get the owner's decision, then run: "
                             f"brand-creator state --record {g} \"<decision>\"")
         print(f"{g}: recorded ({rec})")
+        return 0
+
+    if a.part:
+        reader = PART_READERS.get(a.part)
+        if reader is None or reader.file != STATE_FILE:
+            fail(EXIT_USAGE, f"{a.part!r} is not a part of {STATE_FILE} this plugin reads (it reads: {', '.join(sorted(k for k, r in PART_READERS.items() if r.file == STATE_FILE))})")
+        try:
+            text = reader.read(project / STATE_FILE)
+        except PartError as e:
+            fail(EXIT_FAIL, f"{STATE_FILE} ({reader.label}) cannot be read: {e}")
+        print(f"{STATE_FILE}#{a.part} sha256:{sha256_bytes(text.encode('utf-8'))}")   # the sha256 of the very text printed next: what part_sha256 (and so stale_inputs) computes
+        print(text)
         return 0
 
     changed = False

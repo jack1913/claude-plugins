@@ -942,6 +942,120 @@ def test_a_cold_review_with_another_input_fails(proj):
     assert r.returncode == 1 and "has no `inputs:` list: the four stills, brief/BRIEF.md and FACTS.md, each `- <path> sha256:<hex>`" in detail(proj, "site:cold"), r.stdout
 
 
+def held_rules(p: Path) -> list[dict]:
+    """The inputs of the board-lint report that stand for the G4 rules of BRAND-STATE.md (an input with part g4-rules)."""
+    return [i for i in report(p, "board-lint")["inputs"] if i["path"] == "BRAND-STATE.md" and i.get("part") == "g4-rules"]
+
+
+def test_a_cold_review_may_list_the_g4_rules_as_a_seventh_input(proj):
+    """G4-03: the six inputs alone (a review made before this release) or the six plus `- BRAND-STATE.md#g4-rules sha256:<hex>` pass; the lint report then holds the rules, and only then."""
+    assert lint(proj).returncode == 0 and detail(proj, "site:cold") == "Ledger: ship; Atlas: ship"
+    assert held_rules(proj) == [], "no review lists the rules: the lint report does not stand on them"
+    cold_review_record(proj, page_of("Atlas"), rules=True)                                     # one review with the seventh input, one without
+    assert "- BRAND-STATE.md#g4-rules sha256:" in cold_of(proj, "Atlas").read_text(encoding="utf-8")
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    assert detail(proj, "site:cold") == "Ledger: ship; Atlas: ship"
+    assert len(held_rules(proj)) == 1
+    cold_review_record(proj, page_of("Ledger"), rules=True)                                    # all of them
+    assert lint(proj).returncode == 0 and len(held_rules(proj)) == 1, "one input for the whole board, however many reviews list it"
+    cold_review_record(proj, page_of("Ledger"), rules=True, leave_out=("FACTS.md",))           # the seventh input does not stand in for one of the six
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:cold"] and "Ledger: the inputs of rounds/r2/Ledger/cold-review.md" in detail(proj, "site:cold") and "(it does not list FACTS.md)" in detail(proj, "site:cold"), r.stdout
+
+
+def test_a_cold_review_never_lists_the_whole_brand_state_and_knows_no_other_part(proj):
+    cold_review_record(proj, page_of("Atlas"), rules=True, add=("BRAND-STATE.md",))
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:cold"], r.stdout
+    why = detail(proj, "site:cold")
+    assert ("Atlas: the inputs of rounds/r2/Atlas/cold-review.md must be exactly the four stills of the variant, brief/BRIEF.md and FACTS.md "
+            "(it lists BRAND-STATE.md, which a cold review does not read (of BRAND-STATE.md it takes the G4 rules alone: list BRAND-STATE.md#g4-rules))") in why and "Ledger" not in why, why
+    assert "a seventh input may be the G4 rules, `- BRAND-STATE.md#g4-rules sha256:<hex>`" in why, why
+    cold_review_record(proj, page_of("Atlas"), add=("BRAND-STATE.md",))                       # the whole file alone, with no part, fails too
+    r = lint(proj)
+    assert r.returncode == 1 and "it lists BRAND-STATE.md, which a cold review does not read" in detail(proj, "site:cold"), r.stdout
+    cold_review_record(proj, page_of("Atlas"), rules=True)
+    review = cold_of(proj, "Atlas")
+    mutate(review, "BRAND-STATE.md#g4-rules", "BRAND-STATE.md#phase")                          # a part nothing can read
+    r = lint(proj)
+    assert r.returncode == 1 and "(it lists BRAND-STATE.md#phase, which a cold review does not read)" in detail(proj, "site:cold"), r.stdout
+    cold_review_record(proj, page_of("Atlas"), rules=True)
+    line = next(ln for ln in review.read_text(encoding="utf-8").splitlines() if "#g4-rules" in ln)
+    mutate(review, line, f"{line}\n{line}")
+    r = lint(proj)
+    assert r.returncode == 1 and "(a file is listed twice)" in detail(proj, "site:cold"), r.stdout
+    cold_review_record(proj, page_of("Atlas"), rules=True)
+    mutate(review, "- BRAND-STATE.md#g4-rules sha256:", "- BRAND-STATE.md#g4-rules sha:")    # a list line that is not "- <path> sha256:<hex>"
+    r = lint(proj)
+    assert r.returncode == 1 and "1 line(s) are not `- <path> sha256:<hex>` (- BRAND-STATE.md#g4-rules sha:" in detail(proj, "site:cold"), r.stdout
+
+
+def test_a_cold_review_goes_stale_when_the_g4_rules_change_but_not_when_another_part_of_brand_state_does(proj):
+    from _common import stale_inputs
+    for name in NAMES:
+        cold_review_record(proj, page_of(name), rules=True)
+    assert lint(proj).returncode == 0
+    assert bc("state", "--bump", "fixes_per_area.logo", project=proj).returncode == 0         # a line of BRAND-STATE.md the rules do not hold
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    assert stale_inputs(proj, report(proj, "board-lint")) == [], "the report of that lint stands on the rules, and they have not changed"
+    mutate(proj / "BRAND-STATE.md", "- (rule) (...)", "- (rule) one mark per screen")          # a new rule, once G4 is recorded, is a change of the part
+    assert stale_inputs(proj, report(proj, "board-lint")) == ["BRAND-STATE.md (the G4 rules) changed"], "the lint report goes stale with the rules, before any new lint"
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:cold"], r.stdout
+    why = detail(proj, "site:cold")
+    for name in NAMES:
+        assert (f"{name}: the G4 rules of BRAND-STATE.md changed after the cold review: review again "
+                f"(rounds/r2/{name}/cold-review.md lists another sha256 for BRAND-STATE.md#g4-rules)") in why, why
+    cold_review_record(proj, page_of("Atlas"), rules=True)                                     # a new review of the new rules, for one of the two
+    r = lint(proj)
+    assert r.returncode == 1 and "Atlas" not in detail(proj, "site:cold") and "Ledger: the G4 rules of BRAND-STATE.md changed" in detail(proj, "site:cold"), r.stdout
+    cold_review_record(proj, page_of("Ledger"), rules=True)
+    assert lint(proj).returncode == 0
+    assert bc("state", "--record", "G4", "approved system rules (reworded)", project=proj).returncode == 0   # the G4 record is the other half of the part
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:cold"] and "the G4 rules of BRAND-STATE.md changed after the cold review" in detail(proj, "site:cold"), r.stdout
+    for name in NAMES:                                                                         # a review without the rules does not care what the rules say
+        cold_review_record(proj, page_of(name))
+    assert lint(proj).returncode == 0 and held_rules(proj) == []
+
+
+def test_a_review_that_lists_rules_nobody_can_read_fails_and_says_why(proj):
+    cold_review_record(proj, page_of("Ledger"), rules=True)
+    card = siteboard.cards(parse_dom(board_of(proj).read_text(encoding="utf-8")))[0]
+    v = siteboard.SiteVariant(proj, 2, "Ledger", card)
+    assert siteboard.cold_problems(proj, v) == ([], "ship")
+    (proj / "BRAND-STATE.md").write_text("no frontmatter here\n", encoding="utf-8")
+    problems, verdict = siteboard.cold_problems(proj, v)
+    assert verdict == "ship" and len(problems) == 1, problems
+    assert "Ledger: rounds/r2/Ledger/cold-review.md lists BRAND-STATE.md#g4-rules, which cannot be checked: BRAND-STATE.md (the G4 rules) cannot be read: " in problems[0], problems
+    (proj / "BRAND-STATE.md").unlink()
+    problems, _ = siteboard.cold_problems(proj, v)
+    assert problems == ["Ledger: rounds/r2/Ledger/cold-review.md lists BRAND-STATE.md#g4-rules, which cannot be checked: BRAND-STATE.md is gone"], problems
+
+
+def test_state_prints_the_g4_rules_part_as_the_line_a_cold_review_lists_and_the_text_a_reviewer_is_given(proj):
+    """`brand-creator state --part g4-rules`: the first line is the cold review's input line (without its dash), the second the part's text, the very text the sha256 is of."""
+    import hashlib
+    import json
+    mutate(proj / "BRAND-STATE.md", "- (rule) (...)", "- (rule) one mark per screen")
+    r = bc("state", "--part", "g4-rules", project=proj)
+    assert r.returncode == 0, r.stderr
+    first, text = r.stdout.splitlines()
+    assert first == f"BRAND-STATE.md#g4-rules sha256:{hashlib.sha256(text.encode('utf-8')).hexdigest()}", r.stdout
+    part = json.loads(text)
+    assert part["g4"].endswith("approved system rules (test)") and part["rules"] == ["(rule) one mark per screen"], part
+    cold_review_record(proj, page_of("Atlas"), rules=True)                                     # the line the helper writes is the line the command prints
+    assert f"- {first}" in cold_of(proj, "Atlas").read_text(encoding="utf-8").splitlines()
+    for bad, word in (("rules", "not a part"), ("phase", "not a part")):
+        r = bc("state", "--part", bad, project=proj)
+        assert r.returncode == 2 and word in r.stderr and "g4-rules" in r.stderr, (bad, r.stdout, r.stderr)
+    (proj / "BRAND-STATE.md").write_text("no frontmatter here\n", encoding="utf-8")
+    r = bc("state", "--part", "g4-rules", project=proj)
+    assert r.returncode == 1 and r.stdout == "" and "BRAND-STATE.md (the G4 rules) cannot be read: " in r.stderr, (r.stdout, r.stderr)
+
+
 def test_the_card_shows_the_cold_verdict(proj):
     cold_review_record(proj, page_of("Atlas"), "fix", findings=("The headline says nothing that only this brand could say.",))
     r = lint(proj)
@@ -1323,10 +1437,39 @@ def test_the_prompt_fragment_describes_the_cold_review_of_a_site_hero():
     for needle in ("A cold review of a site hero reads only the four stills of the variant, `brief/BRIEF.md` and `FACTS.md`, never the board, the references or the reasons",
                    "`rounds/r<N>/<name>/cold-review.md`: `verdict: ship` or `verdict: fix` first, a `by:` line (`by: in-thread`; in-thread it is not blind, and an agent only after the fleet gate), "
                    "an `inputs:` list with the sha256 of each file (`- <path> sha256:<hex>`), then up to five numbered findings, the one that costs the visitor most first, each short enough to sit on a single line",
-                   "does the first screen say what only this brand could say", "does any part read as a tell from `page-tells.json`",
+                   "does the first screen say what only this brand could say",
                    "A review judges what the page shows: where the page lacks something it would need (wording, a picture, a control), the finding notes that the owner would have to supply it, "
                    "and does not fault the page for leaving it out."):
         assert needle in text, needle
+
+
+def test_the_prompt_fragment_names_the_tells_and_the_rules_the_cold_reviewer_is_given():
+    """G4-03: the reviewer is given no page-tells.json, so the fragment names the tells itself (each name of the file, in step with it), and says what the G4 rules part is for."""
+    import json
+    raw = (ROOT / "skills" / "brand-creator" / "references" / "prompt-fragments.md").read_text(encoding="utf-8")
+    text = " ".join(raw.split())
+    bullet = text[text.index("- A cold review of a site hero"):]
+    bullet = bullet[:bullet.index(" **Implementation and safety**")]
+    assert "page-tells.json" not in bullet, "the reviewer cannot read a file the prompt does not give it"
+    for tell in json.loads((ROOT / "skills" / "brand-creator" / "references" / "page-tells.json").read_text(encoding="utf-8"))["tells"]:
+        name = tell["name"][0].lower() + tell["name"][1:]
+        assert name in bullet, f"the cold-review bullet does not name the tell {tell['id']!r} ({name!r})"
+    for needle in ("It may also be given the approved G4 rules as text in the prompt (the output of `brand-creator state --part g4-rules`: the G4 record and the recorded rule lines, never the rest of `BRAND-STATE.md`)",
+                   "its `inputs:` list then ends with `- BRAND-STATE.md#g4-rules sha256:<hex>`, the first line of that output",
+                   "With the G4 rules in the prompt it also asks whether anything on the page breaks one, and a page that does what a rule says (a dark still that equals the light one, when a rule says so) is right, not a finding"):
+        assert needle in bullet, needle
+    agent = " ".join((ROOT / "agents" / "brand-reviewer.md").read_text(encoding="utf-8").split())
+    for needle in ("the prompt gives six files and no list, the variant's four stills, `brief/BRIEF.md` and `FACTS.md`. It may add the approved G4 rules as text in the prompt",
+                   "a page that does what a rule says (a dark still that equals the light one, when a rule says so) is right and is not a finding",
+                   "a page that breaks a rule is a finding, with the rule's own words. Without them, judge what the page shows"):
+        assert needle in agent, needle
+    phase = " ".join((ROOT / "skills" / "brand-creator" / "references" / "phases" / "07p-site-round.md").read_text(encoding="utf-8").split())
+    for needle in ("Run `brand-creator state --part g4-rules`. Its first line, `BRAND-STATE.md#g4-rules sha256:<hex>`, goes into `inputs:` with a dash in front, as the seventh input",
+                   "its second line (the G4 record and the recorded rule lines) you paste into the reviewer's prompt as text",
+                   "a dark still that equals the light one is right when a rule says so, and a page that breaks a rule is a finding",
+                   "Lint accepts the six inputs alone (a review made before this release) or the six plus that line",
+                   "A rule or the G4 record that changes after the review makes it stale (review again); another line of `BRAND-STATE.md` changing does not"):
+        assert needle in phase, needle
 
 
 # ---------------------------------------------------------------- the pages stage: the other pages, built from the hero the owner picked, and the choices they make

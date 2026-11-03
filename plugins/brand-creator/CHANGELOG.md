@@ -6,6 +6,23 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+### Added
+
+- `brand-creator state --part g4-rules` prints the G4 rules of `BRAND-STATE.md` (the G4 record and the rules you approved) as one
+  line to give a reviewer, with the line that records them in a cold review.
+
+### Changed
+
+- The cold review of a site hero can now be given your approved G4 rules. It judges the first screen against them, so a dark
+  still that equals the light one is right when a rule says so, without reading the rest of the project record. The board
+  lint accepts a review made the old way (six inputs) or with the rules as a seventh, and marks the review out of date when a rule
+  or the G4 record changes after it; another line of `BRAND-STATE.md` changing does not.
+
+### Fixed
+
+- The prompt for a cold review asked whether a part reads as a tell from `page-tells.json`, a file the reviewer is not given. The
+  prompt now names the tells itself.
+
 ## [0.6.0] - 2026-11-03
 
 The `/` menu is shorter. It now lists `brand-creator`, `setup`, `status`, `check`, `round` and `brand-adopt`, plus the four
