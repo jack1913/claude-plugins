@@ -166,6 +166,7 @@ A sample is a placeholder, such as a made-up price; its text is not a claim. Ask
 `data-sample="<what it stands for>"` on that part of the page's code.
 
 - A sample with no label fails, and its text is checked.
+- A labelled sample passes the claims check. The page needs no visible badge or note; the label in the code is enough.
 - The result lists your samples: what to replace before you publish.
 - A box marked as a sample sets off no mock-up warning.
 

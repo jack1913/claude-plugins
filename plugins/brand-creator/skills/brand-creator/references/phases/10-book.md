@@ -109,6 +109,12 @@ content language) only when G5 is recorded for that edition (`state --record G5`
 BRAND-STATE.md when rebuilt. A hand-authored book is patched to show the stamp before G5 is recorded. After approval an edition is not
 edited in place: `patch --new-edition` or `collapse --new-edition` opens the next one, which needs its own G5.
 
+Adding or removing a semantic token or a declared contrast pair changes the counts the book computes (`roles`, `pairs`; the colour
+chapter quotes both with `{{count:roles}}` and `{{count:pairs}}`). Until the book is rebuilt (or patched, for a hand-authored one),
+`book-lint` fails `counts:data` ("roles: the book says 7, the data say 8"). When that edition was approved, the rebuild or patch
+changes an approved edition: open the next one first
+(`state --set edition=<N+1>` for a generated book, `patch --new-edition` for a hand-authored one) and record G5 for it.
+
 ## Adapters and the applied skill (opt-in at G5)
 
 Ask once, at G5, whether the owner wants either. Nothing below is written without the owner's yes, and each needs G5 recorded.

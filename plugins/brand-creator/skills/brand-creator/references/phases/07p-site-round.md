@@ -122,7 +122,9 @@ is `start` (`<body data-page="start">`) in every project.
    - It loads `assets/tokens/tokens.css` (`../../../assets/tokens/tokens.css`), the approved mark from `assets/logo/`
      and the fonts in `assets/fonts/`. Every look value is a token; nothing is copied from a reference.
    - Words and numbers come from `FACTS.md` only. A number, price, date or status word that is not in the facts goes inside
-     an element labelled `data-sample="<what it is>"` (`[data-sample]`: a sample, shown as one), never in the open.
+     an element labelled `data-sample="<what it is>"` (`[data-sample]`: a labelled sample), never in the open. The attribute
+     is the label: a labelled sample needs no visible badge or note on the page. `page-check` passes its claims and puts it on
+     the before-publishing list, to be replaced with real content before the page is published.
    - A headline is never a fact's `value` as it stands. It quotes a `copy:` row of `FACTS.md` (wording the owner approved for
      use as copy, labelled `copy: <slot>`, such as `copy: hero headline`; the fact stays in its own row), or it is new wording
      the owner approves on the board, which becomes a `copy:` row once they do. `page-check` warns (`page:words`, never a

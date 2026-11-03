@@ -1015,6 +1015,57 @@ def test_history_launch_and_cascade_references_hold_the_plan_items():
         assert needle.lower() in c.lower(), needle
 
 
+def test_a_labelled_sample_a_new_token_and_the_full_tier_say_what_they_really_cost_where_each_is_explained():
+    """G4-10: (a) a labelled sample needs no visible badge, (b) a semantic token or a declared pair that comes or goes fails `counts:data` and, once the
+    book is approved, needs a new edition and G5, (c) a Full book also has the Adoption and Launch checklist chapters and its check fails without them."""
+    import bookdata   # the docs state what the code does: pin the facts they rest on
+    full = {c[0] for c in bookdata.CHAPTERS if "full" in c[2]}
+    standard = {c[0] for c in bookdata.CHAPTERS if "standard" in c[2]}
+    assert {"adoption", "launch"} <= full and not {"adoption", "launch"} & standard, "the chapters only a Full book has"
+    assert {"roles", "pairs"} <= set(bookdata.COUNT_NAMES), "the counts a token or a pair changes"
+    colour = " ".join((ROOT / "templates" / "book" / "colour.md").read_text(encoding="utf-8").split())
+    assert "{{count:roles}}" in colour and "{{count:pairs}}" in colour, "the colour chapter quotes both counts"
+    # (a) the phase file and the page-check reference: the label is the attribute, nothing shows on the page
+    phase = _flat(REFS / "phases" / "07p-site-round.md")
+    for needle in ("(`[data-sample]`: a labelled sample), never in the open.", "The attribute is the label: a labelled sample needs no visible badge or note on the page.",
+                   "`page-check` passes its claims and puts it on the before-publishing list, to be replaced with real content before the page is published."):
+        assert needle in phase, needle
+    assert "shown as one" not in phase, "no badge is asked for"
+    check = _flat(ROOT / "docs" / "manual" / "reference" / "page-check.md")
+    for needle in ("- A sample with no label fails, and its text is checked.",
+                   "- A labelled sample passes the claims check. The page needs no visible badge or note; the label in the code is enough.",
+                   "- The result lists your samples: what to replace before you publish."):
+        assert needle in check, needle
+    assert check.index("A sample with no label fails") < check.index("A labelled sample passes the claims check") < check.index("The result lists your samples")
+    # (b) where an edition is explained: the book phase, the cascade, the book page of the manual
+    book_phase = _flat(REFS / "phases" / "10-book.md")
+    for needle in ("Adding or removing a semantic token or a declared contrast pair changes the counts the book computes (`roles`, `pairs`;",
+                   "Until the book is rebuilt (or patched, for a hand-authored one), `book-lint` fails `counts:data`",
+                   "open the next one first (`state --set edition=<N+1>` for a generated book, `patch --new-edition` for a hand-authored one) and record G5 for it."):
+        assert needle in book_phase, needle
+    assert book_phase.index("edited in place: `patch --new-edition`") < book_phase.index("Adding or removing a semantic token") < book_phase.index("## Adapters and the applied skill")
+    cascade = _flat(REFS / "cascade.md")
+    for needle in ("A semantic token or a declared contrast pair that is added or removed changes the book's counts (`roles`, `pairs`), so `book-lint` fails `counts:data` until the book is "
+                   "rebuilt (or patched, for a hand-authored one).",
+                   "Step 4's edition rule holds for a generated book too: an approved book then needs a new edition and a new G5 ([10-book](phases/10-book.md#collapse-edition-and-approval))."):
+        assert needle in cascade, needle
+    assert (REFS / "phases" / "10-book.md").read_text(encoding="utf-8").count("## Collapse, edition and approval") == 1, "the cascade links to this heading"
+    manual_book = _flat(ROOT / "docs" / "manual" / "use" / "make-the-brand-book.md")
+    for needle in ("Adding or removing a colour role (a name a surface uses, such as `text` or `accent`) or a contrast pair changes the numbers the book prints, "
+                   "so the book check fails until Claude rebuilds the book. If you already approved the book, the rebuilt one is a new edition, and you approve it again.",
+                   "| The book check fails on `counts:data`"):
+        assert needle in manual_book, needle
+    # (c) the tier page and the book page of the manual
+    tier = _flat(ROOT / "docs" / "manual" / "getting-started" / "choose-a-tier.md")
+    assert "In Full, the brand book also has an Adoption chapter and a Launch checklist chapter. The book check fails without them." in tier
+    for needle in ("In Full the book also has an Adoption chapter and a Launch checklist chapter, and the book check fails without them.",
+                   "| The book check fails on `chapters:required` and names `adoption` and `launch` |"):
+        assert needle in manual_book, needle
+    for page in ("reference/page-check.md", "getting-started/choose-a-tier.md", "use/make-the-brand-book.md"):
+        found = INTERNAL_CODE.findall((ROOT / "docs" / "manual" / page).read_text(encoding="utf-8"))
+        assert not found, f"{page}: gate, phase or decision numbers on a user page: {found}"
+
+
 def test_connectors_are_optional_placeholders_and_the_plugin_ships_no_mcp_config():
     assert not (ROOT / ".mcp.json").exists() and "mcpServers" not in (ROOT / ".claude-plugin" / "plugin.json").read_text()
     c = _flat(ROOT / "CONNECTORS.md")

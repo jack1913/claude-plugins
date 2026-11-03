@@ -46,6 +46,12 @@ stage, and why, is in the [archive](docs/archive/README.md).
   `removed-<date>/` folder (so `check --cascade` does not find the old copies after you change a name or a price), and the
   hero board runs as before. Nothing cites a try-out, and a choice you make there is not your pick: you pick on the board.
   On the round's board, a card that points into `tryout/` still fails `board-lint` (`site:files`).
+- The docs now say three things plainly that cost owners a surprise. A page's sample content marked with `data-sample` and a
+  label passes the claims check and goes on the list of what to replace before you publish; the page needs no visible badge.
+  Adding or removing a colour role or a contrast pair changes the counts the brand book prints, so the book check
+  (`counts:data`) fails until the book is rebuilt, and an approved book then needs a new edition and a new approval. In the
+  Full tier the book also has an Adoption chapter and a Launch checklist chapter, and the book check fails without them.
+  Nothing in the checks changed.
 
 ### Fixed
 

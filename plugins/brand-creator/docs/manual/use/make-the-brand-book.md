@@ -15,7 +15,8 @@ from your project, so it can't drift from your files.
 1. Ask in your own words, such as "generate the brand book" or "export the brand book as a PDF". If Claude does not pick it up, say "use the brand-book skill".
 2. Claude builds `book.html`, one self-contained page with no script and no network, in light and dark. The cover shows
    your name as you drew it, with your wordmark. In Quick it is a short guide: idea, mark, colour, files and changing the
-   brand. Standard and Full add the full chapters.
+   brand. Standard and Full add the full chapters. In Full the book also has an Adoption chapter and a Launch checklist
+   chapter, and the book check fails without them.
 3. Claude reviews the book against its own checklist and shows you the findings.
 4. Read it and approve it, or ask for a change.
 
@@ -24,6 +25,10 @@ from your project, so it can't drift from your files.
 Ask for the change: "update the guidelines after the colour change". Claude changes the source and rebuilds. It never
 edits `book.html` by hand. A hand-drawn logo has a hand-written book instead, which Claude edits through counted patches
 that open a new edition.
+
+Adding or removing a colour role (a name a surface uses, such as `text` or `accent`) or a contrast pair changes the
+numbers the book prints, so the book check fails until Claude rebuilds the book. If you already approved the book, the
+rebuilt one is a new edition, and you approve it again.
 
 ## If your brand moves
 
@@ -76,6 +81,8 @@ Without a yes, Claude writes none of them.
 | --- | --- |
 | Claude says something is missing | It names the step that builds it: the logo, the colours or the files. Finish that first |
 | The PDF step stops | The PDF checks need poppler. `brand-creator prereq --for standard` lists what's missing and how to install it |
+| The book check fails on `counts:data`, such as "the book says 7, the data say 8" | You added or removed a colour role or a contrast pair after the book was built. Ask Claude to rebuild the book. If you had approved it, it opens a new edition |
+| The book check fails on `chapters:required` and names `adoption` and `launch` | A Full book needs an Adoption chapter and a Launch checklist chapter. Ask Claude to add them, then rebuild |
 
 ## Related
 
