@@ -12,7 +12,9 @@ stage, and why, is in the [archive](docs/archive/README.md).
   line to give a reviewer, with the line that records them in a cold review.
 - `brand-creator inline <page> --out <file>` writes one self-contained copy of a page of your project, such as a try-out: its
   stylesheets, scripts, images, fonts and logo go inside the file, so it loads nothing from anywhere. A page that loads from
-  another website is refused (exit 2) with its address named, and nothing is written. The copy goes outside the project or
+  another website is refused (exit 2) with its address named, and nothing is written. Only `.css` files go in as stylesheets
+  and `.js` or `.mjs` files as scripts, and nothing from a hidden file or folder, so a page cannot carry another file of your
+  project into the copy. The copy goes outside the project or
   under `tryout/`, never over the page. `BRAND-STATE.md` has a new `tryout_url` for the private page a shared try-out is on, kept
   apart from `review_url`, the page of your boards.
 

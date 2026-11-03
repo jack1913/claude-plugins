@@ -208,6 +208,13 @@ UNSUPPORTED = [   # (what, where the markup goes, the markup, the files it names
     ("an SVG use of another file", "body", "<svg><use href=\"sprite.svg#a\"></use></svg>", {"sprite.svg": LOGO.read_bytes()}, "SVG <use>"),
     ("an alternate stylesheet", "head", "<link rel=\"alternate stylesheet\" href=\"dark.css\" title=\"dark\">", {"dark.css": "p{color:red}"}, "alternate stylesheet"),
     ("a stylesheet that is not UTF-8", "head", "<link rel=\"stylesheet\" href=\"site.css\">", {"site.css": b"p{content:'\xff\xfe'}"}, "is not UTF-8 text"),
+    # a shared page takes what a page loads as code only from a stylesheet or a script file, and nothing from a hidden file or folder, so a
+    # page cannot carry a project file such as BRAND-STATE.md (or a .env) into a copy that is shown to others
+    ("a stylesheet that is not a .css file", "head", "<link rel=\"stylesheet\" href=\"../../BRAND-STATE.md\">", {}, "BRAND-STATE.md is not a stylesheet: only a .css file"),
+    ("an import of a file that is not .css", "head", "<link rel=\"stylesheet\" href=\"site.css\">", {"site.css": "@import \"notes.txt\";", "notes.txt": "p{color:red}"}, "notes.txt is not a stylesheet: only a .css file"),
+    ("a script that is not a .js file", "head", "<script src=\"notes.txt\"></script>", {"notes.txt": "document.title = 1;"}, "notes.txt is not a script: only a .js or .mjs file"),
+    ("a hidden file", "head", "<link rel=\"stylesheet\" href=\".private/site.css\">", {".private/site.css": "p{color:red}"}, "a hidden file or folder"),
+    ("a picture in a hidden folder", "body", "<img src=\".cache/a.png\" alt=\"\">", {".cache/a.png": PNG_A}, "a hidden file or folder"),
 ]
 
 
