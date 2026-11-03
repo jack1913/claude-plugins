@@ -210,6 +210,35 @@ test("list marks a roster session whose sessionId changed as changed, and keeps 
   }
 });
 
+const said = (text, tokens = 1000) =>
+  `${JSON.stringify({ type: "assistant", message: { usage: { input_tokens: tokens }, content: [{ type: "text", text }] } })}\n`;
+const toolUse = (tokens = 1000) =>
+  `${JSON.stringify({ type: "assistant", message: { usage: { input_tokens: tokens }, content: [{ type: "tool_use", name: "Bash", input: {} }] } })}\n`;
+
+test("list flags an active job whose session's last word reads as done: DONE? run finish", async () => {
+  const t = setup([interactive("u1", 1), interactive("u2", 2, OTHER), interactive("u3", 3, "C:\\Work\\Third")]);
+  try {
+    t.deps.env.PUPPET_CONTEXT_WINDOW = "200000";
+    for (const n of ["u1", "u2", "u3"]) adoptSession(t.deps, n);
+    for (const n of ["u1", "u2", "u3"]) assignJob(t.deps, n, `job ${n}`);
+    const [a1, a2, a3] = t.deps.agents;
+    t.writeTranscript(a1.sessionId, said("Working on it.") + said("FINAL: the merge is pushed.") + toolUse());
+    t.writeTranscript(a2.sessionId, said("Step 2 of 4 done, starting step 3.") + toolUse());
+    t.writeTranscript(a3.sessionId, said("The job is done; nothing is left."));
+    assert.equal(await main(["list"], t.deps), 0);
+    const rows = t.out.join("\n");
+    assert.match(rows, /^u1 .*active job u1 {2}DONE\? run finish$/m);
+    assert.match(rows, /^u3 .*active job u3 {2}DONE\? run finish$/m);
+    assert.doesNotMatch(rows, /^u2 .*DONE\?/m);
+    finishJob(t.deps, "u1");
+    t.out.length = 0;
+    assert.equal(await main(["list"], t.deps), 0);
+    assert.doesNotMatch(t.out.join("\n"), /^u1 .*DONE\?/m);
+  } finally {
+    t.cleanup();
+  }
+});
+
 test("list shows interactive roster sessions with kind, role and job", async () => {
   const t = setup([interactive("u1", 1), interactive("u2", 2, OTHER), interactive("stranger", 3)]);
   try {
@@ -241,7 +270,7 @@ test("spawn ignores clean adopted sessions and the analyst when locking the chec
   try {
     adoptSession(t.deps, "u1");
     adoptSession(t.deps, "u2", { role: "analyst" });
-    assert.equal(await main(["spawn", "w9", REPO, t.brief("job"), "--job", "release 1.2"], t.deps), 0);
+    assert.equal(await main(["spawn", "w9", REPO, t.brief("job"), "--job", "release 1.2", "--effort", "high"], t.deps), 0);
     const rec = t.readRegistry().workers.w9;
     assert.equal(rec.kind, "background");
     assert.equal(rec.role, "worker");
@@ -290,7 +319,7 @@ test("spawn keeps a changed record: the name is still listed under a new session
   try {
     adoptSession(t.deps, "u1");
     t.deps.agents[0] = { ...t.deps.agents[0], sessionId: "cccccccc-0000-4000-8000-000000000000" };
-    assert.equal(await main(["spawn", "w9", REPO, t.brief("job")], t.deps), 0);
+    assert.equal(await main(["spawn", "w9", REPO, t.brief("job"), "--effort", "high"], t.deps), 0);
     assert.ok(t.readRegistry().workers.u1, "spawn must not prune a changed record");
     assert.doesNotMatch(t.out.join("\n"), /pruned/);
   } finally {

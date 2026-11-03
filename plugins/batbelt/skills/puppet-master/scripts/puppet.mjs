@@ -57,8 +57,13 @@ export function transcriptFacts(text) {
   let autoCompactAt = null;
   let model = null;
   let effort = null;
+  let lastText = null;
   for (const e of entries) {
     if (e.isSidechain) continue;
+    if (e.type === "assistant" && Array.isArray(e.message?.content)) {
+      const text = e.message.content.filter((c) => c?.type === "text").map((c) => c.text).join("\n");
+      if (text.trim()) lastText = text;
+    }
     if (e.type === "system" && e.subtype === "compact_boundary" && e.compactMetadata?.trigger === "auto") {
       const pre = e.compactMetadata.preTokens;
       if (Number.isInteger(pre) && pre > 0 && (autoCompactAt === null || pre < autoCompactAt)) autoCompactAt = pre;
@@ -73,8 +78,11 @@ export function transcriptFacts(text) {
   } catch (err) {
     size = { error: err };
   }
-  return { ...size, autoCompactAt, model, effort };
+  return { ...size, autoCompactAt, model, effort, saysDone: lastText !== null && DONE_RE.test(lastText) };
 }
+
+// A last assistant text that reads as a done report: a hint for the master, never a finish.
+const DONE_RE = /^\s*FINAL:|\bjob is done\b/im;
 
 function tokensOf(entries) {
   let usage = null;
@@ -348,6 +356,7 @@ export function measureAgent(deps, agent, record, { window, compactAt, observed 
     tokenSource: t.source,
     model: t.model,
     effort: t.effort,
+    saysDone: t.saysDone,
     autoCompactAt: t.autoCompactAt,
   };
 }
@@ -521,6 +530,26 @@ export function tierMatch(tier, { model, effort } = {}) {
   return tier === "creative" ? opus && HIGH.has(effort) : !opus && LOW.has(effort);
 }
 
+// What `spawn` passes to `claude --bg` for a tier: plain aliases, never versioned model ids.
+export const TIER_LAUNCH = {
+  creative: { model: "opus", effort: "high" },
+  mechanical: { model: "sonnet", effort: "medium" },
+};
+export const EFFORTS = ["low", "medium", "high", "xhigh", "max"];
+
+// The --model and --effort a spawn passes. Explicit flags win over the tier. An effort is
+// always explicit: a no-flag `claude --bg` has started below the user's own default.
+export function launchFlags({ tier, model, effort } = {}) {
+  if (tier !== undefined) tierMatch(tier, {});
+  const base = tier === undefined ? {} : TIER_LAUNCH[tier];
+  const m = model ?? base.model;
+  const e = effort ?? base.effort;
+  if (e === undefined) throw new PuppetError("spawn: name a --tier or --effort", 2);
+  if (!EFFORTS.includes(e)) throw new PuppetError(`--effort must be one of ${EFFORTS.join(", ")}, got "${e}"`, 2);
+  if (m !== undefined && !m.trim()) throw new PuppetError("--model needs a value", 2);
+  return { model: m, effort: e };
+}
+
 export function tierLine(name, tier, facts) {
   const ok = tierMatch(tier, facts);
   if (ok === null) return `${name} tier ${tier}: unchecked (no turn yet); have it state its model, then read its effort with list --name`;
@@ -598,18 +627,27 @@ function rosterRecord(agents, reg, key) {
   return { agent, rec: normalize(rec) };
 }
 
-// Below this share of its compaction point (or window), a finished session may take the
-// next job with --reuse.
+// Below this share of its window (the figure the user's status line shows; the compaction
+// point only when the window is unknown), a finished session may take the next job with --reuse.
 export const REUSE_BELOW = 30;
 
-export function assignJob(deps, key, label, { reuse = false, scope, noGit = false, tier } = {}) {
+// One job's write fields with more work added: no scope on either side means the whole
+// checkout, and the merged job runs git when either part does.
+function mergeJob(a, b) {
+  const scope = a.scope && b.scope ? [...new Set([...a.scope, ...b.scope])] : undefined;
+  return { ...(scope ? { scope } : {}), git: a.git !== false || b.git !== false };
+}
+
+export function assignJob(deps, key, label, { reuse = false, extend = false, scope, noGit = false, tier } = {}) {
   if (!label || !label.trim()) throw new PuppetError("assign needs a job label", 2);
+  if (extend && reuse) throw new PuppetError("--extend and --reuse do not go together", 2);
   if (tier !== undefined) tierMatch(tier, {});
   const job = jobFields(deps, { scope, noGit });
   const agents = listAgents(deps);
   const reg = loadRegistry(deps);
   const { agent, rec } = rosterRecord(agents, reg, key);
   if (rec.role !== "worker") throw new PuppetError(`${agent.name} is the ${rec.role}; the ${rec.role} takes no jobs`);
+  if (extend) return extendJob(deps, reg, agents, agent, rec, label, job, tier);
   const reusable = reuse && rec.jobState === "done";
   if (rec.jobState !== "clean" && !reusable) {
     const did = rec.jobState === "active" ? `holds "${rec.job}"` : rec.job ? `did "${rec.job}"` : "did other work";
@@ -626,10 +664,12 @@ export function assignJob(deps, key, label, { reuse = false, scope, noGit = fals
       if (!(e instanceof PuppetError)) throw e;
       throw new PuppetError(`cannot measure ${agent.name} for --reuse: ${e.message}`);
     }
-    const share = m.compactPercent ?? m.percent ?? 0;
+    const share = m.percent ?? m.compactPercent ?? 0;
     if (share >= REUSE_BELOW) {
+      const of = m.percent === null ? "of its compaction point" : "of its window";
+      const point = m.percent !== null && m.compactPercent !== null ? ` (${m.compactPercent}% of compaction point ${m.compactAt})` : "";
       throw new PuppetError(
-        `${agent.name} is at ${share}% (${m.tokens} tokens); --reuse needs under ${REUSE_BELOW}%: give the user its /clear line first`,
+        `${agent.name} is at ${share}% ${of}${point} (${m.tokens} tokens); --reuse needs under ${REUSE_BELOW}%: give the user its /clear line first`,
       );
     }
   }
@@ -644,6 +684,44 @@ export function assignJob(deps, key, label, { reuse = false, scope, noGit = fals
   saveRegistry(deps, reg);
   const tierCheck = tier === undefined ? null : tierLine(agent.name, tier, sessionFacts(deps, agent));
   return { name: agent.name, ...next, tierCheck };
+}
+
+// More work for the job a session already holds: the label, scope and git merge into it,
+// and its start stays.
+function extendJob(deps, reg, agents, agent, rec, label, job, tier) {
+  if (rec.jobState !== "active") {
+    throw new PuppetError(`--extend needs an active job; ${agent.name} has none (it is ${rec.jobState})`);
+  }
+  const merged = mergeJob(rec, job);
+  checkLock(deps, reg, agents, agent.name, rec.checkout, merged);
+  const joined = `${rec.job}; ${label}`;
+  const jobs = [...(rec.jobs ?? [])];
+  if (jobs.length > 0) jobs[jobs.length - 1] = { ...jobs[jobs.length - 1], label: joined };
+  const next = { ...rec, job: joined, jobs, ...merged };
+  if (!merged.scope) delete next.scope;
+  if (tier !== undefined) next.tier = tier;
+  reg.workers[agent.name] = next;
+  saveRegistry(deps, reg);
+  const tierCheck = tier === undefined ? null : tierLine(agent.name, tier, sessionFacts(deps, agent));
+  return { name: agent.name, ...next, extended: true, tierCheck };
+}
+
+// Undo a finish: the last job is active again, as it was before `finish`.
+export function reopenJob(deps, key) {
+  const agents = listAgents(deps);
+  const reg = loadRegistry(deps);
+  const { agent, rec } = rosterRecord(agents, reg, key);
+  if (rec.jobState !== "done") throw new PuppetError(`${agent.name} has no finished job to reopen (it is ${rec.jobState})`);
+  checkLock(deps, reg, agents, agent.name, rec.checkout, { scope: rec.scope, git: rec.git });
+  const jobs = [...(rec.jobs ?? [])];
+  if (jobs.length > 0) {
+    const { endedAt, ...last } = jobs[jobs.length - 1];
+    jobs[jobs.length - 1] = last;
+  }
+  const next = { ...rec, jobState: "active", ...(jobs.length > 0 ? { jobs } : {}) };
+  reg.workers[agent.name] = next;
+  saveRegistry(deps, reg);
+  return { name: agent.name, ...next };
 }
 
 export function finishJob(deps, key) {
@@ -702,8 +780,9 @@ function readBrief(deps, briefFile) {
   return text;
 }
 
-export function spawnWorker(deps, name, cwd, briefFile, { job, scope, noGit = false } = {}) {
+export function spawnWorker(deps, name, cwd, briefFile, { job, scope, noGit = false, tier, model, effort } = {}) {
   if (!NAME_RE.test(name)) throw new PuppetError(`worker name "${name}" must match [A-Za-z0-9._-]+`, 2);
+  const launch = launchFlags({ tier, model, effort });
   const fields = jobFields(deps, { scope, noGit });
   const brief = readBrief(deps, briefFile);
   const agents = listAgents(deps);
@@ -729,7 +808,8 @@ export function spawnWorker(deps, name, cwd, briefFile, { job, scope, noGit = fa
     queueHarvest(reg, other, rec.sessionId);
     delete reg.workers[other];
   }
-  const r = claudeOk(deps, ["--bg", "--name", name, brief], { cwd });
+  const pass = [...(launch.model ? ["--model", launch.model] : []), "--effort", launch.effort];
+  const r = claudeOk(deps, ["--bg", "--name", name, ...pass, brief], { cwd });
   const id = parseBgId(r.stdout);
   const started = listAgents(deps).find((a) => a.id === id);
   if (!started) throw new PuppetError(`started ${name} as ${id}, but claude agents does not list it`);
@@ -745,10 +825,11 @@ export function spawnWorker(deps, name, cwd, briefFile, { job, scope, noGit = fa
     jobStartedAt: deps.now().toISOString(),
     jobs: [{ label: job ?? name, startedAt: deps.now().toISOString() }],
     ...fields,
+    ...(tier === undefined ? {} : { tier }),
   };
   if (reg.closed) delete reg.closed[name];
   saveRegistry(deps, reg);
-  return { name, id, sessionId: started.sessionId, checkout };
+  return { name, id, sessionId: started.sessionId, checkout, ...launch };
 }
 
 // --- cycling: stop, headless compact, verify, restart -----------------------------------
@@ -881,10 +962,11 @@ const USAGE = [
   "  measure <worker> [--window N] [--compact-at N] [--json]",
   "  list [--name <session>] [--window N] [--compact-at N] [--json]",
   "  adopt <session> [--role worker|analyst|master] [--window N]",
-  "  assign <session> <job> [--reuse] [--scope <dir[,dir]>] [--no-git] [--tier creative|mechanical]",
+  "  assign <session> <job> [--reuse | --extend] [--scope <dir[,dir]>] [--no-git] [--tier creative|mechanical]",
   "  finish <session>",
+  "  reopen <session>",
   "  pick <cwd> [--scope <dir[,dir]>] [--no-git] [--tier creative|mechanical]",
-  "  spawn <name> <cwd> <brief-file> [--job <label>] [--scope <dir[,dir]>] [--no-git]",
+  "  spawn <name> <cwd> <brief-file> (--tier creative|mechanical | --effort <level>) [--model <alias>] [--job <label>] [--scope <dir[,dir]>] [--no-git]",
   "  cycle <worker> <focus> [--next <brief-file>]",
   "  close <worker>",
   "  harvest [--master <session>] [--logs <dir>] [--plugin-data <dir>]",
@@ -900,9 +982,12 @@ const FLAGS = {
   "--compact-at": true,
   "--name": true,
   "--reuse": false,
+  "--extend": false,
   "--scope": true,
   "--no-git": false,
   "--tier": true,
+  "--model": true,
+  "--effort": true,
   "--json": false,
   "--next": true,
   "--role": true,
@@ -1007,7 +1092,8 @@ function cmdList(deps, positional, flags) {
     else if (r.state === "gone") deps.out(`${r.name}  gone  (resume: ${resumeHint(r.cwd, r.sessionId)})`);
     else if (r.roster) {
       const job = `${r.kind} ${r.role} ${r.jobState}${r.job ? ` ${r.job}` : ""}`;
-      deps.out(`${measureLine(r)}  model ${modelLine(r)}  ${job}`);
+      const done = r.jobState === "active" && r.saysDone ? "  DONE? run finish" : "";
+      deps.out(`${measureLine(r)}  model ${modelLine(r)}  ${job}${done}`);
     } else deps.out(`${measureLine(r)}  model ${modelLine(r)}`);
   }
   return failed ? 1 : 0;
@@ -1024,11 +1110,13 @@ function cmdAssign(deps, positional, flags) {
   wantPositional(positional, 2, "assign");
   const r = assignJob(deps, positional[0], positional[1], {
     reuse: Boolean(flags.reuse),
+    extend: Boolean(flags.extend),
     scope: flags.scope,
     noGit: Boolean(flags["no-git"]),
     tier: flags.tier,
   });
-  deps.out(`assigned ${r.name}: ${r.job}${r.scope ? ` (scope ${r.scope.join(",")}${r.git ? "" : ", no git"})` : ""}`);
+  const verb = r.extended ? "extended" : "assigned";
+  deps.out(`${verb} ${r.name}: ${r.job}${r.scope ? ` (scope ${r.scope.join(",")}${r.git ? "" : ", no git"})` : ""}`);
   if (r.tierCheck) deps.out(r.tierCheck);
   return 0;
 }
@@ -1037,6 +1125,13 @@ function cmdFinish(deps, positional) {
   wantPositional(positional, 1, "finish");
   const r = finishJob(deps, positional[0]);
   deps.out(`finished ${r.name}: ${r.job}`);
+  return 0;
+}
+
+function cmdReopen(deps, positional) {
+  wantPositional(positional, 1, "reopen");
+  const r = reopenJob(deps, positional[0]);
+  deps.out(`reopened ${r.name}: ${r.job}`);
   return 0;
 }
 
@@ -1165,8 +1260,12 @@ function cmdSpawn(deps, positional, flags) {
     job: flags.job,
     scope: flags.scope,
     noGit: Boolean(flags["no-git"]),
+    tier: flags.tier,
+    model: flags.model,
+    effort: flags.effort,
   });
-  deps.out(`spawned ${w.name} id=${w.id} in ${w.checkout}`);
+  const passed = [w.model && `model ${w.model}`, `effort ${w.effort}`].filter(Boolean).join(", ");
+  deps.out(`spawned ${w.name} id=${w.id} in ${w.checkout} (${passed})`);
   return 0;
 }
 
@@ -1192,6 +1291,7 @@ const COMMANDS = {
   adopt: cmdAdopt,
   assign: cmdAssign,
   finish: cmdFinish,
+  reopen: cmdReopen,
   pick: cmdPick,
   spawn: cmdSpawn,
   cycle: cmdCycle,

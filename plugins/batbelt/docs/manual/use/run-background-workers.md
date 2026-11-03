@@ -42,14 +42,16 @@ Say what the job is:
 
 Claude picks a clean session of yours in that repository and gives it the job, with the rules you've set (where scratch
 files go, for example). You see a line like `assigned backend-b7: merge payments into test`. If no clean session is free
-there, it starts a background worker instead: `spawned backend-merge id=<id> in <folder>`.
+there, it starts a background worker instead, on the model and effort the job's tier needs:
+`spawned backend-merge id=<id> in <folder> (model opus, effort high)`.
 
 - Each job gets a tier. Design, writing and review are `creative`: an Opus model at high effort or more. Renames,
   moves and checks are `mechanical`: another model at medium effort or less. If a session runs the wrong model or
   effort, Claude says `MISMATCH` and gives you `/model` and `/effort` lines to paste into that window. It never
   changes a session's settings itself.
-- A session that already did a job gets another one only while it is small, under 30% of the size where it would
-  compact. Otherwise clear it (`/clear`) and tell Claude, or let Claude start a worker.
+- A session that already did a job gets another one only while it is small, under 30% of its context as your status
+  line shows it. Otherwise clear it (`/clear`) and tell Claude, or let Claude start a worker. A follow-up to the job a
+  session still holds goes to the same session, and a job closed too early can be reopened.
 - One session edits one repository at a time, unless both jobs name the folders they write, the folders don't
   overlap, and only one of them runs git. Otherwise, for a second job in the same repository, use a second clone.
 - When a session has a question, Claude asks you, one at a time, quoting your own words back before its reading of them.
@@ -60,8 +62,9 @@ Claude measures each session's context, and compacts only between tasks:
 
 - An idle session at 30% of its context or more, with work left, needs compacting.
   - A background worker is compacted and restarted by Claude.
-  - For your own window, Claude gives you one line to paste into it, such as
-    `backend-b7: /compact keep the merge state and the next step`. A message from another session can't run `/compact`.
+  - Your own window is left to auto-compact. If you'd rather choose the moment, say "give me compact lines" once, and
+    Claude gives you one line to paste, such as `backend-b7: /compact keep the merge state and the next step`. A
+    message from another session can't run `/compact`.
 - A busy session at 50% or more is asked to stop at its next task boundary first.
 - Before compacting a worker above 50%, Claude tells you its size and that a compaction can cost close to a dollar.
 - Once Claude has seen a session auto-compact, it knows the size where that happens. From 80% of it, a session's line

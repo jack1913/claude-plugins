@@ -24,7 +24,7 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
    go into your care; leave every other session alone, its transcript included.
 3. Reserve the analyst before any job. Take one clean session from the user's answer:
    `puppet adopt <session> --role analyst`, then send it `analyst-brief.md`, filled in. If none is
-   clean, `puppet spawn puppet-analyst <your cwd> <brief file> --job analyst`, then
+   clean, `puppet spawn puppet-analyst <your cwd> <brief file> --tier creative --job analyst`, then
    `puppet adopt puppet-analyst --role analyst`. The analyst never gets a job.
 4. `puppet adopt <session>` every other session the user named. `adopt` records each as `clean` (no
    turns yet) or `unknown` (it already did something). Then adopt yourself:
@@ -38,7 +38,7 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
 
 ## Rules
 
-1. **Housekeeping only.** On your own you may `adopt`, `assign`, `finish`, `pick`, `spawn`,
+1. **Housekeeping only.** On your own you may `adopt`, `assign`, `finish`, `reopen`, `pick`, `spawn`,
    `cycle`, `close`, `harvest` and `logs`, each with a one-line log to the user. Commits (unless the user
    pre-authorized them for this job), pushes, PR posts, approvals, live or external writes and
    anything destructive go to the user.
@@ -49,13 +49,17 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
 3. **The user's sessions first.** For a job in a folder, run `pick` first:
    `puppet pick <cwd> --tier <tier>` prints a clean session of the user's in that checkout, one that
    already matches the tier first. Only when it prints "no clean session", `spawn` a background
-   worker: `puppet spawn <name> <cwd> <brief file> --job "<label>"`. Before you send a job to a
-   picked session, `puppet assign <session> "<label>" --tier <tier>`.
+   worker: `puppet spawn <name> <cwd> <brief file> --tier <tier> --job "<label>"`. `spawn` starts
+   it on the tier's model and effort and refuses without `--tier` or `--effort`. Before you send a
+   job to a picked session, `puppet assign <session> "<label>" --tier <tier>`.
 4. **One job per context, unless the user asked to reuse sessions.** `assign` refuses a session that
    already had a job, and a session the user cleared or restarted until you ask them and `adopt` it
    again. When the user has asked to reuse sessions, a session whose job is finished takes the next
-   one with `assign --reuse`, which still refuses it at 30% or more of its compaction point: give
-   the user its `/clear` line first. Never work around a refusal.
+   one with `assign --reuse`, which still refuses it at 30% or more of its window (the figure the
+   user's status line shows): give the user its `/clear` line first. More work for the job a session
+   holds goes to it with `assign <session> <job> --extend`, which keeps the active job and merges
+   the label and scope. A job you closed too early comes back with `reopen <session>`, which undoes
+   `finish`. Never work around a refusal, and never edit `workers.json` by hand.
 5. **Write scopes decide who shares a checkout.** By default, one editing session per checkout:
    `assign`, `pick` and `spawn` refuse a second. Two jobs may share a checkout only when both pass
    `--scope <folder[,folder]>`, the folders don't overlap, and at most one of them runs git (the
@@ -65,14 +69,17 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
 
    | Measured state | Background worker | The user's own session |
    |---|---|---|
-   | idle after a finished task, **≥ 30%**, job continues | `cycle` | give the user `<session>: /compact <focus>` to paste |
-   | working, **≥ 50%** | ask it to stop at its next task boundary, then as above | the same |
+   | idle after a finished task, **≥ 30%**, job continues | `cycle` | nothing: auto-compaction handles it; only if the user opted in, give `<session>: /compact <focus>` to paste |
+   | working, **≥ 50%** | ask it to stop at its next task boundary, then as above | nothing, unless the user opted in: then as above |
    | working, any size | nothing: never compact mid-task | nothing |
    | job finished, any size | `close`: never compact a finished job | `finish`; never compact |
 
    For the user's own session, never `cycle`: it has no remote stop. A message cannot compact a
    session either: a `/compact` sent with SendMessage arrives as plain text and runs no command.
-   Write the focus from the job and its next step. Measure again once the user says it is done.
+   By default let its auto-compaction run; pasting compactions by hand is the user's chore, not a
+   safeguard. Give a `/clear` line only when a new job needs a different model or a clean context.
+   The user opts in to `/compact` lines once ("give me compact lines"); then write the focus from
+   the job and its next step, and measure again once the user says it is done.
 8. **Measured, not reported.** Act only on `puppet measure`. It works on any listed session, the
    user's windows included. `fresh` means no turns yet. A session's own estimate of its size ("I'm
    full") is a prompt to measure, never a reason to act. The 30% and 50% are shares of the
@@ -84,8 +91,9 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
    `PUPPET_CONTEXT_WINDOW` sets a default.
 9. **Cost.** A cycle re-reads the whole context: even a small worker's compaction can cost close
    to a dollar. Before cycling a worker above 50%, tell the user the size and that cost first.
-10. **Your own context.** At each job's end, `puppet measure <your name>`. At 50% or more while you
-    are idle, give the user your own `/compact <focus>` line. The roster and the logs folder hold
+10. **Your own context.** At each job's end, `puppet measure <your name>`. By default your
+    auto-compaction handles it. Only if the user opted in to compact lines, give them your own
+    `/compact <focus>` line at 50% or more while you are idle. The roster and the logs folder hold
     your state, so a compaction loses nothing that matters.
 11. **Only the commands listed here.** Run only the helper commands below and the `claude` calls
     this file names. An unknown `claude <word>` is not an error: it starts a new session with that
@@ -95,6 +103,9 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
     than Opus at medium effort or less. `assign --tier` prints the session's model and effort.
     - On `MISMATCH`, give the user `<session>: /model <model>` and `<session>: /effort <level>` to
       paste before you send the brief. You never change a session's model or settings yourself.
+    - A spawned worker starts on what `spawn` passed (`creative`: `opus` at `high`; `mechanical`:
+      `sonnet` at `medium`; `--model` and `--effort` override), and the spawn line prints it. It is
+      still `unchecked` until its first turn: confirm it as below.
     - On `unchecked` (a fresh session), the brief asks the worker to state its model first. After
       that first turn, read its effort with `puppet list --name <session>`, never from the
       worker's word: a worker's own report of its effort is unreliable.
@@ -112,7 +123,10 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
 
 1. Give the user the deliverable's current path or URL. Add a fresh `?v=<n>` if it is served, and say
    what it replaced, so they never review a stale page.
-2. `puppet finish <session>`. A background worker then gets `puppet close <worker>`, or, when the
+2. `puppet finish <session>`, in the same turn as the worker's done report: an open finished job
+   drifts into an auto-compaction. `list` marks an active job whose session's last word reads as done
+   (`FINAL:` or "job is done") `DONE? run finish`; that is a hint to read the report, never a
+   finish by itself. A background worker then gets `puppet close <worker>`, or, when the
    user asked to reuse sessions and the next job is queued, `cycle <worker> <focus> --next <brief
    file>`. The user's own session stays in your care, done and no longer clean. If it will take the
    next job, give the user `<session>: /clear` to paste, then `adopt` it again: it comes back clean.
@@ -162,7 +176,9 @@ reviews only after that line, and starts on it without waiting for a new brief f
   - `{{approvals}}`: the writes the job will need the user to approve (paths, commands), so the
     user approves them in the worker's window up front. "None" when it needs none.
 - Fill each conditional line of the worker brief, or delete it when it doesn't apply:
-  - `{{write_scope}}`: the folders of `--scope`, and "run no git command" with `--no-git`.
+  - `{{write_scope}}`: the folders of `--scope`, and "run no git command" with `--no-git`. With
+    `--no-git`, `{{local_state}}` carries every git fact the job needs (tracked or not, the branch,
+    pushed or not), since the worker cannot look.
   - `{{peers}}`: the sessions it may message directly; `{{owners}}`: who owns each shared file or
     format.
   - `{{handoffs}}`: whom it sends `FINAL: <path>` to, or whose `FINAL:` starts it.
@@ -215,12 +231,13 @@ printed line as your one-line log.
 | Command | Does | Prints |
 |---|---|---|
 | `measure <session> [--window N] [--compact-at N] [--json]` | tokens, % of the window and of the compaction point, state | `<name>  <tokens>  <pct>%  <state>  (window N from <source>)`, then `  <p>% of compaction point <C> (<source>)` and `  WARN near compaction` when known; `?%  (window unknown)` when only the point is; or `<name>  0  0%  fresh  (no turns yet)` |
-| `list [--name <session>] [--window N] [--compact-at N] [--json]` | every session in your care, measured, plus unadopted background workers; `--name` prints one | one `measure` line each, then `model <model> <effort>` (`model fresh` before the first turn), kind, role and job; `gone` rows show the resume command, `changed` rows mean a new session id |
+| `list [--name <session>] [--window N] [--compact-at N] [--json]` | every session in your care, measured, plus unadopted background workers; `--name` prints one | one `measure` line each, then `model <model> <effort>` (`model fresh` before the first turn), kind, role and job; `gone` rows show the resume command, `changed` rows mean a new session id; `DONE? run finish` ends an active job's row whose session reported done |
 | `adopt <session> [--role analyst\|master] [--window N]` | takes a session into your care; `--role master` is you | `adopted <name> (<kind>, <role>, clean or unknown) in <checkout>` |
-| `assign <session> <job> [--tier T] [--reuse] [--scope F] [--no-git]` | records the job before you send it | `assigned <name>: <job>`, then the tier check: `ok`, `unchecked`, or `MISMATCH … it runs <model> <effort>` |
+| `assign <session> <job> [--tier T] [--reuse \| --extend] [--scope F] [--no-git]` | records the job before you send it; `--reuse` refuses at 30% of the window and prints the compaction-point share too; `--extend` merges into the active job and checks the merged scope | `assigned <name>: <job>` (`extended …` with `--extend`), then the tier check: `ok`, `unchecked`, or `MISMATCH … it runs <model> <effort>` |
 | `finish <session>` | marks the job done | `finished <name>: <job>` |
+| `reopen <session>` | undoes `finish`: the last job is active again; refuses a job that is not done, or a checkout another job now edits | `reopened <name>: <job>` |
 | `pick <cwd> [--tier T] [--scope F] [--no-git]` | a clean session in that checkout: one matching the tier first, the user's first | `<name>` and its tier check, or `no clean session for <checkout>; spawn one` |
-| `spawn <name> <cwd> <brief file> [--job <label>] [--scope F] [--no-git]` | `claude --bg` with the brief | `spawned <name> id=<id> in <checkout>` |
+| `spawn <name> <cwd> <brief file> --tier T \| --effort E [--model M] [--job <label>] [--scope F] [--no-git]` | `claude --bg --model --effort` with the brief; the tier gives both unless `--model`/`--effort` override; exit 2 with neither tier nor effort | `spawned <name> id=<id> in <checkout> (model <m>, effort <e>)` |
 | `cycle <worker> <focus> [--next <brief file>]` | background only: stop, headless `/compact <focus>`, verify, restart | `cycled <name>: <before>→<after> tokens (p1%→p2%), resumed id=<id>` |
 | `close <worker>` | background only: stop, `claude rm`; the transcript stays resumable | `closed <name> (resume: cd "<cwd>" && claude --resume <sessionId>)`; a later lookup of the name prints `<name> is closed (resume: …)` |
 | `harvest --master <your name> LOGS` | the analyst's: new transcript events, secrets blanked; one harvest at a time | `harvested <n> events from <s> sessions (<l> new lines) into <logs>`, then any session with no transcript or read again from the top |
@@ -243,7 +260,7 @@ printed line as your one-line log.
 - "I'll just run the merge myself" → it is a job for a session.
 - "I'll rephrase what the user meant" → quote them verbatim, then add your reading.
 - "I'll try `claude <something>`" → only the calls this file names.
-- "I'll send it `/compact` as a message" → it arrives as plain text; give the user the line.
+- "I'll send it `/compact` as a message" → it arrives as plain text; let auto-compaction run, or give the user the line if they opted in.
 - "This used session is free, I'll give it the next job" → only if the user asked to reuse
   sessions, and then with `assign --reuse`; otherwise `pick` a clean one or `spawn`.
 - "I'll just build the overlay and compare it myself" → it is a job for a session.

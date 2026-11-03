@@ -13,6 +13,7 @@ import {
   main,
   parseScope,
   pickSession,
+  reopenJob,
   spawnWorker,
   tierMatch,
 } from "../../plugins/batbelt/skills/puppet-master/scripts/puppet.mjs";
@@ -80,7 +81,133 @@ test("--reuse refuses an active job, the analyst, a large context and an unmeasu
     t.writeTranscript(t.deps.agents[0].sessionId, turn(80000));
     assert.throws(() => assignJob(t.deps, "u1", "two", { reuse: true }), /cannot measure u1 for --reuse: no context window/);
     t.deps.env.PUPPET_CONTEXT_WINDOW = "200000";
-    assert.throws(() => assignJob(t.deps, "u1", "two", { reuse: true }), /u1 is at 40% .*--reuse needs under 30%.*\/clear/);
+    assert.throws(() => assignJob(t.deps, "u1", "two", { reuse: true }), /u1 is at 40% of its window .*--reuse needs under 30%.*\/clear/);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("--reuse measures the window, not the compaction point, and a refusal prints both shares", () => {
+  const t = setup([interactive("u1", 1), interactive("u2", 2, "C:\\Work\\Other")], {
+    PUPPET_CONTEXT_WINDOW: "1000000",
+    PUPPET_COMPACT_AT: "216000",
+  });
+  try {
+    adoptSession(t.deps, "u1");
+    assignJob(t.deps, "u1", "one");
+    finishJob(t.deps, "u1");
+    // 190000 tokens: 19% of the window the status line shows, 88% of the compaction point.
+    t.writeTranscript(t.deps.agents[0].sessionId, turn(190000));
+    assert.equal(assignJob(t.deps, "u1", "two", { reuse: true }).jobState, "active");
+    adoptSession(t.deps, "u2");
+    assignJob(t.deps, "u2", "one");
+    finishJob(t.deps, "u2");
+    t.writeTranscript(t.deps.agents[1].sessionId, turn(400000));
+    assert.throws(
+      () => assignJob(t.deps, "u2", "two", { reuse: true }),
+      /u2 is at 40% of its window \(185\.2% of compaction point 216000\)/,
+    );
+  } finally {
+    t.cleanup();
+  }
+});
+
+// --- P-5 extend and reopen ---
+
+test("--extend appends to an active job: keeps its start, merges label and scope", () => {
+  const t = setup([interactive("u1", 1)]);
+  try {
+    adoptSession(t.deps, "u1");
+    const first = assignJob(t.deps, "u1", "docs pass", { scope: "docs", noGit: true });
+    const rec = assignJob(t.deps, "u1", "fix links", { extend: true, scope: "site", noGit: true });
+    assert.equal(rec.jobState, "active");
+    assert.equal(rec.jobStartedAt, first.jobStartedAt);
+    assert.equal(rec.job, "docs pass; fix links");
+    assert.deepEqual(rec.scope, ["docs", "site"]);
+    assert.equal(rec.git, false);
+    assert.equal(rec.jobs.length, 1);
+    assert.equal(rec.jobs[0].label, "docs pass; fix links");
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("--extend widens to the whole checkout when either side has no scope, and git when either runs it", () => {
+  const t = setup([interactive("u1", 1)]);
+  try {
+    adoptSession(t.deps, "u1");
+    assignJob(t.deps, "u1", "docs pass", { scope: "docs", noGit: true });
+    const rec = assignJob(t.deps, "u1", "and commit", { extend: true });
+    assert.equal(rec.scope, undefined);
+    assert.equal(rec.git, true);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("--extend refuses a job that is not active, and a merged scope that overlaps another job", () => {
+  const t = setup([interactive("u1", 1), interactive("u2", 2)]);
+  try {
+    adoptSession(t.deps, "u1");
+    adoptSession(t.deps, "u2");
+    assert.throws(() => assignJob(t.deps, "u1", "x", { extend: true }), /--extend needs an active job.*u1/);
+    assignJob(t.deps, "u1", "docs", { scope: "docs", noGit: true });
+    assignJob(t.deps, "u2", "code", { scope: "src" });
+    assert.throws(
+      () => assignJob(t.deps, "u1", "also code", { extend: true, scope: "src/lib", noGit: true }),
+      /u2 is already editing .*write scopes overlap/,
+    );
+    assert.equal(assignJob(t.deps, "u1", "site", { extend: true, scope: "site", noGit: true }).job, "docs; site");
+    assert.throws(() => assignJob(t.deps, "u1", "x", { extend: true, reuse: true }), /--extend and --reuse/);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("reopen undoes a finish, and refuses a job that is not done", () => {
+  const t = setup([interactive("u1", 1)]);
+  try {
+    adoptSession(t.deps, "u1");
+    assert.throws(() => reopenJob(t.deps, "u1"), /u1 has no finished job to reopen/);
+    const before = assignJob(t.deps, "u1", "one", { scope: "docs", noGit: true });
+    finishJob(t.deps, "u1");
+    const rec = reopenJob(t.deps, "u1");
+    assert.equal(rec.jobState, "active");
+    assert.equal(rec.job, "one");
+    assert.equal(rec.jobStartedAt, before.jobStartedAt);
+    assert.deepEqual(rec.jobs, before.jobs);
+    assert.throws(() => reopenJob(t.deps, "u1"), /u1 has no finished job to reopen/);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("reopen refuses when another job took the checkout meanwhile", () => {
+  const t = setup([interactive("u1", 1), interactive("u2", 2)]);
+  try {
+    adoptSession(t.deps, "u1");
+    adoptSession(t.deps, "u2");
+    assignJob(t.deps, "u1", "one");
+    finishJob(t.deps, "u1");
+    assignJob(t.deps, "u2", "two");
+    assert.throws(() => reopenJob(t.deps, "u1"), /u2 is already editing/);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("the CLI: assign --extend, reopen, and their usage errors", async () => {
+  const t = setup([interactive("u1", 1)]);
+  try {
+    assert.equal(await main(["adopt", "u1"], t.deps), 0);
+    assert.equal(await main(["assign", "u1", "one"], t.deps), 0);
+    assert.equal(await main(["assign", "u1", "two", "--extend"], t.deps), 0);
+    assert.match(t.out.at(-1), /^extended u1: one; two$/);
+    assert.equal(await main(["finish", "u1"], t.deps), 0);
+    assert.equal(await main(["reopen", "u1"], t.deps), 0);
+    assert.match(t.out.at(-1), /^reopened u1: one; two$/);
+    assert.equal(await main(["reopen"], t.deps), 2);
+    assert.equal(await main(["assign", "u1", "x", "--extend", "--reuse"], t.deps), 2);
   } finally {
     t.cleanup();
   }
@@ -131,8 +258,8 @@ test("pick and spawn follow the same scope rule", async () => {
     assert.equal(pickSession(t.deps, REPO, { scope: "research", noGit: true }).name, "u2");
     const brief = path.join(t.dir, "b.md");
     fs.writeFileSync(brief, "do it");
-    assert.throws(() => spawnWorker(t.deps, "w9", REPO, brief), /already editing .*unless both jobs pass --scope/);
-    const w = spawnWorker(t.deps, "w9", REPO, brief, { scope: "docs", noGit: true });
+    assert.throws(() => spawnWorker(t.deps, "w9", REPO, brief, { effort: "high" }), /already editing .*unless both jobs pass --scope/);
+    const w = spawnWorker(t.deps, "w9", REPO, brief, { scope: "docs", noGit: true, effort: "high" });
     assert.deepEqual(t.readRegistry().workers[w.name].scope, ["docs"]);
     assert.equal(await main(["assign", "u2", "more", "--scope", "docs", "--no-git"], t.deps), 1);
     assert.match(t.err.at(-1), /w9 is already editing .*overlap at docs|both jobs run git/);

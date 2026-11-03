@@ -20,7 +20,7 @@ sounds like coordinating sessions never starts it.
 - [`analyst-brief.md`](../../skills/puppet-master/analyst-brief.md) is the analyst's brief, with `{{master_name}}`,
   `{{helper}}` and `{{logs_args}}`, the closed tag list and the report's shape.
 - [`scripts/puppet.mjs`](../../skills/puppet-master/scripts/puppet.mjs) is the helper and its command line: `measure`,
-  `list`, `adopt`, `assign`, `finish`, `pick`, `spawn`, `cycle`, `close`, `harvest`, `finding`, `summary`, `decide`
+  `list`, `adopt`, `assign`, `finish`, `reopen`, `pick`, `spawn`, `cycle`, `close`, `harvest`, `finding`, `summary`, `decide`
   and `shipped`.
 - [`scripts/harvest.mjs`](../../skills/puppet-master/scripts/harvest.mjs) resolves the logs folder, redacts secrets
   and pulls events out of transcripts.
@@ -40,8 +40,12 @@ All three scripts use Node built-ins only, with no npm and no `package.json`.
   tells the master to do it or it is a read-only check of a session's report.
 - **One job per context, unless reused on purpose.** By default a session that held a job is not given another
   (`assign` refuses it): different work in one context gets mixed up. `assign --reuse` gives a `done` session its next
-  job only while it measures under 30% of its compaction point (or of its window when no point is known). Above that,
-  the master gives the user the session's `/clear` line first. The record keeps every job in `jobs[]`.
+  job only while it measures under 30% of its window, the figure the user's status line shows (of its compaction point
+  only when the window is unknown): on 2026-11-01 a session at 19% of its window was refused at 88% of its compaction
+  point. Above that, the master gives the user the session's `/clear` line first, and the refusal prints both shares.
+  The record keeps every job in `jobs[]`. `assign --extend` adds work to the job a session holds instead: the label
+  and scope merge and the start stays. `reopen` undoes a `finish` made too early, so nobody edits `workers.json` by
+  hand.
 - **One editing session per checkout, unless both jobs name their folders.** `assign` and `spawn` refuse a second
   session with an active job whose cwd resolves (through `git rev-parse --show-toplevel`) to the same checkout. The
   exception: both jobs pass `--scope <folders>` (relative to the checkout, comma-separated), the folders don't
@@ -56,6 +60,10 @@ All three scripts use Node built-ins only, with no npm and no `package.json`.
   lines to paste, and never changes a session's settings itself. A fresh session is asked for its model only. Its
   effort is read from its transcript after the first turn, because workers misreport their own effort: on
   2026-11-01 three of three said `low` while their transcripts said medium, medium and high.
+- **A spawn always names its effort.** `spawn` passes `--model` and `--effort` to `claude --bg`: `creative` gives
+  `opus` at `high`, `mechanical` gives `sonnet` at `medium`, and explicit `--model`/`--effort` win. With neither a tier
+  nor `--effort` it exits 2: on 2026-11-02 a worker spawned with no flags started at medium although the user's own
+  default is high. Aliases only, never versioned model ids. The first turn's transcript still confirms what started.
 - **Proxy launchers.** On a machine with a proxy launcher (such as use-llm) the transcript shows the Claude model
   name, and the real backend shows only in the launcher's command line. The launcher's config is never read: it may
   hold plaintext keys.
@@ -71,8 +79,10 @@ All three scripts use Node built-ins only, with no npm and no `package.json`.
   a finished job is closed, never compacted. An automatic threshold that can fire mid-task is not the mechanism, so
   the helper warns before one fires (`WARN near compaction`, from 80% of the session's compaction point). A
   background worker is compacted by `cycle`. A window the user opened has no remote stop and a message cannot compact
-  it, so the master gives the user a `<session>: /compact <focus>` line to paste. The master measures itself the same
-  way.
+  it, so the master lets its auto-compaction run (2026-11-01: four hand-pasted `/compact` lines were the user's
+  chore, while two auto-compactions did no harm) and gives a `<session>: /compact <focus>` line only when the user
+  opted in; a `/clear` line is for a new job that needs another model or a clean context. The master treats its own
+  context the same way.
 - **Measured, not reported.** A worker's own estimate of its size is a prompt to measure, never a reason to act:
   workers have claimed to be full at about a fifth of their window.
 - **No permission laundering.** A relayed answer is never the user's approval of a permission prompt in a worker, and
@@ -144,7 +154,7 @@ reads as an active background worker. The file is written atomically (a temp fil
   live session may be the analyst, and only one the master. The master adopts itself with
   `--role master --window <tokens>`. The analyst and the master take no jobs and hold no checkout lock.
 - `assign` moves `clean` to `active`, `finish` moves `active` to `done`, and `assign --reuse` moves `done` back to
-  `active` under the 30% rule. Nothing moves a session back to `clean` except adopting it again, which the master
+  `active` under the 30% rule, and so does `reopen`, which keeps the job and its start. Nothing moves a session back to `clean` except adopting it again, which the master
   does only after asking the user.
 - `pick <cwd>` returns a clean worker session in the cwd's checkout, or nothing when another session is editing that
   checkout (with `--scope` and `--no-git`, under the scope rule). With `--tier`, a session whose model and effort
@@ -230,7 +240,12 @@ failure. There is no silent fallback.
   remote stop.
 - `assign` refuses a session that is not in the roster, that is the analyst or the master, that already held a job
   (unless `--reuse` and under 30%), that has a new session id, or whose checkout another session is editing outside
-  the scope rule. `--reuse` also refuses a session it cannot measure.
+  the scope rule. `--reuse` also refuses a session it cannot measure. `--extend` refuses a session with no active job,
+  and a merged scope that collides with another job.
+- `reopen` refuses a session whose job is not `done`, and one whose checkout another job edits now.
+- `list` ends an active job's row with `DONE? run finish` when the session's last assistant text starts a line with
+  `FINAL:` or says "job is done": on 2026-11-01 a worker reported done at 16:27 and stayed open until it
+  auto-compacted at 19:55. The flag is a hint; nothing finishes a job but `finish`.
 - `assign` and `pick` never refuse on a tier: a `MISMATCH` line is a warning.
 - `cycle` refuses a worker that is not idle. If it fails after stopping the worker, the message says whether the worker
   was compacted and prints the `cd "<cwd>" && claude --bg --resume <sessionId>` that restarts it.

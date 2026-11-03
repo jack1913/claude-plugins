@@ -51,12 +51,12 @@ test("launches claude --bg --name with the brief verbatim", async () => {
   const t = spawnSetup();
   try {
     const brief = 'Say "quotes"\nand keep %PATH% as is';
-    assert.equal(await main(["spawn", "w9", "C:\\work\\repo", t.brief(brief)], t.deps), 0);
+    assert.equal(await main(["spawn", "w9", "C:\\work\\repo", t.brief(brief), "--effort", "high"], t.deps), 0);
     const [call] = bgCalls(t);
     assert.equal(call.cmd, "claude");
-    assert.deepEqual(call.args, ["--bg", "--name", "w9", brief]);
+    assert.deepEqual(call.args, ["--bg", "--name", "w9", "--effort", "high", brief]);
     assert.equal(call.opts.cwd, "C:\\work\\repo");
-    assert.deepEqual(t.out, [`spawned w9 id=${t.fresh.id} in C:\\Work\\Repo`]);
+    assert.deepEqual(t.out, [`spawned w9 id=${t.fresh.id} in C:\\Work\\Repo (effort high)`]);
   } finally {
     t.cleanup();
   }
@@ -65,7 +65,7 @@ test("launches claude --bg --name with the brief verbatim", async () => {
 test("records id and sessionId", async () => {
   const t = spawnSetup();
   try {
-    assert.equal(await main(["spawn", "w9", "C:\\work\\repo", t.brief("job")], t.deps), 0);
+    assert.equal(await main(["spawn", "w9", "C:\\work\\repo", t.brief("job"), "--effort", "high"], t.deps), 0);
     const rec = t.readRegistry().workers.w9;
     assert.equal(rec.id, t.fresh.id);
     assert.equal(rec.sessionId, t.fresh.sessionId);
@@ -85,7 +85,7 @@ test("refuses a second live worker in the same checkout", async () => {
         editor: { id: other.id, sessionId: other.sessionId, cwd: "C:\\Work\\Repo", checkout: "C:\\Work\\Repo" },
       },
     });
-    assert.equal(await main(["spawn", "w9", "c:\\work\\repo\\sub", t.brief("job")], t.deps), 1);
+    assert.equal(await main(["spawn", "w9", "c:\\work\\repo\\sub", t.brief("job"), "--effort", "high"], t.deps), 1);
     assert.match(t.err.join("\n"), /editor/);
     assert.equal(bgCalls(t).length, 0);
   } finally {
@@ -101,7 +101,7 @@ test("a stale record does not lock", async () => {
         editor: { id: "deadbeef", sessionId: "dead-sid", cwd: "C:\\Work\\Repo", checkout: "C:\\Work\\Repo" },
       },
     });
-    assert.equal(await main(["spawn", "w9", "C:\\work\\repo", t.brief("job")], t.deps), 0);
+    assert.equal(await main(["spawn", "w9", "C:\\work\\repo", t.brief("job"), "--effort", "high"], t.deps), 0);
     assert.deepEqual(Object.keys(t.readRegistry().workers), ["w9"]);
   } finally {
     t.cleanup();
@@ -111,7 +111,7 @@ test("a stale record does not lock", async () => {
 test("refuses a live name clash", async () => {
   const t = spawnSetup({ live: [agent("w9", 5)] });
   try {
-    assert.equal(await main(["spawn", "w9", "C:\\work\\repo", t.brief("job")], t.deps), 2);
+    assert.equal(await main(["spawn", "w9", "C:\\work\\repo", t.brief("job"), "--effort", "high"], t.deps), 2);
     assert.equal(bgCalls(t).length, 0);
   } finally {
     t.cleanup();
@@ -121,7 +121,7 @@ test("refuses a live name clash", async () => {
 test("rejects a name outside [A-Za-z0-9._-]", async () => {
   const t = spawnSetup();
   try {
-    assert.equal(await main(["spawn", "bad name", "C:\\work\\repo", t.brief("job")], t.deps), 2);
+    assert.equal(await main(["spawn", "bad name", "C:\\work\\repo", t.brief("job"), "--effort", "high"], t.deps), 2);
     assert.equal(t.calls.length, 0);
   } finally {
     t.cleanup();
@@ -132,8 +132,8 @@ test("rejects a missing or empty brief file", async () => {
   const t = spawnSetup();
   try {
     const missing = path.join(t.dir, "nope.md");
-    assert.equal(await main(["spawn", "w9", "C:\\work\\repo", missing], t.deps), 2);
-    assert.equal(await main(["spawn", "w9", "C:\\work\\repo", t.brief("  \n")], t.deps), 2);
+    assert.equal(await main(["spawn", "w9", "C:\\work\\repo", missing, "--effort", "high"], t.deps), 2);
+    assert.equal(await main(["spawn", "w9", "C:\\work\\repo", t.brief("  \n"), "--effort", "high"], t.deps), 2);
     assert.equal(t.calls.length, 0);
   } finally {
     t.cleanup();
@@ -143,7 +143,7 @@ test("rejects a missing or empty brief file", async () => {
 test("rejects a brief over 30000 characters", async () => {
   const t = spawnSetup();
   try {
-    assert.equal(await main(["spawn", "w9", "C:\\work\\repo", t.brief("x".repeat(30001))], t.deps), 2);
+    assert.equal(await main(["spawn", "w9", "C:\\work\\repo", t.brief("x".repeat(30001)), "--effort", "high"], t.deps), 2);
     assert.equal(t.calls.length, 0);
   } finally {
     t.cleanup();
@@ -153,7 +153,7 @@ test("rejects a brief over 30000 characters", async () => {
 test("--bg failure is loud", async () => {
   const t = spawnSetup({ bg: () => ({ code: 1, stderr: "workspace not trusted" }) });
   try {
-    assert.equal(await main(["spawn", "w9", "C:\\work\\repo", t.brief("job")], t.deps), 1);
+    assert.equal(await main(["spawn", "w9", "C:\\work\\repo", t.brief("job"), "--effort", "high"], t.deps), 1);
     assert.match(t.err.join("\n"), /workspace not trusted/);
     assert.equal(fs.existsSync(t.deps.env.PUPPET_STATE), false);
   } finally {
@@ -171,7 +171,7 @@ function gitSetup(gitAnswer) {
 test("outside a git repository the checkout is the cwd", async () => {
   const t = gitSetup({ code: 128, stdout: "", stderr: "fatal: not a git repository (or any of the parent directories): .git" });
   try {
-    assert.equal(await main(["spawn", "w9", "C:\\work\\plain", t.brief("job")], t.deps), 0);
+    assert.equal(await main(["spawn", "w9", "C:\\work\\plain", t.brief("job"), "--effort", "high"], t.deps), 0);
     assert.equal(t.readRegistry().workers.w9.checkout, "C:\\work\\plain");
   } finally {
     t.cleanup();
@@ -186,11 +186,66 @@ test("any other git failure is loud", async () => {
   for (const answer of answers) {
     const t = gitSetup(answer);
     try {
-      assert.equal(await main(["spawn", "w9", "C:\\work\\repo", t.brief("job")], t.deps), 1);
+      assert.equal(await main(["spawn", "w9", "C:\\work\\repo", t.brief("job"), "--effort", "high"], t.deps), 1);
       assert.match(t.err.join("\n"), /git/);
       assert.equal(bgCalls(t).length, 0);
     } finally {
       t.cleanup();
     }
+  }
+});
+
+test("--tier creative passes --model opus --effort high before the brief, and records the tier", async () => {
+  const t = spawnSetup();
+  try {
+    assert.equal(await main(["spawn", "w9", "C:\\work\\repo", t.brief("job"), "--tier", "creative"], t.deps), 0);
+    assert.deepEqual(bgCalls(t)[0].args, ["--bg", "--name", "w9", "--model", "opus", "--effort", "high", "job"]);
+    assert.match(t.out[0], /\(model opus, effort high\)$/);
+    assert.equal(t.readRegistry().workers.w9.tier, "creative");
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("--tier mechanical passes a non-Opus alias at medium", async () => {
+  const t = spawnSetup();
+  try {
+    assert.equal(await main(["spawn", "w9", "C:\\work\\repo", t.brief("job"), "--tier", "mechanical"], t.deps), 0);
+    assert.deepEqual(bgCalls(t)[0].args, ["--bg", "--name", "w9", "--model", "sonnet", "--effort", "medium", "job"]);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("explicit --model and --effort win over the tier", async () => {
+  const t = spawnSetup();
+  try {
+    const args = ["spawn", "w9", "C:\\work\\repo", t.brief("job"), "--tier", "creative", "--model", "fable", "--effort", "max"];
+    assert.equal(await main(args, t.deps), 0);
+    assert.deepEqual(bgCalls(t)[0].args, ["--bg", "--name", "w9", "--model", "fable", "--effort", "max", "job"]);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("no tier and no --effort is a usage error, and nothing starts", async () => {
+  const t = spawnSetup();
+  try {
+    assert.equal(await main(["spawn", "w9", "C:\\work\\repo", t.brief("job")], t.deps), 2);
+    assert.match(t.err.join("\n"), /name a --tier or --effort/);
+    assert.equal(bgCalls(t).length, 0);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("an --effort outside the CLI's levels and an unknown tier are usage errors", async () => {
+  const t = spawnSetup();
+  try {
+    assert.equal(await main(["spawn", "w9", "C:\\work\\repo", t.brief("job"), "--effort", "huge"], t.deps), 2);
+    assert.equal(await main(["spawn", "w9", "C:\\work\\repo", t.brief("job"), "--tier", "fast"], t.deps), 2);
+    assert.equal(bgCalls(t).length, 0);
+  } finally {
+    t.cleanup();
   }
 });

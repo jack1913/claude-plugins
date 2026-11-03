@@ -32,7 +32,7 @@ test("the body covers every helper command, the logs flags and the thresholds", 
   const skill = read("SKILL.md");
   const words = [
     "measure", "list", "spawn", "cycle", "close", "adopt", "assign", "finish", "pick", "harvest",
-    "finding", "summary", "decide", "shipped", "logs", "--window", "--next", "--job", "--role analyst",
+    "finding", "summary", "decide", "shipped", "logs", "reopen", "--extend", "--window", "--next", "--job", "--role analyst",
     "--logs", "--plugin-data", "${user_config.puppet_logs_dir}", "${CLAUDE_PLUGIN_DATA}",
     "PUPPET_CONTEXT_WINDOW", "PUPPET_CLAUDE_BIN", "PUPPET_LOGS_DIR", "30%", "50%",
   ];
@@ -62,11 +62,64 @@ test("on start the master warns once when it runs from a hand-installed copy", (
   assert.match(start, /may\s+lag\s+the\s+plugin/);
 });
 
-test("an interactive session at a threshold gets a /compact line, never cycle", () => {
+test("an interactive session at a threshold is left to auto-compaction; a /compact line only on opt-in, never cycle", () => {
   const skill = read("SKILL.md");
-  assert.match(skill, /<session>: \/compact <focus>/);
+  const row = skill.split("\n").find((l) => l.includes("idle after a finished task"));
+  assert.ok(row, "rule 7 has the idle-after-task row");
+  const userCell = row.split("|").at(-2);
+  assert.match(userCell, /auto-compaction/);
+  assert.match(userCell, /opted\s+in/);
+  assert.match(userCell, /<session>: \/compact <focus>/);
+  assert.match(skill, /give\s+me\s+compact\s+lines/);
+  assert.match(skill, /`\/clear`[^\n]*different\s+model/);
   assert.match(skill, /never\s+`cycle`/);
   assert.match(skill, /arrives\s+as\s+plain\s+text/);
+});
+
+test("every spawn line names a tier, and the helper table lists --tier, --effort and --model", () => {
+  const skill = read("SKILL.md");
+  const spawns = skill.match(/`puppet spawn [^`]*`/g);
+  assert.ok(spawns.length >= 2);
+  for (const s of spawns) assert.match(s, /--tier (creative|<tier>)/, s);
+  const row = skill.split("\n").find((l) => l.startsWith("| `spawn "));
+  assert.match(row, /--tier/);
+  assert.match(row, /--effort/);
+  assert.match(row, /--model/);
+  assert.match(skill, /`spawn`\s+starts[\s\S]{0,120}refuses\s+without\s+`--tier`\s+or\s+`--effort`/);
+});
+
+test("--reuse is measured against the window; --extend adds to an active job; reopen undoes a finish", () => {
+  const skill = read("SKILL.md");
+  assert.match(skill, /`assign --reuse`[^.]*30% or more of its\s+window/);
+  assert.match(skill, /`assign <session> <job> --extend`[\s\S]{0,200}active job/);
+  assert.match(skill, /`reopen <session>`[\s\S]{0,200}`finish`/);
+  assert.match(skill, /never\s+edit\s+`workers\.json`/);
+});
+
+test("finish runs in the same turn as the done report, and list's DONE? flag is only a hint", () => {
+  const ends = section(read("SKILL.md"), "When a job ends");
+  assert.match(ends, /same\s+turn/);
+  assert.match(ends, /`DONE\? run finish`/);
+  assert.match(ends, /never\s+a\s+finish\s+by\s+itself/);
+});
+
+test("the brief reports hook-made caches and runs multi-line scripts by path", () => {
+  const brief = read("worker-brief.md");
+  const caches = brief.split(/\r?\n- /).find((b) => b.includes("leftover build folder"));
+  for (const w of [".ruff_cache", "__pycache__", "hook"]) assert.ok(caches.includes(w), `build-output line lacks ${w}`);
+  assert.match(brief, /run it by path\. No heredocs, no\s+multi-line `python -c`/);
+});
+
+test("with --no-git, {{local_state}} carries the git facts", () => {
+  const briefs = section(read("SKILL.md"), "Briefs");
+  assert.match(briefs, /With\s+`--no-git`, `\{\{local_state\}\}` carries every git fact/);
+});
+
+test("the master's own context follows the same auto-compaction default", () => {
+  const skill = read("SKILL.md");
+  const rule10 = skill.slice(skill.indexOf("10. **Your own context.**"), skill.indexOf("11. **"));
+  assert.match(rule10, /auto-compaction/);
+  assert.match(rule10, /opted\s+in/);
 });
 
 test("repository work is a job for a session, and relays quote the user verbatim", () => {

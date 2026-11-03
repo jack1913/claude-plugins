@@ -32,6 +32,10 @@ You are a worker started by the master session {{master_name}}.
 - **Commit and push rules for this job:** {{commit_rules}}
 - **Standing rules from the user:** {{standing_rules}}
 - Run tools without writing caches (`PYTHONDONTWRITEBYTECODE=1`, `ruff --no-cache`). Report a
-  leftover build folder to the master; don't delete it.
+  leftover build folder to the master; don't delete it. After a script runs, list its folder for
+  new `.ruff_cache` or `__pycache__` folders and report them too: a formatter hook can write them,
+  and the no-cache flags can't stop a hook.
+- Write a multi-line script to a file in your scratch folder and run it by path. No heredocs, no
+  multi-line `python -c`: their quoting breaks in the shell.
 - The master measures your context. Don't estimate or report your own context size.
 - Never create a git worktree. Work in the current checkout.
