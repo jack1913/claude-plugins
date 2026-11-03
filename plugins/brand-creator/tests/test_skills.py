@@ -1266,8 +1266,25 @@ def test_the_site_round_phase_goes_hero_first_and_tags_every_choice():
             "A rule of an earlier site binds nothing until the owner says it stands: a rule that came from a site they rejected is not a rule of the redo.",
             "Write the answer into `DECISIONS.md` as one entry (`Gate: G4p`, `Decided: ...`)",
             "each rule that stands by id and text, each one dropped named as dropped",
-            "A rule that stands is cited by the new board's `data-source` like any rule", "There is no new gate id.", "With no earlier site, skip this step."):
+            "A rule that stands is cited by the new board's `data-source` like any rule", "There is no new gate id.", "With no earlier site, skip this step.",
+            # the approved masters and the signature move are inputs; each hero states its one idea before it is built (G4-02)
+            "What the brand already approved, which a hero starts from instead of building bare",
+            "`assets/masters/` (the approved templates and pictures, reusable as they are: a hero loads one by its relative path and never redraws it)",
+            "`motion/motion.json` (when it says `\"motion\": \"on\"` the brand moves: its signature move, `signature.name` and the places in `signature.where`, is shown on the first screen of each variant, or the card says why that variant leaves it out",
+            "with `off` nothing moves and nothing is asked",
+            "Before any variant is built, each states its **one memorable idea** in one line", "a choice and not a layout", "Two variants with one idea are one variant.",
+            "The idea goes on the card as the Idea line (`data-field=\"idea\"`)",
+            "a hero card with no idea line, or an empty one, is a `site:fields` warning in this release and a failure in the next",
+            "It starts from what the brand approved (Inputs): an approved master or picture of `assets/masters/` is used as it stands",
+            "the signature move shows on the first screen, or the card's What it is line says why this variant leaves it out",
+            "the check line (`data-check=\"pass\"` or `\"fail\"`, as its report says), its idea, what it is, what it takes from the references,",
+            "**A bare hero while the brand's approved work sits unused.**",
+            "The Idea line of a hero card (`data-field=\"idea\"`) is read by `site:fields`: missing or empty it warns in this release and fails in the next",
+            "A page card has no Idea line."):
         assert needle in flat, needle
+    # the inputs are listed before the hero is built, and the idea is stated before the page of the variant is
+    assert flat.index("## Inputs") < flat.index("What the brand already approved") < flat.index("## Outputs and paths")
+    assert flat.index("**one memorable idea**") < flat.index("2. **The page.**") < flat.index("It starts from what the brand approved (Inputs)") < flat.index("Per variant, in this order:")
     assert "rules of G4 in `qa/rules.json`" not in flat and "copy of the refine round" not in flat
     # the question comes before the first variant is built and before the three steps of a variant
     assert flat.index("0. **Which earlier site rules still stand.**") < flat.index("1. **The variants.**") < flat.index("Per variant, in this order:")
@@ -1278,6 +1295,12 @@ def test_the_site_round_phase_goes_hero_first_and_tags_every_choice():
                    "Claude writes your answer in your list of decisions (`DECISIONS.md`)", "a rule you drop is named as dropped"):
         assert needle in manual, needle
     assert "G4p" not in manual
+    for needle in ("They start from what you already approved: the templates and pictures you signed off (your masters) are used as they are,",
+                   "and if your logo moves, its signature move shows on the first screen, or the board says why a version leaves it out.",
+                   "Before it builds one, Claude writes down the one idea the version rests on, in a line.",
+                   "- the one idea it rests on, in a line"):
+        assert needle in manual, needle
+    assert "site:fields" not in manual, "the manual says no lint row"
     assert "older release" not in flat, "page-check has never been released: no owner has a report from an older release"
     assert "a lint of a board whose rule cites a line only `BRAND-STATE.md` holds lists the whole file, so it needs that run" not in flat, "a hero board has no choices: the review copy's lint replaced the board's report"
     assert "Set the phase once" not in flat and "lists `BRAND-STATE.md` among its inputs" not in flat and "which every `page-check` report lists" not in flat, "the old rule: every write to BRAND-STATE.md makes the reports stale"
@@ -1347,7 +1370,12 @@ def test_the_round_wrapper_has_a_site_kind():
                    "and the \"(rule)\" lines of G4 that came from the old site",
                    "ask the owner once which still stand, in their words, and wait for the answer before any variant is built",
                    "Write the answer into `DECISIONS.md` (`Gate: G4p`, `Decided: ...`, each dropped rule named as dropped)",
-                   "a rule that stands is cited by `data-source` like any rule", "No new gate id."):
+                   "a rule that stands is cited by `data-source` like any rule", "No new gate id.",
+                   # the approved masters and the signature move are inputs; each hero states its one idea (G4-02)
+                   "A hero starts from what the brand approved: the approved masters and pictures in `assets/masters/` as they are",
+                   "when `motion/motion.json` says the brand moves, its signature move on the first screen, or the card says why a variant leaves it out",
+                   "Before building, each hero variant states its one memorable idea in one line (the card's Idea line).",
+                   "a hero card also has its idea line (`data-field=\"idea\"`; a card without it only warns in this release)"):
         assert needle in section, needle
     assert section.index("0. At the hero stage") < section.index("1. The first board of each stage"), "the question comes before the first board"
     # the pages are made, checked and read before the board is built from them, and the board is shot last

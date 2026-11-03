@@ -137,7 +137,7 @@ def test_the_template_as_it_is_fails_until_filled(proj):
     for needle in ('data-board="site"', 'data-site-stage="hero"', 'data-section="what-changed"', 'data-section="hardest-surface"', 'data-section="weak-points"', 'data-section="my-call"',
                    'data-section="questions"', 'data-section="reply"', "data-site-variant=", 'data-field="still"', 'data-view="1440-light"', 'data-view="1440-dark"', 'data-view="390-light"',
                    'data-view="390-dark"', 'data-field="live"', "data-check=", 'data-field="tells"', 'data-field="reflex"', 'data-field="layout"', "data-layout=", 'data-field="from-refs"',
-                   "data-cold=", 'data-field="what-it-is"', 'data-field="cost"', "data-vote=", 'name="vote-[[fill: Name one]]"', 'data-section="choices"', "data-choice=", 'data-tag="rule"',
+                   "data-cold=", 'data-field="idea"', 'data-field="what-it-is"', 'data-field="cost"', "data-vote=", 'name="vote-[[fill: Name one]]"', 'data-section="choices"', "data-choice=", 'data-tag="rule"',
                    'data-tag="example"', "@media (prefers-reduced-motion:reduce)", ".variant[hidden]{display:none}", "articles for variants two and three"):
         assert needle in src, needle
     board_of(proj).write_text(src, encoding="utf-8")
@@ -455,6 +455,75 @@ def test_a_field_belongs_to_its_own_card(proj):
     board.write_text(board.read_text(encoding="utf-8").replace(cards[1], stripped), encoding="utf-8")
     r = lint(proj)
     assert r.returncode == 1 and "site:fields" in failed(proj) and "Atlas: Cost is missing or empty" in detail(proj, "site:fields") and "Ledger" not in detail(proj, "site:fields")
+
+
+IDEA_LINE = '<dd data-field="idea">Filled in for the test fixture.</dd>'    # the Idea line of a card of the filled template
+
+
+def test_a_hero_card_with_its_idea_line_is_clean(proj):
+    """Present: pass. The idea line is a line of each hero card (the filled template carries it), and the row says every card has it."""
+    assert 'data-field="idea"' in board_of(proj).read_text(encoding="utf-8") and board_of(proj).read_text(encoding="utf-8").count(IDEA_LINE) == 2
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    assert rows(proj)["site:fields"]["status"] == "pass" and detail(proj, "site:fields") == "What it is, Takes from and Cost are filled in on every card, and every card has its Idea line"
+    assert not [x for x in rows(proj).values() if x["status"] == "warn"], "a hero board with its idea lines has no warning at all"
+
+
+def test_a_hero_card_without_an_idea_line_warns_in_this_release_and_names_the_card(proj):
+    """Missing: one warning, never a failure (a board made before the line existed must still lint); the row says it is a failure from the next release."""
+    mutate(board_of(proj), 'data-field="idea"', 'data-removed="idea"')   # the first card only: Ledger
+    r = lint(proj)
+    assert r.returncode == 0 and failed(proj) == [], r.stdout
+    row = rows(proj)["site:fields"]
+    assert row["status"] == "warn" and "Ledger: Idea is missing or empty" in row["detail"] and "Atlas" not in row["detail"], row
+    assert "a warning in this release, a failure in the next" in row["detail"], row
+    assert [x for x, v in rows(proj).items() if v["status"] == "warn"] == ["site:fields"], "the idea line is the only warning of the board"
+
+
+def test_a_hero_card_with_an_empty_idea_line_warns_in_this_release(proj):
+    mutate(board_of(proj), IDEA_LINE, '<dd data-field="idea"></dd>')
+    r = lint(proj)
+    assert r.returncode == 0 and failed(proj) == [], r.stdout
+    row = rows(proj)["site:fields"]
+    assert row["status"] == "warn" and "Ledger: Idea is missing or empty" in row["detail"] and "Atlas" not in row["detail"], row
+    mutate(board_of(proj), '<dd data-field="idea"></dd>', '<dd data-field="idea">   </dd>')   # a line of spaces is empty too
+    assert lint(proj).returncode == 0 and rows(proj)["site:fields"]["status"] == "warn"
+
+
+def test_every_hero_card_without_the_idea_line_is_named(proj):
+    mutate(board_of(proj), 'data-field="idea"', 'data-removed="idea"', count=2)
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    row = rows(proj)["site:fields"]
+    assert row["status"] == "warn" and "Ledger: Idea is missing or empty" in row["detail"] and "Atlas: Idea is missing or empty" in row["detail"], row
+
+
+def test_an_idea_line_belongs_to_its_own_card(proj):
+    """Ledger's idea is not Atlas's: the line is read inside its card only."""
+    board = board_of(proj)
+    cards = CARD.findall(board.read_text(encoding="utf-8"))
+    assert len(cards) == 2
+    board.write_text(board.read_text(encoding="utf-8").replace(cards[1], cards[1].replace('data-field="idea"', 'data-removed="idea"')), encoding="utf-8")
+    r = lint(proj)
+    row = rows(proj)["site:fields"]
+    assert r.returncode == 0 and row["status"] == "warn" and "Atlas: Idea is missing or empty" in row["detail"] and "Ledger" not in row["detail"], row
+
+
+def test_a_failing_field_still_fails_the_row_when_the_idea_line_is_missing_too(proj):
+    mutate(board_of(proj), 'data-field="idea"', 'data-removed="idea"')
+    mutate(board_of(proj), 'data-field="cost"', 'data-removed="cost"')
+    r = lint(proj)
+    assert r.returncode == 1 and "site:fields" in failed(proj), r.stdout
+    assert "Ledger: Cost is missing or empty" in detail(proj, "site:fields") and "Ledger: Idea is missing or empty" in detail(proj, "site:fields")
+
+
+def test_the_idea_line_is_a_hero_line_a_page_card_has_none(tmp_path):
+    """The pages stage asks for no idea: its cards carry none, and the row passes as before."""
+    p = pages_project(tmp_path)
+    assert 'data-field="idea"' not in re.sub(r"<!--.*?-->", "", board_of(p, 3).read_text(encoding="utf-8"), flags=re.S)
+    r = lint3(p)
+    assert r.returncode == 0, r.stdout
+    assert rows(p)["site:fields"]["status"] == "pass" and "Idea" not in detail(p, "site:fields")
 
 
 # ---------------------------------------------------------------- page:data-board, page:site-stage

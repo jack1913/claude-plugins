@@ -50,6 +50,11 @@ come first, [07w-website-references](07w-website-references.md); say so and stop
 - What a page is made of: `assets/tokens/tokens.css` (built from the G4 tokens; every colour, size, space and motion value
   is a token), the approved mark in `assets/logo/`, the brand's fonts in `assets/fonts/`, and the rules of G4: the "(rule)" lines of
   `BRAND-STATE.md` under "Rules (G4)", with the thresholds and the `page.rules` tied to those lines in `qa/rules.json`.
+- What the brand already approved, which a hero starts from instead of building bare: `assets/masters/` (the approved
+  templates and pictures, reusable as they are: a hero loads one by its relative path and never redraws it) and
+  `motion/motion.json` (when it says `"motion": "on"` the brand moves: its signature move, `signature.name` and the places
+  in `signature.where`, is shown on the first screen of each variant, or the card says why that variant leaves it out; with
+  `off` nothing moves and nothing is asked).
 - [page-layouts.json](../page-layouts.json): the layout references, keyed to the visitor's job. [page-tells.json](../page-tells.json)
   and [ai-defaults.json](../ai-defaults.json): the generic patterns the reflex test and `page-check` look for.
 - `DECISIONS.md` and `decisions/*.md`: where a rule says it was decided.
@@ -101,7 +106,11 @@ data-page="start">`) in every project.
    by a word of 3 letters or more (letters, digits, `-` and `_`; never "Variant 2" or "Option B"), spelt the same on the
    card and on the disk. They differ in structure, not in colour: where the first screen leads, what the visitor can do from
    it, how it ends. A site cliché or a generic tell that a variant keeps is a hit on its reflex line, argued on its card;
-   two hits on one variant fail.
+   two hits on one variant fail. Before any variant is built, each states its **one memorable idea** in one line: what
+   a visitor will remember of the first screen and what makes it this brand's, a choice and not a layout ("the price lands
+   like a stamp, once", not "headline, picture, button"). Two variants with one idea are one variant. The idea goes on the
+   card as the Idea line (`data-field="idea"`); a hero card with no idea line, or an empty one, is a `site:fields` warning in
+   this release and a failure in the next.
 2. **The page.** `rounds/r<N>/<Name>/index.html` is the home page's first screen, built from the picked references
    (their structure and rhythm, never their look) and the brand:
    - `<body data-layout="<id of page-layouts.json, or own:<word>>" data-page="start">`. The layout is the visitor's job in
@@ -112,6 +121,9 @@ data-page="start">`) in every project.
    - Words and numbers come from `FACTS.md` only. A number, price, date or status word that is not in the facts goes inside
      an element labelled `data-sample="<what it is>"` (`[data-sample]`: a sample, shown as one), never in the open.
    - No network: no web font, script, image or frame from another address.
+   - It starts from what the brand approved (Inputs): an approved master or picture of `assets/masters/` is used as it stands,
+     and when `motion/motion.json` says the brand moves, the signature move shows on the first screen, or the card's What it
+     is line says why this variant leaves it out.
 3. **Per variant, in this order: `capture`, `page-check`, the cold review.**
    - `capture rounds/r<N>/<Name>/index.html --project <dir>` writes the four stills and the full page into `shots/`, with
      `capture.json`. Read all four stills.
@@ -124,7 +136,7 @@ data-page="start">`) in every project.
    - A change to the page after any step makes the later ones stale: change the page, then start the variant's three
      steps again.
 4. **The board** from `${CLAUDE_PLUGIN_ROOT}/templates/site-board.html`: one card per variant with its four stills, the live
-   link, the check line (`data-check="pass"` or `"fail"`, as its report says), what it is, what it takes from the references,
+   link, the check line (`data-check="pass"` or `"fail"`, as its report says), its idea, what it is, what it takes from the references,
    the tells, the reflex line (`no hits`, or one `hit: <id> | <argument>` per hit, tested against `page-tells.json`,
    `ai-defaults.json` and `research/site-cliches.md`), the cost, the layout line, the cold line and a vote. Hardest
    surface, My call (which hero you would take, with the honest critique of your own pick), questions and reply as on every
@@ -278,6 +290,9 @@ board, the owner chooses between new variants or pages (a new site board) and a 
 - **A rule without where it was decided.** If nothing the owner said holds it, it is an example. The lint finds the quoted
   text in the project's decision files.
 - **Pages before the hero.** The pages board needs an earlier hero board and names the picked variant.
+- **A bare hero while the brand's approved work sits unused.** An approved master or picture left out, or a signature move that
+  never shows on the first screen, with nothing on the card saying why. The hero is then safe and generic: start from the
+  inputs, and state the one idea before building.
 - **A hero variant that differs only in colour.** Three heroes are three structures. If every one hits the same reflex
   pattern, the lint fails the board.
 - **An in-thread cold review presented as blind.** It is not. Say `by: in-thread`, and never write findings from the
@@ -300,6 +315,8 @@ board, the owner chooses between new variants or pages (a new site board) and a 
   `site:reflex-shared`, `site:refs` and `site:cold`; at the pages stage `site:hero-first`, `site:pages`, the `site:files`
   to `site:stills` rows read for the pages, `site:cold` for a page that has a review, `section:choices` and
   `site:choices` (an id, a tag, a rule's source found in the decision files, `data-pages` naming pages of the board).
+- The Idea line of a hero card (`data-field="idea"`) is read by `site:fields`: missing or empty it warns in this release and
+  fails in the next, so a board made before the line existed still lints. A page card has no Idea line.
 - `page-check` on each page: brand rules fail (`page:rule:<id>`, colours, fonts, the mark, claims), tells warn.
 - `capture` refuses a page in `history/` or a round before the latest, and `site approve` refuses without G4p, without a
   current passing lint of the pages board, on a network or root-relative address and on a missing file; `check` gates

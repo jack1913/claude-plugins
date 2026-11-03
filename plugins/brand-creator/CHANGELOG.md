@@ -24,6 +24,12 @@ stage, and why, is in the [archive](docs/archive/README.md).
   still that equals the light one is right when a rule says so, without reading the rest of the project record. The board
   lint accepts a review made the old way (six inputs) or with the rules as a seventh, and marks the review out of date when a rule
   or the G4 record changes after it; another line of `BRAND-STATE.md` changing does not.
+- The site round's hero stage starts from what your brand already approved. The approved templates and pictures in
+  `assets/masters/` are inputs, used as they are, and when `motion/motion.json` says your brand moves, the signature move
+  shows on the first screen of each hero, or the card says why a hero leaves it out. Before a hero is built, it states its
+  one memorable idea in one line, and the card carries it as an "Idea" line. A hero card with no Idea line, or an empty
+  one, makes `board-lint` warn (`site:fields`) in this release and fail in the next, so boards made before this release
+  still lint.
 
 ### Fixed
 

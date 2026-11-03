@@ -4,7 +4,7 @@ The board is an ordinary round (rounds/rN/board.html, N 2 or more), from templat
 (refs_gate_rows: site-refs:tier, site-refs:brief, site-refs:g4, site-refs:research, site-refs:cliches-file) and the reading of brief/BRIEF.md that decides whether the project has a
 site at all (brief_lists_site). The sections and the group count are board_lint's own, with the other kinds of board. The rows of the page itself are here too: owner_rows (owner-sites:items: the sites the owner named) and
 group_rows (group:<name>:name, :idea, :references, :layout and, one per reference, :shot:<k>). The site board (data-board="site", templates/site-board.html) has its rows here too: the gates of
-the site round (site_gate_rows: site:tier, site:brief, site:g4, site:g4w) and, at the hero stage, one card per variant (variant_rows: site:variants, site:files, site:layout, site:fields) and the proof each variant brings: the page-check report of its page (site:check), the tells in it (site:tells) and the stills `capture` took (site:stills).
+the site round (site_gate_rows: site:tier, site:brief, site:g4, site:g4w) and, at the hero stage, one card per variant (variant_rows: site:variants, site:files, site:layout, site:fields: What it is, Takes from, Cost, and the card's Idea line, which only warns for now) and the proof each variant brings: the page-check report of its page (site:check), the tells in it (site:tells) and the stills `capture` took (site:stills).
 
 A screenshot on the board is checked against the captures. group_rows reads every research/site-refs/<name>/capture.json (written by `brand-creator capture --url`): a screenshot whose bytes are a
 thumbnail or a view listed there, for the address the reference links to, passes; one that matches no capture is a warning, never a failure, and never silent (a screenshot the owner sent has no
@@ -120,6 +120,7 @@ SKIPPED = "skipped by owner"        # what G4w says when the owner skipped the w
 DISLIKES = re.compile(r"\bdislikes?\b", re.I)   # "picked <groups>; likes <...>; dislikes <...>": what stands from the word dislikes on is what the owner turned away from, never a pick
 RECORD_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}\s*")   # `state --record` writes "<date> <decision>"
 FIELDS = (("what-it-is", "What it is"), ("from-refs", "Takes from"), ("cost", "Cost"))
+IDEA = ("idea", "Idea")             # a hero card's one memorable idea, in one line: a card without it warns in this release and fails in the next (the owner's O1 of group 4)
 TELL_ROW = re.compile(r"^tell:([a-z0-9-]+)$")    # the row page-check gives a generic tell of skills/brand-creator/references/page-tells.json (pagecheck.tell_rows): a warning when it found one
 VIEWS = ("1440-light", "1440-dark", "390-light", "390-dark")   # the four first-screen stills `capture <page>` takes, and the four a card shows
 SHA256 = re.compile(r"[0-9a-f]{64}")
@@ -325,6 +326,18 @@ def field_problems(v: SiteVariant, optional: tuple[str, ...] = ()) -> list[str]:
         elif FILL in text:
             out.append(f"{v.name}: {label} still holds a [[fill: ...]] marker")
     return out
+
+
+def idea_problems(v: SiteVariant) -> list[str]:
+    """The Idea line of a hero card (data-field="idea"): some text, no placeholder and no [[fill: ...]] marker left. Each problem is a warning in this release, so a board made before the line existed still lints;
+    the next release makes it a failure."""
+    fid, label = IDEA
+    nodes = list(v.card.find_all(data_field=fid))
+    if not any(n.nonempty() for n in nodes):
+        return [f'{v.name}: {label} is missing or empty (data-field="{fid}" inside the card: the one memorable idea of this hero, in one line)']
+    if FILL in " ".join(n.text() for n in nodes):
+        return [f"{v.name}: {label} still holds a [[fill: ...]] marker"]
+    return []
 
 
 # ---------------------------------------------------------------- the proof of each variant: page-check, its tells, and the stills
@@ -839,23 +852,27 @@ def cold_rows(rep: Report, project: Path, variants: list[SiteVariant], required:
         rep.inputs.append(PartInput(Path(project) / STATE_FILE, "g4-rules"))
 
 
-def card_rows(rep: Report, project: Path, page_rel: str, rnd: int, variants: list[SiteVariant], noun: str = "variant", count_row: str = "site:variants", optional: tuple[str, ...] = ()) -> None:
-    """site:files, site:layout and site:fields for the cards of a hero board (noun "variant") or of a pages board (noun "page"; `optional` names the fields a card may leave out). Each is one result for the whole
-    board and names the cards it fails; without a card they are not verified (`count_row` says why there is none)."""
+def card_rows(rep: Report, project: Path, page_rel: str, rnd: int, variants: list[SiteVariant], noun: str = "variant", count_row: str = "site:variants", optional: tuple[str, ...] = (), idea: bool = False) -> None:
+    """site:files, site:layout and site:fields for the cards of a hero board (noun "variant", `idea`: each card also states its one idea, a warning for now) or of a pages board (noun "page"; `optional` names the
+    fields a card may leave out). Each is one result for the whole board and names the cards it fails; without a card they are not verified (`count_row` says why there is none)."""
     known = load_layouts()
     layouts = [layout_problems(v, known) for v in variants]
     failures, warnings = [p for f, _ in layouts for p in f], [p for _, w in layouts for p in w]
+    ideas = [p for v in variants for p in idea_problems(v)] if idea else []
     rows = (("site:files", f"each {noun} has its folder and page, and the page declares its layout and its id", [p for v in variants for p in files_problems(project, v, page_rel, rnd)],
              "folder, index.html, a <body> with data-layout and data-page, the live link of the card"),
             ("site:layout", "each page records a layout reference (or its own), and the card says the same", failures,
              "; ".join(f"{v.name}: {v.layout}" for v in variants)),
-            ("site:fields", ("each card says what it is, what it takes from the references and what it costs" if not optional else "each card says what it is and what it costs, and what it takes from, where a card has the line"), [p for v in variants for p in field_problems(v, optional)],
-             "What it is, Takes from and Cost are filled in on every card" if not optional else "What it is and Cost are filled in on every card (and Takes from where a card has the line)"))
+            ("site:fields", ("each card says what it is, what it takes from the references and what it costs" if not optional else "each card says what it is and what it costs, and what it takes from, where a card has the line")
+             + (", and states its one idea" if idea else ""), [p for v in variants for p in field_problems(v, optional)],
+             ("What it is, Takes from and Cost are filled in on every card" if not optional else "What it is and Cost are filled in on every card (and Takes from where a card has the line)") + (", and every card has its Idea line" if idea else "")))
     for rid, label, found, ok in rows:
         if not variants:
             rep.add(rid, "skipped", label, detail=f"not verified: there is no {noun} card to look at ({count_row} says why)")
         elif rid == "site:layout" and warnings and not found:   # a layout of its own is allowed, with a warning
             rep.add(rid, "warn", label, detail=shown(warnings))
+        elif rid == "site:fields" and ideas:                     # the Idea line only warns in this release (a hero board made before it existed lints); a field that fails still fails the row
+            rep.add(rid, "fail" if found else "warn", label, detail=shown(found + ideas) + ("" if found else "; a warning in this release, a failure in the next: state the one idea of each hero in a line (data-field=\"idea\")"))
         else:
             rep.add(rid, "fail" if found else "pass", label, detail=shown(found + (warnings if rid == "site:layout" else [])) if found else ok)
 
@@ -870,7 +887,7 @@ def variant_rows(rep: Report, project: Path, rnd: int, root: Node, page: Path, f
     rep.add("site:variants", "fail" if problems else "pass", "the variants: their number, and a word for each",
             detail=shown(problems) if problems else f"{len(named)} variant(s): {', '.join(n for n, _ in named)}" + (f" (the first hero board: {lo} or {hi})" if first else ""))
     variants = [SiteVariant(project, rnd, nm, card) for nm, card in named]
-    card_rows(rep, project, page_rel, rnd, variants)
+    card_rows(rep, project, page_rel, rnd, variants, idea=True)
     verdicts = proof_rows(rep, project, page, variants)
     reflex_rows(rep, project, variants, verdicts)
     refs_rows(rep, project, rnd, variants)
