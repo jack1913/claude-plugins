@@ -100,6 +100,9 @@ A claim is something the page states as true: a number, such as a price, an open
 such as "coming soon". Each needs a fact, so the page promises nothing you haven't confirmed. To fix one, give Claude
 the fact and its source for `FACTS.md`, mark a placeholder as a [sample](#samples), or remove it.
 
+Wording you approved for use on the page, such as a headline, goes in its own row of `FACTS.md`, labelled `copy:` and
+its place (`copy: hero headline`), apart from the plain fact. Its text backs a number or status word like any fact.
+
 The check only looks for the same number anywhere in your facts. Easiest: write the fact as the page does; "open
 7:00–18:00" backs those hours.
 
@@ -165,6 +168,19 @@ A sample is a placeholder, such as a made-up price; its text is not a claim. Ask
 - A sample with no label fails, and its text is checked.
 - The result lists your samples: what to replace before you publish.
 - A box marked as a sample sets off no mock-up warning.
+
+## Forbidden words
+
+The words listed as bullets under a "Forbidden" heading in your brief (`brief/BRIEF.md`) and in `research/cliches.md`
+are the ones your brand never uses. The brand book's check uses the same list.
+
+- The check looks for each as a whole word, in any letter case, in the text the page displays. "revolutionary" is found
+  in "A Revolutionary tool", not in "revolutionaryx".
+- A word found warns and names where, with the text around it. It never fails the page. A word inside a sample is found
+  too, and the line says so.
+- With a list and no word found, the line passes. With no list, the line is INFO and says nothing was looked for. It is
+  never a pass.
+- The list is not part of what makes a report go out of date. Change the list, then check again.
 
 ## Template warnings
 

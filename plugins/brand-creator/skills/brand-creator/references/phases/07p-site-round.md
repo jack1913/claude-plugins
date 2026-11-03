@@ -111,6 +111,11 @@ data-page="start">`) in every project.
      and the fonts in `assets/fonts/`. Every look value is a token; nothing is copied from a reference.
    - Words and numbers come from `FACTS.md` only. A number, price, date or status word that is not in the facts goes inside
      an element labelled `data-sample="<what it is>"` (`[data-sample]`: a sample, shown as one), never in the open.
+   - A headline is never a fact's `value` as it stands. It quotes a `copy:` row of `FACTS.md` (wording the owner approved for
+     use as copy, labelled `copy: <slot>`, such as `copy: hero headline`; the fact stays in its own row), or it is new wording
+     the owner approves on the board, which becomes a `copy:` row once they do. `page-check` warns (`page:words`, never a
+     failure) for each word the brief or `research/cliches.md` lists under Forbidden that it finds in the text of the page:
+     reword it, or tell the owner why the page keeps it.
    - No network: no web font, script, image or frame from another address.
 3. **Per variant, in this order: `capture`, `page-check`, the cold review.**
    - `capture rounds/r<N>/<Name>/index.html --project <dir>` writes the four stills and the full page into `shots/`, with

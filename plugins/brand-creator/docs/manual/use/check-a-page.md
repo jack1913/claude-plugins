@@ -23,7 +23,8 @@ The check opens your page at several sizes, from a phone to a wide screen, in li
 - a page rule you asked Claude for and approved, such as one logo per screen or at most three words on a button.
 
 Failing blocks nothing: it gives you things to fix. The check also warns about patterns that make a page look like any
-template, such as a small label in capitals over a heading. Warnings never fail the page. The exact rules are in
+template, such as a small label in capitals over a heading, and about any word your brand forbids: the words you
+listed under "Forbidden" in your brief. Warnings never fail the page. The exact rules are in
 [Page check](../reference/page-check.md).
 
 ## Check a page
@@ -65,6 +66,20 @@ A labelled sample passes, and goes on your list of what to replace before you pu
 For a real number, tell Claude the fact and its source, and Claude adds it to `FACTS.md`. A copyright year, or the
 "404" on a "page not found" page, needs no fact. Phone numbers, postal codes and street numbers do: to the check they
 are numbers like any other.
+
+## Keep approved wording apart from facts
+
+A fact and the words that present it are not the same thing. Keep the fact in `FACTS.md` as it is: "shipping takes 3
+days". When you approve wording for a headline, ask Claude to add it as its own row, labelled `copy:` and the place it
+is for, such as `copy: hero headline`. A page then quotes that row, or uses new wording you approve first, and never
+a fact copied word for word into a headline. A number in an approved row counts as backed, like any fact.
+
+## If a word on the page is one you forbade
+
+If your brief lists forbidden words, the check looks for each on the page, in any letter case, and warns where it finds
+one, with the text around it. Reword it, or tell Claude the word may stay. Nothing fails for it. With no list, the
+check says it looked for nothing, and does not count that as a pass. To start a list, ask Claude to add the words
+under "Forbidden" in your brief, one per bullet.
 
 ## Turn a warning into a brand rule
 
