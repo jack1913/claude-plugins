@@ -1,7 +1,7 @@
 export const meta = {
   name: 'directions',
-  description: 'brand-creator direction boards: an optional read-only look at the owner\'s product repositories first, then one designer per direction, each in its own folder, and one judge that advises',
-  whenToUse: 'Only from the brand-creator skill, after the agent count, models, size and cost were shown and the owner said yes. Ends before a direction is picked.',
+  description: 'brand-creator draws direction boards, one designer each, and a judge advises; it starts this after your yes.',
+  whenToUse: 'Only from the brand-creator skill, after the agent count, models, size and cost were shown and the owner said yes.',
   phases: [
     { title: 'Inventory', detail: 'optional: one read-only surveyor of the target repositories (inventory: true)' },
     { title: 'Design', detail: 'one designer per direction, each writing only rounds/rN/<direction>/' },

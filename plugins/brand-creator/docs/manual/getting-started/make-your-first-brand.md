@@ -21,7 +21,7 @@ Claude does the legwork.
 
    > A logo and a look for my bakery
 
-   Or type `/brand-creator:new my-bakery`. You get up to three quick questions, each with a suggested answer:
+   Or name it: "start a brand called My Bakery". You get up to three quick questions, each with a suggested answer:
    - how far to go ([Choose a tier](choose-a-tier.md)),
    - how this brand relates to others you run (only if you mention a parent or sister brand),
    - the name (only if it's still open).

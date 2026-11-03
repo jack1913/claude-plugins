@@ -8,6 +8,7 @@
 - [Method](#method)
 - [Trademark screening, step by step](#trademark-screening-step-by-step)
 - [Print hand-off](#print-hand-off)
+- [Handing it over](#handing-it-over)
 - [Gate](#gate)
 - [Pitfalls](#pitfalls)
 - [Enforcement](#enforcement)
@@ -39,7 +40,7 @@ the ticks survive when it is generated again (each box has an id in a comment).
    identifiers from the adoption survey, with the new value left for the owner), **Print hand-off** (only when print files exist: the printer's
    requirements, the printer's CMYK profile, preflight, the printer's proof, and spot colours as a name plus a Lab target, never "hex equals spot"),
    and **Decisions for you**.
-3. Hand the list over ([the launch skill](../../../launch/SKILL.md), `/brand-creator:launch`) one action at a time, with the reason and the exact click path (the registrar's page, the register's search page). When the
+3. Hand the list over one action at a time ([Handing it over](#handing-it-over)), with the reason and the exact click path (the registrar's page, the register's search page). When the
    owner says "buy the domain" or "file it", answer with the hand-off, never a purchase or a filing; record the owner's report afterwards (G7).
 4. Re-run `launch-todo` after a new names run or adoption survey. Re-run the screening before the owner buys: every state says when it was read.
 
@@ -77,6 +78,28 @@ Only when print files exist (print is opt-in). It is the owner's step with the p
   with the date of the proof.
 - Nothing here can check PDF/X conformance, ink coverage or overprint. The printer's preflight does.
 
+## Handing it over
+
+No command starts this. The owner asks in words ("help me launch", "what do I do before the brand goes public", "buy the
+domain"), and the brand-creator skill reads this file and does the following. It runs in any tier when the owner asks.
+The rules of the RULES line hold: it hands each step over and acts on nothing.
+
+1. Find the project: `brand-creator --data "${CLAUDE_PLUGIN_DATA}" state --project-auto`. None → say so and stop.
+2. No name screening on file (`assets/_checks/names.json`) → say that the domain and handle rows will be UNKNOWN, and
+   offer the names run first (it needs the owner's privacy OK; see the brand-naming skill).
+3. `brand-creator --data "${CLAUDE_PLUGIN_DATA}" launch-todo --project <dir> [--name <candidate>]` (`--name` when the
+   names run screened several candidates), then read LAUNCH.md fully.
+4. Hand over **one action**: the first unticked box in file order (trademark comes first; nothing is bought before its
+   answer). Give the reason in one sentence, the exact click path (the page to open, what to type, which button), what
+   it costs when that is known, and what to tell you afterwards. Then stop and wait.
+5. When the owner reports back, record it: `brand-creator --data "${CLAUDE_PLUGIN_DATA}" state --project <dir> --record G7 "<what the owner did, and when>"`.
+   The owner ticks the box (ticks survive a regeneration), then the next action.
+6. "Buy it for me", "file it", "register the handle", "send the e-mail": answer with the hand-off, never the act. You
+   never open a registrar's checkout, a filing form or a sign-up page on the owner's behalf.
+7. Every state in the file is a reading of one source on one day (REGISTERED, NOT-FOUND or UNKNOWN). Never say a name
+   is available, free or clear. Older than a few days before a purchase or a filing → say "recheck first" and offer to
+   run the screening again.
+
 ## Gate
 
 **G7 Outward.** One action at a time, with its reason and the click path. You recommend and record; the owner buys, files, registers and contacts.
@@ -96,3 +119,4 @@ Only when print files exist (print is opt-in). It is the owner's step with the p
 - No state word outside REGISTERED, NOT-FOUND, UNKNOWN, and none of the words available, free, clear, in the generated file (a test).
 - `check --cascade` treats the rename list as a record of another repository (a warning), and every other line of `LAUNCH.md` as searched.
 - Proven by `test_launch_cascade.py` (see the table in [09-qa](09-qa.md)).
+- The hand-off wording above is pinned by `test_skills.py::test_the_launch_hand_off_rules_live_in_the_launch_phase_file`; the behaviour eval `evals/outward-actions-hand-off` asks for a purchase and a filing and wants the hand-off, with a click path, instead.

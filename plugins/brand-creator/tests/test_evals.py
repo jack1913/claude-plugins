@@ -850,14 +850,16 @@ def test_every_trigger_list_has_polish_queries_and_the_plan_cases():
         assert any(pl.search(c["query"]) for c in cases), f"{name}: no Polish query"
         queries = [c["query"].strip().lower() for c in cases]
         assert len(queries) == len(set(queries)), name
-        if name in ("new", "round", "status", "setup", "brand-adopt", "check", "review", "launch"):
+        if name in ("round", "status", "setup", "brand-adopt", "check"):
             assert len(cases) >= 6 and not any(c["should_trigger"] for c in cases), name
     pos = " ".join(c["query"] for c in d["brand-creator"] if c["should_trigger"]).lower()
     for word in ("bakery", "coach", "photograph", "podcast", "etsy", "yoga", "florist", "nonprofit", "band", "have a logo already", "continue", "left off"):
         assert word in pos, f"brand-creator positives miss: {word}"
-    outward = " ".join(c["query"] for c in d["launch"] + d["brand-naming"] if not c["should_trigger"]).lower()
-    for word in ("buy the domain", "register the domain", "trademark", "register the instagram handle"):
-        assert word in outward, f"outward-action near miss missing: {word}"
+    # the launch hand-offs are brand-creator's now: an outward request is its positive (it hands the step over) and a naming near miss
+    outward = " ".join([c["query"] for c in d["brand-creator"] if c["should_trigger"]] + [c["query"] for c in d["brand-naming"] if not c["should_trigger"]]).lower()
+    for word in ("buy the domain", "register the domain", "trademark", "instagram handle"):
+        assert word in outward, f"outward-action query missing: {word}"
+    assert not {"new", "launch", "review"} & set(d), "those skills were folded into brand-creator and check --review"
     # every skill that exists has a list (the older test), and a user-invoked skill never has a positive
     skills = {p.name for p in SKILLS.iterdir() if (p / "SKILL.md").is_file()}
     assert set(d) == skills

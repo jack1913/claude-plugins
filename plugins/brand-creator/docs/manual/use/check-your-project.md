@@ -49,13 +49,13 @@ The full steps are in [Check a page against your brand](check-a-page.md).
 
 ## Get a review
 
-> /brand-creator:review
+> /brand-creator:check --review
 
 Claude reads the latest work against its own rules and the checks, challenges its own findings, and gives you one list:
 fixes that need no decision, numbered decisions with a recommendation, and up to five strengths that must not change. You
 approve the list. Nothing is fixed before.
 
-Add `panel` for a review panel: separate reviewers for design, content and technical, plus legal, platform and
+Add `panel` (`/brand-creator:check --review panel`) for a review panel: separate reviewers for design, content and technical, plus legal, platform and
 accessibility when they apply, then a judge. By default Claude runs them one after another in your session. Extra agents
 start only after you see their count, models, size and cost and say yes.
 

@@ -1,4 +1,4 @@
-"""Static checks over the skills and their references: frontmatter, budgets, links, verbatim lines, wrappers."""
+"""Static checks over the skills and their references: frontmatter, budgets, links, verbatim lines, wrappers, the / menu."""
 import fnmatch
 import json
 import os
@@ -12,7 +12,10 @@ from helpers import ROOT
 SKILLS = ROOT / "skills"
 ORCH = SKILLS / "brand-creator" / "SKILL.md"
 REFS = SKILLS / "brand-creator" / "references"
-WRAPPERS = ("new", "round", "status", "setup", "check", "review", "launch")
+WRAPPERS = ("round", "status", "setup", "check")
+REMOVED_SKILLS = ("new", "launch", "review")   # folded into the brand-creator skill (new, launch) and into check --review (review)
+MENU = {"brand-creator", "setup", "status", "check", "round", "brand-adopt"}   # the skills the / menu lists
+HIDDEN = {"brand-naming", "brand-assets", "brand-book"}   # user-invocable: false: Claude starts them from the owner's words
 ENTRY = 'brand-creator --data "${CLAUDE_PLUGIN_DATA}"'  # quoted: a data path may hold spaces (CONTRACT.md, entry point)
 RULE = "Bash(brand-creator *)"
 
@@ -37,7 +40,7 @@ def all_skills():
 
 
 def test_every_skill_has_valid_frontmatter():
-    allowed = {"name", "description", "when_to_use", "argument-hint", "arguments", "disable-model-invocation",
+    allowed = {"name", "description", "when_to_use", "argument-hint", "arguments", "disable-model-invocation", "user-invocable",
                "allowed-tools", "compatibility", "license", "metadata"}
     names = set()
     for p in all_skills():
@@ -51,6 +54,8 @@ def test_every_skill_has_valid_frontmatter():
         assert len(body.splitlines()) < 500, p
         names.add(fm["name"])
     assert {"brand-creator", "brand-naming", "brand-assets", "brand-book", "brand-adopt", *WRAPPERS} <= names
+    assert names == MENU | HIDDEN, names ^ (MENU | HIDDEN)
+    assert not names & set(REMOVED_SKILLS), "a skill that was folded away is back"
 
 
 def yaml_plain_scalar_problem(v):
@@ -312,7 +317,8 @@ def test_status_injection_exits_0_with_a_message_outside_a_project(tmp_path):
     data.mkdir()
     env = {**os.environ, "PATH": os.pathsep.join([str(ROOT / "bin"), os.environ["PATH"]])}
     r = subprocess.run(_status_cmd(data), cwd=tmp_path, capture_output=True, text=True, env=env)
-    assert r.returncode == 0 and "no brand project found" in r.stdout + r.stderr and "/brand-creator:new" in r.stdout + r.stderr
+    out = r.stdout + r.stderr
+    assert r.returncode == 0 and "no brand project found" in out and "saying what the brand is for" in out and "/brand-creator:new" not in out
 
 
 def test_status_injection_works_on_a_machine_without_uv(tmp_path):
@@ -640,7 +646,7 @@ def test_g0_fits_the_ask_user_question_tool_in_every_place_it_is_described():
     """G0 holds at most 3 concrete scope questions (tier, architecture when siblings show, name when open), each with 2 to 4
     options; the mark source is inferred and stated, never asked; free text and the folder do not go in the call. The one
     upload consent (review surface) is the only other item, and only when boards could be uploaded."""
-    texts = {p: p.read_text(encoding="utf-8") for p in (ORCH, SKILLS / "new" / "SKILL.md", REFS / "phases" / "00-intake.md")}
+    texts = {p: p.read_text(encoding="utf-8") for p in (ORCH, REFS / "phases" / "00-intake.md")}
     for p, t in texts.items():
         flat = " ".join(t.split())
         assert "at most 3 scope questions" in flat, p
@@ -756,18 +762,95 @@ def test_brand_adopt_is_user_invoked_and_states_every_safety_rule_of_the_apply()
     assert "the brand-adopt skill" in _flat(REFS / "phases" / "11-adoption.md")
 
 
-def test_check_review_and_launch_wrappers_say_what_they_run():
-    check, review, launch = (_flat(SKILLS / s / "SKILL.md") for s in ("check", "review", "launch"))
+def test_check_holds_the_gates_the_cascade_the_page_check_and_the_review_with_its_panel():
+    """`review` was folded into `check --review`: every rule the review skill held is pinned here, in check, and the argument-hint names the flags."""
+    fm, body = frontmatter(SKILLS / "check" / "SKILL.md")
+    for flag in ("--page <file-or-folder-page-or-localhost-url>", "--review [board|book|pack|all] [panel]", "--panel", "<old value or phrase>"):
+        assert flag in fm["argument-hint"], flag
+    assert fm["disable-model-invocation"] == "true" and "user-invocable" not in fm   # typed only, and in the / menu
+    check = _flat(SKILLS / "check" / "SKILL.md")
     assert "check --project <dir> --cascade" in check and "history/MANIFEST.sha256" in check and "Never report a row that did not run as passed" in check
-    for needle in ("Self-review (always)", "one approvable list", "Lens panel (optional)", "Default: single-thread", "fleet gate",
+    for needle in ("## Review (`--review`)", "### Self-review (always)", "one approvable list", "### Lens panel (optional)", "Default: single-thread", "fleet gate",
                    "explicit yes", "A (before launch), B (soon) and C (optional)", "must not change", "Lenses read; they never edit",
-                   "Panels advise"):
-        assert needle in review or needle in " ".join((SKILLS / "review" / "SKILL.md").read_text().split()), needle
-    for needle in ("launch-todo --project <dir>", "**one action**", "exact click path", "--record G7", "never the act",
-                   "available, free or clear", "recheck first"):
+                   "Panels advise", "`--panel` alone", "`--review panel`", "### Lens panel as a workflow", "fleet-plan review-panel --args @<file>",
+                   "one `brand-creator:brand-reviewer` per lens", "then one `brand-creator:brand-judge`", "Do not edit the work under review while the panel runs",
+                   "challenge every finding", "The owner approves the list; nothing is fixed before.", "(1440 and 390, light and dark)",
+                   "`book-lint --self-consistency` for the book", "Measured numbers instead of adjectives"):
+        assert needle.lower() in check.lower(), needle
+    assert check.index("### Self-review (always)") < check.index("### Lens panel (optional)") < check.index("### Lens panel as a workflow")
+    assert rules_line(body) == rules_line(ORCH.read_text(encoding="utf-8"))
+    assert "/brand-creator:new" not in check
+
+
+def test_the_launch_hand_off_rules_live_in_the_launch_phase_file():
+    """`launch` was folded into the brand-creator skill: the hand-off rules are the phase file's, and the orchestrator sends the owner's words there."""
+    launch = _flat(REFS / "phases" / "13-launch.md")
+    assert launch.index("## Handing it over") < launch.index("## Gate")
+    for needle in ("launch-todo --project <dir>", "[--name <candidate>]", "**one action**", "the first unticked box in file order", "(trademark comes first; nothing is bought before its answer)",
+                   "exact click path", "(the page to open, what to type, which button)", "what it costs when that is known", "what to tell you afterwards", "Then stop and wait.",
+                   "--record G7", "Buy it for me", "never the act", "never open a registrar's checkout, a filing form or a sign-up page on the owner's behalf",
+                   "a reading of one source on one day", "REGISTERED, NOT-FOUND or UNKNOWN", "available, free or clear", "recheck first",
+                   "No name screening on file", "will be UNKNOWN", "offer the names run first", "None → say so and stop"):
         assert needle in launch, needle
-    for s in ("review", "launch"):
-        assert rules_line((SKILLS / s / "SKILL.md").read_text(encoding="utf-8")) == rules_line(ORCH.read_text(encoding="utf-8")), s
+    orch = " ".join(ORCH.read_text(encoding="utf-8").split())
+    row = next(ln for ln in orch.split(" | P") if ln.startswith("13 |"))
+    assert 'when asked in words ("help me launch", "buy the domain")' in row and "Handing it over" in row and "13-launch" in orch
+    assert "**G7 Outward.**" in orch and "the owner buys, files, registers and contacts" in orch
+    assert "/brand-creator:launch" not in orch + launch
+
+
+def test_no_skill_page_or_script_tells_the_owner_to_type_a_removed_command():
+    """`/brand-creator:new`, `:launch` and `:review` are gone: the words, or `/brand-creator:check --review`, replace them. The changelog and the frozen archive may name them."""
+    pat = re.compile(r"brand-creator:(?:new|launch|review)(?![-\w])")
+    files = [*SKILLS.rglob("*.md"), *(ROOT / "agents").glob("*.md"), *(ROOT / "workflows").glob("*.js"), *(MANUAL).rglob("*.md"),
+             ROOT / "README.md", ROOT / "AGENTS.md", ROOT / "scripts" / "state.py", ROOT / "scripts" / "CONTRACT.md",
+             *(ROOT / "docs" / "internals").glob("*.md"), *(ROOT / "evals").rglob("*.md")]
+    found = [f"{p.relative_to(ROOT)}: {m.group(0)}" for p in files for m in pat.finditer(p.read_text(encoding="utf-8"))]
+    assert not found, found
+    for gone in REMOVED_SKILLS:
+        assert not (SKILLS / gone).exists(), gone
+
+
+def test_the_slash_menu_lists_six_skills_and_the_other_three_are_started_from_words():
+    """The owner's decision: the menu shows brand-creator, setup, status, check, round and brand-adopt. `user-invocable: false` only hides a skill from the
+    menu; its description stays in Claude's context, so the trigger evals stay valid."""
+    menu, hidden, typed_only = set(), set(), set()
+    for p in all_skills():
+        fm, _ = frontmatter(p)
+        name = fm["name"]
+        if fm.get("user-invocable") == "false":
+            hidden.add(name)
+            assert "disable-model-invocation" not in fm, f"{name}: hidden and typed-only would be unreachable"
+        else:
+            menu.add(name)
+        if fm.get("disable-model-invocation") == "true":
+            typed_only.add(name)
+    assert menu == MENU and hidden == HIDDEN
+    assert typed_only == {"setup", "status", "check", "round", "brand-adopt"}   # brand-creator and the hidden three stay model-invocable
+    # a hidden skill keeps its description and when_to_use as they were evaluated: the trigger-eval lists exist for it
+    evals = json.loads((ROOT / "evals" / "trigger-evals.json").read_text(encoding="utf-8"))
+    for name in HIDDEN | {"brand-creator"}:
+        assert any(c["should_trigger"] for c in evals[name]), name
+    assert not set(REMOVED_SKILLS) & set(evals)
+
+
+def test_the_folded_skills_are_started_by_the_orchestrator_from_the_owners_words():
+    """`new` became Step 0 of the orchestrator plus the intake phase file; its status and round neighbours no longer offer a command that is gone."""
+    orch = " ".join(ORCH.read_text(encoding="utf-8").split())
+    step0 = orch[orch.index("## Step 0"):orch.index("## Running the tools")]
+    for needle in ("Nothing → read [00-intake](references/phases/00-intake.md)", "Starting from the owner's words", "run G0 (below), then scaffold with",
+                   "Asked to start a new brand meanwhile: ask whether to resume it or start a separate one next to it."):
+        assert needle in step0, needle
+    intake = _flat(REFS / "phases" / "00-intake.md")
+    assert intake.index("## Starting from the owner's words") < intake.index("## Techniques")
+    for needle in ("No command starts a project", "Check first that no project is already open here", "whether to resume it or start a separate one next to it",
+                   "Read what already exists (site, repo, logo files) before asking anything", "Then run G0", "(`./<slug>/` here)", "${user_config.projects_root}",
+                   "making the slug from the name the owner gave", "`acme` for Acme", "`brand-<yyyymmdd>`", "new <slug> --name \"<Name>\" --tier <tier> --root <folder>", "Fill `brief/BRIEF.md` and `FACTS.md`",
+                   "`state --record G0", "Reply with the response template", "If the scaffold exits 3, tell the owner to run `/brand-creator:setup` first"):
+        assert needle in intake, needle
+    for skill in ("round", "status", "check"):
+        flat = _flat(SKILLS / skill / "SKILL.md")
+        assert "offer to start one (the owner says what the brand is for, in words)" in flat, skill
 
 
 def test_history_launch_and_cascade_references_hold_the_plan_items():
@@ -901,8 +984,8 @@ def test_the_round_wrapper_builds_round_0_from_the_style_board_and_checks_the_ga
     assert "[pick|refine]" not in body
 
 
-def test_the_new_wrapper_says_the_style_research_comes_before_round_1():
-    flat = _flat(SKILLS / "new" / "SKILL.md")
+def test_starting_a_project_says_the_style_research_comes_before_round_1():
+    flat = _flat(REFS / "phases" / "00-intake.md")
     assert "what comes next (category research in Standard and Full, then the style research and its board, then round 1)" in flat
     assert "(research or round 1)" not in flat
 

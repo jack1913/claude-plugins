@@ -6,6 +6,47 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+The `/` menu is shorter. It now lists `brand-creator`, `setup`, `status`, `check`, `round` and `brand-adopt`, plus the four
+workflows. Nothing you could do is gone: what lost its command is something you ask for in your own words, or a flag of
+`check`.
+
+Breaking changes, each with what to do:
+
+- `/brand-creator:new` is gone. Say what you need instead, such as "a logo for my bakery" or "start a brand called
+  Acme". You get the same up to three quick questions and the same project folder. If a project is already open in the
+  folder, Claude says so and asks whether to pick it up or start a separate one next to it.
+- `/brand-creator:launch` is gone. Ask for it, such as "help me launch" or "give me the launch checklist". You get the same
+  `LAUNCH.md`, handed over one step at a time with the reason and the click path, and Claude still buys, files and
+  registers nothing. Where you typed `--name <candidate>`, say the name: "the launch checklist for Loaf".
+- `/brand-creator:review` is gone. Type `/brand-creator:check --review` for the review of the latest work as one list to
+  approve (`--review board`, `book`, `pack` or `all` to name what to review), and `/brand-creator:check --review panel`,
+  or `--panel`, for the review panel. A panel with extra agents still starts only after you see the count, models, size
+  and cost and say yes.
+- `/brand-creator:brand-naming`, `/brand-creator:brand-assets` and `/brand-creator:brand-book` are no longer in the `/`
+  menu. Ask in your own words, such as "name ideas for my bakery", "favicons from my logo.svg" or "generate the brand
+  book", and Claude starts them as before.
+
+### Added
+
+- `/brand-creator:check --review [board|book|pack|all] [panel]` and `--panel`: the review `/brand-creator:review` gave,
+  now a part of `check`. The review runs the checks first, challenges its own findings and gives you one list to approve.
+  Nothing is fixed before you approve it.
+
+### Changed
+
+- The four workflows (`directions`, `naming`, `review-panel` and `adopt`) still show in the `/` menu, because Claude Code
+  has no documented way to keep a plugin's workflow out of it. Their steps and behaviour are unchanged. The text in the
+  "Yes, run it / No" prompt is now one short sentence that says brand-creator starts them after your yes, and the
+  [agents and workflows page](docs/manual/reference/agents-and-workflows.md) says they are meant to be started that way.
+  `review-panel` now starts from `/brand-creator:check --review panel`.
+- When no brand project is found, `/brand-creator:status` and the `brand-creator state` message no longer point to
+  `/brand-creator:new`. They say to tell Claude what the brand is for.
+
+### Removed
+
+- `/brand-creator:new`, `/brand-creator:launch` and `/brand-creator:review`: say what you need in words, or type
+  `/brand-creator:check --review`.
+
 ## [0.5.0] - 2026-11-03
 
 brand-creator now takes a brand onto the web. Website references come before any page; a site round builds reference

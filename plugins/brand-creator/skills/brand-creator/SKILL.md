@@ -17,15 +17,14 @@ show options with a stated pick. **Re-invoke this skill after compaction** (only
 1. Run `brand-creator --data "${CLAUDE_PLUGIN_DATA}" state --project-auto`. It walks up from
    the current folder to the first `BRAND-STATE.md`. Found → read `BRAND-STATE.md` fully (tier, phase, gates,
    Collaboration, Directions, `fixes_per_area`, `review_url`) and resume at the recorded phase. Say in one line where
-   the project stands and what comes next.
+   the project stands and what comes next. Asked to start a new brand meanwhile: ask whether to resume it or start a
+   separate one next to it.
 2. Not found → look under the projects folder setting (`${user_config.projects_root}`; empty or left as a literal
    placeholder means unset) for `*/BRAND-STATE.md` of the brand being discussed. One match → resume it. Several →
    ask which.
-3. Nothing → run G0 (below), then scaffold with
+3. Nothing → read [00-intake](references/phases/00-intake.md) ("Starting from the owner's words"), run G0 (below), then scaffold with
    `brand-creator --data "${CLAUDE_PLUGIN_DATA}" new <slug> --name "<Name>" --tier <tier> --root <folder>`.
-   When the projects folder is unset, the folder is not an AskUserQuestion item: the plain-text facts message after G0
-   says "I'll create ./<slug>/ in the current folder unless you name another place". An open name gets the working slug
-   `brand-<yyyymmdd>`, renamed after G1 and recorded under Renames.
+   An open name gets the working slug `brand-<yyyymmdd>`, renamed after G1 and recorded under Renames.
    Then comes P1s style research and its board (G1s); no board of directions is built before G1s is recorded (see G1s).
 
 Work inside the brand project from the first minute. Only page shots go to scratch (the tools put them under the data
@@ -106,7 +105,7 @@ Quick with an open or at-risk name runs the brand-naming skill (P2) before the b
 | P10 | brand book or short guide: [the brand-book skill](../brand-book/SKILL.md) | G5 | [10-book](references/phases/10-book.md) | all (short in Quick) |
 | P11 | adoption into products: `/brand-creator:brand-adopt` | G6 | [11-adoption](references/phases/11-adoption.md) | F |
 | P12 | history, ADR, governance | freeze only | [12-history](references/phases/12-history.md) | all |
-| P13 | launch hand-offs (owner acts): `/brand-creator:launch` | G7 | [13-launch](references/phases/13-launch.md) | F |
+| P13 | launch hand-offs (owner acts), when asked in words ("help me launch", "buy the domain"): "Handing it over" | G7 | [13-launch](references/phases/13-launch.md) | any, when asked |
 
 Read the phase file fully when entering a phase. Record every gate decision with
 `... state --project <dir> --record G<n> "<decision>"`; `freeze` and the emitters refuse to run without G3.
@@ -261,7 +260,7 @@ a naming fan-out, an adoption across repositories), propose it and wait:
 | Workflow | When | Default agents |
 |---|---|---|
 | `directions` | round 1 or a reset round (`inventory: true` adds the P1c survey) | 3 designers + judge = 4 |
-| `review-panel` | `/brand-creator:review panel` | 3 lenses + judge = 4 |
+| `review-panel` | `/brand-creator:check --review panel` | 3 lenses + judge = 4 |
 | `naming` | P2 with an open name | 2 hunters + screener + judge = 4 |
 | `adopt` | P11 after G6 | implementer + reviewer per repository |
 
@@ -342,8 +341,8 @@ Full file contract: `${CLAUDE_PLUGIN_ROOT}/scripts/CONTRACT.md`. Templates: `${C
 - [drawing-engines.md](references/drawing-engines.md): where marks are drawn (the use-llm design canvas, Claude Code's /design, or Claude-drawn SVG on the owner's yes), the drawing brief, what lands in the round, the canvas's known quirks.
 - [The brand-naming skill](../brand-naming/SKILL.md): P2 naming, prior art, screening and the verdict memo.
 - [The brand-book skill](../brand-book/SKILL.md): P10 book, self-review checklist, collapse, G5 opt-ins, the RGB proof PDF.
-- User-invoked: [brand-adopt](../brand-adopt/SKILL.md) (P11 apply), [check](../check/SKILL.md) (gates and cascade),
-  [review](../review/SKILL.md) (self-review, optional lens panel), [launch](../launch/SKILL.md) (P13 hand-off).
+- User-invoked: [brand-adopt](../brand-adopt/SKILL.md) (P11 apply), [check](../check/SKILL.md) (gates, cascade, and
+  `--review` with its optional lens panel).
 - [CONNECTORS.md](../../CONNECTORS.md): optional design-tool connectors (never required, never the source of truth).
 - [The brand-assets skill](../brand-assets/SKILL.md): P8 asset packs from INVENTORY.md slots, size bands, downscale proof; also runs
   standalone on a mark file.

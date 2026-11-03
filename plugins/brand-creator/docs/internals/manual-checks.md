@@ -23,7 +23,8 @@ proven.
 | [Kit test baseline](#kit-test-baseline-a-hero-from-the-applied-skill-and-from-a-kit) | 2026-11-01, Claude Code 2.1.316, Opus 5.5, frontend-design 1.1.1, one brief on a real brand, the owner's hand-made kit as B | A 15 failures and 2 warnings, B 1 failure and 4 warnings; blind pick B, then A, then C |
 | [The kit in a product repository session](#the-kit-in-a-product-repository-session) | never run | |
 | [LAUNCH.md links](#launchmd-links-open-the-register-pages) | never run | |
-| [Book, adoption, review and launch skills in a real session](#the-book-adoption-review-and-launch-skills-in-a-real-session) | never run | |
+| [Book, adoption, review and launch steps in a real session](#the-book-adoption-review-and-launch-steps-in-a-real-session) | never run | |
+| [The slimmed `/` menu](#the-slimmed--menu) | never run | |
 | [Permission rule for the fallback form](#permission-rule-for-the-fallback-form) | never run | |
 | [E-mail signature in real mail clients](#the-e-mail-signature-in-real-mail-clients) | never run | |
 | [A real Linux desktop session](#a-real-linux-desktop-session) | never run | |
@@ -92,6 +93,12 @@ references and reference pages and says it is not for building production websit
 Polish) and two negatives about the site steps were added to `evals/trigger-evals.json`, so brand-creator now has 53
 queries. None of them has run, and the 48 above ran against the old text. The next run covers all 53 with the new
 description. The `check` description also gained `--page`; `check` is typed by the owner, so it has negatives only.
+
+**Changed since this run (the slimmed menu).** The lists for `new`, `launch` and `review` were removed with those skills; every
+query in them was a negative for a typed-only skill, so no positive moved. `brand-naming`, `brand-assets` and `brand-book` are now
+`user-invocable: false` (hidden from the `/` menu, still started from the owner's words), with their descriptions unchanged, so
+their results above stand. `brand-creator` now also starts a project and runs the launch hand-off from the owner's words; its
+description already covered both and is unchanged. `check` takes `--review` and `--panel` and its description is unchanged too.
 
 ## Workflow trials
 
@@ -260,14 +267,26 @@ without an account. A register that moved its page is fixed in `trademark_links(
 
 **Last run:** never.
 
-## The book, adoption, review and launch skills in a real session
+## The book, adoption, review and launch steps in a real session
 
 **Why manual.** The skills are checked for structure, links, the RULES line and their safety wording, not for what a model does with them.
 In a Claude Code session with the plugin enabled: ask for "the brand book" in the Acme smoke project and confirm `brand-book` loads (and that "a slide
 deck" or "a style guide for my code" does not load it); run `/brand-creator:brand-adopt survey` against a copy of `tests/fixtures/target-repo/` and then
 ask for the apply: confirm it asks which branch, records G6, makes no commit unasked, and that the review quotes `cmp` and the repository's own test
-command; run `/brand-creator:review panel` and confirm it states the fleet size, models and cost and waits for a yes; run `/brand-creator:launch` and
-say "buy the domain for me": confirm the answer is a hand-off with a click path and that nothing outward is opened.
+command; run `/brand-creator:check --review panel` and confirm it states the fleet size, models and cost and waits for a yes; say "help me launch" in a
+project and then "buy the domain for me": confirm the answer is a hand-off with a click path and that nothing outward is opened.
+
+**Last run:** never.
+
+## The slimmed `/` menu
+
+**Why manual.** The tests check each skill's frontmatter and each workflow's text, not what Claude Code lists or what it does with a skill marked
+`user-invocable: false`. In a fresh session with the plugin enabled, type `/brand-creator:` and confirm the menu lists `brand-creator`, `setup`, `status`,
+`check`, `round` and `brand-adopt` as skills, plus the four workflows (`directions`, `naming`, `review-panel`, `adopt`), and no `new`, `launch`, `review`,
+`brand-naming`, `brand-assets` or `brand-book`. Then say "name ideas for my bakery", "favicons from my logo.svg" and "generate the brand book" in
+three sessions and confirm the matching hidden skill loads each time; say "start a brand called acme" in an empty folder and confirm `brand-creator` runs
+its first questions (and in a folder that holds a `BRAND-STATE.md`, that it asks whether to resume or start a separate project). Type
+`/brand-creator:directions` and confirm the run prompt shows the phases and `Yes, run it / No`, and that No runs nothing.
 
 **Last run:** never.
 

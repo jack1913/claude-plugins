@@ -52,12 +52,16 @@ run.
 | Workflow | Phase | Default agents | What it returns | Ends before |
 |---|---|---|---|---|
 | `directions` | P3 round 1, G2b-a reset rounds; needs the style pick (G1s) first | 3 designers + 1 judge = 4; `inventory: true` adds 1 | one board per direction in `rounds/rN/<direction>/`, the judge's ranking, grafts, MUST-FIX and NICE lists, violations | G2 (the lead assembles the round page) |
-| `review-panel` | `/brand-creator:review panel` | 3 lenses + 1 judge = 4; each extra lens adds 1 | findings `{id, severity, where, evidence, why, change, effort}` per lens, then A / B / C, owner decisions, up to 5 strengths | the owner approving the list |
+| `review-panel` | `/brand-creator:check --review panel` | 3 lenses + 1 judge = 4; each extra lens adds 1 | findings `{id, severity, where, evidence, why, change, effort}` per lens, then A / B / C, owner decisions, up to 5 strengths | the owner approving the list |
 | `naming` | P2, brand-naming steps 3 to 11 | 2 hunters + 1 screener + 1 judge = 4 | candidates, shortlist with classes, the name checker run (`--plan` unless the owner OK'd lookups), verdicts | G1 |
 | `adopt` | P11 after G6 | 2 per repository (implementer, then reviewer) | rows done / partly / not done with evidence, `cmp` and build/test results, no-decision fixes, decisions | every commit (three separate asks) |
 
 The agent count is the number of `agent()` calls the script makes with the given arguments; `fleet-plan` counts them
 by running the script with stub agents, and a test keeps the default path of every workflow under 5.
+
+All four workflows show in the `/` menu: Claude Code has no documented way to keep a plugin workflow out of it. Typing one
+shows its phases and a "Yes, run it / No" prompt, not the agent count, models and cost. They are meant to be started by
+the lead, after the gate, with the arguments above.
 
 Copy panel and rule hardening are not shipped as workflows in this version. Nor is the style research (P1s): the lead builds
 the style board (`rounds/r0/board.html`) single-thread, and no designer starts before the owner's style pick is recorded as

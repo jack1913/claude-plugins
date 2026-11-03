@@ -4,6 +4,7 @@ description: Turns an approved logo or mark into the platform files a product sh
 when_to_use: Use whenever someone wants icons, favicons, social images, store art or tray icons made from a logo they already have, even a single file ("favicons from my logo.svg", "app icon set for iOS and macOS from this SVG", "make the .ico and tray icons", "OG image from our logo"), or when a brand-creator project reaches the icons and images step. Polish triggers include "favicony z logo", "ikony aplikacji z logo", "wygeneruj ikony", "zestaw ikon dla iOS", "plik .ico z logo".
 compatibility: Claude Code only (calls the plugin's bin/ entry point). Apple packs need macOS with Xcode and have no fallback. Off macOS the small-size check needs an explicit --renderer opt-in and the Tauri .icns needs --renderer pillow. Social images and store frames need the Chromium installed by /brand-creator:setup.
 allowed-tools: Bash(brand-creator *)
+user-invocable: false
 ---
 
 # Brand assets

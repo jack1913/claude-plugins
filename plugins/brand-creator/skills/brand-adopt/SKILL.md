@@ -91,7 +91,7 @@ you", each with a recommendation.
   read that configuration.
 - Rows that act on a live service (renaming a repository, a hosted service or an app id, an upload, a DNS change, a store
   listing) each need their own OK, separate from the apply ask. Most are owner steps listed in LAUNCH.md
-  (`/brand-creator:launch`).
+  (the owner asks for the launch checklist in words).
 
 ## 6. A parent site that shows the product
 

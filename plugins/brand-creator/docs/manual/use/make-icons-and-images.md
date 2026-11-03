@@ -10,10 +10,7 @@ a brand project.
 
 ## Make the files
 
-1. Ask in your own words, such as "favicons from my logo.svg", or type the command:
-
-   > /brand-creator:brand-assets
-
+1. Ask in your own words, such as "favicons from my logo.svg" or "make the .ico and tray icons".
 2. Answer a couple of quick questions: which targets (web only, web and social, web and app icons, or every target), and
    whether a dark version of the logo exists. Your name, site address and any tagline come in one plain message.
 3. Claude draws each size at real pixels, checks small sizes, and records what it made in a manifest.

@@ -22,7 +22,7 @@ other pages; steps below, "A site round").
    `07-tokens.md` ("The motion round", for a motion round), `07w-website-references.md` (a website references board) or
    `07p-site-round.md` (a site board).
 2. Find the project: `brand-creator --data "${CLAUDE_PLUGIN_DATA}" state --project-auto`.
-   Read BRAND-STATE.md, brief/BRIEF.md and FACTS.md fully. No project → say so and offer `/brand-creator:new`.
+   Read BRAND-STATE.md, brief/BRIEF.md and FACTS.md fully. No project → say so and offer to start one (the owner says what the brand is for, in words).
 3. Pick the round number N. The style board is round 0 (`rounds/r0/`): it comes first, while G1s is not recorded, even in
    a project that already has rounds (the hook keeps `rounds/r0/` writable while G1s is empty). Every other round is the
    highest `rounds/rK/` + 1. From round 2: `cp -R rounds/r<N-1> rounds/r<N>` first; never edit an earlier round. A motion

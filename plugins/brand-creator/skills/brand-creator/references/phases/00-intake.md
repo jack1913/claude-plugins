@@ -5,6 +5,7 @@
 - [Goal](#goal)
 - [Inputs](#inputs)
 - [Outputs and paths](#outputs-and-paths)
+- [Starting from the owner's words](#starting-from-the-owners-words)
 - [Techniques](#techniques)
 - [Gate G0](#gate-g0)
 - [Pitfalls](#pitfalls)
@@ -39,6 +40,30 @@ then set what G0 decided:
 ... state --project <dir> --set review_surface=local      # only when the upload question was asked and answered
 ... state --project <dir> --record G0 "standard tier, authored-vector mark (provisional), name decided"
 ```
+
+## Starting from the owner's words
+
+No command starts a project. The owner says so ("a logo for my bakery", "start a brand called acme"), and the
+brand-creator skill does this, in order:
+
+1. Check first that no project is already open here: `brand-creator --data "${CLAUDE_PLUGIN_DATA}" state --project-auto`.
+   If one is found, say so and ask whether to resume it or start a separate one next to it.
+2. Read what already exists (site, repo, logo files) before asking anything. Then run G0 ([Gate G0](#gate-g0)): one
+   AskUserQuestion call of at most 3 scope questions (tier, architecture only when a parent or siblings show, name only
+   when open), each with a "(Recommended)" option, plus the upload question only when boards could go to claude.ai (the
+   orchestrator's Review surface). The mark source is inferred and stated, not asked. The facts you could not find go in
+   one plain-text message afterwards, which also names the project folder (`./<slug>/` here) when the projects folder
+   setting (`${user_config.projects_root}`) is unset.
+3. Scaffold, making the slug from the name the owner gave (lowercase letters, digits and hyphens: `acme` for Acme, `my-bakery`
+   for My Bakery) or, when no name was given or the name is still open, `brand-<yyyymmdd>`:
+   `brand-creator --data "${CLAUDE_PLUGIN_DATA}" new <slug> --name "<Name>" --tier <tier> --root <folder>`.
+4. Fill `brief/BRIEF.md` and `FACTS.md` from what you read and what the owner answered; set `mark_source` (provisional
+   until G2), `architecture`, `language`, `incumbent` and, when asked, `review_surface` with `state --set`; record G0 with
+   `state --record G0 "<decision>"`.
+5. Reply with the response template: what was created (paths), the tier with expected rounds and session length, what
+   comes next (category research in Standard and Full, then the style research and its board, then round 1), still open.
+
+If the scaffold exits 3, tell the owner to run `/brand-creator:setup` first.
 
 ## Techniques
 

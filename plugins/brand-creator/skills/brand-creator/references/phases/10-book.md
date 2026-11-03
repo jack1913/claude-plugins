@@ -22,7 +22,7 @@ One self-contained document that says what the brand is, shows it at the sizes i
 guide (the Quick chapters: idea, mark, colour, files, changing, plus wordmark when there is one), built by `book` like any book, and the Quick
 path ends with it and G5. Standard and Full: the whole book. The book is a view of the project's data, not a second copy
 of it: tokens, the manifest, BRAND-STATE.md, FACTS.md and the check reports are read, never retyped.
-The order of work, and the self-review as a checklist, are in [the brand-book skill](../../../brand-book/SKILL.md); `/brand-creator:review`
+The order of work, and the self-review as a checklist, are in [the brand-book skill](../../../brand-book/SKILL.md); `/brand-creator:check --review`
 runs the same self-review.
 
 ## Inputs

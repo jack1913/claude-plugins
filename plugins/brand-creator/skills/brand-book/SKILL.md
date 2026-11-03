@@ -4,6 +4,7 @@ description: Builds, updates, reviews and exports the brand book of a brand with
 when_to_use: Use whenever someone wants brand guidelines, a brand book or a brand rules page written, changed, reviewed, approved or exported, or one chapter of it ("generate the brand book", "export the brand book as a PDF"), or when a brand-creator project reaches the brand book step. A brand that does not exist yet starts with brand-creator, even when the ask is a brand book or księga znaku for it. Polish triggers include "księga znaku", "zaktualizuj księgę znaku", "zasady marki", "wytyczne marki", "brandbook".
 compatibility: Claude Code only (calls the plugin's bin/ entry point). Needs the Chromium installed by /brand-creator:setup for shots and book-pdf, and poppler (pdfinfo, pdftotext) for the PDF checks.
 allowed-tools: Bash(brand-creator *)
+user-invocable: false
 ---
 
 # Brand book
@@ -97,7 +98,7 @@ never passed.
 ## Self-review
 
 Run it before showing the owner an edition, and present the result as one list: fixes that need no decision (made, then
-re-checked), then numbered "Decisions for you", each with a recommendation. `/brand-creator:review` runs the same list.
+re-checked), then numbered "Decisions for you", each with a recommendation. `/brand-creator:check --review` runs the same list.
 
 | # | Item | How it is checked |
 |---|---|---|

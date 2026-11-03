@@ -133,6 +133,31 @@ def test_workflows_follow_the_runtime_rules():
         assert re.search(r"Agents in the default path: .*", text), f"{p.name}: the header documents its agent count"
 
 
+def _meta(name):
+    text = (WORKFLOWS / f"{name}.js").read_text(encoding="utf-8")
+    return {k: v.replace("\\'", "'") for k, v in re.findall(r"^  (description|whenToUse): '((?:[^'\\]|\\.)*)',$", text, re.M)}
+
+
+def test_the_workflows_are_in_the_menu_but_say_in_one_plain_sentence_that_brand_creator_starts_them():
+    """Claude Code has no documented way to keep a plugin workflow out of the / menu, and typing one shows `meta.description` in a Yes / No prompt.
+    So the description is one plain sentence of at most 120 characters, and `whenToUse` names the only entry point."""
+    entry = {"directions": "Only from the brand-creator skill, ", "naming": "Only from the brand-naming skill, ",
+             "review-panel": "Only from /brand-creator:check --review panel, ", "adopt": "Only from /brand-creator:brand-adopt, "}
+    for name, start in entry.items():
+        meta = _meta(name)
+        d, w = meta["description"], meta["whenToUse"]
+        assert d.startswith("brand-creator ") and len(d) <= 120, (name, len(d), d)
+        assert d.endswith("it starts this after your yes."), (name, d)
+        assert d.count(". ") == 0 and d.count(".") == 1, f"{name}: one sentence"
+        assert w.startswith(start) and w.count(". ") == 0 and w.endswith((" said yes.", " size and cost.")), (name, w)
+        assert "the owner" in w and "agent count, models, size and cost" in w, (name, w)
+        assert "Ends before" not in w and "Read only" not in w, f"{name}: whenToUse is one sentence"
+    # the old entry point is gone from the script, its header and its error message
+    panel = (WORKFLOWS / "review-panel.js").read_text(encoding="utf-8")
+    assert not re.search(r"brand-creator:review(?![-\w])", panel)
+    assert "run this from /brand-creator:check --review panel after the fleet gate" in panel
+
+
 def test_fleet_plan_check_passes_on_the_shipped_files():
     r = bc("fleet-plan", "--check")
     assert r.returncode == 0, r.stdout + r.stderr
@@ -154,7 +179,7 @@ def test_the_fleet_gate_and_refine_loop_are_documented_where_they_are_used():
         assert needle in fleet, needle
     refine = (ROOT / "skills/brand-creator/references/phases/05-refinement.md").read_text(encoding="utf-8")
     assert "## Refine loop with one reviewer call" in refine and "Refinement is never a workflow" in refine
-    for skill, wf in (("review", "review-panel"), ("brand-adopt", "adopt"), ("brand-naming", "naming")):
+    for skill, wf in (("check", "review-panel"), ("brand-adopt", "adopt"), ("brand-naming", "naming")):
         t = (ROOT / "skills" / skill / "SKILL.md").read_text(encoding="utf-8")
         assert f"fleet-plan {wf}" in t and "fleet.md" in t, skill
     page = (ROOT / "docs/manual/reference/agents-and-workflows.md").read_text(encoding="utf-8")

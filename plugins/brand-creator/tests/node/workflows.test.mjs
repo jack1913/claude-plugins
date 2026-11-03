@@ -46,6 +46,8 @@ test("meta is a pure literal with name = file name, description and phases; a co
     const { meta } = F.loadWorkflow(path.join(WF, `${n}.js`));
     assert.equal(meta.name, n);
     assert.ok(meta.description.startsWith("brand-creator"), n);
+    assert.ok(meta.description.length <= 120 && meta.description.endsWith("it starts this after your yes."), `${n}: the run prompt shows one short sentence`);
+    assert.ok(meta.whenToUse.startsWith("Only from "), `${n}: whenToUse names the one entry point`);
     assert.ok(Array.isArray(meta.phases) && meta.phases.length >= 2, n);
   }
   assert.deepEqual(F.literalProblems("{ name: 'x', description: \"y\", phases: [{ title: 'A' }], n: 2, ok: true }"), []);

@@ -3,7 +3,7 @@
 The limits brand-creator keeps, so you know what stays yours.
 
 - **Nothing outward.** It never buys a domain, files a trademark, registers a handle, uploads to a store or contacts
-  anyone. `/brand-creator:launch` hands you each of those steps, with the reason and where to click.
+  anyone. When you ask to launch, it hands you each of those steps, with the reason and where to click.
 - **No git unless you ask.** It never commits, merges, pushes or stashes on its own. Each is a separate ask, and before a
   push you're told what it will trigger. Repository hooks are never skipped. Your product repositories change only after
   you say go, on a branch you name, one at a time, with a review first.

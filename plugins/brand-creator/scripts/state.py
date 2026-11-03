@@ -162,7 +162,7 @@ def main() -> int:
         p = try_find_project()
         if p is None:
             print(f"no brand project found from {Path.cwd()} (no {STATE_FILE} in this folder or above). "
-                  f"Start one with /brand-creator:new, or pass --project.")
+                  f"Start one by saying what the brand is for, or pass --project.")
             return 0
         project = p
     else:

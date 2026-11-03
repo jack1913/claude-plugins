@@ -10,13 +10,10 @@ process one decision at a time, and you decide on taste.
 
 ## Start it
 
-1. Say what you need, such as "a logo and a look for my bakery", or type the command:
-
-   > /brand-creator:new my-bakery
-
-   Claude can start the process itself when you ask for a logo, a look, a visual identity, a rebrand or brand guidelines.
-   It works for small, casual asks too, such as "a logo for my band".
-
+1. Say what you need, such as "a logo and a look for my bakery" or "start a brand called Acme". Claude starts the
+   process itself when you ask for a logo, a look, a visual identity, a rebrand or brand guidelines. It works for small,
+   casual asks too, such as "a logo for my band". If a project is already open in the folder, Claude says so and asks
+   whether to pick it up or start a separate one next to it.
 2. Answer up to three quick questions. Each has a suggested answer, so `ok` accepts them:
    - how far to go: [Choose a tier](../getting-started/choose-a-tier.md);
    - how this brand relates to others you run, only if you mention a parent or sister brand;
@@ -50,7 +47,7 @@ It shows your brand, tier, where you are, the decisions recorded so far and what
 | You see | Do this |
 | --- | --- |
 | "cannot run" | Run `/brand-creator:setup` first |
-| "no brand project found" | Open Claude Code inside the project folder, or start one with `/brand-creator:new` |
+| "no brand project found" | Open Claude Code inside the project folder, or start one by saying what you need, such as "a logo for my bakery" |
 
 ## Related
 

@@ -1,7 +1,7 @@
 export const meta = {
   name: 'review-panel',
-  description: 'brand-creator review panel: one read-only reviewer per lens (design, content, technical, plus legal, platform and accessibility when they apply), then one judge that challenges and sorts the findings',
-  whenToUse: 'Only from /brand-creator:review panel, after the agent count, models, size and cost were shown and the owner said yes. Read only; ends with one list to approve.',
+  description: 'brand-creator reviews your work, one reviewer per angle and a judge; it starts this after your yes.',
+  whenToUse: 'Only from /brand-creator:check --review panel, after the agent count, models, size and cost were shown and the owner said yes.',
   phases: [
     { title: 'Lenses', detail: 'one reviewer per lens; they run check commands and never edit' },
     { title: 'Judge', detail: 'challenges every finding; A before launch, B soon, C optional, owner-only decisions' },
@@ -9,7 +9,7 @@ export const meta = {
 }
 
 /*
- * brand-creator workflow: review-panel (the optional lens panel of /brand-creator:review).
+ * brand-creator workflow: review-panel (the optional lens panel of /brand-creator:check --review).
  *
  * Agents in the default path: 3 lenses (design, content, technical) + 1 judge = 4 (size guideline small, < 5). Each
  * extra lens (legal, platform, accessibility) adds one; the script refuses to start above args.approved_agents.
@@ -48,7 +48,7 @@ function opts(type, extra) {
 }
 
 const A = args
-if (!A || typeof A !== 'object') fail('args are required: run this from /brand-creator:review after the fleet gate (see references/fleet.md)')
+if (!A || typeof A !== 'object') fail('args are required: run this from /brand-creator:check --review panel after the fleet gate (see references/fleet.md)')
 for (const k of ['project', 'plugin_root', 'data']) if (!isAbs(A[k])) fail('args.' + k + ' must be an absolute path')
 if (!/^\d{4}-\d{2}-\d{2}$/.test(String(A.today || ''))) fail('args.today must be YYYY-MM-DD')
 if (!(A.ceiling in RANK)) fail('args.ceiling must be the session model family: opus, sonnet or haiku')

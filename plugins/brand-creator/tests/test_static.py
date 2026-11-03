@@ -231,9 +231,15 @@ def test_readme_states_the_minimum_claude_code_version_used_by_prereq():
     assert prereq.MIN_CLAUDE == max(runtime_versions, key=lambda v: tuple(map(int, v.split("."))))
     assert rows
     # the README is a storefront: install, first run and the one-time setup; the rest is in the manual
-    for section in ("## Install", "## Try it", "/brand-creator:setup", "/brand-creator:new", "marketplace add",
+    for section in ("## Install", "## Try it", "/brand-creator:setup", "marketplace add",
                     "/plugin install brand-creator@", "## What it never does", "## Something off?"):
         assert section in readme or section in (ROOT / "docs/manual/getting-started/make-your-first-brand.md").read_text(), section
+    # a brand is started in words, not with a command; the README's table lists the few things you type
+    assert "> A logo and a look for my bakery" in readme and "/brand-creator:new" not in readme
+    table = readme[readme.index("## What you can do"):readme.index("## What it adds to your sessions")]
+    for typed in ("`/brand-creator:round`, `status`", "`/brand-creator:check`", "`/brand-creator:brand-adopt`"):
+        assert typed in table, typed
+    assert '"help me launch"' in table and "--review" in table and "/brand-creator:launch" not in table and "/brand-creator:review" not in table
     for page, needle in (("platform-support", "## Linux"), ("permissions", "Bash(brand-creator *)"), ("troubleshooting", "# Troubleshooting"),
                          ("costs", "# Costs"), ("what-it-never-does", "# What it never does")):
         assert needle in (ROOT / "docs/manual/reference" / f"{page}.md").read_text(), page
