@@ -980,12 +980,12 @@ def test_a_cold_review_must_start_with_its_verdict(proj):
     review.write_text("", encoding="utf-8")
     r = lint(proj)
     assert r.returncode == 1 and failed(proj) == ["site:cold"], r.stdout
-    assert "Atlas: rounds/r2/Atlas/cold-review.md must start with its verdict, `verdict: ship` or `verdict: fix` (the file is empty)" in detail(proj, "site:cold")
+    assert "Atlas: rounds/r2/Atlas/cold-review.md must start with its verdict, `verdict: ship`, `verdict: fix` or `verdict: owner` (the file is empty)" in detail(proj, "site:cold")
     cold_review_record(proj, page_of("Atlas"))
     mutate(review, "verdict: ship", "Verdict was ship")
     r = lint(proj)
     assert r.returncode == 1 and failed(proj) == ["site:cold"], r.stdout
-    assert "must start with its verdict, `verdict: ship` or `verdict: fix` (its first line is 'Verdict was ship')" in detail(proj, "site:cold")
+    assert "must start with its verdict, `verdict: ship`, `verdict: fix` or `verdict: owner` (its first line is 'Verdict was ship')" in detail(proj, "site:cold")
     mutate(review, "Verdict was ship", "verdict: maybe")
     assert lint(proj).returncode == 1 and "(its first line is 'verdict: maybe')" in detail(proj, "site:cold")
     mutate(review, "verdict: maybe", "# Cold review\n\nverdict: ship")                         # a heading above the verdict: the verdict is not first
@@ -1274,10 +1274,71 @@ def test_the_card_shows_the_cold_verdict(proj):
     assert r.returncode == 1 and 'Atlas: the card says data-cold="ship"' in detail(proj, "site:cold"), r.stdout
     mutate(board_of(proj), '<p class="cold" data-cold="ship">', '<p class="cold" data-cold="maybe">')       # the first card, Ledger
     r = lint(proj)
-    assert r.returncode == 1 and 'Ledger: data-cold must be "ship" or "fix", got \'maybe\'' in detail(proj, "site:cold"), r.stdout
+    assert r.returncode == 1 and 'Ledger: data-cold must be "ship", "fix" or "owner", got \'maybe\'' in detail(proj, "site:cold"), r.stdout
     mutate(board_of(proj), '<p class="cold" data-cold="maybe">', '<p class="cold" data-removed="maybe">')
     r = lint(proj)
-    assert r.returncode == 1 and 'Ledger: the card needs one cold line (data-cold="ship" or "fix"), it has 0' in detail(proj, "site:cold"), r.stdout
+    assert r.returncode == 1 and 'Ledger: the card needs one cold line (data-cold="ship", "fix" or "owner"), it has 0' in detail(proj, "site:cold"), r.stdout
+
+
+def test_a_second_cold_review_may_say_owner_and_the_board_lints_clean(proj):
+    """G4-05: `verdict: owner` is a third verdict (what is left is a choice only the owner can make; its findings are questions to them). `site:cold` passes it like `ship`, the card shows it, an unknown verdict
+    still fails, and a board whose second review says `owner` lints clean."""
+    ask = ("Do you want the tear-off to stay on the first screen, or the plain headline the brief asks for?",)
+    cold_review_record(proj, page_of("Atlas"), "fix", findings=("The second action reads as a stock label.",))             # the first review: fix
+    board_of(proj).write_text(board_text(colds={"Atlas": "fix"}), encoding="utf-8")
+    assert lint(proj).returncode == 0 and detail(proj, "site:cold") == "Ledger: ship; Atlas: fix"
+    (proj / "rounds" / "r2" / "Atlas" / "index.html").write_text(page_text("Atlas") + "<!-- the second action reworded -->\n", encoding="utf-8")   # what was found is fixed in the page
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:check", "site:stills"], "the changed page makes its page check and stills stale until they are taken again"
+    settle(proj, 2, "Atlas")                                                                    # and the stills are taken again
+    cold_review_record(proj, page_of("Atlas"), "owner", findings=ask)                          # the second review: only the owner can decide what is left
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:cold"], r.stdout
+    assert 'Atlas: the card says data-cold="fix" and rounds/r2/Atlas/cold-review.md says verdict: owner' in detail(proj, "site:cold")
+    board_of(proj).write_text(board_text(colds={"Atlas": "owner"}), encoding="utf-8")
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    assert rows(proj)["site:cold"]["status"] == "pass" and detail(proj, "site:cold") == "Ledger: ship; Atlas: owner"
+    card = board_of(proj).read_text(encoding="utf-8")
+    assert '<p class="cold" data-cold="owner">Cold review: <b>owner</b>' in card, "the card shows the last verdict"
+    mutate(cold_of(proj, "Atlas"), "verdict: owner", "Verdict: OWNER  ")                      # letter case and a trailing space do not matter, as for the other two
+    assert lint(proj).returncode == 0
+    mutate(cold_of(proj, "Atlas"), "Verdict: OWNER  ", "verdict: maybe")                       # an unknown verdict still fails, and the message names the three
+    r = lint(proj)
+    assert r.returncode == 1 and failed(proj) == ["site:cold"], r.stdout
+    assert "must start with its verdict, `verdict: ship`, `verdict: fix` or `verdict: owner` (its first line is 'verdict: maybe')" in detail(proj, "site:cold")
+    mutate(cold_of(proj, "Atlas"), "verdict: maybe", "verdict: owners")                        # a longer word is no verdict either
+    assert lint(proj).returncode == 1 and "(its first line is 'verdict: owners')" in detail(proj, "site:cold")
+
+
+def test_the_card_may_claim_owner_and_nothing_else_beyond_the_three_verdicts(proj):
+    cold_review_record(proj, page_of("Atlas"), "owner", findings=("Which of the two headlines is the brand's voice?",))
+    board_of(proj).write_text(board_text(colds={"Atlas": "owner"}), encoding="utf-8")
+    assert lint(proj).returncode == 0
+    mutate(board_of(proj), '<p class="cold" data-cold="owner">', '<p class="cold" data-cold="ship">')
+    r = lint(proj)
+    assert r.returncode == 1 and 'Atlas: the card says data-cold="ship" and rounds/r2/Atlas/cold-review.md says verdict: owner' in detail(proj, "site:cold"), r.stdout
+    mutate(board_of(proj), '<p class="cold" data-cold="ship">', '<p class="cold" data-cold="decide">')       # the first card, Ledger
+    r = lint(proj)
+    assert r.returncode == 1 and 'Ledger: data-cold must be "ship", "fix" or "owner", got \'decide\'' in detail(proj, "site:cold"), r.stdout
+
+
+def test_a_board_made_before_the_owner_verdict_lints_as_it_did(proj):
+    """Review focus 2: two `fix` reviews on a board made in an earlier release, six inputs each, still lint clean: the new verdict adds no failure and no warning."""
+    for name in NAMES:
+        cold_review_record(proj, page_of(name), "fix", findings=("The headline says nothing that only this brand could say.",))
+    board_of(proj).write_text(board_text(colds={"Ledger": "fix", "Atlas": "fix"}), encoding="utf-8")
+    r = lint(proj)
+    assert r.returncode == 0, r.stdout
+    assert rows(proj)["site:cold"]["status"] == "pass" and detail(proj, "site:cold") == "Ledger: fix; Atlas: fix"
+    assert not [x for x, row in rows(proj).items() if row["status"] == "warn" and x.startswith("site:cold")], "no warning is added by the stop rule"
+
+
+def test_the_template_cold_line_names_the_three_verdicts():
+    """G4-05: the cold line of the hero card and of the page card says ship, fix or owner, and the owner verdict has its own mark on the card."""
+    template = " ".join(TEMPLATE.read_text(encoding="utf-8").split())
+    assert template.count('data-cold="[[fill: ship, fix or owner]]">Cold review: <b>[[fill: ship, fix or owner]]</b>') == 2, "the hero card and the page card say the three verdicts"
+    assert '.cold[data-cold="owner"]' in template, "the owner verdict has its own mark on the card"
 
 
 def test_the_cold_review_of_a_page_card_may_be_left_out_but_a_card_may_not_claim_one(proj):
@@ -1639,7 +1700,7 @@ def test_the_contract_and_the_qa_phase_name_every_row_the_site_board_writes():
 def test_the_prompt_fragment_describes_the_cold_review_of_a_site_hero():
     text = " ".join((ROOT / "skills" / "brand-creator" / "references" / "prompt-fragments.md").read_text(encoding="utf-8").split())
     for needle in ("A cold review of a site hero reads only the four stills of the variant, `brief/BRIEF.md` and `FACTS.md`, never the board, the references or the reasons",
-                   "`rounds/r<N>/<name>/cold-review.md`: `verdict: ship` or `verdict: fix` first, a `by:` line (`by: in-thread`; in-thread it is not blind, and an agent only after the fleet gate), "
+                   "`rounds/r<N>/<name>/cold-review.md`: `verdict: ship`, `verdict: fix` or `verdict: owner` first, a `by:` line (`by: in-thread`; in-thread it is not blind, and an agent only after the fleet gate), "
                    "an `inputs:` list with the sha256 of each file (`- <path> sha256:<hex>`), then up to five numbered findings, the one that costs the visitor most first, each short enough to sit on a single line",
                    "does the first screen say what only this brand could say",
                    "A review judges what the page shows: where the page lacks something it would need (wording, a picture, a control), the finding notes that the owner would have to supply it, "
@@ -1943,6 +2004,14 @@ def test_a_page_with_a_cold_review_is_held_to_it(tmp_path):
     mutate(p / "rounds" / "r3" / "start" / "cold-review.md", "verdict: fix", "it is fine")
     r = lint3(p)
     assert r.returncode == 1 and "start: rounds/r3/start/cold-review.md must start with its verdict" in detail(p, "site:cold"), r.stdout
+
+
+def test_a_page_review_may_say_owner_too(tmp_path):
+    """G4-05: the pages stage reads a page's cold review by the same rules: an `owner` shown as `owner` passes."""
+    p = pages_project(tmp_path, colds={"start": "owner"})
+    r = lint3(p)
+    assert r.returncode == 0, r.stdout
+    assert rows(p)["site:cold"]["status"] == "pass" and detail(p, "site:cold") == "start: owner"
 
 
 def test_a_page_card_may_not_claim_a_cold_review_it_has_not_got(tmp_path):

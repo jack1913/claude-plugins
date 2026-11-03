@@ -164,10 +164,13 @@ review and the choices are in `references/phases/07p-site-round.md`; the board's
 3. For each folder, in this order: `brand-creator --data "${CLAUDE_PLUGIN_DATA}" capture rounds/r<N>/<name>/index.html
    --project <dir>`, then `... page-check rounds/r<N>/<name>/index.html --project <dir>` (fix a failing row in the page, or let
    its card say `fail`; never `pass`), then the cold review: `rounds/r<N>/<name>/cold-review.md`, the verdict first
-   (`verdict: ship` or `verdict: fix`), `by: in-thread` by default and not blind. An agent (one
+   (`verdict: ship`, `verdict: fix` or `verdict: owner`), `by: in-thread` by default and not blind. An agent (one
    `brand-creator:brand-reviewer` call per hero variant, with the prompt fragment under **Review** in
    `references/prompt-fragments.md`) only after the fleet gate and the owner's yes. Read every still before you say what the
-   page does. A page changed after any of the three needs them again.
+   page does. A page changed after any of the three needs them again. Run at most two cold reviews per variant per board (the first, and one
+   after the fixes); a third is not run. What the second leaves that only the owner can decide is `verdict: owner`, its findings written as
+   questions to them; the card shows the last verdict, and the gate message for an agent states the calls this allows (2 variants: up to 4).
+   The prompt of an agent's second call says in one line that it is the second and last review of the variant; the first call's has no such line.
 4. Build the board from the template: one card per variant (`data-site-variant="<name>"`) or page (`data-site-page="<id>"`)
    with its four stills, the live link, its check line (`data-check="pass"` or `"fail"`, as its report says), the tells
    found, the layout, the cold verdict and a vote; a hero card also has its idea line (`data-field="idea"`; a card without it

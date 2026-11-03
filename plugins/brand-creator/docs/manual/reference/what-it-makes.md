@@ -85,11 +85,11 @@ not count.
   board's check makes sure that the pictures show each page as it is now, that the cold review was made from those very
   pictures, that every version was checked against your brand's rules, and that the pages board comes after a first
   screen you picked.
-- **The cold review** gives its verdict, "ship" or "fix", first, before any reason. It reads only the version's four
+- **The cold review** gives its verdict, "ship", "fix" or "owner" (what is left is your call), first, before any reason. It reads only the version's four
   pictures, your brief and `FACTS.md` (your list of facts): never the board, the references or Claude's reasons. By
   default Claude writes it in the same conversation, so it is not blind, and the board says "by in-thread". A separate
   helper agent writes it only after you agree to how many, which model and the cost, and the board then says "by
-  agent". Each review is kept in `cold-review.md` beside its version.
+  agent". Each review is kept in `cold-review.md` beside its version. A version is reviewed at most twice (the second review replaces the first).
 - **Layout references.** A layout reference is a short recipe for how a page is organised for one visitor job, such as
   "understand how a service will run for them before handing it something important". It is a starting point, never a
   template. The plugin keeps them in `skills/brand-creator/references/page-layouts.json`, keyed to what the visitor

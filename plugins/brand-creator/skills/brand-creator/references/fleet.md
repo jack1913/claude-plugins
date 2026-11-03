@@ -40,7 +40,7 @@ Before any workflow or subagent fleet:
      are the rows of [fleet-costs.json](fleet-costs.json), each from a dated, named run. An agent with no row is "not
      measured": say so, and never fill it in from what the step would cost in one thread. A fleet with no workflow to
      plan (the cold review of a site hero below, the research fan-out) has a row of its own there (`cold-review`,
-     `research-fleet`): state that row's figure, and for a `per: call` row multiply it by the number of calls. The
+     `research-fleet`): state that row's figure, and for a `per: call` row multiply it by the number of calls (for the cold review, the number its stop rule allows, below). The
      plan's turn total is the ceiling. The first run of a workflow on a project is the one to watch in `/workflows`;
    - that **single-thread is the default** and you will do it in this thread if they prefer.
 3. Wait for an explicit yes. Put the approved number in `approved_agents`; the scripts refuse to start a run that plans
@@ -178,8 +178,19 @@ in-thread`), so an agent is the opt-in upgrade, only after the fleet gate: the c
 capped at the session model with the per-call `model`, and each call reads four pictures and two files. Each call gets the
 cold-review fragment of [prompt-fragments.md](prompt-fragments.md) and the six paths (the variant's four stills,
 `brief/BRIEF.md`, `FACTS.md`) and nothing else: not the board, the references or your reasons. The reviewer reports and
-never writes, so you write `rounds/r<N>/<name>/cold-review.md` from its reply, the verdict first and `by: agent`, with the
-sha256 of each input.
+never writes, so you write `rounds/r<N>/<name>/cold-review.md` from its reply, the verdict first (`ship`, `fix` or `owner`) and
+`by: agent`, with the sha256 of each input.
+
+At most two calls per hero variant per board: the first review, and one after the fixes; a third is not run, and a `verdict: owner`
+review is the last one for that variant (what is left is a choice only the owner can make, its findings written as questions to
+them). The fleet gate message for these calls states the number the rule allows: the calls now (one per variant) and the most it
+allows (2 variants: up to 4 calls; 3 variants: up to 6), each at the figure of the `cold-review` row, so that the owner's yes
+covers the second review too. A later hero board is a new board and counts afresh.
+
+The reviewer cannot tell its first call from its second, so the prompt of the second call of a variant states it in one line, "This
+is the second and last review of this variant." That line is an addition to the inputs above, as are the G4 rules as prompt text and the three key
+frames that [07p-site-round](phases/07p-site-round.md) allows. It is a line of the prompt, not an input, and never the first review's findings or your reasons. The prompt of a first call has no such line. The reviewer takes its
+push to `owner` (and its restraint with `fix`) from that line alone: "when the prompt says this is the second review", in its brief.
 
 ## A fleet without a workflow
 

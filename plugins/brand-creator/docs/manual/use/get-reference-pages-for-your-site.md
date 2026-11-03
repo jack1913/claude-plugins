@@ -83,14 +83,19 @@ The first screen, what a visitor sees before they scroll, sets the tone for ever
    - whether it keeps your brand's rules. A version that breaks one is marked as failing, never hidden;
    - anything that makes it look generic, like countless other sites (such as a small label in capitals over a
      heading), and what Claude will change or why it keeps it;
-   - a verdict, "ship" (good to go) or "fix", from a review that judges only the four pictures, your brief and your
-     facts (`FACTS.md`: the true things your pages may say, such as your prices).
+   - a verdict, "ship" (good to go), "fix" or "owner" (what is left is your call), from a review that judges only the four
+     pictures, your brief and your facts (`FACTS.md`: the true things your pages may say, such as your prices).
 5. Pick one, mix two ("this one, with the ending of that one"), or say that none fits and what was missing. Claude says
    back your pick and writes it down in your words.
 
 Claude does that review itself by default, in the same chat. It built the page, so this is not a stranger's fresh look,
 and the board says so. For one, ask for a separate reviewer: an extra agent, at extra cost. Claude says how many and
 roughly what they cost, and waits for your yes.
+
+A version is reviewed at most twice: once, and once more after Claude fixed what the first review found. If something
+is still open after that, the review says "owner" and asks you questions ("Do you want X or Y?"), or, if it still says
+"fix", Claude puts what is left to you on the board instead of changing the page again. Either way Claude does not send
+the page round a third time. Your questions are in the board's Questions list, each with the answer Claude recommends: you answer there, and any change to the page follows.
 
 ## 3. Get your other pages, and say which choices are rules
 

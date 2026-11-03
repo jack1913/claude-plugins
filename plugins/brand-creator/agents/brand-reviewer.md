@@ -29,8 +29,13 @@ RULES: work under the round/project dir only; never edit adoption targets before
   and nothing else: not the board, the references or the reasons. With the rules, judge the stills against them: a page
   that does what a rule says (a dark still that equals the light one, when a rule says so) is right and is not a finding;
   a page that breaks a rule is a finding, with the rule's own words. Without them, judge what the page shows. Start the reply with
-  `verdict: ship` or `verdict: fix`, before any reason, then at most five numbered findings, the one that costs the
-  visitor most first, one short line each. The questions to ask are in the prompt. You write no file: the main thread
+  `verdict: ship`, `verdict: fix` or `verdict: owner`, before any reason, then at most five numbered findings, the one that costs the
+  visitor most first, one short line each. `owner` is for the review where what is left is a choice only the owner can make (wording or
+  a picture they must supply, a trade-off between two good options, a rule they have not decided): write each finding then as a
+  question to them, not as a fault. A cold review is run at most twice per variant, the second after the fixes. When the prompt says
+  this is the second review, say `owner` for what you would otherwise only list for another round of fixes, and `fix` only for a fault that
+  is plainly there. A prompt that does not say so is the first review: a fault is `fix`, and `owner` only when what is left is a choice
+  only the owner can make. The questions to ask are in the prompt. You write no file: the main thread
   writes `cold-review.md` from your reply. The numbered-item and "Decisions for you" parts below do not apply to it.
 
 ## Review on a still copy

@@ -383,7 +383,7 @@ def fill_site_board(template: str, names: tuple[str, ...] = ("Ledger", "Atlas"),
                     pages: tuple[str, ...] = ("start", "pricing"), hero: str = "Ledger", choices: tuple | None = None) -> str:
     """The site board template as a finished page that must pass board-lint: the variant article repeated once per name and every [[fill: ...]] marker outside an HTML comment replaced with stand-in
     text. `first` is the first board of its stage, which does without the two blocks a later one needs (What changed, Weak points); `stage` is the data-site-stage; `checks` maps a variant name to the
-    check line of its card (pass or fail, default pass), `colds` to its cold line (ship or fix, default ship), `layouts` to its layout id (default walkthrough), `from_refs` to its Takes from line
+    check line of its card (pass or fail, default pass), `colds` to its cold line (ship, fix or owner, default ship), `layouts` to its layout id (default walkthrough), `from_refs` to its Takes from line
     (default SITE_FROM_REFS) and `reflex` to its reflex line (default "no hits"). The folders, the stills, the reports and the cold reviews of the variants are the test's to make.
     At the pages stage (`stage` "pages") the page cards, the choices and the questions of the pages come from the three comments of the template (see fill_site_pages_board): `pages` are the page ids, `hero`
     the data-hero, `choices` the choice items; `names` is not used."""
@@ -401,7 +401,7 @@ def fill_site_board(template: str, names: tuple[str, ...] = ("Ledger", "Atlas"),
         b = b.replace("[[fill: layout id]]", (layouts or {}).get(name, "walkthrough"))
         b = re.sub(r'(data-field="from-refs">)\[\[fill:[^\]]*\]\]', lambda mm: mm.group(1) + (from_refs or {}).get(name, SITE_FROM_REFS), b)
         b = re.sub(r'(data-field="reflex">)\[\[fill:[^\]]*\]\]', lambda mm: mm.group(1) + (reflex or {}).get(name, "no hits"), b)
-        return re.sub(r"\[\[fill: ship or fix\]\]", (colds or {}).get(name, "ship"), b)
+        return re.sub(r"\[\[fill: ship, fix or owner\]\]", (colds or {}).get(name, "ship"), b)
 
     page = template.replace(block, named(block, names[0]) if names else "", 1).replace(marker.group(0), "".join(named(block, n) for n in names[1:]), 1)
     for word, name in zip(("one", "two", "three"), names):
@@ -445,7 +445,7 @@ def fill_site_pages_board(template: str, pages: tuple[str, ...] = ("start", "pri
                           colds: dict | None = None, layouts: dict | None = None, from_refs: dict | None = None, choices: tuple | None = None, brand: str = "Acme") -> str:
     """The site board template at the pages stage as a finished page that must pass board-lint: the "variants" section becomes the pages section of the template's second comment (one article per id of
     `pages`), the choices section of its first comment goes in before My call, the questions of its third comment replace question 1, and <body> says data-site-stage="pages" and data-hero. `checks` maps a
-    page id to its check line (pass or fail, default pass); `layouts` to its layout id (default walkthrough); `colds` to its cold line (ship or fix): a page not in `colds` has no cold line (it is optional on
+    page id to its check line (pass or fail, default pass); `layouts` to its layout id (default walkthrough); `colds` to its cold line (ship, fix or owner): a page not in `colds` has no cold line (it is optional on
     a page); `from_refs` to its Takes from line (default the hero's structure; None leaves the line out); `choices` is a tuple of (id, tag, text, data-source, data-pages or None) like SITE_CHOICES. The folders,
     the stills, the reports and the cold reviews of the pages are the test's to make."""
     import re
@@ -465,7 +465,7 @@ def fill_site_pages_board(template: str, pages: tuple[str, ...] = ("start", "pri
         else:
             b = re.sub(r'(data-field="from-refs">)\[\[fill:[^\]]*\]\]', lambda mm: mm.group(1) + text, b)
         if pid in (colds or {}):
-            b = b.replace('data-cold="[[fill: ship or fix]]"', f'data-cold="{colds[pid]}"').replace("<b>[[fill: ship or fix]]</b>", f"<b>{colds[pid]}</b>")
+            b = b.replace('data-cold="[[fill: ship, fix or owner]]"', f'data-cold="{colds[pid]}"').replace("<b>[[fill: ship, fix or owner]]</b>", f"<b>{colds[pid]}</b>")
             b = re.sub(r"\[\[fill: OPTIONAL: its first finding[^\]]*\]\]", "The first screen says what only this brand could say.", b)
         else:
             b, n = re.subn(r'        <p class="cold" data-cold=.*?</p>\n', "", b)

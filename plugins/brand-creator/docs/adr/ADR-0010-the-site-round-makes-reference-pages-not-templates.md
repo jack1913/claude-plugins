@@ -73,3 +73,18 @@ round to its own record. This is that record.
 - The book can show the pages.
 - Credit. Hero first with a cold review that answers ship or fix first, and layouts named after what the visitor came to
   do, are ideas from Hallmark (MIT); rewritten, nothing copied.
+
+## Update 2026-11-03
+
+The cold review answers `ship`, `fix` or `owner`, not only `ship` or `fix` as the bullet "Each variant is checked three ways" and the
+Credit line above say. `owner` says that what is left is a choice only the owner can make, and its findings are written as questions to
+them. A variant is reviewed at most twice per board (the first, and one after the fixes) and a third review is not run: the second may say
+`owner`, and one that still says `fix` is not followed by a change of the page but by what is left going to the owner on the board. The
+lint passes `owner` like `ship` and cannot count the reviews, so the cap is a rule of the phase and of the fleet gate. Everything else in
+that bullet stands, including that the review runs in the thread by default and an agent only after the fleet gate. The change is
+written in the [site round](../../skills/brand-creator/references/phases/07p-site-round.md#the-cold-review), in the
+[fleet reference](../../skills/brand-creator/references/fleet.md#the-cold-review-of-a-site-hero-main-thread-one-reviewer-call-per-variant)
+and in the [changelog](../../CHANGELOG.md).
+
+Why: the pilot's 21 reviews showed a loop with no end: a review always finds something, so the page was fixed and read again. A verdict
+that hands a choice to the owner ends the loop where only the owner can.

@@ -84,6 +84,12 @@ stage, and why, is in the [archive](docs/archive/README.md).
   a word. A font the earlier report lists, that still sits in your project outside `assets/fonts/` and that this run does not name,
   is a warning (`fonts:dropped`) that names it and says to name every font in one run. The report is not merged: it still lists
   only the fonts of the run that wrote it. A font you took away, or one outside the project, is not counted.
+- The cold review of a site hero now stops. A version is read at most twice per board: the first time, and once after Claude fixed
+  what the first review found; a third review is not run. The review has a third verdict, `owner`, for what only you can decide:
+  its findings are written as questions to you, on the board's Questions list with the answer Claude recommends, and the board's card shows it next to `ship` and `fix`. `board-lint` accepts
+  all three (an unknown word still fails; boards made before this release lint as they did), and the lint cannot count reviews, so
+  the limit is in the round's instructions. When Claude asks you to approve reviewer agents, it now states how many calls the
+  rule allows (up to 4 for two versions, 6 for three).
 
 ### Fixed
 
