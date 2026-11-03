@@ -1107,13 +1107,15 @@ def _load_checked(project: Path, path: str, where: str) -> None:
         real = confine(project, path, what="file", read=True)
     except CliError as e:
         raise CliError(e.code, f"{where}: {e.message}") from None
+    # the letter case first: on a Mac `PIC.svg` exists when the project holds `pic.svg`, on Linux it does not, and either way the
+    # owner needs the same answer (the spelling the project has), not "the project does not have it"
+    alike = _exact_case(project, path)
+    if alike is not None:
+        fail(EXIT_FAIL, f"{where}: leads to {path}, which the project holds as {alike}: a product repository on Linux tells the letter case apart, so write the path as it is")
     if not os.path.lexists(project / path):
         fail(EXIT_FAIL, f"{where}: leads to {path}, which the project does not have: the kit copies every file a page loads, and `kit check` would fail the link")
     if real.is_dir():
         fail(EXIT_FAIL, f"{where}: leads to {path}, a folder, not a file: it holds no index.html for a web server to answer with, and `kit check` fails a link to a folder, so the page cannot go into the kit as it is")
-    alike = _exact_case(project, path)
-    if alike is not None:
-        fail(EXIT_FAIL, f"{where}: leads to {path}, which the project holds as {alike}: a product repository on Linux tells the letter case apart, so write the path as it is")
 
 
 def _failing(doc: dict) -> str:

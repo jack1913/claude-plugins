@@ -461,6 +461,9 @@ ok "staleness recorded and current; specs-due lists the rows to recheck"
 step "check (every gate for the artefacts that exist)"
 # board-lint lists FACTS.md and the brief as inputs, and FACTS.md was replaced by the example's after the first lint (platform packs): lint the board again
 # (this check is run by hand; the chain of tools/finish.sh below lints the latest board itself before its own check, and its step is asserted there)
+# The project is Full tier since the Tier B packs, and a Full-tier round 1 needs an inventory (board-lint project:inventory): on macOS the
+# Apple step wrote INVENTORY.md; elsewhere the example has no target repository, which BRAND-STATE.md records
+[ -f "$P/INVENTORY.md" ] || "${BC[@]}" state --project "$P" --set "inventory=none (no target repo)" >/dev/null
 "${BC[@]}" board-lint rounds/r1/board.html --project "$P" >/dev/null || die "the example board does not pass board-lint with the example's FACTS.md"
 "${BC[@]}" check --project "$P"
 
