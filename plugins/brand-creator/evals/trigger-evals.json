@@ -1,5 +1,5 @@
 {
-  "$description": "Trigger evals in skill-creator style: one list of {query, should_trigger} per skill. Written in the stage that writes each description; run by hand on small, medium and large models (billed, stage 7), with frontend-design installed. brand-creator, brand-naming, brand-assets and brand-book are model-invocable (the last three are also hidden from the / menu, so a request for them is always in words) and carry positives and near-miss negatives, including sibling cases (a naming-only request goes to brand-naming, not brand-creator; platform files from a finished mark go to brand-assets, not brand-creator; guidelines around an existing logo go to brand-creator, not brand-assets; the book of an approved identity goes to brand-book, while a book for a brand that does not exist yet goes to brand-creator). round, status, setup, brand-adopt and check set disable-model-invocation, so their lists hold negatives only: prompts that sound like them and must not load them on their own. Starting a project, the launch hand-offs and the review of the latest work have no skill of their own any more: the first two are brand-creator's (see its positives), and the review is a flag of check, which is typed only. Every list also carries Polish queries, and brand-creator's positives include non-software businesses (a bakery, a coach, a photographer, a podcast, an Etsy shop, a florist, a yoga studio, a band, a nonprofit). Requests that name an action the owner must take (buy, register, file) are brand-creator's positives (it hands each one over) and brand-naming's negatives, so that none of them loads a user-invoked skill on its own.",
+  "$description": "Trigger evals in skill-creator style: one list of {query, should_trigger} per skill. Written in the stage that writes each description; run by hand on small, medium and large models (billed, stage 7), with frontend-design installed. brand-creator, brand-naming, brand-assets and brand-book are model-invocable (the last three are also hidden from the / menu, so a request for them is always in words) and carry positives and near-miss negatives, including sibling cases (a naming-only request goes to brand-naming, not brand-creator; platform files from a finished mark go to brand-assets, not brand-creator; guidelines around an existing logo go to brand-creator, not brand-assets; the book of an approved identity goes to brand-book, while a book for a brand that does not exist yet goes to brand-creator). round, status, setup, brand-adopt and check set disable-model-invocation, so their lists hold negatives only: prompts that sound like them and must not load them on their own. Starting a project, the launch hand-offs and the review of the latest work have no skill of their own any more: the first two are brand-creator's (see its positives), and the review is a flag of check, which is typed only. Their old near-miss lists were folded into brand-creator's list: a code project or a code review, a git branch, a website launch or business cards stay negatives; starting a brand, a brand's launch hand-offs and (with a BRAND-STATE.md folder cue) a review of the round boards asked in words are positives (brand-creator loads, then offers the typed /brand-creator:check --review [panel] for a review list or a panel, and runs a round's own self-review before it is shown itself); the review of a brand book that exists is brand-book's, so it is a near miss for brand-creator and a positive for brand-book. Every list also carries Polish queries, and brand-creator's positives include non-software businesses (a bakery, a coach, a photographer, a podcast, an Etsy shop, a florist, a yoga studio, a band, a nonprofit). Requests that name an action the owner must take (buy, register, file) are brand-creator's positives (it hands each one over) and brand-naming's negatives, so that none of them loads a user-invoked skill on its own.",
   "brand-creator": [
     {
       "query": "(inside a folder with BRAND-STATE.md) Change the accent minimum rule from 4x4 px to 3x3 px and update everything that has to follow",
@@ -211,6 +211,118 @@
     },
     {
       "query": "Code the pricing page in our React app with the brand tokens",
+      "should_trigger": false
+    },
+    {
+      "query": "Start a brand called Acme",
+      "should_trigger": true
+    },
+    {
+      "query": "I need a logo for my bakery",
+      "should_trigger": true
+    },
+    {
+      "query": "Start a new brand project called Northlight",
+      "should_trigger": true
+    },
+    {
+      "query": "Open a new project folder for a rebrand of our accounting firm",
+      "should_trigger": true
+    },
+    {
+      "query": "Zacznij nowy projekt marki dla mojej kawiarni",
+      "should_trigger": true
+    },
+    {
+      "query": "(inside a folder with BRAND-STATE.md) Help me launch",
+      "should_trigger": true
+    },
+    {
+      "query": "(w folderze z BRAND-STATE.md) pomóż mi z premierą marki",
+      "should_trigger": true
+    },
+    {
+      "query": "Give me the launch checklist for the new brand",
+      "should_trigger": true
+    },
+    {
+      "query": "What do I need to do before the brand goes public?",
+      "should_trigger": true
+    },
+    {
+      "query": "Co zrobić przed publikacją marki?",
+      "should_trigger": true
+    },
+    {
+      "query": "Buy the domain for me",
+      "should_trigger": true
+    },
+    {
+      "query": "Pay for the trademark filing",
+      "should_trigger": true
+    },
+    {
+      "query": "Register the Instagram handle for me",
+      "should_trigger": true
+    },
+    {
+      "query": "zarejestruj znak towarowy za mnie",
+      "should_trigger": true
+    },
+    {
+      "query": "(inside a folder with BRAND-STATE.md) Ask a panel of reviewers to critique the boards",
+      "should_trigger": true
+    },
+    {
+      "query": "(inside a folder with BRAND-STATE.md) Get a few reviewers' opinions on the direction board",
+      "should_trigger": true
+    },
+    {
+      "query": "(inside a folder with BRAND-STATE.md) Self-review the round before I see it",
+      "should_trigger": true
+    },
+    {
+      "query": "(w folderze z BRAND-STATE.md) zrób przegląd tablic z kierunkami",
+      "should_trigger": true
+    },
+    {
+      "query": "Launch the website",
+      "should_trigger": false
+    },
+    {
+      "query": "Order business cards for us",
+      "should_trigger": false
+    },
+    {
+      "query": "Start a new React project called storefront",
+      "should_trigger": false
+    },
+    {
+      "query": "Scaffold a new Next.js app",
+      "should_trigger": false
+    },
+    {
+      "query": "Create a new git branch for the logo work",
+      "should_trigger": false
+    },
+    {
+      "query": "Review this pull request",
+      "should_trigger": false
+    },
+    {
+      "query": "Review the diff",
+      "should_trigger": false
+    },
+    {
+      "query": "Critique this board",
+      "should_trigger": false
+    },
+    {
+      "query": "Give me feedback on the brand book before I approve it",
+      "should_trigger": false
+    },
+    {
+      "query": "Zrób przegląd księgi znaku",
       "should_trigger": false
     }
   ],
@@ -594,6 +706,14 @@
     {
       "query": "Set up a Docusaurus site for our product docs and theme it with our brand colours and logo.",
       "should_trigger": false
+    },
+    {
+      "query": "Give me feedback on the brand book before I approve it",
+      "should_trigger": true
+    },
+    {
+      "query": "Zrób przegląd księgi znaku",
+      "should_trigger": true
     }
   ],
   "round": [

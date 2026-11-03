@@ -860,6 +860,58 @@ def test_every_trigger_list_has_polish_queries_and_the_plan_cases():
     for word in ("buy the domain", "register the domain", "trademark", "instagram handle"):
         assert word in outward, f"outward-action query missing: {word}"
     assert not {"new", "launch", "review"} & set(d), "those skills were folded into brand-creator and check --review"
+    # what the three removed lists held lives on in brand-creator's list, each with the answer it deserves against brand-creator's text
+    verdict = {c["query"]: c["should_trigger"] for c in d["brand-creator"]}
+    near_misses = (
+        "Launch the website", "Order business cards for us",                              # not a brand's launch steps
+        "Start a new React project called storefront", "Scaffold a new Next.js app",       # a code project, not a brand
+        "Create a new git branch for the logo work",                                       # a git act
+        "Review this pull request", "Review the diff",                                     # a code review
+        "Critique this board",                                                             # no brand cue at all
+        "Give me feedback on the brand book before I approve it", "Zrób przegląd księgi znaku")   # a book that exists is brand-book's
+    for q in near_misses:
+        assert verdict.get(q) is False, f"near miss missing or wrong: {q}"
+    # the two review queries of a book that exists are sibling cases: a near miss here and a positive in brand-book's list
+    book = {c["query"]: c["should_trigger"] for c in d["brand-book"]}
+    for q in ("Give me feedback on the brand book before I approve it", "Zrób przegląd księgi znaku"):
+        assert book.get(q) is True, f"sibling case missing or wrong in brand-book's list: {q}"
+    owned = (
+        # start (was `new`)
+        "I need a logo for my bakery", "Zacznij nowy projekt marki dla mojej kawiarni", "Open a new project folder for a rebrand of our accounting firm",
+        "Start a new brand project called Northlight", "Start a brand called Acme",
+        # launch hand-off (was `launch`): handed over, never done
+        "Buy the domain for me", "What do I need to do before the brand goes public?", "zarejestruj znak towarowy za mnie",
+        "Give me the launch checklist for the new brand", "Co zrobić przed publikacją marki?", "Register the Instagram handle for me",
+        "Pay for the trademark filing", "(inside a folder with BRAND-STATE.md) Help me launch", "(w folderze z BRAND-STATE.md) pomóż mi z premierą marki",
+        # review of a project's round boards (was `review`; the review list and the panel are typed `check --review [panel]`, a round's own self-review runs in brand-creator)
+        "(inside a folder with BRAND-STATE.md) Ask a panel of reviewers to critique the boards",
+        "(w folderze z BRAND-STATE.md) zrób przegląd tablic z kierunkami",
+        "(inside a folder with BRAND-STATE.md) Get a few reviewers' opinions on the direction board",
+        "(inside a folder with BRAND-STATE.md) Self-review the round before I see it")
+    for q in owned:
+        assert verdict.get(q) is True, f"brand-creator positive missing or wrong: {q}"
+    # the trigger text carries the phrases the docs promise
+    when = re.search(r"^when_to_use: (.*)$", (SKILLS / "brand-creator" / "SKILL.md").read_text(encoding="utf-8"), re.M).group(1).lower()
+    for phrase in ("start a brand called acme", "help me launch", "the launch checklist", "buy the domain", "file the trademark", "pomóż mi z premierą marki"):
+        assert phrase in when, phrase
     # every skill that exists has a list (the older test), and a user-invoked skill never has a positive
     skills = {p.name for p in SKILLS.iterdir() if (p / "SKILL.md").is_file()}
     assert set(d) == skills
+
+
+def test_the_manual_checks_page_says_brand_creators_trigger_text_changed_and_a_billed_run_is_due():
+    """The slimmed menu moved positives into brand-creator's list and changed its when_to_use: the record must not say that no positive moved."""
+    page = (ROOT / "docs" / "internals" / "manual-checks.md").read_text(encoding="utf-8")
+    section = " ".join(page[page.index("**Changed since this run (the slimmed menu)."):page.index("## Workflow trials")].split())
+    assert "no positive moved" not in section and "its description already covered both and is unchanged" not in section
+    for needle in ("`when_to_use` of `brand-creator` changed", "start a brand called Acme", "help me launch", "the launch checklist",
+                   "positives", "near misses", "None of them has run", "re-run the billed trigger evals for `brand-creator`"):
+        assert needle in section, needle
+    # the words the text really lost (checked against a word diff of the committed text): no phrase that was never there
+    for cut in ("\"a logo for my band\"", "\"product\" in \"for a business, product, shop, podcast or person\"", "\"token or threshold\" after \"change a rule\""):
+        assert cut in section, cut
+    assert "\"a brand's\"" not in section
+    # the sibling review queries are positives in brand-book's list, and the page says its next run covers them
+    assert "now positives in the `brand-book` list, which has 43 queries" in section and "the next `brand-book` run covers them" in section
+    evals = json.loads((ROOT / "evals" / "trigger-evals.json").read_text(encoding="utf-8"))
+    assert len(evals["brand-book"]) == 43 and len(evals["brand-creator"]) == 81

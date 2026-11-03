@@ -1,7 +1,7 @@
 ---
 name: check
-description: Runs every check that applies to the current brand project (boards, contrast, logo sheet, files, book, print, adoption and the history record) and, given old names or colours, searches the whole project for leftovers. With --page, checks a page built anywhere against the brand instead. Reports each failing row with its fix. Runs only when typed as /brand-creator:check.
-argument-hint: "[--page <file-or-folder-page-or-localhost-url>] [--review [board|book|pack|all] [panel]] [--panel] [<old value or phrase> ...]"
+description: Runs every check that applies to the current brand project (boards, contrast, logo sheet, files, book, print, adoption and the history record) and, given old names or colours, searches the whole project for leftovers. With --page, checks a page built anywhere against the brand instead. With --review, reviews the latest work against the project's own rules and presents the findings as one list to approve (add panel for a review panel). Reports each failing row with its fix. Runs only when typed as /brand-creator:check.
+argument-hint: "[--page <file-or-folder-page-or-localhost-url>] [<old value or phrase> ...] | --review [board|book|pack|all] [panel] | --panel"
 disable-model-invocation: true
 allowed-tools: Bash(brand-creator *)
 ---
@@ -10,9 +10,8 @@ allowed-tools: Bash(brand-creator *)
 
 Thin wrapper over `brand-creator check` and `brand-creator page-check`; what each row means is in
 [09-qa](../brand-creator/references/phases/09-qa.md) and the cascade method in
-[cascade](../brand-creator/references/cascade.md). Arguments: `$ARGUMENTS` (`--page` and the page to check; `--review`
-and what to review, or `--panel`, which is `--review panel`; then old values or phrases that must be gone; empty → the
-gates only). `--review` is the judgement review of the latest work, below.
+[cascade](../brand-creator/references/cascade.md). Arguments: `$ARGUMENTS`, read as in [Arguments](#arguments)
+below (empty → the gates only). `--review` is the judgement review of the latest work, below.
 
 RULES: work under the round/project dir only; never edit adoption targets before G6; never rm/pkill (move to removed-<date>/); never commit/push/merge/stash/worktree unless explicitly asked, each separately; no outward actions (buy, file, register, contact); raise errors explicitly, no silent fallbacks; read your shots before any visual claim.
 
@@ -44,6 +43,21 @@ RULES: work under the round/project dir only; never edit adoption targets before
    that did not run as passed.
 6. Fix nothing unasked. Offer the fixes as one list: those that need no decision first, then numbered decisions with a
    recommendation. A fix goes into a source (a token, a chapter, a generator), never into an output.
+
+## Arguments
+
+Read `$ARGUMENTS` left to right before anything runs.
+
+- `--page <page>` is the page check (step 4).
+- `--review` takes at most a target (`board`, `book`, `pack` or `all`) and then `panel`, in that order.
+- `--panel` is an alias of `--review panel`.
+- With `--review` or `--panel`, any word that is not that target or `panel` in its place is refused, before or after,
+  with the one line `usage: /brand-creator:check --review [board|book|pack|all] [panel]`. It is never read as an old value
+  to search for.
+- Old values and phrases (step 3) are the words left over when `--review` and `--panel` are absent. Except: a bare `panel`
+  without `--review` is refused with `did you mean --review panel?` (to search for the word itself, quote it).
+- `--page` and `--review` together are refused: run them one after the other (`--panel` counts as `--review`).
+- A refused command runs nothing: no gates, no page check, no review, no cascade.
 
 ## Review (`--review`)
 

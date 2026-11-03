@@ -86,19 +86,31 @@ names the optional chapters, the clean-up after a choice, and says such a book s
 the lockup clean-up and still fires on the Polish query. Fourteen held-out queries, written for this re-run by an agent that
 did not see the new text, passed 14 of 14 on Sonnet (13 with the old text) and 11 of 14 on Haiku (9): Haiku missed a clean-up
 after choosing an accent colour, a tone of voice chapter rewrite in Polish and a new history chapter. They were added to the
-eval set afterwards, so brand-book now has 41 queries; the next run covers them all.
+eval set afterwards, so brand-book now has 41 queries (43 after the slimmed menu, below); the next run covers them all.
 
 **Changed since this run.** The `brand-creator` description changed after the run above: it now names the brand's website
 references and reference pages and says it is not for building production websites. Three positives (two English, one
 Polish) and two negatives about the site steps were added to `evals/trigger-evals.json`, so brand-creator now has 53
-queries. None of them has run, and the 48 above ran against the old text. The next run covers all 53 with the new
-description. The `check` description also gained `--page`; `check` is typed by the owner, so it has negatives only.
+queries. None has run against the new text; the last run's 48 queries ran against the older text. The next run covers all of them with the new
+description (81 after the slimmed menu, below). The `check` description also gained `--page`; `check` is typed by the owner, so it has negatives only.
 
-**Changed since this run (the slimmed menu).** The lists for `new`, `launch` and `review` were removed with those skills; every
-query in them was a negative for a typed-only skill, so no positive moved. `brand-naming`, `brand-assets` and `brand-book` are now
-`user-invocable: false` (hidden from the `/` menu, still started from the owner's words), with their descriptions unchanged, so
-their results above stand. `brand-creator` now also starts a project and runs the launch hand-off from the owner's words; its
-description already covered both and is unchanged. `check` takes `--review` and `--panel` and its description is unchanged too.
+**Changed since this run (the slimmed menu).** The lists for `new`, `launch` and `review` were removed with those skills, and their
+queries moved into the `brand-creator` list, each with the answer it deserves against the `brand-creator` text. The near misses stay
+negatives: a code project, a git branch, a website launch, business cards, a code review, and the review of a brand book that
+exists (that is `brand-book`'s). The queries that are `brand-creator`'s work now are positives, so positives did move: starting a
+brand, the launch hand-offs (handed over, never done) and, with a `BRAND-STATE.md` folder cue, a review of the round boards asked in
+words (`brand-creator` loads, then offers the typed `/brand-creator:check --review [panel]` for a review list or a panel, and runs a
+round's own self-review before it is shown itself). The `when_to_use` of `brand-creator` changed with them:
+it now names "start a brand called Acme", "help me launch" and "the launch checklist", with a Polish counterpart for the launch, because
+no command starts a project or the launch hand-off any more. To stay under the listing target of 1,024 characters it also lost a few words:
+"a logo for my band" as an example of a casual ask, "product" in "for a business, product, shop, podcast or person", and "token or threshold" after "change a rule". `brand-creator` has 81 queries now, 48 of them positives. None of them
+has run: the 48 above ran against the older text, so re-run the billed trigger evals for `brand-creator` (the next run covers all
+81 with the new text). `brand-naming`, `brand-assets` and `brand-book` are now `user-invocable: false` (hidden from the `/` menu,
+still started from the owner's words), with their descriptions unchanged, so their results above stand. Two sibling queries about a
+book that exists, "Give me feedback on the brand book before I approve it" and "Zrób przegląd księgi znaku", are near misses for
+`brand-creator` and are now positives in the `brand-book` list, which has 43 queries (25 of them positives). They have not run
+either: the next `brand-book` run covers them with its unchanged description. `check` takes `--review` and
+`--panel` and its description now says so; `check` is typed by the owner, so its list has negatives only.
 
 ## Workflow trials
 
@@ -284,8 +296,12 @@ project and then "buy the domain for me": confirm the answer is a hand-off with 
 `user-invocable: false`. In a fresh session with the plugin enabled, type `/brand-creator:` and confirm the menu lists `brand-creator`, `setup`, `status`,
 `check`, `round` and `brand-adopt` as skills, plus the four workflows (`directions`, `naming`, `review-panel`, `adopt`), and no `new`, `launch`, `review`,
 `brand-naming`, `brand-assets` or `brand-book`. Then say "name ideas for my bakery", "favicons from my logo.svg" and "generate the brand book" in
-three sessions and confirm the matching hidden skill loads each time; say "start a brand called acme" in an empty folder and confirm `brand-creator` runs
-its first questions (and in a folder that holds a `BRAND-STATE.md`, that it asks whether to resume or start a separate project). Type
+three sessions and confirm the matching hidden skill loads each time; then say "use the brand-naming skill" (and the same for `brand-assets` and
+`brand-book`) and confirm each loads by that name, which is the fallback the manual gives. Say "start a brand called acme" in an empty folder and
+confirm `brand-creator` runs its first questions, offers `./acme/` in the current folder, and puts no folder question in the question call (and in
+a folder that holds a `BRAND-STATE.md`, that it asks whether to resume or start a separate project); say "put it in ~/brands/acme-rebrand" and
+confirm the folder is `acme-rebrand` under `~/brands`. Type `/brand-creator:check --review board extra`, `/brand-creator:check "Old Name" --review`, `/brand-creator:check acme --panel`,
+`/brand-creator:check panel` and `/brand-creator:check --page index.html --review` and confirm each is refused in one line and runs nothing. Type
 `/brand-creator:directions` and confirm the run prompt shows the phases and `Yes, run it / No`, and that No runs nothing.
 
 **Last run:** never.

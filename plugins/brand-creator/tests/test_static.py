@@ -240,6 +240,7 @@ def test_readme_states_the_minimum_claude_code_version_used_by_prereq():
     for typed in ("`/brand-creator:round`, `status`", "`/brand-creator:check`", "`/brand-creator:brand-adopt`"):
         assert typed in table, typed
     assert '"help me launch"' in table and "--review" in table and "/brand-creator:launch" not in table and "/brand-creator:review" not in table
+    _readme_starts_column_is_one_set_and_every_row_is_true(table)
     for page, needle in (("platform-support", "## Linux"), ("permissions", "Bash(brand-creator *)"), ("troubleshooting", "# Troubleshooting"),
                          ("costs", "# Costs"), ("what-it-never-does", "# What it never does")):
         assert needle in (ROOT / "docs/manual/reference" / f"{page}.md").read_text(), page
@@ -247,6 +248,41 @@ def test_readme_states_the_minimum_claude_code_version_used_by_prereq():
     # a stranger reads the README: no build placeholders and no build-stage labels (the history is in docs/archive/build-log.md)
     assert not re.search(r"TODO|\(stage \d|\bstages? \d", readme), "README carries a build placeholder or stage label"
     assert "/plugin marketplace add jack1913/claude-plugins" in readme and "/plugin install brand-creator@jack1913" in readme
+
+
+def _readme_starts_column_is_one_set_and_every_row_is_true(table):
+    """The Starts column uses the three values of docs-standard section 5 and commands.md, and each row is true of the skill behind it:
+    `you only` is disable-model-invocation, `Claude only` is user-invocable: false (nothing to type), `you or Claude` is both ways."""
+    rows = [[c.strip() for c in ln.strip().strip("|").split("|")] for ln in table.splitlines() if ln.startswith("| ") and not ln.startswith("| ---")]
+    header, rows = rows[0], rows[1:]
+    assert header == ["Say or type", "Starts", "What you get"], header
+    values = {"you only", "you or Claude", "Claude only"}
+    assert {r[1] for r in rows} <= values, {r[1] for r in rows} - values
+    legend = table[:table.index("| Say or type")]
+    for value in values:
+        assert f"*{value}*" in legend, f"the legend before the table does not explain {value}"
+    by_words = {"favicons from my logo.svg": "brand-assets", "name ideas for my bakery": "brand-naming", "generate the brand book": "brand-book"}
+    skills = {p.parent.name: p for p in (ROOT / "skills").glob("*/SKILL.md")}
+    for say, starts, _ in rows:
+        commands = re.findall(r"`/brand-creator:([a-z-]+)", say)
+        typed_only = starts == "you only"
+        claude_only = starts == "Claude only"
+        if claude_only:
+            assert not commands, f"{say}: nothing to type, yet the row shows a command"
+        else:
+            assert commands, f"{say}: {starts!r} but no command is shown to type"
+        for name in commands:
+            text = skills[name].read_text(encoding="utf-8")
+            hidden = "\nuser-invocable: false\n" in text
+            typed = "\ndisable-model-invocation: true\n" in text
+            assert not hidden, f"{name} is not in the / menu: nothing to type"
+            if typed_only:
+                assert typed, f"{name} can be started by Claude: the row says you only"
+        for words, skill in by_words.items():
+            if words in say:
+                assert claude_only and "\nuser-invocable: false\n" in skills[skill].read_text(encoding="utf-8"), say
+        if "help me launch" in say or "write the brand kit" in say:
+            assert claude_only, f"{say}: there is no command for it"
 
 
 def test_wording_never_calls_dtcg_a_w3c_standard():

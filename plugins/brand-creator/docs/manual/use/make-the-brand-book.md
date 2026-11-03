@@ -12,7 +12,7 @@ from your project, so it can't drift from your files.
 
 ## Build it
 
-1. Ask in your own words, such as "generate the brand book" or "export the brand book as a PDF".
+1. Ask in your own words, such as "generate the brand book" or "export the brand book as a PDF". If Claude does not pick it up, say "use the brand-book skill".
 2. Claude builds `book.html`, one self-contained page with no script and no network, in light and dark. The cover shows
    your name as you drew it, with your wordmark. In Quick it is a short guide: idea, mark, colour, files and changing the
    brand. Standard and Full add the full chapters.

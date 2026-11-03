@@ -55,9 +55,19 @@ Claude reads the latest work against its own rules and the checks, challenges it
 fixes that need no decision, numbered decisions with a recommendation, and up to five strengths that must not change. You
 approve the list. Nothing is fixed before.
 
-Add `panel` (`/brand-creator:check --review panel`) for a review panel: separate reviewers for design, content and technical, plus legal, platform and
+To review one thing, name it: `/brand-creator:check --review board` (or `book`, `pack`, `all`).
+
+Add `panel` (`/brand-creator:check --review panel`, or `--panel`) for a review panel: separate reviewers for design, content and technical, plus legal, platform and
 accessibility when they apply, then a judge. By default Claude runs them one after another in your session. Extra agents
 start only after you see their count, models, size and cost and say yes.
+
+A review takes nothing else, so `check` refuses some commands and runs nothing:
+
+- With `--review` or `--panel`, any word other than the thing to review and `panel` is refused with a one-line usage
+  message. That holds before or after `--review`.
+- A bare `panel` without `--review` is refused with "did you mean --review panel?". To search your project for the word
+  panel itself, put it in quotes.
+- `--page` together with `--review` is refused. Run them one after the other.
 
 ## Check it worked
 

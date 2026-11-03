@@ -42,17 +42,19 @@ The whole walk-through: [Make your first brand](docs/manual/getting-started/make
 
 ## What you can do
 
-Most of it you ask for in your own words. Only a few things are commands you type.
+Most of it you ask for in your own words. Only a few things are commands you type. The Starts column says how each one
+starts: *you only* is a command you type, *Claude only* has nothing to type (you ask in your own words), and
+*you or Claude* can be either.
 
 | Say or type | Starts | What you get |
 | --- | --- | --- |
-| "a logo and a look for my bakery" | you or Claude | The whole process, start to finish |
-| "favicons from my logo.svg" | Claude, from your words | Icons and social images from a logo you already have, no project needed |
-| "name ideas for my bakery", "is the name X taken" | Claude, from your words | Name ideas, or a check on a name you have |
-| "generate the brand book" | Claude, from your words | A brand book page built from your project |
-| "sample pages for my website" | you or Claude | Real sites you like first, then your first screen and pages in your brand, each choice marked as a rule or an example |
-| "write the brand kit" | you or Claude | Your brand in one folder your website's code can carry, with a step-by-step recipe for a page |
-| "help me launch" | you or Claude | Your launch checklist, one step at a time. You do each step |
+| "a logo and a look for my bakery", or `/brand-creator:brand-creator` | you or Claude | The whole process, start to finish |
+| "favicons from my logo.svg" | Claude only | Icons and social images from a logo you already have, no project needed |
+| "name ideas for my bakery", "is the name X taken" | Claude only | Name ideas, or a check on a name you have |
+| "generate the brand book" | Claude only | A brand book page built from your project |
+| "sample pages for my website", or `/brand-creator:round site-refs` | you or Claude | Real sites you like first, then your first screen and pages in your brand, each choice marked as a rule or an example |
+| "write the brand kit" | Claude only | Your brand in one folder your website's code can carry, with a step-by-step recipe for a page |
+| "help me launch" | Claude only | Your launch checklist, one step at a time. You do each step |
 | `/brand-creator:round`, `status` | you only | The next round, and where you are |
 | `/brand-creator:check` | you only | Every check. `--review` adds a review as one list, `--page <page>` shows where a page you or someone else built breaks your brand: colours, fonts, logo, claims |
 | `/brand-creator:brand-adopt` | you only | A read-only look at where the brand belongs in your repositories, then, when you say go, the brand and its kit applied on a branch you name |

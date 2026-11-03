@@ -1,7 +1,7 @@
 ---
 name: brand-creator
 description: Starts or continues a brand-identity project for a company, product or person and runs it step by step, with the owner deciding each step. Identity creation, plus the brand's own website references and reference pages; not for building production websites, UI components, slide themes, chart colours or colour conversions.
-when_to_use: Use whenever someone wants a logo, a look, a visual identity, a rebrand, brand guidelines or a brand book, even when the ask is small or casual ("a logo for my band", "a look for my Etsy shop"), for a business, product, shop, podcast or person. Also to go on with a brand project (a folder holding BRAND-STATE.md) and any work on its files (edit or lint a round board, fold in a judge report, change a rule, token or threshold such as an accent minimum), and for launch steps ("buy the domain", "file the trademark"), which are handed to the owner, never done for them. Polish triggers include "księga znaku", "identyfikacja wizualna", "zaprojektuj logo", "nowa marka", "rebranding", "logo dla firmy".
+when_to_use: Use whenever someone wants a logo, a look, visual identity, a rebrand, brand guidelines or a brand book, even casual asks ("a look for my Etsy shop", "start a brand called Acme"), for a business, shop, podcast or person. Also to continue a brand project (a folder with BRAND-STATE.md) and work on its files (edit or lint a round board, fold in a judge report, change a rule such as an accent minimum), and for launch steps ("buy the domain", "file the trademark", "help me launch", "the launch checklist"), handed over, never done for them. Polish triggers include "księga znaku", "identyfikacja wizualna", "zaprojektuj logo", "nowa marka", "rebranding", "logo dla firmy", "pomóż mi z premierą marki".
 compatibility: Claude Code only (uses the plugin's bin/ entry point and hooks). Needs Python 3.10+ with uv, Node 22+, resvg and a Playwright Chromium installed by /brand-creator:setup; macOS with Xcode only for Apple emitters.
 allowed-tools: Bash(brand-creator *)
 ---
@@ -25,7 +25,7 @@ show options with a stated pick. **Re-invoke this skill after compaction** (only
 3. Nothing → read [00-intake](references/phases/00-intake.md) ("Starting from the owner's words"), run G0 (below), then scaffold with
    `brand-creator --data "${CLAUDE_PLUGIN_DATA}" new <slug> --name "<Name>" --tier <tier> --root <folder>`.
    An open name gets the working slug `brand-<yyyymmdd>`, renamed after G1 and recorded under Renames.
-   Then comes P1s style research and its board (G1s); no board of directions is built before G1s is recorded (see G1s).
+   Then comes P1s style research and its board (G1s); no board of directions before G1s is recorded.
 
 Work inside the brand project from the first minute. Only page shots go to scratch (the tools put them under the data
 folder). Never build a brand in `/tmp`.
@@ -63,7 +63,7 @@ These rules ship with the plugin and hold whatever the user's own configuration 
 |---|---|---|---|
 | Quick | P0 → style research (P1s) → one board (3 directions) → pick → one refine → mark → tokens → web + social → short guide (`book`, Quick chapters) → G5 | mark and lockup SVG/PNG, favicon set, OG card, circle-safe avatar (400, 800), tokens.css/json, short guide (`book.html`); GitHub preview and README headers only when the brief or inventory lists a repository | contrast, logo sheet, board lint, shots, book lint |
 | Standard | + P1 research (feeds P1s), P2 naming if the name is open, a motion round after G3 (or nothing moves), full book, web/social/profile/print packs | + book.html, names memo, print PDFs (opt-in) | + book lint, print check, font check, motion proof |
-| Full | + P1c inventory, platform emitters, adoption, launch | + Apple/Windows/Linux/Wallet/developer packs, ADOPTION, LAUNCH | + emitter compiles, idempotence, staleness |
+| Full | + P1c inventory, platform emitters, adoption, launch (by default; any tier on ask) | + Apple/Windows/Linux/Wallet/developer packs, ADOPTION, LAUNCH | + emitter compiles, idempotence, staleness |
 
 Rough length to state at G0: Quick 2-3 board rounds in one sitting; Standard 4-6 rounds over a day or two, and 2-3 more
 for motion; Full several sessions. Folders appear when their phase starts. Existing mark (Quick): audit the supplied SVG/PNG/PDF
@@ -105,7 +105,7 @@ Quick with an open or at-risk name runs the brand-naming skill (P2) before the b
 | P10 | brand book or short guide: [the brand-book skill](../brand-book/SKILL.md) | G5 | [10-book](references/phases/10-book.md) | all (short in Quick) |
 | P11 | adoption into products: `/brand-creator:brand-adopt` | G6 | [11-adoption](references/phases/11-adoption.md) | F |
 | P12 | history, ADR, governance | freeze only | [12-history](references/phases/12-history.md) | all |
-| P13 | launch hand-offs (owner acts), when asked in words ("help me launch", "buy the domain"): "Handing it over" | G7 | [13-launch](references/phases/13-launch.md) | any, when asked |
+| P13 | launch hand-offs (owner acts), when asked in words ("help me launch", "buy the domain"): "Handing it over" | G7 | [13-launch](references/phases/13-launch.md) | any on ask; F by default |
 
 Read the phase file fully when entering a phase. Record every gate decision with
 `... state --project <dir> --record G<n> "<decision>"`; `freeze` and the emitters refuse to run without G3.
@@ -263,6 +263,10 @@ a naming fan-out, an adoption across repositories), propose it and wait:
 | `review-panel` | `/brand-creator:check --review panel` | 3 lenses + judge = 4 |
 | `naming` | P2 with an open name | 2 hunters + screener + judge = 4 |
 | `adopt` | P11 after G6 | implementer + reviewer per repository |
+
+A review of the latest work as one list, or a panel, asked in words is not run from here: offer
+`/brand-creator:check --review [panel]`, which only the owner can type. The self-review of a round before you show it (Round
+mechanics, step 4, and the refine loop in the next paragraph) stays yours and runs here.
 
 Refinement is a main-thread loop with at most one `brand-creator:brand-reviewer` call per round. Agents, models,
 arguments, resume and the refine loop: [fleet.md](references/fleet.md).

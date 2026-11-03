@@ -198,7 +198,9 @@ only, npm, GitHub, Docker Hub, PyPI, crates.io and Homebrew. It lists the servic
 offices are never queried: the memo carries search links you run yourself. The `brand-naming` skill grows and filters
 candidates, checks meaning in each audience language and writes a go, go-with-conditions or no verdict.
 
-## Adoption and launch (Full tier)
+## Adoption and launch
+
+Adoption is for the Full tier. The launch checklist is for any tier when you ask, and Full plans it by default.
 
 - `adoption survey` reads your product repositories read only for every place the old brand shows, and writes
   `ADOPTION.md` as numbered rows.

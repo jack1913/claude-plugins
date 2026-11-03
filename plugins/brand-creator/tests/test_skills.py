@@ -104,6 +104,10 @@ def test_orchestrator_frontmatter():
                  "BRAND-STATE.md", "buy the domain", "file the trademark", "fold in a judge report", "accent minimum", "Etsy",
                  "shop", "podcast", "brand guidelines", "brand book"):
         assert trig in fm["when_to_use"], trig
+    # no command starts a project or the launch hand-off any more (docs say "start a brand called Acme", "help me launch",
+    # "give me the launch checklist"), so the words that the docs promise are in the text Claude reads
+    for trig in ("start a brand called Acme", "help me launch", "the launch checklist", "pomóż mi z premierą marki"):
+        assert trig in fm["when_to_use"], trig
     # headroom: the skill listing cuts the text at 1536 characters; keep at least 150 spare so a later addition does not cut the
     # Polish triggers at the end
     assert len(fm["description"]) + len(fm["when_to_use"]) <= 1536 - 150, len(fm["description"]) + len(fm["when_to_use"])
@@ -834,6 +838,105 @@ def test_the_slash_menu_lists_six_skills_and_the_other_three_are_started_from_wo
     assert not set(REMOVED_SKILLS) & set(evals)
 
 
+def test_the_launch_hand_off_runs_in_any_tier_when_asked_and_full_plans_it_by_default():
+    """One claim in the phase map, the tiers table and the tier page: the hand-off (LAUNCH.md) is not Full only."""
+    orch = " ".join(ORCH.read_text(encoding="utf-8").split())
+    top = orch[:orch.index("## Round mechanics")]
+    table = top[top.index("## Scope tiers"):top.index("## Two axes")]
+    full = next(ln for ln in table.split(" | ") if ln.startswith("+ P1c inventory"))
+    assert full.endswith("launch (by default; any tier on ask)"), full
+    row = next(ln for ln in ORCH.read_text(encoding="utf-8").splitlines() if ln.startswith("| P13 |"))
+    assert row.rstrip().endswith("| any on ask; F by default |") and "Full only" not in top
+    page = _flat_md(MANUAL / "getting-started" / "choose-a-tier.md")
+    assert "a launch checklist (`LAUNCH.md`), planned by default" in page
+    assert "The launch checklist is not only for Full: in any tier, say \"help me launch\"" in page
+    assert "It runs in any tier when the owner asks." in _flat(REFS / "phases" / "13-launch.md")
+    makes = _flat_md(MANUAL / "reference" / "what-it-makes.md")
+    assert "## Adoption and launch (Full tier)" not in makes and "The launch checklist is for any tier when you ask, and Full plans it by default." in makes
+
+
+def test_check_says_in_its_description_that_it_also_reviews():
+    """`check` is typed only, so its description is the / menu text, not a trigger: it must name the review that replaced /brand-creator:review."""
+    fm, _ = frontmatter(SKILLS / "check" / "SKILL.md")
+    d = fm["description"]
+    assert "With --review, reviews the latest work against the project's own rules and presents the findings as one list to approve" in d
+    assert " you " not in d and "gives you" not in d   # docs-standard section 5: a skill description is third person, never "you"
+    assert "(add panel for a review panel)" in d and d.endswith("Runs only when typed as /brand-creator:check.") and len(d) <= 1024
+    commands = _flat_md(MANUAL / "reference" / "commands.md")
+    assert "or reviews the latest work and gives you one list to approve" in commands   # the commands page is "from the description"
+
+
+def test_check_reads_its_arguments_by_one_set_of_rules():
+    """A bare word can be a --review target, the word panel, or an old value to search for. The skill text says which, and what is refused."""
+    flat = _flat(SKILLS / "check" / "SKILL.md")
+    body = flat[flat.index("## Arguments"):flat.index("## Review (`--review`)")]
+    for needle in (
+            # the --review grammar: at most a target, then panel
+            "`--review` takes at most a target (`board`, `book`, `pack` or `all`) and then `panel`, in that order",
+            # with --review or --panel, any other word, before or after, is refused and never read as an old value
+            "With `--review` or `--panel`, any word that is not that target or `panel` in its place is refused, before or after,",
+            "with the one line `usage: /brand-creator:check --review [board|book|pack|all] [panel]`",
+            "It is never read as an old value to search for",
+            # old values are the words left over, except a bare panel
+            "Old values and phrases (step 3) are the words left over when `--review` and `--panel` are absent. Except: a bare `panel`",
+            "without `--review` is refused with `did you mean --review panel?` (to search for the word itself, quote it)",
+            # --page and --review together
+            "`--page` and `--review` together are refused: run them one after the other",
+            # --panel is an alias
+            "`--panel` is an alias of `--review panel`",
+            # a refusal runs nothing
+            "A refused command runs nothing"):
+        assert needle in body, needle
+    # each rule is stated once, in that section, and the intro line points at it
+    assert flat.count("did you mean --review panel?") == 1 and flat.count("run them one after the other") == 1
+    assert "read as in [Arguments](#arguments)" in flat
+    # the hint shows the exclusive forms: --review and --panel stand apart from --page and the old values (`|` separates choices), and the commands page copies it
+    hint = frontmatter(SKILLS / "check" / "SKILL.md")[0]["argument-hint"]
+    assert hint == ("[--page <file-or-folder-page-or-localhost-url>] [<old value or phrase> ...] | --review [board|book|pack|all] [panel] | --panel"), hint
+    # the user pages say the same in short sentences, and none of them contradicts the line that tells the reader to add panel
+    use = _flat_md(MANUAL / "use" / "check-your-project.md")
+    ref = _flat_md(MANUAL / "reference" / "commands.md")
+    assert hint.replace("|", "\\|") in ref   # the Arguments column copies the hint (a pipe is escaped in a table cell)
+    for page in (use, ref):
+        assert "did you mean --review panel?" in page and "put it in quotes" in page
+    assert "any word other than the thing to review and `panel` is refused with a one-line usage message. That holds before or after `--review`." in use
+    assert "`--page` together with `--review` is refused. Run them one after the other." in use
+    assert "Anything else after `--review`" not in use and "run those one after the other" not in use
+    assert "With either, any other word, before or after, is refused with a one-line usage message; it is never searched for as an old value." in ref
+
+
+def test_a_review_asked_in_words_is_offered_as_the_typed_check_command():
+    """The trigger evals send a review or panel asked in words (in a project folder) to brand-creator, and `check` is typed only: the orchestrator says what to
+    do then (offer the typed command for a review list or a panel; the round's own self-review before it is shown still runs in brand-creator).
+    The line sits below Round mechanics, where the size budget of the top section does not apply."""
+    orch = " ".join(ORCH.read_text(encoding="utf-8").split())
+    line = ("A review of the latest work as one list, or a panel, asked in words is not run from here: offer `/brand-creator:check --review [panel]`, "
+            "which only the owner can type. The self-review of a round before you show it (Round mechanics, step 4, and the refine loop in the next paragraph) "
+            "stays yours and runs here.")
+    assert orch.count(line) == 1
+    assert orch.index("## Round mechanics") < orch.index(line) < orch.index("## Recording state")
+    # the rule never contradicts what already runs here: the round's own self-review (step 4) and the refine loop's step 2 without the reviewer
+    assert "Iterate at least twice before showing" in orch[orch.index("## Round mechanics"):orch.index(line)]
+    assert "Refinement is a main-thread loop" in orch[orch.index(line):]
+    assert "Without the yes, you do step 2 yourself" in " ".join((REFS / "phases" / "05-refinement.md").read_text(encoding="utf-8").split())
+    fm, _ = frontmatter(SKILLS / "check" / "SKILL.md")
+    assert fm["disable-model-invocation"] == "true"
+
+
+def test_the_hidden_skills_say_how_to_name_them_when_claude_does_not_pick_them_up():
+    """brand-naming, brand-assets and brand-book are `user-invocable: false`: no / entry to fall back on, so the manual says the words that load a skill
+    by name (the Skill tool can load a skill that is only hidden from the menu; `disable-model-invocation` is the flag that blocks it)."""
+    pages = {"brand-naming": "name-your-brand.md", "brand-assets": "make-icons-and-images.md", "brand-book": "make-the-brand-book.md"}
+    commands = _flat_md(MANUAL / "reference" / "commands.md")
+    for skill, page in pages.items():
+        line = f"If Claude does not pick it up, say \"use the {skill} skill\"."
+        assert line in _flat_md(MANUAL / "use" / page), (skill, page)
+        assert f"\"use the {skill} skill\"" in commands, skill
+        fm, _ = frontmatter(SKILLS / skill / "SKILL.md")
+        assert fm["user-invocable"] == "false" and "disable-model-invocation" not in fm
+    assert "If Claude does not pick one up, name it" in commands
+
+
 def test_the_folded_skills_are_started_by_the_orchestrator_from_the_owners_words():
     """`new` became Step 0 of the orchestrator plus the intake phase file; its status and round neighbours no longer offer a command that is gone."""
     orch = " ".join(ORCH.read_text(encoding="utf-8").split())
@@ -843,14 +946,47 @@ def test_the_folded_skills_are_started_by_the_orchestrator_from_the_owners_words
         assert needle in step0, needle
     intake = _flat(REFS / "phases" / "00-intake.md")
     assert intake.index("## Starting from the owner's words") < intake.index("## Techniques")
-    for needle in ("No command starts a project", "Check first that no project is already open here", "whether to resume it or start a separate one next to it",
+    for needle in ("No command starts a project", "Step 0 of the orchestrator has already settled whether a project is open",
                    "Read what already exists (site, repo, logo files) before asking anything", "Then run G0", "(`./<slug>/` here)", "${user_config.projects_root}",
-                   "making the slug from the name the owner gave", "`acme` for Acme", "`brand-<yyyymmdd>`", "new <slug> --name \"<Name>\" --tier <tier> --root <folder>", "Fill `brief/BRIEF.md` and `FACTS.md`",
+                   "The slug is, in this order: the folder name the owner gave (step 3; it wins over the name when both are given), else one made from the name the owner gave", "`acme` for Acme", "`brand-<yyyymmdd>`", "new <slug> --name \"<Name>\" --tier <tier> --root <folder>", "Fill `brief/BRIEF.md` and `FACTS.md`",
                    "`state --record G0", "Reply with the response template", "If the scaffold exits 3, tell the owner to run `/brand-creator:setup` first"):
         assert needle in intake, needle
     for skill in ("round", "status", "check"):
         flat = _flat(SKILLS / skill / "SKILL.md")
         assert "offer to start one (the owner says what the brand is for, in words)" in flat, skill
+
+
+def test_the_resume_or_separate_rule_lives_in_step_0_only_and_the_intake_does_not_look_for_a_project_again():
+    """Step 0 already ran `state --project-auto` and found nothing before it sends the owner to the intake phase file; the file does not run it
+    again, and the rule 'resume it or start a separate one' has one home (Step 0, where a project was found)."""
+    orch = ORCH.read_text(encoding="utf-8")
+    start = _flat(REFS / "phases" / "00-intake.md")
+    start = start[start.index("## Starting from the owner's words") + 1:start.index("## Techniques")]
+    assert "state --project-auto" not in start and "Check first that no project is already open here" not in start
+    rule = "whether to resume it or start a separate one next to it"
+    assert " ".join(orch.split()).count(rule) == 1 and rule not in _flat(REFS / "phases" / "00-intake.md")
+
+
+def test_the_project_folder_is_offered_in_a_plain_message_and_the_owner_may_name_another_place_or_folder_name():
+    """Two rules of the removed `new` skill and of the old Step 0: the folder is never an AskUserQuestion item (so G0 keeps its three questions),
+    and the offer is 'I'll create ./<slug>/ in the current folder unless you name another place'. The owner can also name the folder in words."""
+    intake = _flat(REFS / "phases" / "00-intake.md")
+    start = intake[intake.index("## Starting from the owner's words") + 1:intake.index("## Techniques")]
+    for needle in ("The project folder is not an AskUserQuestion item (G0 keeps its three questions)",
+                   "I'll create ./<slug>/ in the current folder unless you name another place",
+                   "The owner may name another place, or a folder name that differs from the brand name, in words (\"put it in ~/brands/acme-rebrand\")",
+                   "the last part of the path is the slug (the folder name) and the rest is `--root`",
+                   "the folder name is the slug, so it can differ from the brand name",
+                   "it wins over the name when both are given",
+                   "I'll create <parent>/<slug>/ next to <open project> unless you name another place"):   # a new one beside an open project is offered where it goes
+        assert needle in start, needle
+    orch = " ".join(ORCH.read_text(encoding="utf-8").split())
+    step0 = orch[orch.index("## Step 0"):orch.index("## Running the tools")]
+    assert "(\"Starting from the owner's words\")" in step0   # Step 0 points at the section that holds the folder rules
+    assert "and the steps below run as for a first project" in start   # a 'separate one' answer from Step 0 starts here, next to the open project
+    assert "Only the working slug `brand-<yyyymmdd>` is renamed after G1; a folder name the owner gave keeps its name." in start
+    g0 = orch[orch.index("**G0 Scope.**"):orch.index("**G1 Name go.**")]
+    assert "the project folder when unset go in one plain-text message after the call, not in it" in g0
 
 
 def test_history_launch_and_cascade_references_hold_the_plan_items():

@@ -41,13 +41,27 @@ test("every workflow passes the static checks and every agent file the agent che
   assert.match(r.stdout, /PASS: 7 agents, 4 workflows checked/);
 });
 
+// Claude Code has no documented way to keep a plugin workflow out of the / menu, and typing one shows `meta.description` in a Yes / No prompt:
+// the description is one plain sentence of at most 120 characters, and `whenToUse` names the only entry point (one sentence too).
+const ENTRY = {
+  directions: "Only from the brand-creator skill, ",
+  naming: "Only from the brand-naming skill, ",
+  "review-panel": "Only from /brand-creator:check --review panel, ",
+  adopt: "Only from /brand-creator:brand-adopt, ",
+};
+
 test("meta is a pure literal with name = file name, description and phases; a computed meta is refused", () => {
   for (const n of NAMES) {
     const { meta } = F.loadWorkflow(path.join(WF, `${n}.js`));
     assert.equal(meta.name, n);
-    assert.ok(meta.description.startsWith("brand-creator"), n);
-    assert.ok(meta.description.length <= 120 && meta.description.endsWith("it starts this after your yes."), `${n}: the run prompt shows one short sentence`);
-    assert.ok(meta.whenToUse.startsWith("Only from "), `${n}: whenToUse names the one entry point`);
+    const d = meta.description, w = meta.whenToUse;
+    assert.ok(d.startsWith("brand-creator "), n);
+    assert.ok(d.length <= 120 && d.endsWith("it starts this after your yes."), `${n}: the run prompt shows one short sentence`);
+    assert.ok(!d.includes(". ") && d.split(".").length === 2, `${n}: the description is one sentence`);
+    assert.ok(w.startsWith(ENTRY[n]), `${n}: whenToUse names the one entry point`);
+    assert.ok(!w.includes(". ") && (w.endsWith(" said yes.") || w.endsWith(" size and cost.")), `${n}: whenToUse is one sentence that ends on the yes`);
+    assert.ok(w.includes("the owner") && w.includes("agent count, models, size and cost"), `${n}: whenToUse says who must be asked, and about what`);
+    assert.ok(!w.includes("Ends before") && !w.includes("Read only"), `${n}: whenToUse is one sentence`);
     assert.ok(Array.isArray(meta.phases) && meta.phases.length >= 2, n);
   }
   assert.deepEqual(F.literalProblems("{ name: 'x', description: \"y\", phases: [{ title: 'A' }], n: 2, ok: true }"), []);
@@ -56,6 +70,12 @@ test("meta is a pure literal with name = file name, description and phases; a co
   }
   const f = mutated("naming", "name: 'naming',", "name: 'nam' + 'ing',");
   assert.throws(() => F.loadWorkflow(f), /meta must be a pure literal/);
+});
+
+test("review-panel names its one entry point in its error message and nowhere names the removed /brand-creator:review", () => {
+  const src = fs.readFileSync(path.join(WF, "review-panel.js"), "utf8");
+  assert.ok(src.includes("run this from /brand-creator:check --review panel after the fleet gate"));
+  assert.ok(!/brand-creator:review(?![-\w])/.test(src));
 });
 
 test("the default path of every workflow starts fewer than 5 agents, all of known brand-creator types", async () => {

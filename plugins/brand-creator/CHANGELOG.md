@@ -13,18 +13,21 @@ workflows. Nothing you could do is gone: what lost its command is something you 
 Breaking changes, each with what to do:
 
 - `/brand-creator:new` is gone. Say what you need instead, such as "a logo for my bakery" or "start a brand called
-  Acme". You get the same up to three quick questions and the same project folder. If a project is already open in the
-  folder, Claude says so and asks whether to pick it up or start a separate one next to it.
+  Acme". You get the same up to three quick questions and the same project folder, and you can name another place or
+  folder name in words ("put it in ~/brands/acme-rebrand"). If a project is already open in the folder, Claude says so and
+  asks whether to pick it up or start a separate one next to it.
 - `/brand-creator:launch` is gone. Ask for it, such as "help me launch" or "give me the launch checklist". You get the same
   `LAUNCH.md`, handed over one step at a time with the reason and the click path, and Claude still buys, files and
   registers nothing. Where you typed `--name <candidate>`, say the name: "the launch checklist for Loaf".
 - `/brand-creator:review` is gone. Type `/brand-creator:check --review` for the review of the latest work as one list to
   approve (`--review board`, `book`, `pack` or `all` to name what to review), and `/brand-creator:check --review panel`,
   or `--panel`, for the review panel. A panel with extra agents still starts only after you see the count, models, size
-  and cost and say yes.
+  and cost and say yes. If you ask for a review in words, Claude points you to that command. The read-through Claude
+  does of each round before showing it to you, and the one reviewer call of a refinement round, are unchanged.
 - `/brand-creator:brand-naming`, `/brand-creator:brand-assets` and `/brand-creator:brand-book` are no longer in the `/`
   menu. Ask in your own words, such as "name ideas for my bakery", "favicons from my logo.svg" or "generate the brand
-  book", and Claude starts them as before.
+  book", and Claude starts them as before. If Claude does not pick one up, say "use the brand-naming skill", "use the
+  brand-assets skill" or "use the brand-book skill".
 
 ### Added
 
@@ -39,6 +42,14 @@ Breaking changes, each with what to do:
   "Yes, run it / No" prompt is now one short sentence that says brand-creator starts them after your yes, and the
   [agents and workflows page](docs/manual/reference/agents-and-workflows.md) says they are meant to be started that way.
   `review-panel` now starts from `/brand-creator:check --review panel`.
+- `/brand-creator:check` reads its arguments by one set of rules. `--review` takes at most one of `board`, `book`, `pack`
+  or `all`, and then `panel` (`--panel` is the same as `--review panel`). With either, any other word, before or after, is
+  refused with a one-line usage message and is never searched for as an old value. A bare `panel`, which `check` used to
+  search for like any old value, is refused with "did you mean --review panel?"; put the word in quotes to search for it.
+  `--page` together with `--review` is refused too, and a refused command runs nothing. The description in the `/` menu
+  now mentions the review.
+- The launch checklist is not only for the Full tier: in any tier, ask for it and Claude hands it over one step at a
+  time. Full still plans it by default.
 - When no brand project is found, `/brand-creator:status` and the `brand-creator state` message no longer point to
   `/brand-creator:new`. They say to tell Claude what the brand is for.
 

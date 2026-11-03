@@ -26,7 +26,8 @@ process one decision at a time, and you decide on taste.
 4. Look at the style board. Before anything is drawn, Claude researches how brands like yours look and shows a few
    styles with real examples. You pick; see [Pick and refine a direction](pick-and-refine-a-direction.md).
 
-Your project gets its own folder, like `./my-bakery/`, unless you name another place. Set a default folder in
+Your project gets its own folder, like `./my-bakery/`, unless you name another place or another folder name, such as "put it in
+~/brands/acme-rebrand". Set a default folder in
 [Settings](../reference/settings.md).
 
 ## Pick up where you left off

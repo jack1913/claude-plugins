@@ -9,7 +9,7 @@ screening, not clearance.
 
 ## Find or check a name
 
-1. Ask in your own words, such as "name ideas for my bakery" or "is the name Loaf taken?".
+1. Ask in your own words, such as "name ideas for my bakery" or "is the name Loaf taken?". If Claude does not pick it up, say "use the brand-naming skill".
 2. Answer a few quick questions: the language of the name, the kind of brand (software, consumer or personal) and the
    region. Each has a suggested answer.
 3. For name ideas, Claude builds candidates in several styles, cuts the weak ones with a reason so you can rescue one, and

@@ -24,11 +24,12 @@ angle brackets stand for what you fill in. So `/brand-creator:round` and `/brand
 | `/brand-creator:setup` | you only | Installs the tools brand-creator needs, after showing what it will download and getting your yes | `[--force]` |
 | `/brand-creator:round` | you only | Builds your next board and stops for your decision: the style board first, then directions and refinements (and, in Standard and Full, a motion round), then the boards for your website if your brief lists one | `[style\|pick\|refine\|motion\|site-refs\|site] [what this round should answer]` |
 | `/brand-creator:status` | you only | Shows where the project stands and what comes next | — |
-| `/brand-creator:check` | you only | Runs every check that applies, and optionally searches for leftovers of old values, checks one page against your brand, or reviews the latest work and gives you one list to approve | `[--page <file-or-folder-page-or-localhost-url>] [--review [board\|book\|pack\|all] [panel]] [--panel] [<old value or phrase> ...]` |
+| `/brand-creator:check` | you only | Runs every check that applies, and optionally searches for leftovers of old values, checks one page against your brand, or reviews the latest work and gives you one list to approve | `[--page <file-or-folder-page-or-localhost-url>] [<old value or phrase> ...] \| --review [board\|book\|pack\|all] [panel] \| --panel` |
 | `/brand-creator:brand-adopt` | you only | Looks at where your brand belongs in your product's code, and changes it only when you ask | `[survey\|apply\|review\|status] [repository label]` |
 
 Rows marked Claude only are not in the `/` menu. Ask for them in your own words, such as "name ideas for my bakery",
-and Claude starts them. Each command has a how-to page:
+and Claude starts them. If Claude does not pick one up, name it: say "use the brand-naming skill", "use the brand-assets
+skill" or "use the brand-book skill". Each command has a how-to page:
 
 - [Start a brand](../use/start-a-brand.md): `brand-creator`, `status`, `setup`
 - [Pick and refine a direction](../use/pick-and-refine-a-direction.md): `round`, `motion`
@@ -149,6 +150,12 @@ in motion/motion.json`.
 | an old value or phrase | Also searches the whole project for leftovers of it. Repeat for each one | Off: only the checks run |
 | `--review [board\|book\|pack\|all]` | Reviews the latest work, or what you name, against the project's own rules and checks, and gives you one list to approve. Nothing is fixed before you approve | Off: the project's checks run |
 | `panel`, after `--review`, or `--panel` | Also offers a review panel. A panel that uses extra agents starts only after you see the size and cost and say yes | Off |
+
+`--review` takes at most one of `board`, `book`, `pack` or `all`, and then `panel`. `--panel` is the same as `--review panel`.
+With either, any other word, before or after, is refused with a one-line usage message; it is never searched for as an old
+value. A bare `panel` without `--review` is refused too, with "did you mean --review panel?". To search for the word panel
+itself, put it in quotes. `--page` and `--review` together are refused: run them one after the other. A refused command runs
+nothing.
 
 With `--page`, Claude opens the page at several sizes, from a phone to a wide screen, in light and dark, and lists what
 breaks your brand, each with its fix, plus warnings about what makes the page look like any template. It never changes
