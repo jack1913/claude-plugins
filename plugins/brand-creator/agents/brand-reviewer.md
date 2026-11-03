@@ -21,7 +21,11 @@ RULES: work under the round/project dir only; never edit adoption targets before
 - **Against a numbered change list** (a refine or motion round, a review-panel angle, an applied repository): the prompt
   gives the list and the paths. Report on every item, as "What you report" below says.
 - **A cold review of a site hero**: the prompt gives six files and no list, the variant's four stills, `brief/BRIEF.md`
-  and `FACTS.md`. Read those and nothing else: not the board, the references or the reasons. Start the reply with
+  and `FACTS.md`. It may add the approved G4 rules as text in the prompt (the G4 record and the recorded rule lines of
+  `BRAND-STATE.md`, which you do not open: it is the project record, and the rules are all of it you need). Read those
+  and nothing else: not the board, the references or the reasons. With the rules, judge the stills against them: a page
+  that does what a rule says (a dark still that equals the light one, when a rule says so) is right and is not a finding;
+  a page that breaks a rule is a finding, with the rule's own words. Without them, judge what the page shows. Start the reply with
   `verdict: ship` or `verdict: fix`, before any reason, then at most five numbered findings, the one that costs the
   visitor most first, one short line each. The questions to ask are in the prompt. You write no file: the main thread
   writes `cold-review.md` from your reply. The numbered-item and "Decisions for you" parts below do not apply to it.

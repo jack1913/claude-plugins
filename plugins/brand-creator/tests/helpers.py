@@ -551,15 +551,17 @@ def capture_record(p: Path, page: str) -> Path:
 
 
 def cold_review_record(p: Path, page: str, verdict: str = "ship", *, by: str = "in-thread", findings: tuple[str, ...] = ("The first screen says what only this brand could say.",),
-                       leave_out: tuple[str, ...] = (), add: tuple[str, ...] = ()) -> Path:
+                       leave_out: tuple[str, ...] = (), add: tuple[str, ...] = (), rules: bool = False) -> Path:
     """The cold-review.md a reader of a page's four stills, brief/BRIEF.md and FACTS.md alone leaves beside the page: the verdict first, `by:`, the `inputs:` with the sha256 of each file as it is now, then the
-    findings as numbered lines (the prompt fragment of references/prompt-fragments.md, Review). `leave_out` drops listed inputs and `add` lists more files of the project, for a test that breaks the rule.
+    findings as numbered lines (the prompt fragment of references/prompt-fragments.md, Review). `leave_out` drops listed inputs and `add` lists more files of the project, for a test that breaks the rule;
+    `rules` adds the seventh input, the G4 rules part of BRAND-STATE.md as `- BRAND-STATE.md#g4-rules sha256:<hex>`, the sha256 of the part as it is now (what `brand-creator state --part g4-rules` prints).
     Call it after capture_record: the stills must be there. -> the review's path."""
-    from _common import sha256_file
+    from _common import part_sha256, sha256_file
     folder = (p / page).parent
     base = folder.relative_to(p).as_posix()
     files = [f for f in [f"{base}/shots/{v}.png" for v in ("1440-light", "1440-dark", "390-light", "390-dark")] + ["brief/BRIEF.md", "FACTS.md"] if f not in leave_out] + list(add)
-    body = [f"verdict: {verdict}", f"by: {by}", "inputs:"] + [f"- {f} sha256:{sha256_file(p / f)}" for f in files] + [""] + [f"{i}. {t}" for i, t in enumerate(findings, 1)]
+    listed = [f"- {f} sha256:{sha256_file(p / f)}" for f in files] + ([f"- BRAND-STATE.md#g4-rules sha256:{part_sha256(p / 'BRAND-STATE.md', 'g4-rules')}"] if rules else [])
+    body = [f"verdict: {verdict}", f"by: {by}", "inputs:"] + listed + [""] + [f"{i}. {t}" for i, t in enumerate(findings, 1)]
     out = folder / "cold-review.md"
     out.write_text("\n".join(body) + "\n", encoding="utf-8")
     return out
