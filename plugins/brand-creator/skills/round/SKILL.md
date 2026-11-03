@@ -126,6 +126,11 @@ The site's reference pages, after G4w, in Standard and Full, when the brief list
 review and the choices are in `references/phases/07p-site-round.md`; the board's rules are in `references/board-contract.md`
 ("Site board"). Make the pages before the board, in this order:
 
+0. At the hero stage, when `site/site.json` exists, a `removed-*/site/` folder does, or the brief records an incumbent site,
+   list the earlier choices tagged `rule` (id, text, source) and the "(rule)" lines of G4 that came from the old site, and
+   ask the owner once which still stand, in their words, and wait for the answer before any variant is built. Write the
+   answer into `DECISIONS.md` (`Gate: G4p`, `Decided: ...`, each dropped rule named as dropped); a rule that stands is cited
+   by `data-source` like any rule. No new gate id. The step is "The hero first", step 0, in the phase file.
 1. The first board of each stage, the hero board and then the pages board, is a new, empty folder (`mkdir rounds/r<N>`):
    never a copy of an earlier round. A later board of the same stage starts as `cp -R rounds/r<N-1> rounds/r<N>` of the
    previous board of that stage; then make `capture`, `page-check` and the cold review again, because each is tied to the

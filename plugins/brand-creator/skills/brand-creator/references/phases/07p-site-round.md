@@ -53,6 +53,10 @@ come first, [07w-website-references](07w-website-references.md); say so and stop
 - [page-layouts.json](../page-layouts.json): the layout references, keyed to the visitor's job. [page-tells.json](../page-tells.json)
   and [ai-defaults.json](../ai-defaults.json): the generic patterns the reflex test and `page-check` look for.
 - `DECISIONS.md` and `decisions/*.md`: where a rule says it was decided.
+- An earlier site, when there is one: `site/site.json` (its choices with their tags and sources), a `removed-*/site/` folder
+  (an earlier approved site that `site approve --replace` moved aside), or an incumbent site named in the brief (`incumbent`
+  in `BRAND-STATE.md`, or a site under Existing assets in `brief/BRIEF.md`). Its rules bind the redo only when the owner says they
+  still stand (step 0 of [The hero first](#the-hero-first)).
 
 ## Outputs and paths
 
@@ -84,6 +88,15 @@ so its `capture`, `page-check` and cold review are made again in the new round.
 Build the pages before the board, in this order, and only then the board. The home page is `start` (`<body
 data-page="start">`) in every project.
 
+0. **Which earlier site rules still stand.** Only when `site/site.json` exists, a `removed-*/site/` folder does, or the brief
+   records an incumbent site. List the earlier choices tagged `rule` in each `site.json` (id, text, source), and name the
+   "(rule)" lines under "Rules (G4)" of `BRAND-STATE.md` that came from the old site. Ask the owner once which still stand,
+   in their words, and wait for the answer before any variant is built. A rule of an earlier site binds nothing until the
+   owner says it stands: a rule that came from a site they rejected is not a rule of the redo. Write the answer into
+   `DECISIONS.md` as one entry (`Gate: G4p`, `Decided: ...`): each rule that stands by id and text, each one dropped named as
+   dropped. A G4 line the owner drops is named as dropped too; the line itself changes the way any G4 rule changes. A rule
+   that stands is cited by the new board's `data-source` like any rule (the lint finds the quoted text in the decision files,
+   `site:choices`); a dropped one is not built in again. There is no new gate id. With no earlier site, skip this step.
 1. **The variants.** 2 or 3 on the first hero board (1 or more on a later one), each a folder `rounds/r<N>/<Name>/`, named
    by a word of 3 letters or more (letters, digits, `-` and `_`; never "Variant 2" or "Option B"), spelt the same on the
    card and on the disk. They differ in structure, not in colour: where the first screen leads, what the visitor can do from

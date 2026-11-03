@@ -1255,9 +1255,29 @@ def test_the_site_round_phase_goes_hero_first_and_tags_every_choice():
             "or a changed G4 record or \"(rule)\" line of `BRAND-STATE.md` after the check, the capture or the lint",
             "Other writes to `BRAND-STATE.md` (the phase, `review_url`, a gate, the Directions table, Still open) leave the `page-check` reports current",
             "never a copy of an earlier round", "A later pages board (the refine loop on the pages, started as `cp -R` of the previous pages board) also has What changed and Weak points",
-            "**G4p The site's reference pages approved.**"):
+            "**G4p The site's reference pages approved.**",
+            # a redo asks which earlier site rules still stand, before any variant is built (G4-01)
+            "An earlier site, when there is one: `site/site.json`", "a `removed-*/site/` folder", "an incumbent site named in the brief",
+            "0. **Which earlier site rules still stand.**",
+            "Only when `site/site.json` exists, a `removed-*/site/` folder does, or the brief records an incumbent site",
+            "List the earlier choices tagged `rule` in each `site.json` (id, text, source)",
+            "name the \"(rule)\" lines under \"Rules (G4)\" of `BRAND-STATE.md` that came from the old site",
+            "Ask the owner once which still stand, in their words, and wait for the answer before any variant is built.",
+            "A rule of an earlier site binds nothing until the owner says it stands: a rule that came from a site they rejected is not a rule of the redo.",
+            "Write the answer into `DECISIONS.md` as one entry (`Gate: G4p`, `Decided: ...`)",
+            "each rule that stands by id and text, each one dropped named as dropped",
+            "A rule that stands is cited by the new board's `data-source` like any rule", "There is no new gate id.", "With no earlier site, skip this step."):
         assert needle in flat, needle
     assert "rules of G4 in `qa/rules.json`" not in flat and "copy of the refine round" not in flat
+    # the question comes before the first variant is built and before the three steps of a variant
+    assert flat.index("0. **Which earlier site rules still stand.**") < flat.index("1. **The variants.**") < flat.index("Per variant, in this order:")
+    assert flat.index("## Inputs") < flat.index("An earlier site, when there is one") < flat.index("## Outputs and paths")
+    # the manual page says it in the reader's words, with no gate id
+    manual = _flat(ROOT / "docs" / "manual" / "use" / "get-reference-pages-for-your-site.md")
+    for needle in ("If this site replaces an earlier one, Claude first lists the rules from it and asks which still stand.",
+                   "Claude writes your answer in your list of decisions (`DECISIONS.md`)", "a rule you drop is named as dropped"):
+        assert needle in manual, needle
+    assert "G4p" not in manual
     assert "older release" not in flat, "page-check has never been released: no owner has a report from an older release"
     assert "a lint of a board whose rule cites a line only `BRAND-STATE.md` holds lists the whole file, so it needs that run" not in flat, "a hero board has no choices: the review copy's lint replaced the board's report"
     assert "Set the phase once" not in flat and "lists `BRAND-STATE.md` among its inputs" not in flat and "which every `page-check` report lists" not in flat, "the old rule: every write to BRAND-STATE.md makes the reports stale"
@@ -1321,8 +1341,15 @@ def test_the_round_wrapper_has_a_site_kind():
                    "A write to `BRAND-STATE.md` (the phase, `review_url`, a gate, the Directions table, Still open) does not: a `page-check` report holds only its G4 rules (the G4 record and the \"(rule)\" lines)",
                    "only a change to those needs `page-check` on each page of the round and then `board-lint rounds/r<N>/board.html --project <dir>` again",
                    "lint a pages board again when a rule of it cites a line only `BRAND-STATE.md` holds",
-                   "never fill-in templates"):
+                   "never fill-in templates",
+                   # a redo asks which earlier site rules still stand, before any variant is built (G4-01)
+                   "0. At the hero stage, when `site/site.json` exists, a `removed-*/site/` folder does, or the brief records an incumbent site, list the earlier choices tagged `rule` (id, text, source)",
+                   "and the \"(rule)\" lines of G4 that came from the old site",
+                   "ask the owner once which still stand, in their words, and wait for the answer before any variant is built",
+                   "Write the answer into `DECISIONS.md` (`Gate: G4p`, `Decided: ...`, each dropped rule named as dropped)",
+                   "a rule that stands is cited by `data-source` like any rule", "No new gate id."):
         assert needle in section, needle
+    assert section.index("0. At the hero stage") < section.index("1. The first board of each stage"), "the question comes before the first board"
     # the pages are made, checked and read before the board is built from them, and the board is shot last
     order = [section.index(n) for n in ("`brand-creator --data \"${CLAUDE_PLUGIN_DATA}\" capture rounds/r<N>/<name>/index.html", "`... page-check rounds/r<N>/<name>/index.html",
                                         "then the cold review: `rounds/r<N>/<name>/cold-review.md`", "Build the board from the template", "shoot the board last")]
