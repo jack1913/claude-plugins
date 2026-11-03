@@ -6,6 +6,21 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-03
+
+brand-creator now takes a brand onto the web. Website references come before any page; a site round builds reference
+pages of your own site, each choice tagged as a brand rule or an example; a page check holds any page to your brand; a
+brand kit puts the brand in one folder your product's code can carry; and a redesign keeps a record of what the site is
+wired to, so a new look cannot quietly drop it. The manual's new walkthrough, "Take your brand to the web", covers the road.
+
+Breaking changes, each with what to do:
+
+- `board-lint` now fails a pick board where one direction has two reflex hits, or where every direction shares one
+  hit. Replace a part of that direction, or make the directions differ, then run `board-lint` again.
+- A project that keeps a `kit.json` of its own in `.claude/skills/<slug>-brand/` is now read as a generated brand kit,
+  so `check` expects the kit's reports. Move a hand-made kit to another folder, or let `brand-creator kit build --yes
+  --replace` move its files aside and write the generated kit.
+
 This release adds checks that can warn on a project you already have. A warning changes neither a result nor an exit
 code, and nothing that passed before fails because of a warning. Settle these now, because the first two groups become
 failures in the next release:
