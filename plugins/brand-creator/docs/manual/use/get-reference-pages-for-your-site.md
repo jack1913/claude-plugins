@@ -50,6 +50,10 @@ Nothing on your site is built until you have seen how other sites do the same jo
 
 In a hurry? Say "skip the references", and Claude builds from your brief instead. Claude never skips this step for you.
 
+Each site's whole-page picture (`1440-full.png`) is large, and the board does not need it, so a new project keeps it
+out of git with a `.gitignore` file. A project made earlier has no such file. If you keep yours in git, add this line to
+its `.gitignore`, and make the file if there is none: `research/site-refs/*/1440-full.png`
+
 ## 2. Pick the first screen of your home page
 
 The first screen, what a visitor sees before they scroll, sets the tone for everything else. So it comes first.

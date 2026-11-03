@@ -90,6 +90,10 @@ stage, and why, is in the [archive](docs/archive/README.md).
   all three (an unknown word still fails; boards made before this release lint as they did), and the lint cannot count reviews, so
   the limit is in the round's instructions. When Claude asks you to approve reviewer agents, it now states how many calls the
   rule allows (up to 4 for two versions, 6 for three).
+- A new project now comes with a `.gitignore` that keeps the whole-page picture of each captured site
+  (`research/site-refs/*/1440-full.png`) out of git. Those pictures are large, and the boards use the smaller stills and the
+  thumbnails. `brand-creator new` never overwrites a `.gitignore` (it still refuses a folder that holds anything). A project made
+  before this has none: add that line to its `.gitignore` yourself, as the manual's page on reference pages for your site says.
 
 ### Fixed
 

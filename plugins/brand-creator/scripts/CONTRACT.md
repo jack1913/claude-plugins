@@ -127,6 +127,9 @@ fontTools, Brotli and skia-pathops (`outline_glyphs.py`, `fontcheck.py`), Pillow
 ```text
 <project>/
   BRAND-STATE.md  FACTS.md  brief/BRIEF.md
+  .gitignore                       written by `new` from templates/gitignore (no dot, so a copy of the plugin keeps it): the one line `research/site-refs/*/1440-full.png`,
+                                   the full-page site captures, which the boards do not use (they use the smaller stills and the thumbnails). Never overwritten: `new` refuses a folder that
+                                   holds anything, an existing `.gitignore` included, before it writes a file. A project made before has none; the manual says what to add by hand
   research/research.md  research/YYYY-MM-DD-<topic>.md  research/positioning-map.md   P1 output (templates/research.md)
   research/cliches.md              (optional; "Forbidden" bullets feed the FORBIDDEN count in shots; templates/cliches.md)
   research/site-cliches.md         (the website references: the category's site clichés under "Avoid unless argued", no Forbidden section; templates/site-cliches.md)
