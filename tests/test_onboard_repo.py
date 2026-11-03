@@ -4756,7 +4756,7 @@ def test_forbidden_allow_globs_are_anchored(tmp_path, capsys):
     rc, _, lines = _run_check(cli, capsys, [str(tmp_path / "README.md"), str(tmp_path / "docs")],
                               ["--no-tier-check", "--forbidden", "grill-me",
                                "--forbidden-allow", "README.md,**/reference/**"])
-    hits = [ln.split("\t")[2] for ln in lines if "FORBIDDEN_TOKEN" in ln]
+    hits = [ln.split("\t")[2].replace("\\", "/") for ln in lines if "FORBIDDEN_TOKEN" in ln]
     assert len(hits) == 1 and "docs/manual/README.md" in hits[0]
 
 
@@ -5148,7 +5148,7 @@ def test_forbidden_allow_matches_repo_relative_paths(tmp_path, capsys, monkeypat
     monkeypatch.chdir(tmp_path)
     rc = chk.main(["check-docs", "docs", "README.md", "--no-tier-check", "--forbidden", "grill-me",
                    "--forbidden-allow", "README.md"])
-    out = capsys.readouterr().out
+    out = capsys.readouterr().out.replace("\\", "/")
     assert rc == 1 and out.count("FORBIDDEN_TOKEN") == 1 and "docs/README.md" in out
 
 
