@@ -78,7 +78,7 @@ Generalised from prompts that worked; use them as written or close to it.
   the start, the middle and the end of the longest animation that runs on load, each listed in `inputs:`); it reads the motion
   from them (does the entrance carry the idea, does anything stay on screen after it ends) and does not guess it from the end
   stills. It writes
-  `rounds/r<N>/<name>/cold-review.md`: `verdict: ship` or `verdict: fix`
+  `rounds/r<N>/<name>/cold-review.md`: `verdict: ship`, `verdict: fix` or `verdict: owner`
   first, a `by:` line (`by: in-thread`; in-thread it is not blind, and an agent only after the fleet gate), an `inputs:`
   list with the sha256 of each file (`- <path> sha256:<hex>`), then up to five numbered findings, the one that costs the
   visitor most first, each short enough to sit on a single line. The findings ask: does the first screen say what only
@@ -90,6 +90,11 @@ Generalised from prompts that worked; use them as written or close to it.
   says (a dark still that equals the light one, when a rule says so) is right, not a finding.
   A review judges what the page shows: where the page lacks something it would need (wording, a picture, a control), the
   finding notes that the owner would have to supply it, and does not fault the page for leaving it out.
+  `owner` says that what is left is a choice only the owner can make, and then each finding is a question to the owner, not a
+  fault ("Do you want X or Y?"). A variant is read at most twice, the second time after the fixes. The prompt of the second
+  review says so in one line of its own, which stands outside this fragment, so a first call built from the fragment never carries it (the exact line is
+  in [fleet.md](fleet.md); a line of the prompt, not an input, and not the first review's findings); the prompt of the first has no such line. When the prompt says this is the second review, put what you would only
+  list for another round of fixes as a question to the owner, and use `fix` only for a fault that is plainly there.
 
 **Implementation and safety**
 

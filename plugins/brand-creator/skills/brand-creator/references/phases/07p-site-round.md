@@ -240,7 +240,7 @@ inputs:
 1. The finding that costs the visitor most, short enough for one line.
 ```
 
-- The first non-empty line is `verdict: ship` or `verdict: fix`. Then `by:`, the `inputs:` list with the sha256 of each file
+- The first non-empty line is `verdict: ship`, `verdict: fix` or `verdict: owner`. Then `by:`, the `inputs:` list with the sha256 of each file
   as it is now (`shasum -a 256 <file>`), then at most five numbered findings, worst first, one line each.
 - **The brand's rules, when the review should judge against them.** Run `brand-creator state --part g4-rules`. Its first line,
   `BRAND-STATE.md#g4-rules sha256:<hex>`, goes into `inputs:` with a dash in front, as the seventh input; its second line (the
@@ -258,10 +258,24 @@ inputs:
 - **In-thread by default**, labelled `by: in-thread`. It is not blind: the same session that built the page reads it. Say
   so to the owner when you show the card, and read as little as the review allows (the six files, and the rules when you give them, nothing else).
 - **An agent only after the fleet gate** ([fleet.md](../fleet.md)): one `brand-creator:brand-reviewer` call per hero
-  variant, with the prompt fragment and the six paths, after the owner's yes to the count, the model and the cost. The
+  variant, with the prompt fragment and the six paths (the second call of a variant adds one line, below), after the owner's yes to the count (at most two calls per variant), the model and the cost. The
   reviewer reports and never writes: you write `cold-review.md` from its reply, with `by: agent`.
 - The card's cold line (`data-cold`) says the verdict. A `fix` shown as `fix` is honest and passes; act on it, or say on
-  the card why not. The review is required on a hero variant and optional on a page.
+  the card why not. An `owner` shown as `owner` passes like `ship`. The review is required on a hero variant and optional on a page.
+- **At most two cold reviews per variant per board.** The first, and one after you fixed what it found; a third is not run. A
+  review that finds only what you cannot settle for the owner says `verdict: owner`: what is left is a choice only the owner can make, and its findings are written as questions to them
+  (a question each, "Do you want X or Y?", not a fault). Put those questions on the board, in its Questions section (from question 2 on a hero board,
+  after the board's own two questions on the pages board), each with lettered options and exactly one recommended, so the owner answers with the reply
+  composer; My call stays your recommendation, as on every board. The second review may say `owner`, and so may the first: an `owner` ends the
+  loop for that variant, with nothing left to fix. If the second review still says `fix`, do not change the page and review it a third time (a changed page makes the
+  review stale, and the lint would ask for the third review this rule does not allow): put what is left to the owner on the board the same way, as questions,
+  and change the page after their pick, in the next round. The second review replaces the first in
+  `cold-review.md` and lists the inputs of the page as it is then. The card's cold line shows the last verdict (`ship`, `fix` or `owner`), with the first finding or question in a line. A later hero board
+  is a new board and counts afresh. The lint cannot count the reviews; the rule is yours to keep, and the fleet gate message states the number of calls it allows.
+  With an agent, the prompt of the second call states in one line that it is the second and last review of this variant ("This is the
+  second and last review of this variant."): a line of the prompt, not an input, and not the first review's findings or your reasons. The
+  agent cannot tell its second call from its first otherwise, and it takes its push to `owner` from that line ("when the prompt says
+  this is the second review", in its brief); the prompt of the first call has no such line.
 - The page or a still changed after the review: the hashes no longer match and the lint fails it. Review again.
 
 ## The other pages
@@ -358,6 +372,9 @@ board, the owner chooses between new variants or pages (a new site board) and a 
   inputs, and state the one idea before building.
 - **A hero variant that differs only in colour.** Three heroes are three structures. If every one hits the same reflex
   pattern, the lint fails the board.
+- **A third cold review of one variant.** The rule is two per variant per board: the first, and one after the fixes. What the second
+  leaves is the owner's call: `verdict: owner`, its findings as questions on the board's Questions section (one recommended each), your recommendation in My call. Further reviews cost tokens and the
+  owner's time and decide nothing.
 - **An in-thread cold review presented as blind.** It is not. Say `by: in-thread`, and never write findings from the
   reasons you know.
 - **A stale proof.** A page, still, token file, or a changed G4 record or "(rule)" line of `BRAND-STATE.md` after the
@@ -389,6 +406,9 @@ board, the owner chooses between new variants or pages (a new site board) and a 
   `site:reflex-shared`, `site:refs` and `site:cold`; at the pages stage `site:hero-first`, `site:pages`, the `site:files`
   to `site:stills` rows read for the pages, `site:cold` for a page that has a review, `section:choices` and
   `site:choices` (an id, a tag, a rule's source found in the decision files, `data-pages` naming pages of the board).
+- `site:cold` accepts `ship`, `fix` and `owner` as the verdict (an unknown one fails, and so does a card that shows another one than
+  the file's); it cannot count the reviews of a variant, so the cap of two is prose, and so is whether the questions of an `owner`
+  review were put to the owner.
 - The Idea line of a hero card (`data-field="idea"`) is read by `site:fields`: missing or empty it warns in this release and
   fails in the next, so a board made before the line existed still lints. A page card has no Idea line.
 - No lint row reads a try-out, and none is added: a hero card's folder and live link are `rounds/r<N>/<Name>/`, so on the round's

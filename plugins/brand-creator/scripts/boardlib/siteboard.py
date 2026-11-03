@@ -15,7 +15,7 @@ line of the template ("(site, app icon, ...)"), the owner's own words not yet wr
 
 Three more kinds of row close the card of a hero variant (reflex_rows, refs_rows, cold_rows). The reflex test of the card (data-field="reflex") is the one a style board's direction has, read by boardlib/reflex.py against the ids of page-tells.json and ai-defaults.json and the items of research/site-cliches.md:
 site:<name>:reflex (the line is there: a card with no reflex line fails, as a direction does) and site:<name>:reflex-format|reflex-ids|reflex-count|reflex-grounded for each card, site:<name>:reflex-measured (a tell page-check measured that the line does not argue) and site:reflex-shared across the cards. site:refs holds each card's "Takes from" to what the owner picked in G4w (a group of the references
-board, or a site the owner liked, that the G4w record names before its "dislikes"). site:cold reads rounds/rN/<name>/cold-review.md: the verdict first, `by:`, the inputs it was made from with their sha256 (the four stills, brief/BRIEF.md and FACTS.md, each equal to the file now; optionally the G4 rules part and the three key frames `capture --frames` takes), at most five findings, and the card's cold line saying the same verdict.
+board, or a site the owner liked, that the G4w record names before its "dislikes"). site:cold reads rounds/rN/<name>/cold-review.md: the verdict first (ship, fix or owner), `by:`, the inputs it was made from with their sha256 (the four stills, brief/BRIEF.md and FACTS.md, each equal to the file now; optionally the G4 rules part and the three key frames `capture --frames` takes), at most five findings, and the card's cold line saying the same verdict.
 
 The pages stage (data-site-stage="pages", pages_rows) is read after the owner picked a hero: site:hero-first (an earlier round holds a hero board, and <body data-hero> names one of its variant cards), site:pages (one card per page,
 data-site-page, a page id equal to <body data-page> and to the folder rounds/rN/<id>/), the rows of a hero card that fit a page (site:files, site:layout, site:fields, site:check, site:tells, site:stills, and site:cold for a page that has a
@@ -581,7 +581,8 @@ MAX_FINDINGS = 5                  # a cold review gives at most this many findin
 REFLEX_LABEL = "the card has a reflex line"   # site:<name>:reflex: the required field; the row of a style board's direction says "required field"
 REFLEX_SOURCES = "page-tells.json, ai-defaults.json or research/site-cliches.md"   # where the name of a hit may come from, as a reflex row says it
 NO_CLICHE_FILE = "page-tells.json and ai-defaults.json (the project has no research/site-cliches.md, so no cliché of the category's sites can be named)"
-COLD_VERDICT = re.compile(r"verdict[ \t]*:[ \t]*(ship|fix)", re.I)       # the first non-empty line of cold-review.md
+COLD_VERDICTS = ("ship", "fix", "owner")                                  # `owner`: what is left is a choice only the owner can make, its findings are questions to them (at most two reviews are run per variant per board; the lint cannot count them)
+COLD_VERDICT = re.compile(r"verdict[ \t]*:[ \t]*(" + "|".join(COLD_VERDICTS) + ")", re.I)   # the first non-empty line of cold-review.md
 COLD_BY = re.compile(r"^by[ \t]*:[ \t]*\S", re.I | re.M)                  # "by: in-thread", or "by: agent"
 COLD_INPUTS = re.compile(r"inputs[ \t]*:", re.I)                          # the line that opens the list of what the review was made from
 COLD_ITEM = re.compile(r"[-*][ \t]+(\S+)[ \t]+sha256:([0-9a-f]{64})", re.I)   # "- <path> sha256:<hex>"
@@ -784,10 +785,11 @@ def frame_record_problems(project: Path, v: SiteVariant, wanted: dict[str, str])
 
 def cold_problems(project: Path, v: SiteVariant, required: bool = True, noun: str = "variant") -> tuple[list[str], str | None]:
     """site:cold for one card -> (the problems, the verdict when the file gives one). rounds/rN/<name>/cold-review.md exists (`required`; a page card of the pages stage may go without, and then must not claim a verdict);
-    its first non-empty line is `verdict: ship` or `verdict: fix`; it has a `by:` line; its `inputs:` list is exactly the four stills of the variant (`noun` "page" on a pages board: of the page), brief/BRIEF.md and FACTS.md, each `- <path> sha256:<hex>` equal to
+    its first non-empty line is `verdict: ship`, `verdict: fix` or `verdict: owner` (`owner` passes like `ship`: what is left is a choice only the owner can make, and the findings are questions to them); it has a `by:` line; its `inputs:` list is exactly the four stills of the variant (`noun` "page" on a pages board: of the page), brief/BRIEF.md and FACTS.md, each `- <path> sha256:<hex>` equal to
     the file now, and may add one seventh input, the G4 rules part of BRAND-STATE.md (`- BRAND-STATE.md#g4-rules sha256:<hex>`, the sha256 of the part as `_common.stale_inputs` reads it: a change of a rule or of
     the G4 record makes the review stale, a change elsewhere in BRAND-STATE.md does not; the whole file is never an input), and may add the three key frames of the page's first screen (`shots/frame-1440-0.png`, `-50` and `-100`, from
-    `brand-creator capture <page> --frames`: all three or none, each equal to the file now and to what capture.json lists for it); it has at most five findings (numbered lines); the card's cold line (data-cold) says the same verdict. A `fix` shown as `fix` passes."""
+    `brand-creator capture <page> --frames`: all three or none, each equal to the file now and to what capture.json lists for it); it has at most five findings (numbered lines); the card's cold line (data-cold) says the same verdict. A `fix` shown as `fix` passes, and so does an `owner` shown as `owner`; at most two reviews are run per variant per board (the first, and one after the fixes), a rule of the
+    round the lint cannot count."""
     path = f"{v.dir}/{COLD_FILE}"
     cold_lines = [n for n in v.card.walk() if "data-cold" in n.attrs]
     f = Path(project) / path
@@ -805,7 +807,7 @@ def cold_problems(project: Path, v: SiteVariant, required: bool = True, noun: st
     m = COLD_VERDICT.fullmatch(first)
     verdict = m.group(1).lower() if m else None
     if verdict is None:
-        problems.append(f"{v.name}: {path} must start with its verdict, `verdict: ship` or `verdict: fix`" + (f" (its first line is {one_line(first, 60)!r})" if first else " (the file is empty)"))
+        problems.append(f"{v.name}: {path} must start with its verdict, `verdict: ship`, `verdict: fix` or `verdict: owner`" + (f" (its first line is {one_line(first, 60)!r})" if first else " (the file is empty)"))
     if not COLD_BY.search(text):
         problems.append(f"{v.name}: {path} has no `by:` line (`by: in-thread`, or `by: agent` after the fleet gate)")
     expected = [f"{v.shots}/{view}.png" for view in VIEWS] + [BRIEF_FILE, FACTS_FILE]
@@ -852,11 +854,11 @@ def cold_problems(project: Path, v: SiteVariant, required: bool = True, noun: st
     if len(findings) > MAX_FINDINGS:
         problems.append(f"{v.name}: {path} gives {len(findings)} findings, at most {MAX_FINDINGS}, the costliest to the visitor first")
     if len(cold_lines) != 1:
-        problems.append(f'{v.name}: the card needs one cold line (data-cold="ship" or "fix"), it has {len(cold_lines)}')
+        problems.append(f'{v.name}: the card needs one cold line (data-cold="ship", "fix" or "owner"), it has {len(cold_lines)}')
     else:
         claimed = cold_lines[0].attrs["data-cold"].strip()
-        if claimed not in ("ship", "fix"):
-            problems.append(f'{v.name}: data-cold must be "ship" or "fix", got {claimed!r}')
+        if claimed not in COLD_VERDICTS:
+            problems.append(f'{v.name}: data-cold must be "ship", "fix" or "owner", got {claimed!r}')
         elif verdict is not None and claimed != verdict:
             problems.append(f'{v.name}: the card says data-cold="{claimed}" and {path} says verdict: {verdict}')
     return problems, verdict

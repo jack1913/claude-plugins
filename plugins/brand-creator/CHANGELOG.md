@@ -70,6 +70,12 @@ stage, and why, is in the [archive](docs/archive/README.md).
   end stills. The board lint accepts the six inputs, the six plus the rules, the six plus the three frames, or all of them (all three
   frames or none), and marks the review out of date when a frame changes or the page is taken again without `--frames`. `site approve`
   does not copy the frames into the approved page.
+- The cold review of a site hero now stops. A version is read at most twice per board: the first time, and once after Claude fixed
+  what the first review found; a third review is not run. The review has a third verdict, `owner`, for what only you can decide:
+  its findings are written as questions to you, on the board's Questions list with the answer Claude recommends, and the board's card shows it next to `ship` and `fix`. `board-lint` accepts
+  all three (an unknown word still fails; boards made before this release lint as they did), and the lint cannot count reviews, so
+  the limit is in the round's instructions. When Claude asks you to approve reviewer agents, it now states how many calls the
+  rule allows (up to 4 for two versions, 6 for three).
 
 ### Fixed
 

@@ -60,8 +60,8 @@ The first screen, what a visitor sees before they scroll, sets the tone for ever
 2. Claude builds two or three versions in your colours, fonts and logo. For each one you see it on a phone and a
    desktop, in light and dark, with:
    - a check against your brand's rules;
-   - a short verdict, "ship" (good to go) or "fix", from a review that sees only the pictures, your brief and your
-     facts.
+   - a short verdict, "ship" (good to go), "fix" or "owner" (what is left is your call), from a review that sees only
+     the pictures, your brief and your facts.
 3. Pick one, mix two ("this one, with the ending of that one"), or say what is missing.
 
 ## 3. Get your other pages, and say which choices are rules

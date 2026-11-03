@@ -72,6 +72,7 @@ figcaption{font-size:13px;color:var(--muted);margin-top:4px}
 .check,.cold{margin:0;font-size:14px;background:var(--sunk);border-radius:4px;padding:8px 10px;border-left:4px solid var(--muted)}
 .check[data-check="pass"],.cold[data-cold="ship"]{border-left-color:var(--good)}
 .check[data-check="fail"],.cold[data-cold="fix"]{border-left-color:var(--warn)}
+.cold[data-cold="owner"]{border-left-color:var(--accent)}
 .layout-line{margin:0;font-size:14px}
 .fit{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;margin:0}
 .fit dt{font-weight:600}.fit dd{margin:0}
@@ -139,7 +140,7 @@ footer{margin-top:56px;font-size:13px;color:var(--muted)}
           <dt>Cost</dt><dd data-field="cost">[[fill: what it takes to build and keep in the product repository: the script, the pictures, the content the owner must supply]]</dd>
         </dl>
         <p class="layout-line" data-field="layout" data-layout="[[fill: layout id]]">Layout: <b>[[fill: layout id]]</b>. [[fill: why this structure serves the visitor's job; for own:word, why none of the layout references fit]]</p>
-        <p class="cold" data-cold="[[fill: ship or fix]]">Cold review: <b>[[fill: ship or fix]]</b>, [[fill: by in-thread or by agent]]. [[fill: its first finding in a line, from cold-review.md]]</p>
+        <p class="cold" data-cold="[[fill: ship, fix or owner]]">Cold review: <b>[[fill: ship, fix or owner]]</b>, [[fill: by in-thread or by agent]]. [[fill: its first finding in a line, from cold-review.md; for owner, the first question to the owner]]</p>
         <fieldset class="vote" data-vote="[[fill: Name one]]"><legend>Your vote</legend>
           <label><input type="radio" name="vote-[[fill: Name one]]" value="keep">keep</label><label><input type="radio" name="vote-[[fill: Name one]]" value="drop">drop</label><label><input type="radio" name="vote-[[fill: Name one]]" value="unsure">unsure</label></fieldset>
       </article>
@@ -230,7 +231,7 @@ footer{margin-top:56px;font-size:13px;color:var(--muted)}
           <dt>Cost</dt><dd data-field="cost">[[fill: what it takes to build and keep in the product repository: the script, the pictures, the content the owner must supply]]</dd>
         </dl>
         <p class="layout-line" data-field="layout" data-layout="[[fill: layout id]]">Layout: <b>[[fill: layout id]]</b>. [[fill: why this structure serves the visitor's job; for own:word, why none of the layout references fit]]</p>
-        <p class="cold" data-cold="[[fill: ship or fix]]">Cold review: <b>[[fill: ship or fix]]</b>, [[fill: by in-thread or by agent]]. [[fill: OPTIONAL: its first finding in a line, from cold-review.md; delete the line when the page has no cold review]]</p>
+        <p class="cold" data-cold="[[fill: ship, fix or owner]]">Cold review: <b>[[fill: ship, fix or owner]]</b>, [[fill: by in-thread or by agent]]. [[fill: OPTIONAL: its first finding in a line, from cold-review.md; delete the line when the page has no cold review]]</p>
         <fieldset class="vote" data-vote="[[fill: page id]]"><legend>Your vote</legend>
           <label><input type="radio" name="vote-[[fill: page id]]" value="keep">keep</label><label><input type="radio" name="vote-[[fill: page id]]" value="drop">drop</label><label><input type="radio" name="vote-[[fill: page id]]" value="unsure">unsure</label></fieldset>
       </article>

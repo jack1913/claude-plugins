@@ -1551,6 +1551,67 @@ def test_the_site_round_takes_key_frames_of_a_page_that_animates_on_load():
     assert "[--frames]" in (ROOT / "scripts" / "render.mjs").read_text(encoding="utf-8")
 
 
+def test_the_cold_review_stops_after_two_reviews_and_has_a_third_verdict_for_the_owner():
+    """G4-05 (O3): at most two cold reviews per variant per board (the first, and one after the fixes); `verdict: owner` says the rest is the owner's call; a third review is not run; the card shows the last
+    verdict; the fleet gate states the number of calls the rule allows. The phase file, the round skill, the fleet reference, the prompt, the reviewer's brief, the contract and the manual say so."""
+    phase = _flat(REFS / "phases" / "07p-site-round.md")
+    for needle in ("The first non-empty line is `verdict: ship`, `verdict: fix` or `verdict: owner`.",
+                   "**At most two cold reviews per variant per board.** The first, and one after you fixed what it found; a third is not run.",
+                   "`verdict: owner`: what is left is a choice only the owner can make, and its findings are written as questions to them",
+                   "The second review may say `owner`",
+                   "If the second review still says `fix`, do not change the page and review it a third time",
+                   "The card's cold line shows the last verdict",
+                   "after the owner's yes to the count (at most two calls per variant), the model and the cost",
+                   "the prompt of the second call states in one line that it is the second and last review of this variant",
+                   "a line of the prompt, not an input, and not the first review's findings or your reasons",
+                   "\"when the prompt says this is the second review\", in its brief"):
+        assert needle in phase, needle
+    assert phase.index("## The cold review") < phase.index("**At most two cold reviews per variant per board.**") < phase.index("## The other pages")
+    # what is left for the owner goes to the board's Questions section (numbered, lettered options, one recommended), My call keeps the recommendation
+    for needle in ("Put those questions on the board, in its Questions section (from question 2 on a hero board, after the board's own two questions on the pages board), each with lettered options and exactly one recommended",
+                   "My call stays your recommendation, as on every board",
+                   "put what is left to the owner on the board the same way, as questions",
+                   "its findings as questions on the board's Questions section (one recommended each), your recommendation in My call"):
+        assert needle in phase, needle
+    assert "the questions in My call" not in phase and "as questions, on the card and in My call" not in phase
+    contract_ref = _flat(REFS / "board-contract.md")
+    assert 'a cold line (`data-cold="ship|fix|owner"`)' in contract_ref and 'data-cold="ship|fix"' not in contract_ref, "the site board card paragraph lists the three verdicts"
+    fleet = _flat(REFS / "fleet.md")
+    for needle in ("At most two calls per hero variant per board: the first review, and one after the fixes; a third is not run",
+                   "The fleet gate message for these calls states the number the rule allows", "(2 variants: up to 4 calls; 3 variants: up to 6)",
+                   "a `verdict: owner` review is the last one for that variant",
+                   "the prompt of the second call of a variant states it in one line, \"This is the second and last review of this variant.\"",
+                   "That line is an addition to the inputs above, as are the G4 rules as prompt text and the three key frames that [07p-site-round](phases/07p-site-round.md) allows",
+                   "a line of the prompt, not an input, and never the first review's findings or your reasons", "The prompt of a first call has no such line"):
+        assert needle in fleet, needle
+    assert "the one addition" not in fleet, "the second call's line is not the only thing added to the six paths"
+    assert fleet.index("## The cold review of a site hero") < fleet.index("At most two calls per hero variant per board") < fleet.index("## A fleet without a workflow")
+    fragment = _flat(REFS / "prompt-fragments.md")
+    bullet = fragment[fragment.index("- A cold review of a site hero"):]
+    bullet = bullet[:bullet.index(" **Implementation and safety**")]
+    for needle in ("`verdict: ship`, `verdict: fix` or `verdict: owner` first",
+                   "`owner` says that what is left is a choice only the owner can make, and then each finding is a question to the owner",
+                   "The prompt of the second review says so in one line of its own, which stands outside this fragment, so a first call built from the fragment never carries it (the exact line is in [fleet.md](fleet.md); a line of the prompt, not an input, and not the first review's findings)",
+                   "the prompt of the first has no such line", "When the prompt says this is the second review, put what you would only list for another round of fixes as a question to the owner"):
+        assert needle in bullet, needle
+    assert "This is the second and last review of this variant." not in bullet, "a first call built from the fragment must not carry the second call's line"
+    agent = _flat(ROOT / "agents" / "brand-reviewer.md")
+    for needle in ("`verdict: ship`, `verdict: fix` or `verdict: owner`", "a choice only the owner can make",
+                   "When the prompt says this is the second review, say `owner` for what you would otherwise only list for another round of fixes",
+                   "A prompt that does not say so is the first review: a fault is `fix`"):
+        assert needle in agent, needle
+    contract = _flat(ROOT / "scripts" / "CONTRACT.md")
+    for needle in ("is not `verdict: ship`, `verdict: fix` or `verdict: owner`", 'an element with `data-cold="ship"`, `"fix"` or `"owner"`', "`owner` passes like `ship`",
+                   "At most two cold reviews are run per variant per board",
+                   "the prompt of the second call says in one line that it is the second and last review of the variant (a line of the prompt, not an input)"):
+        assert needle in contract, needle
+    skill = _flat(SKILLS / "round" / "SKILL.md")
+    for needle in ("`verdict: ship`, `verdict: fix` or `verdict: owner`", "at most two cold reviews per variant per board (the first, and one after the fixes); a third is not run",
+                   "The prompt of an agent's second call says in one line that it is the second and last review of the variant; the first call's has no such line"):
+        assert needle in skill, needle
+    assert "`verdict: ship`, `verdict: fix` or `verdict: owner`" in _flat(REFS / "phases" / "09-qa.md")
+
+
 def test_the_round_wrapper_has_a_site_kind():
     fm, body = frontmatter(SKILLS / "round" / "SKILL.md")
     assert fm["argument-hint"] == "[style|pick|refine|motion|site-refs|site] [what this round should answer]"
@@ -1574,7 +1635,7 @@ def test_the_round_wrapper_has_a_site_kind():
                    "A later board of the same stage starts as `cp -R rounds/r<N-1> rounds/r<N>` of the previous board of that stage; then make `capture`, `page-check` and the cold review again",
                    "The first hero board shows 2 or 3 variants.", "`data-layout` (an id of `references/page-layouts.json`, or `own:<word>`) and `data-page` (`start` for the home page)",
                    "a labelled `[data-sample]` element", "makes no request to another address",
-                   "fix a failing row in the page, or let its card say `fail`; never `pass`", "`verdict: ship` or `verdict: fix`", "`by: in-thread` by default and not blind",
+                   "fix a failing row in the page, or let its card say `fail`; never `pass`", "`verdict: ship`, `verdict: fix` or `verdict: owner`", "`by: in-thread` by default and not blind",
                    "`brand-creator:brand-reviewer` call per hero variant", "only after the fleet gate and the owner's yes",
                    "`data-hero=\"<the picked variant>\"` and a choices section that tags every choice `rule`", "or `example`",
                    "shoot the board last: `shot` keeps one report, and `check` wants the one of the latest board.",
