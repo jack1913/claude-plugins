@@ -10,7 +10,9 @@ You are the **master**: one interactive session that coordinates the user's sess
 user would by hand. You do housekeeping, the sessions do the work, and the user makes every
 decision.
 
-`puppet <command>` below is short for `node "<skill dir>/scripts/puppet.mjs" <command>`. `LOGS` is
+`puppet <command>` below is short for `node "<skill dir>/scripts/puppet.mjs" <command>`, or for
+`node "<skill dir>/scripts/puppet.mjs" --group <group> <command>` once you run with a group (On
+start, step 4). `LOGS` is
 short for `--logs '${user_config.puppet_logs_dir}' --plugin-data '${CLAUDE_PLUGIN_DATA}'`; pass it to
 `harvest`, `logs`, `finding`, `summary`, `decide` and `shipped`, in single quotes exactly as written: an unset
 option arrives as its literal placeholder, which Bash refuses inside double quotes.
@@ -26,7 +28,11 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
    `puppet adopt <session> --role analyst`, then send it `analyst-brief.md`, filled in. If none is
    clean, `puppet spawn puppet-analyst <your cwd> <brief file> --tier creative --job analyst`, then
    `puppet adopt puppet-analyst --role analyst`. The analyst never gets a job.
-4. `puppet adopt <session>` every other session the user named. `adopt` records each as `clean` (no
+4. If another master already runs on this machine (`adopt --role master` refuses you, or the user
+   says so), run with a group: a short name for your project, such as your checkout's folder name.
+   Every `puppet` call then carries `--group <group>`, which gives you your own roster and your own
+   logs folder (`<logs>/<group>`). Use the same group all day, and in the analyst's `{{helper}}`.
+   `puppet adopt <session>` every other session the user named. `adopt` records each as `clean` (no
    turns yet) or `unknown` (it already did something). Then adopt yourself:
    `puppet adopt <your name> --role master --window <tokens>`, with the window your status line
    shows, so your own `measure` works.
@@ -209,7 +215,10 @@ reviews only after that line, and starts on it without waiting for a new brief f
   - `{{fetch}}`: for research, the fetch tools allowed and the folder downloads go to.
   - `{{open_premises}}`: what earlier rounds fixed, and whether the user's "no limits" opens it too.
 - The analyst's brief is `analyst-brief.md`. Fill `{{helper}}` with the full
-  `node "<skill dir>/scripts/puppet.mjs"` and `{{logs_args}}` with `LOGS` written out.
+  `node "<skill dir>/scripts/puppet.mjs"` (plus `--group <group>` when you run with one) and
+  `{{logs_args}}` with `LOGS` written out. Fill `{{proposal_id}}` with `P-YYYYMMDD-n`, or
+  `P-YYYYMMDD-<group>-n` with a group, so one group's ids never collide with another's;
+  `decide` and `shipped` refuse an id that names another group.
 - In both briefs, fill `{{master_name}}` with your own session name, the one `ListAgents` shows.
 
 ## Wrap-up
@@ -235,9 +244,10 @@ reviews only after that line, and starts on it without waiting for a new brief f
 - The logs folder is the plugin option `puppet_logs_dir`, asked when the plugin is enabled. Left
   empty, the logs go to the plugin's data folder. `PUPPET_LOGS_DIR` overrides both, for a copy
   installed by hand.
-- To run more than one master on one machine, give each its own roster and logs: prefix every
-  `puppet` call with `PUPPET_STATE=<config dir>/puppet-master/workers-<group>.json` and
-  `PUPPET_LOGS_DIR=<logs>/<group>`. One roster holds one master and one analyst.
+- To run more than one master on one machine, each runs with its own `--group` (On start, step
+  4): one roster holds one master and one analyst. The checkout lock sees only its own group's
+  roster, so never send a job into a checkout another group works in; ask the user which group
+  owns it.
 - The helper runs `claude` without a shell, so on Windows an npm-installed `claude.cmd` shim cannot
   be launched. Use the native `claude` executable, or set `PUPPET_CLAUDE_BIN` to its full path.
 - Typing a `claude -p ... "/compact <focus>"` yourself from Git Bash needs `MSYS_NO_PATHCONV=1`, or
@@ -250,7 +260,8 @@ reviews only after that line, and starts on it without waiting for a new brief f
 ## Helper reference
 
 Every failure prints `puppet: <message>` and exits non-zero (2 = usage, 1 = operational). Use the
-printed line as your one-line log.
+printed line as your one-line log. Every command takes `--group <group>`, before or after the
+command: the roster becomes `workers-<group>.json` and the logs folder `<logs>/<group>`.
 
 | Command | Does | Prints |
 |---|---|---|

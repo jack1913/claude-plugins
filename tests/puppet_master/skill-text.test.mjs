@@ -179,10 +179,14 @@ test("the master offers its own /compact line once at 50% of its window, unpromp
   assert.match(rule10, /cannot\s+compact\s+yourself/);
 });
 
-test("several masters on one machine: PUPPET_STATE and PUPPET_LOGS_DIR are documented (carcare P-20261102-7)", () => {
-  const setup = section(read("SKILL.md"), "Setup prerequisites (the user's, never written by you)");
-  assert.match(setup, /PUPPET_STATE/);
-  assert.match(setup, /more\s+than\s+one\s+master/);
+test("several masters on one machine run with --group, and proposal ids carry the group (carcare P-20261102-7)", () => {
+  const skill = read("SKILL.md");
+  assert.match(skill, /`puppet <command>`[^\n]*\n?[^\n]*--group <group>/);
+  assert.match(section(skill, "On start"), /another\s+master/);
+  assert.match(section(skill, "Briefs"), /`\{\{proposal_id\}\}`/);
+  const analyst = read("analyst-brief.md");
+  assert.match(analyst, /\{\{proposal_id\}\}/);
+  assert.doesNotMatch(analyst, /P-<YYYYMMDD>-<n>/);
 });
 
 test("repository work is a job for a session, and relays quote the user verbatim", () => {

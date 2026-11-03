@@ -54,7 +54,7 @@ against one is flagged to the user, and you never propose a change to it.
 2. **Findings** by tag. Each one has its id, its evidence (session, time and the event's excerpt,
    which is already redacted; quote nothing else from a transcript) and its note.
 3. **Proposals**, ranked by how many findings and sessions back each one. Each has:
-   - an id `P-<YYYYMMDD>-<n>`;
+   - an id `{{proposal_id}}`, with the day as `YYYYMMDD` and `n` counting from 1;
    - its target;
    - the change, in one or two sentences;
    - the finding ids it cites;

@@ -262,7 +262,26 @@ function requireBackground(agent, verb) {
 // --- the worker registry --------------------------------------------------------------
 
 export function statePath(deps) {
-  return deps.env.PUPPET_STATE ?? path.join(configDir(deps.env), "puppet-master", "workers.json");
+  const base = deps.env.PUPPET_STATE ?? path.join(configDir(deps.env), "puppet-master", "workers.json");
+  // A group (one master and its sessions) keeps its own roster beside the default one.
+  return deps.group ? path.join(path.dirname(base), `workers-${deps.group}.json`) : base;
+}
+
+// --- groups: several masters on one machine ---------------------------------------------
+
+const GROUP_RE = /^[A-Za-z0-9][A-Za-z0-9-]*$/;
+
+function withGroup(deps, group) {
+  if (!GROUP_RE.test(group)) throw new PuppetError(`--group must match [A-Za-z0-9-]+, got "${group}"`, 2);
+  return { ...deps, group };
+}
+
+// A proposal id names its group (`P-<YYYYMMDD>-<group>-<n>`); an id without one is an older,
+// ungrouped id and is taken by any group. One group's id never lands in another's log.
+function checkProposalGroup(deps, proposalId) {
+  const m = /^P-\d{8}-(.+)-\d+$/.exec(proposalId ?? "");
+  if (!m || m[1] === deps.group) return;
+  throw new PuppetError(`${proposalId} belongs to group "${m[1]}"; pass --group ${m[1]}`, 2);
 }
 
 export function loadRegistry(deps) {
@@ -959,7 +978,7 @@ export function closeWorker(deps, key) {
 // --- subcommands ----------------------------------------------------------------------
 
 const USAGE = [
-  "usage: puppet.mjs <command> ...",
+  "usage: puppet.mjs [--group <name>] <command> ...   (--group: this master's own roster and logs)",
   "  measure <worker> [--window N] [--compact-at N] [--json]",
   "  list [--name <session>] [--window N] [--compact-at N] [--json]",
   "  adopt <session> [--role worker|analyst|master] [--window N]",
@@ -987,6 +1006,7 @@ const FLAGS = {
   "--scope": true,
   "--no-git": false,
   "--tier": true,
+  "--group": true,
   "--model": true,
   "--effort": true,
   "--json": false,
@@ -1142,12 +1162,13 @@ function cmdReopen(deps, positional) {
 }
 
 export function logsDirFor(deps, flags) {
-  return resolveLogsDir({
+  const dir = resolveLogsDir({
     flag: flags.logs,
     env: deps.env,
     pluginData: flags["plugin-data"],
     configDir: configDir(deps.env),
   }).dir;
+  return deps.group ? path.join(dir, deps.group) : dir;
 }
 
 // The sessions the analyst reads: every roster session (a transcript stays on disk whether
@@ -1228,6 +1249,7 @@ function cmdSummary(deps, positional, flags) {
 
 function cmdDecide(deps, positional, flags) {
   wantPositional(positional, 2, "decide");
+  checkProposalGroup(deps, positional[0]);
   const d = decide(deps, {
     logsDir: logsDirFor(deps, flags),
     proposalId: positional[0],
@@ -1242,6 +1264,7 @@ function cmdDecide(deps, positional, flags) {
 
 function cmdShipped(deps, positional, flags) {
   wantPositional(positional, 2, "shipped");
+  checkProposalGroup(deps, positional[0]);
   const r = markShipped(deps, { logsDir: logsDirFor(deps, flags), proposalId: positional[0], sha: positional[1] });
   deps.out(`${r.proposalId} shipped as ${r.changeSha}`);
   return 0;
@@ -1312,12 +1335,26 @@ const COMMANDS = {
 
 export async function main(argv, deps) {
   try {
-    const [cmd, ...rest] = argv;
+    // `--group <name>` may lead, so a master's `puppet` shorthand can carry it.
+    let args = argv;
+    let group;
+    if (args[0] === "--group") {
+      if (args.length < 2) throw new PuppetError(`--group needs a value\n${USAGE}`, 2);
+      group = args[1];
+      args = args.slice(2);
+    }
+    const [cmd, ...rest] = args;
     if (!cmd || !(cmd in COMMANDS)) {
       throw new PuppetError(cmd ? `unknown command ${cmd}\n${USAGE}` : USAGE, 2);
     }
     const { positional, flags } = parseArgs(rest);
-    return await COMMANDS[cmd](deps, positional, flags);
+    if (flags.group !== undefined) {
+      if (group !== undefined && group !== flags.group) {
+        throw new PuppetError(`two groups given: ${group} and ${flags.group}`, 2);
+      }
+      group = flags.group;
+    }
+    return await COMMANDS[cmd](group === undefined ? deps : withGroup(deps, group), positional, flags);
   } catch (e) {
     if (e instanceof PuppetError) {
       deps.err(`puppet: ${e.message}`);

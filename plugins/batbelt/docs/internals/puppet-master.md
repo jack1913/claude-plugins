@@ -18,7 +18,7 @@ sounds like coordinating sessions never starts it.
   for every brief: `{{deliverable}}`, `{{local_state}}` and `{{approvals}}`, and the conditional ones: `{{tier_check}}`, `{{test_tmp}}`, `{{decided}}`, `{{write_scope}}`, `{{peers}}`, `{{owners}}`, `{{handoffs}}`,
   `{{references}}`, `{{fetch}}` and `{{open_premises}}`.
 - [`analyst-brief.md`](../../skills/puppet-master/analyst-brief.md) is the analyst's brief, with `{{master_name}}`,
-  `{{helper}}` and `{{logs_args}}`, the closed tag list and the report's shape.
+  `{{helper}}`, `{{logs_args}}` and `{{proposal_id}}`, the closed tag list and the report's shape.
 - [`scripts/puppet.mjs`](../../skills/puppet-master/scripts/puppet.mjs) is the helper and its command line: `measure`,
   `list`, `adopt`, `assign`, `finish`, `reopen`, `pick`, `spawn`, `cycle`, `close`, `harvest`, `finding`, `summary`, `decide`
   and `shipped`.
@@ -152,8 +152,7 @@ Things that shaped the helper:
 
 ## The roster
 
-`<config dir>/puppet-master/workers.json` (`PUPPET_STATE` overrides it, which is how a second master on one machine
-gets its own roster, with `PUPPET_LOGS_DIR` for its own logs; the config dir is `CLAUDE_CONFIG_DIR` or
+`<config dir>/puppet-master/workers.json` (`PUPPET_STATE` overrides it; the config dir is `CLAUDE_CONFIG_DIR` or
 `~/.claude`) maps each session's name to its record: `id` (background only), `sessionId`, `cwd`, `checkout`, `kind`
 (`interactive` or `background`), `role` (`worker`, `analyst` or `master`), `job`, `jobState`, `jobStartedAt`, `jobs[]`
 (each job's label, start and `endedAt`), the job's `scope`, `git` and `tier` when given, and its `window` after a
@@ -227,6 +226,13 @@ automatically, and the report says how much it read.
   brief or scripts: it is flagged to the user and never proposed.
 - **`summary`** starts with a headline of sessions, lines, events and findings. With no lines read, the headline says
   nothing was read, so an empty day cannot pass for a clean one; lines read with no events is a clean day.
+- **Groups.** Every command takes `--group <name>` (`[A-Za-z0-9-]+`, before or after the command). A group is one
+  master with its sessions: its roster is `workers-<group>.json` beside the default one and its logs are
+  `<logs>/<group>`, so a second master on one machine needs no `PUPPET_STATE`/`PUPPET_LOGS_DIR` prefix (on
+  2026-11-02 the carcare master ran on that prefix, which the skill did not mention). A grouped proposal id is
+  `P-<YYYYMMDD>-<group>-<n>`: the two groups' 11-02 reports both numbered `P-20261102-1..`, so an id alone was
+  ambiguous. `decide` and `shipped` refuse an id that names another group; an ungrouped id is taken by any group.
+  The checkout lock sees one group's roster only.
 - **`decide`** and **`shipped`** append rows to `decisions.jsonl`, folded by proposal id. For a shipped proposal,
   `summary` gives the mean count of its tag per day before and after the ship day, over days that read any transcript line.
 
@@ -284,7 +290,7 @@ captures of a real probe worker, plus `bg-stdout-color.txt` (the coloured `--bg`
 - the roster: adopt, assign, finish, pick, the one-editor lock, changed and gone sessions, and Windows paths that
   differ in case or hold spaces;
 - the compaction point, `WARN`, the model and effort column, `list --name` and the closed tombstone
-  (`compaction.test.mjs`); reuse, write scopes, tiers and the master's record (`dispatch.test.mjs`);
+  (`compaction.test.mjs`); reuse, write scopes, tiers and the master's record (`dispatch.test.mjs`); groups (`group.test.mjs`);
 - `cycle`'s verified compaction and its stopped-worker messages, and `close` never passing a discard flag;
 - logs-folder resolution, redaction (including a secret past the excerpt cut), event extraction across a partial
   line, dialog answers and `notify_when_idle`, harvest offsets, and filing by work day;
