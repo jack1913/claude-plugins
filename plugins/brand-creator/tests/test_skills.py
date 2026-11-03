@@ -1458,6 +1458,67 @@ def test_the_hero_is_tried_live_before_the_board_and_copied_into_the_round_with_
     assert "sketch" not in manual and "G4p" not in manual and "site:files" not in manual
 
 
+def test_a_tryout_is_shared_as_a_private_page_only_with_the_owners_ask_and_yes_and_the_manual_no_longer_says_never_publishes():
+    """G4-17: `inline` makes one self-contained copy of a try-out; Claude publishes it as a private Artifact page only when the owner asks and has said yes to claude.ai pages (`review_surface`
+    `artifact`, or the one upload question), records the address as `tryout_url` (never `review_url`), and clears it at the stage gate; with no yes nothing is published. Every home says so in its own words."""
+    flat = _flat(REFS / "phases" / "07p-site-round.md")
+    for needle in (
+            "**Sharing a try-out (only with the owner's yes).** A try-out stays a local page.",
+            "When the owner asks to show one to someone, and has said yes to claude.ai pages (`review_surface` is `artifact`, or they answer yes to the one upload question of the orchestrator's Review surface)",
+            "make one self-contained copy outside the project: `brand-creator --data \"${CLAUDE_PLUGIN_DATA}\" inline tryout/<Name>/index.html --project <dir> --out \"${CLAUDE_PLUGIN_DATA}/scratch/tryout-<Name>.html\"`",
+            "Say the size it prints, then publish that file as a private Artifact page with the Artifact tool and record its address with `state --set tryout_url=<url>`, never as `review_url` (the page of the boards)",
+            "With no yes, or no Artifact tool, nothing is published and the try-out stays local: say so once.",
+            "`inline` refuses a page that loads from another website (exit 2, naming the URL): take that out of the try-out",
+            "a link to another file is dead in it, and a change is made in the try-out and published again.",
+            "At the stage gate clear the address (`state --set tryout_url=`) and tell the owner the private page is theirs to remove on claude.ai.",
+            "| A shared copy of a try-out (only when the owner asks and said yes to claude.ai pages) | one self-contained `.html` file made by `inline`, outside the project; published as a private Artifact page; its address in `BRAND-STATE.md` → `tryout_url`, cleared at the stage gate |",
+            "- **A try-out published without the owner's yes.** A try-out is a local page.", "an address written to `review_url` instead of `tryout_url`, and a `tryout_url` still set after the stage gate are wrong.",
+            "- `inline` reads no gate of the board: it refuses a page that loads from another website (exit 2) and writes only outside the project or under `tryout/`.",
+            "That the owner asked for the copy and said yes to publishing it is judgement and is not scripted."):
+        assert needle in flat, needle
+    # the sharing step sits inside step 2a, after the rule that nothing cites a try-out and before the stage gate; it does not change what 2a already said about the local page
+    assert flat.index("**Nothing cites a try-out.**") < flat.index("**Sharing a try-out (only with the owner's yes).**") < flat.index("**At the stage gate**, when the owner says in their words")
+    assert "they open the pages in their own browser (local files; nothing is published) and say what to change" in flat
+    skill = _flat(SKILLS / "round" / "SKILL.md")
+    section = skill[skill.index("2a. On the first hero board"):skill.index("3. For each folder, in this order:")]
+    for needle in ("A try-out is shared as a private Artifact page only when the owner asks and has said yes to claude.ai pages (`review_surface` `artifact`, or the one upload question)",
+                   "`inline tryout/<name>/index.html --out <a file outside the project>` makes one self-contained copy",
+                   "you publish it and record its address with `state --set tryout_url=<url>` (never `review_url`), and clear it at the stage gate; with no yes, nothing is published."):
+        assert needle in section, needle
+    manual = _flat(ROOT / "docs" / "manual" / "use" / "get-reference-pages-for-your-site.md")
+    for needle in ("They stay on your computer, and nothing is published without your yes, and then only as a private page.",
+                   "Want someone else to see a version, or to see it on your phone? Ask Claude to share it.",
+                   "If you already allowed private claude.ai pages (or say yes when Claude asks), Claude puts one self-contained copy of that version online as a private page and gives you its address. Without your yes, nothing leaves your computer.",
+                   "Links to other files don't work in the copy, and you can remove the page on claude.ai when you are done with it.",
+                   "If you asked to share a version, Claude gave you the address of its private page.",
+                   "Claude says a version cannot be shared because it loads something from another website"):
+        assert needle in manual, needle
+    assert "never publishes" not in manual and "Claude never publishes anything" not in manual
+    assert manual.index("Ask Claude to share it.") < manual.index("When the versions look right, tell Claude to put them on the board.")
+    assert "inline" not in manual and "tryout_url" not in manual and "Artifact" not in manual and "G4" not in manual, "the manual speaks the owner's words: no command, key or gate id"
+    commands = _flat(ROOT / "docs" / "manual" / "reference" / "commands.md")
+    assert ("**Sharing a first-screen version.** While you try the versions, you can ask Claude to share one. Claude makes one self-contained copy of it and, only with your yes to private claude.ai pages "
+            "(the `review_surface` [setting](settings.md)), publishes the copy as a private page and gives you its address. Without your yes, the version stays on your computer.") in commands
+    settings = _flat(ROOT / "docs" / "manual" / "reference" / "settings.md")
+    assert "A first-screen version you ask Claude to share as a private page follows the same answer" in settings
+    assert "Boards, and a first-screen version you ask to share, go to claude.ai as a private page only if you allow it." in _flat(ROOT / "README.md")
+    # the command is in the entry point's help, its contract and the QA table; the key is in the state template
+    usage = (ROOT / "bin" / "brand-creator").read_text(encoding="utf-8").split("usage() {")[1].split("EOF\n}")[0]
+    assert re.search(r"(?m)^  inline <page\.html>  +one self-contained copy of a page of the project", usage) and "(a page that loads from another website: exit 2)" in usage
+    contract = _flat(ROOT / "scripts" / "CONTRACT.md")
+    for needle in ("### inline `brand-creator inline <page.html> --out <file.html> [--project DIR]` (`scripts/inline_page.py`) writes one self-contained copy of a page of the project",
+                   "exit 2 a URL on another website", "a classic script with `defer` goes to the end of `<body>`",
+                   "a `.html` file outside the project or under `<project>/tryout/`", "the instructions write it outside the project, in the data folder's `scratch/`",
+                   "`tryout_url` (written by `state --set tryout_url=<url>`, cleared by `state --set tryout_url=`) is the private page a shared try-out of the site round is on",
+                   "It is a key of its own, apart from `review_url`"):
+        assert needle in contract, needle
+    qa = _flat(REFS / "phases" / "09-qa.md")
+    assert "| `inline <page.html> --out <file.html>` | none (the file `--out` names, outside the project or under `tryout/`) |" in qa
+    assert "That the owner asked for the copy and said yes to publishing it as a private page is judgement and is not scripted" in qa
+    template = (ROOT / "templates" / "BRAND-STATE.md").read_text(encoding="utf-8")
+    assert re.search(r'(?m)^review_url: ""\s+# the one stable review page', template) and re.search(r'(?m)^tryout_url: ""\s+# the private page a shared try-out of the site round is on', template)
+
+
 def test_the_round_wrapper_has_a_site_kind():
     fm, body = frontmatter(SKILLS / "round" / "SKILL.md")
     assert fm["argument-hint"] == "[style|pick|refine|motion|site-refs|site] [what this round should answer]"

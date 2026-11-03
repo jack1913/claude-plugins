@@ -10,6 +10,11 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 - `brand-creator state --part g4-rules` prints the G4 rules of `BRAND-STATE.md` (the G4 record and the rules you approved) as one
   line to give a reviewer, with the line that records them in a cold review.
+- `brand-creator inline <page> --out <file>` writes one self-contained copy of a page of your project, such as a try-out: its
+  stylesheets, scripts, images, fonts and logo go inside the file, so it loads nothing from anywhere. A page that loads from
+  another website is refused (exit 2) with its address named, and nothing is written. The copy goes outside the project or
+  under `tryout/`, never over the page. `BRAND-STATE.md` has a new `tryout_url` for the private page a shared try-out is on, kept
+  apart from `review_url`, the page of your boards.
 
 ### Changed
 
@@ -52,6 +57,10 @@ stage, and why, is in the [archive](docs/archive/README.md).
   (`counts:data`) fails until the book is rebuilt, and an approved book then needs a new edition and a new approval. In the
   Full tier the book also has an Adoption chapter and a Launch checklist chapter, and the book check fails without them.
   Nothing in the checks changed.
+- A try-out can be shared. When you ask, and have said yes to private claude.ai pages (the same answer as for boards), Claude
+  publishes a self-contained copy of it as a private page and gives you its address; without your yes nothing leaves your
+  computer. The manual no longer says Claude never publishes anything: nothing is published without your yes, and then only as a
+  private page.
 
 ### Fixed
 

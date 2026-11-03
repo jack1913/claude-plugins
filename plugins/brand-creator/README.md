@@ -74,7 +74,7 @@ Full): [Choose a tier](docs/manual/getting-started/choose-a-tier.md).
   Before any run you see how many, which models and a rough cost, and you say yes. The four workflows show in the `/`
   menu too, but brand-creator starts them for you, after that yes.
 - **Network, only after your OK.** Setup downloads tools after you say yes. A name check sends names to registries after
-  you agree. Boards go to claude.ai as a private page only if you allow it.
+  you agree. Boards, and a first-screen version you ask to share, go to claude.ai as a private page only if you allow it.
 - **Files it writes.** Your brand project folder, and the plugin's data folder for the tools. Your product repositories
   change only after you say go, on a branch you name.
 - **A brand kit, if you ask for one.** A skill for your brand (`.claude/skills/<brand>-brand/`) in your brand project and,

@@ -72,6 +72,7 @@ Commands are written after `brand-creator --data "${CLAUDE_PLUGIN_DATA}"`.
 | A hero variant, one folder each, named by a word of 3 or more letters | `rounds/r<N>/<Name>/index.html` (the home page's first screen), `shots/` (from `capture`: `1440-light.png`, `1440-dark.png`, `390-light.png`, `390-dark.png`, `1440-light-full.png`, `capture.json`) and `cold-review.md` |
 | A page of the pages stage, one folder each, named by its page id (`start`, `pricing`) | `rounds/r<N>/<id>/index.html`, `shots/`, and `cold-review.md` when the page was read cold |
 | A try-out of a hero variant (the first hero board only), one folder each, named as its variant | `tryout/<Name>/index.html`: a plain local page the owner opens in their own browser; no `shots/`, no report, no record, and nothing cites it; the whole folder moves to `removed-<date>/tryout/` at the stage gate |
+| A shared copy of a try-out (only when the owner asks and said yes to claude.ai pages) | one self-contained `.html` file made by `inline`, outside the project; published as a private Artifact page; its address in `BRAND-STATE.md` → `tryout_url`, cleared at the stage gate |
 | The site board (the page the owner sees) | `rounds/r<N>/board.html`, from `${CLAUDE_PLUGIN_ROOT}/templates/site-board.html` (`data-board="site"`) |
 | The same page on the review surface | `review/index.html`, a copy of the board with the stills inlined as `data:` URIs and the live links seen from `review/`, linted with `board-lint review/index.html --round <N>` |
 | The check of a page | `assets/_checks/page-check/<slug>-<hash6>.json`, one per page (from `page-check`) |
@@ -151,6 +152,17 @@ is `start` (`<body data-page="start">`) in every project.
      owner makes there ("this one, not that one") is not the hero pick: the pick is made on the board and written down from
      there (step 6). The first hero board still shows 2 or 3 variants: leave out a variant the owner drops, and build another
      when fewer than 2 remain.
+   - **Sharing a try-out (only with the owner's yes).** A try-out stays a local page. When the owner asks to show one to someone,
+     and has said yes to claude.ai pages (`review_surface` is `artifact`, or they answer yes to the one upload question of the
+     orchestrator's Review surface), make one self-contained copy outside the project:
+     `brand-creator --data "${CLAUDE_PLUGIN_DATA}" inline tryout/<Name>/index.html --project <dir>
+     --out "${CLAUDE_PLUGIN_DATA}/scratch/tryout-<Name>.html"`. Say the size it prints, then publish that file as a private Artifact page
+     with the Artifact tool and record its address with `state --set tryout_url=<url>`, never as `review_url` (the page of the
+     boards); a changed try-out is published again to the same address. With no yes, or no Artifact tool, nothing is published
+     and the try-out stays local: say so once. `inline` refuses a page that loads from another website (exit 2, naming the URL):
+     take that out of the try-out, which has no network by step 2 anyway. The copy is for looking at, not a second page: a link
+     to another file is dead in it, and a change is made in the try-out and published again. At the stage gate clear the address
+     (`state --set tryout_url=`) and tell the owner the private page is theirs to remove on claude.ai.
    - **At the stage gate**, when the owner says in their words that the try-outs are ready for the board (never on your own),
      make `rounds/r<N>/` (a new, empty folder, as for any first board of a stage; never `cp -R` onto a `rounds/r<N>/<Name>/`
      that exists, it nests the copy as `<Name>/<Name>/` and keeps the old page) and copy each variant that stays:
@@ -349,6 +361,10 @@ board, the owner chooses between new variants or pages (a new site board) and a 
   from before the owner's live edits on the board (the lint passes, the folder and page exist), so there is no `rounds/r<N>/`
   until the gate; and a `tryout/` left in place after the gate fails `check --cascade` after the first rename, price or
   wording change: move it aside.
+- **A try-out published without the owner's yes.** A try-out is a local page. Sharing it as a private Artifact page needs the
+  owner's ask and their yes to claude.ai pages (`review_surface` `artifact`, or the one upload question answered yes). A page
+  published without them, an address written to `review_url` instead of `tryout_url`, and a `tryout_url` still set after the stage
+  gate are wrong.
 - **Building the production site here.** The pages are references. The real site is built in the product repository.
 - **Capturing in an earlier round.** `capture` refuses a page in `history/` or in a round before the latest; work in the
   latest round.
@@ -369,6 +385,8 @@ board, the owner chooses between new variants or pages (a new site board) and a 
   review copy's live link is checked only for being there). `check --cascade` does search `tryout/`, which is why step 2a moves it
   to `removed-<date>/` at the stage gate. The step itself (2a) is prose: that the pages were really tried live, and that their
   paths were rewritten for the depth, is judgement and is not scripted.
+- `inline` reads no gate of the board: it refuses a page that loads from another website (exit 2) and writes only outside the project
+  or under `tryout/`. That the owner asked for the copy and said yes to publishing it is judgement and is not scripted.
 - `page-check` on each page: brand rules fail (`page:rule:<id>`, colours, fonts, the mark, claims), tells warn.
 - `capture` refuses a page in `history/` or a round before the latest, and `site approve` refuses without G4p, without a
   current passing lint of the pages board, on a network or root-relative address and on a missing file; `check` gates

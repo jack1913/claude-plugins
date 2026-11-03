@@ -217,6 +217,12 @@ board is written does not look as if it came after it. Only that command writes 
 is read by `state --json`, which also reports `rounds` and `latest_round` as `rN` (`r0`, the style board, counts as a round) or
 `null` when no round exists, and `motion`, the decision of `brand-creator motion` (see The motion decision).
 
+`tryout_url` (written by `state --set tryout_url=<url>`, cleared by `state --set tryout_url=`) is the private page a shared try-out of the site round is on
+(`inline` makes the file, the Artifact tool publishes it, only with the owner's yes). It is a key of its own, apart from `review_url`, which stays the one
+review page of the boards: setting one never touches the other, `state` prints `try-out url: ...` only while it is set, and `state --json` holds it in
+`state`. A project made before the key has it from its first `--set`. Like `review_url`, it is no input of a page check or a board lint, so writing it
+leaves their reports current.
+
 ## Token sources (DTCG 2025.10)
 
 DTCG 2025.10 is a Final Community Group Report. It is not a W3C Standard and nothing here calls it one.
@@ -1746,6 +1752,35 @@ made before the site round, and a site round not yet approved) gets no `site:` r
 `site approve` writes no report, so right after it `site:pages` and `site:stills` are "not verified" until `page-check` and `capture` have run on each page, which is what its output asks for. The page-check report of a page
 in `site/` holds `BRAND-STATE.md` by its G4 rules only, so recording G5 or G6 or setting the phase afterwards leaves it current; a changed G4 record or `(rule)` line makes it stale. A page that `check` passes has not changed since approval, was checked against
 the brand rules as it is, and has stills of the page as it is.
+
+### inline
+
+`brand-creator inline <page.html> --out <file.html> [--project DIR]` (`scripts/inline_page.py`) writes one self-contained copy of a page of the project, so a try-out
+(`tryout/<Name>/index.html`) can be shown to someone as a private page. It writes no report in `assets/_checks/`, and nothing reads its output: the file is for
+the Artifact tool, and publishing it is the owner's decision (the review-surface consent; the command publishes nothing and reads no setting).
+
+- **Reads** only inside the project: `page` is resolved with `confine`, and so is every file it names (a path that leads outside, or through a link to a place
+  outside, exits 2). The page and each stylesheet must be UTF-8 text (exit 1 otherwise). Paths are read as a browser reads them, from the folder of the file that names them: the
+  `url()` and `@import` of a stylesheet are seen from the stylesheet's own folder, not the page's. The places read are those of `site approve` (`sitedata`: `src`, `srcset`, `poster`,
+  `url()` and `@import` in a `<style>`, a style attribute and a stylesheet), by element: `<link rel="stylesheet">` becomes a `<style>` element (its `media` kept; `integrity` and
+  `crossorigin` go; `</style` in the text is written `<\/style`), `<script src>` becomes an inline `<script>` (its other attributes kept; `src`, `integrity`, `crossorigin`, `defer`, `async`, `referrerpolicy`, `fetchpriority` and `blocking` go;
+  `</script` in the code is written `<\/script`, `<!--` as `<\!--`; a classic script with `defer` goes to the end of `<body>`, in order, where it ran), the `href` of an icon link
+  (`icon`, `apple-touch-icon`, `mask-icon` and the like) and the `src`, `poster`, `srcset`, `imagesrcset` and `data` (of an `<object>`) of an element, and the `href` of an SVG `<image>`, become `data:` URLs
+  (`;base64,`, the `#fragment` kept; the types of the book: png, jpg, webp, gif, svg, avif, ico, woff2, woff, ttf, otf). A `<link>` that only hints (`preload`, `prefetch`, `modulepreload`,
+  `preconnect`, `dns-prefetch`) is dropped. An `@import` is replaced by the stylesheet it names (up to eight deep; one that imports itself exits 1); a stylesheet's `@charset` is dropped.
+  Not read, and left as written: `<a href>`, `<form action>`, `<link>` of any other kind, the text of a `<script>`, a bare string in `image-set()` and a URL a script builds. A link to a file
+  of the project is dead in the copy.
+- **Refuses**, naming the file and line, up to twelve problems, and writes nothing when there is one (exit 2 when any of them is exit 2, else 1):
+  - exit 2 a URL on another website (`http(s)://`, `ftp(s)://`, `ws(s)://` or `//`: the sentence names the URL), any other scheme but `data:`, and a path starting with `/`; this includes a
+    `preconnect` or `preload` of another website;
+  - exit 1 a file that does not exist or is a folder; a kind of file the command does not inline (video, audio, a manifest, anything whose type is not in the list above); a frame or `<embed>` of
+    an HTML page; an SVG `<use>` of another file (a browser does not take it from a `data:` URL); an `@import` with a condition (a media query, `layer()`, `supports()`) or of a `data:` URL; a module
+    (`type="module"`) that imports another file; an alternate stylesheet; a `<base href>`; a `<script>` or stylesheet whose address is a `data:` URL.
+- **Writes** one file, `--out`, only when its bytes change, and never before every refusal above: a `.html` file outside the project or under `<project>/tryout/` (the real path is judged, so a link out of `tryout/`
+  is outside and a link into the project from outside is inside; a relative `--out` is read from the folder the command runs in). Anything else inside the project, a folder, another suffix and the page itself exit 2. A copy under `tryout/` is a text file with base64 in it, which `check --cascade` searches: the instructions write it outside the project, in the data folder's `scratch/`.
+- The copy is read once more before it is written, and must name no file to load (exit 1, "a fault in this command, not in the page", if it does). That proves the places above; that the page
+  asks the network for nothing as it runs (a script's request) is `page-check` or `shot` on the page or on its copy under `tryout/`. The same inputs give the same bytes.
+- It prints `wrote <path>: <n> bytes, <k> file(s) inlined (...)`. Exit 0 written; 1 and 2 as above. It needs no browser.
 
 ## Brand book
 

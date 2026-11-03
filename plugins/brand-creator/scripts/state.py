@@ -10,6 +10,7 @@
   state --get tier               one value (dotted keys: gates.G3, fixes_per_area.logo)
   state --set tier=standard      set a frontmatter value (not gates.* or g1s_round; use --record). A list key is written as a real
                                  list: reset_rounds=2,3 (whole numbers from 1), book_chapters=tone,photography
+                                 tryout_url is the private page a shared try-out of the site round is on, kept apart from review_url (--set tryout_url= clears it)
                                  site_research is the owner's answer to online research for website references: auto (not asked
                                  yet) | online | links-only | none (capture --url needs online or links-only); anything else exits 2
   state --bump fixes_per_area.logo   add 1 to a counter
@@ -130,6 +131,8 @@ def print_summary(s: dict) -> None:
           f"mark source: {d.get('mark_source', '?')}")
     print(f"renderer: {d.get('renderer', 'resvg')}   review surface: {d.get('review_surface', 'auto')}   "
           f"review url: {d.get('review_url') or '-'}")
+    if d.get("tryout_url"):   # a try-out of the site round shared as a private page (apart from the review page)
+        print(f"try-out url: {d['tryout_url']}")
     print("gates: " + "  ".join(f"{g} {'recorded' if str(gates.get(g, '')).strip() else '-'}" for g in GATE_IDS))
     for g in GATE_IDS:
         if str(gates.get(g, "")).strip():
