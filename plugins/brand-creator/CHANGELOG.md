@@ -6,6 +6,15 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+### Changed
+
+- The site round's hero stage starts from what your brand already approved. The approved templates and pictures in
+  `assets/masters/` are inputs, used as they are, and when `motion/motion.json` says your brand moves, the signature move
+  shows on the first screen of each hero, or the card says why a hero leaves it out. Before a hero is built, it states its
+  one memorable idea in one line, and the card carries it as an "Idea" line. A hero card with no Idea line, or an empty
+  one, makes `board-lint` warn (`site:fields`) in this release and fail in the next, so boards made before this release
+  still lint.
+
 ## [0.6.0] - 2026-11-03
 
 The `/` menu is shorter. It now lists `brand-creator`, `setup`, `status`, `check`, `round` and `brand-adopt`, plus the four

@@ -141,6 +141,9 @@ review and the choices are in `references/phases/07p-site-round.md`; the board's
    mark from `assets/logo/` and the fonts in `assets/fonts/`, takes its words from `FACTS.md` only (a number or status word
    that is not there goes in a labelled `[data-sample]` element) and makes no request to another address. Its `<body>`
    declares `data-layout` (an id of `references/page-layouts.json`, or `own:<word>`) and `data-page` (`start` for the home page).
+   A hero starts from what the brand approved: the approved masters and pictures in `assets/masters/` as they are, and, when
+   `motion/motion.json` says the brand moves, its signature move on the first screen, or the card says why a variant leaves
+   it out. Before building, each hero variant states its one memorable idea in one line (the card's Idea line).
 3. For each folder, in this order: `brand-creator --data "${CLAUDE_PLUGIN_DATA}" capture rounds/r<N>/<name>/index.html
    --project <dir>`, then `... page-check rounds/r<N>/<name>/index.html --project <dir>` (fix a failing row in the page, or let
    its card say `fail`; never `pass`), then the cold review: `rounds/r<N>/<name>/cold-review.md`, the verdict first
@@ -150,9 +153,10 @@ review and the choices are in `references/phases/07p-site-round.md`; the board's
    page does. A page changed after any of the three needs them again.
 4. Build the board from the template: one card per variant (`data-site-variant="<name>"`) or page (`data-site-page="<id>"`)
    with its four stills, the live link, its check line (`data-check="pass"` or `"fail"`, as its report says), the tells
-   found, the layout, the cold verdict and a vote; a hero card also has the reflex line and what it takes from the
-   references. The pages stage has `data-hero="<the picked variant>"` and a choices section that tags every choice `rule`
-   (it quotes where the owner decided it) or `example`. Hardest surface, My call, questions and reply as on every board.
+   found, the layout, the cold verdict and a vote; a hero card also has its idea line (`data-field="idea"`; a card without it
+   only warns in this release), the reflex line and what it takes from the references. The pages stage has
+   `data-hero="<the picked variant>"` and a choices section that tags every choice `rule` (it quotes where the owner
+   decided it) or `example`. Hardest surface, My call, questions and reply as on every board.
 5. Lint (steps 6 and 7 above), shoot the board last: `shot` keeps one report, and `check` wants the one of the latest board.
    Taking a still, a check or a cold review again after the lint makes its report stale: lint again.
    A write to `BRAND-STATE.md` (the phase, `review_url`, a gate, the Directions table, Still open) does not: a `page-check`

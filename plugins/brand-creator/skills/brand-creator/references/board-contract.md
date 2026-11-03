@@ -203,13 +203,13 @@ One folder per variant of the hero stage, `rounds/r<N>/<name>/`, made before the
 | `reply` | always | how to answer: a variant name, or question number plus option |
 
 The card, an element with `data-site-variant="<name>"` (a word, never a label such as "Variant 2", also the name of the folder), holds the four stills of the first screen (`<img data-field="still" data-view="1440-light|1440-dark|390-light|390-dark">`),
-the live link (`<a data-field="live" href="<name>/index.html">`), a check line (`data-check="pass|fail"` and its text), `data-field="what-it-is"`, `"from-refs"` (the group of the references board, or the owner's site, the structure is taken from:
+the live link (`<a data-field="live" href="<name>/index.html">`), a check line (`data-check="pass|fail"` and its text), `data-field="idea"` (the one memorable idea of the hero, in one line), `data-field="what-it-is"`, `"from-refs"` (the group of the references board, or the owner's site, the structure is taken from:
 never their look) and `"cost"`, the tells found and the reflex line (`data-field="tells"`, `"reflex"`), the layout line (`data-field="layout"` with the `data-layout` the page declares), a cold line (`data-cold="ship|fix"`) and a vote (`<fieldset data-vote="<name>">`).
 There is no `positioning-map`, `strategy-core`, `today`, `losers`, `none-of-these` or `direction` section. The pages stage has its own cards and a `choices` section (see "Site board, pages stage" below).
 
 `board-lint` gives these rows: `site:tier` (Standard or Full), `site:brief` (the brief lists a site), `site:g4` (G4 is recorded), `site:g4w` (the pick, or the skip, is recorded; a pick has its references board), `site:variants` (2 or 3 variants on the
 first hero board, a word for each name), `site:files` (each variant's folder, spelt as the card spells it, letter case included; its `index.html`; the `<body>` declaring `data-layout` and `data-page`; the live link), `site:layout` (the page's layout is a
-layout reference, or `own:<word>` with a warning, and the card says the same), `site:fields` (What it is, Takes from and Cost are filled in), the section rows and `page:data-board`, which fails a site board in round 0 or 1 or in a round listed in
+layout reference, or `own:<word>` with a warning, and the card says the same), `site:fields` (What it is, Takes from and Cost are filled in; the Idea line only warns for now), the section rows and `page:data-board`, which fails a site board in round 0 or 1 or in a round listed in
 `reset_rounds`. The pages stage is read by its own rows (see "Site board, pages stage" below). The lint report lists `brief/BRIEF.md`, the references board G4w stands on and the
 `index.html` of each variant among its inputs, so a changed file makes it stale.
 

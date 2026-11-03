@@ -62,7 +62,11 @@ The first screen, what a visitor sees before they scroll, sets the tone for ever
    (`DECISIONS.md`). Only the rules you keep apply to the new pages, and a rule you drop is named as dropped. With no
    earlier site, there is no question.
 3. Claude builds two or three versions. Each is organised like the references you picked (or built from your brief,
-   if you skipped them), in your colours, fonts and logo. For each one the board shows:
+   if you skipped them), in your colours, fonts and logo. They start from what you already approved: the templates and
+   pictures you signed off (your masters) are used as they are, and if your logo moves, its signature move shows on the
+   first screen, or the board says why a version leaves it out. Before it builds one, Claude writes down the one idea the
+   version rests on, in a line. For each one the board shows:
+   - the one idea it rests on, in a line (a version should be something you can remember, not only tidy);
    - four pictures: on a phone and a desktop, in light and dark;
    - whether it keeps your brand's rules. A version that breaks one is marked as failing, never hidden;
    - anything that makes it look generic, like countless other sites (such as a small label in capitals over a
