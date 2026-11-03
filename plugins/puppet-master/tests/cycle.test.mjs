@@ -8,7 +8,7 @@ import {
   RESUME_PROMPT,
   main,
   parseCompactResult,
-} from "../../plugins/batbelt/skills/puppet-master/scripts/puppet.mjs";
+} from "../skills/puppet-master/scripts/puppet.mjs";
 import { agent, fixture, makeDeps } from "./helpers.mjs";
 
 const COMPACT_RESULT = fixture("compact-result.json");

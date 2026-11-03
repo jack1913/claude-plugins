@@ -18,11 +18,11 @@ $ python3 .github/scripts/check-marketplace.py
 ```
 
 ```console capture=check-marketplace
-3 plugins checked, 0 errors
+4 plugins checked, 0 errors
 ```
 
 The workflow check, which also checks the rulesets, runs from the repository root too. A pass prints
-`5 workflows and 4 rulesets checked, 0 errors`, and `--self-test` ends with `self-test: N of N broken rules caught`:
+`6 workflows and 5 rulesets checked, 0 errors`, and `--self-test` ends with `self-test: N of N broken rules caught`:
 
 ```bash
 python3 .github/scripts/check-workflows.py
@@ -31,11 +31,18 @@ python3 .github/scripts/check-workflows.py --self-test
 
 ## batbelt
 
-From the repository root (its tests live in `tests/`). `tests/test_puppet_master.py` runs puppet-master's `node:test`
-suite, so `node` 20 or newer must be on `PATH`; without it that test fails. A pass ends with a line like `N passed in Ts`:
+From the repository root (its tests live in `tests/`). A pass ends with a line like `N passed in Ts`:
 
 ```bash
 uv run --no-project --with-requirements tests/requirements.txt python -m pytest tests -q
+```
+
+## puppet-master
+
+From `plugins/puppet-master`, with Node 20 or newer. The suite needs no packages; a pass ends with `ℹ fail 0`:
+
+```bash
+node --test tests/*.test.mjs
 ```
 
 ## swift

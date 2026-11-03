@@ -14,7 +14,7 @@ plugin plus `marketplace.yml` and `docs.yml`, one release-tag ruleset per plugin
 | `.github/rulesets/main-branch.json` | The branch ruleset of `main` on GitHub: never deleted, never force-pushed ([ADR-0006](../adr/ADR-0006-main-and-release-tags-cannot-be-rewritten.md)) |
 | `.github/rulesets/<plugin>-release-tags.json` | The tag ruleset that plugin's releases need on GitHub: a tag `<plugin>--v*` only on a commit where the checks `<plugin>` and `docs` passed, never deleted or moved once pushed ([Release a plugin](release.md#the-tag-rulesets)) |
 | `plugins/<name>/` | One plugin: `.claude-plugin/plugin.json`, docs, tests, `CHANGELOG.md`, version (batbelt: its tests are in the root `tests/`) |
-| `tests/` | batbelt's tests (brand-creator and swift keep theirs in their own folder) |
+| `tests/` | batbelt's tests (the other plugins keep theirs in their own folder) |
 | `.claude/` | The repo's own agent setup: `rules/`, `skills/` (`changelog-release`, `update-docs`, `update-rules`) and `settings.json`; see [Agent instruction layout](agent-instructions.md) |
 | `AGENTS.md`, `CLAUDE.md` | The index for agents (`CLAUDE.md` imports `AGENTS.md`) |
 | `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `LICENSE` | The landing page, how to contribute, how to report a security problem, the licence |

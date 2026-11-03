@@ -6,7 +6,7 @@ relays its questions, measures its context, gets it compacted at a clean task bo
 their jobs are done. One more session, the **analyst**, watches the day and proposes changes to the skill at its end.
 The master does housekeeping only; the user makes every decision.
 
-The skill sets `disable-model-invocation: true`, so it runs only when typed as `/batbelt:puppet-master`: a request that
+The skill sets `disable-model-invocation: true`, so it runs only when typed as `/puppet-master:puppet-master`: a request that
 sounds like coordinating sessions never starts it.
 
 ## Files
@@ -279,8 +279,8 @@ The skill documents these and never applies them:
 
 ## Tests
 
-`tests/test_puppet_master.py` runs `node --test` over `tests/puppet_master/*.test.mjs`. A fake `deps.run` answers every
-`claude` and `git` call, so no test starts a session. The fixtures in `tests/puppet_master/fixtures/` are sanitized
+The workflow runs `node --test` over `tests/*.test.mjs`. A fake `deps.run` answers every
+`claude` and `git` call, so no test starts a session. The fixtures in `tests/fixtures/` are sanitized
 captures of a real probe worker, plus `bg-stdout-color.txt` (the coloured `--bg` output) and `transcript-harvest.jsonl`
 (one entry per event kind, each with a near-miss). The suite covers:
 

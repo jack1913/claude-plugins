@@ -62,6 +62,6 @@ describes). Why the triggers, verdicts and rulesets:
 validate steps have no decision record: their reasons are in the bullets above.
 
 Re-derive:
-`python3 .github/scripts/check-workflows.py` (5 workflows and 4 rulesets checked, 0 errors);
+`python3 .github/scripts/check-workflows.py` (6 workflows and 5 rulesets checked, 0 errors);
 `python3 .github/scripts/check-workflows.py --self-test` (every rule broken on purpose is caught);
 `python3 .github/scripts/check-workflows.py --live` (4 rulesets on GitHub compared with their files, 0 errors).

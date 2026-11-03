@@ -10,8 +10,8 @@ import {
   headline,
   markShipped,
   summarize,
-} from "../../plugins/batbelt/skills/puppet-master/scripts/analyst.mjs";
-import { main } from "../../plugins/batbelt/skills/puppet-master/scripts/puppet.mjs";
+} from "../skills/puppet-master/scripts/analyst.mjs";
+import { main } from "../skills/puppet-master/scripts/puppet.mjs";
 import { makeDeps } from "./helpers.mjs";
 
 const at = (d, h = 12) => () => new Date(2026, 9, d, h, 0, 0); // local time, October 2026

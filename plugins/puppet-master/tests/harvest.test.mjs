@@ -11,8 +11,8 @@ import {
   redact,
   resolveLogsDir,
   workDay,
-} from "../../plugins/batbelt/skills/puppet-master/scripts/harvest.mjs";
-import { main } from "../../plugins/batbelt/skills/puppet-master/scripts/puppet.mjs";
+} from "../skills/puppet-master/scripts/harvest.mjs";
+import { main } from "../skills/puppet-master/scripts/puppet.mjs";
 import { agent, fixture, makeDeps } from "./helpers.mjs";
 
 const SID = "abcdef12-0000-4000-8000-000000000000";
@@ -66,7 +66,7 @@ test("redact keeps ordinary text, short SHAs, UUIDs and Windows paths with space
     "D:\\Work\\My Notes\\2026-10-27-review-draft.md",
     "merged as 1a2b3c4d on main",
     "session 1234abcd-0000-4000-8000-00000000beef is idle",
-    "/d/work/plugins/batbelt/skills/puppet-master/scripts/harvest",
+    "/d/work/plugins/puppet-master/skills/puppet-master/scripts/harvest",
   ];
   for (const s of plain) assert.equal(redact(s), s);
 });

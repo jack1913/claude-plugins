@@ -4,9 +4,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { TAGS } from "../../plugins/batbelt/skills/puppet-master/scripts/analyst.mjs";
+import { TAGS } from "../skills/puppet-master/scripts/analyst.mjs";
 
-const PLUGIN_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "plugins", "batbelt");
+const PLUGIN_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SKILL_DIR = path.join(PLUGIN_DIR, "skills", "puppet-master");
 const read = (name) => fs.readFileSync(path.join(SKILL_DIR, name), "utf8");
 

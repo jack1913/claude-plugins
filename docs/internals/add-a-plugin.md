@@ -50,7 +50,7 @@ $ claude plugin validate plugins/<name> --strict
 The marketplace check prints one summary line:
 
 ```console capture=check-marketplace
-3 plugins checked, 0 errors
+4 plugins checked, 0 errors
 ```
 
 Each validate command ends with:

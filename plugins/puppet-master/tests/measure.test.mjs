@@ -11,7 +11,7 @@ import {
   percent,
   resolveWindow,
   transcriptTokens,
-} from "../../plugins/batbelt/skills/puppet-master/scripts/puppet.mjs";
+} from "../skills/puppet-master/scripts/puppet.mjs";
 
 const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
 const fixture = (name) => fs.readFileSync(path.join(FIXTURES, name), "utf8");

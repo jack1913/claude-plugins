@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { main } from "../../plugins/batbelt/skills/puppet-master/scripts/puppet.mjs";
+import { main } from "../skills/puppet-master/scripts/puppet.mjs";
 import { agent, makeDeps } from "./helpers.mjs";
 
 function closeSetup({ live = true, rm, stop } = {}) {

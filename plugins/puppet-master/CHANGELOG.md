@@ -1,0 +1,20 @@
+# Changelog
+
+All notable changes to puppet-master are documented here.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+
+- A `puppet-master` skill: one Claude session hands your jobs to the Claude sessions you already have open, and starts a background worker only when none of them is free. Each session gets one job. The master relays their questions to you one at a time, quoting your own words, and gets a session compacted only between tasks once it is measured at 30% of its context or more: a background worker by itself, while your own window is left to auto-compact unless you ask for `/compact` lines to paste. It closes background workers when their jobs are done. It runs only when you type `/puppet-master:puppet-master`. It needs Node.js 20 or newer and a setting of your own first. See [Run background workers](docs/manual/use/run-background-workers.md).
+- `puppet-master` keeps one session as an analyst. It reads the day's transcripts of the sessions you named, records what went wrong with evidence, with anything that looks like a secret blanked, and at the end of the day proposes changes for you to approve, reject or defer. It never changes the plugin itself.
+- A plugin option, `puppet_logs_dir`: where the analyst keeps its logs. Leave it empty to use the plugin's data folder.
+- `puppet-master` shows each session's model and effort, and every job names a tier: `creative` (an Opus model at high effort or more) or `mechanical` (another model at medium effort or less). When a session doesn't match, Claude gives you the `/model` and `/effort` lines to paste. It never changes a session's settings itself. A background worker it starts gets the tier's model and effort from the start.
+- `puppet-master` warns before a session auto-compacts: from 80% of the size where it has seen your sessions compact, or the one you set in `PUPPET_COMPACT_AT`.
+- `puppet-master` can give a finished session another job while it is under 30% of its context window, add a follow-up to the job a session holds, reopen a job closed too early, and can run two jobs in one repository when each names the folders it writes and only one of them runs git.
+- A `puppet-master` worker's brief names the kind of deliverable (code, a document or a browser run), which the worker states back first, the local state it would otherwise stop to ask about, and the writes you can approve in its window up front. It reminds the worker that files its tools write by default count against its write scope, and that after a compaction it takes its place from git, not from the summary. It also reports cache folders a formatter hook leaves behind, runs multi-line scripts from a file instead of heredocs, and, when it may not run git, gets the git facts it needs in the brief. A worker never stashes, resets or switches branches over your uncommitted edits, never prints a credential, uses the browser only while it holds it, runs tests with a temp folder whose path has no spaces, and is told the values you already decided so you aren't asked twice. When it is blocked, you are asked once, with the exact command.
+- `puppet-master` remembers a closed session by name and prints its resume command when you mention it again. It closes a job in the same turn the session reports it done, and marks a session that reported done while its job is still open. It checks a question's premise before asking you, re-reads what a brief claims before sending it, and offers its own `/compact` line once when it reaches half its window. `list` shows a session with no known window as `?%` instead of failing. Several masters can run on one machine, each with its own `--group`: its own sessions, logs and proposal ids.
+- The analyst's day starts at 05:00, so work past midnight stays with its day (`PUPPET_DAY_START_HOUR` changes the hour). It also records your answers to Claude's question dialogs, and no longer logs an idle notification as an empty message.

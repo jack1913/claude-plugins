@@ -4,7 +4,7 @@ The words used across these pages, in plain terms.
 
 | Word | Meaning |
 |---|---|
-| plugin | A bundle you add to Claude Code. It can bring skills, commands, agents, workflows and hooks. This marketplace has three: batbelt, brand-creator and swift. |
+| plugin | A bundle you add to Claude Code. It can bring skills, commands, agents, workflows and hooks. This marketplace has four: batbelt, brand-creator, puppet-master and swift. |
 | marketplace | A catalog of plugins. This one is called `jack1913`. You add it once, then install any plugin from it as `<plugin>@jack1913`. |
 | skill | A set of instructions Claude loads when a task calls for it, like writing Swift concurrency code. Some start when you ask in plain words. |
 | command | Something you type that starts with `/`, like `/batbelt:grill-me`. The plugin's name comes first, so commands from different plugins never clash. |

@@ -13,7 +13,7 @@ Find what you want to do; the plugin next to it is the one to install.
 | Stress-test a plan before you build it | [batbelt](../use/batbelt.md) |
 | Check a number, a legal rule or a market claim against real sources | [batbelt](../use/batbelt.md) |
 | Set up a repository so Claude works well in it | [batbelt](../use/batbelt.md) |
-| Hand jobs to your open Claude sessions, or background ones, from one session, one job each | [batbelt](../use/batbelt.md) |
+| Hand jobs to your open Claude sessions, or background ones, from one session, one job each | [puppet-master](../use/puppet-master.md) |
 
 Then [install it](install-a-plugin.md). You can install more than one.
 
@@ -23,3 +23,4 @@ Then [install it](install-a-plugin.md). You can install more than one.
 - **swift**: [what it never does](../../../plugins/swift/README.md#what-it-never-does)
 - **batbelt**: [prove a claim](../../../plugins/batbelt/docs/manual/use/prove-a-claim.md) and
   [set up a repository](../../../plugins/batbelt/docs/manual/use/set-up-a-repository.md)
+- **puppet-master**: [what it never does](../../../plugins/puppet-master/README.md#what-it-never-does)

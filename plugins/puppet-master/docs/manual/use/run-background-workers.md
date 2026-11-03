@@ -7,7 +7,7 @@ only does the housekeeping; every decision stays yours.
 
 ## Before you start
 
-- batbelt is installed. See [Install a plugin](../../../../../docs/manual/getting-started/install-a-plugin.md).
+- puppet-master is installed. See [Install a plugin](../../../../../docs/manual/getting-started/install-a-plugin.md).
 - Node.js 20 or newer is on your `PATH`.
 - Background sessions can edit files without a git worktree. Add this to your own `~/.claude/settings.json` (Claude
   never changes it for you):
@@ -19,7 +19,7 @@ only does the housekeeping; every decision stays yours.
 - You've run `claude` once in each folder a worker will use, so the folder is trusted.
 - On Windows, the native `claude` executable is on your `PATH`. Installed through npm? Set `PUPPET_CLAUDE_BIN` to the
   full path of the `claude` executable, because the npm `claude.cmd` shim can't be started.
-- Optional: choose where the analyst keeps its logs. When you enable batbelt, Claude Code asks for the **puppet-master
+- Optional: choose where the analyst keeps its logs. When you enable puppet-master, Claude Code asks for the **puppet-master
   logs folder**; leave it empty to use the plugin's own data folder. A copy of the skill installed by hand reads
   `PUPPET_LOGS_DIR` instead.
 
@@ -27,7 +27,7 @@ only does the housekeeping; every decision stays yours.
 
 1. Open the sessions you want to work in, then, in the one you want as the master, type:
 
-   > /batbelt:puppet-master
+   > /puppet-master:puppet-master
 
 2. Claude lists your open sessions by name, with their folders, and asks which it may use. Answer "all", or "all but
    the ones in my other project". Sessions you leave out are never touched or read.
@@ -113,4 +113,4 @@ More: [Troubleshooting](../reference/troubleshooting.md).
 ## Related
 
 - [Commands](../reference/commands.md)
-- [Grill a plan](grill-a-plan.md)
+- [What it never does](../../../README.md#what-it-never-does)

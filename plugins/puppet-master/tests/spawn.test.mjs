@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 
-import { PuppetError, main, parseBgId } from "../../plugins/batbelt/skills/puppet-master/scripts/puppet.mjs";
+import { PuppetError, main, parseBgId } from "../skills/puppet-master/scripts/puppet.mjs";
 import { agent, fixture, makeDeps } from "./helpers.mjs";
 
 const BG_STDOUT = fixture("bg-stdout.txt");

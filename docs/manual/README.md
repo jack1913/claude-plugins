@@ -3,7 +3,7 @@
 
 # jack1913 plugins manual
 
-Plugins for Claude Code: make a brand, write better Swift, and think a plan through before you build it.
+Plugins for Claude Code: make a brand, write better Swift, think a plan through before you build it, and coordinate your sessions.
 
 ## Start here
 
@@ -14,7 +14,8 @@ Plugins for Claude Code: make a brand, write better Swift, and think a plan thro
 
 - [brand-creator](use/brand-creator.md): a logo, colours and every file your brand needs
 - [swift](use/swift.md): SwiftUI, concurrency and tests the Apple-native way, plus screen reviews
-- [batbelt](use/batbelt.md): grill a plan, prove a claim, set up a repository, run background workers
+- [batbelt](use/batbelt.md): grill a plan, prove a claim, set up a repository
+- [puppet-master](use/puppet-master.md): hand jobs to your open sessions from one session, one job each
 
 ## Look it up
 

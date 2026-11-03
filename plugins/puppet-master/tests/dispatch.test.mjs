@@ -16,7 +16,7 @@ import {
   reopenJob,
   spawnWorker,
   tierMatch,
-} from "../../plugins/batbelt/skills/puppet-master/scripts/puppet.mjs";
+} from "../skills/puppet-master/scripts/puppet.mjs";
 import { agent, makeDeps } from "./helpers.mjs";
 
 const REPO = "C:\\Work\\Repo";

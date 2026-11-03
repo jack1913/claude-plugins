@@ -1,1 +1,1 @@
-3 plugins checked, 0 errors
+4 plugins checked, 0 errors

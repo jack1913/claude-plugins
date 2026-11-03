@@ -8,7 +8,6 @@ Everything batbelt adds to Claude Code. "You only" means it runs only when you t
 | --- | --- | --- | --- |
 | `/batbelt:grill-me` | you or Claude | Interviews you about a plan or design, one question at a time with a suggested answer, until every decision holds up | — |
 | `/batbelt:prove-it` | you or Claude | Checks business, legal and market claims against real sources and writes an assumption register | — |
-| `/batbelt:puppet-master` | you only | Hands jobs to your open sessions, and to background workers when none is free, one job each; compacts only between tasks; an analyst session proposes improvements at the end of the day | — |
 | `/batbelt:onboard-repo` | you only | Sets up a repository so Claude works well in it | `[--sync] [--check] [--no-review] [--resume] [--unattended] [--with update-deps] [--without update-deps]` |
 
 ## grill-me
@@ -22,22 +21,6 @@ Say "grill me", "grill this plan" or "stress-test my design", or type the comman
 Type the command, or ask "is this actually true?" or "verify the claims in this business case". Say "spec this change" to get a change spec as well as the register. It takes no arguments: it asks for the sources, the reference date and the file location. How-to: [Prove a claim](../use/prove-a-claim.md).
 
 > /batbelt:prove-it
-
-## puppet-master
-
-Type the command in the session you want as the master, or ask Claude to hand a job to your sessions. It takes no arguments: it asks which open sessions it may use, then you say each job, its folder and whether it may commit. Say "wrap up" at the end of the day for the analyst's report. It needs Node.js 20 or newer and some setup of your own first; its one option, the logs folder, is asked when you enable batbelt. How-to: [Run background workers](../use/run-background-workers.md).
-
-> /batbelt:puppet-master
-
-It reads these environment variables, all optional:
-
-| Variable | What it sets |
-| --- | --- |
-| `PUPPET_CONTEXT_WINDOW` | Your sessions' context window, in tokens, when Claude can't learn it |
-| `PUPPET_COMPACT_AT` | The size, in tokens, at which your sessions auto-compact. Without it, Claude uses the smallest one it has seen |
-| `PUPPET_DAY_START_HOUR` | The hour a day starts in the analyst's logs, from `0` to `23`. Default `5` |
-| `PUPPET_LOGS_DIR` | The logs folder, ahead of the plugin option |
-| `PUPPET_CLAUDE_BIN` | The full path of the `claude` executable |
 
 ## onboard-repo
 

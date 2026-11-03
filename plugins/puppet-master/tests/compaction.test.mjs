@@ -8,7 +8,7 @@ import {
   measureWorker,
   resolveCompactAt,
   transcriptFacts,
-} from "../../plugins/batbelt/skills/puppet-master/scripts/puppet.mjs";
+} from "../skills/puppet-master/scripts/puppet.mjs";
 import { agent, makeDeps } from "./helpers.mjs";
 
 const line = (o) => `${JSON.stringify(o)}\n`;

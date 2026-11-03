@@ -1,8 +1,8 @@
 {
   "name": "batbelt",
   "displayName": "batbelt",
-  "version": "0.3.0",
-  "description": "Grill a plan, prove a claim against real sources, set up a repository for Claude, and run background workers.",
+  "version": "0.3.0",
+  "description": "Grill a plan, prove a claim against real sources, and set up a repository for Claude.",
   "author": {
     "name": "Jacek Pytlik"
   },
@@ -15,15 +15,6 @@
     "fact-checking",
     "assumptions",
     "onboarding",
-    "repository-setup",
-    "background-sessions"
-  ],
-  "userConfig": {
-    "puppet_logs_dir": {
-      "type": "directory",
-      "title": "puppet-master logs folder",
-      "description": "Where the puppet-master analyst keeps its daily findings, reports and your decisions. Leave empty to use the plugin's data folder.",
-      "required": false
-    }
-  }
+    "repository-setup"
+  ]
 }

@@ -3,7 +3,7 @@
 ## 1. Project identity
 
 The `jack1913` Claude Code plugin marketplace: one public repo whose `plugins/` folder holds every plugin (batbelt,
-brand-creator, swift), each one self-contained and versioned on its own.
+brand-creator, puppet-master, swift), each one self-contained and versioned on its own.
 
 ## 2. Repo layout
 
@@ -39,6 +39,7 @@ brand-creator, swift), each one self-contained and versioned on its own.
 | What the docs check enforces | `.github/scripts/check-docs-standard.py` (module docstring), `.markdownlint-cli2.yaml`, `lychee.toml`; the root manual's recorded outputs and coverage record: `docs/.onboard-captures/`, `docs/.onboard-coverage.json` |
 | batbelt's tests | `tests/test_plugin.py`, `tests/test_onboard_repo.py`, `tests/test_permission_plan.py`, `tests/test_review_fixes.py` |
 | onboard-repo (source of truth for the stamped skills below) | `plugins/batbelt/skills/onboard-repo/` |
+| Working on puppet-master | `plugins/puppet-master/AGENTS.md` (tests: `plugins/puppet-master/tests/`, `node --test`) |
 | Working on swift | `plugins/swift/AGENTS.md` (it has its own `.claude/` skills, rules and settings) |
 | Working on brand-creator | `plugins/brand-creator/AGENTS.md` (script contract: `plugins/brand-creator/scripts/CONTRACT.md`; decisions: `plugins/brand-creator/docs/adr/README.md`, archived log: `plugins/brand-creator/docs/archive/decisions-log.md`) |
 | How any doc is written and where it lives (root and every plugin) | `docs/internals/docs-standard.md`, templates in `docs/internals/templates/` |

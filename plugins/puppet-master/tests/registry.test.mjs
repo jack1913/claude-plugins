@@ -13,7 +13,7 @@ import {
   saveRegistry,
   statePath,
   workerState,
-} from "../../plugins/batbelt/skills/puppet-master/scripts/puppet.mjs";
+} from "../skills/puppet-master/scripts/puppet.mjs";
 import { agent, makeDeps } from "./helpers.mjs";
 
 const agents = [agent("w1", 1), agent("w2", 2)];

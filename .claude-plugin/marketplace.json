@@ -4,7 +4,7 @@
     "name": "Jacek Pytlik",
     "url": "https://github.com/jack1913"
   },
-  "description": "Claude Code plugins for building a brand, writing current Swift, and testing a plan before you build it.",
+  "description": "Claude Code plugins for building a brand, writing current Swift, testing a plan before you build it, and coordinating your Claude sessions.",
   "plugins": [
     {
       "name": "brand-creator",
@@ -37,6 +37,16 @@
         "planning",
         "verification",
         "onboarding"
+      ]
+    },
+    {
+      "name": "puppet-master",
+      "source": "./plugins/puppet-master",
+      "category": "productivity",
+      "tags": [
+        "sessions",
+        "background-workers",
+        "coordination"
       ]
     }
   ]
