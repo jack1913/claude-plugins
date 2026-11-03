@@ -318,7 +318,8 @@ function freshMeasure(agent) {
 
 const minPositive = (a, b) => [a, b].filter((x) => Number.isInteger(x) && x > 0).reduce((m, x) => Math.min(m, x), Infinity);
 
-export function measureAgent(deps, agent, record, { window, compactAt, observed } = {}) {
+// windowOptional: a status listing shows an unknown size instead of failing on it.
+export function measureAgent(deps, agent, record, { window, compactAt, observed, windowOptional = false } = {}) {
   const file = findTranscript(projectsDir(deps), agent.sessionId, { optional: true });
   if (file === null) return freshMeasure(agent);
   const t = transcriptFacts(deps.fs.readFileSync(file, "utf8"));
@@ -338,7 +339,7 @@ export function measureAgent(deps, agent, record, { window, compactAt, observed 
   } catch (e) {
     // With a known compaction point the window is only context; without one, no size
     // can be judged, and the error stands.
-    if (!(e instanceof PuppetError) || c === null) throw e;
+    if (!(e instanceof PuppetError) || (c === null && !windowOptional)) throw e;
     w = { window: null, source: null };
   }
   return {
@@ -1042,7 +1043,12 @@ function cmdList(deps, positional, flags) {
   const reg = loadRegistry(deps);
   const rows = [];
   let failed = false;
-  const opts = { window: flags.window, compactAt: flags["compact-at"], observed: reg.observedCompactAt };
+  const opts = {
+    window: flags.window,
+    compactAt: flags["compact-at"],
+    observed: reg.observedCompactAt,
+    windowOptional: true,
+  };
   const measure = (a, rec, extra) => {
     try {
       rows.push({ ...measureAgent(deps, a, rec, opts), ...extra });

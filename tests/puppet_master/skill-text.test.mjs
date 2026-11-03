@@ -115,11 +115,68 @@ test("with --no-git, {{local_state}} carries the git facts", () => {
   assert.match(briefs, /With\s+`--no-git`, `\{\{local_state\}\}` carries every git fact/);
 });
 
-test("the master's own context follows the same auto-compaction default", () => {
+// --- 11-02 proposals (brainiac B-, carcare C-) ---
+
+test("the brief names a test temp folder without spaces, set as TMP and TEMP (brainiac P-20261102-1)", () => {
+  const brief = read("worker-brief.md");
+  assert.match(brief, /\{\{test_tmp\}\}[^\n]*TMP\s+and\s+TEMP/);
+  const briefs = section(read("SKILL.md"), "Briefs");
+  assert.match(briefs, /`\{\{test_tmp\}\}`[^\n]*no\s+spaces/);
+});
+
+test("a worker never stashes, resets or switches over the user's edits, and reports the exact command (brainiac P-20261102-2)", () => {
+  const brief = read("worker-brief.md");
+  assert.match(brief, /never\s+stash,\s+reset,\s+check\s+out\s+or\s+switch\s+branches\s+over\s+them/);
+  assert.match(brief, /exact\s+command/);
+});
+
+test("the master re-reads what a brief asserts and asks the user once about a blocked worker (brainiac P-20261102-3)", () => {
+  const skill = read("SKILL.md");
+  const briefs = section(skill, "Briefs");
+  assert.match(briefs, /re-read\s+the\s+decisions\s+log/i);
+  const relay = section(skill, "Relay protocol");
+  assert.match(relay, /ask\s+the\s+user\s+once,\s+with\s+the\s+exact\s+command/);
+  assert.match(relay, /never\s+hand\s+it\s+to\s+another\s+session/i);
+});
+
+test("questions to the user carry a checked premise and the cost of each option (carcare P-20261102-1)", () => {
+  const relay = section(read("SKILL.md"), "Relay protocol");
+  assert.match(relay, /check\s+its\s+premise/);
+  assert.match(relay, /precedent/);
+});
+
+test("a brief's steps rest on checked facts and name their preconditions (carcare P-20261102-2)", () => {
+  const briefs = section(read("SKILL.md"), "Briefs");
+  assert.match(briefs, /installed[\s\S]{0,80}check/);
+  assert.match(briefs, /precondition/);
+});
+
+test("irreversible commands name who runs them up front (carcare P-20261102-3)", () => {
+  const skill = read("SKILL.md");
+  assert.match(section(skill, "Briefs"), /irreversible[\s\S]{0,200}who\s+runs\s+it/);
+  assert.match(read("worker-brief.md"), /permission\s+mode\s+denies/);
+});
+
+test("the brief carries the browser and credential rules and the user's decided values (carcare P-20261102-4, -5, -6)", () => {
+  const brief = read("worker-brief.md");
+  assert.match(brief, /Playwright[\s\S]{0,200}close\s+it/);
+  assert.match(brief, /report\s+a\s+hang/);
+  assert.match(brief, /Never\s+print\s+a\s+credential/);
+  assert.match(brief, /\{\{decided\}\}/);
+  assert.match(section(read("SKILL.md"), "Briefs"), /`\{\{decided\}\}`/);
+});
+
+test("the master offers its own /compact line once at 50% of its window, unprompted (carcare P-20261102-8)", () => {
   const skill = read("SKILL.md");
   const rule10 = skill.slice(skill.indexOf("10. **Your own context.**"), skill.indexOf("11. **"));
-  assert.match(rule10, /auto-compaction/);
-  assert.match(rule10, /opted\s+in/);
+  assert.match(rule10, /once,\s+unprompted/);
+  assert.match(rule10, /cannot\s+compact\s+yourself/);
+});
+
+test("several masters on one machine: PUPPET_STATE and PUPPET_LOGS_DIR are documented (carcare P-20261102-7)", () => {
+  const setup = section(read("SKILL.md"), "Setup prerequisites (the user's, never written by you)");
+  assert.match(setup, /PUPPET_STATE/);
+  assert.match(setup, /more\s+than\s+one\s+master/);
 });
 
 test("repository work is a job for a session, and relays quote the user verbatim", () => {

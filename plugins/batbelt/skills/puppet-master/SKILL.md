@@ -91,10 +91,11 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
    `PUPPET_CONTEXT_WINDOW` sets a default.
 9. **Cost.** A cycle re-reads the whole context: even a small worker's compaction can cost close
    to a dollar. Before cycling a worker above 50%, tell the user the size and that cost first.
-10. **Your own context.** At each job's end, `puppet measure <your name>`. By default your
-    auto-compaction handles it. Only if the user opted in to compact lines, give them your own
-    `/compact <focus>` line at 50% or more while you are idle. The roster and the logs folder hold
-    your state, so a compaction loses nothing that matters.
+10. **Your own context.** At each job's end, `puppet measure <your name>`. At 50% or more of your
+    window while you are idle, give the user your own `/compact <focus>` line once, unprompted: you
+    cannot compact yourself, and a master left to grow makes the user notice and do it (2026-11-02:
+    a master at 434,785 tokens). Give it again only after the next 25% of growth. The roster and
+    the logs folder hold your state, so a compaction loses nothing that matters.
 11. **Only the commands listed here.** Run only the helper commands below and the `claude` calls
     this file names. An unknown `claude <word>` is not an error: it starts a new session with that
     word as its prompt.
@@ -139,6 +140,12 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
   place of the quote.
 - Relay a session's questions to the user **one at a time**, grill-style: the question, your
   recommendation, the options.
+- **Before you put a question to the user, check its premise** against the repository or the docs,
+  and state the evidence in the question. For a trade-off, name the precedent or workaround already
+  in use and the cost of each option, so the user can answer once.
+- **A worker blocked by the user's uncommitted edits or by its permission mode:** ask the user
+  once, with the exact command to run in their own window. Never hand it to another session: that
+  would get round the denial.
 - **Before relaying, read the session's latest transcript turn.** If the user already answered
   there, don't relay. Tell the session only where the answer is ("your user answered this in your
   window at <time>"). Never restate it as your own go-ahead.
@@ -174,7 +181,14 @@ reviews only after that line, and starts on it without waiting for a new brief f
   - `{{local_state}}`: what the worker would otherwise stop to find out: uncommitted edits, untracked
     folders, the branch and whether it is pushed. Write "none known" when there is none.
   - `{{approvals}}`: the writes the job will need the user to approve (paths, commands), so the
-    user approves them in the worker's window up front. "None" when it needs none.
+    user approves them in the worker's window up front. "None" when it needs none. For each
+    irreversible command (a wipe, a volume removal, a force push), say who runs it: the user in
+    their own window, or the worker only if its permission mode allows it. A relayed OK cannot
+    lift a worker's permission mode.
+- **Check what a brief asserts, just before you send it.** Re-read the decisions log and any state
+  the brief states (approved or not, the branch, a dirty tree) instead of what you read at the
+  start. Before a brief says a tool is or isn't installed, check it in the session. Build the steps
+  on these checked facts, and name each step's precondition (what must exist or have run first).
 - Fill each conditional line of the worker brief, or delete it when it doesn't apply:
   - `{{write_scope}}`: the folders of `--scope`, and "run no git command" with `--no-git`. With
     `--no-git`, `{{local_state}}` carries every git fact the job needs (tracked or not, the branch,
@@ -183,6 +197,10 @@ reviews only after that line, and starts on it without waiting for a new brief f
     format.
   - `{{handoffs}}`: whom it sends `FINAL: <path>` to, or whose `FINAL:` starts it.
   - `{{tier_check}}`: for a fresh session, "First, reply with your model name."
+  - `{{test_tmp}}`: for a job that runs tests, a folder on a local drive with no spaces in its
+    path (such as `<drive>:/tmp-<job>`). Never offer a scratch path with a space as TMP.
+  - `{{decided}}`: values the user already fixed that a tool or plugin in the worker's window will
+    ask for (a branch, a name, a target), each quoted with when the user said it.
   - `{{references}}`: the user's reference images. Compare like for like before showing anything:
     the same orientation, the same scale, measured ratios.
   - `{{fetch}}`: for research, the fetch tools allowed and the folder downloads go to.
@@ -214,6 +232,9 @@ reviews only after that line, and starts on it without waiting for a new brief f
 - The logs folder is the plugin option `puppet_logs_dir`, asked when the plugin is enabled. Left
   empty, the logs go to the plugin's data folder. `PUPPET_LOGS_DIR` overrides both, for a copy
   installed by hand.
+- To run more than one master on one machine, give each its own roster and logs: prefix every
+  `puppet` call with `PUPPET_STATE=<config dir>/puppet-master/workers-<group>.json` and
+  `PUPPET_LOGS_DIR=<logs>/<group>`. One roster holds one master and one analyst.
 - The helper runs `claude` without a shell, so on Windows an npm-installed `claude.cmd` shim cannot
   be launched. Use the native `claude` executable, or set `PUPPET_CLAUDE_BIN` to its full path.
 - Typing a `claude -p ... "/compact <focus>"` yourself from Git Bash needs `MSYS_NO_PATHCONV=1`, or

@@ -59,6 +59,17 @@ test("measure without any window fails loudly", async () => {
   }
 });
 
+test("list shows a row with no window and no compaction point as unknown, and exits 0", async () => {
+  const t = makeDeps({ agents: [agent("w1", 1)] });
+  try {
+    t.writeTranscript(t.deps.agents[0].sessionId, fixture("transcript-usage-sum.jsonl"));
+    assert.equal(await main(["list"], t.deps), 0);
+    assert.match(t.out.join("\n"), /^w1 {2}85545 {2}\?% {2}\S+ {2}\(window unknown\)/m);
+  } finally {
+    t.cleanup();
+  }
+});
+
 test("list measures each worker and fails if a row fails", async () => {
   const t = makeDeps({ agents: [agent("w1", 1), agent("w2", 2)] });
   try {

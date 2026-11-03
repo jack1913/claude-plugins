@@ -15,7 +15,7 @@ sounds like coordinating sessions never starts it.
   protocol, wrap-up and the helper reference.
 - [`worker-brief.md`](../../skills/puppet-master/worker-brief.md) is the brief every worker gets, with the placeholders
   `{{master_name}}`, `{{job}}`, `{{commit_rules}}` and `{{standing_rules}}`, the ones `SKILL.md` explains under Briefs
-  for every brief: `{{deliverable}}`, `{{local_state}}` and `{{approvals}}`, and the conditional ones: `{{tier_check}}`, `{{write_scope}}`, `{{peers}}`, `{{owners}}`, `{{handoffs}}`,
+  for every brief: `{{deliverable}}`, `{{local_state}}` and `{{approvals}}`, and the conditional ones: `{{tier_check}}`, `{{test_tmp}}`, `{{decided}}`, `{{write_scope}}`, `{{peers}}`, `{{owners}}`, `{{handoffs}}`,
   `{{references}}`, `{{fetch}}` and `{{open_premises}}`.
 - [`analyst-brief.md`](../../skills/puppet-master/analyst-brief.md) is the analyst's brief, with `{{master_name}}`,
   `{{helper}}` and `{{logs_args}}`, the closed tag list and the report's shape.
@@ -87,7 +87,16 @@ All three scripts use Node built-ins only, with no npm and no `package.json`.
   workers have claimed to be full at about a fifth of their window.
 - **No permission laundering.** A relayed answer is never the user's approval of a permission prompt in a worker, and
   the master never asks a worker to do what the user's settings denied. A worker asking the user to confirm in its own
-  window is correct.
+  window is correct. A worker blocked by the user's uncommitted edits or by its permission mode reaches the user once,
+  with the exact command; the job is never handed to another session, which would get round the denial (the user
+  dropped that route on 2026-11-02). The brief names who runs each irreversible command up front.
+- **A brief states checked facts.** The master re-reads the decisions log and any state a brief asserts just before
+  sending it, checks a tool is installed before saying so, and names each step's precondition: on 2026-11-02 one
+  brief called approved proposals unreviewed and another called an installed package missing.
+- **Workers keep their hands off.** The brief forbids stashing, resetting or switching over the user's uncommitted
+  edits, printing a credential, and driving the Playwright browser without holding it; it names a test temp folder
+  with no spaces (a `TMP` under a path with a space made suites look red twice on 2026-11-02) and the values the
+  user already decided, so a plugin's prompt in the worker's window is not put to the user again.
 
 ## Verified mechanics
 
@@ -129,8 +138,9 @@ Things that shaped the helper:
 - Only the last line of a transcript may be unparseable (the session may be mid-write). A bad line anywhere else is an
   error.
 - The window comes from `--window <tokens>`, else the window the session's last `cycle` or `adopt --window`
-  recorded, else `PUPPET_CONTEXT_WINDOW`. With none of them and no compaction point either, the helper exits 1; it
-  never guesses a default.
+  recorded, else `PUPPET_CONTEXT_WINDOW`. With none of them and no compaction point either, `measure` exits 1; it
+  never guesses a default. `list` shows such a row as `?%` and `(window unknown)` and exits 0, so a status check
+  never fails on it.
 - The **compaction point** is the size at which the session auto-compacts. It comes from `--compact-at <tokens>`,
   else `PUPPET_COMPACT_AT`, else the smallest `preTokens` of any automatic `compact_boundary` the helper has seen,
   kept in the registry as `observedCompactAt`. It is never derived from the model: the window only shows in a
@@ -142,7 +152,8 @@ Things that shaped the helper:
 
 ## The roster
 
-`<config dir>/puppet-master/workers.json` (`PUPPET_STATE` overrides it; the config dir is `CLAUDE_CONFIG_DIR` or
+`<config dir>/puppet-master/workers.json` (`PUPPET_STATE` overrides it, which is how a second master on one machine
+gets its own roster, with `PUPPET_LOGS_DIR` for its own logs; the config dir is `CLAUDE_CONFIG_DIR` or
 `~/.claude`) maps each session's name to its record: `id` (background only), `sessionId`, `cwd`, `checkout`, `kind`
 (`interactive` or `background`), `role` (`worker`, `analyst` or `master`), `job`, `jobState`, `jobStartedAt`, `jobs[]`
 (each job's label, start and `endedAt`), the job's `scope`, `git` and `tier` when given, and its `window` after a
