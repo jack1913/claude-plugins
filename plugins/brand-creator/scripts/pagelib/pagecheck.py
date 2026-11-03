@@ -18,6 +18,7 @@ paints is a semantic colour of that theme) and `pair_rows` gives `page:pairs:<sc
 
 `motion_rows` gives `page:motion` (every duration and easing is a motion token), and `claim_rows` gives `page:claims` (every number and status word outside a `data-sample`
 is backed by FACTS.md) and `page:samples` (the before-publishing list, also the report's `samples`).
+`word_rows` gives `page:words` (a warning for each word the brand forbids, the list `book-lint` applies, found in the text of the page; info when no word is listed).
 
 `rule_rows` gives `page:rule:<id>` for each brand rule of qa/rules.json `page.rules` (`rule_request` is what such rules ask of the browser): it fails when it is broken and its `g4` words are in a recorded
 "(rule)" line of BRAND-STATE.md Rules (G4), warns when it is broken and not yet tied, and passes when it holds.
@@ -47,7 +48,7 @@ from urllib.parse import urlsplit
 
 import qa_rules
 from _color import parse_hex, wcag_ratio
-from _common import CliError, EXIT_CANNOT, EXIT_USAGE, PartInput, Report, confine, fail, gate_recorded, plugin_root, rel, scratch_dir
+from _common import CliError, EXIT_CANNOT, EXIT_USAGE, PartInput, Report, confine, fail, forbidden_terms, gate_recorded, plugin_root, rel, scratch_dir
 
 REPORT_DIR = "page-check"
 SCHEMES = ("light", "dark")
@@ -988,6 +989,51 @@ def claim_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
                 + _names([f"{s['label']} ({s['text'][:40] or 'no text'}) in {s['selector']}, {s['view']}" for s in samples.values()], NAMED), samples=list(samples.values()))
 
 
+def word_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
+    """page:words: none of the words the brand forbids is in the text of the page. The words are `_common.forbidden_terms`, the list `book-lint` applies (the bullets under a
+    heading "Forbidden" in brief/BRIEF.md and research/cliches.md); a word is found as a whole word in any letter case, in the same runs of text the claims are read from, a
+    labelled sample included (a made-up sentence is still wording the brand forbids; the hit says it is in a sample). A hit warns, never fails; the same block in another view is
+    one hit, named at the first view that has it. With no word listed the row is info (nothing was checked, so it is never a pass). `skipped` when no view was measured, and a
+    warning "NOT verified beyond the first blocks of text" when a view had more blocks than were measured."""
+    rid, label = "page:words", "none of the brand's forbidden words is on the page"
+    views = [v for v in measures.get("views", []) if isinstance(v, dict) and not v.get("error") and "claim_text" in v]
+    if not views:
+        rep.add(rid, "skipped", label, detail="not verified: no view was measured (see the page:load rows)")
+        return
+    terms = forbidden_terms(ctx.project)
+    if not terms:
+        rep.add(rid, "info", label, detail="no forbidden words are listed, so none was looked for: list them, one per bullet, under a Forbidden heading in brief/BRIEF.md or research/cliches.md",
+                forbidden_hits=[], forbidden_checked=0, forbidden_words=[])
+        return
+    patterns = [(t, re.compile(r"(?<!\w)" + re.escape(t) + r"(?!\w)", re.I)) for t in terms]
+    hits: dict[tuple, dict] = {}
+    seen_runs: set[tuple] = set()
+    truncated = []
+    for v in views:
+        if v.get("claim_text_total"):
+            truncated.append(f"{v['claim_text_total']} blocks of text at {v.get('width')} px, {len(v['claim_text'])} measured")
+        for run in v["claim_text"]:
+            text = run["text"]
+            if (run["sel"], text) in seen_runs:
+                continue
+            seen_runs.add((run["sel"], text))
+            sample = str(run.get("sample_label") or "").strip()
+            for term, pattern in patterns:
+                m = pattern.search(text)
+                if m and (term.lower(), run["sel"]) not in hits:
+                    hits[(term.lower(), run["sel"])] = {"word": term, "selector": run["sel"], "context": _context(text, m.start(), len(m.group(0))), "width": v.get("width"), "sample": sample or None}
+    found = list(hits.values())
+    extra = {"forbidden_hits": found[:100], "forbidden_checked": len(terms), "forbidden_words": terms[:200]}
+    notes = ["NOT verified beyond the first blocks of text of a view: " + _names(truncated, 2)] if truncated else []
+    if found:
+        said = [f"'{h['word']}' in {h['selector']}{' in a sample (' + h['sample'] + ')' if h['sample'] else ''} (\"{h['context']}\")" for h in found]
+        rep.add(rid, "warn", label, detail="; ".join([f"{len(found)} forbidden word(s) found: " + _names(said, NAMED) + "; reword it, or take the word off the list if the brand no longer forbids it"] + notes), **extra)
+    elif notes:
+        rep.add(rid, "warn", label, detail="; ".join(notes), **extra)
+    else:
+        rep.add(rid, "pass", label, detail=f"{len(terms)} forbidden word(s) looked for, none found in the text of the page", **extra)
+
+
 # ---------------------------------------------------------------- the mark
 
 LOGO_DIR = "assets/logo"
@@ -1920,7 +1966,7 @@ def tell_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
 
 
 # each (rep, measures, ctx); a later family of rows is added here
-ROW_CHECKS = [load_rows, colour_rows, pair_rows, motion_rows, claim_rows, mark_rows, font_rows, display_size_rows, tell_rows, rule_rows]
+ROW_CHECKS = [load_rows, colour_rows, pair_rows, motion_rows, claim_rows, word_rows, mark_rows, font_rows, display_size_rows, tell_rows, rule_rows]
 
 
 def judge(rep: Report, measures: dict, ctx: Ctx, measures_path: Path) -> None:

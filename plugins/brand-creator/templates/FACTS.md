@@ -23,3 +23,8 @@ Rules:
 - Status words ("in development", "available", "launching") need a row that says so, with a date.
 - Never add clients, team size, years of experience, awards, numbers, dates or features the owner did not confirm.
 - When a fact changes, update the row and run the cascade (`brand-creator check --cascade "<old wording>"`).
+- A fact and the words that present it are two things. The `value` of a fact row stays the plain fact ("shipping takes 3
+  days"). Wording the owner approved for use as copy goes in its own row, labelled `copy: <slot>` (`copy: hero headline`),
+  with the owner's words as its `value` and where they approved them as its `source`. A headline on a page quotes a `copy:`
+  row, or is new wording the owner approves on the board; it never uses a fact's `value` as it stands. A number or status
+  word in a `copy:` row backs the page like any fact.

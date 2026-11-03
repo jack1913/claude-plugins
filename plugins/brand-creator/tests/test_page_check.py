@@ -23,7 +23,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "pagelib"))
 import pagecheck  # noqa: E402
 import qa_rules  # noqa: E402
 from _color import parse_hex  # noqa: E402
-from _common import CliError, Report, stale_inputs  # noqa: E402
+from _common import CliError, Report, forbidden_terms, stale_inputs  # noqa: E402
 
 PAGE = """<!doctype html>
 <html lang="en">
@@ -352,9 +352,10 @@ def test_a_clean_page_passes_and_its_report_is_named_after_the_page(acme):
     ids = [x["id"] for x in rep["results"]]
     assert ids[:5] == ["page:target", "page:load:390-light", "page:load:390-dark", "page:load:1440-light", "page:load:1440-dark"]
     assert ids[5:9] == ["page:colours:light", "page:colours:dark", "page:pairs:light", "page:pairs:dark"]
-    assert all(x["status"] == "pass" for x in rep["results"][1:] if x["id"] not in ("page:mark-file", "page:display-size")) and row(rep, "page:target")["status"] == "info"
+    assert all(x["status"] == "pass" for x in rep["results"][1:] if x["id"] not in ("page:mark-file", "page:display-size", "page:words")) and row(rep, "page:target")["status"] == "info"
     assert row(rep, "page:mark-file")["status"] == "info" and "no brand mark is shown" in row(rep, "page:mark-file")["detail"]   # a page without a mark says so
     assert row(rep, "page:display-size")["status"] == "info" and "no font.display token" in row(rep, "page:display-size")["detail"]   # Acme has no display face
+    assert row(rep, "page:words")["status"] == "info" and "no forbidden words are listed" in row(rep, "page:words")["detail"]   # Acme lists none: nothing was looked for, which is not a pass
     paths = {i["path"] for i in rep["inputs"]}
     assert {"assets/tokens/tokens.json", "assets/tokens/tokens.css", "pages/index.html", "FACTS.md", "BRAND-STATE.md", "qa/rules.json"} <= paths
     measures = json.loads(Path(rep["measures"]).read_text(encoding="utf-8"))
@@ -1017,6 +1018,73 @@ def test_a_labelled_sample_is_listed_and_an_empty_label_is_not_a_sample(tmp_path
     assert "Price (Now only 49 zł, available) in body > p > span, 390-light" in results[1]["detail"] and "before the page is published" in results[1]["detail"]
 
 
+def words(tmp_path: Path, runs: list, *, terms=("revolutionary", "game-changer"), cliches=(), **view_facts) -> tuple[dict, list[dict]]:
+    """page:words on constructed measurements, in a project whose brief lists `terms` under Forbidden and whose research/cliches.md lists `cliches`."""
+    (tmp_path / "brief").mkdir(exist_ok=True)
+    (tmp_path / "brief" / "BRIEF.md").write_text("# Brief\n\n## Forbidden\n\n<!-- one per bullet -->\n" + "".join(f"- {t}\n" for t in terms) + "\n## Decisions\n\n- not a term\n", encoding="utf-8")
+    if cliches:
+        (tmp_path / "research").mkdir(exist_ok=True)
+        (tmp_path / "research" / "cliches.md").write_text("# Clichés\n\n## Forbidden\n\n" + "".join(f"- `{c}`\n" for c in cliches), encoding="utf-8")
+    rep = Report("page-check/x-000000", tmp_path)
+    pagecheck.word_rows(rep, {"views": [view(claim_text=list(runs), samples=[], **view_facts)]}, synthetic_ctx(tmp_path, TOKENS))
+    (got,) = rep.results
+    return got, rep.results
+
+
+def test_a_forbidden_word_on_a_page_warns_and_names_it_and_a_page_without_one_passes(tmp_path):
+    got, _ = words(tmp_path, [claim_run("Acme makes hand tools."), claim_run("A Revolutionary tool, and a game-changer.", "body > b")])
+    assert got["id"] == "page:words" and got["status"] == "warn"   # a warning, never a failure (O6)
+    assert sorted(h["word"] for h in got["forbidden_hits"]) == ["game-changer", "revolutionary"] and {h["selector"] for h in got["forbidden_hits"]} == {"body > b"}   # any letter case, one hit per word and block
+    assert "'revolutionary' in body > b" in got["detail"] and "A Revolutionary tool" in got["detail"] and "reword" in got["detail"]
+    clean, _ = words(tmp_path, [claim_run("Acme makes hand tools that last."), claim_run("Not revolutionaryx, nor a game-changerless one.", "body > b")])   # a word inside another word is not the word
+    assert clean["status"] == "pass" and clean["forbidden_hits"] == [] and clean["forbidden_checked"] == 2 and clean["forbidden_words"] == ["revolutionary", "game-changer"] and "2 forbidden word(s)" in clean["detail"]
+
+
+def test_the_forbidden_words_are_the_list_book_lint_applies_and_a_block_is_judged_once_across_views(tmp_path):
+    got, _ = words(tmp_path, [claim_run("Our best-in-class tools, a true game-changer.")], terms=("game-changer",), cliches=("best-in-class",))   # brief/BRIEF.md and research/cliches.md, as book-lint reads them
+    assert forbidden_terms(tmp_path) == ["game-changer", "best-in-class"] and sorted(h["word"] for h in got["forbidden_hits"]) == ["best-in-class", "game-changer"]
+    rep = Report("page-check/x-000000", tmp_path)
+    twice = [view(width=w, claim_text=[claim_run("A game-changer.")], samples=[]) for w in (390, 1440)]
+    pagecheck.word_rows(rep, {"views": twice}, synthetic_ctx(tmp_path, TOKENS))
+    assert [(h["word"], h["width"]) for h in rep.results[0]["forbidden_hits"]] == [("game-changer", 390)]   # the same block in a second view is one hit, named at the first view
+
+
+def test_a_forbidden_word_in_a_labelled_sample_still_warns_and_says_it_is_in_a_sample(tmp_path):
+    got, _ = words(tmp_path, [claim_run("A revolutionary price", "body > p > span", label="Price")])
+    assert got["status"] == "warn" and got["forbidden_hits"][0]["sample"] == "Price" and "in a sample (Price)" in got["detail"]   # a made-up sentence is still wording the brand forbids
+
+
+def test_no_list_of_forbidden_words_is_an_info_row_never_a_pass_and_an_unmeasured_page_is_not_verified(tmp_path):
+    got, _ = words(tmp_path, [claim_run("A revolutionary tool.")], terms=())
+    assert got["status"] == "info" and got["forbidden_hits"] == [] and got["forbidden_checked"] == 0 and "no forbidden words are listed" in got["detail"] and "brief/BRIEF.md" in got["detail"]
+    rep = Report("page-check/x-000000", tmp_path)
+    pagecheck.word_rows(rep, {"views": [view(error="boom")]}, synthetic_ctx(tmp_path, TOKENS))
+    assert rep.results[0]["status"] == "skipped" and "not verified" in rep.results[0]["detail"]
+    truncated, _ = words(tmp_path, [claim_run("Plain text.")], claim_text_total=3500)   # more blocks than were measured: no pass
+    assert truncated["status"] == "warn" and "NOT verified beyond the first blocks" in truncated["detail"]
+
+
+def test_a_copy_row_of_facts_md_backs_a_number_like_any_fact_and_only_its_value_counts(tmp_path):
+    write_facts(tmp_path, ("copy: hero headline", "Tools built to last 25 years"), ("batch size", "200 per batch"))
+    got, _, _ = claims(tmp_path, [claim_run("Tools built to last 25 years."), claim_run("Made in batches of 200", "body > b")])
+    assert got["status"] == "pass" and got["unbacked_numbers"] == []   # the wording backs its number as a fact does
+    got, _, _ = claims(tmp_path, [claim_run("Tools built to last 30 years.")])
+    assert got["status"] == "fail" and [o["number"] for o in got["unbacked_numbers"]] == ["30"]   # the label's own text backs nothing
+    assert pagecheck.fact_values(tmp_path) == ["Tools built to last 25 years", "200 per batch"]
+
+
+def test_the_facts_template_the_site_round_and_the_contract_state_the_copy_split_and_the_words_row():
+    facts = (ROOT / "templates" / "FACTS.md").read_text(encoding="utf-8")
+    assert "labelled `copy: <slot>`" in facts and "`copy: hero headline`" in facts and "never uses a fact's `value` as it stands" in facts
+    site_round = " ".join((ROOT / "skills" / "brand-creator" / "references" / "phases" / "07p-site-round.md").read_text(encoding="utf-8").split())
+    for needle in ("A headline is never a fact's `value` as it stands", "quotes a `copy:` row of `FACTS.md`", "new wording the owner approves on the board", "`page:words`, never a failure",
+                   "Forbidden"):
+        assert needle in site_round, needle
+    contract = " ".join((ROOT / "scripts" / "CONTRACT.md").read_text(encoding="utf-8").split())
+    assert "**Word row.** `page:words`" in contract and "**Copy rows of `FACTS.md`.**" in contract and "never a `pass`" in contract
+    assert pagecheck.ROW_CHECKS.index(pagecheck.word_rows) == pagecheck.ROW_CHECKS.index(pagecheck.claim_rows) + 1
+
+
 def claims_of_page(tmp_path: Path, runs: list, title: str = "", h1=(), lang: str = "en") -> dict:
     """page:claims on constructed measurements of a page that has a title and headings: the row."""
     rep = Report("page-check/x-000000", tmp_path)
@@ -1499,6 +1567,30 @@ def test_an_empty_sample_label_fails(acme):
     mutate(page, 'data-sample=""', 'data-sample="Tagline"')
     r, rep = check_page(acme, "--schemes", "light")
     assert r.returncode == 0 and row(rep, "page:claims")["status"] == "pass" and [s["label"] for s in rep["samples"]] == ["Tagline"], r.stdout + r.stderr
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_forbidden_word_on_a_real_page_warns_without_failing_and_a_copy_row_backs_its_number(acme):
+    page = write_page(acme)
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 0, r.stdout + r.stderr
+    none = row(rep, "page:words")
+    assert none["status"] == "info" and "no forbidden words are listed" in none["detail"] and [x["id"] for x in rep["results"]].index("page:words") == [x["id"] for x in rep["results"]].index("page:claims") + 1
+    mutate(acme / "brief" / "BRIEF.md", "## Forbidden\n", "## Forbidden\n\n- revolutionary\n- game-changer\n")
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert row(rep, "page:words")["status"] == "pass" and row(rep, "page:words")["forbidden_checked"] == 2
+    mutate(page, "</main>", "<p>A Revolutionary way to make hand tools that last 25 years.</p>\n</main>")
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 1, r.stdout + r.stderr   # 25 is no fact yet: the claims row fails, the words row only warns
+    bad = row(rep, "page:words")
+    assert bad["status"] == "warn" and [(h["word"], h["width"]) for h in bad["forbidden_hits"]] == [("revolutionary", 390)] and "A Revolutionary way to make hand tools" in bad["detail"]
+    assert row(rep, "page:claims")["status"] == "fail" and [o["number"] for o in row(rep, "page:claims")["unbacked_numbers"]] == ["25"]
+    add_fact(acme, "copy: hero headline", "A Revolutionary way to make hand tools that last 25 years.")   # the approved wording is a row of FACTS.md; its value backs the number
+    r, rep = check_page(acme, "--schemes", "light")
+    assert r.returncode == 0, r.stdout + r.stderr   # the words row is a warning, so the exit code is 0
+    assert row(rep, "page:claims")["status"] == "pass" and row(rep, "page:words")["status"] == "warn"
 
 
 @pytest.mark.requires_setup

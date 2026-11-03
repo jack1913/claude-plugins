@@ -1419,6 +1419,17 @@ brand-creator page-check --url http://localhost:<port>/<path> [--project DIR] ..
   before-publishing list. The report also holds it at its top level as `samples`, `[{label, text, selector, view}]` (always present, `[]` when there is none); a sample on the page
   is never a failure, and must be replaced with real content before the page is published. Convention: `data-sample="<what it stands for>"` on any element marks sample content; its text,
   and the text of everything inside it that has no `data-sample` of its own, is not checked as a claim.
+- **Copy rows of `FACTS.md`.** A row labelled `copy: <slot>` (`copy: hero headline`) holds wording the owner approved for use as copy, in its `value`, apart from the plain fact it presents.
+  No reader treats it differently: `page:claims` and `book-lint` read its `value` like any other, so a number or status word in it is backed; no emitter label matches it. The site round
+  (`07p-site-round.md`) has a headline quote a `copy:` row, or be new wording the owner approves on the board, never a fact's `value` as it stands.
+- **Word row.** `page:words`, once over all widths and schemes, right after the claim rows: `_common.forbidden_terms(project)`, the list `book-lint` applies (the bullets under a heading
+  starting `Forbidden` in `brief/BRIEF.md` and `research/cliches.md`), looked for as whole words in any letter case in the same `claim_text` runs, a labelled `data-sample` included (the hit says
+  it is in a sample: a made-up sentence is still wording the brand forbids). A hit is a `warn`, never a `fail` (the exit code stays 0): the detail names up to six, each with the word,
+  the selector, the sample label when there is one and the text around it; the same block in another view is one hit, named at the first view that has it. With no word listed the row is `info` ("no forbidden
+  words are listed, so none was looked for"), never a `pass`; with a list and no hit it is `pass`; a view that held more blocks than were measured (`claim_text_total`) makes it a warning "NOT verified
+  beyond the first blocks of text"; `skipped` when no view was measured. The row holds `forbidden_hits` (`[{word, selector, context, width, sample}]`, `sample` is `null` outside a sample),
+  `forbidden_checked` (how many words were looked for) and `forbidden_words`. The list is not an input of the report: a change to the brief or to `research/cliches.md` does not make a
+  `page-check` report stale, so run the check again after changing it.
 - **Mark facts.** Every view also holds `marks` and `images`, collected over the same shown elements. A mark is an element with `data-brand-mark`, or an image whose file name says
   it is the logo: the name without its extension (its stem) is `logo`, `mark` or `wordmark`, alone or followed by `-`, `_` or `@` and more, in any case (`logo.svg`, `mark.svg`, `wordmark.svg`,
   `logo@2x.png`, `mark-dark.svg`, `Wordmark_light.svg`). `mark` is also a person's name, and both are ordinary words (a team page holds photos of people named Mark), so they make a candidate

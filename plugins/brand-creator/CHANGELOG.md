@@ -30,6 +30,15 @@ stage, and why, is in the [archive](docs/archive/README.md).
   one memorable idea in one line, and the card carries it as an "Idea" line. A hero card with no Idea line, or an empty
   one, makes `board-lint` warn (`site:fields`) in this release and fail in the next, so boards made before this release
   still lint.
+- The page check warns about words your brand forbids. Each word listed as a bullet under "Forbidden" in `brief/BRIEF.md`
+  or `research/cliches.md` (the list the brand book check already uses) is looked for in the text of the page, in any
+  letter case, as a whole word. A hit is a warning that names the word and the text around it (`page:words`), and never fails
+  the page; a word in a labelled sample is found too. A project with no list gets an info line that says nothing was
+  looked for, not a pass. The list is not part of what makes a report go out of date, so check again after changing it.
+- `FACTS.md` keeps the plain fact apart from the words that present it. Wording you approved for use as copy goes in its own
+  row, labelled `copy: <slot>` (`copy: hero headline`), and its text backs a number or status word like any fact. In the
+  site round a headline quotes such a row, or is new wording you approve on the board, and is no longer a fact copied word
+  for word.
 
 ### Fixed
 
