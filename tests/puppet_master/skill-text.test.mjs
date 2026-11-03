@@ -115,6 +115,12 @@ test("with --no-git, {{local_state}} carries the git facts", () => {
   assert.match(briefs, /With\s+`--no-git`, `\{\{local_state\}\}` carries every git fact/);
 });
 
+test("standing rules name the tool flag that keeps output in place, and the scope lists default report files (P-20261101-4)", () => {
+  const briefs = section(read("SKILL.md"), "Briefs");
+  assert.match(briefs, /name\s+the\s+flag\s+that\s+keeps\s+its\s+output/);
+  assert.match(briefs, /report\s+files\s+the\s+job's\s+tools\s+write\s+by\s+default/);
+});
+
 // --- 11-02 proposals (brainiac B-, carcare C-) ---
 
 test("the brief names a test temp folder without spaces, set as TMP and TEMP (brainiac P-20261102-1)", () => {

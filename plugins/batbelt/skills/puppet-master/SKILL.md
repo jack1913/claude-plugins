@@ -173,7 +173,9 @@ reviews only after that line, and starts on it without waiting for a new brief f
   answers today. A harness default, such as a session scratchpad, is not a standing rule. When the
   user hasn't said where scratch goes, it goes inside the repository or the job's folder.
   Restate each recurring constraint (local-only files, token handling) in every brief, word for
-  word: it lives in `{{standing_rules}}`, never left to a summary or an earlier brief.
+  word: it lives in `{{standing_rules}}`, never left to a summary or an earlier brief. When a
+  tool writes outside the repository by default, name the flag that keeps its output in place
+  (such as a screenshot tool's `--out <folder>`), not only the folder.
 - Write every path in a brief with forward slashes: backslashes get lost on the way.
 - Fill these lines in every worker brief:
   - `{{deliverable}}`: code, a document or a browser run. "Check it in the browser" is a browser
@@ -190,7 +192,8 @@ reviews only after that line, and starts on it without waiting for a new brief f
   start. Before a brief says a tool is or isn't installed, check it in the session. Build the steps
   on these checked facts, and name each step's precondition (what must exist or have run first).
 - Fill each conditional line of the worker brief, or delete it when it doesn't apply:
-  - `{{write_scope}}`: the folders of `--scope`, and "run no git command" with `--no-git`. With
+  - `{{write_scope}}`: the folders of `--scope`, the report files the job's tools write by default
+    (a check's result file, for example), and "run no git command" with `--no-git`. With
     `--no-git`, `{{local_state}}` carries every git fact the job needs (tracked or not, the branch,
     pushed or not), since the worker cannot look.
   - `{{peers}}`: the sessions it may message directly; `{{owners}}`: who owns each shared file or
