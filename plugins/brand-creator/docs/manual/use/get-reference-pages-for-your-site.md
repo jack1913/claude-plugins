@@ -57,7 +57,11 @@ The first screen, what a visitor sees before they scroll, sets the tone for ever
 
    > /brand-creator:round site
 
-2. Claude builds two or three versions. Each is organised like the references you picked (or built from your brief,
+2. If this site replaces an earlier one, Claude first lists the rules from it and asks which still stand. Answer in your
+   own words, such as "keep the dark footer, drop the rest". Claude writes your answer in your list of decisions
+   (`DECISIONS.md`). Only the rules you keep apply to the new pages, and a rule you drop is named as dropped. With no
+   earlier site, there is no question.
+3. Claude builds two or three versions. Each is organised like the references you picked (or built from your brief,
    if you skipped them), in your colours, fonts and logo. For each one the board shows:
    - four pictures: on a phone and a desktop, in light and dark;
    - whether it keeps your brand's rules. A version that breaks one is marked as failing, never hidden;
@@ -65,7 +69,7 @@ The first screen, what a visitor sees before they scroll, sets the tone for ever
      heading), and what Claude will change or why it keeps it;
    - a verdict, "ship" (good to go) or "fix", from a review that judges only the four pictures, your brief and your
      facts (`FACTS.md`: the true things your pages may say, such as your prices).
-3. Pick one, mix two ("this one, with the ending of that one"), or say that none fits and what was missing. Claude says
+4. Pick one, mix two ("this one, with the ending of that one"), or say that none fits and what was missing. Claude says
    back your pick and writes it down in your words.
 
 Claude does that review itself by default, in the same chat. It built the page, so this is not a stranger's fresh look,
@@ -116,6 +120,7 @@ them. Your brand book can show them, with the tag on each choice, in an optional
 - The references board shows four to six groups, and `research/site-refs/` holds a folder of pictures for each site
   Claude opened.
 - After you pick references, or skip them, `/brand-creator:status` shows it as recorded.
+- If there was an earlier site, `DECISIONS.md` has an entry that names the rules you kept and the ones you dropped.
 - After you approve the pages, `site/site.json` exists, and `/brand-creator:check` passes the lines about your site, or
   says "not verified" (it could not confirm something) and why.
 
