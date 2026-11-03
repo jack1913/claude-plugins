@@ -48,6 +48,10 @@ Copy it into the reply's "What changed" and tick it as you go.
 8. [ ] **Variants that bent the rule** (switchable demos, open choices) are updated or collapsed together with it.
 9. [ ] **Show the specific section** that changed: a shot of it at 1440 and 390, read before you describe it.
 
+A semantic token or a declared contrast pair that is added or removed changes the book's counts (`roles`, `pairs`), so `book-lint`
+fails `counts:data` until the book is rebuilt (or patched, for a hand-authored one). Step 4's edition rule holds for a generated book
+too: an approved book then needs a new edition and a new G5 ([10-book](phases/10-book.md#collapse-edition-and-approval)).
+
 ## Where the old look hides
 
 Search finds text. These surfaces embed the old look as pixels or geometry, so they are rebuilt (step 4) and looked at

@@ -39,6 +39,12 @@ stage, and why, is in the [archive](docs/archive/README.md).
   row, labelled `copy: <slot>` (`copy: hero headline`), and its text backs a number or status word like any fact. In the
   site round a headline quotes such a row, or is new wording you approve on the board, and is no longer a fact copied word
   for word.
+- The docs now say three things plainly that cost owners a surprise. A page's sample content marked with `data-sample` and a
+  label passes the claims check and goes on the list of what to replace before you publish; the page needs no visible badge.
+  Adding or removing a colour role or a contrast pair changes the counts the brand book prints, so the book check
+  (`counts:data`) fails until the book is rebuilt, and an approved book then needs a new edition and a new approval. In the
+  Full tier the book also has an Adoption chapter and a Launch checklist chapter, and the book check fails without them.
+  Nothing in the checks changed.
 
 ### Fixed
 
