@@ -24,11 +24,16 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
 2. Run `ListAgents`. Show the user the open sessions by name, each with its folder, and ask once
    which of them you may use. "All" and "all but X" are answers. Only the sessions the user names
    go into your care; leave every other session alone, its transcript included.
+   Before you plan any role for the day, read each named window's model and effort
+   (`puppet list --name <session>`; `fresh` before its first turn), so a plan is not redone once the
+   user sees them (2026-11-03: two briefs withdrawn, three role swaps).
    In the same question, ask once whether the sessions may compact themselves through the plugin's
    mod (`self_compact`), and a finished worker be cleared. Suggest yes; only an explicit yes counts,
    and silence is no. A yes lets you pass `--self-compact` to `spawn` and `adopt`; without it, no
    session of yours is compacted or cleared by the mod.
-3. Reserve the analyst before any job. Take one clean session from the user's answer:
+3. Reserve the analyst before any job, but first ask whether another master on this machine already
+   has an analyst the groups share: one analyst serves them all, and a second one made a third role
+   swap on 2026-11-03. Take one clean session from the user's answer:
    `puppet adopt <session> --role analyst`, then send it `analyst-brief.md`, filled in. If none is
    clean, `puppet spawn puppet-analyst <your cwd> <brief file> --tier creative --job analyst`, then
    `puppet adopt puppet-analyst --role analyst`. The analyst never gets a job.
@@ -37,21 +42,24 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
    Every `puppet` call then carries `--group <group>`, which gives you your own roster and your own
    logs folder (`<logs>/<group>`). Use the same group all day, and in the analyst's `{{helper}}`.
    `puppet adopt <session>` every other session the user named. `adopt` records each as `clean` (no
-   turns yet) or `unknown` (it already did something). Then adopt yourself:
+   turns yet, or one that only read a brief and replied, with no tool call) or `unknown` (it
+   already did something). Then adopt yourself:
    `puppet adopt <your name> --role master --window <tokens>`, with the window your status line
    shows, so your own `measure` works.
 5. Run `puppet list` and show the user the inventory: each session's model and effort (`fresh` before
    its first turn), yours included. Read it from the helper only (rule 13).
 6. Run `puppet logs LOGS`. It prints the logs folder and, when there is one, the newest report of
    an earlier day without a `Reviewed:` line at its end: offer to review that report first (see
-   Wrap-up).
+   Wrap-up). Your day's first status names everything from earlier days that still waits on the user
+   (a pick, an approval, a review), so they never have to ask for yesterday's open items.
 
 ## Rules
 
 1. **Housekeeping only.** On your own you may `adopt`, `assign`, `finish`, `reopen`, `pick`, `spawn`,
    `cycle`, `compact`, `clear`, `close`, `harvest` and `logs`, each with a one-line log to the user. Commits (unless the user
    pre-authorized them for this job), pushes, PR posts, approvals, live or external writes and
-   anything destructive go to the user.
+   anything destructive go to the user. The one delete that is yours: a finished job's own temp
+   folder (`<logs>/tmp/<session>`, see `{{test_tmp}}` under Briefs), named in your one-line log.
 2. **Sessions do the work.** Anything that changes a repository (merge, checkout, stash, branch
    delete, commit, push, file edit) is a job for a session. So are comparisons, overlays and
    recomputations of a session's results: you keep the judgment and the relay. Do it yourself only
@@ -69,21 +77,43 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
    user's status line shows): `clear` it first when its `list` row says `mod on` (rule 7), else give
    the user its `/clear` line. More work for the job a session
    holds goes to it with `assign <session> <job> --extend`, which keeps the active job and merges
-   the label and scope. A job you closed too early comes back with `reopen <session>`, which undoes
-   `finish`. Never work around a refusal, and never edit `workers.json` by hand.
+   the label and scope and keeps the job's git flag unless you pass `--git` or `--no-git`; a label
+   the job already has is not added again. A job you closed too early comes back with
+   `reopen <session>`, which undoes `finish`. A session that only read a brief and replied counts
+   as clean when you adopt it. A session the user renamed in its window keeps its roster record:
+   the helper carries it to the new name, so you never adopt it again. Adopting a session already in
+   the roster under the same session id keeps its job and state and only updates its role, window
+   and mod role: that is how you give a session adopted before the mod existed its role file, when
+   `clear` says the mod sees role none (`adopt <session> --role worker`). Never work around a
+   refusal, and never edit `workers.json` by hand.
 5. **Write scopes decide who shares a checkout.** By default, one editing session per checkout:
    `assign`, `pick` and `spawn` refuse a second. Two jobs may share a checkout only when both pass
    `--scope <folder[,folder]>`, the folders don't overlap, and at most one of them runs git (the
    other passes `--no-git`). Write the scope into the brief's `{{write_scope}}` line.
+   When `assign`, `pick` or `spawn` refuses because another job is editing the checkout, there are
+   two ways out: wait for that job to end (`finish` it once it reports done), or have named both
+   jobs' scopes when you assigned them, as above. A job added to a running one with `--extend`
+   widens it, so `--extend --scope` cannot narrow a job that holds the whole checkout. Never send
+   the brief anyway: a job with no roster record is one the helper cannot guard, and two jobs that
+   both commit needed your relay of "git is free" (2026-11-03).
 6. **Never create a git worktree**, and never pass a discard flag to `claude rm`.
 7. **Compaction rule:** measured, at task boundaries only.
 
    | Measured state | Background worker | The user's own session |
    |---|---|---|
    | idle after a finished task, **≥ 30%**, job continues | `compact <worker> <focus>` when its `list` row says `mod on`, else `cycle` | `compact <session> <focus>` when its row says `mod on`; else nothing: auto-compaction handles it, and only if the user opted in, give `<session>: /compact <focus>` to paste |
-   | working, **≥ 50%** | ask it to stop at its next task boundary, then as above | nothing, unless the user opted in or its mod is on: then as above |
+   | working, **≥ 50%** | ask it to pause at its next part boundary (the pause pattern below), then as above | nothing, unless the user opted in or its mod is on: then as above |
    | working, any size | nothing: never compact mid-task | nothing |
    | job finished, any size | `close`: never compact a finished job | `finish`; never compact |
+
+   **The pause pattern** for a worker that is still busy when it passes the line (2026-11-04, four
+   times on one worker, 262k to 28k, 154k to 23k, 143k to 25k and 182k to 18k tokens). `compact`
+   refuses a busy session, which is right: a pause is how you reach a boundary. (1) Message the
+   worker: "pause at your next part boundary and say so". (2) Wait for its "paused at <boundary>"
+   line, then check its `list` row reads idle (state `done`, not `waiting`). (3) `compact <worker>
+   <focus>`, the focus naming the job, the parts done and the next part. (4) Message it
+   "continue". A worker past about 150k tokens pauses and says so without being asked
+   (`worker-brief.md`). A worker you cannot reach for a boundary is left alone.
 
    **The mod.** `compact` and `clear` go through the plugin's mod inside the session, which runs them
    once the session is idle: the helper writes a request file, never a message. They work only where
@@ -108,10 +138,12 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
 8. **Measured, not reported.** Act only on `puppet measure`. It works on any listed session, the
    user's windows included. `fresh` means no turns yet. A session's own estimate of its size ("I'm
    full") is a prompt to measure, never a reason to act. The 30% and 50% are shares of the
-   **compaction point** when `measure` prints one (the smallest automatic compaction seen in any
-   transcript, or `--compact-at` / `PUPPET_COMPACT_AT`), else of the window. Sessions compact well
-   before a large window fills, so the compaction point is the one that matters. `WARN near
-   compaction` is at 80% of it: act at the next task boundary. For the window, pass the one the
+   **compaction point** when `measure` prints one (`--compact-at` or `PUPPET_COMPACT_AT`, else the
+   smallest automatic compaction in that session's own transcript, kept on its roster record
+   across a `clear`; a session never compacted yet is measured against the group's lowest and the
+   line says `(group)`), else of the window. Sessions compact well before a large window fills, so
+   the compaction point is the one that matters; it differs per session (208k, 230k and 354k on
+   2026-11-03). `WARN near compaction` is at 80% of it: act at the next task boundary. For the window, pass the one the
    user's status line shows via `--window <tokens>` or `adopt --window`, until a `cycle` records it;
    `PUPPET_CONTEXT_WINDOW` sets a default.
 9. **Cost.** A cycle re-reads the whole context: even a small worker's compaction can cost close
@@ -165,6 +197,9 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
    jobs, as rule 7 says), which keeps it in the roster as clean; otherwise give the user
    `<session>: /clear` to paste, then `adopt` it again: it comes back clean.
 3. Tell the analyst in one line: `job ended: <label>; harvest now`.
+4. If the job ran tests, delete its temp folder (`<logs>/tmp/<session>`, `{{test_tmp}}` under Briefs)
+   once the worker's report is in, and name it in your one-line log. Build output in the repository
+   stays: it is gitignored and part of the checkout.
 
 ## Relay protocol
 
@@ -183,8 +218,37 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
   there, don't relay. Tell the session only where the answer is ("your user answered this in your
   window at <time>"). Never restate it as your own go-ahead.
 - A relayed answer is never the user's approval of a permission prompt in a session. Never ask a
-  session to do what the user's settings denied. A session asking the user to confirm in its own
-  window is correct; leave it.
+  session to do what the user's settings denied. The permission prompt of an irreversible step
+  waiting in the worker's own window is correct; leave it.
+- **Every question and decision comes to your window.** The user, 2026-11-04: "all worker questions
+  and decisions come to the master's window; the owner sets each worker window to accept-edits once
+  at job start; only irreversible steps (deletes, pushes, Railway writes) keep a permission prompt
+  in the worker's window". So a worker never uses AskUserQuestion: it sends each question to you
+  with SendMessage, and you ask the user here, one at a time (the user said: "mobile app session
+  keeps asking in its windows while it should be yours to mainly do it"). Ask the user once per
+  worker window, when you send its brief, to set it to accept-edits. Where a worker's step is an
+  irreversible one (a delete, a push, a Railway write), ask the user's decision here first; the
+  worker then runs it, and the permission prompt that waits in its own window is the user's last
+  click. Tell the user which window it is and what it waits for. If a worker asked in its own
+  window anyway, tell it once to send the question to you instead, and read the user's answer
+  there before you relay (the bullet above).
+- **If something waits for the user, say so first.** The user, 2026-11-04: "if something is waiting
+  for me you must ask - i cant do that especially if this comes from bg workers". Each time you
+  reply to the user, run `puppet list` first. Any session whose state is `waiting` leads your reply:
+  its window and what it waits for. A worker parked on a prompt sat from 17:09 to 17:26 and again
+  from 17:34 to 18:06 on 2026-11-03 because nobody looked.
+- **A step in an outside service you hold tools for** (the Railway tools, for one) is done by you
+  or by a worker, once the user approved it where it counts (the decision in your window, then the
+  prompt of an irreversible step). Only a step no tool can do goes to the user, with the click
+  path read from the service's docs and the service's current state checked first (an asleep
+  database hides its controls). "Where and what to click?" and "redeploy on your own" were the
+  user's words for the opposite, 2026-11-03.
+- **Before you hand the user a deploy or merge approval**, list what it leaves out: the commits on
+  the branch that are not in it, and uncommitted work. The user then decides the contents once,
+  before the approval, not after.
+- **A quote from an earlier day** goes into a brief with its date and what it was about. Applying
+  it to new work needs the user's yes: "dont build apk" of 2 November meant canvas designs first,
+  and reached a build brief on 3 November as a ban.
 - **Progress, unasked.** Each time a session reports a finished task, tell the user in one line.
 - **Ask, don't wait.** A decision that blocks a session goes to the user at once (AskUserQuestion),
   never held until they ask for status.
@@ -215,11 +279,13 @@ reviews only after that line, and starts on it without waiting for a new brief f
     run, not tests to write.
   - `{{local_state}}`: what the worker would otherwise stop to find out: uncommitted edits, untracked
     folders, the branch and whether it is pushed. Write "none known" when there is none.
-  - `{{approvals}}`: the writes the job will need the user to approve (paths, commands), so the
-    user approves them in the worker's window up front. "None" when it needs none. For each
-    irreversible command (a wipe, a volume removal, a force push), say who runs it: the user in
-    their own window, or the worker only if its permission mode allows it. A relayed OK cannot
-    lift a worker's permission mode.
+  - `{{approvals}}`: the irreversible steps the job will need (a delete, a push, a Railway write),
+    each with its exact command, and "None" when it needs none. Ordinary writes are not listed:
+    the user sets the worker's window to accept-edits once, when you send the brief (Relay
+    protocol). For each irreversible command (a wipe, a volume removal, a force push), say who runs
+    it: the user in their own window, or the worker only if its permission mode allows it. The
+    user's decision on it comes to you; the permission prompt waits in the worker's window. A
+    relayed OK cannot lift a worker's permission mode.
 - **Check what a brief asserts, just before you send it.** Re-read the decisions log and any state
   the brief states (approved or not, the branch, a dirty tree) instead of what you read at the
   start. Before a brief says a tool is or isn't installed, check it in the session. Build the steps
@@ -236,8 +302,14 @@ reviews only after that line, and starts on it without waiting for a new brief f
   - `{{self_compact}}`: for a worker you spawn with `--self-compact`: "The master may compact your
     context between turns and clear it once your job is finished. After your `FINAL:`, nothing may
     live only in your head: the report, the files and git hold it." Delete the line otherwise.
-  - `{{test_tmp}}`: for a job that runs tests, a folder on a local drive with no spaces in its
-    path (such as `<drive>:/tmp-<job>`). Never offer a scratch path with a space as TMP.
+  - `{{test_tmp}}`: for a job that runs tests, a folder with no spaces in its path: `<logs>/tmp/<session>`
+    (the logs folder `puppet logs LOGS` prints); when the logs folder has a space, another
+    local folder with none, never at a drive root: Claude Code's own safety check will not let
+    any session delete a folder there (2026-11-03: six of them stayed). Never offer a scratch path
+    with a space as TMP. TMP and TEMP are for the test run's own files; build output
+    (`--artifacts-path`, `bin/`) goes in a gitignored folder inside the repository, since tests
+    that look for the repository root fail from a build elsewhere (84 did, 2026-11-03). You delete
+    the temp folder at the job's end (When a job ends, step 4).
   - `{{decided}}`: values the user already fixed that a tool or plugin in the worker's window will
     ask for (a branch, a name, a target), each quoted with when the user said it.
   - `{{references}}`: the user's reference images. Compare like for like before showing anything:
@@ -301,10 +373,10 @@ command: the roster becomes `workers-<group>.json` and the logs folder `<logs>/<
 
 | Command | Does | Prints |
 |---|---|---|
-| `measure <session> [--window N] [--compact-at N] [--json]` | tokens, % of the window and of the compaction point, state | `<name>  <tokens>  <pct>%  <state>  (window N from <source>)`, then `  <p>% of compaction point <C> (<source>)` and `  WARN near compaction` when known; `?%  (window unknown)` when only the point is; or `<name>  0  0%  fresh  (no turns yet)` |
+| `measure <session> [--window N] [--compact-at N] [--json]` | tokens, % of the window and of the compaction point, state | `<name>  <tokens>  <pct>%  <state>  (window N from <source>)`, then `  <p>% of compaction point <C> (<source>)` (source `flag`, `env`, `observed` for the session's own transcript, `recorded` for its roster record, or `group` for the group's lowest) and `  WARN near compaction` when known; `?%  (window unknown)` when only the point is; or `<name>  0  0%  fresh  (no turns yet)` |
 | `list [--name <session>] [--window N] [--compact-at N] [--json]` | every session in your care, measured, plus unadopted background workers; `--name` prints one | one `measure` line each, then `model <model> <effort>` (`model fresh` before the first turn), kind, role and job; `gone` rows show the resume command, `changed` rows mean a new session id; `DONE? run finish` ends an active job's row whose session reported done; `mod on (<source>)`, `mod off (mode <mode>)` or `mod stale` ends the row of a session whose mod beat, and no `mod` means the plugin is not loaded there |
 | `adopt <session> [--role analyst\|master] [--window N] [--self-compact]` | takes a session into your care; `--role master` is you; also tells the session's mod its role, and `--self-compact` switches its mod on (only after the user's yes) | `adopted <name> (<kind>, <role>, clean or unknown) in <checkout>`, then `; self-compact switched on` with the flag |
-| `assign <session> <job> [--tier T] [--reuse \| --extend] [--scope F] [--no-git]` | records the job before you send it; `--reuse` refuses at 30% of the window and prints the compaction-point share too; `--extend` merges into the active job and checks the merged scope | `assigned <name>: <job>` (`extended …` with `--extend`), then the tier check: `ok`, `unchecked`, or `MISMATCH … it runs <model> <effort>` |
+| `assign <session> <job> [--tier T] [--reuse \| --extend] [--scope F] [--git \| --no-git]` | records the job before you send it; `--reuse` refuses at 30% of the window and prints the compaction-point share too; `--extend` merges into the active job, checks the merged scope, keeps the job's git flag unless `--git` or `--no-git` is passed, and adds no label the job already has | `assigned <name>: <job>` (`extended …` with `--extend`), then the tier check: `ok`, `unchecked`, or `MISMATCH … it runs <model> <effort>` |
 | `finish <session>` | marks the job done | `finished <name>: <job>` |
 | `reopen <session>` | undoes `finish`: the last job is active again; refuses a job that is not done, or a checkout another job now edits | `reopened <name>: <job>` |
 | `pick <cwd> [--tier T] [--scope F] [--no-git]` | a clean session in that checkout: one matching the tier first, the user's first | `<name>` and its tier check, or `no clean session for <checkout>; spawn one` |
@@ -330,6 +402,9 @@ command: the roster becomes `workers-<group>.json` and the logs folder `<logs>/<
 - "The job is done, compact it to tidy up" → `finish`, then `close` a background worker.
 - "The user said yes in its window, I'll tell it to proceed" → point to the answer; don't give the
   go-ahead yourself.
+- "The worker can ask the user itself" → no: it sends the question to you, and you ask here.
+- "It is busy, I'll compact it anyway" → ask it to pause at its next part boundary, then `compact`,
+  then "continue" (the pause pattern).
 - "I'll just run the merge myself" → it is a job for a session.
 - "I'll rephrase what the user meant" → quote them verbatim, then add your reading.
 - "I'll try `claude <something>`" → only the calls this file names.

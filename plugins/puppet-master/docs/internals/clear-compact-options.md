@@ -25,7 +25,7 @@ Every claim below is labelled **verified**, with how it was verified (a doc page
 
 | Rank | Option | The user waits? | Moves work to `--bg`? | Status |
 | --- | --- | --- | --- | --- |
-| 1 | **A. A puppet-master mod in every session** compacts or clears its own session when the master asks, at the next idle moment | No | No | Verified on a background session; foreground untested |
+| 1 | **A. A puppet-master mod in every session** compacts or clears its own session when the master asks, at the next idle moment | No | No | Verified on a background session, and `clear` on a foreground window (2026-11-04); the rest of the foreground untested |
 | 2 | **C. Idle compaction**, built in and on by default, as a free backstop | No | No | Verified (docs); only after about an hour idle, from 100k tokens |
 | 3 | **E. Background session the user attaches to** (`claude attach`, `/bg`), for jobs already in `--bg` | No | Yes, but visible | Verified (help, docs); interplay with `cycle` untested |
 | 4 | Paste lines, as today: the fallback where the mod cannot load | Yes | No | Current behaviour |
@@ -36,7 +36,8 @@ Every claim below is labelled **verified**, with how it was verified (a doc page
 | — | H. Settings hooks, or SendMessage alone | — | — | Rejected: neither can start a compaction |
 
 Ship A, keep C on, keep E for workers that are already background, and keep paste lines as the fallback when a
-session's mod is not loaded. A needs a test in one foreground window before it replaces the paste lines (see
+session's mod is not loaded. A `clear` of a foreground window has run (2026-11-04); the rest of A needs a test in one
+foreground window before it replaces the paste lines (see
 [Decisions and what is still open](#decisions-and-what-is-still-open)).
 
 ## A. A puppet-master mod in every session (recommended)
@@ -186,7 +187,8 @@ Run on 2026-11-04 with the master's go, on a throwaway session of this worker's 
 4. The clear request returned `{ text: "" }`, and `claude agents --json` showed the new session id.
 5. `claude stop 4e993a9a` and `claude rm 4e993a9a`, with no discard flag.
 
-Not covered: a foreground window the user opened, a session with work in progress, and option B's tool.
+Not covered by the probe: a foreground window the user opened, a session with work in progress, and option B's tool.
+A foreground `clear` was run afterwards: see [Decisions and what is still open](#decisions-and-what-is-still-open).
 
 ## What was built
 
@@ -227,15 +229,18 @@ Run on 2026-11-04 with the master's go, on a throwaway `--bg` Haiku session with
 2. **May the master clear a window on its own?** The user, 2026-11-04: "Compact freely, clear only between jobs and only
    for workers, do not clear master - also we can make this mode ask at start of session if to tuern it on default
    suggestion make it true but if not said explicit it wont run".
-3. **A foreground test is still owed.** In a throwaway window with the plugin loaded from this checkout (`claude
-   --plugin-dir <this checkout>/plugins/puppet-master`): the start question and each answer, a compact and a clear by
-   the master, the master's own compaction, and that the mod keeps beating after a `/clear`. Until then the paste
+3. **Part of the foreground test is still owed.** Done, reported by the master on 2026-11-04 (not re-run for this
+   page): `finish` then `clear` on the live window `carcare-platform-b3`, printing `cleared carcare-platform-b3: new
+   session f824c3fb-…, clean`. Still owed, in a throwaway window with the plugin loaded from this checkout (`claude
+   --plugin-dir <this checkout>/plugins/puppet-master`): the start question and each answer, a compact by the master
+   of a window, the master's own compaction, and that the mod keeps beating after a `/clear`. Until then the paste
    lines remain the fallback the helper prints.
 4. **What Claude Code itself could add** to make the mod unnecessary: a SendMessage flag that lets a session's own user
    allow listed commands (`/compact <focus>`, `/clear`) from named peers. Today the docs rule this out for every
    message (**verified**: cross-session-messaging doc).
-5. **A bug found on the way:** `IDLE_STATES` counts `state` `done` as idle even when `status` is `waiting`. `compact`
-   and `clear` refuse `waiting` on their own; `cycle` and the checkout lock do not yet.
+5. **A bug found on the way, fixed 2026-11-04:** `IDLE_STATES` counted `state` `done` as idle even when `status` was
+   `waiting`. `workerState` now reports such a session as `waiting`, so `compact`, `clear`, `cycle` and the checkout
+   lock all treat it as busy.
 
 ## Sources
 

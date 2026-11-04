@@ -132,14 +132,61 @@ test("--extend appends to an active job: keeps its start, merges label and scope
   }
 });
 
-test("--extend widens to the whole checkout when either side has no scope, and git when either runs it", () => {
+test("--extend widens to the whole checkout when either side has no scope", () => {
   const t = setup([interactive("u1", 1)]);
   try {
     adoptSession(t.deps, "u1");
     assignJob(t.deps, "u1", "docs pass", { scope: "docs", noGit: true });
-    const rec = assignJob(t.deps, "u1", "and commit", { extend: true });
+    const rec = assignJob(t.deps, "u1", "and more", { extend: true });
     assert.equal(rec.scope, undefined);
-    assert.equal(rec.git, true);
+  } finally {
+    t.cleanup();
+  }
+});
+
+// P-20261103-carcare-platform-10: an --extend that names no git flag keeps the job's own.
+test("--extend keeps the job's git flag unless --git or --no-git is passed", () => {
+  const t = setup([interactive("u1", 1), interactive("u2", 2, "C:\\Work\\Other")]);
+  try {
+    adoptSession(t.deps, "u1");
+    assignJob(t.deps, "u1", "docs pass", { scope: "docs", noGit: true });
+    assert.equal(assignJob(t.deps, "u1", "more docs", { extend: true, scope: "docs" }).git, false);
+    assert.equal(assignJob(t.deps, "u1", "and commit", { extend: true, scope: "docs", git: true }).git, true);
+    // an explicit --no-git undoes a git job
+    assert.equal(assignJob(t.deps, "u1", "no more git", { extend: true, scope: "docs", noGit: true }).git, false);
+    // a git job stays a git job
+    adoptSession(t.deps, "u2");
+    assignJob(t.deps, "u2", "commit work");
+    assert.equal(assignJob(t.deps, "u2", "also this", { extend: true }).git, true);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("--extend never adds a label the job already has", () => {
+  const t = setup([interactive("u1", 1)]);
+  try {
+    adoptSession(t.deps, "u1");
+    assignJob(t.deps, "u1", "web app", { noGit: true });
+    assert.equal(assignJob(t.deps, "u1", "IIS checks", { extend: true }).job, "web app; IIS checks");
+    const again = assignJob(t.deps, "u1", "IIS checks", { extend: true });
+    assert.equal(again.job, "web app; IIS checks");
+    assert.equal(again.jobs[0].label, "web app; IIS checks");
+    assert.equal(assignJob(t.deps, "u1", "web app", { extend: true }).job, "web app; IIS checks");
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("the CLI: assign takes --git, and refuses --git with --no-git", async () => {
+  const t = setup([interactive("u1", 1)]);
+  try {
+    assert.equal(await main(["adopt", "u1"], t.deps), 0);
+    assert.equal(await main(["assign", "u1", "one", "--scope", "docs", "--no-git"], t.deps), 0);
+    assert.equal(await main(["assign", "u1", "two", "--extend", "--scope", "docs", "--git"], t.deps), 0);
+    assert.equal(t.readRegistry().workers.u1.git, true);
+    assert.equal(await main(["assign", "u1", "three", "--extend", "--git", "--no-git"], t.deps), 2);
+    assert.match(t.err.at(-1), /--git and --no-git do not go together/);
   } finally {
     t.cleanup();
   }

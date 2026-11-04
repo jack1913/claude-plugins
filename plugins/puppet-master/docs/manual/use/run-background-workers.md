@@ -59,6 +59,10 @@ there, it starts a background worker instead, on the model and effort the job's 
 - One session edits one repository at a time, unless both jobs name the folders they write, the folders don't
   overlap, and only one of them runs git. Otherwise, for a second job in the same repository, use a second clone.
 - When a session has a question, Claude asks you, one at a time, quoting your own words back before its reading of them.
+  The sessions send their questions to the master's window, never to you in their own. Set each worker's window to
+  accept-edits once, when its job starts. Only an irreversible step (a delete, a push, a write to Railway) still shows a
+  permission prompt in the worker's own window, and Claude tells you which window and what it waits for.
+- A window you rename keeps its record: Claude carries its job to the new name.
 
 ## Keep it small
 
@@ -70,7 +74,9 @@ Claude measures each session's context, and compacts only between tasks:
   - Without it, your own window is left to auto-compact. If you'd rather choose the moment, say "give me compact
     lines" once, and Claude gives you one line to paste, such as `backend-b7: /compact keep the merge state and the
     next step`. A message from another session can't run `/compact`.
-- A busy session at 50% or more is asked to stop at its next task boundary first.
+- A busy session at 50% or more is asked to pause at its next part boundary first. Claude then compacts it with a
+  focus naming the job and the next part, and tells it to continue. A worker also pauses and says so on its own
+  once it passes about 150k tokens.
 - Before compacting a worker above 50%, Claude tells you its size and that a compaction can cost close to a dollar.
 - Once Claude has seen a session auto-compact, it knows the size where that happens. From 80% of it, a session's line
   ends in `WARN near compaction`.

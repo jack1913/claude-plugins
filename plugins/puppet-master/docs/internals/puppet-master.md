@@ -100,6 +100,17 @@ All three scripts use Node built-ins only, with no npm and no `package.json`.
   window is correct. A worker blocked by the user's uncommitted edits or by its permission mode reaches the user once,
   with the exact command; the job is never handed to another session, which would get round the denial (the user
   dropped that route on 2026-11-02). The brief names who runs each irreversible command up front.
+- **Every question comes to the master's window.** The user, 2026-11-04 (it replaced the analyst's proposal P-1, "the
+  worker asks for the approval itself in its own window"): "all worker questions and decisions come to the master's
+  window; the owner sets each worker window to accept-edits once at job start; only irreversible steps (deletes,
+  pushes, Railway writes) keep a permission prompt in the worker's window". A worker never uses `AskUserQuestion`: it
+  sends the question to the master, which asks the user in its own window. On 2026-11-03 the user typed the same
+  approval line in the master's window and then in a worker's, four times, and a worker sat on its own prompt for
+  17 and 32 minutes while the master looked elsewhere; so the master also runs `list` before each reply and leads with a
+  `waiting` session.
+- **A busy worker is paused, not compacted.** `compact` refuses a busy session. The pattern that worked four times on
+  one worker on 2026-11-04: ask it to pause at its next part boundary, `compact` it with a focus, send "continue". A
+  worker pauses by itself past about 150k tokens, which is the one size a worker may report.
 - **A brief states checked facts.** The master re-reads the decisions log and any state a brief asserts just before
   sending it, checks a tool is installed before saying so, and names each step's precondition: on 2026-11-02 one
   brief called approved proposals unreviewed and another called an installed package missing.
@@ -118,7 +129,7 @@ the helper calls.
 | Start | `claude --bg --name <worker> "<brief>"`, in a trusted folder | Works; an untrusted folder refuses until the user runs `claude` there once. Stdout: `backgrounded · <id> · <name>` plus hint lines. On 2.1.312 the id and hints are wrapped in ANSI colour codes, which `parseBgId` strips |
 | List | `claude agents --json` (or the `ListAgents` tool) | Background workers with `kind` `background`, `id`, `sessionId`, `cwd`, `state` and `status`. On 2.1.312 the user's windows are listed too, with `kind` `interactive`, `sessionId`, `cwd`, `status` and no `id` or `state` |
 | Compact by message (2.1.312) | `SendMessage` of `/compact <focus>` to a live session | Refused: it arrives as wrapped plain text, the session answers that it cannot run a built-in command, and no `compact_boundary` is written |
-| States | `state` in the listing | `working` (`status` `busy`), then `done` (`status` `idle`); `blocked` while waiting on a prompt. A stopped worker drops out of the listing |
+| States | `state` in the listing | `working` (`status` `busy`), then `done` (`status` `idle`); `blocked` while waiting on a prompt. A session parked on a dialog lists as `state` `done` with `status` `waiting` (probe, 2026-11-04): the helper reports it as `waiting`, which is busy. A stopped worker drops out of the listing |
 | Message | `SendMessage`, both ways | Delivered, no hold |
 | Edit files | `worktree.bgIsolation: "none"` in the user's `settings.json` | Without it a background worker cannot edit until `EnterWorktree`. With it, a worker wrote into the main checkout, and no worktree appeared |
 | Compact | `claude stop <id>`, then `claude -p --resume <sessionId> --output-format json "/compact <focus>"` | The transcript gains a `compact_boundary`; the JSON result carries `modelUsage.<model>.contextWindow` |
@@ -152,9 +163,12 @@ Things that shaped the helper:
   never guesses a default. `list` shows such a row as `?%` and `(window unknown)` and exits 0, so a status check
   never fails on it.
 - The **compaction point** is the size at which the session auto-compacts. It comes from `--compact-at <tokens>`,
-  else `PUPPET_COMPACT_AT`, else the smallest `preTokens` of any automatic `compact_boundary` the helper has seen,
-  kept in the registry as `observedCompactAt`. It is never derived from the model: the window only shows in a
-  compact's JSON result. With a point known, the measure line adds `<p>% of compaction point <tokens> (<source>)`,
+  else `PUPPET_COMPACT_AT`, else the session's own smallest `preTokens` of an automatic `compact_boundary`: in its
+  transcript (source `observed`), or kept on its roster record as `compactAt` (source `recorded`, so a `clear` does not
+  lose it). A session never compacted yet is measured against the group's lowest, kept in the registry as
+  `observedCompactAt` (source `group`). The point differs per session: on 2026-11-03 the analyst compacted at 208,192
+  tokens, one worker at 230,030 and another at 354,186, and that one lowest point read 221% for the master at 460,642
+  tokens, which had not compacted. It is never derived from the model: the window only shows in a compact's JSON result. With a point known, the measure line adds `<p>% of compaction point <tokens> (<source>)`,
   and `WARN near compaction` from 80% of it. With a point and no window, the line shows `?%` and `(window unknown)`.
 - The **model and effort** are those of the last main-thread `api-request` record (`querySource`
   `repl_main_thread`): `params.model` and `params.output_config.effort`. `list` shows them as
@@ -170,12 +184,27 @@ Things that shaped the helper:
 tombstone per closed session: `id`, `sessionId`, `cwd`, `closedAt`). A record written before the roster existed
 reads as an active background worker. The file is written atomically (a temp file, then a rename).
 
-- `adopt` takes a listed session into the roster as `clean` (no turns yet) or `unknown` (it did something). Only one
-  live session may be the analyst, and only one the master. The master adopts itself with
-  `--role master --window <tokens>`. The analyst and the master take no jobs and hold no checkout lock.
+- `adopt` takes a listed session into the roster as `clean` (no turns yet, or at most two text turns and no tool call:
+  it only read a brief and replied, 2026-11-03) or `unknown` (it did something). Only one live session may be the
+  analyst, and only one the master. The master adopts itself with `--role master --window <tokens>`. The analyst and
+  the master take no jobs and hold no checkout lock.
+- **A renamed session keeps its record.** A rename in the window changes the name `claude agents --json` lists and
+  keeps the session id (2026-11-04: `carcare-platform-66` became `-b3`, and the roster held both, `done` and
+  `unknown`). Every command that lists the sessions first carries a record whose `sessionId` matches a live session under
+  another name to the live name, and saves it; of two records for one session the better one wins (an active job over a
+  finished one over `unknown` over `clean`, the older name's at a tie). `adopt` of a carried session keeps its job and
+  state. Adopting a session that is already in the roster under the same name and `sessionId` likewise keeps its job and
+  `jobState`, and updates only the role, the window and the mod's role file (2026-11-04: an adopt of a carried `done`
+  record made it `unknown`, and `clear` and `assign` refused it); a session adopted before the mod existed has no role
+  file, which the mod reads as role none, and this is how it gets one (`clear` says so). A changed `sessionId` is
+  adopted afresh. Only the same `sessionId` moves: a name another live session still uses, and a session id that changed (a
+  `clear`), are left as they were.
 - `assign` moves `clean` to `active`, `finish` moves `active` to `done`, and `assign --reuse` moves `done` back to
   `active` under the 30% rule, and so does `reopen`, which keeps the job and its start. Nothing moves a session back to `clean` except adopting it again, which the master
   does only after asking the user.
+- `assign --extend` keeps the job's git flag unless `--git` or `--no-git` is passed (2026-11-03: a no-git job turned
+  into a git job, and a later `--extend --no-git` could not undo it), and adds no label the job already has. The scope
+  still widens to the whole checkout when either side has none, so `--extend --scope` cannot narrow a running job.
 - `pick <cwd>` returns a clean worker session in the cwd's checkout, or nothing when another session is editing that
   checkout (with `--scope` and `--no-git`, under the scope rule). With `--tier`, a session whose model and effort
   already match comes first, then an unchecked one, then a mismatch; within each, the user's windows come before
@@ -246,14 +275,21 @@ all mean no question, recorded in the heartbeat as `ask`: `skipped-background` o
 
 **Verified** (probe sessions, 2026-11-04, Claude Code 2.1.318, Windows 10): a mod in a background session compacted it
 (24,266 to 6,452 tokens, with the focus kept) and cleared it (new session id, same background id); the ask hangs a
-background worker as described above. **Not yet tested in a foreground window**: the start question and its four
-answers, `/clear` and compaction of a window, the master's own compaction after its turn, that the mod's timer
+background worker as described above.
+
+**Verified on a foreground window** (reported by the master, 2026-11-04, not re-run for this page): `finish` then
+`clear` on the live window `carcare-platform-b3` printed `cleared carcare-platform-b3: new session f824c3fb-…, clean`.
+The master also ran `compact` with a focus four times on one worker between its parts: 262k to 28k, 154k to 23k, 143k
+to 25k and 182k to 18k tokens (see the pause pattern in `SKILL.md`, rule 7). **Not yet tested in a foreground
+window**: the start question and its four answers, the master's own compaction after its turn, that the mod's timer
 survives a `/clear`, and `mod on` showing in `list` through the plugin's real install. The mod runs in an environment
 with no Node and no `fs` in `claude plugin test`, so the unit tests in `tests/mod.test.mjs` drive it with a fake `$`
 and a Map for the files.
 
-**Known gap.** `IDLE_STATES` counts `state` `done` as idle even when `status` is `waiting` (a session parked on a
-dialog). `compact` and `clear` refuse `waiting` themselves; `cycle` and the checkout lock still use the old set.
+**A session parked on a dialog is not idle.** It lists as `state` `done`, `status` `waiting`. `workerState` reports it
+as `waiting`, which is in `BUSY_STATES` and not in `IDLE_STATES`, so `compact`, `clear` and `cycle` refuse it and the
+checkout lock counts an `unknown` session in that state as editing (before, only `compact` and `clear` checked
+`status`). Idle means state `done` or `idle` and no pending dialog.
 
 ## The analyst and its logs
 

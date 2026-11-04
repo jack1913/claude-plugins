@@ -47,6 +47,17 @@ test("workerState reads state, then status", () => {
   assert.ok(BUSY_STATES.has("blocked"));
 });
 
+test("a session parked on a dialog is waiting, never idle, whatever its state says", () => {
+  // Observed 2026-11-04: a session behind a dialog lists as state "done", status "waiting".
+  const parked = { state: "done", status: "waiting" };
+  assert.equal(workerState(parked), "waiting");
+  assert.equal(IDLE_STATES.has(workerState(parked)), false);
+  assert.ok(BUSY_STATES.has("waiting"));
+  // a finished, idle session is unchanged
+  assert.equal(workerState({ state: "done", status: "idle" }), "done");
+  assert.equal(workerState({ status: "waiting" }), "waiting");
+});
+
 test("listAgents parses agents --json and is loud on failure", () => {
   const ok = makeDeps({ agents });
   try {

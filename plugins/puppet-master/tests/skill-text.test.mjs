@@ -384,6 +384,112 @@ test("hooks.json lists the mod module, and the module exists", () => {
   assert.ok(fs.existsSync(path.join(PLUGIN_DIR, "hooks", "puppet-mod.js")));
 });
 
+// --- 2026-11-04: the analyst's approved proposals of 2026-11-03 and the user's direction that replaced P-1 ---
+
+test("all questions come to the master's window: workers never use AskUserQuestion (user direction, replaces P-1)", () => {
+  const skill = read("SKILL.md");
+  const relay = section(skill, "Relay protocol");
+  assert.match(relay, /all worker questions\s+and decisions come to the master's window/);
+  assert.match(relay, /accept-edits once\s+at job start/);
+  assert.match(relay, /only irreversible steps \(deletes, pushes, Railway writes\) keep a permission prompt\s+in the worker's window/);
+  assert.match(relay, /never uses AskUserQuestion/);
+  assert.match(relay, /if something is waiting\s+for me you must ask/);
+  const brief = read("worker-brief.md");
+  assert.match(brief, /Never use AskUserQuestion in your own window/);
+  assert.match(brief, /Questions go to the master, never to the user/);
+  assert.match(brief, /accept-edits/);
+  // the approved-up-front irreversible steps: the first line to the master names the window that waits (P-4)
+  assert.match(brief, /first action, before any work, is one line to \{\{master_name\}\}: "waiting for the owner's approval\s+in my window: <the list>"/);
+  assert.match(section(skill, "Briefs"), /`\{\{approvals\}\}`: the irreversible steps/);
+});
+
+test("a denied command is never run again in another shell, another form or in parts (carcare P-20261103-11)", () => {
+  const brief = read("worker-brief.md");
+  assert.match(brief, /never run it again in another shell \(Bash after PowerShell, or the other way\s+round\), in another form, or split into parts/);
+  assert.match(brief, /send the master the exact\s+command, and wait/);
+});
+
+test("the brief's fixed rules forbid cd chains, sed -i and any git command in a no-git job (carcare P-20261103-2)", () => {
+  const brief = read("worker-brief.md");
+  assert.match(brief, /No `cd <dir> && …` chain/);
+  assert.match(brief, /no `sed -i`/);
+  assert.match(brief, /run no git command at all: a read-only one/);
+  assert.match(brief, /`git check-ignore`/);
+});
+
+test("the checkout lock has two ways out and never a brief with no roster record (carcare P-20261103-3)", () => {
+  const rule5 = read("SKILL.md").split("5. **Write scopes")[1].split("6. **Never create")[0];
+  assert.match(rule5, /wait for that job to end/);
+  assert.match(rule5, /Never send\s+the brief anyway/);
+  assert.match(rule5, /no roster record/);
+  assert.match(rule5, /`--extend --scope` cannot narrow/);
+});
+
+test("the pause pattern: ask for a part boundary, compact with a focus, send continue (2026-11-04)", () => {
+  const skill = read("SKILL.md");
+  assert.match(skill, /\*\*The pause pattern\*\*/);
+  assert.match(skill, /"pause at your next part boundary and say so"/);
+  assert.match(skill, /`compact <worker>\s+<focus>`/);
+  assert.match(skill, /"continue"/);
+  assert.match(skill, /262k to 28k/);
+  const row = skill.split("\n").find((l) => l.startsWith("   | working, **≥ 50%**"));
+  assert.match(row, /pause at its next part boundary/);
+  const brief = read("worker-brief.md");
+  assert.match(brief, /Pausing at a part boundary/);
+  assert.match(brief, /send "paused at <boundary>" and wait/);
+  assert.match(brief, /sends "continue"/);
+  assert.match(brief, /Past about 150k tokens[\s\S]{0,120}pause at the next part boundary\s+and\s+say so/);
+});
+
+test("test temp folders sit under the logs folder, never at a drive root; build output stays in the repository (carcare P-20261103-7)", () => {
+  const skill = read("SKILL.md");
+  const briefs = section(skill, "Briefs");
+  assert.match(briefs, /`\{\{test_tmp\}\}`[^\n]*no spaces[^\n]*`<logs>\/tmp\/<session>`/);
+  assert.match(briefs, /never at a drive root/);
+  assert.match(briefs, /build output\s+\(`--artifacts-path`, `bin\/`\)[^.]*inside the repository/);
+  assert.match(section(skill, "When a job ends"), /delete its temp folder \(`<logs>\/tmp\/<session>`/);
+  assert.match(read("worker-brief.md"), /Build output \(`--artifacts-path`, `bin\/`\)\s+goes in a gitignored folder inside the repository/);
+});
+
+test("services the master holds tools for are done by it or a worker, with the user's approval where it counts (carcare P-20261103-8)", () => {
+  const relay = section(read("SKILL.md"), "Relay protocol");
+  assert.match(relay, /outside service you hold tools for/);
+  assert.match(relay, /Only a step no tool can do goes to the user, with the click\s+path read from the service's docs and the service's current state checked first/);
+});
+
+test("on start the master reads each window's model and effort before it plans roles, and asks about a shared analyst (carcare P-20261103-9)", () => {
+  const start = section(read("SKILL.md"), "On start");
+  assert.match(start, /Before you plan any role for the day, read each named window's model and effort\s+\(`puppet list --name <session>`/);
+  assert.match(start, /already\s+has an analyst the groups share/);
+});
+
+test("the master runs list before each reply and leads with a waiting worker (carcare P-20261103-12)", () => {
+  const relay = section(read("SKILL.md"), "Relay protocol");
+  assert.match(relay, /Each time you\s+reply to the user, run `puppet list` first/);
+  assert.match(relay, /Any session whose state is `waiting` leads your reply/);
+});
+
+test("a deploy or merge approval lists what it leaves out; an old quote goes in with its date; the first status names old open items (carcare P-20261103-14, -15, -16)", () => {
+  const skill = read("SKILL.md");
+  const relay = section(skill, "Relay protocol");
+  assert.match(relay, /list what it leaves out: the commits on\s+the branch that are not in it, and uncommitted work/);
+  assert.match(relay, /A quote from an earlier day\*\* goes into a brief with its date and what it was\s+about/);
+  assert.match(relay, /needs the user's yes/);
+  assert.match(section(skill, "On start"), /day's first status names everything from earlier days that still waits on the user/);
+});
+
+test("rule 4 and the helper table say what assign --extend keeps, and that a rename and a brief-only session need no adopt dance (carcare P-20261103-10, 2026-11-04)", () => {
+  const skill = read("SKILL.md");
+  assert.match(skill, /keeps the job's git flag unless you pass `--git` or `--no-git`/);
+  assert.match(skill, /A session the user renamed in its window keeps its roster record/);
+  assert.match(skill, /one that only read a brief and replied, with no tool call/);
+  assert.match(skill, /keeps its job and state and only updates its role, window\s+and mod role/);
+  assert.match(skill, /`adopt <session> --role worker`/);
+  const row = skill.split("\n").find((l) => l.startsWith("| `assign "));
+  assert.match(row, /\[--git \\\| --no-git\]/);
+  assert.match(skill, /`recorded` for its roster record, or `group` for the group's lowest/);
+});
+
 test("the worker brief carries the standing build-output and peer lines", () => {
   const brief = read("worker-brief.md");
   assert.match(brief, /PYTHONDONTWRITEBYTECODE=1/);

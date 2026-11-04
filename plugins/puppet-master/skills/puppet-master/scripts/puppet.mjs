@@ -59,11 +59,17 @@ export function transcriptFacts(text) {
   let model = null;
   let effort = null;
   let lastText = null;
+  let toolUses = 0;
+  let textTurns = 0;
   for (const e of entries) {
     if (e.isSidechain) continue;
     if (e.type === "assistant" && Array.isArray(e.message?.content)) {
       const text = e.message.content.filter((c) => c?.type === "text").map((c) => c.text).join("\n");
-      if (text.trim()) lastText = text;
+      if (text.trim()) {
+        lastText = text;
+        textTurns++;
+      }
+      toolUses += e.message.content.filter((c) => c?.type === "tool_use").length;
     }
     if (e.type === "system" && e.subtype === "compact_boundary" && e.compactMetadata?.trigger === "auto") {
       const pre = e.compactMetadata.preTokens;
@@ -79,8 +85,12 @@ export function transcriptFacts(text) {
   } catch (err) {
     size = { error: err };
   }
-  return { ...size, autoCompactAt, model, effort, saysDone: lastText !== null && DONE_RE.test(lastText) };
+  return { ...size, autoCompactAt, model, effort, toolUses, textTurns, saysDone: lastText !== null && DONE_RE.test(lastText) };
 }
+
+// A session that only read a brief and replied "ready": at most this many text turns, and not
+// one tool call. Nothing was done in its context, so `assign` may take it as clean.
+export const BRIEF_ONLY_MAX_TURNS = 2;
 
 // A last assistant text that reads as a done report: a hint for the master, never a finish.
 const DONE_RE = /^\s*FINAL:|\bjob is done\b/im;
@@ -162,13 +172,13 @@ export function resolveWindow({ flag, recorded, env } = {}) {
   );
 }
 
-// The size at which sessions get compacted automatically: a flag, else PUPPET_COMPACT_AT,
-// else the smallest automatic compaction seen in a transcript. Never guessed: null when
-// none of the three is there.
-export function resolveCompactAt({ flag, env, observed } = {}) {
+// The size at which a session gets compacted automatically: a flag, else PUPPET_COMPACT_AT,
+// else an automatic compaction seen (`observedSource` says whose: the session's own, its
+// roster record's, or the group's). Never guessed: null when none of the three is there.
+export function resolveCompactAt({ flag, env, observed, observedSource = "observed" } = {}) {
   if (flag !== undefined) return { compactAt: positiveInt(flag, "--compact-at"), source: "flag" };
   if (env !== undefined && env !== "") return { compactAt: positiveInt(env, "PUPPET_COMPACT_AT"), source: "env" };
-  if (Number.isInteger(observed) && observed > 0) return { compactAt: observed, source: "observed" };
+  if (Number.isInteger(observed) && observed > 0) return { compactAt: observed, source: observedSource };
   return null;
 }
 
@@ -236,10 +246,12 @@ export function findWorker(agents, key, closed = {}) {
 }
 
 // Observed on a live background session: `state` working → done (with `status`
-// busy → idle); `blocked` is a session waiting on a prompt, so it is mid-task. A state
-// in neither set is unknown, and nothing that needs a task boundary acts on it.
+// busy → idle); `blocked` is a session waiting on a prompt, so it is mid-task. A session
+// parked on a dialog lists as `state done`, `status waiting` (probe, 2026-11-04): `workerState`
+// reports it as `waiting`, which is busy, never idle. A state in neither set is unknown, and
+// nothing that needs a task boundary acts on it.
 export const IDLE_STATES = new Set(["done", "idle"]);
-export const BUSY_STATES = new Set(["working", "busy", "blocked"]);
+export const BUSY_STATES = new Set(["working", "busy", "blocked", "waiting"]);
 
 // A session resumes from its own project directory, so every printed resume command
 // carries the worker's cwd.
@@ -249,6 +261,8 @@ function resumeHint(cwd, sessionId, { bg = true } = {}) {
 }
 
 export function workerState(agent) {
+  // `status waiting` wins over `state done`: the session is behind a dialog, not at a boundary.
+  if (agent.status === "waiting") return "waiting";
   return agent.state ?? agent.status ?? "unknown";
 }
 
@@ -312,6 +326,48 @@ export function saveRegistry(deps, reg) {
   deps.fs.renameSync(tmp, p);
 }
 
+// --- renamed sessions -----------------------------------------------------------------
+
+// The better of two records for one session: an active job over a finished one over an
+// unknown over a clean one; at a tie, the earlier candidate (the older name's, with more history).
+const JOB_RANK = { active: 3, done: 2, unknown: 1, clean: 0 };
+const rankOf = (rec) => JOB_RANK[rec.jobState ?? "active"] ?? 0;
+
+// A session renamed in its window (`/rename`) keeps its session id, so a record under its old
+// name is the same session's: carry it over to the live name, rather than let an `adopt` open a
+// second, `unknown` record for it (2026-11-04: carcare-platform-66 → -b3 held both). Only a record
+// with the very same session id moves; a name another live session still uses is left alone.
+// Returns the live names whose record was carried.
+export function carryRenames(reg, agents) {
+  const carried = new Set();
+  for (const a of agents) {
+    const mine = Object.entries(reg.workers).filter(([, r]) => r.sessionId === a.sessionId);
+    const olds = mine.filter(([n]) => n !== a.name && !agents.some((x) => x.name === n && x.sessionId !== a.sessionId));
+    if (olds.length === 0) continue;
+    if (reg.workers[a.name] && reg.workers[a.name].sessionId !== a.sessionId) continue;
+    const own = mine.find(([n]) => n === a.name);
+    const candidates = [...olds, ...(own ? [own] : [])];
+    const best = candidates.reduce((b, c) => (rankOf(c[1]) > rankOf(b[1]) ? c : b));
+    const window = candidates.map(([, r]) => r.window).find(Boolean);
+    const compactAt = candidates.map(([, r]) => r.compactAt).reduce((m, x) => minPositive(m, x), Infinity);
+    for (const [n] of candidates) delete reg.workers[n];
+    reg.workers[a.name] = {
+      ...best[1],
+      ...(window ? { window } : {}),
+      ...(Number.isFinite(compactAt) ? { compactAt } : {}),
+    };
+    carried.add(a.name);
+  }
+  return carried;
+}
+
+// The roster, with every rename carried over and saved. `agents` is the live list.
+function loadRoster(deps, agents) {
+  const reg = loadRegistry(deps);
+  if (carryRenames(reg, agents).size > 0) saveRegistry(deps, reg);
+  return reg;
+}
+
 // --- measuring ------------------------------------------------------------------------
 
 function projectsDir(deps) {
@@ -347,12 +403,15 @@ export function measureAgent(deps, agent, record, { window, compactAt, observed,
     if (t.error instanceof PuppetError && t.error.code === "no-usage") return freshMeasure(agent);
     throw t.error;
   }
-  const seen = minPositive(observed, t.autoCompactAt);
-  const c = resolveCompactAt({
-    flag: compactAt,
-    env: deps.env.PUPPET_COMPACT_AT,
-    observed: Number.isFinite(seen) ? seen : undefined,
-  });
+  // The session's own point first (its transcript, or the roster record kept from before a
+  // clear); the group's lowest only for a session that has not been compacted yet. One
+  // session's point says nothing sure about another's: a compaction comes at 208,192, 230,030
+  // or 354,186 tokens depending on the session (2026-11-03).
+  const own = minPositive(t.autoCompactAt, record?.compactAt);
+  const mine = Number.isFinite(own)
+    ? { observed: own, observedSource: own === t.autoCompactAt ? "observed" : "recorded" }
+    : { observed: observed ?? undefined, observedSource: "group" };
+  const c = resolveCompactAt({ flag: compactAt, env: deps.env.PUPPET_COMPACT_AT, ...mine });
   let w;
   try {
     w = resolveWindow({ flag: window, recorded: record?.window, env: deps.env.PUPPET_CONTEXT_WINDOW });
@@ -382,19 +441,32 @@ export function measureAgent(deps, agent, record, { window, compactAt, observed,
   };
 }
 
-// Keep the smallest automatic compaction any measured transcript showed; true when it moved.
+// Keep the smallest automatic compaction any measured transcript showed (the group's, for a
+// session with none of its own), and each rostered session's own smallest on its record, so a
+// `clear` does not lose it. True when anything moved.
 function noteCompactions(reg, measures) {
+  let moved = false;
   const seen = measures.reduce((m, x) => minPositive(m, x?.autoCompactAt), minPositive(reg.observedCompactAt));
   if (Number.isFinite(seen) && seen !== reg.observedCompactAt) {
     reg.observedCompactAt = seen;
-    return true;
+    moved = true;
   }
-  return false;
+  for (const m of measures) {
+    const rec = m?.name === undefined ? undefined : reg.workers[m.name];
+    if (!rec || !Number.isInteger(m.autoCompactAt) || m.autoCompactAt <= 0) continue;
+    const own = minPositive(m.autoCompactAt, rec.compactAt);
+    if (own !== rec.compactAt) {
+      rec.compactAt = own;
+      moved = true;
+    }
+  }
+  return moved;
 }
 
 export function measureWorker(deps, key, { window, compactAt } = {}) {
-  const reg = loadRegistry(deps);
-  const agent = findWorker(listAgents(deps), key, reg.closed);
+  const agents = listAgents(deps);
+  const reg = loadRoster(deps, agents);
+  const agent = findWorker(agents, key, reg.closed);
   const record = reg.workers[agent.name];
   const m = measureAgent(deps, agent, record, { window, compactAt, observed: reg.observedCompactAt });
   if (noteCompactions(reg, [m])) saveRegistry(deps, reg);
@@ -471,6 +543,15 @@ function queueHarvest(reg, name, sessionId) {
   if (!sessionId) return;
   reg.pendingHarvest = reg.pendingHarvest ?? [];
   if (!reg.pendingHarvest.some((p) => p.sessionId === sessionId)) reg.pendingHarvest.push({ name, sessionId });
+}
+
+// No transcript, or one with no tool call and at most BRIEF_ONLY_MAX_TURNS text turns: a session
+// that only read its brief and replied. It did nothing, so it counts as clean for `assign`.
+function isBriefOnly(deps, agent) {
+  const file = findTranscript(projectsDir(deps), agent.sessionId, { optional: true });
+  if (file === null) return false;
+  const t = transcriptFacts(deps.fs.readFileSync(file, "utf8"));
+  return t.toolUses === 0 && t.textTurns >= 1 && t.textTurns <= BRIEF_ONLY_MAX_TURNS;
 }
 
 export function isEditing(rec, agents) {
@@ -602,20 +683,36 @@ function isFresh(deps, agent) {
 
 const ROLES = new Set(["worker", "analyst", "master"]);
 
-export function adoptSession(deps, key, { role = "worker", window, selfCompact = false } = {}) {
-  if (!ROLES.has(role)) throw new PuppetError(`--role must be worker, analyst or master, got "${role}"`, 2);
+export function adoptSession(deps, key, { role, window, selfCompact = false } = {}) {
+  if (role !== undefined && !ROLES.has(role)) throw new PuppetError(`--role must be worker, analyst or master, got "${role}"`, 2);
   const w = window === undefined ? undefined : positiveInt(window, "--window");
   const agents = listAgents(deps);
   const reg = loadRegistry(deps);
+  // A session renamed since it was adopted is already in the roster under its old name: its
+  // record moves to the new name first.
+  carryRenames(reg, agents);
   const agent = findWorker(agents, key, reg.closed);
-  if (role !== "worker") {
+  const before = reg.workers[agent.name];
+  // A session already in the roster under this name, with the same session id, keeps its job and
+  // job state: adopting it again only updates its role, window and mod role (2026-11-04: an adopt
+  // of a carried `done` record made it `unknown`, and `clear` and `assign` refused it). A changed
+  // session id (a clear, a restart) is adopted afresh below.
+  const same = before !== undefined && before.sessionId === agent.sessionId;
+  const asRole = role ?? (same ? before.role : undefined) ?? "worker";
+  if (asRole !== "worker") {
     for (const [other, rec] of Object.entries(reg.workers)) {
-      if (other !== agent.name && normalize(rec).role === role && isLive(agents, rec)) {
-        throw new PuppetError(`${other} is already the ${role}`);
+      if (other !== agent.name && normalize(rec).role === asRole && isLive(agents, rec)) {
+        throw new PuppetError(`${other} is already the ${asRole}`);
       }
     }
   }
-  const before = reg.workers[agent.name];
+  if (same) {
+    reg.workers[agent.name] = { ...before, role: asRole, ...(w ? { window: w } : {}) };
+    saveRegistry(deps, reg);
+    writeModRole(deps, agent.sessionId, asRole);
+    if (selfCompact) writeModOptin(deps, agent.sessionId);
+    return { name: agent.name, ...reg.workers[agent.name] };
+  }
   if (before && before.sessionId !== agent.sessionId) queueHarvest(reg, agent.name, before.sessionId);
   if (reg.closed) delete reg.closed[agent.name];
   const kept = w ?? before?.window;
@@ -625,15 +722,16 @@ export function adoptSession(deps, key, { role = "worker", window, selfCompact =
     cwd: pathApi(deps).resolve(agent.cwd),
     checkout: checkoutOf(deps, agent.cwd),
     kind: agent.kind ?? "background",
-    role,
+    role: asRole,
     job: null,
-    jobState: isFresh(deps, agent) ? "clean" : "unknown",
+    jobState: isFresh(deps, agent) || isBriefOnly(deps, agent) ? "clean" : "unknown",
     ...(kept ? { window: kept } : {}),
+    ...(before?.compactAt ? { compactAt: before.compactAt } : {}),
   };
   reg.workers[agent.name] = rec;
   saveRegistry(deps, reg);
   // The mod in that session reads its role from here; an opt-in only when the master says so.
-  writeModRole(deps, agent.sessionId, role);
+  writeModRole(deps, agent.sessionId, asRole);
   if (selfCompact) writeModOptin(deps, agent.sessionId);
   return { name: agent.name, ...rec };
 }
@@ -656,22 +754,25 @@ function rosterRecord(agents, reg, key) {
 export const REUSE_BELOW = 30;
 
 // One job's write fields with more work added: no scope on either side means the whole
-// checkout, and the merged job runs git when either part does.
-function mergeJob(a, b) {
+// checkout. The git flag stays the job's own unless the extension names one (`--git` or
+// `--no-git`, as `gitFlag` true or false): an extension that names none must not turn a no-git
+// job into a git job (2026-11-03: 4e).
+function mergeJob(a, b, gitFlag) {
   const scope = a.scope && b.scope ? [...new Set([...a.scope, ...b.scope])] : undefined;
-  return { ...(scope ? { scope } : {}), git: a.git !== false || b.git !== false };
+  return { ...(scope ? { scope } : {}), git: gitFlag ?? a.git !== false };
 }
 
-export function assignJob(deps, key, label, { reuse = false, extend = false, scope, noGit = false, tier } = {}) {
+export function assignJob(deps, key, label, { reuse = false, extend = false, scope, noGit = false, git = false, tier } = {}) {
   if (!label || !label.trim()) throw new PuppetError("assign needs a job label", 2);
   if (extend && reuse) throw new PuppetError("--extend and --reuse do not go together", 2);
+  if (git && noGit) throw new PuppetError("--git and --no-git do not go together", 2);
   if (tier !== undefined) tierMatch(tier, {});
   const job = jobFields(deps, { scope, noGit });
   const agents = listAgents(deps);
-  const reg = loadRegistry(deps);
+  const reg = loadRoster(deps, agents);
   const { agent, rec } = rosterRecord(agents, reg, key);
   if (rec.role !== "worker") throw new PuppetError(`${agent.name} is the ${rec.role}; the ${rec.role} takes no jobs`);
-  if (extend) return extendJob(deps, reg, agents, agent, rec, label, job, tier);
+  if (extend) return extendJob(deps, reg, agents, agent, rec, label, job, tier, git ? true : noGit ? false : undefined);
   const reusable = reuse && rec.jobState === "done";
   if (rec.jobState !== "clean" && !reusable) {
     const did = rec.jobState === "active" ? `holds "${rec.job}"` : rec.job ? `did "${rec.job}"` : "did other work";
@@ -712,13 +813,14 @@ export function assignJob(deps, key, label, { reuse = false, extend = false, sco
 
 // More work for the job a session already holds: the label, scope and git merge into it,
 // and its start stays.
-function extendJob(deps, reg, agents, agent, rec, label, job, tier) {
+function extendJob(deps, reg, agents, agent, rec, label, job, tier, gitFlag) {
   if (rec.jobState !== "active") {
     throw new PuppetError(`--extend needs an active job; ${agent.name} has none (it is ${rec.jobState})`);
   }
-  const merged = mergeJob(rec, job);
+  const merged = mergeJob(rec, job, gitFlag);
   checkLock(deps, reg, agents, agent.name, rec.checkout, merged);
-  const joined = `${rec.job}; ${label}`;
+  // A label the job already has is not added again.
+  const joined = String(rec.job).split("; ").includes(label) ? rec.job : `${rec.job}; ${label}`;
   const jobs = [...(rec.jobs ?? [])];
   if (jobs.length > 0) jobs[jobs.length - 1] = { ...jobs[jobs.length - 1], label: joined };
   const next = { ...rec, job: joined, jobs, ...merged };
@@ -733,7 +835,7 @@ function extendJob(deps, reg, agents, agent, rec, label, job, tier) {
 // Undo a finish: the last job is active again, as it was before `finish`.
 export function reopenJob(deps, key) {
   const agents = listAgents(deps);
-  const reg = loadRegistry(deps);
+  const reg = loadRoster(deps, agents);
   const { agent, rec } = rosterRecord(agents, reg, key);
   if (rec.jobState !== "done") throw new PuppetError(`${agent.name} has no finished job to reopen (it is ${rec.jobState})`);
   checkLock(deps, reg, agents, agent.name, rec.checkout, { scope: rec.scope, git: rec.git });
@@ -750,7 +852,7 @@ export function reopenJob(deps, key) {
 
 export function finishJob(deps, key) {
   const agents = listAgents(deps);
-  const reg = loadRegistry(deps);
+  const reg = loadRoster(deps, agents);
   const { agent, rec } = rosterRecord(agents, reg, key);
   if (rec.jobState !== "active") throw new PuppetError(`${agent.name} has no active job`);
   const jobs = [...(rec.jobs ?? [])];
@@ -771,7 +873,7 @@ export function pickSession(deps, cwd, { scope, noGit = false, tier } = {}) {
   const checkout = checkoutOf(deps, cwd);
   const key = checkoutKey(deps, checkout);
   const agents = listAgents(deps);
-  const reg = loadRegistry(deps);
+  const reg = loadRoster(deps, agents);
   const here = Object.entries(reg.workers).filter(([, r]) => checkoutKey(deps, r.checkout) === key);
   if (here.some(([, r]) => isEditing(r, agents) && collision(job, { scope: r.scope, git: r.git }))) return null;
   const rank = (c) => {
@@ -816,7 +918,7 @@ export function spawnWorker(deps, name, cwd, briefFile, { job, scope, noGit = fa
   }
   const checkout = checkoutOf(deps, cwd);
   const key = checkoutKey(deps, checkout);
-  const reg = loadRegistry(deps);
+  const reg = loadRoster(deps, agents);
   for (const [other, rec] of Object.entries(reg.workers)) {
     if (checkoutKey(deps, rec.checkout) !== key) continue;
     const why = isEditing(rec, agents) ? collision(fields, { scope: rec.scope, git: rec.git }) : null;
@@ -892,7 +994,8 @@ function newBoundaries(text, since) {
 }
 
 export function cycleWorker(deps, key, focus, { nextBriefFile } = {}) {
-  const agent = requireBackground(findWorker(listAgents(deps), key, loadRegistry(deps).closed), "cycling");
+  const agents = listAgents(deps);
+  const agent = requireBackground(findWorker(agents, key, loadRoster(deps, agents).closed), "cycling");
   const state = workerState(agent);
   if (!IDLE_STATES.has(state)) {
     throw new PuppetError(`${agent.name} is not at a task boundary (state ${state}); not cycling`);
@@ -945,7 +1048,7 @@ export function cycleWorker(deps, key, focus, { nextBriefFile } = {}) {
 
 export function closeWorker(deps, key) {
   const agents = listAgents(deps);
-  const reg = loadRegistry(deps);
+  const reg = loadRoster(deps, agents);
   const live = agents.filter((a) => a.name === key || a.id === key || a.sessionId === key);
   let name;
   let id;
@@ -1052,12 +1155,12 @@ export function modLabel(hb) {
 // dialog (`status waiting`, which `state done` hides: a session can sit behind a dialog and
 // still count as idle).
 function requireBoundary(agent, verb) {
+  if (agent.status === "waiting") {
+    throw new PuppetError(`${agent.name} is waiting on a dialog (status waiting); not ${verb} it`);
+  }
   const state = workerState(agent);
   if (!IDLE_STATES.has(state)) {
     throw new PuppetError(`${agent.name} is not at a task boundary (state ${state}); not ${verb} it`);
-  }
-  if (agent.status === "waiting") {
-    throw new PuppetError(`${agent.name} is waiting on a dialog (status waiting); not ${verb} it`);
   }
 }
 
@@ -1107,7 +1210,7 @@ const pasteLine = (name, text) => `give the user "${name}: ${text}" to paste`;
 export async function compactSession(deps, key, focus) {
   if (!focus || !focus.trim()) throw new PuppetError("compact needs a focus text", 2);
   const agents = listAgents(deps);
-  const reg = loadRegistry(deps);
+  const reg = loadRoster(deps, agents);
   const { agent, rec } = rosterRecord(agents, reg, key);
   const fallback = pasteLine(agent.name, `/compact ${focus}`);
   const self = rec.role === "master";
@@ -1133,7 +1236,7 @@ export async function compactSession(deps, key, focus) {
 // a clean session under its new session id.
 export async function clearSession(deps, key) {
   const agents = listAgents(deps);
-  const reg = loadRegistry(deps);
+  const reg = loadRoster(deps, agents);
   const { agent, rec } = rosterRecord(agents, reg, key);
   if (rec.role !== "worker") throw new PuppetError(`${agent.name} is the ${rec.role}; only a worker is cleared`);
   if (rec.jobState === "active") throw new PuppetError(`${agent.name} holds an active job ("${rec.job}"); not clearing it`);
@@ -1144,7 +1247,10 @@ export async function clearSession(deps, key) {
   const fallback = pasteLine(agent.name, "/clear");
   const hb = requireMod(deps, agent, fallback);
   if (hb.role !== "worker") {
-    throw new PuppetError(`${agent.name}: the mod sees its role as ${hb.role ?? "none"}, not worker; not clearing. Fallback: ${fallback}`);
+    // No role file (a session adopted before the mod existed) is fixed by adopting it again: that
+    // keeps its record and writes the file.
+    const hint = hb.role ? "" : ` Adopt it again with --role worker (\`adopt ${agent.name} --role worker\`), which keeps its job and writes the role file; the mod sees it within a few seconds.`;
+    throw new PuppetError(`${agent.name}: the mod sees its role as ${hb.role ?? "none"}, not worker; not clearing.${hint} Fallback: ${fallback}`);
   }
   let r;
   try {
@@ -1183,7 +1289,7 @@ const USAGE = [
   "  measure <worker> [--window N] [--compact-at N] [--json]",
   "  list [--name <session>] [--window N] [--compact-at N] [--json]",
   "  adopt <session> [--role worker|analyst|master] [--window N] [--self-compact]",
-  "  assign <session> <job> [--reuse | --extend] [--scope <dir[,dir]>] [--no-git] [--tier creative|mechanical]",
+  "  assign <session> <job> [--reuse | --extend] [--scope <dir[,dir]>] [--git | --no-git] [--tier creative|mechanical]   (--git only means something with --extend)",
   "  finish <session>",
   "  reopen <session>",
   "  pick <cwd> [--scope <dir[,dir]>] [--no-git] [--tier creative|mechanical]",
@@ -1208,6 +1314,7 @@ const FLAGS = {
   "--extend": false,
   "--scope": true,
   "--no-git": false,
+  "--git": false,
   "--self-compact": false,
   "--tier": true,
   "--group": true,
@@ -1264,7 +1371,7 @@ function cmdMeasure(deps, positional, flags) {
 function cmdList(deps, positional, flags) {
   wantPositional(positional, 0, "list");
   const agents = listAgents(deps);
-  const reg = loadRegistry(deps);
+  const reg = loadRoster(deps, agents);
   const rows = [];
   let failed = false;
   const opts = {
@@ -1334,7 +1441,7 @@ function cmdList(deps, positional, flags) {
 function cmdAdopt(deps, positional, flags) {
   wantPositional(positional, 1, "adopt");
   const r = adoptSession(deps, positional[0], {
-    role: flags.role ?? "worker",
+    role: flags.role,
     window: flags.window,
     selfCompact: Boolean(flags["self-compact"]),
   });
@@ -1349,6 +1456,7 @@ function cmdAssign(deps, positional, flags) {
     extend: Boolean(flags.extend),
     scope: flags.scope,
     noGit: Boolean(flags["no-git"]),
+    git: Boolean(flags.git),
     tier: flags.tier,
   });
   const verb = r.extended ? "extended" : "assigned";
@@ -1387,7 +1495,7 @@ export function logsDirFor(deps, flags) {
 function cmdHarvest(deps, positional, flags) {
   wantPositional(positional, 0, "harvest");
   const agents = listAgents(deps);
-  const reg = loadRegistry(deps);
+  const reg = loadRoster(deps, agents);
   const sessions = [];
   const add = (name, sessionId) => {
     if (!sessions.some((s) => s.sessionId === sessionId)) sessions.push({ name, sessionId });

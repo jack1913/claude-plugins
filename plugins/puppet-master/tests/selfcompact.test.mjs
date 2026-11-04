@@ -269,6 +269,31 @@ test("clear refuses a busy or dialog-parked worker, a missing mod, and a mod tha
   }
 });
 
+test("clear on a worker whose mod has no role file says to adopt it again with --role worker", async () => {
+  // 2026-11-04: a session adopted before the mod existed has no role file, so the mod sees role none.
+  for (const role of [null, undefined]) {
+    const t = setup({ heartbeat: { role } });
+    try {
+      assert.equal(await main(["clear", "w1"], t.deps), 1);
+      const msg = t.err.join("\n");
+      assert.match(msg, /mod sees its role as none, not worker/);
+      assert.match(msg, /Adopt it again with --role worker \(`adopt w1 --role worker`\), which keeps its job/);
+      assert.ok(msg.includes('Fallback: give the user "w1: /clear" to paste'), msg);
+      assert.equal(t.get("requests", t.w.sessionId), undefined);
+    } finally {
+      t.cleanup();
+    }
+  }
+  // a mod that sees another role gets no such hint
+  const t = setup({ heartbeat: { role: "master" } });
+  try {
+    assert.equal(await main(["clear", "w1"], t.deps), 1);
+    assert.doesNotMatch(t.err.join("\n"), /Adopt it again/);
+  } finally {
+    t.cleanup();
+  }
+});
+
 test("clear: a refusing ack, a missing new id and an unlisted new session are each loud", async () => {
   const busy = setup({ mod: (t) => t.ack({ ok: false, outcome: "busy", detail: "a turn is running" }) });
   try {

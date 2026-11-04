@@ -85,6 +85,18 @@ test("refuses a busy worker", async () => {
   }
 });
 
+test("refuses a worker parked on a dialog (state done, status waiting): it is not at a boundary", async () => {
+  const t = cycleSetup();
+  try {
+    t.deps.agents = [{ ...t.w, state: "done", status: "waiting" }];
+    assert.equal(await main(["cycle", "w1", "probe"], t.deps), 1);
+    assert.match(t.err.join("\n"), /not at a task boundary \(state waiting\)/);
+    assert.equal(verbs(t).length, 0, "nothing may be stopped behind a dialog");
+  } finally {
+    t.cleanup();
+  }
+});
+
 test("refuses an interactive session even when idle", async () => {
   const t = cycleSetup();
   try {

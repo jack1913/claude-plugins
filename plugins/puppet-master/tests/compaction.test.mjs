@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 
 import {
   main,
+  measureLine,
   measureWorker,
   resolveCompactAt,
   transcriptFacts,
@@ -62,18 +63,72 @@ test("measure with no window but a seen compaction prints instead of failing, an
   }
 });
 
-test("a compaction seen in one session sets the point for another, and only ever goes down", async () => {
+test("a session with its own auto compaction is measured against that one, not the group's lowest", async () => {
+  // 2026-11-03: the analyst compacted at 208192, 9d at 354186, 4e at 230030; measure used 208192 for all.
   const t = makeDeps({ agents: [agent("w1", 1), agent("w2", 2)] });
   try {
     t.writeTranscript(t.deps.agents[0].sessionId, turn(300000) + autoCompact(220000) + turn(30000));
     t.writeTranscript(t.deps.agents[1].sessionId, turn(300000) + autoCompact(350000) + turn(60000));
     measureWorker(t.deps, "w1");
     const m = measureWorker(t.deps, "w2", { window: "1000000" });
-    assert.equal(m.compactAt, 220000);
+    assert.equal(m.compactAt, 350000);
+    assert.equal(m.compactSource, "observed");
     assert.equal(m.percent, 6);
-    assert.equal(m.compactPercent, 27.3);
+    assert.equal(m.compactPercent, 17.1);
     assert.equal(m.warn, false);
+    // the group's lowest is still kept, for a session with no compaction of its own
     assert.equal(t.readRegistry().observedCompactAt, 220000);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("a session with no compaction of its own falls back to the group's lowest, and says so", async () => {
+  const t = makeDeps({ agents: [agent("w1", 1), agent("w2", 2)] });
+  try {
+    t.writeTranscript(t.deps.agents[0].sessionId, turn(300000) + autoCompact(220000) + turn(30000));
+    t.writeTranscript(t.deps.agents[1].sessionId, turn(100000));
+    measureWorker(t.deps, "w1");
+    const m = measureWorker(t.deps, "w2", { window: "1000000" });
+    assert.equal(m.compactAt, 220000);
+    assert.equal(m.compactSource, "group");
+    assert.equal(
+      measureLine(m),
+      "w2  100000  10%  done  (window 1000000 from flag)  45.5% of compaction point 220000 (group)",
+    );
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("a session's own point is kept on its roster record and survives a clear, which empties its transcript", async () => {
+  const t = makeDeps({ agents: [agent("w1", 1)] });
+  try {
+    t.writeRegistry({ workers: { w1: { id: t.deps.agents[0].id, sessionId: t.deps.agents[0].sessionId, cwd: "/w", checkout: "/w" } } });
+    t.writeTranscript(t.deps.agents[0].sessionId, turn(300000) + autoCompact(354000) + turn(30000));
+    assert.equal(await main(["list", "--window", "1000000"], t.deps), 0);
+    assert.equal(t.readRegistry().workers.w1.compactAt, 354000);
+    // the session is cleared: a new session id, a transcript with no compaction in it
+    const fresh = { ...t.deps.agents[0], sessionId: "eeeeeeee-0000-4000-8000-000000000000" };
+    t.deps.agents = [fresh];
+    t.writeRegistry({ workers: { w1: { ...t.readRegistry().workers.w1, sessionId: fresh.sessionId } }, observedCompactAt: 208192 });
+    t.writeTranscript(fresh.sessionId, turn(1000));
+    const m = measureWorker(t.deps, "w1", { window: "1000000" });
+    assert.equal(m.compactAt, 354000);
+    assert.equal(m.compactSource, "recorded");
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("--compact-at and PUPPET_COMPACT_AT still win over every observed point", async () => {
+  const t = makeDeps({ agents: [agent("w1", 1)], env: { PUPPET_COMPACT_AT: "200000" } });
+  try {
+    t.writeTranscript(t.deps.agents[0].sessionId, turn(300000) + autoCompact(354000) + turn(100000));
+    const m = measureWorker(t.deps, "w1");
+    assert.equal(m.compactAt, 200000);
+    assert.equal(m.compactSource, "env");
+    assert.equal(measureWorker(t.deps, "w1", { compactAt: "250000" }).compactSource, "flag");
   } finally {
     t.cleanup();
   }
