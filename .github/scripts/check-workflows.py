@@ -435,7 +435,7 @@ MUTATIONS = [
     ("pull_request filters other paths", "docs.yml", "  pull_request:\n    paths:\n      - \"**/*.md\"\n", "  pull_request:\n    paths:\n", "same, non-empty paths list"),
     ("no manual run", "marketplace.yml", "  workflow_dispatch:\n", "", "must trigger on push, pull_request and workflow_dispatch"),
     ("a floating runner image", "batbelt.yml", "runs-on: ubuntu-24.04", "runs-on: ubuntu-latest", "floating runner image"),
-    ("a floating larger runner", "brand-creator.yml", "runs-on: macos-26", "runs-on: macos-latest-large", "floating runner image"),
+    ("a floating larger runner", "brand-creator.yml", "runs-on: ubuntu-24.04", "runs-on: ubuntu-latest-8-cores", "floating runner image"),
     ("a floating image in a block list", "swift.yml", JOB, "    runs-on:\n      - ubuntu-latest\n", "floating runner image"),
     ("a runner the check cannot read", "swift.yml", JOB, "    runs-on: [ubuntu-24.04]\n", "cannot be read as one pinned image label"),
     ("main runs can be cancelled", "brand-creator.yml", f"cancel-in-progress: {PR_ONLY}", "cancel-in-progress: true", "can cancel a run on main"),

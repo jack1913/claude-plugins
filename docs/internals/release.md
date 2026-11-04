@@ -31,6 +31,9 @@ Why: [ADR-0002](../adr/ADR-0002-per-plugin-versions-and-tags.md).
    whose CI failed. The tag then goes on the fix commit, which needs both checks too: a workflow whose paths that commit
    did not change never starts there, so start it by hand on `main`'s current commit with
    `gh workflow run <workflow>.yml --ref main` (`docs.yml`, or the plugin's own).
+
+   brand-creator's workflow runs no macOS job. Before its tag, run its suite on a Mac on that commit and record the
+   result: [macOS release run](../../plugins/brand-creator/docs/internals/manual-checks.md#macos-release-run).
 5. Dry-run the tag, from the repository root:
 
    ```bash

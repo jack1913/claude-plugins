@@ -126,16 +126,16 @@ def test_the_denylist_skip_is_expected_only_when_no_denylist_was_mounted(tmp_pat
 
 # ---------------------------------------------------------------- the workflow
 
-def test_ci_workflow_runs_linux_validate_and_macos_and_never_the_billed_eval():
+def test_ci_workflow_runs_linux_and_validate_never_macos_and_never_the_billed_eval():
     text = ci_text()
-    for job in ("linux-suite:", "validate:", "macos-suite:", "brand-creator:"):
+    for job in ("linux-suite:", "validate:", "brand-creator:"):
         assert re.search(rf"^  {job}$", text, re.M), job
+    assert not re.search(r"runs-on: *macos", text) and "macos-suite" not in text   # hosted macOS runners dropped jobs and held tags: the Mac run is by hand
+    assert '"macOS release run"' in text
     assert "tests/docker/run.sh" in text                                             # the same entry point a developer uses
     assert "claude plugin validate" in text and "--strict" in text
-    validate = text[text.index("\n  validate:\n"):text.index("\n  macos-suite:\n")]
+    validate = text[text.index("\n  validate:\n"):text.index("\n  brand-creator:\n")]
     assert "claude --version" in validate and "available=" not in validate and "if:" not in validate   # no CLI fails the job: the verdict never passes an unvalidated manifest
-    assert "requires_macos or requires_actool" in text and text.count("BRAND_CREATOR_REQUIRE_ALL") >= 2
-    assert "setup --yes" in text and "acme.sh" in text
     for ln in text.splitlines():
         if not ln.lstrip().startswith("#"):
             assert "plugin eval" not in ln, "CI must not run the billed eval"
@@ -217,17 +217,11 @@ def test_ci_runs_each_part_in_its_own_job_and_the_verdict_passes_only_when_every
     assert "NEEDS: ${{ toJSON(needs) }}" in verdict and """jq -e 'all(.[]; .result == "success")'""" in verdict   # only success passes it: skipped or cancelled is never green
 
 
-def test_macos_runs_the_apple_tool_tests_and_each_half_of_the_smoke_in_a_job_of_its_own(tmp_path):
-    """The Acme smoke took 15 of the macOS job's 22 minutes. Its two halves share the build up to the frozen round, then one runs
+def test_the_acme_smoke_splits_into_two_halves_that_can_run_side_by_side(tmp_path):
+    """The Acme smoke took 15 of a 22-minute macOS run. Its two halves share the build up to the frozen round, then one runs
     tools/finish.sh and the other every section after it, so they run side by side. That holds because finish.sh works on its own
     copy of the pack, taken before any later section writes into it (names does), and nothing later reads that copy or its logs."""
     import os
-    text = ci_text()
-    job = text[text.index("  macos-suite:"):text.index("\n  brand-creator:\n")]
-    assert re.findall(r"- part: ([\w-]+)", job) == ["pytest", "smoke-finish", "smoke-rest"]
-    assert re.findall(r"^ +smoke: (\w+)$", job, re.M) == ["finish", "rest"]
-    assert "fail-fast: false" in job and "ACME_SMOKE_PART: ${{ matrix.smoke }}" in job
-    assert "if: matrix.part == 'pytest'" in job and "if: matrix.part != 'pytest'" in job       # each job runs its part only
     acme = (ROOT / "tests" / "smoke" / "acme.sh").read_text()
     shared, tail = acme.split('\nif [ "$PART" != rest ]; then\n')
     finish, rest = tail.split('\nfi\nif [ "$PART" = finish ]; then\n')
@@ -268,8 +262,6 @@ def test_pytest_hands_waiting_tests_to_idle_workers_everywhere_it_runs_in_parall
     """With the default `load` scheduling a block of long tests (test_finish_chain) sat queued on one worker while the others were idle:
     25.7 min on 8 workers; `worksteal` moves waiting tests to idle workers: 11.0 min, the same 1880 tests."""
     assert "--dist worksteal" in (ROOT / "tests" / "run-all.sh").read_text()
-    macos = [ln for ln in ci_text().splitlines() if "-m \"requires_macos or requires_actool\"" in ln]
-    assert macos and all("--dist worksteal" in ln for ln in macos), macos
 
 
 def test_the_verifier_tests_ignore_the_part_their_own_ci_job_runs(tmp_path, monkeypatch):

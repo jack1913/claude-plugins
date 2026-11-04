@@ -77,11 +77,13 @@ It starts on a push to `main` or a pull request that changes `plugins/brand-crea
 | --- | --- |
 | linux (pytest), linux (node), linux (smoke) | one part of the Docker suite each (`tests/docker/run.sh` with `BRAND_CREATOR_TEST_PARTS`), each within its own deadline; the run log and the JUnit file are kept as an artifact |
 | validate | `claude plugin validate --strict` on the plugin, and the validate test in `tests/test_static.py` |
-| macos (pytest) | the Apple-tool tests, with `BRAND_CREATOR_REQUIRE_ALL=1` |
-| macos (smoke-finish), macos (smoke-rest) | the two halves of the Acme smoke on macOS (`ACME_SMOKE_PART`), with `emit apple` |
 | brand-creator | the verdict: passes only when every other job passed (a failed, cancelled or skipped job is never green). A release tag `brand-creator--v*` is accepted only on a commit where it and `docs` passed ([Release a plugin](../../../../docs/internals/release.md#the-tag-rulesets)) |
 
 The workflow never runs `claude plugin eval`: it is billed. See [Evals](evals.md).
+
+No job runs on macOS. GitHub's hosted macOS runners queued for long and dropped jobs before they started, which held
+release tags. The macOS-only parts, the Apple-tool tests and the Acme smoke with `emit apple`, are run on a Mac before
+each release instead ([macOS release run](manual-checks.md#macos-release-run)).
 
 ## Validate
 
