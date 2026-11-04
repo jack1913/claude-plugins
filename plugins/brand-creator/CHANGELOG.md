@@ -12,7 +12,9 @@ stage, and why, is in the [archive](docs/archive/README.md).
   line to give a reviewer, with the line that records them in a cold review.
 - `brand-creator inline <page> --out <file>` writes one self-contained copy of a page of your project, such as a try-out: its
   stylesheets, scripts, images, fonts and logo go inside the file, so it loads nothing from anywhere. A page that loads from
-  another website is refused (exit 2) with its address named, and nothing is written. The copy goes outside the project or
+  another website is refused (exit 2) with its address named, and nothing is written. Only `.css` files go in as stylesheets
+  and `.js` or `.mjs` files as scripts, and nothing from a hidden file or folder, so a page cannot carry another file of your
+  project into the copy. The copy goes outside the project or
   under `tryout/`, never over the page. `BRAND-STATE.md` has a new `tryout_url` for the private page a shared try-out is on, kept
   apart from `review_url`, the page of your boards.
 - `brand-creator capture <page> --frames` takes three key frames of a page's first screen (1440 wide, light): at the start, the
@@ -29,6 +31,9 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ### Changed
 
+- Claude now starts brand-creator for launch steps asked in plain words, such as paying the trademark fee or what to do
+  before the brand goes public (still handed to you, never done for you), and for picking references for your website;
+  Polish asks such as "przed publikacją marki" and "znak towarowy" too.
 - The cost of an agent fleet is now stated in tokens, from measured runs. Before you say yes to a workflow, the dry run
   (`fleet-plan`) shows each agent's tokens as a range with the date it was measured, and says "not measured" for an agent
   nobody has measured, where it used to say "about one pass per agent". Claude does the same when it states the cost.

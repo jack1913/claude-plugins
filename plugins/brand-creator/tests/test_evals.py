@@ -899,19 +899,21 @@ def test_every_trigger_list_has_polish_queries_and_the_plan_cases():
     assert set(d) == skills
 
 
-def test_the_manual_checks_page_says_brand_creators_trigger_text_changed_and_a_billed_run_is_due():
-    """The slimmed menu moved positives into brand-creator's list and changed its when_to_use: the record must not say that no positive moved."""
+def test_the_manual_checks_page_records_the_trigger_run_of_the_text_as_it_ships():
+    """The 2026-11-03 run measured the brand-creator text that ships and brand-book's unchanged one: the record names the run, the
+    sibling method, the known misses and what the text lost, and the text in the skill is the one it names."""
     page = (ROOT / "docs" / "internals" / "manual-checks.md").read_text(encoding="utf-8")
-    section = " ".join(page[page.index("**Changed since this run (the slimmed menu)."):page.index("## Workflow trials")].split())
-    assert "no positive moved" not in section and "its description already covered both and is unchanged" not in section
-    for needle in ("`when_to_use` of `brand-creator` changed", "start a brand called Acme", "help me launch", "the launch checklist",
-                   "positives", "near misses", "None of them has run", "re-run the billed trigger evals for `brand-creator`"):
+    section = " ".join(page[page.index("## Trigger evals for the skill descriptions"):page.index("## Workflow trials")].split())
+    for needle in ("**Last run:** 2026-11-03", "| brand-creator | 78/81, 0.98, 0.96 |", "| brand-book | 42/43, 1.00, 0.96 |", "**Sibling run.**",
+                   "\"Register the Instagram handle for me\"", "\"Zrób przegląd księgi znaku\"", "1,021 characters",
+                   "checked against a word diff of the committed text", "\"przed publikacją marki\"", "\"znak towarowy\""):
         assert needle in section, needle
-    # the words the text really lost (checked against a word diff of the committed text): no phrase that was never there
-    for cut in ("\"a logo for my band\"", "\"product\" in \"for a business, product, shop, podcast or person\"", "\"token or threshold\" after \"change a rule\""):
-        assert cut in section, cut
-    assert "\"a brand's\"" not in section
-    # the sibling review queries are positives in brand-book's list, and the page says its next run covers them
-    assert "now positives in the `brand-book` list, which has 43 queries" in section and "the next `brand-book` run covers them" in section
+    # the run is done: nothing says it is still due
+    assert "None of them has run" not in section and "re-run the billed trigger evals for `brand-creator`" not in section
+    head = (ROOT / "skills" / "brand-creator" / "SKILL.md").read_text(encoding="utf-8").split("\n---\n", 1)[0]
+    fm = dict(re.match(r"^([a-z][a-z_-]*):\s*(.*)$", line).groups() for line in head.splitlines()[1:])   # one key: value per line (test_skills holds that)
+    assert len(fm["description"]) + len(fm["when_to_use"]) == 1021
+    for words in ("before the brand goes public, trademark fees too", "pick site references", "\"przed publikacją marki\"", "\"znak towarowy\""):
+        assert words in fm["when_to_use"], words
     evals = json.loads((ROOT / "evals" / "trigger-evals.json").read_text(encoding="utf-8"))
     assert len(evals["brand-book"]) == 43 and len(evals["brand-creator"]) == 81

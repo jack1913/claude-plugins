@@ -1836,7 +1836,9 @@ the Artifact tool, and publishing it is the owner's decision (the review-surface
     `preconnect` or `preload` of another website;
   - exit 1 a file that does not exist or is a folder; a kind of file the command does not inline (video, audio, a manifest, anything whose type is not in the list above); a frame or `<embed>` of
     an HTML page; an SVG `<use>` of another file (a browser does not take it from a `data:` URL); an `@import` with a condition (a media query, `layer()`, `supports()`) or of a `data:` URL; a module
-    (`type="module"`) that imports another file; an alternate stylesheet; a `<base href>`; a `<script>` or stylesheet whose address is a `data:` URL.
+    (`type="module"`) that imports another file; an alternate stylesheet; a `<base href>`; a `<script>` or stylesheet whose address is a `data:` URL; a stylesheet (a `<link>` or an
+    `@import`) that is not a `.css` file, and a `<script src>` that is not a `.js` or `.mjs` file, so no other project file (`BRAND-STATE.md`, `FACTS.md`) goes into a copy shown to others;
+    any file whose path inside the project has a hidden file or folder (a name starting with `.`).
 - **Writes** one file, `--out`, only when its bytes change, and never before every refusal above: a `.html` file outside the project or under `<project>/tryout/` (the real path is judged, so a link out of `tryout/`
   is outside and a link into the project from outside is inside; a relative `--out` is read from the folder the command runs in). Anything else inside the project, a folder, another suffix and the page itself exit 2. A copy under `tryout/` is a text file with base64 in it, which `check --cascade` searches: the instructions write it outside the project, in the data folder's `scratch/`.
 - The copy is read once more before it is written, and must name no file to load (exit 1, "a fault in this command, not in the page", if it does). That proves the places above; that the page

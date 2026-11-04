@@ -42,6 +42,7 @@ from bookgen import FONT_MIME, IMG_MIME  # noqa: E402   (what the book embeds: t
 MIME = {**IMG_MIME, **{ext: mime for ext, (mime, _fmt) in FONT_MIME.items()}, ".avif": "image/avif", ".ico": "image/x-icon"}
 PAGE_SUFFIXES = (".html", ".htm")
 HTML_SUFFIXES = (".html", ".htm", ".xhtml")
+CODE_SUFFIXES = {"stylesheet": (".css",), "script": (".js", ".mjs")}   # the only files read as text into the page: no other project file (BRAND-STATE.md, FACTS.md) goes in
 HINT_RELS = {"preload", "prefetch", "modulepreload", "preconnect", "dns-prefetch"}   # a hint: dropped when local, refused when it names another website
 FILE_RELS = {"icon", "shortcut", "apple-touch-icon", "apple-touch-icon-precomposed", "mask-icon", "apple-touch-startup-image", "manifest"}   # the href is a file the page loads
 SCRIPT_DROP = {"src", "integrity", "crossorigin", "defer", "async", "referrerpolicy", "fetchpriority", "blocking"}   # what an inline script has no use for
@@ -113,6 +114,8 @@ class Inliner:
         real = Path(os.path.realpath(base / unquote(path_part)))
         if real != self.root and self.root not in real.parents:
             raise Refused(EXIT_USAGE, f"{shown} leads outside the project (or through a link to a place outside it)")
+        if any(part.startswith(".") for part in real.relative_to(self.root).parts):
+            raise Refused(EXIT_FAIL, f"{shown} leads to {self.rel(real)}, a hidden file or folder, which a shared page does not take")
         if not real.exists():
             raise Refused(EXIT_FAIL, f"{shown} leads to {self.rel(real)}, which does not exist")
         if not real.is_file():
@@ -130,6 +133,13 @@ class Inliner:
             return self.read(p).decode("utf-8-sig")
         except UnicodeDecodeError:
             raise Refused(EXIT_FAIL, f"{self.rel(p)} is not UTF-8 text, so it cannot be put inside the page")
+
+    def code(self, p: Path, kind: str) -> str:
+        """The text of a stylesheet or a script file; any other file is refused, so a page cannot carry a project file into its copy."""
+        if p.suffix.lower() not in CODE_SUFFIXES[kind]:
+            names = " or ".join(CODE_SUFFIXES[kind])
+            raise Refused(EXIT_FAIL, f"{self.rel(p)} is not a {kind}: only a {names} file is put inside the page as a {kind}")
+        return self.text(p)
 
     def data_uri(self, url: str, base: Path, tag: str = "") -> str | None:
         """The data: URL of the file a URL leads to (its fragment kept), or None to leave the URL as written. `tag` is the element it loads for."""
@@ -162,7 +172,7 @@ class Inliner:
                     sheet = self.rel(found[0])
                     if sheet in (stack or ()) or len(stack or ()) >= IMPORT_DEPTH:
                         raise Refused(EXIT_FAIL, f"{sheet} imports itself, or sits more than {IMPORT_DEPTH} stylesheets deep")
-                    edits.append((at, tail.end(), self.css(self.text(found[0]), found[0].parent, sheet, 1, (*(stack or ()), sheet))))
+                    edits.append((at, tail.end(), self.css(self.code(found[0], "stylesheet"), found[0].parent, sheet, 1, (*(stack or ()), sheet))))
                 else:
                     new = self.data_uri(text[start:end], base)
                     if new is not None:
@@ -211,7 +221,7 @@ class Inliner:
         found = self.locate(a["src"], base)
         if found is None:
             raise Refused(EXIT_FAIL, "a <script> whose src is a data: URL cannot be inlined")
-        code = self.text(found[0])
+        code = self.code(found[0], "script")
         module = a.get("type", "").strip().lower() == "module"
         if module and MODULE_IMPORT.search(code):
             raise Refused(EXIT_FAIL, f"{self.rel(found[0])} is a module that imports another file, which cannot be inlined: put it in one script")
@@ -232,7 +242,7 @@ class Inliner:
                 raise Refused(EXIT_FAIL, "a stylesheet whose href is a data: URL cannot be inlined")
             media = f' media="{html.escape(a["media"], quote=True)}"' if a.get("media", "").strip() else ""
             sheet = self.rel(found[0])
-            css = self.css(self.text(found[0]), found[0].parent, sheet, 1, (sheet,))
+            css = self.css(self.code(found[0], "stylesheet"), found[0].parent, sheet, 1, (sheet,))
             css = re.sub(r"</(style)", r"<\\/\1", css, flags=re.I)      # the text of a style must not end it
             return [(t.start, t.end, f"<style{media}>{css}</style>")]
         if rel & HINT_RELS:
