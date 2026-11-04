@@ -22,6 +22,8 @@ stage, and why, is in the [archive](docs/archive/README.md).
   counts again, so the page check asks for them in `FACTS.md`.
 - The mock-up warning counts items that lie on top of each other once, so a carousel whose slides are stacked in one
   place no longer looks as if its list filled the whole box.
+- The mock-up warning leaves a band of your page alone: a section with its own heading, such as a table of parts with
+  a legend under it, or a list of cards. A screen drawn inside such a band still warns.
 
 ## [0.6.0] - 2026-11-03
 

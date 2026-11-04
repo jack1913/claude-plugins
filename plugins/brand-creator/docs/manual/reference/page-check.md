@@ -184,7 +184,8 @@ Patterns that make a page look like any template. Each warns and says where; it 
 - **A hero that carries too much text:** over 45 words before you scroll, the menu not counted.
 - **A product mock-up made of styled boxes:** a screen drawn instead of shown: a box of 240 by 160 pixels or more
   holding 8 or more boxes with a background or border, and no video, drawing area or picture over 48 pixels. Tables,
-  checklists, timelines and boxes holding the main heading or several headings don't count.
+  checklists, timelines and boxes holding the main heading or several headings don't count, and neither does a band of
+  the page, a section with its own heading: the boxes inside it are still checked.
 - **Three equal tiles in a row:** at 1024 pixels wide or more, exactly three blocks side by side, of equal width and
   similar height, each with a heading.
 

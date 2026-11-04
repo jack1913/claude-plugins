@@ -3442,6 +3442,26 @@ def test_styled_badges_in_the_cells_of_a_table_are_data_and_a_drawing_in_a_cell_
 
 @pytest.mark.requires_setup
 @pytest.mark.requires_node
+def test_a_page_band_is_not_judged_as_a_whole_and_a_drawing_inside_it_still_is(acme):
+    """O9, calibrated on a real brand site: a band of the page, a `<section>` (or role=region) with a heading as a direct child or named by aria-labelledby, is not a mock-up however many
+    styled boxes it holds: the boxes inside it are judged on their own. A drawn app panel in a band still warns, and a section with no heading is judged as before."""
+    mock_row = lambda inside, panel="section": mock_tell(acme, mock_page(inside, panel))
+    legend = f"<div>{BADGE}{BADGE}{BADGE}</div>"
+    cards = "<ul>" + "".join(f'<li><div class="card"><div class="head">Tool {n}</div><div class="foot"></div></div></li>' for n in range(1, 5)) + "</ul>"
+    assert mock_row(f"{BADGE_TABLE}{legend}")["status"] == "warn"                                       # no heading: the box is judged as before, the table and the legend beside it
+    for name, inside in (("an index table and a legend", f"<h2>Parts</h2>{BADGE_TABLE}{legend}"), ("a list of cards", f"<h2>Tools</h2>{cards}")):
+        band = mock_row(inside)
+        assert band["status"] == "pass" and not band["hits"], (name, band)                              # the two warnings of the pilot calibration
+    named = mock_tell(acme, page_with_main(f'<h1>Acme hand tools</h1>\n<div role="region" aria-labelledby="parts" class="shot"><p id="parts">Parts</p>{BADGE_TABLE}{legend}</div>'))
+    assert named["status"] == "pass", named                                                             # a region named by a heading elsewhere is a band too
+    drawn = mock_row(f'<h2>Your account</h2><div style="min-height: 200px">{APP_PANEL}</div>')
+    assert drawn["status"] == "warn" and [leaf(h["selector"], 1) for h in drawn["hits"]] == ["div"], drawn   # the drawing in the band is its own box
+    deep = mock_row(f"<div><h2>Parts</h2></div>{BADGE_TABLE}{legend}")
+    assert deep["status"] == "warn", deep                                                               # a heading inside a child is not the band's own
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
 def test_a_row_of_items_running_past_its_box_fills_no_more_of_it_than_the_box(acme):
     """The browser end to end: the ten items of a carousel between a head and a footer, most of them outside the box, do not make the list nearly all of the box."""
     mock_row = lambda inside: mock_tell(acme, mock_page(inside))

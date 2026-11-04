@@ -1872,7 +1872,7 @@ def find_tells(measures: dict, cfg: dict) -> dict:
         for b in boxes:
             media = b["media_px"]
             pictured = any(n in media for n in ("canvas", "video")) or any(media.get(n, 0) > t["max_icon_px"] for n in ("img", "svg", "picture"))   # an img, svg or picture this small is an icon
-            section = b["h1"] > 0 or b["headings"] > t["max_headings"]   # the page, or a band of it, and not a drawing in it
+            section = b["h1"] > 0 or b["headings"] > t["max_headings"] or b.get("band", False)   # the page, or a band of it (O9: the boxes inside a band are still judged), and not a drawing in it
             # a list excuses a box only when the box is the list, or the items of the lists are nearly all of it: all its styled parts but at most one, or most of its area (the area of the items themselves, not of a list stretched past them)
             listed = b["in_lists"] > 0 and (b["styled"] - b["in_lists"] <= t["max_unlisted_styled"] or b["list_area"] >= t["min_list_area_ratio"] * b["width"] * b["height"] - EPSILON)
             # a table is data, a badge in one of its cells too: the box is a table or a table section, or every styled part of it sits in a cell
