@@ -6,6 +6,15 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+### Added
+
+- The page check warns about a box a movement leaves behind (`tell:stray-box`). It waits for your page's movements to
+  end, then looks for a box that still shows but lies completely outside the box that holds it, or off the screen, by 8
+  pixels or more: the sheets that stay on screen after their animation. It also looks at each width again in a window
+  1300 pixels high, so a problem that only shows on a tall screen is found. A page with a movement that never ends, or
+  that follows the scroll position in its styles, is "not verified" for this warning, never a pass. A site card names it
+  like any other warning the check finds.
+
 ## [0.6.0] - 2026-11-03
 
 The `/` menu is shorter. It now lists `brand-creator`, `setup`, `status`, `check`, `round` and `brand-adopt`, plus the four

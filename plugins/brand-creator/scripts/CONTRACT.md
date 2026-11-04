@@ -1543,6 +1543,17 @@ brand-creator page-check --url http://localhost:<port>/<path> [--project DIR] ..
     while a figure drawn as a panel with a header, rows and small svg icons, with no heading or one, is.
   - `three-equal-tiles`: in a view of `min_viewport_px` (1024) or more, an element with exactly three shown element children (a `<template>`, a `<script>` or a hidden child is not counted), side by side in one row, widths within `width_tolerance_px` (2), the shorter at
     least `min_height_ratio` (0.8) of the taller, each holding a shown heading.
+  - `stray-box`: after the page's animations that end have ended (`waitAnimations`, as `shot` waits), a shown element (not hidden, opacity above 0, `visibility: visible`, with a box) that lies wholly outside the
+    box of its parent (the nearest ancestor that is neither inline nor `display: contents`; none for a child of the body) on one axis by `min_outside_px` (8) css px or more, or wholly outside the viewport by that much
+    past its left, top or right edge, is a hit: a box the animation left behind. The edges are those of the page, in page coordinates (`scrollX` and `scrollY` are added), so a page that is scrolled when it is measured
+    (a script, an `autofocus` field below the fold, a `#fragment` in the URL) has nothing above or left of its scroll position past an edge: the verdict is the one the same page gets unscrolled. It is not one when an ancestor clips it on that axis (`overflow` other than `visible`, `clip-path`, `contain: paint`, `content-visibility`) and the element
+    lies wholly outside that ancestor's box on it (one that still sits inside the box of the ancestor that clips it is shown, so `main { overflow-x: hidden }` hides nothing it holds; the overflow of `html` and `body`
+    is the viewport's and clips only what is outside the viewport), when it or an ancestor is `position: fixed` or `sticky`, when it lies in a parent that is itself out the same way
+    (the parent is the stray), or when it is a focusable control positioned `absolute` and out of the viewport (a skip link set off screen). Below the viewport is where a page scrolls to, and no hit. Each view is measured a
+    second time with the viewport 1300 css px high (the width and scheme stay), for this tell alone, so a bug that shows only on a tall screen is found (the open page is resized and its animations waited for again, not
+    loaded again: a script that reads the window height once, as the page loads, is not run again at the tall height); a hit seen at the view's own height is not said again for the tall one.
+    NOT verified (never a pass, never a hit): an element that still has a running animation or transition, a view that still has an animation running after the wait (`animations.running`: one that never ends, or waits
+    for a scroll or view timeline) and a view whose wait was cut off (`animations.capped`), each for the width (a tall window says so) it was seen at.
   - Note `stock-anatomy` (info): in one view, from the top of the page down, the hero, a `three-equal-tiles` row, an FAQ (a `details` with a `summary`, or a heading that is a word of the note's lists) and a
     closing band (the last block of `main`, or of the body without one: a heading, an action and at most `cta_max_words` (40) words).
 - **Tell facts.** Every view holds `tell_facts` from `page_measure.mjs`, whatever the rules: `viewport`; `eyebrow` (`{sel, text, words, uppercase, letter_spacing_em, font_size_px, heading_sel, heading_tag,
@@ -1552,14 +1563,23 @@ brand-creator page-check --url http://localhost:<port>/<path> [--project DIR] ..
   largest side in css px of the shown media inside by element name, `{"svg": 24, "img": 600}` or `{}` (a `picture` by the `img` it draws), and `page-tells.json` says which are icons; `headings` is the number of shown
   headings inside and `h1` the number of shown `h1` among them); `tiles` (`{sel, tiles: [{sel, left, top, width, height}]}`, at most 40); `headings`, `details` and
   `last_band` (where the pieces of a stock page are). The lists are capped (60 eyebrow candidates, 100 arrows, headings and details, 200 separators); `truncated` is true when the page has more than 8000 elements, which the walks over every element (`middot-run`,
-  `styled-div-mock`, `three-equal-tiles`) stop at. Nothing is judged in the browser.
+  `styled-div-mock`, `three-equal-tiles`, `stray-box`) stop at. Nothing is judged in the browser.
+- **Stray facts.** `tell_facts.strays` is `[{sel, text, animating, parent, viewport}]`, up to 100 in document order, the elements a shown box lies out of place for by 2 css px or more, measured on the page after its animations
+  ended; `text` is its text (60 characters), `animating` whether it or an ancestor still has a running animation or transition, `parent` `{sel, side, px}` (`side` of the parent it lies on: `below`, `above`, `right` or `left`;
+  `px` the gap) or null, `viewport` `{side, px}` (`left`, `top` or `right`; `px` how far past the edge) or null. `tell_facts.strays_tall` is `{viewport: {width, height: 1300}, animations: {waited, running, capped}, strays}` (and
+  `truncated` when the page had more than 8000 elements, and `load`, the page errors and the requests to another origin or failed own requests that only the resize brought, as strings) from the second
+  measurement at the tall window, or `{viewport, error}` when that failed (the view keeps its other facts). The view's `errors`, `non_local`, `failed_local`, `resources` and `served`, which `page:load`
+  reads, are taken before the resize, so nothing the tall window brings fails the view. The thresholds are `pagecheck.find_tells`'s.
 - **Tell rows.** `tell:<id>`, one per tell of the file in its order, none for a tell a brand rule has adopted. The thresholds are applied to every view and a place seen in several views is one hit with its `widths`.
   Pass: "none found in N view(s)". Warn: "N found: <selector>: <what was seen> (at <widths> px)" (up to six named; the row's `hits` keeps up to 100 as `{selector, text, widths}`) and the tell's `why`. Skipped:
   no view was measured. `tell:stock-second-action` also warns "NOT verified: no word list for <lang>" when the page's `lang`, or the closest `lang` of its second action, is not in `languages` (a page that sets
-  no `lang` too); the other tells need no word list. `middot-run`, `styled-div-mock` and `three-equal-tiles` warn "NOT verified beyond the first elements of a view" when a view was cut at 8000 elements.
+  no `lang` too); the other tells need no word list. `middot-run`, `styled-div-mock`, `three-equal-tiles` and `stray-box` warn "NOT verified beyond the first elements of a view" when a view was cut at 8000 elements.
   `note:stock-anatomy` (info, with `anatomy`: `{view, hero, tiles, faq, closing_band}`, the tops in css px) appears only when one view shows the stock order. A `page.rules` entry of kind `tell` (`tell` is an id of the file;
   any other id exits 2 before a page is opened) gives `page:rule:<id>` in place of `tell:<tell>`: the same hits, a warning while the rule is not tied to a recorded G4 line and a failure after, a pass when none are
   found; the row holds `tell` and `hits`. `pagecheck.load_tells()`, `tell_ids()` and `check_tell_rules(rules)` are the readers other tools import; the file ships with the plugin (exit 3 if it cannot be read).
+- **Stray-box rows.** `tell:stray-box` is a tell row like the others, with the hit `text` "<its text> is still shown <n> px below its parent <selector> and <n> px past the left edge of the screen after the page settled" (the
+  distance under `min_outside_px` is not said; ", in a window 1300 px high" ends a hit only the tall window shows). A row with no hit and a reason it could not judge is a warning that says "NOT verified at <widths> px: ..." with
+  `hits: []`, so `site:tells` asks the card to name it as a tell the page check could not verify. `page-tells.json` holds `min_outside_px`; the height of the tall window is `PAGE_TALL_HEIGHT` in `render.mjs`.
 - **Writing a collector.** `page_measure.mjs` installs `window.__bcMeasure` for the length of one view (`collect` removes it again): `selector(el)`, `shown(el)` (`{shown, opacity}`),
   `walkable(el)`, `colour(css)` (`{r, g, b, a, hex}` or null), `canvas()`, `ground(el)` and `hex([r, g, b])`. A later collector calls them inside its own `page.evaluate`.
 - **For other tools.** `scripts/pagelib/pagecheck.py` imports only the standard library and `scripts/lib`, and the claims rows also load `scripts/booklib/bookdata.py` (the FACTS.md table and the English status words), found next to the module; a tool puts `scripts/pagelib` on `sys.path` and calls

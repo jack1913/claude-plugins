@@ -187,6 +187,28 @@ Patterns that make a page look like any template. Each warns and says where; it 
 - **Three equal tiles in a row:** at 1024 pixels wide or more, exactly three blocks side by side, of equal width and
   similar height, each with a heading.
 
+## Boxes left behind by a movement
+
+A movement can carry a box away and never hide it, so a sheet or a card stays on screen where it does not belong. No
+other check looks for a box left outside its place, and none looks at a tall window. This one waits for the movements
+that end, then looks at where everything stopped. It warns when a box that still shows lies:
+
+- completely outside the box that holds it, by 8 pixels or more, or
+- completely off the screen, past its left, top or right edge, by 8 pixels or more. The edges are those of the page, so
+  a page that is already scrolled when it is checked is judged as it is at the top.
+
+It leaves alone a box its holder cuts off completely, a box that stays put on the screen as you scroll, and a
+see-through or hidden box. A "skip to content" link parked off the screen until a key brings it back doesn't count
+either.
+
+It also looks at each width again in a window 1300 pixels high, so a problem that only shows on a tall screen is found.
+The open page is made taller, not loaded again: a page whose script reads the window height only once, as it loads, is
+not seen as it would be on a tall screen.
+
+If something still moves when the check looks, such as a movement that never ends or one that follows the scroll
+position in the page's styles, the line says "not verified": the check can't tell where that box comes to rest. Like
+the template warnings, this one never fails a page unless you make it [a page rule](#your-page-rules).
+
 ## Your page rules
 
 Ask Claude to make a brand rule, such as "one logo per screen", a page rule. It quotes one of your system rules (the
@@ -222,7 +244,8 @@ your site and reports are not there.
 ## What it cannot see
 
 What is inside a frame (a page within the page), colours in gradients and shadows, movement a script starts when the
-visitor clicks or types, or draws frame by frame, and how colour-blind visitors see the page.
+visitor clicks, types or scrolls (a box that shows only once you scroll to it is not judged until it shows, and the
+check never scrolls), or draws frame by frame, and how colour-blind visitors see the page.
 
 ## Related
 

@@ -24,7 +24,8 @@ Each entry of qa/rules.json `page.rules` is a brand rule of the owner's and give
 the "(rule)" line it is tied to (`g4`) is recorded at G4, and before that only warns.
 Generic tells (skills/brand-creator/references/page-tells.json) give `tell:<id>`, a warning that names where the pattern is (an eyebrow over a heading, an arrow glued to a label, a run of middle
 dots, a stock label on the hero's second action, too much text in the hero, a mock-up built of styled boxes, three equal tiles in a row); a tell the owner adopts as a rule of kind `tell` is judged by its
-`page:rule:<id>` row instead. `note:stock-anatomy` is an info row for a page in the stock order.
+`page:rule:<id>` row instead. `note:stock-anatomy` is an info row for a page in the stock order. `tell:stray-box` looks for what no other check does: a box left outside its place once the animations that end have ended, still shown
+outside its parent's box or off the screen (each width is measured again in a window 1300 px high for it alone); a page with an animation that never ends or follows a scroll or view timeline is NOT verified for it.
 Over all views it reports `page:fonts` (every text is set in a family a `font.*` token names, and the browser drew it in that face) and `page:display-size` (no text in the
 `font.display` face is under `page.display_min_px`).
 

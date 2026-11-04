@@ -1,5 +1,5 @@
 {
-  "$description": "The generic page tells that `brand-creator page-check` warns about: layout and copy patterns that read as a template whatever the brand. A tell is a warning (row tell:<id>), never a failure; it becomes a brand rule only when the owner adopts it in qa/rules.json page.rules (kind \"tell\", tied to a recorded G4 rule line). The browser collects the candidates (scripts/pagelib/page_measure.mjs); the thresholds below are applied by scripts/pagelib/pagecheck.py. Word lists are English and Polish; a page in another language is reported NOT verified for the tells that need one.",
+  "$description": "The generic page tells that `brand-creator page-check` warns about: layout and copy patterns that read as a template whatever the brand. A tell is a warning (row tell:<id>), never a failure; it becomes a brand rule only when the owner adopts it in qa/rules.json page.rules (kind \"tell\", tied to a recorded G4 rule line). The browser collects the candidates (scripts/pagelib/page_measure.mjs); the thresholds below are applied by scripts/pagelib/pagecheck.py. Word lists are English and Polish; a page in another language is reported NOT verified for the tells that need one. One tell, stray-box, is not a template pattern but a fault an animation can leave behind.",
   "version": 1,
   "languages": ["en", "pl"],
   "tells": [
@@ -69,6 +69,14 @@
       "why": "Three features, steps or prices of the same weight is the layout a template reaches for when the content has no order of its own.",
       "measure": "At threshold.min_viewport_px wide or more: an element with exactly three shown element children (a template or a hidden child is not counted) laid out in one row, widths within threshold.width_tolerance_px, the shorter at least threshold.min_height_ratio of the taller, each holding a heading.",
       "threshold": {"min_viewport_px": 1024, "width_tolerance_px": 2, "min_height_ratio": 0.8}
+    },
+    {
+      "id": "stray-box",
+      "name": "A box left outside its place once the page has settled",
+      "what": "After the page's animations have ended, an element that is still shown lies wholly outside the box of its parent, or outside the screen.",
+      "why": "An animation that moves a box away and does not hide or remove it leaves sheets, cards or labels on the page where they do not belong; no other check looks for a box left outside its place, and none looks at a tall window.",
+      "measure": "After the animations that end have ended, a shown element (not hidden, opacity above 0, visibility visible, with a box) that lies wholly outside the box of its parent (the nearest ancestor that is not inline) on one axis by threshold.min_outside_px css px or more, or wholly outside the viewport by that much past its left, top or right edge (the edges of the page, whatever the scroll position when it is measured; a focusable control set off screen until it is focused is not counted, and neither is a part of an element that is itself out), when no ancestor clips it on that axis (overflow other than visible, clip-path, contain: paint, content-visibility) with the element wholly outside its box (an element still inside the box of the ancestor that clips it is shown) and neither it nor an ancestor is fixed or sticky. Each width is measured a second time in a window 1300 css px high, for this tell alone (the page that is open is made taller and its animations are waited for again; it is not loaded again), so a bug that shows only on a tall screen is found. A page with an animation still running after the wait, one that never ends or one that waits for a scroll (a scroll or view timeline), is NOT verified for this tell, and so is a view whose wait for the animations was cut off; an element that is still animating is not counted.",
+      "threshold": {"min_outside_px": 8}
     }
   ],
   "notes": [

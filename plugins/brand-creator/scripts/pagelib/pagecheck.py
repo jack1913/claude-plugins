@@ -25,6 +25,9 @@ is backed by FACTS.md) and `page:samples` (the before-publishing list, also the 
 `tell_rows` gives `tell:<id>` for each generic tell of skills/brand-creator/references/page-tells.json (an eyebrow over a heading, an arrow glued to a label, a run of middle dots, a stock label on
 the hero's second action, a hero with too much text, a mock-up built of styled boxes, three equal tiles in a row): a warning that names the hits, never a failure, until the owner adopts the tell
 as a brand rule (kind `tell` in qa/rules.json page.rules, which gives `page:rule:<id>` in its place), and `note:stock-anatomy`. `check_tell_rules` refuses a rule that names no tell.
+`tell:stray-box` looks for a box left outside its place once the animations that end have ended (`find_tells` reads `tell_facts.strays`, and `strays_tall` for the window 1300 px high every view is measured in again, and the
+view's `animations` fact): a box still shown outside its parent's box or off the screen by `min_outside_px` is a hit; a view whose wait was cut off, a view with an animation still running and an element
+that is still animating are NOT verified for it, never a pass.
 
 Standard library plus scripts/lib (_color, _common, qa_rules) only, and, imported when they are judged, scripts/booklib/bookdata.py (the FACTS.md table and the English status words, for the
 claims) and scripts/adaptlib/adapt.py (the recorded G4 rule lines, for the brand rules). This folder is outside scripts/lib/, so a change here does not make every pack stale. The
@@ -1729,7 +1732,8 @@ def rule_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
 TELLS_FILE = "skills/brand-creator/references/page-tells.json"
 TELLS_CAP = 100                           # hits one tell row keeps in its `hits`
 ELEMENT_CAP_NOTE = "NOT verified beyond the first elements of a view (the page has more than the check walks)"
-TELL_NEEDS_WALK = ("middot-run", "styled-div-mock", "three-equal-tiles")   # the tells found by walking every element, which stops at a cap
+TELL_NEEDS_WALK = ("middot-run", "styled-div-mock", "three-equal-tiles", "stray-box")   # the tells found by walking every element, which stops at a cap
+SIDE_OF_PARENT = {"below": "below", "above": "above", "right": "to the right of", "left": "to the left of"}   # where a stray lies against its parent, as a phrase
 EPSILON = 1e-6
 
 
@@ -1769,6 +1773,42 @@ def _widths(widths: list) -> str:
     return ", ".join(f"{w:g}" for w in seen[:NAMED]) + (f" and {len(seen) - NAMED} more" if len(seen) > NAMED else "") + " px"
 
 
+def _is_stray(c: dict, t: dict) -> bool:
+    """A candidate of the stray-box tell is a hit when it lies outside its parent's box, or outside the viewport, by `min_outside_px` or more."""
+    return any(c[k] is not None and c[k]["px"] >= t["min_outside_px"] - EPSILON for k in ("parent", "viewport"))
+
+
+def _stray_text(c: dict, t: dict, at_tall: bool, tall_height) -> str:
+    """What was seen of a stray, in words: where it lies against its parent and against the screen, and that it is still shown once the page has settled."""
+    parts = []
+    if c["parent"] is not None and c["parent"]["px"] >= t["min_outside_px"] - EPSILON:
+        parts.append(f"{c['parent']['px']:g} px {SIDE_OF_PARENT[c['parent']['side']]} its parent {c['parent']['sel']}")
+    if c["viewport"] is not None and c["viewport"]["px"] >= t["min_outside_px"] - EPSILON:
+        parts.append(f"{c['viewport']['px']:g} px past the {c['viewport']['side']} edge of the screen")
+    what = f"\"{c['text']}\" " if c["text"] else ""   # the hit line names the selector before this
+    return f"{what}is still shown {' and '.join(parts)} after the page settled" + (f", in a window {tall_height:g} px high" if at_tall and tall_height else "")
+
+
+def _stray_notes(unseen: dict[str, list], tall_height) -> list[str]:
+    """The NOT verified notes of the stray-box tell. A view whose wait for the animations that end was cut off is not judged for it, and neither is a view that still has an animation running
+    (one that never ends, or waits for a scroll: where it leaves its element is not known); an element that is still animating is not counted as a stray. A tall window the browser could not measure is said too."""
+    notes = []
+    def where(items: list) -> str:   # items are (width, at a tall window, ...)
+        own, tall = [x[0] for x in items if not x[1]], [x[0] for x in items if x[1]]
+        return ", and ".join(([_widths(own)] if own else []) + ([_widths(tall) + " in a tall window"] if tall else []))
+    if unseen["capped"]:
+        notes.append(f"NOT verified at {where(unseen['capped'])}: the page's animations were still running when the check stopped waiting for them, so what they leave on the page was not judged")
+    if unseen["running"]:
+        n = max(x[2] for x in unseen["running"])
+        notes.append(f"NOT verified at {where(unseen['running'])}: {n} animation(s) never end or wait for a scroll, so where they leave their elements was not judged"
+                     + (f" (still animating: {_names(sorted(set(unseen['animating'])), NAMED)})" if unseen["animating"] else ""))
+    elif unseen["animating"]:
+        notes.append(f"NOT verified: still animating after the page settled, so where it ends was not judged: {_names(sorted(set(unseen['animating'])), NAMED)}")
+    for width, why, height in unseen["tall"]:
+        notes.append(f"NOT verified at {width} px in a window {height or 'a tall'} px high: {why}")
+    return notes
+
+
 def find_tells(measures: dict, cfg: dict) -> dict:
     """Apply the thresholds and word lists of page-tells.json to the candidates each view holds (`tell_facts`, see page_measure.mjs). -> {"views": the number of views judged,
     "hits": {tell id: [hit]} (a hit is {selector, text, widths}, the same place in other views merged), "unverified": {tell id: [reason]}, "anatomy": {...} or None}."""
@@ -1781,6 +1821,8 @@ def find_tells(measures: dict, cfg: dict) -> dict:
     unverified: dict[str, list[str]] = {t["id"]: [] for t in cfg["tells"]}
     stock_langs: set[str] = set()
     anatomy = None
+    stray_unseen: dict[str, list] = {"capped": [], "running": [], "animating": [], "tall": []}   # what the stray-box tell could not judge: see _stray_notes
+    stray_tall_height = None
 
     def add(tid: str, key, view: dict, selector: str, text: str) -> None:
         h = merged.setdefault((tid, key), {"selector": selector, "text": text, "widths": []})
@@ -1851,6 +1893,32 @@ def find_tells(measures: dict, cfg: dict) -> dict:
                 if in_row and max(widths) - min(widths) <= tol + EPSILON and max(heights) > 0 and min(heights) / max(heights) >= t["min_height_ratio"] - EPSILON:
                     rows.append((min(x["top"] for x in ts), g))
                     add("three-equal-tiles", g["sel"], v, g["sel"], f"three tiles of {widths[0]:g} px side by side, each with a heading")
+        t = th["stray-box"]
+        walks = [(False, f.get("strays", []), v.get("animations"))]   # (at a tall window, the candidates, the animations the wait left running): the view's own walk first, then the tall one
+        tall = f.get("strays_tall")
+        if isinstance(tall, dict):
+            if tall.get("error"):
+                stray_unseen["tall"].append((width, tall["error"], (tall.get("viewport") or {}).get("height")))
+            else:
+                walks.append((True, tall.get("strays", []), tall.get("animations")))
+                if tall.get("truncated") and ELEMENT_CAP_NOTE not in unverified["stray-box"]:
+                    unverified["stray-box"].append(ELEMENT_CAP_NOTE)
+                stray_tall_height = (tall.get("viewport") or {}).get("height") or stray_tall_height
+        standing: set[str] = set()   # what the view's own walk counted as a hit: the tall walk adds only what it alone shows
+        for at_tall, strays, anim in walks:
+            anim = anim if isinstance(anim, dict) else {}
+            if anim.get("capped"):
+                stray_unseen["capped"].append((width, at_tall))
+            elif anim.get("running"):
+                stray_unseen["running"].append((width, at_tall, anim["running"]))
+            for c in strays:
+                if not _is_stray(c, t) or (at_tall and c["sel"] in standing):
+                    continue
+                if c["animating"]:
+                    stray_unseen["animating"].append(c["sel"])
+                elif not anim.get("capped"):
+                    add("stray-box", (c["sel"], at_tall), v, c["sel"], _stray_text(c, t, at_tall, stray_tall_height))
+                    standing.add(c["sel"])
         if f.get("truncated"):
             for tid in TELL_NEEDS_WALK:
                 if ELEMENT_CAP_NOTE not in unverified[tid]:
@@ -1868,6 +1936,7 @@ def find_tells(measures: dict, cfg: dict) -> dict:
     if stock_langs:
         shown = ", ".join(sorted(k or "an unknown language (the page sets no lang)" for k in stock_langs))
         unverified["stock-second-action"].append(f"NOT verified: no word list for {shown} (only {' and '.join(languages)} are listed)")
+    unverified["stray-box"].extend(_stray_notes(stray_unseen, stray_tall_height))
     hits: dict[str, list[dict]] = {t["id"]: [] for t in cfg["tells"]}
     for (tid, _), h in merged.items():
         hits[tid].append(h)

@@ -974,7 +974,7 @@ const TELL = {
  *  `headings`: [{sel, text (60), top}] (h1-h6) and `details`: [{sel, top}] (a details element with a summary); `last_band`: the last block of the main content {sel, top, words, headings, actions}.
  *  `viewport` is {width, height}; `truncated` is true when more than TELL.elements elements were on the page. */
 async function tellFacts(page) {
-  return page.evaluate((K) => {
+  const facts = await page.evaluate((K) => {
     const H = window.__bcMeasure;
     const round = (v) => Math.round(v * 100) / 100;
     const clean = (t) => String(t ?? "").replace(/\s+/g, " ").trim();
@@ -1242,6 +1242,109 @@ async function tellFacts(page) {
 
     return { tell_facts: { viewport: { width: vw, height: vh }, eyebrow, arrows, separators, hero, boxes, tiles, headings, details, last_band, ...(truncated ? { truncated: true } : {}) } };
   }, TELL);
+  facts.tell_facts.strays = (await strayFacts(page)).strays;   // `strays`, see strayFacts; the same walk is made again at a tall window (`strays_tall`, render.mjs measureView)
+  return facts;
+}
+
+// ---------------------------------------------------------------- stray boxes
+// The candidates for the generic tell `stray-box` of page-tells.json: what is still shown, after the page's animations have ended, outside the box it belongs to. Collected on the page that has
+// settled (render.mjs waits for the animations that end); like every collector this only reports, and pagecheck.py applies `min_outside_px`.
+const STRAY = {
+  elements: 8000,   // elements walked; the view says so (`truncated`) when the page had more
+  floor_px: 2,      // an element is a candidate from this far outside (the tell asks for 8): a rounding error is not one
+  list: 100,        // candidates reported per walk
+  text: 60,
+};
+
+/** `{strays: [{sel, text (60), animating, parent, viewport}], truncated}`. A candidate is an element that is shown (not hidden, opacity above 0, visibility visible, with a box; an svg's inner parts are not looked at) and
+ *  is neither fixed nor sticky, itself or in an ancestor, with no ancestor that clips it on the axis it lies out on: one with overflow other than visible (on that axis), clip-path, contain: paint or
+ *  content-visibility, whose box the element lies wholly outside (one that still contains it does not hide it: `main { overflow-x: hidden }` is common); the overflow of html and body is the viewport's and
+ *  clips only what is outside the viewport. `parent`: {sel, side, px} when the element lies wholly outside the box of its parent (the nearest ancestor that is not inline or
+ *  display: contents; none for the body) on one axis, `side` that of the parent it is on (below, above, right, left), `px` how far (the largest gap): null otherwise, and for a parent with no box. `viewport`: {side, px}
+ *  when it lies wholly outside the viewport past its left, top or right edge (below the page is only where a page scrolls to; the edges are those of the page, in page coordinates, so a page that is scrolled when it
+ *  is measured has nothing above or left of its scroll position past an edge: it is judged as the same page unscrolled), `px` how far: null otherwise, and for an element whose parent lies outside the same way
+ *  (the stray is the parent). A focusable control (a link, a button, an input ...) positioned absolutely and wholly outside the viewport is no candidate at all: a skip link set off screen until it is focused is made so. `animating` is true when the element, or an ancestor, still has a running animation or
+ *  transition: an animation that never ends, or waits for a scroll, so where the element ends is not known. A candidate has `parent` or `viewport` of at least STRAY.floor_px. `truncated` is true when more
+ *  than STRAY.elements elements were on the page. */
+async function strayFacts(page) {
+  return page.evaluate((K) => {
+    const H = window.__bcMeasure;
+    const round = (v) => Math.round(v * 100) / 100;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const sx = window.scrollX, sy = window.scrollY;   // a page can be scrolled when it is measured (a script, an autofocus field, a #fragment): the edges of the page are judged in page coordinates
+    const all = [...document.body.querySelectorAll("*")];
+    const truncated = all.length > K.elements;
+    const els = truncated ? all.slice(0, K.elements) : all;
+    const FOCUSABLE = "a[href], button, input, select, textarea, summary, [tabindex]";
+    const visible = (el) => {
+      if (!H.walkable(el) || (el instanceof SVGElement && el.localName !== "svg")) return false;
+      const info = H.shown(el);
+      if (!info.shown || info.opacity <= 0) return false;
+      const s = getComputedStyle(el);
+      return s.visibility === "visible" && s.display !== "contents";
+    };
+    const boxParent = (el) => {   // the box the element is laid out in: an inline parent or display: contents has none of its own
+      let p = el.parentElement;
+      while (p && /^(inline$|contents)/.test(getComputedStyle(p).display)) p = p.parentElement;
+      return p;
+    };
+    const running = new Set(document.getAnimations().filter((a) => a.playState === "running").map((a) => a.effect && a.effect.target).filter(Boolean));
+    const animating = (el) => { for (let a = el; a; a = a.parentElement) if (running.has(a)) return true; return false; };
+    const pinned = (el) => { for (let a = el; a; a = a.parentElement) { const p = getComputedStyle(a).position; if (p === "fixed" || p === "sticky") return true; } return false; };
+    // the window as it is now (an overflow: hidden on html or body cuts off what lies outside the part of the page shown): the rect is in window coordinates, with no scroll position added
+    const outsideViewport = (r, axis) => (axis === "x" ? r.right <= 0 || r.left >= vw : r.bottom <= 0 || r.top >= vh);
+    const outsideBox = (r, b, axis) => (axis === "x" ? r.right <= b.left || r.left >= b.right : r.bottom <= b.top || r.top >= b.bottom);
+    const clipped = (el, axis, r) => {   // an ancestor cuts the element off on this axis: it clips (overflow on the axis, clip-path, contain, content-visibility) and the element lies wholly outside its box
+      const overflow = axis === "x" ? "overflowX" : "overflowY";
+      let viewportClips = false;
+      for (let a = el.parentElement; a; a = a.parentElement) {
+        const s = getComputedStyle(a);
+        if (a === document.body || a === document.documentElement) { if (s[overflow] === "hidden" || s[overflow] === "clip") viewportClips = true; continue; }
+        if (/^(inline$|contents)/.test(s.display)) continue;   // no box of its own: nothing is cut at its edge
+        const both = s.clipPath !== "none" || s.contentVisibility !== "visible" || /\b(paint|strict|content)\b/.test(s.contain);   // cuts on both axes
+        if (!both && s[overflow] === "visible") continue;
+        const b = a.getBoundingClientRect();
+        if (both ? outsideBox(r, b, "x") || outsideBox(r, b, "y") : outsideBox(r, b, axis)) return true;   // an element that still lies inside the box of its holder is shown, whatever the holder cuts
+      }
+      return viewportClips && outsideViewport(r, axis);
+    };
+    const past = (r) => [["left", -(r.right + sx)], ["top", -(r.bottom + sy)], ["right", r.left + sx - vw]].reduce((a, b) => (b[1] > a[1] ? b : a));   // the edge of the page it is furthest past, and how far: the scroll position is added, so what lies above or left of a scrolled window is on the page, as on the same page unscrolled
+    const strays = [];
+    for (const el of els) {
+      if (strays.length >= K.list) break;
+      if (el.localName === "body" || !visible(el)) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) continue;
+      const [edge, far] = past(r);
+      if (far >= K.floor_px && el.matches(FOCUSABLE) && getComputedStyle(el).position === "absolute") continue;   // a skip link set off screen until it is focused is made so
+      const found = { parent: null, viewport: null };
+      const box = boxParent(el);
+      if (box && box !== document.body && box !== document.documentElement) {
+        const pr = box.getBoundingClientRect();
+        if (pr.width >= 1 && pr.height >= 1) {
+          const [side, px] = [["below", r.top - pr.bottom], ["above", pr.top - r.bottom], ["right", r.left - pr.right], ["left", pr.left - r.right]].reduce((a, b) => (b[1] > a[1] ? b : a));
+          if (px >= K.floor_px && !pinned(el) && !clipped(el, side === "below" || side === "above" ? "y" : "x", r)) found.parent = { sel: H.selector(box), side, px: round(px) };
+        }
+      }
+      if (far >= K.floor_px && !pinned(el) && !clipped(el, edge === "top" ? "y" : "x", r)) {
+        const up = box && box !== document.body && box !== document.documentElement ? box.getBoundingClientRect() : null;
+        if (!up || up.width < 1 || up.height < 1 || past(up)[0] !== edge || past(up)[1] < K.floor_px) found.viewport = { side: edge, px: round(far) };   // inside a parent that is out as well, the parent is the stray
+      }
+      if (!found.parent && !found.viewport) continue;
+      strays.push({ sel: H.selector(el), text: String(el.innerText ?? el.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, K.text), animating: animating(el), ...found });
+    }
+    return { strays, ...(truncated ? { truncated: true } : {}) };
+  }, STRAY);
+}
+
+/** The stray candidates alone, on a page that has been settled again (render.mjs measureView at a tall window): the helpers are put in and taken out again. */
+export async function collectStrays(page) {
+  try {
+    await page.evaluate(installHelpers);
+    return await strayFacts(page);
+  } finally {
+    await page.evaluate(() => { delete window.__bcMeasure; }).catch(() => {});
+  }
 }
 
 const COLLECTORS = [
