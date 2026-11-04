@@ -26,6 +26,9 @@ is backed by FACTS.md) and `page:samples` (the before-publishing list, also the 
 `tell_rows` gives `tell:<id>` for each generic tell of skills/brand-creator/references/page-tells.json (an eyebrow over a heading, an arrow glued to a label, a run of middle dots, a stock label on
 the hero's second action, a hero with too much text, a mock-up built of styled boxes, three equal tiles in a row): a warning that names the hits, never a failure, until the owner adopts the tell
 as a brand rule (kind `tell` in qa/rules.json page.rules, which gives `page:rule:<id>` in its place), and `note:stock-anatomy`. `check_tell_rules` refuses a rule that names no tell.
+`tell:stray-box` looks for a box left outside its place once the animations that end have ended (`find_tells` reads `tell_facts.strays`, and `strays_tall` for the window 1300 px high every view is measured in again, and the
+view's `animations` fact): a box still shown outside its parent's box or off the screen by `min_outside_px` is a hit; a view whose wait was cut off, a view with an animation still running and an element
+that is still animating are NOT verified for it, never a pass.
 
 Standard library plus scripts/lib (_color, _common, qa_rules) only, and, imported when they are judged, scripts/booklib/bookdata.py (the FACTS.md table and the English status words, for the
 claims) and scripts/adaptlib/adapt.py (the recorded G4 rule lines, for the brand rules). This folder is outside scripts/lib/, so a change here does not make every pack stale. The
@@ -703,6 +706,9 @@ STATUS_CODE = re.compile(r"[45]\d\d")      # a 4xx or 5xx status code of an erro
 ERROR_WORDS = {"en": ("error", "not found", "forbidden", "unauthorized", "unavailable", "gone", "bad request", "server error"),
                "pl": ("błąd", "nie znaleziono", "nie istnieje", "brak dostępu", "odmowa dostępu", "niedostępna", "niedostępny")}
 ERROR_WORD_PATTERNS = {lang: re.compile(r"(?<!\w)(?:" + "|".join(r"\s+".join(re.escape(w) for w in phrase.split()) for phrase in phrases) + r")(?!\w)", re.I) for lang, phrases in ERROR_WORDS.items()}   # whole words, any letter case, any white space between the words of a phrase
+ERROR_WORD_GAP = r"[\s\-–·|:]*"          # what may stand between an error word and the code (O10): spaces and the separators - – · | :
+ERROR_WORD_BEFORE = {lang: re.compile(p.pattern + ERROR_WORD_GAP + r"$", re.I) for lang, p in ERROR_WORD_PATTERNS.items()}    # "Error 404", "Błąd 404", "Service Unavailable 503"
+ERROR_WORD_AFTER = {lang: re.compile(ERROR_WORD_GAP + p.pattern, re.I) for lang, p in ERROR_WORD_PATTERNS.items()}            # "404 Not Found", "404 · Nie znaleziono"
 
 # A date written with a month name is one date, not numbers, in the languages whose month names are listed (the page language decides: any other, or none, keeps the numbers as they are).
 # Polish: "21 października 2026", "21 października", and a month with a year, in the nominative, genitive or locative ("Październik 2026", "października 2026", "w październiku 2026"), in any
@@ -836,17 +842,19 @@ def target_stem(target) -> str:
 def status_codes(views: list[dict], target=None) -> set[str]:
     """The status codes of an error page. A page is an error page when its file name, without the extension, is a 4xx or 5xx code (`404.html`, `500.html`), or its `<title>` or an `<h1>`
     (`document.title` and `claim_h1` of a view) holds one as a bare number. The text counts only when that number is the only one in it (every number, a bare single digit and a copyright
-    year too), no `+` stands before or after it, and the same text holds an error word of the page's language (ERROR_WORDS: English and Polish; the language is the view's `lang`, the
-    document's, and any other, or none, leaves the file name as the only rule): `Błąd 404 | Acme` and `404 · Nie znaleziono` on a Polish page, `Error 500` on an English one do; a count in a
-    heading (`Ponad 400 projektów`, `Zaufało nam 500 firm`, `Over 400 clients`), `500+ firm nam ufa`, `+500 klientów`, `5 lat, 500 klientów`, `Error 500 (1 of 3)` and `404 and 500` do not.
+    year too), no `+` stands before or after it, and an error word of the page's language stands right beside it, with nothing but spaces or the separators `-`, `–`, `·`, `|` and `:`
+    between them (ERROR_WORDS: English and Polish; the language is the view's `lang`, the document's, and any other, or none, leaves the file name as the only rule): `Błąd 404 | Acme` and
+    `404 · Nie znaleziono` on a Polish page, `Error 500`, `404 Not Found` and `Service Unavailable 503` on an English one do; a count in a heading (`Ponad 400 projektów`, `Zaufało nam 500
+    firm`, `Over 400 clients`), an error word away from the number (`450 tickets, all gone`, `Gone in 450 seconds`, `Ponad 400 produktów, żaden niedostępny`), `500+ firm nam ufa`,
+    `+500 klientów`, `5 lat, 500 klientów`, `Error 500 (1 of 3)` and `404 and 500` do not.
     A number on an error page that is this same code is the page's status code, not a claim, wherever it stands on the page; any other number is judged as usual."""
     codes = set()
     stem = target_stem(target)
     if STATUS_CODE.fullmatch(stem):
         codes.add(stem)
     for v in views:
-        error_words = ERROR_WORD_PATTERNS.get(_primary_language(v.get("lang") or ""))
-        if error_words is None:
+        lang = _primary_language(v.get("lang") or "")
+        if lang not in ERROR_WORD_PATTERNS:
             continue   # the page is in a language whose error words are not listed: the file name is the only rule
         for text in [(v.get("document") or {}).get("title"), *(v.get("claim_h1") or [])]:
             if not isinstance(text, str):
@@ -855,7 +863,8 @@ def status_codes(views: list[dict], target=None) -> set[str]:
             if len(found) == 1:
                 (n,) = found
                 plus = re.search(r"\+\s?$", text[:n["at"]]) or re.match(r"\s?\+", text[n["at"] + len(n["text"]):])   # +500 and 500+ are counts
-                if n["bare"] and STATUS_CODE.fullmatch(n["number"]) and not plus and error_words.search(text):
+                beside = ERROR_WORD_BEFORE[lang].search(text[:n["at"]]) or ERROR_WORD_AFTER[lang].match(text[n["at"] + len(n["text"]):])   # the error word right beside the code (O10)
+                if n["bare"] and STATUS_CODE.fullmatch(n["number"]) and not plus and beside:
                     codes.add(n["number"])
     return codes
 
@@ -1775,7 +1784,8 @@ def rule_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
 TELLS_FILE = "skills/brand-creator/references/page-tells.json"
 TELLS_CAP = 100                           # hits one tell row keeps in its `hits`
 ELEMENT_CAP_NOTE = "NOT verified beyond the first elements of a view (the page has more than the check walks)"
-TELL_NEEDS_WALK = ("middot-run", "styled-div-mock", "three-equal-tiles")   # the tells found by walking every element, which stops at a cap
+TELL_NEEDS_WALK = ("middot-run", "styled-div-mock", "three-equal-tiles", "stray-box")   # the tells found by walking every element, which stops at a cap
+SIDE_OF_PARENT = {"below": "below", "above": "above", "right": "to the right of", "left": "to the left of"}   # where a stray lies against its parent, as a phrase
 EPSILON = 1e-6
 
 
@@ -1815,6 +1825,42 @@ def _widths(widths: list) -> str:
     return ", ".join(f"{w:g}" for w in seen[:NAMED]) + (f" and {len(seen) - NAMED} more" if len(seen) > NAMED else "") + " px"
 
 
+def _is_stray(c: dict, t: dict) -> bool:
+    """A candidate of the stray-box tell is a hit when it lies outside its parent's box, or outside the viewport, by `min_outside_px` or more."""
+    return any(c[k] is not None and c[k]["px"] >= t["min_outside_px"] - EPSILON for k in ("parent", "viewport"))
+
+
+def _stray_text(c: dict, t: dict, at_tall: bool, tall_height) -> str:
+    """What was seen of a stray, in words: where it lies against its parent and against the screen, and that it is still shown once the page has settled."""
+    parts = []
+    if c["parent"] is not None and c["parent"]["px"] >= t["min_outside_px"] - EPSILON:
+        parts.append(f"{c['parent']['px']:g} px {SIDE_OF_PARENT[c['parent']['side']]} its parent {c['parent']['sel']}")
+    if c["viewport"] is not None and c["viewport"]["px"] >= t["min_outside_px"] - EPSILON:
+        parts.append(f"{c['viewport']['px']:g} px past the {c['viewport']['side']} edge of the screen")
+    what = f"\"{c['text']}\" " if c["text"] else ""   # the hit line names the selector before this
+    return f"{what}is still shown {' and '.join(parts)} after the page settled" + (f", in a window {tall_height:g} px high" if at_tall and tall_height else "")
+
+
+def _stray_notes(unseen: dict[str, list], tall_height) -> list[str]:
+    """The NOT verified notes of the stray-box tell. A view whose wait for the animations that end was cut off is not judged for it, and neither is a view that still has an animation running
+    (one that never ends, or waits for a scroll: where it leaves its element is not known); an element that is still animating is not counted as a stray. A tall window the browser could not measure is said too."""
+    notes = []
+    def where(items: list) -> str:   # items are (width, at a tall window, ...)
+        own, tall = [x[0] for x in items if not x[1]], [x[0] for x in items if x[1]]
+        return ", and ".join(([_widths(own)] if own else []) + ([_widths(tall) + " in a tall window"] if tall else []))
+    if unseen["capped"]:
+        notes.append(f"NOT verified at {where(unseen['capped'])}: the page's animations were still running when the check stopped waiting for them, so what they leave on the page was not judged")
+    if unseen["running"]:
+        n = max(x[2] for x in unseen["running"])
+        notes.append(f"NOT verified at {where(unseen['running'])}: {n} animation(s) never end or wait for a scroll, so where they leave their elements was not judged"
+                     + (f" (still animating: {_names(sorted(set(unseen['animating'])), NAMED)})" if unseen["animating"] else ""))
+    elif unseen["animating"]:
+        notes.append(f"NOT verified: still animating after the page settled, so where it ends was not judged: {_names(sorted(set(unseen['animating'])), NAMED)}")
+    for width, why, height in unseen["tall"]:
+        notes.append(f"NOT verified at {width} px in a window {height or 'a tall'} px high: {why}")
+    return notes
+
+
 def find_tells(measures: dict, cfg: dict) -> dict:
     """Apply the thresholds and word lists of page-tells.json to the candidates each view holds (`tell_facts`, see page_measure.mjs). -> {"views": the number of views judged,
     "hits": {tell id: [hit]} (a hit is {selector, text, widths}, the same place in other views merged), "unverified": {tell id: [reason]}, "anatomy": {...} or None}."""
@@ -1827,6 +1873,8 @@ def find_tells(measures: dict, cfg: dict) -> dict:
     unverified: dict[str, list[str]] = {t["id"]: [] for t in cfg["tells"]}
     stock_langs: set[str] = set()
     anatomy = None
+    stray_unseen: dict[str, list] = {"capped": [], "running": [], "animating": [], "tall": []}   # what the stray-box tell could not judge: see _stray_notes
+    stray_tall_height = None
 
     def add(tid: str, key, view: dict, selector: str, text: str) -> None:
         h = merged.setdefault((tid, key), {"selector": selector, "text": text, "widths": []})
@@ -1870,7 +1918,7 @@ def find_tells(measures: dict, cfg: dict) -> dict:
         for b in boxes:
             media = b["media_px"]
             pictured = any(n in media for n in ("canvas", "video")) or any(media.get(n, 0) > t["max_icon_px"] for n in ("img", "svg", "picture"))   # an img, svg or picture this small is an icon
-            section = b["h1"] > 0 or b["headings"] > t["max_headings"]   # the page, or a band of it, and not a drawing in it
+            section = b["h1"] > 0 or b["headings"] > t["max_headings"] or b.get("band", False)   # the page, or a band of it (O9: the boxes inside a band are still judged), and not a drawing in it
             # a list excuses a box only when the box is the list, or the items of the lists are nearly all of it: all its styled parts but at most one, or most of its area (the area of the items themselves, not of a list stretched past them)
             listed = b["in_lists"] > 0 and (b["styled"] - b["in_lists"] <= t["max_unlisted_styled"] or b["list_area"] >= t["min_list_area_ratio"] * b["width"] * b["height"] - EPSILON)
             # a table is data, a badge in one of its cells too: the box is a table or a table section, or every styled part of it sits in a cell
@@ -1897,6 +1945,32 @@ def find_tells(measures: dict, cfg: dict) -> dict:
                 if in_row and max(widths) - min(widths) <= tol + EPSILON and max(heights) > 0 and min(heights) / max(heights) >= t["min_height_ratio"] - EPSILON:
                     rows.append((min(x["top"] for x in ts), g))
                     add("three-equal-tiles", g["sel"], v, g["sel"], f"three tiles of {widths[0]:g} px side by side, each with a heading")
+        t = th["stray-box"]
+        walks = [(False, f.get("strays", []), v.get("animations"))]   # (at a tall window, the candidates, the animations the wait left running): the view's own walk first, then the tall one
+        tall = f.get("strays_tall")
+        if isinstance(tall, dict):
+            if tall.get("error"):
+                stray_unseen["tall"].append((width, tall["error"], (tall.get("viewport") or {}).get("height")))
+            else:
+                walks.append((True, tall.get("strays", []), tall.get("animations")))
+                if tall.get("truncated") and ELEMENT_CAP_NOTE not in unverified["stray-box"]:
+                    unverified["stray-box"].append(ELEMENT_CAP_NOTE)
+                stray_tall_height = (tall.get("viewport") or {}).get("height") or stray_tall_height
+        standing: set[str] = set()   # what the view's own walk counted as a hit: the tall walk adds only what it alone shows
+        for at_tall, strays, anim in walks:
+            anim = anim if isinstance(anim, dict) else {}
+            if anim.get("capped"):
+                stray_unseen["capped"].append((width, at_tall))
+            elif anim.get("running"):
+                stray_unseen["running"].append((width, at_tall, anim["running"]))
+            for c in strays:
+                if not _is_stray(c, t) or (at_tall and c["sel"] in standing):
+                    continue
+                if c["animating"]:
+                    stray_unseen["animating"].append(c["sel"])
+                elif not anim.get("capped"):
+                    add("stray-box", (c["sel"], at_tall), v, c["sel"], _stray_text(c, t, at_tall, stray_tall_height))
+                    standing.add(c["sel"])
         if f.get("truncated"):
             for tid in TELL_NEEDS_WALK:
                 if ELEMENT_CAP_NOTE not in unverified[tid]:
@@ -1914,6 +1988,7 @@ def find_tells(measures: dict, cfg: dict) -> dict:
     if stock_langs:
         shown = ", ".join(sorted(k or "an unknown language (the page sets no lang)" for k in stock_langs))
         unverified["stock-second-action"].append(f"NOT verified: no word list for {shown} (only {' and '.join(languages)} are listed)")
+    unverified["stray-box"].extend(_stray_notes(stray_unseen, stray_tall_height))
     hits: dict[str, list[dict]] = {t["id"]: [] for t in cfg["tells"]}
     for (tid, _), h in merged.items():
         hits[tid].append(h)

@@ -1151,6 +1151,15 @@ def test_a_copyright_year_and_an_error_pages_status_code_are_no_claims(tmp_path)
         assert not_error["status"] == "fail" and [o["number"] for o in not_error["unbacked_numbers"]] == [number], (number, not_error["detail"])
     for number in ("400", "599"):
         assert claims_of_page(tmp_path, [claim_run(f"Hello {number}", "body > p")], title=f"Error {number}")["status"] == "pass", number
+    # O10: the error word stands right beside the code, with nothing but spaces or a separator (- – · | :) between them; an error word elsewhere in the text makes it a count
+    for lang, title, code in (("en", "Error 404", "404"), ("en", "404 Not Found", "404"), ("pl", "404 · Nie znaleziono", "404"), ("pl", "Błąd 404 – strona nie istnieje", "404"),
+                              ("en", "Service Unavailable 503", "503"), ("en", "Error: 500", "500"), ("pl", "Błąd | 404", "404")):
+        page = claims_of_page(tmp_path, [claim_run(f"Hello {code}", "body > p")], title=title, lang=lang)
+        assert page["status"] == "pass", (title, page["detail"])
+    for lang, title, number in (("en", "450 tickets, all gone", "450"), ("en", "Gone in 450 seconds", "450"), ("pl", "Ponad 400 produktów, żaden niedostępny", "400"),
+                                ("en", "Error in 404 places", "404")):
+        count = claims_of_page(tmp_path, [claim_run(f"Hello {number}", "body > p")], title=title, lang=lang)
+        assert count["status"] == "fail" and [o["number"] for o in count["unbacked_numbers"]] == [number], (title, count["detail"])
 
 
 def claims_of_file(tmp_path: Path, runs: list, page: str = "pages/x.html", title: str = "", h1=(), lang: str = "en", url: str | None = None, kind: str = "project") -> dict:
@@ -1189,10 +1198,11 @@ def test_a_code_in_the_title_or_an_h1_counts_only_when_it_is_the_only_number_the
     lead = claims_of_file(tmp_path, big, h1=["Błąd +500 klientów"], lang="pl")
     assert lead["status"] == "fail" and [o["number"] for o in lead["unbacked_numbers"]] == ["500", "500"], lead["detail"]   # a plus before the number is a count too
     assert claims_of_file(tmp_path, big, title="Błąd + 500 klientów", lang="pl")["status"] == "fail" and claims_of_file(tmp_path, big, title="Error 500+", lang="en")["status"] == "fail"
-    for lang, text in (("pl", "Błąd 500+ firm"), ("pl", "+500 firm. Błąd"), ("pl", "Błąd + 500 firm"), ("pl", "Błąd 500 + firm"),
+    for lang, text in (("pl", "Błąd 500+ firm"), ("pl", "+500 · Błąd"), ("pl", "Błąd + 500 firm"), ("pl", "Błąd 500 + firm"),
                        ("en", "Error 500+"), ("en", "Error +500"), ("en", "Error + 500"), ("en", "Error 500 +")):
         assert pagecheck.status_codes([{"lang": lang, "claim_h1": [text]}]) == set() and pagecheck.status_codes([{"lang": lang, "document": {"title": text}}]) == set(), (lang, text)
         assert pagecheck.status_codes([{"lang": lang, "claim_h1": [text.replace("+", "")]}]) == {"500"}, (lang, text)   # the same words without the plus are the code: only the plus decides
+    assert pagecheck.status_codes([{"lang": "pl", "claim_h1": ["500 firm. Błąd"]}]) == set()   # O10: an error word away from the number ("firm." between) makes it a count
     for title, h1, lang in (("Błąd 404 | Acme", [], "pl"), ("Acme", ["Strona nie istnieje 404"], "pl"), ("Acme", ["Error 500 – Acme"], "en"), ("404 – Nie znaleziono", ["404"], "pl")):
         code = "404" if "404" in title + "".join(h1) else "500"
         got = claims_of_file(tmp_path, [claim_run(f"Błąd {code}", "body > main > p"), claim_run(code, "body > div")], title=title, h1=h1, lang=lang)
@@ -3152,13 +3162,13 @@ def test_render_page_measure_refuses_a_rules_list_it_cannot_read(tmp_path):
 
 # ---------------------------------------------------------------- the generic tells (warnings)
 
-TELL_IDS = ["eyebrow", "arrow-glued", "middot-run", "stock-second-action", "hero-text-budget", "styled-div-mock", "three-equal-tiles"]
+TELL_IDS = ["eyebrow", "arrow-glued", "middot-run", "stock-second-action", "hero-text-budget", "styled-div-mock", "three-equal-tiles", "stray-box"]
 LONG_HERO = ("Every Acme tool is forged in one workshop, tested by the people who use it every day, and sold with a published list of its spare parts so that a worn "
              "handle or a bent blade is a small repair and never a reason to buy the whole tool again.")   # more than 45 words
 
 
 def tells_page(lang: str = "en", second: str = "Learn more", hero_text: str = LONG_HERO) -> str:
-    """One page that shows all seven tells, and the stock order of a product page: hero, three tiles, a box made of boxes, an FAQ, a closing band."""
+    """One page that shows all eight tells, and the stock order of a product page: hero, three tiles, a box made of boxes, a sheet left outside its parent, an FAQ, a closing band."""
     mock = "<i></i>" * 8
     style = """  nav, section, .mock { display: block; margin: 0; }
   .eyebrow { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; }
@@ -3166,6 +3176,8 @@ def tells_page(lang: str = "en", second: str = "Learn more", hero_text: str = LO
   .tile { flex: 1 1 0; padding: 8px; }
   .mock { width: 300px; height: 200px; }
   .mock i { display: block; height: 12px; margin: 4px; border: 1px solid var(--color-text); }
+  .sheets { height: 40px; }
+  .sheet { position: relative; top: 120px; margin: 0; }
 """
     return PAGE.replace('lang="en"', f'lang="{lang}"').replace("</style>", style + "</style>").replace(
         PAGE[PAGE.index("<main>"):PAGE.index("</main>") + len("</main>")], f"""<nav><a href="#a">Products</a> <a href="#b">Pricing</a></nav>
@@ -3183,6 +3195,7 @@ def tells_page(lang: str = "en", second: str = "Learn more", hero_text: str = LO
   <div class="tile"><h2>Planes</h2><p>True.</p></div>
 </section>
 <div class="mock">{mock}</div>
+<div class="sheets"><p class="sheet">Sheet one</p></div>
 <section class="faq"><h2>FAQ</h2><details><summary>Can I repair a tool?</summary><p>Yes, with the spare-parts list.</p></details></section>
 <section class="closing"><h2>Ready to order?</h2><p><a href="#order">Order a tool</a></p></section>
 </main>""")
@@ -3200,7 +3213,7 @@ def leaf(selector: str, levels: int = 2) -> str:
 def tell_view(width: int = 1440, scheme: str = "light", lang: str = "en", **facts) -> dict:
     """A view as the browser would have measured it, with the candidates of the tells; what is not given is empty."""
     base = {"viewport": {"width": width, "height": 900}, "eyebrow": [], "arrows": [], "separators": [], "hero": {"found": False}, "boxes": [], "tiles": [], "headings": [], "details": [],
-            "last_band": None}
+            "last_band": None, "strays": []}
     return {"width": width, "scheme": scheme, "lang": lang, "viewport": {"width": width, "height": 900}, "tell_facts": {**base, **facts}}
 
 
@@ -3298,6 +3311,80 @@ def test_the_tell_thresholds_are_applied_to_what_the_browser_collected():
     assert not tile_hits(tops=(0, 120, 240), lefts=(0, 0, 0)) and not tile_hits(lefts=(0, 250, 500))                             # stacked, or overlapping, is not a row
     assert len(found_tells(tell_view(width=390, eyebrow=[eb()]), tell_view(width=1440, eyebrow=[eb()]))["hits"]["eyebrow"]) == 1   # the same place in two views is one hit ...
     assert found_tells(tell_view(width=390, eyebrow=[eb()]), tell_view(width=1440, eyebrow=[eb()]))["hits"]["eyebrow"][0]["widths"] == [390, 1440]   # ... seen at both
+
+
+def stray(sel: str = "div.sheet", text: str = "Sheet one", animating: bool = False, parent: tuple | None = ("below", 8), viewport: tuple | None = None) -> dict:
+    """A stray-box candidate as the collector reports it: where it lies against its parent (side, px) and against the screen (edge, px)."""
+    return {"sel": sel, "text": text, "animating": animating, "parent": {"sel": "div.stack", "side": parent[0], "px": parent[1]} if parent else None,
+            "viewport": {"side": viewport[0], "px": viewport[1]} if viewport else None}
+
+
+def test_the_stray_box_threshold_decides_at_its_edge_and_what_it_cannot_see_is_not_verified(tmp_path):
+    """No browser: `min_outside_px` (8) applies to the distance from the parent and from the screen; an element still animating, a view with an animation still running and a view whose
+    wait was cut off are NOT verified, never a hit; the tall window's own walk adds what only it shows."""
+    assert next(t for t in pagecheck.load_tells()["tells"] if t["id"] == "stray-box")["threshold"] == {"min_outside_px": 8}
+    hits = lambda *views: found_tells(*views)["hits"]["stray-box"]
+    notes = lambda *views: found_tells(*views)["unverified"]["stray-box"]
+    assert [len(hits(tell_view(strays=[stray(parent=("below", px))]))) for px in (2, 7, 7.99, 8, 80)] == [0, 0, 0, 1, 1]       # a candidate from 2 px: the tell asks for 8
+    assert [len(hits(tell_view(strays=[stray(parent=None, viewport=("left", px))]))) for px in (7, 8)] == [0, 1]               # the screen has the same number
+    assert [len(hits(tell_view(strays=[stray(parent=(side, 8))]))) for side in ("below", "above", "right", "left")] == [1, 1, 1, 1]
+    (h,) = hits(tell_view(strays=[stray(parent=("below", 80))]))
+    assert h["selector"] == "div.sheet" and h["text"] == '"Sheet one" is still shown 80 px below its parent div.stack after the page settled', h
+    assert hits(tell_view(strays=[stray(parent=("right", 12))]))[0]["text"] == '"Sheet one" is still shown 12 px to the right of its parent div.stack after the page settled'
+    assert hits(tell_view(strays=[stray(parent=None, viewport=("top", 30), text="")]))[0]["text"] == "is still shown 30 px past the top edge of the screen after the page settled"
+    both = hits(tell_view(strays=[stray(parent=("below", 80), viewport=("left", 20))]))
+    assert len(both) == 1 and both[0]["text"].endswith("80 px below its parent div.stack and 20 px past the left edge of the screen after the page settled"), both
+    one_of_two = hits(tell_view(strays=[stray(parent=("below", 80), viewport=("left", 7))]))[0]["text"]
+    assert "7 px" not in one_of_two and "80 px below" in one_of_two, one_of_two                                                 # the number that is under the threshold is not said
+    assert [h["widths"] for h in hits(tell_view(width=390, strays=[stray()]), tell_view(width=1440, strays=[stray()]))] == [[390, 1440]]   # the same place in two views is one hit
+    assert not notes(tell_view(strays=[stray()]))                                                                                # a view with no animation fact, as a page that does not move gives
+    # an element that is still animating is no hit and no pass: its place is not known
+    moving = tell_view(strays=[stray(sel="div.sway", animating=True)])
+    moving["animations"] = {"waited": 0, "running": 1, "capped": False}
+    assert not hits(moving) and len(notes(moving)) == 1 and notes(moving)[0].startswith("NOT verified at 1440 px: 1 animation(s) never end or wait for a scroll") and "still animating: div.sway" in notes(moving)[0], notes(moving)
+    calm = tell_view(strays=[])                                                                                                   # an animation that never ends elsewhere on the page: the row is not a pass either
+    calm["animations"] = {"waited": 2, "running": 3, "capped": False}
+    assert not hits(calm) and notes(calm)[0].startswith("NOT verified at 1440 px: 3 animation(s) never end or wait for a scroll") and "still animating" not in notes(calm)[0]
+    both_views = [{**calm, "width": 390}, {**moving, "width": 1440}]
+    assert len(notes(*both_views)) == 1 and notes(*both_views)[0].startswith("NOT verified at 390, 1440 px:")
+    elsewhere = tell_view(strays=[stray(sel="div.fixed-sheet"), stray(sel="div.sway", animating=True)])                           # a stray that is not animating is still a hit beside one that is
+    elsewhere["animations"] = {"waited": 0, "running": 1, "capped": False}
+    assert [h["selector"] for h in hits(elsewhere)] == ["div.fixed-sheet"] and notes(elsewhere)
+    cut_off = tell_view(strays=[stray()])                                                                                         # the wait for the animations that end was cut off: the view is not judged
+    cut_off["animations"] = {"waited": 4, "running": 1, "capped": True}
+    assert not hits(cut_off) and len(notes(cut_off)) == 1 and notes(cut_off)[0].startswith("NOT verified at 1440 px: the page's animations were still running when the check stopped waiting"), notes(cut_off)
+    p = make_project(tmp_path)                                                                                                    # the row: a warning that says NOT verified, with the hits it has, never a pass
+    unseen = tell_rows_of(p, [moving])["tell:stray-box"]
+    assert unseen["status"] == "warn" and unseen["hits"] == [] and unseen["detail"].startswith("NOT verified at 1440 px") and unseen["tell"] == "stray-box", unseen
+    mixed = tell_rows_of(p, [elsewhere])["tell:stray-box"]
+    assert mixed["status"] == "warn" and [h["selector"] for h in mixed["hits"]] == ["div.fixed-sheet"] and "1 found: div.fixed-sheet" in mixed["detail"] and "NOT verified at 1440 px" in mixed["detail"], mixed
+    assert tell_rows_of(p, [tell_view(strays=[stray(parent=("below", 7))])])["tell:stray-box"]["status"] == "pass"                  # under the threshold: none found
+    # the window 1300 px high: its own walk, the same thresholds
+    tall = lambda *items, **facts: {"viewport": {"width": 1440, "height": 1300}, "animations": {"waited": 0, "running": 0, "capped": False}, "strays": list(items), **facts}
+    only_tall = tell_view(strays=[], strays_tall=tall(stray(sel="div.late", parent=("below", 400))))
+    (t,) = hits(only_tall)
+    assert t["selector"] == "div.late" and t["widths"] == [1440] and t["text"].endswith("400 px below its parent div.stack after the page settled, in a window 1300 px high"), t
+    assert not hits(tell_view(strays=[], strays_tall=tall(stray(parent=("below", 7)))))
+    assert [h["text"].endswith("in a window 1300 px high") for h in hits(tell_view(strays=[stray()], strays_tall=tall(stray(), stray(sel="div.late"))))] == [False, True]   # seen at the view's own height too: said once
+    assert len(hits(tell_view(strays=[stray()], strays_tall=tall(stray(), stray(sel="div.late"))))) == 2
+    cut_tall = tell_view(strays=[], strays_tall=tall(stray(), animations={"waited": 1, "running": 1, "capped": True}))
+    assert not hits(cut_tall) and notes(cut_tall)[0].startswith("NOT verified at 1440 px in a tall window: the page's animations were still running"), notes(cut_tall)
+    late = tell_view(strays=[stray(animating=True)], strays_tall=tall(stray()))                                                    # the view's wait was cut off; the tall walk waited again and saw the box at rest
+    late["animations"] = {"waited": 1, "running": 1, "capped": True}
+    (found_late,) = hits(late)
+    assert found_late["text"].endswith("after the page settled, in a window 1300 px high") and notes(late)[0].startswith("NOT verified at 1440 px: the page's animations were still running"), (found_late, notes(late))
+    running_tall = tell_view(strays=[], strays_tall=tall(stray(animating=True), animations={"waited": 0, "running": 2, "capped": False}))
+    assert not hits(running_tall) and notes(running_tall)[0].startswith("NOT verified at 1440 px in a tall window: 2 animation(s) never end")
+    unmeasured = tell_view(strays=[], strays_tall={"viewport": {"width": 1440, "height": 1300}, "error": "page.setViewportSize: closed"})
+    assert not hits(unmeasured) and notes(unmeasured) == ["NOT verified at 1440 px in a window 1300 px high: page.setViewportSize: closed"]
+    assert not notes(tell_view(strays=[], strays_tall=tall()))                                                                    # a tall walk that found nothing and had no animation says nothing
+    assert notes(tell_view(strays=[], strays_tall=tall(truncated=True))) == [pagecheck.ELEMENT_CAP_NOTE]
+    for left_out in ("sel", "animating", "parent", "viewport", "text"):                                                           # a collector that left a field out is an error, not a box that is in place
+        with pytest.raises(KeyError):
+            found_tells(tell_view(strays=[{k: v for k, v in stray().items() if k != left_out}]))
+    for left_out in ("sel", "side", "px"):
+        with pytest.raises(KeyError):
+            found_tells(tell_view(strays=[{**stray(), "parent": {k: v for k, v in stray()["parent"].items() if k != left_out}}]))
 
 
 ICON = '<svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8"/></svg>'
@@ -3447,6 +3534,26 @@ def test_styled_badges_in_the_cells_of_a_table_are_data_and_a_drawing_in_a_cell_
 
 @pytest.mark.requires_setup
 @pytest.mark.requires_node
+def test_a_page_band_is_not_judged_as_a_whole_and_a_drawing_inside_it_still_is(acme):
+    """O9, calibrated on a real brand site: a band of the page, a `<section>` (or role=region) with a heading as a direct child or named by aria-labelledby, is not a mock-up however many
+    styled boxes it holds: the boxes inside it are judged on their own. A drawn app panel in a band still warns, and a section with no heading is judged as before."""
+    mock_row = lambda inside, panel="section": mock_tell(acme, mock_page(inside, panel))
+    legend = f"<div>{BADGE}{BADGE}{BADGE}</div>"
+    cards = "<ul>" + "".join(f'<li><div class="card"><div class="head">Tool {n}</div><div class="foot"></div></div></li>' for n in range(1, 5)) + "</ul>"
+    assert mock_row(f"{BADGE_TABLE}{legend}")["status"] == "warn"                                       # no heading: the box is judged as before, the table and the legend beside it
+    for name, inside in (("an index table and a legend", f"<h2>Parts</h2>{BADGE_TABLE}{legend}"), ("a list of cards", f"<h2>Tools</h2>{cards}")):
+        band = mock_row(inside)
+        assert band["status"] == "pass" and not band["hits"], (name, band)                              # the two warnings of the pilot calibration
+    named = mock_tell(acme, page_with_main(f'<h1>Acme hand tools</h1>\n<div role="region" aria-labelledby="parts" class="shot"><p id="parts">Parts</p>{BADGE_TABLE}{legend}</div>'))
+    assert named["status"] == "pass", named                                                             # a region named by a heading elsewhere is a band too
+    drawn = mock_row(f'<h2>Your account</h2><div style="min-height: 200px">{APP_PANEL}</div>')
+    assert drawn["status"] == "warn" and [leaf(h["selector"], 1) for h in drawn["hits"]] == ["div"], drawn   # the drawing in the band is its own box
+    deep = mock_row(f"<div><h2>Parts</h2></div>{BADGE_TABLE}{legend}")
+    assert deep["status"] == "warn", deep                                                               # a heading inside a child is not the band's own
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
 def test_a_row_of_items_running_past_its_box_fills_no_more_of_it_than_the_box(acme):
     """The browser end to end: the ten items of a carousel between a head and a footer, most of them outside the box, do not make the list nearly all of the box."""
     mock_row = lambda inside: mock_tell(acme, mock_page(inside))
@@ -3457,10 +3564,19 @@ def test_a_row_of_items_running_past_its_box_fills_no_more_of_it_than_the_box(ac
     assert (shot["styled"], shot["in_lists"]) == (12, 10), shot                                        # the head, the footer and ten items
     assert 10 * 202 * 142 > 0.8 * shot["width"] * shot["height"]                                       # the items by themselves are larger than the box, which is what excused it
     assert shot["list_area"] == (3 * 202 + 11) * 142 and shot["list_area"] < 0.8 * shot["width"] * shot["height"], shot   # three whole items and 11 px of a fourth: what lies in the box
-    assert shot["list_area"] <= shot["width"] * shot["height"]                                         # clipped to the box: items that do not overlap never add up to more than the whole
+    assert shot["list_area"] <= shot["width"] * shot["height"]                                         # the union of the items, each clipped to the box, is never more than the whole
     assert mock_row(CAROUSEL.replace('<div class="head">Featured</div>', "").replace('<div class="foot"></div>', ""))["status"] == "pass"   # the row of items alone is the whole list: no part beside it
     fits = mock_row(CAROUSEL.replace("overflow: hidden; gap: 8px", "overflow: hidden").replace("width: 200px", "width: 62px"))
     assert fits["status"] == "warn" and shot_facts()["list_area"] == 10 * 64 * 142, fits               # ten items that all lie in the box are counted whole
+    # ten items stacked in one place (a carousel whose slides lie on top of each other), between a head and a footer: the place they share is counted once
+    stacked = ('<div class="head">Featured</div><ul style="position: relative; height: 142px">'
+               + "".join(f'<li style="position: absolute; top: 0; left: 0; width: 200px; height: 140px">Part {n}</li>' for n in range(1, 11))
+               + '</ul><div class="foot"></div>')
+    deck = mock_row(stacked)
+    assert shot_facts()["list_area"] == 202 * 142, shot_facts()                                        # one item's area, not ten (ten would be 286,840 px², more than 0.8 of the box)
+    assert deck["status"] == "warn" and [leaf(h["selector"]) for h in deck["hits"]] == ["main > figure.shot"], deck
+    half = mock_row(stacked.replace("top: 0; left: 0;", "top: 0; left: 0; transform: translateX(101px);", 1))
+    assert shot_facts()["list_area"] == 202 * 142 + 101 * 142, shot_facts()                            # one slide moved half its width: the union grows by the half that no other covers
 
 
 @pytest.mark.requires_setup
@@ -3562,11 +3678,11 @@ def test_the_tell_rows_warn_never_fail_and_a_tell_the_owner_adopted_has_one_row_
     assert tell_rows_of(p, [tell_view(lang="en-GB")])["tell:stock-second-action"]["status"] == "pass" and tell_rows_of(p, [tell_view(lang="pl-PL")])["tell:stock-second-action"]["status"] == "pass"
     cut = tell_view()
     cut["tell_facts"]["truncated"] = True
-    for tid in ("middot-run", "styled-div-mock", "three-equal-tiles"):
+    for tid in ("middot-run", "styled-div-mock", "three-equal-tiles", "stray-box"):
         assert tell_rows_of(p, [cut])[f"tell:{tid}"]["status"] == "warn" and "NOT verified beyond the first elements" in tell_rows_of(p, [cut])[f"tell:{tid}"]["detail"], tid
     assert tell_rows_of(p, [cut])["tell:eyebrow"]["status"] == "pass"
     adopted = tell_rows_of(p, [tell_view(eyebrow=[eb])], {"id": "no-eyebrow", "kind": "tell", "tell": "eyebrow", "g4": "no eyebrow over a heading"})
-    assert "tell:eyebrow" not in adopted and len([k for k in adopted if k.startswith("tell:")]) == 6   # the rule's page:rule:no-eyebrow row speaks for it
+    assert "tell:eyebrow" not in adopted and len([k for k in adopted if k.startswith("tell:")]) == len(TELL_IDS) - 1   # the rule's page:rule:no-eyebrow row speaks for it
 
 
 def test_a_tell_rule_is_judged_like_the_other_rules(tmp_path):
@@ -3623,6 +3739,7 @@ def test_each_tell_is_found_on_a_page_built_to_show_it(acme):
     assert leaf(hit("hero-text-budget")["selector"], 1) == "section.hero" and hit("hero-text-budget")["widths"] == [390, 1440]
     assert leaf(hit("styled-div-mock")["selector"]) == "main > div.mock" and "8 styled boxes" in hit("styled-div-mock")["text"] and hit("styled-div-mock")["widths"] == [390, 1440]
     assert leaf(hit("three-equal-tiles")["selector"]) == "main > section.tiles" and hit("three-equal-tiles")["widths"] == [1440]   # at 390 px they are not shown as a row of three
+    assert leaf(hit("stray-box")["selector"]) == "div.sheets > p.sheet" and hit("stray-box")["widths"] == [390, 1440] and "\"Sheet one\" is still shown 80 px below its parent" in hit("stray-box")["text"]
     note = row(rep, "note:stock-anatomy")
     assert note["status"] == "info" and note["anatomy"]["view"] == "1440-light" and note["anatomy"]["hero"] < note["anatomy"]["tiles"] < note["anatomy"]["faq"] < note["anatomy"]["closing_band"], note
     assert row(rep, "page:colours:light")["status"] == "pass" and row(rep, "page:fonts")["status"] == "pass"   # the page is otherwise the brand's: only the patterns warn
@@ -3818,6 +3935,174 @@ def test_the_tells_collector_reports_the_candidates_a_page_shows(acme):
     assert len({t["width"] for t in tiles}) == 1 and tiles[0]["left"] < tiles[1]["left"] < tiles[2]["left"] and len({t["top"] for t in tiles}) == 1
     assert [h["text"] for h in f["headings"]][:4] == ["Collector page", "After a rule", "After an image", "Heading"] and f["details"] == []
     assert f["last_band"]["sel"].endswith("div.trio:nth-of-type(6)") and f["last_band"]["headings"] == 4 and f["last_band"]["actions"] == 0
+
+
+STRAY_STYLE = """  .stack { position: relative; height: 40px; margin: 0 0 160px; }
+  .sheet { height: 24px; margin: 0; }
+  .drop { animation: drop 150ms linear forwards; }
+  @keyframes drop { to { transform: translateY(120px); } }
+  .vanish { animation: vanish 150ms linear forwards; }
+  @keyframes vanish { to { transform: translateY(120px); opacity: 0; } }
+  .sway { animation: sway 1s linear infinite alternate; }
+  @keyframes sway { from { transform: translateY(100px); } to { transform: translateY(140px); } }
+  .clip { overflow: hidden; }
+  .tall-only { position: absolute; left: 0; top: calc(100vh - 860px); }
+"""
+
+
+def stray_page(*stacks: str, style: str = "") -> str:
+    """A page of short boxes (40 px high, 160 px apart), each holding the markup given: the stray-box tell looks at what the animations leave outside them."""
+    body = "".join(f'<div class="stack">{x}</div>\n' for x in stacks)
+    return PAGE.replace("</style>", STRAY_STYLE + style + "</style>").replace(PAGE[PAGE.index("<main>"):PAGE.index("</main>") + len("</main>")], f"<main>\n<h1>Acme hand tools</h1>\n{body}</main>")
+
+
+def stray_check(p: Path, page: str) -> tuple[dict, dict]:
+    """page-check at 1440 px, light, of `page`. -> (the stray-box row, the view as measured). The other rows of an odd page may fail: the tell row is what is read."""
+    write_page(p, page)
+    r = bc("page-check", "pages/index.html", "--widths", "1440", "--schemes", "light", project=p)
+    assert r.returncode in (0, 1), r.stdout + r.stderr
+    rep = report(p, pagecheck.report_tool("pages/index.html"))
+    (v,) = json.loads(Path(rep["measures"]).read_text(encoding="utf-8"))["views"]
+    return tell_row(rep, "stray-box"), v
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_box_an_animation_leaves_outside_its_parent_is_warned_and_a_hidden_clipped_or_unfinished_one_is_not(acme):
+    """The pilot-style bug: sheets left on screen after their animation. Judged on the page after its animations ended: a sheet that ends outside its short parent is found; one that ends
+    transparent, or inside an overflow: hidden parent, is not; an animation that never ends makes the tell NOT verified, never a pass."""
+    row_, v = stray_check(acme, stray_page('<p class="sheet drop">Left behind</p>', '<p class="sheet vanish">Gone</p>', '<div class="clip"><p class="sheet drop">Clipped</p></div>',
+                                           '<p class="sheet">Still</p>'))
+    assert row_["status"] == "warn" and [leaf(h["selector"]) for h in row_["hits"]] == ["div.stack > p.sheet.drop"] and "NOT verified" not in row_["detail"], row_
+    assert row_["hits"][0]["text"] == '"Left behind" is still shown 80 px below its parent body > main > div.stack:nth-of-type(1) after the page settled', row_["hits"]
+    assert v["animations"]["running"] == 0 and v["animations"]["capped"] is False                                                   # the animations ended before the page was measured
+    strays = {leaf(x["sel"]): x for x in v["tell_facts"]["strays"]}
+    assert set(strays) == {"div.stack > p.sheet.drop"} and strays["div.stack > p.sheet.drop"]["animating"] is False, strays          # transparent, clipped and in place: not even candidates
+    # an animation that never ends: where the sheet is depends on when the page was measured
+    row_, v = stray_check(acme, stray_page('<p class="sheet sway">Swaying</p>'))
+    assert row_["status"] == "warn" and row_["hits"] == [] and "NOT verified at 1440 px" in row_["detail"] and "never end" in row_["detail"] and "1 found" not in row_["detail"], row_
+    assert v["animations"]["running"] >= 1
+    (sway,) = v["tell_facts"]["strays"]
+    assert sway["animating"] is True and sway["parent"]["side"] == "below" and sway["parent"]["px"] >= 60
+    assert "still animating: " in row_["detail"] and leaf(sway["sel"]) in row_["detail"]
+    # an animation that waits for a scroll never starts on a page that is not scrolled: the same
+    row_, v = stray_check(acme, stray_page('<p class="sheet reveal">Scroll</p>', style="  .reveal { animation: drop linear both; animation-timeline: view(); }\n"))
+    assert row_["status"] == "warn" and row_["hits"] == [] and "NOT verified at 1440 px" in row_["detail"] and "wait for a scroll" in row_["detail"], row_
+    assert v["animations"]["running"] == 1 and v["tell_facts"]["strays"][0]["animating"] is True
+    # an ancestor that clips cuts off only what lies outside its box: `main { overflow-x: hidden }` (its overflow-y computes to auto) still holds the sheet 80 px below its parent, so it is found
+    row_, v = stray_check(acme, stray_page('<p class="sheet drop">Left behind</p>', style="  main { overflow-x: hidden; }\n"))
+    assert row_["status"] == "warn" and [leaf(h["selector"]) for h in row_["hits"]] == ["div.stack > p.sheet.drop"] and "NOT verified" not in row_["detail"], row_
+    assert row_["hits"][0]["text"] == '"Left behind" is still shown 80 px below its parent body > main > div.stack after the page settled', row_["hits"]
+    (held,) = v["tell_facts"]["strays"]
+    assert (held["parent"]["side"], held["parent"]["px"], held["animating"]) == ("below", 80, False), held
+    for style in ("  main { overflow: hidden; padding-bottom: 400px; }\n", "  html, body { overflow-x: hidden; }\n"):   # a wrapper cut on both axes that is tall enough, and the viewport's own overflow
+        row_, _ = stray_check(acme, stray_page('<p class="sheet drop">Left behind</p>', style=style))
+        assert row_["status"] == "warn" and [leaf(h["selector"]) for h in row_["hits"]] == ["div.stack > p.sheet.drop"], (style, row_)
+    # a wrapper that clips cuts off the sheet that ends wholly outside its box (the wrapper is as short as the sheet, which ends 120 px lower): not a candidate
+    row_, v = stray_check(acme, stray_page('<div class="wrap"><p class="sheet drop">Cut off</p></div>', style="  .wrap { overflow-x: hidden; }\n"))
+    assert row_["status"] == "pass" and row_["hits"] == [], row_
+    assert v["tell_facts"]["strays"] == [], v["tell_facts"]["strays"]
+    # both at once: the wrapper of the page holds the first sheet, the one inside a wrapper of its own is cut off
+    row_, _ = stray_check(acme, stray_page('<p class="sheet drop">Left behind</p>', '<div class="wrap"><p class="sheet drop">Cut off</p></div>',
+                                           style="  main { overflow-x: hidden; } .wrap { overflow-x: hidden; }\n"))
+    assert row_["status"] == "warn" and [h["text"].split(" is still")[0] for h in row_["hits"]] == ['"Left behind"'], row_
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_box_that_is_out_of_place_only_in_a_tall_window_is_found_from_the_tall_walk(acme):
+    """Each width is measured once more in a window 1300 px high: a box placed by the height of the window (here 100vh - 860 px, which is 40 px at the usual 900 and 440 px at 1300) shows only there."""
+    row_, v = stray_check(acme, stray_page('<p class="sheet tall-only">Pushed down</p>'))
+    assert v["tell_facts"]["strays"] == [] and v["viewport"] == {"width": 1440, "height": 900}                                          # at 900 px it sits at the foot of its parent
+    tall = v["tell_facts"]["strays_tall"]
+    assert tall["viewport"] == {"width": 1440, "height": 1300} and tall["animations"]["running"] == 0 and "truncated" not in tall and "error" not in tall
+    assert [(leaf(x["sel"]), x["parent"]["side"], x["parent"]["px"]) for x in tall["strays"]] == [("div.stack > p.sheet.tall-only", "below", 400)], tall
+    assert row_["status"] == "warn" and [h["widths"] for h in row_["hits"]] == [[1440]] and row_["hits"][0]["text"].endswith("400 px below its parent " + tall["strays"][0]["parent"]["sel"] + " after the page settled, in a window 1300 px high"), row_
+    assert v["height"] < 1300 and v["viewport"]["height"] == 900, "the view itself keeps the viewport it is keyed by"
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_box_the_window_cuts_off_sideways_is_not_a_stray_and_a_box_out_of_place_stands_for_its_children(acme):
+    """With `overflow-x: hidden` on html and body, a box left past the left or right edge cannot be seen or scrolled to: not a candidate. A box left 2000 px to the left with two sheets
+    inside it is one stray, the box: its children are out the same way only because it is."""
+    for side in ("left: -2000px", "left: 2000px"):
+        row_, v = stray_check(acme, stray_page('<p class="sheet off">Off</p>', style=f"  html, body {{ overflow-x: hidden; }} .off {{ position: relative; {side}; }}\n"))
+        assert row_["status"] == "pass" and v["tell_facts"]["strays"] == [], (side, v["tell_facts"]["strays"])
+    row_, v = stray_check(acme, stray_page('<div class="away"><p class="sheet">One</p><p class="sheet">Two</p></div>', style="  .away { position: relative; left: -2000px; }\n"))
+    assert row_["status"] == "warn" and [leaf(h["selector"], 1) for h in row_["hits"]] == ["div.away"], row_["hits"]
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_what_only_the_tall_window_brings_is_kept_out_of_the_views_load_row(acme):
+    """The tall window is for the stray-box tell alone: a page error or a missing file that only the resize to 1300 px brings is kept on `strays_tall` as `load`, and page:load,
+    which is a failing row, reads only what the view logged at its own height."""
+    script = "<script>addEventListener('resize', () => { if (innerHeight > 1000) null.boom(); });</script>"
+    picture = '<picture><source media="(min-height: 1200px)" srcset="missing-tall.png"><img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" alt="" width="1" height="1"></picture>'
+    for markup, said in ((script, "pageerror: "), (picture, "failed local request: 404 /pages/missing-tall.png")):
+        write_page(acme, stray_page('<p class="sheet">Steady</p>' + markup))
+        r = bc("page-check", "pages/index.html", "--widths", "1440", "--schemes", "light", project=acme)
+        rep = report(acme, pagecheck.report_tool("pages/index.html"))
+        load = row(rep, "page:load:1440-light")
+        assert load["status"] == "pass", (said, load)
+        (v,) = json.loads(Path(rep["measures"]).read_text(encoding="utf-8"))["views"]
+        assert v["errors"] == [] and v["failed_local"] == [] and v["non_local"] == [], (said, v["errors"], v["failed_local"])
+        assert any(x.startswith(said) for x in v["tell_facts"]["strays_tall"]["load"]), (said, v["tell_facts"]["strays_tall"])
+        assert r.returncode in (0, 1), r.stdout + r.stderr
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_page_that_is_scrolled_when_it_is_measured_has_nothing_stray_above_its_scroll_position(acme):
+    """A page can be scrolled when the check measures it (a script, an `autofocus` field below the fold, a `#fragment` in the address): what lies above the scroll position is still on the page, and is not "past the
+    top edge of the screen". The edges are those of the page, so the verdict is the one the same page gets unscrolled: a sheet left below its parent, and a box left above the top of the page, are still found."""
+    tall = "main { padding-bottom: 1600px; } .above { position: absolute; left: 0; top: -2000px; } .narrow { width: 100px; }\n"
+    for scroll in ("window.scrollTo(0, 700)", "window.scrollTo(0, document.documentElement.scrollHeight)"):   # a page scrolled part way, and to the foot
+        script = f"<script>{scroll}</script>"
+        row_, v = stray_check(acme, stray_page('<p class="sheet">Top of the page</p>', '<p class="sheet">Middle</p>' + script, style=tall))
+        assert row_["status"] == "pass" and row_["hits"] == [], (scroll, row_)                                                          # the heading and the first sheet lie above the scroll position: not strays
+        assert v["tell_facts"]["strays"] == [] and v["tell_facts"]["strays_tall"]["strays"] == [], (scroll, v["tell_facts"]["strays"], v["tell_facts"]["strays_tall"]["strays"])
+        row_, v = stray_check(acme, stray_page('<p class="sheet drop">Left behind</p>', '<p class="sheet">Middle</p>' + script, style=tall))
+        assert row_["status"] == "warn" and [leaf(h["selector"]) for h in row_["hits"]] == ["div.stack > p.sheet.drop"], (scroll, row_)    # the stray is found, and it is not the heading
+        assert row_["hits"][0]["text"] == '"Left behind" is still shown 80 px below its parent body > main > div.stack:nth-of-type(1) after the page settled' and "top edge" not in row_["detail"], row_["hits"]
+        row_, v = stray_check(acme, stray_page('<p class="sheet">Top of the page</p>', '<p class="sheet above">Above the page</p>' + script, style=tall))   # really above the top of the page: past the edge
+        (above,) = v["tell_facts"]["strays"]
+        assert above["text"] == "Above the page" and above["viewport"]["side"] == "top" and above["viewport"]["px"] > 1000 and above["parent"]["side"] == "above", above
+        assert row_["status"] == "warn" and [h["text"].split(" is still")[0] for h in row_["hits"]] == ['"Above the page"'] and "past the top edge of the screen" in row_["hits"][0]["text"], row_
+    # a page that is scrolled sideways: what lies left of the window is on the page, and no stray either
+    row_, v = stray_check(acme, stray_page('<p class="sheet narrow">Narrow</p>', '<p class="sheet">Middle</p><script>window.scrollTo(300, 700)</script>', style=tall + "main { min-width: 2400px; }\n"))
+    assert row_["status"] == "pass" and row_["hits"] == [] and v["tell_facts"]["strays"] == [] and v["tell_facts"]["strays_tall"]["strays"] == [], (row_, v["tell_facts"]["strays"])
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_the_stray_collector_reports_where_a_shown_box_lies_against_its_parent_and_the_screen(acme):
+    """What the browser reports as `strays`: only a shown box, not fixed or sticky, with no ancestor that clips it, that lies wholly outside its parent or the screen by at least 2 px."""
+    style = """  .right { position: relative; left: 1600px; } .left { position: relative; left: -2000px; }
+  .fixed { position: fixed; top: 0; left: -2000px; } .sticky { position: sticky; top: 0; transform: translateY(300px); }
+  .skip { position: absolute; left: -9999px; top: 0; } .ghost { position: absolute; left: -9999px; top: 0; }
+  .hidden { transform: translateY(120px); visibility: hidden; } .none { transform: translateY(120px); display: none; }
+  .faint { transform: translateY(120px); opacity: 0; } .near { transform: translateY(43px); } .hair { transform: translateY(41px); } .touching { transform: translateY(40px); }
+  .overlap { transform: translateY(30px); } .layer { overflow: clip; }
+"""
+    page = stray_page('<p class="sheet drop">Below</p>', '<p class="sheet right">Right</p>', '<p class="sheet left">Left</p>', '<p class="sheet fixed">Fixed</p>', '<p class="sheet sticky">Sticky</p>',
+                      '<a class="skip" href="#x">Skip to content</a><span class="ghost">Off screen</span>', '<p class="sheet hidden">Hidden</p>', '<p class="sheet none">None</p>',
+                      '<p class="sheet faint">Faint</p>', '<p class="sheet near">Near</p>', '<p class="sheet hair">Hair</p>', '<p class="sheet touching">Touching</p>', '<p class="sheet overlap">Overlap</p>',
+                      '<div class="layer"><p class="sheet drop">Clipped by overflow clip</p></div>', style=style)
+    _, v = stray_check(acme, page)
+    f = v["tell_facts"]
+    assert "truncated" not in f
+    found = {x["text"]: x for x in f["strays"]}
+    assert set(found) == {"Below", "Right", "Left", "Off screen", "Near"}, sorted(found)         # not fixed, sticky, hidden, faint, a skip link, 1 px off, touching, overlapping or clipped
+    assert set(found["Below"]) == {"sel", "text", "animating", "parent", "viewport"} and set(found["Below"]["parent"]) == {"sel", "side", "px"} and found["Below"]["viewport"] is None
+    assert found["Below"]["parent"]["side"] == "below" and found["Below"]["parent"]["px"] == 80 and found["Below"]["animating"] is False
+    assert (found["Right"]["parent"]["side"], found["Right"]["parent"]["px"]) == ("right", 160) and found["Right"]["viewport"] == {"side": "right", "px": 160}
+    assert (found["Left"]["parent"]["side"], found["Left"]["parent"]["px"]) == ("left", 560) and found["Left"]["viewport"] == {"side": "left", "px": 560}
+    assert found["Off screen"]["viewport"]["side"] == "left" and found["Off screen"]["viewport"]["px"] > 8000 and found["Off screen"]["parent"]["side"] == "left"
+    assert (found["Near"]["parent"]["side"], found["Near"]["parent"]["px"]) == ("below", 3) and found["Near"]["viewport"] is None                         # 2 px is where a candidate starts: the tell asks for 8
+    assert found["Below"]["parent"]["sel"].endswith("div.stack:nth-of-type(1)")
+    assert f["strays_tall"]["viewport"]["height"] == 1300 and [x["text"] for x in f["strays_tall"]["strays"]] == [x["text"] for x in f["strays"]]   # nothing there depends on the height
 
 
 # ---------------------------------------------------------------- a report input that stands for a part of a file: BRAND-STATE.md by its G4 rules (no browser)

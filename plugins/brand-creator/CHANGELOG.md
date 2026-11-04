@@ -20,6 +20,12 @@ stage, and why, is in the [archive](docs/archive/README.md).
   `frame-1440-100.png`, listed in `capture.json`. The four stills only show where a motion ends; a tear-off or a tab switch shows in
   the frames. A page that does not animate on load, or only repeats an animation for ever, gets no frame, and the run says so. The
   same page taken twice gives the same frames.
+- The page check warns about a box a movement leaves behind (`tell:stray-box`). It waits for your page's movements to
+  end, then looks for a box that still shows but lies completely outside the box that holds it, or off the screen, by 8
+  pixels or more: the sheets that stay on screen after their animation. It also looks at each width again in a window
+  1300 pixels high, so a problem that only shows on a tall screen is found. A page with a movement that never ends, or
+  that follows the scroll position in its styles, is "not verified" for this warning, never a pass. A site card names it
+  like any other warning the check finds.
 
 ### Changed
 
@@ -97,6 +103,13 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ### Fixed
 
+- A number in a page's title or main heading counts as an error code only with an error word right beside it ("Error
+  404", "404 Not Found", "404 · Nie znaleziono"). "450 tickets, all gone" and "Ponad 400 produktów, żaden niedostępny" are
+  counts again, so the page check asks for them in `FACTS.md`.
+- The mock-up warning counts items that lie on top of each other once, so a carousel whose slides are stacked in one
+  place no longer looks as if its list filled the whole box.
+- The mock-up warning leaves a band of your page alone: a section with its own heading, such as a table of parts with
+  a legend under it, or a list of cards. A screen drawn inside such a band still warns.
 - The prompt for a cold review asked whether a part reads as a tell from `page-tells.json`, a file the reviewer is not given. The
   prompt now names the tells itself.
 

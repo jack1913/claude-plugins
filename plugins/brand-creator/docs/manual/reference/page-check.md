@@ -137,7 +137,8 @@ In Polish or English text, "21 października 2026", "w październiku 2026" and "
 - **A copyright year:** 19xx or 20xx right after `©`, `(c)` or "copyright", and the end of a range ("© 2024–2026").
 - **An error page's code,** 400 to 599, standing alone, anywhere on that page. A page is an error page when its file
   is named after the code (`404.html`), or its title or main heading holds the code as its only number, with no "+",
-  plus an error word in its language:
+  and an error word in its language right beside it, as in "Error 404" or "404 · Nie znaleziono" ("Gone in 450
+  seconds" is a count):
   - English: error, not found, forbidden, unauthorized, unavailable, gone, bad request, server error;
   - Polish: błąd, nie znaleziono, nie istnieje, brak dostępu, odmowa dostępu, niedostępna, niedostępny.
 
@@ -200,9 +201,32 @@ Patterns that make a page look like any template. Each warns and says where; it 
 - **A hero that carries too much text:** over 45 words before you scroll, the menu not counted.
 - **A product mock-up made of styled boxes:** a screen drawn instead of shown: a box of 240 by 160 pixels or more
   holding 8 or more boxes with a background or border, and no video, drawing area or picture over 48 pixels. Tables,
-  checklists, timelines and boxes holding the main heading or several headings don't count.
+  checklists, timelines and boxes holding the main heading or several headings don't count, and neither does a band of
+  the page, a section with its own heading: the boxes inside it are still checked.
 - **Three equal tiles in a row:** at 1024 pixels wide or more, exactly three blocks side by side, of equal width and
   similar height, each with a heading.
+
+## Boxes left behind by a movement
+
+A movement can carry a box away and never hide it, so a sheet or a card stays on screen where it does not belong. No
+other check looks for a box left outside its place, and none looks at a tall window. This one waits for the movements
+that end, then looks at where everything stopped. It warns when a box that still shows lies:
+
+- completely outside the box that holds it, by 8 pixels or more, or
+- completely off the screen, past its left, top or right edge, by 8 pixels or more. The edges are those of the page, so
+  a page that is already scrolled when it is checked is judged as it is at the top.
+
+It leaves alone a box its holder cuts off completely, a box that stays put on the screen as you scroll, and a
+see-through or hidden box. A "skip to content" link parked off the screen until a key brings it back doesn't count
+either.
+
+It also looks at each width again in a window 1300 pixels high, so a problem that only shows on a tall screen is found.
+The open page is made taller, not loaded again: a page whose script reads the window height only once, as it loads, is
+not seen as it would be on a tall screen.
+
+If something still moves when the check looks, such as a movement that never ends or one that follows the scroll
+position in the page's styles, the line says "not verified": the check can't tell where that box comes to rest. Like
+the template warnings, this one never fails a page unless you make it [a page rule](#your-page-rules).
 
 ## Your page rules
 
@@ -239,7 +263,8 @@ your site and reports are not there.
 ## What it cannot see
 
 What is inside a frame (a page within the page), colours in gradients and shadows, movement a script starts when the
-visitor clicks or types, or draws frame by frame, and how colour-blind visitors see the page.
+visitor clicks, types or scrolls (a box that shows only once you scroll to it is not judged until it shows, and the
+check never scrolls), or draws frame by frame, and how colour-blind visitors see the page.
 
 ## Related
 

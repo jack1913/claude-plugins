@@ -390,7 +390,7 @@ def test_page_tells_names_each_tell_with_its_keys_and_both_word_lists():
     """The generic page tells `page-check` warns about: every tell says what it is, why, how it is measured and with which numbers; a tell with a word list has it in each language."""
     d = json.loads((REFS / "page-tells.json").read_text(encoding="utf-8"))
     assert d["version"] == 1 and d["$description"] and d["languages"] == ["en", "pl"]
-    assert [t["id"] for t in d["tells"]] == ["eyebrow", "arrow-glued", "middot-run", "stock-second-action", "hero-text-budget", "styled-div-mock", "three-equal-tiles"]
+    assert [t["id"] for t in d["tells"]] == ["eyebrow", "arrow-glued", "middot-run", "stock-second-action", "hero-text-budget", "styled-div-mock", "three-equal-tiles", "stray-box"]
     required = {"id", "name", "what", "why", "measure"}
     for t in d["tells"]:
         assert required <= set(t) and set(t) <= required | {"threshold", "words"}, t["id"]

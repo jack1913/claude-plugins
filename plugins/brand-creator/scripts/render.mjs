@@ -30,7 +30,7 @@ import {
   Report, forbiddenTerms, writeIfChanged, sha256, readStateTop, missingSharedLibs, findHeadlessShell, proofReportTool, pixelArt, motionProofKind, today,
 } from "./lib/_common.mjs";
 import { isLoopbackUrl } from "./lib/_common.mjs";
-import { collect } from "./pagelib/page_measure.mjs";
+import { collect, collectStrays } from "./pagelib/page_measure.mjs";
 import { collectWiring } from "./pagelib/wiring.mjs";
 
 const ANIMATION_CAP_MS = 15000;   // shot waits at most this long for running animations and transitions to end
@@ -2079,6 +2079,7 @@ async function cmdPdf(argv) {
 const PAGE_VIEWPORT_HEIGHT = { 360: 800, 390: 844, 768: 1024, 1024: 768, 1440: 900, 1920: 1080 };   // css px; any other width gets 900
 const PAGE_TIMEOUT_MS = 60000;
 const PAGE_SETTLE_MS = 100;
+const PAGE_TALL_HEIGHT = 1300;   // css px: each view is measured once more at this height for the `stray-box` tell alone (`tell_facts.strays_tall`), a bug that shows only on a tall screen
 const PAGE_MAX_REDIRECTS = 10;   // a chain longer than this is stopped (Chromium itself allows 20)
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
@@ -2157,6 +2158,20 @@ function readPageRequest(project, file) {
   return req;
 }
 
+/** The stray-box candidates of the page in a window PAGE_TALL_HEIGHT high: the viewport is resized, the page settles and its animations are waited for again, and only that tell's facts are collected. -> {viewport,
+ *  animations, strays, truncated}, or {viewport, error} when the page could not be measured so (the view keeps its other facts). */
+async function measureTall(page, width) {
+  const viewport = { width, height: PAGE_TALL_HEIGHT };
+  try {
+    await page.setViewportSize(viewport);
+    await page.waitForTimeout(PAGE_SETTLE_MS);
+    const animations = await waitAnimations(page);
+    return { viewport, animations, ...(await collectStrays(page)) };
+  } catch (e) {
+    return { viewport, error: String(e.message).split("\n")[0] };
+  }
+}
+
 async function measureView(browser, req, width, scheme) {
   const viewport = { width, height: PAGE_VIEWPORT_HEIGHT[width] ?? 900 };
   const server = req.rootReal ? await startServer(req.rootReal) : null;
@@ -2193,10 +2208,17 @@ async function measureView(browser, req, width, scheme) {
     if (!page.url().startsWith(origin + "/")) throw new Error(`the page ended on ${page.url().slice(0, 160)}, not on ${origin}`);
     const base = await page.evaluate(() => ({ lang: document.documentElement.lang || "", height: document.documentElement.scrollHeight }));
     const collected = await collect(page, req);
+    // what the view itself logged, kept before the tall window: an error or a request the resize brings is the stray-box tell's alone, never page:load's
+    const load = { errors: [...seen.errors], nonLocal: [...seen.nonLocal], failedLocal: [...seen.failedLocal] };
+    const kept = { resources: Object.fromEntries(Object.entries(resources).sort(([a], [b]) => (a < b ? -1 : 1))), served: server ? server.served().sort() : [] };
+    const tall = await measureTall(page, width);
+    const added = [...seen.errors.slice(load.errors.length), ...seen.nonLocal.slice(load.nonLocal.length).map((u) => `non-local request: ${u}`),
+                   ...seen.failedLocal.slice(load.failedLocal.length).map((u) => `failed local request: ${u}`)];
+    if (added.length) tall.load = added;
+    collected.tell_facts.strays_tall = tall;
     return {
-      width, scheme, viewport, ...base, errors: seen.errors, non_local: seen.nonLocal, failed_local: seen.failedLocal,
-      resources: Object.fromEntries(Object.entries(resources).sort(([a], [b]) => (a < b ? -1 : 1))),
-      served: server ? server.served().sort() : [], animations, ...collected,
+      width, scheme, viewport, ...base, errors: load.errors, non_local: load.nonLocal, failed_local: load.failedLocal,
+      resources: kept.resources, served: kept.served, animations, ...collected,
     };
   } catch (e) {
     const stopped = seen?.nonLocal.length ? ` (a request to another origin was stopped: ${seen.nonLocal[0]})` : "";

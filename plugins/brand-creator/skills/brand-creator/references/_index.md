@@ -16,7 +16,7 @@ whole list in one place.
 | [working-style.md](working-style.md) | Default ways of working with a brand owner, and the per-project Collaboration block that overrides them |
 | [anti-patterns.md](anti-patterns.md) | Case cards of mistakes that happened in real brand projects, each with the check that catches it |
 | [ai-defaults.json](ai-defaults.json) | The list of generic first-idea patterns every direction is tested against |
-| [page-tells.json](page-tells.json) | The generic page tells the page check warns about (an eyebrow over a heading, an arrow glued to a label, three equal tiles and four more), with their numbers and English and Polish word lists |
+| [page-tells.json](page-tells.json) | The generic page tells the page check warns about (an eyebrow over a heading, an arrow glued to a label, three equal tiles and five more, one of them a box an animation leaves outside its place), with their numbers and English and Polish word lists |
 | [page-layouts.json](page-layouts.json) | Layout references for a site's pages, keyed to what the visitor came to do: structure only, never a look |
 | [cascade.md](cascade.md) | The checklist for when a rule, colour, lockup or threshold changes, and where the old look hides |
 | [fleet.md](fleet.md) | The opt-in helper agents and workflows: when to offer them, what to tell the owner, how to run them |
