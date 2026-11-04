@@ -131,6 +131,8 @@ line when you next touch the board.
   place no longer looks as if its list filled the whole box.
 - The mock-up warning leaves a band of your page alone: a section with its own heading, such as a table of parts with
   a legend under it, or a list of cards. A screen drawn inside such a band still warns.
+- A PDF the plugin makes (the brand book's proof, the print files) now always gets its ID zeroed. About one time in 40
+  Ghostscript writes the ID in a second form, which was left as it was and not reported, so the same PDF made twice could differ.
 - The prompt for a cold review asked whether a part reads as a tell from `page-tells.json`, a file the reviewer is not given. The
   prompt now names the tells itself.
 

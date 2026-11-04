@@ -190,8 +190,25 @@ def test_normalise_pdf_fixes_dates_and_ids_without_breaking_the_file(tmp_path):
     info = subprocess.run(["pdfinfo", str(out)], capture_output=True, text=True)
     assert info.returncode == 0 and "Pages:" in info.stdout and "1980" in info.stdout  # still a valid PDF, now dated 1980-01-01
     assert "1980" in next(l for l in info.stdout.splitlines() if l.startswith("CreationDate"))
-    ids = [m for m in __import__("re").findall(rb"/ID\s*\[\s*<([0-9A-F]+)>\s*<([0-9A-F]+)>", fixed)[0]]
-    assert all(set(i) == {ord("0")} for i in ids)  # the ID is zeroed
+    ids = determinism.pdf_ids(fixed)
+    assert len(ids) == 2 and all(set(i) == {ord("0")} for i in ids)  # the ID is zeroed, whichever form Ghostscript wrote
+
+
+def test_a_pdf_id_written_as_a_literal_string_is_zeroed_and_caught_like_a_hex_one(tmp_path):
+    """Ghostscript writes /ID as (...) instead of <...> when that is shorter (about one PDF in 40): it must be zeroed too."""
+    trailer = b"trailer\n<< /Size 3 /ID [(\\276Tv}\\(a\\)b(c)\\\\x)(\\276Tv}\\(a\\)b(c)\\\\x)] >>\nstartxref\n9\n%%EOF\n"
+    hexed = b"trailer\n<< /ID [ <7A2241ff8FC6> <7A2241FF8FC6> ] >>\n%%EOF\n"
+    for raw in (trailer, hexed):
+        pdf = tmp_path / "a.pdf"
+        pdf.write_bytes(raw)
+        assert "PDF /ID is not zeroed (pdf-dates)" in determinism.lint_file(pdf)
+        fixed = determinism.normalise_pdf(raw)
+        assert len(fixed) == len(raw) and determinism.normalise_pdf(fixed) == fixed
+        ids = determinism.pdf_ids(fixed)
+        assert len(ids) == 2 and all(set(i) == {ord("0")} for i in ids), ids
+        assert fixed.endswith(b" >>\nstartxref\n9\n%%EOF\n") or fixed.endswith(b" ] >>\n%%EOF\n")  # nothing after the ID moved
+        pdf.write_bytes(fixed)
+        assert determinism.lint_file(pdf) == []
 
 
 @pytest.mark.requires_gs
