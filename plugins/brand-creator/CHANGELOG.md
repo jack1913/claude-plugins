@@ -15,6 +15,12 @@ stage, and why, is in the [archive](docs/archive/README.md).
   that follows the scroll position in its styles, is "not verified" for this warning, never a pass. A site card names it
   like any other warning the check finds.
 
+### Fixed
+
+- A number in a page's title or main heading counts as an error code only with an error word right beside it ("Error
+  404", "404 Not Found", "404 · Nie znaleziono"). "450 tickets, all gone" and "Ponad 400 produktów, żaden niedostępny" are
+  counts again, so the page check asks for them in `FACTS.md`.
+
 ## [0.6.0] - 2026-11-03
 
 The `/` menu is shorter. It now lists `brand-creator`, `setup`, `status`, `check`, `round` and `brand-adopt`, plus the four

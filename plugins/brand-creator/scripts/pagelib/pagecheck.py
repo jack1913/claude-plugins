@@ -705,6 +705,9 @@ STATUS_CODE = re.compile(r"[45]\d\d")      # a 4xx or 5xx status code of an erro
 ERROR_WORDS = {"en": ("error", "not found", "forbidden", "unauthorized", "unavailable", "gone", "bad request", "server error"),
                "pl": ("błąd", "nie znaleziono", "nie istnieje", "brak dostępu", "odmowa dostępu", "niedostępna", "niedostępny")}
 ERROR_WORD_PATTERNS = {lang: re.compile(r"(?<!\w)(?:" + "|".join(r"\s+".join(re.escape(w) for w in phrase.split()) for phrase in phrases) + r")(?!\w)", re.I) for lang, phrases in ERROR_WORDS.items()}   # whole words, any letter case, any white space between the words of a phrase
+ERROR_WORD_GAP = r"[\s\-–·|:]*"          # what may stand between an error word and the code (O10): spaces and the separators - – · | :
+ERROR_WORD_BEFORE = {lang: re.compile(p.pattern + ERROR_WORD_GAP + r"$", re.I) for lang, p in ERROR_WORD_PATTERNS.items()}    # "Error 404", "Błąd 404", "Service Unavailable 503"
+ERROR_WORD_AFTER = {lang: re.compile(ERROR_WORD_GAP + p.pattern, re.I) for lang, p in ERROR_WORD_PATTERNS.items()}            # "404 Not Found", "404 · Nie znaleziono"
 
 # A date written with a month name is one date, not numbers, in the languages whose month names are listed (the page language decides: any other, or none, keeps the numbers as they are).
 # Polish: "21 października 2026", "21 października", and a month with a year, in the nominative, genitive or locative ("Październik 2026", "października 2026", "w październiku 2026"), in any
@@ -838,17 +841,19 @@ def target_stem(target) -> str:
 def status_codes(views: list[dict], target=None) -> set[str]:
     """The status codes of an error page. A page is an error page when its file name, without the extension, is a 4xx or 5xx code (`404.html`, `500.html`), or its `<title>` or an `<h1>`
     (`document.title` and `claim_h1` of a view) holds one as a bare number. The text counts only when that number is the only one in it (every number, a bare single digit and a copyright
-    year too), no `+` stands before or after it, and the same text holds an error word of the page's language (ERROR_WORDS: English and Polish; the language is the view's `lang`, the
-    document's, and any other, or none, leaves the file name as the only rule): `Błąd 404 | Acme` and `404 · Nie znaleziono` on a Polish page, `Error 500` on an English one do; a count in a
-    heading (`Ponad 400 projektów`, `Zaufało nam 500 firm`, `Over 400 clients`), `500+ firm nam ufa`, `+500 klientów`, `5 lat, 500 klientów`, `Error 500 (1 of 3)` and `404 and 500` do not.
+    year too), no `+` stands before or after it, and an error word of the page's language stands right beside it, with nothing but spaces or the separators `-`, `–`, `·`, `|` and `:`
+    between them (ERROR_WORDS: English and Polish; the language is the view's `lang`, the document's, and any other, or none, leaves the file name as the only rule): `Błąd 404 | Acme` and
+    `404 · Nie znaleziono` on a Polish page, `Error 500`, `404 Not Found` and `Service Unavailable 503` on an English one do; a count in a heading (`Ponad 400 projektów`, `Zaufało nam 500
+    firm`, `Over 400 clients`), an error word away from the number (`450 tickets, all gone`, `Gone in 450 seconds`, `Ponad 400 produktów, żaden niedostępny`), `500+ firm nam ufa`,
+    `+500 klientów`, `5 lat, 500 klientów`, `Error 500 (1 of 3)` and `404 and 500` do not.
     A number on an error page that is this same code is the page's status code, not a claim, wherever it stands on the page; any other number is judged as usual."""
     codes = set()
     stem = target_stem(target)
     if STATUS_CODE.fullmatch(stem):
         codes.add(stem)
     for v in views:
-        error_words = ERROR_WORD_PATTERNS.get(_primary_language(v.get("lang") or ""))
-        if error_words is None:
+        lang = _primary_language(v.get("lang") or "")
+        if lang not in ERROR_WORD_PATTERNS:
             continue   # the page is in a language whose error words are not listed: the file name is the only rule
         for text in [(v.get("document") or {}).get("title"), *(v.get("claim_h1") or [])]:
             if not isinstance(text, str):
@@ -857,7 +862,8 @@ def status_codes(views: list[dict], target=None) -> set[str]:
             if len(found) == 1:
                 (n,) = found
                 plus = re.search(r"\+\s?$", text[:n["at"]]) or re.match(r"\s?\+", text[n["at"] + len(n["text"]):])   # +500 and 500+ are counts
-                if n["bare"] and STATUS_CODE.fullmatch(n["number"]) and not plus and error_words.search(text):
+                beside = ERROR_WORD_BEFORE[lang].search(text[:n["at"]]) or ERROR_WORD_AFTER[lang].match(text[n["at"] + len(n["text"]):])   # the error word right beside the code (O10)
+                if n["bare"] and STATUS_CODE.fullmatch(n["number"]) and not plus and beside:
                     codes.add(n["number"])
     return codes
 

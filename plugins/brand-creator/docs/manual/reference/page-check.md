@@ -134,7 +134,8 @@ In Polish or English text, "21 października 2026", "w październiku 2026" and "
 - **A copyright year:** 19xx or 20xx right after `©`, `(c)` or "copyright", and the end of a range ("© 2024–2026").
 - **An error page's code,** 400 to 599, standing alone, anywhere on that page. A page is an error page when its file
   is named after the code (`404.html`), or its title or main heading holds the code as its only number, with no "+",
-  plus an error word in its language:
+  and an error word in its language right beside it, as in "Error 404" or "404 · Nie znaleziono" ("Gone in 450
+  seconds" is a count):
   - English: error, not found, forbidden, unauthorized, unavailable, gone, bad request, server error;
   - Polish: błąd, nie znaleziono, nie istnieje, brak dostępu, odmowa dostępu, niedostępna, niedostępny.
 

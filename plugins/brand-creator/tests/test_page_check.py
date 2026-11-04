@@ -1083,6 +1083,15 @@ def test_a_copyright_year_and_an_error_pages_status_code_are_no_claims(tmp_path)
         assert not_error["status"] == "fail" and [o["number"] for o in not_error["unbacked_numbers"]] == [number], (number, not_error["detail"])
     for number in ("400", "599"):
         assert claims_of_page(tmp_path, [claim_run(f"Hello {number}", "body > p")], title=f"Error {number}")["status"] == "pass", number
+    # O10: the error word stands right beside the code, with nothing but spaces or a separator (- – · | :) between them; an error word elsewhere in the text makes it a count
+    for lang, title, code in (("en", "Error 404", "404"), ("en", "404 Not Found", "404"), ("pl", "404 · Nie znaleziono", "404"), ("pl", "Błąd 404 – strona nie istnieje", "404"),
+                              ("en", "Service Unavailable 503", "503"), ("en", "Error: 500", "500"), ("pl", "Błąd | 404", "404")):
+        page = claims_of_page(tmp_path, [claim_run(f"Hello {code}", "body > p")], title=title, lang=lang)
+        assert page["status"] == "pass", (title, page["detail"])
+    for lang, title, number in (("en", "450 tickets, all gone", "450"), ("en", "Gone in 450 seconds", "450"), ("pl", "Ponad 400 produktów, żaden niedostępny", "400"),
+                                ("en", "Error in 404 places", "404")):
+        count = claims_of_page(tmp_path, [claim_run(f"Hello {number}", "body > p")], title=title, lang=lang)
+        assert count["status"] == "fail" and [o["number"] for o in count["unbacked_numbers"]] == [number], (title, count["detail"])
 
 
 def claims_of_file(tmp_path: Path, runs: list, page: str = "pages/x.html", title: str = "", h1=(), lang: str = "en", url: str | None = None, kind: str = "project") -> dict:
