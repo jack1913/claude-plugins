@@ -85,7 +85,8 @@ Generalised from prompts that worked; use them as written or close to it.
   this brand could say; does it serve the visitor's job in BRIEF and put the job's own action in reach; does any part
   read as one of the generic tells (an eyebrow over a heading; an arrow glued to a link or button label; a run of middle
   dots between items; a stock label on the hero's second action; a hero that carries too much text; a product mock-up made
-  of styled boxes; three equal tiles in a row); does every number and status word match FACTS or sit in a labelled sample.
+  of styled boxes; three equal tiles in a row; a box left outside its place once the page has settled, which a still can
+  show as a sheet past the edge of its card); does every number and status word match FACTS or sit in a labelled sample.
   With the G4 rules in the prompt it also asks whether anything on the page breaks one, and a page that does what a rule
   says (a dark still that equals the light one, when a rule says so) is right, not a finding.
   A review judges what the page shows: where the page lacks something it would need (wording, a picture, a control), the

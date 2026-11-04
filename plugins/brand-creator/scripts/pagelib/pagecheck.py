@@ -1923,7 +1923,7 @@ def find_tells(measures: dict, cfg: dict) -> dict:
             listed = b["in_lists"] > 0 and (b["styled"] - b["in_lists"] <= t["max_unlisted_styled"] or b["list_area"] >= t["min_list_area_ratio"] * b["width"] * b["height"] - EPSILON)
             # a table is data, a badge in one of its cells too: the box is a table or a table section, or every styled part of it sits in a cell
             tabular = b["table"] or (b["in_cells"] > 0 and b["styled"] == b["in_cells"])
-            if b["width"] >= t["min_width_px"] and b["height"] >= t["min_height_px"] and b["styled"] >= t["min_styled_descendants"] and not (pictured or section or listed or tabular or b["labelled"]):
+            if b["width"] >= t["min_width_px"] and b["height"] >= t["min_height_px"] and b["styled"] - b.get("in_bands", 0) >= t["min_styled_descendants"] and not (pictured or section or listed or tabular or b["labelled"]):
                 meets[b["id"]] = b
         outer = set()
         for i in meets:
@@ -1956,6 +1956,10 @@ def find_tells(measures: dict, cfg: dict) -> dict:
                 if tall.get("truncated") and ELEMENT_CAP_NOTE not in unverified["stray-box"]:
                     unverified["stray-box"].append(ELEMENT_CAP_NOTE)
                 stray_tall_height = (tall.get("viewport") or {}).get("height") or stray_tall_height
+                if tall.get("load"):   # what only the resize brought (a page error, a request stopped or failed): page:load judges the view at its own height, so it is said here
+                    load = tall["load"]
+                    unverified["stray-box"].append(f"NOT verified at {width} px in a window {stray_tall_height} px high: the page logged {load[0]}"
+                                                   + (f" and {len(load) - 1} more" if len(load) > 1 else "") + " only after the resize, which page:load does not judge")
         standing: set[str] = set()   # what the view's own walk counted as a hit: the tall walk adds only what it alone shows
         for at_tall, strays, anim in walks:
             anim = anim if isinstance(anim, dict) else {}

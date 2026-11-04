@@ -3544,8 +3544,14 @@ def test_a_page_band_is_not_judged_as_a_whole_and_a_drawing_inside_it_still_is(a
     for name, inside in (("an index table and a legend", f"<h2>Parts</h2>{BADGE_TABLE}{legend}"), ("a list of cards", f"<h2>Tools</h2>{cards}")):
         band = mock_row(inside)
         assert band["status"] == "pass" and not band["hits"], (name, band)                              # the two warnings of the pilot calibration
-    named = mock_tell(acme, page_with_main(f'<h1>Acme hand tools</h1>\n<div role="region" aria-labelledby="parts" class="shot"><p id="parts">Parts</p>{BADGE_TABLE}{legend}</div>'))
-    assert named["status"] == "pass", named                                                             # a region named by a heading elsewhere is a band too
+    named = mock_tell(acme, page_with_main(f'<h1>Acme hand tools</h1>\n<div role="region" aria-labelledby="parts" class="shot"><div><h3 id="parts">Parts</h3></div>{BADGE_TABLE}{legend}</div>'))
+    assert named["status"] == "pass", named                                                             # a region named by a heading of its own that is not a direct child is a band too
+    unnamed = mock_tell(acme, page_with_main(f'<h1>Acme hand tools</h1>\n<div role="region" aria-labelledby="parts" class="shot"><p id="parts">Parts</p>{BADGE_TABLE}{legend}</div>'))
+    assert unnamed["status"] == "warn", unnamed                                                         # aria-labelledby that names no heading makes no band
+    wrapped = mock_tell(acme, page_with_main(f'<h1>Acme hand tools</h1>\n<div class="wrap"><section class="shot"><h2>Parts</h2>{BADGE_TABLE}{legend}</section></div>'))
+    assert wrapped["status"] == "pass" and not wrapped["hits"], wrapped                                 # a box round a band is not judged on what the band holds (a full-width background)
+    beside = mock_tell(acme, page_with_main(f'<h1>Acme hand tools</h1>\n<div class="wrap"><section class="shot"><h2>Parts</h2>{BADGE_TABLE}</section><figure class="shot">{APP_PANEL}</figure></div>'))
+    assert [leaf(h["selector"], 1) for h in beside["hits"]] == ["figure.shot"], beside                  # a drawing beside the band still warns, as its own box
     drawn = mock_row(f'<h2>Your account</h2><div style="min-height: 200px">{APP_PANEL}</div>')
     assert drawn["status"] == "warn" and [leaf(h["selector"], 1) for h in drawn["hits"]] == ["div"], drawn   # the drawing in the band is its own box
     deep = mock_row(f"<div><h2>Parts</h2></div>{BADGE_TABLE}{legend}")
@@ -4049,6 +4055,8 @@ def test_what_only_the_tall_window_brings_is_kept_out_of_the_views_load_row(acme
         (v,) = json.loads(Path(rep["measures"]).read_text(encoding="utf-8"))["views"]
         assert v["errors"] == [] and v["failed_local"] == [] and v["non_local"] == [], (said, v["errors"], v["failed_local"])
         assert any(x.startswith(said) for x in v["tell_facts"]["strays_tall"]["load"]), (said, v["tell_facts"]["strays_tall"])
+        stray = tell_row(rep, "stray-box")
+        assert "in a window 1300 px high: the page logged " in stray["detail"] and "only after the resize, which page:load does not judge" in stray["detail"], (said, stray)   # said on the tell's row
         assert r.returncode in (0, 1), r.stdout + r.stderr
 
 

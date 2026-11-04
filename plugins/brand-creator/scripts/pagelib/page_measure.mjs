@@ -961,7 +961,7 @@ const TELL = {
  *  `hero`: {found, sel, h1_sel, top, words, viewport_height, lang, actions: [{sel, label (80), lang}]}: the first shown h1 and the nearest section, header, [role=banner] or element
  *  named hero around it (else its parent); `words` are the words of its text, outside a nav, that are in the first screen (the top of the page to the viewport height); `actions` are its
  *  shown links, buttons and submit inputs with a label, outside a nav and in the first screen, in document order.
- *  `boxes`: [{id, parent, sel, width, height, styled, in_lists, in_cells, table, list_area, media_px, headings, h1, labelled, band}]: shown boxes of at least the floor above, `parent` the id of the nearest box above that is also in the list; `styled` is the
+ *  `boxes`: [{id, parent, sel, width, height, styled, in_lists, in_cells, table, list_area, media_px, headings, h1, labelled, band, in_bands}]: shown boxes of at least the floor above, `parent` the id of the nearest box above that is also in the list; `styled` is the
  *  number of shown descendants with a background colour or image or a border (not form controls, table parts or rules); `in_lists` how many of those sit in the items of a list (a li of a ul or ol, the li and
  *  everything in it; the items of the outermost list in the box) and `list_area` the area in css px squared of those items themselves, the part of each li box that lies in the rectangle of the box (not the box of the list, which may be stretched past them, and not
  *  what a row of items runs on past the box; a list that holds no styled item adds none), so that
@@ -969,7 +969,8 @@ const TELL = {
  *  or a row (table, thead, tbody, tfoot, tr), so that pagecheck.py can tell a table of badges from a drawing; `media_px` the largest side in css px of the shown media
  *  inside, by element name ({"svg": 24, "img": 600}; img, svg, canvas, video and picture, a picture measured by the img it draws; {} for none): which of them is only an icon is for pagecheck.py to
  *  say; `headings` the shown headings (h1 to h6, [role=heading]) inside and `h1` the shown h1 among them, which tell a section of the page from a drawing; `labelled` whether the box or an ancestor has
- *  a non-empty data-sample; `band` whether the box is a band of the page: a section or [role=region] with a heading as a direct child or an aria-labelledby.
+ *  a non-empty data-sample; `band` whether the box is a band of the page: a section or [role=region] with a heading as a direct child or named by aria-labelledby after a heading, and
+ *  `in_bands` how many of the `styled` sit in a band inside the box (the box itself, when it is one, included).
  *  `tiles`: [{sel, tiles: [{sel, left, top, width, height}]}]: elements with exactly three shown element children (a <template>, a <script> or a hidden child is not counted) that each hold a shown heading.
  *  `headings`: [{sel, text (60), top}] (h1-h6) and `details`: [{sel, top}] (a details element with a summary); `last_band`: the last block of the main content {sel, top, words, headings, actions}.
  *  `viewport` is {width, height}; `truncated` is true when more than TELL.elements elements were on the page. */
@@ -1164,7 +1165,7 @@ async function tellFacts(page) {
     };
     const boxes = [];
     let walked = 0, nextId = 0;
-    const nothing = () => ({ styled: 0, media: {}, inLists: 0, inCells: 0, itemRects: [], rect: null, headings: 0, h1: 0 });
+    const nothing = () => ({ styled: 0, media: {}, inLists: 0, inCells: 0, inBands: 0, itemRects: [], rect: null, headings: 0, h1: 0 });
     const TABLE_PARTS = new Set(["table", "thead", "tbody", "tfoot", "tr"]);
     // the area of the union of rectangles, each clipped to r, so items stacked in one place (a fade carousel) count once: a sweep over the x edges, the y intervals of each strip merged
     const unionArea = (rects, r) => {
@@ -1195,7 +1196,7 @@ async function tellFacts(page) {
       const me = big ? { id: nextId++, parent: nearest ? nearest.id : null, sel: H.selector(el), width: round(r.width), height: round(r.height), el } : null;
       const isList = el.localName === "ul" || el.localName === "ol";
       const isCell = el.localName === "td" || el.localName === "th";
-      let styled = 0, inLists = 0, inCells = 0, items = 0, headings = has && el.matches(HEADING) ? 1 : 0, h1 = has && el.localName === "h1" ? 1 : 0;
+      let styled = 0, inLists = 0, inCells = 0, inBands = 0, items = 0, headings = has && el.matches(HEADING) ? 1 : 0, h1 = has && el.localName === "h1" ? 1 : 0;
       const itemRects = [], itemBoxes = [];   // the boxes of the li of the outermost lists inside el; and, for el a list, those of its own items
       const media = {};
       for (const c of el.children) {
@@ -1203,21 +1204,24 @@ async function tellFacts(page) {
         styled += got.styled;
         headings += got.headings;
         h1 += got.h1;
+        inBands += got.inBands;
         inCells += isCell ? got.styled : got.inCells;   // everything styled in a cell is in the cell, a badge in a td as much as a list in it
         for (const [name, side] of Object.entries(got.media)) media[name] = Math.max(media[name] ?? 0, side);
         if (isList && c.localName === "li") { items += got.styled; if (got.rect) itemBoxes.push(got.rect); }   // an item and all it holds is the list's; a list inside it is part of it
         else { inLists += got.inLists; for (const x of got.itemRects) itemRects.push(x); }
       }
       if (items) { inLists += items; for (const x of itemBoxes) itemRects.push(x); }   // a list that holds no styled item adds nothing; the room of the items themselves, not of the list: a list stretched past its items is not full of them
+      // a band of the page (O9): a section or a region with a heading as a direct child, or named by aria-labelledby after a heading; what it holds is in a band for every box round it
+      const named = (el.getAttribute("aria-labelledby") || "").split(/\s+/).filter(Boolean).some((id) => { const t = document.getElementById(id); return Boolean(t && t.matches(HEADING)); });
+      const isBand = has && (el.localName === "section" || el.getAttribute("role") === "region") && ([...el.children].some((c) => c.matches(HEADING)) || named);
       if (me && styled >= K.boxFloor[2] && boxes.length < K.boxes) {
         const sample = el.closest("[data-sample]");
         const listArea = unionArea(itemRects, r);   // an item is counted where it lies in this box, and a place two items share once: a carousel fills no more of the box than the box
         boxes.push({ id: me.id, parent: me.parent, sel: me.sel, width: me.width, height: me.height, styled, in_lists: inLists, in_cells: inCells, table: TABLE_PARTS.has(el.localName), list_area: round(listArea), media_px: media, headings, h1,
-                     labelled: Boolean(sample && sample.getAttribute("data-sample").trim()),
-                     // a band of the page (O9): a section or a region with a heading of its own as a direct child, or named by aria-labelledby
-                     band: (el.localName === "section" || el.getAttribute("role") === "region") && ([...el.children].some((c) => c.matches(HEADING)) || Boolean((el.getAttribute("aria-labelledby") || "").trim())) });
+                     labelled: Boolean(sample && sample.getAttribute("data-sample").trim()), band: isBand, in_bands: inBands });
       }
-      return { styled: styled + (has && styledBox(el, s) ? 1 : 0), media, inLists, inCells, itemRects, rect: has ? { left: r.left, top: r.top, right: r.right, bottom: r.bottom } : null, headings, h1 };
+      const own = styled + (has && styledBox(el, s) ? 1 : 0);
+      return { styled: own, media, inLists, inCells, inBands: isBand ? own : inBands, itemRects, rect: has ? { left: r.left, top: r.top, right: r.right, bottom: r.bottom } : null, headings, h1 };
     };
     for (const c of document.body.children) walk(c, null);
     boxes.sort((a, b) => a.id - b.id);
