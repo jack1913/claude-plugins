@@ -24,6 +24,10 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
 2. Run `ListAgents`. Show the user the open sessions by name, each with its folder, and ask once
    which of them you may use. "All" and "all but X" are answers. Only the sessions the user names
    go into your care; leave every other session alone, its transcript included.
+   In the same question, ask once whether the sessions may compact themselves through the plugin's
+   mod (`self_compact`), and a finished worker be cleared. Suggest yes; only an explicit yes counts,
+   and silence is no. A yes lets you pass `--self-compact` to `spawn` and `adopt`; without it, no
+   session of yours is compacted or cleared by the mod.
 3. Reserve the analyst before any job. Take one clean session from the user's answer:
    `puppet adopt <session> --role analyst`, then send it `analyst-brief.md`, filled in. If none is
    clean, `puppet spawn puppet-analyst <your cwd> <brief file> --tier creative --job analyst`, then
@@ -45,7 +49,7 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
 ## Rules
 
 1. **Housekeeping only.** On your own you may `adopt`, `assign`, `finish`, `reopen`, `pick`, `spawn`,
-   `cycle`, `close`, `harvest` and `logs`, each with a one-line log to the user. Commits (unless the user
+   `cycle`, `compact`, `clear`, `close`, `harvest` and `logs`, each with a one-line log to the user. Commits (unless the user
    pre-authorized them for this job), pushes, PR posts, approvals, live or external writes and
    anything destructive go to the user.
 2. **Sessions do the work.** Anything that changes a repository (merge, checkout, stash, branch
@@ -62,7 +66,8 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
    already had a job, and a session the user cleared or restarted until you ask them and `adopt` it
    again. When the user has asked to reuse sessions, a session whose job is finished takes the next
    one with `assign --reuse`, which still refuses it at 30% or more of its window (the figure the
-   user's status line shows): give the user its `/clear` line first. More work for the job a session
+   user's status line shows): `clear` it first when its `list` row says `mod on` (rule 7), else give
+   the user its `/clear` line. More work for the job a session
    holds goes to it with `assign <session> <job> --extend`, which keeps the active job and merges
    the label and scope. A job you closed too early comes back with `reopen <session>`, which undoes
    `finish`. Never work around a refusal, and never edit `workers.json` by hand.
@@ -75,17 +80,31 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
 
    | Measured state | Background worker | The user's own session |
    |---|---|---|
-   | idle after a finished task, **≥ 30%**, job continues | `cycle` | nothing: auto-compaction handles it; only if the user opted in, give `<session>: /compact <focus>` to paste |
-   | working, **≥ 50%** | ask it to stop at its next task boundary, then as above | nothing, unless the user opted in: then as above |
+   | idle after a finished task, **≥ 30%**, job continues | `compact <worker> <focus>` when its `list` row says `mod on`, else `cycle` | `compact <session> <focus>` when its row says `mod on`; else nothing: auto-compaction handles it, and only if the user opted in, give `<session>: /compact <focus>` to paste |
+   | working, **≥ 50%** | ask it to stop at its next task boundary, then as above | nothing, unless the user opted in or its mod is on: then as above |
    | working, any size | nothing: never compact mid-task | nothing |
    | job finished, any size | `close`: never compact a finished job | `finish`; never compact |
 
+   **The mod.** `compact` and `clear` go through the plugin's mod inside the session, which runs them
+   once the session is idle: the helper writes a request file, never a message. They work only where
+   the session's `list` row says `mod on (<source>)`: the user said yes in that window, set
+   `self_compact` to `on`, or you passed `--self-compact` to `spawn` or `adopt` after the user's yes
+   (On start, step 2). `mod off (mode ask)` is a session the user did not switch on,
+   `mod off (mode off)` is the user's veto, `mod stale` a mod that stopped, and no `mod` at all a
+   session where the plugin is not loaded: use today's route there (`cycle` for a worker, nothing or
+   the paste line for a window). Both verbs refuse a session that is not idle or is waiting on a dialog, and on any
+   failure print the paste line as the fallback: relay that to the user.
+   `clear` is for a worker whose job you `finish`ed, only between jobs, never queued. It refuses the
+   master, the analyst and any session with an active job, and the mod refuses them again. Never
+   `clear` your own session. `clear` re-adopts the worker under its new session id as `clean`.
+
    For the user's own session, never `cycle`: it has no remote stop. A message cannot compact a
-   session either: a `/compact` sent with SendMessage arrives as plain text and runs no command.
-   By default let its auto-compaction run; pasting compactions by hand is the user's chore, not a
-   safeguard. Give a `/clear` line only when a new job needs a different model or a clean context.
-   The user opts in to `/compact` lines once ("give me compact lines"); then write the focus from
-   the job and its next step, and measure again once the user says it is done.
+   session either: a `/compact` sent with SendMessage arrives as plain text and runs no command;
+   use `compact`. Where the mod is not on, let its auto-compaction run; pasting compactions by hand
+   is the user's chore, not a safeguard. Give a `/clear` line only when a new job needs a different
+   model or a clean context. The user opts in to `/compact` lines once ("give me compact lines");
+   then write the focus from the job and its next step, and measure again once the user says it is
+   done.
 8. **Measured, not reported.** Act only on `puppet measure`. It works on any listed session, the
    user's windows included. `fresh` means no turns yet. A session's own estimate of its size ("I'm
    full") is a prompt to measure, never a reason to act. The 30% and 50% are shares of the
@@ -97,11 +116,17 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
    `PUPPET_CONTEXT_WINDOW` sets a default.
 9. **Cost.** A cycle re-reads the whole context: even a small worker's compaction can cost close
    to a dollar. Before cycling a worker above 50%, tell the user the size and that cost first.
+   `compact` through the mod runs in the live process and reads the prompt cache (one probe: 22,470
+   of 24,266 input tokens were cache reads), so it is the cheaper route; no whole-cycle figure for
+   it is measured yet.
 10. **Your own context.** At each job's end, `puppet measure <your name>`. At 50% or more of your
     window while you are idle, give the user your own `/compact <focus>` line once, unprompted: you
     cannot compact yourself, and a master left to grow makes the user notice and do it (2026-11-02:
     a master at 434,785 tokens). Give it again only after the next 25% of growth. The roster and
-    the logs folder hold your state, so a compaction loses nothing that matters.
+    the logs folder hold your state, so a compaction loses nothing that matters. When your own
+    `list` row says `mod on`, run `puppet compact <your name> <focus>` instead: the mod compacts you
+    once your turn ends, and the helper does not wait. That a master's own compaction runs this way
+    is not yet tested in a window: if `measure` shows no drop at your next turn, give the line.
 11. **Only the commands listed here.** Run only the helper commands below and the `claude` calls
     this file names. An unknown `claude <word>` is not an error: it starts a new session with that
     word as its prompt.
@@ -136,7 +161,9 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
    finish by itself. A background worker then gets `puppet close <worker>`, or, when the
    user asked to reuse sessions and the next job is queued, `cycle <worker> <focus> --next <brief
    file>`. The user's own session stays in your care, done and no longer clean. If it will take the
-   next job, give the user `<session>: /clear` to paste, then `adopt` it again: it comes back clean.
+   next job: for a worker whose `list` row says `mod on`, `puppet clear <session>` (only between
+   jobs, as rule 7 says), which keeps it in the roster as clean; otherwise give the user
+   `<session>: /clear` to paste, then `adopt` it again: it comes back clean.
 3. Tell the analyst in one line: `job ended: <label>; harvest now`.
 
 ## Relay protocol
@@ -206,6 +233,9 @@ reviews only after that line, and starts on it without waiting for a new brief f
     format.
   - `{{handoffs}}`: whom it sends `FINAL: <path>` to, or whose `FINAL:` starts it.
   - `{{tier_check}}`: for a fresh session, "First, reply with your model name."
+  - `{{self_compact}}`: for a worker you spawn with `--self-compact`: "The master may compact your
+    context between turns and clear it once your job is finished. After your `FINAL:`, nothing may
+    live only in your head: the report, the files and git hold it." Delete the line otherwise.
   - `{{test_tmp}}`: for a job that runs tests, a folder on a local drive with no spaces in its
     path (such as `<drive>:/tmp-<job>`). Never offer a scratch path with a space as TMP.
   - `{{decided}}`: values the user already fixed that a tool or plugin in the worker's window will
@@ -248,6 +278,12 @@ reviews only after that line, and starts on it without waiting for a new brief f
   4): one roster holds one master and one analyst. The checkout lock sees only its own group's
   roster, so never send a job into a checkout another group works in; ask the user which group
   owns it.
+- The mod (`compact`, `clear`) needs Claude Code 2.1.287 or newer, and a window opened before the plugin
+  was installed or updated needs `/reload-plugins`. It does not load under `--safe-mode`, `--bare` or
+  `"disableAllHooks": true`. The plugin option `self_compact` is `ask` by default: an interactive window
+  asks once at start and does nothing without a yes; `on` and `off` skip the question, and `off` also
+  overrides your `--self-compact`. The helper and the mod meet in `PUPPET_MOD_DIR`, else
+  `<config dir>/puppet-master/mod`.
 - The helper runs `claude` without a shell, so on Windows an npm-installed `claude.cmd` shim cannot
   be launched. Use the native `claude` executable, or set `PUPPET_CLAUDE_BIN` to its full path.
 - Typing a `claude -p ... "/compact <focus>"` yourself from Git Bash needs `MSYS_NO_PATHCONV=1`, or
@@ -266,14 +302,16 @@ command: the roster becomes `workers-<group>.json` and the logs folder `<logs>/<
 | Command | Does | Prints |
 |---|---|---|
 | `measure <session> [--window N] [--compact-at N] [--json]` | tokens, % of the window and of the compaction point, state | `<name>  <tokens>  <pct>%  <state>  (window N from <source>)`, then `  <p>% of compaction point <C> (<source>)` and `  WARN near compaction` when known; `?%  (window unknown)` when only the point is; or `<name>  0  0%  fresh  (no turns yet)` |
-| `list [--name <session>] [--window N] [--compact-at N] [--json]` | every session in your care, measured, plus unadopted background workers; `--name` prints one | one `measure` line each, then `model <model> <effort>` (`model fresh` before the first turn), kind, role and job; `gone` rows show the resume command, `changed` rows mean a new session id; `DONE? run finish` ends an active job's row whose session reported done |
-| `adopt <session> [--role analyst\|master] [--window N]` | takes a session into your care; `--role master` is you | `adopted <name> (<kind>, <role>, clean or unknown) in <checkout>` |
+| `list [--name <session>] [--window N] [--compact-at N] [--json]` | every session in your care, measured, plus unadopted background workers; `--name` prints one | one `measure` line each, then `model <model> <effort>` (`model fresh` before the first turn), kind, role and job; `gone` rows show the resume command, `changed` rows mean a new session id; `DONE? run finish` ends an active job's row whose session reported done; `mod on (<source>)`, `mod off (mode <mode>)` or `mod stale` ends the row of a session whose mod beat, and no `mod` means the plugin is not loaded there |
+| `adopt <session> [--role analyst\|master] [--window N] [--self-compact]` | takes a session into your care; `--role master` is you; also tells the session's mod its role, and `--self-compact` switches its mod on (only after the user's yes) | `adopted <name> (<kind>, <role>, clean or unknown) in <checkout>`, then `; self-compact switched on` with the flag |
 | `assign <session> <job> [--tier T] [--reuse \| --extend] [--scope F] [--no-git]` | records the job before you send it; `--reuse` refuses at 30% of the window and prints the compaction-point share too; `--extend` merges into the active job and checks the merged scope | `assigned <name>: <job>` (`extended …` with `--extend`), then the tier check: `ok`, `unchecked`, or `MISMATCH … it runs <model> <effort>` |
 | `finish <session>` | marks the job done | `finished <name>: <job>` |
 | `reopen <session>` | undoes `finish`: the last job is active again; refuses a job that is not done, or a checkout another job now edits | `reopened <name>: <job>` |
 | `pick <cwd> [--tier T] [--scope F] [--no-git]` | a clean session in that checkout: one matching the tier first, the user's first | `<name>` and its tier check, or `no clean session for <checkout>; spawn one` |
-| `spawn <name> <cwd> <brief file> --tier T \| --effort E [--model M] [--job <label>] [--scope F] [--no-git]` | `claude --bg --model --effort` with the brief; the tier gives both unless `--model`/`--effort` override; exit 2 with neither tier nor effort | `spawned <name> id=<id> in <checkout> (model <m>, effort <e>)` |
+| `spawn <name> <cwd> <brief file> --tier T \| --effort E [--model M] [--job <label>] [--scope F] [--no-git] [--self-compact]` | `claude --bg --model --effort` with the brief; the tier gives both unless `--model`/`--effort` override; exit 2 with neither tier nor effort; `--self-compact` switches the worker's mod on (only after the user's yes) | `spawned <name> id=<id> in <checkout> (model <m>, effort <e>)`, then `; self-compact switched on` with the flag |
 | `cycle <worker> <focus> [--next <brief file>]` | background only: stop, headless `/compact <focus>`, verify, restart | `cycled <name>: <before>→<after> tokens (p1%→p2%), resumed id=<id>` |
+| `compact <session> <focus>` | any adopted session whose mod is on and that is idle: the mod compacts it with your focus, the helper checks the transcript for a new `compact_boundary`; your own session is queued for after your turn | `compacted <name>: <before>→<after> tokens`; for yourself `requested <name>'s own compaction: …`; on failure the paste line |
+| `clear <worker>` | a worker with a finished job, its mod on and idle: the mod runs `/clear`, the helper re-adopts it as clean under its new session id; refuses a master, an analyst, an active job | `cleared <name>: new session <id>, clean`; on failure the paste line |
 | `close <worker>` | background only: stop, `claude rm`; the transcript stays resumable | `closed <name> (resume: cd "<cwd>" && claude --resume <sessionId>)`; a later lookup of the name prints `<name> is closed (resume: …)` |
 | `harvest --master <your name> LOGS` | the analyst's: new transcript events, secrets blanked; one harvest at a time | `harvested <n> events from <s> sessions (<l> new lines) into <logs>`, then any session with no transcript or read again from the top |
 | `logs LOGS` | the logs folder and the newest earlier report not yet reviewed | `<logs>`, then `unreviewed report: <path>` when there is one |
@@ -295,7 +333,9 @@ command: the roster becomes `workers-<group>.json` and the logs folder `<logs>/<
 - "I'll just run the merge myself" → it is a job for a session.
 - "I'll rephrase what the user meant" → quote them verbatim, then add your reading.
 - "I'll try `claude <something>`" → only the calls this file names.
-- "I'll send it `/compact` as a message" → it arrives as plain text; let auto-compaction run, or give the user the line if they opted in.
+- "I'll send it `/compact` as a message" → it arrives as plain text; use `puppet compact` where its mod is on, else let auto-compaction run, or give the user the line if they opted in.
+- "Its mod is loaded, so I'll compact or clear it" → only where the row says `mod on`: loaded is not on. `clear` only after `finish`, only a worker.
+- "I'll clear my own window, or the analyst's" → never: `clear` is for finished workers.
 - "This used session is free, I'll give it the next job" → only if the user asked to reuse
   sessions, and then with `assign --reuse`; otherwise `pick` a clean one or `spawn`.
 - "I'll just build the overlay and compare it myself" → it is a job for a session.

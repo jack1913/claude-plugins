@@ -13,7 +13,8 @@ Other ways to install (from a shell, for a whole team):
 [Install a plugin](../../docs/manual/getting-started/install-a-plugin.md).
 
 It needs Node.js 20 or newer, and a setting you add yourself first: see
-[Run background workers](docs/manual/use/run-background-workers.md).
+[Run background workers](docs/manual/use/run-background-workers.md). The optional compact-and-clear mod needs Claude
+Code 2.1.287 or newer; without it, everything else works.
 
 ## Try it
 
@@ -35,15 +36,22 @@ How-to page: [Run background workers](docs/manual/use/run-background-workers.md)
 
 ## What it adds to your sessions
 
-puppet-master adds one skill. It adds no hooks, agents or servers.
+puppet-master adds one skill and one small mod. It adds no agents or servers.
 
 - **It runs only when you type it**, so it never starts driving your sessions on its own.
+- **Its mod is off until you say yes.** The mod runs inside each session where the plugin is on. A window you opened
+  asks once at start whether the master may compact it, and does nothing without a yes. A worker is switched on only
+  by the master, after you said yes. It touches only its own folder, `~/.claude/puppet-master/mod`. It can compact
+  any switched-on session when idle, and clear only a worker whose job is finished, never the master. The
+  `self_compact` setting turns it on or off for good.
 - **It hands jobs to the Claude sessions you name**, and starts, compacts and closes background ones, which run as you with your settings. It keeps a list of those sessions in `~/.claude/puppet-master/workers.json` (`workers-<group>.json` when several masters run on one machine).
 - **Its analyst** reads the transcripts of those sessions and the master's, and writes the day's events, findings and report to a logs folder you choose (the plugin's data folder by default), with any text that looks like a secret blanked.
 
 ## What it never does
 
-- It never compacts a session mid-task, never creates a git worktree, and never changes your settings.
+- It never compacts a session mid-task, never clears the master or a session with an open job, never creates a git
+  worktree, and never changes your settings. The one exception is its own `self_compact` option, saved only when you
+  answer "always" or "don't ask again".
 - Pushes, approvals and anything destructive stay yours.
 - Its analyst never changes the plugin: it proposes, and you decide.
 

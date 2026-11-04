@@ -19,6 +19,12 @@ Find what you see, then do what's next to it.
 | `… belongs to group "<group>"; pass --group <group>` | That proposal id is another master's. Decide it in that master's session, or tell this one to use that group |
 | `PUPPET_DAY_START_HOUR must be a whole hour from 0 to 23` | Set it to a whole hour, such as `5`, or remove it |
 | `just compacted (auto); its size is known after its next turn` | Wait for that session's next answer, then ask again |
+| `no mod heartbeat` | The plugin isn't loaded in that session. Run `/reload-plugins` there, or paste the line the message ends with. Claude Code must be 2.1.287 or newer |
+| `loaded but not switched on` or `mod off (mode ask)` on a session's line | You didn't switch the mod on in that session. Say yes in its window, or tell Claude to switch it on |
+| `self_compact off, the user's veto` | You set `self_compact` to `off`. Set it back to `ask` or `on` in the plugin's options |
+| `mod stale` on a session's line | The mod stopped in that session. Run `/reload-plugins` there |
+| `was NOT compacted` or `was NOT cleared` | The message says why, such as `busy` or `stale`, and ends with the line to paste. Try again when the session is idle |
+| `is waiting on a dialog` | That session is waiting for you to answer a question in its own window. Answer it first |
 | A logs folder named `${user_config…}` | The helper never creates one. If you see it, delete it and set `PUPPET_LOGS_DIR` to the folder you want |
 | A background worker can't edit files | Add `"worktree": { "bgIsolation": "none" }` to your own `~/.claude/settings.json`. See [Run background workers](../use/run-background-workers.md) |
 

@@ -19,6 +19,8 @@ only does the housekeeping; every decision stays yours.
 - You've run `claude` once in each folder a worker will use, so the folder is trusted.
 - On Windows, the native `claude` executable is on your `PATH`. Installed through npm? Set `PUPPET_CLAUDE_BIN` to the
   full path of the `claude` executable, because the npm `claude.cmd` shim can't be started.
+- Optional: for the master to compact and clear sessions for you, Claude Code 2.1.287 or newer. See
+  [Let sessions compact themselves](#let-sessions-compact-themselves).
 - Optional: choose where the analyst keeps its logs. When you enable puppet-master, Claude Code asks for the **puppet-master
   logs folder**; leave it empty to use the plugin's own data folder. A copy of the skill installed by hand reads
   `PUPPET_LOGS_DIR` instead.
@@ -30,7 +32,9 @@ only does the housekeeping; every decision stays yours.
    > /puppet-master:puppet-master
 
 2. Claude lists your open sessions by name, with their folders, and asks which it may use. Answer "all", or "all but
-   the ones in my other project". Sessions you leave out are never touched or read.
+   the ones in my other project". Sessions you leave out are never touched or read. In the same question it asks
+   whether it may compact your sessions and clear finished workers for you. Claude suggests yes, but nothing
+   happens unless you answer yes.
 3. It sets one of them aside as the **analyst** and gives it no job. If none of your sessions is clean, it starts a
    background session for that.
 
@@ -61,16 +65,45 @@ there, it starts a background worker instead, on the model and effort the job's 
 Claude measures each session's context, and compacts only between tasks:
 
 - An idle session at 30% of its context or more, with work left, needs compacting.
-  - A background worker is compacted and restarted by Claude.
-  - Your own window is left to auto-compact. If you'd rather choose the moment, say "give me compact lines" once, and
-    Claude gives you one line to paste, such as `backend-b7: /compact keep the merge state and the next step`. A
-    message from another session can't run `/compact`.
+  - With the mod on in that session, Claude compacts it for you when it is idle, a window of yours or a worker alike.
+  - Without it, a background worker is compacted and restarted by Claude.
+  - Without it, your own window is left to auto-compact. If you'd rather choose the moment, say "give me compact
+    lines" once, and Claude gives you one line to paste, such as `backend-b7: /compact keep the merge state and the
+    next step`. A message from another session can't run `/compact`.
 - A busy session at 50% or more is asked to stop at its next task boundary first.
 - Before compacting a worker above 50%, Claude tells you its size and that a compaction can cost close to a dollar.
 - Once Claude has seen a session auto-compact, it knows the size where that happens. From 80% of it, a session's line
   ends in `WARN near compaction`.
 
 Ask "how are my sessions?" to see each one's size, model and effort, state and job.
+
+## Let sessions compact themselves
+
+puppet-master ships a small mod that runs inside a session and compacts it, or clears it, when the master asks. It
+does nothing in a session until you switch it on, and it never touches a session that is working.
+
+1. Make sure Claude Code is 2.1.287 or newer. A window you opened before you installed or updated puppet-master needs
+   `/reload-plugins`.
+2. Open a window. At the start, it asks whether the master may compact it. Answer:
+   - **Yes, this session** to switch it on for this window only.
+   - **Yes, always on this machine** to switch it on everywhere. This sets the `self_compact` option to `on`.
+   - **No** to leave it off for this window. It asks again next time.
+   - **No, and don't ask again on this machine** to set `self_compact` to `off`. That also overrides the master.
+   A dismissed question counts as no. A background worker never asks: the master switches it on, after you said yes
+   when you started the master.
+3. Ask "how are my sessions?". A session whose mod is on ends its line in `mod on (asked)`, `mod on (optin)` or
+   `mod on (config)`. `mod off (mode ask)` is a window you did not switch on, `mod stale` a mod that stopped, and no
+   `mod` at all a session where the plugin is not loaded.
+
+What the master then does:
+
+- It compacts an idle session with a focus it writes from the job, in your window or a worker.
+- It clears only a worker whose job is finished, between jobs, and only when it is idle. It never clears the window
+  you use as the master, the analyst, or a session with an open job.
+- If a session can't do it, the master says why and gives you the line to paste instead, such as
+  `backend-b7: /clear`.
+
+To turn it off for good, set `self_compact` to `off` in the plugin's options (see [Commands](../reference/commands.md#plugin-options)).
 
 ## Wrap up the day
 
@@ -106,6 +139,9 @@ there starts at 05:00, so work past midnight stays with its day. To start it at 
 | `changed (new session id …)` | The window was cleared or restarted. Tell Claude whether it is clean now |
 | `just compacted (auto); its size is known after its next turn` | Wait for that session's next answer, then ask again |
 | `is stopped and NOT compacted` | Run the restart command the message ends with |
+| `no mod heartbeat` | The plugin isn't loaded in that session. Run `/reload-plugins` there, or paste the line the message ends with |
+| `loaded but not switched on` | You didn't switch the mod on in that session. Say yes in its window, or tell Claude to switch it on |
+| `was NOT compacted` or `was NOT cleared` | The message says why, and ends with the line to paste |
 | A worker can't edit files | Check the `bgIsolation` line in your `~/.claude/settings.json` |
 
 More: [Troubleshooting](../reference/troubleshooting.md).

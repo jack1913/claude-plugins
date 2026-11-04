@@ -16,12 +16,15 @@ sounds like coordinating sessions never starts it.
 - [`worker-brief.md`](../../skills/puppet-master/worker-brief.md) is the brief every worker gets, with the placeholders
   `{{master_name}}`, `{{job}}`, `{{commit_rules}}` and `{{standing_rules}}`, the ones `SKILL.md` explains under Briefs
   for every brief: `{{deliverable}}`, `{{local_state}}` and `{{approvals}}`, and the conditional ones: `{{tier_check}}`, `{{test_tmp}}`, `{{decided}}`, `{{write_scope}}`, `{{peers}}`, `{{owners}}`, `{{handoffs}}`,
-  `{{references}}`, `{{fetch}}` and `{{open_premises}}`.
+  `{{references}}`, `{{fetch}}`, `{{open_premises}}` and `{{self_compact}}`.
 - [`analyst-brief.md`](../../skills/puppet-master/analyst-brief.md) is the analyst's brief, with `{{master_name}}`,
   `{{helper}}`, `{{logs_args}}` and `{{proposal_id}}`, the closed tag list and the report's shape.
 - [`scripts/puppet.mjs`](../../skills/puppet-master/scripts/puppet.mjs) is the helper and its command line: `measure`,
-  `list`, `adopt`, `assign`, `finish`, `reopen`, `pick`, `spawn`, `cycle`, `close`, `harvest`, `finding`, `summary`, `decide`
-  and `shipped`.
+  `list`, `adopt`, `assign`, `finish`, `reopen`, `pick`, `spawn`, `cycle`, `compact`, `clear`, `close`, `harvest`,
+  `finding`, `summary`, `decide` and `shipped`.
+- [`hooks/puppet-mod.js`](../../hooks/puppet-mod.js), listed by [`hooks/hooks.json`](../../hooks/hooks.json), is the
+  mod that compacts or clears a session from inside (see [The mod](#the-mod)). Claude Code runs it in its own
+  environment, not in Node; `hooks/package.json` only lets Node import it in the tests.
 - [`scripts/harvest.mjs`](../../skills/puppet-master/scripts/harvest.mjs) resolves the logs folder, redacts secrets
   and pulls events out of transcripts.
 - [`scripts/analyst.mjs`](../../skills/puppet-master/scripts/analyst.mjs) holds the tags, findings, the day's summary
@@ -78,11 +81,18 @@ All three scripts use Node built-ins only, with no npm and no `package.json`.
   when the job continues; at 50% or more, ask a working session to stop at its next boundary; never compact mid-task;
   a finished job is closed, never compacted. An automatic threshold that can fire mid-task is not the mechanism, so
   the helper warns before one fires (`WARN near compaction`, from 80% of the session's compaction point). A
-  background worker is compacted by `cycle`. A window the user opened has no remote stop and a message cannot compact
-  it, so the master lets its auto-compaction run (2026-11-01: four hand-pasted `/compact` lines were the user's
-  chore, while two auto-compactions did no harm) and gives a `<session>: /compact <focus>` line only when the user
-  opted in; a `/clear` line is for a new job that needs another model or a clean context. The master treats its own
-  context the same way.
+  background worker is compacted by `compact` where its mod is on, else by `cycle`. A window the user opened has no
+  remote stop and a message cannot compact it, so, where its mod is not on, the master lets its auto-compaction run
+  (2026-11-01: four hand-pasted `/compact` lines were the user's chore, while two auto-compactions did no harm) and
+  gives a `<session>: /compact <focus>` line only when the user opted in; a `/clear` line is for a new job that needs
+  another model or a clean context. The master treats its own context the same way, through its own mod when on.
+- **The mod is off unless switched on, and clears only finished workers.** The user's terms, 2026-11-04: "Compact
+  freely, clear only between jobs and only for workers, do not clear master", and the mod asks at session start
+  with a suggested yes, but "if not said explicit it wont run". So silence is off: the plugin option `self_compact` is
+  `ask` by default, a window asks once, and a background worker is switched on only by the master's `--self-compact`
+  after the user's yes. `off` is the user's veto and beats the master's opt-in. `clear` is refused by the helper for
+  a master, an analyst and any session without a finished job, and refused again by the mod, which clears only a
+  session whose role file says `worker`, and only while idle (never queued behind a prompt).
 - **Measured, not reported.** A worker's own estimate of its size is a prompt to measure, never a reason to act:
   workers have claimed to be full at about a fifth of their window.
 - **No permission laundering.** A relayed answer is never the user's approval of a permission prompt in a worker, and
@@ -175,6 +185,8 @@ reads as an active background worker. The file is written atomically (a temp fil
   A session listed under a new `sessionId` (the user cleared or restarted it) is `changed`, and `assign` refuses it
   until it is adopted again. One no longer listed is `gone`, with its resume command, and its record is dropped.
   Background sessions that nobody adopted are listed too.
+- A session whose mod has beaten ends its `list` row in `mod on (<source>)`, `mod off (mode <mode>)` or `mod stale`,
+  and its JSON row has a `mod` string; a session whose mod never beat has neither.
 - `list --json` prints one JSON object per row. A measured row has `name`, `id`, `tokens`, `percent`, `window`,
   `windowSource`, `compactAt`, `compactSource`, `compactPercent`, `warn`, `state`, `tokenSource`, `model`, `effort`
   and `autoCompactAt`, plus `kind`, `role`, `job`, `jobState` and `roster: true` for a roster session. A changed row
@@ -184,6 +196,64 @@ reads as an active background worker. The file is written atomically (a temp fil
   that no session has the name. Adopting or spawning the name again clears it.
 - `spawn` prunes records of sessions that are no longer listed, printing how to resume each. The transcripts stay, so
   nothing is lost.
+
+## The mod
+
+`hooks/puppet-mod.js` runs inside every session that loads the plugin and, in a session where it was switched on,
+compacts or clears that session when the helper writes a request. Options considered and why this one:
+[clear-compact-options.md](clear-compact-options.md).
+
+**Switched on** means one of: the user said yes to the start question (`asked`), `self_compact` is `on` (`config`), or
+the helper wrote an opt-in for the session (`optin`, from `spawn` or `adopt --self-compact`). `self_compact` `off`
+beats all three. A missing config row counts as off.
+
+**Files.** One folder, `PUPPET_MOD_DIR` or `<config dir>/puppet-master/mod`, written atomically by the helper (a
+temp file, then a rename) and plainly by the mod (the mod has no rename or delete; it blanks a handled request to
+`{}`):
+
+| File | Written by | Holds |
+| --- | --- | --- |
+| `heartbeat/<sessionId>.json` | the mod, every 3 s | `sessionId`, `version`, `beat` (ms), `mode`, `enabled`, `source`, `role`, `ask`, `turnRunning`, `lastError` |
+| `optin/<sessionId>.json` | the helper | the master's opt-in |
+| `roles/<sessionId>.json` | the helper, on `adopt` and `spawn` | `role` |
+| `requests/<sessionId>.json` | the helper | `nonce`, `sessionId`, `requestedAt` (ms), `action` (`compact` or `clear`), `focus`, `role` |
+| `acks/<nonce>.json` | the mod | `ok`, `outcome`, tokens before and after, or `newSessionId` after a clear |
+
+The mod acts only on a request for its own session id, newer than five minutes, with a valid nonce it has not seen,
+and answers every refusal with an ack: `wrong-session`, `stale`, `not-enabled`, `refused-role`, `busy`, `vetoed`,
+`rejected`. A heartbeat older than 15 s reads as a mod that stopped. The helper removes an ack once read, and on a
+timeout withdraws its request so nothing runs later unseen.
+
+**Compact.** The mod calls `$.session.compact({ instructions: focus })`. It rejects while a turn runs, so the mod
+keeps the request and retries every 3 s until the request is stale. The helper then checks the transcript for a new
+`compact_boundary`, as `cycle` does. The master's own compaction cannot wait for an ack inside its own turn: the
+helper writes the request and returns, and the mod runs it after the turn.
+
+**Clear.** The mod tracks `turn.start`, `turn.complete` and `prompt.submit`. It runs `$.command.run({ command:
+"clear" })` only when a worker role file and the request both say `worker`, no turn runs, and no prompt arrived in the
+last 10 s. A busy session is answered `busy` at once, never retried or queued. After a clear the session id changes;
+the mod copies the opt-in and role files to the new id and acks it, and the helper re-adopts the worker as `clean`
+under that id, queueing the old id for the analyst's next harvest.
+
+**The start question.** In mode `ask`, 5 s after the start, `$.ui.ask` offers "Yes, this session (Recommended)",
+"Yes, always on this machine" (sets `self_compact` `on`), "No" and "No, and don't ask again on this machine" (sets
+`off`). A dismissal or no answer in 20 s leaves the session off. The question is asked only when `claude agents
+--json` lists the mod's own session as `interactive`, so the mod makes one `$.process.run` with no shell
+(`PUPPET_CLAUDE_BIN` is honoured). Why: a probe on 2026-11-04 found that in a `--bg` session `isInteractive` is
+`true` and `surface` is `terminal`, and that `$.ui.ask` leaves the dialog open after its timeout, so the worker sat at
+`state` `done`, `status` `waiting` for as long as the probe watched. A background row, no row, no `claude` and bad JSON
+all mean no question, recorded in the heartbeat as `ask`: `skipped-background` or `skipped-unknown`.
+
+**Verified** (probe sessions, 2026-11-04, Claude Code 2.1.318, Windows 10): a mod in a background session compacted it
+(24,266 to 6,452 tokens, with the focus kept) and cleared it (new session id, same background id); the ask hangs a
+background worker as described above. **Not yet tested in a foreground window**: the start question and its four
+answers, `/clear` and compaction of a window, the master's own compaction after its turn, that the mod's timer
+survives a `/clear`, and `mod on` showing in `list` through the plugin's real install. The mod runs in an environment
+with no Node and no `fs` in `claude plugin test`, so the unit tests in `tests/mod.test.mjs` drive it with a fake `$`
+and a Map for the files.
+
+**Known gap.** `IDLE_STATES` counts `state` `done` as idle even when `status` is `waiting` (a session parked on a
+dialog). `compact` and `clear` refuse `waiting` themselves; `cycle` and the checkout lock still use the old set.
 
 ## The analyst and its logs
 
@@ -267,6 +337,13 @@ failure. There is no silent fallback.
 - `cycle` refuses a worker that is not idle. If it fails after stopping the worker, the message says whether the worker
   was compacted and prints the `cd "<cwd>" && claude --bg --resume <sessionId>` that restarts it.
 - `close` keeps the registry record when `claude rm` fails, and prints the resume command.
+- `compact` refuses a session outside the roster, one that is not idle or is `waiting` on a dialog (the master's own
+  session is exempt from the idle check, since it runs in its own turn), and one whose mod has no fresh, switched-on
+  heartbeat; it names the reason and prints `give the user "<name>: /compact <focus>" to paste`. A refusing ack, a
+  timeout (90 s) and an ack with no new `compact_boundary` in the transcript are errors with the same line.
+- `clear` refuses a session that is not a worker, has an active job or no finished job, is not idle or is `waiting`,
+  or whose heartbeat does not show the `worker` role; a refusing ack, a missing new session id and a new session
+  that `claude agents` does not list are errors. It never sends a second request while one waits.
 
 ## Setup that stays the user's
 
@@ -276,6 +353,8 @@ The skill documents these and never applies them:
 - A trusted folder for each worker's cwd.
 - `crossSessionInbound: accept`, only if a worker runs in a mode that holds messages.
 - The logs folder, through the plugin option or `PUPPET_LOGS_DIR`.
+- `self_compact`: only the user's answer or their own setting changes it; the master never does, and passes
+  `--self-compact` only after the user's yes.
 
 ## Tests
 
@@ -295,7 +374,10 @@ captures of a real probe worker, plus `bg-stdout-color.txt` (the coloured `--bg`
 - logs-folder resolution, redaction (including a secret past the excerpt cut), event extraction across a partial
   line, dialog answers and `notify_when_idle`, harvest offsets, and filing by work day;
 - findings, the summary headline, decisions and the before/after means;
+- the mod against a fake `$` (`mod.test.mjs`): off unless switched on, the veto, stale and foreign requests, the
+  compact retry, every clear refusal, the start question's answers and its skips; the helper's `compact`, `clear`,
+  opt-in and role files and the `list` column against a scripted fake mod (`selfcompact.test.mjs`);
 - the text of `SKILL.md` and both briefs (the analyst brief's tags must equal the tags in `analyst.mjs`), and the
-  `plugin.json` option.
+  `plugin.json` options.
 
 A missing `node` (20 or newer) fails the test, never skips it.

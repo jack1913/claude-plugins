@@ -21,6 +21,14 @@
       "title": "puppet-master logs folder",
       "description": "Where the puppet-master analyst keeps its daily findings, reports and your decisions. Leave empty to use the plugin's data folder.",
       "required": false
+    },
+    "self_compact": {
+      "type": "string",
+      "title": "Let the master compact this session",
+      "description": "ask (default): an interactive window asks once at start, and does nothing unless you say yes. on: the master may compact this session when it asks. off: never, and the master's own opt-in is ignored. A session the master clears is always a worker it adopted.",
+      "default": "ask",
+      "options": ["ask", "on", "off"],
+      "required": false
     }
   }
 }

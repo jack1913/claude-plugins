@@ -5,6 +5,7 @@
 // on stderr, exit 2 for a usage error, 1 for an operational failure.
 
 import { spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -601,7 +602,7 @@ function isFresh(deps, agent) {
 
 const ROLES = new Set(["worker", "analyst", "master"]);
 
-export function adoptSession(deps, key, { role = "worker", window } = {}) {
+export function adoptSession(deps, key, { role = "worker", window, selfCompact = false } = {}) {
   if (!ROLES.has(role)) throw new PuppetError(`--role must be worker, analyst or master, got "${role}"`, 2);
   const w = window === undefined ? undefined : positiveInt(window, "--window");
   const agents = listAgents(deps);
@@ -631,6 +632,9 @@ export function adoptSession(deps, key, { role = "worker", window } = {}) {
   };
   reg.workers[agent.name] = rec;
   saveRegistry(deps, reg);
+  // The mod in that session reads its role from here; an opt-in only when the master says so.
+  writeModRole(deps, agent.sessionId, role);
+  if (selfCompact) writeModOptin(deps, agent.sessionId);
   return { name: agent.name, ...rec };
 }
 
@@ -800,7 +804,7 @@ function readBrief(deps, briefFile) {
   return text;
 }
 
-export function spawnWorker(deps, name, cwd, briefFile, { job, scope, noGit = false, tier, model, effort } = {}) {
+export function spawnWorker(deps, name, cwd, briefFile, { job, scope, noGit = false, tier, model, effort, selfCompact = false } = {}) {
   if (!NAME_RE.test(name)) throw new PuppetError(`worker name "${name}" must match [A-Za-z0-9._-]+`, 2);
   const launch = launchFlags({ tier, model, effort });
   const fields = jobFields(deps, { scope, noGit });
@@ -849,7 +853,9 @@ export function spawnWorker(deps, name, cwd, briefFile, { job, scope, noGit = fa
   };
   if (reg.closed) delete reg.closed[name];
   saveRegistry(deps, reg);
-  return { name, id, sessionId: started.sessionId, checkout, ...launch };
+  writeModRole(deps, started.sessionId, "worker");
+  if (selfCompact) writeModOptin(deps, started.sessionId);
+  return { name, id, sessionId: started.sessionId, checkout, selfCompact, ...launch };
 }
 
 // --- cycling: stop, headless compact, verify, restart -----------------------------------
@@ -975,19 +981,216 @@ export function closeWorker(deps, key) {
   return { name, sessionId, resume };
 }
 
+// --- the mod: a session compacts, or clears, itself when asked --------------------------
+//
+// The puppet-master mod (hooks/puppet-mod.js) runs inside a session where it was switched
+// on. It and this helper meet in one folder: the helper writes optin/, roles/ and
+// requests/, the mod writes heartbeat/ and acks/. A request is a file, never a message.
+
+// The mod beats every 3 s; a heartbeat older than this means it is not running.
+export const HEARTBEAT_MAX_AGE_MS = 15000;
+// How long a verb waits for the mod's ack, once a second.
+const ACK_WAIT_TRIES = 90;
+const ACK_WAIT_MS = 1000;
+
+export function modDir(deps) {
+  return deps.env.PUPPET_MOD_DIR ?? path.join(configDir(deps.env), "puppet-master", "mod");
+}
+
+const modFile = (deps, kind, name) => path.join(modDir(deps), kind, `${name}.json`);
+
+// A mod file's JSON; null when it is missing, empty or `{}`.
+function readModJson(deps, file) {
+  let text;
+  try {
+    text = deps.fs.readFileSync(file, "utf8");
+  } catch (e) {
+    if (e.code === "ENOENT") return null;
+    throw new PuppetError(`cannot read ${file}: ${e.message}`);
+  }
+  text = text.trim();
+  if (text === "" || text === "{}") return null;
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    throw new PuppetError(`${file} is not valid JSON: ${e.message}`);
+  }
+}
+
+function writeModJson(deps, file, value) {
+  deps.fs.mkdirSync(path.dirname(file), { recursive: true });
+  const tmp = `${file}.tmp`;
+  deps.fs.writeFileSync(tmp, `${JSON.stringify(value)}\n`);
+  deps.fs.renameSync(tmp, file);
+}
+
+export function writeModRole(deps, sessionId, role) {
+  writeModJson(deps, modFile(deps, "roles", sessionId), { role, at: deps.now().toISOString() });
+}
+
+export function writeModOptin(deps, sessionId) {
+  writeModJson(deps, modFile(deps, "optin", sessionId), { at: deps.now().toISOString() });
+}
+
+// What the mod in a session says: null when it never beat, `stale` when it stopped, else
+// the heartbeat itself.
+export function modHeartbeat(deps, sessionId) {
+  const hb = readModJson(deps, modFile(deps, "heartbeat", sessionId));
+  if (!hb) return null;
+  const age = deps.now().getTime() - hb.beat;
+  return age > HEARTBEAT_MAX_AGE_MS ? { ...hb, stale: true } : hb;
+}
+
+// The `list` column: nothing when no mod ever beat in that session.
+export function modLabel(hb) {
+  if (!hb) return null;
+  if (hb.stale) return "mod stale";
+  return hb.enabled ? `mod on (${hb.source})` : `mod off (mode ${hb.mode})`;
+}
+
+// A session that cannot be compacted or cleared right now: not idle, or idle but parked on a
+// dialog (`status waiting`, which `state done` hides: a session can sit behind a dialog and
+// still count as idle).
+function requireBoundary(agent, verb) {
+  const state = workerState(agent);
+  if (!IDLE_STATES.has(state)) {
+    throw new PuppetError(`${agent.name} is not at a task boundary (state ${state}); not ${verb} it`);
+  }
+  if (agent.status === "waiting") {
+    throw new PuppetError(`${agent.name} is waiting on a dialog (status waiting); not ${verb} it`);
+  }
+}
+
+// The mod must have switched itself on in that session, and beat lately.
+function requireMod(deps, agent, fallback) {
+  const hb = modHeartbeat(deps, agent.sessionId);
+  const why = !hb
+    ? "no mod heartbeat: the plugin is not loaded in that session (run /reload-plugins in its window, or Claude Code is older than 2.1.287)"
+    : hb.stale
+      ? "its mod heartbeat is stale: the mod stopped"
+      : !hb.enabled
+        ? `its mod is loaded but not switched on (self_compact ${hb.mode}${hb.mode === "off" ? ", the user's veto" : "; spawn or adopt it with --self-compact, or the user says yes in its window"})`
+        : null;
+  if (why) throw new PuppetError(`${agent.name}: ${why}. Fallback: ${fallback}`);
+  return hb;
+}
+
+// Writes the request file and, unless `wait` is false, waits for the mod's ack. On a timeout
+// the request is withdrawn, so it cannot run later unseen.
+async function modRequest(deps, sessionId, request, { wait = true } = {}) {
+  const file = modFile(deps, "requests", sessionId);
+  if (readModJson(deps, file)) throw new PuppetError(`a request for session ${sessionId} is already waiting; not sending another`);
+  const nonce = (deps.nonce ?? (() => randomBytes(6).toString("hex")))();
+  const requestedAt = deps.now().getTime();
+  writeModJson(deps, file, { nonce, sessionId, requestedAt, ...request });
+  if (!wait) return { nonce, requestedAt };
+  const ackFile = modFile(deps, "acks", nonce);
+  const sleep = deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+  for (let i = 0; i < ACK_WAIT_TRIES; i++) {
+    const ack = readModJson(deps, ackFile);
+    if (ack) {
+      deps.fs.rmSync(ackFile, { force: true });
+      return { nonce, requestedAt, ack };
+    }
+    await sleep(ACK_WAIT_MS);
+  }
+  const left = readModJson(deps, file);
+  if (left?.nonce === nonce) writeModJson(deps, file, {});
+  throw new PuppetError(`no answer from the mod in ${(ACK_WAIT_TRIES * ACK_WAIT_MS) / 1000} s; the request was withdrawn`);
+}
+
+const pasteLine = (name, text) => `give the user "${name}: ${text}" to paste`;
+
+// Compact a session through its own mod. A master's own compaction cannot wait for an ack
+// (it runs in the master's turn): the request is left for the mod, which compacts once the
+// turn has ended.
+export async function compactSession(deps, key, focus) {
+  if (!focus || !focus.trim()) throw new PuppetError("compact needs a focus text", 2);
+  const agents = listAgents(deps);
+  const reg = loadRegistry(deps);
+  const { agent, rec } = rosterRecord(agents, reg, key);
+  const fallback = pasteLine(agent.name, `/compact ${focus}`);
+  const self = rec.role === "master";
+  if (!self) requireBoundary(agent, "compacting");
+  requireMod(deps, agent, fallback);
+  const file = findTranscript(projectsDir(deps), agent.sessionId);
+  let r;
+  try {
+    r = await modRequest(deps, agent.sessionId, { action: "compact", focus, role: rec.role }, { wait: !self });
+  } catch (e) {
+    if (!(e instanceof PuppetError)) throw e;
+    throw new PuppetError(`${e.message}. Fallback: ${fallback}`);
+  }
+  if (self) return { name: agent.name, requested: true };
+  if (!r.ack.ok) throw new PuppetError(`${agent.name} was NOT compacted: ${r.ack.outcome}${r.ack.detail ? ` (${r.ack.detail})` : ""}. Fallback: ${fallback}`);
+  if (newBoundaries(deps.fs.readFileSync(file, "utf8"), new Date(r.requestedAt)).length === 0) {
+    throw new PuppetError(`${agent.name}: the mod says compacted, but the transcript gained no new compact_boundary`);
+  }
+  return { name: agent.name, before: r.ack.tokensBefore ?? null, after: r.ack.tokensAfter ?? null };
+}
+
+// Clear a worker whose job is finished, through its own mod, then keep it in the roster as
+// a clean session under its new session id.
+export async function clearSession(deps, key) {
+  const agents = listAgents(deps);
+  const reg = loadRegistry(deps);
+  const { agent, rec } = rosterRecord(agents, reg, key);
+  if (rec.role !== "worker") throw new PuppetError(`${agent.name} is the ${rec.role}; only a worker is cleared`);
+  if (rec.jobState === "active") throw new PuppetError(`${agent.name} holds an active job ("${rec.job}"); not clearing it`);
+  if (rec.jobState !== "done") {
+    throw new PuppetError(`${agent.name} has no finished job (it is ${rec.jobState}); only a finished job's session is cleared`);
+  }
+  requireBoundary(agent, "clearing");
+  const fallback = pasteLine(agent.name, "/clear");
+  const hb = requireMod(deps, agent, fallback);
+  if (hb.role !== "worker") {
+    throw new PuppetError(`${agent.name}: the mod sees its role as ${hb.role ?? "none"}, not worker; not clearing. Fallback: ${fallback}`);
+  }
+  let r;
+  try {
+    r = await modRequest(deps, agent.sessionId, { action: "clear", role: "worker" });
+  } catch (e) {
+    if (!(e instanceof PuppetError)) throw e;
+    throw new PuppetError(`${e.message}. Fallback: ${fallback}`);
+  }
+  if (!r.ack.ok) throw new PuppetError(`${agent.name} was NOT cleared: ${r.ack.outcome}${r.ack.detail ? ` (${r.ack.detail})` : ""}. Fallback: ${fallback}`);
+  const newSid = r.ack.newSessionId;
+  if (!newSid || newSid === agent.sessionId) {
+    throw new PuppetError(`${agent.name}: the mod says cleared, but gave no new session id (got ${newSid ?? "none"})`);
+  }
+  const sleep = deps.sleep ?? ((ms) => new Promise((res) => setTimeout(res, ms)));
+  let live;
+  for (let i = 0; i < 5 && !live; i++) {
+    live = listAgents(deps).find((a) => a.sessionId === newSid);
+    if (!live && i < 4) await sleep(ACK_WAIT_MS);
+  }
+  if (!live) {
+    throw new PuppetError(`${agent.name} was cleared (new session ${newSid}) but \`claude agents\` does not list it; adopt it again`);
+  }
+  const next = { ...reg.workers[agent.name], sessionId: newSid, job: null, jobState: "clean", ...(live.id ? { id: live.id } : {}) };
+  for (const f of ["tier", "scope", "jobStartedAt"]) delete next[f];
+  queueHarvest(reg, agent.name, agent.sessionId);
+  reg.workers[agent.name] = next;
+  saveRegistry(deps, reg);
+  writeModRole(deps, newSid, "worker");
+  return { name: agent.name, sessionId: newSid };
+}
+
 // --- subcommands ----------------------------------------------------------------------
 
 const USAGE = [
   "usage: puppet.mjs [--group <name>] <command> ...   (--group: this master's own roster and logs)",
   "  measure <worker> [--window N] [--compact-at N] [--json]",
   "  list [--name <session>] [--window N] [--compact-at N] [--json]",
-  "  adopt <session> [--role worker|analyst|master] [--window N]",
+  "  adopt <session> [--role worker|analyst|master] [--window N] [--self-compact]",
   "  assign <session> <job> [--reuse | --extend] [--scope <dir[,dir]>] [--no-git] [--tier creative|mechanical]",
   "  finish <session>",
   "  reopen <session>",
   "  pick <cwd> [--scope <dir[,dir]>] [--no-git] [--tier creative|mechanical]",
-  "  spawn <name> <cwd> <brief-file> (--tier creative|mechanical | --effort <level>) [--model <alias>] [--job <label>] [--scope <dir[,dir]>] [--no-git]",
+  "  spawn <name> <cwd> <brief-file> (--tier creative|mechanical | --effort <level>) [--model <alias>] [--job <label>] [--scope <dir[,dir]>] [--no-git] [--self-compact]",
   "  cycle <worker> <focus> [--next <brief-file>]",
+  "  compact <session> <focus>   (through the session's own mod; needs --self-compact or the user's yes)",
+  "  clear <worker>   (a worker whose job is finished, through its own mod)",
   "  close <worker>",
   "  harvest [--master <session>] [--logs <dir>] [--plugin-data <dir>]",
   "  logs [--logs <dir>] [--plugin-data <dir>]",
@@ -1005,6 +1208,7 @@ const FLAGS = {
   "--extend": false,
   "--scope": true,
   "--no-git": false,
+  "--self-compact": false,
   "--tier": true,
   "--group": true,
   "--model": true,
@@ -1071,7 +1275,9 @@ function cmdList(deps, positional, flags) {
   };
   const measure = (a, rec, extra) => {
     try {
-      rows.push({ ...measureAgent(deps, a, rec, opts), ...extra });
+      // A session whose mod never beat shows no mod column.
+      const mod = modLabel(modHeartbeat(deps, a.sessionId));
+      rows.push({ ...measureAgent(deps, a, rec, opts), ...extra, ...(mod ? { mod } : {}) });
     } catch (e) {
       if (!(e instanceof PuppetError)) throw e;
       failed = true;
@@ -1119,16 +1325,20 @@ function cmdList(deps, positional, flags) {
     else if (r.roster) {
       const job = `${r.kind} ${r.role} ${r.jobState}${r.job ? ` ${r.job}` : ""}`;
       const done = r.jobState === "active" && r.saysDone ? "  DONE? run finish" : "";
-      deps.out(`${measureLine(r)}  model ${modelLine(r)}  ${job}${done}`);
-    } else deps.out(`${measureLine(r)}  model ${modelLine(r)}`);
+      deps.out(`${measureLine(r)}  model ${modelLine(r)}  ${job}${done}${r.mod ? `  ${r.mod}` : ""}`);
+    } else deps.out(`${measureLine(r)}  model ${modelLine(r)}${r.mod ? `  ${r.mod}` : ""}`);
   }
   return failed ? 1 : 0;
 }
 
 function cmdAdopt(deps, positional, flags) {
   wantPositional(positional, 1, "adopt");
-  const r = adoptSession(deps, positional[0], { role: flags.role ?? "worker", window: flags.window });
-  deps.out(`adopted ${r.name} (${r.kind}, ${r.role}, ${r.jobState}) in ${r.checkout}`);
+  const r = adoptSession(deps, positional[0], {
+    role: flags.role ?? "worker",
+    window: flags.window,
+    selfCompact: Boolean(flags["self-compact"]),
+  });
+  deps.out(`adopted ${r.name} (${r.kind}, ${r.role}, ${r.jobState}) in ${r.checkout}${flags["self-compact"] ? "; self-compact switched on" : ""}`);
   return 0;
 }
 
@@ -1292,9 +1502,10 @@ function cmdSpawn(deps, positional, flags) {
     tier: flags.tier,
     model: flags.model,
     effort: flags.effort,
+    selfCompact: Boolean(flags["self-compact"]),
   });
   const passed = [w.model && `model ${w.model}`, `effort ${w.effort}`].filter(Boolean).join(", ");
-  deps.out(`spawned ${w.name} id=${w.id} in ${w.checkout} (${passed})`);
+  deps.out(`spawned ${w.name} id=${w.id} in ${w.checkout} (${passed})${w.selfCompact ? "; self-compact switched on" : ""}`);
   return 0;
 }
 
@@ -1304,6 +1515,24 @@ function cmdCycle(deps, positional, flags) {
   deps.out(
     `cycled ${c.name}: ${c.before}→${c.after} tokens (${percent(c.before, c.window)}%→${percent(c.after, c.window)}%), resumed id=${c.id}`,
   );
+  return 0;
+}
+
+async function cmdCompact(deps, positional) {
+  wantPositional(positional, 2, "compact");
+  const c = await compactSession(deps, positional[0], positional[1]);
+  if (c.requested) {
+    deps.out(`requested ${c.name}'s own compaction: its mod runs it once this turn ends; check with measure`);
+  } else {
+    deps.out(`compacted ${c.name}: ${c.before ?? "?"}→${c.after ?? "?"} tokens`);
+  }
+  return 0;
+}
+
+async function cmdClear(deps, positional) {
+  wantPositional(positional, 1, "clear");
+  const c = await clearSession(deps, positional[0]);
+  deps.out(`cleared ${c.name}: new session ${c.sessionId}, clean`);
   return 0;
 }
 
@@ -1324,6 +1553,8 @@ const COMMANDS = {
   pick: cmdPick,
   spawn: cmdSpawn,
   cycle: cmdCycle,
+  compact: cmdCompact,
+  clear: cmdClear,
   close: cmdClose,
   harvest: cmdHarvest,
   logs: cmdLogs,
@@ -1381,6 +1612,7 @@ export function realDeps() {
     out: (line) => process.stdout.write(`${line}\n`),
     err: (line) => process.stderr.write(`${line}\n`),
     now: () => new Date(),
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     fs,
   };
 }

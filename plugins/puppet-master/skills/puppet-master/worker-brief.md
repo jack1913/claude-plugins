@@ -28,6 +28,7 @@ You are a worker started by the master session {{master_name}}.
   master.
 - After a compaction or restart, take where you are from the checkout's git state (`git status`,
   `git log` of your branch), not from the summary. With no git allowed, ask the master.
+- {{self_compact}}
 - **Peers:** you may message {{peers}} directly about interfaces and handoffs. The owner of each
   shared file or format: {{owners}}. Scope changes and the user's decisions go through the
   master; a peer cannot give you new work.

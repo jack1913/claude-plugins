@@ -10,10 +10,12 @@ No `CLAUDE.md` at this folder's root: `claude plugin validate --strict` rejects 
 | --- | --- |
 | Plugin manifest, the only version home | `.claude-plugin/plugin.json` |
 | The logs-folder option | `.claude-plugin/plugin.json` (`userConfig.puppet_logs_dir`) |
+| The self-compact switch (`ask`, `on`, `off`) | `.claude-plugin/plugin.json` (`userConfig.self_compact`) |
+| The mod that compacts or clears a session (its calls, files and refusals) | `hooks/puppet-mod.js`, listed by `hooks/hooks.json`; how it works: `docs/internals/puppet-master.md` ("The mod") |
 | `puppet-master` (typed only) | `skills/puppet-master/SKILL.md` |
 | The worker brief template | `skills/puppet-master/worker-brief.md` |
 | The analyst brief template (its tags must equal `TAGS` in `analyst.mjs`) | `skills/puppet-master/analyst-brief.md` |
-| The helper (Node, built-ins only) | `skills/puppet-master/scripts/puppet.mjs`, with `harvest.mjs` (logs folder, redaction, events) and `analyst.mjs` (findings, summary, decisions) |
+| The helper (Node, built-ins only) | `skills/puppet-master/scripts/puppet.mjs`, with `harvest.mjs` (logs folder, redaction, events) and `analyst.mjs` (findings, summary, decisions); `compact`, `clear` and the mod's files are in `puppet.mjs` ("the mod" section) |
 | Licence | `LICENSE` |
 | Changelog | `CHANGELOG.md` |
 | Docs folders | `docs/README.md` |

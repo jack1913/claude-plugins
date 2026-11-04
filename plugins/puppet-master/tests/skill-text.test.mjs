@@ -311,6 +311,79 @@ test("the Briefs section asks for forward slashes and restated standing rules", 
   assert.match(briefs, /never\s+(left\s+)?to\s+a\s+summary/);
 });
 
+// --- self-compact and clear through the mod (2026-11-04) ---
+
+test("the mod is off unless switched on: the master asks once at start, silence is no, and --self-compact follows the yes", () => {
+  const skill = read("SKILL.md");
+  const start = section(skill, "On start");
+  assert.match(start, /whether\s+the\s+sessions\s+may\s+compact\s+themselves/);
+  assert.match(start, /only\s+an\s+explicit\s+yes\s+counts/);
+  assert.match(start, /silence\s+is\s+no/);
+  assert.match(start, /`--self-compact`/);
+  assert.match(skill, /`mod off \(mode off\)`\s+is\s+the\s+user's\s+veto/);
+});
+
+test("rule 7 routes compact through the mod only where `list` says mod on, and keeps today's route elsewhere", () => {
+  const skill = read("SKILL.md");
+  const row = skill.split("\n").find((l) => l.includes("idle after a finished task"));
+  const [, , workerCell, userCell] = row.split("|");
+  assert.match(workerCell, /`compact <worker> <focus>`[^|]*`mod on`[^|]*else `cycle`/);
+  assert.match(userCell, /`compact <session> <focus>`[^|]*`mod on`/);
+  assert.match(userCell, /auto-compaction/);
+  assert.match(skill, /loaded\s+is\s+not\s+on/);
+  assert.match(skill, /use\s+`compact`/);
+  assert.match(skill, /on\s+any\s+failure\s+print\s+the\s+paste\s+line\s+as\s+the\s+fallback/);
+});
+
+test("clear is only for a finished worker, between jobs, never queued, never the master or the analyst", () => {
+  const skill = read("SKILL.md");
+  assert.match(skill, /`clear`\s+is\s+for\s+a\s+worker\s+whose\s+job\s+you\s+`finish`ed,\s+only\s+between\s+jobs,\s+never\s+queued/);
+  assert.match(skill, /refuses\s+the\s+master,\s+the\s+analyst\s+and\s+any\s+session\s+with\s+an\s+active\s+job,\s+and\s+the\s+mod\s+refuses\s+them\s+again/);
+  assert.match(skill, /Never\s+`clear`\s+your\s+own\s+session/);
+  assert.match(section(skill, "When a job ends"), /`puppet clear <session>`[\s\S]{0,200}otherwise\s+give\s+the\s+user\s+`<session>: \/clear`/);
+});
+
+test("rule 10: the master compacts itself through the mod once its turn ends, and says it is untested in a window", () => {
+  const skill = read("SKILL.md");
+  const rule10 = skill.slice(skill.indexOf("10. **Your own context.**"), skill.indexOf("11. **"));
+  assert.match(rule10, /`puppet compact <your name> <focus>`/);
+  assert.match(rule10, /not\s+yet\s+tested\s+in\s+a\s+window/);
+  assert.match(rule10, /give\s+the\s+line/);
+});
+
+test("rule 9 names the cheaper route, and the helper table lists compact, clear, --self-compact and the mod column", () => {
+  const skill = read("SKILL.md");
+  assert.match(skill, /reads\s+the\s+prompt\s+cache/);
+  for (const head of ["| `compact <session> <focus>` |", "| `clear <worker>` |"]) {
+    assert.ok(skill.includes(head), `helper table lacks ${head}`);
+  }
+  assert.match(skill.split("\n").find((l) => l.startsWith("| `adopt ")), /--self-compact/);
+  assert.match(skill.split("\n").find((l) => l.startsWith("| `spawn ")), /--self-compact/);
+  assert.match(skill, /`mod on \(<source>\)`, `mod off \(mode <mode>\)` or `mod stale`/);
+});
+
+test("the worker brief has the {{self_compact}} line, and the Briefs section gives its text", () => {
+  assert.ok(read("worker-brief.md").includes("{{self_compact}}"));
+  const briefs = section(read("SKILL.md"), "Briefs");
+  assert.match(briefs, /`\{\{self_compact\}\}`[\s\S]{0,400}nothing\s+may\s+live\s+only\s+in\s+your\s+head/);
+});
+
+test("plugin.json declares self_compact as ask|on|off with ask as the default", () => {
+  const pj = JSON.parse(fs.readFileSync(path.join(PLUGIN_DIR, ".claude-plugin", "plugin.json"), "utf8"));
+  const opt = pj.userConfig?.self_compact;
+  assert.ok(opt, "plugin.json has no userConfig.self_compact");
+  assert.equal(opt.type, "string");
+  assert.equal(opt.default, "ask");
+  assert.deepEqual(opt.options, ["ask", "on", "off"]);
+  assert.ok(opt.title && opt.description);
+});
+
+test("hooks.json lists the mod module, and the module exists", () => {
+  const hooks = JSON.parse(fs.readFileSync(path.join(PLUGIN_DIR, "hooks", "hooks.json"), "utf8"));
+  assert.deepEqual(hooks.modules, ["./puppet-mod.js"]);
+  assert.ok(fs.existsSync(path.join(PLUGIN_DIR, "hooks", "puppet-mod.js")));
+});
+
 test("the worker brief carries the standing build-output and peer lines", () => {
   const brief = read("worker-brief.md");
   assert.match(brief, /PYTHONDONTWRITEBYTECODE=1/);
