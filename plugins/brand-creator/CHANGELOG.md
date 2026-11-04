@@ -6,6 +6,16 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-04
+
+The site round gets fixes from a real client round. You can try the first-screen versions live in your browser before the
+board, and share a try-out as a private page. The cold review can be given your G4 rules and the key frames of a moving page,
+and it stops after two reads. The page check warns about a box a movement leaves behind and about words your brand forbids,
+and gives fewer false warnings about error codes and mock-ups.
+
+Nothing you used is gone. A hero card with no Idea line makes `board-lint` warn in this release and fail in the next: add the
+line when you next touch the board.
+
 ### Added
 
 - `brand-creator state --part g4-rules` prints the G4 rules of `BRAND-STATE.md` (the G4 record and the rules you approved) as one
