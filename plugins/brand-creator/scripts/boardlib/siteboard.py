@@ -312,32 +312,35 @@ def layout_problems(v: SiteVariant, known: dict[str, dict]) -> tuple[list[str], 
     return failures, warnings
 
 
+def _field_problem(v: SiteVariant, fid: str, label: str, hint: str = "") -> str | None:
+    """The one rule of a card field: some text, no placeholder and no [[fill: ...]] marker left. -> the problem, or None. `hint` ends the missing-field message, inside its brackets."""
+    nodes = list(v.card.find_all(data_field=fid))
+    if not any(n.nonempty() for n in nodes):
+        return f'{v.name}: {label} is missing or empty (data-field="{fid}" inside the card{hint})'
+    if FILL in " ".join(n.text() for n in nodes):
+        return f"{v.name}: {label} still holds a [[fill: ...]] marker"
+    return None
+
+
 def field_problems(v: SiteVariant, optional: tuple[str, ...] = ()) -> list[str]:
     """What it is, Takes from and Cost are filled in: some text, no placeholder and no [[fill: ...]] marker left. A field named in `optional` (Takes from, on a page card) may be left out of the card, but a
     line that is there is filled in."""
     out = []
     for fid, label in FIELDS:
-        nodes = list(v.card.find_all(data_field=fid))
-        text = " ".join(n.text() for n in nodes)
-        if not nodes and fid in optional:
+        if fid in optional and not list(v.card.find_all(data_field=fid)):
             continue
-        if not any(n.nonempty() for n in nodes):
-            out.append(f'{v.name}: {label} is missing or empty (data-field="{fid}" inside the card)')
-        elif FILL in text:
-            out.append(f"{v.name}: {label} still holds a [[fill: ...]] marker")
+        problem = _field_problem(v, fid, label)
+        if problem:
+            out.append(problem)
     return out
 
 
 def idea_problems(v: SiteVariant) -> list[str]:
-    """The Idea line of a hero card (data-field="idea"): some text, no placeholder and no [[fill: ...]] marker left. Each problem is a warning in this release, so a board made before the line existed still lints;
-    the next release makes it a failure."""
+    """The Idea line of a hero card (data-field="idea"): some text, no placeholder and no [[fill: ...]] marker left, by the rule of every field (_field_problem). Each problem is a warning in this release, so a board
+    made before the line existed still lints; the next release makes it a failure."""
     fid, label = IDEA
-    nodes = list(v.card.find_all(data_field=fid))
-    if not any(n.nonempty() for n in nodes):
-        return [f'{v.name}: {label} is missing or empty (data-field="{fid}" inside the card: the one memorable idea of this hero, in one line)']
-    if FILL in " ".join(n.text() for n in nodes):
-        return [f"{v.name}: {label} still holds a [[fill: ...]] marker"]
-    return []
+    problem = _field_problem(v, fid, label, ": the one memorable idea of this hero, in one line")
+    return [problem] if problem else []
 
 
 # ---------------------------------------------------------------- the proof of each variant: page-check, its tells, and the stills

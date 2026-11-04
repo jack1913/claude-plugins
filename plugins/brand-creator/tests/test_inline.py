@@ -125,6 +125,31 @@ def test_a_stylesheet_is_read_from_its_own_folder_and_an_import_is_inlined_in_pl
     assert set(data_urls(text)) == {PNG_A, LOGO.read_bytes()}
 
 
+def test_an_import_inside_a_style_element_never_ends_the_element_early(tmp_path):
+    p = project(tmp_path)
+    page = tryout(p, head='<style>@import "a.css";\nh1{color:red}</style><style>@import url(b.css);</STYLE>', body='<h1 style="color:red">x</h1>',
+                  extra={"a.css": "/* ends </style> early? */\n.a{color:blue}\n", "b.css": "/* and </STYLE\n> and </Style> */\n.b{color:blue}\n"})
+    out = tmp_path / "out.html"
+    r = share(p, page, out)
+    assert r.returncode == 0, r.stderr
+    text = out.read_text(encoding="utf-8")
+    assert "/* ends <\\/style> early? */\n.a{color:blue}\n\nh1{color:red}</style>" in text, text
+    assert "/* and <\\/STYLE\n> and <\\/Style> */" in text
+    assert len(re.findall(r"</style", text, re.I)) == 2 and text.count("<style") == 2, "only the two closing tags of the two elements remain"
+    assert "@import" not in text.lower() and "a.css" not in text and "b.css" not in text
+
+
+def test_the_deferred_scripts_land_before_the_last_body_tag_even_when_lower_casing_changes_the_length(tmp_path):
+    p = project(tmp_path)
+    page = tryout(p, head='<script src="late.js" defer></script>', body="<p>\u0130stanbul \u0130\u0130\u0130 \u0130zmir</p><P>two</P>", extra={"late.js": "late();"})
+    put(p, page, (p / page).read_text(encoding="utf-8").replace("</body>", "</BODY>"))
+    out = tmp_path / "out.html"
+    r = share(p, page, out)
+    assert r.returncode == 0, r.stderr
+    text = out.read_text(encoding="utf-8")
+    assert text.endswith("<P>two</P><script>late();</script></BODY></html>"), text[-120:]
+
+
 def test_every_place_a_page_loads_a_file_from_becomes_a_data_url_and_a_link_is_left_alone(tmp_path):
     p = project(tmp_path)
     head = ('<link rel="icon" href="icon.png"><link rel="apple-touch-icon" href=\'icon.png\'><link rel="preload" href="icon.png" as="image">'
@@ -274,6 +299,25 @@ def test_the_copy_goes_outside_the_project_or_under_tryout_and_nowhere_else(tmp_
     assert share(p, page, tmp_path / "share" / "ok.html").returncode == 0
     assert share(p, page, p / "tryout" / "Atlas-share.html").returncode == 0 and (p / "tryout" / "Atlas-share.html").is_file()
     assert (p / "tryout" / "Atlas" / "index.html").read_text(encoding="utf-8").count("tokens.css") == 1, "the page itself is as it was"
+
+
+def test_a_copy_under_tryout_never_overwrites_another_page_of_a_tryout(tmp_path):
+    p = project(tmp_path)
+    page = tryout(p, head='<link rel="stylesheet" href="../../assets/tokens/tokens.css">')
+    other = tryout(p, body="<h1>Ledger</h1>", name="Ledger")
+    put(p, "tryout/Ledger/about.html", "<p>about</p>")
+    held = {f: (p / f).read_bytes() for f in (other, "tryout/Ledger/about.html")}
+    for bad in (other, "tryout/Ledger/about.html"):
+        r = share(p, page, p / bad)
+        assert r.returncode == 2 and bad in r.stderr and "already exists" in r.stderr and "outside the project" in r.stderr, (bad, r.stderr)
+    assert {f: (p / f).read_bytes() for f in held} == held, "the other try-out's pages are as they were"
+    copy = p / "tryout" / "Atlas-share.html"
+    assert share(p, page, copy).returncode == 0 and copy.is_file()                                     # a new file is written
+    first = copy.read_bytes()
+    assert share(p, page, copy).returncode == 0 and copy.read_bytes() == first                         # the same copy again: nothing changes
+    copy.write_text("<p>someone's own page</p>", encoding="utf-8")
+    r = share(p, page, copy)
+    assert r.returncode == 2 and "Atlas-share.html" in r.stderr and copy.read_text(encoding="utf-8") == "<p>someone's own page</p>", r.stderr
 
 
 def test_inline_takes_a_html_page_of_the_project_only(tmp_path):

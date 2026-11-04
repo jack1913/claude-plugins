@@ -50,6 +50,7 @@ MODULE_IMPORT = re.compile(r"""(?m)^\s*(?:import|export)\b[^;\n]*?\bfrom\s*["']|
 IMPORT_HEAD = re.compile(r"""@import\s+(?:url\(\s*)?["']?$""", re.I)
 IMPORT_TAIL = re.compile(r"""["']?\s*\)?\s*;""")
 CHARSET = re.compile(r"""\A\s*@charset\s+["'][^"']*["']\s*;\s*""")
+STYLE_END = re.compile(r"</(style)", re.I)      # what must not stand in the text of a <style> element
 SHOWN = 12            # problems listed in a message before "and N more"
 IMPORT_DEPTH = 8      # stylesheets imported inside stylesheets
 
@@ -172,7 +173,7 @@ class Inliner:
                     sheet = self.rel(found[0])
                     if sheet in (stack or ()) or len(stack or ()) >= IMPORT_DEPTH:
                         raise Refused(EXIT_FAIL, f"{sheet} imports itself, or sits more than {IMPORT_DEPTH} stylesheets deep")
-                    edits.append((at, tail.end(), self.css(self.code(found[0], "stylesheet"), found[0].parent, sheet, 1, (*(stack or ()), sheet))))
+                    edits.append((at, tail.end(), STYLE_END.sub(r"<\\/\1", self.css(self.code(found[0], "stylesheet"), found[0].parent, sheet, 1, (*(stack or ()), sheet)))))   # the text of a style must not end it
                 else:
                     new = self.data_uri(text[start:end], base)
                     if new is not None:
@@ -211,8 +212,8 @@ class Inliner:
             except Refused as e:
                 self.problem(label, line, e)
         if deferred:
-            body = text.lower().rfind("</body")
-            at = len(text) if body < 0 else body
+            bodies = list(re.finditer(r"</body", text, re.I))      # in the text as it is: lower-casing can change its length
+            at = bodies[-1].start() if bodies else len(text)
             edits.append((at, at, "".join(deferred)))
         return apply(text, edits)
 
@@ -243,7 +244,7 @@ class Inliner:
             media = f' media="{html.escape(a["media"], quote=True)}"' if a.get("media", "").strip() else ""
             sheet = self.rel(found[0])
             css = self.css(self.code(found[0], "stylesheet"), found[0].parent, sheet, 1, (sheet,))
-            css = re.sub(r"</(style)", r"<\\/\1", css, flags=re.I)      # the text of a style must not end it
+            css = STYLE_END.sub(r"<\\/\1", css)      # the text of a style must not end it
             return [(t.start, t.end, f"<style{media}>{css}</style>")]
         if rel & HINT_RELS:
             self.locate(href, base)      # a hint that names another website is refused; a local one is only dropped
@@ -328,6 +329,8 @@ def main() -> int:
         fail(EXIT_USAGE, f"--out {a.out} is the page itself: the copy would overwrite it")
     text, files = inline(project, page)
     data = text.encode("utf-8")
+    if Path(os.path.realpath(project / "tryout")) in target.parents and target.exists() and target.read_bytes() != data:
+        fail(EXIT_USAGE, f"--out {a.out} already exists under tryout/ and is not this copy, so it may be another try-out's page: write the copy outside the project (nothing was written)")
     write_bytes_if_changed(target, data)
     print(f"wrote {target}: {len(data)} bytes, {len(files)} file(s) inlined" + (f" ({', '.join(files[:SHOWN])}{', ...' if len(files) > SHOWN else ''})" if files else ""))
     return 0

@@ -29,6 +29,9 @@ answer = scenario.get(" ".join(argv[:2])) or scenario.get(cmd) or {}
 if cmd == "state" and argv[1:3] == ["--get", "tier"]:
     print(scenario["tier"])
 elif cmd == "state" and argv[1:3] == ["--get", "slug"]:
+    if scenario.get("slug_fails"):
+        print(scenario["slug_fails"]["err"], file=sys.stderr)
+        sys.exit(scenario["slug_fails"]["code"])
     print(scenario["slug"])
 elif cmd == "motion" and "--json" in argv and "code" not in answer:
     print(json.dumps(scenario["decision"]))
@@ -385,6 +388,25 @@ def test_a_skill_folder_of_another_name_is_not_this_projects_brand_skill(tmp_pat
     c = chain(tmp_path, decision=OFF, files=(".claude/skills/other-brand/SKILL.md", ".claude/skills/other-brand/kit.json"))
     assert c.code == 0 and not c.ran("applied-skill") and not c.ran("kit"), c.calls         # the folder is `.claude/skills/<slug>-brand`, as `check` finds it
     assert any(s.startswith("adapters, applied skill, kit: skipped") for s in c.steps), c.steps
+
+
+def test_a_slug_that_is_not_set_means_no_skill_folder_and_is_no_failed_step(tmp_path):
+    c = chain(tmp_path, decision=OFF, files=(SKILL, KIT), answers={"slug_fails": {"code": 1, "err": "error: slug is not set in BRAND-STATE.md"}})
+    assert c.code == 0 and "step failed" not in c.out, c.out                                  # what `state --get` says of a key that is not there: exit 1, "<key> is not set in BRAND-STATE.md"
+    assert not c.ran("applied-skill") and not c.ran("kit") and c.ran("check")
+    assert any(s.startswith("adapters, applied skill, kit: skipped") for s in c.steps), c.steps
+
+
+@pytest.mark.parametrize("code, err", [
+    (2, "error: BRAND-STATE.md has no frontmatter (first line must be ---)"),
+    (3, "error: cannot read BRAND-STATE.md"),
+    (1, "error: something else went wrong in state"),
+])
+def test_a_state_that_cannot_be_read_is_a_failed_step_with_its_message_and_the_chain_still_runs_check(tmp_path, code, err):
+    c = chain(tmp_path, decision=OFF, files=(SKILL, KIT), answers={"slug_fails": {"code": code, "err": err}})
+    assert failed("state --get slug", code, err.removeprefix("error: ")) in c.out and c.out.count("finish.sh: step failed:") == 1, c.out
+    assert not c.ran("applied-skill") and not c.ran("kit") and c.ran("staleness", "--write") and c.calls.count(["check"]) == 1, c.calls    # nothing is guessed about the skill; check still writes the pack report
+    assert c.code == code and f"check passed, but a step failed (state --get slug): the chain ends with exit {code}" in c.out, c.out
 
 
 def test_adapter_files_with_no_options_to_write_them_again_are_left_alone_and_the_line_says_which_variable_to_set(tmp_path):

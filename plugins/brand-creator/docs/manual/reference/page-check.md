@@ -137,8 +137,9 @@ In Polish or English text, "21 października 2026", "w październiku 2026" and "
 - **A copyright year:** 19xx or 20xx right after `©`, `(c)` or "copyright", and the end of a range ("© 2024–2026").
 - **An error page's code,** 400 to 599, standing alone, anywhere on that page. A page is an error page when its file
   is named after the code (`404.html`), or its title or main heading holds the code as its only number, with no "+",
-  and an error word in its language right beside it, as in "Error 404" or "404 · Nie znaleziono" ("Gone in 450
-  seconds" is a count):
+  and an error word in its language right beside it, as in "Error 404", "404 Page Not Found", "Not Found (404)" or "404 · Nie znaleziono" ("Gone in 450
+  seconds" is a count). Only spaces, dashes and similar separators (- – — · • | : /), brackets round the code and the
+  words "page", "site", "strona" and "witryna" may stand between them:
   - English: error, not found, forbidden, unauthorized, unavailable, gone, bad request, server error;
   - Polish: błąd, nie znaleziono, nie istnieje, brak dostępu, odmowa dostępu, niedostępna, niedostępny.
 
@@ -174,7 +175,7 @@ A sample is a placeholder, such as a made-up price; its text is not a claim. Ask
 ## Forbidden words
 
 The words listed as bullets under a "Forbidden" heading in your brief (`brief/BRIEF.md`) and in `research/cliches.md`
-are the ones your brand never uses. The brand book's check uses the same list.
+are the ones your brand never uses. The brand book's check uses this list too.
 
 - The check looks for each as a whole word, in any letter case, in the text the page displays. "revolutionary" is found
   in "A Revolutionary tool", not in "revolutionaryx".
@@ -182,7 +183,10 @@ are the ones your brand never uses. The brand book's check uses the same list.
   too, and the line says so.
 - With a list and no word found, the line passes. With no list, the line is INFO and says nothing was looked for. It is
   never a pass.
-- The list is not part of what makes a report go out of date. Change the list, then check again.
+- The list is part of what makes a report go out of date: add a word to your brief, or to `research/cliches.md` if it
+  was there when you checked, and the old report reads as stale until you check again.
+- The page check uses the words under "Forbidden" in the brief and in `research/cliches.md`. The brand book check adds the
+  forbidden words set in the book's own settings; the page check does not.
 
 ## Template warnings
 
@@ -220,9 +224,11 @@ It leaves alone a box its holder cuts off completely, a box that stays put on th
 see-through or hidden box. A "skip to content" link parked off the screen until a key brings it back doesn't count
 either.
 
-It also looks at each width again in a window 1300 pixels high, so a problem that only shows on a tall screen is found.
+It also looks at each width again in a window 1300 pixels high, so a problem that only shows on a tall screen is found (once for each width, in the first colour scheme you check).
 The open page is made taller, not loaded again: a page whose script reads the window height only once, as it loads, is
 not seen as it would be on a tall screen.
+
+If a page has more boxes out of place than the check lists (100), the line says "not verified" beyond the first ones.
 
 If something still moves when the check looks, such as a movement that never ends or one that follows the scroll
 position in the page's styles, the line says "not verified": the check can't tell where that box comes to rest. Like

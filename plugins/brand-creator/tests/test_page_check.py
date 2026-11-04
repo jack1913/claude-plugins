@@ -430,8 +430,8 @@ def test_from_checks_a_copy_and_never_writes_where_the_site_is(acme, tmp_path):
     assert tree(acme) - before_project == {f"assets/_checks/{tool}.json"}          # the project gained the report and nothing else
     rep = report(acme, tool)
     assert rep["target"] == {"kind": "from", "page": "index.html", "from": str(site.resolve()), "url": None}
-    assert {i["path"] for i in rep["inputs"]} == {"assets/tokens/tokens.json", "assets/tokens/tokens.css", "qa/rules.json", "FACTS.md", "BRAND-STATE.md"} | set(
-        pagecheck.logo_files(acme, qa_rules.load(acme)[0]))   # a site elsewhere is not a project file (the logo files are: a mark is judged against them);
+    assert {i["path"] for i in rep["inputs"]} == {"assets/tokens/tokens.json", "assets/tokens/tokens.css", "qa/rules.json", "FACTS.md", "BRAND-STATE.md", "brief/BRIEF.md"} | set(
+        pagecheck.logo_files(acme, qa_rules.load(acme)[0]))   # a site elsewhere is not a project file (the logo files and the brief, where the forbidden words are read, are: a mark is judged against them);
     # tokens.css is read for the colours the browser renders for the tokens
     h = tool.rsplit("-", 1)[1]
     copies = list((Path(os.environ["BRAND_CREATOR_DATA"]) / "scratch").glob(f"*/page-check/{h}/1"))
@@ -1151,13 +1151,16 @@ def test_a_copyright_year_and_an_error_pages_status_code_are_no_claims(tmp_path)
         assert not_error["status"] == "fail" and [o["number"] for o in not_error["unbacked_numbers"]] == [number], (number, not_error["detail"])
     for number in ("400", "599"):
         assert claims_of_page(tmp_path, [claim_run(f"Hello {number}", "body > p")], title=f"Error {number}")["status"] == "pass", number
-    # O10: the error word stands right beside the code, with nothing but spaces or a separator (- – · | :) between them; an error word elsewhere in the text makes it a count
+    # O10: the error word stands right beside the code, with nothing but spaces, a separator (- – — · • | : / and parentheses) or a filler word (page, site, strona, witryna) between them; an error word elsewhere in the text makes it a count
     for lang, title, code in (("en", "Error 404", "404"), ("en", "404 Not Found", "404"), ("pl", "404 · Nie znaleziono", "404"), ("pl", "Błąd 404 – strona nie istnieje", "404"),
-                              ("en", "Service Unavailable 503", "503"), ("en", "Error: 500", "500"), ("pl", "Błąd | 404", "404")):
+                              ("en", "Service Unavailable 503", "503"), ("en", "Error: 500", "500"), ("pl", "Błąd | 404", "404"),
+                              ("en", "404 Page Not Found", "404"), ("en", "404 - Page not found", "404"), ("en", "404 — Not Found", "404"), ("en", "404 / Not Found", "404"),
+                              ("en", "Not Found (404)", "404"), ("en", "404 SITE NOT FOUND", "404"), ("pl", "404 – Strona nie istnieje", "404"), ("pl", "Błąd 404 – strona nie istnieje", "404"),
+                              ("pl", "404 • Witryna niedostępna", "404")):
         page = claims_of_page(tmp_path, [claim_run(f"Hello {code}", "body > p")], title=title, lang=lang)
         assert page["status"] == "pass", (title, page["detail"])
     for lang, title, number in (("en", "450 tickets, all gone", "450"), ("en", "Gone in 450 seconds", "450"), ("pl", "Ponad 400 produktów, żaden niedostępny", "400"),
-                                ("en", "Error in 404 places", "404")):
+                                ("en", "Error in 404 places", "404"), ("pl", "500 firm. Błąd", "500"), ("en", "404 page views, all gone", "404")):
         count = claims_of_page(tmp_path, [claim_run(f"Hello {number}", "body > p")], title=title, lang=lang)
         assert count["status"] == "fail" and [o["number"] for o in count["unbacked_numbers"]] == [number], (title, count["detail"])
 
@@ -4086,7 +4089,7 @@ def test_a_page_that_is_scrolled_when_it_is_measured_has_nothing_stray_above_its
 @pytest.mark.requires_setup
 @pytest.mark.requires_node
 def test_the_stray_collector_reports_where_a_shown_box_lies_against_its_parent_and_the_screen(acme):
-    """What the browser reports as `strays`: only a shown box, not fixed or sticky, with no ancestor that clips it, that lies wholly outside its parent or the screen by at least 2 px."""
+    """What the browser reports as `strays`: only a shown box, not fixed or sticky, with no ancestor that clips it, that lies wholly outside its parent or the screen by at least the tell's own 8 px (the request carries it)."""
     style = """  .right { position: relative; left: 1600px; } .left { position: relative; left: -2000px; }
   .fixed { position: fixed; top: 0; left: -2000px; } .sticky { position: sticky; top: 0; transform: translateY(300px); }
   .skip { position: absolute; left: -9999px; top: 0; } .ghost { position: absolute; left: -9999px; top: 0; }
@@ -4102,15 +4105,62 @@ def test_the_stray_collector_reports_where_a_shown_box_lies_against_its_parent_a
     f = v["tell_facts"]
     assert "truncated" not in f
     found = {x["text"]: x for x in f["strays"]}
-    assert set(found) == {"Below", "Right", "Left", "Off screen", "Near"}, sorted(found)         # not fixed, sticky, hidden, faint, a skip link, 1 px off, touching, overlapping or clipped
+    assert set(found) == {"Below", "Right", "Left", "Off screen"}, sorted(found)         # not fixed, sticky, hidden, faint, a skip link, 3 px off (under the tell's 8), 1 px off, touching, overlapping or clipped
     assert set(found["Below"]) == {"sel", "text", "animating", "parent", "viewport"} and set(found["Below"]["parent"]) == {"sel", "side", "px"} and found["Below"]["viewport"] is None
     assert found["Below"]["parent"]["side"] == "below" and found["Below"]["parent"]["px"] == 80 and found["Below"]["animating"] is False
     assert (found["Right"]["parent"]["side"], found["Right"]["parent"]["px"]) == ("right", 160) and found["Right"]["viewport"] == {"side": "right", "px": 160}
     assert (found["Left"]["parent"]["side"], found["Left"]["parent"]["px"]) == ("left", 560) and found["Left"]["viewport"] == {"side": "left", "px": 560}
     assert found["Off screen"]["viewport"]["side"] == "left" and found["Off screen"]["viewport"]["px"] > 8000 and found["Off screen"]["parent"]["side"] == "left"
-    assert (found["Near"]["parent"]["side"], found["Near"]["parent"]["px"]) == ("below", 3) and found["Near"]["viewport"] is None                         # 2 px is where a candidate starts: the tell asks for 8
     assert found["Below"]["parent"]["sel"].endswith("div.stack:nth-of-type(1)")
     assert f["strays_tall"]["viewport"]["height"] == 1300 and [x["text"] for x in f["strays_tall"]["strays"]] == [x["text"] for x in f["strays"]]   # nothing there depends on the height
+
+
+def many_stacks(n: int, inner: str) -> list[str]:
+    return [inner] * n
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_more_than_a_hundred_offsets_under_the_tells_threshold_never_hide_a_real_stray(acme):
+    """Candidates start at the tell's own 8 px (the request carries it), so 120 boxes 3 px out of place do not fill the list of 100 before the real stray."""
+    small = '<p class="sheet small">tiny</p>'
+    row_, v = stray_check(acme, stray_page(*many_stacks(120, small), '<p class="sheet drop">Left behind</p>', style="  .small { transform: translateY(43px); }\n"))
+    f = v["tell_facts"]
+    assert [x["text"] for x in f["strays"]] == ["Left behind"] and "strays_capped" not in f and "strays_truncated" not in f, [x["text"] for x in f["strays"]][:3]
+    assert row_["status"] == "warn" and [h["text"].split(" is still")[0] for h in row_["hits"]] == ['"Left behind"'] and "NOT verified" not in row_["detail"], row_
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_page_with_more_stray_boxes_than_the_list_holds_says_not_verified_and_never_passes_silently(acme):
+    row_, v = stray_check(acme, stray_page(*many_stacks(104, '<p class="sheet drop">Left behind</p>')))
+    f = v["tell_facts"]
+    assert len(f["strays"]) == 100 and f["strays_capped"] is True and f["strays_truncated"] is True, (len(f["strays"]), f.get("strays_capped"))
+    assert row_["status"] == "warn" and pagecheck.STRAY_CAP_NOTE in row_["detail"] and row_["hits"], row_
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_run_of_two_schemes_measures_the_tall_window_once_per_width(acme):
+    write_page(acme, stray_page('<p class="sheet tall-only">Pushed down</p>'))
+    r = bc("page-check", "pages/index.html", "--widths", "1440,1024", "--schemes", "light,dark", project=acme)
+    assert r.returncode in (0, 1), r.stdout + r.stderr
+    rep = report(acme, pagecheck.report_tool("pages/index.html"))
+    views = json.loads(Path(rep["measures"]).read_text(encoding="utf-8"))["views"]
+    assert [(v["width"], v["scheme"], "strays_tall" in v["tell_facts"]) for v in views] == [(1440, "light", True), (1440, "dark", False), (1024, "light", True), (1024, "dark", False)]
+    row_ = tell_row(rep, "stray-box")
+    assert row_["status"] == "warn" and sorted(w for h in row_["hits"] for w in h["widths"]) == [1024, 1440] and "NOT verified" not in row_["detail"], row_   # the dark views are no error and no note
+
+
+def test_a_view_with_no_tall_walk_is_measured_in_the_other_scheme_and_the_cap_of_the_list_is_not_verified():
+    hits = lambda *views: found_tells(*views)["hits"]["stray-box"]
+    notes = lambda *views: found_tells(*views)["unverified"]["stray-box"]
+    tall = {"viewport": {"width": 1440, "height": 1300}, "animations": {"waited": 0, "running": 0, "capped": False}, "strays": [stray(sel="div.late", parent=("below", 400))]}
+    light, dark = tell_view(scheme="light", strays=[], strays_tall=tall), tell_view(scheme="dark", strays=[])
+    assert [h["selector"] for h in hits(light, dark)] == ["div.late"] and notes(light, dark) == []
+    assert notes(tell_view(strays=[stray()], strays_capped=True, strays_truncated=True)) == [pagecheck.STRAY_CAP_NOTE]
+    assert notes(tell_view(strays=[], strays_tall={**tall, "strays": [], "truncated": True, "capped": True})) == [pagecheck.STRAY_CAP_NOTE]
+    assert pagecheck.stray_min_px() == 8
 
 
 # ---------------------------------------------------------------- a report input that stands for a part of a file: BRAND-STATE.md by its G4 rules (no browser)
@@ -4230,3 +4280,32 @@ def test_a_part_that_cannot_be_read_makes_its_input_stale_and_says_why(tmp_path)
     assert got == ["pages/index.html (the G4 rules) cannot be read: 'g4-rules' is a part of BRAND-STATE.md, not of index.html"], got
     state.unlink()
     assert stale_inputs(p, rep) == ["BRAND-STATE.md is gone"], "a part of a file that is gone is gone"
+
+
+def test_a_word_added_to_the_brief_or_the_cliches_list_makes_a_passing_report_stale(tmp_path):
+    p = state_with_g4(tmp_path)
+    (p / "brief").mkdir(exist_ok=True)
+    (p / "brief" / "BRIEF.md").write_text("# Brief\n\n## Forbidden\n\n- revolutionary\n", encoding="utf-8")
+    rep = hand_report(p)
+    assert {"brief/BRIEF.md"} <= {i["path"] for i in rep["inputs"]} and "research/cliches.md" not in {i["path"] for i in rep["inputs"]}   # only the files that exist
+    assert stale_inputs(p, rep) == []
+    with (p / "brief" / "BRIEF.md").open("a", encoding="utf-8") as f:
+        f.write("- game-changer\n")
+    assert stale_inputs(p, rep) == ["brief/BRIEF.md changed"]
+    (p / "research").mkdir(exist_ok=True)
+    (p / "research" / "cliches.md").write_text("# Clichés\n\n## Forbidden\n\n- best-in-class\n", encoding="utf-8")
+    rep = hand_report(p)
+    assert "research/cliches.md" in {i["path"] for i in rep["inputs"]} and stale_inputs(p, rep) == []
+    with (p / "research" / "cliches.md").open("a", encoding="utf-8") as f:
+        f.write("- cutting-edge\n")
+    assert stale_inputs(p, rep) == ["research/cliches.md changed"]
+
+
+def test_the_docs_say_the_page_check_uses_the_brief_and_cliches_words_only_and_that_they_make_a_report_stale():
+    flat = lambda *parts: " ".join(ROOT.joinpath(*parts).read_text(encoding="utf-8").split())
+    for text in (flat("scripts", "CONTRACT.md"), flat("CHANGELOG.md"), flat("skills", "brand-creator", "references", "phases", "09-qa.md")):
+        assert "lint.forbidden" in text, "the book's own list is named"
+    contract = flat("scripts", "CONTRACT.md")
+    assert "also applies the book's own `lint.forbidden`; the page check does not" in contract and "are inputs of the report: a change to either makes a `page-check` report stale" in contract
+    assert "is not an input of the report" not in contract and "not part of what makes a report go out of date" not in flat("CHANGELOG.md") + flat("docs", "manual", "reference", "page-check.md")
+    assert "the list `book-lint` applies" not in flat("skills", "brand-creator", "references", "phases", "09-qa.md") + contract + (ROOT / "scripts" / "page_check.py").read_text(encoding="utf-8")

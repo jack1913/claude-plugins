@@ -18,7 +18,7 @@ paints is a semantic colour of that theme) and `pair_rows` gives `page:pairs:<sc
 
 `motion_rows` gives `page:motion` (every duration and easing is a motion token), and `claim_rows` gives `page:claims` (every number and status word outside a `data-sample`
 is backed by FACTS.md) and `page:samples` (the before-publishing list, also the report's `samples`).
-`word_rows` gives `page:words` (a warning for each word the brand forbids, the list `book-lint` applies, found in the text of the page; info when no word is listed).
+`word_rows` gives `page:words` (a warning for each word the brand forbids (the Forbidden bullets of brief/BRIEF.md and research/cliches.md; book-lint also adds the book's own `lint.forbidden`), found in the text of the page; info when no word is listed).
 
 `rule_rows` gives `page:rule:<id>` for each brand rule of qa/rules.json `page.rules` (`rule_request` is what such rules ask of the browser): it fails when it is broken and its `g4` words are in a recorded
 "(rule)" line of BRAND-STATE.md Rules (G4), warns when it is broken and not yet tied, and passes when it holds.
@@ -272,8 +272,10 @@ def load_modern(project: Path) -> dict[str, str]:
 
 def base_inputs(project: Path, target: Target) -> list[Path | PartInput]:
     """The files every page check stands on: the built tokens (json and css), the rules, the facts and, of the state of the project, the G4 rules (BRAND-STATE.md "g4-rules": the G4 record
-    and the recorded "(rule)" lines, the only two things a page check reads from it; recording G5 or G6 or setting the phase does not make the report stale), and the page (a project target)."""
+    and the recorded "(rule)" lines, the only two things a page check reads from it; recording G5 or G6 or setting the phase does not make the report stale), whichever of brief/BRIEF.md and
+    research/cliches.md exist (the forbidden words of page:words come from them), and the page (a project target)."""
     files = [project / TOKENS_FILE, project / TOKENS_CSS, project / qa_rules.RULES_FILE, project / "FACTS.md", PartInput(project / "BRAND-STATE.md", "g4-rules")]
+    files += [project / r for r in FORBIDDEN_SOURCES if (project / r).is_file()]   # the lists of forbidden words page:words reads: a word added later makes an old pass stale
     if target.kind == "project" and target.file:
         files.append(target.file)
     return files
@@ -701,14 +703,16 @@ YEAR = re.compile(r"(?:19|20)\d{2}")
 COPYRIGHT_BEFORE = re.compile(r"(?:©|\(c\)|\bcopyright\b)\s*(?:(?:©|\(c\))\s*)?(?:(?:19|20)\d{2}\s*[-–—]\s*)?$", re.I)
 COPYRIGHT_LOOKBACK = 40                   # characters before a year that are looked at for the sign
 DATE_YEAR_R = re.compile(r"\.((?:19|20)\d{2})r(?!\w)")   # the Polish year written glued to the date: 15.11.2026r.
+FORBIDDEN_SOURCES = ("brief/BRIEF.md", "research/cliches.md")   # where `_common.forbidden_terms` reads the forbidden words
 STATUS_CODE = re.compile(r"[45]\d\d")      # a 4xx or 5xx status code of an error page
 # The words that say a title or an h1 is about an error, per page language: a code in such a text counts as the page's status code only when the same text holds one of them.
 ERROR_WORDS = {"en": ("error", "not found", "forbidden", "unauthorized", "unavailable", "gone", "bad request", "server error"),
                "pl": ("błąd", "nie znaleziono", "nie istnieje", "brak dostępu", "odmowa dostępu", "niedostępna", "niedostępny")}
 ERROR_WORD_PATTERNS = {lang: re.compile(r"(?<!\w)(?:" + "|".join(r"\s+".join(re.escape(w) for w in phrase.split()) for phrase in phrases) + r")(?!\w)", re.I) for lang, phrases in ERROR_WORDS.items()}   # whole words, any letter case, any white space between the words of a phrase
-ERROR_WORD_GAP = r"[\s\-–·|:]*"          # what may stand between an error word and the code (O10): spaces and the separators - – · | :
-ERROR_WORD_BEFORE = {lang: re.compile(p.pattern + ERROR_WORD_GAP + r"$", re.I) for lang, p in ERROR_WORD_PATTERNS.items()}    # "Error 404", "Błąd 404", "Service Unavailable 503"
-ERROR_WORD_AFTER = {lang: re.compile(ERROR_WORD_GAP + p.pattern, re.I) for lang, p in ERROR_WORD_PATTERNS.items()}            # "404 Not Found", "404 · Nie znaleziono"
+ERROR_FILLERS = {"en": ("page", "site"), "pl": ("strona", "witryna")}   # words that may stand between the code and the error phrase: "404 Page Not Found", "404 – Strona nie istnieje"
+ERROR_WORD_GAP = {lang: r"(?:[\s\-–—·•|:/()]|(?<!\w)(?:" + "|".join(words) + r")(?!\w))*" for lang, words in ERROR_FILLERS.items()}   # the gap (O10): white space, the separators - – — · • | : / , a pair of parentheses round the code, and the filler words, in any letter case
+ERROR_WORD_BEFORE = {lang: re.compile(p.pattern + ERROR_WORD_GAP[lang] + r"$", re.I) for lang, p in ERROR_WORD_PATTERNS.items()}    # "Error 404", "Błąd 404", "Service Unavailable 503"
+ERROR_WORD_AFTER = {lang: re.compile(ERROR_WORD_GAP[lang] + p.pattern, re.I) for lang, p in ERROR_WORD_PATTERNS.items()}            # "404 Not Found", "404 · Nie znaleziono"
 
 # A date written with a month name is one date, not numbers, in the languages whose month names are listed (the page language decides: any other, or none, keeps the numbers as they are).
 # Polish: "21 października 2026", "21 października", and a month with a year, in the nominative, genitive or locative ("Październik 2026", "października 2026", "w październiku 2026"), in any
@@ -842,9 +846,9 @@ def target_stem(target) -> str:
 def status_codes(views: list[dict], target=None) -> set[str]:
     """The status codes of an error page. A page is an error page when its file name, without the extension, is a 4xx or 5xx code (`404.html`, `500.html`), or its `<title>` or an `<h1>`
     (`document.title` and `claim_h1` of a view) holds one as a bare number. The text counts only when that number is the only one in it (every number, a bare single digit and a copyright
-    year too), no `+` stands before or after it, and an error word of the page's language stands right beside it, with nothing but spaces or the separators `-`, `–`, `·`, `|` and `:`
-    between them (ERROR_WORDS: English and Polish; the language is the view's `lang`, the document's, and any other, or none, leaves the file name as the only rule): `Błąd 404 | Acme` and
-    `404 · Nie znaleziono` on a Polish page, `Error 500`, `404 Not Found` and `Service Unavailable 503` on an English one do; a count in a heading (`Ponad 400 projektów`, `Zaufało nam 500
+    year too), no `+` stands before or after it, and an error word of the page's language stands right beside it, with nothing between them but white space, the separators `-`, `–`, `—`, `·`, `•`, `|`, `:`
+    and `/`, parentheses round the code (`Not Found (404)`) and the filler words `page`, `site` (English) or `strona`, `witryna` (Polish), in any letter case (ERROR_WORDS: English and Polish; the language is the view's `lang`, the document's, and any other, or none, leaves the file name as the only rule): `Błąd 404 | Acme`,
+    `404 · Nie znaleziono` and `404 – Strona nie istnieje` on a Polish page, `Error 500`, `404 Page Not Found`, `Not Found (404)` and `Service Unavailable 503` on an English one do; a count in a heading (`Ponad 400 projektów`, `Zaufało nam 500
     firm`, `Over 400 clients`), an error word away from the number (`450 tickets, all gone`, `Gone in 450 seconds`, `Ponad 400 produktów, żaden niedostępny`), `500+ firm nam ufa`,
     `+500 klientów`, `5 lat, 500 klientów`, `Error 500 (1 of 3)` and `404 and 500` do not.
     A number on an error page that is this same code is the page's status code, not a claim, wherever it stands on the page; any other number is judged as usual."""
@@ -999,8 +1003,8 @@ def claim_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
 
 
 def word_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
-    """page:words: none of the words the brand forbids is in the text of the page. The words are `_common.forbidden_terms`, the list `book-lint` applies (the bullets under a
-    heading "Forbidden" in brief/BRIEF.md and research/cliches.md); a word is found as a whole word in any letter case, in the same runs of text the claims are read from, a
+    """page:words: none of the words the brand forbids is in the text of the page. The words are `_common.forbidden_terms`: the bullets under a
+    heading "Forbidden" in brief/BRIEF.md and research/cliches.md only (the book check adds the book's own `lint.forbidden` to that list, the page check does not); both files are inputs of the report, so a change to either makes it stale; a word is found as a whole word in any letter case, in the same runs of text the claims are read from, a
     labelled sample included (a made-up sentence is still wording the brand forbids; the hit says it is in a sample). A hit warns, never fails; the same block in another view is
     one hit, named at the first view that has it. With no word listed the row is info (nothing was checked, so it is never a pass). `skipped` when no view was measured, and a
     warning "NOT verified beyond the first blocks of text" when a view had more blocks than were measured."""
@@ -1784,9 +1788,19 @@ def rule_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
 TELLS_FILE = "skills/brand-creator/references/page-tells.json"
 TELLS_CAP = 100                           # hits one tell row keeps in its `hits`
 ELEMENT_CAP_NOTE = "NOT verified beyond the first elements of a view (the page has more than the check walks)"
+STRAY_CAP_NOTE = "NOT verified beyond the first boxes found outside their place (the page has more of them than the check lists, so the later ones were not looked at)"
 TELL_NEEDS_WALK = ("middot-run", "styled-div-mock", "three-equal-tiles", "stray-box")   # the tells found by walking every element, which stops at a cap
 SIDE_OF_PARENT = {"below": "below", "above": "above", "right": "to the right of", "left": "to the left of"}   # where a stray lies against its parent, as a phrase
 EPSILON = 1e-6
+
+
+def stray_min_px() -> float:
+    """The stray-box tell's own threshold (`min_outside_px` of page-tells.json): the browser is asked to keep only candidates at or past it, so a small offset never fills its list."""
+    t = next((t for t in load_tells()["tells"] if t["id"] == "stray-box"), {})
+    px = (t.get("threshold") or {}).get("min_outside_px")
+    if not isinstance(px, (int, float)) or isinstance(px, bool) or px < 0:
+        fail(EXIT_CANNOT, f"{TELLS_FILE}: the stray-box tell has no threshold.min_outside_px: reinstall the plugin")
+    return px
 
 
 def load_tells() -> dict:
@@ -1953,7 +1967,9 @@ def find_tells(measures: dict, cfg: dict) -> dict:
                 stray_unseen["tall"].append((width, tall["error"], (tall.get("viewport") or {}).get("height")))
             else:
                 walks.append((True, tall.get("strays", []), tall.get("animations")))
-                if tall.get("truncated") and ELEMENT_CAP_NOTE not in unverified["stray-box"]:
+                if tall.get("capped") and STRAY_CAP_NOTE not in unverified["stray-box"]:
+                    unverified["stray-box"].append(STRAY_CAP_NOTE)
+                elif tall.get("truncated") and ELEMENT_CAP_NOTE not in unverified["stray-box"]:
                     unverified["stray-box"].append(ELEMENT_CAP_NOTE)
                 stray_tall_height = (tall.get("viewport") or {}).get("height") or stray_tall_height
                 if tall.get("load"):   # what only the resize brought (a page error, a request stopped or failed): page:load judges the view at its own height, so it is said here
@@ -1975,6 +1991,8 @@ def find_tells(measures: dict, cfg: dict) -> dict:
                 elif not anim.get("capped"):
                     add("stray-box", (c["sel"], at_tall), v, c["sel"], _stray_text(c, t, at_tall, stray_tall_height))
                     standing.add(c["sel"])
+        if f.get("strays_capped") and STRAY_CAP_NOTE not in unverified["stray-box"]:
+            unverified["stray-box"].append(STRAY_CAP_NOTE)
         if f.get("truncated"):
             for tid in TELL_NEEDS_WALK:
                 if ELEMENT_CAP_NOTE not in unverified[tid]:

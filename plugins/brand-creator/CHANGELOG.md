@@ -15,7 +15,8 @@ stage, and why, is in the [archive](docs/archive/README.md).
   another website is refused (exit 2) with its address named, and nothing is written. Only `.css` files go in as stylesheets
   and `.js` or `.mjs` files as scripts, and nothing from a hidden file or folder, so a page cannot carry another file of your
   project into the copy. The copy goes outside the project or
-  under `tryout/`, never over the page. `BRAND-STATE.md` has a new `tryout_url` for the private page a shared try-out is on, kept
+  under `tryout/`, never over the page and never over a file already there (a try-out's own page): under `tryout/` the file must be new,
+  or the same copy again, and a stylesheet's `@import` never ends the `<style>` it lands in. `BRAND-STATE.md` has a new `tryout_url` for the private page a shared try-out is on, kept
   apart from `review_url`, the page of your boards.
 - `brand-creator capture <page> --frames` takes three key frames of a page's first screen (1440 wide, light): at the start, the
   middle and the end of the longest animation that runs when the page loads, as `shots/frame-1440-0.png`, `frame-1440-50.png` and
@@ -25,7 +26,8 @@ stage, and why, is in the [archive](docs/archive/README.md).
 - The page check warns about a box a movement leaves behind (`tell:stray-box`). It waits for your page's movements to
   end, then looks for a box that still shows but lies completely outside the box that holds it, or off the screen, by 8
   pixels or more: the sheets that stay on screen after their animation. It also looks at each width again in a window
-  1300 pixels high, so a problem that only shows on a tall screen is found. A page with a movement that never ends, or
+  1300 pixels high (once per width, in the first colour scheme), so a problem that only shows on a tall screen is found. Only boxes 8 pixels or more out
+  of place are collected, and a page with more of them than the check lists is "not verified" beyond the first ones, never a pass. A page with a movement that never ends, or
   that follows the scroll position in its styles, is "not verified" for this warning, never a pass. A site card names it
   like any other warning the check finds.
 
@@ -52,10 +54,10 @@ stage, and why, is in the [archive](docs/archive/README.md).
   one, makes `board-lint` warn (`site:fields`) in this release and fail in the next, so boards made before this release
   still lint.
 - The page check warns about words your brand forbids. Each word listed as a bullet under "Forbidden" in `brief/BRIEF.md`
-  or `research/cliches.md` (the list the brand book check already uses) is looked for in the text of the page, in any
+  or `research/cliches.md` (the book check also adds the book's own `lint.forbidden`; the page check does not) is looked for in the text of the page, in any
   letter case, as a whole word. A hit is a warning that names the word and the text around it (`page:words`), and never fails
   the page; a word in a labelled sample is found too. A project with no list gets an info line that says nothing was
-  looked for, not a pass. The list is not part of what makes a report go out of date, so check again after changing it.
+  looked for, not a pass. Both files are inputs of the report, so a word added later makes an older report stale.
 - `FACTS.md` keeps the plain fact apart from the words that present it. Wording you approved for use as copy goes in its own
   row, labelled `copy: <slot>` (`copy: hero headline`), and its text backs a number or status word like any fact. In the
   site round a headline quotes such a row, or is new wording you approve on the board, and is no longer a fact copied word
@@ -88,7 +90,9 @@ stage, and why, is in the [archive](docs/archive/README.md).
   choices and nothing records them, so a `BRAND.md` or `DESIGN.md` with that line empty is left alone and the chain says which
   line to set), then `applied-skill --yes`, or, when the project has a kit, `kit build --yes` and `kit check`. A project with
   none of these runs nothing and says so. A command that refuses (a file you edited by hand, a package that is not installed)
-  is a failed step, said with its message; the chain still runs `check`, then ends with a non-zero exit code. A project that
+  is a failed step, said with its message; the chain still runs `check`, then ends with a non-zero exit code. So is a project
+  state it cannot read (a slug that is not set simply means no applied skill, but any other failure of `state --get slug` is said, never
+  taken for "no skill"). A project that
   already has `tools/finish.sh` keeps its copy: take the step from `templates/finish.sh.tpl`.
 - `fontcheck` now warns when a run leaves out a font an earlier run checked. Each run writes the one report over the last, so
   checking a font of a master or a page by itself dropped the other fonts from the report, and the kit then left them out without
@@ -109,7 +113,9 @@ stage, and why, is in the [archive](docs/archive/README.md).
 ### Fixed
 
 - A number in a page's title or main heading counts as an error code only with an error word right beside it ("Error
-  404", "404 Not Found", "404 · Nie znaleziono"). "450 tickets, all gone" and "Ponad 400 produktów, żaden niedostępny" are
+  404", "404 Not Found", "404 Page Not Found", "Not Found (404)", "404 – Strona nie istnieje", "404 · Nie znaleziono"); only
+  spaces, separators (- – — · • | : /), brackets round the code and the words "page", "site", "strona" and "witryna"
+  may stand between them. "450 tickets, all gone" and "Ponad 400 produktów, żaden niedostępny" are
   counts again, so the page check asks for them in `FACTS.md`.
 - The mock-up warning counts items that lie on top of each other once, so a carousel whose slides are stacked in one
   place no longer looks as if its list filled the whole box.

@@ -247,7 +247,18 @@ refresh() {   # refresh <brand-creator words>: one command of this step. Its out
 }
 ADAPTERS_OPTS=(); [ -z "$ADAPTERS_ARGS" ] || read -r -a ADAPTERS_OPTS <<< "$ADAPTERS_ARGS"
 SKILL_DIR=""   # .claude/skills/<slug>-brand, as `check` finds it; a project whose slug is not set or cannot name a skill has no skill folder, and neither does it for `check`
-SLUG="$("${BC[@]}" state --get slug 2>/dev/null)" || SLUG=""
+SLUG=""; SLUG_RC=0; SLUG_OUT="$("${BC[@]}" state --get slug 2>&1)" || SLUG_RC=$?   # stderr too: state says why in an `error: ...` line there
+if [ "$SLUG_RC" -eq 0 ]; then
+  SLUG="$SLUG_OUT"
+elif [ "$SLUG_RC" -eq 1 ] && [[ "$SLUG_OUT" == *" is not set in "* ]]; then
+  :   # `state --get` exits 1 with "<key> is not set in BRAND-STATE.md" for a slug that is not there: no skill folder
+else
+  # any other failure (a BRAND-STATE.md that cannot be read, a usage error) is a failed step, said with state's own message: nothing is guessed about the skill, check still runs, and the chain does not end in a pass
+  SLUG_WHY="$(printf '%s\n' "$SLUG_OUT" | sed -n 's/^error: //p' | tail -n 1)"
+  [ -n "$SLUG_WHY" ] || printf '%s\n' "$SLUG_OUT" >&2   # its output first, as refresh() does, so "printed above" is true
+  echo "finish.sh: step failed: state --get slug stopped with exit $SLUG_RC: ${SLUG_WHY:-the reason is printed above}. The chain goes on, so that check still writes the pack report" >&2
+  [ "$REFRESH_FAILED" -ne 0 ] || { REFRESH_FAILED="$SLUG_RC"; REFRESH_WHAT="state --get slug"; }
+fi
 [ -z "$SLUG" ] || SKILL_DIR=".claude/skills/$SLUG-brand"
 REFRESHED=no
 if [ -f BRAND.md ] || [ -f DESIGN.md ]; then

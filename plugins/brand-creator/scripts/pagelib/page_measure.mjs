@@ -974,7 +974,7 @@ const TELL = {
  *  `tiles`: [{sel, tiles: [{sel, left, top, width, height}]}]: elements with exactly three shown element children (a <template>, a <script> or a hidden child is not counted) that each hold a shown heading.
  *  `headings`: [{sel, text (60), top}] (h1-h6) and `details`: [{sel, top}] (a details element with a summary); `last_band`: the last block of the main content {sel, top, words, headings, actions}.
  *  `viewport` is {width, height}; `truncated` is true when more than TELL.elements elements were on the page. */
-async function tellFacts(page) {
+async function tellFacts(page, request = {}) {
   const facts = await page.evaluate((K) => {
     const H = window.__bcMeasure;
     const round = (v) => Math.round(v * 100) / 100;
@@ -1260,7 +1260,10 @@ async function tellFacts(page) {
 
     return { tell_facts: { viewport: { width: vw, height: vh }, eyebrow, arrows, separators, hero, boxes, tiles, headings, details, last_band, ...(truncated ? { truncated: true } : {}) } };
   }, TELL);
-  facts.tell_facts.strays = (await strayFacts(page)).strays;   // `strays`, see strayFacts; the same walk is made again at a tall window (`strays_tall`, render.mjs measureView)
+  const stray = await strayFacts(page, request.stray_min_px);   // `strays`, see strayFacts; the same walk is made again at a tall window (`strays_tall`, render.mjs measureView)
+  facts.tell_facts.strays = stray.strays;
+  if (stray.truncated) facts.tell_facts.strays_truncated = true;      // the walk stopped short (the element cap or the list cap): the stray-box tell says it is not verified
+  if (stray.capped) facts.tell_facts.strays_capped = true;            // ... because there were more candidates than the list holds
   return facts;
 }
 
@@ -1269,7 +1272,7 @@ async function tellFacts(page) {
 // settled (render.mjs waits for the animations that end); like every collector this only reports, and pagecheck.py applies `min_outside_px`.
 const STRAY = {
   elements: 8000,   // elements walked; the view says so (`truncated`) when the page had more
-  floor_px: 2,      // an element is a candidate from this far outside (the tell asks for 8): a rounding error is not one
+  floor_px: 2,      // an element is a candidate from this far outside when the request gives no `stray_min_px` (page_check.py sends the tell's own min_outside_px, 8): a rounding error is not one
   list: 100,        // candidates reported per walk
   text: 60,
 };
@@ -1283,8 +1286,9 @@ const STRAY = {
  *  is measured has nothing above or left of its scroll position past an edge: it is judged as the same page unscrolled), `px` how far: null otherwise, and for an element whose parent lies outside the same way
  *  (the stray is the parent). A focusable control (a link, a button, an input ...) positioned absolutely and wholly outside the viewport is no candidate at all: a skip link set off screen until it is focused is made so. `animating` is true when the element, or an ancestor, still has a running animation or
  *  transition: an animation that never ends, or waits for a scroll, so where the element ends is not known. A candidate has `parent` or `viewport` of at least STRAY.floor_px. `truncated` is true when more
- *  than STRAY.elements elements were on the page. */
-async function strayFacts(page) {
+ *  than STRAY.elements elements were on the page, or when more than STRAY.list candidates were found (then `capped` is true too: the list holds the first ones only). `minPx` is the least distance outside that makes
+ *  a candidate (the stray-box tell's own threshold; STRAY.floor_px when none is given), so a small offset that the tell ignores never fills the list. */
+async function strayFacts(page, minPx) {
   return page.evaluate((K) => {
     const H = window.__bcMeasure;
     const round = (v) => Math.round(v * 100) / 100;
@@ -1328,8 +1332,8 @@ async function strayFacts(page) {
     };
     const past = (r) => [["left", -(r.right + sx)], ["top", -(r.bottom + sy)], ["right", r.left + sx - vw]].reduce((a, b) => (b[1] > a[1] ? b : a));   // the edge of the page it is furthest past, and how far: the scroll position is added, so what lies above or left of a scrolled window is on the page, as on the same page unscrolled
     const strays = [];
+    let capped = false;
     for (const el of els) {
-      if (strays.length >= K.list) break;
       if (el.localName === "body" || !visible(el)) continue;
       const r = el.getBoundingClientRect();
       if (r.width <= 0 || r.height <= 0) continue;
@@ -1349,17 +1353,18 @@ async function strayFacts(page) {
         if (!up || up.width < 1 || up.height < 1 || past(up)[0] !== edge || past(up)[1] < K.floor_px) found.viewport = { side: edge, px: round(far) };   // inside a parent that is out as well, the parent is the stray
       }
       if (!found.parent && !found.viewport) continue;
+      if (strays.length >= K.list) { capped = true; break; }   // a further candidate than the list holds
       strays.push({ sel: H.selector(el), text: String(el.innerText ?? el.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, K.text), animating: animating(el), ...found });
     }
-    return { strays, ...(truncated ? { truncated: true } : {}) };
-  }, STRAY);
+    return { strays, ...(truncated || capped ? { truncated: true } : {}), ...(capped ? { capped: true } : {}) };
+  }, { ...STRAY, floor_px: Number.isFinite(minPx) && minPx >= 0 ? minPx : STRAY.floor_px });
 }
 
 /** The stray candidates alone, on a page that has been settled again (render.mjs measureView at a tall window): the helpers are put in and taken out again. */
-export async function collectStrays(page) {
+export async function collectStrays(page, minPx) {
   try {
     await page.evaluate(installHelpers);
-    return await strayFacts(page);
+    return await strayFacts(page, minPx);
   } finally {
     await page.evaluate(() => { delete window.__bcMeasure; }).catch(() => {});
   }
@@ -1376,7 +1381,7 @@ const COLLECTORS = [
   async (page) => markFacts(page),
   async (page) => fontFacts(page),
   async (page, request) => ruleFacts(page, request),
-  async (page) => tellFacts(page),
+  async (page, request) => tellFacts(page, request),
 ];
 
 /** Run every collector on the settled page and merge their answers; the in-page helpers are taken out of the page again. */

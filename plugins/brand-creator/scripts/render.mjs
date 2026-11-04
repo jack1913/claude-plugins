@@ -2137,6 +2137,7 @@ function readPageRequest(project, file) {
   if (!Array.isArray(req.colours) || req.colours.length > 500 || req.colours.some((c) => typeof c !== "string" || !c || c.length > 200)) bad("colours must be a list of up to 500 CSS colours");
   req.dsf = req.dsf ?? 1;
   if (![1, 2, 3].includes(req.dsf)) bad("dsf must be 1, 2 or 3");
+  if (req.stray_min_px !== undefined && (typeof req.stray_min_px !== "number" || !(req.stray_min_px >= 0) || req.stray_min_px > 1000)) bad("stray_min_px must be a number from 0 to 1000");   // the stray-box tell's own threshold: the least distance outside that makes a candidate
   if (req.url) {
     if (typeof req.url !== "string" || !isLoopbackUrl(req.url)) die(EXIT.USAGE, `page-measure opens only a page on this machine (http or https on localhost, 127.0.0.1 or [::1]), not ${JSON.stringify(req.url)}`);
     req.openUrl = new URL(req.url).href;
@@ -2160,19 +2161,19 @@ function readPageRequest(project, file) {
 
 /** The stray-box candidates of the page in a window PAGE_TALL_HEIGHT high: the viewport is resized, the page settles and its animations are waited for again, and only that tell's facts are collected. -> {viewport,
  *  animations, strays, truncated}, or {viewport, error} when the page could not be measured so (the view keeps its other facts). */
-async function measureTall(page, width) {
+async function measureTall(page, width, minPx) {
   const viewport = { width, height: PAGE_TALL_HEIGHT };
   try {
     await page.setViewportSize(viewport);
     await page.waitForTimeout(PAGE_SETTLE_MS);
     const animations = await waitAnimations(page);
-    return { viewport, animations, ...(await collectStrays(page)) };
+    return { viewport, animations, ...(await collectStrays(page, minPx)) };
   } catch (e) {
     return { viewport, error: String(e.message).split("\n")[0] };
   }
 }
 
-async function measureView(browser, req, width, scheme) {
+async function measureView(browser, req, width, scheme, tallDone = new Set()) {
   const viewport = { width, height: PAGE_VIEWPORT_HEIGHT[width] ?? 900 };
   const server = req.rootReal ? await startServer(req.rootReal) : null;
   const origin = server ? server.origin : new URL(req.openUrl).origin;
@@ -2211,11 +2212,14 @@ async function measureView(browser, req, width, scheme) {
     // what the view itself logged, kept before the tall window: an error or a request the resize brings is the stray-box tell's alone, never page:load's
     const load = { errors: [...seen.errors], nonLocal: [...seen.nonLocal], failedLocal: [...seen.failedLocal] };
     const kept = { resources: Object.fromEntries(Object.entries(resources).sort(([a], [b]) => (a < b ? -1 : 1))), served: server ? server.served().sort() : [] };
-    const tall = await measureTall(page, width);
-    const added = [...seen.errors.slice(load.errors.length), ...seen.nonLocal.slice(load.nonLocal.length).map((u) => `non-local request: ${u}`),
-                   ...seen.failedLocal.slice(load.failedLocal.length).map((u) => `failed local request: ${u}`)];
-    if (added.length) tall.load = added;
-    collected.tell_facts.strays_tall = tall;
+    if (!tallDone.has(width)) {   // the stray boxes of a tall window depend on the width and the height alone, so a width is measured once, in the first scheme that measures: the other scheme's view has no `strays_tall`
+      tallDone.add(width);
+      const tall = await measureTall(page, width, req.stray_min_px);
+      const added = [...seen.errors.slice(load.errors.length), ...seen.nonLocal.slice(load.nonLocal.length).map((u) => `non-local request: ${u}`),
+                     ...seen.failedLocal.slice(load.failedLocal.length).map((u) => `failed local request: ${u}`)];
+      if (added.length) tall.load = added;
+      collected.tell_facts.strays_tall = tall;
+    }
     return {
       width, scheme, viewport, ...base, errors: load.errors, non_local: load.nonLocal, failed_local: load.failedLocal,
       resources: kept.resources, served: kept.served, animations, ...collected,
@@ -2239,7 +2243,8 @@ async function cmdPageMeasure(argv) {
   const browser = await launch();   // a missing setup fails before anything is opened
   const views = [];
   try {
-    for (const width of req.widths) for (const scheme of req.schemes) views.push(await measureView(browser, req, width, scheme));
+    const tallDone = new Set();   // the widths whose tall window has been measured
+    for (const width of req.widths) for (const scheme of req.schemes) views.push(await measureView(browser, req, width, scheme, tallDone));
     fs.mkdirSync(path.dirname(out), { recursive: true });
     fs.writeFileSync(out, JSON.stringify({
       schema: 1, chromium: browser.version(), target: { kind: req.url ? "url" : "page", page: req.url ? null : req.pageRel, url: req.url ?? null }, views,
