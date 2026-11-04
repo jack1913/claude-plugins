@@ -40,7 +40,11 @@ BRAND_CREATOR_DATA=<set-up data dir> tests/run-all.sh
   `profiles` (`test_emit_profiles.py`), `book-motion` (`test_book_motion.py`), `kit` (`test_kit.py`: a hand edit,
   a fill marker, a link out of the kit, a value with no citation, an unknown rule id, a status that compares sizes,
   an owner file written over) and `wiring` (`test_adoption_wiring.py`: a compare that ignores losses, `wiring` left
-  out of `TARGET_KEYS`, a skipped read-only proof, a URL that is not on this machine); `--list` prints every break.
+  out of `TARGET_KEYS`, a skipped read-only proof, a URL that is not on this machine), `grounds` (the grounds of
+  `tokens.json` and the owner's dated naming read by one rule in every command) and `site-round` (group 4: a hero card's
+  Idea line, the `owner` verdict, the stray-box tell and its tall window, a font dropped from `fontcheck`, the finish
+  chain's adapter step, the mock-up's page band and list union, the error word beside a code, and a try-out shared only
+  with the owner's yes and inlined from code files only); `--list` prints every break.
 - A test that cannot run prints "NOT VERIFIED". `BRAND_CREATOR_REQUIRE_ALL=1` turns every such skip into a failure.
 - Tests that talk to real services (`requires_network`) run only with `BRAND_CREATOR_LIVE=1`.
 - The anonymisation test needs a private denylist (`BRAND_CREATOR_DENYLIST`) and skips without it.

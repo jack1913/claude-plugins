@@ -30,6 +30,7 @@ BL = "scripts/booklib/booklint.py"
 KT = "tests/test_kit.py::"
 KL = "scripts/adaptlib/kitlib.py"
 WT = "tests/test_adoption_wiring.py::"
+PT = "tests/test_page_check.py::"
 
 # group, id, file, the text, its replacement, the tests that must catch it (pytest node ids, relative to the plugin folder)
 LEDGER: list[dict] = [
@@ -531,6 +532,42 @@ LEDGER: list[dict] = [
     dict(group="grounds", id="starter-kept-decided-by-its-own-rule", file="scripts/check.py",
          old="    if not (isinstance(decided, str) and adapt.owner_named(decided)):", new="    if not (isinstance(decided, str) and decided.strip()):",
          tests=["tests/test_contrast_tokens.py::test_contrast_adapt_and_check_hold_the_owners_naming_to_one_rule"]),
+    # ---- the site round after its first real use (group 4): the hero's idea, the owner verdict, the stray-box tell, dropped fonts, the finish chain's adapter step, the mock-up's
+    #      page band and list union, the error word beside the code, and the try-out shared only with the owner's yes
+    dict(group="site-round", id="idea-warning-off", file="scripts/boardlib/siteboard.py",
+         old="ideas = [p for v in variants for p in idea_problems(v)] if idea else []", new="ideas = []",
+         tests=["tests/test_site_board.py::test_a_hero_card_without_an_idea_line_warns_in_this_release_and_names_the_card",
+                "tests/test_site_board.py::test_a_hero_card_with_an_empty_idea_line_warns_in_this_release"]),
+    dict(group="site-round", id="owner-verdict-refused", file="scripts/boardlib/siteboard.py",
+         old='COLD_VERDICTS = ("ship", "fix", "owner")', new='COLD_VERDICTS = ("ship", "fix")',
+         tests=["tests/test_site_board.py::test_a_second_cold_review_may_say_owner_and_the_board_lints_clean"]),
+    dict(group="site-round", id="stray-box-never-fires", file="scripts/pagelib/pagecheck.py",
+         old='                if not _is_stray(c, t) or (at_tall and c["sel"] in standing):', new="                if True:",
+         tests=[PT + "test_a_box_an_animation_leaves_outside_its_parent_is_warned_and_a_hidden_clipped_or_unfinished_one_is_not"]),
+    dict(group="site-round", id="tall-window-errors-fail-the-load-row", file="scripts/render.mjs",
+         old="errors: load.errors, non_local: load.nonLocal, failed_local: load.failedLocal,", new="errors: seen.errors, non_local: seen.nonLocal, failed_local: seen.failedLocal,",
+         tests=[PT + "test_what_only_the_tall_window_brings_is_kept_out_of_the_views_load_row"]),
+    dict(group="site-round", id="fontcheck-dropped-warning-off", file="scripts/fontcheck.py",
+         old="    elif dropped:", new="    elif False:",
+         tests=["tests/test_fontcheck.py::test_a_run_that_leaves_out_a_font_an_earlier_run_checked_warns_naming_it"]),
+    dict(group="site-round", id="finish-adapters-step-skipped", file=TPL,
+         old='    refresh adapters "${ADAPTERS_OPTS[@]}"\n', new="    true\n",
+         tests=[ST + "test_the_adapter_files_and_the_applied_skill_are_written_again_after_the_tokens_and_the_press_kit_and_before_the_last_lint_staleness_and_check"]),
+    dict(group="site-round", id="page-band-judged-whole", file="scripts/pagelib/pagecheck.py",
+         old=' or b.get("band", False)', new="",
+         tests=[PT + "test_a_page_band_is_not_judged_as_a_whole_and_a_drawing_inside_it_still_is"]),
+    dict(group="site-round", id="list-area-summed", file="scripts/pagelib/page_measure.mjs",
+         old="const listArea = unionArea(itemRects, r);", new="const listArea = itemRects.reduce((n, x) => n + unionArea([x], r), 0);",
+         tests=[PT + "test_a_row_of_items_running_past_its_box_fills_no_more_of_it_than_the_box"]),
+    dict(group="site-round", id="error-word-anywhere", file="scripts/pagelib/pagecheck.py",
+         old="and not plus and beside:", new="and not plus and ERROR_WORD_PATTERNS[lang].search(text):",
+         tests=[PT + "test_a_copyright_year_and_an_error_pages_status_code_are_no_claims"]),
+    dict(group="site-round", id="tryout-published-without-the-yes", file="skills/brand-creator/references/phases/07p-site-round.md",
+         old="     and has said yes to claude.ai pages (`review_surface` is `artifact`, or they answer yes to the one upload question of the", new="     (`review_surface` is `artifact`, or they answer yes to the one upload question of the",
+         tests=["tests/test_skills.py::test_a_tryout_is_shared_as_a_private_page_only_with_the_owners_ask_and_yes_and_the_manual_no_longer_says_never_publishes"]),
+    dict(group="site-round", id="inline-takes-any-file-as-code", file="scripts/inline_page.py",
+         old="        if p.suffix.lower() not in CODE_SUFFIXES[kind]:", new="        if False:",
+         tests=["tests/test_inline.py::test_a_page_with_something_that_cannot_be_inlined_exits_1_and_writes_nothing"]),
 ]
 
 IGNORE = shutil.ignore_patterns("__pycache__", ".pytest_cache", "node_modules", "results")
