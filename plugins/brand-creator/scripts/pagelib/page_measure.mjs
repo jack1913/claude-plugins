@@ -1166,7 +1166,20 @@ async function tellFacts(page) {
     let walked = 0, nextId = 0;
     const nothing = () => ({ styled: 0, media: {}, inLists: 0, inCells: 0, itemRects: [], rect: null, headings: 0, h1: 0 });
     const TABLE_PARTS = new Set(["table", "thead", "tbody", "tfoot", "tr"]);
-    const overlap = (a, r) => Math.max(0, Math.min(a.right, r.right) - Math.max(a.left, r.left)) * Math.max(0, Math.min(a.bottom, r.bottom) - Math.max(a.top, r.top));   // the part of a that lies in r
+    // the area of the union of rectangles, each clipped to r, so items stacked in one place (a fade carousel) count once: a sweep over the x edges, the y intervals of each strip merged
+    const unionArea = (rects, r) => {
+      const cs = rects.map((a) => ({ left: Math.max(a.left, r.left), right: Math.min(a.right, r.right), top: Math.max(a.top, r.top), bottom: Math.min(a.bottom, r.bottom) }))
+        .filter((a) => a.right > a.left && a.bottom > a.top);
+      const xs = [...new Set(cs.flatMap((a) => [a.left, a.right]))].sort((a, b) => a - b);
+      let area = 0;
+      for (let i = 0; i + 1 < xs.length; i++) {
+        const ys = cs.filter((a) => a.left <= xs[i] && a.right >= xs[i + 1]).map((a) => [a.top, a.bottom]).sort((p, q) => p[0] - q[0]);
+        let covered = 0, end = -Infinity;
+        for (const [top, bottom] of ys) { if (bottom > end) { covered += bottom - Math.max(top, end); end = bottom; } }
+        area += covered * (xs[i + 1] - xs[i]);
+      }
+      return area;
+    };
     const walk = (el, nearest) => {   // -> {styled, media: {element name: largest side}, inLists, inCells, itemRects, rect, headings, h1} counted inside el, el itself included; rect is el's own box
       if (!H.walkable(el) || walked++ > K.elements) return nothing();
       if (MEDIA_TAGS.has(el.localName)) {
@@ -1198,8 +1211,7 @@ async function tellFacts(page) {
       if (items) { inLists += items; for (const x of itemBoxes) itemRects.push(x); }   // a list that holds no styled item adds nothing; the room of the items themselves, not of the list: a list stretched past its items is not full of them
       if (me && styled >= K.boxFloor[2] && boxes.length < K.boxes) {
         const sample = el.closest("[data-sample]");
-        let listArea = 0;
-        for (const x of itemRects) listArea += overlap(x, r);   // an item is counted where it lies in this box: a carousel that runs past the box fills no more of it than the box
+        const listArea = unionArea(itemRects, r);   // an item is counted where it lies in this box, and a place two items share once: a carousel fills no more of the box than the box
         boxes.push({ id: me.id, parent: me.parent, sel: me.sel, width: me.width, height: me.height, styled, in_lists: inLists, in_cells: inCells, table: TABLE_PARTS.has(el.localName), list_area: round(listArea), media_px: media, headings, h1,
                      labelled: Boolean(sample && sample.getAttribute("data-sample").trim()) });
       }

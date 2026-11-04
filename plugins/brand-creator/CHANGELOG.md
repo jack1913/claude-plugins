@@ -20,6 +20,8 @@ stage, and why, is in the [archive](docs/archive/README.md).
 - A number in a page's title or main heading counts as an error code only with an error word right beside it ("Error
   404", "404 Not Found", "404 · Nie znaleziono"). "450 tickets, all gone" and "Ponad 400 produktów, żaden niedostępny" are
   counts again, so the page check asks for them in `FACTS.md`.
+- The mock-up warning counts items that lie on top of each other once, so a carousel whose slides are stacked in one
+  place no longer looks as if its list filled the whole box.
 
 ## [0.6.0] - 2026-11-03
 

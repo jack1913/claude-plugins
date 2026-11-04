@@ -1130,10 +1130,11 @@ def test_a_code_in_the_title_or_an_h1_counts_only_when_it_is_the_only_number_the
     lead = claims_of_file(tmp_path, big, h1=["Błąd +500 klientów"], lang="pl")
     assert lead["status"] == "fail" and [o["number"] for o in lead["unbacked_numbers"]] == ["500", "500"], lead["detail"]   # a plus before the number is a count too
     assert claims_of_file(tmp_path, big, title="Błąd + 500 klientów", lang="pl")["status"] == "fail" and claims_of_file(tmp_path, big, title="Error 500+", lang="en")["status"] == "fail"
-    for lang, text in (("pl", "Błąd 500+ firm"), ("pl", "+500 firm. Błąd"), ("pl", "Błąd + 500 firm"), ("pl", "Błąd 500 + firm"),
+    for lang, text in (("pl", "Błąd 500+ firm"), ("pl", "+500 · Błąd"), ("pl", "Błąd + 500 firm"), ("pl", "Błąd 500 + firm"),
                        ("en", "Error 500+"), ("en", "Error +500"), ("en", "Error + 500"), ("en", "Error 500 +")):
         assert pagecheck.status_codes([{"lang": lang, "claim_h1": [text]}]) == set() and pagecheck.status_codes([{"lang": lang, "document": {"title": text}}]) == set(), (lang, text)
         assert pagecheck.status_codes([{"lang": lang, "claim_h1": [text.replace("+", "")]}]) == {"500"}, (lang, text)   # the same words without the plus are the code: only the plus decides
+    assert pagecheck.status_codes([{"lang": "pl", "claim_h1": ["500 firm. Błąd"]}]) == set()   # O10: an error word away from the number ("firm." between) makes it a count
     for title, h1, lang in (("Błąd 404 | Acme", [], "pl"), ("Acme", ["Strona nie istnieje 404"], "pl"), ("Acme", ["Error 500 – Acme"], "en"), ("404 – Nie znaleziono", ["404"], "pl")):
         code = "404" if "404" in title + "".join(h1) else "500"
         got = claims_of_file(tmp_path, [claim_run(f"Błąd {code}", "body > main > p"), claim_run(code, "body > div")], title=title, h1=h1, lang=lang)
@@ -3451,10 +3452,19 @@ def test_a_row_of_items_running_past_its_box_fills_no_more_of_it_than_the_box(ac
     assert (shot["styled"], shot["in_lists"]) == (12, 10), shot                                        # the head, the footer and ten items
     assert 10 * 202 * 142 > 0.8 * shot["width"] * shot["height"]                                       # the items by themselves are larger than the box, which is what excused it
     assert shot["list_area"] == (3 * 202 + 11) * 142 and shot["list_area"] < 0.8 * shot["width"] * shot["height"], shot   # three whole items and 11 px of a fourth: what lies in the box
-    assert shot["list_area"] <= shot["width"] * shot["height"]                                         # clipped to the box: items that do not overlap never add up to more than the whole
+    assert shot["list_area"] <= shot["width"] * shot["height"]                                         # the union of the items, each clipped to the box, is never more than the whole
     assert mock_row(CAROUSEL.replace('<div class="head">Featured</div>', "").replace('<div class="foot"></div>', ""))["status"] == "pass"   # the row of items alone is the whole list: no part beside it
     fits = mock_row(CAROUSEL.replace("overflow: hidden; gap: 8px", "overflow: hidden").replace("width: 200px", "width: 62px"))
     assert fits["status"] == "warn" and shot_facts()["list_area"] == 10 * 64 * 142, fits               # ten items that all lie in the box are counted whole
+    # ten items stacked in one place (a carousel whose slides lie on top of each other), between a head and a footer: the place they share is counted once
+    stacked = ('<div class="head">Featured</div><ul style="position: relative; height: 142px">'
+               + "".join(f'<li style="position: absolute; top: 0; left: 0; width: 200px; height: 140px">Part {n}</li>' for n in range(1, 11))
+               + '</ul><div class="foot"></div>')
+    deck = mock_row(stacked)
+    assert shot_facts()["list_area"] == 202 * 142, shot_facts()                                        # one item's area, not ten (ten would be 286,840 px², more than 0.8 of the box)
+    assert deck["status"] == "warn" and [leaf(h["selector"]) for h in deck["hits"]] == ["main > figure.shot"], deck
+    half = mock_row(stacked.replace("top: 0; left: 0;", "top: 0; left: 0; transform: translateX(101px);", 1))
+    assert shot_facts()["list_area"] == 202 * 142 + 101 * 142, shot_facts()                            # one slide moved half its width: the union grows by the half that no other covers
 
 
 @pytest.mark.requires_setup
