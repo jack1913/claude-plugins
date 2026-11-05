@@ -29,7 +29,7 @@ proven.
 | [E-mail signature in real mail clients](#the-e-mail-signature-in-real-mail-clients) | never run | |
 | [A real Linux desktop session](#a-real-linux-desktop-session) | never run | |
 | [Windows](#windows) | never run | |
-| [macOS release run](#macos-release-run) | 2026-11-04, 0.7.0, the release commit's tree | passed on the second pytest run; the first had one failure that did not come back |
+| [macOS release run](#macos-release-run) | 2026-11-05, 0.8.0, commit bef34eb (the release commit without its version pins) | passed |
 | [CI first run](#ci-first-run) | 2026-10-25, runs 40170278108 (push) and 40171295112 (by hand) on commit b621a96 | every job passed, the two macOS smoke halves and the `brand-creator` verdict included |
 
 ## Behaviour evals (`claude plugin eval`)
@@ -421,11 +421,14 @@ It passes when pytest reports no failure and its NOT VERIFIED banner names no Ap
 `BRAND_CREATOR_DENYLIST` is not set), node reports `fail 0`, and both `SMOKE PASSED` and `QUICK SMOKE PASSED` are
 printed. Record the version, the commit, the date and the counts here before tagging.
 
-**Last run:** 2026-11-04, brand-creator 0.7.0, macOS 27.3, on the release commit's tree (only this record differs):
-pytest 3038 passed, 1 skipped (the denylist), node 220 pass and 0 fail, `SMOKE PASSED` and `QUICK SMOKE PASSED`. The first
-`run-all.sh --smoke` had one failure, `test_social_cards_show_the_drawn_wordmark_and_the_dark_header_its_dark_file`
-(`emit social` exited 3 under the full parallel load); it passed alone three times, and twice in a loaded run of the
-emitter tests, and the whole pytest suite then passed again. Its cause was not found.
+**Last run:** 2026-11-05, brand-creator 0.8.0, macOS 27.3, on commit bef34eb (the release commit differs only in its version
+pins, the changelog and this record): pytest 3069 passed, 1 skipped (the denylist), node 225 pass and 0 fail, `SMOKE PASSED`
+and `QUICK SMOKE PASSED`, on the first run. The Linux Docker run of the same tree (setup from scratch) printed `LINUX RUN OK`
+for pytest and node, and for the smoke.
+
+The 0.7.0 run (2026-11-04) had one failure on its first `run-all.sh --smoke`,
+`test_social_cards_show_the_drawn_wordmark_and_the_dark_header_its_dark_file` (`emit social` exited 3 under the full parallel
+load), which did not come back in five reruns or in this run; its cause was not found.
 
 ## CI first run
 

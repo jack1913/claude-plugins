@@ -6,6 +6,13 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-05
+
+Fixes from a real client's site round. `check --refresh` re-runs the reports that went out of date, so the asset script no
+longer ends "not verified" on reports its own steps made stale. `capture --reveal` photographs pages that show their sections
+as you scroll, and the page check warns about a tilted form. Your answers stay internal unless you say they may be public,
+legal deadlines need an official source, and every command's `--help` works without setup.
+
 ### Added
 
 - `brand-creator capture <page> --reveal` scrolls the page to the bottom and back before it takes the pictures, so a page that shows
