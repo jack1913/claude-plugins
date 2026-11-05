@@ -390,7 +390,7 @@ def test_page_tells_names_each_tell_with_its_keys_and_both_word_lists():
     """The generic page tells `page-check` warns about: every tell says what it is, why, how it is measured and with which numbers; a tell with a word list has it in each language."""
     d = json.loads((REFS / "page-tells.json").read_text(encoding="utf-8"))
     assert d["version"] == 1 and d["$description"] and d["languages"] == ["en", "pl"]
-    assert [t["id"] for t in d["tells"]] == ["eyebrow", "arrow-glued", "middot-run", "stock-second-action", "hero-text-budget", "styled-div-mock", "three-equal-tiles", "stray-box"]
+    assert [t["id"] for t in d["tells"]] == ["eyebrow", "arrow-glued", "middot-run", "stock-second-action", "hero-text-budget", "styled-div-mock", "three-equal-tiles", "stray-box", "tilted-form"]
     required = {"id", "name", "what", "why", "measure"}
     for t in d["tells"]:
         assert required <= set(t) and set(t) <= required | {"threshold", "words"}, t["id"]
@@ -1305,7 +1305,7 @@ def test_the_site_round_phase_goes_hero_first_and_tags_every_choice():
             "every `board-lint` run writes the one report `assets/_checks/board-lint.json`, so the lint of the review copy took the place of the board's, and `check` wants the report of `rounds/r<N>/board.html`",
             "or a changed G4 record or \"(rule)\" line of `BRAND-STATE.md` after the check, the capture or the lint",
             "Other writes to `BRAND-STATE.md` (the phase, `review_url`, a gate, the Directions table, Still open) leave the `page-check` reports current",
-            "never a copy of an earlier round", "A later pages board (the refine loop on the pages, started as `cp -R` of the previous pages board) also has What changed and Weak points",
+            "never a copy of an earlier round", "A later pages board (the refine loop on the pages, started as the copy above of the previous pages board, which keeps every page card, because the approval copies only the cards on the last pages board) also has What changed and Weak points",
             "**G4p The site's reference pages approved.**",
             # a redo asks which earlier site rules still stand, before any variant is built (G4-01)
             "An earlier site, when there is one: `site/site.json`", "a `removed-*/site/` folder", "an incumbent site named in the brief",
@@ -1325,13 +1325,13 @@ def test_the_site_round_phase_goes_hero_first_and_tags_every_choice():
             "with `off` nothing moves and nothing is asked",
             "Before any variant is built, each states its **one memorable idea** in one line", "a choice and not a layout", "Two variants with one idea are one variant.",
             "The idea goes on the card as the Idea line (`data-field=\"idea\"`)",
-            "a hero card with no idea line, or an empty one, is a `site:fields` warning in this release and a failure in the next",
+            "a hero card with no idea line, or an empty one, fails `site:fields`",
             "It starts from what the brand approved (Inputs): an approved master or picture of `assets/masters/` is used as it stands",
             "the signature move shows on the first screen, or the card's What it is line says why this variant leaves it out",
             "the check line (`data-check=\"pass\"` or `\"fail\"`, as its report says), its idea, what it is, what it takes from the references,",
             "**A bare hero while the brand's approved work sits unused.**",
-            "The Idea line of a hero card (`data-field=\"idea\"`) is read by `site:fields`: missing or empty it warns in this release and fails in the next",
-            "A page card has no Idea line."):
+            "The Idea line of a hero card (`data-field=\"idea\"`) is read by `site:fields`: missing or empty it fails",
+            "A page card's Idea line is read the same way"):
         assert needle in flat, needle
     # the inputs are listed before the hero is built, and the idea is stated before the page of the variant is
     assert flat.index("## Inputs") < flat.index("What the brand already approved") < flat.index("## Outputs and paths")
@@ -1403,7 +1403,7 @@ def test_the_hero_is_tried_live_before_the_board_and_copied_into_the_round_with_
             "The first hero board still shows 2 or 3 variants",
             # the stage gate: the copy, and the paths made one level deeper
             "**At the stage gate**, when the owner says in their words that the try-outs are ready for the board (never on your own)",
-            "make `rounds/r<N>/` (a new, empty folder, as for any first board of a stage; never `cp -R` onto a `rounds/r<N>/<Name>/` that exists, it nests the copy as `<Name>/<Name>/` and keeps the old page)",
+            "make `rounds/r<N>/` (a new, empty folder, as for any first board of a stage; never copy onto a `rounds/r<N>/<Name>/` that exists, it nests the copy as `<Name>/<Name>/` and keeps the old page)",
             "`cp -R tryout/<Name> rounds/r<N>/<Name>`",
             "every relative path that leaves the variant's own folder gets one more `../`",
             "(`../../assets/tokens/tokens.css` becomes `../../../assets/tokens/tokens.css`)", "`href`, `src`, `srcset`, `url()`, `@import`", "a path inside the folder stays as it is",
@@ -1543,7 +1543,7 @@ def test_the_site_round_takes_key_frames_of_a_page_that_animates_on_load():
     agent = _flat(ROOT / "agents" / "brand-reviewer.md")
     assert "it may add three more paths, the key frames of the first screen (`shots/frame-1440-0.png`, `-50.png` and `-100.png`: the start, the middle and the end of the animation): Read them in that order and judge the motion from them" in agent
     contract = _flat(ROOT / "scripts" / "CONTRACT.md")
-    for needle in ("`capture <page.html> [--project DIR] [--wait MS] [--timeout MS] [--frames]`", "**Key frames (`--frames`).**", "**The key frames the reader may be given.**",
+    for needle in ("`capture <page.html> [--project DIR] [--wait MS] [--timeout MS] [--frames] [--reveal]`", "**Key frames (`--frames`).**", "**The key frames the reader may be given.**",
                    "One frame or two fail `site:cold`", "a page taken again without `--frames` makes the review stale"):
         assert needle in contract, needle
     usage = (ROOT / "bin" / "brand-creator").read_text(encoding="utf-8")
@@ -1619,7 +1619,7 @@ def test_the_round_wrapper_has_a_site_kind():
     flat = " ".join(body.split())
     for needle in ("`site` (the site round: the hero in two or three variants, then the other pages; steps below, \"A site round\")",
                    "`07p-site-round.md` (a site board)",
-                   "So is the first site board of each stage (below, \"A site round\").",
+                   "So is the first site board of each stage, and a later hero board is `mkdir rounds/r<N>` with a copy of each picked variant only, never of the whole round (below, \"A site round\").",
                    "Before a site board, run `state --project <dir> --require G4w` (exit 1: the website references come first; say so and stop)",
                    "A G4w that is `skipped by owner` goes on.",
                    "a site round from `${CLAUDE_PLUGIN_ROOT}/templates/site-board.html` (`data-board=\"site\"`), once its pages are made, captured and checked",
@@ -1632,7 +1632,7 @@ def test_the_round_wrapper_has_a_site_kind():
     assert flat.index("Before a site board, run") < flat.index("Build `rounds/r<N>/board.html`") < flat.index("Lint until exit 0")
     section = flat[flat.index("## A site round"):]
     for needle in ("The first board of each stage, the hero board and then the pages board, is a new, empty folder (`mkdir rounds/r<N>`): never a copy of an earlier round.",
-                   "A later board of the same stage starts as `cp -R rounds/r<N-1> rounds/r<N>` of the previous board of that stage; then make `capture`, `page-check` and the cold review again",
+                   "A later pages board starts as `rsync -a --exclude shots/ --exclude cold-review.md --exclude capture.json rounds/r<N-1>/ rounds/r<N>/` of the previous pages board and keeps every page card. A later hero board is `mkdir rounds/r<N>`, then",
                    "The first hero board shows 2 or 3 variants.", "`data-layout` (an id of `references/page-layouts.json`, or `own:<word>`) and `data-page` (`start` for the home page)",
                    "a labelled `[data-sample]` element", "makes no request to another address",
                    "fix a failing row in the page, or let its card say `fail`; never `pass`", "`verdict: ship`, `verdict: fix` or `verdict: owner`", "`by: in-thread` by default and not blind",
@@ -1654,7 +1654,7 @@ def test_the_round_wrapper_has_a_site_kind():
                    "A hero starts from what the brand approved: the approved masters and pictures in `assets/masters/` as they are",
                    "when `motion/motion.json` says the brand moves, its signature move on the first screen, or the card says why a variant leaves it out",
                    "Before building, each hero variant states its one memorable idea in one line (the card's Idea line).",
-                   "a hero card also has its idea line (`data-field=\"idea\"`; a card without it only warns in this release)"):
+                   "a hero card also has its idea line (`data-field=\"idea\"`; a card without it fails `site:fields`)"):
         assert needle in section, needle
     assert section.index("0. At the hero stage") < section.index("1. The first board of each stage"), "the question comes before the first board"
     # the pages are made, checked and read before the board is built from them, and the board is shot last
@@ -1870,7 +1870,7 @@ def test_the_drawing_engines_reference_says_what_the_brief_must_say_and_what_lan
     for needle in ("`${CLAUDE_PLUGIN_ROOT}/templates/canvas-brief.md`", "`brief/canvas-round-<N>.md`",
                    # the seven things the brief must say
                    "the exact round folder to write to (`rounds/r<N>/<direction>/`)", "which from round 2 starts as a copy of the previous round",
-                   "`cp -R rounds/r<N-1> rounds/r<N>` first when the folder is not there yet", "which colour goes to which item",
+                   "`rsync -a --exclude shots/ --exclude cold-review.md --exclude capture.json rounds/r<N-1>/ rounds/r<N>/` first when the folder is not there yet", "which colour goes to which item",
                    "a target footprint at 16 px", "the dark-background rule for the mark", "a 1 px keyline in the light colour", "a separate dark version",
                    "whether larger grids are redrawn or upscaled: redraw the 32 grid, never upscale",
                    "references that need screening before drawing starts (other companies' marks, platform marks, characters): screening, not clearance",
@@ -1925,7 +1925,7 @@ def test_the_canvas_brief_template_has_a_slot_for_everything_the_brief_must_say_
     for needle in (# 1 the exact round folder
                    "Write the round's files only inside `rounds/r[[fill: N]]/`", "`rounds/r[[fill: N]]/[[fill: direction folder]]/`",
                    # ... which from round 2 starts as a copy of the previous round (round 4 of a real project was drawn without it)
-                   "the round folder starts as a copy of the previous round", "run `cp -R rounds/r<N-1> rounds/r<N>` first",
+                   "the round folder starts as a copy of the previous round", "run `rsync -a --exclude shots/ --exclude cold-review.md --exclude capture.json rounds/r<N-1>/ rounds/r<N>/` first",
                    "the previous round itself is never written to",
                    # 2 which colour goes to which item
                    "which colour goes to which item",
@@ -2124,7 +2124,7 @@ def test_the_orchestrator_says_standard_and_full_decide_motion_before_g4_and_qui
     assert "and leave out motion and script rules unless something moves" not in flat, "the old G4 sentence let every tier leave motion out"
     assert "the motion round comes next" not in flat, "P6 (the masters) comes between G3 and the motion round, as 07-tokens says: after G3 and the P6 masters"
     below = " ".join(text[text.index("## Round mechanics"):].split())
-    for needle in ("A motion round is the exception: the first starts as an empty folder, a later one copies the previous motion round (the round skill).",
+    for needle in ("A motion round and a site board are the exceptions (the round skill: a later hero board copies only the picked variants).",
                    "a motion round from `templates/motion-board.html`",
                    "A motion round has no review template either: its review page is a copy of the board with its pictures inlined (the round skill), linted with `--round <N>`."):
         assert needle in below, needle
@@ -2158,7 +2158,7 @@ def test_the_round_wrapper_has_a_motion_kind_whose_variants_are_made_before_the_
         assert needle in flat, needle
     section = flat[flat.index("## A motion round"):]
     for needle in ("The first motion round is a new, empty folder (`mkdir rounds/r<N>`): do not copy the refine round.",
-                   "A later one, the refine loop on the picked or combined variant, starts as `cp -R rounds/r<N-1> rounds/r<N>` of the previous motion round",
+                   "A later one, the refine loop on the picked or combined variant, starts as `rsync -a --exclude shots/ --exclude cold-review.md --exclude capture.json rounds/r<N-1>/ rounds/r<N>/` of the previous motion round",
                    "set the `page` of each `rounds/r<N>/<name>/proof.json` to `rounds/r<N>/<name>/index.html` (a proof that still points into the old round fails `board-lint`)",
                    "The first motion round shows exactly 3 variants", "A later one shows 1 or more.",
                    "(`frames` cannot step through `requestAnimationFrame`)",
@@ -2587,3 +2587,50 @@ def test_the_changelog_of_the_motion_release_opens_with_the_migration_note_and_l
     fixed = flat[flat.index("### Fixed"):]
     assert "and every vote stays." in fixed and "the three votes stay" not in flat, "a style board has four to six cards, a round page three to five: every vote stays"
     assert "`board-lint` checks it on every kind of board (`page:votes`): it fails a board whose cards share a radio name, or whose radios are not named `vote-<its name>`" in fixed
+
+
+def test_the_site_round_group_5_instruction_lines_are_in_the_texts():
+    """L1a of 0.8.0: the pages reuse the hero's world, later boards carry the picked variants, a round is copied without its per-round files, builders live in the project, the H1 is not the signature line,
+    the mock-up tell is about fake UI, and the approval lists what is left behind."""
+    flat = lambda p: " ".join(p.read_text(encoding="utf-8").split())
+    p7, hist, ws = flat(PHASES / "07p-site-round.md"), flat(PHASES / "12-history.md"), flat(REFS / "working-style.md")
+    tone, tells = " ".join((ROOT / "templates" / "book" / "tone.md").read_text(encoding="utf-8").split()), (REFS / "page-tells.json").read_text(encoding="utf-8")
+    for needle in ("write the hero's motifs down as a short system", "Each page card has an Idea line (`data-field=\"idea\"`)", "it fails", "a tilt or a drawing goes around a form, never on it",
+                   "state the number of reviews and their cost before running them",
+                   "rsync -a --exclude shots/ --exclude cold-review.md --exclude capture.json rounds/r<N-1>/ rounds/r<N>/", "rounds/r<N-1>/<Name>/ rounds/r<N>/<Name>/` for each picked variant", "keeps every page card", "A later board of the hero stage carries only the variant(s)", "rounds/r<N>/_build/", "never in the session scratchpad",
+                   "The H1 says what the brand is and for whom", "`copy: site H1`", "`copy: signature line`", "never drop graphics to avoid the warning", "is about a drawn screen of a product made of boxes (fake UI), not about drawing",
+                   "**List what the approved site leaves behind**", "Method: cleaning old rounds"):
+        assert needle in p7, needle
+    assert "tr '\\n' '\\0' < qa/<date>-cleanup-removed.txt | xargs -0 git rm -q --" in hist and "qa/<date>-cleanup-removed.txt" in hist and "--pathspec-from-file" in hist
+    assert "Every script that builds a page, a board or a picture lives in `rounds/r<N>/_build/` (or `tools/`), never in the session scratchpad, which a restart wipes." in ws
+    assert "copy: site H1" in tone and "copy: signature line" in tone and "H1" in tone
+    assert "graphics are never dropped to avoid the warning" in tells
+    for p in (SKILLS / "round" / "SKILL.md", SKILLS / "brand-creator" / "SKILL.md", PHASES / "05-refinement.md", REFS / "drawing-engines.md", ROOT / "templates" / "canvas-brief.md"):
+        txt = p.read_text(encoding="utf-8")
+        assert "cp -R rounds/r<N-1> rounds/r<N>" not in txt, f"{p.name} still tells the agent to cp -R a round"
+
+
+def test_l1b_rules_are_written_where_the_agent_reads_them():
+    """An answer is not copy, legal claims need a primary source, one numbered list per turn, researchers return partial results."""
+    norm = lambda s: " ".join(s.split())
+    refs = ROOT / "skills" / "brand-creator"
+    facts = (ROOT / "templates" / "FACTS.md").read_text(encoding="utf-8")
+    state = (ROOT / "templates" / "BRAND-STATE.md").read_text(encoding="utf-8")
+    assert "## Internal context" in state and "no page, board," in norm(state)
+    flat = norm(facts)
+    assert "An answer is not a fact" in flat and "## Internal context" in flat
+    assert "checked in the primary source" in flat and "a portal, blog or commercial summary is never the source" in flat and "the date checked" in flat
+    p7 = norm((refs / "references" / "phases" / "07p-site-round.md").read_text(encoding="utf-8"))
+    assert "## Internal context" in p7 and "primary source" in p7 and "never a portal or blog" in p7
+    ws = norm((refs / "references" / "working-style.md").read_text(encoding="utf-8"))
+    assert "never a second \"1.\"" in ws and "never a second \"1.\"" in p7
+    assert "An answer is context, not copy." in ws and "only when the owner says it may be said publicly" in ws and "under `## Internal context` in `BRAND-STATE.md`" in ws
+    agent = norm((ROOT / "agents" / "brand-researcher.md").read_text(encoding="utf-8"))
+    assert "two thirds of your turns" in agent and "tagged UNVERIFIED" in agent
+    assert "**Statutes and legal requirements: primary source only.**" in agent and "a portal or blog makes it `secondary`" in agent
+    book = norm((ROOT / "skills" / "brand-book" / "SKILL.md").read_text(encoding="utf-8"))
+    assert "A statutory deadline, obligation or rate is in the book only when its row names the statute's consolidated text or the authority's own page" in book and "never shown as UNVERIFIED" in book
+    assert "a portal or blog is never that source" in norm((ROOT / "templates" / "book" / "tone.md").read_text(encoding="utf-8"))
+    for name in ("regulated-industries.md", "phases/01-research.md"):
+        txt = norm((refs / "references" / name).read_text(encoding="utf-8"))
+        assert "statutory deadline" in txt and "consolidated text or the authority's own page" in txt and "a portal or blog is never that source" in txt.replace("A portal", "a portal"), name

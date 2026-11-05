@@ -1075,7 +1075,7 @@ def test_a_copy_row_of_facts_md_backs_a_number_like_any_fact_and_only_its_value_
 
 def test_the_facts_template_the_site_round_and_the_contract_state_the_copy_split_and_the_words_row():
     facts = (ROOT / "templates" / "FACTS.md").read_text(encoding="utf-8")
-    assert "labelled `copy: <slot>`" in facts and "`copy: hero headline`" in facts and "never uses a fact's `value` as it stands" in facts
+    assert "labelled `copy: <slot>`" in facts and "`copy: site H1`" in facts and "`copy: signature line`" in facts and "never uses a fact's `value` as it stands" in facts
     site_round = " ".join((ROOT / "skills" / "brand-creator" / "references" / "phases" / "07p-site-round.md").read_text(encoding="utf-8").split())
     for needle in ("A headline is never a fact's `value` as it stands", "quotes a `copy:` row of `FACTS.md`", "new wording the owner approves on the board", "`page:words`, never a failure",
                    "Forbidden"):
@@ -3165,13 +3165,13 @@ def test_render_page_measure_refuses_a_rules_list_it_cannot_read(tmp_path):
 
 # ---------------------------------------------------------------- the generic tells (warnings)
 
-TELL_IDS = ["eyebrow", "arrow-glued", "middot-run", "stock-second-action", "hero-text-budget", "styled-div-mock", "three-equal-tiles", "stray-box"]
+TELL_IDS = ["eyebrow", "arrow-glued", "middot-run", "stock-second-action", "hero-text-budget", "styled-div-mock", "three-equal-tiles", "stray-box", "tilted-form"]
 LONG_HERO = ("Every Acme tool is forged in one workshop, tested by the people who use it every day, and sold with a published list of its spare parts so that a worn "
              "handle or a bent blade is a small repair and never a reason to buy the whole tool again.")   # more than 45 words
 
 
 def tells_page(lang: str = "en", second: str = "Learn more", hero_text: str = LONG_HERO) -> str:
-    """One page that shows all eight tells, and the stock order of a product page: hero, three tiles, a box made of boxes, a sheet left outside its parent, an FAQ, a closing band."""
+    """One page that shows all nine tells, and the stock order of a product page: hero, three tiles, a box made of boxes, a sheet left outside its parent, a sign-up form on a tilted sheet, an FAQ, a closing band."""
     mock = "<i></i>" * 8
     style = """  nav, section, .mock { display: block; margin: 0; }
   .eyebrow { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; }
@@ -3181,6 +3181,8 @@ def tells_page(lang: str = "en", second: str = "Learn more", hero_text: str = LO
   .mock i { display: block; height: 12px; margin: 4px; border: 1px solid var(--color-text); }
   .sheets { height: 40px; }
   .sheet { position: relative; top: 120px; margin: 0; }
+  .paper { transform: rotate(-3deg); }
+  input, button, select { background: var(--color-bg); color: var(--color-text); border: 1px solid var(--color-text); font: inherit; }
 """
     return PAGE.replace('lang="en"', f'lang="{lang}"').replace("</style>", style + "</style>").replace(
         PAGE[PAGE.index("<main>"):PAGE.index("</main>") + len("</main>")], f"""<nav><a href="#a">Products</a> <a href="#b">Pricing</a></nav>
@@ -3199,6 +3201,7 @@ def tells_page(lang: str = "en", second: str = "Learn more", hero_text: str = LO
 </section>
 <div class="mock">{mock}</div>
 <div class="sheets"><p class="sheet">Sheet one</p></div>
+<form class="paper" action="#"><label>Email <input name="email"></label> <button type="button">Sign up</button></form>
 <section class="faq"><h2>FAQ</h2><details><summary>Can I repair a tool?</summary><p>Yes, with the spare-parts list.</p></details></section>
 <section class="closing"><h2>Ready to order?</h2><p><a href="#order">Order a tool</a></p></section>
 </main>""")
@@ -3216,7 +3219,7 @@ def leaf(selector: str, levels: int = 2) -> str:
 def tell_view(width: int = 1440, scheme: str = "light", lang: str = "en", **facts) -> dict:
     """A view as the browser would have measured it, with the candidates of the tells; what is not given is empty."""
     base = {"viewport": {"width": width, "height": 900}, "eyebrow": [], "arrows": [], "separators": [], "hero": {"found": False}, "boxes": [], "tiles": [], "headings": [], "details": [],
-            "last_band": None, "strays": []}
+            "last_band": None, "strays": [], "tilts": []}
     return {"width": width, "scheme": scheme, "lang": lang, "viewport": {"width": width, "height": 900}, "tell_facts": {**base, **facts}}
 
 
@@ -4309,3 +4312,71 @@ def test_the_docs_say_the_page_check_uses_the_brief_and_cliches_words_only_and_t
     assert "also applies the book's own `lint.forbidden`; the page check does not" in contract and "are inputs of the report: a change to either makes a `page-check` report stale" in contract
     assert "is not an input of the report" not in contract and "not part of what makes a report go out of date" not in flat("CHANGELOG.md") + flat("docs", "manual", "reference", "page-check.md")
     assert "the list `book-lint` applies" not in flat("skills", "brand-creator", "references", "phases", "09-qa.md") + contract + (ROOT / "scripts" / "page_check.py").read_text(encoding="utf-8")
+
+
+def tilt(angle: float, by: str = "self", sel: str = "form.signup", tag: str = "form") -> dict:
+    """A form or control drawn rotated, as the collector reports it."""
+    return {"sel": sel, "tag": tag, "angle": angle, "by": by}
+
+
+def test_the_tilted_form_threshold_decides_at_its_edge_and_a_capped_list_is_not_verified():
+    """No browser: a rotation of 0.1 degrees or more, either way, is a hit; the hit names the element and who turns it; a full list says so."""
+    assert next(t for t in pagecheck.load_tells()["tells"] if t["id"] == "tilted-form")["threshold"] == {"min_degrees": 0.1}
+    hits = lambda *views: found_tells(*views)["hits"]["tilted-form"]
+    assert [len(hits(tell_view(tilts=[tilt(a)]))) for a in (0.05, 0.1, -3, 180)] == [0, 1, 1, 1]
+    (h,) = hits(tell_view(tilts=[tilt(-3, by="div.sheet", sel="input.email", tag="input")]))
+    assert h["selector"] == "input.email" and "input" in h["text"] and "-3 degrees" in h["text"] and "the transform of div.sheet" in h["text"], h
+    (own,) = hits(tell_view(tilts=[tilt(2)]))
+    assert "its own transform" in own["text"]
+    assert len(hits(tell_view(width=390, tilts=[tilt(2)]), tell_view(tilts=[tilt(2)]))) == 1 and hits(tell_view(width=390, tilts=[tilt(2)]), tell_view(tilts=[tilt(2)]))[0]["widths"] == [390, 1440]
+    assert found_tells(tell_view(tilts=[tilt(2)], tilts_capped=True))["unverified"]["tilted-form"] == [pagecheck.TILT_CAP_NOTE]
+    assert not found_tells(tell_view(tilts=[]))["unverified"]["tilted-form"]
+
+
+TILT_STYLE = """  input, button, select { background: var(--color-bg); color: var(--color-text); border: 1px solid var(--color-text); font: inherit; }
+  .sheet { width: 400px; padding: 12px; background: var(--color-text); }
+  .tilt { transform: rotate(4deg); }
+  .turn { rotate: 0.1turn; }
+  .flat { transform: none; }
+"""
+
+
+def tilt_check(p: Path, body: str) -> tuple[dict, dict]:
+    """page-check at 1440 px, light, of a page whose main holds `body`. -> (the tilted-form row, the view as measured)."""
+    write_page(p, PAGE.replace("</style>", TILT_STYLE + "</style>").replace(PAGE[PAGE.index("<main>"):PAGE.index("</main>") + len("</main>")], f"<main>\n<h1>Acme hand tools</h1>\n{body}\n</main>"))
+    r = bc("page-check", "pages/index.html", "--widths", "1440", "--schemes", "light", project=p)
+    assert r.returncode in (0, 1), r.stdout + r.stderr
+    rep = report(p, pagecheck.report_tool("pages/index.html"))
+    (v,) = json.loads(Path(rep["measures"]).read_text(encoding="utf-8"))["views"]
+    return tell_row(rep, "tilted-form"), v
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_form_drawn_rotated_warns_whoever_turns_it_and_an_upright_form_or_a_tilted_picture_does_not(acme):
+    # the form sits on a tilted sheet: the form is the one hit, its field and button (turned with it) are not listed again
+    row_, v = tilt_check(acme, '<div class="sheet tilt"><form class="signup" action="#"><label>Email <input name="email"></label> <button type="button">Go</button></form></div>')
+    assert row_["status"] == "warn" and [leaf(h["selector"]) for h in row_["hits"]] == ["div.sheet.tilt > form.signup"], row_
+    assert "4 degrees" in row_["hits"][0]["text"] and "div.sheet" in row_["hits"][0]["text"], row_["hits"]
+    assert [t["tag"] for t in v["tell_facts"]["tilts"]] == ["form"] and v["tell_facts"]["tilts"][0]["angle"] == 4
+    # a field of an upright form, turned by itself (the `rotate` property, 0.1 turn is 36 degrees), is a hit of its own; so is a lone select
+    row_, _ = tilt_check(acme, '<form action="#"><input class="turn" name="a"></form><select class="tilt"><option>One</option></select>')
+    assert row_["status"] == "warn" and sorted(leaf(h["selector"], 1) for h in row_["hits"]) == ["input.turn", "select.tilt"], row_
+    assert any("36 degrees" in h["text"] and "its own transform" in h["text"] for h in row_["hits"]), row_["hits"]
+    # an upright form on an upright sheet, and a tilted picture with no form control in it, are not the tell
+    row_, v = tilt_check(acme, '<div class="sheet flat"><form action="#"><input name="a"> <button type="button">Go</button></form></div><div class="sheet tilt"><p>A tilted card with no field.</p><svg width="40" height="40"><rect width="40" height="40"/></svg></div>')
+    assert row_["status"] == "pass" and row_["hits"] == [] and v["tell_facts"]["tilts"] == [], row_
+    # a button outside a form is not a form control
+    row_, _ = tilt_check(acme, '<div class="tilt"><button type="button">Not in a form</button></div>')
+    assert row_["status"] == "pass", row_
+    # a form turned in 3D (rotate: x, rotateY) or mirrored (scaleX(-1)), by itself or by its sheet, is not measured; a hidden tilted form is not shown
+    row_, v = tilt_check(acme, '<form style="rotate: x 30deg" action="#"><input name="a"></form><form style="transform: rotateY(180deg)" action="#"><input name="b"></form>'
+                               '<div style="transform: scaleX(-1)"><form action="#"><input name="c"></form></div><form class="tilt" style="display:none" action="#"><input name="d"></form>')
+    assert row_["status"] == "pass" and v["tell_facts"]["tilts"] == [], (row_, v["tell_facts"]["tilts"])
+    # a skew is not a rotation (skewY would read as one), nor is an uneven scale; a rotation with an even scale is one
+    row_, v = tilt_check(acme, '<form style="transform: skewY(6deg)" action="#"><input name="a"></form><form style="transform: scale(2, 1)" action="#"><input name="b"></form>'
+                               '<form style="transform: rotate(5deg) scale(1.5)" action="#"><input name="c"></form>')
+    assert [t["angle"] for t in v["tell_facts"]["tilts"]] == [5], v["tell_facts"]["tilts"]
+    # an in-plane turn written with an axis (rotate: z 10deg, or the vector 0 0 1) is measured
+    row_, _ = tilt_check(acme, '<form style="rotate: z 10deg" action="#"><input name="a"></form><form style="rotate: 0 0 1 -12deg" action="#"><input name="b"></form>')
+    assert row_["status"] == "warn" and len(row_["hits"]) == 2 and any("10 degrees" in h["text"] for h in row_["hits"]) and any("12 degrees" in h["text"] for h in row_["hits"]), row_["hits"]

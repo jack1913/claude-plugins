@@ -18,7 +18,9 @@ RULES: work under the round/project dir only; never edit adoption targets before
 1. Find the project: `brand-creator --data "${CLAUDE_PLUGIN_DATA}" state --project-auto`. None → say so and offer to
    start one (the owner says what the brand is for, in words).
 2. Run the gates: `brand-creator --data "${CLAUDE_PLUGIN_DATA}" check --project <dir>`. It covers the history manifest
-   (`history/MANIFEST.sha256`), report currency and every gate of the tier.
+   (`history/MANIFEST.sha256`), report currency and every gate of the tier. When rows say a report is stale, run it again with
+   `--refresh` (it re-runs the page-check, contrast, book-lint, kit-check and board-lint reports that are only a re-run of a check, and
+   names the others with their commands).
 3. With arguments, run the cascade too, one `--cascade` per old value:
    `brand-creator --data "${CLAUDE_PLUGIN_DATA}" check --project <dir> --cascade "<old value>"`. Add `--also <path>`
    for a parent brand's document the owner names. Adoption work-list lines warn; every other hit fails.

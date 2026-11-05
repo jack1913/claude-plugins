@@ -107,7 +107,7 @@ def main() -> int:
         return rc or EXIT_FAIL
     changed = write_bytes_if_changed(out, data)
     rep.extra["written"] = changed
-    lrep = booklint.write_report(project, out, results, view=build.view, state_view_sha=state_sha, self_consistency=True, book_file=out_rel)
+    lrep = booklint.write_report(project, out, results, view=build.view, state_view_sha=state_sha, self_consistency=True, book_file=out_rel, **({"allow_variants": True} if a.allow_variants else {}))
     lrep.finish(quiet_pass=True)
     rc = rep.finish(quiet_pass=True)
     print(f"book: {rel(project, out)} {'written' if changed else 'unchanged'} ({len(data)} bytes, {len(build.chapter_ids)} chapters, {','.join(build.langs)})")

@@ -82,7 +82,7 @@ The first screen, what a visitor sees before they scroll, sets the tone for ever
    versions look right, tell Claude to put them on the board. Claude copies them into the round and moves the `tryout/`
    folder into a folder named `removed-` plus the date (nothing is deleted), so the old copies do not make `/brand-creator:check` fail when you later change a name or a price.
 4. Claude puts the versions on a board. For each one the board shows:
-   - the one idea it rests on, in a line (a version should be something you can remember, not only tidy);
+   - the one idea it rests on, in a line (a version should be something you can remember, not only tidy). A version without this line fails the board's check, so Claude adds it;
    - four pictures: on a phone and a desktop, in light and dark;
    - whether it keeps your brand's rules. A version that breaks one is marked as failing, never hidden;
    - anything that makes it look generic, like countless other sites (such as a small label in capitals over a
@@ -90,7 +90,7 @@ The first screen, what a visitor sees before they scroll, sets the tone for ever
    - a verdict, "ship" (good to go), "fix" or "owner" (what is left is your call), from a review that judges only the four
      pictures, your brief and your facts (`FACTS.md`: the true things your pages may say, such as your prices).
 5. Pick one, mix two ("this one, with the ending of that one"), or say that none fits and what was missing. Claude says
-   back your pick and writes it down in your words.
+   back your pick and writes it down in your words. A later first-screen board shows only the versions you picked or mixed.
 
 Claude does that review itself by default, in the same chat. It built the page, so this is not a stranger's fresh look,
 and the board says so. For one, ask for a separate reviewer: an extra agent, at extra cost. Claude says how many and
@@ -107,6 +107,9 @@ the page round a third time. Your questions are in the board's Questions list, e
 
    > /brand-creator:round site
 
+   First the board writes down the world of the first screen you picked (its own shapes, devices and moves, one line each),
+   and each page uses at least one of them for its own job. Each page card has an Idea line, the page's one idea in your
+   brand's world.
 2. The board lists every choice the pages make, such as the order of the sections or where the main button sits. Each
    choice has a tag:
    - **Brand rule:** you decided it, so your site keeps it, on every page unless the rule names certain pages. The board
@@ -123,7 +126,11 @@ the page round a third time. Your questions are in the board's Questions list, e
 2. Claude says back what you approved and writes it down. It locks a copy of the round in `history/`, so it can't
    quietly change. Then it copies each page into `site/` in your brand project, with a record of the pages and every
    choice and its tag (`site/site.json`), and checks and photographs each page again there.
-3. Type `/brand-creator:check`. It confirms that no approved page changed since you approved it, that each one keeps
+3. Claude lists what the approved site leaves behind (approved ads or a deck in the old language, voice lines that place
+   copy on the site, the book's site chapter, the kit) as next steps for you to pick. Before the first push of a project
+   you share, it offers to clean old rounds: it lists what would go in `qa/<date>-cleanup-removed.txt`, and you run one
+   line yourself, because the safety hook stops Claude from removing files.
+4. Type `/brand-creator:check`. It confirms that no approved page changed since you approved it, that each one keeps
    your brand's rules, and that its pictures show the page as it is now.
 
 The pages in `site/` are for whoever builds your real site: the rules are what to keep, the examples one way to follow

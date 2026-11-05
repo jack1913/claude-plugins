@@ -30,7 +30,7 @@ def test_dockerfile_pins_every_input_and_ships_no_macos_tool():
     assert re.search(r"^ARG NODE_VERSION=24\.\d+\.\d+$", text, re.M)                       # Node 24, an exact version
     assert len(re.findall(r"^ARG NODE_SHA256_\w+=[0-9a-f]{64}$", text, re.M)) == 2          # both architectures, checked with sha256sum -c
     assert "sha256sum -c" in text
-    for pkg in ("python3", "resvg", "imagemagick", "ghostscript", "poppler-utils", "ripgrep", "potrace", "fontconfig", "fonts-dejavu-core", "libnss3"):
+    for pkg in ("python3", "resvg", "imagemagick", "ghostscript", "poppler-utils", "ripgrep", "rsync", "potrace", "fontconfig", "fonts-dejavu-core", "libnss3"):
         assert re.search(rf"\b{re.escape(pkg)}\b", text), pkg
     assert "USER bc" in text                                                                # not root
     for tool in ("sips", "iconutil", "actool", "xcrun", "xdg-open"):

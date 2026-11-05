@@ -105,7 +105,7 @@ re-checked), then numbered "Decisions for you", each with a recommendation. `/br
 | 1 | No mark depends on an installed font | `book-lint` (`marks:lint`); outline text with `outline-glyphs` |
 | 2 | Formal and short names are used consistently, and as the regulator requires where one applies | read every chapter and the cover; [regulated-industries](../brand-creator/references/regulated-industries.md) |
 | 3 | The book obeys its own rules: motion durations, reduced motion, the smallest label, the palette | `book-lint --self-consistency` (`motion:reduced`, `motion:replay`, `motion:stills`) |
-| 4 | Legal and regulatory statements match a dated source | FACTS.md `legal:` rows, verbatim, and the owner's source; UNVERIFIED when none was read |
+| 4 | Legal and regulatory statements match a dated source | FACTS.md `legal:` rows, verbatim, and the owner's source; UNVERIFIED when none was read. A statutory deadline, obligation or rate is in the book only when its row names the statute's consolidated text or the authority's own page and the date checked; otherwise it is left out and listed for the owner, never shown as UNVERIFIED |
 | 5 | The system has not drifted back into a rejected direction | the history chapter against the Directions table; judgement, said as such |
 | 6 | Every chapter the tier needs is there | `book-lint` (`chapters:required`) |
 | 7 | Components show their focus state | the components chapter, read in the shots |

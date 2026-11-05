@@ -69,7 +69,7 @@ Commands are written after `brand-creator --data "${CLAUDE_PLUGIN_DATA}"`.
 
 | Output | Path |
 |---|---|
-| A hero variant, one folder each, named by a word of 3 or more letters | `rounds/r<N>/<Name>/index.html` (the home page's first screen), `shots/` (from `capture`: `1440-light.png`, `1440-dark.png`, `390-light.png`, `390-dark.png`, `1440-light-full.png`, `capture.json`; with `--frames` also `frame-1440-0.png`, `frame-1440-50.png`, `frame-1440-100.png`) and `cold-review.md` |
+| A hero variant, one folder each, named by a word of 3 or more letters | `rounds/r<N>/<Name>/index.html` (the home page's first screen), `shots/` (from `capture`: `1440-light.png`, `1440-dark.png`, `390-light.png`, `390-dark.png`, `1440-light-full.png`, `capture.json`; with `--frames` also `frame-1440-0.png`, `frame-1440-50.png`, `frame-1440-100.png`; `--reveal` adds no file) and `cold-review.md` |
 | A page of the pages stage, one folder each, named by its page id (`start`, `pricing`) | `rounds/r<N>/<id>/index.html`, `shots/`, and `cold-review.md` when the page was read cold |
 | A try-out of a hero variant (the first hero board only), one folder each, named as its variant | `tryout/<Name>/index.html`: a plain local page the owner opens in their own browser; no `shots/`, no report, no record, and nothing cites it; the whole folder moves to `removed-<date>/tryout/` at the stage gate |
 | A shared copy of a try-out (only when the owner asks and said yes to claude.ai pages) | one self-contained `.html` file made by `inline`, outside the project; published as a private Artifact page; its address in `BRAND-STATE.md` → `tryout_url`, cleared at the stage gate |
@@ -86,9 +86,11 @@ Directions table, Still open) leaves the round's reports and the board's lint cu
 line makes them stale, and then `page-check` runs again on each page, then the lint. A site board is no pick, style or reset
 round, so the hook, `freeze`, `shot` and the review surface work unchanged and the style gate ignores it. The first board of each stage
 (the first hero board, then the first pages board) is a new, empty folder (`mkdir rounds/r<N>`), never a copy of an
-earlier round. A later board of the same stage, the refine loop on the picked or combined variant, starts as
-`cp -R rounds/r<N-1> rounds/r<N>` of the previous board of that stage; everything a variant carries is tied to its path,
-so its `capture`, `page-check` and cold review are made again in the new round.
+earlier round. A later pages board, the refine loop on the pages, starts as
+`rsync -a --exclude shots/ --exclude cold-review.md --exclude capture.json rounds/r<N-1>/ rounds/r<N>/` (a plain `cp -R` would carry the old stills, `capture.json` and `cold-review.md`, which point at the old round and fail the lint) of the previous pages board, and keeps every page card (the approval copies only the cards on the last pages board). A later hero board, the refine loop on the picked or combined variant, is `mkdir rounds/r<N>`, then
+`rsync -a --exclude shots/ --exclude cold-review.md --exclude capture.json rounds/r<N-1>/<Name>/ rounds/r<N>/<Name>/` for each picked variant (a combined variant starts from one of them, under its new name), the `board.html` and `_build/` copied the same way, and the cards of the other variants removed from the new `board.html`: the others stay in their earlier round, and nothing has to be moved out of the new one. Everything a variant carries is tied to its path,
+so its `capture`, `page-check` and cold review are made again in the new round. A later board of the hero stage carries only the variant(s) the owner picked or combined, so only those are reviewed.
+Every script that builds a page, a board or a picture lives in `rounds/r<N>/_build/` (or `tools/`), never in the session scratchpad, which a restart wipes.
 
 ## The hero first
 
@@ -113,8 +115,8 @@ is `start` (`<body data-page="start">`) in every project.
    two hits on one variant fail. Before any variant is built, each states its **one memorable idea** in one line: what
    a visitor will remember of the first screen and what makes it this brand's, a choice and not a layout ("the price lands
    like a stamp, once", not "headline, picture, button"). Two variants with one idea are one variant. The idea goes on the
-   card as the Idea line (`data-field="idea"`); a hero card with no idea line, or an empty one, is a `site:fields` warning in
-   this release and a failure in the next.
+   card as the Idea line (`data-field="idea"`); a hero card with no idea line, or an empty one, fails
+   `site:fields`.
 2. **The page.** `rounds/r<N>/<Name>/index.html` is the home page's first screen, built from the picked references
    (their structure and rhythm, never their look) and the brand:
    - `<body data-layout="<id of page-layouts.json, or own:<word>>" data-page="start">`. The layout is the visitor's job in
@@ -126,8 +128,16 @@ is `start` (`<body data-page="start">`) in every project.
      an element labelled `data-sample="<what it is>"` (`[data-sample]`: a labelled sample), never in the open. The attribute
      is the label: a labelled sample needs no visible badge or note on the page. `page-check` passes its claims and puts it on
      the before-publishing list, to be replaced with real content before the page is published.
+   - **The H1 says what the brand is and for whom.** The brand's signature line or a campaign headline is its own slot
+     (campaigns, social, the product's success moment) and stands in the H1 only when the owner says so; ask early which is which.
+     The `copy:` rows name the slot (`copy: site H1`, `copy: signature line`).
+   - An answer the owner gave to a question is not copy: it goes on a page only once it is a `FACTS.md` row, which the owner
+     makes by saying it may be said publicly; otherwise it stays under `## Internal context` in `BRAND-STATE.md`.
+   - A statutory deadline, obligation, rate or legal requirement on a page, board or book is checked in the primary source (the
+     statute's consolidated text, the authority's own page) before it is drawn; its `FACTS.md` source names that source and the
+     date checked, never a portal or blog.
    - A headline is never a fact's `value` as it stands. It quotes a `copy:` row of `FACTS.md` (wording the owner approved for
-     use as copy, labelled `copy: <slot>`, such as `copy: hero headline`; the fact stays in its own row), or it is new wording
+     use as copy, labelled `copy: <slot>`, such as `copy: site H1` or `copy: signature line`; the fact stays in its own row), or it is new wording
      the owner approves on the board, which becomes a `copy:` row once they do. `page-check` warns (`page:words`, never a
      failure) for each word the brief or `research/cliches.md` lists under Forbidden that it finds in the text of the page:
      reword it, or tell the owner why the page keeps it.
@@ -164,7 +174,7 @@ is `start` (`<body data-page="start">`) in every project.
      to another file is dead in it, and a change is made in the try-out and published again. At the stage gate clear the address
      (`state --set tryout_url=`) and tell the owner the private page is theirs to remove on claude.ai.
    - **At the stage gate**, when the owner says in their words that the try-outs are ready for the board (never on your own),
-     make `rounds/r<N>/` (a new, empty folder, as for any first board of a stage; never `cp -R` onto a `rounds/r<N>/<Name>/`
+     make `rounds/r<N>/` (a new, empty folder, as for any first board of a stage; never copy onto a `rounds/r<N>/<Name>/`
      that exists, it nests the copy as `<Name>/<Name>/` and keeps the old page) and copy each variant that stays:
      `cp -R tryout/<Name> rounds/r<N>/<Name>`. The copy sits one level deeper, so every relative path that leaves the variant's
      own folder gets one more `../` (`../../assets/tokens/tokens.css` becomes `../../../assets/tokens/tokens.css`), in the page
@@ -179,6 +189,10 @@ is `start` (`<body data-page="start">`) in every project.
 3. **Per variant, in this order: `capture`, `page-check`, the cold review.**
    - `capture rounds/r<N>/<Name>/index.html --project <dir>` writes the four stills and the full page into `shots/`, with
      `capture.json`. Read all four stills.
+   - **A page that shows content as it is scrolled to** (an `IntersectionObserver`, a scroll-triggered class, `data-reveal`) is taken with `--reveal` (`capture rounds/r<N>/<Name>/index.html
+     --project <dir> --reveal`; it goes with `--frames` too): the command scrolls the page to the bottom and back in screen-sized steps before each still, so the stills and the full page show the
+     sections revealed, and you need no Playwright script of your own for it. Say it on the card's check line ("stills taken with --reveal"). `capture.json` records `reveal`; if `reveal.capped`
+     is true the page is longer than 40 screens, the walk stopped there, and the card says what was not revealed.
    - **A page that animates when it loads** (an entrance, a tear-off, a reveal) is taken with `capture rounds/r<N>/<Name>/index.html --project <dir> --frames`
      instead. Beside the four stills it writes `shots/frame-1440-0.png`, `frame-1440-50.png` and `frame-1440-100.png`: the first screen at 1440, light, at the
      start, the middle and the end of the longest animation that runs on load, and `capture.json` lists them. Read all three: the four stills show only where the
@@ -266,12 +280,12 @@ inputs:
   review that finds only what you cannot settle for the owner says `verdict: owner`: what is left is a choice only the owner can make, and its findings are written as questions to them
   (a question each, "Do you want X or Y?", not a fault). Put those questions on the board, in its Questions section (from question 2 on a hero board,
   after the board's own two questions on the pages board), each with lettered options and exactly one recommended, so the owner answers with the reply
-  composer; My call stays your recommendation, as on every board. The second review may say `owner`, and so may the first: an `owner` ends the
+  composer; My call stays your recommendation, as on every board. The chat uses the board's numbers for these questions and numbers any other question after them, never a second "1.". The second review may say `owner`, and so may the first: an `owner` ends the
   loop for that variant, with nothing left to fix. If the second review still says `fix`, do not change the page and review it a third time (a changed page makes the
   review stale, and the lint would ask for the third review this rule does not allow): put what is left to the owner on the board the same way, as questions,
   and change the page after their pick, in the next round. The second review replaces the first in
   `cold-review.md` and lists the inputs of the page as it is then. The card's cold line shows the last verdict (`ship`, `fix` or `owner`), with the first finding or question in a line. A later hero board
-  is a new board and counts afresh. The lint cannot count the reviews; the rule is yours to keep, and the fleet gate message states the number of calls it allows.
+  is a new board and counts afresh, but it carries only the variant(s) the owner picked or combined, so only those are reviewed; state the number of reviews and their cost before running them. The lint cannot count the reviews; the rule is yours to keep, and the fleet gate message states the number of calls it allows.
   With an agent, the prompt of the second call states in one line that it is the second and last review of this variant ("This is the
   second and last review of this variant."): a line of the prompt, not an input, and not the first review's findings or your reasons. The
   agent cannot tell its second call from its first otherwise, and it takes its push to `owner` from that line ("when the prompt says
@@ -287,6 +301,12 @@ the pages start in their own turn.
    `rounds/r<N>/<id>/`, named by its page id (lowercase letters, digits and `-`, starting with a letter, 2 to 32
    characters: `start`, `pricing`). The id is the same in three places: the folder, the card's `data-site-page` and
    `<body data-page>`.
+1a. **The hero's world carries over.** Before building the other pages, write the hero's motifs down as a short system on the pages
+   board (its own shapes, devices and the move; one line each), and build every page with at least one of them used for that
+   page's own job. A pages round of card, list and button, with nothing that says it is this brand, is the failure of a generic
+   first hero and is rebuilt whole. Each page card has an Idea line (`data-field="idea"`): the page's one idea in the brand's world,
+   like a hero card's. `board-lint` warns (`site:fields`) when a page card has none; from the next release it fails. Forms stay
+   straight (the tilted-form tell): a tilt or a drawing goes around a form, never on it.
 2. **The home page is a page like the others.** Begin `rounds/r<N>/start/` from the picked hero's folder (its `index.html`
    and the files it loads, without `shots/` and `cold-review.md`; the depth in the tree is the same, so its relative
    paths still hold) and build the rest of the page below the first screen. Build each other page from the hero's
@@ -297,8 +317,8 @@ the pages start in their own turn.
    and the two questions of the pages. `<body data-round="<N>" data-board="site" data-site-stage="pages"
    data-hero="<the picked variant>">`. The lint fails a pages board without an earlier hero board that holds that variant
    (hero first), and a page card spelt unlike its page id. Lint, shoot and make the review copy as for the hero; a write to `BRAND-STATE.md` asks for
-   `page-check` and the lint again only when it changes the G4 record or a "(rule)" line. A later pages board (the refine loop on the pages, started as `cp -R` of the previous pages
-   board) also has What changed and Weak points: the lint requires both from the second board of a stage.
+   `page-check` and the lint again only when it changes the G4 record or a "(rule)" line. A later pages board (the refine loop on the pages, started as the copy above of the previous pages
+   board, which keeps every page card, because the approval copies only the cards on the last pages board) also has What changed and Weak points: the lint requires both from the second board of a stage.
 4. **The choices.** List every structural and visual choice the pages make (the order of the sections, where the action
    sits, what repeats, how a page ends, the density, the way an image or a figure is shown), one `<li data-choice="c1">`
    each, tagged:
@@ -337,7 +357,11 @@ this order:
    each used, a checksum of each, and the choices with their tags and sources. It refuses without G4p, on a page that
    needs the network, and when `site/` already holds approved pages (`--replace` moves the old ones to
    `removed-<date>/` first, never deletes).
-6. **Take the stills again where the pages now live:** `capture site/<id>/index.html` and `page-check
+6. **List what the approved site leaves behind**, each as a next step for the owner to pick: approved masters in `assets/masters/`
+   whose words or look predate the site (ads, deck), voice lines that place copy on the site, the book's site chapter, the kit
+   or the applied skill. Before the first push of a project that is mirrored or shared, offer to clean the old rounds
+   ([12-history.md](12-history.md), "Method: cleaning old rounds").
+7. **Take the stills again where the pages now live:** `capture site/<id>/index.html` and `page-check
    site/<id>/index.html` for each page, then `check --project <dir>`. `check` gates the record, the pages and their stills.
 
 The approved pages are references for whoever builds the real site, never fill-in templates: the rules go into the
@@ -370,6 +394,14 @@ board, the owner chooses between new variants or pages (a new site board) and a 
 - **A bare hero while the brand's approved work sits unused.** An approved master or picture left out, or a signature move that
   never shows on the first screen, with nothing on the card saying why. The hero is then safe and generic: start from the
   inputs, and state the one idea before building.
+- **Dropping graphics to avoid the mock-up warning.** The `styled-div-mock` tell is about a drawn screen of a product made of
+  boxes (fake UI), not about drawing. An illustration, a drawn calendar, paper or a figure is allowed and argued on the card;
+  never drop graphics to avoid the warning.
+- **A later hero board that carries every variant.** It carries only the variant(s) the owner picked or combined, so the cold reviews
+  (and their cost) stay with those; the others stay in their earlier round.
+- **A builder in the session scratchpad.** A restart wipes it. Builders live in `rounds/r<N>/_build/` or `tools/`.
+- **The signature line on the site's H1.** The H1 says what it is and for whom; the signature line is its own slot.
+- **A hero's world dropped on the other pages.** See "The other pages", step 1a.
 - **A hero variant that differs only in colour.** Three heroes are three structures. If every one hits the same reflex
   pattern, the lint fails the board.
 - **A third cold review of one variant.** The rule is two per variant per board: the first, and one after the fixes. What the second
@@ -409,8 +441,9 @@ board, the owner chooses between new variants or pages (a new site board) and a 
 - `site:cold` accepts `ship`, `fix` and `owner` as the verdict (an unknown one fails, and so does a card that shows another one than
   the file's); it cannot count the reviews of a variant, so the cap of two is prose, and so is whether the questions of an `owner`
   review were put to the owner.
-- The Idea line of a hero card (`data-field="idea"`) is read by `site:fields`: missing or empty it warns in this release and
-  fails in the next, so a board made before the line existed still lints. A page card has no Idea line.
+- The Idea line of a hero card (`data-field="idea"`) is read by `site:fields`: missing or empty it fails (in 0.7.0 it
+  only warned), so a board made before the line existed needs the line added. A page card's Idea line is read the same way
+  but only warns in 0.8.0; it fails from the next release.
 - No lint row reads a try-out, and none is added: a hero card's folder and live link are `rounds/r<N>/<Name>/`, so on the round's
   board (`rounds/r<N>/board.html`) a card that points into `tryout/` fails `site:files` as any card without its folder does (the
   review copy's live link is checked only for being there). `check --cascade` does search `tryout/`, which is why step 2a moves it

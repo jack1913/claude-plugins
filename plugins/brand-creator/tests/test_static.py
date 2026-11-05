@@ -216,6 +216,31 @@ def test_every_uv_script_starts_and_shows_help():
             assert r.returncode == 0 and "usage:" in r.stdout, (p, r.stderr)
 
 
+def _help_of(args, tmp_path):
+    env = {k: v for k, v in os.environ.items() if k not in ("BRAND_CREATOR_DATA", "CLAUDE_PLUGIN_DATA")}
+    return subprocess.run([str(ROOT / "bin" / "brand-creator"), *args], capture_output=True, text=True, env=env, cwd=tmp_path)
+
+
+def test_a_subcommand_prints_its_help_with_no_data_directory(tmp_path):
+    """`brand-creator <sub> --help` and `-h` need no data directory (a Claude Code Bash tool sets none): a Python one, a node one, the render.mjs ones and emit."""
+    for args in (["page-check", "--help"], ["board-lint", "-h"], ["state", "--help"], ["tokens", "--help"], ["fleet-plan", "--help"], ["emit", "web", "--help"], ["adoption", "survey", "-h"],
+                 ["shot", "--help"], ["card", "-h"], ["frames", "--help"], ["fonts", "--help"], ["capture", "--help"], ["capture", "-h"], ["emit", "--help"], ["smoke", "--help"], ["version", "--help"], ["root", "-h"]):
+        r = _help_of(args, tmp_path)
+        assert r.returncode == 0 and "usage:" in r.stdout and "no data directory" not in r.stderr, (args, r.returncode, r.stdout, r.stderr)
+    assert not list(tmp_path.iterdir()), "help creates nothing"
+
+
+def test_capture_help_lists_its_options_and_a_command_without_help_still_needs_the_data_directory(tmp_path):
+    r = _help_of(["capture", "--help"], tmp_path)
+    for opt in ("--project", "--wait", "--timeout", "--frames", "--url", "--name"):
+        assert opt in r.stdout, (opt, r.stdout)
+    assert "brand-creator shot" not in r.stdout and "  brand-creator capture <page.html>" in r.stdout, "capture shows its own usage lines, as brand-creator runs them"
+    r = _help_of(["page-check", "page.html"], tmp_path)
+    assert r.returncode == 2 and "no data directory" in r.stderr, (r.returncode, r.stderr)
+    r = _help_of(["capture", "--bogus"], tmp_path)
+    assert r.returncode == 2 and "no data directory" in r.stderr
+
+
 def test_executables_and_shebangs():
     assert os.access(ROOT / "bin" / "brand-creator", os.X_OK)
     assert (ROOT / "bin" / "brand-creator").read_text().startswith("#!/usr/bin/env bash")

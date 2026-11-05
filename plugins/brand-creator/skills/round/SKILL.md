@@ -25,9 +25,10 @@ other pages; steps below, "A site round").
    Read BRAND-STATE.md, brief/BRIEF.md and FACTS.md fully. No project → say so and offer to start one (the owner says what the brand is for, in words).
 3. Pick the round number N. The style board is round 0 (`rounds/r0/`): it comes first, while G1s is not recorded, even in
    a project that already has rounds (the hook keeps `rounds/r0/` writable while G1s is empty). Every other round is the
-   highest `rounds/rK/` + 1. From round 2: `cp -R rounds/r<N-1> rounds/r<N>` first; never edit an earlier round. A motion
+   highest `rounds/rK/` + 1. From round 2: `rsync -a --exclude shots/ --exclude cold-review.md --exclude capture.json rounds/r<N-1>/ rounds/r<N>/` first; never edit an earlier round. A motion
    round is the exception (below). A website references board is another: a new, empty folder (`mkdir rounds/r<N>`), not a
-   copy. So is the first site board of each stage (below, "A site round").
+   copy. So is the first site board of each stage, and a later hero board is `mkdir rounds/r<N>` with a copy of each picked
+   variant only, never of the whole round (below, "A site round").
 4. Check the gate before drawing anything. Before a round 1 board, or the pick board of a reset round, run
    `brand-creator --data "${CLAUDE_PLUGIN_DATA}" state --project <dir> --require G1s`. Exit 1 means the owner has
    not picked a style yet: build the style board instead (round 0), or after a full rejection a new style board in the next
@@ -93,7 +94,7 @@ what follows the approval are in `references/phases/07-tokens.md` ("The motion r
 `references/board-contract.md` ("Motion board"). Make the variants before the board, in this order:
 
 1. The first motion round is a new, empty folder (`mkdir rounds/r<N>`): do not copy the refine round. A later one, the
-   refine loop on the picked or combined variant, starts as `cp -R rounds/r<N-1> rounds/r<N>` of the previous motion round;
+   refine loop on the picked or combined variant, starts as `rsync -a --exclude shots/ --exclude cold-review.md --exclude capture.json rounds/r<N-1>/ rounds/r<N>/` of the previous motion round;
    then set the `page` of each `rounds/r<N>/<name>/proof.json` to `rounds/r<N>/<name>/index.html` (a proof that still
    points into the old round fails `board-lint`).
 2. One folder per variant, `rounds/r<N>/<name>/`, named by a word of 3 or more letters (letters, digits, `-` and `_`;
@@ -132,8 +133,11 @@ review and the choices are in `references/phases/07p-site-round.md`; the board's
    answer into `DECISIONS.md` (`Gate: G4p`, `Decided: ...`, each dropped rule named as dropped); a rule that stands is cited
    by `data-source` like any rule. No new gate id. The step is "The hero first", step 0, in the phase file.
 1. The first board of each stage, the hero board and then the pages board, is a new, empty folder (`mkdir rounds/r<N>`):
-   never a copy of an earlier round. A later board of the same stage starts as `cp -R rounds/r<N-1> rounds/r<N>` of the
-   previous board of that stage; then make `capture`, `page-check` and the cold review again, because each is tied to the
+   never a copy of an earlier round. A later pages board starts as `rsync -a --exclude shots/ --exclude cold-review.md --exclude capture.json rounds/r<N-1>/ rounds/r<N>/` of the
+   previous pages board and keeps every page card. A later hero board is `mkdir rounds/r<N>`, then
+   `rsync -a --exclude shots/ --exclude cold-review.md --exclude capture.json rounds/r<N-1>/<Name>/ rounds/r<N>/<Name>/` for each picked variant (a combined one starts from one of them),
+   `board.html` and `_build/` copied the same way, the other variants' cards removed from it, and it carries only those
+   variants; then make `capture`, `page-check` and the cold review again, because each is tied to the
    page's path.
 2. One folder per hero variant, `rounds/r<N>/<Name>/`, or per page, `rounds/r<N>/<id>/`. A variant is named by a word of 3 or
    more letters (letters, digits, `-` and `_`; never "Variant 2"); a page by its page id (`start`, `pricing`). The first hero
@@ -174,7 +178,7 @@ review and the choices are in `references/phases/07p-site-round.md`; the board's
 4. Build the board from the template: one card per variant (`data-site-variant="<name>"`) or page (`data-site-page="<id>"`)
    with its four stills, the live link, its check line (`data-check="pass"` or `"fail"`, as its report says), the tells
    found, the layout, the cold verdict and a vote; a hero card also has its idea line (`data-field="idea"`; a card without it
-   only warns in this release), the reflex line and what it takes from the references. The pages stage has
+   fails `site:fields`), the reflex line and what it takes from the references. The pages stage has
    `data-hero="<the picked variant>"` and a choices section that tags every choice `rule` (it quotes where the owner
    decided it) or `example`. Hardest surface, My call, questions and reply as on every board.
 5. Lint (steps 6 and 7 above), shoot the board last: `shot` keeps one report, and `check` wants the one of the latest board.

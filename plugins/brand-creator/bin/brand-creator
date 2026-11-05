@@ -46,12 +46,13 @@ checks and renders
                           history/ or an earlier round is refused: read-only), each written only when its bytes change
   capture <page.html>     stills of a page of the project: the first screen at 1440 and 390, light and dark, and a full page, beside it in shots/, with
                           capture.json (what the page loaded); --frames adds three key frames of the first screen (the start, middle and end of the
-                          animation that runs on load); --url URL --name NAME captures a real site into research/site-refs/NAME/ instead: the
+                          animation that runs on load); --reveal scrolls the page down and back first, so what it shows on scroll is in the stills; --url URL --name NAME captures a real site into research/site-refs/NAME/ instead: the
                           only command that reaches the network, and only after the owner answered the online-research question (site_research)
   logo-sheet              real-size logo sheet (16/20/32/64/128/180, light and dark, x4 favicon, header mock)
   contrast                WCAG 2.2 AA UI pairs, brand-rule pairs, colours that touch in the logo SVGs, APCA advisory
   board-lint <page.html>  required board sections (data-section attributes) for a round page; a motion round's variants too (folder, proof, stills, their reports)
-  check                   all gates for the artefacts that exist; --cascade "<old value>" greps for leftovers
+  check                   all gates for the artefacts that exist; --cascade "<old value>" greps for leftovers; --refresh first re-runs the stale
+                          reports that are a pure re-run of a check (page-check, contrast, book-lint, board-lint)
   page-check <page.html>  open a page at several widths, light and dark, and report what it loads: a page of the project, --from DIR <page> (a built
                           site anywhere, copied and read only) or --url URL (a page on this machine only); one report per page
 
@@ -156,16 +157,28 @@ case "$sub" in
   version|--version)
     case "${1:-}" in
       "")      python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['version'])" "$ROOT/.claude-plugin/plugin.json"; exit 0 ;;
+      -h|--help) echo "usage: brand-creator version [--check]    (prints the plugin version; --check: is this the copy Claude Code has installed?)"; exit 0 ;;
       --check) ;;   # is this the copy Claude Code has installed? (tools/finish.sh runs it first): a bootstrap script, run below
       *)       die "version takes no argument but --check" ;;
     esac ;;
-  root)           printf '%s\n' "$ROOT"; exit 0 ;;   # the plugin root: tools/finish.sh hands it to a project's own generators as BRAND_CREATOR_ROOT
+  root)
+    case "${1:-}" in -h|--help) echo "usage: brand-creator root    (prints the plugin root folder)"; exit 0 ;; esac
+    printf '%s\n' "$ROOT"; exit 0 ;;   # the plugin root: tools/finish.sh hands it to a project's own generators as BRAND_CREATOR_ROOT
 esac
+
+# `<subcommand> --help` needs no data directory: the subcommand prints its own help (smoke has none of its own, so it is said here)
+wants_help=0
+for a in "$@"; do case "$a" in --) break ;; -h|--help) wants_help=1; break ;; esac; done
+if [ "$wants_help" = 1 ] && [ "$sub" = smoke ]; then
+  echo "usage: brand-creator smoke    (dev helper: runs the Acme end-to-end smoke test; takes no options; needs a data directory with setup done)"; exit 0
+fi
 
 if [ -n "$data" ]; then
   mkdir -p "$data" 2>/dev/null || die "cannot create the data directory: $data"
   data="$(cd -P "$data" && pwd)"
   export BRAND_CREATOR_DATA="$data"
+elif [ "$wants_help" = 1 ]; then
+  :   # help: no data directory needed, and none is created
 elif [ "$sub" != "prereq" ] && [ "$sub" != "version" ] && [ "$sub" != "--version" ]; then
   die "no data directory. Pass --data <dir> (skills pass \${CLAUDE_PLUGIN_DATA}) or set BRAND_CREATOR_DATA."
 fi
@@ -234,6 +247,7 @@ case "$sub" in
   tokens)     js build_tokens.mjs "$@" ;;
   emit)
     [ $# -ge 1 ] || die "emit needs a target: web | social | apple | windows | linux | tray | tauri | wallet | developer | android | chrome-ext | msix | print | presskit | profiles"
+    case "$1" in -h|--help) echo "usage: brand-creator emit <target> [options]   (targets: web, social, apple, windows, linux, tray, tauri, wallet, developer, android, chrome-ext, msix, print, presskit, profiles; \`brand-creator emit <target> --help\` shows the options of one)"; exit 0 ;; esac
     target="$1"; shift
     case "$target" in
       web)    py emitters/web.py "$@" ;;

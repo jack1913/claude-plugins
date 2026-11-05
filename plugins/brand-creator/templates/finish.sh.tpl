@@ -23,11 +23,14 @@
 #   9 board-lint on the board of the latest round (the report of a pick board lists FACTS.md and brief/BRIEF.md as inputs, and check wants a current one: an edit of the facts or the brief
 #     made since the last lint is picked up here; a failing or not-verified lint that wrote its report does not stop the chain, check gates it; a lint that refuses the board is a failed
 #     step, said with its message, and does not stop the chain either: check still runs, and the chain ends with a non-zero exit code), then staleness --write
-#     (records the inputs, the plugin version and the emitter code the pack was built from), then check
+#     (records the inputs, the plugin version and the emitter code the pack was built from), then `check --refresh`: it first re-runs the page-check, contrast, book-lint, kit-check and board-lint reports
+#     that this chain's own steps (or an edit of FACTS.md) made stale, so the chain does not end on a report it made stale itself, then checks. A report that is not a pure re-run
+#     (the adapters, the applied skill, the kit, the book, the emitters) is named, never re-run there
 #
 # The chain sets BRAND_CREATOR_CHAIN=1. A generator that clears or rewrites a whole output folder calls
 # `require_chain()` (scripts/lib/_common.py) and refuses to run without it: run alone it would wipe files that later steps refill.
-# Needs the plugin's bin/ on PATH (Claude Code does that) and BRAND_CREATOR_DATA or CLAUDE_PLUGIN_DATA set.
+# Needs the plugin's bin/ on PATH (Claude Code does that) and BRAND_CREATOR_DATA or CLAUDE_PLUGIN_DATA set; with neither, the one set-up data directory
+# under ~/.claude/plugins/data/brand-creator-* is used (a line says which), and none or several is exit 2.
 # Option values live in the variables of block 2 (an environment variable of the same name overrides them), and reach each emitter
 # as separate, quoted arguments: a tagline or an exemption with spaces in it is one argument, here and in the idempotence run.
 # The print, press-kit and post steps follow the CLI's own tiers: `emit print` (and the e-mail signature), `emit presskit` and `emit social --posts` are Standard and Full tier;
@@ -37,7 +40,19 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 export BRAND_CREATOR_CHAIN=1
 DATA="${BRAND_CREATOR_DATA:-${CLAUDE_PLUGIN_DATA:-}}"
-[ -n "$DATA" ] || { echo "finish.sh: set BRAND_CREATOR_DATA (or CLAUDE_PLUGIN_DATA) to the data directory" >&2; exit 2; }
+if [ -z "$DATA" ]; then   # a Claude Code Bash tool sets neither: take the one data directory that `brand-creator setup` finished (its setup.json is there)
+  FOUND=(); UNSET=()
+  [ -n "${HOME:-}" ] || { echo "finish.sh: set BRAND_CREATOR_DATA (or CLAUDE_PLUGIN_DATA) to the data directory: HOME is not set, so ~/.claude/plugins/data cannot be searched" >&2; exit 2; }
+  for d in "$HOME"/.claude/plugins/data/brand-creator-*/; do
+    [ -d "$d" ] || continue
+    if [ -f "${d}setup.json" ]; then FOUND+=("${d%/}"); else UNSET+=("${d%/}"); fi
+  done
+  case ${#FOUND[@]} in
+    1) DATA="${FOUND[0]}"; echo "finish.sh: data directory $DATA (the only set-up one under ~/.claude/plugins/data; BRAND_CREATOR_DATA picks another)" ;;
+    0) echo "finish.sh: set BRAND_CREATOR_DATA (or CLAUDE_PLUGIN_DATA) to the data directory: none set up was found under ~/.claude/plugins/data/brand-creator-*${UNSET[*]+ (not set up: ${UNSET[*]})} (run brand-creator setup)" >&2; exit 2 ;;
+    *) echo "finish.sh: set BRAND_CREATOR_DATA (or CLAUDE_PLUGIN_DATA) to the data directory: several set-up ones were found under ~/.claude/plugins/data: ${FOUND[*]}" >&2; exit 2 ;;
+  esac
+fi
 BC=(brand-creator --data "$DATA")
 BRAND_CREATOR_ROOT="$("${BC[@]}" root)"; export BRAND_CREATOR_ROOT      # the generators of block 1 import scripts/lib from here
 step() { printf '\n== %s\n' "$*"; }
@@ -305,13 +320,13 @@ if [ -n "$BOARD" ]; then
 fi
 "${BC[@]}" staleness --write
 if [ "$REFRESH_FAILED" -ne 0 ]; then   # an adapter file, the applied skill or the kit that refused to be written again (the first failed step of the chain, so it comes before the lint's): check still runs and writes the pack report, but the chain never ends in a pass
-  RESULT_RC=0; "${BC[@]}" check || RESULT_RC=$?
+  RESULT_RC=0; "${BC[@]}" check --refresh || RESULT_RC=$?
   if [ "$RESULT_RC" -ne 0 ]; then exit "$RESULT_RC"; fi
   echo "finish.sh: check passed, but a step failed ($REFRESH_WHAT): the chain ends with exit $REFRESH_FAILED" >&2; exit "$REFRESH_FAILED"
 fi
 if [ "$LINT_FAILED" -ne 0 ]; then   # a board the lint refused: check still runs and writes the pack report, but the chain never ends in a pass
-  CHECK_RC=0; "${BC[@]}" check || CHECK_RC=$?
+  CHECK_RC=0; "${BC[@]}" check --refresh || CHECK_RC=$?
   [ "$CHECK_RC" -eq 0 ] || exit "$CHECK_RC"
   echo "finish.sh: check passed, but a step failed (board-lint $BOARD): the chain ends with exit $LINT_FAILED" >&2; exit "$LINT_FAILED"
 fi
-"${BC[@]}" check
+"${BC[@]}" check --refresh

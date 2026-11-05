@@ -3,7 +3,8 @@
 What each step of a brand project produces, in more detail. For a short list by task, see the
 [how-to pages](../README.md#do-something).
 
-Every step is a `brand-creator` command that the skills run for you. `brand-creator --help` lists them all.
+Every step is a `brand-creator` command that the skills run for you. `brand-creator --help` lists them all, and
+`brand-creator <command> --help` shows one command's options.
 A synthetic worked brand, Acme, shows a finished project: `skills/brand-creator/references/examples/acme/` in the plugin.
 
 ## Boards and rounds
@@ -67,7 +68,11 @@ not count.
   visitor sees before scrolling) 1440 pixels wide, like a desktop, and 390, like a phone, in light and dark, and the
   whole page at 1440. The pictures go in a `shots/` folder beside the page, with `capture.json`: a list of the files the
   page loaded and of anything that went wrong. A page in an earlier round, or in `history/` where approved rounds are
-  kept, is refused, because those are locked.
+  kept, is refused, because those are locked. A page that shows content only as you scroll to it is photographed with
+  `capture --reveal`: Claude scrolls the page to the bottom in screen-sized steps, waiting at each, and back to the top
+  first, so the pictures show what a visitor sees after scrolling. A page too long to walk (more than 40 screens) is
+  walked as far as it goes, and `capture.json` and the run say so. A page that scrolls inside a box (a snap-scrolling
+  page) has that box walked instead.
 - **Pictures of real sites** (`capture --url`). For the references, Claude photographs each site into
   `research/site-refs/<name>/`: the first screen at both widths, the whole page and two small thumbnails. It is the
   only tool here that goes online, and only when your answer to the online question allows it: research online, or

@@ -44,7 +44,7 @@ const USAGE = `usage:
   render.mjs pdf <page.html> --out FILE.pdf --label TEXT [--project DIR] [--format A4|Letter] [--scheme light|dark] [--label-px N] [--timeout MS]
   render.mjs pdf <page.html> --out FILE.pdf --size-mm WxH [--bleed-mm N] [--measure FILE.json] [--project DIR] [--scheme light|dark] [--timeout MS]
   render.mjs page-measure --request FILE.json --out FILE.json [--project DIR]
-  render.mjs capture <page.html> [--project DIR] [--wait MS] [--timeout MS] [--frames]
+  render.mjs capture <page.html> [--project DIR] [--wait MS] [--timeout MS] [--frames] [--reveal]
   render.mjs capture --url URL --name NAME [--project DIR] [--timeout MS]
   render.mjs wiring <url>
   render.mjs selftest
@@ -59,6 +59,8 @@ capture writes no report: its stills and capture.json go beside the page (<page 
 site_research in BRAND-STATE.md is online or links-only, and it is the only form that lets the browser reach the network.
 capture --frames also writes shots/frame-1440-0.png, frame-1440-50.png and frame-1440-100.png: the first screen at 1440, light, with every finite animation that runs on load
 paused at 0, 50 and 100 % of the longest one (a page with none writes no frame, and says so); it goes with a page of the project, not with --url.
+capture --reveal first scrolls the page from top to bottom in viewport-sized steps, waiting at each step as it waits after load, and returns to the top, so that the stills show what the page reveals on scroll
+(at most 40 steps, and no longer than --timeout per load: a longer walk stops there and capture.json says so); it goes with a page of the project, not with --url.
 wiring opens one page of your own local server (http or https on localhost, 127.0.0.1 or [::1]; anything else is refused) and prints, as JSON on stdout, the links, form fields, ids, test hooks,
 scripts and inline handlers it carries as written in the DOM; a page that does not load is exit 3.`;
 
@@ -2264,6 +2266,8 @@ async function cmdPageMeasure(argv) {
 //   capture --url URL --name NAME     a real site, into research/site-refs/NAME/: the first screen at 1440 and at 390, a full page, two small JPEG thumbnails the references board inlines,
 //                                     and capture.json (the address, where it ended, its status and title). The only place where Chromium may reach the network, and only after the owner's
 //                                     answer to the online-research question (site_research is online or links-only). It never writes assets/_checks/.
+//   capture <page.html> --reveal      before each still, the page is scrolled from top to bottom in viewport-sized steps (waiting at each as after load) and back to the top, so that what it reveals on scroll is shown;
+//                                     at most CAPTURE_REVEAL_MAX_STEPS steps, and capture.json records the walk (and that it was capped).
 //   capture <page.html> --frames      also the key frames of the first screen (1440 x 900, light): the animations that run on load, paused and seeked to 0, 50 and 100 % of the longest finite one, as
 //                                     the motion proof seeks a page (shot --motion); capture.json lists them. A page with no finite animation on load gets none, and the run says so.
 // Every refusal comes before the browser starts; every picture is taken before the first file is written, so a page or a site that does not load leaves nothing behind.
@@ -2280,6 +2284,7 @@ const CAPTURE_RESERVED_NAME = "owner";        // research/site-refs/owner/ holds
 const CAPTURE_MAX_PROBLEMS = 40;
 const CAPTURE_FRAME_PERCENTS = [0, 50, 100];  // key frames (--frames): where in the longest finite animation that runs on load the first screen is taken
 const CAPTURE_FRAMES_SETTLE_MS = 1000;        // a page with no animation at load is looked at this long, for a script that starts one a moment later (startPass)
+const CAPTURE_REVEAL_MAX_STEPS = 40;          // --reveal: viewport-sized steps of the walk down the page; a page that needs more is walked this far and capture.json says so
 const captureFrameFile = (percent) => `frame-1440-${percent}.png`;
 const CAPTURE_READ_ONLY = { tail: "(capture writes its stills beside the page)", how: "copy the page into the latest round and capture it there" };
 
@@ -2305,6 +2310,47 @@ async function settleForStill(page, { timeout, waitMs, lazyCap = null }) {
   await page.waitForTimeout(waitMs);
   await waitAnimations(page);
   return lazy;
+}
+
+/** --reveal: scroll the page from the top to the bottom in viewport-sized steps, wait at each as `settleForStill` waits (the pause, then the animations that end), and return to the top.
+ *  A page that grows while it is walked (content added on scroll) is followed up to the step cap. The walk of one load also stops once it has taken `timeout` ms (--timeout),
+ *  so that a page whose finite animations run long cannot hold the run for minutes. The page scrolls the window, or, when the window does not scroll, its largest shown element that
+ *  scrolls (overflow-y auto or scroll: a scroll-snap page): that element is walked instead (`inner`). A scroller that does not move when scrolled ends the walk:
+ *  `stuck`, so that it is said and never reported as a long page. -> {steps, capped, timedOut, inner, stuck}: capped when the bottom was not reached within the cap or the time. */
+async function revealWalk(page, waitMs, timeout) {
+  let steps = 0, capped = false, timedOut = false, inner = false, stuck = false;
+  const started = Date.now();
+  // the scroller, found again at every step (the same rule picks the same element): the window when the document is taller than it, else the largest shown element that scrolls
+  const scroller = () => {
+    const doc = document.scrollingElement || document.documentElement;
+    if (doc.scrollHeight > window.innerHeight + 1 && !["hidden", "clip"].includes(getComputedStyle(doc).overflowY)) return { el: null, vh: window.innerHeight, total: doc.scrollHeight, y: Math.round(window.scrollY) };
+    let best = null;
+    for (const el of document.querySelectorAll("body *")) {
+      if (!el.clientHeight || el.scrollHeight <= el.clientHeight + 1 || !["auto", "scroll", "overlay"].includes(getComputedStyle(el).overflowY)) continue;
+      if (!best || el.scrollHeight - el.clientHeight > best.scrollHeight - best.clientHeight) best = el;
+    }
+    return best ? { el: best, vh: best.clientHeight, total: best.scrollHeight, y: Math.round(best.scrollTop) } : { el: null, vh: window.innerHeight, total: doc.scrollHeight, y: Math.round(window.scrollY) };
+  };
+  // evaluated as a string expression (by the browser's debugger protocol, so a page's Content-Security-Policy, which may forbid eval, does not apply)
+  const withScroller = (body) => `(() => { const s = (${scroller.toString()})(); ${body} })()`;
+  for (;;) {
+    const at = await page.evaluate(withScroller("return { vh: s.vh, total: s.total, y: s.y, inner: Boolean(s.el) };"));
+    if (at.inner) inner = true;
+    if (at.y + at.vh >= at.total - 1) break;   // the bottom is in view
+    if (steps >= CAPTURE_REVEAL_MAX_STEPS) { capped = true; break; }
+    if (Date.now() - started >= timeout) { capped = true; timedOut = true; break; }
+    const y = Math.min(at.y + at.vh, at.total - at.vh);
+    const moved = await page.evaluate(withScroller(`const o = { top: ${y}, left: 0, behavior: "instant" }; if (s.el) s.el.scrollTo(o); else window.scrollTo(o);
+      return Math.round(s.el ? s.el.scrollTop : window.scrollY) !== s.y;`));
+    if (!moved) { stuck = true; break; }   // it does not move when scrolled: said, never walked 40 times or called long
+    steps += 1;
+    await page.waitForTimeout(waitMs);
+    await waitAnimations(page);
+  }
+  await page.evaluate(withScroller(`const o = { top: 0, left: 0, behavior: "instant" }; if (s.el) s.el.scrollTo(o); window.scrollTo(o);`));
+  await page.waitForTimeout(waitMs);
+  await waitAnimations(page);
+  return { steps, capped, timedOut, inner, stuck };
 }
 
 /** A picture shrunk to `width` px in a blank page (a canvas, as pngDiff decodes pictures), as a JPEG on white. */
@@ -2335,13 +2381,14 @@ function writeCaptureRecord(file, doc) {
 
 async function cmdCapture(argv) {
   const { values, positionals } = parse(argv, {
-    project: { type: "string" }, wait: { type: "string" }, timeout: { type: "string" }, url: { type: "string" }, name: { type: "string" }, frames: { type: "boolean", default: false },
+    project: { type: "string" }, wait: { type: "string" }, timeout: { type: "string" }, url: { type: "string" }, name: { type: "string" }, frames: { type: "boolean", default: false }, reveal: { type: "boolean", default: false },
   });
   const project = findProject(values.project);
   if (values.url !== undefined) {
     if (positionals.length) die(EXIT.USAGE, `capture --url takes no page: ${positionals[0]}\n${USAGE}`);
     if (values.wait !== undefined) die(EXIT.USAGE, `--wait goes with a page of the project, not with --url\n${USAGE}`);
     if (values.frames) die(EXIT.USAGE, `--frames goes with a page of the project, not with --url\n${USAGE}`);
+    if (values.reveal) die(EXIT.USAGE, `--reveal goes with a page of the project, not with --url\n${USAGE}`);
     return captureSite(project, values);
   }
   if (values.name !== undefined) die(EXIT.USAGE, `--name goes with --url\n${USAGE}`);
@@ -2428,7 +2475,7 @@ async function captureProjectPage(project, pageFile, values) {
   const browser = await launch();   // a missing setup fails before anything is opened
   const server = await startServer(project);
   const stills = [], problems = new Set();
-  let full = null, taken = { frames: [], length: 0, why: null, realTime: false };
+  let full = null, reveal = null, taken = { frames: [], length: 0, why: null, realTime: false };
   try {
     const { url } = pageUrl(project, server.origin, pageFile);
     for (const [width, height, scheme] of CAPTURE_VIEWS) {
@@ -2439,6 +2486,11 @@ async function captureProjectPage(project, pageFile, values) {
       try {
         await withTimeout(page.goto(url, { waitUntil: "load", timeout }), timeout + 5000, `loading ${url}`);
         await settleForStill(page, { timeout, waitMs });
+        if (values.reveal) {
+          const walk = await revealWalk(page, waitMs, timeout);
+          reveal = { steps: Math.max(reveal?.steps ?? 0, walk.steps), capped: Boolean(reveal?.capped) || walk.capped, timedOut: Boolean(reveal?.timedOut) || walk.timedOut,
+            inner: Boolean(reveal?.inner) || walk.inner, stuck: Boolean(reveal?.stuck) || walk.stuck };
+        }
         stills.push({ view: `${width}-${scheme}`, width, height, scheme, file: `${width}-${scheme}.png`, png: await page.screenshot() });
         if (width === 1440 && scheme === "light") {
           const total = await page.evaluate(() => document.documentElement.scrollHeight);
@@ -2472,6 +2524,8 @@ async function captureProjectPage(project, pageFile, values) {
     schema: 1, tool: "capture", source: { page: pageRel }, date: today(),
     views: stills.map((s) => ({ view: s.view, width: s.width, height: s.height, scheme: s.scheme, file: s.file, sha256: sha256(s.png) })),
     full: { file: full.file, sha256: sha256(full.png), height: full.height, cut: full.cut, ...(full.cut ? { page_height: full.page_height } : {}) },
+    ...(reveal ? { reveal: { steps: reveal.steps, capped: reveal.capped, ...(reveal.timedOut ? { timed_out: true } : {}), ...(reveal.inner ? { inner_scroller: true } : {}),
+      ...(reveal.stuck ? { not_scrolled: true } : {}) } } : {}),
     ...(taken.frames.length ? { frames: taken.frames.map((f) => ({ percent: f.percent, ms: f.ms, file: f.file, sha256: sha256(f.png) })) } : {}),
     inputs, problems: kept.slice(0, CAPTURE_MAX_PROBLEMS).concat(kept.length > CAPTURE_MAX_PROBLEMS ? [`${kept.length - CAPTURE_MAX_PROBLEMS} more`] : []),
   };
@@ -2481,6 +2535,13 @@ async function captureProjectPage(project, pageFile, values) {
   console.log(`capture ${pageRel}: ${files.length} stills and capture.json in ${dir}/ (${written} of ${files.length + 1} file(s) written, the others unchanged)`
     + (full.cut ? `; the full page is ${full.page_height} px tall and was cut at ${CAPTURE_FULL_MAX} px` : ""));
   for (const p of doc.problems) console.log(`  problem while loading: ${p}`);
+  if (reveal) {
+    console.log(`  reveal: each page was scrolled to the bottom and back in viewport-sized steps (${reveal.steps} steps at most, of ${CAPTURE_REVEAL_MAX_STEPS} allowed)`
+      + (reveal.timedOut ? `; CAPPED: a walk took longer than --timeout, so what lies below where it stopped was not revealed`
+        : reveal.capped ? `; CAPPED: the page is longer than ${CAPTURE_REVEAL_MAX_STEPS} screens, so what lies below the walk was not revealed` : "")
+      + (reveal.inner ? "; the page scrolls inside an element, which was walked instead of the window" : "")
+      + (reveal.stuck ? "; NOT SCROLLED: a page did not move when scrolled, so what lies below its first screen was not revealed" : ""));
+  }
   if (taken.frames.length) {
     console.log(`  key frames: ${taken.frames.length} of the first screen (1440, light) at ${CAPTURE_FRAME_PERCENTS.join(", ")} % of ${taken.length} ms`
       + (taken.realTime ? "; the page also moves by requestAnimationFrame, which cannot be seeked, so the frames may differ from run to run" : ""));
@@ -2620,9 +2681,19 @@ async function cmdSelftest() {
   return EXIT.PASS;
 }
 
+// `render.mjs <command> --help` (or -h): that command's usage lines, then the notes (they are shared by the commands); exit 0
+function helpOf(cmd) {
+  const lines = USAGE.split("\n"), own = lines.filter((l) => l.startsWith(`  render.mjs ${cmd} `) || l === `  render.mjs ${cmd}`);
+  if (!own.length) return die(EXIT.USAGE, `unknown command ${cmd}\n${USAGE}`);
+  const notes = lines.filter((l) => !l.startsWith("  render.mjs ") && l !== "usage:");   // the notes are shared, so a command sees them all
+  console.log(["usage:", ...own.map((l) => l.replace("  render.mjs ", "  brand-creator ")), ...notes].join("\n"));   // run as brand-creator <command>
+  return EXIT.PASS;
+}
+
 mainGuard(async () => {
-  dataDir(); // fail early with the standard message when --data is missing
   const [cmd, ...rest] = process.argv.slice(2);
+  if (cmd && !cmd.startsWith("-") && rest.some((a) => a === "-h" || a === "--help")) return helpOf(cmd);   // before the data directory: help needs none
+  dataDir(); // fail early with the standard message when --data is missing
   switch (cmd) {
     case "shot": return cmdShot(rest);
     case "card": return cmdCard(rest);

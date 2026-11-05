@@ -6,6 +6,61 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+### Added
+
+- `brand-creator capture <page> --reveal` scrolls the page to the bottom and back before it takes the pictures, so a page that shows
+  its sections only as you scroll to them is photographed with those sections shown, and you no longer need a script of your own for
+  it. A page longer than 40 screens, or a walk that takes longer than `--timeout`, is cut short there, and the run and `capture.json` say so.
+- `brand-creator check --refresh` first runs again every report that went out of date and can be made again without a decision of yours (the
+  page check of each of your pages, then the contrast, the book check, the kit check and the board check, which reads the page checks), says each run and
+  how it ended, and then checks as usual. A report that writes your files or needs your yes (the adapter files, the applied skill, the kit,
+  the book, the packs) is only named, with the command to run. A run that fails is said so.
+- The page check has a new warning, `tilted-form`: a form, or a field, drop-down, text area or button of a form, drawn rotated, by
+  itself or by a tilted sheet round it. Forms are never tilted; the warning names the form and what turns it. A tilted picture with
+  no field in it is left alone.
+
+### Changed
+
+- An answer you give to a question is no longer put on a page as a fact. It becomes a fact only when you say it may be said
+  publicly (it asks when unsure); otherwise it is kept in a new "Internal context" part of `BRAND-STATE.md`, which no page,
+  board, book, brand file or kit uses.
+- A legal or statutory claim (a deadline, an obligation, a rate) is checked in the statute's own text or the authority's own page
+  before a page, board or book shows it, and its fact row names that source and the date checked; a portal or a blog is never the source.
+- A board's questions and the chat's now share one numbered list: the chat repeats the board's questions with the board's numbers and
+  numbers any other question after them, so "2a" means one thing.
+- A research helper now stops gathering when about two thirds of its turns are used and returns what it has, every unfinished claim marked
+  UNVERIFIED, instead of running out of turns and returning nothing. Its turn limit is raised from 30 to 40.
+- `tools/finish.sh` now ends on `brand-creator check --refresh`, so the chain no longer finishes on a report its own steps (or a change to `FACTS.md`
+  made just before) left out of date: in a real round it ended "not verified" in half its runs. A step that fails still ends the chain with a
+  non-zero exit code. Your project keeps its own copy of `finish.sh`: take the last step from `templates/finish.sh.tpl`.
+- A hero card of a site board with no Idea line, or an empty one, now fails the `board-lint` check `site:fields` (in 0.7.0 it only
+  warned). A site board made before 0.7.0 without Idea lines fails its lint now: add the one-line idea to each hero card.
+- The site round now carries the first screen's world into the other pages: the board writes the shapes and moves of the picked
+  first screen down as a short system, every page uses at least one for its own job, and each page card has an Idea line. The board
+  check warns when a page card has none; in the next release that becomes a failure. Forms stay straight: a tilt or a drawing goes
+  round a form, never on it.
+- A later board of the first-screen stage carries only the versions you picked or mixed, so only those are reviewed, and Claude says how many
+  reviews there are and what they cost before running them.
+- A new round is copied without the old round's pictures, cold review and `capture.json`, which pointed at the old round and failed the board check.
+  The copy uses `rsync`, which `brand-creator prereq` now lists as optional (macOS has it; on Linux, `apt install rsync`).
+- Every script that builds a page, a board or a picture now lives in the round's `_build/` folder (or `tools/`), never in the session's
+  scratch folder, which a restart wipes.
+- The website's main heading says what the brand is and for whom; the signature line or campaign headline is its own slot and stands there only when you say so.
+- The mock-up warning is about a drawn screen of a product made of boxes, not about drawing: an illustration, a drawn calendar, paper or a figure is
+  allowed and argued on the card, and graphics are no longer dropped to avoid the warning.
+- When you approve the site, Claude lists what it leaves behind (masters, voice lines, the book's site chapter, the kit) as next steps for you, and before the first push of a
+  shared project offers to clean old rounds, with the one line you run yourself.
+
+### Fixed
+
+- `brand-creator <command> --help` (or `-h`) now prints the command's help even when no data directory is set, as in a Claude Code
+  Bash tool; before, it stopped with "no data directory".
+- `brand-creator capture --help` (and `shot`, `card`, `frames`, `fonts`) now prints its options instead of failing with "Unknown option".
+- `tools/finish.sh` no longer needs `BRAND_CREATOR_DATA` typed by hand: with neither it nor `CLAUDE_PLUGIN_DATA` set, it uses the one
+  set-up folder under `~/.claude/plugins/data/` named `brand-creator-...` and says which. With none, or several, it stops (exit 2) and
+  names what it found; `BRAND_CREATOR_DATA` picks another. Your project keeps its own copy of `finish.sh`: take the change from
+  `templates/finish.sh.tpl`.
+
 ## [0.7.0] - 2026-11-04
 
 The site round gets fixes from a real client round. You can try the first-screen versions live in your browser before the

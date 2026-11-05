@@ -50,7 +50,7 @@ def main() -> int:
     results = booklint.lint(project, text, path=target, view=view, cfg=cfg, tokens_doc=doc, facts_rows=facts,
                             self_consistency=a.self_consistency, allow_variants=a.allow_variants)
     rep = booklint.write_report(project, f, results, view=view, state_view_sha=bookdata.view_sha(view, facts), self_consistency=a.self_consistency,
-                                book_file=f.relative_to(project.resolve()).as_posix())
+                                book_file=f.relative_to(project.resolve()).as_posix(), **({"allow_variants": True} if a.allow_variants else {}))
     return rep.finish(quiet_pass=True)
 
 

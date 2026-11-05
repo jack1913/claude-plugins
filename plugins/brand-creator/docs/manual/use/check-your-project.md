@@ -21,6 +21,9 @@ you approve.
    - 3: a check could not run. The report says "not verified" and why.
 
    A check that did not run is never reported as a pass.
+   When a result says a report is out of date ("stale", often after you changed `FACTS.md`), ask for the check to
+   refresh it: Claude runs the page checks, the contrast, the book check, the kit check and the board check again first, and tells you
+   what it ran. Reports that write your files, such as the adapter files, are only named, never re-run for you.
 3. Claude fixes nothing unasked. It offers the fixes as one list: those that need no decision first, then numbered
    decisions with a recommendation.
 

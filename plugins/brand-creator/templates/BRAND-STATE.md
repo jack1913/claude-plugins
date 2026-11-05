@@ -98,6 +98,11 @@ One line per edition event, written by `brand-creator patch` and `brand-creator 
 
 One line per decision that closed a choice, written by `brand-creator collapse`.
 
+## Internal context
+
+What the owner told you in answer to a question and has not said may be said in public. Context for you only: no page, board,
+book, adapter or kit uses it as a claim. A line moves to `FACTS.md` when the owner says it may be said.
+
 ## Notes
 
 (Anything the next session needs. Keep it short.)

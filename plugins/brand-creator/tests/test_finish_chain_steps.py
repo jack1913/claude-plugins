@@ -116,8 +116,9 @@ def chain(tmp_path: Path, *, tier: str = "standard", decision: dict | None = Non
     (stub / "brand-creator").chmod(0o755)
     scenario, log = tmp_path / "scenario.json", tmp_path / "calls.jsonl"
     scenario.write_text(json.dumps({"tier": tier, "slug": slug, "decision": decision, **(answers or {})}))
-    run_env = {k: v for k, v in os.environ.items() if k not in ("BRAND_CREATOR_ROOT", "PRINT_REGION", "POST_FACTS", "FRAMES_ARGS", "TAGLINE", "ADAPTERS_ARGS")}
-    run_env.update(PATH=f"{stub}:{os.environ['PATH']}", BRAND_CREATOR_DATA=str(tmp_path / "data"), STUB_SCENARIO=str(scenario), STUB_LOG=str(log), **env)
+    run_env = {k: v for k, v in os.environ.items() if k not in ("BRAND_CREATOR_ROOT", "PRINT_REGION", "POST_FACTS", "FRAMES_ARGS", "TAGLINE", "ADAPTERS_ARGS", "CLAUDE_PLUGIN_DATA")}
+    run_env.update({"PATH": f"{stub}:{os.environ['PATH']}", "BRAND_CREATOR_DATA": str(tmp_path / "data"), "STUB_SCENARIO": str(scenario), "STUB_LOG": str(log), **env})
+    run_env = {k: v for k, v in run_env.items() if v is not None}   # an `env` value of None unsets the variable
     r = subprocess.run(["bash", str(p / "tools" / "finish.sh")], capture_output=True, text=True, env=run_env, cwd=tmp_path, timeout=120)
     return Chain(r, log, p)
 
@@ -125,6 +126,44 @@ def chain(tmp_path: Path, *, tier: str = "standard", decision: dict | None = Non
 def report_of(c_path: Path) -> dict:
     """An answer of `shot --motion` that wrote its report: it prints the report's path, as the real one does, and the file is there."""
     return {"out": f"report: {c_path}", "write": [str(c_path)]}
+
+
+# ---------------------------------------------------------------- the data directory: neither variable set (a Claude Code Bash tool sets neither)
+
+def fake_home(tmp_path: Path, *set_up: str, half: tuple[str, ...] = ()) -> Path:
+    """A HOME with ~/.claude/plugins/data/brand-creator-<x>/ for each name: `set_up` ones hold the setup.json that `brand-creator setup` leaves, `half` ones do not."""
+    home = tmp_path / "home"
+    for n_, done in [(n_, True) for n_ in set_up] + [(n_, False) for n_ in half]:
+        d = home / ".claude" / "plugins" / "data" / f"brand-creator-{n_}"
+        d.mkdir(parents=True)
+        if done:
+            (d / "setup.json").write_text("{}\n")
+    home.mkdir(exist_ok=True)
+    return home
+
+
+def test_with_no_data_variable_the_one_set_up_data_directory_is_used_and_said(tmp_path):
+    home = fake_home(tmp_path, "mine", half=("inline",))   # an empty folder of another plugin copy does not count
+    c = chain(tmp_path, HOME=str(home), BRAND_CREATOR_DATA=None)
+    assert c.code == 0, c.out
+    assert f"finish.sh: data directory {home}/.claude/plugins/data/brand-creator-mine " in c.out and "BRAND_CREATOR_DATA picks another" in c.out
+    assert c.ran("state"), "the chain went on to run brand-creator"
+
+
+def test_with_no_data_variable_and_no_set_up_directory_the_chain_stops_with_exit_2_and_says_what_it_found(tmp_path):
+    c = chain(tmp_path, HOME=str(fake_home(tmp_path, half=("inline",))), BRAND_CREATOR_DATA=None)
+    assert c.code == 2 and "none set up was found" in c.out and "brand-creator setup" in c.out and not c.calls, c.out
+
+
+def test_with_no_data_variable_and_several_set_up_directories_the_chain_stops_with_exit_2_and_names_them(tmp_path):
+    c = chain(tmp_path, HOME=str(fake_home(tmp_path, "one", "two")), BRAND_CREATOR_DATA=None)
+    assert c.code == 2 and "several set-up ones" in c.out and "brand-creator-one" in c.out and "brand-creator-two" in c.out and not c.calls, c.out
+
+
+def test_a_data_variable_wins_over_the_directories_under_home(tmp_path):
+    c = chain(tmp_path, HOME=str(fake_home(tmp_path, "one", "two")))
+    assert c.code == 0, c.out
+    assert "finish.sh: data directory" not in c.out
 
 
 # ---------------------------------------------------------------- the motion step: the decision is always said; a proof that ran is gated by check
@@ -271,6 +310,17 @@ def test_the_board_of_the_latest_round_is_linted_again_after_the_press_kit_and_b
     assert names.index("board-lint") < names.index("staleness") < names.index("check") and names.index("emit presskit") < names.index("board-lint"), names
 
 
+def test_the_chain_ends_on_check_refresh_so_that_it_never_ends_on_a_report_its_own_steps_made_stale(tmp_path):
+    """The last step is `check --refresh` (it re-runs a stale page-check, contrast or board-lint first), also after a failed step: the step accounting is the same, so a failed step still ends the chain non-zero."""
+    c = chain(tmp_path, decision=OFF, rounds={2: True})
+    assert c.code == 0, c.out
+    assert [x for x in c.calls if x[:1] == ["check"]] == [["check", "--refresh"]], c.calls
+    c = chain(tmp_path / "b", decision=OFF, rounds={2: True}, answers={"board-lint": {"code": 2, "err": "error: refused"}})
+    assert c.calls[-1] == ["check", "--refresh"] and c.code == 2 and "check passed, but a step failed (board-lint rounds/r2/board.html)" in c.out, (c.calls, c.out)
+    c = chain(tmp_path / "c", decision=OFF, files=("BRAND.md",), ADAPTERS_ARGS="--brand-md", answers={"adapters": {"code": 1, "err": "error: edited by hand"}})
+    assert c.calls[-1] == ["check", "--refresh"] and c.code == 1, (c.calls, c.out)
+
+
 def test_the_latest_round_counts_by_its_number_not_by_its_name(tmp_path):
     c = chain(tmp_path, decision=OFF, rounds={2: True, 10: True, 9: True})
     assert c.code == 0 and [x for x in c.calls if x[:1] == ["board-lint"]] == [["board-lint", "rounds/r10/board.html"]], c.calls
@@ -405,7 +455,7 @@ def test_a_slug_that_is_not_set_means_no_skill_folder_and_is_no_failed_step(tmp_
 def test_a_state_that_cannot_be_read_is_a_failed_step_with_its_message_and_the_chain_still_runs_check(tmp_path, code, err):
     c = chain(tmp_path, decision=OFF, files=(SKILL, KIT), answers={"slug_fails": {"code": code, "err": err}})
     assert failed("state --get slug", code, err.removeprefix("error: ")) in c.out and c.out.count("finish.sh: step failed:") == 1, c.out
-    assert not c.ran("applied-skill") and not c.ran("kit") and c.ran("staleness", "--write") and c.calls.count(["check"]) == 1, c.calls    # nothing is guessed about the skill; check still writes the pack report
+    assert not c.ran("applied-skill") and not c.ran("kit") and c.ran("staleness", "--write") and c.calls.count(["check", "--refresh"]) == 1, c.calls    # nothing is guessed about the skill; check still writes the pack report
     assert c.code == code and f"check passed, but a step failed (state --get slug): the chain ends with exit {code}" in c.out, c.out
 
 
@@ -462,14 +512,14 @@ def test_the_first_of_two_failed_steps_decides_the_exit_code_and_both_are_said(t
     c = chain(tmp_path, decision=OFF, files=("BRAND.md", SKILL, KIT), ADAPTERS_ARGS="--brand-md",
               answers={"adapters": {"code": 1, "err": f"error: {EDITED}"}, "kit build": {"code": 2, "err": "error: no --yes"}})
     assert c.out.count("finish.sh: step failed:") == 2 and failed("kit build --yes", 2, "no --yes") in c.out, c.out
-    assert c.code == 1 and c.out.count("check passed, but a step failed (adapters --brand-md): the chain ends with exit 1") == 1 and c.calls.count(["check"]) == 1, c.out
+    assert c.code == 1 and c.out.count("check passed, but a step failed (adapters --brand-md): the chain ends with exit 1") == 1 and c.calls.count(["check", "--refresh"]) == 1, c.out
 
 
 def test_a_refused_board_and_a_refused_adapter_file_run_check_once_and_the_chain_does_not_pass(tmp_path):
     c = chain(tmp_path, decision=OFF, rounds={2: True}, files=("BRAND.md",), ADAPTERS_ARGS="--brand-md",
               answers={"board-lint": {"code": 2, "err": f"error: {REFUSED}"}, "adapters": {"code": 1, "err": f"error: {EDITED}"}})
     assert c.out.count("finish.sh: step failed:") == 2 and failed("adapters --brand-md", 1, EDITED) in c.out and failed_step(2) in c.out, c.out
-    assert c.calls.count(["check"]) == 1 and c.code == 1, c.out                              # the adapter file is the first failed step of the chain: its exit code ends it, and the later refused board does not hide it
+    assert c.calls.count(["check", "--refresh"]) == 1 and c.code == 1, c.out                              # the adapter file is the first failed step of the chain: its exit code ends it, and the later refused board does not hide it
     assert "check passed, but a step failed (adapters --brand-md): the chain ends with exit 1" in c.out and "check passed, but a step failed (board-lint" not in c.out
 
 

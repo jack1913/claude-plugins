@@ -1788,6 +1788,7 @@ def rule_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
 TELLS_FILE = "skills/brand-creator/references/page-tells.json"
 TELLS_CAP = 100                           # hits one tell row keeps in its `hits`
 ELEMENT_CAP_NOTE = "NOT verified beyond the first elements of a view (the page has more than the check walks)"
+TILT_CAP_NOTE = "NOT verified beyond the first forms and form controls found drawn rotated (the page has more of them than the check lists)"
 STRAY_CAP_NOTE = "NOT verified beyond the first boxes found outside their place (the page has more of them than the check lists, so the later ones were not looked at)"
 TELL_NEEDS_WALK = ("middot-run", "styled-div-mock", "three-equal-tiles", "stray-box")   # the tells found by walking every element, which stops at a cap
 SIDE_OF_PARENT = {"below": "below", "above": "above", "right": "to the right of", "left": "to the left of"}   # where a stray lies against its parent, as a phrase
@@ -1906,6 +1907,13 @@ def find_tells(measures: dict, cfg: dict) -> dict:
         for c in f.get("arrows", []):
             if c["gap_chars"] <= t["max_gap_chars"]:
                 add("arrow-glued", (c["sel"], c["label"]), v, c["sel"], f"\"{c['label']}\" has {c['glyph']} at its {c['edge']}")
+        t = th["tilted-form"]
+        for c in f.get("tilts", []):
+            if abs(c["angle"]) >= t["min_degrees"] - EPSILON:
+                whose = "its own transform" if c["by"] == "self" else f"the transform of {c['by']}"
+                add("tilted-form", (c["sel"], c["angle"]), v, c["sel"], f"the {c['tag']} is drawn rotated {c['angle']:g} degrees by {whose}")
+        if f.get("tilts_capped") and TILT_CAP_NOTE not in unverified["tilted-form"]:
+            unverified["tilted-form"].append(TILT_CAP_NOTE)
         t = th["middot-run"]
         for c in f.get("separators", []):
             if c["count"] >= t["min_separators"]:

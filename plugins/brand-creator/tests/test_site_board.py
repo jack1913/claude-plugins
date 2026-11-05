@@ -515,33 +515,32 @@ def test_a_hero_card_with_its_idea_line_is_clean(proj):
     assert not [x for x in rows(proj).values() if x["status"] == "warn"], "a hero board with its idea lines has no warning at all"
 
 
-def test_a_hero_card_without_an_idea_line_warns_in_this_release_and_names_the_card(proj):
-    """Missing: one warning, never a failure (a board made before the line existed must still lint); the row says it is a failure from the next release."""
+def test_a_hero_card_without_an_idea_line_fails_site_fields_and_names_the_card(proj):
+    """Missing: site:fields fails (it was a warning in 0.7.0) and names the card; nothing else on the board fails."""
     mutate(board_of(proj), 'data-field="idea"', 'data-removed="idea"')   # the first card only: Ledger
     r = lint(proj)
-    assert r.returncode == 0 and failed(proj) == [], r.stdout
+    assert r.returncode == 1 and failed(proj) == ["site:fields"], r.stdout
     row = rows(proj)["site:fields"]
-    assert row["status"] == "warn" and "Ledger: Idea is missing or empty" in row["detail"] and "Atlas" not in row["detail"], row
-    assert "a warning in this release, a failure in the next" in row["detail"], row
-    assert [x for x, v in rows(proj).items() if v["status"] == "warn"] == ["site:fields"], "the idea line is the only warning of the board"
+    assert row["status"] == "fail" and "Ledger: Idea is missing or empty" in row["detail"] and "Atlas" not in row["detail"], row
+    assert "a warning in this release" not in row["detail"], row
 
 
-def test_a_hero_card_with_an_empty_idea_line_warns_in_this_release(proj):
+def test_a_hero_card_with_an_empty_idea_line_fails_site_fields(proj):
     mutate(board_of(proj), IDEA_LINE, '<dd data-field="idea"></dd>')
     r = lint(proj)
-    assert r.returncode == 0 and failed(proj) == [], r.stdout
+    assert r.returncode == 1 and failed(proj) == ["site:fields"], r.stdout
     row = rows(proj)["site:fields"]
-    assert row["status"] == "warn" and "Ledger: Idea is missing or empty" in row["detail"] and "Atlas" not in row["detail"], row
+    assert row["status"] == "fail" and "Ledger: Idea is missing or empty" in row["detail"] and "Atlas" not in row["detail"], row
     mutate(board_of(proj), '<dd data-field="idea"></dd>', '<dd data-field="idea">   </dd>')   # a line of spaces is empty too
-    assert lint(proj).returncode == 0 and rows(proj)["site:fields"]["status"] == "warn"
+    assert lint(proj).returncode == 1 and rows(proj)["site:fields"]["status"] == "fail"
 
 
 def test_every_hero_card_without_the_idea_line_is_named(proj):
     mutate(board_of(proj), 'data-field="idea"', 'data-removed="idea"', count=2)
     r = lint(proj)
-    assert r.returncode == 0, r.stdout
+    assert r.returncode == 1, r.stdout
     row = rows(proj)["site:fields"]
-    assert row["status"] == "warn" and "Ledger: Idea is missing or empty" in row["detail"] and "Atlas: Idea is missing or empty" in row["detail"], row
+    assert row["status"] == "fail" and "Ledger: Idea is missing or empty" in row["detail"] and "Atlas: Idea is missing or empty" in row["detail"], row
 
 
 def test_an_idea_line_belongs_to_its_own_card(proj):
@@ -552,7 +551,7 @@ def test_an_idea_line_belongs_to_its_own_card(proj):
     board.write_text(board.read_text(encoding="utf-8").replace(cards[1], cards[1].replace('data-field="idea"', 'data-removed="idea"')), encoding="utf-8")
     r = lint(proj)
     row = rows(proj)["site:fields"]
-    assert r.returncode == 0 and row["status"] == "warn" and "Atlas: Idea is missing or empty" in row["detail"] and "Ledger" not in row["detail"], row
+    assert r.returncode == 1 and row["status"] == "fail" and "Atlas: Idea is missing or empty" in row["detail"] and "Ledger" not in row["detail"], row
 
 
 def test_a_failing_field_still_fails_the_row_when_the_idea_line_is_missing_too(proj):
@@ -563,13 +562,30 @@ def test_a_failing_field_still_fails_the_row_when_the_idea_line_is_missing_too(p
     assert "Ledger: Cost is missing or empty" in detail(proj, "site:fields") and "Ledger: Idea is missing or empty" in detail(proj, "site:fields")
 
 
-def test_the_idea_line_is_a_hero_line_a_page_card_has_none(tmp_path):
-    """The pages stage asks for no idea: its cards carry none, and the row passes as before."""
+def test_a_page_card_with_its_idea_line_passes_site_fields(tmp_path):
+    """The pages stage asks for an Idea line on each card (the page's one idea in the brand's world): present, the row passes."""
     p = pages_project(tmp_path)
-    assert 'data-field="idea"' not in re.sub(r"<!--.*?-->", "", board_of(p, 3).read_text(encoding="utf-8"), flags=re.S)
+    assert board_of(p, 3).read_text(encoding="utf-8").count(IDEA_LINE) == 2
     r = lint3(p)
     assert r.returncode == 0, r.stdout
-    assert rows(p)["site:fields"]["status"] == "pass" and "Idea" not in detail(p, "site:fields")
+    assert rows(p)["site:fields"]["status"] == "pass"
+
+
+def test_a_page_card_without_an_idea_line_is_a_warning_in_this_release(tmp_path):
+    """Missing: site:fields warns and names the page and the next release; the exit stays 0 (it fails from the next release)."""
+    p = pages_project(tmp_path)
+    mutate(board_of(p, 3), 'data-field="idea"', 'data-removed="idea"')   # the first page card only
+    r = lint3(p)
+    row = rows(p)["site:fields"]
+    assert r.returncode == 0, r.stdout
+    assert row["status"] == "warn" and "start: Idea is missing or empty" in row["detail"] and "pricing" not in row["detail"] and "next release" in row["detail"], row
+
+
+def test_a_failing_field_still_fails_a_page_card_row_whatever_its_idea(tmp_path):
+    p = pages_project(tmp_path)
+    mutate(board_of(p, 3), 'data-field="idea"', 'data-removed="idea"')
+    mutate(board_of(p, 3), 'data-field="cost"', 'data-removed="cost"')
+    assert lint3(p).returncode == 1 and rows(p)["site:fields"]["status"] == "fail"
 
 
 # ---------------------------------------------------------------- page:data-board, page:site-stage

@@ -50,6 +50,18 @@ already says.
    keeps its own copy of it, never a link into a product repository that will change.
 4. Nothing under `history/` is edited, moved or removed. A correction is a new round and a new freeze.
 
+## Method: cleaning old rounds
+
+Before the first push of a project that is mirrored or shared, offer to clean the old rounds. Keep the boards, what they show,
+the builders (`_build/`, `tools/`), every `.md` file and every path the book, the kit, the tools or the state name; list the rest
+in `qa/<date>-cleanup-removed.txt`, one file per line (`git rm` takes no folder without `-r`), and check the links before and after. The guard blocks the agent from
+`git rm` in a brand project, so the owner runs one line as a `!` command (the tested form; `git rm --pathspec-from-file` cannot be
+combined with other pathspec arguments):
+
+```
+cd <project> && tr '\n' '\0' < qa/<date>-cleanup-removed.txt | xargs -0 git rm -q --
+```
+
 ## Method: decision records
 
 - `DECISIONS.md` takes every owner decision at a gate: the gate, what was decided (stable direction names), the reason

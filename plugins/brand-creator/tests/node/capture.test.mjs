@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import http from "node:http";
 import crypto from "node:crypto";
+import zlib from "node:zlib";
 import { spawn } from "node:child_process";
 import { needSetup, bc, makeProject, BIN, DATA } from "./_helpers.mjs";
 
@@ -370,4 +371,121 @@ test("capture --frames: it goes with a page of the project, not with --url", (t)
   assert.equal(r.status, 2, r.stdout + r.stderr);
   assert.match(r.stderr, /--frames goes with a page of the project, not with --url/);
   assert.ok(!fs.existsSync(path.join(p, "research/site-refs")), "nothing is written");
+});
+
+// ---------------------------------------------------------------- capture <page> --reveal: what the page shows once it is scrolled into view (group 5)
+// A section that is hidden until an IntersectionObserver sees it. It is tall, far below the first screen and painted red (#c03), so a still shows it or not by a count of red pixels.
+
+/** The number of pixels of a PNG (8 bit, RGB or RGBA, not interlaced: what Chromium writes) that are the brand red #c03. */
+function redPixels(file) {
+  const d = fs.readFileSync(file);
+  assert.equal(d[24], 8, "8 bit PNG"); assert.equal(d[28], 0, "not interlaced");
+  const bpp = d[25] === 6 ? 4 : 3, w = d.readUInt32BE(16), h = d.readUInt32BE(20);
+  const chunks = [];
+  for (let i = 8; i < d.length;) { const n = d.readUInt32BE(i), type = d.toString("latin1", i + 4, i + 8); if (type === "IDAT") chunks.push(d.subarray(i + 8, i + 8 + n)); i += 12 + n; }
+  const raw = zlib.inflateSync(Buffer.concat(chunks)), stride = w * bpp, out = Buffer.alloc(stride * h);
+  for (let y = 0; y < h; y++) {
+    const f = raw[y * (stride + 1)], line = raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1));
+    for (let x = 0; x < stride; x++) {
+      const a = x >= bpp ? out[y * stride + x - bpp] : 0, b = y ? out[(y - 1) * stride + x] : 0, c = x >= bpp && y ? out[(y - 1) * stride + x - bpp] : 0;
+      const pa = Math.abs(b - c), pb = Math.abs(a - c), pc = Math.abs(a + b - 2 * c);
+      const pred = [0, a, b, (a + b) >> 1, pa <= pb && pa <= pc ? a : pb <= pc ? b : c][f];
+      out[y * stride + x] = (line[x] + pred) & 255;
+    }
+  }
+  let n = 0;
+  for (let i = 0; i < out.length; i += bpp) if (out[i] === 0xcc && out[i + 1] === 0 && out[i + 2] === 0x33) n++;
+  return n;
+}
+
+const REVEAL_HTML = "<!doctype html><html><head><meta charset=utf-8><title>Ledger, a demo page</title><link rel=stylesheet href=style.css></head>"
+  + "<body><h1>Ledger</h1><div class=tall></div><section class=late>Late</section>"
+  + "<script>new IntersectionObserver((es,o)=>es.forEach((e)=>{if(e.isIntersecting){e.target.classList.add('in');o.unobserve(e.target)}})).observe(document.querySelector('.late'))</script></body></html>";
+const REVEAL_CSS = CSS + ".tall{height:1500px}.late{height:300px;background:#c03;opacity:0;transition:opacity 200ms}.late.in{opacity:1}";
+
+test("capture --reveal: a section that appears only when scrolled into view is hidden in the stills without the flag and shown with it, and a second run writes the same bytes", (t) => {
+  if (needSetup(t)) return;
+  const p = makeProject();
+  const page = writeMoving(p, "rounds/r1/Late", REVEAL_CSS, REVEAL_HTML);
+  const dir = path.join(p, "rounds/r1/Late/shots");
+  const plain = bc(["capture", page, "--project", p]);
+  assert.equal(plain.status, 0, plain.stdout + plain.stderr);
+  assert.equal(redPixels(path.join(dir, "1440-light-full.png")), 0, "without --reveal the section is still hidden");
+  assert.ok(!("reveal" in record(dir)), "a plain run records no reveal");
+  assert.ok(!/reveal/.test(plain.stdout), plain.stdout);
+  const r = bc(["capture", page, "--project", p, "--reveal"]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.ok(redPixels(path.join(dir, "1440-light-full.png")) > 1440 * 300 * 0.9, "with --reveal the full page shows the section");
+  assert.equal(redPixels(path.join(dir, "1440-light.png")), 0, "the first screen is taken back at the top: the section is below it");
+  assert.equal(redPixels(path.join(dir, "390-dark.png")), 0);
+  const rec = record(dir);
+  assert.equal(rec.reveal.capped, false);
+  assert.ok(rec.reveal.steps >= 2, JSON.stringify(rec.reveal));
+  assert.match(r.stdout, /reveal: each page was scrolled/);
+  assert.ok(!/CAPPED/.test(r.stdout), r.stdout);
+  const before = fs.readFileSync(path.join(dir, "capture.json"));
+  const again = bc(["capture", page, "--project", p, "--reveal"], { env: { BRAND_CREATOR_TODAY: "2026-11-30" } });
+  assert.equal(again.status, 0, again.stdout + again.stderr);
+  assert.match(again.stdout, /0 of 6 file\(s\) written/);
+  assert.ok(fs.readFileSync(path.join(dir, "capture.json")).equals(before), "capture.json stays byte for byte, its date included");
+});
+
+test("capture --reveal: the walk waits at every step, so a section a scroll handler reveals a moment after the scroll stops is shown", (t) => {
+  if (needSetup(t)) return;
+  const p = makeProject();
+  // the handler waits 150 ms after the last scroll event, then reveals the section if it is in view: a walk that did not wait at each step would be back at the top by then
+  const html = REVEAL_HTML.replace(/<script>.*<\/script>/, "<script>let t;addEventListener('scroll',()=>{clearTimeout(t);t=setTimeout(()=>{const s=document.querySelector('.late'),r=s.getBoundingClientRect();if(r.top<innerHeight&&r.bottom>0)s.classList.add('in')},150)})</script>");
+  const page = writeMoving(p, "rounds/r1/Debounced", REVEAL_CSS.replace("transition:opacity 200ms", ""), html);
+  const r = bc(["capture", page, "--project", p, "--reveal"]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.ok(redPixels(path.join(p, "rounds/r1/Debounced/shots/1440-light-full.png")) > 1440 * 300 * 0.9, "the section revealed 150 ms after the scroll is in the full page");
+});
+
+test("capture --reveal: a walk that takes longer than --timeout stops there and says so", (t) => {
+  if (needSetup(t)) return;
+  const p = makeProject();
+  // every scroll starts a finite 1.2 s animation, which the walk waits for at each step: with --timeout 1000 the walk of a very long page stops after its first step
+  const html = REVEAL_HTML.replace(/<script>.*<\/script>/, "<script>addEventListener('scroll',()=>document.querySelector('h1').animate([{opacity:0.5},{opacity:1}],{duration:1200}))</script>");
+  const page = writeMoving(p, "rounds/r1/Slow", REVEAL_CSS.replace(".tall{height:1500px}", ".tall{height:60000px}"), html);
+  const r = bc(["capture", page, "--project", p, "--reveal", "--wait", "0", "--timeout", "1000"]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const rec = record(path.join(p, "rounds/r1/Slow/shots"));
+  assert.equal(rec.reveal.capped, true); assert.equal(rec.reveal.timed_out, true);
+  assert.ok(rec.reveal.steps < 40, JSON.stringify(rec.reveal));
+  assert.match(r.stdout, /CAPPED: a walk took longer than --timeout/);
+});
+
+test("capture --reveal: a page that scrolls inside an element has that element walked, and a page with overflow hidden is still walked (a script can scroll it), never called long", (t) => {
+  if (needSetup(t)) return;
+  const p = makeProject();
+  const snap = REVEAL_CSS + "html,body{height:100%;margin:0;overflow:hidden}main{height:100%;overflow-y:scroll;scroll-snap-type:y mandatory}";
+  const html = REVEAL_HTML.replace("<body><h1>Ledger</h1><div class=tall></div><section class=late>Late</section>", "<body><main><h1>Ledger</h1><div class=tall></div><section class=late>Late</section></main>");
+  const page = writeMoving(p, "rounds/r1/Snap", snap, html);
+  const r = bc(["capture", page, "--project", p, "--reveal", "--wait", "0"]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const rec = record(path.join(p, "rounds/r1/Snap/shots"));
+  assert.equal(rec.reveal.inner_scroller, true, JSON.stringify(rec.reveal));
+  assert.ok(rec.reveal.steps >= 1 && !rec.reveal.not_scrolled, JSON.stringify(rec.reveal));
+  assert.match(r.stdout, /scrolls inside an element/);
+  const clipped = writeMoving(p, "rounds/r1/Clipped", REVEAL_CSS + "html{overflow:hidden}", REVEAL_HTML);
+  const c = bc(["capture", clipped, "--project", p, "--reveal", "--wait", "0"]);
+  assert.equal(c.status, 0, c.stdout + c.stderr);
+  const crec = record(path.join(p, "rounds/r1/Clipped/shots"));
+  assert.ok(crec.reveal.steps >= 1 && !crec.reveal.not_scrolled && crec.reveal.capped === false, JSON.stringify(crec.reveal));
+  assert.ok(!/CAPPED|NOT SCROLLED/.test(c.stdout), c.stdout);
+});
+
+test("capture --reveal: a page longer than the walk is walked as far as the cap allows and says so; --url refuses the flag", (t) => {
+  if (needSetup(t)) return;
+  const p = makeProject();
+  const css = REVEAL_CSS.replace(".tall{height:1500px}", ".tall{height:60000px}");
+  const page = writeMoving(p, "rounds/r1/Long", css, REVEAL_HTML);
+  const r = bc(["capture", page, "--project", p, "--reveal", "--wait", "0"]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const rec = record(path.join(p, "rounds/r1/Long/shots"));
+  assert.deepEqual(rec.reveal, { steps: 40, capped: true });
+  assert.match(r.stdout, /CAPPED/);
+  const url = bc(["capture", "--url", "http://127.0.0.1:9/", "--name", "nowhere", "--reveal", "--project", p]);
+  assert.equal(url.status, 2, url.stdout + url.stderr);
+  assert.match(url.stdout + url.stderr, /--reveal goes with a page of the project/);
 });

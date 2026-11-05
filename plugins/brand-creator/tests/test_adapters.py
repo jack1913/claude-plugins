@@ -1073,3 +1073,15 @@ def test_an_action_under_4_5_to_1_does_not_make_the_adapters_fail_while_contrast
     assert rep["status"] == "pass" and row(pack, "design-md:lint", "adapters")["status"] == "pass"
     assert not [x for x in rep["results"] if x["id"].startswith("design-md:lint") and x["status"] == "fail"]
     assert "action-on-bg" not in (pack / "DESIGN.md").read_text()
+
+
+def test_internal_context_in_brand_state_reaches_no_adapter_applied_skill_or_kit(pack):
+    marker = "INTERNAL-MARKER the program does not make the bank transfer"
+    mutate(pack / "BRAND-STATE.md", "## Internal context\n", f"## Internal context\n\n- {marker}\n")      # the template carries the section
+    assert marker in (pack / "BRAND-STATE.md").read_text()
+    generate(pack)
+    assert bc("kit", "build", "--yes", project=pack).returncode == 0
+    files = [pack / "BRAND.md", pack / "DESIGN.md"] + [f for f in (pack / ".claude" / "skills" / "acme-brand").rglob("*") if f.is_file()]
+    assert len(files) > 3
+    for f in files:
+        assert "INTERNAL-MARKER" not in f.read_text(encoding="utf-8", errors="ignore"), f

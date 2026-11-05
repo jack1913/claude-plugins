@@ -955,6 +955,9 @@ const TELL = {
  *  `arrows`: [{sel, label (80), edge ("start" or "end"), glyph, gap_chars}]: shown links, buttons and submit inputs whose label (the content of ::before and ::after included) starts or
  *  ends with an arrow, a chevron, a double angle, -> or => next to other text; `gap_chars` is the number of white space characters between them: a run of spaces, tabs and line breaks is one (the browser
  *  collapses it), a no-break or an em space is each one (the browser draws every one of them).
+ *  `tilts`: [{sel, tag, angle, by}]: shown forms and form controls (input other than hidden, select, textarea, and a button inside a form) drawn rotated: `angle` is the rotation in degrees (-180 to 180) of the element's own and its ancestors'
+ *  `transform` and `rotate`, composed, `by` the selector of the element whose own transform or rotate turns it first (its own, then the nearest ancestor), only for an angle other than 0 (to two decimals); an element turned in 3D, mirrored, skewed or scaled unevenly (by itself or an ancestor) is left out; a control inside a form drawn at
+ *  the same angle as the form is not listed again. `tilts_capped` is set when there were more than TELL.list of them.
  *  `separators`: [{sel, text (80), count, via}]: elements whose own text holds middle dots or bullets with text on both sides on one line (`via: "text"`; a child element is one unit, a <br> or a block child
  *  ends the line, so a dot that starts a line is a list marker and is not counted), and parents whose children carry a ::before or ::after that is a single dot (`via: "pseudo"`, `count` the children
  *  that do and have a sibling beside them in one row; a stacked list with a marker on each item separates nothing).
@@ -1069,6 +1072,57 @@ async function tellFacts(page, request = {}) {
       const a = lead.exec(spaced), z = trail.exec(spaced);
       if (a) arrows.push({ sel: H.selector(el), label: label.slice(0, 80), edge: "start", glyph: a[1], gap_chars: a[2].length });
       else if (z) arrows.push({ sel: H.selector(el), label: label.slice(0, 80), edge: "end", glyph: z[2], gap_chars: z[1].length });
+    }
+
+    // forms and form controls drawn rotated
+    const UNMEASURED = "unmeasured";   // a 3D turn or a mirror: not an in-plane rotation, so not measured (the element is left out)
+    const turnOf = (el) => {   // the 2D matrix of one element's own `rotate` and `transform`, null when it has neither, UNMEASURED for a 3D turn or a mirror
+      const cs = getComputedStyle(el);
+      let m = null;
+      if (cs.rotate && cs.rotate !== "none") {
+        const parts = cs.rotate.trim().split(/\s+/), last = parts[parts.length - 1], n = parseFloat(last);
+        // "30deg" and "z 30deg" turn in the plane; "x 30deg", "y 30deg" and a vector other than 0 0 1 turn in 3D
+        const axis = parts.slice(0, -1), inPlane = !axis.length || (axis.length === 1 && axis[0] === "z")
+          || (axis.length === 3 && parseFloat(axis[0]) === 0 && parseFloat(axis[1]) === 0 && parseFloat(axis[2]) > 0);
+        if (!inPlane) return UNMEASURED;
+        if (Number.isFinite(n)) {
+          const deg = /rad$/.test(last) ? n * 180 / Math.PI : /turn$/.test(last) ? n * 360 : /grad$/.test(last) ? n * 0.9 : n;
+          m = new DOMMatrix().rotate(deg);
+        }
+      }
+      if (cs.transform && cs.transform !== "none") {
+        let t = null;
+        try { t = new DOMMatrix(cs.transform); } catch (e) { /* a transform that cannot be read is not a rotation we can measure */ }
+        if (t) {
+          if (!t.is2D || t.a * t.d - t.b * t.c < 0) return UNMEASURED;   // rotateX/Y, perspective, scaleX(-1): a 3D turn or a mirror
+          const eps = 1e-3 * Math.max(1, Math.hypot(t.a, t.b));
+          if (Math.abs(t.a - t.d) > eps || Math.abs(t.b + t.c) > eps) return UNMEASURED;   // a skew or an uneven scale is not a rotation (skewY would read as one)
+          m = m ? m.multiply(t) : t;
+        }
+      }
+      return m;
+    };
+    const angleOf = (m) => { let a = Math.atan2(m.b, m.a) * 180 / Math.PI; if (a <= -180) a += 360; return Math.round(a * 100) / 100 || 0; };
+    const tilts = [];
+    let tiltsCapped = false;
+    const formAngle = new Map();
+    for (const el of document.querySelectorAll("form, input:not([type=hidden]), select, textarea, button")) {
+      if (el.matches("button") && !el.closest("form")) continue;
+      if (!boxed(el)) continue;
+      let total = new DOMMatrix(), by = null, unmeasured = false;
+      for (let a = el; a && a.nodeType === 1; a = a.parentElement) {
+        const m = turnOf(a);
+        if (m === UNMEASURED) { unmeasured = true; break; }
+        if (m) { total = m.multiply(total); if (by === null && angleOf(m) !== 0) by = a; }
+      }
+      if (unmeasured) continue;
+      const angle = angleOf(total);
+      if (el.matches("form")) formAngle.set(el, angle);
+      if (angle === 0 || !by) continue;
+      const form = el.closest("form");
+      if (!el.matches("form") && form && formAngle.get(form) === angle) continue;   // it is turned with its form: the form is the hit
+      if (tilts.length >= K.list) { tiltsCapped = true; break; }
+      tilts.push({ sel: H.selector(el), tag: el.localName, angle, by: by === el ? "self" : H.selector(by) });
     }
 
     // middle dots between items
@@ -1258,7 +1312,7 @@ async function tellFacts(page, request = {}) {
                                 headings: [...band.querySelectorAll(HEADING)].filter(boxed).length + (band.matches(HEADING) ? 1 : 0),
                                 actions: [...band.querySelectorAll(CONTROLS)].filter(boxed).length } : null;
 
-    return { tell_facts: { viewport: { width: vw, height: vh }, eyebrow, arrows, separators, hero, boxes, tiles, headings, details, last_band, ...(truncated ? { truncated: true } : {}) } };
+    return { tell_facts: { viewport: { width: vw, height: vh }, eyebrow, arrows, tilts, ...(tiltsCapped ? { tilts_capped: true } : {}), separators, hero, boxes, tiles, headings, details, last_band, ...(truncated ? { truncated: true } : {}) } };
   }, TELL);
   const stray = await strayFacts(page, request.stray_min_px);   // `strays`, see strayFacts; the same walk is made again at a tall window (`strays_tall`, render.mjs measureView)
   facts.tell_facts.strays = stray.strays;

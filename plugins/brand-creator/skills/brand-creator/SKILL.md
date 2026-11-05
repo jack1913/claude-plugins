@@ -217,10 +217,10 @@ Every board round, in this order (the `/brand-creator:round` skill wraps it). Ro
 (`templates/style-board.html`, P1s) and round 1 does not start until G1s is recorded (a pick, "skipped by owner" or "n/a");
 after a full rejection the next pick board also waits for a new style board and a new pick (G2b-a):
 
-1. New folder `rounds/r<N>/`; from round 2 copy the previous round first (`cp -R rounds/r<N-1> rounds/r<N>`).
+1. New folder `rounds/r<N>/`; from round 2 copy the previous round first (`rsync -a --exclude shots/ --exclude cold-review.md --exclude capture.json rounds/r<N-1>/ rounds/r<N>/`: the per-round shots, `cold-review.md` and `capture.json` stay behind, they point at the old round).
    Earlier rounds are never edited; the hook blocks it. Marks that need drawing are drawn first, on the session's drawing
    engine, and come in as SVG masters with a `SOURCE.md` ([drawing-engines.md](references/drawing-engines.md)). A motion
-   round is the exception: the first starts as an empty folder, a later one copies the previous motion round (the round skill).
+   round and a site board are the exceptions (the round skill: a later hero board copies only the picked variants).
 2. Build the round page at `rounds/r<N>/board.html` from `${CLAUDE_PLUGIN_ROOT}/templates/round-page.html`
    (per-direction deep boards from `templates/board.html` go in `rounds/r<N>/<direction>/board.html`; a motion round from
    `templates/motion-board.html`). Fill every

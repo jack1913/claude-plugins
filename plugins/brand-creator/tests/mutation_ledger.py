@@ -34,6 +34,9 @@ PT = "tests/test_page_check.py::"
 
 # group, id, file, the text, its replacement, the tests that must catch it (pytest node ids, relative to the plugin folder)
 LEDGER: list[dict] = [
+    dict(group="finish-chain", id="final-check-without-refresh", file=TPL,
+         old='"${BC[@]}" check --refresh\n', new='"${BC[@]}" check\n',
+         tests=[ST + "test_the_chain_ends_on_check_refresh_so_that_it_never_ends_on_a_report_its_own_steps_made_stale"]),
     # ---- templates/finish.sh.tpl: what the chain does at each step, and when it stops
     dict(group="finish-chain", id="failing-proof-stops", file=TPL,
          old='if [ "$rc" -eq 1 ]; then echo "finish.sh: the motion proof failed (see above); the chain goes on and check fails the report" >&2\n',
@@ -534,10 +537,13 @@ LEDGER: list[dict] = [
          tests=["tests/test_contrast_tokens.py::test_contrast_adapt_and_check_hold_the_owners_naming_to_one_rule"]),
     # ---- the site round after its first real use (group 4): the hero's idea, the owner verdict, the stray-box tell, dropped fonts, the finish chain's adapter step, the mock-up's
     #      page band and list union, the error word beside the code, and the try-out shared only with the owner's yes
-    dict(group="site-round", id="idea-warning-off", file="scripts/boardlib/siteboard.py",
+    dict(group="site-round", id="idea-failure-off", file="scripts/boardlib/siteboard.py",
          old="ideas = [p for v in variants for p in idea_problems(v)] if idea else []", new="ideas = []",
-         tests=["tests/test_site_board.py::test_a_hero_card_without_an_idea_line_warns_in_this_release_and_names_the_card",
-                "tests/test_site_board.py::test_a_hero_card_with_an_empty_idea_line_warns_in_this_release"]),
+         tests=["tests/test_site_board.py::test_a_hero_card_without_an_idea_line_fails_site_fields_and_names_the_card",
+                "tests/test_site_board.py::test_a_hero_card_with_an_empty_idea_line_fails_site_fields"]),
+    dict(group="site-round", id="page-idea-warning-off", file="scripts/boardlib/siteboard.py",
+         old=', optional=("from-refs",), idea_warns=True)', new=', optional=("from-refs",))',
+         tests=["tests/test_site_board.py::test_a_page_card_without_an_idea_line_is_a_warning_in_this_release"]),
     dict(group="site-round", id="owner-verdict-refused", file="scripts/boardlib/siteboard.py",
          old='COLD_VERDICTS = ("ship", "fix", "owner")', new='COLD_VERDICTS = ("ship", "fix")',
          tests=["tests/test_site_board.py::test_a_second_cold_review_may_say_owner_and_the_board_lints_clean"]),

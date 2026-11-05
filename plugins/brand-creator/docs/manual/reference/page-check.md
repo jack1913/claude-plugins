@@ -209,6 +209,12 @@ Patterns that make a page look like any template. Each warns and says where; it 
   the page, a section with its own heading: the boxes inside it are still checked.
 - **Three equal tiles in a row:** at 1024 pixels wide or more, exactly three blocks side by side, of equal width and
   similar height, each with a heading.
+- **A form drawn rotated:** a form, or a field, drop-down, text area or button of a form, turned by 0.1 degrees or more
+  either way, by its own turn or by one of the boxes round it, such as a form on a tilted paper sheet. Forms are never
+  tilted: a tilted field is harder to read and to use. A form on a tilted sheet is one warning, naming the form and the
+  box that turns it. A tilted picture or card with no field in it doesn't count, and neither does a button outside a
+  form. A skew, a 3D turn or a mirrored form isn't measured. If the page has more than 100 turned forms or fields, the line says "not
+  verified" beyond the first ones.
 
 ## Boxes left behind by a movement
 
