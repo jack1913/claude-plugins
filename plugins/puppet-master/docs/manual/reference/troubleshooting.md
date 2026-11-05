@@ -11,7 +11,7 @@ Find what you see, then do what's next to it.
 | `changed (new session id …)` or `has a new session id` | That window was cleared or restarted. Tell Claude whether it is clean now |
 | A resumed master session's commands fail | Tell it to run its start-up steps again: list the sessions, adopt itself and any session shown as `changed`, then measure. The helper refuses a session with a new session id until it is adopted again |
 | `is already editing … unless both jobs pass --scope` | Two jobs share that folder only when each names the folders it writes and only one runs git. Otherwise use a second checkout, or wait |
-| `MISMATCH … tier …` | That session runs a different model or effort than the job needs. Paste the `/model` and `/effort` lines Claude gives you into that window |
+| `MISMATCH … tier …` | That session runs a different model or effort than the job needs. Let Claude start a worker on the right tier, or keep the window: run `/model` and press `s` on the row Claude names, then `/effort` and press `s` at the level. `s` changes that session only; a typed `/model <name>` saves your default |
 | `spawn: name a --tier or --effort` | The master started a worker without saying how strong it should be. Tell it the job's tier: `creative` or `mechanical` |
 | `WARN near compaction` | That session is near the size where it auto-compacts. Let it finish its task |
 | `DONE? run finish` on a session's line | That session reported its job done. Tell the master to close the job |

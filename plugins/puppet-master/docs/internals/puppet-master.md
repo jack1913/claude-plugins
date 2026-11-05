@@ -59,8 +59,10 @@ All three scripts use Node built-ins only, with no npm and no `package.json`.
 - **Every job names its tier.** `creative` (design, writing, judgment, review) needs an Opus model at high effort or
   more; `mechanical` (renames, moves, reformatting, checks) needs a model other than Opus at medium effort or less.
   `assign --tier` and `pick --tier` compare the tier with the session's transcript and print `ok`, `unchecked` (no
-  turn yet) or `MISMATCH`. A mismatch warns and does not refuse: the master gives the user `/model` and `/effort`
-  lines to paste, and never changes a session's settings itself. A fresh session is asked for its model only. Its
+  turn yet) or `MISMATCH`. A mismatch warns and does not refuse. After it, both commands print session-only paste
+  lines (`<name>: /model`, then `s` on the tier's model row; `<name>: /effort`, then `s` at its level). On a mismatch
+  from `pick`, the master spawns a worker on the tier instead. It never changes a session's settings itself (see
+  [No model switch in the mod](#no-model-switch-in-the-mod)). A fresh session is asked for its model only. Its
   effort is read from its transcript after the first turn, because workers misreport their own effort: on
   2026-11-01 three of three said `low` while their transcripts said medium, medium and high.
 - **A spawn always names its effort.** `spawn` passes `--model` and `--effort` to `claude --bg`: `creative` gives
@@ -290,6 +292,29 @@ and a Map for the files.
 as `waiting`, which is in `BUSY_STATES` and not in `IDLE_STATES`, so `compact`, `clear` and `cycle` refuse it and the
 checkout lock counts an `unknown` session in that state as editing (before, only `compact` and `clear` checked
 `status`). Idle means state `done` or `idle` and no pending dialog.
+
+### No model switch in the mod
+
+Researched on 2026-11-05 (Claude Code 2.1.318), and not built: the owner chose "No: paste lines + spawn". The probe
+notes are in the checkout's untracked `scratch/model-switch-probe-report.md`.
+
+- **A typed `/model <name>` or `/effort <level>` saves the user's default.** "Typing `/model <name>` directly behaves
+  like `Enter`", which writes `model` to the user's settings, background sessions included. A level typed after
+  `/effort` is saved per model under `modelSettings`. Only `s` in the picker or the slider switches one session
+  (**verified**: docs, model-config "Setting your model" and "Adjust effort level", agent-view "Set the model,
+  effort, and fast mode"). So a mod running `$.command.run({ command: "model", args })` would change the default of
+  every new session, and the paste lines use the `s` form. The mods API has `$.session.model()` and no setter
+  (**verified**: mods types, `$.session`).
+- **A `turn.step` hook can switch a session without writing settings, but the status line does not follow.** A probe
+  mod on a throwaway `--bg` Haiku session rewrote each main-loop request to `sonnet` at `medium`. The transcript's
+  `api-request` and the reply both recorded `claude-sonnet-5-5`, and `puppet list` printed `model claude-sonnet-5-5
+  medium`. The SHA-256 of the user's and the checkout's `settings.json` stayed the same across four snapshots. But
+  the status line was given `claude-haiku-5-5` at `low` on every call, `$.session.model()` stayed Haiku, and the
+  switched model, asked its name, answered "Haiku 5.5" (**verified**: the probe, background id `511c4a9b`, stopped
+  and removed).
+- **What is built instead.** A `MISMATCH` from `pick` leads to `spawn`, which passes `--model` and `--effort` at launch
+  and saves nothing. A window the user keeps for the job gets the session-only paste lines (`mismatchPaste` in
+  `puppet.mjs`).
 
 ## The analyst and its logs
 

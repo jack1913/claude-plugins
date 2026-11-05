@@ -659,6 +659,15 @@ export function tierLine(name, tier, facts) {
   return ok ? `${name} tier ${tier}: ok (${has})` : `MISMATCH ${name} tier ${tier} needs ${TIERS[tier]}; it runs ${has}`;
 }
 
+// The line printed after a MISMATCH: the session-only paste form. A typed `/model <name>` or
+// `/effort <level>` saves the user's default for new sessions (docs: model-config, "Setting
+// your model" and "Adjust effort level"); `s` in the picker or slider switches this session only.
+export function mismatchPaste(name, tier) {
+  const { model, effort } = TIER_LAUNCH[tier];
+  const row = model[0].toUpperCase() + model.slice(1);
+  return `give the user "${name}: /model, then s on the ${row} row" and "${name}: /effort, then s at ${effort}" to paste (this session only; never a typed /model ${model} or /effort ${effort}, which saves the user's default)`;
+}
+
 // The model and effort of a listed session, read from its transcript; nulls when fresh.
 function sessionFacts(deps, agent) {
   const file = findTranscript(projectsDir(deps), agent.sessionId, { optional: true });
@@ -1462,6 +1471,7 @@ function cmdAssign(deps, positional, flags) {
   const verb = r.extended ? "extended" : "assigned";
   deps.out(`${verb} ${r.name}: ${r.job}${r.scope ? ` (scope ${r.scope.join(",")}${r.git ? "" : ", no git"})` : ""}`);
   if (r.tierCheck) deps.out(r.tierCheck);
+  if (r.tierCheck?.startsWith("MISMATCH ")) deps.out(mismatchPaste(r.name, flags.tier));
   return 0;
 }
 
@@ -1598,6 +1608,7 @@ function cmdPick(deps, positional, flags) {
   if (!hit) throw new PuppetError(`no clean session for ${checkoutOf(deps, positional[0])}; spawn one`);
   deps.out(hit.name);
   if (hit.tierCheck) deps.out(hit.tierCheck);
+  if (hit.tierCheck?.startsWith("MISMATCH ")) deps.out(mismatchPaste(hit.name, flags.tier));
   return 0;
 }
 

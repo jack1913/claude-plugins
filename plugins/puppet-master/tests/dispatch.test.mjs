@@ -16,6 +16,7 @@ import {
   reopenJob,
   spawnWorker,
   tierMatch,
+  mismatchPaste,
 } from "../skills/puppet-master/scripts/puppet.mjs";
 import { agent, makeDeps } from "./helpers.mjs";
 
@@ -338,6 +339,7 @@ test("assign --tier warns on a mismatch and does not refuse; a fresh session is 
     assert.deepEqual(t.out, [
       "assigned u1: logo",
       "MISMATCH u1 tier creative needs an Opus model at high effort or more; it runs claude-sonnet-5-5 medium",
+      'give the user "u1: /model, then s on the Opus row" and "u1: /effort, then s at high" to paste (this session only; never a typed /model opus or /effort high, which saves the user\'s default)',
     ]);
     t.out.length = 0;
     assert.equal(await main(["assign", "u2", "rename", "--tier", "mechanical"], t.deps), 0);
@@ -359,6 +361,28 @@ test("pick --tier prefers a clean session that already matches, then an unchecke
     assert.equal(pickSession(t.deps, REPO, { tier: "mechanical" }).name, "u1");
     assert.equal(await main(["pick", REPO, "--tier", "creative"], t.deps), 0);
     assert.deepEqual(t.out, ["u3", "u3 tier creative: ok (claude-opus-5-5 high)"]);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("a tier MISMATCH is followed by the session-only paste lines, never a typed /model <name>", async () => {
+  const t = setup([interactive("u1", 1)]);
+  try {
+    adoptSession(t.deps, "u1");
+    t.writeTranscript(t.deps.agents[0].sessionId, request("claude-opus-5-5", "high"));
+    assert.equal(await main(["pick", REPO, "--tier", "mechanical"], t.deps), 0);
+    assert.equal(t.out.length, 3);
+    assert.match(t.out[1], /^MISMATCH u1 tier mechanical /);
+    assert.equal(
+      t.out[2],
+      'give the user "u1: /model, then s on the Sonnet row" and "u1: /effort, then s at medium" to paste (this session only; never a typed /model sonnet or /effort medium, which saves the user\'s default)',
+    );
+    assert.equal(mismatchPaste("w", "creative").includes('"w: /model, then s on the Opus row"'), true);
+    // An ok or unchecked tier check prints no paste line.
+    t.out.length = 0;
+    assert.equal(await main(["pick", REPO, "--tier", "creative"], t.deps), 0);
+    assert.deepEqual(t.out, ["u1", "u1 tier creative: ok (claude-opus-5-5 high)"]);
   } finally {
     t.cleanup();
   }

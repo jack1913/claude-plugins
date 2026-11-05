@@ -51,8 +51,10 @@ there, it starts a background worker instead, on the model and effort the job's 
 
 - Each job gets a tier. Design, writing and review are `creative`: an Opus model at high effort or more. Renames,
   moves and checks are `mechanical`: another model at medium effort or less. If a session runs the wrong model or
-  effort, Claude says `MISMATCH` and gives you `/model` and `/effort` lines to paste into that window. It never
-  changes a session's settings itself.
+  effort, Claude says `MISMATCH` and starts a background worker on the right model and effort instead. If you want
+  that window for the job, Claude gives you lines for it: run `/model` and press `s` on the model's row, then
+  `/effort` and press `s` at the level. `s` changes that session only. A typed `/model opus` or `/effort high` would
+  save your default for every new session. Claude never changes a session's settings itself.
 - A session that already did a job gets another one only while it is small, under 30% of its context as your status
   line shows it. Otherwise clear it (`/clear`) and tell Claude, or let Claude start a worker. A follow-up to the job a
   session still holds goes to the same session, and a job closed too early can be reopened.
@@ -139,7 +141,7 @@ there starts at 05:00, so work past midnight stays with its day. To start it at 
 | `puppet: cannot run claude` | Set `PUPPET_CLAUDE_BIN` to the full path of the `claude` executable |
 | `already editing` | Another session works in that folder. Wait for it to finish, use a second clone, or give both jobs separate folders |
 | `one job per context` | That session already did a job. Claude can reuse it while it is small; otherwise clear it and tell Claude, or let Claude start a worker |
-| `MISMATCH … tier …` | Paste the `/model` and `/effort` lines Claude gives you into that window |
+| `MISMATCH … tier …` | Let Claude start a worker on the right tier, or keep the window: run `/model` and press `s` on the row Claude names, then `/effort` and press `s` at the level |
 | `WARN near compaction` | That session is close to auto-compacting. Let it finish its task, then compact or clear it as Claude suggests |
 | `no clean session for <folder>; spawn one` | None of your sessions is free there; Claude starts a worker |
 | `changed (new session id …)` | The window was cleared or restarted. Tell Claude whether it is clean now |

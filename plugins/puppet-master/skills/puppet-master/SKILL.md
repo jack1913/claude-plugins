@@ -66,8 +66,9 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
    when the user tells you to, or to run a read-only check of what a session reported.
 3. **The user's sessions first.** For a job in a folder, run `pick` first:
    `puppet pick <cwd> --tier <tier>` prints a clean session of the user's in that checkout, one that
-   already matches the tier first. Only when it prints "no clean session", `spawn` a background
-   worker: `puppet spawn <name> <cwd> <brief file> --tier <tier> --job "<label>"`. `spawn` starts
+   already matches the tier first. Only when it prints "no clean session", or a session with
+   `MISMATCH` (rule 12), `spawn` a background worker:
+   `puppet spawn <name> <cwd> <brief file> --tier <tier> --job "<label>"`. `spawn` starts
    it on the tier's model and effort and refuses without `--tier` or `--effort`. Before you send a
    job to a picked session, `puppet assign <session> "<label>" --tier <tier>`.
 4. **One job per context, unless the user asked to reuse sessions.** `assign` refuses a session that
@@ -165,8 +166,14 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
 12. **Every job names its tier.** `creative` is design, writing, judgment and review: an Opus model at
     high effort or more. `mechanical` is renames, moves, reformatting, running checks: a model other
     than Opus at medium effort or less. `assign --tier` prints the session's model and effort.
-    - On `MISMATCH`, give the user `<session>: /model <model>` and `<session>: /effort <level>` to
-      paste before you send the brief. You never change a session's model or settings yourself.
+    - On `MISMATCH` from `pick`, `spawn` a background worker on the tier instead (rule 3): `spawn`
+      passes `--model` and `--effort` and writes no settings. Only when the user wants that window
+      for the job, `assign` it and give the paste lines the helper prints after `MISMATCH`, before
+      you send the brief: `<session>: /model`, then `s` on the `<model>` row, and `<session>: /effort`,
+      then `s` at `<level>`. `s` switches that session only. Never give a typed `/model <name>` or
+      `/effort <level>`: it saves the user's default for every new session (verified: docs,
+      model-config, "Setting your model" and "Adjust effort level", 2026-11-05). You never change a
+      session's model or settings yourself.
     - A spawned worker starts on what `spawn` passed (`creative`: `opus` at `high`; `mechanical`:
       `sonnet` at `medium`; `--model` and `--effort` override), and the spawn line prints it. It is
       still `unchecked` until its first turn: confirm it as below.
@@ -376,10 +383,10 @@ command: the roster becomes `workers-<group>.json` and the logs folder `<logs>/<
 | `measure <session> [--window N] [--compact-at N] [--json]` | tokens, % of the window and of the compaction point, state | `<name>  <tokens>  <pct>%  <state>  (window N from <source>)`, then `  <p>% of compaction point <C> (<source>)` (source `flag`, `env`, `observed` for the session's own transcript, `recorded` for its roster record, or `group` for the group's lowest) and `  WARN near compaction` when known; `?%  (window unknown)` when only the point is; or `<name>  0  0%  fresh  (no turns yet)` |
 | `list [--name <session>] [--window N] [--compact-at N] [--json]` | every session in your care, measured, plus unadopted background workers; `--name` prints one | one `measure` line each, then `model <model> <effort>` (`model fresh` before the first turn), kind, role and job; `gone` rows show the resume command, `changed` rows mean a new session id; `DONE? run finish` ends an active job's row whose session reported done; `mod on (<source>)`, `mod off (mode <mode>)` or `mod stale` ends the row of a session whose mod beat, and no `mod` means the plugin is not loaded there |
 | `adopt <session> [--role analyst\|master] [--window N] [--self-compact]` | takes a session into your care; `--role master` is you; also tells the session's mod its role, and `--self-compact` switches its mod on (only after the user's yes) | `adopted <name> (<kind>, <role>, clean or unknown) in <checkout>`, then `; self-compact switched on` with the flag |
-| `assign <session> <job> [--tier T] [--reuse \| --extend] [--scope F] [--git \| --no-git]` | records the job before you send it; `--reuse` refuses at 30% of the window and prints the compaction-point share too; `--extend` merges into the active job, checks the merged scope, keeps the job's git flag unless `--git` or `--no-git` is passed, and adds no label the job already has | `assigned <name>: <job>` (`extended …` with `--extend`), then the tier check: `ok`, `unchecked`, or `MISMATCH … it runs <model> <effort>` |
+| `assign <session> <job> [--tier T] [--reuse \| --extend] [--scope F] [--git \| --no-git]` | records the job before you send it; `--reuse` refuses at 30% of the window and prints the compaction-point share too; `--extend` merges into the active job, checks the merged scope, keeps the job's git flag unless `--git` or `--no-git` is passed, and adds no label the job already has | `assigned <name>: <job>` (`extended …` with `--extend`), then the tier check: `ok`, `unchecked`, or `MISMATCH … it runs <model> <effort>`, then the session-only paste lines (`/model`, then `s`; `/effort`, then `s`) |
 | `finish <session>` | marks the job done | `finished <name>: <job>` |
 | `reopen <session>` | undoes `finish`: the last job is active again; refuses a job that is not done, or a checkout another job now edits | `reopened <name>: <job>` |
-| `pick <cwd> [--tier T] [--scope F] [--no-git]` | a clean session in that checkout: one matching the tier first, the user's first | `<name>` and its tier check, or `no clean session for <checkout>; spawn one` |
+| `pick <cwd> [--tier T] [--scope F] [--no-git]` | a clean session in that checkout: one matching the tier first, the user's first | `<name>` and its tier check (after a `MISMATCH`, the paste lines: `spawn` instead, rule 12), or `no clean session for <checkout>; spawn one` |
 | `spawn <name> <cwd> <brief file> --tier T \| --effort E [--model M] [--job <label>] [--scope F] [--no-git] [--self-compact]` | `claude --bg --model --effort` with the brief; the tier gives both unless `--model`/`--effort` override; exit 2 with neither tier nor effort; `--self-compact` switches the worker's mod on (only after the user's yes) | `spawned <name> id=<id> in <checkout> (model <m>, effort <e>)`, then `; self-compact switched on` with the flag |
 | `cycle <worker> <focus> [--next <brief file>]` | background only: stop, headless `/compact <focus>`, verify, restart | `cycled <name>: <before>→<after> tokens (p1%→p2%), resumed id=<id>` |
 | `compact <session> <focus>` | any adopted session whose mod is on and that is idle: the mod compacts it with your focus, the helper checks the transcript for a new `compact_boundary`; your own session is queued for after your turn | `compacted <name>: <before>→<after> tokens`; for yourself `requested <name>'s own compaction: …`; on failure the paste line |
@@ -416,3 +423,5 @@ command: the roster becomes `workers-<group>.json` and the logs folder `<logs>/<
 - "I'll just build the overlay and compare it myself" → it is a job for a session.
 - "Research can't run while the drawing job edits" → it can, with disjoint `--scope` and `--no-git`.
 - "I'll check the model in the config file" → the helper's `list`; never a config file.
+- "It's on the wrong tier, I'll give the user `/model opus` to paste" → a typed `/model <name>` saves
+  the user's default; `spawn` on the tier, or give the session-only lines the helper prints.

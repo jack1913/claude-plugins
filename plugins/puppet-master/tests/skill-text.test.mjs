@@ -272,6 +272,15 @@ test("dispatch rules: tiers, reuse, write scopes and the compaction point", () =
     assert.ok(skill.includes(word), `SKILL.md does not mention ${word}`);
   }
   assert.match(skill, /never\s+read\s+the\s+launcher's\s+config/);
+  // A tier mismatch: spawn first, and only the session-only paste form (2026-11-05).
+  const rule12 = skill.slice(skill.indexOf("12. **Every job names its tier.**"), skill.indexOf("13. **Never copy"));
+  assert.match(rule12, /On\s+`MISMATCH`\s+from\s+`pick`,\s+`spawn`\s+a\s+background\s+worker\s+on\s+the\s+tier\s+instead/);
+  assert.match(rule12, /`<session>: \/model`,\s+then\s+`s`\s+on\s+the\s+`<model>`\s+row/);
+  assert.match(rule12, /`<session>: \/effort`,\s+then\s+`s`\s+at\s+`<level>`/);
+  assert.match(rule12, /Never\s+give\s+a\s+typed\s+`\/model <name>`\s+or\s+`\/effort <level>`:\s+it\s+saves\s+the\s+user's\s+default/);
+  assert.doesNotMatch(rule12, /give\s+the\s+user\s+`<session>: \/model <model>`/);
+  assert.match(skill, /Only\s+when\s+it\s+prints\s+"no\s+clean\s+session",\s+or\s+a\s+session\s+with\s+`MISMATCH`\s+\(rule\s+12\),\s+`spawn`/);
+  assert.match(section(skill, "Red flags: stop"), /a\s+typed\s+`\/model <name>`\s+saves\s+the\s+user's\s+default/);
   assert.match(skill, /Never\s+copy,\s+write\s+or\s+print\s+any\s+`config\.json`/);
 });
 
