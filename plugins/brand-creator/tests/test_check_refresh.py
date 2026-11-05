@@ -70,7 +70,7 @@ def test_refresh_runs_the_stale_page_check_then_board_lint_and_both_are_current_
 def test_widths_from_the_rules_are_read_again_and_widths_given_on_the_command_line_are_kept(stale):
     """An edit of qa/rules.json page.widths makes the page-check stale: a check made with the rules' widths is re-run at the new ones, one made with --widths keeps them."""
     pc = report(stale, f"page-check/{page_tool(stale)}")
-    assert pc["widths_from"] == "flag" and pc["schemes_from"] == "flag", pc   # the fixture ran --widths 390 --schemes light
+    assert pc["run"]["widths_from"] == "flag" and pc["run"]["schemes_from"] == "flag", pc   # the fixture ran --widths 390 --schemes light
     rules_file = stale / "qa" / "rules.json"
     rules = json.loads(rules_file.read_text(encoding="utf-8"))
     rules.setdefault("page", {})["widths"] = [390, 1440]
@@ -78,7 +78,7 @@ def test_widths_from_the_rules_are_read_again_and_widths_given_on_the_command_li
     out = bc("check", "--refresh", project=stale).stdout
     assert "brand-creator page-check pages/index.html --widths 390 --schemes light -> exit 0" in out, out
     assert bc("page-check", "pages/index.html", "--schemes", "light", project=stale).returncode == 0   # now from the rules
-    assert report(stale, f"page-check/{page_tool(stale)}")["widths_from"] == "rules"
+    assert report(stale, f"page-check/{page_tool(stale)}")["run"]["widths_from"] == "rules"
     rules["page"]["widths"] = [1440]
     rules_file.write_text(json.dumps(rules, indent=2) + "\n", encoding="utf-8")
     out = bc("check", "--refresh", project=stale).stdout
@@ -219,3 +219,19 @@ def test_contrast_keeps_skip_marks_and_kit_check_is_a_pure_re_run(tmp_path):
     assert check.refresh_command(tmp_path, "contrast", doc)[0] == ["contrast", "--cvd", "--skip-marks"]
     assert check.refresh_command(tmp_path, "contrast", {"results": []})[0] == ["contrast"]
     assert check.refresh_command(tmp_path, "kit-check", {})[0] == ["kit", "check"]
+
+
+def test_a_page_check_that_failed_while_measuring_records_its_target_and_is_re_run_as_the_same_check(acme, plugin_copy):
+    """The report a crashed measurement leaves (main_guard records the failure) names its page and the widths given, so check --refresh re-runs that page-check."""
+    (acme / "pages").mkdir()
+    (acme / "pages" / "index.html").write_text(PAGE, encoding="utf-8")
+    shutil.copytree(ROOT / "skills", plugin_copy / "skills")
+    (plugin_copy / "scripts" / "render.mjs").write_text("process.stderr.write('error: chromium crashed\\n'); process.exit(3);\n", encoding="utf-8")
+    r = bc("page-check", "pages/index.html", "--widths", "390", "--schemes", "light", project=acme, plugin=plugin_copy)
+    assert r.returncode != 0, r.stdout + r.stderr
+    doc = report(acme, f"page-check/{page_tool(acme)}")
+    run = doc["run"]
+    assert run["target"]["page"] == "pages/index.html" and run["widths"] == [390] and run["widths_from"] == "flag" and run["schemes"] == ["light"], doc
+    assert "target" not in doc, "a crash is no verdict of the page: the readers of a verdict (check, kit) still say run page-check"
+    words, _ = check.refresh_command(acme, f"page-check/{page_tool(acme)}", doc)
+    assert words == ["page-check", "pages/index.html", "--widths", "390", "--schemes", "light"], words

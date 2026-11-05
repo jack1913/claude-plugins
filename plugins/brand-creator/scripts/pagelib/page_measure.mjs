@@ -1093,8 +1093,14 @@ async function tellFacts(page, request = {}) {
       if (cs.transform && cs.transform !== "none") {
         let t = null;
         try { t = new DOMMatrix(cs.transform); } catch (e) { /* a transform that cannot be read is not a rotation we can measure */ }
+        if (t && !t.is2D) {
+          // perspective(1px) translateZ(0), a parallax translateZ: 3D in form, but nothing turns out of the plane; their in-plane part is read like any 2D transform
+          const flat = [t.m13, t.m23, t.m31, t.m32, t.m14, t.m24].every((v) => Math.abs(v) < 1e-6);
+          t = flat ? DOMMatrix.fromMatrix({ a: t.m11, b: t.m12, c: t.m21, d: t.m22, e: t.m41, f: t.m42 }) : null;
+          if (!t) return UNMEASURED;   // rotateX, rotateY, a 3D turn
+        }
         if (t) {
-          if (!t.is2D || t.a * t.d - t.b * t.c < 0) return UNMEASURED;   // rotateX/Y, perspective, scaleX(-1): a 3D turn or a mirror
+          if (t.a * t.d - t.b * t.c < 0) return UNMEASURED;   // scaleX(-1): a mirror
           const eps = 1e-3 * Math.max(1, Math.hypot(t.a, t.b));
           if (Math.abs(t.a - t.d) > eps || Math.abs(t.b + t.c) > eps) return UNMEASURED;   // a skew or an uneven scale is not a rotation (skewY would read as one)
           m = m ? m.multiply(t) : t;

@@ -52,7 +52,7 @@ checks and renders
   contrast                WCAG 2.2 AA UI pairs, brand-rule pairs, colours that touch in the logo SVGs, APCA advisory
   board-lint <page.html>  required board sections (data-section attributes) for a round page; a motion round's variants too (folder, proof, stills, their reports)
   check                   all gates for the artefacts that exist; --cascade "<old value>" greps for leftovers; --refresh first re-runs the stale
-                          reports that are a pure re-run of a check (page-check, contrast, book-lint, board-lint)
+                          reports that are a pure re-run of a check (page-check, contrast, book-lint, kit check, board-lint)
   page-check <page.html>  open a page at several widths, light and dark, and report what it loads: a page of the project, --from DIR <page> (a built
                           site anywhere, copied and read only) or --url URL (a page on this machine only); one report per page
 

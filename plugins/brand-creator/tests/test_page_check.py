@@ -4377,6 +4377,9 @@ def test_a_form_drawn_rotated_warns_whoever_turns_it_and_an_upright_form_or_a_ti
     row_, v = tilt_check(acme, '<form style="transform: skewY(6deg)" action="#"><input name="a"></form><form style="transform: scale(2, 1)" action="#"><input name="b"></form>'
                                '<form style="transform: rotate(5deg) scale(1.5)" action="#"><input name="c"></form>')
     assert [t["angle"] for t in v["tell_facts"]["tilts"]] == [5], v["tell_facts"]["tilts"]
+    # a 3D transform that turns nothing out of the plane (the perspective(1px) translateZ(0) hack) is read by its in-plane part
+    row_, v = tilt_check(acme, '<form style="transform: perspective(1px) translateZ(0) rotate(4deg)" action="#"><input name="a"></form>')
+    assert [t["angle"] for t in v["tell_facts"]["tilts"]] == [4], v["tell_facts"]["tilts"]
     # an in-plane turn written with an axis (rotate: z 10deg, or the vector 0 0 1) is measured
     row_, _ = tilt_check(acme, '<form style="rotate: z 10deg" action="#"><input name="a"></form><form style="rotate: 0 0 1 -12deg" action="#"><input name="b"></form>')
     assert row_["status"] == "warn" and len(row_["hits"]) == 2 and any("10 degrees" in h["text"] for h in row_["hits"]) and any("12 degrees" in h["text"] for h in row_["hits"]), row_["hits"]

@@ -94,11 +94,14 @@ def main() -> int:
     node = which_or_cannot("node", "Install Node 22 or newer. Run: brand-creator prereq --for quick")
 
     rep = Report(pc.report_tool(target.ident), project, pc.base_inputs(project, target), renderer="chromium")
+    # `run`: what this run was asked to check, for check --refresh only: the target, the widths and schemes, and where they came from (it passes them on only when they were given
+    # on the command line; from the rules, a re-run reads the rules again). Recorded before the browser runs, so that a report that records a failure (a measurement that crashed or
+    # timed out) can still be re-run as the same check. `target` itself is written only by a finished check, so every reader of a verdict still sees a crash as no report of the page.
+    rep.extra["run"] = {"target": target.as_report(), "widths": widths, "schemes": schemes,
+                        "widths_from": "flag" if a.widths is not None else "rules", "schemes_from": "flag" if a.schemes is not None else "default"}
     root = project if target.kind == "project" else pc.stage_from_copy(project, target) if target.kind == "from" else None
     measures, measures_path = measure(project, root, target, widths, schemes, node, sorted(set(modern.values())), rules["page"]["rules"])
-    # where the widths and schemes came from: check --refresh passes them on only when they were given on the command line (from the rules, a re-run reads the rules again)
-    origin = {"widths_from": "flag" if a.widths is not None else "rules", "schemes_from": "flag" if a.schemes is not None else "default"}
-    pc.judge(rep, measures, pc.Ctx(project, target, widths, schemes, rules, tokens, modern, extra=origin), measures_path)
+    pc.judge(rep, measures, pc.Ctx(project, target, widths, schemes, rules, tokens, modern), measures_path)
     return rep.finish()
 
 

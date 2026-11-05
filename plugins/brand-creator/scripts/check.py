@@ -450,7 +450,9 @@ def refresh_command(project: Path, tool: str, doc: dict) -> tuple[list[str] | No
     """-> (the words of the command that makes this stale report current, or None), and why not when None. Only a pure re-run of a check qualifies, its arguments taken from what
     the report records (or the project's defaults): never from a guess, and never a command that writes files the owner reads or needs the owner's options or yes."""
     if tool.startswith("page-check/"):
-        target = doc.get("target")
+        # what the run was asked (page_check.py `run`); a 0.8.0 report keeps the same keys at its top level, and one from before 0.8.0 records no widths_from (re-run with the rules' widths)
+        run = doc["run"] if isinstance(doc.get("run"), dict) else doc
+        target = run.get("target")
         if not (isinstance(target, dict) and target.get("kind") == "project" and isinstance(target.get("page"), str)):
             return None, "its page is a built site or an address, which only the owner's own command names (--from, --url)"
         page = target["page"]
@@ -459,10 +461,10 @@ def refresh_command(project: Path, tool: str, doc: dict) -> tuple[list[str] | No
         words = ["page-check", page]
         # only what was given on the command line is passed on: widths from qa/rules.json are read from it again (an edit of page.widths is what made the report stale),
         # and a report that does not record where they came from is re-run with the rules' widths and both schemes
-        widths, schemes = doc.get("widths"), doc.get("schemes")
-        if doc.get("widths_from") == "flag" and isinstance(widths, list) and widths:
+        widths, schemes = run.get("widths"), run.get("schemes")
+        if run.get("widths_from") == "flag" and isinstance(widths, list) and widths:
             words += ["--widths", ",".join(str(w) for w in widths)]
-        if doc.get("schemes_from") == "flag" and isinstance(schemes, list) and schemes and schemes != list(PAGE_SCHEMES):
+        if run.get("schemes_from") == "flag" and isinstance(schemes, list) and schemes and schemes != list(PAGE_SCHEMES):
             words += ["--schemes", ",".join(str(x) for x in schemes)]
         return words, ""
     if tool == "board-lint":

@@ -6,6 +6,16 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-05
+
+### Fixed
+
+- A page check that failed while measuring the page now records which page and which widths it was, so `check --refresh` runs it
+  again as the same check instead of calling it a built site.
+- The page check's tilted-form warning now also reads a form under the common `perspective(1px) translateZ(0)` trick, which turns
+  nothing; before, such a form was left out.
+- `brand-creator --help` and the commands page now list the kit check among the reports `check --refresh` runs again.
+
 ## [0.8.0] - 2026-11-05
 
 Fixes from a real client's site round. `check --refresh` re-runs the reports that went out of date, so the asset script no
