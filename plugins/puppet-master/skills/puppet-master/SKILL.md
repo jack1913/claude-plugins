@@ -28,9 +28,10 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
    (`puppet list --name <session>`; `fresh` before its first turn), so a plan is not redone once the
    user sees them (2026-11-03: two briefs withdrawn, three role swaps).
    In the same question, ask once whether the sessions may compact themselves through the plugin's
-   mod (`self_compact`), and a finished worker be cleared. Suggest yes; only an explicit yes counts,
+   mod (`self_compact`), have their model and effort switched for the job's tier (that session
+   only), and a finished worker be cleared. Suggest yes; only an explicit yes counts,
    and silence is no. A yes lets you pass `--self-compact` to `spawn` and `adopt`; without it, no
-   session of yours is compacted or cleared by the mod.
+   session of yours is compacted, switched or cleared by the mod.
 3. Reserve the analyst before any job, but first ask whether another master on this machine already
    has an analyst the groups share: one analyst serves them all, and a second one made a third role
    swap on 2026-11-03. Take one clean session from the user's answer:
@@ -56,7 +57,7 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
 ## Rules
 
 1. **Housekeeping only.** On your own you may `adopt`, `assign`, `finish`, `reopen`, `pick`, `spawn`,
-   `cycle`, `compact`, `clear`, `close`, `harvest` and `logs`, each with a one-line log to the user. Commits (unless the user
+   `cycle`, `compact`, `switch`, `clear`, `close`, `harvest` and `logs`, each with a one-line log to the user. Commits (unless the user
    pre-authorized them for this job), pushes, PR posts, approvals, live or external writes and
    anything destructive go to the user. The one delete that is yours: a finished job's own temp
    folder (`<logs>/tmp/<session>`, see `{{test_tmp}}` under Briefs), named in your one-line log.
@@ -64,10 +65,14 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
    delete, commit, push, file edit) is a job for a session. So are comparisons, overlays and
    recomputations of a session's results: you keep the judgment and the relay. Do it yourself only
    when the user tells you to, or to run a read-only check of what a session reported.
-3. **The user's sessions first.** For a job in a folder, run `pick` first:
-   `puppet pick <cwd> --tier <tier>` prints a clean session of the user's in that checkout, one that
-   already matches the tier first. Only when it prints "no clean session", or a session with
-   `MISMATCH` (rule 12), `spawn` a background worker:
+3. **The user's sessions first.** The user, 2026-11-06: "move theirs work into opened, and keep bg
+   only when you cannot do with opened windows". The user's opened windows take the work first; a
+   background worker only when none of them can do the job. For a job in a folder, run `pick` first:
+   `puppet pick <cwd> --tier <tier>` prints a clean session of the user's in that checkout: one that
+   already matches the tier, or whose mod is on so `switch` can align it, first, and an opened window
+   before a background worker. On a `MISMATCH` where its mod is on, `switch` it to the tier (rule 12)
+   and give it the job. Only when it prints "no clean session", or a session with `MISMATCH` whose
+   mod is not on (rule 12), `spawn` a background worker:
    `puppet spawn <name> <cwd> <brief file> --tier <tier> --job "<label>"`. `spawn` starts
    it on the tier's model and effort and refuses without `--tier` or `--effort`. Before you send a
    job to a picked session, `puppet assign <session> "<label>" --tier <tier>`.
@@ -116,14 +121,15 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
    "continue". A worker past about 150k tokens pauses and says so without being asked
    (`worker-brief.md`). A worker you cannot reach for a boundary is left alone.
 
-   **The mod.** `compact` and `clear` go through the plugin's mod inside the session, which runs them
-   once the session is idle: the helper writes a request file, never a message. They work only where
+   **The mod.** `compact`, `switch` (rule 12) and `clear` go through the plugin's mod inside the
+   session, which runs them once the session is idle: the helper writes a request file, never a message. They work only where
    the session's `list` row says `mod on (<source>)`: the user said yes in that window, set
    `self_compact` to `on`, or you passed `--self-compact` to `spawn` or `adopt` after the user's yes
    (On start, step 2). `mod off (mode ask)` is a session the user did not switch on,
    `mod off (mode off)` is the user's veto, `mod stale` a mod that stopped, and no `mod` at all a
    session where the plugin is not loaded: use today's route there (`cycle` for a worker, nothing or
-   the paste line for a window). Both verbs refuse a session that is not idle or is waiting on a dialog, and on any
+   the paste line for a window). The three verbs refuse a session that is not idle or is waiting on a
+   dialog (your own `compact` and `switch` wait for your turn's end instead), and on any
    failure print the paste line as the fallback: relay that to the user.
    `clear` is for a worker whose job you `finish`ed, only between jobs, never queued. It refuses the
    master, the analyst and any session with an active job, and the mod refuses them again. Never
@@ -166,18 +172,30 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
 12. **Every job names its tier.** `creative` is design, writing, judgment and review: an Opus model at
     high effort or more. `mechanical` is renames, moves, reformatting, running checks: a model other
     than Opus at medium effort or less. `assign --tier` prints the session's model and effort.
-    - On `MISMATCH` from `pick`, `spawn` a background worker on the tier instead (rule 3): `spawn`
-      passes `--model` and `--effort` and writes no settings. Only when the user wants that window
-      for the job, `assign` it and give the paste lines the helper prints after `MISMATCH`, before
-      you send the brief: `<session>: /model`, then `s` on the `<model>` row, and `<session>: /effort`,
-      then `s` at `<level>`. `s` switches that session only. Never give a typed `/model <name>` or
+    - On `MISMATCH` where the session's mod is on, the helper prints "its mod is on: run
+      `switch <session> --tier <tier>`". Run `puppet switch <session> --tier <tier>` yourself before
+      you send the brief: no paste lines, no new worker. The switch is that session's only: its mod
+      sends the tier's model and effort on every main-loop request and writes no settings file
+      (verified 2026-11-06 on a throwaway background session: the transcript's requests, settings
+      hashes unchanged). Its status line and its own answer keep naming the launch model, so check
+      it only with `puppet list --name <session>` after its next turn: `model` is the last request
+      sent, and the mod column says `switched to <model> <effort>`. A switch outlives a `compact`
+      and a `clear` (it moves to the new session id); `switch <session> --reset` takes the session
+      back to its launch model. Your own switch is written once your turn ends.
+    - On `MISMATCH` where the mod is not on, take another opened window whose mod is on, else
+      `spawn` a background worker on the tier (rule 3): `spawn` passes `--model` and `--effort` and
+      writes no settings. Only when the user wants that window for the job, `assign` it and give
+      the paste lines the helper prints after `MISMATCH`, before you send the brief:
+      `<session>: /model`, then `s` on the `<model>` row, and `<session>: /effort`, then `s` at
+      `<level>`. `s` switches that session only. Never give a typed `/model <name>` or
       `/effort <level>`: it saves the user's default for every new session (verified: docs,
-      model-config, "Setting your model" and "Adjust effort level", 2026-11-05). You never change a
-      session's model or settings yourself.
+      model-config, "Setting your model" and "Adjust effort level", 2026-11-05). You change a
+      session's model only through `switch`, never its settings.
     - A spawned worker starts on what `spawn` passed (`creative`: `opus` at `high`; `mechanical`:
       `sonnet` at `medium`; `--model` and `--effort` override), and the spawn line prints it. It is
       still `unchecked` until its first turn: confirm it as below.
-    - On `unchecked` (a fresh session), the brief asks the worker to state its model first. After
+    - On `unchecked` (a fresh session, never a switched one: after a `switch` the session names its
+      launch model), the brief asks the worker to state its model first. After
       that first turn, read its effort with `puppet list --name <session>`, never from the
       worker's word: a worker's own report of its effort is unreliable.
     - On a machine that uses a proxy launcher (such as use-llm), the transcript shows the Claude
@@ -381,15 +399,16 @@ command: the roster becomes `workers-<group>.json` and the logs folder `<logs>/<
 | Command | Does | Prints |
 |---|---|---|
 | `measure <session> [--window N] [--compact-at N] [--json]` | tokens, % of the window and of the compaction point, state | `<name>  <tokens>  <pct>%  <state>  (window N from <source>)`, then `  <p>% of compaction point <C> (<source>)` (source `flag`, `env`, `observed` for the session's own transcript, `recorded` for its roster record, or `group` for the group's lowest) and `  WARN near compaction` when known; `?%  (window unknown)` when only the point is; or `<name>  0  0%  fresh  (no turns yet)` |
-| `list [--name <session>] [--window N] [--compact-at N] [--json]` | every session in your care, measured, plus unadopted background workers; `--name` prints one | one `measure` line each, then `model <model> <effort>` (`model fresh` before the first turn), kind, role and job; `gone` rows show the resume command, `changed` rows mean a new session id; `DONE? run finish` ends an active job's row whose session reported done; `mod on (<source>)`, `mod off (mode <mode>)` or `mod stale` ends the row of a session whose mod beat, and no `mod` means the plugin is not loaded there |
+| `list [--name <session>] [--window N] [--compact-at N] [--json]` | every session in your care, measured, plus unadopted background workers; `--name` prints one | one `measure` line each, then `model <model> <effort>` (`model fresh` before the first turn), kind, role and job; `gone` rows show the resume command, `changed` rows mean a new session id; `DONE? run finish` ends an active job's row whose session reported done; `mod on (<source>)` (then `switched to <model> <effort>` after a `switch`), `mod off (mode <mode>)` or `mod stale` ends the row of a session whose mod beat, and no `mod` means the plugin is not loaded there |
 | `adopt <session> [--role analyst\|master] [--window N] [--self-compact]` | takes a session into your care; `--role master` is you; also tells the session's mod its role, and `--self-compact` switches its mod on (only after the user's yes) | `adopted <name> (<kind>, <role>, clean or unknown) in <checkout>`, then `; self-compact switched on` with the flag |
-| `assign <session> <job> [--tier T] [--reuse \| --extend] [--scope F] [--git \| --no-git]` | records the job before you send it; `--reuse` refuses at 30% of the window and prints the compaction-point share too; `--extend` merges into the active job, checks the merged scope, keeps the job's git flag unless `--git` or `--no-git` is passed, and adds no label the job already has | `assigned <name>: <job>` (`extended …` with `--extend`), then the tier check: `ok`, `unchecked`, or `MISMATCH … it runs <model> <effort>`, then the session-only paste lines (`/model`, then `s`; `/effort`, then `s`) |
+| `assign <session> <job> [--tier T] [--reuse \| --extend] [--scope F] [--git \| --no-git]` | records the job before you send it; `--reuse` refuses at 30% of the window and prints the compaction-point share too; `--extend` merges into the active job, checks the merged scope, keeps the job's git flag unless `--git` or `--no-git` is passed, and adds no label the job already has | `assigned <name>: <job>` (`extended …` with `--extend`), then the tier check: `ok` (`(switched)` after a `switch`), `unchecked`, or `MISMATCH … it runs <model> <effort>`, then `its mod is on: run switch …` where the mod is on, else the session-only paste lines (`/model`, then `s`; `/effort`, then `s`) |
 | `finish <session>` | marks the job done | `finished <name>: <job>` |
 | `reopen <session>` | undoes `finish`: the last job is active again; refuses a job that is not done, or a checkout another job now edits | `reopened <name>: <job>` |
-| `pick <cwd> [--tier T] [--scope F] [--no-git]` | a clean session in that checkout: one matching the tier first, the user's first | `<name>` and its tier check (after a `MISMATCH`, the paste lines: `spawn` instead, rule 12), or `no clean session for <checkout>; spawn one` |
+| `pick <cwd> [--tier T] [--scope F] [--no-git]` | a clean session in that checkout: one matching the tier or whose mod is on first, the user's first | `<name>` and its tier check (after a `MISMATCH`, `its mod is on: run switch …`, else the paste lines: rule 12), or `no clean session for <checkout>; spawn one` |
 | `spawn <name> <cwd> <brief file> --tier T \| --effort E [--model M] [--job <label>] [--scope F] [--no-git] [--self-compact]` | `claude --bg --model --effort` with the brief; the tier gives both unless `--model`/`--effort` override; exit 2 with neither tier nor effort; `--self-compact` switches the worker's mod on (only after the user's yes) | `spawned <name> id=<id> in <checkout> (model <m>, effort <e>)`, then `; self-compact switched on` with the flag |
 | `cycle <worker> <focus> [--next <brief file>]` | background only: stop, headless `/compact <focus>`, verify, restart | `cycled <name>: <before>→<after> tokens (p1%→p2%), resumed id=<id>` |
 | `compact <session> <focus>` | any adopted session whose mod is on and that is idle: the mod compacts it with your focus, the helper checks the transcript for a new `compact_boundary`; your own session is queued for after your turn | `compacted <name>: <before>→<after> tokens`; for yourself `requested <name>'s own compaction: …`; on failure the paste line |
+| `switch <session> --tier T \| --model M --effort E \| --reset` | any adopted session whose mod is on and that is idle: the mod sends that model and effort on every main-loop request from the next one on, this session only, no settings written; `--tier` uses `spawn`'s model and effort; `--reset` goes back to the launch model; your own session is queued for after your turn | `switched <name> to <model> <effort> (last request: …)` (or `(switched before to …)`); `reset <name>: …`; for yourself `requested <name>'s own switch …`; on failure the paste lines |
 | `clear <worker>` | a worker with a finished job, its mod on and idle: the mod runs `/clear`, the helper re-adopts it as clean under its new session id; refuses a master, an analyst, an active job | `cleared <name>: new session <id>, clean`; on failure the paste line |
 | `close <worker>` | background only: stop, `claude rm`; the transcript stays resumable | `closed <name> (resume: cd "<cwd>" && claude --resume <sessionId>)`; a later lookup of the name prints `<name> is closed (resume: …)` |
 | `harvest --master <your name> LOGS` | the analyst's: new transcript events, secrets blanked; one harvest at a time | `harvested <n> events from <s> sessions (<l> new lines) into <logs>`, then any session with no transcript or read again from the top |
@@ -424,4 +443,9 @@ command: the roster becomes `workers-<group>.json` and the logs folder `<logs>/<
 - "Research can't run while the drawing job edits" → it can, with disjoint `--scope` and `--no-git`.
 - "I'll check the model in the config file" → the helper's `list`; never a config file.
 - "It's on the wrong tier, I'll give the user `/model opus` to paste" → a typed `/model <name>` saves
-  the user's default; `spawn` on the tier, or give the session-only lines the helper prints.
+  the user's default; `switch` it where its mod is on, else `spawn` on the tier, or give the
+  session-only lines the helper prints.
+- "The open windows are on the wrong model, I'll open a background worker" → `switch` an opened
+  window whose mod is on; a background worker only when no opened window can do the job.
+- "It says it is Haiku, so the switch failed" → its own answer and its status line name the launch
+  model; `list --name` after its next turn is the check.

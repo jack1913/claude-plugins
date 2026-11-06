@@ -34,14 +34,15 @@ Set these in the plugin's options. `/config` lists them too.
 | Option | What it sets |
 | --- | --- |
 | `puppet_logs_dir` | The analyst's logs folder. Empty uses the plugin's data folder |
-| `self_compact` | `ask` (the default): a window you open asks once at start whether the master may compact it, and does nothing without a yes. `on`: the master may compact every session. `off`: never, whatever the master asks |
+| `self_compact` | `ask` (the default): a window you open asks once at start whether the master may compact it and switch its model and effort, and does nothing without a yes. `on`: the master may do so in every session. `off`: never, whatever the master asks |
 
-## Helper commands for compacting and clearing
+## Helper commands for compacting, switching and clearing
 
 Claude runs these for you. They work only on a session whose mod is on.
 
 | Command | What it does |
 | --- | --- |
 | `compact <session> <focus>` | The session's own mod compacts it when it is idle, keeping what the focus names |
+| `switch <session> --tier creative\|mechanical` | The session's own mod sends its requests on the tier's model and effort, that session only, from its next request on. `--model <m> --effort <e>` names them instead; `--reset` goes back to the model it started with. Its status line keeps the starting model |
 | `clear <worker>` | The mod clears a worker whose job is finished, then Claude keeps it as a clean session. Refused for the master, the analyst and a session with an open job |
 | `spawn … --self-compact`, `adopt … --self-compact` | Switch a worker's or a window's mod on. Claude passes it only after you said yes |

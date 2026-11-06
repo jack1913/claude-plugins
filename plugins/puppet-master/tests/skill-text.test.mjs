@@ -272,15 +272,26 @@ test("dispatch rules: tiers, reuse, write scopes and the compaction point", () =
     assert.ok(skill.includes(word), `SKILL.md does not mention ${word}`);
   }
   assert.match(skill, /never\s+read\s+the\s+launcher's\s+config/);
-  // A tier mismatch: spawn first, and only the session-only paste form (2026-11-05).
+  // A tier mismatch: `switch` where the mod is on (2026-11-06); else another window or spawn, and
+  // only the session-only paste form (2026-11-05).
   const rule12 = skill.slice(skill.indexOf("12. **Every job names its tier.**"), skill.indexOf("13. **Never copy"));
-  assert.match(rule12, /On\s+`MISMATCH`\s+from\s+`pick`,\s+`spawn`\s+a\s+background\s+worker\s+on\s+the\s+tier\s+instead/);
+  assert.match(rule12, /On\s+`MISMATCH`\s+where\s+the\s+session's\s+mod\s+is\s+on[\s\S]*Run\s+`puppet switch <session> --tier <tier>`\s+yourself[\s\S]*no\s+paste\s+lines,\s+no\s+new\s+worker/);
+  assert.match(rule12, /status\s+line\s+and\s+its\s+own\s+answer\s+keep\s+naming\s+the\s+launch\s+model/);
+  assert.match(rule12, /On\s+`MISMATCH`\s+where\s+the\s+mod\s+is\s+not\s+on,\s+take\s+another\s+opened\s+window\s+whose\s+mod\s+is\s+on,\s+else\s+`spawn`\s+a\s+background\s+worker\s+on\s+the\s+tier/);
+  assert.doesNotMatch(rule12, /You\s+never\s+change\s+a\s+session's\s+model/);
   assert.match(rule12, /`<session>: \/model`,\s+then\s+`s`\s+on\s+the\s+`<model>`\s+row/);
   assert.match(rule12, /`<session>: \/effort`,\s+then\s+`s`\s+at\s+`<level>`/);
   assert.match(rule12, /Never\s+give\s+a\s+typed\s+`\/model <name>`\s+or\s+`\/effort <level>`:\s+it\s+saves\s+the\s+user's\s+default/);
   assert.doesNotMatch(rule12, /give\s+the\s+user\s+`<session>: \/model <model>`/);
-  assert.match(skill, /Only\s+when\s+it\s+prints\s+"no\s+clean\s+session",\s+or\s+a\s+session\s+with\s+`MISMATCH`\s+\(rule\s+12\),\s+`spawn`/);
-  assert.match(section(skill, "Red flags: stop"), /a\s+typed\s+`\/model <name>`\s+saves\s+the\s+user's\s+default/);
+  assert.match(skill, /Only\s+when\s+it\s+prints\s+"no\s+clean\s+session",\s+or\s+a\s+session\s+with\s+`MISMATCH`\s+whose\s+mod\s+is\s+not\s+on\s+\(rule\s+12\),\s+`spawn`/);
+  // The user's rule of 2026-11-06, verbatim, in rule 3.
+  const rule3 = skill.slice(skill.indexOf("3. **The user's sessions first.**"), skill.indexOf("4. **One job per context"));
+  assert.ok(rule3.replace(/\s+/g, " ").includes('"move theirs work into opened, and keep bg only when you cannot do with opened windows"'), rule3);
+  assert.match(rule3, /On\s+a\s+`MISMATCH`\s+where\s+its\s+mod\s+is\s+on,\s+`switch`\s+it/);
+  const flags = section(skill, "Red flags: stop");
+  assert.match(flags, /a\s+typed\s+`\/model <name>`\s+saves\s+the\s+user's\s+default/);
+  assert.match(flags, /`switch`\s+an\s+opened\s+window\s+whose\s+mod\s+is\s+on;\s+a\s+background\s+worker\s+only\s+when\s+no\s+opened\s+window\s+can\s+do\s+the\s+job/);
+  assert.match(section(skill, "Helper reference"), /\|\s+`switch <session> --tier T/);
   assert.match(skill, /Never\s+copy,\s+write\s+or\s+print\s+any\s+`config\.json`/);
 });
 
@@ -368,7 +379,7 @@ test("rule 9 names the cheaper route, and the helper table lists compact, clear,
   }
   assert.match(skill.split("\n").find((l) => l.startsWith("| `adopt ")), /--self-compact/);
   assert.match(skill.split("\n").find((l) => l.startsWith("| `spawn ")), /--self-compact/);
-  assert.match(skill, /`mod on \(<source>\)`, `mod off \(mode <mode>\)` or `mod stale`/);
+  assert.match(skill, /`mod on \(<source>\)` \(then `switched to <model> <effort>` after a `switch`\), `mod off \(mode <mode>\)` or `mod stale`/);
 });
 
 test("the worker brief has the {{self_compact}} line, and the Briefs section gives its text", () => {

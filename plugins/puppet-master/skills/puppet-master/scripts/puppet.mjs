@@ -655,21 +655,40 @@ export function launchFlags({ tier, model, effort } = {}) {
 export function tierLine(name, tier, facts) {
   const ok = tierMatch(tier, facts);
   if (ok === null) return `${name} tier ${tier}: unchecked (no turn yet); have it state its model, then read its effort with list --name`;
-  const has = `${facts.model} ${facts.effort}`;
+  const has = `${facts.model} ${facts.effort}${facts.switched ? " (switched)" : ""}`;
   return ok ? `${name} tier ${tier}: ok (${has})` : `MISMATCH ${name} tier ${tier} needs ${TIERS[tier]}; it runs ${has}`;
 }
 
-// The line printed after a MISMATCH: the session-only paste form. A typed `/model <name>` or
+// The session-only paste form, for a session whose mod is not on. A typed `/model <name>` or
 // `/effort <level>` saves the user's default for new sessions (docs: model-config, "Setting
 // your model" and "Adjust effort level"); `s` in the picker or slider switches this session only.
-export function mismatchPaste(name, tier) {
-  const { model, effort } = TIER_LAUNCH[tier];
-  const row = model[0].toUpperCase() + model.slice(1);
+export function switchPaste(name, { model, effort }) {
+  const alias = /^(opus|sonnet|haiku)/.exec(model)?.[1];
+  const row = alias ? alias[0].toUpperCase() + alias.slice(1) : model;
   return `give the user "${name}: /model, then s on the ${row} row" and "${name}: /effort, then s at ${effort}" to paste (this session only; never a typed /model ${model} or /effort ${effort}, which saves the user's default)`;
 }
 
-// The model and effort of a listed session, read from its transcript; nulls when fresh.
+export function mismatchPaste(name, tier) {
+  return switchPaste(name, TIER_LAUNCH[tier]);
+}
+
+// The line printed after a MISMATCH: `switch` where the session's mod is on, else the paste.
+export function mismatchNext(deps, sessionId, name, tier) {
+  return modOn(modHeartbeat(deps, sessionId))
+    ? `its mod is on: run \`switch ${name} --tier ${tier}\` (session-only; no paste)`
+    : mismatchPaste(name, tier);
+}
+
+// The model and effort a listed session's next request goes out with: the mod's switch when
+// one applies, else its last main-thread request in the transcript; nulls when fresh.
 function sessionFacts(deps, agent) {
+  const hb = modHeartbeat(deps, agent.sessionId);
+  if (modOn(hb) && hb.override) return { model: hb.override.model, effort: hb.override.effort, switched: true };
+  return lastRequest(deps, agent);
+}
+
+// The model and effort of the last main-thread request in the transcript; nulls when fresh.
+function lastRequest(deps, agent) {
   const file = findTranscript(projectsDir(deps), agent.sessionId, { optional: true });
   if (file === null) return { model: null, effort: null };
   const t = transcriptFacts(deps.fs.readFileSync(file, "utf8"));
@@ -874,8 +893,8 @@ export function finishJob(deps, key) {
 
 // A clean worker session in the cwd's checkout; null when there is none, or when the job
 // would collide with a session already editing that checkout. With a tier, a session that
-// already matches it comes first, then one not yet checked; within each, the user's own
-// windows first.
+// already matches it, or whose mod is on so `switch` can align it, comes first, then one not
+// yet checked; within each, the user's own windows first (an opened window before a worker).
 export function pickSession(deps, cwd, { scope, noGit = false, tier } = {}) {
   if (tier !== undefined) tierMatch(tier, {});
   const job = jobFields(deps, { scope, noGit });
@@ -886,7 +905,7 @@ export function pickSession(deps, cwd, { scope, noGit = false, tier } = {}) {
   const here = Object.entries(reg.workers).filter(([, r]) => checkoutKey(deps, r.checkout) === key);
   if (here.some(([, r]) => isEditing(r, agents) && collision(job, { scope: r.scope, git: r.git }))) return null;
   const rank = (c) => {
-    const match = tier === undefined ? 0 : { true: 0, null: 1, false: 2 }[String(c.match)];
+    const match = tier === undefined || c.switchable ? 0 : { true: 0, null: 1, false: 2 }[String(c.match)];
     return match * 2 + (c.record.kind === "interactive" ? 0 : 1);
   };
   const clean = here
@@ -895,7 +914,8 @@ export function pickSession(deps, cwd, { scope, noGit = false, tier } = {}) {
     .map((c) => {
       if (tier === undefined) return c;
       const facts = sessionFacts(deps, c.agent);
-      return { ...c, match: tierMatch(tier, facts), tierCheck: tierLine(c.name, tier, facts) };
+      const switchable = modOn(modHeartbeat(deps, c.agent.sessionId));
+      return { ...c, match: tierMatch(tier, facts), switchable, tierCheck: tierLine(c.name, tier, facts) };
     })
     .sort((a, b) => rank(a) - rank(b));
   return clean[0] ?? null;
@@ -1153,11 +1173,15 @@ export function modHeartbeat(deps, sessionId) {
   return age > HEARTBEAT_MAX_AGE_MS ? { ...hb, stale: true } : hb;
 }
 
+// A mod that beat lately and is switched on: it can compact, switch and (a worker) clear.
+export const modOn = (hb) => Boolean(hb && !hb.stale && hb.enabled);
+
 // The `list` column: nothing when no mod ever beat in that session.
 export function modLabel(hb) {
   if (!hb) return null;
   if (hb.stale) return "mod stale";
-  return hb.enabled ? `mod on (${hb.source})` : `mod off (mode ${hb.mode})`;
+  if (!hb.enabled) return `mod off (mode ${hb.mode})`;
+  return `mod on (${hb.source})${hb.override ? `  switched to ${hb.override.model} ${hb.override.effort}` : ""}`;
 }
 
 // A session that cannot be compacted or cleared right now: not idle, or idle but parked on a
@@ -1291,6 +1315,62 @@ export async function clearSession(deps, key) {
   return { name: agent.name, sessionId: newSid };
 }
 
+// The same limits the mod checks: a model alias or a claude-* id (an optional [1m]).
+const SWITCH_MODEL_RE = /^(?:opus|sonnet|haiku|claude-[a-z0-9.-]+)(?:\[1m\])?$/;
+
+// What a switch names: a tier's model and effort (as `spawn` launches it), or both given;
+// null for --reset, which takes the session back to its launch model and effort.
+export function switchTarget({ tier, model, effort, reset = false } = {}) {
+  if (reset) {
+    if (tier !== undefined || model !== undefined || effort !== undefined) {
+      throw new PuppetError("switch: --reset takes no --tier, --model or --effort", 2);
+    }
+    return null;
+  }
+  if (tier !== undefined) {
+    if (model !== undefined || effort !== undefined) throw new PuppetError("switch: --tier, or --model with --effort, not both", 2);
+    tierMatch(tier, {});
+    return { ...TIER_LAUNCH[tier] };
+  }
+  if (model === undefined || effort === undefined) throw new PuppetError("switch: name a --tier, or --model and --effort, or --reset", 2);
+  if (!SWITCH_MODEL_RE.test(model)) throw new PuppetError(`--model must be opus, sonnet, haiku or a claude-* id, got "${model}"`, 2);
+  if (!EFFORTS.includes(effort)) throw new PuppetError(`--effort must be one of ${EFFORTS.join(", ")}, got "${effort}"`, 2);
+  return { model, effort };
+}
+
+// Switch a session's model and effort through its own mod, for this session only (no
+// settings file is written). The master's own switch cannot wait for an ack (it runs in the
+// master's turn): the mod writes it once the turn has ended.
+export async function switchSession(deps, key, opts = {}) {
+  const target = switchTarget(opts);
+  const agents = listAgents(deps);
+  const reg = loadRoster(deps, agents);
+  const { agent, rec } = rosterRecord(agents, reg, key);
+  const fallback = target
+    ? switchPaste(agent.name, target)
+    : "none needed: where the mod is not on, no switch applies and the session runs its launch model";
+  const self = rec.role === "master";
+  if (!self) requireBoundary(agent, "switching");
+  const hb = requireMod(deps, agent, fallback);
+  // A mod loaded before the switch existed beats with no `override` field and drops the request.
+  if (!("override" in hb)) {
+    throw new PuppetError(`${agent.name}: its mod predates the switch (loaded before the update); reopen the window or run /reload-plugins in it. Fallback: ${fallback}`);
+  }
+  const last = lastRequest(deps, agent);
+  let r;
+  try {
+    r = await modRequest(deps, agent.sessionId, { action: "switch", ...(target ?? { reset: true }), role: rec.role }, { wait: !self });
+  } catch (e) {
+    if (!(e instanceof PuppetError)) throw e;
+    throw new PuppetError(`${e.message}. Fallback: ${fallback}`);
+  }
+  if (self) return { name: agent.name, target, requested: true };
+  if (!r.ack.ok) {
+    throw new PuppetError(`${agent.name} was NOT switched: ${r.ack.outcome}${r.ack.detail ? ` (${r.ack.detail})` : ""}. Fallback: ${fallback}`);
+  }
+  return { name: agent.name, target, previous: r.ack.previous ?? null, last };
+}
+
 // --- subcommands ----------------------------------------------------------------------
 
 const USAGE = [
@@ -1306,6 +1386,7 @@ const USAGE = [
   "  cycle <worker> <focus> [--next <brief-file>]",
   "  compact <session> <focus>   (through the session's own mod; needs --self-compact or the user's yes)",
   "  clear <worker>   (a worker whose job is finished, through its own mod)",
+  "  switch <session> (--tier creative|mechanical | --model <m> --effort <e> | --reset)   (this session only, through its own mod)",
   "  close <worker>",
   "  harvest [--master <session>] [--logs <dir>] [--plugin-data <dir>]",
   "  logs [--logs <dir>] [--plugin-data <dir>]",
@@ -1325,6 +1406,7 @@ const FLAGS = {
   "--no-git": false,
   "--git": false,
   "--self-compact": false,
+  "--reset": false,
   "--tier": true,
   "--group": true,
   "--model": true,
@@ -1471,7 +1553,7 @@ function cmdAssign(deps, positional, flags) {
   const verb = r.extended ? "extended" : "assigned";
   deps.out(`${verb} ${r.name}: ${r.job}${r.scope ? ` (scope ${r.scope.join(",")}${r.git ? "" : ", no git"})` : ""}`);
   if (r.tierCheck) deps.out(r.tierCheck);
-  if (r.tierCheck?.startsWith("MISMATCH ")) deps.out(mismatchPaste(r.name, flags.tier));
+  if (r.tierCheck?.startsWith("MISMATCH ")) deps.out(mismatchNext(deps, r.sessionId, r.name, flags.tier));
   return 0;
 }
 
@@ -1608,7 +1690,7 @@ function cmdPick(deps, positional, flags) {
   if (!hit) throw new PuppetError(`no clean session for ${checkoutOf(deps, positional[0])}; spawn one`);
   deps.out(hit.name);
   if (hit.tierCheck) deps.out(hit.tierCheck);
-  if (hit.tierCheck?.startsWith("MISMATCH ")) deps.out(mismatchPaste(hit.name, flags.tier));
+  if (hit.tierCheck?.startsWith("MISMATCH ")) deps.out(mismatchNext(deps, hit.agent.sessionId, hit.name, flags.tier));
   return 0;
 }
 
@@ -1655,6 +1737,32 @@ async function cmdClear(deps, positional) {
   return 0;
 }
 
+async function cmdSwitch(deps, positional, flags) {
+  wantPositional(positional, 1, "switch");
+  const s = await switchSession(deps, positional[0], {
+    tier: flags.tier,
+    model: flags.model,
+    effort: flags.effort,
+    reset: Boolean(flags.reset),
+  });
+  const to = s.target ? `${s.target.model} ${s.target.effort}` : "its launch model and effort";
+  if (s.requested) {
+    deps.out(`requested ${s.name}'s own switch to ${to}: its mod writes it once this turn ends; check with list --name ${s.name} after its next turn`);
+    return 0;
+  }
+  const was = s.previous
+    ? ` (switched before to ${s.previous.model} ${s.previous.effort})`
+    : s.last.model
+      ? ` (last request: ${s.last.model} ${s.last.effort ?? "?"})`
+      : "";
+  deps.out(
+    s.target
+      ? `switched ${s.name} to ${to}${was}, from its next request on; its status line and its own answer keep naming the launch model: check with list --name ${s.name} after its next turn`
+      : `reset ${s.name}: its next request goes out on ${to}`,
+  );
+  return 0;
+}
+
 function cmdClose(deps, positional) {
   wantPositional(positional, 1, "close");
   const c = closeWorker(deps, positional[0]);
@@ -1674,6 +1782,7 @@ const COMMANDS = {
   cycle: cmdCycle,
   compact: cmdCompact,
   clear: cmdClear,
+  switch: cmdSwitch,
   close: cmdClose,
   harvest: cmdHarvest,
   logs: cmdLogs,

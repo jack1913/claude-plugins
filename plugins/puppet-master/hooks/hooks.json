@@ -1,4 +1,4 @@
 {
-  "description": "puppet-master mod: compacts, or for a worker clears, its own session when the master's helper asks, only where it was switched on",
+  "description": "puppet-master mod: compacts, switches the model and effort of (session-only), or for a worker clears, its own session when the master's helper asks, only where it was switched on",
   "modules": ["./puppet-mod.js"]
 }

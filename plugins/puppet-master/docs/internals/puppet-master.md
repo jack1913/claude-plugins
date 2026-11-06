@@ -20,10 +20,10 @@ sounds like coordinating sessions never starts it.
 - [`analyst-brief.md`](../../skills/puppet-master/analyst-brief.md) is the analyst's brief, with `{{master_name}}`,
   `{{helper}}`, `{{logs_args}}` and `{{proposal_id}}`, the closed tag list and the report's shape.
 - [`scripts/puppet.mjs`](../../skills/puppet-master/scripts/puppet.mjs) is the helper and its command line: `measure`,
-  `list`, `adopt`, `assign`, `finish`, `reopen`, `pick`, `spawn`, `cycle`, `compact`, `clear`, `close`, `harvest`,
-  `finding`, `summary`, `decide` and `shipped`.
+  `list`, `adopt`, `assign`, `finish`, `reopen`, `pick`, `spawn`, `cycle`, `compact`, `switch`, `clear`, `close`,
+  `harvest`, `finding`, `summary`, `decide` and `shipped`.
 - [`hooks/puppet-mod.js`](../../hooks/puppet-mod.js), listed by [`hooks/hooks.json`](../../hooks/hooks.json), is the
-  mod that compacts or clears a session from inside (see [The mod](#the-mod)). Claude Code runs it in its own
+  mod that compacts, switches the model and effort of, or clears a session from inside (see [The mod](#the-mod)). Claude Code runs it in its own
   environment, not in Node; `hooks/package.json` only lets Node import it in the tests.
 - [`scripts/harvest.mjs`](../../skills/puppet-master/scripts/harvest.mjs) resolves the logs folder, redacts secrets
   and pulls events out of transcripts.
@@ -38,7 +38,9 @@ All three scripts use Node built-ins only, with no npm and no `package.json`.
   compact and restart workers, logging each in one line. Commits (unless the user pre-authorized them for the job),
   pushes, PR posts, approvals, live or external writes and anything destructive go to the user.
 - **The user's sessions first.** The user works with several windows open. A job goes to a clean one of them in the
-  job's checkout (`pick`), and a background worker is started only when there is none. On 2026-10-27 the master did
+  job's checkout (`pick`), and a background worker is started only when there is none. The user, 2026-11-06: "move
+  theirs work into opened, and keep bg only when you cannot do with opened windows": a window on the wrong tier whose
+  mod is on is switched to the tier rather than passed over, so `pick` ranks it with the ones that match. On 2026-10-27 the master did
   merges, pushes and checkouts itself, so anything that changes a repository is a job for a session, unless the user
   tells the master to do it or it is a read-only check of a session's report.
 - **One job per context, unless reused on purpose.** By default a session that held a job is not given another
@@ -58,11 +60,13 @@ All three scripts use Node built-ins only, with no npm and no `package.json`.
   weaken the lock.
 - **Every job names its tier.** `creative` (design, writing, judgment, review) needs an Opus model at high effort or
   more; `mechanical` (renames, moves, reformatting, checks) needs a model other than Opus at medium effort or less.
-  `assign --tier` and `pick --tier` compare the tier with the session's transcript and print `ok`, `unchecked` (no
-  turn yet) or `MISMATCH`. A mismatch warns and does not refuse. After it, both commands print session-only paste
-  lines (`<name>: /model`, then `s` on the tier's model row; `<name>: /effort`, then `s` at its level). On a mismatch
-  from `pick`, the master spawns a worker on the tier instead. It never changes a session's settings itself (see
-  [No model switch in the mod](#no-model-switch-in-the-mod)). A fresh session is asked for its model only. Its
+  `assign --tier` and `pick --tier` compare the tier with the session's switch when its mod has one, else with its
+  transcript, and print `ok`, `unchecked` (no turn yet) or `MISMATCH`. A mismatch warns and does not refuse. After
+  it, where the session's mod is on, both commands print `its mod is on: run switch <name> --tier <tier>` and the
+  master runs it (see [The model switch](#the-model-switch)); elsewhere they print session-only paste lines
+  (`<name>: /model`, then `s` on the tier's model row; `<name>: /effort`, then `s` at its level), and the master
+  takes another window or spawns a worker on the tier. It never changes a session's settings. A fresh session is
+  asked for its model only. Its
   effort is read from its transcript after the first turn, because workers misreport their own effort: on
   2026-11-01 three of three said `low` while their transcripts said medium, medium and high.
 - **A spawn always names its effort.** `spawn` passes `--model` and `--effort` to `claude --bg`: `creative` gives
@@ -244,15 +248,16 @@ temp file, then a rename) and plainly by the mod (the mod has no rename or delet
 
 | File | Written by | Holds |
 | --- | --- | --- |
-| `heartbeat/<sessionId>.json` | the mod, every 3 s | `sessionId`, `version`, `beat` (ms), `mode`, `enabled`, `source`, `role`, `ask`, `turnRunning`, `lastError` |
+| `heartbeat/<sessionId>.json` | the mod, every 3 s, and at once after a switch | `sessionId`, `version`, `beat` (ms), `mode`, `enabled`, `source`, `role`, `ask`, `turnRunning`, `override` (the switch that applies, or `null`), `lastError` |
 | `optin/<sessionId>.json` | the helper | the master's opt-in |
 | `roles/<sessionId>.json` | the helper, on `adopt` and `spawn` | `role` |
-| `requests/<sessionId>.json` | the helper | `nonce`, `sessionId`, `requestedAt` (ms), `action` (`compact` or `clear`), `focus`, `role` |
-| `acks/<nonce>.json` | the mod | `ok`, `outcome`, tokens before and after, or `newSessionId` after a clear |
+| `requests/<sessionId>.json` | the helper | `nonce`, `sessionId`, `requestedAt` (ms), `action` (`compact`, `switch` or `clear`), `focus`, `model` and `effort` or `reset`, `role` |
+| `acks/<nonce>.json` | the mod | `ok`, `outcome`, tokens before and after, `model`, `effort` and `previous` after a switch, or `newSessionId` after a clear |
+| `overrides/<sessionId>.json` | the mod, on a switch | `model`, `effort`, `at`, `nonce`, and `carriedFrom` when a clear moved it to a new id; `{}` after `--reset` |
 
 The mod acts only on a request for its own session id, newer than five minutes, with a valid nonce it has not seen,
-and answers every refusal with an ack: `wrong-session`, `stale`, `not-enabled`, `refused-role`, `busy`, `vetoed`,
-`rejected`. A heartbeat older than 15 s reads as a mod that stopped. The helper removes an ack once read, and on a
+and answers every refusal with an ack: `wrong-session`, `stale`, `not-enabled`, `refused-role`, `refused-value`,
+`busy`, `vetoed`, `rejected`. A heartbeat older than 15 s reads as a mod that stopped. The helper removes an ack once read, and on a
 timeout withdraws its request so nothing runs later unseen.
 
 **Compact.** The mod calls `$.session.compact({ instructions: focus })`. It rejects while a turn runs, so the mod
@@ -293,10 +298,61 @@ as `waiting`, which is in `BUSY_STATES` and not in `IDLE_STATES`, so `compact`, 
 checkout lock counts an `unknown` session in that state as editing (before, only `compact` and `clear` checked
 `status`). Idle means state `done` or `idle` and no pending dialog.
 
-### No model switch in the mod
+### The model switch
 
-Researched on 2026-11-05 (Claude Code 2.1.318), and not built: the owner chose "No: paste lines + spawn". The probe
-notes are in the checkout's untracked `scratch/model-switch-probe-report.md`.
+Built on 2026-11-06 at the owner's word: "we must solve this onces and for all [...] i asked if you have enabled
+yesterday update that should let you handle changing model and effort of opened sessions like you do with clear and
+compact". It replaces the 2026-11-05 pick "No: paste lines + spawn". The probe notes are in the checkout's untracked
+`scratch/model-switch-probe-report.md`, the build's live test in `scratch/model-switch-build/`.
+
+**How it works.** `switch <session> --tier T | --model M --effort E | --reset` writes a `switch` request; `--tier` uses
+`spawn`'s model and effort (`creative`: `opus` `high`; `mechanical`: `sonnet` `medium`). The mod checks the values
+(an alias `opus`, `sonnet`, `haiku` or a `claude-*` id, each with an optional `[1m]`, and one of the five effort
+levels; anything else is `refused-value`), writes `overrides/<session>.json` and acks `switched` with the previous
+switch. Like `compact`, it waits while a turn runs and retries each tick until the request is stale, so the master's
+own switch lands after its turn. A `turn.step` hook then calls `next({ ...e, model, effort })` on every main-loop
+request (`e.agentId` absent); a subagent keeps its own model. The hook applies the override only while the mod is
+switched on: `self_compact` `off` vetoes it. After a load or a `/reload-plugins` it reads the override file once
+before the first tick. A new session id, from the mod's `clear` or a `/clear` the user typed, takes the old id's
+override along, as a `/model` choice outlives a `/clear`. `--reset` blanks the file and the session goes back to its
+launch model. `assign` and `pick` read the switch from the heartbeat, so a switched session checks `ok (… (switched))`
+before its next turn.
+
+**Verified** (2026-11-06, Claude Code 2.1.319, a throwaway `--bg` session started as `--model haiku --effort low`,
+closed with the helper's `close`; the transcript's `api-request` records, read by
+`scratch/model-switch-build/facts.mjs`):
+
+- after `switch --model sonnet --effort medium`, both main-thread requests of a turn with a `Read` tool call (before
+  and after the tool result) went out as `claude-sonnet-5-5` at `medium`, and `list` printed `model claude-sonnet-5-5
+  medium … mod on (optin)  switched to sonnet medium`;
+- after `compact` the session id stayed the same and the next request was still Sonnet at medium;
+- after `clear` the new session id held the override (`carriedFrom` the old one) and its first request was Sonnet at
+  medium;
+- `--tier creative` gave `claude-opus-5-5` at `high`, and `--reset` gave `claude-haiku-5-5` at `low` again;
+- the SHA-256 of the user's and the checkout's `settings.json` was the same before and after; neither
+  `settings.local.json` exists;
+- the session loaded the mod straight from the checkout: `claude plugin list` reads `puppet-master@jack1913` from
+  `plugins/puppet-master`, and the probe's heartbeat carried the new `override` field.
+
+**Known costs.**
+
+- The status line keeps showing the launch model and effort (it showed `Haiku 5.5 low` through every switch), and
+  the session names the launch model when asked (it answered "Haiku 5.5 (claude-haiku-5-5)" while Sonnet ran it).
+  `list` is the only check: its `model` column is the last request sent.
+- The context window the status line and `$.session.usage()` report is the launch model's: the mods types call it
+  "the context window of the session's model". That auto-compaction follows the launch model's window too is a
+  **hypothesis**: not tested. Switching a session to a model with a smaller window than its launch model's could let
+  it grow past that smaller window before it compacts.
+- Each switch starts a new prompt cache for the next request, as a `/model` switch does (**hypothesis**: not measured).
+- The hook rewrites every main-loop request, a fallback model's too (`e.model` is "the session's, a fallback's"), so
+  a switch overrides a fallback (**hypothesis**: no fallback was seen).
+- The mod's busy check counts a subagent's `turn.complete` as the turn's end; the helper's own idle check from
+  `claude agents` comes first, so a busy session is refused before a request is written.
+
+**Not yet tested:** a foreground window, a `/reload-plugins` in a live session (the unit test covers the read before
+the first tick), and the master's own switch after its turn.
+
+Why `turn.step` and not `/model`:
 
 - **A typed `/model <name>` or `/effort <level>` saves the user's default.** "Typing `/model <name>` directly behaves
   like `Enter`", which writes `model` to the user's settings, background sessions included. A level typed after
@@ -312,9 +368,9 @@ notes are in the checkout's untracked `scratch/model-switch-probe-report.md`.
   the status line was given `claude-haiku-5-5` at `low` on every call, `$.session.model()` stayed Haiku, and the
   switched model, asked its name, answered "Haiku 5.5" (**verified**: the probe, background id `511c4a9b`, stopped
   and removed).
-- **What is built instead.** A `MISMATCH` from `pick` leads to `spawn`, which passes `--model` and `--effort` at launch
-  and saves nothing. A window the user keeps for the job gets the session-only paste lines (`mismatchPaste` in
-  `puppet.mjs`).
+- **Where the mod is not on**, a `MISMATCH` still leads to another window or `spawn`, which passes `--model` and
+  `--effort` at launch and saves nothing, and a window the user keeps for the job gets the session-only paste lines
+  (`switchPaste` in `puppet.mjs`).
 
 ## The analyst and its logs
 
@@ -402,6 +458,10 @@ failure. There is no silent fallback.
   session is exempt from the idle check, since it runs in its own turn), and one whose mod has no fresh, switched-on
   heartbeat; it names the reason and prints `give the user "<name>: /compact <focus>" to paste`. A refusing ack, a
   timeout (90 s) and an ack with no new `compact_boundary` in the transcript are errors with the same line.
+- `switch` refuses a wrong flag combination or value (exit 2), a session outside the roster, one that is not idle or
+  is `waiting` (the master's own session is exempt), one whose mod has no fresh, switched-on heartbeat, and one whose
+  heartbeat has no `override` field (a mod loaded before the switch existed, which would drop the request); it names
+  the reason and prints the session-only paste lines. A refusing ack and a timeout are errors with the same lines.
 - `clear` refuses a session that is not a worker, has an active job or no finished job, is not idle or is `waiting`,
   or whose heartbeat does not show the `worker` role; a refusing ack, a missing new session id and a new session
   that `claude agents` does not list are errors. It never sends a second request while one waits.
@@ -436,8 +496,11 @@ captures of a real probe worker, plus `bg-stdout-color.txt` (the coloured `--bg`
   line, dialog answers and `notify_when_idle`, harvest offsets, and filing by work day;
 - findings, the summary headline, decisions and the before/after means;
 - the mod against a fake `$` (`mod.test.mjs`): off unless switched on, the veto, stale and foreign requests, the
-  compact retry, every clear refusal, the start question's answers and its skips; the helper's `compact`, `clear`,
-  opt-in and role files and the `list` column against a scripted fake mod (`selfcompact.test.mjs`);
+  compact retry, every clear refusal, the start question's answers and its skips, and the switch: the `turn.step`
+  rewrite on the main loop only, the veto, the limits, the wait while a turn runs, `--reset`, the read before the
+  first tick, and the carry to a new session id; the helper's `compact`, `clear`, opt-in and role files and the
+  `list` column against a scripted fake mod (`selfcompact.test.mjs`); the helper's `switch`, the tier check that reads
+  a switch, the line after a `MISMATCH`, and `pick` ranking a switchable window (`switch.test.mjs`);
 - the text of `SKILL.md` and both briefs (the analyst brief's tags must equal the tags in `analyst.mjs`), and the
   `plugin.json` options.
 

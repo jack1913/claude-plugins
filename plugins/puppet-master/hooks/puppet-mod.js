@@ -1,12 +1,19 @@
 // puppet-mod.js: the puppet-master mod. In a session where it was switched on, it compacts
-// that session, or (for a worker only) clears it, when the master's helper writes a request
-// for it. Off unless switched on: a session does nothing here until the user said yes at
-// the session-start question, set `self_compact` to `on`, or the master's helper wrote an
-// opt-in for that session (`spawn --self-compact`, `adopt --self-compact`).
+// that session, switches its model and effort, or (for a worker only) clears it, when the
+// master's helper writes a request for it. Off unless switched on: a session does nothing
+// here until the user said yes at the session-start question, set `self_compact` to `on`, or
+// the master's helper wrote an opt-in for that session (`spawn --self-compact`,
+// `adopt --self-compact`).
+//
+// The switch is session-only: no settings file is written. A `turn.step` hook names the
+// override's model and effort on every main-loop model request (subagents keep theirs). The
+// status line and the session's own self-report keep the launch model; the transcript's
+// api-request records, which the helper's `list` reads, show the one sent.
 //
 // What it reads and writes, all in one folder (`<config dir>/puppet-master/mod`, or
 // PUPPET_MOD_DIR): heartbeat/<session>.json (written every tick), optin/<session>.json and
-// roles/<session>.json (the helper's), requests/<session>.json (the helper's), acks/<nonce>.json.
+// roles/<session>.json (the helper's), requests/<session>.json (the helper's), acks/<nonce>.json,
+// overrides/<session>.json (the switch; carried to the new session id after a clear).
 // It calls $.session.id, usage, compact, $.command.run, $.ui.ask, $.config.list and set, $.fs,
 // $.env, and one $.process.run (`claude agents --json`, to learn whether it runs in a window
 // or a worker before it asks). No shell, no network.
@@ -22,7 +29,7 @@ const PROMPT_GRACE_MS = 10000;
 const CONFIG_KEY = "puppet-master.self_compact";
 
 const ASK_QUESTION =
-  "puppet-master: may the master compact this session when it asks (a worker session it may also clear between jobs)?";
+  "puppet-master: may the master compact this session, and switch its model and effort for a job (this session only), when it asks (a worker session it may also clear between jobs)?";
 const ASK_YES = "Yes, this session (Recommended)";
 const ASK_ALWAYS = "Yes, always on this machine";
 const ASK_NO = "No";
@@ -55,6 +62,19 @@ async function readJson($, file) {
 
 const writeJson = ($, file, value) => $.fs.write(file, `${JSON.stringify(value, null, 2)}\n`);
 
+// What a switch may name: a model alias or a claude-* id (an optional [1m]), and one of the five
+// effort levels. Anything else is refused, in a request and in an override file alike.
+const MODEL_RE = /^(?:opus|sonnet|haiku|claude-[a-z0-9.-]+)(?:\[1m\])?$/;
+const EFFORTS = ["low", "medium", "high", "xhigh", "max"];
+
+function checkOverride(v) {
+  if (typeof v.model !== "string" || !MODEL_RE.test(v.model)) {
+    throw new Error(`model must be opus, sonnet, haiku or a claude-* id, got ${JSON.stringify(v.model ?? null)}`);
+  }
+  if (!EFFORTS.includes(v.effort)) throw new Error(`effort must be one of ${EFFORTS.join(", ")}, got ${JSON.stringify(v.effort ?? null)}`);
+  return { model: v.model, effort: v.effort };
+}
+
 // The `self_compact` row: ask (default), on or off. A missing row is "off": silence never runs.
 async function readMode($) {
   const row = (await $.config.list()).find((r) => r.key === CONFIG_KEY);
@@ -75,7 +95,28 @@ export function register(on) {
     lastError: null,
     loggedErrors: new Set(),
     handled: new Set(),
+    // The switch: the override file's value for this session, whether it applies (the mod is
+    // switched on), whether it was read since this module loaded, and the session id it was read for.
+    override: null,
+    overrideOn: false,
+    ready: false,
+    lastSid: null,
   };
+
+  // The switch. On the main loop only: a subagent keeps the model and effort it was given.
+  // Before the first tick after a load or reload, the override is read here once.
+  on("turn.step", async function* ($, e, next) {
+    if (e.agentId !== undefined) return yield* next(e);
+    let ov = null;
+    try {
+      if (!st.ready) await refresh($, st);
+      ov = st.overrideOn ? st.override : null;
+    } catch (err) {
+      await fail($, st, err);
+    }
+    if (ov === null) return yield* next(e);
+    return yield* next({ ...e, model: ov.model, effort: ov.effort });
+  });
 
   on("turn.start", async ($, e, next) => {
     st.turnRunning = true;
@@ -186,10 +227,11 @@ async function tick($, st) {
   }
 }
 
-async function poll($, st) {
+// What this session is switched to, and whether the mod is on. A new session id (a /clear,
+// whoever ran it) takes the old id's override with it, as a /model choice outlives a /clear.
+async function refresh($, st) {
   const dir = await modDir($, st);
   const sid = await $.session.id();
-  const now = await $.clock.now();
   const mode = await readMode($);
   const optin = await readJson($, `${dir}/optin/${sid}.json`);
   const role = (await readJson($, `${dir}/roles/${sid}.json`))?.role ?? null;
@@ -200,19 +242,47 @@ async function poll($, st) {
     else if (mode === "on") source = "config";
     else if (optin) source = "optin";
   }
-  await writeJson($, `${dir}/heartbeat/${sid}.json`, {
-    sessionId: sid,
-    version: VERSION,
-    startedAt: st.startedAt,
-    beat: now,
-    mode,
-    enabled: source !== null,
-    source,
-    role,
-    ask: st.askState,
-    turnRunning: st.turnRunning,
-    lastError: st.lastError,
-  });
+  const file = `${dir}/overrides/${sid}.json`;
+  if (st.lastSid !== null && st.lastSid !== sid && !(await readJson($, file))) {
+    const old = await readJson($, `${dir}/overrides/${st.lastSid}.json`);
+    if (old) await writeJson($, file, { ...old, carriedFrom: st.lastSid });
+  }
+  st.lastSid = sid;
+  const raw = await readJson($, file);
+  let override = null;
+  if (raw) {
+    try {
+      override = checkOverride(raw);
+    } catch (err) {
+      await fail($, st, `ignored ${file}: ${err.message}`);
+    }
+  }
+  st.override = override;
+  st.overrideOn = source !== null;
+  st.ready = true;
+  return { dir, sid, mode, optin, role, source };
+}
+
+async function poll($, st) {
+  const { dir, sid, mode, optin, role, source } = await refresh($, st);
+  const now = await $.clock.now();
+  const beat = () =>
+    writeJson($, `${dir}/heartbeat/${sid}.json`, {
+      sessionId: sid,
+      version: VERSION,
+      startedAt: st.startedAt,
+      beat: now,
+      mode,
+      enabled: source !== null,
+      source,
+      role,
+      ask: st.askState,
+      turnRunning: st.turnRunning,
+      // The model and effort every main-loop request is sent with; null when none applies.
+      override: st.overrideOn ? st.override : null,
+      lastError: st.lastError,
+    });
+  await beat();
 
   const file = `${dir}/requests/${sid}.json`;
   const req = await readJson($, file);
@@ -220,7 +290,7 @@ async function poll($, st) {
   const blank = () => $.fs.write(file, "{}");
   const ack = (body) => writeJson($, `${dir}/acks/${req.nonce}.json`, { nonce: req.nonce, action: req.action, sessionId: sid, at: now, ...body });
 
-  if (typeof req.nonce !== "string" || !/^[A-Za-z0-9-]{4,64}$/.test(req.nonce) || !["compact", "clear"].includes(req.action)) {
+  if (typeof req.nonce !== "string" || !/^[A-Za-z0-9-]{4,64}$/.test(req.nonce) || !["compact", "clear", "switch"].includes(req.action)) {
     await blank();
     throw new Error(`ignored a request with no valid nonce or action in ${file}`);
   }
@@ -238,6 +308,37 @@ async function poll($, st) {
   if (source === null) {
     st.handled.add(req.nonce);
     await ack({ ok: false, outcome: "not-enabled", detail: `self_compact is ${mode} and no opt-in for this session` });
+    return blank();
+  }
+
+  const promptSoon = st.promptAt !== null && now - st.promptAt < PROMPT_GRACE_MS;
+
+  // switch: written between turns only. While a turn runs the request waits, retried each tick
+  // until it goes stale, so a switch the master asks for its own session lands when its turn ends.
+  if (req.action === "switch") {
+    let next = null;
+    if (req.reset !== true) {
+      try {
+        next = checkOverride(req);
+      } catch (err) {
+        st.handled.add(req.nonce);
+        await ack({ ok: false, outcome: "refused-value", detail: err.message });
+        return blank();
+      }
+    }
+    if (st.turnRunning || promptSoon) {
+      st.lastError = "switch waiting: a turn is running or a prompt just arrived";
+      return;
+    }
+    const previous = st.override;
+    const file = `${dir}/overrides/${sid}.json`;
+    if (next) await writeJson($, file, { ...next, at: now, nonce: req.nonce });
+    else await $.fs.write(file, "{}");
+    st.override = next;
+    st.handled.add(req.nonce);
+    // The heartbeat names the new switch before the ack, so the helper's next read sees it.
+    await beat();
+    await ack({ ok: true, outcome: next ? "switched" : "reset", model: next?.model ?? null, effort: next?.effort ?? null, previous });
     return blank();
   }
 
@@ -263,7 +364,6 @@ async function poll($, st) {
     await ack({ ok: false, outcome: "refused-role", detail: `role ${role ?? "unknown"}: clear is for a worker the master adopted` });
     return blank();
   }
-  const promptSoon = st.promptAt !== null && now - st.promptAt < PROMPT_GRACE_MS;
   if (st.turnRunning || promptSoon) {
     st.handled.add(req.nonce);
     await ack({ ok: false, outcome: "busy", detail: "a turn is running or a prompt just arrived; not clearing" });

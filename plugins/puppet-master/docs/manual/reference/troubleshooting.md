@@ -11,7 +11,8 @@ Find what you see, then do what's next to it.
 | `changed (new session id …)` or `has a new session id` | That window was cleared or restarted. Tell Claude whether it is clean now |
 | A resumed master session's commands fail | Tell it to run its start-up steps again: list the sessions, adopt itself and any session shown as `changed`, then measure. The helper refuses a session with a new session id until it is adopted again |
 | `is already editing … unless both jobs pass --scope` | Two jobs share that folder only when each names the folders it writes and only one runs git. Otherwise use a second checkout, or wait |
-| `MISMATCH … tier …` | That session runs a different model or effort than the job needs. Let Claude start a worker on the right tier, or keep the window: run `/model` and press `s` on the row Claude names, then `/effort` and press `s` at the level. `s` changes that session only; a typed `/model <name>` saves your default |
+| `MISMATCH … tier …` | That session runs a different model or effort than the job needs. Where its mod is on, Claude switches it for that session only. Elsewhere, let Claude start a worker on the right tier, or keep the window: run `/model` and press `s` on the row Claude names, then `/effort` and press `s` at the level. `s` changes that session only; a typed `/model <name>` saves your default |
+| The status line, or the session itself, names the old model after a switch | Expected: both keep the model the session started with. Ask "how are my sessions?": the model column shows the one in use after its next answer |
 | `spawn: name a --tier or --effort` | The master started a worker without saying how strong it should be. Tell it the job's tier: `creative` or `mechanical` |
 | `WARN near compaction` | That session is near the size where it auto-compacts. Let it finish its task |
 | `DONE? run finish` on a session's line | That session reported its job done. Tell the master to close the job |
@@ -23,7 +24,7 @@ Find what you see, then do what's next to it.
 | `loaded but not switched on` or `mod off (mode ask)` on a session's line | You didn't switch the mod on in that session. Say yes in its window, or tell Claude to switch it on |
 | `self_compact off, the user's veto` | You set `self_compact` to `off`. Set it back to `ask` or `on` in the plugin's options |
 | `mod stale` on a session's line | The mod stopped in that session. Run `/reload-plugins` there |
-| `was NOT compacted` or `was NOT cleared` | The message says why, such as `busy` or `stale`, and ends with the line to paste. Try again when the session is idle |
+| `was NOT compacted`, `was NOT cleared` or `was NOT switched` | The message says why, such as `busy` or `stale`, and ends with the line to paste. Try again when the session is idle |
 | `is waiting on a dialog` | That session is waiting for you to answer a question in its own window. Answer it first |
 | A logs folder named `${user_config…}` | The helper never creates one. If you see it, delete it and set `PUPPET_LOGS_DIR` to the folder you want |
 | A background worker can't edit files | Add `"worktree": { "bgIsolation": "none" }` to your own `~/.claude/settings.json`. See [Run background workers](../use/run-background-workers.md) |

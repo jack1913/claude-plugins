@@ -113,6 +113,20 @@ function setup({ mode = "ask", kind = "interactive", answer = ASK_YES, files = {
     role(role) {
       t.put(`roles/${state.sid}.json`, { role });
     },
+    // One model request through the turn.step hook: what it sent down, and what it streamed up.
+    async step(e = {}) {
+      let sent;
+      const next = async function* (x) {
+        sent = x;
+        yield { kind: "text", text: "hi" };
+        return { stop: "end" };
+      };
+      const it = handlers["turn.step"]($, { turnId: "t1", index: 0, model: "claude-opus-5-5", effort: "high", messageCount: 3, ...e }, next);
+      const chunks = [];
+      let r;
+      while (!(r = await it.next()).done) chunks.push(r.value);
+      return { sent, chunks, result: r.value };
+    },
   };
   return t;
 }
@@ -321,6 +335,160 @@ test("an unreadable request file is a loud error, not a silent skip", async () =
   t.put(`requests/${SID}.json`, "{not json");
   await t.tick();
   assert.ok(t.calls.log.some((l) => /not valid JSON/.test(l)), t.calls.log.join("|"));
+});
+
+// --- switch: the session's model and effort ---
+
+const sw = (extra = {}) => ({ action: "switch", model: "sonnet", effort: "medium", ...extra });
+
+test("switch: an enabled session writes the override, acks it, and its main-loop requests carry it", async () => {
+  const t = setup({ mode: "on" });
+  await t.start();
+  const before = await t.step();
+  assert.equal(before.sent.model, "claude-opus-5-5");
+  const n = t.request(sw());
+  await t.tick();
+  const ack = t.ack(n);
+  assert.deepEqual(
+    (({ ok, outcome, model, effort, previous }) => ({ ok, outcome, model, effort, previous }))(ack),
+    { ok: true, outcome: "switched", model: "sonnet", effort: "medium", previous: null },
+  );
+  assert.equal(t.json(`overrides/${SID}.json`).model, "sonnet");
+  assert.equal(t.fsMap.get(`${DIR}/requests/${SID}.json`), "{}");
+  // the heartbeat names the switch in the same tick, before the helper reads it again
+  assert.deepEqual(t.json(`heartbeat/${SID}.json`).override, { model: "sonnet", effort: "medium" });
+  const after = await t.step({ index: 1 });
+  assert.equal(after.sent.model, "sonnet");
+  assert.equal(after.sent.effort, "medium");
+  assert.equal(after.sent.index, 1);
+  assert.equal(after.sent.turnId, "t1");
+  assert.deepEqual(after.chunks, [{ kind: "text", text: "hi" }]);
+  assert.deepEqual(after.result, { stop: "end" });
+  await t.tick();
+  assert.deepEqual(t.json(`heartbeat/${SID}.json`).override, { model: "sonnet", effort: "medium" });
+});
+
+test("switch: a subagent's request keeps its own model and effort", async () => {
+  const t = setup({ mode: "on", files: { [`overrides/${SID}.json`]: { model: "haiku", effort: "low" } } });
+  await t.start();
+  await t.tick();
+  const sub = await t.step({ agentId: "a1", model: "claude-sonnet-5-5", effort: "medium" });
+  assert.equal(sub.sent.model, "claude-sonnet-5-5");
+  assert.equal(sub.sent.effort, "medium");
+  assert.equal((await t.step()).sent.model, "haiku");
+});
+
+test("switch: refused where the mod is not switched on, and mode off vetoes an existing override", async () => {
+  const t = setup({ mode: "ask" });
+  await t.start();
+  const n = t.request(sw());
+  await t.tick();
+  assert.equal(t.ack(n).outcome, "not-enabled");
+  assert.equal(t.json(`overrides/${SID}.json`), undefined);
+  assert.equal((await t.step()).sent.model, "claude-opus-5-5");
+  const off = setup({ mode: "off", files: { [`overrides/${SID}.json`]: { model: "haiku", effort: "low" }, [`optin/${SID}.json`]: { at: "x" } } });
+  await off.start();
+  await off.tick();
+  assert.equal((await off.step()).sent.model, "claude-opus-5-5");
+  assert.equal(off.json(`heartbeat/${SID}.json`).override, null);
+});
+
+test("switch: a model or effort outside the limits is refused and nothing is written", async () => {
+  for (const extra of [{ model: "gpt-5" }, { model: "sonnet; rm" }, { effort: "huge" }, { effort: undefined }, { model: undefined }]) {
+    const t = setup({ mode: "on" });
+    await t.start();
+    const n = t.request(sw(extra));
+    await t.tick();
+    assert.equal(t.ack(n).outcome, "refused-value", JSON.stringify(extra));
+    assert.equal(t.json(`overrides/${SID}.json`), undefined);
+  }
+});
+
+test("switch: full ids and the [1m] form are accepted", async () => {
+  for (const model of ["claude-sonnet-5-5", "opus[1m]", "claude-opus-5-5[1m]"]) {
+    const t = setup({ mode: "on" });
+    await t.start();
+    const n = t.request(sw({ model, effort: "xhigh" }));
+    await t.tick();
+    assert.equal(t.ack(n).outcome, "switched", model);
+    assert.equal((await t.step()).sent.model, model);
+  }
+});
+
+test("switch: while a turn runs the request waits, then lands when the turn ends", async () => {
+  const t = setup({ mode: "on" });
+  await t.start();
+  await t.handlers["turn.start"](t.$, {}, async (e) => e);
+  const n = t.request(sw());
+  await t.tick();
+  assert.equal(t.ack(n), undefined);
+  assert.notEqual(t.fsMap.get(`${DIR}/requests/${SID}.json`), "{}");
+  assert.equal((await t.step()).sent.model, "claude-opus-5-5");
+  await t.handlers["turn.complete"](t.$, {}, async (e) => e);
+  await t.tick();
+  assert.equal(t.ack(n).outcome, "switched");
+});
+
+test("switch: a request still waiting when it goes stale is answered stale, never run", async () => {
+  const t = setup({ mode: "on" });
+  await t.start();
+  await t.handlers["turn.start"](t.$, {}, async (e) => e);
+  const n = t.request(sw());
+  await t.tick();
+  t.state.now += 6 * 60 * 1000;
+  await t.tick();
+  assert.equal(t.ack(n).outcome, "stale");
+  assert.match(t.ack(n).detail, /switch waiting/);
+  assert.equal(t.json(`overrides/${SID}.json`), undefined);
+});
+
+test("switch --reset blanks the override and acks the previous one", async () => {
+  const t = setup({ mode: "on", files: { [`overrides/${SID}.json`]: { model: "haiku", effort: "low" } } });
+  await t.start();
+  await t.tick();
+  const n = t.request({ action: "switch", reset: true });
+  await t.tick();
+  const ack = t.ack(n);
+  assert.equal(ack.outcome, "reset");
+  assert.deepEqual(ack.previous, { model: "haiku", effort: "low" });
+  assert.equal(t.fsMap.get(`${DIR}/overrides/${SID}.json`), "{}");
+  assert.equal((await t.step()).sent.model, "claude-opus-5-5");
+});
+
+test("switch: after a reload the first request carries the override before any tick", async () => {
+  const t = setup({ mode: "on", files: { [`overrides/${SID}.json`]: { model: "sonnet", effort: "medium" } } });
+  await t.start();
+  const r = await t.step();
+  assert.equal(r.sent.model, "sonnet");
+  assert.equal(r.sent.effort, "medium");
+});
+
+test("switch: an override file outside the limits is ignored and logged", async () => {
+  const t = setup({ mode: "on", files: { [`overrides/${SID}.json`]: { model: "sonnet", effort: "turbo" } } });
+  await t.start();
+  await t.tick();
+  assert.equal((await t.step()).sent.effort, "high");
+  assert.ok(t.calls.log.some((l) => /ignored .*overrides.*effort must be/.test(l)), t.calls.log.join("|"));
+});
+
+test("switch: a clear, the mod's or the user's, carries the override to the new session id", async () => {
+  const t = setup({ mode: "on" });
+  t.role("worker");
+  await t.start();
+  t.request(sw({ nonce: "sw-1" }));
+  await t.tick();
+  t.request({ action: "clear", nonce: "clr-1" });
+  await t.tick();
+  assert.equal(t.state.sid, "22222222-bbbb");
+  await t.tick();
+  assert.equal(t.json("overrides/22222222-bbbb.json").model, "sonnet");
+  assert.equal(t.json("overrides/22222222-bbbb.json").carriedFrom, SID);
+  assert.deepEqual(t.json("heartbeat/22222222-bbbb.json").override, { model: "sonnet", effort: "medium" });
+  assert.equal((await t.step()).sent.model, "sonnet");
+  // a /clear the user typed: the id changes between two ticks, nothing else happens
+  t.state.sid = "33333333-cccc";
+  await t.tick();
+  assert.equal(t.json("overrides/33333333-cccc.json").model, "sonnet");
 });
 
 // --- the question at session start ---

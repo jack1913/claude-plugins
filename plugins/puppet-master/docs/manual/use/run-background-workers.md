@@ -19,7 +19,8 @@ only does the housekeeping; every decision stays yours.
 - You've run `claude` once in each folder a worker will use, so the folder is trusted.
 - On Windows, the native `claude` executable is on your `PATH`. Installed through npm? Set `PUPPET_CLAUDE_BIN` to the
   full path of the `claude` executable, because the npm `claude.cmd` shim can't be started.
-- Optional: for the master to compact and clear sessions for you, Claude Code 2.1.287 or newer. See
+- Optional: for the master to compact, clear and switch the model of sessions for you, Claude Code 2.1.287 or
+  newer. See
   [Let sessions compact themselves](#let-sessions-compact-themselves).
 - Optional: choose where the analyst keeps its logs. When you enable puppet-master, Claude Code asks for the **puppet-master
   logs folder**; leave it empty to use the plugin's own data folder. A copy of the skill installed by hand reads
@@ -33,8 +34,8 @@ only does the housekeeping; every decision stays yours.
 
 2. Claude lists your open sessions by name, with their folders, and asks which it may use. Answer "all", or "all but
    the ones in my other project". Sessions you leave out are never touched or read. In the same question it asks
-   whether it may compact your sessions and clear finished workers for you. Claude suggests yes, but nothing
-   happens unless you answer yes.
+   whether it may compact your sessions, switch their model and effort for a job, and clear finished workers for
+   you. Claude suggests yes, but nothing happens unless you answer yes.
 3. It sets one of them aside as the **analyst** and gives it no job. If none of your sessions is clean, it starts a
    background session for that.
 
@@ -50,11 +51,15 @@ there, it starts a background worker instead, on the model and effort the job's 
 `spawned backend-merge id=<id> in <folder> (model opus, effort high)`.
 
 - Each job gets a tier. Design, writing and review are `creative`: an Opus model at high effort or more. Renames,
-  moves and checks are `mechanical`: another model at medium effort or less. If a session runs the wrong model or
-  effort, Claude says `MISMATCH` and starts a background worker on the right model and effort instead. If you want
-  that window for the job, Claude gives you lines for it: run `/model` and press `s` on the model's row, then
-  `/effort` and press `s` at the level. `s` changes that session only. A typed `/model opus` or `/effort high` would
-  save your default for every new session. Claude never changes a session's settings itself.
+  moves and checks are `mechanical`: another model at medium effort or less. Your open windows get the work first.
+  If a window runs the wrong model or effort and its mod is on, Claude switches it to the job's model and effort
+  itself, for that window only: you see `switched backend-b7 to sonnet medium …`. Its status line keeps showing the
+  model it started with, and asked which model it is, it names that one too; Claude checks the real one in its
+  session list. Where the mod is not on, Claude takes another window or starts a background worker on the right
+  model and effort. If you want that window for the job, Claude gives you lines for it: run `/model` and press `s`
+  on the model's row, then `/effort` and press `s` at the level. `s` changes that session only. A typed
+  `/model opus` or `/effort high` would save your default for every new session. Claude never changes your
+  settings.
 - A session that already did a job gets another one only while it is small, under 30% of its context as your status
   line shows it. Otherwise clear it (`/clear`) and tell Claude, or let Claude start a worker. A follow-up to the job a
   session still holds goes to the same session, and a job closed too early can be reopened.
@@ -87,8 +92,9 @@ Ask "how are my sessions?" to see each one's size, model and effort, state and j
 
 ## Let sessions compact themselves
 
-puppet-master ships a small mod that runs inside a session and compacts it, or clears it, when the master asks. It
-does nothing in a session until you switch it on, and it never touches a session that is working.
+puppet-master ships a small mod that runs inside a session and compacts it, switches its model and effort, or clears
+it, when the master asks. It does nothing in a session until you switch it on, and it never touches a session that is
+working.
 
 1. Make sure Claude Code is 2.1.287 or newer. A window you opened before you installed or updated puppet-master needs
    `/reload-plugins`.
@@ -100,12 +106,15 @@ does nothing in a session until you switch it on, and it never touches a session
    A dismissed question counts as no. A background worker never asks: the master switches it on, after you said yes
    when you started the master.
 3. Ask "how are my sessions?". A session whose mod is on ends its line in `mod on (asked)`, `mod on (optin)` or
-   `mod on (config)`. `mod off (mode ask)` is a window you did not switch on, `mod stale` a mod that stopped, and no
-   `mod` at all a session where the plugin is not loaded.
+   `mod on (config)`, then `switched to <model> <effort>` once the master switched it. `mod off (mode ask)` is a
+   window you did not switch on, `mod stale` a mod that stopped, and no `mod` at all a session where the plugin is
+   not loaded.
 
 What the master then does:
 
 - It compacts an idle session with a focus it writes from the job, in your window or a worker.
+- It switches an idle session's model and effort to what the job needs. The switch holds for that session only,
+  through compactions and clears, until the master switches it back; your settings and other sessions keep theirs.
 - It clears only a worker whose job is finished, between jobs, and only when it is idle. It never clears the window
   you use as the master, the analyst, or a session with an open job.
 - If a session can't do it, the master says why and gives you the line to paste instead, such as
@@ -141,7 +150,8 @@ there starts at 05:00, so work past midnight stays with its day. To start it at 
 | `puppet: cannot run claude` | Set `PUPPET_CLAUDE_BIN` to the full path of the `claude` executable |
 | `already editing` | Another session works in that folder. Wait for it to finish, use a second clone, or give both jobs separate folders |
 | `one job per context` | That session already did a job. Claude can reuse it while it is small; otherwise clear it and tell Claude, or let Claude start a worker |
-| `MISMATCH … tier …` | Let Claude start a worker on the right tier, or keep the window: run `/model` and press `s` on the row Claude names, then `/effort` and press `s` at the level |
+| `MISMATCH … tier …` | Where that window's mod is on, Claude switches it. Elsewhere, let Claude start a worker on the right tier, or keep the window: run `/model` and press `s` on the row Claude names, then `/effort` and press `s` at the level |
+| The status line shows the old model after a switch | Expected: the status line and the session's own answer keep the model it started with. The session list shows the model in use |
 | `WARN near compaction` | That session is close to auto-compacting. Let it finish its task, then compact or clear it as Claude suggests |
 | `no clean session for <folder>; spawn one` | None of your sessions is free there; Claude starts a worker |
 | `changed (new session id …)` | The window was cleared or restarted. Tell Claude whether it is clean now |
@@ -149,7 +159,7 @@ there starts at 05:00, so work past midnight stays with its day. To start it at 
 | `is stopped and NOT compacted` | Run the restart command the message ends with |
 | `no mod heartbeat` | The plugin isn't loaded in that session. Run `/reload-plugins` there, or paste the line the message ends with |
 | `loaded but not switched on` | You didn't switch the mod on in that session. Say yes in its window, or tell Claude to switch it on |
-| `was NOT compacted` or `was NOT cleared` | The message says why, and ends with the line to paste |
+| `was NOT compacted`, `was NOT cleared` or `was NOT switched` | The message says why, and ends with the line to paste |
 | A worker can't edit files | Check the `bgIsolation` line in your `~/.claude/settings.json` |
 
 More: [Troubleshooting](../reference/troubleshooting.md).
