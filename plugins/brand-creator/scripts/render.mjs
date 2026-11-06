@@ -774,6 +774,91 @@ function inPageSettle(keepSeeked = false) {
   for (const { s, vals } of plan) for (const [p, v] of vals) s.target.style.setProperty(p, v);
   return left;
 }
+/** page:first-screen-motion, in the page, after startPass adopted (paused) the animations that run on load. `sels` are the hero's heading and first action as the
+ *  settled view found them (null for none). Every animation that ran on load is seeked as the key frames seek it (one that repeats forever over its first iteration);
+ *  first to the end of the longest finite one, where the ones in the first screen are named (their target's box meets the window), then from 0 in `samples` even steps,
+ *  until the heading and the action are both shown. Shown: what is left of the element's box inside the window and inside every ancestor that clips its overflow, times
+ *  the opacity of the element and its ancestors, is at least half (an element under display:none or not visibility:visible is not shown). A clip-path on the way is
+ *  not read: `clip` says one was there. reduced: no seeking from 0, only the end state, and the animations that move something (a transform, a position, a margin,
+ *  a size or a background position; a fade or a colour change does not move).
+ *  -> {found: {heading, action}, length, first: [{name, end, infinite, moves}], unseekable, rest: {heading, action}, shown_at: {heading, action} (ms or null), at_start, clip}. */
+async function inPageHeroMotion({ sels, samples, reduced }) {
+  const bc = window.__bc, W = innerWidth, H = innerHeight;
+  const MOVES = /^(transform|translate|rotate|scale|left|top|right|bottom|inset|offset|margin|width|height|backgroundPosition)/;
+  const pick = (sel) => { if (!sel) return null; try { return document.querySelector(sel); } catch { return null; } };
+  const els = { heading: pick(sels.heading), action: pick(sels.action) };
+  const clip = { heading: false, action: false };
+  // how shown one painted box is: [area, shown area times opacity]; `from` is the element whose ancestors clip and fade it, itself included when `own` (its own
+  // overflow clips the text inside it, not its own border box)
+  const part = (k, r, from, own) => {
+    const area = r.width * r.height;
+    if (!(area > 0)) return [0, 0];
+    const box = { l: Math.max(0, r.left), t: Math.max(0, r.top), r: Math.min(W, r.right), b: Math.min(H, r.bottom) };
+    let op = 1;
+    for (let e = from; e && e.nodeType === 1; e = e.parentElement) {
+      const cs = getComputedStyle(e);
+      if (cs.display === "none") return [area, 0];
+      op *= parseFloat(cs.opacity);
+      if (cs.clipPath && cs.clipPath !== "none") clip[k] = true;
+      if ((own || e !== from) && e !== document.documentElement && e !== document.body) {
+        const c = e.getBoundingClientRect();
+        if (cs.overflowX !== "visible") { box.l = Math.max(box.l, c.left); box.r = Math.min(box.r, c.right); }
+        if (cs.overflowY !== "visible") { box.t = Math.max(box.t, c.top); box.b = Math.min(box.b, c.bottom); }
+      }
+    }
+    if (getComputedStyle(from).visibility !== "visible") return [area, 0];
+    return [area, Math.min(1, op) * Math.max(0, box.r - box.l) * Math.max(0, box.b - box.t)];
+  };
+  // shown: where its text is painted (a heading whose words slide up from under a mask keeps its own box still), each text box weighed by its area; an element with no text
+  // (an icon button) by its own box
+  const shown = (k) => {
+    const el = els[k];
+    if (!el || !el.isConnected) return 0;
+    let area = 0, seen = 0;
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      if (!n.textContent.trim() || !n.parentElement) continue;
+      const range = document.createRange();
+      range.selectNodeContents(n);
+      for (const r of range.getClientRects()) { const [a, s] = part(k, r, n.parentElement, true); area += a; seen += s; }
+    }
+    if (!area) [area, seen] = part(k, el.getBoundingClientRect(), el, false);
+    return area > 0 ? Math.round((100 * seen) / area) / 100 : 0;
+  };
+  const run = bc.anims.filter((s) => s.wasRunning);
+  const finite = run.filter((s) => s.seekable && !s.infinite && s.end > 0);
+  const length = finite.length ? Math.max(...finite.map((s) => s.end)) : 0;
+  const at = async (t) => {
+    for (const s of run) if (s.seekable) s.a.currentTime = s.infinite ? Math.min(t, s.delay + s.duration) : t;
+    await bc.frame(); await bc.frame();
+  };
+  await at(length);
+  const inScreen = (s) => {
+    const e = s.target;
+    if (!e || typeof e.getBoundingClientRect !== "function") return false;
+    const r = e.getBoundingClientRect();
+    return r.bottom > 0 && r.top < H && r.right > 0 && r.left < W && (r.width > 0 || r.height > 0);
+  };
+  const first = run.filter(inScreen).filter((s) => s.infinite || s.duration > 0).slice(0, 40)
+    .map((s) => ({ name: s.name + (s.pseudo ? " on " + s.pseudo : ""), end: s.end, infinite: s.infinite, moves: s.props.some((p) => MOVES.test(p)) }));
+  const rest = { heading: shown("heading"), action: shown("action") };
+  const shownAt = { heading: null, action: null }, atStart = { heading: null, action: null };
+  if (!reduced) {
+    const steps = length > 0 ? samples : 0;
+    for (let i = 0; i <= steps; i++) {
+      const t = steps ? (length * i) / steps : 0;
+      await at(t);
+      for (const k of ["heading", "action"]) {
+        if (!els[k] || shownAt[k] !== null) continue;
+        const v = shown(k);
+        if (i === 0) atStart[k] = v;
+        if (v >= 0.5) shownAt[k] = Math.round(t);
+      }
+      if ((!els.heading || shownAt.heading !== null) && (!els.action || shownAt.action !== null)) break;
+    }
+  }
+  return { found: { heading: !!els.heading, action: !!els.action }, length, first, unseekable: run.filter((s) => !s.seekable).length, rest, shown_at: shownAt, at_start: atStart, clip };
+}
 /** The animations that are running right now: after every one of the page's has been finished, a started one is a motion that did not end. */
 function inPageRunning() {
   return document.getAnimations().filter((a) => a.playState === "running").map((a) => a.animationName || a.transitionProperty || a.id || "animation");
@@ -2235,6 +2320,50 @@ async function measureView(browser, req, width, scheme, tallDone = new Set()) {
   }
 }
 
+const MOTION_VIEW_SAMPLES = 40;   // page:first-screen-motion: the even steps from the start to the end of the motion on load at which the heading and the action are looked for
+
+/** page:first-screen-motion: the views it is measured in: the narrowest and the widest width that measured, in the light scheme (else the first scheme that measured). */
+function motionViews(views) {
+  const ok = views.filter((v) => !v.error);
+  if (!ok.length) return [];
+  const scheme = ok.some((v) => v.scheme === "light") ? "light" : ok[0].scheme;
+  const ws = ok.filter((v) => v.scheme === scheme).map((v) => v.width);
+  return [...new Set([Math.min(...ws), Math.max(...ws)])].map((w) => ok.find((v) => v.width === w && v.scheme === scheme));
+}
+
+/** page:first-screen-motion: the motion of the first screen in one measured view, from two more loads of the page in its window: as a visitor sees it (the animations that
+ *  run on load paused by startPass and seeked, inPageHeroMotion), and with prefers-reduced-motion: reduce (what still moves on load, what a script still draws after
+ *  settling, and the hero at the end). The hero's heading and first action are the ones the settled view found. -> {width, scheme, viewport, normal, reduced} or {…, error}. */
+async function measureFirstScreenMotion(browser, req, view) {
+  const { width, scheme, viewport } = view, hero = (view.tell_facts && view.tell_facts.hero) || {};
+  const sels = { heading: hero.found ? hero.h1_sel || null : null, action: hero.found && hero.first_action ? hero.first_action.sel || null : null };
+  const server = req.rootReal ? await startServer(req.rootReal) : null;
+  const origin = server ? server.origin : new URL(req.openUrl).origin;
+  const url = server ? origin + "/" + req.pageRel.split("/").map(encodeURIComponent).join("/") : req.openUrl;
+  const one = async (reduced) => {
+    const ctx = await browser.newContext({ viewport, colorScheme: scheme, deviceScaleFactor: 1, serviceWorkers: "block", reducedMotion: reduced ? "reduce" : "no-preference" });
+    try {
+      await instrument(ctx, origin, { ownRedirects: true });
+      await ctx.addInitScript(INIT_SCRIPT);
+      const page = await ctx.newPage();
+      await withTimeout(page.goto(url, { waitUntil: "load", timeout: PAGE_TIMEOUT_MS }), PAGE_TIMEOUT_MS + 5000, `loading ${url}`);
+      await withTimeout(page.evaluate(() => document.fonts.ready), PAGE_TIMEOUT_MS, "fonts.ready");
+      const sp = await startPass(page, CAPTURE_FRAMES_SETTLE_MS, reduced ? "reduced" : "normal");
+      const got = await withTimeout(page.evaluate(inPageHeroMotion, { sels, samples: MOTION_VIEW_SAMPLES, reduced }), PAGE_TIMEOUT_MS, "the first screen's motion");
+      return { ...got, real_time: sp.realTime, late: sp.late, alive: sp.alive };
+    } finally {
+      await ctx.close();
+    }
+  };
+  try {
+    return { width, scheme, viewport, normal: await one(false), reduced: await one(true) };
+  } catch (e) {
+    return { width, scheme, viewport, error: firstLine(e) };
+  } finally {
+    if (server) await server.close();
+  }
+}
+
 async function cmdPageMeasure(argv) {
   const { values, positionals } = parse(argv, { request: { type: "string" }, out: { type: "string" }, project: { type: "string" } });
   if (positionals.length) die(EXIT.USAGE, "page-measure takes no page: it is named in the request\n" + USAGE);
@@ -2247,9 +2376,11 @@ async function cmdPageMeasure(argv) {
   try {
     const tallDone = new Set();   // the widths whose tall window has been measured
     for (const width of req.widths) for (const scheme of req.schemes) views.push(await measureView(browser, req, width, scheme, tallDone));
+    const motion = [];
+    for (const v of motionViews(views)) motion.push(await measureFirstScreenMotion(browser, req, v));
     fs.mkdirSync(path.dirname(out), { recursive: true });
     fs.writeFileSync(out, JSON.stringify({
-      schema: 1, chromium: browser.version(), target: { kind: req.url ? "url" : "page", page: req.url ? null : req.pageRel, url: req.url ?? null }, views,
+      schema: 1, chromium: browser.version(), target: { kind: req.url ? "url" : "page", page: req.url ? null : req.pageRel, url: req.url ?? null }, views, first_screen_motion: motion,
     }, null, 1) + "\n");
   } finally {
     await browser.close();

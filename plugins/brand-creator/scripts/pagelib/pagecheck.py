@@ -2120,8 +2120,80 @@ def first_screen_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
         rep.add(rid, "pass", label, detail="; ".join(["the hero's heading" + (" ends" if actionless and len(actionless) == measured else " and first action end") + f" inside the first screen in {measured} view(s)"] + notes), **extra)
 
 
+MOTION_MESSAGE_MS = 500    # page:first-screen-motion: the hero's heading and first action are shown this long into the motion on load at the latest
+MOTION_PAUSE_MS = 5000     # page:first-screen-motion: motion on load that lasts longer (or repeats forever) needs a way to pause, stop or hide it (WCAG 2.2.2)
+
+
+def first_screen_motion_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
+    """page:first-screen-motion: the motion of the first screen, from render.mjs's two more loads of the narrowest and the widest view (light): the animations that run
+    on load paused and seeked from 0 to the end of the longest finite one, and the same page with prefers-reduced-motion: reduce. A warning, never a failure. It warns
+    when (1) the hero's heading or first action is shown only later than MOTION_MESSAGE_MS into that motion, or not at all (shown: at least half of it in the window and
+    its clipping ancestors, at an opacity of at least half); (2) motion in the first screen runs longer than MOTION_PAUSE_MS or repeats forever, which WCAG 2.2.2 asks a
+    way to pause, stop or hide for (the check does not look for one); (3) with reduced motion something in the first screen still moves on load (a transform, a
+    position, a margin, a size: a fade does not move), a script still draws frames once the page settled, or the heading is not shown at the end. What it cannot see
+    is said: motion driven by requestAnimationFrame (not seekable), animations on a scroll timeline, a clip-path on the heading's way (not read). A page with no motion
+    on load passes; no measured motion view is skipped."""
+    rid, label = "page:first-screen-motion", "the first screen's motion shows the message at once and respects reduced motion"
+    got = [m for m in measures.get("first_screen_motion", []) if isinstance(m, dict)]
+    if not got:
+        rep.add(rid, "skipped", label, detail="not verified: no view was measured for motion (see the page:load rows)")
+        return
+    warns, notes, measured, moving = [], [], [], False
+    for m in got:
+        view = f"{m.get('width')}-{m.get('scheme')}"
+        if m.get("error") or not isinstance(m.get("normal"), dict) or not isinstance(m.get("reduced"), dict):
+            notes.append(f"not measured at {view}: {m.get('error') or 'no measurement'}")
+            continue
+        measured.append(view)
+        n, r = m["normal"], m["reduced"]
+        first = [a for a in n.get("first") or [] if isinstance(a, dict)]
+        length = n.get("length") or 0
+        if first or n.get("real_time"):
+            moving = True
+        for k, what in (("heading", "heading"), ("action", "first action")):
+            if not (n.get("found") or {}).get(k):
+                continue
+            at = (n.get("shown_at") or {}).get(k)
+            clip = " (a clip-path on its way is not read)" if (n.get("clip") or {}).get(k) else ""
+            if at is None and length:
+                warns.append(f"at {view} the hero's {what} is not shown at any moment of the {length / 1000:g} s motion on load{clip}")
+            elif at is not None and at > MOTION_MESSAGE_MS:
+                warns.append(f"at {view} the hero's {what} is shown only {at / 1000:g} s into the motion on load (at most {MOTION_MESSAGE_MS} ms: show the message first, then move){clip}")
+        long = [a for a in first if a.get("infinite")]
+        ends = [a["end"] for a in first if isinstance(a.get("end"), (int, float))]
+        if long:
+            warns.append(f"at {view} {_names([a['name'] for a in long], NAMED)} in the first screen repeat(s) forever: WCAG 2.2.2 asks for a way to pause, stop or hide it (not looked for)")
+        elif ends and max(ends) > MOTION_PAUSE_MS:
+            warns.append(f"at {view} the motion in the first screen runs {max(ends) / 1000:g} s on load: past {MOTION_PAUSE_MS / 1000:g} s WCAG 2.2.2 asks for a way to pause, stop or hide it (not looked for)")
+        still = [a["name"] for a in r.get("first") or [] if isinstance(a, dict) and a.get("moves")]
+        if still:
+            warns.append(f"at {view} with reduced motion {_names(still, NAMED)} still move(s) on load")
+        if r.get("alive"):
+            warns.append(f"at {view} with reduced motion a script still draws frames after the page settled ({r['alive']} requestAnimationFrame call(s) in {QUIET_NOTE})")
+        if (r.get("found") or {}).get("heading") and (r.get("rest") or {}).get("heading", 1) < 0.5:
+            warns.append(f"at {view} with reduced motion the hero's heading is not shown once the page settled")
+        if n.get("real_time"):
+            notes.append(f"at {view} the page also moves by requestAnimationFrame, which cannot be seeked: that motion is NOT verified")
+        if n.get("unseekable"):
+            notes.append(f"at {view} {n['unseekable']} animation(s) run on a scroll or view timeline: NOT verified")
+    extra = {"motion_views": measured, "message_ms": MOTION_MESSAGE_MS, "pause_ms": MOTION_PAUSE_MS}
+    if not measured:
+        rep.add(rid, "skipped", label, detail="not verified: " + "; ".join(notes), **extra)
+    elif warns or notes:
+        rep.add(rid, "warn", label, detail="; ".join(warns + notes + (["a hero may be meant to move first, so this never fails"] if warns else [])), **extra)
+    elif not moving:
+        rep.add(rid, "pass", label, detail=f"nothing in the first screen moves on load at {', '.join(measured)}", **extra)
+    else:
+        rep.add(rid, "pass", label, detail=f"at {', '.join(measured)} the hero's message is shown within {MOTION_MESSAGE_MS} ms, the first screen's motion ends within "
+                                           f"{MOTION_PAUSE_MS / 1000:g} s, and with reduced motion nothing moves on load", **extra)
+
+
+QUIET_NOTE = "the last 500 ms of a 1 s wait"
+
+
 # each (rep, measures, ctx); a later family of rows is added here
-ROW_CHECKS = [load_rows, colour_rows, pair_rows, motion_rows, claim_rows, word_rows, mark_rows, font_rows, display_size_rows, tell_rows, first_screen_rows, rule_rows]
+ROW_CHECKS = [load_rows, colour_rows, pair_rows, motion_rows, claim_rows, word_rows, mark_rows, font_rows, display_size_rows, tell_rows, first_screen_rows,
+              first_screen_motion_rows, rule_rows]
 
 
 def judge(rep: Report, measures: dict, ctx: Ctx, measures_path: Path) -> None:

@@ -228,6 +228,23 @@ measured on its heading alone and says so. If the heading is missing at some siz
 as not measured and the row is a warning, never a pass. The first link or button in the hero counts, a logo link included, and on a page with no
 section around its heading the hero is taken to be the heading's parent block.
 
+## What moves when the page opens
+
+Many heroes move when the page opens. The check opens the page again at the smallest and the largest size (light
+theme), pauses everything that moves, and steps through it from start to end. One warning (`page:first-screen-motion`)
+says what it found. Like the row above it, it never fails a page. It warns when:
+
+- the hero's heading or its first button or link shows only after half a second, or never: say what the page is about
+  first, then move. Shown means at least half of it is on screen and not faded below half. Words that slide up from
+  under a mask count once they are out.
+- something in the first screen moves for longer than 5 seconds, or never stops. Accessibility rules (WCAG 2.2.2) then
+  ask for a way to pause, stop or hide it. The check doesn't look for that control, so check it yourself.
+- with reduced motion turned on (a setting on the visitor's device), something still moves when the page opens, a script
+  keeps drawing frames, or the heading stays hidden. A fade isn't counted as movement.
+
+What it can't step through, it names: motion a script draws frame by frame, and motion tied to scrolling. A page where
+nothing moves when it opens passes.
+
 ## Boxes left behind by a movement
 
 A movement can carry a box away and never hide it, so a sheet or a card stays on screen where it does not belong. No

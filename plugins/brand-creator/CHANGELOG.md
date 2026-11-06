@@ -39,6 +39,12 @@ stage, and why, is in the [archive](docs/archive/README.md).
   link end inside the first screen, and warns (never fails) naming each size where one falls below the fold, by how many pixels, and
   which. A page with no hero, or a size where the heading is hidden, says "not measured". It replaces checking this by hand each round.
 
+- `brand-creator page-check` has a second new row, `page:first-screen-motion`, for what moves when the page opens. At the smallest
+  and largest size it steps through that motion and warns (never fails) when the hero's heading or first button shows only after
+  half a second, when the motion runs longer than 5 seconds or never stops (WCAG 2.2.2 then asks for a way to pause it), or when, with
+  reduced motion turned on, something still moves or the heading stays hidden. A heading whose words slide up from under a mask
+  counts as shown once they are out. Motion it cannot step through (drawn frame by frame by a script) is named as not checked.
+
 - `brand-creator kit check` now names each of your own kit files (`voice.md`, `visual.md`, a recipe you wrote) that nobody
   has touched since the last build, once your tokens, `FACTS.md` or `BRAND-STATE.md` changed after it, as a warning
   (`kit:behind`), so you can tell which hand files may be behind the brand. It names every such file and never edits them;

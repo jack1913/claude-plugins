@@ -491,10 +491,21 @@ def check_no_failed_removal(repo: Repo) -> None:
     if not staged:
         return
     f, text = failed
-    m = re.search(r"^restore: (.*)$", text, re.M)
     lines = [json.dumps(p, ensure_ascii=False) for p in staged]
     raise CliError(EXIT_FAIL, shown(lines, f"refused: an earlier removal failed (qa/{f.name}) and {len(lines)} change(s) under rounds/ are still staged. Restore first with: "
-                                           f"{m.group(1) if m else '(no restore line in the record)'}"))
+                                           f"{restore_from_record(repo, text)}"))
+
+
+def restore_from_record(repo: Repo, text: str) -> str:
+    """The restore line of a removed record, rebuilt from its checked fields, never its `restore:` text: a record is a file anyone can edit,
+    and the line is printed for someone (or an agent) to run. The commit is a hex id, rounds are rN, paths are quoted, the project is ours."""
+    head = re.search(r"^head before: ([0-9a-f]{40,64})$", text, re.M)
+    rounds = re.search(r"^removed rounds: ((?:r\d+)(?: r\d+)*)$", text, re.M)
+    if head is None or rounds is None:
+        return "(the record's head or rounds line is damaged; find the commit before the removal with git log and check out rounds/ from it)"
+    targets = rounds.group(1).split()
+    targets = [f"rounds/{r}" for r in targets] + [shlex.quote(p) for p in sorted(record_files(text)) if not p.startswith("rounds/")]
+    return f"git -C {shlex.quote(str(repo.project))} --literal-pathspecs checkout {head.group(1)} -- {' '.join(targets)}"
 
 
 def chunks(paths: list[str]) -> list[list[str]]:

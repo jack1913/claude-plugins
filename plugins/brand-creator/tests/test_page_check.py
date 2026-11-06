@@ -546,7 +546,7 @@ def test_a_page_on_this_machine_may_open_a_websocket_to_its_own_origin(acme, tmp
         assert r.returncode == 0, r.stdout + r.stderr
         ok = row(report(acme, pagecheck.report_tool(f"url:{base}/index.html")), "page:load:390-light")
         assert ok["status"] == "pass", ok
-        assert hmr == ["/hmr"]   # the server was asked, once
+        assert hmr == ["/hmr"] * 3   # the server was asked once per load: the view, then page:first-screen-motion's two loads (as seen, then with reduced motion)
 
 
 @pytest.mark.requires_setup
@@ -566,7 +566,7 @@ def test_a_websocket_to_another_origin_is_stopped_and_the_other_server_never_hea
             warned = row(report(acme, pagecheck.report_tool(f"url:{base}/index.html")), "page:load:390-light")
             assert r.returncode == 0 and warned["status"] == "warn", r.stdout + r.stderr
             assert warned["non_local_requests"] == [f"{other.replace('http', 'ws')}/ws"] and "aborted: page-check runs offline" in warned["detail"], warned
-            assert hmr == ["/hmr"]
+            assert hmr == ["/hmr"] * 3   # the view and page:first-screen-motion's two loads
         assert heard == [] and upgraded == []
         # a project page and a built site: the same socket fails the view, as any other request to another origin does
         r = bc("page-check", "--from", str(site), "index.html", *narrow, project=acme)
@@ -4536,3 +4536,107 @@ def test_a_hero_title_wrapper_does_not_hide_the_action_below_the_fold(acme):
     page = fold_page('<section class="hero"><div class="hero__title"><h1>Acme hand tools</h1></div><span class="tall"></span><p class="hero__actions"><a href="#go">Start</a></p></section>')
     r = fold_row(acme, page, "390")
     assert r["status"] == "warn" and 'the action' in r["detail"] and '"Start"' in r["detail"] and "below the fold" in r["detail"], r
+
+
+# ---------------------------------------------------------------- page:first-screen-motion
+
+
+def motion_m(width: int = 1440, normal: dict | None = None, reduced: dict | None = None, **top) -> dict:
+    """One measured motion view as render.mjs writes it: by default a page with nothing moving, its heading and action shown at once."""
+    base = {"found": {"heading": True, "action": True}, "length": 0, "first": [], "unseekable": 0, "rest": {"heading": 1, "action": 1},
+            "shown_at": {"heading": 0, "action": 0}, "at_start": {"heading": 1, "action": 1}, "clip": {"heading": False, "action": False},
+            "real_time": False, "late": None, "alive": 0}
+    return {"width": width, "scheme": "light", "viewport": {"width": width, "height": 900}, "normal": {**base, **(normal or {})}, "reduced": {**base, **(reduced or {})}, **top}
+
+
+def motion_row_of(tmp_path: Path, *ms: dict) -> dict:
+    rep = Report("page-check/x-000000", tmp_path)
+    ctx = pagecheck.Ctx(tmp_path, pagecheck.Target("project", "pages/x.html", page="pages/x.html"), [390, 1440], ["light"], qa_rules.DEFAULTS, {})
+    pagecheck.first_screen_motion_rows(rep, {"first_screen_motion": list(ms)}, ctx)
+    return rep.results[0]
+
+
+def test_the_motion_row_passes_a_still_page_and_a_short_motion_that_shows_the_message_at_once(tmp_path):
+    """No browser."""
+    still = motion_row_of(tmp_path, motion_m(390), motion_m())
+    assert still["status"] == "pass" and "nothing in the first screen moves on load at 390-light, 1440-light" in still["detail"], still
+    fade = {"length": 800, "first": [{"name": "rise", "end": 800, "infinite": False, "moves": True}], "shown_at": {"heading": 200, "action": 400}}
+    short = motion_row_of(tmp_path, motion_m(normal=fade, reduced={"first": [{"name": "rise", "end": 1, "infinite": False, "moves": False}]}))
+    assert short["status"] == "pass" and "shown within 500 ms" in short["detail"] and short["motion_views"] == ["1440-light"], short
+
+
+def test_the_motion_row_warns_for_a_late_or_hidden_message_a_long_or_endless_motion_and_ignored_reduced_motion(tmp_path):
+    """No browser: each warning names its view and its numbers; the row never fails."""
+    late = motion_row_of(tmp_path, motion_m(normal={"length": 9800, "first": [{"name": "pad", "end": 9800, "infinite": False, "moves": True}],
+                                                    "shown_at": {"heading": 1225, "action": None}, "clip": {"heading": True, "action": False}}))
+    d = late["detail"]
+    assert late["status"] == "warn" and "the hero's heading is shown only 1.225 s into the motion on load" in d and "(a clip-path on its way is not read)" in d, late
+    assert "the hero's first action is not shown at any moment of the 9.8 s motion on load" in d and "runs 9.8 s on load: past 5 s WCAG 2.2.2" in d, late
+    loop = motion_row_of(tmp_path, motion_m(normal={"first": [{"name": "spin", "end": None, "infinite": True, "moves": True}]}))
+    assert loop["status"] == "warn" and "spin in the first screen repeat(s) forever: WCAG 2.2.2" in loop["detail"], loop
+    reduced = motion_row_of(tmp_path, motion_m(390, reduced={"first": [{"name": "slide", "end": 600, "infinite": False, "moves": True}], "alive": 31, "rest": {"heading": 0, "action": 1}}))
+    d = reduced["detail"]
+    assert reduced["status"] == "warn" and "at 390-light with reduced motion slide still move(s) on load" in d and "31 requestAnimationFrame call(s)" in d, reduced
+    assert "with reduced motion the hero's heading is not shown once the page settled" in d and "never fails" in d, reduced
+    noaction = motion_row_of(tmp_path, motion_m(normal={"found": {"heading": True, "action": False}, "shown_at": {"heading": 0, "action": None}, "length": 300,
+                                                        "first": [{"name": "rise", "end": 300, "infinite": False, "moves": True}]}))
+    assert noaction["status"] == "pass", noaction
+
+
+def test_the_motion_row_says_what_it_could_not_see_and_is_never_a_pass_for_it(tmp_path):
+    """No browser."""
+    raf = motion_row_of(tmp_path, motion_m(normal={"real_time": True, "unseekable": 2}))
+    assert raf["status"] == "warn" and "requestAnimationFrame, which cannot be seeked: that motion is NOT verified" in raf["detail"] and "2 animation(s) run on a scroll" in raf["detail"], raf
+    half = motion_row_of(tmp_path, motion_m(390, error="loading x timed out"), motion_m())
+    assert half["status"] == "warn" and "not measured at 390-light: loading x timed out" in half["detail"], half
+    assert motion_row_of(tmp_path, motion_m(error="boom"))["status"] == "skipped"
+    assert motion_row_of(tmp_path)["status"] == "skipped"
+
+
+MOTION_HERO = '<section class="hero"><h1>Acme hand tools</h1><p><a href="#go">Start</a></p><div class="pad"></div></section>'
+
+
+def fs_motion_page(css: str) -> str:
+    return fold_page(MOTION_HERO).replace("</style>", "  .pad { width: 120px; height: 120px; background: var(--color-line); }\n" + css + "\n</style>")
+
+
+def fs_motion_row(p: Path, page: str) -> dict:
+    write_page(p, page)
+    r = bc("page-check", "pages/index.html", "--widths", "390,1440", "--schemes", "light", project=p)
+    assert r.returncode in (0, 1), r.stdout + r.stderr
+    return row(report(p, pagecheck.report_tool("pages/index.html")), "page:first-screen-motion")
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_hero_that_moves_briefly_and_keeps_still_with_reduced_motion_passes(acme):
+    css = """  @keyframes rise { from { transform: translateY(16px); } to { transform: none; } }
+  .pad { animation: rise 600ms ease-out both; }
+  @media (prefers-reduced-motion: reduce) { .pad { animation: none; } }"""
+    got = fs_motion_row(acme, fs_motion_page(css))
+    assert got["status"] == "pass" and "shown within 500 ms" in got["detail"] and got["motion_views"] == ["390-light", "1440-light"], got
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_heading_that_waits_for_the_motion_and_an_endless_spin_that_ignores_reduced_motion_warn(acme):
+    css = """  @keyframes show { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes spin { to { transform: rotate(1turn); } }
+  .hero h1 { animation: show 400ms 1200ms both; }
+  .pad { animation: spin 2s linear infinite; }"""
+    got = fs_motion_row(acme, fs_motion_page(css))
+    d = got["detail"]
+    assert got["status"] == "warn", got
+    assert "at 1440-light the hero's heading is shown only" in d and "at 390-light the hero's heading is shown only" in d, got
+    assert "spin in the first screen repeat(s) forever" in d and "with reduced motion spin still move(s) on load" in d, got
+    assert "first action" not in d, got
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_heading_that_slides_up_from_under_a_mask_counts_as_shown_only_once_it_is_out(acme):
+    css = """  @keyframes up { from { transform: translateY(110%); } to { transform: none; } }
+  .hero h1 { overflow: hidden; } .hero h1 span { display: inline-block; animation: up 500ms 900ms both; }
+  @media (prefers-reduced-motion: reduce) { .hero h1 span { animation: none; } }"""
+    got = fs_motion_row(acme, fs_motion_page(css).replace("<h1>Acme hand tools</h1>", "<h1><span>Acme hand tools</span></h1>"))
+    assert got["status"] == "warn" and "the hero's heading is shown only" in got["detail"] and "reduced motion" not in got["detail"], got

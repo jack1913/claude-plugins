@@ -981,6 +981,15 @@ def test_a_failed_chunk_stops_and_records_what_was_removed(tmp_path, monkeypatch
         r = p.run(*args)
         assert r.returncode == 1 and "an earlier removal failed" in r.stderr and "rounds/r2/f" in r.stderr and "git -C" in r.stderr and "checkout" in r.stderr, r.stderr
     restore = re.search(r"^restore: (.*)$", record, re.M).group(1)
+    # the printed line is rebuilt from the record's checked fields, never copied from its restore: text, which anyone can edit
+    rec_path = p.dir / "qa" / f"{DATE}-cleanup-removed.txt"
+    rec_path.write_text(record.replace(f"restore: {restore}", "restore: touch PWNED; " + restore), encoding="utf-8")
+    r = p.run()
+    assert r.returncode == 1 and "PWNED" not in r.stderr and restore in r.stderr, r.stderr
+    rec_path.write_text(re.sub(r"^head before: .*$", "head before: HEAD; touch PWNED", record, flags=re.M), encoding="utf-8")
+    r = p.run()
+    assert r.returncode == 1 and "PWNED" not in r.stderr and "damaged" in r.stderr, r.stderr
+    rec_path.write_text(record, encoding="utf-8")
     assert subprocess.run(["bash", "-c", restore], capture_output=True, text=True, env={**os.environ, **p.env}).returncode == 0
     monkeypatch.undo()
     r = p.run("--yes", code)
