@@ -18,5 +18,6 @@ Why brand-creator works the way it does, one decision per file. Decisions made b
 | [ADR-0010](ADR-0010-the-site-round-makes-reference-pages-not-templates.md) | The site round makes reference pages, not templates: hero first, a cold review, choices tagged rule or example, and a recorded gate (G4p) | accepted |
 | [ADR-0011](ADR-0011-a-generated-brand-kit-around-the-applied-skill.md) | A generated brand kit sits around the applied skill | accepted |
 | [ADR-0012](ADR-0012-a-redesign-records-the-sites-wiring.md) | A redesign records the site's wiring: six kinds of item before and after, and a loss only as dropped with a reason | accepted |
+| [ADR-0013](ADR-0013-old-rounds-leave-through-cleanup.md) | Old rounds leave through `brand-creator cleanup`: whole committed folders, after a recorded yes tied to the exact plan | accepted |
 
 New records follow [ADR-TEMPLATE.md](ADR-TEMPLATE.md).

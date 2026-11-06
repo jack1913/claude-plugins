@@ -57,6 +57,10 @@ files above, but only where your product doesn't have it yet. A note of yours wr
 recipes. A file of another kind, such as a PDF, is copied and its words are never checked. If it is a web page or a
 stylesheet, its links still have to lead to a file inside the kit.
 
+A build never overwrites a file of yours. When your tokens, `FACTS.md` or `BRAND-STATE.md` change after a build, the kit
+check warns and names each of your files you have not touched since that build, so you can read them against the brand.
+Claude never edits them. Building again records them as they are and clears the warning, so read them first.
+
 ## Put your masters in the kit
 
 Masters are the templates you approved, such as an ad, a slide deck or a poster, with the pictures, PDFs and fonts they

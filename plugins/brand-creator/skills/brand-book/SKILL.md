@@ -89,6 +89,11 @@ never passed.
 2. `patch book.html --old "<exact text>" --new "<new text>" --count <N> --note "<why, one line>"`. It refuses unless the
    text occurs exactly N times, and writes one line to the Edition log in BRAND-STATE.md. Never Edit or Write
    `book.html` directly, and never use a shell substitution on it.
+   `--loose-space` makes `--old` match a no-break space (U+00A0, U+202F) or a longer run of white space where it has a
+   space; the count must still be exact. A whole chapter: `book chapter --replace|--add ID --from <file>` (the file's
+   root is `<section data-chapter="ID">`) or `--remove ID`; it recomputes the contents' `data-count="chapters"`. Missing
+   no-break spaces (the book-lint warning): `book nbsp --fix` lists them, `--yes` writes them. Same edition path, same
+   `--new-edition` rule.
 3. An approved edition is not edited in place: add `--new-edition`, which opens the next edition (it needs its own G5).
 4. Keep the markup contract: `data-mark` on every embedded mark, no live text inside a mark (outline it with
    `outline-glyphs`), labelled diagrams in `<svg data-diagram>`, `data-path` and `data-sha` on file rows, one

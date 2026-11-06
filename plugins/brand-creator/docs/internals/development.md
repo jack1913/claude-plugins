@@ -47,6 +47,9 @@ BRAND_CREATOR_DATA=<set-up data dir> tests/run-all.sh
   with the owner's yes and inlined from code files only); `--list` prints every break.
 - A test that cannot run prints "NOT VERIFIED". `BRAND_CREATOR_REQUIRE_ALL=1` turns every such skip into a failure.
 - Tests that talk to real services (`requires_network`) run only with `BRAND_CREATOR_LIVE=1`.
+- Tests that spend money (`costs_money`: OpenRouter image generation, a billed run) run only with `BRAND_CREATOR_PAID=1`. Without it,
+  `tests/conftest.py` and `tests/run-all.sh` take every `OPENROUTER_*` and `USE_LLM_DESIGN_*` variable out of the run, and a lookup
+  of `openrouter.ai` from a test fails.
 - The anonymisation test needs a private denylist (`BRAND_CREATOR_DENYLIST`) and skips without it.
 - A set-up data directory comes from `brand-creator --data <dir> setup --yes`.
 - No run writes into the data directory it is given. pytest, node:test and each smoke give the tools a data directory of

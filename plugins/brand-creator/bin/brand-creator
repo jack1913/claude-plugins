@@ -32,6 +32,10 @@ project
   site approve            put the approved pages of the site round (a pages board, G4p recorded, linted since its last change) into site/ with their paths
                           fixed, and write site/site.json: each page, its layout and every choice as a brand rule or an example; --round N, --replace
                           (moves an existing site/ to removed-<date>/site/)
+  site review-status <page>  does a page need a cold review? reuse the earlier one when its page and stills are unchanged (read-only; exit 1: review needed)
+  cleanup                 take old round folders out through git: a dry run (the default) prints the plan and writes qa/<date>-cleanup-plan.txt; after the owner's yes,
+                          --record-yes CODE --said "<their words>" records it in DECISIONS.md and --yes CODE runs git rm (staged, never committed); keeps the latest
+                          round of each stage and every round something kept refers to; --keep rN keeps one more; only committed, unchanged files go
 
 checks and renders
   shot <page.html>        four-view page shots (1440/390 x light/dark) with an overflow/console/network report; --out DIR keeps them outside the
@@ -74,7 +78,8 @@ brand book
   book-lint [book.html]   gate a book, generated or hand-authored: ids, anchors, network, words, status words, language parity, marks,
                           edition stamp, counts, manifest accounting; --self-consistency checks the book against its own rules
   book-pdf                book.pdf from book.html (Chromium; RGB, labelled "RGB, not print-ready" in the metadata and on the cover)
-  patch FILE              assert-counted replace in a hand-authored book (--old, --new, --count N); logs the edition in BRAND-STATE.md
+  patch FILE              assert-counted replace in a hand-authored book (--old, --new, --count N; --loose-space matches around no-break spaces); logs the edition in BRAND-STATE.md
+  book chapter|nbsp       hand-authored book: replace, add or remove a whole chapter (--from FILE; recomputes the chapter count); no-break spaces after one-letter words (--fix, --yes)
   collapse                after a decision, move the losing variants and switchers out of the book sources and tokens into removed-<date>/
 
 adoption, adapters, launch
@@ -228,6 +233,7 @@ case "$sub" in
   book-pdf)   py book_pdf.py "$@" ;;
   patch)      py patch.py "$@" ;;
   collapse)   py collapse.py "$@" ;;
+  cleanup)    py cleanup.py "$@" ;;
   print-check) py print_check.py "$@" ;;
   adoption)   py adoption.py "$@" ;;
   adapters)   py adapters.py "$@" ;;

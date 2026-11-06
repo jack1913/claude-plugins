@@ -1947,6 +1947,33 @@ def owned_changes(project: Path, doc: dict) -> list[tuple[str, str]]:
     return out
 
 
+BRAND_SOURCES = ("state_sha", "tokens", "tokens_css", "facts")   # the brand inputs an owner file is written against: BRAND-STATE.md (with the motion spec), the token files, FACTS.md
+
+
+BRAND_SOURCE_NAMES = {"state_sha": "BRAND-STATE.md", "tokens": "tokens.json", "tokens_css": "tokens.css", "facts": "FACTS.md"}   # how the owner's line names a brand input
+
+
+def behind_names(changed: list[str]) -> str:
+    """The brand inputs of `changed` as the owner's line names them. `state_sha` also hashes FACTS.md and the motion spec, so it is named as BRAND-STATE.md only as far as it is known."""
+    names = [BRAND_SOURCE_NAMES[k] for k in changed if k != "state_sha"]
+    if "state_sha" in changed:
+        if "facts" in changed:   # FACTS.md alone moves the hash, so BRAND-STATE.md is not known to have changed
+            return ", ".join(names) + " (and possibly BRAND-STATE.md or the motion spec)"
+        names.append("BRAND-STATE.md or the motion spec")
+    return ", ".join(names)
+
+
+def behind_files(project: Path, doc: dict) -> tuple[list[str], list[str]]:
+    """(the keys of `BRAND_SOURCES` that changed since the last build, the owner's files that are still as that build recorded them). A file nobody has touched since the build was written against the
+    brand the kit was built from, so once a brand input changed it is behind it; a file edited after the build is `owned_changes`' to report, and which brand it was written against is not known. May raise CliError
+    when a source cannot be read."""
+    changed = [k for k in source_changes(project, doc) if k in BRAND_SOURCES]
+    if not changed:
+        return [], []
+    recorded = doc["owned"]
+    return changed, [rel for rel in owner_sorted(recorded) if rel != "EXTENDING.md" and (data := kit_bytes(project, rel)) is not None and sha256_bytes(data) == recorded[rel]]   # EXTENDING.md is the plugin's guide, no brand content
+
+
 # ---------------------------------------------------------------- kit check, part 2: tags and values
 # `tag_check` and `number_check` read the owner's recipes, `golden-rules.md`, `visual.md` and the generated `reference-pages/<id>/notes.md` (`judged_files`), as text from a plain file of the kit.
 # A rule id is judged against `known_rule_ids` of the project, and only when a line names one: `known` is a function the caller gives, so a project that cites no rule needs no site record.

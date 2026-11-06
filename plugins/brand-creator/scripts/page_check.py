@@ -28,7 +28,7 @@ dots, a stock label on the hero's second action, too much text in the hero, a mo
 `page:rule:<id>` row instead. `note:stock-anatomy` is an info row for a page in the stock order. `tell:stray-box` looks for what no other check does: a box left outside its place once the animations that end have ended, still shown
 outside its parent's box or off the screen (each width is measured again in a window 1300 px high for it alone); a page with an animation that never ends or follows a scroll or view timeline is NOT verified for it.
 Over all views it reports `page:fonts` (every text is set in a family a `font.*` token names, and the browser drew it in that face) and `page:display-size` (no text in the
-`font.display` face is under `page.display_min_px`).
+`font.display` face is under `page.display_min_px`). `page:first-screen` is a warning: the hero's h1 and first action against each view's window height.
 
 Exit 0 pass (warnings allowed), 1 a row failed, 2 usage error (no target, two targets, a page that does not exist, a remote URL, a bad width or scheme, a
 --from folder of more than 5000 files or 200 MB, a bad qa/rules.json page block, a `tell` rule that names no tell), 3 cannot run (no built tokens, no node, Chromium missing or no view measured).

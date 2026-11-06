@@ -171,7 +171,7 @@ review and the choices are in `references/phases/07p-site-round.md`; the board's
    (`verdict: ship`, `verdict: fix` or `verdict: owner`), `by: in-thread` by default and not blind. An agent (one
    `brand-creator:brand-reviewer` call per hero variant, with the prompt fragment under **Review** in
    `references/prompt-fragments.md`) only after the fleet gate and the owner's yes. Read every still before you say what the
-   page does. A page changed after any of the three needs them again. Run at most two cold reviews per variant per board (the first, and one
+   page does. A page changed after any of the three needs them again. Run `site review-status <page>` first: reuse means no review. Run at most two cold reviews per variant per board (the first, and one
    after the fixes); a third is not run. What the second leaves that only the owner can decide is `verdict: owner`, its findings written as
    questions to them; the card shows the last verdict, and the gate message for an agent states the calls this allows (2 variants: up to 4).
    The prompt of an agent's second call says in one line that it is the second and last review of the variant; the first call's has no such line.

@@ -69,10 +69,12 @@ not count.
   whole page at 1440. The pictures go in a `shots/` folder beside the page, with `capture.json`: a list of the files the
   page loaded and of anything that went wrong. A page in an earlier round, or in `history/` where approved rounds are
   kept, is refused, because those are locked. A page that shows content only as you scroll to it is photographed with
-  `capture --reveal`: Claude scrolls the page to the bottom in screen-sized steps, waiting at each, and back to the top
-  first, so the pictures show what a visitor sees after scrolling. A page too long to walk (more than 40 screens) is
-  walked as far as it goes, and `capture.json` and the run say so. A page that scrolls inside a box (a snap-scrolling
-  page) has that box walked instead.
+  `capture --reveal`. Claude first scrolls the page to the bottom and back to the top, half a screen at a time, and does the
+  same inside any big box on the page that scrolls on its own, such as a main area or a sidebar. The pictures then show
+  what a visitor sees after scrolling. If the walk stops early (more than 40 screens in all, or it took too long), the run
+  and `capture.json` say where. Each box is photographed where the page shows it, so what a box shows further down is not
+  in the pictures. A page that scrolls only by script (its own scrolling is hidden) is walked too, and the run says a
+  visitor cannot scroll it. A page that stops answering while it is walked stops the capture, and nothing is written.
 - **Pictures of real sites** (`capture --url`). For the references, Claude photographs each site into
   `research/site-refs/<name>/`: the first screen at both widths, the whole page and two small thumbnails. It is the
   only tool here that goes online, and only when your answer to the online question allows it: research online, or
@@ -94,7 +96,10 @@ not count.
   pictures, your brief and `FACTS.md` (your list of facts): never the board, the references or Claude's reasons. By
   default Claude writes it in the same conversation, so it is not blind, and the board says "by in-thread". A separate
   helper agent writes it only after you agree to how many, which model and the cost, and the board then says "by
-  agent". Each review is kept in `cold-review.md` beside its version. A version is reviewed at most twice (the second review replaces the first).
+  agent". Each review is kept in `cold-review.md` beside its
+  version. A version is reviewed at most twice (the second review replaces the first). A page that did not change since
+  its last review is not reviewed again: Claude runs `brand-creator site review-status <page>` first, which only reads,
+  and when it says "reuse" the board shows the earlier review.
 - **Layout references.** A layout reference is a short recipe for how a page is organised for one visitor job, such as
   "understand how a service will run for them before handing it something important". It is a starting point, never a
   template. The plugin keeps them in `skills/brand-creator/references/page-layouts.json`, keyed to what the visitor

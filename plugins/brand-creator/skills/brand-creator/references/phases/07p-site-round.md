@@ -190,9 +190,9 @@ is `start` (`<body data-page="start">`) in every project.
    - `capture rounds/r<N>/<Name>/index.html --project <dir>` writes the four stills and the full page into `shots/`, with
      `capture.json`. Read all four stills.
    - **A page that shows content as it is scrolled to** (an `IntersectionObserver`, a scroll-triggered class, `data-reveal`) is taken with `--reveal` (`capture rounds/r<N>/<Name>/index.html
-     --project <dir> --reveal`; it goes with `--frames` too): the command scrolls the page to the bottom and back in screen-sized steps before each still, so the stills and the full page show the
+     --project <dir> --reveal`; it goes with `--frames` too): the command scrolls the page and every box that scrolls inside it to the end and back, half a screen at a time, before each still, so the stills and the full page show the
      sections revealed, and you need no Playwright script of your own for it. Say it on the card's check line ("stills taken with --reveal"). `capture.json` records `reveal`; if `reveal.capped`
-     is true the page is longer than 40 screens, the walk stopped there, and the card says what was not revealed.
+     is true the walk stopped before the end of the page (`page_unfinished`) or of some boxes (`boxes_unfinished`), the run's line says which, and the card says what was not revealed.
    - **A page that animates when it loads** (an entrance, a tear-off, a reveal) is taken with `capture rounds/r<N>/<Name>/index.html --project <dir> --frames`
      instead. Beside the four stills it writes `shots/frame-1440-0.png`, `frame-1440-50.png` and `frame-1440-100.png`: the first screen at 1440, light, at the
      start, the middle and the end of the longest animation that runs on load, and `capture.json` lists them. Read all three: the four stills show only where the
@@ -228,6 +228,11 @@ is `start` (`<body data-page="start">`) in every project.
    Do not start the pages in the same turn as the pick.
 
 ## The cold review
+
+**Run `brand-creator site review-status rounds/r<N>/<Name>/index.html` before every cold review, the first of a variant on a board too.** It only reads. `reuse <path>: ...` (exit 0)
+means the page and its stills are the ones that review read: run no review, and the board cites that earlier review (its path, in the card's cold line, with its verdict; see the last bullet of this section). `review needed: <why>` (exit 1) means
+run one: no earlier review of that variant name, a review that recorded no sha256, or the file that changed. A later board's folder is a copy without `cold-review.md` and without `shots/`: take the
+stills again (`capture`) first, and the command finds the review in the earlier round's folder of the same variant name.
 
 A hero is read by someone who does not know why it looks the way it does. The verdict comes first, before any reason, and
 the review reads fixed inputs only: the variant's four stills, `brief/BRIEF.md` and `FACTS.md`. Never the board, the
@@ -290,7 +295,10 @@ inputs:
   second and last review of this variant."): a line of the prompt, not an input, and not the first review's findings or your reasons. The
   agent cannot tell its second call from its first otherwise, and it takes its push to `owner` from that line ("when the prompt says
   this is the second review", in its brief); the prompt of the first call has no such line.
-- The page or a still changed after the review: the hashes no longer match and the lint fails it. Review again.
+- The page or a still changed after the review: the hashes no longer match and the lint fails it. Review again. A page that did not change since a review is not reviewed again:
+  `site review-status` says `reuse` and the cap above counts no new review. The lint wants a `cold-review.md` in the new folder with this round's paths: copy the earlier file there with
+  the `rounds/r<K>/<Name>/shots/` paths of its inputs changed to this round's (the hashes stay: the command checked they are the same), and say "reused from rounds/r<K>/<Name>" on the card's cold line.
+  State the number of reviews run and the ones reused when you show the board.
 
 ## The other pages
 
@@ -305,7 +313,7 @@ the pages start in their own turn.
    board (its own shapes, devices and the move; one line each), and build every page with at least one of them used for that
    page's own job. A pages round of card, list and button, with nothing that says it is this brand, is the failure of a generic
    first hero and is rebuilt whole. Each page card has an Idea line (`data-field="idea"`): the page's one idea in the brand's world,
-   like a hero card's. `board-lint` warns (`site:fields`) when a page card has none; from the next release it fails. Forms stay
+   like a hero card's. `board-lint` fails (`site:fields`) a page card that has none, as it does a hero card. Forms stay
    straight (the tilted-form tell): a tilt or a drawing goes around a form, never on it.
 2. **The home page is a page like the others.** Begin `rounds/r<N>/start/` from the picked hero's folder (its `index.html`
    and the files it loads, without `shots/` and `cold-review.md`; the depth in the tree is the same, so its relative
@@ -360,7 +368,7 @@ this order:
 6. **List what the approved site leaves behind**, each as a next step for the owner to pick: approved masters in `assets/masters/`
    whose words or look predate the site (ads, deck), voice lines that place copy on the site, the book's site chapter, the kit
    or the applied skill. Before the first push of a project that is mirrored or shared, offer to clean the old rounds
-   ([12-history.md](12-history.md), "Method: cleaning old rounds").
+   with `brand-creator cleanup` ([12-history.md](12-history.md), "Method: cleaning old rounds").
 7. **Take the stills again where the pages now live:** `capture site/<id>/index.html` and `page-check
    site/<id>/index.html` for each page, then `check --project <dir>`. `check` gates the record, the pages and their stills.
 
@@ -443,7 +451,7 @@ board, the owner chooses between new variants or pages (a new site board) and a 
   review were put to the owner.
 - The Idea line of a hero card (`data-field="idea"`) is read by `site:fields`: missing or empty it fails (in 0.7.0 it
   only warned), so a board made before the line existed needs the line added. A page card's Idea line is read the same way
-  but only warns in 0.8.0; it fails from the next release.
+  and fails the same way (it only warned in 0.8.0).
 - No lint row reads a try-out, and none is added: a hero card's folder and live link are `rounds/r<N>/<Name>/`, so on the round's
   board (`rounds/r<N>/board.html`) a card that points into `tryout/` fails `site:files` as any card without its folder does (the
   review copy's live link is checked only for being there). `check --cascade` does search `tryout/`, which is why step 2a moves it

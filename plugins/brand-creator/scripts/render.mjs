@@ -59,8 +59,8 @@ capture writes no report: its stills and capture.json go beside the page (<page 
 site_research in BRAND-STATE.md is online or links-only, and it is the only form that lets the browser reach the network.
 capture --frames also writes shots/frame-1440-0.png, frame-1440-50.png and frame-1440-100.png: the first screen at 1440, light, with every finite animation that runs on load
 paused at 0, 50 and 100 % of the longest one (a page with none writes no frame, and says so); it goes with a page of the project, not with --url.
-capture --reveal first scrolls the page from top to bottom in viewport-sized steps, waiting at each step as it waits after load, and returns to the top, so that the stills show what the page reveals on scroll
-(at most 40 steps, and no longer than --timeout per load: a longer walk stops there and capture.json says so); it goes with a page of the project, not with --url.
+capture --reveal first scrolls the page and every box that scrolls inside it to the end and back, half a screen at a time, waiting at each step as it waits after load (at most 80 steps in all, and no longer
+than --timeout per load: a walk that stops early says where in capture.json and the run's line); it goes with a page of the project, not with --url.
 wiring opens one page of your own local server (http or https on localhost, 127.0.0.1 or [::1]; anything else is refused) and prints, as JSON on stdout, the links, form fields, ids, test hooks,
 scripts and inline handlers it carries as written in the DOM; a page that does not load is exit 3.`;
 
@@ -2266,8 +2266,8 @@ async function cmdPageMeasure(argv) {
 //   capture --url URL --name NAME     a real site, into research/site-refs/NAME/: the first screen at 1440 and at 390, a full page, two small JPEG thumbnails the references board inlines,
 //                                     and capture.json (the address, where it ended, its status and title). The only place where Chromium may reach the network, and only after the owner's
 //                                     answer to the online-research question (site_research is online or links-only). It never writes assets/_checks/.
-//   capture <page.html> --reveal      before each still, the page is scrolled from top to bottom in viewport-sized steps (waiting at each as after load) and back to the top, so that what it reveals on scroll is shown;
-//                                     at most CAPTURE_REVEAL_MAX_STEPS steps, and capture.json records the walk (and that it was capped).
+//   capture <page.html> --reveal      before each still, the page and every box that scrolls inside it are scrolled to their end in steps of half a screen (waiting at each as after load)
+//                                     and back, so that what they reveal on scroll is shown; at most CAPTURE_REVEAL_MAX_STEPS steps in all, and capture.json records the walk (revealWalk).
 //   capture <page.html> --frames      also the key frames of the first screen (1440 x 900, light): the animations that run on load, paused and seeked to 0, 50 and 100 % of the longest finite one, as
 //                                     the motion proof seeks a page (shot --motion); capture.json lists them. A page with no finite animation on load gets none, and the run says so.
 // Every refusal comes before the browser starts; every picture is taken before the first file is written, so a page or a site that does not load leaves nothing behind.
@@ -2284,7 +2284,12 @@ const CAPTURE_RESERVED_NAME = "owner";        // research/site-refs/owner/ holds
 const CAPTURE_MAX_PROBLEMS = 40;
 const CAPTURE_FRAME_PERCENTS = [0, 50, 100];  // key frames (--frames): where in the longest finite animation that runs on load the first screen is taken
 const CAPTURE_FRAMES_SETTLE_MS = 1000;        // a page with no animation at load is looked at this long, for a script that starts one a moment later (startPass)
-const CAPTURE_REVEAL_MAX_STEPS = 40;          // --reveal: viewport-sized steps of the walk down the page; a page that needs more is walked this far and capture.json says so
+const CAPTURE_REVEAL_MAX_STEPS = 80;          // --reveal: the steps one load may take, down the page and inside its boxes together (80 half screens: 40 screens); a walk that needs more stops there and capture.json says where
+const CAPTURE_REVEAL_STEP = 0.5;              // --reveal: a step moves a scroller by this part of the height the screen shows of it, so an item a reveal script sees only inside a margin (rootMargin down to -50 %, threshold up to 0.5) is seen at some step
+const CAPTURE_REVEAL_BOX_MIN = 0.5;           // --reveal: a box that scrolls is walked when it is at least this part of the screen's height; a smaller one (a code block) is counted, not walked
+const CAPTURE_REVEAL_ANSWER_MS = 1000;        // --reveal: the longest the walk waits for the page's IntersectionObserver or its next frames before it goes on without them
+const CAPTURE_REVEAL_GUARD_MS = ANIMATION_CAP_MS + 5000;   // --reveal: once --timeout has passed, a call into the page that has not answered after this long is given up (a page whose script never ends)
+const CAPTURE_REVEAL_KEY = "brand-creator.reveal";   // the walk's state in the page, under Symbol.for(this), deleted at the end
 const captureFrameFile = (percent) => `frame-1440-${percent}.png`;
 const CAPTURE_READ_ONLY = { tail: "(capture writes its stills beside the page)", how: "copy the page into the latest round and capture it there" };
 
@@ -2312,45 +2317,297 @@ async function settleForStill(page, { timeout, waitMs, lazyCap = null }) {
   return lazy;
 }
 
-/** --reveal: scroll the page from the top to the bottom in viewport-sized steps, wait at each as `settleForStill` waits (the pause, then the animations that end), and return to the top.
- *  A page that grows while it is walked (content added on scroll) is followed up to the step cap. The walk of one load also stops once it has taken `timeout` ms (--timeout),
- *  so that a page whose finite animations run long cannot hold the run for minutes. The page scrolls the window, or, when the window does not scroll, its largest shown element that
- *  scrolls (overflow-y auto or scroll: a scroll-snap page): that element is walked instead (`inner`). A scroller that does not move when scrolled ends the walk:
- *  `stuck`, so that it is said and never reported as a long page. -> {steps, capped, timedOut, inner, stuck}: capped when the bottom was not reached within the cap or the time. */
-async function revealWalk(page, waitMs, timeout) {
-  let steps = 0, capped = false, timedOut = false, inner = false, stuck = false;
-  const started = Date.now();
-  // the scroller, found again at every step (the same rule picks the same element): the window when the document is taller than it, else the largest shown element that scrolls
-  const scroller = () => {
-    const doc = document.scrollingElement || document.documentElement;
-    if (doc.scrollHeight > window.innerHeight + 1 && !["hidden", "clip"].includes(getComputedStyle(doc).overflowY)) return { el: null, vh: window.innerHeight, total: doc.scrollHeight, y: Math.round(window.scrollY) };
-    let best = null;
-    for (const el of document.querySelectorAll("body *")) {
-      if (!el.clientHeight || el.scrollHeight <= el.clientHeight + 1 || !["auto", "scroll", "overlay"].includes(getComputedStyle(el).overflowY)) continue;
-      if (!best || el.scrollHeight - el.clientHeight > best.scrollHeight - best.clientHeight) best = el;
+// ---- in the page (each is passed to page.evaluate whole: no closure over this module)
+
+/** The walk starts: its state on window (where each scroller was found, the inline styles it changes, the helpers below), and the root pinned for the walk. */
+function inPageRevealBegin(key) {
+  const S = { found: new Map(), pinned: new Map(), boxes: [], walked: 0, seen: new Set(), small: [], neg: new Set(), win: { top: scrollY, left: scrollX } };
+  window[Symbol.for(key)] = S;
+  // a scroller pinned for the walk: no scroll snapping (a step lands where it was sent) and no scroll anchoring (content that shrinks above the screen does not pull it back)
+  S.pin = (el) => {
+    if (S.pinned.has(el)) return;
+    const cs = getComputedStyle(el), was = { attr: el.getAttribute("style"), css: el.style.cssText, props: [] };
+    for (const prop of ["scroll-snap-type", "overflow-anchor"]) {
+      if (cs.getPropertyValue(prop) === "none") continue;
+      was.props.push([prop, el.style.getPropertyValue(prop), el.style.getPropertyPriority(prop)]);
+      el.style.setProperty(prop, "none", "important");
     }
-    return best ? { el: best, vh: best.clientHeight, total: best.scrollHeight, y: Math.round(best.scrollTop) } : { el: null, vh: window.innerHeight, total: doc.scrollHeight, y: Math.round(window.scrollY) };
+    S.pinned.set(el, was);
   };
-  // evaluated as a string expression (by the browser's debugger protocol, so a page's Content-Security-Policy, which may forbid eval, does not apply)
-  const withScroller = (body) => `(() => { const s = (${scroller.toString()})(); ${body} })()`;
-  for (;;) {
-    const at = await page.evaluate(withScroller("return { vh: s.vh, total: s.total, y: s.y, inner: Boolean(s.el) };"));
-    if (at.inner) inner = true;
-    if (at.y + at.vh >= at.total - 1) break;   // the bottom is in view
-    if (steps >= CAPTURE_REVEAL_MAX_STEPS) { capped = true; break; }
-    if (Date.now() - started >= timeout) { capped = true; timedOut = true; break; }
-    const y = Math.min(at.y + at.vh, at.total - at.vh);
-    const moved = await page.evaluate(withScroller(`const o = { top: ${y}, left: 0, behavior: "instant" }; if (s.el) s.el.scrollTo(o); else window.scrollTo(o);
-      return Math.round(s.el ? s.el.scrollTop : window.scrollY) !== s.y;`));
-    if (!moved) { stuck = true; break; }   // it does not move when scrolled: said, never walked 40 times or called long
-    steps += 1;
-    await page.waitForTimeout(waitMs);
-    await waitAnimations(page);
+  S.keep = (el) => { if (!S.found.has(el)) S.found.set(el, { top: el.scrollTop, left: el.scrollLeft }); };
+  // the element around `a` in the flat tree: a slotted element's slot, a shadow root's host
+  S.up = (a) => a.assignedSlot ?? a.parentElement ?? (a.parentNode instanceof ShadowRoot ? a.parentNode.host : null);
+  // every element around `el` that may scroll (its overflow is not visible) is kept, to be put back, and pinned
+  S.hold = (el) => {
+    for (let a = S.up(el); a && a !== document.documentElement; a = S.up(a)) {
+      const cs = getComputedStyle(a);
+      if (cs.overflowY !== "visible" || cs.overflowX !== "visible") { S.keep(a); S.pin(a); }
+    }
+  };
+  // what a viewport IntersectionObserver sees of `el` -> {width, height, bottom: its bottom edge is on the screen}, or null when the page's observer does not answer within `ms`
+  S.see = (el, ms) => new Promise((resolve) => {
+    let io = null;
+    const t = setTimeout(() => { io?.disconnect(); resolve(null); }, ms);
+    try {
+      io = new IntersectionObserver((es) => {
+        clearTimeout(t); io.disconnect();
+        const e = es[es.length - 1], r = e.intersectionRect;
+        resolve({ width: r.width, height: r.height, bottom: r.height > 0 && r.bottom >= e.boundingClientRect.bottom - 1 });
+      });
+      io.observe(el);
+    } catch { clearTimeout(t); resolve(null); }
+  });
+  S.pin(document.documentElement);
+  if (document.scrollingElement) S.pin(document.scrollingElement);
+  // the viewport's overflow is the root's, or the body's when the root's is visible (propagation); hidden and clip are scrolled by a script, never by a visitor's wheel
+  const html = getComputedStyle(document.documentElement), ownY = html.overflowX === "visible" && html.overflowY === "visible" && document.body ? getComputedStyle(document.body).overflowY : html.overflowY;
+  return ["hidden", "clip"].includes(ownY);
+}
+
+/** Two animation frames and a task (the page's scroll events, IntersectionObserver callbacks and what they append have run), or `ms` when the page's frames do not come. */
+function inPageRevealFrames(ms) {
+  return new Promise((done) => {
+    const t = setTimeout(done, ms);
+    try { requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => { clearTimeout(t); done(); }, 0))); } catch { /* the timer ends it */ }
+  });
+}
+
+/** Where scroller `i` is (-1: the window, else the i-th box): its position, the height it shows, and its scroll height. A box that scrolls into negative
+ *  positions (flex-direction: column-reverse) has its range from -(scroll height - shown) to 0: its position is counted from the start of that range. */
+function inPageRevealAt({ key, i }) {
+  const S = window[Symbol.for(key)], doc = document.scrollingElement || document.documentElement, el = i < 0 ? null : S.boxes[i];
+  return el ? { y: Math.round(el.scrollTop - (S.neg.has(el) ? -(el.scrollHeight - el.clientHeight) : 0)), vh: el.clientHeight, total: el.scrollHeight } : { y: Math.round(scrollY), vh: doc.clientHeight, total: doc.scrollHeight };
+}
+
+/** Scroller `i` to `top`, at once (behavior "instant" overrides the page's scroll-behavior: smooth). -> where it is now. */
+function inPageRevealScroll({ key, i, top }) {
+  const S = window[Symbol.for(key)], el = i < 0 ? null : S.boxes[i], min = el && S.neg.has(el) ? -(el.scrollHeight - el.clientHeight) : 0, o = { top: top + min, behavior: "instant" };
+  if (el) el.scrollTo(o); else scrollTo(o);
+  return Math.round(el ? el.scrollTop - min : scrollY);
+}
+
+/** The boxes that scroll, found again (after the page's walk and after each box): every element shown whose content is taller than it and that
+ *  moves when scrolled (overflow-y auto, scroll or overlay; a body only when its overflow is its own, not the window's). A box new to the walk
+ *  joins the boxes still to walk, in document order; one under `min` of the screen's height is a small box, put aside. -> {boxes, small}. */
+function inPageRevealFind({ key, min }) {
+  const S = window[Symbol.for(key)], doc = document.scrollingElement || document.documentElement, html = getComputedStyle(document.documentElement);
+  const rootOwnsOverflow = html.overflowX === "visible" && html.overflowY === "visible";   // then the body's overflow is the window's (CSS Overflow 3, propagation)
+  const fresh = [];
+  for (const el of document.querySelectorAll("body, body *")) {
+    if (S.seen.has(el) || el.scrollHeight - el.clientHeight <= 1 || !el.clientHeight) continue;
+    if (!["auto", "scroll", "overlay"].includes(getComputedStyle(el).overflowY) || (el === document.body && rootOwnsOverflow)) continue;
+    if (!el.checkVisibility({ visibilityProperty: true, opacityProperty: true, contentVisibilityAuto: true })) continue;   // not seen yet: found again later
+    S.seen.add(el);
+    S.keep(el); S.pin(el);
+    const was = el.scrollTop, to = (top) => { el.scrollTo({ top, behavior: "instant" }); return el.scrollTop !== was; };
+    let moves = to(el.scrollHeight) || to(0);   // an instant test to its end (or its top), put back at once
+    to(-el.scrollHeight); if (el.scrollTop < 0) { moves = true; S.neg.add(el); }   // a column-reverse box: its scroll range is negative, whatever place the page left it at
+    el.scrollTo({ top: was, behavior: "instant" });
+    if (!moves) continue;
+    if (el.clientHeight < min * doc.clientHeight) S.small.push(el); else fresh.push(el);
   }
-  await page.evaluate(withScroller(`const o = { top: 0, left: 0, behavior: "instant" }; if (s.el) s.el.scrollTo(o); window.scrollTo(o);`));
-  await page.waitForTimeout(waitMs);
-  await waitAnimations(page);
-  return { steps, capped, timedOut, inner, stuck };
+  const rest = S.boxes.splice(S.walked).concat(fresh).sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
+  S.boxes.push(...rest);
+  return { boxes: S.boxes.length, small: S.small.length };
+}
+
+/** Box `i` put on the screen: first at its own top, then the window and every scroller around it (in the flat tree: also the shadow scroller a slotted box
+ *  sits in) scrolled at once so that its top is at the top of the screen, or as near as they go. Every scroller moved is kept, to be put back.
+ *  -> {shown: the height of it a viewport IntersectionObserver sees (0: off the screen, a box that only touches its edge), measured: false when the observer did not answer} */
+async function inPageRevealPlace({ key, i, ms }) {
+  const S = window[Symbol.for(key)], el = S.boxes[i];
+  S.walked = i + 1;
+  S.hold(el);
+  el.scrollTo({ top: S.neg.has(el) ? -el.scrollHeight : 0, behavior: "instant" });   // a box the page had scrolled (a chat at its end) is walked from its top
+  el.scrollIntoView({ block: "start", inline: "nearest", behavior: "instant" });
+  const seen = await S.see(el, ms);
+  return { shown: seen && seen.width >= 1 ? Math.floor(Math.min(seen.height, el.clientHeight)) : 0, measured: seen !== null };
+}
+
+/** Box `i` is at its end: is its bottom on the screen? If not (a box taller than the screen), and `move`, the nearest scroller around it that still
+ *  carries it up (the window last) is scrolled down by `step`. -> "shown" (its bottom is on the screen, or nothing around it carries it up), "moved",
+ *  "more" (not shown, and not to move), or "unmeasured" (the page's observer did not answer). */
+async function inPageRevealOver({ key, i, step, move, ms }) {
+  const S = window[Symbol.for(key)], el = S.boxes[i];
+  if (!el.isConnected) return "shown";
+  const seen = await S.see(el, ms);
+  if (!seen) return "unmeasured";
+  if (seen.bottom) return "shown";
+  if (!move) return "more";
+  const top = el.getBoundingClientRect().top;
+  for (let a = S.up(el); a; a = S.up(a)) {
+    if (a === document.documentElement) scrollBy({ top: step, behavior: "instant" });   // the window
+    else if (getComputedStyle(a).overflowY === "visible" || a.scrollHeight - a.clientHeight <= 1) continue;
+    else { S.keep(a); S.pin(a); a.scrollBy({ top: step, behavior: "instant" }); }
+    if (el.getBoundingClientRect().top < top - 0.5) return "moved";
+  }
+  return "shown";
+}
+
+/** Small box `j`: put on the screen as a box is, to tell whether it is ever on it (one in a closed drawer is not). -> true: on the screen, or the observer did not answer. */
+async function inPageRevealSmall({ key, j, ms }) {
+  const S = window[Symbol.for(key)], el = S.small[j];
+  S.hold(el);
+  el.scrollIntoView({ block: "start", inline: "nearest", behavior: "instant" });
+  const seen = await S.see(el, ms);
+  return !seen || (seen.width >= 1 && seen.height >= 1);
+}
+
+/** The end: every box and the window back where the walk found them (their top, on a page that does not scroll itself on load), the pinned styles as they were. */
+function inPageRevealEnd(key) {
+  const S = window[Symbol.for(key)];
+  for (const [el, at] of S.found) el.scrollTo({ top: at.top, left: at.left, behavior: "instant" });
+  scrollTo({ top: S.win.top, left: S.win.left, behavior: "instant" });
+  for (const [el, was] of S.pinned) {
+    for (const [prop, value, priority] of was.props) if (value) el.style.setProperty(prop, value, priority); else el.style.removeProperty(prop);
+    // the page did not change this inline style meanwhile: the attribute goes back letter for letter. The inline style reaches the attribute lazily
+    // and re-serialized: it is read first, or a removed attribute comes back as style="".
+    const now = el.getAttribute("style");
+    if (el.style.cssText === was.css && now !== was.attr) { if (was.attr === null) el.removeAttribute("style"); else el.setAttribute("style", was.attr); }
+  }
+}
+
+/** After the return has settled: is every scroller the walk moved still where it was found? (A page may scroll itself back.) Deletes the state. */
+function inPageRevealReturned(key) {
+  const S = window[Symbol.for(key)];
+  delete window[Symbol.for(key)];
+  const off = (a, b) => Math.abs(a - b) > 1;
+  return !(off(scrollY, S.win.top) || off(scrollX, S.win.left) || [...S.found].some(([el, at]) => off(el.scrollTop, at.top) || off(el.scrollLeft, at.left)));
+}
+
+// ---- in node
+
+/** --reveal: before the stills of one load, scroll the page and every box that scrolls inside it to the end and back, in steps of half of what the screen shows of each,
+ *  waiting after each step as after load.
+ *  1. The window, put at its top, then walked down (a page that grows is followed: its height is read again at every step).
+ *  2. Then the boxes (found after 1, so a box the page's walk revealed is among them), in document order. Each is put at its own top and on the screen (the window and
+ *     the scrollers around it scrolled to show its top), walked down, and then, while its bottom is not on the screen (a box taller than the screen), carried up by
+ *     the nearest scroller around it. The boxes are found again after each box. A small box is only counted, when it is ever on the screen.
+ *  3. Every scroller back where it was found, the pinned styles put back, waited for, and checked.
+ *  One budget: CAPTURE_REVEAL_MAX_STEPS steps for the window and the boxes together, and `timeout` ms for the whole walk, checked before every step and every placement.
+ *  Every call into the page is given up CAPTURE_REVEAL_GUARD_MS after the timeout: the walk then throws "the page stopped answering during the --reveal walk" and capture stops (exit 1, nothing written).
+ *  -> {steps, boxSteps, boxes, boxesUnfinished, unmeasured, small, capped, timedOut, pageUnfinished, grew, notScrolled, notReturned, rootHidden} */
+async function revealWalk(page, waitMs, timeout) {
+  const key = CAPTURE_REVEAL_KEY, started = Date.now(), ms = CAPTURE_REVEAL_ANSWER_MS;
+  const out = { steps: 0, boxSteps: 0, boxes: 0, boxesUnfinished: 0, unmeasured: 0, small: 0, capped: false, timedOut: false, pageUnfinished: false, grew: false, notScrolled: false, notReturned: false, rootHidden: false };
+  const guard = (p) => withTimeout(p, Math.max(timeout - (Date.now() - started), 0) + CAPTURE_REVEAL_GUARD_MS, "the --reveal walk");
+  const ev = (fn, arg) => guard(page.evaluate(fn, arg));
+  const settle = async () => { await ev(inPageRevealFrames, ms); await page.waitForTimeout(waitMs); await guard(waitAnimations(page)); };
+  const spent = () => (Date.now() - started >= timeout ? "time" : out.steps >= CAPTURE_REVEAL_MAX_STEPS ? "steps" : null);
+  const stop = (why) => { out.capped = true; if (why === "time") out.timedOut = true; };
+  const took = (i) => { out.steps += 1; if (i >= 0) out.boxSteps += 1; };
+  // one scroller from its top to its end, by CAPTURE_REVEAL_STEP of `shown` px (null: of its own height, read again at each step) -> "end" | "spent" | "stuck"
+  const walkOne = async (i, shown) => {
+    let first = null;
+    for (;;) {
+      const at = await ev(inPageRevealAt, { key, i });
+      first ??= at.total;
+      if (at.total > first) out.grew = true;
+      if (at.y + at.vh >= at.total - 1) return "end";
+      const why = spent();
+      if (why) { stop(why); return "spent"; }
+      const y = await ev(inPageRevealScroll, { key, i, top: Math.min(at.y + Math.max(1, Math.floor(CAPTURE_REVEAL_STEP * (shown ?? at.vh))), at.total - at.vh) });
+      if (y <= at.y) return "stuck";   // it does not move when scrolled
+      took(i);
+      await settle();
+      if ((await ev(inPageRevealAt, { key, i })).y <= at.y) return "stuck";   // the page moved it back
+    }
+  };
+  let found = { boxes: 0, small: 0 };
+  try {
+    const locked = await ev(inPageRevealBegin, key);
+    if ((await ev(inPageRevealAt, { key, i: -1 })).y > 0) { await ev(inPageRevealScroll, { key, i: -1, top: 0 }); await settle(); }   // a page loaded scrolled (an anchor) is walked from its top
+    const page1 = await walkOne(-1, null);
+    if (page1 === "spent") out.pageUnfinished = true;
+    if (page1 === "stuck") out.notScrolled = true;
+    if (locked && out.steps > 0) out.rootHidden = true;   // walked by script, but a visitor cannot scroll it
+    found = await ev(inPageRevealFind, { key, min: CAPTURE_REVEAL_BOX_MIN });
+    for (let i = 0; i < found.boxes; i++) {
+      const why = spent();
+      if (why) { stop(why); out.boxesUnfinished = found.boxes - i; break; }
+      const { shown, measured } = await ev(inPageRevealPlace, { key, i, ms });
+      if (!measured) { out.unmeasured += 1; continue; }   // the page's IntersectionObserver did not answer: not walked, and said so
+      if (shown < 1) continue;   // off the screen however the page is scrolled (a closed drawer): not walked, not counted
+      await settle();
+      const before = out.boxSteps;
+      let r = await walkOne(i, shown);
+      // at its end, but its bottom may be below the screen (a box taller than the screen): the scrollers around it carry it up, step by step, until its bottom is shown
+      for (const step = Math.max(1, Math.floor(CAPTURE_REVEAL_STEP * shown)); r === "end";) {
+        const why = spent();
+        const o = await ev(inPageRevealOver, { key, i, step, move: !why, ms });
+        if (o === "more") { stop(why); r = "spent"; break; }
+        if (o === "unmeasured") out.unmeasured += 1;
+        if (o !== "moved") break;
+        took(i);
+        await settle();
+      }
+      if (out.boxSteps > before) out.boxes += 1;   // a box counts as walked once it took a step
+      if (r === "stuck") out.notScrolled = true;
+      if (r === "spent") { out.boxesUnfinished = found.boxes - i; break; }
+      found = await ev(inPageRevealFind, { key, min: CAPTURE_REVEAL_BOX_MIN });
+    }
+    for (let j = 0; j < found.small; j++) if (spent() || await ev(inPageRevealSmall, { key, j, ms })) out.small += 1;   // past the budget, every small box is counted
+    await ev(inPageRevealEnd, key);
+    await settle();
+    out.notReturned = !(await ev(inPageRevealReturned, key));
+  } catch (e) {
+    // the page stopped answering (a script that never ends): the run stops here, and capture writes nothing
+    if (/the --reveal walk timed out/.test(String(e?.message))) throw new Error("the page stopped answering during the --reveal walk");
+    throw e;
+  }
+  return out;
+}
+
+// ---- the record and the line (captureProjectPage)
+
+/** The four loads' walks, merged: the most of each count, any of each flag. */
+function mergeReveal(a, w) {
+  if (!a) return { ...w };
+  const m = {};
+  for (const k of Object.keys(w)) m[k] = typeof w[k] === "number" ? Math.max(a[k], w[k]) : a[k] || w[k];
+  return m;
+}
+
+/** capture.json's `reveal`, keys in a fixed order, the optional ones only when they say something. */
+function revealRecord(r) {
+  return {
+    steps: r.steps, capped: r.capped,
+    ...(r.timedOut ? { timed_out: true } : {}),
+    ...(r.pageUnfinished ? { page_unfinished: true } : {}),
+    ...(r.boxes ? { boxes: r.boxes, box_steps: r.boxSteps } : {}),
+    ...(r.boxesUnfinished ? { boxes_unfinished: r.boxesUnfinished } : {}),
+    ...(r.unmeasured ? { boxes_unmeasured: r.unmeasured } : {}),
+    ...(r.small ? { small_boxes: r.small } : {}),
+    ...(r.grew ? { grew: true } : {}),
+    ...(r.notScrolled ? { not_scrolled: true } : {}),
+    ...(r.notReturned ? { not_returned: true } : {}),
+    ...(r.rootHidden ? { root_hidden: true } : {}),
+  };
+}
+
+const revealCount = (k, one, many) => `${k} ${k === 1 ? one : many}`;
+
+/** The one line the run prints for the walk. Every clause is true of the merged record: a count is the most any load had. */
+function revealLine(r) {
+  const max = CAPTURE_REVEAL_MAX_STEPS, screens = Math.round(max * CAPTURE_REVEAL_STEP), boxes = (k) => revealCount(k, "box that scrolls", "boxes that scroll");
+  const done = !r.capped && !r.notScrolled && !r.unmeasured;
+  const head = r.steps === 0 && done
+    ? `reveal: nothing to scroll: in every load the page fits its screen and holds no box that scrolls${r.small ? " and is at least half a screen tall" : ""}`
+    : r.steps === 0 ? "reveal: no step was taken"
+    : `reveal: before the stills, each load was scrolled ${done ? "to the end" : "down"}${r.notReturned ? "" : " and back"} in steps of at most half a screen (${revealCount(r.steps, "step", "steps")} at most, of ${max} allowed`
+      + (r.boxes ? `; up to ${r.boxSteps} of them inside ${boxes(r.boxes)}, each with the page scrolled to show it` : "") + ")";
+  const parts = [head];
+  if (r.grew) parts.push("the page or a box grew as it was scrolled (content added at its end), and the walk followed it");
+  const left = [r.pageUnfinished ? "the page" : null, r.boxesUnfinished ? boxes(r.boxesUnfinished) : null].filter(Boolean).join(" and ");
+  if (r.timedOut) parts.push(`CAPPED: a walk took longer than --timeout and stopped before the end of ${left || "a scroller"}, so what lies past where it stopped was not revealed`);
+  else if (r.pageUnfinished) parts.push(`CAPPED: the page is longer than ${screens} screens, so what lies below the walk was not revealed` + (r.boxesUnfinished ? `, nor what lies further down in ${boxes(r.boxesUnfinished)}` : ""));
+  else if (r.capped) parts.push(`CAPPED: the page and its boxes needed more than ${max} steps, so what lies further down in ${boxes(r.boxesUnfinished)} was not revealed`);
+  if (r.unmeasured) parts.push(`NOT MEASURED: the page's IntersectionObserver did not answer for ${boxes(r.unmeasured)}, so what lies further down in ${r.unmeasured === 1 ? "it" : "them"} may not be revealed`);
+  if (r.small) parts.push(`${revealCount(r.small, "box", "boxes")} under half a screen tall that ${r.small === 1 ? "scrolls" : "scroll"} (a code block, a short list) ${r.small === 1 ? "was" : "were"} not walked, so what ${r.small === 1 ? "it reveals" : "they reveal"} on scroll is not shown`);
+  if (r.notScrolled) parts.push("NOT SCROLLED: a scroller did not stay where it was scrolled to (it does not move, or the page moved it back), so what lies below where it stopped was not revealed");
+  if (r.notReturned) parts.push("NOT RETURNED: after the walk a scroller was not back where the walk found it (a script moved it), so a first screen may not show the top");
+  if (r.rootHidden) parts.push("NOTE: the page's own scrolling is hidden or clipped (overflow: hidden or clip on the root, or on the body when the root's is visible), so the walk scrolled it by script but a visitor cannot scroll it with the wheel, and the stills may show what no visitor reaches");
+  return "  " + parts.join("; ");
 }
 
 /** A picture shrunk to `width` px in a blank page (a canvas, as pngDiff decodes pictures), as a JPEG on white. */
@@ -2487,9 +2744,7 @@ async function captureProjectPage(project, pageFile, values) {
         await withTimeout(page.goto(url, { waitUntil: "load", timeout }), timeout + 5000, `loading ${url}`);
         await settleForStill(page, { timeout, waitMs });
         if (values.reveal) {
-          const walk = await revealWalk(page, waitMs, timeout);
-          reveal = { steps: Math.max(reveal?.steps ?? 0, walk.steps), capped: Boolean(reveal?.capped) || walk.capped, timedOut: Boolean(reveal?.timedOut) || walk.timedOut,
-            inner: Boolean(reveal?.inner) || walk.inner, stuck: Boolean(reveal?.stuck) || walk.stuck };
+          reveal = mergeReveal(reveal, await revealWalk(page, waitMs, timeout));
         }
         stills.push({ view: `${width}-${scheme}`, width, height, scheme, file: `${width}-${scheme}.png`, png: await page.screenshot() });
         if (width === 1440 && scheme === "light") {
@@ -2524,8 +2779,7 @@ async function captureProjectPage(project, pageFile, values) {
     schema: 1, tool: "capture", source: { page: pageRel }, date: today(),
     views: stills.map((s) => ({ view: s.view, width: s.width, height: s.height, scheme: s.scheme, file: s.file, sha256: sha256(s.png) })),
     full: { file: full.file, sha256: sha256(full.png), height: full.height, cut: full.cut, ...(full.cut ? { page_height: full.page_height } : {}) },
-    ...(reveal ? { reveal: { steps: reveal.steps, capped: reveal.capped, ...(reveal.timedOut ? { timed_out: true } : {}), ...(reveal.inner ? { inner_scroller: true } : {}),
-      ...(reveal.stuck ? { not_scrolled: true } : {}) } } : {}),
+    ...(reveal ? { reveal: revealRecord(reveal) } : {}),
     ...(taken.frames.length ? { frames: taken.frames.map((f) => ({ percent: f.percent, ms: f.ms, file: f.file, sha256: sha256(f.png) })) } : {}),
     inputs, problems: kept.slice(0, CAPTURE_MAX_PROBLEMS).concat(kept.length > CAPTURE_MAX_PROBLEMS ? [`${kept.length - CAPTURE_MAX_PROBLEMS} more`] : []),
   };
@@ -2535,13 +2789,7 @@ async function captureProjectPage(project, pageFile, values) {
   console.log(`capture ${pageRel}: ${files.length} stills and capture.json in ${dir}/ (${written} of ${files.length + 1} file(s) written, the others unchanged)`
     + (full.cut ? `; the full page is ${full.page_height} px tall and was cut at ${CAPTURE_FULL_MAX} px` : ""));
   for (const p of doc.problems) console.log(`  problem while loading: ${p}`);
-  if (reveal) {
-    console.log(`  reveal: each page was scrolled to the bottom and back in viewport-sized steps (${reveal.steps} steps at most, of ${CAPTURE_REVEAL_MAX_STEPS} allowed)`
-      + (reveal.timedOut ? `; CAPPED: a walk took longer than --timeout, so what lies below where it stopped was not revealed`
-        : reveal.capped ? `; CAPPED: the page is longer than ${CAPTURE_REVEAL_MAX_STEPS} screens, so what lies below the walk was not revealed` : "")
-      + (reveal.inner ? "; the page scrolls inside an element, which was walked instead of the window" : "")
-      + (reveal.stuck ? "; NOT SCROLLED: a page did not move when scrolled, so what lies below its first screen was not revealed" : ""));
-  }
+  if (reveal) console.log(revealLine(reveal));
   if (taken.frames.length) {
     console.log(`  key frames: ${taken.frames.length} of the first screen (1440, light) at ${CAPTURE_FRAME_PERCENTS.join(", ")} % of ${taken.length} ms`
       + (taken.realTime ? "; the page also moves by requestAnimationFrame, which cannot be seeked, so the frames may differ from run to run" : ""));

@@ -117,6 +117,72 @@ def test_project_discovery_walks_up_and_errors_clearly(tmp_path):
     assert r.returncode == 0 and "no brand project found" in r.stdout
 
 
+def test_raising_the_tier_names_the_chapters_and_facts_the_new_tier_needs(tmp_path):
+    p = make_project(tmp_path, tier="standard")
+    r = bc("state", "--set", "tier=full", project=p)
+    assert r.returncode == 0, r.stderr
+    assert "tier raised: standard -> full" in r.stdout
+    assert "adoption, launch" in r.stdout and "INVENTORY.md" in r.stdout and "Open: <what it waits for>" in r.stdout and "book:open-items" in r.stdout
+    for cid in ("adoption", "launch"):   # what the lint needs is named from the same registry: standard's own chapters are missing too, so they are listed first
+        assert cid in r.stdout.split("INVENTORY.md")[0]
+    same = bc("state", "--set", "tier=full", project=p)
+    assert same.returncode == 0 and "tier raised" not in same.stdout and same.stdout.strip() == ""
+    low = bc("state", "--set", "tier=standard", project=p)
+    assert low.returncode == 0 and low.stdout.strip() == ""
+    # what the project already has is not listed again
+    (p / "book" / "chapters").mkdir(parents=True)
+    for cid in ("adoption", "launch"):
+        (p / "book" / "chapters" / f"{cid}.md").write_text("## x\n")
+    (p / "INVENTORY.md").write_text("# Inventory\n")
+    r = bc("state", "--set", "tier=full", project=p)
+    assert "adoption" not in r.stdout and "launch" not in r.stdout and "INVENTORY.md" not in r.stdout
+    q = make_project(tmp_path, slug="two", tier="quick")
+    r = bc("state", "--set", "tier=standard", project=q)
+    assert "tier raised: quick -> standard" in r.stdout and "adoption" not in r.stdout and "INVENTORY.md" not in r.stdout
+    q1 = make_project(tmp_path, slug="five", tier="standard")
+    j = bc("state", "--set", "tier=full", "--json", project=q1)   # the lines go to stderr, so stdout still parses
+    assert j.returncode == 0 and isinstance(json.loads(j.stdout), dict) and "tier raised: standard -> full" in j.stderr
+    q2 = make_project(tmp_path, slug="four", tier="standard")
+    g = bc("state", "--set", "tier=full", "--get", "tier", project=q2)
+    assert g.stdout.strip() == "full" and "tier raised: standard -> full" in g.stderr
+    r = bc("state", "--set", "inventory=none (no target repo)", project=make_project(tmp_path, slug="three", tier="standard"))
+    assert r.stdout.strip() == ""
+
+
+def test_raising_the_tier_after_g4_names_the_motion_decision_and_reads_a_missing_tier_as_quick(tmp_path):
+    p = make_project(tmp_path, tier="quick")
+    assert bc("state", "--record", "G4", "approved", project=p).returncode == 0
+    r = bc("state", "--set", "tier=standard", project=p)
+    assert r.returncode == 0 and "motion decision" in r.stdout and "motion:decided" in r.stdout and "brand-creator motion --off" in r.stdout, (r.stdout, r.stderr)
+    (p / "motion").mkdir()
+    (p / "motion" / "motion.json").write_text('{"schema": 1, "motion": "off", "reason": "nothing moves"}\n')
+    r = bc("state", "--set", "tier=full", project=p)
+    assert "motion decision" not in r.stdout, r.stdout
+    r0 = make_project(tmp_path, slug="beforeg4", tier="quick")           # G4 not recorded: no motion line
+    r = bc("state", "--set", "tier=standard", project=r0)
+    assert r.returncode == 0 and "motion decision" not in r.stdout, (r.stdout, r.stderr)
+    q = make_project(tmp_path, slug="notier", tier="quick")
+    st = q / "BRAND-STATE.md"
+    st.write_text("".join(ln for ln in st.read_text().splitlines(True) if not ln.startswith("tier:")))
+    r = bc("state", "--set", "tier=standard", project=q)
+    assert r.returncode == 0 and "tier raised: quick -> standard" in r.stdout, (r.stdout, r.stderr)
+
+
+def test_raising_the_tier_reads_the_chapter_file_of_each_content_language(tmp_path):
+    p = make_project(tmp_path, tier="standard")
+    assert bc("state", "--set", "content_languages=pl,en", project=p).returncode == 0
+    (p / "book" / "chapters").mkdir(parents=True)
+    for name in ("adoption.pl.md", "adoption.en.md", "launch.pl.md"):
+        (p / "book" / "chapters" / name).write_text("## x\n")
+    r = bc("state", "--set", "tier=full", project=p)
+    head = r.stdout.split("INVENTORY.md")[0]
+    assert "launch" in head and "adoption" not in head, r.stdout
+    (p / "book" / "chapters" / "launch.en.md").write_text("## x\n")
+    r = bc("state", "--set", "tier=standard", project=p)
+    r = bc("state", "--set", "tier=full", project=p)
+    assert "launch" not in r.stdout.split("INVENTORY.md")[0], r.stdout
+
+
 def test_state_record_require_get_set_bump(tmp_path):
     p = make_project(tmp_path)
     d = tmp_path / "d"
@@ -653,3 +719,30 @@ def test_reset_rounds_is_read_through_one_helper_that_takes_a_list_or_the_old_qu
     assert _common.State(f).reset_rounds() == rounds
     f.write_text("---\nslug: x\n---\n")
     assert _common.State(f).reset_rounds() == []                                         # a project without the key
+
+
+def test_raising_the_tier_on_a_hand_authored_book_reads_chapter_attributes_and_survives_a_broken_config(tmp_path):
+    p = make_project(tmp_path, slug="hand", tier="standard")
+    assert bc("state", "--set", "mark_source=authored-vector", project=p).returncode == 0
+    (p / "book").mkdir(exist_ok=True)
+    (p / "book" / "book.json").write_text("{not json")
+    r = bc("state", "--set", "tier=full", project=p)
+    assert r.returncode == 0, r.stderr
+    assert "not checked" in r.stdout and "book.json" in r.stdout
+    (p / "book" / "book.json").write_text("{}")
+    out = (p / "book.html")
+    out.write_text("<section data-chapter='adoption'></section><section data-chapter=\"launch\"></section>")
+    r = bc("state", "--set", "tier=quick", project=p)
+    r = bc("state", "--set", "tier=full", project=p)
+    assert "adoption" not in r.stdout.split("INVENTORY.md")[0].split("(in the book)")[-1] and "launch" not in r.stdout.split("(in the book)")[-1].split("INVENTORY.md")[0]
+
+
+def test_raising_the_tier_still_names_the_inventory_when_book_json_cannot_be_read(tmp_path):
+    p = make_project(tmp_path, tier="quick")
+    for kv in ("content_languages=pl", "mark_source=authored-vector"):
+        assert bc("state", "--set", kv, project=p).returncode == 0
+    (p / "book").mkdir(exist_ok=True)
+    (p / "book" / "book.json").write_text("{bad")
+    r = bc("state", "--set", "tier=full", project=p)
+    assert r.returncode == 0, r.stderr
+    assert "book/book.json cannot be read" in r.stdout and "INVENTORY.md" in r.stdout, r.stdout

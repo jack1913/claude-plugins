@@ -216,6 +216,18 @@ Patterns that make a page look like any template. Each warns and says where; it 
   form. A skew, a 3D turn or a mirrored form isn't measured. If the page has more than 100 turned forms or fields, the line says "not
   verified" beyond the first ones.
 
+## Heading and button in the first screen
+
+The first screen is what a visitor sees before scrolling. For each size and theme, the check finds the hero (the block
+around the page's first heading) and looks at where the heading and the hero's first button or link end. The first
+screen is the window height the check opens the page with for that width (800 at 360, 844 at 390, 1024 at 768, 768 at
+1024, 900 at 1440, 1080 at 1920, 900 at any other width). If the bottom edge of either is lower, one warning
+(`page:first-screen`) names each such size, what fell below the fold and by how many pixels. A tall hero may be what you
+want, so it never fails a page. A page with no hero says "not measured" and why, and a hero with no button or link is
+measured on its heading alone and says so. If the heading is missing at some sizes but not others (hidden on a phone, say), those sizes are named
+as not measured and the row is a warning, never a pass. The first link or button in the hero counts, a logo link included, and on a page with no
+section around its heading the hero is taken to be the heading's parent block.
+
 ## Boxes left behind by a movement
 
 A movement can carry a box away and never hide it, so a sheet or a card stays on screen where it does not belong. No

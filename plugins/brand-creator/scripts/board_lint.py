@@ -50,14 +50,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "boardlib"))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "marklib"))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "pagelib"))   # boardlib/siteboard.py names the page-check report of a page with pagelib/pagecheck.py
 from _common import (EXIT_USAGE, CliError, Parser, Report, add_project_arg, confine, fail, find_project, gate_recorded,  # noqa: E402
-                     list_rounds, main_guard, read_state, rel)
+                     inventory_needed, inventory_recorded, main_guard, read_state, rel)
 import svgtools  # noqa: E402
 from boardpage import (DATA_IMAGE, FILL, GENERIC_NAME, KINDS, MIN_GROUPS, MIN_TERRITORIES, WORD_NAME, Node, declared_round,  # noqa: E402
-                       group_count, is_style_board, page_kind, parse_dom, read_page, sections, territory_count)
+                       group_count, page_kind, parse_dom, read_page, sections, territory_count)
 import divergence  # noqa: E402
 import motionboard  # noqa: E402
 import reflex  # noqa: E402
 import siteboard  # noqa: E402
+from rounds import first_motion, style_rearmed  # noqa: E402   (boardlib/rounds.py: the two questions about earlier rounds, also asked by `brand-creator cleanup` of the rounds it keeps)
 from boardpage import thumb_problems  # noqa: E402
 from _color import parse_hex, wcag_ratio  # noqa: E402
 from marks import ground_contacts, ground_target, outline_width, tokens_ground  # noqa: E402
@@ -126,40 +127,6 @@ def check_votes(rep: Report, root: Node) -> None:
     first = groups[0][0]
     rep.add("page:votes", "fail", label, detail="; ".join(problems[:8]) + (f"; and {len(problems) - 8} more" if len(problems) > 8 else "")
             + f'. To fix it, name the radios of each card vote-<its name>, a group of their own per card (name="vote-{first}" on the card {first})')
-
-
-def style_rearmed(project: Path, rnd: int, reset_rounds: list[int], g1s_round: int | None) -> tuple[bool, str]:
-    """After a full rejection the pick board of reset round `rnd` needs a new style board and a style pick recorded after it.
-    The rejected round is the highest earlier round whose board is not a style board. The new style board is a style board in a
-    round listed in reset_rounds that lies after the rejected round and before `rnd` (the latest one counts); a page that only says
-    data-board="style" counts when it declares its own round and holds MIN_TERRITORIES named territories with content, as the style lint
-    asks. G1s must have been recorded when that round or a later style board was on disk (g1s_round, written by `state --record G1s`).
-    Returns (ok, detail)."""
-    pages = {n: read_page(path / "board.html") for n, path in list_rounds(project) if n < rnd}
-    pages = {n: root for n, root in pages.items() if page_kind(root) not in ("motion", "site-refs", "site")}   # a motion round, a website references round or a site round is not a round the owner rejected, and no style board lies in it
-    last = max((n for n, root in pages.items() if page_kind(root) != "style"), default=-1)
-    declared = [n for n, root in pages.items() if page_kind(root) == "style" and n > last and n in reset_rounds]
-    styles = [n for n in declared if is_style_board(pages[n], n)]
-    rejected = f"the rejected round is r{last}" if last >= 0 else "no earlier pick or refine round was found"
-
-    def not_counted(n: int) -> str:
-        said = declared_round(pages[n])
-        if said != n:
-            return f'r{n} declares data-round="{said}" (a copied page)' if said is not None else f"r{n} declares no data-round"
-        return f"r{n} has {territory_count(pages[n])} of the {MIN_TERRITORIES} territories a style board needs"
-
-    if not styles:
-        span = f"between r{last} and r{rnd}" if last >= 0 else f"before r{rnd}"
-        thin = ", ".join(not_counted(n) for n in sorted(declared))
-        return False, ("after a full rejection, show a new style board in a reset round before the next pick board "
-                       f"(a page with data-board=\"style\" in a round listed in reset_rounds, {span}; {rejected})"
-                       + (f". Not counted as a style board: {thin}" if thin else ""))
-    new = max(styles)
-    if g1s_round is None or g1s_round < new:
-        return False, ("G1s still holds the pick from before the rejection: record the owner's new pick with state --record G1s "
-                       f"\"picked <territory>\" (g1s_round is {'missing' if g1s_round is None else g1s_round}; the new style board is "
-                       f"r{new}, and the record must come after it)")
-    return True, f"the new style board r{new} comes after the rejected round and the pick was recorded after it (g1s_round {g1s_round}; {rejected})"
 
 
 MASTERS_LABEL = "kept masters before G3 (advice, warnings only)"
@@ -443,7 +410,7 @@ def main() -> int:
         """A motion board (data-board="motion"): the gates of the round, the sections every board has, and one card per variant (boardlib/motionboard.py).
         The first motion board of a project shows exactly three variants and needs no What changed and Weak points; a later one (the refine loop on the picked or
         combined variant) shows one or more and needs both, as a refine board does. No map, no directions, no None of these section, no kept masters."""
-        first = not any(page_kind(read_page(d / "board.html")) == "motion" for n, d in list_rounds(project) if n < rnd)
+        first = first_motion(project, rnd)
         motionboard.gate_rows(rep, project)
         if a.min_directions:
             rep.add("directions:count", "info", "not required here", detail="a motion board shows variants of one move (motion:variants), not directions; --min-directions is not used")
@@ -704,10 +671,9 @@ def main() -> int:
 
     # ---- project-level: inventory before the first board (Full tier / product-in-family)
     if rnd == 1:
-        needs_inv = str(st.get("tier", "")).lower() == "full" or str(st.get("architecture", "")).lower() == "product-in-family"
-        inv = str(st.get("inventory", "") or "").strip()
+        needs_inv = inventory_needed(str(st.get("tier", "")), str(st.get("architecture", "")))
         if needs_inv:
-            ok = (project / "INVENTORY.md").is_file() or inv.lower().startswith("none")
+            ok = inventory_recorded(project, st)
             rep.add("project:inventory", "pass" if ok else "fail", "inventory before round 1",
                     detail="INVENTORY.md exists or BRAND-STATE records 'inventory: none (no target repo)'" if ok else
                            "round 1 needs INVENTORY.md, or `inventory: none (no target repo)` in BRAND-STATE.md (Full tier / product-in-family)")

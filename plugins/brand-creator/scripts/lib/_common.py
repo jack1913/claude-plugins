@@ -564,6 +564,16 @@ def read_state(project: Path) -> State:
     return State(project / STATE_FILE)
 
 
+def inventory_needed(tier: str, architecture: str) -> bool:
+    """The Full tier and product-in-family need INVENTORY.md before round 1 (board-lint's project:inventory row; `state --set tier=` names it when the tier is raised)."""
+    return str(tier or "").strip().lower() == "full" or str(architecture or "").strip().lower() == "product-in-family"
+
+
+def inventory_recorded(project: Path, st) -> bool:
+    """INVENTORY.md exists, or BRAND-STATE.md records `inventory: none (no target repo)`."""
+    return (project / "INVENTORY.md").is_file() or str(st.get("inventory", "") or "").strip().lower().startswith("none")
+
+
 def gate_recorded(project: Path, gate: str) -> str:
     gates = read_state(project).get("gates", {}) or {}
     return str(gates.get(gate, "") or "").strip()

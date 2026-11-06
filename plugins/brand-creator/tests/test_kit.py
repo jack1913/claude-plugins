@@ -2182,6 +2182,65 @@ def test_a_kit_of_an_older_edition_fails_kit_check(pack):
     assert (kit_json(pack)["edition"], kit_json(pack)["version"]) == ("2", "2.1")
 
 
+def test_an_owner_file_nobody_touched_since_the_build_is_named_as_behind_once_the_brand_changed_and_is_never_edited(pack):
+    """kit:behind lists each owner file (the five and the owner's own, a recipe added by hand) that is still as the last build recorded it once FACTS.md, the tokens or BRAND-STATE.md changed;
+    a file the owner edited after the build is kit:owned's, not named as behind; the check edits nothing."""
+    filled_kit(pack)
+    (kit_of(pack) / "recipes" / "ad.md").write_text("# Ad\n\nA headline on the accent. [example]\n", encoding="utf-8")
+    assert build(pack).returncode == 0
+    assert kit_check(pack).returncode == 0 and "kit:behind" not in statuses(pack)           # the brand has not moved: nothing is behind
+    mutate(pack / "FACTS.md", "tools are made in batches of 200", "tools are made in batches of 300")
+    mutate(kit_of(pack) / "voice.md", "Keep it short. [example]", "Keep it very short. [example]")   # edited after the build: kit:owned's
+    before = {p: p.read_bytes() for p in kit_of(pack).rglob("*") if p.is_file()}
+    r = kit_check(pack)
+    assert r.returncode == 3, r.stdout + r.stderr                                         # kit:sources is still "not verified"; the warning does not hide it
+    row = check_report_rows(pack)["kit:behind"]
+    assert row["status"] == "warn" and "recipes/ad.md" in row["detail"] and "voice.md" not in row["detail"] and "(state_sha, facts)" not in row["detail"] and "FACTS.md (and possibly BRAND-STATE.md or the motion spec) changed after it" in row["detail"] and "EXTENDING.md" not in row["detail"]
+    assert "[WARN] kit:behind" in r.stdout and "never edits your files" in row["detail"]
+    assert {p: p.read_bytes() for p in kit_of(pack).rglob("*") if p.is_file()} == before     # no file of the kit was touched
+    assert build(pack).returncode == 0 and "kit:behind" not in (kit_check(pack) and statuses(pack))   # the build records the files against the brand as it is
+
+
+def test_kit_behind_names_every_owner_file_and_a_tokens_change_alone_counts_and_the_build_says_what_it_records(pack):
+    filled_kit(pack)
+    for n in ("ad", "presentation"):
+        (kit_of(pack) / "recipes" / f"{n}.md").write_text(f"# {n}\n\nA line. [example]\n", encoding="utf-8")
+    assert build(pack).returncode == 0
+    tokens = pack / "assets" / "tokens" / "tokens.css"
+    tokens.write_text(tokens.read_text(encoding="utf-8") + "\n:root { --zz-extra: 1px; }\n", encoding="utf-8")
+    assert kit_check(pack).returncode == 3
+    detail = check_report_rows(pack)["kit:behind"]["detail"]
+    for rel in ("voice.md", "visual.md", "golden-rules.md", "recipes/web-page.md", "recipes/ad.md", "recipes/presentation.md"):
+        assert rel in detail
+    assert "more" not in detail and "EXTENDING.md" not in detail and "tokens.css changed after it" in detail
+    assert "recipes/presentation.md" in check_report_rows(pack)["kit:sources"]["detail"]
+    b = build(pack)
+    assert b.returncode == 0 and "recipes/presentation.md" in b.stdout and "never edits them" in b.stdout
+
+
+def test_kit_behind_names_a_brand_state_change_without_claiming_facts_and_facts_without_claiming_brand_state(pack):
+    filled_kit(pack)
+    assert build(pack).returncode == 0
+    assert bc("state", "--set", "name=Acme Tools", project=pack).returncode == 0
+    assert kit_check(pack).returncode == 3
+    detail = check_report_rows(pack)["kit:behind"]["detail"]
+    assert "BRAND-STATE.md or the motion spec changed after it" in detail and "FACTS.md" not in detail
+
+
+def test_a_kit_build_says_when_it_cannot_tell_which_owner_files_are_behind(pack):
+    filled_kit(pack)
+    assert build(pack).returncode == 0
+    (kit_of(pack) / "kit.json").write_text("{not json", encoding="utf-8")
+    b = build(pack)
+    assert "not verified" in b.stdout and "owner files are behind" in b.stdout, b.stdout + b.stderr
+
+
+def test_a_change_the_kit_does_not_take_from_the_brand_names_no_file_as_behind(pack):
+    filled_kit(pack)
+    shutil.copy(pack / "assets" / "logo" / "wordmark.svg", pack / "assets" / "logo" / "zz-extra.svg")   # a logo is a source of the kit, not a brand input an owner file is written against
+    assert kit_check(pack).returncode == 3 and "kit:behind" not in statuses(pack)
+
+
 def test_a_brand_change_after_the_build_makes_kit_check_not_verified(pack):
     filled_kit(pack)
     assert kit_check(pack).returncode == 0
@@ -2189,9 +2248,10 @@ def test_a_brand_change_after_the_build_makes_kit_check_not_verified(pack):
     r = kit_check(pack)
     assert r.returncode == 3, r.stdout + r.stderr                               # not verified, never a pass
     assert report(pack, "kit-check")["status"] == "not-verified"
-    assert statuses(pack) == {**ALL_PASS, "kit:sources": "skipped"}             # the files are the bytes the build wrote; it is the brand that moved on
+    assert statuses(pack) == {**ALL_PASS, "kit:sources": "skipped", "kit:behind": "warn"}   # the files are the bytes the build wrote; it is the brand that moved on, and the owner's files with it
     assert check_report_rows(pack)["kit:sources"]["detail"] == ("not verified: the brand changed after the kit was built (state_sha, facts); "
-                                                                "run `brand-creator kit build --yes`")
+                                                                "read the owner's files kit:behind names (voice.md, visual.md, golden-rules.md, recipes/web-page.md) against the brand first, "
+                                                                "the build records them as they are; run `brand-creator kit build --yes`")
     assert build(pack).returncode == 0
     assert kit_check(pack).returncode == 0 and statuses(pack) == ALL_PASS
     shutil.copy(pack / "assets" / "logo" / "wordmark.svg", pack / "assets" / "logo" / "zz-extra.svg")      # a new logo is a source too

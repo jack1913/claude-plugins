@@ -52,15 +52,19 @@ already says.
 
 ## Method: cleaning old rounds
 
-Before the first push of a project that is mirrored or shared, offer to clean the old rounds. Keep the boards, what they show,
-the builders (`_build/`, `tools/`), every `.md` file and every path the book, the kit, the tools or the state name; list the rest
-in `qa/<date>-cleanup-removed.txt`, one file per line (`git rm` takes no folder without `-r`), and check the links before and after. The guard blocks the agent from
-`git rm` in a brand project, so the owner runs one line as a `!` command (the tested form; `git rm --pathspec-from-file` cannot be
-combined with other pathspec arguments):
-
-```
-cd <project> && tr '\n' '\0' < qa/<date>-cleanup-removed.txt | xargs -0 git rm -q --
-```
+Before the first push of a project that is mirrored or shared, offer to clean the old rounds. Run `brand-creator cleanup --project
+<dir>`. It removes whole round folders only, and keeps the latest round of each stage, the latest pick board, every round something
+kept refers to, every earlier round the lint of a kept board reads, and every round it cannot place; `history/`, `site/` and
+`assets/` are never touched (only the `assets/_checks` reports of a removed round go with it). It refuses while any file of a round
+to remove is not committed as it is. Show the owner the plan: the rounds it keeps and why, the rounds it removes with their size
+and whether `history/` holds a frozen copy, and the code. Ask. On a yes, run `brand-creator cleanup --record-yes <code> --said
+"<the owner's words, one line, with no path of a round>"`, then `brand-creator cleanup --yes <code>`. Tell the owner the removal is
+staged, not committed, and give them the suggested commit message and the restore line from `qa/<date>-cleanup-removed.txt` as a
+`!` line they can type if they want a round back. Then run `brand-creator check --refresh` (recording the yes touched
+`DECISIONS.md`, which a site board's lint reads). A refusal names what to fix (commit the files, keep a round, say the words
+without a path); never work around it by removing files another way. A round the owner wants kept is `--keep r<N>`, on all three
+runs, which makes a new plan and needs a new yes. A second removal of the same plan after a restore needs a second
+`--record-yes`.
 
 ## Method: decision records
 

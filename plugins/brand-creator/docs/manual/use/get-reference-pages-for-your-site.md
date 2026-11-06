@@ -96,10 +96,12 @@ Claude does that review itself by default, in the same chat. It built the page, 
 and the board says so. For one, ask for a separate reviewer: an extra agent, at extra cost. Claude says how many and
 roughly what they cost, and waits for your yes.
 
-A version is reviewed at most twice: once, and once more after Claude fixed what the first review found. If something
-is still open after that, the review says "owner" and asks you questions ("Do you want X or Y?"), or, if it still says
-"fix", Claude puts what is left to you on the board instead of changing the page again. Either way Claude does not send
-the page round a third time. Your questions are in the board's Questions list, each with the answer Claude recommends: you answer there, and any change to the page follows.
+A version that did not change since its last review is not reviewed again: Claude checks that first and cites the
+earlier review on the board. A version is reviewed at most twice: once, and once more after Claude fixed what the first
+review found. If something is still open after that, the review says "owner" and asks you questions ("Do you want X or
+Y?"), or, if it still says "fix", Claude puts what is left to you on the board instead of changing the page again. Either
+way Claude does not send the page round a third time. Your questions are in the board's Questions list, each with the
+answer Claude recommends: you answer there, and any change to the page follows.
 
 ## 3. Get your other pages, and say which choices are rules
 
@@ -128,8 +130,9 @@ the page round a third time. Your questions are in the board's Questions list, e
    choice and its tag (`site/site.json`), and checks and photographs each page again there.
 3. Claude lists what the approved site leaves behind (approved ads or a deck in the old language, voice lines that place
    copy on the site, the book's site chapter, the kit) as next steps for you to pick. Before the first push of a project
-   you share, it offers to clean old rounds: it lists what would go in `qa/<date>-cleanup-removed.txt`, and you run one
-   line yourself, because the safety hook stops Claude from removing files.
+   you share, it offers to clean old rounds: it shows which old rounds would go and why the rest stay. After your yes it
+   removes them itself through git, so any of them can come back, and leaves the commit to you
+   ([the limits](../reference/commands.md#cleanup)).
 4. Type `/brand-creator:check`. It confirms that no approved page changed since you approved it, that each one keeps
    your brand's rules, and that its pictures show the page as it is now.
 

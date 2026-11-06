@@ -14,7 +14,7 @@ How long: Quick is 2 to 3 rounds in one sitting. Standard is 4 to 6 rounds over 
 
 The launch checklist is not only for Full: in any tier, say "help me launch" and Claude hands it over one step at a time. See [Launch your brand](../use/launch-your-brand.md).
 
-In Full, the brand book also has an Adoption chapter and a Launch checklist chapter. The book check fails without them.
+In Full, the brand book also has an Adoption chapter and a Launch checklist chapter. The book check fails without them. When you move up to Full later, `brand-creator state --set tier=full` lists the chapters and the inventory you do not have yet, and what you cannot fill yet is written as an `Open:` item (see [Make the brand book](../use/make-the-brand-book.md)).
 
 ## Which one to pick
 

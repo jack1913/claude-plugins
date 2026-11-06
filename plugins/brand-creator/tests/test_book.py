@@ -660,6 +660,66 @@ def test_a_missing_chapter_and_leftover_scaffolding_fail_book_lint(proj):
 
 @setup
 @resvg
+def test_an_open_item_builds_and_is_listed_as_info_but_an_unfilled_marker_still_fails(proj):
+    mutate(proj / "book/chapters/use.md", "## ", "- [ ] Domains: Open: waits for the name to be chosen.\n\nOpen: no repository exists yet.\n\n## ", 1)
+    r = bc("book", project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr                                    # an open item is no leftover marker: the build and its lint pass
+    assert bc("book-lint", project=proj).returncode == 0
+    row = next(x for x in report(proj, "book-lint")["results"] if x["id"] == "book:open-items")
+    assert row["status"] == "info" and "2 open" in row["detail"]
+    assert "use: Domains - waits for the name to be chosen." in row["detail"] and "use: no repository exists yet." in row["detail"]
+    mutate(proj / "book/chapters/use.md", "Open: no repository exists yet.", "[[fill: the repository]]")
+    build_fails(proj, "unfilled marker")
+    html = (proj / "book.html").read_text()
+    (proj / "book.html").write_text(html.replace("</li>", " [[fill: x]]</li>", 1))   # in the HTML too, a marker is a failure the open item is not
+    assert bc("book-lint", project=proj).returncode == 1
+    assert next(x for x in report(proj, "book-lint")["results"] if x["id"] == "words:scratch")["status"] == "fail"
+
+
+@setup
+@resvg
+def test_an_open_item_with_nothing_after_it_fails_and_a_book_with_none_passes_the_row(proj):
+    assert next(x for x in report(proj, "book-lint")["results"] if x["id"] == "book:open-items")["status"] == "pass"
+    html = (proj / "book.html").read_text()
+    end = html.index("</section>", html.index('data-chapter="use"'))
+    (proj / "book.html").write_text(html[:end] + "<ul><li>Handles: Open:</li></ul>" + html[end:])
+    assert bc("book-lint", project=proj).returncode == 1
+    row = next(x for x in report(proj, "book-lint")["results"] if x["id"] == "book:open-items")
+    assert row["status"] == "fail" and "use" in row["detail"]
+
+
+@setup
+@resvg
+def test_open_outside_a_chapter_or_with_a_colon_in_the_label_is_not_an_open_item(proj):
+    sec = '<section data-chapter="use">%s</section>'
+    assert booklint._open_rules("<p>Open: x</p>")[0]["status"] == "pass"                      # outside any chapter
+    assert booklint._open_rules(sec % "<p>A: B: Open: x</p>")[0]["status"] == "pass"          # a colon in the label
+    d = booklint._open_rules(sec % "<ul><li><strong>Handles</strong>: Open: x</li></ul>")[0]["detail"]
+    assert "use: Handles - x" in d and "  " not in d
+    nested = booklint._open_rules(sec % "<ul><li><p>Handles: Open: x</p></li></ul>")[0]["detail"]
+    assert nested.startswith("1 open: ") and nested.count("Handles - x") == 1, nested   # a <p> in an <li> is one item
+    two_p = booklint._open_rules(sec % "<ul><li><p>Handles: Open: a</p><p>Mail: Open: b</p></li></ul>")[0]["detail"]
+    assert two_p.startswith("2 open: ") and "Handles - a" in two_p and "Mail - b" in two_p, two_p   # two <p> in one <li> are two items
+    sub = booklint._open_rules(sec % "<ul><li>Handles: Open: a<ul><li>Mail: Open: b</li></ul></li></ul>")[0]["detail"]
+    assert sub.startswith("2 open: ") and "Handles - a" in sub and "Mail - b" in sub, sub   # a nested list holds its own item
+    named = booklint._open_rules(sec % "<ul><li>Handles: Open:<ul><li>the domain</li><li>the trademark</li></ul></li></ul>")[0]
+    assert named["status"] == "info" and named["detail"].startswith("1 open: "), named   # a nested list names what the `Open:` item waits for
+    assert booklint._open_rules(sec % "<ul><li>Handles: Open:</li></ul>")[0]["status"] == "fail"   # nothing after it, nothing nested
+    loose = booklint._open_rules(sec % "<ul><li><p>Handles: Open:</p><ul><li>the domain</li></ul></li></ul>")[0]
+    assert loose["status"] == "info" and loose["detail"] == "1 open: use: Handles - the domain", loose   # a loose list: the <p> stands for its <li>
+    assert booklint._open_rules(sec % "<ul><li><p>Handles: Open:</p></li></ul>")[0]["status"] == "fail"   # a loose item with nothing nested
+    for odd in ("<ul><li>Note: <p>Handles: Open:</p><ul><li>the domain</li></ul></li></ul>",
+                "<ul><li><p>Note: x</p>Handles: Open:<ul><li>d</li></ul></li></ul>"):
+        assert booklint._open_rules(sec % odd)[0]["status"] == "fail", odd   # an li that does not read as one item: the bare `Open:` is not dropped
+
+
+def test_the_adoption_and_launch_templates_offer_the_open_form():
+    for name in ("adoption", "launch"):
+        assert "Open: <what" in (ROOT / "templates" / "book" / f"{name}.md").read_text()
+
+
+@setup
+@resvg
 def test_duplicate_ids_and_broken_anchors_fail(proj):
     mutate(proj / "book.html", '<section class="ch" id="files"', '<section class="ch" id="idea"')
     mutate(proj / "book.html", 'href="#proof"', 'href="#nowhere"')

@@ -91,6 +91,7 @@ Run the lint, then read the book as a stranger would. Each item has a check or a
 | Legal and regulatory statements match a dated source | FACTS.md `legal:` rows (verbatim) and the owner's source; judgement |
 | The system has not drifted back into a rejected direction | read the history chapter against the Directions table; judgement |
 | Required chapters are present for the tier | `book-lint` `chapters:required` |
+| An item the owner cannot fill yet is written `Open: <what it waits for>`, never a `[[fill: ...]]` left or an invented answer | `book-lint` `book:open-items` (info, lists them) |
 | Components show their focus state | read the components chapter; judgement |
 | No label is under the minimum size | `book-lint --self-consistency` `self:font-size` |
 | The book reads at 390 px | `brand-creator shot book.html`, read the 390 slices |
@@ -103,6 +104,11 @@ tokens or elements marked `variant`. After the owner decides: `brand-creator col
 it after the owner has seen it). The losing options and every switcher leave the sources; a dated copy of each changed file goes to
 `removed-<date>/`; the decision is recorded under Collapsed in BRAND-STATE.md. Rebuild the tokens and the book afterwards. Variants live only
 while undecided: `book-lint` fails any left in the book, and `book --allow-variants` exists only for a review build.
+
+A late tier change (`state --set tier=full` on a Standard project) prints the chapters of the new tier's book the project has no file
+for and the inventory it lacks. Write each missing chapter from `templates/book/` (`book --init`); what the owner cannot give yet
+(no inventory, repository, handles or mailbox) is an open item, `Open: <what it waits for>` as a list item or paragraph, never a
+guess: `book-lint` lists it in the info row `book:open-items`, and each one is asked for again when the owner has the fact.
 
 The cover shows the edition and APPROVED (or the word `labels.<language>.APPROVED` gives in `book/book.json`, for the book's first
 content language) only when G5 is recorded for that edition (`state --record G5` writes `approved_edition`). A generated book follows
@@ -149,7 +155,10 @@ decks and other templates) go into `assets/masters/` first, and only approved on
 3. `kit build --yes` again records the owner's text and moves the version on (until then `kit check` warns that owner files changed
    since the last build), then `kit check` until it passes. A fresh kit fails `kit:fill` until those three files are filled; it also
    fails a hand-edited generated file and a dead link, and says "not verified" when the brand changed after the kit was built.
-4. A brand change goes into the project (tokens, logo, rules, facts), then `kit build --yes` again, then `kit check`. A generated
+4. A brand change goes into the project (tokens, logo, rules, facts), then `kit check` first: its `kit:behind` row names the owner
+   files nobody touched since the last build, which the change leaves behind (`voice.md`, `visual.md`, `golden-rules.md`,
+   recipes). Show the owner those files; build only after they have read or edited them, because the build records them as they
+   are and clears the warning. Then `kit build --yes` again, then `kit check`. A generated
    file edited by hand, or a file put into `brand/`, `snippets/` or `reference-pages/`, stops the build (exit 1); `--replace` moves
    it to `removed-<date>/` and builds. An edit of an owner file moves the kit's version at the next build.
 5. To put the kit in a repository: `adoption add --repo <label> --kit`, then [the brand-adopt skill](../../../brand-adopt/SKILL.md)

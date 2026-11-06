@@ -18,7 +18,7 @@ Documented subset (anything else is an error with the line number, never a silen
   inline                    **bold**, *italic* or _italic_, `code`, [text](#anchor), [text](relative/file), [text](mailto:...)
 
 Raw HTML is escaped, so a chapter can never carry a script or a network reference by accident. `[[fill: ...]]` markers left in a
-chapter are an error. Links with an http(s) address are written as given: book_lint fails them (a book makes no network calls).
+chapter are an error; an item the owner cannot fill yet is written `Open: <what it waits for>` (or `Label: Open: <what it waits for>`), which book-lint lists (book:open-items). Links with an http(s) address are written as given: book_lint fails them (a book makes no network calls).
 """
 from __future__ import annotations
 

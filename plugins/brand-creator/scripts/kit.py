@@ -64,7 +64,7 @@ makes it stale. Rows: kit:files (every generated file is what kit.json lists, ki
 relative link in a .md, .html or .css file resolves to a file inside the kit: one that points outside it, an absolute path or a missing file fails; a link to a folder is its index.html when the kit has one there;
 a link to a font that kit.json lists in fonts.not_copied is a warning: the font must be supplied under its own licence), kit:fill (no `[[fill` marker is left in a text file), kit:versions (SKILL.md holds
 `Kit version <kit.json version> (kit.json).` exactly once, and the kit's edition is the approved one), kit:plugin (warns on another plugin version), kit:sources (not verified when the brand changed after the kit was built, naming
-what changed) and kit:owned (warns when an owner file was changed, added or removed since the last build). Exit 0 pass, 1 a row failed, 3 not verified. A link inside the kit is never followed.
+what changed), kit:owned (warns when an owner file was changed, added or removed since the last build) and kit:behind (a warning, only when it has something to say: the owner's files not touched since the build, once the tokens, FACTS.md or BRAND-STATE.md changed after it; the files are never edited). Exit 0 pass, 1 a row failed, 3 not verified. A link inside the kit is never followed.
 Two rows read the owner's Markdown files (recipes/**/*.md and any other .md of hers except EXTENDING.md and voice.md), golden-rules.md, visual.md and the generated reference-pages/<id>/notes.md (an owner file that is not Markdown is never read by
 kit:fill, kit:tags or kit:numbers): kit:tags (every bullet, and in golden-rules.md and visual.md every numbered
 line too, outside code fences, carries `[example]` or `[rule: <id>]`; a numbered step of a recipe needs no tag. Every id a `[rule: <id>]` names, on any line of those files, a numbered step, a sentence or
@@ -316,7 +316,12 @@ def sources_row(rep, project: Path, doc: dict) -> None:
         rep.add("kit:sources", "skipped", label, detail=f"not verified: the brand's sources cannot be read ({e.message}); run `brand-creator kit build --yes` again")
         return
     if changed:
-        rep.add("kit:sources", "skipped", label, detail=f"not verified: the brand changed after the kit was built ({', '.join(changed)}); run `brand-creator kit build --yes`")
+        try:
+            behind = kitlib.behind_files(project, doc)[1]
+        except CliError:
+            behind = []
+        first = f"read the owner's files kit:behind names ({', '.join(behind)}) against the brand first, the build records them as they are; " if behind else ""
+        rep.add("kit:sources", "skipped", label, detail=f"not verified: the brand changed after the kit was built ({', '.join(changed)}); {first}run `brand-creator kit build --yes`")
     else:
         rep.add("kit:sources", "pass", label, detail="the sources kit.json records are the ones the project has now")
 
@@ -337,6 +342,18 @@ def owned_check_row(rep, project: Path, doc: dict) -> None:
         rep.add("kit:owned", "warn", label, detail="; ".join(f"{named(rels)} {why}: {then[why]}" for why, rels in why_files.items()))
     else:
         rep.add("kit:owned", "pass", label, detail=f"the {len(doc['owned'])} owner files are as the last build recorded them")
+
+
+def behind_row(rep, project: Path, doc: dict) -> None:
+    """Row kit:behind (warn, only when there is something to say): the owner's files nobody has touched since the build, once the brand's tokens, FACTS.md or BRAND-STATE.md changed after it. Never edits a file."""
+    try:
+        changed, files = kitlib.behind_files(project, doc)
+    except CliError:
+        return   # kit:sources already says "not verified: the brand's sources cannot be read"
+    if files:
+        rep.add("kit:behind", "warn", "the owner's files were written against the brand as it is now",
+                detail=f"{', '.join(files)} not touched since the build, and {kitlib.behind_names(changed)} changed after it: read {'it' if len(files) == 1 else 'each'} against the brand, edit it yourself if it is behind, then run `brand-creator kit build --yes` "
+                       f"(the build never edits your files)")
 
 
 IDS_HINT = "fix it and run `brand-creator kit check` again"
@@ -410,6 +427,7 @@ def check(project: Path, a) -> int:
     plugin_row(rep, doc)
     sources_row(rep, project, doc)
     owned_check_row(rep, project, doc)
+    behind_row(rep, project, doc)
     known = functools.cache(lambda: frozenset(kitlib.known_rule_ids(project)))   # read at the first tag that names a rule, once
     tags_row(rep, project, known)
     numbers_row(rep, project, known)
@@ -433,6 +451,11 @@ def build(project: Path, a) -> int:
     owner = kitlib.owner_plan(project)                     # the owner's files: every scaffold is filled now, so an unknown placeholder stops the run before anything is written
     csha = kitlib.content_sha({rel: sha256_bytes(data) for rel, data in generated.items()}, owner["owned"])
     prev = kitlib.previous(project)
+    try:
+        behind = kitlib.behind_files(project, kitlib.load(project))[1] if kitlib.exists(project) else []   # read now: the build re-records the hashes and the sources
+    except CliError as e:
+        behind = []
+        print(f"note: which owner files are behind the brand is not verified, the existing kit.json cannot be read ({e.message})")
     version = kitlib.next_version(prev, edition, csha)
     files = kitlib.with_version(generated, version)
     src = kitlib.sources(project)
@@ -473,6 +496,8 @@ def build(project: Path, a) -> int:
     rep.add("kit:written", "pass", f"{kd_rel}/ generated",
             detail=f"{len(files)} generated files: {written} written, {unchanged} unchanged, {len(moving)} moved to {folder}/; version {version}")
     owner_row(rep, scaffolded, kept)
+    if behind:
+        print(f"note: the brand changed since the last build and these owner files were not touched since it, so they may be behind the brand (not verified, the build never edits them): {', '.join(behind)}")
     font_row(rep, fonts)
     ground_row(rep, kitlib.ground_plan(project))
     reference_row(rep, pages)

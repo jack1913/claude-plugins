@@ -991,3 +991,219 @@ def test_check_has_no_site_rows_without_g4p_or_site(tmp_path):
     mid = pages_project(tmp_path / "other")
     assert lint3(mid).returncode == 0
     assert run_check(mid)[1] == {}
+
+
+# ---------------------------------------------------------------- site review-status
+
+def _hero(p: Path, rnd: int, name: str, html: str = PAGE, *, review: bool = True) -> str:
+    """A hero folder of a round with its page, its stills and (when `review`) a cold review of them, as `capture` and a reviewer leave them."""
+    from helpers import capture_record, cold_review_record
+    rel = f"rounds/r{rnd}/{name}/index.html"
+    (p / rel).parent.mkdir(parents=True, exist_ok=True)
+    (p / rel).write_text(html, encoding="utf-8")
+    capture_record(p, rel)
+    if review:
+        cold_review_record(p, rel)
+    return rel
+
+
+def _copy_round(p: Path, a: int, b: int, name: str) -> str:
+    """What `rsync -a --exclude shots/ --exclude cold-review.md --exclude capture.json` does for one variant: the page only; the stills are taken again."""
+    from helpers import capture_record
+    rel = f"rounds/r{b}/{name}/index.html"
+    (p / rel).parent.mkdir(parents=True, exist_ok=True)
+    (p / rel).write_bytes((p / f"rounds/r{a}/{name}/index.html").read_bytes())
+    capture_record(p, rel)
+    for f in (p / f"rounds/r{a}/{name}/shots").glob("*.png"):     # a capture of an unchanged page gives the same pictures
+        (p / f"rounds/r{b}/{name}/shots/{f.name}").write_bytes(f.read_bytes())
+    import hashlib
+    import json as _json
+    cap = p / f"rounds/r{b}/{name}/shots/capture.json"      # capture.json lists the bytes of the stills that are there
+    doc = _json.loads(cap.read_text(encoding="utf-8"))
+    for v in doc["views"]:
+        v["sha256"] = hashlib.sha256((cap.parent / v["file"]).read_bytes()).hexdigest()
+    cap.write_text(_json.dumps(doc, indent=2) + "\n", encoding="utf-8")
+    return rel
+
+
+def _status(p: Path, page: str):
+    return bc("site", "review-status", page, project=p)
+
+
+def test_review_status_reuses_the_review_of_an_unchanged_page(tmp_path):
+    p = make_project(tmp_path)
+    page = _hero(p, 2, "Ledger")
+    r = _status(p, page)                                    # this round's own review
+    assert r.returncode == 0 and r.stdout.strip() == "reuse rounds/r2/Ledger/cold-review.md: the page is unchanged since that review", (r.stdout, r.stderr)
+    later = _copy_round(p, 2, 3, "Ledger")                  # the next board: no cold-review.md in the copy
+    assert not (p / "rounds/r3/Ledger/cold-review.md").exists()
+    r = _status(p, later)
+    assert r.returncode == 0 and r.stdout.strip() == "reuse rounds/r2/Ledger/cold-review.md: the page is unchanged since that review", (r.stdout, r.stderr)
+    assert _status(p, "rounds/r3/Ledger").returncode == 0, "the folder names the page too"
+
+
+def test_review_status_names_the_file_that_changed(tmp_path):
+    p = make_project(tmp_path)
+    _hero(p, 2, "Ledger")
+    later = _copy_round(p, 2, 3, "Ledger")
+    (p / later).write_text(PAGE.replace("A page", "Another page"), encoding="utf-8")
+    r = _status(p, later)
+    assert r.returncode == 1 and r.stdout.startswith("review needed: ") and "index.html" in r.stdout, (r.stdout, r.stderr)
+    (p / later).write_bytes((p / "rounds/r2/Ledger/index.html").read_bytes())
+    assert _status(p, later).returncode == 0
+    (p / "rounds/r3/Ledger/shots/390-dark.png").write_bytes(b"changed")     # a still that is not the one the review read
+    r = _status(p, later)
+    assert r.returncode == 1 and "rounds/r3/Ledger/shots/390-dark.png changed" in r.stdout, r.stdout
+    (p / "rounds/r3/Ledger/shots/390-dark.png").write_bytes((p / "rounds/r2/Ledger/shots/390-dark.png").read_bytes())
+    (p / "FACTS.md").write_text("another fact\n", encoding="utf-8")
+    r = _status(p, later)
+    assert r.returncode == 1 and "FACTS.md changed" in r.stdout, r.stdout
+    (p / "rounds/r3/Ledger/shots/1440-light.png").unlink()                  # the stills of a copied round are not taken yet
+    r = _status(p, later)
+    assert r.returncode == 1 and "1440-light.png is not there" in r.stdout and "capture" in r.stdout, r.stdout
+
+
+def test_review_status_needs_a_review_when_there_is_none(tmp_path):
+    p = make_project(tmp_path)
+    page = _hero(p, 2, "Ledger", review=False)
+    r = _status(p, page)
+    assert r.returncode == 1 and r.stdout.startswith("review needed: no earlier cold review of Ledger"), (r.stdout, r.stderr)
+
+
+def test_review_status_never_reuses_another_variants_review(tmp_path):
+    p = make_project(tmp_path)
+    _hero(p, 2, "Ledger")
+    other = _hero(p, 3, "Atlas", review=False)              # the same page content, another variant name
+    r = _status(p, other)
+    assert r.returncode == 1 and "no earlier cold review of Atlas" in r.stdout, (r.stdout, r.stderr)
+    r = _status(p, "rounds/r2/Ledger/index.html")
+    assert r.returncode == 0, "the variant's own review still stands"
+
+
+def test_review_status_says_why_when_a_review_records_no_sha(tmp_path):
+    p = make_project(tmp_path)
+    page = _hero(p, 2, "Ledger")
+    (p / "rounds/r2/Ledger/cold-review.md").write_text("verdict: ship\nby: in-thread\n\n1. A finding.\n", encoding="utf-8")
+    r = _status(p, page)
+    assert r.returncode == 1 and "review needed: rounds/r2/Ledger/cold-review.md records no sha256" in r.stdout and "no `inputs:` list" in r.stdout, (r.stdout, r.stderr)
+    (p / "rounds/r2/Ledger/cold-review.md").write_text("verdict: ship\nby: in-thread\ninputs:\n- FACTS.md sha256:" + "0" * 64 + "\n\n1. A finding.\n", encoding="utf-8")
+    r = _status(p, page)
+    assert r.returncode == 1 and "records no sha256 for a still" in r.stdout, r.stdout
+    (p / "rounds/r2/Ledger/cold-review.md").write_text("verdict: ship\nby: in-thread\n\n1. A finding.\n", encoding="utf-8")
+    r = _status(p, page)
+    assert r.returncode == 1 and "no `inputs:` list" in r.stdout, r.stdout
+
+
+def test_review_status_writes_nothing_and_refuses_a_bad_page(tmp_path):
+    p = make_project(tmp_path)
+    page = _hero(p, 2, "Ledger")
+    later = _copy_round(p, 2, 3, "Ledger")
+    before = _files(p)
+    stamps = {f: (p / f).stat().st_mtime_ns for f in before}
+    for rel in (page, later):
+        _status(p, rel)
+    assert _files(p) == before and {f: (p / f).stat().st_mtime_ns for f in before} == stamps, "review-status writes nothing"
+    for args in ((), ("FACTS.md",), ("rounds/r2/Ledger/nothing.html",), ("rounds/r9/Ledger/index.html",), ("../outside/index.html",), (page, "--replace")):
+        r = bc("site", "review-status", *args, project=p)
+        assert r.returncode == 2, (args, r.returncode, r.stdout, r.stderr)
+    assert bc("site", "approve", page, project=p).returncode == 2
+
+
+def test_review_status_sees_a_page_changed_after_its_review_before_the_stills_are_retaken(tmp_path):
+    p = make_project(tmp_path)
+    page = _hero(p, 2, "Ledger")
+    (p / page).write_text(PAGE.replace("A page", "Another page"), encoding="utf-8")      # no recapture
+    r = _status(p, page)
+    assert r.returncode == 1 and r.stdout.startswith("review needed: the stills are older than the page") and "index.html" in r.stdout and "capture" in r.stdout, (r.stdout, r.stderr)
+
+
+def test_review_status_sees_a_changed_stylesheet_of_the_page(tmp_path):
+    p = make_project(tmp_path)
+    tokens = p / "assets/tokens/tokens.css"
+    tokens.parent.mkdir(parents=True, exist_ok=True)
+    tokens.write_text(":root{--a:1}\n", encoding="utf-8")       # capture lists it among the files the stills were made from
+    _hero(p, 2, "Ledger")
+    later = _copy_round(p, 2, 3, "Ledger")
+    assert _status(p, later).returncode == 0
+    tokens.write_text(":root{--a:2}\n", encoding="utf-8")
+    r = _status(p, later)
+    assert r.returncode == 1 and "stills are older than the page" in r.stdout and "tokens.css" in r.stdout, r.stdout
+
+
+def test_review_status_takes_the_newest_earlier_review(tmp_path):
+    p = make_project(tmp_path)
+    _hero(p, 2, "Ledger")
+    _hero(p, 3, "Ledger", PAGE.replace("A page", "Another page"))      # the page changed in r3 and was reviewed again
+    later = _copy_round(p, 3, 4, "Ledger")
+    r = _status(p, later)
+    assert r.returncode == 0 and r.stdout.strip() == "reuse rounds/r3/Ledger/cold-review.md: the page is unchanged since that review", (r.stdout, r.stderr)
+
+
+def test_review_status_confines_a_review_to_its_own_variant_and_the_project(tmp_path):
+    p = make_project(tmp_path)
+    page = _hero(p, 2, "Ledger")
+    atlas = _hero(p, 2, "Atlas")
+    review = p / "rounds/r2/Ledger/cold-review.md"
+    good = review.read_text(encoding="utf-8")
+    import hashlib
+    (p.parent / "secret.txt").write_text("x", encoding="utf-8")
+    sha = hashlib.sha256(b"x").hexdigest()
+    review.write_text(good.replace("\n\n1.", f"\n- ../secret.txt sha256:{sha}\n\n1.", 1), encoding="utf-8")
+    r = _status(p, page)
+    assert r.returncode == 1 and "outside the project" in r.stdout, (r.stdout, r.stderr)
+    atlas_lines = [ln for ln in (p / "rounds/r2/Atlas/cold-review.md").read_text(encoding="utf-8").splitlines() if "/shots/" in ln]
+    review.write_text("verdict: ship\nby: in-thread\ninputs:\n" + "\n".join(atlas_lines) + "\n\n1. A finding.\n", encoding="utf-8")
+    r = _status(p, page)
+    assert r.returncode == 1 and "a still that is not one of rounds/r2/Ledger/shots/" in r.stdout, (r.stdout, r.stderr)
+
+
+def test_review_status_asks_for_the_key_frames_the_review_lists_and_capture_json_lists_too(tmp_path):
+    """A review that lists the key frames is reused only while capture.json lists them too (board-lint site:cold), and a missing frame is retaken with --frames."""
+    from helpers import capture_record, cold_review_record
+    p = make_project(tmp_path)
+    page = _hero(p, 2, "Ledger", review=False)
+    capture_record(p, page, frames=True)
+    cold_review_record(p, page, frames=True)
+    assert _status(p, page).returncode == 0
+    cap = p / "rounds/r2/Ledger/shots/capture.json"
+    import json as _json
+    doc = _json.loads(cap.read_text(encoding="utf-8"))
+    kept = doc.pop("frames")
+    cap.write_text(_json.dumps(doc), encoding="utf-8")      # captured again without --frames: the frame files stay, capture.json lists none
+    r = _status(p, page)
+    assert r.returncode == 1 and "key frames" in r.stdout and "frame-1440-0.png" in r.stdout and "--frames" in r.stdout, (r.stdout, r.stderr)
+    doc["frames"] = kept
+    cap.write_text(_json.dumps(doc), encoding="utf-8")
+    assert _status(p, page).returncode == 0
+    doc["frames"] = [{**f, "sha256": "0" * 64} if i == 0 else f for i, f in enumerate(kept)]      # capture.json lists another picture than the review does
+    cap.write_text(_json.dumps(doc), encoding="utf-8")
+    r = _status(p, page)
+    assert r.returncode == 1 and "--frames" in r.stdout, (r.stdout, r.stderr)
+    doc["frames"] = kept
+    cap.write_text(_json.dumps(doc), encoding="utf-8")
+    (p / "rounds/r2/Ledger/shots/frame-1440-50.png").unlink()
+    r = _status(p, page)
+    assert r.returncode == 1 and "frame-1440-50.png is not there" in r.stdout and "capture rounds/r2/Ledger/index.html --frames" in r.stdout, r.stdout
+
+
+def test_review_status_sees_the_reviewed_stills_copied_back_over_a_new_capture(tmp_path):
+    p = make_project(tmp_path)
+    page = _hero(p, 2, "Ledger")
+    shots = p / "rounds/r2/Ledger/shots"
+    old = {f.name: f.read_bytes() for f in shots.glob("*.png")}
+    (p / page).write_text(PAGE.replace("A page", "Another page"), encoding="utf-8")
+    from helpers import capture_record
+    capture_record(p, page)                                  # the page is captured again: capture.json lists the new stills (the helper draws the same pictures, so make them new)
+    import hashlib
+    import json as _json
+    cap = shots / "capture.json"
+    doc = _json.loads(cap.read_text(encoding="utf-8"))
+    for v in doc["views"]:
+        data = b"new " + (shots / v["file"]).read_bytes()
+        (shots / v["file"]).write_bytes(data)
+        v["sha256"] = hashlib.sha256(data).hexdigest()
+    cap.write_text(_json.dumps(doc, indent=2) + "\n", encoding="utf-8")
+    for name, data in old.items():                           # the reviewed stills are put back by hand
+        (shots / name).write_bytes(data)
+    r = _status(p, page)
+    assert r.returncode == 1 and "stills are older than the page" in r.stdout and "does not match" in r.stdout, (r.stdout, r.stderr)

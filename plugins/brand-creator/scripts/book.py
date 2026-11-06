@@ -12,10 +12,12 @@
                           it lints clean
   book --init             copy the skeleton of every chapter this book needs from templates/book/ into book/chapters/ (never overwrites)
   book --verify           rebuild in memory and compare with the book on disk (a hand edit or a stale book fails)
+  book chapter --replace|--add|--remove ID [--from FILE]   whole-chapter edits of a hand-authored book (below); recomputes the chapter count
+  book nbsp --fix [--yes]   no-break spaces after one-letter words in a hand-authored book; a dry run unless --yes
   book --allow-variants   build with choice scaffolding still open, for a review (book-lint still fails it until `collapse`)
 
-mark_source authored-vector: the book is hand-authored HTML; this command refuses. Edit it with `brand-creator patch` and gate it
-with `brand-creator book-lint`. Which chapters appear follows the tier, the architecture and BRAND-STATE.md (scripts/CONTRACT.md,
+mark_source authored-vector: the book is hand-authored HTML; the build refuses. Edit it with `brand-creator patch` (--loose-space
+matches around no-break spaces), `book chapter` and `book nbsp`, and gate it with `brand-creator book-lint`. Which chapters appear follows the tier, the architecture and BRAND-STATE.md (scripts/CONTRACT.md,
 "Brand book"). The output is byte-identical for the same inputs. Report: assets/_checks/book.json (and book-lint.json).
 """
 import sys
@@ -55,6 +57,9 @@ def init_chapters(project: Path, build: "bookgen.BookBuild") -> int:
 
 
 def main() -> int:
+    if len(sys.argv) > 1 and sys.argv[1] in ("chapter", "nbsp"):   # the hand-authored book's tools (book_hand.py); the word comes first
+        import book_hand
+        return book_hand.main(sys.argv[1], sys.argv[2:])
     ap = Parser(prog="brand-creator book", description=__doc__, formatter_class=__import__("argparse").RawDescriptionHelpFormatter)
     add_project_arg(ap)
     add_renderer_arg(ap)

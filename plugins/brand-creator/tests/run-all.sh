@@ -20,6 +20,11 @@ for p in ${items[@]+"${items[@]}"}; do
   [ -z "$p" ] && continue
   case "$p" in pytest|node|smoke) parts+="$p," ;; *) echo "run-all.sh: unknown part '$p' in BRAND_CREATOR_TEST_PARTS (pytest, node, smoke)" >&2; exit 2 ;; esac
 done
+# The paid-service fail-safe (tests/conftest.py): unless BRAND_CREATOR_PAID=1, no part of the run sees an OpenRouter key or the
+# design-canvas host that generates images with it, so nothing here can spend money by accident.
+if [ "${BRAND_CREATOR_PAID:-}" != "1" ]; then
+  while IFS= read -r v; do unset "$v"; done < <(compgen -e | grep -E '^(OPENROUTER_|USE_LLM_DESIGN_)' || true)
+fi
 has() { case "$parts" in *",$1,"*) return 0 ;; *) return 1 ;; esac; }
 rc=0
 ran=0

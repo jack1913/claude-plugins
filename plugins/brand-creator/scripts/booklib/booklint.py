@@ -255,6 +255,7 @@ def lint(project: Path, text: str, *, path: str, view: dict, cfg: dict, tokens_d
     if is_html:
         res += _variant_rules(text, allow_variants)
         res += _chapter_rules(project, text, view)
+        res += _open_rules(text)
         res += _edition_rules(text, view, cfg)
         res += _count_rules(project, text, cfg, tokens_doc, facts_rows)
         res += _file_rules(project, text, L)
@@ -466,6 +467,49 @@ def _chapter_rules(project: Path, text: str, view: dict) -> list[dict]:
                 else f"{len(need)} required chapter(s) present")]
 
 
+OPEN_ITEM = re.compile(r"^(?:(?P<label>[^:]{1,60}?):\s+)?Open:(?:\s+(?P<what>\S.*))?$", re.S)
+
+
+def _open_rules(text: str) -> list[dict]:
+    """book:open-items. A list item or paragraph of a chapter that reads `Open: <what it waits for>` (or `<Label>: Open: <what it waits for>`) is an item the owner could not fill
+    yet and wrote down honestly: it is no leftover marker, and it is listed here (info, chapter and item) so it stays visible. `Open:` with no missing fact after it is a fail: it says
+    nothing about what the item waits for. No open item: pass."""
+    chapters = [(t.start, htmlscan.element_end(text, t), t.attrs["data-chapter"]) for t in htmlscan.tags(text)
+                if not t.closing and t.name == "section" and "data-chapter" in t.attrs]
+    items, bare = [], []
+    boxes = [(start, end) for start, end, _t in htmlscan.elements(text, lambda t, a: t.name in ("li", "p"))]
+    for start, end in boxes:
+        chapter = next((c for s0, e0, c in chapters if s0 <= start < e0), None)
+        if chapter is None:
+            continue
+        # the item's own text: what is left once the list items and paragraphs nested in it are cut out, each of those being an item of its own
+        inner = sorted((s0, e0) for s0, e0 in boxes if start <= s0 and e0 <= end and (s0, e0) != (start, end))
+        own, at = "", start
+        for s0, e0 in inner:
+            if s0 >= at:
+                own, at = own + text[at:s0] + " ", e0
+        own += text[at:end]
+        flat = lambda h: " ".join(htmlscan.visible_text(h, with_attributes=False).split())
+        m = OPEN_ITEM.match(flat(own))
+        if m and not m.group("what") and inner and not any(OPEN_ITEM.match(flat(text[s0:e0])) for s0, e0 in inner):
+            m = OPEN_ITEM.match(flat(text[start:end])) or m   # `Open:` followed by a nested list that names what it waits for: read the item whole
+        if m and not m.group("what") and not inner and text[start:start + 2].lower() == "<p":
+            # a loose list: <li><p>Label: Open:</p><ul><li>what it waits for</li></ul></li>. The li's own text is empty, so the <p> stands for it
+            li = min(((s0, e0) for s0, e0 in boxes if s0 < start and end <= e0 and text[s0:s0 + 3].lower() == "<li"), key=lambda b: b[1] - b[0], default=None)
+            rest = [(s0, e0) for s0, e0 in boxes if li and li[0] < s0 and e0 <= li[1] and not (start <= s0 and e0 <= end)]
+            if rest and not any(OPEN_ITEM.match(flat(text[s0:e0])) for s0, e0 in rest):
+                m = OPEN_ITEM.match(flat(text[li[0]:li[1]])) or m   # an li whose text does not read as one item keeps the bare `Open:` (a fail)
+        if not m:
+            continue
+        what, label = m.group("what"), (m.group("label") or "").strip()
+        (items if what else bare).append(f"{chapter}: {label + ' - ' if label else ''}{(what or 'Open:')[:90]}")
+    if bare:
+        return [row("book:open-items", "fail", "an open item names what it waits for", f"nothing after `Open:` in {len(bare)} item(s): {'; '.join(bare[:4])}")]
+    if items:
+        return [row("book:open-items", "info", "open items the book still carries (written down honestly, not leftover markers)", f"{len(items)} open: {'; '.join(items[:8])}")]
+    return [row("book:open-items", "pass", "no open item in the book")]
+
+
 def _edition_rules(text: str, view: dict, cfg: dict) -> list[dict]:
     cover = next((t for t in htmlscan.tags(text) if not t.closing and "data-cover" in t.attrs), None)
     if cover is None:
@@ -625,6 +669,35 @@ def _lang_ranges(text: str, code: str) -> list[tuple[int, int]]:
     return out
 
 
+def single_letter_nbsp_pattern(words: list[str]) -> "re.Pattern":
+    """The `single-letter-nbsp` rule: one of the language's one-letter words followed by an ordinary space. Group 1 is the word; the
+    match ends after the space(s). The lint warns on it and `brand-creator book nbsp --fix` repairs it: one copy."""
+    w = "".join(re.escape(x) for x in words)
+    return re.compile(rf"(?<![\w\u2019'-])([{w}{w.upper()}])[ \t]+(?=[^\W_])")
+
+
+def nbsp_fixes(text: str, view: dict) -> list[tuple[int, int, int, str]]:
+    """Every place the `single-letter-nbsp` rule warns on, as (start, end, line, context): text[start:end] is the run of ordinary space
+    that becomes one no-break space. Offsets are offsets in `text` (the same masking as the lint)."""
+    langs = view.get("content_languages") or []
+    out = []
+    for code, rules in _language_rule_files(langs).items():
+        keep = None if len(langs) == 1 else _lang_ranges(text, code)
+        if keep is not None and not keep:
+            continue
+        body = _masked(text, keep)
+        for r in rules:
+            c = r["check"]
+            if c.get("kind") != "single-letter-nbsp":
+                continue
+            for m in single_letter_nbsp_pattern(c["words"]).finditer(body):
+                out.append((m.end(1), m.end(), body.count("\n", 0, m.start()) + 1, " ".join(_ctx(body, m, 24).split())))
+    by_span = {}
+    for item in out:
+        by_span.setdefault(item[:2], item)   # one entry per place: nested elements of two languages both see it
+    return sorted(by_span.values())
+
+
 def _language_rules(text: str, view: dict) -> list[dict]:
     """The `check` of each rule in scripts/data/languages/<code>.json, run on the book text written in that language (a warning with line and
     offset, never a failure: typography is advice). One content language: the whole book text. Several: the elements marked lang=<code>."""
@@ -638,8 +711,7 @@ def _language_rules(text: str, view: dict) -> list[dict]:
         for r in rules:
             c = r["check"]
             if c.get("kind") == "single-letter-nbsp":
-                words = "".join(re.escape(w) for w in c["words"])
-                pat = re.compile(rf"(?<![\w\u2019'-])([{words}{words.upper()}])[ \t]+(?=[^\W_])")
+                pat = single_letter_nbsp_pattern(c["words"])
                 what = "a one-letter word is followed by an ordinary space (use a no-break space)"
             elif c.get("kind") == "low-opening-quote":
                 pat = re.compile("[" + "".join(re.escape(x) for x in c["flag"]) + "]")

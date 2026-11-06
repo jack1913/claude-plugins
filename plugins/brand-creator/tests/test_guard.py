@@ -625,3 +625,31 @@ def test_gate_value_reader_agrees_with_the_state_parser(tmp_path):
             p = _style_project(tmp_path / why.replace(" ", "-").replace("'", ""), line)
             recorded = bool(str((_common.State(p / "BRAND-STATE.md").get("gates", {}) or {}).get("G1s", "") or "").strip())
             assert g.gate_is_empty(p, "G1s") is (not recorded), (why, line)
+
+
+# ---- `brand-creator cleanup` (group 6): the guard does not inspect brand-creator commands, and every git deletion form stays blocked
+
+@pytest.mark.parametrize("cmd", [
+    "brand-creator cleanup",
+    "brand-creator cleanup --yes abc123def456",
+    "brand-creator cleanup --keep r2 --record-yes abc123def456 --said 'ok, remove them'",
+    'brand-creator --data "/x y" cleanup --yes abc123def456',
+    "/a/bin/brand-creator cleanup --yes abc123def456",
+    "bash -c 'brand-creator cleanup --yes abc123def456'",
+])
+def test_guard_allows_brand_creator_cleanup(proj, cmd):
+    r = run_guard(tool("Bash", command=cmd, cwd=proj))
+    assert r.returncode == 0, (cmd, r.stderr)
+
+
+@pytest.mark.parametrize("cmd", [
+    "git rm -r -q -- rounds/r1",
+    "git --literal-pathspecs rm -q -- rounds/r1/a.png",
+    "git -C . rm --pathspec-from-file=qa/list.txt",
+    "tr '\\n' '\\0' < qa/list.txt | xargs -0 git rm -q --",
+    "git checkout HEAD~1 -- rounds/r1",
+    "git restore --source=HEAD --staged --worktree -- rounds/r1",
+])
+def test_guard_still_blocks_git_rm_and_xargs_in_rounds(proj, cmd):
+    r = run_guard(tool("Bash", command=cmd, cwd=proj))
+    assert blocked(r), (cmd, r.returncode, r.stderr)

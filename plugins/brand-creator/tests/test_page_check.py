@@ -4383,3 +4383,156 @@ def test_a_form_drawn_rotated_warns_whoever_turns_it_and_an_upright_form_or_a_ti
     # an in-plane turn written with an axis (rotate: z 10deg, or the vector 0 0 1) is measured
     row_, _ = tilt_check(acme, '<form style="rotate: z 10deg" action="#"><input name="a"></form><form style="rotate: 0 0 1 -12deg" action="#"><input name="b"></form>')
     assert row_["status"] == "warn" and len(row_["hits"]) == 2 and any("10 degrees" in h["text"] for h in row_["hits"]) and any("12 degrees" in h["text"] for h in row_["hits"]), row_["hits"]
+
+
+# ---------------------------------------------------------------- page:first-screen
+
+
+FOLD_CSS = """  .hero { padding: 0; } .hero h1, .hero p { margin: 8px; }
+  .tall { display: block; height: 1200px; background: var(--color-line); }
+  .gap { display: none; height: 1000px; }
+  @media (max-width: 600px) { .gap { display: block; } }
+"""
+
+
+TALL_IMG = '<img width="1200" height="1200" alt="" src="data:image/svg+xml;utf8,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%271200%27 height=%271200%27%3E%3Crect width=%271200%27 height=%271200%27 fill=%27%23ccc%27/%3E%3C/svg%3E" style="display:block">'
+
+
+def fold_page(hero: str, body: str = "") -> str:
+    return PAGE.replace("</style>", FOLD_CSS + "</style>").replace(PAGE[PAGE.index("<main>"):PAGE.index("</main>") + len("</main>")], f"<main>\n{hero}\n{body}</main>")
+
+
+def fold_row(p: Path, page: str, *widths: str) -> dict:
+    write_page(p, page)
+    r = bc("page-check", "pages/index.html", "--widths", ",".join(widths or ("390", "1440")), project=p)
+    assert r.returncode in (0, 1, 3), r.stdout + r.stderr
+    return row(report(p, pagecheck.report_tool("pages/index.html")), "page:first-screen")
+
+
+def fold_view(width: int = 1440, scheme: str = "light", height: int = 900, **hero) -> dict:
+    base = {"found": True, "sel": "section.hero", "h1_sel": "h1", "h1_text": "Acme hand tools", "h1_bottom": 80, "first_action": {"sel": "a.go", "label": "Start", "bottom": 160},
+            "top": 0, "words": 10, "viewport_height": height, "lang": "en", "actions": []}
+    v = tell_view(width=width, scheme=scheme, hero={**base, **hero})
+    v["viewport"] = {"width": width, "height": height}
+    return v
+
+
+def fold_rows_of(tmp_path: Path, *views: dict) -> dict:
+    rep = Report("page-check/x-000000", tmp_path)
+    ctx = pagecheck.Ctx(tmp_path, pagecheck.Target("project", "pages/x.html", page="pages/x.html"), [1440], ["light"], qa_rules.DEFAULTS, {})
+    pagecheck.first_screen_rows(rep, {"views": list(views)}, ctx)
+    return rep.results[0]
+
+
+def test_the_first_screen_row_judges_the_bottom_edge_against_each_views_own_window_height(tmp_path):
+    """No browser: the heading and the first action must end inside the window height of the view (an edge exactly on the fold is inside); each view that falls over is named with its px and what."""
+    ok = fold_rows_of(tmp_path, fold_view(h1_bottom=900, first_action={"sel": "a.go", "label": "Start", "bottom": 900}), fold_view(width=390, height=844, h1_bottom=844))
+    assert ok["status"] == "pass" and "2 view(s)" in ok["detail"], ok
+    only = fold_rows_of(tmp_path, fold_view(first_action=None))
+    assert only["status"] == "pass" and "the hero's heading ends inside the first screen in 1 view(s)" in only["detail"], only
+    r = fold_rows_of(tmp_path, fold_view(), fold_view(width=390, height=844, first_action={"sel": "a.go", "label": "Start", "bottom": 900.5}, h1_bottom=100))
+    assert r["status"] == "warn" and "at 390-light (window 844 px high) the action a.go \"Start\" ends 56.5 px below the fold" in r["detail"] and "1440" not in r["detail"].split("; the first screen")[0], r
+    both = fold_rows_of(tmp_path, fold_view(h1_bottom=1500))
+    assert both["status"] == "warn" and "the heading h1 \"Acme hand tools\" ends 600 px below the fold" in both["detail"] and both["below_fold"][0]["px_below"] == 600, both
+
+
+def test_a_view_with_no_window_height_is_named_not_measured_and_does_not_crash(tmp_path):
+    v = fold_view(width=390)
+    v["viewport"] = {"width": 390}
+    del v["tell_facts"]["hero"]["viewport_height"]
+    r = fold_rows_of(tmp_path, fold_view(), v)
+    assert r["status"] == "warn" and "not measured at 390-light: no window height" in r["detail"], r
+
+
+def test_the_first_screen_row_is_never_a_pass_for_what_it_did_not_measure(tmp_path):
+    nohero = fold_rows_of(tmp_path, fold_view(found=False))
+    assert nohero["status"] == "info" and nohero["detail"].startswith("not measured: the page has no hero"), nohero
+    assert fold_rows_of(tmp_path)["status"] == "skipped"
+    part = fold_rows_of(tmp_path, fold_view(), fold_view(width=390, height=844, found=False))
+    assert part["status"] == "warn" and "not measured at 390-light: no shown h1 there" in part["detail"], part
+    both = fold_rows_of(tmp_path, fold_view(h1_bottom=1500), fold_view(width=390, height=844, found=False))
+    assert both["status"] == "warn" and "below the fold" in both["detail"] and "not measured at 390-light" in both["detail"], both
+    noact = fold_rows_of(tmp_path, fold_view(first_action=None))
+    assert noact["status"] == "pass" and "only its heading was measured" in noact["detail"] and " and first action" not in noact["detail"], noact
+    two = fold_rows_of(tmp_path, fold_view(first_action=None), fold_view(scheme="dark", first_action=None))
+    assert "at 1440-light, 1440-dark: only" in two["detail"], two
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_hero_that_fits_the_first_screen_passes(acme):
+    got = fold_row(acme, fold_page('<section class="hero"><h1>Acme hand tools</h1><p><a href="#go">Start</a></p></section>'))
+    assert got["status"] == "pass" and got["viewport_heights"] == [844, 900], got
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_heading_pushed_below_the_fold_by_a_tall_image_warns_with_the_view_and_the_px(acme):
+    got = fold_row(acme, fold_page('<section class="hero">' + TALL_IMG + '<h1>Acme hand tools</h1><p><a href="#go">Start</a></p></section>'))
+    assert got["status"] == "warn", got
+    hits = {(o["width"], o["what"]) for o in got["below_fold"]}
+    assert {(390, "heading"), (390, "action"), (1440, "heading"), (1440, "action")} == hits, got
+    h = next(o for o in got["below_fold"] if (o["width"], o["what"]) == (1440, "heading"))
+    assert h["px_below"] >= 300 and h["text"] == "Acme hand tools" and "below the fold" in got["detail"], got
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_an_action_below_the_fold_at_390_only_warns_for_390_and_not_for_1440(acme):
+    got = fold_row(acme, fold_page('<section class="hero"><h1>Acme hand tools</h1><span class="gap"></span><p><a href="#go">Start</a></p></section>'))
+    assert got["status"] == "warn" and {(o["width"], o["what"]) for o in got["below_fold"]} == {(390, "action")}, got
+    assert "at 390-light" in got["detail"] and "at 1440" not in got["detail"], got
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_page_with_no_hero_is_not_measured_and_never_a_pass(acme):
+    got = fold_row(acme, PAGE.replace("<h1>Acme hand tools</h1>", "<h2>Acme hand tools</h2>"))
+    assert got["status"] == "info" and got["detail"].startswith("not measured: the page has no hero"), got
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_heading_straddling_the_fold_and_the_first_action_among_other_links_are_read_right(acme):
+    # 390 is 844 high: the h1 starts inside and ends below
+    hero = '<section class="hero"><span class="tall" style="height:790px"></span><h1 style="font-size:48px;margin:0">Acme hand tools</h1><p><a href="#go">Start</a></p></section>'
+    got = fold_row(acme, fold_page(hero), "390")
+    h = [o for o in got["below_fold"] if o["what"] == "heading"]
+    assert got["status"] == "warn" and h and 0 < h[0]["px_below"] < 100, got
+    # a nav link and a hidden button before the first shown action are skipped: the real action is below the fold, so taking either of them would pass
+    hero2 = ('<section class="hero"><nav><a href="#n">Menu</a></nav><button style="display:none">Ghost</button><h1>Acme hand tools</h1>'
+             '<span class="tall"></span><p><a href="#go">Start</a></p></section>')
+    got2 = fold_row(acme, fold_page(hero2), "390")
+    assert got2["status"] == "warn" and {o["text"] for o in got2["below_fold"] if o["what"] == "action"} == {"Start"}, got2
+    # a second action below the fold is not the first
+    hero3 = ('<section class="hero"><h1>Acme hand tools</h1><p><a href="#go">Start</a></p><span class="tall"></span><p><a href="#late">Later</a></p></section>')
+    got3 = fold_row(acme, fold_page(hero3), "390")
+    assert got3["status"] == "pass", got3
+    # an icon link with no text and no aria-label is no action, even above the real one
+    hero4 = ('<section class="hero"><h1>Acme hand tools</h1><a href="#i" style="display:inline-block;width:20px;height:20px"></a>'
+             '<span class="tall"></span><p><a href="#go">Start</a></p></section>')
+    got4 = fold_row(acme, fold_page(hero4), "390")
+    assert got4["status"] == "warn" and {o["text"] for o in got4["below_fold"] if o["what"] == "action"} == {"Start"}, got4
+    # a button that starts above the fold and ends below it is judged by its bottom edge
+    hero5 = ('<section class="hero"><h1>Acme hand tools</h1><span class="tall" style="height:730px"></span>'
+             '<p><a href="#go" style="display:block;height:90px">Start</a></p></section>')
+    got5 = fold_row(acme, fold_page(hero5), "390")
+    a = [o for o in got5["below_fold"] if o["what"] == "action"]
+    assert got5["status"] == "warn" and a and 0 < a[0]["px_below"] < 90 and not [o for o in got5["below_fold"] if o["what"] == "heading"], got5
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_heading_hidden_at_390_is_named_not_measured_and_never_a_pass(acme):
+    page = fold_page('<section class="hero"><h1>Acme hand tools</h1><p><a href="#go">Start</a></p></section>').replace("</style>", "@media (max-width: 600px) { .hero h1 { display: none; } }\n</style>")
+    got = fold_row(acme, page)
+    assert got["status"] == "warn" and "not measured at 390-light, 390-dark: no shown h1 there" in got["detail"], got
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_hero_title_wrapper_does_not_hide_the_action_below_the_fold(acme):
+    """A BEM wrapper named for the hero around the h1 alone is no hero: the action is looked for in the section around it, and a button below the fold warns."""
+    page = fold_page('<section class="hero"><div class="hero__title"><h1>Acme hand tools</h1></div><span class="tall"></span><p class="hero__actions"><a href="#go">Start</a></p></section>')
+    r = fold_row(acme, page, "390")
+    assert r["status"] == "warn" and 'the action' in r["detail"] and '"Start"' in r["detail"] and "below the fold" in r["detail"], r

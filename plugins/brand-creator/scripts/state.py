@@ -33,8 +33,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "boardlib"))
+sys.path.insert(0, str(Path(__file__).resolve().parent / "booklib"))
+import bookdata  # noqa: E402
+import htmlscan  # noqa: E402
 from _common import (EXIT_FAIL, EXIT_USAGE, GATE_IDS, PART_READERS, CliError, PartError, Parser, STATE_FILE, add_project_arg, fail, find_project,  # noqa: E402
-                     gate_recorded, latest_round, list_rounds, main_guard, read_state, sha256_bytes, today, try_find_project,
+                     gate_recorded, inventory_needed, inventory_recorded, latest_round, list_rounds, main_guard, read_state, sha256_bytes, today, try_find_project,
                      verify_history)
 from boardpage import is_style_board, read_page  # noqa: E402
 import motionspec  # noqa: E402
@@ -96,6 +99,46 @@ def list_value(key: str, value: str) -> list:
     if not all(WORD_RE.fullmatch(x) for x in items):
         fail(EXIT_USAGE, f"{key} must be a list of plain words, like [a, b], got {value!r}")
     return items
+
+
+def tier_needs(project: Path, st) -> list[str]:
+    """The lines `state --set tier=` prints when the tier goes up: the chapters the new tier's book needs that the project has no file for yet (the registry and
+    rules book-lint's chapters:required row uses: bookdata.chapters_for) and the facts the new tier needs that it does not have (the inventory rule board-lint uses).
+    A hand-authored book (mark_source authored-vector) has its chapters in the book itself, not in book/chapters, so they are looked for there. Empty when nothing is missing."""
+    d = st.data()
+    bc = d.get("book_chapters", [])
+    view = {"tier": str(d.get("tier", "quick")), "architecture": str(d.get("architecture", "standalone")),
+            "book_chapters": bookdata.parse_langs(bc) if not isinstance(bc, list) else [str(x).strip() for x in bc]}
+    langs = bookdata.parse_langs(d.get("content_languages", "")) or [""]
+    if str(d.get("mark_source", "")).strip() == "authored-vector":
+        try:
+            book = project / bookdata.load_config(project)[0]["output"]
+        except CliError:
+            book = None
+        if book is None:
+            have, where = None, "in the book"
+        else:
+            text = book.read_text(encoding="utf-8", errors="replace") if book.is_file() else ""
+            ids = {t.attrs["data-chapter"] for t in htmlscan.tags(text) if not t.closing and t.name == "section" and "data-chapter" in t.attrs}
+            have = lambda cid: cid in ids   # noqa: E731
+            where = "in the book"
+    else:
+        have = lambda cid: all((project / bookdata.CHAPTER_DIR / (f"{cid}.{l}.md" if l and len(langs) > 1 else f"{cid}.md")).is_file() for l in langs)   # noqa: E731
+        where = bookdata.CHAPTER_DIR
+    out = []
+    if have is None:   # the other lines do not depend on book.json
+        out.append("chapters the new tier's book needs: not checked, book/book.json cannot be read (run `brand-creator book-lint` for the reason)")
+    missing = [c for c in bookdata.chapters_for(project, view) if not have(c)] if have else []
+    if missing:
+        out.append(f"chapters the {view['tier']} book needs and the project does not have yet ({where}): {', '.join(missing)}"
+                   + ("; `brand-creator book --init` copies their skeletons" if where == bookdata.CHAPTER_DIR else ""))
+    if inventory_needed(view["tier"], view["architecture"]) and not inventory_recorded(project, st):
+        out.append("fact it needs and does not have yet: INVENTORY.md, or `inventory: none (no target repo)` in BRAND-STATE.md")
+    if view["tier"] in ("standard", "full") and gate_recorded(project, "G4") and not (project / motionspec.FILE).is_file():   # check's motion:decided row
+        out.append(f"fact it needs and does not have yet: the motion decision (G4 is recorded; `check` fails motion:decided without it): {motionspec.DECIDE}")
+    if out:
+        out.append("an item you cannot fill yet is written as `Open: <what it waits for>` in the chapter; book-lint lists it (book:open-items) instead of failing it")
+    return out
 
 
 def motion_decision(project: Path) -> dict:
@@ -200,6 +243,7 @@ def main() -> int:
 
     changed = False
     st = read_state(project)
+    old_tier = str(st.get("tier", "") or "quick").strip().lower()   # no tier: Quick, as the book reads it (bookdata.state_view)
     for kv in a.set:
         if "=" not in kv:
             fail(EXIT_USAGE, f"--set needs KEY=VALUE, got {kv!r}")
@@ -251,6 +295,14 @@ def main() -> int:
         changed = True
     if changed:
         st.save()
+        new_tier = str(st.get("tier", "") or "").strip().lower()
+        if old_tier in ENUMS["tier"] and new_tier in ENUMS["tier"] and ENUMS["tier"].index(new_tier) > ENUMS["tier"].index(old_tier):
+            lines = tier_needs(project, st)
+            if lines:   # stdout stays machine-readable when --json or --get is given
+                out = sys.stderr if (a.get or a.json) else sys.stdout
+                print(f"tier raised: {old_tier} -> {new_tier}", file=out)
+                for ln in lines:
+                    print("  " + ln, file=out)
         if not (a.get or a.json):
             return 0
 

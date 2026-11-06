@@ -2601,13 +2601,21 @@ def test_the_site_round_group_5_instruction_lines_are_in_the_texts():
                    "The H1 says what the brand is and for whom", "`copy: site H1`", "`copy: signature line`", "never drop graphics to avoid the warning", "is about a drawn screen of a product made of boxes (fake UI), not about drawing",
                    "**List what the approved site leaves behind**", "Method: cleaning old rounds"):
         assert needle in p7, needle
-    assert "tr '\\n' '\\0' < qa/<date>-cleanup-removed.txt | xargs -0 git rm -q --" in hist and "qa/<date>-cleanup-removed.txt" in hist and "--pathspec-from-file" in hist
     assert "Every script that builds a page, a board or a picture lives in `rounds/r<N>/_build/` (or `tools/`), never in the session scratchpad, which a restart wipes." in ws
     assert "copy: site H1" in tone and "copy: signature line" in tone and "H1" in tone
     assert "graphics are never dropped to avoid the warning" in tells
     for p in (SKILLS / "round" / "SKILL.md", SKILLS / "brand-creator" / "SKILL.md", PHASES / "05-refinement.md", REFS / "drawing-engines.md", ROOT / "templates" / "canvas-brief.md"):
         txt = p.read_text(encoding="utf-8")
         assert "cp -R rounds/r<N-1> rounds/r<N>" not in txt, f"{p.name} still tells the agent to cp -R a round"
+
+
+def test_history_names_cleanup_and_no_bang_removal():
+    """12-history.md sends the cleaning of old rounds through `brand-creator cleanup` (the plan, the recorded yes, the removal, the refresh), never through a line the owner types."""
+    hist = " ".join((PHASES / "12-history.md").read_text(encoding="utf-8").split())
+    for needle in ("brand-creator cleanup", "--record-yes", "--yes", "check --refresh"):
+        assert needle in hist, needle
+    assert "xargs" not in hist and "git rm" not in hist and "--pathspec-from-file" not in hist
+    assert "Method: cleaning old rounds" in hist
 
 
 def test_l1b_rules_are_written_where_the_agent_reads_them():

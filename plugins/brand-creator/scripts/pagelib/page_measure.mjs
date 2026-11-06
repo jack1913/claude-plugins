@@ -961,7 +961,7 @@ const TELL = {
  *  `separators`: [{sel, text (80), count, via}]: elements whose own text holds middle dots or bullets with text on both sides on one line (`via: "text"`; a child element is one unit, a <br> or a block child
  *  ends the line, so a dot that starts a line is a list marker and is not counted), and parents whose children carry a ::before or ::after that is a single dot (`via: "pseudo"`, `count` the children
  *  that do and have a sibling beside them in one row; a stacked list with a marker on each item separates nothing).
- *  `hero`: {found, sel, h1_sel, top, words, viewport_height, lang, actions: [{sel, label (80), lang}]}: the first shown h1 and the nearest section, header, [role=banner] or element
+ *  `hero`: {found, sel, h1_sel, h1_text (80), h1_bottom, first_action: {sel, label (80), bottom} or null, top, words, viewport_height, lang, actions: [{sel, label (80), lang}]} (`h1_bottom` and `bottom` are page y of the bottom edge; `first_action` is the first action wherever it lies): the first shown h1 and the nearest section, header, [role=banner] or element
  *  named hero around it (else its parent); `words` are the words of its text, outside a nav, that are in the first screen (the top of the page to the viewport height); `actions` are its
  *  shown links, buttons and submit inputs with a label, outside a nav and in the first screen, in document order.
  *  `boxes`: [{id, parent, sel, width, height, styled, in_lists, in_cells, table, list_area, media_px, headings, h1, labelled, band, in_bands}]: shown boxes of at least the floor above, `parent` the id of the nearest box above that is also in the list; `styled` is the
@@ -1173,7 +1173,8 @@ async function tellFacts(page, request = {}) {
     const hero = { found: false };
     const h1 = [...document.querySelectorAll("h1")].find(boxed);
     if (h1) {
-      let box = h1.parentElement && h1.parentElement.closest("section, header, [role=banner], [class*=hero i], [id*=hero i]");
+      const HERO_BOX = "section, header, [role=banner], [class*=hero i], [id*=hero i]";
+      let box = h1.parentElement && h1.parentElement.closest(HERO_BOX);
       if (!box || box === document.body || box === document.documentElement) box = h1.parentElement || h1;
       const shownText = (node) => {
         const p = node.parentElement;
@@ -1200,14 +1201,29 @@ async function tellFacts(page, request = {}) {
           if (wr.top + window.scrollY < vh) inScreen++;
         }
       }
+      // a wrapper named for the hero that holds only the heading (<div class="hero__title">) is no hero: the actions are looked for in the block around it, up to a section, header or banner
+      const labelled = (el) => boxed(el) && !inNav(el) && Boolean(labelOf(el) || clean(el.getAttribute("aria-label")));
+      let actionBox = box;
+      while (actionBox !== document.body && actionBox !== document.documentElement && ![...actionBox.querySelectorAll(CONTROLS)].some(labelled) && !actionBox.matches("section, header, [role=banner]")) {
+        const up = actionBox.parentElement && actionBox.parentElement.closest(HERO_BOX);
+        if (!up || up === document.body || up === document.documentElement) break;
+        actionBox = up;
+      }
       const actions = [];
-      for (const el of box.querySelectorAll(CONTROLS)) {
+      for (const el of actionBox.querySelectorAll(CONTROLS)) {
         if (actions.length >= K.heroActions) break;
         if (!boxed(el) || inNav(el) || top(el.getBoundingClientRect()) >= vh) continue;
         const label = labelOf(el) || clean(el.getAttribute("aria-label"));
         if (label) actions.push({ sel: H.selector(el), label: label.slice(0, 80), lang: langOf(el) });
       }
-      Object.assign(hero, { found: true, sel: H.selector(box), h1_sel: H.selector(h1), top: top(box.getBoundingClientRect()), words: inScreen, viewport_height: vh, lang: langOf(h1), actions });
+      let firstAction = null;   // the first action wherever it lies (the list above stops at the fold): page:first-screen asks where it ends
+      for (const el of actionBox.querySelectorAll(CONTROLS)) {
+        if (!boxed(el) || inNav(el)) continue;
+        const label = labelOf(el) || clean(el.getAttribute("aria-label"));
+        if (label) { firstAction = { sel: H.selector(el), label: label.slice(0, 80), bottom: round(el.getBoundingClientRect().bottom + window.scrollY) }; break; }
+      }
+      Object.assign(hero, { found: true, sel: H.selector(box), h1_sel: H.selector(h1), h1_text: clean(h1.textContent).slice(0, 80), h1_bottom: round(h1.getBoundingClientRect().bottom + window.scrollY), first_action: firstAction,
+                            top: top(box.getBoundingClientRect()), words: inScreen, viewport_height: vh, lang: langOf(h1), actions });
     }
 
     // boxes built from styled boxes: one walk, counting from the leaves up

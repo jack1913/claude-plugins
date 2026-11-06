@@ -571,14 +571,20 @@ def test_a_page_card_with_its_idea_line_passes_site_fields(tmp_path):
     assert rows(p)["site:fields"]["status"] == "pass"
 
 
-def test_a_page_card_without_an_idea_line_is_a_warning_in_this_release(tmp_path):
-    """Missing: site:fields warns and names the page and the next release; the exit stays 0 (it fails from the next release)."""
+def test_a_page_card_without_an_idea_line_fails_site_fields(tmp_path):
+    """Missing: site:fields fails and names the page, as for a hero card (in 0.8.0 it only warned)."""
     p = pages_project(tmp_path)
     mutate(board_of(p, 3), 'data-field="idea"', 'data-removed="idea"')   # the first page card only
     r = lint3(p)
     row = rows(p)["site:fields"]
-    assert r.returncode == 0, r.stdout
-    assert row["status"] == "warn" and "start: Idea is missing or empty" in row["detail"] and "pricing" not in row["detail"] and "next release" in row["detail"], row
+    assert r.returncode == 1, r.stdout
+    assert row["status"] == "fail" and "start: Idea is missing or empty" in row["detail"] and "pricing" not in row["detail"], row
+
+
+def test_a_page_card_with_an_empty_idea_line_fails_site_fields(tmp_path):
+    p = pages_project(tmp_path)
+    mutate(board_of(p, 3), IDEA_LINE, '<dd data-field="idea">  </dd>')   # the first page card only
+    assert lint3(p).returncode == 1 and rows(p)["site:fields"]["status"] == "fail" and "start: Idea is missing or empty" in rows(p)["site:fields"]["detail"]
 
 
 def test_a_failing_field_still_fails_a_page_card_row_whatever_its_idea(tmp_path):
@@ -1962,7 +1968,7 @@ def test_takes_from_and_the_cold_review_are_optional_on_a_page(tmp_path):
     assert page.count('data-field="from-refs"') == 1 and '<p class="cold"' not in page
     r = lint3(p)
     assert r.returncode == 0, r.stdout
-    assert rows(p)["site:fields"]["status"] == "pass" and detail(p, "site:fields") == "What it is and Cost are filled in on every card (and Takes from where a card has the line)"
+    assert rows(p)["site:fields"]["status"] == "pass" and detail(p, "site:fields") == "What it is and Cost are filled in on every card (and Takes from where a card has the line), and every card has its Idea line"
 
 
 def test_a_takes_from_line_that_is_there_is_filled_in_and_what_it_is_and_cost_are_not_optional(tmp_path):

@@ -4,6 +4,7 @@
 # dependencies = []
 # ///
 """brand-creator site approve [--round N] [--replace] [--project DIR]: put the approved pages of the site round into site/.
+brand-creator site review-status <page> [--project DIR]: say whether a page needs a cold review or the earlier one still stands (read-only).
 
     brand-creator site approve                  the latest round, which must be a site board at the pages stage
     brand-creator site approve --round 5        the pages board of round 5
@@ -16,6 +17,12 @@ stay. site/site.json (schema 1) records the approval, the round, the hero, each 
 Approved pages are references for whoever builds the real site, never fill-in templates.
 
 Nothing is written when any page fails. An existing site/ stops the run unless --replace is given, which moves it to removed-<date>/site/ first (it is never deleted).
+review-status rounds/r<N>/<Name>/index.html (or its folder) finds the newest cold-review.md of that variant (this round's folder, else the same variant name in earlier rounds, newest first), and compares the sha256 each
+input of it records with the file now (the stills of the variant's own shots/, brief/BRIEF.md, FACTS.md, the G4 rules part; and the page itself, byte for byte, when the review sits in an earlier round). It prints one line
+and writes nothing: `reuse <path>: the page is unchanged since that review` (exit 0), `review needed: <why>` (exit 1: no earlier review, a review that records no sha256, or the file that changed or is not there),
+the last check is that the folder's shots/capture.json is the capture of this page and current (an unusable one counts as old stills: exit 1), its four stills are the bytes it lists, and its `frames` list the key
+frames the review lists, with the same sha256. Exit 2 for usage (not a page of the form above), exit 3 for a file it cannot read.
+
 Exit 0 written. Exit 1: G4p not recorded; no current, passing board-lint report of the board; a page that cannot go (a network address, a path starting with /, a file that is not there, a page without its
 layout or index.html); site/ already holds pages. Exit 2: usage; a round that is not a site board at the pages stage; a path that leaves the project; a symbolic link in a page folder, or one that is
 rounds/, rounds/r<N>/, the board file or a page folder itself.
@@ -32,7 +39,7 @@ sys.path.insert(0, str(HERE / "lib"))
 sys.path.insert(0, str(HERE / "boardlib"))
 sys.path.insert(0, str(HERE / "pagelib"))   # boardlib/siteboard.py names the page-check report of a page with pagelib/pagecheck.py
 from _common import (EXIT_FAIL, EXIT_USAGE, STATE_FILE, CliError, Parser, add_project_arg, confine, fail, find_project, gate_recorded, list_rounds, main_guard,  # noqa: E402
-                     sha256_bytes, sha256_file, stale_inputs, today)
+                     sha256_bytes, sha256_file, stale_inputs, today, part_sha256, PartError)
 from boardpage import page_kind, page_marker, read_page  # noqa: E402
 import siteboard  # noqa: E402
 import sitedata  # noqa: E402
@@ -285,15 +292,141 @@ def approve(project: Path, round_arg: int | None, replace: bool) -> int:
     return 0
 
 
+def review_status(project: Path, page_arg: str) -> int:
+    """The state of the cold review of a hero or page folder: print one line, write nothing. See the module docstring."""
+    page = confine(project, page_arg, what="page", read=True)
+    root = Path(os.path.realpath(project))
+    if page.is_dir():
+        page = page / "index.html"
+    rel = page.relative_to(root).as_posix()
+    m = re.fullmatch(r"rounds/r(\d+)/([^/]+)/index\.html", rel)
+    if not m:
+        raise CliError(EXIT_USAGE, f"{page_arg} is not a page of a round (rounds/r<N>/<name>/index.html, or its folder)")
+    num, name = int(m.group(1)), m.group(2)
+    here = f"rounds/r{num}/{name}"
+    if not page.is_file():
+        raise CliError(EXIT_USAGE, f"{rel} is not there: no page, nothing to review")
+    review = None
+    for n, d in sorted(list_rounds(project), reverse=True):
+        if n <= num and (d / name / siteboard.COLD_FILE).is_file():
+            review = f"rounds/r{n}/{name}"
+            break
+    if review is None:
+        print(f"review needed: no earlier cold review of {name} (no rounds/r<N>/{name}/{siteboard.COLD_FILE} in round {num} or before)")
+        return EXIT_FAIL
+    rev = f"{review}/{siteboard.COLD_FILE}"
+    try:
+        lines = (project / rev).read_text(encoding="utf-8-sig", errors="replace").splitlines()
+    except OSError as e:
+        raise CliError(3, f"cannot read {rev} ({type(e).__name__}: {e})")
+    listed, bad = siteboard.cold_inputs(lines)
+    if not listed:
+        print(f"review needed: {rev} records no sha256 for the page or its stills (no `inputs:` list of `- <path> sha256:<hex>` lines)")
+        return EXIT_FAIL
+    if bad:
+        print(f"review needed: {rev} has an inputs line that is not `- <path> sha256:<hex>` ({bad[0]})")
+        return EXIT_FAIL
+    for path, _ in listed:   # the review reads files of this project only, and stills of its own folder only
+        file = path.partition("#")[0]
+        if not (project / file).resolve().is_relative_to(root):
+            print(f"review needed: {rev} lists {path}, which is outside the project")
+            return EXIT_FAIL
+        if "/shots/" in file and (not file.startswith(f"{review}/shots/") or "/" in file[len(review) + 7:]):
+            print(f"review needed: {rev} lists {path}, a still that is not one of {review}/shots/")
+            return EXIT_FAIL
+    missing = [v for v in siteboard.VIEWS if f"{review}/shots/{v}.png" not in {p for p, _ in listed}]
+    if missing:
+        print(f"review needed: {rev} records no sha256 for a still of the page ({', '.join(v + '.png' for v in missing)} not listed)")
+        return EXIT_FAIL
+    for path, recorded in listed:
+        if path.startswith(f"{review}/shots/"):   # the variant's stills: the ones of this round's folder, which a copied round has to take again (capture)
+            now_rel = f"{here}/shots/{path[len(review) + 7:]}"
+        else:
+            now_rel = path
+        if "#" in now_rel:
+            file, _, part = now_rel.partition("#")
+            try:
+                now = part_sha256(project / file, part)
+            except PartError as e:
+                print(f"review needed: {now_rel} cannot be read ({e})")
+                return EXIT_FAIL
+        else:
+            f = project / now_rel
+            if not f.is_file():
+                print(f"review needed: {now_rel} is not there" + (" (take the stills again: brand-creator capture " + rel + (" --frames" if "/shots/frame-1440-" in now_rel else "") + ")" if "/shots/" in now_rel else ""))
+                return EXIT_FAIL
+            try:
+                now = sha256_file(f)
+            except OSError as e:
+                raise CliError(3, f"cannot read {now_rel} ({type(e).__name__}: {e})")
+        if now != recorded:
+            print(f"review needed: {now_rel} changed since the review in {rev}")
+            return EXIT_FAIL
+    if review != here:   # the review is in an earlier round: the page itself must be the page it read
+        old = project / review / "index.html"
+        try:
+            same = old.is_file() and sha256_file(old) == sha256_file(page)
+        except OSError as e:
+            raise CliError(3, f"cannot read a page ({type(e).__name__}: {e})")
+        if not same:
+            print(f"review needed: {rel} differs from {review}/index.html, the page that review read")
+            return EXIT_FAIL
+    # the stills must be those of the page as it is now: what board-lint site:stills asks (capture.json of this folder is current and its four stills are the bytes it lists)
+    cap = f"{here}/shots/capture.json"
+    again = f"run brand-creator capture {rel}"
+    if not (project / cap).is_file():
+        print(f"review needed: the stills are older than the page ({cap} is not there): {again}")
+        return EXIT_FAIL
+    doc, stale = siteboard.read_record(project, cap, rel)
+    if doc is None:
+        print(f"review needed: the stills are older than the page ({cap} is unusable: {'; '.join(stale[:2])}): {again}")
+        return EXIT_FAIL
+    source = doc.get("source")
+    if not (isinstance(source, dict) and source.get("page") == rel):
+        print(f"review needed: the stills are older than the page ({cap} is the capture of another page): {again}")
+        return EXIT_FAIL
+    if stale:
+        print(f"review needed: the stills are older than the page ({'; '.join(stale[:2])}): {again}")
+        return EXIT_FAIL
+    views = {e.get("view"): e for e in doc.get("views", []) if isinstance(e, dict)} if isinstance(doc.get("views"), list) else {}
+    for v in siteboard.VIEWS:
+        e = views.get(v)
+        name = e.get("file") if isinstance(e, dict) else None
+        f = project / here / "shots" / name if isinstance(name, str) and name and "/" not in name and "\\" not in name else None
+        try:
+            ok = f is not None and f.is_file() and sha256_file(f) == e.get("sha256")
+        except OSError as err:
+            raise CliError(3, f"cannot read {f} ({type(err).__name__}: {err})")
+        if not ok:
+            print(f"review needed: the stills are older than the page ({cap} does not match the {v} still): {again}")
+            return EXIT_FAIL
+    wanted = {f"{here}/shots/{path[len(review) + 7:]}": sha for path, sha in listed if path.startswith(f"{review}/shots/frame-1440-")}
+    if wanted:   # the key frames the review read must be the ones capture.json lists now, as board-lint site:cold asks (a capture without --frames lists none)
+        got = {f"{here}/shots/{e['file']}": e.get("sha256") for e in doc["frames"] if isinstance(e, dict) and isinstance(e.get("file"), str)} if isinstance(doc.get("frames"), list) else {}
+        off = [w for w, sha in wanted.items() if got.get(w) != sha]
+        if off:
+            print(f"review needed: the key frames the review lists are not the ones {cap} lists now ({', '.join(off)}): run brand-creator capture {rel} --frames")
+            return EXIT_FAIL
+    print(f"reuse {rev}: the page is unchanged since that review")
+    return 0
+
+
 def main() -> int:
     ap = Parser(prog="brand-creator site", description=__doc__, formatter_class=__import__("argparse").RawDescriptionHelpFormatter)
-    ap.add_argument("action", choices=("approve",), help="approve: put the approved pages of the pages board into site/")
+    ap.add_argument("action", choices=("approve", "review-status"), help="approve: put the approved pages of the pages board into site/; review-status <page>: does the page need a cold review (read-only)")
+    ap.add_argument("page", nargs="?", help="review-status: rounds/r<N>/<name>/index.html or its folder")
     add_project_arg(ap)
     ap.add_argument("--round", type=int, help="the round of the pages board (default: the latest round)")
     ap.add_argument("--replace", action="store_true", help="site/ holds approved pages already: move it to removed-<date>/site/ and write the pages of this round")
     a = ap.parse_args()
     if a.round is not None and a.round < 0:
         raise CliError(EXIT_USAGE, "--round takes a round number (0 or more)")
+    if a.action == "review-status":
+        if a.page is None or a.round is not None or a.replace:
+            raise CliError(EXIT_USAGE, "usage: brand-creator site review-status <rounds/r<N>/<name>/index.html> (it takes no --round or --replace)")
+        return review_status(find_project(a.project), a.page)
+    if a.page is not None:
+        raise CliError(EXIT_USAGE, "site approve takes no page")
     return approve(find_project(a.project), a.round, a.replace)
 
 

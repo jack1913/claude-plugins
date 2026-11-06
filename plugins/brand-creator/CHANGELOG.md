@@ -6,6 +6,73 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+### Added
+
+- `brand-creator cleanup` takes old round folders out of a project through git, so you no longer type a removal line yourself. It first shows a plan
+  (`qa/<date>-cleanup-plan.txt`): the rounds that stay and why (the latest of each stage, the latest pick board, any round a kept file or
+  report points at, any round a kept board's check reads, any round it cannot place, and any you add with `--keep rN`), the rounds that go
+  with their size and whether `history/` holds a frozen copy, and a code. After your yes, `--record-yes CODE --said "<your words>"` writes
+  it into `DECISIONS.md`, tied to that exact plan, and `--yes CODE` removes the round folders with `git rm` and writes
+  `qa/<date>-cleanup-removed.txt` with the line that restores them. It removes only files that are committed and unchanged, refuses
+  (naming each file) when any other file, link or nested repository is in a round to remove, removes the check reports of a removed
+  round too, stages the removal without committing it and prints a suggested commit message. A plan that changed since your yes
+  needs a new yes, and each yes is used once. `history/`, `site/` and the rest of `assets/` are never touched. It was not run against a real
+  brand project: it finds a round that something points at by reading the project's files as text, so compare its keep list with
+  your own before you say yes.
+
+- Three tools for a hand-written book, so whole-chapter work no longer needs a one-off script. `brand-creator book chapter --replace <id> --from <file>`
+  swaps one chapter for the chapter in the file (also `--add` and `--remove`), keeps the rest of the book exactly as it was,
+  needs `--new-edition` for an approved edition and logs the edition like `patch`; it refuses a generated book, an unknown
+  chapter id or a file whose chapter has another id. The chapter count in the contents is now recalculated by the tool after a
+  chapter is added or removed, and the book check fails a count that does not match. `brand-creator patch --loose-space`
+  finds the old text even where the book has a no-break space instead of a space (or a longer run of spaces), and still
+  refuses unless it occurs exactly the number of times you said. `brand-creator book nbsp --fix` lists the spaces the book
+  check warns about (after a one-letter word, as in Polish) and, with `--yes`, makes them no-break spaces.
+
+- A book chapter can now carry an open item: when you cannot fill something in yet (the Adoption and Launch chapters of a Full
+  book ask for an inventory, repository, handles and e-mail), it is written as `Open: <what it waits for>` instead of a
+  `[[fill: ...]]` marker. The book check accepts it and lists every open item, with its chapter, in a new row
+  (`book:open-items`), so none is forgotten; a bare `Open:` with nothing after it still fails. In a hand-authored book, a short nested list under `Open:` may name what the item waits for. Raising the tier (`brand-creator state --set tier=full`) now says which chapters of the new tier's book and which facts
+  (the inventory, and once the look is approved the motion decision) the project does not have yet. Setting the same tier or a lower one prints nothing new.
+
+- `brand-creator page-check` has a new row, `page:first-screen`: at each size it checks that the hero's heading and its first button or
+  link end inside the first screen, and warns (never fails) naming each size where one falls below the fold, by how many pixels, and
+  which. A page with no hero, or a size where the heading is hidden, says "not measured". It replaces checking this by hand each round.
+
+- `brand-creator kit check` now names each of your own kit files (`voice.md`, `visual.md`, a recipe you wrote) that nobody
+  has touched since the last build, once your tokens, `FACTS.md` or `BRAND-STATE.md` changed after it, as a warning
+  (`kit:behind`), so you can tell which hand files may be behind the brand. It names every such file and never edits them;
+  `kit build` prints the same list before it records them. The build already never overwrites your files.
+
+- `brand-creator site review-status <page>` says whether a page needs a cold review: it finds the page's last review (this round's, else
+  the same version in an earlier round) and compares the page and the pictures it read with the files now. It prints "reuse" and the
+  review's path when nothing changed, or "review needed" and why (no earlier review, a review that recorded no checksums, or the file
+  that changed). It only reads. The cold-review rule now says to run it first, so a page that did not change is never reviewed twice.
+
+### Changed
+
+- A page card of a pages board with no Idea line, or an empty one, now fails the `board-lint` check `site:fields` (in 0.8.0 it only
+  warned). A pages board without Idea lines, such as one made before 0.8.0, fails its lint now: add the one-line idea to each page card.
+- `capture --reveal` now scrolls every big box on the page that scrolls on its own (a main area, a sidebar) as well as the page, in
+  steps of half a screen, so reveal scripts that watch with a margin see every item. Each box is shown on the screen while it is
+  walked, and a tall box is carried up until its bottom is shown. The walk waits two frames after each step, turns scroll snapping
+  and scroll anchoring off while it runs, and puts every scroller back where it found it. It says where a walk that stopped early
+  ended, and reports a page that will not scroll, will not stay at its top, or does not answer. The budget is 80 half-screen steps
+  (40 screens, as before), so a capture with `--reveal` takes about twice as long. The `reveal` part of `capture.json` drops
+  `inner_scroller` and gains `boxes`, `box_steps`, `page_unfinished`, `boxes_unfinished`, `boxes_unmeasured`, `small_boxes`, `grew`,
+  `not_returned` and `root_hidden`. A page whose own scrolling is hidden or clipped is still walked, and the run now says a
+  visitor cannot scroll it. A page that stops answering during the walk stops `capture` at once, with nothing written, instead of
+  failing later on the pictures.
+
+### Fixed
+
+- `capture --reveal` did not walk a page whose body scrolls itself, though the run said it did. It now walks that body as a box and
+  never prints a success line for a walk that took no step.
+- `capture --reveal` walked a closed drawer instead of the page's main area. A drawer that is not shown is no longer walked.
+- `capture --reveal` stepped 40 times through a page that scrolls itself back, and called it longer than 40 screens. It now
+  says the page did not scroll.
+- `capture --reveal` skipped a box built with `flex-direction: column-reverse` (a chat). It now walks such a box from its top to its end.
+
 ## [0.8.1] - 2026-11-05
 
 ### Fixed

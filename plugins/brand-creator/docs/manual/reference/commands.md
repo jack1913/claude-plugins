@@ -183,6 +183,32 @@ a program reads). Any tier can have a kit, but putting it into your product need
 | "Is my website's copy of the kit current?" | `kit status` | Compares the copy in each of your product's code folders with your kit, file by file and exactly, and says `current`, `not installed` or `not current`, with the list of files to copy | Writes and copies nothing, in your product or your project: the kit goes in with `/brand-creator:brand-adopt`. It refuses your home folder itself, Claude's own settings folder (`~/.claude`) and your brand project |
 | "Test my brand kit" | a test build, then the page check | Builds a first screen and one more part of a page from the kit alone, in a temporary folder outside your project, then checks both against your brand | Starts only when you ask, and uses no extra agents |
 
+## cleanup
+
+> Clean the old rounds
+
+Old rounds pile up in your project's `rounds/` folder. This is a `brand-creator` command, not a slash command: you ask in
+your own words, and Claude runs it, usually offering before the first push of a project you share. It removes whole round
+folders and nothing inside a round you keep. Your project needs git, with the rounds committed: that is how any removed
+round can come back.
+
+| You say | Claude runs | What it does | What it never does |
+| --- | --- | --- | --- |
+| "Clean the old rounds" | `cleanup` | Shows a plan and writes it to `qa/<date>-cleanup-plan.txt`: which rounds stay and why (the latest of each stage, the latest pick board, any round something you keep points at, any it cannot place), which go, how big they are, and whether `history/` holds a frozen copy. Each plan has a short code | Removes nothing |
+| "Yes, remove them" | `cleanup --record-yes` then `cleanup --yes` | Writes your yes and your words into `DECISIONS.md`, tied to the plan's code, then removes those round folders through git. The removal is staged, and the restore line and a suggested commit message are printed | Commits, and removes anything that is not committed as it is; the work stays recoverable. `history/`, `site/` and `assets/` are never touched, except the check reports of a removed round |
+| "Keep round 3 too" | `cleanup --keep r3` | Makes a new plan with that round kept; it needs its own yes | Reuses an earlier yes for a plan that changed |
+
+It refuses, naming each file, while any file of a round to remove is changed, new, deleted or hidden from git, or a round
+holds a link. Your yes counts once: a second removal of the same plan after you restore the rounds needs a second yes.
+Recording your yes touches `DECISIONS.md`, which the check of a site's pages board reads, so Claude then runs
+`/brand-creator:check --refresh`.
+
+Limits: the plan finds a round something points at by reading the files of your project as text (paths, links and file
+names). A path a script builds from parts, a picture file that names a round, or a document outside your project that no
+list names is not seen, so a round still in use can be proposed for removal. Compare the plan with what you would keep by
+hand before you say yes, and check the first site or book you open after it. Nothing was run against a real brand project
+before release. Where it comes up: [Get reference pages for your site](../use/get-reference-pages-for-your-site.md), step 3.
+
 ## brand-adopt
 
 > /brand-creator:brand-adopt survey

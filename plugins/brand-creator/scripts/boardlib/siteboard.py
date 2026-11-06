@@ -120,7 +120,7 @@ SKIPPED = "skipped by owner"        # what G4w says when the owner skipped the w
 DISLIKES = re.compile(r"\bdislikes?\b", re.I)   # "picked <groups>; likes <...>; dislikes <...>": what stands from the word dislikes on is what the owner turned away from, never a pick
 RECORD_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}\s*")   # `state --record` writes "<date> <decision>"
 FIELDS = (("what-it-is", "What it is"), ("from-refs", "Takes from"), ("cost", "Cost"))
-IDEA = ("idea", "Idea")             # a hero card's one memorable idea, in one line: a card without it fails site:fields (a warning in 0.7.0; the owner's O1 of group 4)
+IDEA = ("idea", "Idea")             # a hero card's one memorable idea, in one line: a card without it fails site:fields, a page card too (a warning in 0.7.0, and on a page card in 0.8.0; the owner's O1 of group 4)
 TELL_ROW = re.compile(r"^tell:([a-z0-9-]+)$")    # the row page-check gives a generic tell of skills/brand-creator/references/page-tells.json (pagecheck.tell_rows): a warning when it found one
 VIEWS = ("1440-light", "1440-dark", "390-light", "390-dark")   # the four first-screen stills `capture <page>` takes, and the four a card shows
 SHA256 = re.compile(r"[0-9a-f]{64}")
@@ -132,9 +132,10 @@ def stage_of(root: Node | None) -> str | None:
     return marker.attrs.get("data-site-stage", "").strip() if marker is not None else None
 
 
-def is_first(project: Path, rnd: int, stage: str | None) -> bool:
-    """Whether the board of round `rnd` is the first site board of its stage in the project: no earlier round holds a site board that declares the same stage."""
-    for n, d in list_rounds(project):
+def is_first(project: Path, rnd: int, stage: str | None, rounds: list[tuple[int, Path]] | None = None) -> bool:
+    """Whether the board of round `rnd` is the first site board of its stage in the project: no earlier round holds a site board that declares the same stage.
+    `rounds` (default: every round folder of the project) is the list of rounds to look in: `brand-creator cleanup` asks the same question of the rounds it keeps."""
+    for n, d in (list_rounds(project) if rounds is None else rounds):
         if n < rnd:
             root = read_page(d / "board.html")
             if page_kind(root) == "site" and stage_of(root) == stage:
@@ -142,9 +143,9 @@ def is_first(project: Path, rnd: int, stage: str | None) -> bool:
     return True
 
 
-def references_board(project: Path, rnd: int) -> tuple[int, Path] | None:
-    """(the round, its board) of the latest website references board before round `rnd` that counts (boardpage.is_site_refs_board), or None."""
-    found = [(n, d / "board.html") for n, d in list_rounds(project) if n < rnd and is_site_refs_board(read_page(d / "board.html"), n)]
+def references_board(project: Path, rnd: int, rounds: list[tuple[int, Path]] | None = None) -> tuple[int, Path] | None:
+    """(the round, its board) of the latest website references board before round `rnd` that counts (boardpage.is_site_refs_board), or None. `rounds`: as in is_first."""
+    found = [(n, d / "board.html") for n, d in (list_rounds(project) if rounds is None else rounds) if n < rnd and is_site_refs_board(read_page(d / "board.html"), n)]
     return found[-1] if found else None
 
 
@@ -336,10 +337,10 @@ def field_problems(v: SiteVariant, optional: tuple[str, ...] = ()) -> list[str]:
 
 
 def idea_problems(v: SiteVariant) -> list[str]:
-    """The Idea line of a hero card (data-field="idea"): some text, no placeholder and no [[fill: ...]] marker left, by the rule of every field (_field_problem). Each problem fails site:fields (in 0.7.0 it was a warning, so a
+    """The Idea line of a hero or page card (data-field="idea"): some text, no placeholder and no [[fill: ...]] marker left, by the rule of every field (_field_problem). Each problem fails site:fields (in 0.7.0 it was a warning, so a
     board made before the line existed still linted)."""
     fid, label = IDEA
-    problem = _field_problem(v, fid, label, ": the one memorable idea of this hero, in one line")
+    problem = _field_problem(v, fid, label, (": the one idea of this page in the brand's world, in one line" if v.noun == "page" else ": the one memorable idea of this hero, in one line"))
     return [problem] if problem else []
 
 
@@ -889,14 +890,13 @@ def cold_rows(rep: Report, project: Path, variants: list[SiteVariant], required:
     rep.inputs += [Path(project) / p for v in variants for p in cold_listed(project, v) if p in cold_frame_paths(v)]   # a review that lists key frames goes stale with them (a capture made again)
 
 
-def card_rows(rep: Report, project: Path, page_rel: str, rnd: int, variants: list[SiteVariant], noun: str = "variant", count_row: str = "site:variants", optional: tuple[str, ...] = (), idea: bool = False, idea_warns: bool = False) -> None:
+def card_rows(rep: Report, project: Path, page_rel: str, rnd: int, variants: list[SiteVariant], noun: str = "variant", count_row: str = "site:variants", optional: tuple[str, ...] = (), idea: bool = False) -> None:
     """site:files, site:layout and site:fields for the cards of a hero board (noun "variant", `idea`: each card also states its one idea) or of a pages board (noun "page"; `optional` names the
     fields a card may leave out). Each is one result for the whole board and names the cards it fails; without a card they are not verified (`count_row` says why there is none)."""
     known = load_layouts()
     layouts = [layout_problems(v, known) for v in variants]
     failures, warnings = [p for f, _ in layouts for p in f], [p for _, w in layouts for p in w]
     ideas = [p for v in variants for p in idea_problems(v)] if idea else []
-    idea_warnings = [p for v in variants for p in idea_problems(v)] if idea_warns else []   # a page card without its Idea line: a warning in 0.8.0, a failure in the next release
     rows = (("site:files", f"each {noun} has its folder and page, and the page declares its layout and its id", [p for v in variants for p in files_problems(project, v, page_rel, rnd)],
              "folder, index.html, a <body> with data-layout and data-page, the live link of the card"),
             ("site:layout", "each page records a layout reference (or its own), and the card says the same", failures,
@@ -909,8 +909,6 @@ def card_rows(rep: Report, project: Path, page_rel: str, rnd: int, variants: lis
             found = found + ideas   # the Idea line fails the row like any other field
         if not variants:
             rep.add(rid, "skipped", label, detail=f"not verified: there is no {noun} card to look at ({count_row} says why)")
-        elif rid == "site:fields" and idea_warnings and not found:
-            rep.add(rid, "warn", label, detail=shown(idea_warnings) + " (a warning in this release; the next release fails it)")
         elif rid == "site:layout" and warnings and not found:   # a layout of its own is allowed, with a warning
             rep.add(rid, "warn", label, detail=shown(warnings))
         else:
@@ -1165,10 +1163,10 @@ def page_cards(root: Node) -> list[Node]:
     return [n for n in root.walk() if PAGE_ATTR in n.attrs]
 
 
-def hero_boards(project: Path, rnd: int) -> list[tuple[int, Path, Node]]:
-    """(the round, its board, its page) of every site board at the hero stage in a round before `rnd`, the latest first."""
+def hero_boards(project: Path, rnd: int, rounds: list[tuple[int, Path]] | None = None) -> list[tuple[int, Path, Node]]:
+    """(the round, its board, its page) of every site board at the hero stage in a round before `rnd`, the latest first. `rounds`: as in is_first."""
     found = []
-    for n, d in list_rounds(project):
+    for n, d in (list_rounds(project) if rounds is None else rounds):
         if n < rnd:
             root = read_page(d / "board.html")
             if root is not None and page_kind(root) == "site" and stage_of(root) == "hero":
@@ -1298,7 +1296,7 @@ def pages_rows(rep: Report, project: Path, rnd: int, root: Node, page: Path) -> 
     problems += [x for x in (id_problem(v) for v in pages) if x]
     rep.add("site:pages", "fail" if problems else "pass", "the pages: at least one, a page id for each",
             detail=shown(problems) if problems else f"{len(pages)} page(s): {', '.join(v.name for v in pages)}")
-    card_rows(rep, project, page_rel, rnd, pages, noun="page", count_row="site:pages", optional=("from-refs",), idea_warns=True)
+    card_rows(rep, project, page_rel, rnd, pages, noun="page", count_row="site:pages", optional=("from-refs",), idea=True)
     proof_rows(rep, project, page, pages, noun="page", count_row="site:pages")
     cold_rows(rep, project, pages, required=False, noun="page", count_row="site:pages")
     choices_rows(rep, project, root, [v.name for v in pages])

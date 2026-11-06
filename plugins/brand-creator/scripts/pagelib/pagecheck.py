@@ -2070,8 +2070,58 @@ def tell_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
                 anatomy=a)
 
 
+def first_screen_rows(rep: Report, measures: dict, ctx: Ctx) -> None:
+    """page:first-screen: in each measured view the bottom edge of the hero's main heading (the first shown h1) and of its first action (the first shown link or button in the hero,
+    outside a nav) is inside the first screen, the viewport height of that view (the browser's window the check sets for the width, not a height of the page's own). A warning, never a
+    failure (a tall hero may be meant): it names each view with something below the fold, by how many px, and what. A page with no hero (no shown h1) is info "not measured: <why>", a
+    hero with no action is measured on its heading and says so; a view with no shown h1 is named as not measured and the row is then a warning, never a pass; no view measured is skipped.
+    The hero box is the h1's nearest section, header, banner or hero element (else its parent), so the first link there counts, a logo link included."""
+    rid, label = "page:first-screen", "the hero's heading and main action in the first screen"
+    views = [v for v in measures.get("views", []) if isinstance(v, dict) and not v.get("error") and isinstance(v.get("tell_facts"), dict)]
+    if not views:
+        rep.add(rid, "skipped", label, detail="not verified: no view was measured (see the page:load rows)")
+        return
+    heroes = [(v, (v["tell_facts"].get("hero") or {})) for v in views]
+    if not any(h.get("found") for _, h in heroes):
+        rep.add(rid, "info", label, detail="not measured: the page has no hero (no shown h1 in any view), so there is no heading or main action to place in the first screen")
+        return
+    over, actionless, unmeasured, nowindow, measured = [], [], [], [], 0
+    for v, h in heroes:
+        if not h.get("found") or not isinstance(h.get("h1_bottom"), (int, float)):
+            unmeasured.append(f"{v.get('width')}-{v.get('scheme')}")
+            continue
+        view = f"{v.get('width')}-{v.get('scheme')}"
+        vh = (v.get("viewport") or {}).get("height") or h.get("viewport_height")
+        if not isinstance(vh, (int, float)) or isinstance(vh, bool):
+            nowindow.append(view)
+            continue
+        measured += 1
+        a = h.get("first_action")
+        if not a:
+            actionless.append(view)
+        for what, sel, text, bottom in (("heading", h.get("h1_sel"), h.get("h1_text") or "", h["h1_bottom"]),
+                                        ("action", (a or {}).get("sel"), (a or {}).get("label") or "", (a or {}).get("bottom"))):
+            if isinstance(bottom, (int, float)) and bottom > vh + EPSILON:
+                px = round(bottom - vh, 1)
+                over.append({"view": view, "width": v.get("width"), "scheme": v.get("scheme"), "viewport_height": vh, "what": what, "selector": sel, "text": text, "px_below": px})
+    notes = [f"no action in the hero at {', '.join(actionless[:3])}{' and more' if len(actionless) > 3 else ''}: only its heading was measured"] if actionless else []
+    if unmeasured:
+        notes.append(f"not measured at {', '.join(unmeasured[:6])}{' and more' if len(unmeasured) > 6 else ''}: no shown h1 there")
+    if nowindow:
+        notes.append(f"not measured at {', '.join(nowindow[:6])}{' and more' if len(nowindow) > 6 else ''}: no window height")
+    extra = {"viewport_heights": sorted({(v.get("viewport") or {}).get("height") for v, _ in heroes if (v.get("viewport") or {}).get("height")}), "below_fold": over[:100]}
+    if not measured:
+        rep.add(rid, "info", label, detail="not measured: no view shows the page's hero with a measured heading", **extra)
+    elif over or unmeasured or nowindow:
+        lines = [f"at {o['view']} (window {o['viewport_height']:g} px high) the {o['what']} {o['selector']}" + (f" \"{o['text']}\"" if o["text"] else "") + f" ends {o['px_below']:g} px below the fold" for o in over]
+        head = [_names(lines, NAMED)] if lines else []
+        rep.add(rid, "warn", label, detail="; ".join(head + ["the first screen is the window height the check sets for each width; a tall hero may be meant, so this never fails"] + notes), **extra)
+    else:
+        rep.add(rid, "pass", label, detail="; ".join(["the hero's heading" + (" ends" if actionless and len(actionless) == measured else " and first action end") + f" inside the first screen in {measured} view(s)"] + notes), **extra)
+
+
 # each (rep, measures, ctx); a later family of rows is added here
-ROW_CHECKS = [load_rows, colour_rows, pair_rows, motion_rows, claim_rows, word_rows, mark_rows, font_rows, display_size_rows, tell_rows, rule_rows]
+ROW_CHECKS = [load_rows, colour_rows, pair_rows, motion_rows, claim_rows, word_rows, mark_rows, font_rows, display_size_rows, tell_rows, first_screen_rows, rule_rows]
 
 
 def judge(rep: Report, measures: dict, ctx: Ctx, measures_path: Path) -> None:

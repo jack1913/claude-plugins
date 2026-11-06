@@ -26,9 +26,32 @@ Ask for the change: "update the guidelines after the colour change". Claude chan
 edits `book.html` by hand. A hand-drawn logo has a hand-written book instead, which Claude edits through counted patches
 that open a new edition.
 
+Three tools help with that book, and each one writes a line to the edition log:
+
+- A chapter can be replaced, added or removed as a whole (`brand-creator book chapter --replace <id> --from <file>`,
+  `--add`, `--remove`). Claude gives the new chapter as a file whose outer `<section>` carries the same chapter id; the
+  rest of the book stays exactly as it was, and the chapter count in the contents is recalculated, never typed. A chapter
+  the contents still links to is not removed.
+- A counted patch can be told to ignore the difference between a normal space and a no-break space
+  (`--loose-space`); it still refuses when the text occurs a different number of times than you expect.
+- `brand-creator book nbsp --fix` lists the spaces that should be no-break spaces (after a one-letter word, in Polish
+  for example), the same ones the book check warns about; with `--yes` it makes them.
+
 Adding or removing a colour role (a name a surface uses, such as `text` or `accent`) or a contrast pair changes the
 numbers the book prints, so the book check fails until Claude rebuilds the book. If you already approved the book, the
 rebuilt one is a new edition, and you approve it again.
+
+## When you cannot fill something in yet
+
+Some chapters ask for facts you may not have: the Adoption and Launch chapters of a Full book want an inventory, a
+repository, handles and an e-mail address. Do not leave a gap and do not invent an answer. Claude writes the item as an
+open item, a line that starts with `Open:` and says what it waits for, for example `Handles: Open: the name is not chosen
+yet.` The book check accepts it and lists it in the row `book:open-items` with its chapter, so it stays in sight until
+you have the fact. In a hand-authored book, a short list under the `Open:` line may name what it waits for. A bare `Open:` with nothing after it fails the check, and so does a `[[fill: ...]]` marker left behind.
+
+When you raise the tier (`brand-creator state --set tier=full`), the command tells you which chapters of the new tier's
+book you do not have yet and which fact it still needs, such as the inventory or, once the look is approved, the motion
+decision.
 
 ## If your brand moves
 
@@ -82,7 +105,7 @@ Without a yes, Claude writes none of them.
 | Claude says something is missing | It names the step that builds it: the logo, the colours or the files. Finish that first |
 | The PDF step stops | The PDF checks need poppler. `brand-creator prereq --for standard` lists what's missing and how to install it |
 | The book check fails on `counts:data`, such as "the book says 7, the data say 8" | You added or removed a colour role or a contrast pair after the book was built. Ask Claude to rebuild the book. If you had approved it, it opens a new edition |
-| The book check fails on `chapters:required` and names `adoption` and `launch` | A Full book needs an Adoption chapter and a Launch checklist chapter. Ask Claude to add them, then rebuild |
+| The book check fails on `chapters:required` and names `adoption` and `launch` | A Full book needs an Adoption chapter and a Launch checklist chapter. Ask Claude to add them, then rebuild. Anything you cannot fill yet goes in as an `Open:` item |
 
 ## Related
 
