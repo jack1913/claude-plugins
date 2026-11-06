@@ -89,14 +89,8 @@ test("resolveWindow takes flag, then recorded, then env", () => {
   assert.deepEqual(resolveWindow({ env: "300000" }), { window: 300000, source: "env" });
 });
 
-test("resolveWindow refuses a missing or invalid window", () => {
-  assert.throws(
-    () => resolveWindow({}),
-    (e) =>
-      e instanceof PuppetError &&
-      e.message.includes("--window") &&
-      e.message.includes("PUPPET_CONTEXT_WINDOW"),
-  );
+test("resolveWindow takes 1M when none is given, and refuses an invalid one", () => {
+  assert.deepEqual(resolveWindow({}), { window: 1000000, source: "default" });
   assert.throws(() => resolveWindow({ flag: "abc" }), PuppetError);
   assert.throws(() => resolveWindow({ flag: "0" }), PuppetError);
   assert.throws(() => resolveWindow({ env: "1.5" }), PuppetError);

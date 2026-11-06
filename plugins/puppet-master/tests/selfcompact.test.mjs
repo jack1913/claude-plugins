@@ -360,7 +360,7 @@ test("spawn --self-compact opts the worker in; without it only the role is writt
     t.deps.platform = "win32";
     try {
       const brief = path.join(t.dir, "brief.md");
-      fs.writeFileSync(brief, "job");
+      fs.writeFileSync(brief, "job\n<!-- end of the puppet-master worker brief: keep this line -->\n");
       assert.equal(await main(["spawn", "w9", "C:\\work\\repo", brief, "--effort", "high", ...(flag ? ["--self-compact"] : [])], t.deps), 0);
       assert.equal(JSON.parse(fs.readFileSync(path.join(t.dir, "mod", "roles", `${fresh.sessionId}.json`), "utf8")).role, "worker");
       assert.equal(fs.existsSync(path.join(t.dir, "mod", "optin", `${fresh.sessionId}.json`)), flag);

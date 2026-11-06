@@ -49,22 +49,22 @@ test("measure --json prints one JSON object", async () => {
   }
 });
 
-test("measure without any window fails loudly", async () => {
+test("measure without a window given measures against 1M and says so", async () => {
   const t = setup();
   try {
-    assert.equal(await main(["measure", "w1"], t.deps), 1);
-    assert.match(t.err.join("\n"), /^puppet: no context window/);
+    assert.equal(await main(["measure", "w1"], t.deps), 0);
+    assert.match(t.out[0], /^w1 {2}85545 {2}8\.6% {2}done {2}\(window 1000000 from default\)$/);
   } finally {
     t.cleanup();
   }
 });
 
-test("list shows a row with no window and no compaction point as unknown, and exits 0", async () => {
+test("list without a window given measures each row against 1M, and exits 0", async () => {
   const t = makeDeps({ agents: [agent("w1", 1)] });
   try {
     t.writeTranscript(t.deps.agents[0].sessionId, fixture("transcript-usage-sum.jsonl"));
     assert.equal(await main(["list"], t.deps), 0);
-    assert.match(t.out.join("\n"), /^w1 {2}85545 {2}\?% {2}\S+ {2}\(window unknown\)/m);
+    assert.match(t.out.join("\n"), /^w1 {2}85545 {2}8\.6% {2}\S+ {2}\(window 1000000 from default\)/m);
   } finally {
     t.cleanup();
   }
@@ -156,6 +156,19 @@ test("no arguments is a usage error", async () => {
     assert.match(t.err.join("\n"), /usage:/);
   } finally {
     t.cleanup();
+  }
+});
+
+test("--help, -h and help print the usage on stdout and exit 0, with or without a group or a command (carcare 2026-11-06 F-23)", async () => {
+  for (const argv of [["--help"], ["-h"], ["help"], ["--group", "g1", "--help"], ["spawn", "--help"], ["--group", "g1", "assign", "-h"]]) {
+    const t = makeDeps();
+    try {
+      assert.equal(await main(argv, t.deps), 0, argv.join(" "));
+      assert.match(t.out.join("\n"), /^usage: puppet\.mjs/, argv.join(" "));
+      assert.deepEqual(t.err, [], argv.join(" "));
+    } finally {
+      t.cleanup();
+    }
   }
 });
 

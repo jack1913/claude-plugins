@@ -79,8 +79,8 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
 4. **One job per context, unless the user asked to reuse sessions.** `assign` refuses a session that
    already had a job, and a session the user cleared or restarted until you ask them and `adopt` it
    again. When the user has asked to reuse sessions, a session whose job is finished takes the next
-   one with `assign --reuse`, which still refuses it at 30% or more of its window (the figure the
-   user's status line shows): `clear` it first when its `list` row says `mod on` (rule 7), else give
+   one with `assign --reuse`, which still refuses it at 30% or more of its window (300,000 tokens
+   of the 1M window): `clear` it first when its `list` row says `mod on` (rule 7), else give
    the user its `/clear` line. More work for the job a session
    holds goes to it with `assign <session> <job> --extend`, which keeps the active job and merges
    the label and scope and keeps the job's git flag unless you pass `--git` or `--no-git`; a label
@@ -144,15 +144,10 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
    done.
 8. **Measured, not reported.** Act only on `puppet measure`. It works on any listed session, the
    user's windows included. `fresh` means no turns yet. A session's own estimate of its size ("I'm
-   full") is a prompt to measure, never a reason to act. The 30% and 50% are shares of the
-   **compaction point** when `measure` prints one (`--compact-at` or `PUPPET_COMPACT_AT`, else the
-   smallest automatic compaction in that session's own transcript, kept on its roster record
-   across a `clear`; a session never compacted yet is measured against the group's lowest and the
-   line says `(group)`), else of the window. Sessions compact well before a large window fills, so
-   the compaction point is the one that matters; it differs per session (208k, 230k and 354k on
-   2026-11-03). `WARN near compaction` is at 80% of it: act at the next task boundary. For the window, pass the one the
-   user's status line shows via `--window <tokens>` or `adopt --window`, until a `cycle` records it;
-   `PUPPET_CONTEXT_WINDOW` sets a default.
+   full") is a prompt to measure, never a reason to act. The user's rule: context is given in tokens and as a % of the 1M window, never as a share of a compaction point
+   (2026-11-06), in what you tell the user and in what you act on. The 30% and 50% above are
+   shares of that window: 300,000 and 500,000 tokens. `measure` uses `--window <tokens>`, else a
+   window `adopt --window` or a `cycle` recorded, else `PUPPET_CONTEXT_WINDOW`, else 1,000,000.
 9. **Cost.** A cycle re-reads the whole context: even a small worker's compaction can cost close
    to a dollar. Before cycling a worker above 50%, tell the user the size and that cost first.
    `compact` through the mod runs in the live process and reads the prompt cache (one probe: 22,470
@@ -210,8 +205,11 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
 
 ## When a job ends
 
-1. Give the user the deliverable's current path or URL. Add a fresh `?v=<n>` if it is served, and say
-   what it replaced, so they never review a stale page.
+1. Give the user the deliverable's full current path or URL (a path from its drive letter, so they
+   can open it). Add a fresh `?v=<n>` if it is served, and say
+   what it replaced, so they never review a stale page. Before you relay a visual deliverable (a
+   canvas, a screenshot, an app screen), open it and look at it yourself; an overlap or clipping the
+   worker flagged is fixed before the link goes to the user.
 2. `puppet finish <session>`, in the same turn as the worker's done report: an open finished job
    drifts into an auto-compaction. `list` marks an active job whose session's last word reads as done
    (`FINAL:` or "job is done") `DONE? run finish`; that is a hint to read the report, never a
@@ -275,6 +273,9 @@ option arrives as its literal placeholder, which Bash refuses inside double quot
   it to new work needs the user's yes: "dont build apk" of 2 November meant canvas designs first,
   and reached a build brief on 3 November as a ban.
 - **Progress, unasked.** Each time a session reports a finished task, tell the user in one line.
+  While a step of yours waits on the user (a download, a device, a login), each reply leads with its
+  status: what it waits for and where (2026-11-06: three prompts to learn whether a download had run).
+- **Before you recommend a route that depends on the user's device or setup**, check that their device or setup can do it (2026-11-06: wireless debugging on a phone too old for it).
 - **Ask, don't wait.** A decision that blocks a session goes to the user at once (AskUserQuestion),
   never held until they ask for status.
 - **The pick first.** When the user asks for a pick or a summary, answer with the pick and its one
@@ -299,11 +300,31 @@ reviews only after that line, and starts on it without waiting for a new brief f
   tool writes outside the repository by default, name the flag that keeps its output in place
   (such as a screenshot tool's `--out <folder>`), not only the folder.
 - Write every path in a brief with forward slashes: backslashes get lost on the way.
+- **Every brief holds the template's lines itself, word for word**, through the brief's last line
+  (`<!-- end of the puppet-master worker brief: keep this line -->`): a common file may add to a brief but never stands in for them
+  (2026-11-06: a common file without the browser line, and a worker held the shared browser for
+  hours). `spawn` refuses a brief file whose text lacks that last line.
+- The brief's first line restates the deliverable's shape in the user's words ("visual concepts
+  first, then code"); check the worker's one-line ack against it before it starts.
+- Tell a worker to wait for "go" only while a user decision it depends on is still open; otherwise
+  it starts right after its first reply (2026-11-05: a worker waited 13 minutes for "just go").
+- Commands the user already approved for this job that are not edits (an install, removing a file
+  the job itself made): list them in `{{approvals}}` so the worker asks you before it runs them and
+  you can say yes at once. They may still prompt in its window: no brief lets a command past the permission check, only the user's settings or a click there.
+- Before you brief a step in an outside service, check that its access path exists on this machine
+  (keys, a CLI login), and prefer the path an earlier job already used (2026-11-04: `railway run`).
+  Before you brief a job that needs a tool (an MCP server, Playwright, a connector), check the
+  session that gets it has it: a spawned worker may not have the tools your window has. Else brief
+  the fallback up front.
 - Fill these lines in every worker brief:
   - `{{deliverable}}`: code, a document or a browser run. "Check it in the browser" is a browser
     run, not tests to write.
   - `{{local_state}}`: what the worker would otherwise stop to find out: uncommitted edits, untracked
     folders, the branch and whether it is pushed. Write "none known" when there is none.
+  - `{{preconditions}}`: the services, tools, device state and shared tools the job depends on (the
+    Docker engine up, a server answering, a phone signed in, the shared browser free), each with its
+    state as you checked it just now and its one recovery command where you know one (`docker
+    desktop restart`). Write "None" when it needs none.
   - `{{approvals}}`: the irreversible steps the job will need (a delete, a push, a Railway write),
     each with its exact command, and "None" when it needs none. Ordinary writes are not listed:
     the user sets the worker's window to accept-edits once, when you send the brief (Relay
@@ -323,6 +344,10 @@ reviews only after that line, and starts on it without waiting for a new brief f
   - `{{peers}}`: the sessions it may message directly; `{{owners}}`: who owns each shared file or
     format.
   - `{{handoffs}}`: whom it sends `FINAL: <path>` to, or whose `FINAL:` starts it.
+  - `{{commit_handoff}}`: the session that commits this job's work, when it is not the worker.
+  - `{{project_standards}}`: the project's own rules the job touches (an APK's name and its
+    versionCode +1 per build, a doc number you reserved for this job, canvas images through
+    `<img src>`).
   - `{{tier_check}}`: for a fresh session, "First, reply with your model name."
   - `{{self_compact}}`: for a worker you spawn with `--self-compact`: "The master may compact your
     context between turns and clear it once your job is finished. After your `FINAL:`, nothing may
@@ -393,15 +418,17 @@ reviews only after that line, and starts on it without waiting for a new brief f
 ## Helper reference
 
 Every failure prints `puppet: <message>` and exits non-zero (2 = usage, 1 = operational). Use the
-printed line as your one-line log. Every command takes `--group <group>`, before or after the
+printed line as your one-line log. Run each `puppet` call as a command of its own, never chained with `;` or `&&`
+to another: each call prints its own outcome, and two chained calls read as one run that both
+succeeded and failed (2026-11-05 and 2026-11-06, four times). `puppet --help` prints the usage. Every command takes `--group <group>`, before or after the
 command: the roster becomes `workers-<group>.json` and the logs folder `<logs>/<group>`.
 
 | Command | Does | Prints |
 |---|---|---|
-| `measure <session> [--window N] [--compact-at N] [--json]` | tokens, % of the window and of the compaction point, state | `<name>  <tokens>  <pct>%  <state>  (window N from <source>)`, then `  <p>% of compaction point <C> (<source>)` (source `flag`, `env`, `observed` for the session's own transcript, `recorded` for its roster record, or `group` for the group's lowest) and `  WARN near compaction` when known; `?%  (window unknown)` when only the point is; or `<name>  0  0%  fresh  (no turns yet)` |
-| `list [--name <session>] [--window N] [--compact-at N] [--json]` | every session in your care, measured, plus unadopted background workers; `--name` prints one | one `measure` line each, then `model <model> <effort>` (`model fresh` before the first turn), kind, role and job; `gone` rows show the resume command, `changed` rows mean a new session id; `DONE? run finish` ends an active job's row whose session reported done; `mod on (<source>)` (then `switched to <model> <effort>` after a `switch`), `mod off (mode <mode>)` or `mod stale` ends the row of a session whose mod beat, and no `mod` means the plugin is not loaded there |
+| `measure <session> [--window N] [--json]` | tokens, % of the window (1,000,000 unless given), state | `<name>  <tokens>  <pct>%  <state>  (window N from <source>)` (source `flag`, `recorded`, `env` or `default`), or `<name>  0  0%  fresh  (no turns yet)` |
+| `list [--name <session>] [--window N] [--json]` | every session in your care, measured, plus unadopted background workers; `--name` prints one | one `measure` line each, then `model <model> <effort>` (`model fresh` before the first turn), kind, role and job; `gone` rows show the resume command, `changed` rows mean a new session id; `DONE? run finish` ends an active job's row whose session reported done; `mod on (<source>)` (then `switched to <model> <effort>` after a `switch`), `mod off (mode <mode>)` or `mod stale` ends the row of a session whose mod beat, and no `mod` means the plugin is not loaded there |
 | `adopt <session> [--role analyst\|master] [--window N] [--self-compact]` | takes a session into your care; `--role master` is you; also tells the session's mod its role, and `--self-compact` switches its mod on (only after the user's yes) | `adopted <name> (<kind>, <role>, clean or unknown) in <checkout>`, then `; self-compact switched on` with the flag |
-| `assign <session> <job> [--tier T] [--reuse \| --extend] [--scope F] [--git \| --no-git]` | records the job before you send it; `--reuse` refuses at 30% of the window and prints the compaction-point share too; `--extend` merges into the active job, checks the merged scope, keeps the job's git flag unless `--git` or `--no-git` is passed, and adds no label the job already has | `assigned <name>: <job>` (`extended …` with `--extend`), then the tier check: `ok` (`(switched)` after a `switch`), `unchecked`, or `MISMATCH … it runs <model> <effort>`, then `its mod is on: run switch …` where the mod is on, else the session-only paste lines (`/model`, then `s`; `/effort`, then `s`) |
+| `assign <session> <job> [--tier T] [--reuse \| --extend] [--scope F] [--git \| --no-git]` | records the job before you send it; `--reuse` refuses at 30% of the window and names `clear` before the `/clear` line; `--extend` merges into the active job, checks the merged scope, keeps the job's git flag unless `--git` or `--no-git` is passed, and adds no label the job already has | `assigned <name>: <job>` (`extended …` with `--extend`), then the tier check: `ok` (`(switched)` after a `switch`), `unchecked`, or `MISMATCH … it runs <model> <effort>`, then `its mod is on: run switch …` where the mod is on, else the session-only paste lines (`/model`, then `s`; `/effort`, then `s`) |
 | `finish <session>` | marks the job done | `finished <name>: <job>` |
 | `reopen <session>` | undoes `finish`: the last job is active again; refuses a job that is not done, or a checkout another job now edits | `reopened <name>: <job>` |
 | `pick <cwd> [--tier T] [--scope F] [--no-git]` | a clean session in that checkout: one matching the tier or whose mod is on first, the user's first | `<name>` and its tier check (after a `MISMATCH`, `its mod is on: run switch …`, else the paste lines: rule 12), or `no clean session for <checkout>; spawn one` |
@@ -434,6 +461,8 @@ command: the roster becomes `workers-<group>.json` and the logs folder `<logs>/<
 - "I'll just run the merge myself" → it is a job for a session.
 - "I'll rephrase what the user meant" → quote them verbatim, then add your reading.
 - "I'll try `claude <something>`" → only the calls this file names.
+- "I'll chain the two `puppet` calls in one command" → one call per command, so each outcome reads
+  on its own.
 - "I'll send it `/compact` as a message" → it arrives as plain text; use `puppet compact` where its mod is on, else let auto-compaction run, or give the user the line if they opted in.
 - "Its mod is loaded, so I'll compact or clear it" → only where the row says `mod on`: loaded is not on. `clear` only after `finish`, only a worker.
 - "I'll clear my own window, or the analyst's" → never: `clear` is for finished workers.

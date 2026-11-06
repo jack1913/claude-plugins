@@ -28,13 +28,16 @@ function spawnSetup({ live = [], toplevel = "C:\\Work\\Repo", bg } = {}) {
   });
   t.deps.platform = "win32";
   t.fresh = fresh;
-  t.brief = (text) => {
+  // A brief built from the template ends in its keep line; a blank text stays blank.
+  t.brief = (text, { end = true } = {}) => {
     const p = path.join(t.dir, "brief.md");
-    fs.writeFileSync(p, text);
+    fs.writeFileSync(p, end && text.trim() ? `${text}\n${WORKER_END}\n` : text);
     return p;
   };
   return t;
 }
+
+const WORKER_END = "<!-- end of the puppet-master worker brief: keep this line -->";
 
 const bgCalls = (t) => t.calls.filter((c) => c.args[0] === "--bg");
 
@@ -54,7 +57,7 @@ test("launches claude --bg --name with the brief verbatim", async () => {
     assert.equal(await main(["spawn", "w9", "C:\\work\\repo", t.brief(brief), "--effort", "high"], t.deps), 0);
     const [call] = bgCalls(t);
     assert.equal(call.cmd, "claude");
-    assert.deepEqual(call.args, ["--bg", "--name", "w9", "--effort", "high", brief]);
+    assert.deepEqual(call.args, ["--bg", "--name", "w9", "--effort", "high", `${brief}\n${WORKER_END}\n`]);
     assert.equal(call.opts.cwd, "C:\\work\\repo");
     assert.deepEqual(t.out, [`spawned w9 id=${t.fresh.id} in C:\\Work\\Repo (effort high)`]);
   } finally {
@@ -123,6 +126,30 @@ test("rejects a name outside [A-Za-z0-9._-]", async () => {
   try {
     assert.equal(await main(["spawn", "bad name", "C:\\work\\repo", t.brief("job"), "--effort", "high"], t.deps), 2);
     assert.equal(t.calls.length, 0);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("refuses a brief that lacks the template's last line, and starts nothing (carcare P-20261106-2, 2026-11-06 F-24/F-25)", async () => {
+  const t = spawnSetup();
+  try {
+    const common = "You are lane W. Read build-common.md first.";
+    assert.equal(await main(["spawn", "w9", "C:\\work\\repo", t.brief(common, { end: false }), "--effort", "high"], t.deps), 2);
+    assert.match(t.err.join("\n"), /does not end with the template's last line .*worker-brief\.md/);
+    const mid = t.brief(`${WORKER_END}\nmore text after it`, { end: false });
+    assert.equal(await main(["spawn", "w9", "C:\\work\\repo", mid, "--effort", "high"], t.deps), 2);
+    assert.equal(bgCalls(t).length, 0);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("accepts the analyst brief's last line too", async () => {
+  const t = spawnSetup();
+  try {
+    const p = t.brief("analyst job\n<!-- end of the puppet-master analyst brief: keep this line -->\n", { end: false });
+    assert.equal(await main(["spawn", "w9", "C:\\work\\repo", p, "--effort", "high"], t.deps), 0);
   } finally {
     t.cleanup();
   }
@@ -199,7 +226,7 @@ test("--tier creative passes --model opus --effort high before the brief, and re
   const t = spawnSetup();
   try {
     assert.equal(await main(["spawn", "w9", "C:\\work\\repo", t.brief("job"), "--tier", "creative"], t.deps), 0);
-    assert.deepEqual(bgCalls(t)[0].args, ["--bg", "--name", "w9", "--model", "opus", "--effort", "high", "job"]);
+    assert.deepEqual(bgCalls(t)[0].args, ["--bg", "--name", "w9", "--model", "opus", "--effort", "high", `job\n${WORKER_END}\n`]);
     assert.match(t.out[0], /\(model opus, effort high\)$/);
     assert.equal(t.readRegistry().workers.w9.tier, "creative");
   } finally {
@@ -211,7 +238,7 @@ test("--tier mechanical passes a non-Opus alias at medium", async () => {
   const t = spawnSetup();
   try {
     assert.equal(await main(["spawn", "w9", "C:\\work\\repo", t.brief("job"), "--tier", "mechanical"], t.deps), 0);
-    assert.deepEqual(bgCalls(t)[0].args, ["--bg", "--name", "w9", "--model", "sonnet", "--effort", "medium", "job"]);
+    assert.deepEqual(bgCalls(t)[0].args, ["--bg", "--name", "w9", "--model", "sonnet", "--effort", "medium", `job\n${WORKER_END}\n`]);
   } finally {
     t.cleanup();
   }
@@ -222,7 +249,7 @@ test("explicit --model and --effort win over the tier", async () => {
   try {
     const args = ["spawn", "w9", "C:\\work\\repo", t.brief("job"), "--tier", "creative", "--model", "fable", "--effort", "max"];
     assert.equal(await main(args, t.deps), 0);
-    assert.deepEqual(bgCalls(t)[0].args, ["--bg", "--name", "w9", "--model", "fable", "--effort", "max", "job"]);
+    assert.deepEqual(bgCalls(t)[0].args, ["--bg", "--name", "w9", "--model", "fable", "--effort", "max", `job\n${WORKER_END}\n`]);
   } finally {
     t.cleanup();
   }

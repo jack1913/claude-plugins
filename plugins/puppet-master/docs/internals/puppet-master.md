@@ -45,9 +45,8 @@ All three scripts use Node built-ins only, with no npm and no `package.json`.
   tells the master to do it or it is a read-only check of a session's report.
 - **One job per context, unless reused on purpose.** By default a session that held a job is not given another
   (`assign` refuses it): different work in one context gets mixed up. `assign --reuse` gives a `done` session its next
-  job only while it measures under 30% of its window, the figure the user's status line shows (of its compaction point
-  only when the window is unknown): on 2026-11-01 a session at 19% of its window was refused at 88% of its compaction
-  point. Above that, the master gives the user the session's `/clear` line first, and the refusal prints both shares.
+  job only while it measures under 30% of its window (1M unless given). Above that, the refusal says to `clear` it
+  where its mod is on, else to give the user the session's `/clear` line.
   The record keeps every job in `jobs[]`. `assign --extend` adds work to the job a session holds instead: the label
   and scope merge and the start stays. `reopen` undoes a `finish` made too early, so nobody edits `workers.json` by
   hand.
@@ -85,8 +84,7 @@ All three scripts use Node built-ins only, with no npm and no `package.json`.
   `--discard-unpushed` or `--force-remove-worktree`: if it refuses, the user decides.
 - **Compaction is measured and happens at task boundaries only.** Compact an idle session at 30% or more of its window
   when the job continues; at 50% or more, ask a working session to stop at its next boundary; never compact mid-task;
-  a finished job is closed, never compacted. An automatic threshold that can fire mid-task is not the mechanism, so
-  the helper warns before one fires (`WARN near compaction`, from 80% of the session's compaction point). A
+  a finished job is closed, never compacted. An automatic threshold that can fire mid-task is not the mechanism. A
   background worker is compacted by `compact` where its mod is on, else by `cycle`. A window the user opened has no
   remote stop and a message cannot compact it, so, where its mod is not on, the master lets its auto-compaction run
   (2026-11-01: four hand-pasted `/compact` lines were the user's chore, while two auto-compactions did no harm) and
@@ -165,17 +163,11 @@ Things that shaped the helper:
 - Only the last line of a transcript may be unparseable (the session may be mid-write). A bad line anywhere else is an
   error.
 - The window comes from `--window <tokens>`, else the window the session's last `cycle` or `adopt --window`
-  recorded, else `PUPPET_CONTEXT_WINDOW`. With none of them and no compaction point either, `measure` exits 1; it
-  never guesses a default. `list` shows such a row as `?%` and `(window unknown)` and exits 0, so a status check
-  never fails on it.
-- The **compaction point** is the size at which the session auto-compacts. It comes from `--compact-at <tokens>`,
-  else `PUPPET_COMPACT_AT`, else the session's own smallest `preTokens` of an automatic `compact_boundary`: in its
-  transcript (source `observed`), or kept on its roster record as `compactAt` (source `recorded`, so a `clear` does not
-  lose it). A session never compacted yet is measured against the group's lowest, kept in the registry as
-  `observedCompactAt` (source `group`). The point differs per session: on 2026-11-03 the analyst compacted at 208,192
-  tokens, one worker at 230,030 and another at 354,186, and that one lowest point read 221% for the master at 460,642
-  tokens, which had not compacted. It is never derived from the model: the window only shows in a compact's JSON result. With a point known, the measure line adds `<p>% of compaction point <tokens> (<source>)`,
-  and `WARN near compaction` from 80% of it. With a point and no window, the line shows `?%` and `(window unknown)`.
+  recorded, else `PUPPET_CONTEXT_WINDOW`, else 1,000,000 (source `default`). Context is given only as tokens and a %
+  of that window: the owner's rule of 2026-11-06. An earlier version also measured each session against the size
+  where it had auto-compacted (its "compaction point", with a `WARN` from 80% of it); that share read 115% for a
+  session at 239,498 tokens, 24% of its window, and blocked `assign --reuse` (2026-11-06), so it was removed along with
+  `--compact-at` and `PUPPET_COMPACT_AT`.
 - The **model and effort** are those of the last main-thread `api-request` record (`querySource`
   `repl_main_thread`): `params.model` and `params.output_config.effort`. `list` shows them as
   `model <model> <effort>`, or `model fresh` before the first request.
@@ -215,7 +207,7 @@ reads as an active background worker. The file is written atomically (a temp fil
   checkout (with `--scope` and `--no-git`, under the scope rule). With `--tier`, a session whose model and effort
   already match comes first, then an unchecked one, then a mismatch; within each, the user's windows come before
   background ones. `pick` prints the name, then the tier line.
-- `list` shows every roster session: name, tokens, percent, state, the compaction point and `WARN` when known, the
+- `list` shows every roster session: name, tokens, percent of the window, state, the
   model column, and for a roster session its kind, role, job state and job. `--name <session>` prints that one row.
   A session listed under a new `sessionId` (the user cleared or restarted it) is `changed`, and `assign` refuses it
   until it is adopted again. One no longer listed is `gone`, with its resume command, and its record is dropped.
@@ -489,7 +481,7 @@ captures of a real probe worker, plus `bg-stdout-color.txt` (the coloured `--bg`
 - window resolution and the registry;
 - the roster: adopt, assign, finish, pick, the one-editor lock, changed and gone sessions, and Windows paths that
   differ in case or hold spaces;
-- the compaction point, `WARN`, the model and effort column, `list --name` and the closed tombstone
+- tokens and % of the window only (no compaction point), the model and effort column, `list --name` and the closed tombstone
   (`compaction.test.mjs`); reuse, write scopes, tiers and the master's record (`dispatch.test.mjs`); groups (`group.test.mjs`);
 - `cycle`'s verified compaction and its stopped-worker messages, and `close` never passing a discard flag;
 - logs-folder resolution, redaction (including a secret past the excerpt cut), event extraction across a partial

@@ -159,6 +159,10 @@ function positiveInt(value, what) {
   return Number(s);
 }
 
+// The owner's rule: context is given in tokens and as a % of the 1M window, never as a share of
+// a compaction point (2026-11-06). A flag, a recorded window or PUPPET_CONTEXT_WINDOW overrides it.
+export const DEFAULT_WINDOW = 1000000;
+
 export function resolveWindow({ flag, recorded, env } = {}) {
   if (flag !== undefined) return { window: positiveInt(flag, "--window"), source: "flag" };
   if (recorded !== undefined) {
@@ -167,23 +171,8 @@ export function resolveWindow({ flag, recorded, env } = {}) {
   if (env !== undefined && env !== "") {
     return { window: positiveInt(env, "PUPPET_CONTEXT_WINDOW"), source: "env" };
   }
-  throw new PuppetError(
-    "no context window: pass --window <tokens>, run `cycle` once to record it, or set PUPPET_CONTEXT_WINDOW",
-  );
+  return { window: DEFAULT_WINDOW, source: "default" };
 }
-
-// The size at which a session gets compacted automatically: a flag, else PUPPET_COMPACT_AT,
-// else an automatic compaction seen (`observedSource` says whose: the session's own, its
-// roster record's, or the group's). Never guessed: null when none of the three is there.
-export function resolveCompactAt({ flag, env, observed, observedSource = "observed" } = {}) {
-  if (flag !== undefined) return { compactAt: positiveInt(flag, "--compact-at"), source: "flag" };
-  if (env !== undefined && env !== "") return { compactAt: positiveInt(env, "PUPPET_COMPACT_AT"), source: "env" };
-  if (Number.isInteger(observed) && observed > 0) return { compactAt: observed, source: observedSource };
-  return null;
-}
-
-// Within this share of the compaction point, measure warns.
-export const WARN_SHARE = 0.8;
 
 export function percent(tokens, window) {
   return Math.round((tokens / window) * 1000) / 10;
@@ -349,13 +338,8 @@ export function carryRenames(reg, agents) {
     const candidates = [...olds, ...(own ? [own] : [])];
     const best = candidates.reduce((b, c) => (rankOf(c[1]) > rankOf(b[1]) ? c : b));
     const window = candidates.map(([, r]) => r.window).find(Boolean);
-    const compactAt = candidates.map(([, r]) => r.compactAt).reduce((m, x) => minPositive(m, x), Infinity);
     for (const [n] of candidates) delete reg.workers[n];
-    reg.workers[a.name] = {
-      ...best[1],
-      ...(window ? { window } : {}),
-      ...(Number.isFinite(compactAt) ? { compactAt } : {}),
-    };
+    reg.workers[a.name] = { ...best[1], ...(window ? { window } : {}) };
     carried.add(a.name);
   }
   return carried;
@@ -388,14 +372,12 @@ function freshMeasure(agent) {
     tokenSource: "none",
     model: null,
     effort: null,
-    autoCompactAt: null,
   };
 }
 
-const minPositive = (a, b) => [a, b].filter((x) => Number.isInteger(x) && x > 0).reduce((m, x) => Math.min(m, x), Infinity);
-
-// windowOptional: a status listing shows an unknown size instead of failing on it.
-export function measureAgent(deps, agent, record, { window, compactAt, observed, windowOptional = false } = {}) {
+// Tokens and % of the window, nothing else: the owner's rule (2026-11-06) is tokens and % of the
+// 1M window, never a share of a compaction point.
+export function measureAgent(deps, agent, record, { window } = {}) {
   const file = findTranscript(projectsDir(deps), agent.sessionId, { optional: true });
   if (file === null) return freshMeasure(agent);
   const t = transcriptFacts(deps.fs.readFileSync(file, "utf8"));
@@ -403,84 +385,32 @@ export function measureAgent(deps, agent, record, { window, compactAt, observed,
     if (t.error instanceof PuppetError && t.error.code === "no-usage") return freshMeasure(agent);
     throw t.error;
   }
-  // The session's own point first (its transcript, or the roster record kept from before a
-  // clear); the group's lowest only for a session that has not been compacted yet. One
-  // session's point says nothing sure about another's: a compaction comes at 208,192, 230,030
-  // or 354,186 tokens depending on the session (2026-11-03).
-  const own = minPositive(t.autoCompactAt, record?.compactAt);
-  const mine = Number.isFinite(own)
-    ? { observed: own, observedSource: own === t.autoCompactAt ? "observed" : "recorded" }
-    : { observed: observed ?? undefined, observedSource: "group" };
-  const c = resolveCompactAt({ flag: compactAt, env: deps.env.PUPPET_COMPACT_AT, ...mine });
-  let w;
-  try {
-    w = resolveWindow({ flag: window, recorded: record?.window, env: deps.env.PUPPET_CONTEXT_WINDOW });
-  } catch (e) {
-    // With a known compaction point the window is only context; without one, no size
-    // can be judged, and the error stands.
-    if (!(e instanceof PuppetError) || (c === null && !windowOptional)) throw e;
-    w = { window: null, source: null };
-  }
+  const w = resolveWindow({ flag: window, recorded: record?.window, env: deps.env.PUPPET_CONTEXT_WINDOW });
   return {
     name: agent.name,
     id: agent.id,
     tokens: t.tokens,
-    percent: w.window === null ? null : percent(t.tokens, w.window),
+    percent: percent(t.tokens, w.window),
     window: w.window,
     windowSource: w.source,
-    compactAt: c?.compactAt ?? null,
-    compactSource: c?.source ?? null,
-    compactPercent: c === null ? null : percent(t.tokens, c.compactAt),
-    warn: c !== null && t.tokens >= WARN_SHARE * c.compactAt,
     state: workerState(agent),
     tokenSource: t.source,
     model: t.model,
     effort: t.effort,
     saysDone: t.saysDone,
-    autoCompactAt: t.autoCompactAt,
   };
 }
 
-// Keep the smallest automatic compaction any measured transcript showed (the group's, for a
-// session with none of its own), and each rostered session's own smallest on its record, so a
-// `clear` does not lose it. True when anything moved.
-function noteCompactions(reg, measures) {
-  let moved = false;
-  const seen = measures.reduce((m, x) => minPositive(m, x?.autoCompactAt), minPositive(reg.observedCompactAt));
-  if (Number.isFinite(seen) && seen !== reg.observedCompactAt) {
-    reg.observedCompactAt = seen;
-    moved = true;
-  }
-  for (const m of measures) {
-    const rec = m?.name === undefined ? undefined : reg.workers[m.name];
-    if (!rec || !Number.isInteger(m.autoCompactAt) || m.autoCompactAt <= 0) continue;
-    const own = minPositive(m.autoCompactAt, rec.compactAt);
-    if (own !== rec.compactAt) {
-      rec.compactAt = own;
-      moved = true;
-    }
-  }
-  return moved;
-}
-
-export function measureWorker(deps, key, { window, compactAt } = {}) {
+export function measureWorker(deps, key, { window } = {}) {
   const agents = listAgents(deps);
   const reg = loadRoster(deps, agents);
   const agent = findWorker(agents, key, reg.closed);
-  const record = reg.workers[agent.name];
-  const m = measureAgent(deps, agent, record, { window, compactAt, observed: reg.observedCompactAt });
-  if (noteCompactions(reg, [m])) saveRegistry(deps, reg);
-  return m;
+  return measureAgent(deps, agent, reg.workers[agent.name], { window });
 }
 
 export function measureLine(m) {
   if (m.state === "fresh") return `${m.name}  0  0%  fresh  (no turns yet)`;
-  const size =
-    m.window === null
-      ? `${m.name}  ${m.tokens}  ?%  ${m.state}  (window unknown)`
-      : `${m.name}  ${m.tokens}  ${m.percent}%  ${m.state}  (window ${m.window} from ${m.windowSource})`;
-  const point = m.compactAt === null ? "" : `  ${m.compactPercent}% of compaction point ${m.compactAt} (${m.compactSource})`;
-  return `${size}${point}${m.warn ? "  WARN near compaction" : ""}`;
+  return `${m.name}  ${m.tokens}  ${m.percent}%  ${m.state}  (window ${m.window} from ${m.windowSource})`;
 }
 
 // Model and effort of a measured session, `fresh` before its first turn.
@@ -493,6 +423,10 @@ export function modelLine(m) {
 
 // Windows caps a command line near 32767 characters, and the brief is one argument.
 const MAX_BRIEF = 30000;
+// The last line of worker-brief.md and analyst-brief.md. A brief `spawn` sends must end with it, so
+// the template's lines travel with every brief (2026-11-06: a hand-written common file dropped the
+// browser line, and a worker held the shared browser for hours).
+export const BRIEF_END_RE = /<!-- end of the puppet-master (?:worker|analyst) brief: keep this line -->\s*$/;
 const NAME_RE = /^[A-Za-z0-9._-]+$/;
 
 function pathApi(deps) {
@@ -754,7 +688,6 @@ export function adoptSession(deps, key, { role, window, selfCompact = false } = 
     job: null,
     jobState: isFresh(deps, agent) || isBriefOnly(deps, agent) ? "clean" : "unknown",
     ...(kept ? { window: kept } : {}),
-    ...(before?.compactAt ? { compactAt: before.compactAt } : {}),
   };
   reg.workers[agent.name] = rec;
   saveRegistry(deps, reg);
@@ -777,8 +710,8 @@ function rosterRecord(agents, reg, key) {
   return { agent, rec: normalize(rec) };
 }
 
-// Below this share of its window (the figure the user's status line shows; the compaction
-// point only when the window is unknown), a finished session may take the next job with --reuse.
+// Below this share of its window (1M unless given), a finished session may take the next job
+// with --reuse.
 export const REUSE_BELOW = 30;
 
 // One job's write fields with more work added: no scope on either side means the whole
@@ -812,17 +745,14 @@ export function assignJob(deps, key, label, { reuse = false, extend = false, sco
   if (reusable) {
     let m;
     try {
-      m = measureAgent(deps, agent, rec, { observed: reg.observedCompactAt });
+      m = measureAgent(deps, agent, rec);
     } catch (e) {
       if (!(e instanceof PuppetError)) throw e;
       throw new PuppetError(`cannot measure ${agent.name} for --reuse: ${e.message}`);
     }
-    const share = m.percent ?? m.compactPercent ?? 0;
-    if (share >= REUSE_BELOW) {
-      const of = m.percent === null ? "of its compaction point" : "of its window";
-      const point = m.percent !== null && m.compactPercent !== null ? ` (${m.compactPercent}% of compaction point ${m.compactAt})` : "";
+    if (m.percent >= REUSE_BELOW) {
       throw new PuppetError(
-        `${agent.name} is at ${share}% ${of}${point} (${m.tokens} tokens); --reuse needs under ${REUSE_BELOW}%: give the user its /clear line first`,
+        `${agent.name} is at ${m.percent}% of its window (${m.tokens} tokens); --reuse needs under ${REUSE_BELOW}%: \`clear ${agent.name}\` first when its list row says mod on, else give the user its /clear line`,
       );
     }
   }
@@ -940,6 +870,13 @@ export function spawnWorker(deps, name, cwd, briefFile, { job, scope, noGit = fa
   const launch = launchFlags({ tier, model, effort });
   const fields = jobFields(deps, { scope, noGit });
   const brief = readBrief(deps, briefFile);
+  if (!BRIEF_END_RE.test(brief)) {
+    throw new PuppetError(
+      `brief file ${briefFile} does not end with the template's last line (worker-brief.md or analyst-brief.md): ` +
+        "a brief holds the template's lines itself; a common file may add to it but never stands in for them",
+      2,
+    );
+  }
   const agents = listAgents(deps);
   const clash = agents.find((a) => a.name === name);
   if (clash) {
@@ -1375,8 +1312,8 @@ export async function switchSession(deps, key, opts = {}) {
 
 const USAGE = [
   "usage: puppet.mjs [--group <name>] <command> ...   (--group: this master's own roster and logs)",
-  "  measure <worker> [--window N] [--compact-at N] [--json]",
-  "  list [--name <session>] [--window N] [--compact-at N] [--json]",
+  "  measure <worker> [--window N] [--json]   (tokens and % of the window; 1000000 unless given)",
+  "  list [--name <session>] [--window N] [--json]",
   "  adopt <session> [--role worker|analyst|master] [--window N] [--self-compact]",
   "  assign <session> <job> [--reuse | --extend] [--scope <dir[,dir]>] [--git | --no-git] [--tier creative|mechanical]   (--git only means something with --extend)",
   "  finish <session>",
@@ -1394,11 +1331,14 @@ const USAGE = [
   "  summary [--day YYYY-MM-DD] [--json] [--logs ...]",
   "  decide <proposal> approve|reject|defer --tag <tag> --target <target> --hypothesis <text> [--logs ...]",
   "  shipped <proposal> <sha> [--logs ...]",
+  "  --help | -h | help   (this text)",
+  "Run each call as a command of its own: never chain two calls with ; or &&.",
 ].join("\n");
+
+const HELP = new Set(["--help", "-h", "help"]);
 
 const FLAGS = {
   "--window": true,
-  "--compact-at": true,
   "--name": true,
   "--reuse": false,
   "--extend": false,
@@ -1454,7 +1394,7 @@ function wantPositional(positional, n, cmd) {
 
 function cmdMeasure(deps, positional, flags) {
   wantPositional(positional, 1, "measure");
-  const m = measureWorker(deps, positional[0], { window: flags.window, compactAt: flags["compact-at"] });
+  const m = measureWorker(deps, positional[0], { window: flags.window });
   deps.out(flags.json ? JSON.stringify(m) : measureLine(m));
   return 0;
 }
@@ -1465,12 +1405,7 @@ function cmdList(deps, positional, flags) {
   const reg = loadRoster(deps, agents);
   const rows = [];
   let failed = false;
-  const opts = {
-    window: flags.window,
-    compactAt: flags["compact-at"],
-    observed: reg.observedCompactAt,
-    windowOptional: true,
-  };
+  const opts = { window: flags.window };
   const measure = (a, rec, extra) => {
     try {
       // A session whose mod never beat shows no mod column.
@@ -1507,7 +1442,7 @@ function cmdList(deps, positional, flags) {
   for (const a of agents.filter((x) => x.kind === "background" && !managed.has(x.sessionId))) {
     measure(a, undefined, {});
   }
-  if (noteCompactions(reg, rows) || pruned) saveRegistry(deps, reg);
+  if (pruned) saveRegistry(deps, reg);
   let shown = rows;
   if (flags.name !== undefined) {
     shown = rows.filter((r) => r.name === flags.name);
@@ -1801,6 +1736,14 @@ export async function main(argv, deps) {
       if (args.length < 2) throw new PuppetError(`--group needs a value\n${USAGE}`, 2);
       group = args[1];
       args = args.slice(2);
+    }
+    // Asking for help is not a usage error: the usage on stdout, exit 0 (2026-11-06: a guessed
+    // `--help` read as "unknown command").
+    // `help` only as the command word; after a command only the flags, so a focus text that says
+    // "help" stays a focus text.
+    if (HELP.has(args[0]) || (args[0] in COMMANDS && args.slice(1).some((a) => a === "--help" || a === "-h"))) {
+      deps.out(USAGE);
+      return 0;
     }
     const [cmd, ...rest] = args;
     if (!cmd || !(cmd in COMMANDS)) {

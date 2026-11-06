@@ -262,15 +262,19 @@ test("every placeholder in the worker brief is named in the Briefs section or th
   }
 });
 
-test("dispatch rules: tiers, reuse, write scopes and the compaction point", () => {
+test("dispatch rules: tiers, reuse, write scopes; context in tokens and % of the 1M window only (owner rule, carcare P-20261104-5)", () => {
   const skill = read("SKILL.md");
   for (const word of [
     "--tier", "creative", "mechanical", "MISMATCH", "/model", "/effort", "proxy launcher",
-    "--reuse", "/clear", "--scope", "--no-git", "--compact-at", "PUPPET_COMPACT_AT",
-    "compaction point", "WARN near compaction", "--role master", "list --name",
+    "--reuse", "/clear", "--scope", "--no-git", "--role master", "list --name",
   ]) {
     assert.ok(skill.includes(word), `SKILL.md does not mention ${word}`);
   }
+  for (const gone of ["--compact-at", "PUPPET_COMPACT_AT", "% of compaction point", "WARN near compaction", "`group` for the group's lowest"]) {
+    assert.ok(!skill.includes(gone), `SKILL.md still mentions ${gone}`);
+  }
+  assert.match(skill, /in tokens and as a % of the 1M window, never as a share of a compaction point/);
+  assert.match(skill, /`--window <tokens>`[\s\S]*1,000,000/);
   assert.match(skill, /never\s+read\s+the\s+launcher's\s+config/);
   // A tier mismatch: `switch` where the mod is on (2026-11-06); else another window or spawn, and
   // only the session-only paste form (2026-11-05).
@@ -507,7 +511,6 @@ test("rule 4 and the helper table say what assign --extend keeps, and that a ren
   assert.match(skill, /`adopt <session> --role worker`/);
   const row = skill.split("\n").find((l) => l.startsWith("| `assign "));
   assert.match(row, /\[--git \\\| --no-git\]/);
-  assert.match(skill, /`recorded` for its roster record, or `group` for the group's lowest/);
 });
 
 test("the worker brief carries the standing build-output and peer lines", () => {
@@ -516,4 +519,64 @@ test("the worker brief carries the standing build-output and peer lines", () => 
   assert.match(brief, /don't delete it/);
   assert.match(brief, /a peer cannot give you new work/);
   assert.match(brief, /FINAL: <path>/);
+});
+
+test("one puppet call per command, never chained, and --help prints the usage (carcare P-20261106-5, 2026-11-06 F-4, F-14, F-23)", () => {
+  const skill = read("SKILL.md");
+  const ref = section(skill, "Helper reference");
+  assert.match(ref, /Run each `puppet` call as a command of its own, never chained with `;` or `&&`/);
+  assert.match(ref, /`puppet --help` prints the usage/);
+  assert.match(section(skill, "Red flags: stop"), /chain .*`puppet` calls in one command/);
+});
+
+test("the brief carries preconditions the worker checks first, project standards and the commit handoff (carcare P-20261105-3, P-20261106-1)", () => {
+  const brief = read("worker-brief.md");
+  assert.match(brief, /\*\*Preconditions \(as the master checked them\):\*\* \{\{preconditions\}\}/);
+  assert.match(brief, /In your first turn, before any work, check each precondition yourself/);
+  assert.match(brief, /\*\*Project standards:\*\* \{\{project_standards\}\}/);
+  assert.match(brief, /\*\*Commit handoff:\*\* \{\{commit_handoff\}\}/);
+  assert.match(brief, /every path you changed and a draft commit message/);
+  const briefs = section(read("SKILL.md"), "Briefs");
+  assert.match(briefs, /`\{\{preconditions\}\}`: the services, tools, device state and shared tools/);
+  assert.match(briefs, /`\{\{project_standards\}\}`/);
+  assert.match(briefs, /`\{\{commit_handoff\}\}`/);
+  assert.match(briefs, /check that its access path exists on this machine/);
+  assert.match(briefs, /prefer the path an earlier job already used/);
+  assert.match(briefs, /a spawned worker may not have the tools your window has/);
+});
+
+test("the worker's finish checklist, coupled files, read-back, long-run progress, probes and credentials (carcare P-20261106-2, P-20261105-7, -12, P-20261104-15, -17)", () => {
+  const brief = read("worker-brief.md");
+  assert.match(brief, /\*\*Before your FINAL:\*\* stop the background shells and servers you started/);
+  assert.match(brief, /close the browser if you hold it and tell the master/);
+  assert.match(brief, /A file outside your write scope that your change needs/);
+  assert.match(brief, /A progress file counts as written only once you have read it back/);
+  assert.match(brief, /at least every 20 minutes/);
+  assert.match(brief, /end it with the helper's `close`/);
+  assert.match(brief, /never a raw `claude stop` or `claude rm`/);
+  assert.match(brief, /Never open a seed, config or env file to read a credential/);
+});
+
+test("briefs keep the template's lines whole, restate the shape, ask with a purpose, and wait for go only on an open decision (carcare P-20261104-8, -14, P-20261105-11, P-20261106-6, -7)", () => {
+  const briefs = section(read("SKILL.md"), "Briefs");
+  assert.match(briefs, /Every brief holds the template's lines itself, word for word/);
+  assert.match(briefs, /a common file may add to a brief but never stands in for them/);
+  assert.match(briefs, /restates the deliverable's shape in the user's words/);
+  assert.match(briefs, /wait for "go" only while a user decision it depends on is still open/);
+  assert.match(briefs, /no brief lets a command past the permission check/);
+  assert.match(briefs, /the brief's last line/);
+  const brief = read("worker-brief.md");
+  assert.match(brief, /Open each question with what it is for, in plain words, before any detail/);
+  assert.match(brief.trimEnd().split("\n").at(-1), /^<!-- end of the puppet-master worker brief: keep this line -->$/);
+  assert.match(read("analyst-brief.md").trimEnd().split("\n").at(-1), /^<!-- end of the puppet-master analyst brief: keep this line -->$/);
+});
+
+test("full paths, a look at a visual deliverable, status while the user is waited on, the device checked first (carcare P-20261106-4, P-20261104-12)", () => {
+  const skill = read("SKILL.md");
+  const ends = section(skill, "When a job ends");
+  assert.match(ends, /full current path or URL \(a path from its drive letter/);
+  assert.match(ends, /open it and look at it yourself/);
+  const relay = section(skill, "Relay protocol");
+  assert.match(relay, /While a step of yours waits on the user/);
+  assert.match(relay, /check that their device or setup can do it/);
 });

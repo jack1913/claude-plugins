@@ -85,8 +85,8 @@ Claude measures each session's context, and compacts only between tasks:
   focus naming the job and the next part, and tells it to continue. A worker also pauses and says so on its own
   once it passes about 150k tokens.
 - Before compacting a worker above 50%, Claude tells you its size and that a compaction can cost close to a dollar.
-- Once Claude has seen a session auto-compact, it knows the size where that happens. From 80% of it, a session's line
-  ends in `WARN near compaction`.
+- Claude gives a session's size in tokens and as a share of a 1,000,000-token window, unless you tell it your
+  window is another size.
 
 Ask "how are my sessions?" to see each one's size, model and effort, state and job.
 
@@ -146,13 +146,11 @@ there starts at 05:00, so work past midnight stays with its day. To start it at 
 
 | You see | Do this |
 | --- | --- |
-| `puppet: no context window` | Tell Claude the window size your status line shows, or set `PUPPET_CONTEXT_WINDOW` to it (in tokens) |
 | `puppet: cannot run claude` | Set `PUPPET_CLAUDE_BIN` to the full path of the `claude` executable |
 | `already editing` | Another session works in that folder. Wait for it to finish, use a second clone, or give both jobs separate folders |
 | `one job per context` | That session already did a job. Claude can reuse it while it is small; otherwise clear it and tell Claude, or let Claude start a worker |
 | `MISMATCH … tier …` | Where that window's mod is on, Claude switches it. Elsewhere, let Claude start a worker on the right tier, or keep the window: run `/model` and press `s` on the row Claude names, then `/effort` and press `s` at the level |
 | The status line shows the old model after a switch | Expected: the status line and the session's own answer keep the model it started with. The session list shows the model in use |
-| `WARN near compaction` | That session is close to auto-compacting. Let it finish its task, then compact or clear it as Claude suggests |
 | `no clean session for <folder>; spawn one` | None of your sessions is free there; Claude starts a worker |
 | `changed (new session id …)` | The window was cleared or restarted. Tell Claude whether it is clean now |
 | `just compacted (auto); its size is known after its next turn` | Wait for that session's next answer, then ask again |

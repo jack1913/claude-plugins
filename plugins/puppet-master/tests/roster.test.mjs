@@ -38,7 +38,7 @@ function setup(agents, { toplevel = {} } = {}) {
   t.deps.platform = "win32";
   t.brief = (text) => {
     const p = path.join(t.dir, "brief.md");
-    fs.writeFileSync(p, text);
+    fs.writeFileSync(p, `${text}\n<!-- end of the puppet-master worker brief: keep this line -->\n`);
     return p;
   };
   return t;

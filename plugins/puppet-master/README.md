@@ -62,7 +62,6 @@ puppet-master adds one skill and one small mod. It adds no agents or servers.
 | --- | --- |
 | `/puppet-master:puppet-master` doesn't start when you ask in words | Type the command. It only runs when typed |
 | A background worker can't edit files | Add `"worktree": { "bgIsolation": "none" }` to your own `~/.claude/settings.json` |
-| `puppet: no context window` | Tell Claude the window size your status line shows, or set `PUPPET_CONTEXT_WINDOW` to it, in tokens |
 
 More: [Troubleshooting](docs/manual/reference/troubleshooting.md).
 

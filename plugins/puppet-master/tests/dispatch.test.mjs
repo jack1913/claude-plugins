@@ -70,7 +70,7 @@ test("a finished session takes the next job only with --reuse, and the record ke
   }
 });
 
-test("--reuse refuses an active job, the analyst, a large context and an unmeasurable one", () => {
+test("--reuse refuses an active job, the analyst and a large context", () => {
   const t = setup([interactive("u1", 1), interactive("u2", 2, "C:\\Work\\Other")]);
   try {
     adoptSession(t.deps, "u1");
@@ -80,7 +80,6 @@ test("--reuse refuses an active job, the analyst, a large context and an unmeasu
     assert.throws(() => assignJob(t.deps, "u1", "two", { reuse: true }), /already holds "one"/);
     finishJob(t.deps, "u1");
     t.writeTranscript(t.deps.agents[0].sessionId, turn(80000));
-    assert.throws(() => assignJob(t.deps, "u1", "two", { reuse: true }), /cannot measure u1 for --reuse: no context window/);
     t.deps.env.PUPPET_CONTEXT_WINDOW = "200000";
     assert.throws(() => assignJob(t.deps, "u1", "two", { reuse: true }), /u1 is at 40% of its window .*--reuse needs under 30%.*\/clear/);
   } finally {
@@ -88,17 +87,14 @@ test("--reuse refuses an active job, the analyst, a large context and an unmeasu
   }
 });
 
-test("--reuse measures the window, not the compaction point, and a refusal prints both shares", () => {
-  const t = setup([interactive("u1", 1), interactive("u2", 2, "C:\\Work\\Other")], {
-    PUPPET_CONTEXT_WINDOW: "1000000",
-    PUPPET_COMPACT_AT: "216000",
-  });
+test("--reuse measures the 1M window only, and a refusal names clear before the /clear line (carcare 2026-11-06 F-11)", () => {
+  // No window given: 1M. 2026-11-06: f6 at 239498 tokens was refused as "115% of its compaction point".
+  const t = setup([interactive("u1", 1), interactive("u2", 2, "C:\\Work\\Other")], { PUPPET_COMPACT_AT: "216000" });
   try {
     adoptSession(t.deps, "u1");
     assignJob(t.deps, "u1", "one");
     finishJob(t.deps, "u1");
-    // 190000 tokens: 19% of the window the status line shows, 88% of the compaction point.
-    t.writeTranscript(t.deps.agents[0].sessionId, turn(190000));
+    t.writeTranscript(t.deps.agents[0].sessionId, turn(239498));
     assert.equal(assignJob(t.deps, "u1", "two", { reuse: true }).jobState, "active");
     adoptSession(t.deps, "u2");
     assignJob(t.deps, "u2", "one");
@@ -106,7 +102,9 @@ test("--reuse measures the window, not the compaction point, and a refusal print
     t.writeTranscript(t.deps.agents[1].sessionId, turn(400000));
     assert.throws(
       () => assignJob(t.deps, "u2", "two", { reuse: true }),
-      /u2 is at 40% of its window \(185\.2% of compaction point 216000\)/,
+      (e) =>
+        /^u2 is at 40% of its window \(400000 tokens\); --reuse needs under 30%: `clear u2` first when its list row says mod on, else give the user its \/clear line$/.test(e.message) &&
+        !/compaction point/.test(e.message),
     );
   } finally {
     t.cleanup();
@@ -305,7 +303,7 @@ test("pick and spawn follow the same scope rule", async () => {
     assignJob(t.deps, "u1", "draw", { scope: "brand" });
     assert.equal(pickSession(t.deps, REPO, { scope: "research", noGit: true }).name, "u2");
     const brief = path.join(t.dir, "b.md");
-    fs.writeFileSync(brief, "do it");
+    fs.writeFileSync(brief, "do it\n<!-- end of the puppet-master worker brief: keep this line -->\n");
     assert.throws(() => spawnWorker(t.deps, "w9", REPO, brief, { effort: "high" }), /already editing .*unless both jobs pass --scope/);
     const w = spawnWorker(t.deps, "w9", REPO, brief, { scope: "docs", noGit: true, effort: "high" });
     assert.deepEqual(t.readRegistry().workers[w.name].scope, ["docs"]);

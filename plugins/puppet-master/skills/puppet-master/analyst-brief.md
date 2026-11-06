@@ -61,3 +61,5 @@ against one is flagged to the user, and you never propose a change to it.
    - the friction it should reduce (its hypothesis).
 4. **Flagged for you**: the summary's instrument findings, as they are.
 5. **Earlier proposals**: the summary's lines on approved and shipped proposals.
+
+<!-- end of the puppet-master analyst brief: keep this line -->
