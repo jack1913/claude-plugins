@@ -1347,13 +1347,14 @@ def test_a_report_in_an_ignored_folder_is_a_loose_report(tmp_path):
     assert f"not in git, deleted with the plan (it will not come back): \"{LOOSE}\"" in r.stdout
 
 
+@pytest.mark.requires_macos
 def test_a_file_named_decomposed_on_disk_and_committed_is_known_to_git(tmp_path):
     p = make(tmp_path)
     nfd = "rounds/r2/ża.png"
     p.write(nfd, b"png")
     p.commit()
-    if p.git("config", "--bool", "core.precomposeunicode", check=False).stdout.strip() != "true":
-        pytest.skip("git here does not precompose names (not macOS)")
+    # git init on macOS sets core.precomposeunicode; without it this test proves nothing, so it fails rather than skips
+    assert p.git("config", "--bool", "core.precomposeunicode", check=False).stdout.strip() == "true"
     r = p.run()
     assert r.returncode == 0, r.stderr
 

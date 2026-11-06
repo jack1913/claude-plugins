@@ -6,6 +6,13 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-06
+
+Fixes from the same client's later rounds. `cleanup` takes old rounds out of a project through git, three book tools replace
+the one-off chapter scripts, and a chapter can carry an open item. The page check gains two rows for the first screen: what
+fits in it, and what moves when the page opens. `site review-status` says when a page needs a cold review, and
+`capture --reveal` now walks pages and boxes that scroll themselves.
+
 ### Added
 
 - `brand-creator cleanup` takes old round folders out of a project through git, so you no longer type a removal line yourself. It first shows a plan
