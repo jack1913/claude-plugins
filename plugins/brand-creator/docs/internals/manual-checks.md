@@ -445,7 +445,9 @@ online.
 **Steps.** After the first push, read the validate job's log: it must run (not skip) `claude plugin validate --strict`
 and the quick tests with no skip, and the `brand-creator` verdict must pass. Record the run URL and the result. The
 workflow had macOS jobs until 0.7.0 and the three Linux Docker jobs until 0.9.0; both now run by hand
-([Release run](#release-run)). The quick-check workflow has not run on GitHub yet.
+([Release run](#release-run)). The quick-check workflow first ran on 2026-11-06, run 42287154008 (started by hand, after
+the account could not start Actions jobs for the push) on commit 9473ac1: `validate` passed in a minute, and the
+verdict passed.
 
 **Last run:** 2026-10-25, runs 40170278108 (push) and 40171295112 (by hand) on commit b621a96: every job passed and
 printed its line (`LINUX RUN OK`, each half's `SMOKE PASSED (part ...)`, `Validation passed`), and the verdict read
