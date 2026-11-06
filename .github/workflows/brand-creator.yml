@@ -1,26 +1,23 @@
 # Continuous integration for the brand-creator plugin, in the monorepo jack1913/claude-plugins (GitHub reads only the root .github/).
 # Every job that checks out the repository runs in plugins/brand-creator (the verdict needs no checkout); the workflow starts only on changes under that folder or to this file.
 #
-#   linux-suite  three parallel jobs, one per part of the suite (pytest, node, smoke), each building tests/docker/Dockerfile
-#             (Debian 13, Python 3.13, Node 24, resvg, ImageMagick, Ghostscript, poppler, ripgrep, potrace, fonts) and running
-#             tests/docker/run.sh with BRAND_CREATOR_TEST_PARTS: `brand-creator setup` (npm ci + Chromium), then that part, on the paths
-#             that apply off macOS, within a deadline inside the container (BRAND_CREATOR_SUITE_MINUTES) that ends before the job's.
-#             The macOS-only tests are NOT VERIFIED there by design; tests/docker/verify_log.py accepts exactly those and fails on any
-#             other skip, and on a part that left no summary. The run log and pytest's JUnit file are kept as an artifact.
-#   validate  `claude plugin validate --strict` through the Claude Code CLI installed from npm. On the pinned CLI (2.1.302) it checks the
-#             plugin manifest only: a skill with broken YAML frontmatter or an unknown key in hooks.json still passes it.
-#             The skill and agent frontmatter and hooks.json are checked by the repository's own tests (tests/test_skills.py,
-#             tests/test_agents_workflows.py, tests/test_guard.py), which run in the linux-suite pytest job. This job also runs the test that mutates
-#             plugin.json and expects the validator to catch it. If the CLI cannot be installed or started, the job fails: an
-#             unvalidated manifest never passes the verdict.
+# CI is kept to quick checks, a few minutes per run (docs/adr/ADR-0008-ci-runs-quick-checks-the-full-suite-runs-before-a-release.md).
+# The full suite (pytest, node and the smoke, on the Mac and in the Linux Docker image) runs on the maintainer's machine before
+# each release tag and is recorded in docs/internals/manual-checks.md ("Release run").
+#
+#   validate  `claude plugin validate --strict` through the Claude Code CLI installed from npm, then the quick tests: the
+#             manifest and version pins (tests/test_static.py, its validator mutation test included), the skill and agent
+#             frontmatter (tests/test_skills.py, tests/test_agents_workflows.py), the hooks (tests/test_guard.py), the eval cases
+#             (tests/test_evals.py), this workflow's shape (tests/test_docker_ci.py) and the paid-test guard (tests/test_paid_guard.py).
+#             BRAND_CREATOR_REQUIRE_ALL=1 turns any skip into a failure; the two tests that need a set-up data directory or the
+#             private denylist are deselected by name. If the CLI cannot be installed or started, the job fails: an unvalidated
+#             manifest never passes the verdict.
 #   brand-creator  the workflow's verdict: passes only when every other job passed (a failed, cancelled or skipped job is never green).
 #             A release tag brand-creator--v* is accepted only on a commit where this check and docs passed
 #             (.github/rulesets/brand-creator-release-tags.json, docs/adr/ADR-0005-release-tags-need-a-passing-ci-verdict.md).
 #
 # `claude plugin eval` is never run here (it is billed); the evals are run by hand, see docs/internals/manual-checks.md.
-# No job runs on macOS: GitHub's hosted macOS runners queued for long and dropped jobs unstarted ("not acquired by Runner"),
-# which held release tags. The macOS-only parts (the Apple-tool tests and the Acme smoke with `emit apple`) are run on a Mac
-# before each release instead: docs/internals/manual-checks.md, "macOS release run".
+# No job runs on macOS or builds the Docker image.
 name: brand-creator
 
 on:
@@ -53,41 +50,6 @@ env:
   CLAUDE_CODE_VERSION: "2.1.302"
 
 jobs:
-  linux-suite:
-    name: "linux (${{ matrix.part }})"
-    runs-on: ubuntu-24.04
-    timeout-minutes: ${{ matrix.job-minutes }}
-    strategy:
-      fail-fast: false
-      matrix:
-        # suite-minutes: the deadline inside the container; job-minutes leaves room for the image, setup and the log check
-        include:
-          - part: pytest
-            suite-minutes: 45
-            job-minutes: 60
-          - part: node
-            suite-minutes: 15
-            job-minutes: 30
-          - part: smoke
-            suite-minutes: 30
-            job-minutes: 45
-    steps:
-      - uses: actions/checkout@v5
-      - name: Build the Linux image and run one part of the suite inside it
-        run: tests/docker/run.sh
-        env:
-          BRAND_CREATOR_TEST_WORKERS: "4"
-          BRAND_CREATOR_TEST_PARTS: ${{ matrix.part }}
-          BRAND_CREATOR_SUITE_MINUTES: ${{ matrix.suite-minutes }}
-          BRAND_CREATOR_TEST_OUT: ${{ runner.temp }}/bc-out
-      - name: Keep the run log and the JUnit file
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: linux-${{ matrix.part }}-reports
-          path: ${{ runner.temp }}/bc-out
-          retention-days: 14
-
   validate:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -107,8 +69,13 @@ jobs:
           claude --version
       - name: claude plugin validate --strict
         run: claude plugin validate "$GITHUB_WORKSPACE/plugins/brand-creator" --strict
-      - name: The validator catches a broken manifest (mutation test)
-        run: uv run --no-project --with-requirements tests/requirements.txt python -m pytest tests/test_static.py -q -k claude_plugin_validate
+      - name: Quick tests (any skip fails)
+        run: |
+          uv run --no-project --with-requirements tests/requirements.txt python -m pytest -q -p no:cacheprovider \
+            tests/test_static.py tests/test_skills.py tests/test_agents_workflows.py tests/test_guard.py \
+            tests/test_evals.py tests/test_docker_ci.py tests/test_paid_guard.py \
+            --deselect tests/test_static.py::test_anonymisation \
+            --deselect tests/test_evals.py::test_the_kit_in_the_kit_fixture_is_current_for_the_project_it_sits_in
         env:
           BRAND_CREATOR_REQUIRE_ALL: "1"
 
@@ -116,7 +83,6 @@ jobs:
   # count as passed in a required check) and passes only when every job it needs passed.
   brand-creator:
     needs:
-      - linux-suite
       - validate
     if: ${{ always() }}
     runs-on: ubuntu-24.04

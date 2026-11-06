@@ -22,7 +22,7 @@ BRAND_CREATOR_DATA=<set-up data dir> tests/run-all.sh
 - `tests/run-all.sh` runs pytest and `node --test`. `--smoke` adds two end-to-end runs: the Acme smoke
   (`tests/smoke/acme.sh`, a synthetic brand through every pack) and the Quick-tier smoke (`tests/smoke/quick.sh`, a
   made-up bakery on a PATH with no Apple tools and no git, ending with the short guide).
-- `BRAND_CREATOR_TEST_PARTS=pytest` (or `node`, `smoke`, comma-separated) runs only those parts, as each CI job does. An
+- `BRAND_CREATOR_TEST_PARTS=pytest` (or `node`, `smoke`, comma-separated) runs only those parts, as each Docker run of the release run does. An
   unknown part, or a choice that runs nothing, is a usage error (exit 2).
 - `ACME_SMOKE_PART=finish` (or `rest`) runs one half of the Acme smoke, as each macOS smoke job does: the build up to the
   frozen round, then `tools/finish.sh` alone, or every section after it. The default, `all`, runs both.
@@ -72,21 +72,20 @@ still checked. `BRAND_CREATOR_TEST_OUT=<dir>` keeps the run log and pytest's JUn
 
 ## CI
 
-`.github/workflows/brand-creator.yml` at the root of the monorepo runs these jobs, all in parallel except the verdict. Each job
+`.github/workflows/brand-creator.yml` at the root of the monorepo runs these jobs, the verdict after the other. Each job
 that checks out the repository runs in `plugins/brand-creator/`; the verdict needs no checkout.
 It starts on a push to `main` or a pull request that changes `plugins/brand-creator/` or the workflow file, never on a tag.
 
 | Job | What it runs |
 | --- | --- |
-| linux (pytest), linux (node), linux (smoke) | one part of the Docker suite each (`tests/docker/run.sh` with `BRAND_CREATOR_TEST_PARTS`), each within its own deadline; the run log and the JUnit file are kept as an artifact |
-| validate | `claude plugin validate --strict` on the plugin, and the validate test in `tests/test_static.py` |
+| validate | `claude plugin validate --strict` on the plugin, then the quick tests (`test_static`, `test_skills`, `test_agents_workflows`, `test_guard`, `test_evals`, `test_docker_ci`, `test_paid_guard`) with any skip a failure; the two tests that need a set-up data directory or the private denylist are deselected by name |
 | brand-creator | the verdict: passes only when every other job passed (a failed, cancelled or skipped job is never green). A release tag `brand-creator--v*` is accepted only on a commit where it and `docs` passed ([Release a plugin](../../../../docs/internals/release.md#the-tag-rulesets)) |
 
 The workflow never runs `claude plugin eval`: it is billed. See [Evals](evals.md).
 
-No job runs on macOS. GitHub's hosted macOS runners queued for long and dropped jobs before they started, which held
-release tags. The macOS-only parts, the Apple-tool tests and the Acme smoke with `emit apple`, are run on a Mac before
-each release instead ([macOS release run](manual-checks.md#macos-release-run)).
+No job runs on macOS or builds the Docker image: CI is kept to a few minutes per push
+([ADR-0008](../../../../docs/adr/ADR-0008-ci-runs-quick-checks-the-full-suite-runs-before-a-release.md)). The full suite,
+on a Mac and in the Linux Docker image, runs before each release instead ([Release run](manual-checks.md#release-run)).
 
 ## Validate
 

@@ -82,7 +82,7 @@ def verify(tmp_path, text, rc=0, env=None):
     log = tmp_path / "run.log"
     log.write_text(text, encoding="utf-8")
     import os
-    base = {k: v for k, v in os.environ.items() if k != "BRAND_CREATOR_TEST_PARTS"}   # the CI job running these tests sets its own part; these logs are whole runs
+    base = {k: v for k, v in os.environ.items() if k != "BRAND_CREATOR_TEST_PARTS"}   # a run of one part (tests/docker/run.sh) sets its own part; these logs are whole runs
     return subprocess.run([sys.executable, str(VERIFY), str(log), str(rc)], capture_output=True, text=True, env={**base, "BRAND_CREATOR_DENYLIST": "x", **(env or {})})
 
 
@@ -126,13 +126,14 @@ def test_the_denylist_skip_is_expected_only_when_no_denylist_was_mounted(tmp_pat
 
 # ---------------------------------------------------------------- the workflow
 
-def test_ci_workflow_runs_linux_and_validate_never_macos_and_never_the_billed_eval():
+def test_ci_workflow_runs_only_the_quick_checks_never_macos_docker_or_the_billed_eval():
     text = ci_text()
-    for job in ("linux-suite:", "validate:", "brand-creator:"):
-        assert re.search(rf"^  {job}$", text, re.M), job
-    assert not re.search(r"runs-on: *macos", text) and "macos-suite" not in text   # hosted macOS runners dropped jobs and held tags: the Mac run is by hand
-    assert '"macOS release run"' in text
-    assert "tests/docker/run.sh" in text                                             # the same entry point a developer uses
+    jobs = re.findall(r"^  ([\w-]+):$", text[text.index("\njobs:\n"):], re.M)
+    assert jobs == ["validate", "brand-creator"], jobs                               # CI minutes: the full suite runs before a release, by hand (ADR-0008)
+    assert not re.search(r"runs-on: *macos", text) and "macos-suite" not in text
+    code = "\n".join(ln for ln in text.splitlines() if not ln.lstrip().startswith("#"))
+    assert "tests/docker" not in code and "docker " not in code and "run-all.sh" not in code   # no image build, no full suite
+    assert '"Release run"' in text
     assert "claude plugin validate" in text and "--strict" in text
     validate = text[text.index("\n  validate:\n"):text.index("\n  brand-creator:\n")]
     assert "claude --version" in validate and "available=" not in validate and "if:" not in validate   # no CLI fails the job: the verdict never passes an unvalidated manifest
@@ -162,7 +163,7 @@ def test_ci_workflow_values_are_valid_yaml():
     assert not bad, "\n".join(bad)
 
 
-# ---------------------------------------------------------------- the suite in parts (one CI job each), its deadlines and its time limits
+# ---------------------------------------------------------------- the suite in parts (one Docker run each), its deadlines and its time limits
 
 PYTEST_ONLY = GOOD[:GOOD.index("ℹ tests 53")]        # what a pytest-only run prints
 NODE_ONLY = GOOD[GOOD.index("ℹ tests 53"):GOOD.index("\n   NOT VERIFIED: the claude CLI")] + "\n"   # what a node-only run prints
@@ -200,16 +201,18 @@ def test_run_all_refuses_a_selection_that_names_an_unknown_part_or_runs_nothing(
     assert r.returncode == 2 and why in r.stderr, r.stdout + r.stderr
 
 
-def test_ci_runs_each_part_in_its_own_job_and_the_verdict_passes_only_when_every_job_did():
+def test_ci_quick_tests_fail_on_any_skip_deselect_only_the_two_that_need_local_files_and_the_verdict_needs_every_job():
     text = ci_text()
-    job = text[text.index("  linux-suite:"):text.index("\n  validate:\n")]
-    verdict = text[text.index("\n  brand-creator:\n"):]                                        # the check the release-tag ruleset requires
-    parts = re.findall(r"- part: (\w+)\n\s+suite-minutes: (\d+)\n\s+job-minutes: (\d+)", job)
-    assert sorted(p for p, _, _ in parts) == ["node", "pytest", "smoke"], parts
-    for part, suite, jobm in parts:
-        assert int(suite) + 10 <= int(jobm), f"{part}: the deadline inside the container must end well before the job's ({suite} vs {jobm} minutes)"
-    assert "fail-fast: false" in job and "BRAND_CREATOR_TEST_PARTS: ${{ matrix.part }}" in job and "BRAND_CREATOR_SUITE_MINUTES: ${{ matrix.suite-minutes }}" in job
-    assert "if: ${{ !cancelled() }}" in job and "uses: actions/upload-artifact@v" in job        # the log and the JUnit file are kept, a failing run's too
+    validate = text[text.index("\n  validate:\n"):text.index("\n  brand-creator:\n")]
+    verdict = text[text.index("\n  brand-creator:\n"):]                                     # the check the release-tag ruleset requires
+    step = validate[validate.index("- name: Quick tests"):]
+    assert 'BRAND_CREATOR_REQUIRE_ALL: "1"' in step                                          # a skip in CI is a failure, never a quiet pass
+    files = re.findall(r"\b(tests/test_\w+\.py)\b(?!::)", step)
+    assert files and all((ROOT / p).is_file() for p in files), files                        # every quick test file exists
+    assert "tests/test_static.py" in files and "tests/test_skills.py" in files and "tests/test_guard.py" in files
+    assert sorted(re.findall(r"--deselect (\S+)", step)) == [
+        "tests/test_evals.py::test_the_kit_in_the_kit_fixture_is_current_for_the_project_it_sits_in",   # needs a set-up data directory
+        "tests/test_static.py::test_anonymisation"]                                                      # needs the private denylist
     jobs = re.findall(r"^  ([\w-]+):$", text[text.index("\njobs:\n"):], re.M)
     needs = re.findall(r"^      - ([\w-]+)$", verdict[:verdict.index("\n    if:")], re.M)
     assert sorted(needs) == sorted(j for j in jobs if j != "brand-creator"), (jobs, needs)  # the verdict waits for every other job
@@ -265,7 +268,7 @@ def test_pytest_hands_waiting_tests_to_idle_workers_everywhere_it_runs_in_parall
 
 
 def test_the_verifier_tests_ignore_the_part_their_own_ci_job_runs(tmp_path, monkeypatch):
-    """The CI job that runs pytest sets BRAND_CREATOR_TEST_PARTS=pytest, and pytest's workers inherit it. The logs these tests write by
+    """A Docker run of the pytest part sets BRAND_CREATOR_TEST_PARTS=pytest, and pytest's workers inherit it. The logs these tests write by
     hand are whole runs, so verify() must not pass that on: with it, a failing node:test summary read as a pytest-only run and passed."""
     monkeypatch.setenv("BRAND_CREATOR_TEST_PARTS", "pytest")
     r = verify(tmp_path, GOOD.replace("ℹ fail 0", "ℹ fail 2"))

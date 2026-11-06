@@ -32,8 +32,8 @@ Why: [ADR-0002](../adr/ADR-0002-per-plugin-versions-and-tags.md).
    did not change never starts there, so start it by hand on `main`'s current commit with
    `gh workflow run <workflow>.yml --ref main` (`docs.yml`, or the plugin's own).
 
-   brand-creator's workflow runs no macOS job. Before its tag, run its suite on a Mac on that commit and record the
-   result: [macOS release run](../../plugins/brand-creator/docs/internals/manual-checks.md#macos-release-run).
+   brand-creator's workflow runs only quick checks. Before its tag, run its full suite on that commit, on a Mac and in
+   the Linux container, and record the result: [Release run](../../plugins/brand-creator/docs/internals/manual-checks.md#release-run).
 5. Dry-run the tag, from the repository root:
 
    ```bash

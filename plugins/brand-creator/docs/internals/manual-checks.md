@@ -29,7 +29,7 @@ proven.
 | [E-mail signature in real mail clients](#the-e-mail-signature-in-real-mail-clients) | never run | |
 | [A real Linux desktop session](#a-real-linux-desktop-session) | never run | |
 | [Windows](#windows) | never run | |
-| [macOS release run](#macos-release-run) | 2026-11-06, 0.9.0, the release commit's tree | passed |
+| [Release run](#release-run) | 2026-11-06, 0.9.0, the release commit's tree | passed |
 | [CI first run](#ci-first-run) | 2026-10-25, runs 40170278108 (push) and 40171295112 (by hand) on commit b621a96 | every job passed, the two macOS smoke halves and the `brand-creator` verdict included |
 
 ## Behaviour evals (`claude plugin eval`)
@@ -404,29 +404,34 @@ what fails; until then the [platform support](../manual/reference/platform-suppo
 
 **Last run:** never.
 
-## macOS release run
+## Release run
 
-**Why manual.** CI runs no macOS job: GitHub's hosted macOS runners queued for long and dropped jobs before they
-started ("not acquired by Runner"), which held release tags. The Apple-tool tests (`sips`, `iconutil`, `actool`,
-`assetutil`, the `.icon` pipeline) and the Acme smoke with `emit apple` run only on a Mac, so they run here, before every
-release tag.
+**Why manual.** CI runs only quick checks, never on macOS and never the Docker image
+([ADR-0008](../../../../docs/adr/ADR-0008-ci-runs-quick-checks-the-full-suite-runs-before-a-release.md)). The full suite
+runs here, before every release tag: on a Mac, where the Apple-tool tests (`sips`, `iconutil`, `actool`, `assetutil`, the
+`.icon` pipeline) and the Acme smoke with `emit apple` run, and in the Linux Docker image, where the off-macOS paths run.
 
-**Steps.** On a Mac with Xcode 26 or later, on the release commit with a clean tree, from the repository root:
+**Steps.** On a Mac with Xcode 26 or later and Docker, on the release commit with a clean tree, from the repository root:
 
 ```bash
 BRAND_CREATOR_DATA=<set-up data dir> plugins/brand-creator/tests/run-all.sh --smoke
+cd plugins/brand-creator
+BRAND_CREATOR_TEST_PARTS=pytest,node tests/docker/run.sh
+BRAND_CREATOR_TEST_PARTS=smoke tests/docker/run.sh --no-build
 ```
 
-It passes when pytest reports no failure and its NOT VERIFIED banner names no Apple tool (only the denylist skip, when
-`BRAND_CREATOR_DENYLIST` is not set), node reports `fail 0`, and both `SMOKE PASSED` and `QUICK SMOKE PASSED` are
-printed. Record the version, the commit, the date and the counts here before tagging.
+It passes when the Mac's pytest reports no failure and its NOT VERIFIED banner names no Apple tool (only the denylist
+skip, when `BRAND_CREATOR_DENYLIST` is not set), node reports `fail 0`, both `SMOKE PASSED` and `QUICK SMOKE PASSED` are
+printed, and each Docker run ends with `LINUX RUN OK`. Record the version, the commit, the date and the counts here before
+tagging.
 
 **Last run:** 2026-11-06, brand-creator 0.9.0, macOS 27.3, on the release commit's tree (only this record differs): pytest
 3312 passed, 1 skipped (the denylist), node 249 pass and 0 fail, `SMOKE PASSED` and `QUICK SMOKE PASSED`, on the first run.
 The Linux Docker run of the same tree printed `LINUX RUN OK` for pytest (3261 passed, 52 expected skips), node (249 pass)
 and the smoke. Its first try failed the log check on one skip that was not an expected NOT VERIFIED: a new cleanup test
 skipped itself off macOS with a plain `pytest.skip`. It now carries `requires_macos`, and `tests/test_cleanup.py` passed
-again on the Mac (135 passed) before the Linux rerun.
+again on the Mac (135 passed) before the Linux rerun. These runs were on ba62f02; the release commit after it changes only
+the CI (the workflow, `tests/test_docker_ci.py`, the docs), and its quick tests passed on the Mac (484 passed, no skip).
 
 The 0.7.0 run (2026-11-04) had one failure on its first `run-all.sh --smoke`,
 `test_social_cards_show_the_drawn_wordmark_and_the_dark_header_its_dark_file` (`emit social` exited 3 under the full parallel
@@ -437,9 +442,10 @@ load), which did not come back in five reruns or in this run; its cause was not 
 **Why manual.** `.github/workflows/brand-creator.yml` (at the root of the claude-plugins monorepo) runs only once the repository is pushed, and its action versions were not checked
 online.
 
-**Steps.** After the first push, read each job's log: each of the three Linux jobs (pytest, node, smoke) must end with the Docker run's `LINUX RUN OK` line, the validate
-job must run (not skip) `claude plugin validate --strict`, and the `brand-creator` verdict must pass. Record the run URL
-and the result. The workflow had macOS jobs until 0.7.0; they now run by hand ([macOS release run](#macos-release-run)).
+**Steps.** After the first push, read the validate job's log: it must run (not skip) `claude plugin validate --strict`
+and the quick tests with no skip, and the `brand-creator` verdict must pass. Record the run URL and the result. The
+workflow had macOS jobs until 0.7.0 and the three Linux Docker jobs until 0.9.0; both now run by hand
+([Release run](#release-run)). The quick-check workflow has not run on GitHub yet.
 
 **Last run:** 2026-10-25, runs 40170278108 (push) and 40171295112 (by hand) on commit b621a96: every job passed and
 printed its line (`LINUX RUN OK`, each half's `SMOKE PASSED (part ...)`, `Validation passed`), and the verdict read

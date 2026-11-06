@@ -16,7 +16,7 @@ description: "CI workflows: one per plugin plus marketplace.yml and docs.yml; pu
   `.claude-plugin/**`, because its tests live in the root `tests/` and
   `tests/test_plugin.py` reads `.claude-plugin/marketplace.json`.
 - Every workflow declares `permissions: contents: read` at the top level, and no job sets
-  its own permissions; jobs run on pinned images (`ubuntu-24.04`, `macos-26`), never a
+  its own permissions; jobs run on a pinned image (`ubuntu-24.04`; no job runs on macOS), never a
   label with `latest`.
 - Every job sets `timeout-minutes`, a whole number from 1 to 60 or a matrix value: GitHub's
   default is six hours, and a hung job holds its verdict, and every release tag that needs it,

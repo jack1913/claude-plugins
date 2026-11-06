@@ -64,9 +64,10 @@ bin/brand-creator --data <dir> setup --yes
 BRAND_CREATOR_DATA=<dir> tests/run-all.sh --smoke
 ```
 
-CI runs the same suite inside a Linux container (`tests/docker/run.sh`), one part (pytest, node, smoke) per parallel job, and
-on macOS the Apple-tool tests and the two halves of the Acme smoke, each in a job of its own
-(`.github/workflows/brand-creator.yml`). Its verdict, the `brand-creator` check, passes only when every job passed. More:
+CI runs only quick checks (`.github/workflows/brand-creator.yml`): `claude plugin validate --strict` and the static tests,
+about a minute, where any skip fails. Its verdict, the `brand-creator` check, passes only when every job passed. The full
+suite runs before each release tag, on a Mac and in the Linux container (`tests/docker/run.sh`)
+([ADR-0008](../adr/ADR-0008-ci-runs-quick-checks-the-full-suite-runs-before-a-release.md)). More:
 [its development notes](../../plugins/brand-creator/docs/internals/development.md).
 
 Without the data directory, the tests that need it print a "NOT VERIFIED" banner. A skip is not a pass.

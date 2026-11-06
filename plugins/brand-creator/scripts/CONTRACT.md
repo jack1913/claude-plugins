@@ -3138,7 +3138,5 @@ commands. Conventions:
 - **Off-macOS opt-ins.** `downscale` needs `--renderer=pillow|resvg` (or a recorded opt-in), `emit tauri` needs `--renderer pillow`; tests, the
   smoke and `finish.sh` (`DOWNSCALE_RENDERER`, `ICNS_RENDERER`) name them. Usage errors (exit 2) are reported before "cannot measure here"
   (exit 3), so a bad call gives the same answer on every OS.
-- **CI.** `.github/workflows/brand-creator.yml` (at the monorepo root, working directory `plugins/brand-creator`, started by a push to `main` or a pull request that changes that folder or the file, never by a tag): `linux-suite` (the Docker run, one job per part: pytest, node, smoke), `validate` (`claude plugin validate --strict` and the manifest-mutation test;
-  it fails when the CLI cannot be installed), `macos-suite` (one job for the `requires_macos` and `requires_actool` tests with REQUIRE_ALL=1,
-  and one for each half of the Acme smoke, `ACME_SMOKE_PART=finish` and `rest`), and `brand-creator`, the verdict: it passes only when every other
-  job passed, and a release tag `brand-creator--v*` is accepted only on a commit where it and `docs` passed. It never runs `claude plugin eval`.
+- **CI.** `.github/workflows/brand-creator.yml` (at the monorepo root, working directory `plugins/brand-creator`, started by a push to `main` or a pull request that changes that folder or the file, never by a tag): `validate` (`claude plugin validate --strict`, then the quick tests with REQUIRE_ALL=1, the two that need a set-up data directory or the denylist deselected by name;
+  it fails when the CLI cannot be installed) and `brand-creator`, the verdict: it passes only when every other job passed, and a release tag `brand-creator--v*` is accepted only on a commit where it and `docs` passed. No job runs on macOS or builds the Docker image; the full suite runs before each release (`docs/internals/manual-checks.md`, "Release run"). It never runs `claude plugin eval`.
