@@ -22,7 +22,7 @@ from typing import Callable, NamedTuple
 EXIT_PASS, EXIT_FAIL, EXIT_USAGE, EXIT_CANNOT = 0, 1, 2, 3
 STATE_FILE = "BRAND-STATE.md"
 RENDERERS = ("resvg", "pillow")
-GATE_IDS = ("G0", "G1", "G1s", "G2", "G2b", "G3", "G4", "G4w", "G4p", "G5", "G6", "G7")
+GATE_IDS = ("G0", "G1", "G1s", "G2", "G2b", "G3", "G4", "G4w", "G4p", "G4m", "G5", "G6", "G7")
 # One User-Agent for every outbound request any script ever makes. Generic on purpose: no personal data, no "@".
 USER_AGENT = "brand-creator/0.9.0 (+https://example.invalid/brand-creator)"
 

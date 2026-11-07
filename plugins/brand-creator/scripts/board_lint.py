@@ -58,6 +58,7 @@ import divergence  # noqa: E402
 import motionboard  # noqa: E402
 import reflex  # noqa: E402
 import siteboard  # noqa: E402
+import mastersdata  # noqa: E402
 from rounds import first_motion, style_rearmed  # noqa: E402   (boardlib/rounds.py: the two questions about earlier rounds, also asked by `brand-creator cleanup` of the rounds it keeps)
 from boardpage import thumb_problems  # noqa: E402
 from _color import parse_hex, wcag_ratio  # noqa: E402
@@ -253,7 +254,7 @@ def main() -> int:
     style_round = rnd == 0 or rnd in reset_rounds   # the style research runs before round 1, and again after a full rejection
     kind = page_kind(root)
     if kind not in KINDS:
-        rep.add("page:data-board", "fail", "page declares its kind", detail='<body data-board="pick|refine|style|motion|site-refs|site"> is missing or invalid')
+        rep.add("page:data-board", "fail", "page declares its kind", detail='<body data-board="pick|refine|style|motion|site-refs|site|masters"> is missing or invalid')
         kind = "pick" if map_round else "refine"
     elif kind == "site-refs" and (rnd < 2 or rnd in reset_rounds):
         rep.add("page:data-board", "fail", "page declares its kind",
@@ -263,6 +264,10 @@ def main() -> int:
         rep.add("page:data-board", "fail", "page declares its kind",
                 detail=("a site board is a round of its own from round 2 on (round 0 is the style board, round 1 the first pick board)" if rnd < 2 else
                         f"round {rnd} is listed in reset_rounds: a style board or a pick board belongs there; a site board is a round of its own from round 2 on"))
+    elif kind == "masters" and (rnd < 2 or rnd in reset_rounds):
+        rep.add("page:data-board", "fail", "page declares its kind",
+                detail=("a masters board is a round of its own from round 2 on (round 0 is the style board, round 1 the first pick board)" if rnd < 2 else
+                        f"round {rnd} is listed in reset_rounds: a style board or a pick board belongs there; a masters board is a round of its own"))
     elif kind == "motion" and (rnd < 2 or rnd in reset_rounds):
         rep.add("page:data-board", "fail", "page declares its kind",
                 detail=("a motion board is round 2 or later (round 0 is the style board, round 1 the first pick board)" if rnd < 2 else
@@ -422,6 +427,16 @@ def main() -> int:
         need("reply", True, "how to answer: a variant name or letter and one sentence")
         motionboard.variant_rows(rep, project, rnd, root, page, first)
 
+    def check_masters_board(rnd: int) -> None:
+        """A masters board (data-board="masters"): the ads and decks of a masters round, read through its masters.json (boardlib/mastersdata.py): the gate, the
+        manifest, the files, each HTML master's declared canvas and, on the first masters board, two or more directions. No map, no kept masters."""
+        if a.min_directions:
+            rep.add("directions:count", "info", "not required here", detail="a masters board counts directions in masters.json (masters:directions); --min-directions is not used")
+        check_my_call()
+        check_questions(need("questions", True, "numbered questions with lettered options, answerable by number from a phone"))
+        need("reply", True, "how to answer: a direction name or letter and one sentence")
+        mastersdata.board_rows(rep, project, rnd)
+
     def check_site_refs(rnd: int) -> None:
         """A website references board (data-board="site-refs"): the gates of the site work (boardlib/siteboard.py), the sections every board has, the sections of its own, and 4 to 6 groups of sites.
         No map, no directions, no kept masters; after the sections and the count come the rows of the sites the owner named, of each group and of each reference (boardlib/siteboard.py), and images:inlined."""
@@ -484,6 +499,9 @@ def main() -> int:
         return rep.finish()
     if kind == "motion":
         check_motion(rnd)
+        return rep.finish()
+    if kind == "masters":
+        check_masters_board(rnd)
         return rep.finish()
 
     need("what-changed", rnd >= 2, "from round 2: what changed since the review")

@@ -19,7 +19,8 @@
                                  highest round whose board.html is a style board, r0 included, or removes it when there is none:
                                  board-lint reads it to see that the style pick is newer than the new style board of a full rejection).
                                  G4w (website references pick) and G4p (the site's reference pages approved) are the site work's
-                                 gates; a project made before them gets the key on its first --record
+                                 gates, G4m (the masters approved: ads and decks, and the owner's PowerPoint answer) the masters
+                                 round's; a project made before them gets the key on its first --record
   state --require G3             exit 1 with a message naming the gate when it is not recorded
   state --project-auto           like the default, but exit 0 with a message when no project is found (for /status)
   state --part g4-rules          the G4 rules of BRAND-STATE.md (the G4 record and the recorded "(rule)" lines) as a cold review lists them: line 1 is

@@ -33,6 +33,7 @@ gates:                         # date + decision, written by: brand-creator stat
   G4: ""                       # system rules
   G4w: ""                      # website references pick (or "skipped by owner"); the site round waits for it
   G4p: ""                      # the site's reference pages approved (site approve needs it)
+  G4m: ""                      # the masters approved: ads and decks (masters approve needs it), with the owner's PowerPoint answer
   G5: ""                       # pack and book
   G6: ""                       # adoption
   G7: ""                       # outward actions

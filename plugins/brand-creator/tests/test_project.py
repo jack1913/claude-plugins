@@ -19,7 +19,7 @@ def test_new_scaffolds_a_project(tmp_path):
     st = _common.State(p / "BRAND-STATE.md").data()
     assert st["slug"] == "acme" and st["tier"] == "standard" and st["name"] == 'Acme "Quoted" Co'
     assert st["phase"] == "P0" and st["architecture"] == "standalone"
-    assert list(st["gates"]) == ["G0", "G1", "G1s", "G2", "G2b", "G3", "G4", "G4w", "G4p", "G5", "G6", "G7"]
+    assert list(st["gates"]) == ["G0", "G1", "G1s", "G2", "G2b", "G3", "G4", "G4w", "G4p", "G4m", "G5", "G6", "G7"]
     assert all(v == "" for v in st["gates"].values())
     text = (p / "BRAND-STATE.md").read_text()
     assert "{{" not in text and "## Collaboration" in text and "## Directions" in text
@@ -538,14 +538,14 @@ def test_state_records_and_requires_the_website_gates(tmp_path):
     assert r.returncode == 0 and "G4w: recorded (2026-10-17 skipped by owner)" in r.stdout, r.stdout + r.stderr
     assert bc("state", "--require", "G4p", project=p).returncode == 1                       # recording one gate leaves the other open
     out = bc("state", project=p).stdout
-    assert "gates: G0 -  G1 -  G1s -  G2 -  G2b -  G3 -  G4 -  G4w recorded  G4p -  G5 -  G6 -  G7 -" in out, out
+    assert "gates: G0 -  G1 -  G1s -  G2 -  G2b -  G3 -  G4 -  G4w recorded  G4p -  G4m -  G5 -  G6 -  G7 -" in out, out
     assert "  G4w: 2026-10-17 skipped by owner" in out
     assert bc("state", "--record", "G4p", "approved start, pricing", project=p).returncode == 0
     out = bc("state", project=p).stdout
-    assert "G4 -  G4w recorded  G4p recorded  G5 -" in out
+    assert "G4 -  G4w recorded  G4p recorded  G4m -  G5 -" in out
     assert out.index("  G4w: ") < out.index("  G4p: ")                                         # the detail lines keep the gate order too
     gates = json.loads(bc("state", "--json", project=p).stdout)["state"]["gates"]
-    assert list(gates) == ["G0", "G1", "G1s", "G2", "G2b", "G3", "G4", "G4w", "G4p", "G5", "G6", "G7"]
+    assert list(gates) == ["G0", "G1", "G1s", "G2", "G2b", "G3", "G4", "G4w", "G4p", "G4m", "G5", "G6", "G7"]
     assert gates["G4p"] == "2026-10-17 approved start, pricing"
     r = bc("state", "--record", "G4x", "nope", project=p)
     assert r.returncode == 2 and "G4w, G4p" in r.stderr, r.stderr                           # the refusal lists the gates in order
@@ -574,12 +574,12 @@ def test_an_older_project_without_the_website_gates_gets_them_on_record(tmp_path
     p = make_project(tmp_path)
     state = p / "BRAND-STATE.md"
     text = state.read_text(encoding="utf-8")
-    for gate in ("G4w", "G4p"):                                                              # a project made before the site work: no such lines
+    for gate in ("G4w", "G4p", "G4m"):                                                       # a project made before the site work and the masters: no such lines
         mutate(state, re.search(rf"(?m)^  {gate}:.*\n", text).group(0), "")
     mutate(state, re.search(r"(?m)^site_research:.*\n", text).group(0), "")
     assert "G4w" not in state.read_text(encoding="utf-8") and "site_research" not in state.read_text(encoding="utf-8")
     out = bc("state", project=p)
-    assert out.returncode == 0 and "G4 -  G4w -  G4p -  G5 -" in out.stdout, out.stdout + out.stderr   # it still reads, both gates open
+    assert out.returncode == 0 and "G4 -  G4w -  G4p -  G4m -  G5 -" in out.stdout, out.stdout + out.stderr   # it still reads, both gates open
     assert bc("state", "--require", "G4w", project=p).returncode == 1
     assert bc("state", "--get", "site_research", project=p).returncode == 1
     assert bc("state", "--record", "G4w", "skipped by owner", project=p).returncode == 0
@@ -588,7 +588,7 @@ def test_an_older_project_without_the_website_gates_gets_them_on_record(tmp_path
     data = _common.State(state).data()
     assert data["gates"]["G4w"] == "2026-10-17 skipped by owner" and data["gates"]["G4p"] == "2026-10-17 approved start", data["gates"]
     assert data["site_research"] == "online" and data["gates"]["G3"] == "" and data["gates"]["G5"] == ""
-    assert "G4 -  G4w recorded  G4p recorded  G5 -" in bc("state", project=p).stdout
+    assert "G4 -  G4w recorded  G4p recorded  G4m -  G5 -" in bc("state", project=p).stdout
 
 
 def test_a_tryout_url_is_a_key_of_its_own_apart_from_the_review_url(tmp_path):
