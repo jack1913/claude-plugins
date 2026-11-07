@@ -528,3 +528,36 @@ def test_replaced_masters_go_to_removed(tmp_path):
     assert r.returncode == 0, r.stderr
     assert not (p / "assets" / "masters" / "stare").exists()
     assert (p / "removed-2026-10-17" / "assets-masters" / "stare" / "a.html").read_text() == "old"
+
+
+# ---------------------------------------------------------------- Task 9: masters older than the site
+
+def chk_rows(p: Path) -> dict:
+    bc("check", project=p)
+    return {r["id"]: r for r in report(p, "check")["results"]}
+
+
+def test_masters_older_than_the_site_get_an_info_row(tmp_path):
+    p = make_project(tmp_path, tier="standard")
+    assert bc("state", "--record", "G4m", "kalendarz", project=p, env={"BRAND_CREATOR_TODAY": "2026-10-25"}).returncode == 0
+    assert bc("state", "--record", "G4p", "start, pricing", project=p, env={"BRAND_CREATOR_TODAY": "2026-11-04"}).returncode == 0
+    row = chk_rows(p)["masters:behind-site"]
+    assert row["status"] == "info" and "approved before the site" in row["detail"] and "2026-10-25" in row["detail"] and "2026-11-04" in row["detail"]
+
+
+def test_approved_masters_with_no_g4m_and_a_site_get_the_row_too(tmp_path):
+    p = make_project(tmp_path, tier="standard")
+    (p / "assets" / "masters").mkdir(parents=True)
+    (p / "assets" / "masters" / "masters.json").write_text('{"entries": []}')
+    assert bc("state", "--record", "G4p", "start", project=p).returncode == 0
+    assert chk_rows(p)["masters:behind-site"]["status"] == "info"
+
+
+def test_no_row_when_the_masters_are_newer_or_there_is_no_site(tmp_path):
+    p = make_project(tmp_path, tier="standard")
+    assert bc("state", "--record", "G4p", "start", project=p, env={"BRAND_CREATOR_TODAY": "2026-11-04"}).returncode == 0
+    assert bc("state", "--record", "G4m", "kalendarz", project=p, env={"BRAND_CREATOR_TODAY": "2026-11-05"}).returncode == 0
+    assert "masters:behind-site" not in chk_rows(p)
+    q = make_project(tmp_path / "other", tier="standard")
+    assert bc("state", "--record", "G4m", "kalendarz", project=q).returncode == 0
+    assert "masters:behind-site" not in chk_rows(q)

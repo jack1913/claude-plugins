@@ -41,6 +41,8 @@
     up to three of the rows it could not verify, and what to do about them (motionboard.unverified_why, the words board-lint uses for a variant). From G3 to G4 an undecided motion is an info row. Quick decides it at G4: no row
   * Once G4 is recorded, tokens/primitives.tokens.json is compared with the plugin's starter (templates/tokens/primitives.tokens.json): a token still holding the starter's value
     is a `tokens:starter` warning, never a failure, unless the owner kept it in $extensions["brand-creator"]["starter-kept"] (a dated decision and a list of paths). Before G4: no row
+  * masters:behind-site (info, only when it has something to say): G4p recorded after G4m, or assets/masters/masters.json with no G4m once G4p is recorded: the masters
+    were approved before the site, and a masters round would bring them to the site's language. The owner decides; it never fails.
   * The approved pages of the site round, when G4p is recorded or site/site.json exists (a project with neither gets no site: row). site:record: G4p is recorded and site/site.json exists (G4p
     without it fails and says to run `site approve`; the record without G4p fails too), and sitedata.validate_site finds nothing (a page edited after it was approved fails, with the command that
     approves it again). site:pages: every page the record lists has a current page-check report of that very page (assets/_checks/<pagecheck.report_tool>.json, target.page equal to its path):
@@ -54,6 +56,7 @@ A check that cannot be established is "not verified" (exit 3), never "pass". A f
 """
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -389,6 +392,21 @@ def site_verdict(rep: Report, rid: str, label: str, results: list[tuple[str, str
         rep.add(rid, "pass", label, detail=passing)
 
 
+def masters_behind_site_row(project: Path, rep: Report) -> None:
+    """masters:behind-site (info, only when it has something to say): the site was approved (G4p) after the masters (G4m), or approved masters are in
+    assets/masters/ with no G4m at all. A masters round would bring them to the site's language; the owner decides."""
+    g4p, g4m = gate_recorded(project, "G4p"), gate_recorded(project, "G4m")
+    if not g4p:
+        return
+    date = lambda rec: rec[:10] if re.match(r"\d{4}-\d{2}-\d{2}", rec) else ""   # noqa: E731
+    if g4m and date(g4m) and date(g4p) and date(g4m) < date(g4p):
+        rep.add("masters:behind-site", "info", "the masters speak the site's language",
+                detail=f"the masters were approved before the site (G4m {date(g4m)}, G4p {date(g4p)}): a masters round would bring them to the site's language")
+    elif not g4m and (project / "assets" / "masters" / "masters.json").is_file():
+        rep.add("masters:behind-site", "info", "the masters speak the site's language",
+                detail=f"assets/masters/ holds masters with no G4m, and the site was approved (G4p {date(g4p) or g4p}): a masters round would bring them to the site's language")
+
+
 def site_rows(project: Path, rep: Report) -> None:
     """The approved pages of the site round (scripts/CONTRACT.md "check and the approved pages"). Rows only when G4p is recorded or site/site.json exists: a project with neither gets none.
     site:record: G4p recorded and site/site.json there (G4p without it fails: run `site approve`; the record without G4p fails too), and sitedata.validate_site finds nothing (a page edited after approval fails).
@@ -708,6 +726,7 @@ def main() -> int:
     adapt_gates.rows(project, rep)
     starter_rows(project, rep)   # tokens:starter, from G4 on
     site_rows(project, rep)   # site:record, site:pages, site:stills: only when G4p is recorded or site/site.json exists
+    masters_behind_site_row(project, rep)   # masters:behind-site: info, when the site was approved after the masters
     bprobs = band_problems(project)
     if any("band" in a_ or "layer_bands" in a_ for a_ in arts):
         rep.add("manifest:bands", "fail" if bprobs else "pass", "slots follow the size-band rule (or carry an exemption)",
