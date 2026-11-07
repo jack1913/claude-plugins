@@ -6,6 +6,41 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-08
+
+Your ads and decks become part of the brand, and frozen rounds shrink to what they show. A masters round builds approved
+ads and a deck in two or three directions, checks every file, and puts them into `assets/masters/` with a README. `freeze`
+keeps only what a round's boards show, and `cleanup --history` slims the rounds frozen before: on the pilot brand, 291 MB of
+`history/` became 21 MB.
+
+### Added
+
+- A masters round (`/brand-creator:round masters`, Standard and Full, after the system rules and after the site): your ads and
+  your deck as masters, two or three directions first, each listed in the round's `masters.json`, on a new masters board.
+  The owner's approval is the new gate G4m, with their answer on how the PowerPoint deck looks in PowerPoint.
+- `brand-creator masters check` opens every ad and slide at its size after its animations end, saves a picture of each, and
+  fails what was found only by eye before: an element past the edge, a text running into another text, a deck PDF with the
+  wrong pages or its own dates, and a PowerPoint deck whose fonts are not inside it. Something painted over a word warns
+  unless it is marked as drawn there on purpose; a box past a PowerPoint slide's edge warns. The PowerPoint render is your
+  check in PowerPoint: Keynote and Google Slides ignore embedded fonts.
+- `brand-creator masters approve` copies the approved masters, and every file they load, into `assets/masters/` with a
+  `README.md` (each file, its size, your copy rules, how to rebuild) and `masters.json`; `--replace` moves earlier masters to
+  `removed-<date>/` first.
+- `brand-creator masters embed-fonts` puts TrueType fonts inside a PowerPoint deck, and `brand-creator pdf normalise` fixes a
+  PDF's dates so the same input gives the same file. `setup` installs `pptxgenjs` for a round's deck builder.
+- The brand book's opt-in chapter "Ads and decks" and its `{{masters}}` block; `check` says when the masters are older than
+  the approved site; `kit check` names your ad and presentation recipes once the masters change.
+- `brand-creator cleanup --history` slims the rounds frozen before 0.10.0 to what their boards show, the scripts that built
+  them and their notes, through the same plan, yes and restore record as round cleanup, and rewrites the checksum list.
+- A new manual page: [Make your ads and decks](docs/manual/use/make-your-ads-and-decks.md).
+
+### Changed
+
+- `freeze` keeps what a round's boards show: the board pages, every file they load (read from the files and in the browser,
+  so a picture a script adds is kept too), the scripts that built the round and its text records. `FROZEN.md` says how much
+  was left out. `--whole` keeps the old copy of everything; without a set-up data directory `freeze` stops and names
+  `--static` (the files only).
+
 ## [0.9.0] - 2026-11-06
 
 Fixes from the same client's later rounds. `cleanup` takes old rounds out of a project through git, three book tools replace

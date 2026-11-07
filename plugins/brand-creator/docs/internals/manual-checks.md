@@ -29,7 +29,7 @@ proven.
 | [E-mail signature in real mail clients](#the-e-mail-signature-in-real-mail-clients) | never run | |
 | [A real Linux desktop session](#a-real-linux-desktop-session) | never run | |
 | [Windows](#windows) | never run | |
-| [Release run](#release-run) | 2026-11-06, 0.9.0, the release commit's tree | passed |
+| [Release run](#release-run) | 2026-11-08, 0.10.0, the release commit's tree | passed |
 | [CI first run](#ci-first-run) | 2026-10-25, runs 40170278108 (push) and 40171295112 (by hand) on commit b621a96 | every job passed, the two macOS smoke halves and the `brand-creator` verdict included |
 
 ## Behaviour evals (`claude plugin eval`)
@@ -425,13 +425,15 @@ skip, when `BRAND_CREATOR_DENYLIST` is not set), node reports `fail 0`, both `SM
 printed, and each Docker run ends with `LINUX RUN OK`. Record the version, the commit, the date and the counts here before
 tagging.
 
-**Last run:** 2026-11-06, brand-creator 0.9.0, macOS 27.3, on the release commit's tree (only this record differs): pytest
-3312 passed, 1 skipped (the denylist), node 249 pass and 0 fail, `SMOKE PASSED` and `QUICK SMOKE PASSED`, on the first run.
-The Linux Docker run of the same tree printed `LINUX RUN OK` for pytest (3261 passed, 52 expected skips), node (249 pass)
-and the smoke. Its first try failed the log check on one skip that was not an expected NOT VERIFIED: a new cleanup test
-skipped itself off macOS with a plain `pytest.skip`. It now carries `requires_macos`, and `tests/test_cleanup.py` passed
-again on the Mac (135 passed) before the Linux rerun. These runs were on ba62f02; the release commit after it changes only
-the CI (the workflow, `tests/test_docker_ci.py`, the docs), and its quick tests passed on the Mac (484 passed, no skip).
+**Last run:** 2026-11-08, brand-creator 0.10.0, macOS 27.3, on the release commit's tree (only this record differs): pytest
+3391 passed, 1 skipped (the denylist), node 249 pass and 0 fail, `SMOKE PASSED` and `QUICK SMOKE PASSED`, on the first run.
+The Linux Docker run of the same tree printed `LINUX RUN OK` for pytest (3340 passed, 52 expected skips), node (249 pass)
+and the smoke. Calibration on a scratch copy of the pilot brand: `cleanup --history` took `history/` from 308 MB to 21 MB
+(6124 files), with 0 files lost by any frozen board in the browser; `masters check` on its approved ads, deck PDF and
+PowerPoint deck passed, with one warning (a text box above slide 12) and the PowerPoint render left to the owner.
+
+The 0.9.0 run (2026-11-06) failed its first Linux log check on a cleanup test that skipped itself off macOS with a plain
+`pytest.skip`; it carries `requires_macos` since.
 
 The 0.7.0 run (2026-11-04) had one failure on its first `run-all.sh --smoke`,
 `test_social_cards_show_the_drawn_wordmark_and_the_dark_header_its_dark_file` (`emit social` exited 3 under the full parallel
