@@ -1947,10 +1947,11 @@ def owned_changes(project: Path, doc: dict) -> list[tuple[str, str]]:
     return out
 
 
-BRAND_SOURCES = ("state_sha", "tokens", "tokens_css", "facts")   # the brand inputs an owner file is written against: BRAND-STATE.md (with the motion spec), the token files, FACTS.md
+BRAND_SOURCES = ("state_sha", "tokens", "tokens_css", "facts", "masters")   # the brand inputs an owner file is written against: BRAND-STATE.md (with the motion spec), the token files, FACTS.md, the approved masters
+MASTER_RECIPES = ("recipes/ad.md", "recipes/presentation.md")   # the owner files that use the masters; with any file that names assets/masters/, the only ones a change to the masters alone makes behind
 
 
-BRAND_SOURCE_NAMES = {"state_sha": "BRAND-STATE.md", "tokens": "tokens.json", "tokens_css": "tokens.css", "facts": "FACTS.md"}   # how the owner's line names a brand input
+BRAND_SOURCE_NAMES = {"state_sha": "BRAND-STATE.md", "tokens": "tokens.json", "tokens_css": "tokens.css", "facts": "FACTS.md", "masters": "assets/masters/"}   # how the owner's line names a brand input
 
 
 def behind_names(changed: list[str]) -> str:
@@ -1971,7 +1972,12 @@ def behind_files(project: Path, doc: dict) -> tuple[list[str], list[str]]:
     if not changed:
         return [], []
     recorded = doc["owned"]
-    return changed, [rel for rel in owner_sorted(recorded) if rel != "EXTENDING.md" and (data := kit_bytes(project, rel)) is not None and sha256_bytes(data) == recorded[rel]]   # EXTENDING.md is the plugin's guide, no brand content
+    files = [rel for rel in owner_sorted(recorded) if rel != "EXTENDING.md" and (data := kit_bytes(project, rel)) is not None and sha256_bytes(data) == recorded[rel]]   # EXTENDING.md is the plugin's guide, no brand content
+    if changed == ["masters"]:   # the masters alone: only the files that use them
+        files = [rel for rel in files if rel in MASTER_RECIPES or b"assets/masters/" in (kit_bytes(project, rel) or b"")]
+        if not files:
+            return [], []
+    return changed, files
 
 
 # ---------------------------------------------------------------- kit check, part 2: tags and values

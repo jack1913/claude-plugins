@@ -5200,3 +5200,19 @@ def test_kit_json_names_its_owner_files_as_plain_paths_of_the_owner_part_of_the_
                 kitlib.load(pack)
             assert e.value.code == 2 and needle in e.value.message, where
         f.write_bytes(good)
+
+
+def test_kit_behind_names_the_ad_and_deck_recipes_after_new_masters_and_not_the_other_files(pack):
+    """0.10.0: approved masters that change after the build make the recipes that use them behind (by default recipes/ad.md and recipes/presentation.md,
+    and any owner file that names assets/masters/); a change to the masters alone does not name voice.md or the web page recipe."""
+    filled_kit(pack)
+    for n in ("ad", "presentation"):
+        (kit_of(pack) / "recipes" / f"{n}.md").write_text(f"# {n}\n\nA line. [example]\n", encoding="utf-8")
+    assert build(pack).returncode == 0
+    m = pack / "assets" / "masters" / "reklama" / "a.html"
+    m.parent.mkdir(parents=True)
+    m.write_text("<p>ad</p>", encoding="utf-8")
+    assert kit_check(pack).returncode == 3
+    detail = check_report_rows(pack)["kit:behind"]["detail"]
+    assert "recipes/ad.md" in detail and "recipes/presentation.md" in detail and "assets/masters/ changed after it" in detail
+    assert "voice.md" not in detail and "recipes/web-page.md" not in detail

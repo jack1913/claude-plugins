@@ -135,3 +135,12 @@ def test_records_are_the_json_md_and_txt_files_anywhere_in_the_round(tmp_path):
     for f in ("v1/proof.json", "v1/frames/frames.json", "NOTES.md", "a/why.txt", "a/shot.png", "node_modules/x/package.json"):
         w(root, f)
     assert rels(root, closure.records(root)) == ["NOTES.md", "a/why.txt", "v1/frames/frames.json", "v1/proof.json"]
+
+
+def test_escapes_names_each_reference_that_leaves_the_round(tmp_path):
+    root = tmp_path / "r3"
+    w(tmp_path, "assets/fonts.css")
+    w(root, "a.html", '<link rel="stylesheet" href="../assets/fonts.css"><img src="ok.png"><img src="/abs.png">')
+    w(root, "ok.png")
+    kept, _ = closure.static_closure(root, [root / "a.html"])
+    assert closure.escapes(root, kept) == ["a.html: ../assets/fonts.css", "a.html: /abs.png"]

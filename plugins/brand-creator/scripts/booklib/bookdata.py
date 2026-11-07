@@ -30,6 +30,7 @@ CHAPTERS = [
     ("photography", "Photography", ("standard", "full"), "opt-in"),
     ("components", "Components", ("standard", "full"), "opt-in"),
     ("site", "Site", ("standard", "full"), "opt-in"),                # the approved reference pages of site/site.json (needs `site approve`)
+    ("masters", "Ads and decks", ("standard", "full"), "opt-in"),    # the approved masters of assets/masters/masters.json (needs `masters approve`)
     ("use", "In use", ("standard", "full"), "always"),
     ("files", "Files", ("quick", "standard", "full"), "always"),
     ("proof", "Proof", ("standard", "full"), "always"),

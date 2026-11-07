@@ -435,3 +435,96 @@ def test_setup_installs_pptxgenjs():
     v = pkg["dependencies"]["pptxgenjs"]
     assert v[0].isdigit(), "pinned exactly, as every dependency"
     assert lock["packages"]["node_modules/pptxgenjs"]["version"] == v
+
+
+# ---------------------------------------------------------------- Task 8: masters approve
+
+STYLED = ad(600, 400, '<p style="position:absolute;left:40px;top:40px;font:40px/1 sans-serif;margin:0">Hi</p>').replace(
+    "</head>", '<link rel="stylesheet" href="../wspolne/styl.css"></head>')
+
+
+def approvable(tmp_path: Path, *, ad_html: str = STYLED, record: bool = True) -> Path:
+    files = {"reklama/k-600x400.html": ad_html, "reklama/l-600x400.html": ad_html, "wspolne/styl.css": "body { background: url('tlo.png') }",
+             "wspolne/tlo.png": PNG, "build.mjs": "// builds the masters\n", "_lead/scratch.png": PNG}
+    entries = [ad_entry("k-600x400", d="k"), ad_entry("l-600x400", d="l")]
+    p = round_with(tmp_path, files, entries)
+    m = json.loads((p / "rounds" / "r5" / "masters.json").read_text())
+    m["copy_rules"], m["builder"] = ["no amounts or names in ads"], "node rounds/r5/build.mjs"
+    (p / "rounds" / "r5" / "masters.json").write_text(json.dumps(m))
+    if record:
+        assert bc("state", "--record", "G4m", "k and l; PowerPoint: no deck", project=p).returncode == 0
+    assert lint(p).returncode == 0, rows(p)
+    assert check(p).returncode == 0, mrows(p)
+    return p
+
+
+def approve(p: Path, *args: str):
+    return bc("masters", "approve", *args, project=p)
+
+
+def test_approve_needs_g4m(tmp_path):
+    p = masters_round(tmp_path)
+    r = approve(p)
+    assert r.returncode == 1 and "G4m" in r.stderr and "PowerPoint" in r.stderr
+    assert not (p / "assets" / "masters").exists()
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_approve_needs_a_current_passing_masters_report(tmp_path):
+    p = approvable(tmp_path)
+    (p / "rounds" / "r5" / "reklama" / "k-600x400.html").write_text(STYLED.replace("Hi", "Hello"))
+    r = approve(p)
+    assert r.returncode == 1 and "masters check" in r.stderr and "stale" in r.stderr
+    assert not (p / "assets" / "masters").exists()
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_approve_copies_the_masters_and_what_they_reach_and_writes_the_readme(tmp_path):
+    p = approvable(tmp_path)
+    r = approve(p)
+    assert r.returncode == 0, r.stdout + r.stderr
+    dest = p / "assets" / "masters"
+    got = sorted(f.relative_to(dest).as_posix() for f in dest.rglob("*") if f.is_file())
+    assert got == ["README.md", "masters.json", "png/k-600x400.png", "png/l-600x400.png", "reklama/k-600x400.html", "reklama/l-600x400.html",
+                   "wspolne/styl.css", "wspolne/tlo.png"]
+    assert (dest / "reklama" / "k-600x400.html").read_bytes() == (p / "rounds" / "r5" / "reklama" / "k-600x400.html").read_bytes()
+    doc = json.loads((dest / "masters.json").read_text())
+    assert doc["round"] == 5 and doc["approved"].endswith("k and l; PowerPoint: no deck") and len(doc["entries"]) == 2
+    readme = (dest / "README.md").read_text()
+    assert "reklama/k-600x400.html" in readme and "600 × 400" in readme and "no amounts or names in ads" in readme
+    assert "node rounds/r5/build.mjs" in readme and "PowerPoint" in readme
+    assert approve(p).returncode == 1                                                    # approved masters are there: --replace is needed
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_approve_refuses_a_master_that_reaches_outside_the_round(tmp_path):
+    """A master is checked served from its round alone, so a file it loads from outside the round is missing there: masters check fails
+    naming it, and approve copies nothing (closure.escapes refuses the same reference should a report ever pass)."""
+    outside = STYLED.replace("</head>", '<link rel="stylesheet" href="../../../assets/fonts/fonts.css"></head>')
+    p = round_with(tmp_path, {"reklama/k-600x400.html": outside, "reklama/l-600x400.html": STYLED, "wspolne/styl.css": "", "wspolne/tlo.png": PNG},
+                   [ad_entry("k-600x400", d="k"), ad_entry("l-600x400", d="l")])
+    (p / "assets" / "fonts").mkdir(parents=True)
+    (p / "assets" / "fonts" / "fonts.css").write_text("")
+    assert bc("state", "--record", "G4m", "k and l", project=p).returncode == 0
+    assert lint(p).returncode == 0
+    assert check(p).returncode == 1 and "/assets/fonts/fonts.css" in mrows(p)["masters:page-errors"]["detail"]
+    r = approve(p)
+    assert r.returncode == 1 and "masters check" in r.stderr
+    assert not (p / "assets" / "masters").exists()
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_replaced_masters_go_to_removed(tmp_path):
+    p = approvable(tmp_path)
+    old = p / "assets" / "masters" / "stare" / "a.html"
+    old.parent.mkdir(parents=True)
+    old.write_text("old")
+    assert approve(p).returncode == 1
+    r = approve(p, "--replace")
+    assert r.returncode == 0, r.stderr
+    assert not (p / "assets" / "masters" / "stare").exists()
+    assert (p / "removed-2026-10-17" / "assets-masters" / "stare" / "a.html").read_text() == "old"

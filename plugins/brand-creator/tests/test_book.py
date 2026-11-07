@@ -1365,3 +1365,55 @@ def test_a_changed_site_still_makes_the_book_report_stale(proj):
     r = bc("book", "--verify", project=proj)
     assert r.returncode == 1 and "edited by hand" in r.stdout + r.stderr
     assert bc("book", project=proj).returncode == 0 and "Pricing sits above the stages" in site_chapter(proj)
+
+
+# ---------------------------------------------------------------- the masters block and the opt-in masters chapter (0.10.0)
+
+def test_the_masters_chapter_is_opt_in_and_stands_after_the_site(tmp_path):
+    assert "masters" not in bookdata.chapters_for(tmp_path, view("standard"))
+    got = bookdata.chapters_for(tmp_path, view("standard", extra=["masters", "site", "components", "tone"]))
+    assert got == ["idea", "mark", "colour", "type", "tone", "components", "site", "masters", "use", "files", "proof", "donts", "changing", "history"]
+    assert bookdata.TITLES["masters"] == "Ads and decks" and "masters" in bookdata.OPT_IN
+    assert (ROOT / "templates/book/masters.md").is_file()
+
+
+def add_masters(proj: Path) -> None:
+    d = proj / "assets" / "masters"
+    (d / "png").mkdir(parents=True)
+    for name, shade in (("kalendarz-1080x1350", 40), ("lista-1080x1350", 200)):
+        (d / "png" / f"{name}.png").write_bytes(_png(27, 34, shade))
+        (d / "reklama").mkdir(exist_ok=True)
+        (d / "reklama" / f"{name}.html").write_text("<p>ad</p>")
+    (d / "masters.json").write_text(json.dumps({"round": 5, "approved": "2026-10-17 kalendarz and lista", "copy_rules": ["no amounts or names in ads"],
+                                                "builder": None, "entries": [
+                                                    {"file": "reklama/kalendarz-1080x1350.html", "kind": "ad", "canvas": [1080, 1350], "direction": "kalendarz"},
+                                                    {"file": "reklama/lista-1080x1350.html", "kind": "ad", "canvas": [1080, 1350], "direction": "lista"}]}))
+
+
+def masters_in_tone(proj: Path) -> None:
+    assert bc("state", "--set", "book_chapters=tone", project=proj).returncode == 0
+    tone = proj / "book/chapters/tone.md"
+    tone.write_text(tone.read_text(encoding="utf-8").rstrip("\n") + "\n\n{{masters}}\n", encoding="utf-8")
+
+
+@setup
+@resvg
+def test_the_masters_block_shows_each_direction_its_sizes_and_the_copy_rules(proj):
+    add_masters(proj)
+    masters_in_tone(proj)
+    r = bc("book", project=proj)
+    assert r.returncode == 0, r.stdout + r.stderr
+    book = (proj / "book.html").read_text()
+    assert 'data-masters-direction="kalendarz"' in book and 'data-masters-direction="lista"' in book
+    assert "1080 × 1350" in book and "no amounts or names in ads" in book and book.count('src="data:image/png;base64,') >= 2
+
+
+@setup
+@resvg
+def test_the_masters_block_needs_the_approved_masters(proj):
+    masters_in_tone(proj)
+    before = (proj / "book.html").read_bytes()
+    r = bc("book", project=proj)
+    err = r.stdout + r.stderr
+    assert r.returncode == 1 and "{{masters}} needs the approved masters (assets/masters/masters.json, from masters approve)" in err, err
+    assert (proj / "book.html").read_bytes() == before

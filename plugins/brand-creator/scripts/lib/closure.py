@@ -169,3 +169,21 @@ def copy_losses(src: Path, copy: Path) -> list[str]:
     _, before = browser_closure(src, starting_pages(src))
     _, after = browser_closure(copy, starting_pages(copy))
     return [m for m in after if m not in before]
+
+
+def escapes(root: Path, files: set[Path]) -> list[str]:
+    """The references of `files` (followed kinds only) that leave root: "<file>: <ref>", a path up out of it or an absolute one. A copy of
+    only the round would break those, so a caller that copies a round's files (masters approve) refuses them."""
+    root = root.resolve()
+    out: list[str] = []
+    for p in sorted(files, key=lambda q: nfc(q.resolve().relative_to(root).as_posix())):
+        suffix = p.suffix.lower()
+        if suffix not in FOLLOWED:
+            continue
+        here = nfc(p.resolve().relative_to(root).as_posix())
+        for ref in references(p.read_text(encoding="utf-8", errors="replace"), suffix):
+            target = posixpath.normpath(posixpath.join(posixpath.dirname(here), ref))
+            if ref.startswith("/") or target == ".." or target.startswith("../"):
+                if f"{here}: {ref}" not in out:
+                    out.append(f"{here}: {ref}")
+    return out

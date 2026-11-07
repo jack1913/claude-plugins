@@ -158,7 +158,7 @@ PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"    # the first eight bytes of every PNG: a 
 
 class BookBuild:
     BLOCK = {"marks", "mark-sizes", "colours", "contrast", "type", "motion", "tokens", "files", "checks", "decided", "history",
-             "edition-log", "donts", "facts", "site"}
+             "edition-log", "donts", "facts", "site", "masters"}
     INLINE = {"count", "fact", "edition", "name", "approved"}
 
     def __init__(self, project: Path, *, renderer: str = "resvg", allow_variants: bool = False):
@@ -992,6 +992,43 @@ class BookBuild:
                 rows.append(([esc(c["text"]), f'<span class="st">{esc(self.T(lang, "Rule" if c["tag"] == "rule" else "Example"))}</span>', esc(source) if source else "-"],
                              {"data-choice": c["id"], "data-tag": c["tag"]}))
             out.append(self.table(head, rows))
+        return "\n".join(out)
+
+    def b_masters(self, arg: str, lang: str) -> str:
+        """The approved masters of assets/masters/masters.json (from `masters approve`): for each direction its ads and slides, each as the PNG `masters check` took, with
+        its size; then the copy rules. A missing record, or a master with no PNG, stops the book (exit 1), as the site block does."""
+        what, way_out = ("the masters chapter", "drop masters from book_chapters") if "masters" in self.chapter_ids else ("{{masters}}", "take {{masters}} out of the chapter that holds it")
+        rec = self.project / "assets" / "masters" / "masters.json"
+        try:
+            doc = json.loads(confine(self.project, "assets/masters/masters.json", what="masters record", read=True).read_text(encoding="utf-8"))
+            entries = [e for e in doc["entries"] if isinstance(e, dict)]
+        except (OSError, ValueError, KeyError, TypeError):
+            fail(EXIT_FAIL, f"{what} needs the approved masters (assets/masters/masters.json, from masters approve): run the masters round, or {way_out}")
+        shown = [e for e in entries if e.get("kind") in ("ad", "slide")]
+        previews = {e["file"]: confine(self.project, f"assets/masters/png/{Path(e['file']).stem}.png", what="master preview", read=True) for e in shown}
+        gone = [f for f, p in previews.items() if not p.is_file()]
+        if gone:
+            fail(EXIT_FAIL, f"{what} needs a picture of each ad and slide: assets/masters/png/ has none for {', '.join(gone[:5])}. Run `brand-creator masters check` on the round, "
+                            "then `brand-creator masters approve --replace`, then build the book again")
+        for f, p in previews.items():
+            with p.open("rb") as fh:
+                if fh.read(len(PNG_SIGNATURE)) != PNG_SIGNATURE:
+                    fail(EXIT_FAIL, f"{what}: assets/masters/png/{Path(f).stem}.png is not a PNG picture")
+        self.add_input(rec)
+        out = []
+        directions = sorted({e.get("direction") or "" for e in shown})
+        for d in directions:
+            if d:
+                out.append(f'<h3 data-masters-direction="{esc(d)}">{esc(d)}</h3>')
+            for e in (x for x in shown if (x.get("direction") or "") == d):
+                p = previews[e["file"]]
+                self.add_input(p)
+                size = f"{e['canvas'][0]} × {e['canvas'][1]}" if e.get("canvas") else ""
+                out.append(f'<figure class="pic" data-master="{esc(e["file"])}"><img src="{self.data_uri(p, "image/png")}" alt="{esc(e["file"])}">'
+                           f"<figcaption>{esc(size)}</figcaption></figure>")
+        rules = [r for r in doc.get("copy_rules", []) if isinstance(r, str)]
+        if rules:
+            out.append(f"<h4>{esc(self.T(lang, 'Copy rules'))}</h4><ul>" + "".join(f"<li>{esc(r)}</li>" for r in rules) + "</ul>")
         return "\n".join(out)
 
     def b_donts(self, arg: str, lang: str) -> str:
