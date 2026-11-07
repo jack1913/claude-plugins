@@ -157,7 +157,9 @@ def cmd_check(project: Path, n: int | None) -> int:
     missing = [e.file for e in m.entries if not (root / e.file).is_file()]
     if missing:
         fail(EXIT_FAIL, f"listed in masters.json but missing in rounds/r{rnd}/: {', '.join(missing[:6])}")
-    rep = Report("masters", project, [mf] + [root / e.file for e in m.entries])
+    html_files = [root / e.file for e in m.entries if e.file.lower().endswith((".html", ".htm"))]
+    reached, _ = closure.static_closure(root, html_files)   # a stylesheet, picture or font a master loads: a change to it makes this report stale
+    rep = Report("masters", project, sorted({mf.resolve()} | {(root / e.file).resolve() for e in m.entries} | reached, key=lambda p: p.as_posix()))
     rep.extra = {"round": rnd}
     html = [e for e in m.entries if e.kind in mastersdata.CANVAS_KINDS and e.file.lower().endswith((".html", ".htm"))]
     if html:

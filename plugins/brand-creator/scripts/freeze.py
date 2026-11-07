@@ -130,6 +130,7 @@ def main() -> int:
         if mode == "closure":
             lost = closure.copy_losses(src, tmp)
             if lost:
+                shutil.rmtree(tmp)   # a refused copy leaves nothing in history/: files outside the manifest would block every later freeze and check
                 fail(EXIT_FAIL, f"the frozen copy of rounds/{rnd} would miss files its boards show ({'; '.join(lost[:5])}"
                                 f"{f'; and {len(lost) - 5} more' if len(lost) > 5 else ''}): nothing was frozen. Run freeze --whole, and report this")
         text = banner_text(rnd, date, a.name)

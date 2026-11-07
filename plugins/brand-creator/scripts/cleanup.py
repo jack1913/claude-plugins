@@ -797,7 +797,7 @@ def history_git_files(repo: Repo, paths: list[str]) -> list[tuple[str, str, str]
             if tok:
                 m = re.match(r"^(\S) (\d+) ([0-9a-f]+) (\d)\t(.*)$", os.fsdecode(tok), re.S)
                 if m and m.group(1) == "H":
-                    tracked[unicodedata.normalize("NFC", repo.local(m.group(5)))] = (m.group(2), m.group(3))
+                    tracked[unicodedata.normalize("NFC", m.group(5))] = (m.group(2), m.group(3))   # ls-files prints paths from the project (git -C), not the repository root
     changed = {unicodedata.normalize("NFC", repo.local(e.path)) for e in status_entries(project, "history", untracked=False)}
     problems = [f"not known to git: {json.dumps(p, ensure_ascii=False)}" for p in paths if p not in tracked]
     problems += [f"changed since the last commit: {json.dumps(p, ensure_ascii=False)}" for p in paths if p in changed]

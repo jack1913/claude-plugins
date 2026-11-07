@@ -578,3 +578,13 @@ def test_two_close_lines_on_a_rotated_sheet_do_not_run_into_each_other(tmp_path)
     p = round_with(tmp_path, {"reklama/a.html": ad(600, 400, sheet)}, [ad_entry("a")])
     assert check(p).returncode == 0, mrows(p)
     assert mrows(p)["masters:covered"]["status"] == "pass", mrows(p)["masters:covered"]
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_stylesheet_a_master_loads_changed_after_the_check_makes_the_report_stale(tmp_path):
+    p = approvable(tmp_path)
+    (p / "rounds" / "r5" / "wspolne" / "styl.css").write_text("body { background: red }")
+    r = approve(p)
+    assert r.returncode == 1 and "stale" in r.stderr and "styl.css" in r.stderr
+    assert not (p / "assets" / "masters").exists()

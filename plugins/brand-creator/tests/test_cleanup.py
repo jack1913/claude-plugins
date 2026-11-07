@@ -1376,9 +1376,9 @@ FZ = "history/2026-10-21-approved"
 HPNG = b"\x89PNG\r\n\x1a\n"
 
 
-def frozen(tmp_path: Path, files: dict[str, str | bytes] | None = None) -> Proj:
+def frozen(tmp_path: Path, files: dict[str, str | bytes] | None = None, *, sub: str = "") -> Proj:
     """A committed project whose history/ holds one freeze: a board that shows shots/a.png, a build script, FROZEN.md, and _lead/big.png that no board shows."""
-    p = make(tmp_path, {1: "pick"})
+    p = make(tmp_path, {1: "pick"}, sub=sub)
     files = files if files is not None else {"board.html": '<img src="shots/a.png">', "shots/a.png": HPNG, "build.py": "print(1)\n",
                                              "FROZEN.md": "# Kept as written\n", "_lead/big.png": HPNG * 1000}
     entries = {}
@@ -1493,3 +1493,14 @@ def test_history_refuses_a_folder_freeze_did_not_name_and_never_puts_it_in_a_res
     assert r.returncode == 1 and "not a frozen round" in r.stderr and json.dumps(f"history/{odd}") in r.stderr
     assert "touch PWNED" not in r.stdout
     assert not (p.dir / "qa" / f"{DATE}-cleanup-plan-history.txt").exists()
+
+
+def test_history_works_for_a_project_in_a_folder_of_a_bigger_repository(tmp_path):
+    """The pilot brand lives in projects-brands/placuje: git prints paths from the repository root in status and from the project in ls-files."""
+    p = frozen(tmp_path, sub="placuje")
+    code = hcode(p)
+    assert p.run("--history", "--static", "--record-yes", code, "--said", "tak").returncode == 0
+    r = p.run("--history", "--static", "--yes", code)
+    assert r.returncode == 0, r.stderr + r.stdout
+    assert not (p.dir / FZ / "_lead").exists() and (p.dir / FZ / "shots" / "a.png").is_file()
+    assert "D  placuje/history/2026-10-21-approved/_lead/big.png" in p.git("status", "--porcelain").stdout
