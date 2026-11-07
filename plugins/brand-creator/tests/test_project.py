@@ -414,14 +414,14 @@ def _project_with_round(tmp_path, g3=True):
 
 def test_freeze_requires_g3(tmp_path):
     p = _project_with_round(tmp_path, g3=False)
-    r = bc("freeze", "r3", "--name", "approved", project=p, data=tmp_path / "d")
+    r = bc("freeze", "r3", "--name", "approved", "--whole", project=p, data=tmp_path / "d")
     assert r.returncode == 1 and "G3" in r.stderr
     assert not (p / "history").exists()
 
 
 def test_freeze_copies_banners_and_writes_the_manifest(tmp_path):
     p = _project_with_round(tmp_path)
-    r = bc("freeze", "r3", "--name", "approved-board", project=p, data=tmp_path / "d")
+    r = bc("freeze", "r3", "--name", "approved-board", "--whole", project=p, data=tmp_path / "d")
     assert r.returncode == 0, r.stderr
     dest = p / "history" / "2026-10-17-approved-board"
     html = (dest / "board.html").read_text()
@@ -441,19 +441,19 @@ def test_freeze_copies_banners_and_writes_the_manifest(tmp_path):
 
 def test_freeze_refuses_to_overwrite_and_accepts_a_second_name(tmp_path):
     p = _project_with_round(tmp_path)
-    assert bc("freeze", "3", "--name", "one", project=p, data=tmp_path / "d").returncode == 0
-    r = bc("freeze", "r3", "--name", "one", project=p, data=tmp_path / "d")
+    assert bc("freeze", "3", "--name", "one", "--whole", project=p, data=tmp_path / "d").returncode == 0
+    r = bc("freeze", "r3", "--name", "one", "--whole", project=p, data=tmp_path / "d")
     assert r.returncode == 1 and "never overwrites" in r.stderr
-    assert bc("freeze", "r3", "--name", "two", project=p, data=tmp_path / "d").returncode == 0
+    assert bc("freeze", "r3", "--name", "two", "--whole", project=p, data=tmp_path / "d").returncode == 0
     assert len((p / "history" / "MANIFEST.sha256").read_text().splitlines()) == 6
 
 
 def test_freeze_refuses_when_history_was_tampered_with(tmp_path):
     p = _project_with_round(tmp_path)
-    assert bc("freeze", "r3", "--name", "one", project=p, data=tmp_path / "d").returncode == 0
+    assert bc("freeze", "r3", "--name", "one", "--whole", project=p, data=tmp_path / "d").returncode == 0
     victim = p / "history" / "2026-10-17-one" / "board.html"
     mutate(victim, "approved", "tampered")
-    r = bc("freeze", "r3", "--name", "two", project=p, data=tmp_path / "d")
+    r = bc("freeze", "r3", "--name", "two", "--whole", project=p, data=tmp_path / "d")
     assert r.returncode == 1 and "not intact" in r.stderr and "modified" in r.stderr
     assert not (p / "history" / "2026-10-17-two").exists()
 
@@ -463,7 +463,7 @@ def test_freeze_validates_input(tmp_path):
     assert bc("freeze", "r9", "--name", "x", project=p, data=tmp_path / "d").returncode == 1
     assert bc("freeze", "r3", "--name", "Bad Name", project=p, data=tmp_path / "d").returncode == 2
     (p / "rounds" / "r3" / "link").symlink_to(p / "BRAND-STATE.md")
-    r = bc("freeze", "r3", "--name", "x", project=p, data=tmp_path / "d")
+    r = bc("freeze", "r3", "--name", "x", "--whole", project=p, data=tmp_path / "d")
     assert r.returncode == 1 and "symlink" in r.stderr
 
 

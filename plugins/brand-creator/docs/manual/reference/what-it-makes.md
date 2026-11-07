@@ -10,7 +10,8 @@ A synthetic worked brand, Acme, shows a finished project: `skills/brand-creator/
 ## Boards and rounds
 
 Round pages are built from a template, checked by `board-lint` and photographed by `shot` at 1440 and 390 pixels wide, in
-light and dark. Approved rounds are frozen with `freeze` into `history/`, with a checksum manifest that `check` verifies.
+light and dark. Approved rounds are frozen with `freeze` into `history/`: what their boards show, the scripts that built them and their notes,
+with a checksum manifest that `check` verifies.
 
 In Standard and Full, a motion round adds one more kind of board after you approve the design: three variants of your
 logo's move, each with its own folder (a page, a proof and its stills) next to the board. `board-lint` checks that each

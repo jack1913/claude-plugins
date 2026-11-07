@@ -6,6 +6,7 @@ static_closure(root, starts)  the files those pages reach through src, href, pos
                       at no file ("<page>: <ref>"). A script that builds a path is not read here: the browser pass
                       (render.mjs page-requests, browser_closure) sees those.
 builders(root)        the scripts that built the round: *.py, *.mjs, *.js, *.sh, never under __pycache__ or node_modules.
+records(root)         the round's small text records anywhere in it: *.json (motion proofs, frames.json, check reports), *.md, *.txt.
 
 Paths are compared after Unicode NFC, so a name decomposed on disk (macOS) is the same file as its precomposed reference.
 """
@@ -20,6 +21,7 @@ from pathlib import Path
 START_NAMES = ("board.html", "index.html", "preview.html", "review.html")
 FOLLOWED = (".html", ".htm", ".css", ".svg", ".js", ".mjs")
 BUILDER_SUFFIXES = (".py", ".mjs", ".js", ".sh")
+RECORD_SUFFIXES = (".json", ".md", ".txt")
 SKIPPED_DIRS = ("__pycache__", "node_modules")
 ATTR = re.compile(r"""\b(?:src|href|poster|data-src|xlink:href)\s*=\s*(?:"([^"]*)"|'([^']*)')""", re.I)
 SRCSET = re.compile(r"""\bsrcset\s*=\s*(?:"([^"]*)"|'([^']*)')""", re.I)
@@ -47,6 +49,11 @@ def starting_pages(root: Path) -> list[Path]:
 def builders(root: Path) -> set[Path]:
     """The scripts in the round (they rebuild what the boards show)."""
     return {p for p in _walk(root) if p.suffix.lower() in BUILDER_SUFFIXES}
+
+
+def records(root: Path) -> set[Path]:
+    """The round's text records (a motion proof, a frames.json, a note): what was approved is read from them, linked or not."""
+    return {p for p in _walk(root) if p.suffix.lower() in RECORD_SUFFIXES}
 
 
 def references(text: str, suffix: str) -> list[str]:
@@ -154,3 +161,11 @@ def browser_closure(root: Path, starts: list[Path]) -> tuple[set[Path], list[str
             if f"{page}: {rel}" not in missing:
                 missing.append(f"{page}: {rel}")
     return seen, missing
+
+
+def copy_losses(src: Path, copy: Path) -> list[str]:
+    """The requests the copy's pages make that find no file, less those the source's own pages already missed ("<page>: <path>"):
+    what a copy of a round (freeze) lost. Raises CliError(EXIT_CANNOT) as browser_closure does."""
+    _, before = browser_closure(src, starting_pages(src))
+    _, after = browser_closure(copy, starting_pages(copy))
+    return [m for m in after if m not in before]

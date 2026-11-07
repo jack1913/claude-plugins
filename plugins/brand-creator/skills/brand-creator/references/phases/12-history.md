@@ -40,7 +40,10 @@ already says.
 1. After G3: `brand-creator freeze r<N> --name approved-board --project <dir>`. It copies the round, adds the banner and
    updates the manifest. Freeze the round behind each later approval too (a system-rules board at G4, a recovery round,
    the approved motion round: `freeze r<N> --name approved-motion`, with its variants, proofs and stills kept as written)
-   with a name that says what was approved. `freeze` copies a round folder only. Take every still before a freeze: `frames`
+   with a name that says what was approved. `freeze` keeps what the round's boards show: its board pages, every file they
+   load (read from the files and in the browser), the scripts that built it and its text records (`*.json`, `*.md`, `*.txt`);
+   `FROZEN.md` says how much it left out. `--whole` copies the whole round; without a set-up data directory it stops and names
+   `--static` (files only). Take every still before a freeze: `frames`
    refuses a proof inside `history/` and one in a round before the latest (both are read-only), so a frozen round keeps the
    stills it was frozen with.
 2. Rejected directions stay in their rounds and in the Directions table, each with the owner's reason in one line. The

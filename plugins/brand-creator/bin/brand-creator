@@ -26,7 +26,8 @@ usage: brand-creator [--data <dir>] <subcommand> [args...]
 project
   new <slug>              scaffold a brand project (BRAND-STATE.md, FACTS.md, DECISIONS.md, brief/BRIEF.md)
   state                   print or query BRAND-STATE.md (--require G3, --record G3 "<decision>", --json)
-  freeze <round> --name N copy an approved round to history/ with a banner and update history/MANIFEST.sha256
+  freeze <round> --name N keep an approved round in history/: what its boards show, its scripts and records (--whole: all of it;
+                          --static: no browser), with a banner, and update history/MANIFEST.sha256
   motion                  the motion decision (motion/motion.json): on, off (nothing moves) or not decided; --off "<reason>" records that nothing
                           moves, once (--json for data). Standard and Full decide it before G4: the motion round, or --off
   site approve            put the approved pages of the site round (a pages board, G4p recorded, linted since its last change) into site/ with their paths

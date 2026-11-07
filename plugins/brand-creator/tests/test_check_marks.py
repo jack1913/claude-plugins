@@ -83,7 +83,7 @@ def test_check_verifies_the_history_manifest(tmp_path):
     (p / "rounds" / "r1").mkdir(parents=True)
     (p / "rounds" / "r1" / "notes.html").write_text("<p>approved</p>")
     assert bc("state", "--record", "G3", "ok", project=p).returncode == 0
-    assert bc("freeze", "r1", "--name", "first", project=p).returncode == 0
+    assert bc("freeze", "r1", "--name", "first", "--whole", project=p).returncode == 0
     assert bc("check", project=p).returncode == 0
     frozen = p / "history" / "2026-10-17-first" / "notes.html"
     before = mutate(frozen, "approved", "edited")

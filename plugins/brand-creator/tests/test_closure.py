@@ -128,3 +128,10 @@ def test_without_a_data_directory_the_browser_pass_says_it_cannot_run(tmp_path, 
     with pytest.raises(CliError) as e:
         closure.browser_closure(root, closure.starting_pages(root))
     assert e.value.code == EXIT_CANNOT and "brand-creator setup" in e.value.message
+
+
+def test_records_are_the_json_md_and_txt_files_anywhere_in_the_round(tmp_path):
+    root = tmp_path / "r3"
+    for f in ("v1/proof.json", "v1/frames/frames.json", "NOTES.md", "a/why.txt", "a/shot.png", "node_modules/x/package.json"):
+        w(root, f)
+    assert rels(root, closure.records(root)) == ["NOTES.md", "a/why.txt", "v1/frames/frames.json", "v1/proof.json"]
