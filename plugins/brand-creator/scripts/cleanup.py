@@ -10,11 +10,19 @@
                                                                                   record the owner's yes to that plan in DECISIONS.md
   brand-creator cleanup [--project DIR] [--keep rN]... --yes CODE                remove the planned round folders with git rm (staged, never committed)
 
+  brand-creator cleanup --history [--static] [--record-yes CODE --said "..." | --yes CODE]
+                                                                                  slim frozen rounds in history/ to what their boards show (same three runs)
+
 Whole round folders only, and only committed files that are unchanged, so everything removed can be restored from git. Kept: the latest round of each stage, the latest pick board, every
 round something kept refers to (text, URLs, links, report inputs, BRAND-STATE.md and site/site.json), every earlier round board-lint reads for a kept board, every round it cannot place, and
 each --keep. history/, site/ and assets/ are never touched, except the assets/_checks reports whose subject is in a removed round. CODE is the plan hash (12 to 64 hex digits of the sha256 the
 dry run prints), checked against the plan computed again on every run: a plan that changed needs a new yes. The same --keep options are needed on all three runs. Exit codes: 0 done or
 nothing to do, 1 a refusal, 2 usage (or a link or special file in a round to remove), 3 git is missing. The rules are in scripts/CONTRACT.md, "cleanup".
+
+--history: for each frozen round in history/, what stays is what freeze keeps since 0.10.0 (its board pages, every file they load, read from the
+files and in the browser, its scripts and its text records); the rest goes, with git rm, and history/MANIFEST.sha256 is rewritten and staged. A
+history/ that does not match its manifest is refused. Without a set-up data directory it stops and names --static (files only). The plan file is
+qa/<date>-cleanup-plan-history.txt, the record qa/<date>-cleanup-removed-history.txt, with its restore line (the freezes and the manifest).
 """
 import argparse
 import hashlib
@@ -35,7 +43,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "boardlib"))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "marklib"))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "pagelib"))
 from _common import (EXIT_CANNOT, EXIT_FAIL, EXIT_USAGE, ROUND_RE, CliError, Parser, add_project_arg, confine, fail, find_project, list_rounds, main_guard,  # noqa: E402
-                     read_state, today, verify_history, write_bytes_if_changed)
+                     read_history_manifest, read_state, today, verify_history, write_bytes_if_changed, write_history_manifest)
+import closure  # noqa: E402
 import rounds as rd  # noqa: E402
 
 CHUNK_FILES = 200           # git rm gets at most this many paths per call ...
@@ -487,12 +496,12 @@ def check_no_failed_removal(repo: Repo) -> None:
     if failed is None:
         return
     listed = record_files(failed[1]) - done
-    staged = [repo.local(e.path) for e in status_entries(project, "rounds", untracked=False) if e.kind in "12" and e.xy == "D." and repo.local(e.path) in listed]
+    staged = [repo.local(e.path) for e in status_entries(project, "rounds", "history", untracked=False) if e.kind in "12" and e.xy == "D." and repo.local(e.path) in listed]
     if not staged:
         return
     f, text = failed
     lines = [json.dumps(p, ensure_ascii=False) for p in staged]
-    raise CliError(EXIT_FAIL, shown(lines, f"refused: an earlier removal failed (qa/{f.name}) and {len(lines)} change(s) under rounds/ are still staged. Restore first with: "
+    raise CliError(EXIT_FAIL, shown(lines, f"refused: an earlier removal failed (qa/{f.name}) and {len(lines)} change(s) under rounds/ or history/ are still staged. Restore first with: "
                                            f"{restore_from_record(repo, text)}"))
 
 
@@ -500,6 +509,10 @@ def restore_from_record(repo: Repo, text: str) -> str:
     """The restore line of a removed record, rebuilt from its checked fields, never its `restore:` text: a record is a file anyone can edit,
     and the line is printed for someone (or an agent) to run. The commit is a hex id, rounds are rN, paths are quoted, the project is ours."""
     head = re.search(r"^head before: ([0-9a-f]{40,64})$", text, re.M)
+    frozen = re.search(r"^removed from history: ((?:[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9-]+)(?: [0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9-]+)*)$", text, re.M)
+    if head is not None and frozen is not None:
+        targets = [f"history/{n}" for n in frozen.group(1).split()] + ["history/MANIFEST.sha256"]
+        return f"git -C {shlex.quote(str(repo.project))} --literal-pathspecs checkout {head.group(1)} -- {' '.join(targets)}"
     rounds = re.search(r"^removed rounds: ((?:r\d+)(?: r\d+)*)$", text, re.M)
     if head is None or rounds is None:
         return "(the record's head or rounds line is damaged; find the commit before the removal with git log and check out rounds/ from it)"
@@ -596,7 +609,13 @@ def parse(argv: list[str] | None):
     ap.add_argument("--record-yes", metavar="CODE", help="record the owner's yes to the plan with this code in DECISIONS.md (needs --said)")
     ap.add_argument("--said", help="the owner's words, one line (with --record-yes only)")
     ap.add_argument("--yes", metavar="CODE", help="remove the planned round folders (needs the yes recorded for this plan)")
+    ap.add_argument("--history", action="store_true", help="slim the frozen rounds in history/ to what their boards show, instead of removing old rounds")
+    ap.add_argument("--static", action="store_true", help="with --history: read what the boards show from the files only (no browser)")
     a = ap.parse_args(argv)
+    if a.history and a.keep:
+        ap.error("--history and --keep refuse each other: --keep names rounds to keep; --history slims history/ and removes no round")
+    if a.static and not a.history:
+        ap.error("--static goes with --history only")
     if a.yes is not None and a.record_yes is not None:
         ap.error("--yes and --record-yes are separate runs: record the owner's yes first, then run --yes")
     if a.said is not None and a.record_yes is None:
@@ -630,6 +649,8 @@ def show_keep(keep: rd.Keep) -> None:
 def main(argv: list[str] | None = None) -> int:
     a = parse(argv)
     project = find_project(a.project)
+    if a.history:
+        return history_main(project, a)
     all_rounds = list_rounds(project)
     for n in a.keeps:
         if n not in {m for m, _ in all_rounds}:
@@ -666,7 +687,7 @@ def main(argv: list[str] | None = None) -> int:
     return do_yes(repo, plan, a.yes.lower(), all_rounds, keep, a)
 
 
-def record_yes(project: Path, plan: Plan, code: str, said: str) -> int:
+def record_yes(project: Path, plan, code: str, said: str, entry_fn=None) -> int:
     shown_in = [f for f, _h in shown_plan_has(project, code)]
     if not shown_in:
         fail(EXIT_FAIL, f"no plan with code {code} was shown: run brand-creator cleanup first and show the owner the plan")
@@ -675,7 +696,7 @@ def record_yes(project: Path, plan: Plan, code: str, said: str) -> int:
     decisions = Path(project) / "DECISIONS.md"
     if not decisions.is_file():
         fail(EXIT_FAIL, "DECISIONS.md not found: the owner's yes is recorded there (templates/DECISIONS.md)")
-    entry = entry_text(plan, said, next((f for f, h in shown_plan_has(project, code) if h == plan.hash), shown_in[0]))
+    entry = (entry_fn or entry_text)(plan, said, next((f for f, h in shown_plan_has(project, code) if h == plan.hash), shown_in[0]))
     found = rd.refs_in_text(entry, "DECISIONS.md", suffix=".md")
     if found:
         fail(EXIT_FAIL, f"the owner's words name {found[0].shown}; DECISIONS.md is read for references, so this entry would keep r{found[0].rnd} and change the plan. "
@@ -714,6 +735,186 @@ def do_yes(repo: Repo, plan: Plan, code: str, all_rounds, keep: rd.Keep, a) -> i
         fail(EXIT_FAIL, "the plan changed while cleanup ran: run the dry run again and show the owner the new plan")
     plan = plan._replace(removal=again)
     remove_rounds(repo, plan, entries[len(used)])
+    return 0
+
+
+# ---------------------------------------------------------------- --history: frozen rounds slimmed to what their boards show
+
+class HPlan(NamedTuple):
+    text: str
+    hash: str
+    date: str
+    head: str
+    freezes: list[str]                      # the frozen rounds that lose files, by folder name
+    files: list[tuple[str, str, str]]       # (blob, mode, path) of what git rm takes, sorted by path bytes
+
+    @property
+    def code(self) -> str:
+        return self.hash[:12]
+
+
+def freeze_dirs(project: Path) -> list[Path]:
+    h = Path(project) / "history"
+    return sorted(d for d in h.iterdir() if d.is_dir() and not d.name.startswith(".")) if h.is_dir() else []
+
+
+def history_keep(d: Path, static: bool) -> set[Path]:
+    """What a frozen round keeps: the closure freeze computes, read on the frozen copy (its banner comments are only comments)."""
+    starts = closure.starting_pages(d)
+    kept, _ = closure.static_closure(d, starts)
+    if not static:
+        try:
+            seen, _ = closure.browser_closure(d, starts)
+        except CliError as e:
+            if e.code != EXIT_CANNOT:
+                raise
+            fail(EXIT_CANNOT, f"{e.message}. cleanup --history reads what each frozen board shows in the browser; without one, run it with --static "
+                              "(the references in the files only: a path a script builds is not seen)")
+        kept |= seen
+    return {p.resolve() for p in kept | closure.builders(d) | closure.records(d) | set(starts)}
+
+
+def history_git_files(repo: Repo, paths: list[str]) -> list[tuple[str, str, str]]:
+    """(blob, mode, path) for each path, all committed and unchanged; otherwise refuse, naming them (they could not be restored)."""
+    project = repo.project
+    tracked: dict[str, tuple[str, str]] = {}
+    for part in chunks(paths):
+        ls = git(project, "ls-files", "-v", "-s", "-z", "--", *part)
+        if ls.returncode != 0:
+            fail(EXIT_FAIL, f"git ls-files failed: {git_text(ls)}")
+        for tok in ls.stdout.split(b"\0"):
+            if tok:
+                m = re.match(r"^(\S) (\d+) ([0-9a-f]+) (\d)\t(.*)$", os.fsdecode(tok), re.S)
+                if m and m.group(1) == "H":
+                    tracked[unicodedata.normalize("NFC", repo.local(m.group(5)))] = (m.group(2), m.group(3))
+    changed = {unicodedata.normalize("NFC", repo.local(e.path)) for e in status_entries(project, "history", untracked=False)}
+    problems = [f"not known to git: {json.dumps(p, ensure_ascii=False)}" for p in paths if p not in tracked]
+    problems += [f"changed since the last commit: {json.dumps(p, ensure_ascii=False)}" for p in paths if p in changed]
+    if problems:
+        raise CliError(EXIT_FAIL, shown(problems, f"refused: {len(problems)} file(s) of history/ to remove are not committed as they are, so they could not be restored:"))
+    return sorted(((tracked[p][1], tracked[p][0], p) for p in paths), key=lambda x: x[2].encode("utf-8", "surrogateescape"))
+
+
+def build_history_plan(repo: Repo, static: bool) -> "HPlan | None":
+    project = repo.project
+    problems = verify_history(project)
+    if problems:
+        raise CliError(EXIT_FAIL, shown(problems, "refused: history/ does not match history/MANIFEST.sha256, so cleanup cannot tell what was frozen; resolve it "
+                                                  "(brand-creator check names it) and run again:"))
+    date, slug = today(), display_slug(project)
+    rows, goes = [], []
+    for d in freeze_dirs(project):
+        keep = history_keep(d, static)
+        files = [p for p in sorted(d.rglob("*")) if p.is_file()]
+        gone = [p for p in files if p.resolve() not in keep]
+        if not gone:
+            continue
+        stay = [p for p in files if p.resolve() in keep]
+        rows.append(f"  {d.name}: stays {len(stay)} files, {mb(sum(p.stat().st_size for p in stay))}; goes {len(gone)} files, "
+                    f"{mb(sum(p.stat().st_size for p in gone))}")
+        goes += [unicodedata.normalize("NFC", p.relative_to(project).as_posix()) for p in gone]
+    if not goes:
+        return None
+    files = history_git_files(repo, goes)
+    freezes = sorted({p.split("/")[1] for _b, _m, p in files})
+    canon = ["brand-creator cleanup history plan v1", slug, f"mode {'static' if static else 'browser'}"] + [f"file {b} {m} {json.dumps(p, ensure_ascii=False)}" for b, m, p in files]
+    digest = hashlib.sha256(("\n".join(canon) + "\n").encode("utf-8", "surrogateescape")).hexdigest()
+    flag = " --static" if static else ""
+    lines = ["brand-creator cleanup plan (history)", f"project: {slug}", f"date: {date}", f"head: {repo.head} (removed files are restored from it)",
+             f"plan: sha256:{digest}   code: {digest[:12]}", "", "frozen rounds slimmed to what their boards show:"] + rows
+    lines += ["", "files to remove (git blob, mode, path):"] + [f"  {b} {m} {json.dumps(p, ensure_ascii=False)}" for b, m, p in files]
+    lines += ["", "history/MANIFEST.sha256 is rewritten without them, and staged.", "",
+              "To remove: the owner says yes to this plan, then", f"  brand-creator cleanup --history{flag} --record-yes {digest[:12]} --said \"<their words>\"",
+              f"  brand-creator cleanup --history{flag} --yes {digest[:12]}"]
+    return HPlan("\n".join(lines) + "\n", digest, date, repo.head, freezes, files)
+
+
+def history_entry_text(plan: HPlan, said: str, plan_file: str) -> str:
+    names = ", ".join(plan.freezes)
+    return (f"## {plan.date}: slim frozen rounds to what their boards show ({names})\n\n"
+            f"- Gate: none (cleanup of history/)\n"
+            f"- Decided: remove {len(plan.files)} files that no board of {names} shows, committed in git at {plan.head[:10]}; history/MANIFEST.sha256 rewritten\n"
+            f"- Why: {said}\n"
+            f"- Rejected: keeping whole frozen rounds\n"
+            f"- Consequences: the plan is {plan_file}; what was removed and how to restore it goes into qa/<date>-cleanup-removed-history.txt\n"
+            f"- Cleanup plan: sha256:{plan.hash}\n")
+
+
+def write_history_record(repo: Repo, plan: HPlan, status: str, staged: int, heading: str, restore: str) -> Path:
+    qa = confine(repo.project, "qa", what="qa folder")
+    qa.mkdir(exist_ok=True)
+    k, name = 1, f"{plan.date}-cleanup-removed-history.txt"
+    while (qa / name).exists():
+        k += 1
+        name = f"{plan.date}-cleanup-removed-history-{k}.txt"
+    lines = ["brand-creator cleanup: removed (history)", f"date: {plan.date}", f"status: {status}", f"plan: sha256:{plan.hash}", f"head before: {plan.head}",
+             f"yes: DECISIONS.md, \"{heading[3:] if heading.startswith('## ') else heading}\"",
+             "removed from history: " + " ".join(plan.freezes), f"removed files: {staged} (staged with git rm, not committed)", f"restore: {restore}", ""]
+    lines += [f"{b} {m} {json.dumps(p, ensure_ascii=False)}" for b, m, p in plan.files]
+    (qa / name).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return qa / name
+
+
+def history_main(project: Path, a) -> int:
+    repo = open_repo(project)
+    check_no_failed_removal(repo)
+    plan = build_history_plan(repo, a.static)
+    if plan is None:
+        if a.record_yes is not None or a.yes is not None:
+            fail(EXIT_FAIL, "the plan changed (now: nothing to slim, every frozen round holds only what its boards show): nothing was recorded or removed")
+        print("nothing to slim in history/: every frozen round holds only what its boards show, its scripts and its records")
+        return 0
+    if a.record_yes is None and a.yes is None:
+        print(plan.text, end="")
+        qa = confine(project, "qa", what="qa folder")
+        qa.mkdir(exist_ok=True)
+        write_bytes_if_changed(confine(project, f"qa/{plan.date}-cleanup-plan-history.txt", what="plan file"), plan.text.encode("utf-8", "surrogateescape"))
+        print(f"plan file: qa/{plan.date}-cleanup-plan-history.txt")
+        return 0
+    if a.record_yes is not None:
+        return record_yes(project, plan, a.record_yes.lower(), a.said, history_entry_text)
+    code = a.yes.lower()
+    if not plan.hash.startswith(code):
+        fail(EXIT_FAIL, f"the plan changed since the owner said yes (now {plan.code}): show the owner the new plan and ask again")
+    entries = [h for h, x in decision_entries(project) if x == plan.hash]
+    if not entries:
+        fail(EXIT_FAIL, f"the owner's yes to plan {plan.code} is not recorded: show the plan, ask, then brand-creator cleanup --history --record-yes {plan.code} --said \"<their words>\"")
+    used = complete_records(project, plan.hash)
+    if len(entries) <= len(used):
+        fail(EXIT_FAIL, f"the yes to plan {plan.code} was used ({used[-1]}): a new removal needs a new plan, or a new yes")
+    heading = entries[len(used)]
+    targets = [f"history/{n}" for n in plan.freezes] + ["history/MANIFEST.sha256"]
+    restore = f"git -C {shlex.quote(str(project))} --literal-pathspecs checkout {plan.head} -- {' '.join(targets)}"
+    paths = [p for _b, _m, p in plan.files]
+    staged = 0
+    for k, part in enumerate(chunks(paths), 1):
+        cp = git(project, "rm", "-q", "--", *part)
+        if cp.returncode != 0:
+            rec = write_history_record(repo, plan, f"failed at chunk {k}: {clean(git_text(cp))[:300]}", staged, heading, restore)
+            fail(EXIT_FAIL, f"git rm failed at chunk {k} ({git_text(cp)}); record {rec.relative_to(project)}; restore what was staged with: {restore}")
+        staged += len(part)
+    history = Path(project) / "history"
+    entries_now = read_history_manifest(history)
+    for p in paths:
+        entries_now.pop(p[len("history/"):], None)
+    write_history_manifest(history, entries_now)
+    for n in plan.freezes:   # folders emptied by git rm
+        for dirpath, _d, _f in os.walk(history / n, topdown=False):
+            try:
+                os.rmdir(dirpath)
+            except OSError:
+                pass
+    cp = git(project, "add", "--", "history/MANIFEST.sha256")
+    problems = verify_history(project)
+    if cp.returncode != 0 or problems:
+        why = git_text(cp) if cp.returncode != 0 else "; ".join(problems[:3])
+        rec = write_history_record(repo, plan, f"failed: post-conditions ({clean(why)[:300]})", staged, heading, restore)
+        fail(EXIT_FAIL, f"cleanup removed the files, but {why}; record {rec.relative_to(project)}; restore with: {restore}")
+    rec = write_history_record(repo, plan, "complete", staged, heading, restore)
+    print(f"slimmed {len(plan.freezes)} frozen round(s) ({', '.join(plan.freezes)}): {staged} file(s) removed with git rm and history/MANIFEST.sha256 rewritten, staged, not committed.")
+    print(f"record: {rec.relative_to(project)}")
+    print(f"restore (before or after you commit): {restore}")
+    print(f"suggested commit message: brand: slim frozen rounds to what their boards show (cleanup plan {plan.code})")
     return 0
 
 

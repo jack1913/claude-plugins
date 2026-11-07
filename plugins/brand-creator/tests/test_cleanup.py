@@ -1368,3 +1368,115 @@ def test_record_yes_keeps_the_line_endings_of_decisions_md(tmp_path):
     assert p.run("--record-yes", code, "--said", "ok").returncode == 0
     new = (p.dir / "DECISIONS.md").read_bytes()
     assert new.startswith(old) and b"\n" not in new.replace(b"\r\n", b"")
+
+
+# ---------------------------------------------------------------- cleanup --history: frozen rounds slimmed to what their boards show
+
+FZ = "history/2026-10-21-approved"
+HPNG = b"\x89PNG\r\n\x1a\n"
+
+
+def frozen(tmp_path: Path, files: dict[str, str | bytes] | None = None) -> Proj:
+    """A committed project whose history/ holds one freeze: a board that shows shots/a.png, a build script, FROZEN.md, and _lead/big.png that no board shows."""
+    p = make(tmp_path, {1: "pick"})
+    files = files if files is not None else {"board.html": '<img src="shots/a.png">', "shots/a.png": HPNG, "build.py": "print(1)\n",
+                                             "FROZEN.md": "# Kept as written\n", "_lead/big.png": HPNG * 1000}
+    entries = {}
+    for rel, data in files.items():
+        f = p.write(f"{FZ}/{rel}", data)
+        entries[f"2026-10-21-approved/{rel}"] = hashlib.sha256(f.read_bytes()).hexdigest()
+    p.write("history/MANIFEST.sha256", "".join(f"{h}  {r}\n" for r, h in sorted(entries.items())))
+    p.commit("frozen")
+    return p
+
+
+def hcode(p: Proj) -> str:
+    r = p.run("--history", "--static")
+    assert r.returncode == 0, r.stderr + r.stdout
+    return re.search(r"code: ([0-9a-f]{12})", r.stdout).group(1)
+
+
+def manifest_paths(p: Proj) -> list[str]:
+    return sorted(ln.split("  ", 1)[1] for ln in (p.dir / "history" / "MANIFEST.sha256").read_text().splitlines() if ln.strip())
+
+
+def test_history_plan_lists_what_each_freeze_keeps_and_what_goes_with_sizes(tmp_path):
+    p = frozen(tmp_path)
+    r = p.run("--history", "--static")
+    assert r.returncode == 0, r.stderr + r.stdout
+    assert "2026-10-21-approved: stays 4 files" in r.stdout and "goes 1 files" in r.stdout
+    assert '"history/2026-10-21-approved/_lead/big.png"' in r.stdout
+    assert (p.dir / "qa" / f"{DATE}-cleanup-plan-history.txt").is_file()
+    assert (p.dir / FZ / "_lead" / "big.png").is_file()                                   # the dry run removes nothing
+
+
+def test_history_yes_removes_only_what_the_plan_listed_and_rewrites_the_manifest(tmp_path):
+    p = frozen(tmp_path)
+    code = hcode(p)
+    assert p.run("--history", "--static", "--record-yes", code, "--said", "tak").returncode == 0
+    r = p.run("--history", "--static", "--yes", code)
+    assert r.returncode == 0, r.stderr + r.stdout
+    assert not (p.dir / FZ / "_lead").exists() and (p.dir / FZ / "shots" / "a.png").is_file() and (p.dir / FZ / "build.py").is_file()
+    assert manifest_paths(p) == ["2026-10-21-approved/FROZEN.md", "2026-10-21-approved/board.html", "2026-10-21-approved/build.py",
+                                 "2026-10-21-approved/shots/a.png"]
+    from _common import verify_history
+    assert verify_history(p.dir) == []
+    st = p.git("status", "--porcelain").stdout
+    assert f"D  {FZ}/_lead/big.png" in st and "M  history/MANIFEST.sha256" in st     # staged, not committed
+    assert "Cleanup plan: sha256:" in (p.dir / "DECISIONS.md").read_text()
+
+
+def test_history_refuses_a_freeze_whose_files_do_not_match_the_manifest(tmp_path):
+    p = frozen(tmp_path)
+    (p.dir / FZ / "board.html").write_text('<img src="shots/a.png"><p>edited</p>')
+    r = p.run("--history", "--static")
+    assert r.returncode == 1 and "modified: history/2026-10-21-approved/board.html" in r.stderr
+    assert not (p.dir / "qa" / f"{DATE}-cleanup-plan-history.txt").exists()
+
+
+def test_history_record_restores_the_freeze_and_the_manifest(tmp_path):
+    p = frozen(tmp_path)
+    code = hcode(p)
+    p.run("--history", "--static", "--record-yes", code, "--said", "tak")
+    assert p.run("--history", "--static", "--yes", code).returncode == 0
+    rec = (p.dir / "qa" / f"{DATE}-cleanup-removed-history.txt").read_text()
+    assert "removed from history: 2026-10-21-approved" in rec
+    restore = re.search(r"^restore: (.*)$", rec, re.M).group(1)
+    assert subprocess.run(restore, shell=True, capture_output=True, env={**os.environ, "HOME": str(p.home)}).returncode == 0
+    assert (p.dir / FZ / "_lead" / "big.png").read_bytes() == HPNG * 1000
+    from _common import verify_history
+    assert verify_history(p.dir) == []
+
+
+def test_history_and_keep_refuse_each_other(tmp_path):
+    p = frozen(tmp_path)
+    r = p.run("--history", "--keep", "r1")
+    assert r.returncode == 2 and "--history" in r.stderr and "--keep" in r.stderr
+
+
+def test_history_static_goes_only_with_history(tmp_path):
+    p = frozen(tmp_path)
+    r = p.run("--static")
+    assert r.returncode == 2 and "--static" in r.stderr
+
+
+def test_history_without_a_browser_names_static(tmp_path):
+    p = frozen(tmp_path)
+    r = bc("cleanup", "--history", project=p.dir, env=p.env, data=tmp_path / "nodata")
+    assert r.returncode == 3 and "--static" in r.stderr
+
+
+def test_history_with_nothing_to_slim_says_so(tmp_path):
+    p = frozen(tmp_path, {"board.html": '<img src="a.png">', "a.png": HPNG, "FROZEN.md": "# Kept as written\n"})
+    r = p.run("--history", "--static")
+    assert r.returncode == 0 and "nothing to slim in history/" in r.stdout
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_history_keeps_a_picture_a_frozen_board_adds_with_a_script(tmp_path):
+    board = '<div id="g"></div><script>const i = document.createElement("img"); i.src = "shots/" + "late" + ".png"; g.append(i);</script>'
+    p = frozen(tmp_path, {"board.html": board, "shots/late.png": HPNG, "shots/unseen.png": HPNG, "FROZEN.md": "# Kept as written\n"})
+    r = p.run("--history")
+    assert r.returncode == 0, r.stderr + r.stdout
+    assert '"history/2026-10-21-approved/shots/unseen.png"' in r.stdout and "shots/late.png" not in r.stdout

@@ -47,3 +47,10 @@ record may name a round.
   committed, unchanged files go, the removal is staged, and the undo is one line.
 - Recording the yes touches `DECISIONS.md`, which the lint of a pages board reads, so a `check --refresh` follows the removal.
 - Not built: `--json`, an undo command, a `check` row about the size of `rounds/`.
+
+## Update 2026-11-07
+
+0.10.0 adds `cleanup --history`: the same plan, yes and record flow slims frozen rounds in `history/` to what their boards show, the
+scripts that built them and their text records, and rewrites `history/MANIFEST.sha256`. A frozen round stays the record of what was
+approved; what goes is what no board of it shows (on the Płacuję project, 291 MB down to about 19 MB). `freeze` itself keeps only that
+much from 0.10.0 (`--whole` keeps the old behaviour).

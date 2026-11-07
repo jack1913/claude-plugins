@@ -737,7 +737,17 @@ Old round folders leave a project through git, after the owner's yes. Script `sc
 brand-creator cleanup [--project DIR] [--keep rN]...                                  the dry run (default): print the plan, write qa/<date>-cleanup-plan.txt
 brand-creator cleanup [--project DIR] [--keep rN]... --record-yes CODE --said "<owner's words>"   record the owner's yes to that plan in DECISIONS.md
 brand-creator cleanup [--project DIR] [--keep rN]... --yes CODE                       remove the planned files with git rm (staged, never committed)
+brand-creator cleanup [--project DIR] --history [--static] [--record-yes CODE --said "..." | --yes CODE]   the same three runs for history/ (below)
 ```
+
+**`--history`** slims the frozen rounds in `history/` to what `freeze` keeps since 0.10.0 (`scripts/lib/closure.py`: the board pages, every file they
+reach, read from the files and, without `--static`, in the plugin's Chromium; the scripts; the text records `*.json`, `*.md`, `*.txt`). A `history/`
+that does not match `history/MANIFEST.sha256` is refused (exit 1, the problems named, nothing written), and so is a file to remove that is not
+committed as it is. Without a set-up data directory it stops (exit 3) and names `--static`. The plan file is `qa/<date>-cleanup-plan-history.txt`
+(its hash covers the mode and every file with its blob), the yes is a DECISIONS.md entry like any cleanup's, and `--yes` removes with `git rm`,
+rewrites the manifest without those files and stages it, then writes `qa/<date>-cleanup-removed-history.txt` with `removed from history: <freeze>...`
+and the restore line (the freezes and the manifest, from the head before). `--history` and `--keep` refuse each other; `--static` goes with
+`--history` only. The guard keeps blocking every other way to change `history/`.
 
 `CODE` is the plan hash: the first 12 hex digits the dry run prints, or all 64; it is checked against the plan computed again on every run, never read from a file. `--keep rN` (repeatable) keeps one
 more round and is part of the plan, so the same options go with all three runs. `--record-yes` and `--yes` are separate runs (both: exit 2). `--said` goes with `--record-yes` only, is one line (a newline or any other
