@@ -83,3 +83,48 @@ def test_builders_skip_pycache_and_node_modules(tmp_path):
               "a/__pycache__/m.py", "shot.png"):
         w(root, f)
     assert rels(root, closure.builders(root)) == ["a/render.mjs", "a/x.js", "build.py", "go.sh"]
+
+
+# ---------------------------------------------------------------- the browser pass (render.mjs page-requests)
+
+import pytest  # noqa: E402
+
+from _common import CliError, EXIT_CANNOT  # noqa: E402
+
+SCRIPTED = '<div id="g"></div><script>for (const n of [1, 2]) { const i = document.createElement("img"); i.src = "shots/" + n + ".png"; g.append(i); }</script>'
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_picture_a_script_adds_is_in_the_browser_closure(tmp_path):
+    root = tmp_path / "r3"
+    w(root, "board.html", SCRIPTED)
+    w(root, "shots/1.png", b"\x89PNG\r\n\x1a\n")
+    w(root, "shots/2.png", b"\x89PNG\r\n\x1a\n")
+    w(root, "shots/3.png", b"\x89PNG\r\n\x1a\n")
+    starts = closure.starting_pages(root)
+    static, _ = closure.static_closure(root, starts)
+    assert rels(root, static) == ["board.html"]                       # the static pass cannot see a path a script builds
+    seen, missing = closure.browser_closure(root, starts)
+    assert rels(root, seen) == ["board.html", "shots/1.png", "shots/2.png"]
+    assert missing == []
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_the_browser_pass_lists_a_request_that_finds_no_file(tmp_path):
+    root = tmp_path / "r3"
+    w(root, "board.html", SCRIPTED)
+    w(root, "shots/1.png", b"\x89PNG\r\n\x1a\n")
+    seen, missing = closure.browser_closure(root, closure.starting_pages(root))
+    assert rels(root, seen) == ["board.html", "shots/1.png"]
+    assert missing == ["board.html: shots/2.png"]
+
+
+def test_without_a_data_directory_the_browser_pass_says_it_cannot_run(tmp_path, monkeypatch):
+    root = tmp_path / "r3"
+    w(root, "board.html", "<p>x</p>")
+    monkeypatch.delenv("BRAND_CREATOR_DATA", raising=False)
+    with pytest.raises(CliError) as e:
+        closure.browser_closure(root, closure.starting_pages(root))
+    assert e.value.code == EXIT_CANNOT and "brand-creator setup" in e.value.message

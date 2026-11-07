@@ -46,6 +46,7 @@ const USAGE = `usage:
   render.mjs page-measure --request FILE.json --out FILE.json [--project DIR]
   render.mjs capture <page.html> [--project DIR] [--wait MS] [--timeout MS] [--frames] [--reveal]
   render.mjs capture --url URL --name NAME [--project DIR] [--timeout MS]
+  render.mjs page-requests --root DIR --page REL [--page REL ...] --out FILE.json [--timeout MS]
   render.mjs wiring <url>
   render.mjs selftest
 shots are written outside the project (default: <data>/scratch/...) or, with --out, under <project>/specimens/ (shots kept as specimens); the report goes to <project>/assets/_checks/shot.json.
@@ -3061,6 +3062,56 @@ async function cmdSelftest() {
 }
 
 // `render.mjs <command> --help` (or -h): that command's usage lines, then the notes (they are shared by the commands); exit 0
+// ---------------------------------------------------------------- page-requests (what a frozen round must keep: freeze, cleanup --history)
+// Serves --root on 127.0.0.1, loads each --page at 1440 px, settles it as a still is settled, walks it down and back (--reveal's walk,
+// so what a page shows on scroll is requested too) and writes {"pages": {page: {"requested": [path...], "missing": [path...]}}}: every
+// path under --root the page asked for and got, and every one that found no file. A request to another origin is aborted and never listed.
+async function cmdPageRequests(argv) {
+  const { values } = parse(argv, { root: { type: "string" }, page: { type: "string", multiple: true }, out: { type: "string" }, timeout: { type: "string" } }, false);
+  if (!values.root || !values.out || !values.page?.length) die(EXIT.USAGE, `page-requests needs --root, at least one --page and --out\n${USAGE}`);
+  const timeout = wholeMs(values.timeout ?? "60000", "--timeout", 1000);
+  let root;
+  try { root = fs.realpathSync.native(values.root); } catch { die(EXIT.USAGE, `--root ${values.root} does not exist`); }
+  if (!fs.statSync(root).isDirectory()) die(EXIT.USAGE, `--root ${values.root} is not a folder`);
+  for (const p of values.page) {
+    const abs = path.resolve(root, p), r = path.relative(root, abs);
+    if (r.startsWith("..") || path.isAbsolute(r) || !fs.existsSync(abs)) die(EXIT.USAGE, `--page ${p} is not a file under --root`);
+  }
+  const browser = await launch();
+  const server = await startServer(root);
+  const pages = {};
+  try {
+    for (const p of values.page) {
+      const requested = new Set(), missing = new Set();
+      const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: "light", deviceScaleFactor: 1 });
+      await instrument(ctx, server.origin);
+      const page = await ctx.newPage();
+      const relOf = (u) => decodeURIComponent(new URL(u).pathname).replace(/^\/+/, "");
+      page.on("response", (r) => {
+        if (!r.url().startsWith(server.origin + "/")) return;
+        (r.status() >= 400 ? missing : requested).add(relOf(r.url()));
+      });
+      try {
+        const url = server.origin + "/" + p.split("/").map(encodeURIComponent).join("/");
+        await withTimeout(page.goto(url, { waitUntil: "load", timeout }), timeout + 5000, `loading ${p}`);
+        await settleForStill(page, { timeout, waitMs: 300 });
+        await revealWalk(page, 300, timeout);
+        await page.waitForTimeout(CAPTURE_FRAMES_SETTLE_MS);
+      } catch (e) {
+        die(EXIT.CANNOT, `page-requests could not load ${p}: ${firstLine(e)}`);
+      } finally {
+        await ctx.close();
+      }
+      pages[p] = { requested: [...requested].sort(), missing: [...missing].sort() };
+    }
+  } finally {
+    await browser.close();
+    await server.close();
+  }
+  fs.writeFileSync(values.out, JSON.stringify({ schema: 1, tool: "page-requests", pages }, null, 2) + "\n");
+  return EXIT.PASS;
+}
+
 function helpOf(cmd) {
   const lines = USAGE.split("\n"), own = lines.filter((l) => l.startsWith(`  render.mjs ${cmd} `) || l === `  render.mjs ${cmd}`);
   if (!own.length) return die(EXIT.USAGE, `unknown command ${cmd}\n${USAGE}`);
@@ -3082,6 +3133,7 @@ mainGuard(async () => {
     case "frames": return cmdFrames(rest);
     case "page-measure": return cmdPageMeasure(rest);
     case "capture": return cmdCapture(rest);
+    case "page-requests": return cmdPageRequests(rest);
     case "wiring": return cmdWiring(rest);
     case undefined: case "-h": case "--help": console.log(USAGE); return cmd ? EXIT.PASS : EXIT.USAGE;
     default: return die(EXIT.USAGE, `unknown command ${cmd}\n${USAGE}`);

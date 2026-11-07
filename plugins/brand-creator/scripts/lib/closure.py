@@ -103,3 +103,54 @@ def static_closure(root: Path, starts: list[Path]) -> tuple[set[Path], list[str]
             elif hit.resolve() not in kept:
                 todo.append(hit.resolve())
     return kept, missing
+
+
+PAGE_REQUESTS_TIMEOUT_S = 600   # every starting page loaded, settled and walked down once
+
+
+def browser_closure(root: Path, starts: list[Path]) -> tuple[set[Path], list[str]]:
+    """The files the starting pages request when loaded in the plugin's Chromium (render.mjs page-requests): paths a script builds
+    included. Second item: the requests that found no file, as "<page>: <path>". Raises CliError(EXIT_CANNOT) when node, the data
+    directory or Chromium is missing: the caller decides what that means, never this function."""
+    import json
+    import os
+    import shutil
+    import subprocess
+    import tempfile
+    from _common import EXIT_CANNOT, fail, plugin_root
+    data = os.environ.get("BRAND_CREATOR_DATA", "").strip()
+    if not data:
+        fail(EXIT_CANNOT, "the browser pass needs a set-up data directory (BRAND_CREATOR_DATA): run brand-creator setup")
+    node = shutil.which("node")
+    if not node:
+        fail(EXIT_CANNOT, "the browser pass needs node (Node 22 or newer): run brand-creator prereq, then brand-creator setup")
+    root = root.resolve()
+    pages = [nfc(p.resolve().relative_to(root).as_posix()) for p in starts if p.suffix.lower() in (".html", ".htm")]
+    index = _index(root)
+    if not pages:
+        return set(), []
+    with tempfile.TemporaryDirectory(prefix="bc-page-requests-") as tmp:
+        out = Path(tmp) / "requests.json"
+        cmd = [node, str(plugin_root() / "scripts" / "render.mjs"), "page-requests", "--root", str(root), "--out", str(out)]
+        for p in pages:
+            cmd += ["--page", p]
+        try:
+            cp = subprocess.run(cmd, capture_output=True, timeout=PAGE_REQUESTS_TIMEOUT_S, env={**os.environ, "BRAND_CREATOR_DATA": data})
+        except subprocess.TimeoutExpired:
+            fail(EXIT_CANNOT, f"the browser pass timed out after {PAGE_REQUESTS_TIMEOUT_S}s")
+        if cp.returncode != 0:
+            why = cp.stderr.decode("utf-8", "replace").strip().removeprefix("error: ")
+            fail(EXIT_CANNOT, f"the browser pass could not run: {why or f'render.mjs page-requests exited {cp.returncode}'}")
+        doc = json.loads(out.read_text(encoding="utf-8"))
+    seen: set[Path] = set()
+    missing: list[str] = []
+    for page in pages:
+        got = doc["pages"].get(page, {})
+        for rel in got.get("requested", []):
+            hit = index.get(nfc(rel))
+            if hit is not None:
+                seen.add(hit.resolve())
+        for rel in got.get("missing", []):
+            if f"{page}: {rel}" not in missing:
+                missing.append(f"{page}: {rel}")
+    return seen, missing
