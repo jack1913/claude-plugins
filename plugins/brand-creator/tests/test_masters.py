@@ -137,3 +137,194 @@ def test_the_masters_board_template_filled_in_passes_board_lint(tmp_path):
     (p / "rounds" / "r5" / "png" / "kalendarz-1080x1350.png").write_bytes(PNG)
     r = lint(p)
     assert r.returncode == 0, failing(report(p, "board-lint"))
+
+
+# ---------------------------------------------------------------- Task 6: masters check
+
+import zipfile  # noqa: E402
+
+import pytest  # noqa: E402
+
+
+def check(p: Path, *args: str):
+    return bc("masters", "check", *args, project=p)
+
+
+def mrows(p: Path) -> dict:
+    return {r["id"]: r for r in report(p, "masters")["results"]}
+
+
+def round_with(tmp_path: Path, files: dict[str, str | bytes], entries: list[dict], *, n: int = 5) -> Path:
+    p = masters_round(tmp_path, n=n, manifest={"entries": entries, "copy_rules": [], "builder": None})
+    for rel, data in files.items():
+        f = p / "rounds" / f"r{n}" / rel
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_bytes(data.encode() if isinstance(data, str) else data)
+    return p
+
+
+def ad_entry(name: str, w: int = 600, h: int = 400, d: str = "k") -> dict:
+    return {"file": f"reklama/{name}.html", "kind": "ad", "canvas": [w, h], "direction": d}
+
+
+ABS = "position:absolute;font:60px/1 sans-serif;margin:0"
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_clean_ad_passes_and_its_png_is_written(tmp_path):
+    p = round_with(tmp_path, {"reklama/a.html": ad(600, 400, f'<p style="{ABS};left:40px;top:40px">Hello</p>')}, [ad_entry("a")])
+    r = check(p)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert mrows(p)["masters:canvas"]["status"] == "pass" and mrows(p)["masters:covered"]["status"] == "pass"
+    png = p / "rounds" / "r5" / "png" / "a.png"
+    assert png.read_bytes()[:8] == PNG
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_an_element_outside_the_canvas_fails_masters_canvas(tmp_path):
+    body = f'<p style="{ABS};left:40px;top:40px">Hi</p><div id="panel" style="position:absolute;left:500px;top:40px;width:200px;height:50px;background:#000"></div>'
+    p = round_with(tmp_path, {"reklama/a.html": ad(600, 400, body)}, [ad_entry("a")])
+    assert check(p).returncode == 1
+    assert mrows(p)["masters:canvas"]["status"] == "fail" and "#panel" in mrows(p)["masters:canvas"]["detail"]
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_number_running_into_another_fails_masters_covered_and_names_both(tmp_path):
+    body = (f'<span id="amount" style="{ABS};left:20px;top:100px">13 205,20 zł</span>'
+            f'<span id="three" style="{ABS};left:300px;top:100px">3</span>')
+    p = round_with(tmp_path, {"reklama/a.html": ad(600, 400, body)}, [ad_entry("a")])
+    assert check(p).returncode == 1
+    d = mrows(p)["masters:covered"]
+    assert d["status"] == "fail" and "#amount" in d["detail"] and "#three" in d["detail"]
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_an_unmarked_stamp_over_text_warns_naming_both_elements(tmp_path):
+    body = (f'<p id="label" style="{ABS};left:40px;top:100px">rozliczony</p>'
+            '<div id="stamp" style="position:absolute;left:60px;top:90px;width:120px;height:90px;background:#e33"></div>')
+    p = round_with(tmp_path, {"reklama/a.html": ad(600, 400, body)}, [ad_entry("a")])
+    assert check(p).returncode == 0
+    d = mrows(p)["masters:covered"]
+    assert d["status"] == "warn" and "#label" in d["detail"] and "#stamp" in d["detail"] and "data-masters-overlay" in d["detail"]
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_an_overlay_marked_on_purpose_passes_and_is_listed(tmp_path):
+    body = (f'<p id="label" style="{ABS};left:40px;top:100px">rozliczony</p>'
+            '<div id="stamp" data-masters-overlay style="position:absolute;left:60px;top:90px;width:120px;height:90px;background:#e33"></div>')
+    p = round_with(tmp_path, {"reklama/a.html": ad(600, 400, body)}, [ad_entry("a")])
+    assert check(p).returncode == 0
+    assert mrows(p)["masters:covered"]["status"] == "pass"
+    assert mrows(p)["masters:overlays"]["status"] == "info" and "#stamp" in mrows(p)["masters:overlays"]["detail"]
+
+
+def pdf_bytes(pages: int, w: int = 1440, h: int = 810, date: str = "D:20261107120000Z") -> bytes:
+    objs = ["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [" + " ".join(f"{3 + i} 0 R" for i in range(pages)) + f"] /Count {pages} >>"]
+    objs += [f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {w} {h}] >>" for _ in range(pages)]
+    objs.append(f"<< /Producer (t) /CreationDate ({date}) /ModDate ({date}) >>")
+    out, offs = b"%PDF-1.4\n", []
+    for i, o in enumerate(objs, 1):
+        offs.append(len(out))
+        out += f"{i} 0 obj\n{o}\nendobj\n".encode()
+    xref = len(out)
+    out += f"xref\n0 {len(objs) + 1}\n0000000000 65535 f \n".encode() + b"".join(f"{o:010d} 00000 n \n".encode() for o in offs)
+    out += f"trailer\n<< /Size {len(objs) + 1} /Root 1 0 R /Info {len(objs)} 0 R /ID [<0123456789abcdef0123456789abcdef> <0123456789abcdef0123456789abcdef>] >>\nstartxref\n{xref}\n%%EOF\n".encode()
+    return out
+
+
+def slides(k: int) -> list[dict]:
+    return [{"file": f"slajdy/{i}.png", "kind": "image"} for i in range(k)] + [{"file": f"slajdy/s{i}.html", "kind": "slide", "canvas": [1920, 1080], "direction": "k"} for i in range(k)]
+
+
+def deck(tmp_path: Path, pdf: bytes, k: int = 3) -> Path:
+    files = {"prezentacja/deck.pdf": pdf, **{f"slajdy/s{i}.html": ad(1920, 1080, f'<p style="{ABS};left:40px;top:40px">S{i}</p>') for i in range(k)}}
+    entries = [{"file": f"slajdy/s{i}.html", "kind": "slide", "canvas": [1920, 1080], "direction": "k"} for i in range(k)] + [{"file": "prezentacja/deck.pdf", "kind": "deck-pdf"}]
+    return round_with(tmp_path, files, entries)
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_normalised_deck_pdf_with_one_page_per_slide_passes(tmp_path):
+    import determinism
+    p = deck(tmp_path, determinism.normalise_pdf(pdf_bytes(3)))
+    assert check(p).returncode == 0, mrows(p)
+    assert mrows(p)["masters:pdf"]["status"] == "pass"
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_deck_pdf_with_the_wrong_page_count_fails(tmp_path):
+    import determinism
+    p = deck(tmp_path, determinism.normalise_pdf(pdf_bytes(2)))
+    assert check(p).returncode == 1
+    assert "2 page" in mrows(p)["masters:pdf"]["detail"] and "3 slide" in mrows(p)["masters:pdf"]["detail"]
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_a_deck_pdf_with_its_own_dates_fails_and_names_pdf_normalise(tmp_path):
+    p = deck(tmp_path, pdf_bytes(3))
+    assert check(p).returncode == 1
+    assert "pdf normalise" in mrows(p)["masters:pdf"]["detail"]
+
+
+def pptx_bytes(*, shape=(0, 0, 9144000, 5143500), size=(12192000, 6858000), font="Geist", embedded=("Geist",)) -> bytes:
+    import io
+    x, y, cx, cy = shape
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        emb = "".join(f'<p:embeddedFont><p:font typeface="{t}"/><p:regular r:id="rIdF{i}"/></p:embeddedFont>' for i, t in enumerate(embedded))
+        z.writestr("ppt/presentation.xml", '<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" '
+                   'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+                   f'<p:sldSz cx="{size[0]}" cy="{size[1]}"/>' + (f"<p:embeddedFontLst>{emb}</p:embeddedFontLst>" if embedded else "") + "</p:presentation>")
+        z.writestr("ppt/slides/slide1.xml", '<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+                   f'<p:cSld><p:spTree><p:sp><p:nvSpPr><p:cNvPr id="2" name="Title 1"/></p:nvSpPr><p:spPr><a:xfrm><a:off x="{x}" y="{y}"/><a:ext cx="{cx}" cy="{cy}"/></a:xfrm></p:spPr>'
+                   f'<p:txBody><a:p><a:r><a:rPr><a:latin typeface="{font}"/></a:rPr><a:t>Hi</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sld>')
+    return buf.getvalue()
+
+
+def pptx_round(tmp_path: Path, data: bytes) -> Path:
+    return round_with(tmp_path, {"prezentacja/deck.pptx": data}, [{"file": "prezentacja/deck.pptx", "kind": "deck-pptx"}])
+
+
+def test_a_sound_pptx_passes_its_structure_and_waits_for_powerpoint(tmp_path):
+    p = pptx_round(tmp_path, pptx_bytes())
+    r = check(p)
+    assert r.returncode == 3, r.stdout + r.stderr                                     # not verified until the owner opened it in PowerPoint
+    assert mrows(p)["masters:pptx"]["status"] == "pass"
+    assert mrows(p)["masters:pptx-render"]["status"] == "skipped" and "PowerPoint" in mrows(p)["masters:pptx-render"]["detail"]
+
+
+def test_pptx_render_is_verified_once_the_powerpoint_answer_is_recorded(tmp_path):
+    p = pptx_round(tmp_path, pptx_bytes())
+    assert bc("state", "--record", "G4m", "Kalendarz; PowerPoint: renders, fonts embedded", project=p).returncode == 0
+    assert check(p).returncode == 0
+    assert mrows(p)["masters:pptx-render"]["status"] == "pass"
+
+
+def test_a_pptx_shape_outside_the_slide_fails(tmp_path):
+    p = pptx_round(tmp_path, pptx_bytes(shape=(11000000, 0, 2000000, 1000000)))
+    assert check(p).returncode == 1
+    assert "Title 1" in mrows(p)["masters:pptx"]["detail"] and "outside" in mrows(p)["masters:pptx"]["detail"]
+
+
+def test_a_pptx_font_that_is_not_embedded_fails(tmp_path):
+    p = pptx_round(tmp_path, pptx_bytes(font="Grandstander", embedded=("Geist",)))
+    assert check(p).returncode == 1
+    assert "Grandstander" in mrows(p)["masters:pptx"]["detail"] and "embed-fonts" in mrows(p)["masters:pptx"]["detail"]
+
+
+def test_a_pptx_that_is_no_zip_fails(tmp_path):
+    p = pptx_round(tmp_path, b"not a zip")
+    assert check(p).returncode == 1 and mrows(p)["masters:pptx"]["status"] == "fail"
+
+
+def test_masters_check_without_a_masters_round_says_so(tmp_path):
+    p = make_project(tmp_path, tier="standard")
+    r = check(p)
+    assert r.returncode == 2 and "masters board" in r.stderr

@@ -47,6 +47,7 @@ const USAGE = `usage:
   render.mjs capture <page.html> [--project DIR] [--wait MS] [--timeout MS] [--frames] [--reveal]
   render.mjs capture --url URL --name NAME [--project DIR] [--timeout MS]
   render.mjs page-requests --root DIR --page REL [--page REL ...] --out FILE.json [--timeout MS]
+  render.mjs masters-measure --request FILE.json --out FILE.json [--timeout MS]
   render.mjs wiring <url>
   render.mjs selftest
 shots are written outside the project (default: <data>/scratch/...) or, with --out, under <project>/specimens/ (shots kept as specimens); the report goes to <project>/assets/_checks/shot.json.
@@ -3112,6 +3113,92 @@ async function cmdPageRequests(argv) {
   return EXIT.PASS;
 }
 
+// ---------------------------------------------------------------- masters-measure (masters check)
+// The request: {"root": DIR, "png_dir": DIR, "masters": [{"file": REL, "width": W, "height": H}, ...]}. Each HTML master is opened at its canvas
+// (viewport W x H, device scale 1, served from root, every request to another origin aborted), its fonts and its animations that end are waited for
+// (the logo reveal settles), then measured: the elements whose box leaves the canvas, the text boxes that run into another text, the text an element
+// is painted over (sampled every 4 px; an element inside data-masters-overlay is drawn over text on purpose), and the overlays. A PNG of the canvas is
+// written to png_dir/<the file's name>.png. The result: {"masters": {file: {...}}}.
+function inPageMasters([W, H]) {
+  const desc = (e) => (e.id ? `#${e.id}` : e.tagName.toLowerCase() + (e.classList.length ? "." + [...e.classList].join(".") : ""));
+  const shown = (e) => { const s = getComputedStyle(e); return s.display !== "none" && s.visibility !== "hidden" && parseFloat(s.opacity) > 0; };
+  const skip = new Set(["SCRIPT", "STYLE", "META", "LINK", "TITLE", "HEAD", "BR", "NOSCRIPT", "TEMPLATE"]);
+  const outside = [];
+  for (const e of document.body.querySelectorAll("*")) {
+    if (skip.has(e.tagName) || !shown(e)) continue;
+    const r = e.getBoundingClientRect();
+    if (!r.width || !r.height) continue;
+    if (r.left < -0.5 || r.top < -0.5 || r.right > W + 0.5 || r.bottom > H + 0.5) outside.push(desc(e));
+  }
+  const texts = [];
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const owner = n.parentElement;
+    if (!n.data.trim() || !owner || skip.has(owner.tagName) || !shown(owner)) continue;
+    const range = document.createRange();
+    range.selectNodeContents(n);
+    for (const r of range.getClientRects()) if (r.width > 1 && r.height > 1) texts.push({ owner, r });
+  }
+  const related = (a, b) => a === b || a.contains(b) || b.contains(a);
+  const pairs = new Map(), covered = new Map();
+  for (let i = 0; i < texts.length; i++) for (let j = i + 1; j < texts.length; j++) {
+    const a = texts[i], b = texts[j];
+    if (related(a.owner, b.owner)) continue;
+    const w = Math.min(a.r.right, b.r.right) - Math.max(a.r.left, b.r.left), h = Math.min(a.r.bottom, b.r.bottom) - Math.max(a.r.top, b.r.top);
+    if (w > 1 && h > 1) pairs.set(`${desc(a.owner)}|${desc(b.owner)}`, [desc(a.owner), desc(b.owner)]);
+  }
+  const textOwners = new Set(texts.map((t) => t.owner));
+  for (const { owner, r } of texts) {
+    for (let y = r.top + 1; y < r.bottom - 1; y += 4) for (let x = r.left + 1; x < r.right - 1; x += 4) {
+      const top = document.elementFromPoint(x, y);
+      if (!top || related(top, owner) || top.closest("[data-masters-overlay]")) continue;
+      if ([...textOwners].some((o) => o !== owner && related(o, top))) continue;   // another text: a run-in, counted above
+      covered.set(`${desc(owner)}|${desc(top)}`, [desc(owner), desc(top)]);
+    }
+  }
+  return { outside, collide: [...pairs.values()], covered: [...covered.values()], overlays: [...document.querySelectorAll("[data-masters-overlay]")].map(desc) };
+}
+
+async function cmdMastersMeasure(argv) {
+  const { values } = parse(argv, { request: { type: "string" }, out: { type: "string" }, timeout: { type: "string" } }, false);
+  if (!values.request || !values.out) die(EXIT.USAGE, `masters-measure needs --request and --out\n${USAGE}`);
+  const timeout = wholeMs(values.timeout ?? "60000", "--timeout", 1000);
+  const req = JSON.parse(fs.readFileSync(values.request, "utf8"));
+  const root = fs.realpathSync.native(req.root);
+  fs.mkdirSync(req.png_dir, { recursive: true });
+  const browser = await launch();
+  const server = await startServer(root);
+  const out = {};
+  try {
+    for (const m of req.masters) {
+      const ctx = await browser.newContext({ viewport: { width: m.width, height: m.height }, deviceScaleFactor: 1, colorScheme: "light" });
+      const seen = await instrument(ctx, server.origin);
+      const page = await ctx.newPage();
+      watch(page, seen, server.origin);
+      try {
+        const url = server.origin + "/" + m.file.split("/").map(encodeURIComponent).join("/");
+        await withTimeout(page.goto(url, { waitUntil: "load", timeout }), timeout + 5000, `loading ${m.file}`);
+        await withTimeout(page.evaluate(() => document.fonts.ready), timeout, "fonts.ready");
+        await withTimeout(waitAnimations(page), timeout, "the animations");
+        await page.waitForTimeout(200);
+        const got = await page.evaluate(inPageMasters, [m.width, m.height]);
+        const png = path.join(req.png_dir, path.posix.basename(m.file).replace(/\.html?$/i, "") + ".png");
+        fs.writeFileSync(png, await page.screenshot({ clip: { x: 0, y: 0, width: m.width, height: m.height } }));
+        out[m.file] = { ...got, png: path.basename(png), errors: seen.errors, non_local: seen.nonLocal, failed_local: seen.failedLocal };
+      } catch (e) {
+        die(EXIT.CANNOT, `masters-measure could not open ${m.file}: ${firstLine(e)}`);
+      } finally {
+        await ctx.close();
+      }
+    }
+  } finally {
+    await browser.close();
+    await server.close();
+  }
+  fs.writeFileSync(values.out, JSON.stringify({ schema: 1, tool: "masters-measure", masters: out }, null, 2) + "\n");
+  return EXIT.PASS;
+}
+
 function helpOf(cmd) {
   const lines = USAGE.split("\n"), own = lines.filter((l) => l.startsWith(`  render.mjs ${cmd} `) || l === `  render.mjs ${cmd}`);
   if (!own.length) return die(EXIT.USAGE, `unknown command ${cmd}\n${USAGE}`);
@@ -3134,6 +3221,7 @@ mainGuard(async () => {
     case "page-measure": return cmdPageMeasure(rest);
     case "capture": return cmdCapture(rest);
     case "page-requests": return cmdPageRequests(rest);
+    case "masters-measure": return cmdMastersMeasure(rest);
     case "wiring": return cmdWiring(rest);
     case undefined: case "-h": case "--help": console.log(USAGE); return cmd ? EXIT.PASS : EXIT.USAGE;
     default: return die(EXIT.USAGE, `unknown command ${cmd}\n${USAGE}`);
