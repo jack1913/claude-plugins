@@ -753,8 +753,8 @@ brand-creator pdf normalise <file.pdf> [--out FILE]
 outside the canvas fails), `masters:covered` (a text box that overlaps another element's text box fails; a non-text element painted over a text,
 sampled every 4 px with `elementFromPoint`, warns unless it is inside `data-masters-overlay`), `masters:overlays` (info), `masters:page-errors`
 (a console error, a request out, a missing file: fail), `masters:pdf` (pages = slide entries, the first page's MediaBox = the slide canvas × 0.75
-pt, `normalise_pdf` leaves it unchanged), `masters:pptx` (every shape inside `p:sldSz`, every typeface a text names in `p:embeddedFontLst`,
-every picture of a slide present) and `masters:pptx-render` (skipped, NOT VERIFIED, until the G4m record holds "PowerPoint"). Exit 0, 1,
+pt, `normalise_pdf` leaves it unchanged), `masters:pptx` (every typeface a text names in `p:embeddedFontLst`, every picture of a slide present;
+a shape box past `p:sldSz` is the warning `masters:pptx-boxes`) and `masters:pptx-render` (skipped, NOT VERIFIED, until the G4m record holds "PowerPoint"). Exit 0, 1,
 2 (no masters board), 3 (not verified or no browser). The report lists masters.json and every master as inputs.
 
 **masters approve** refuses (exit 1, nothing written) without G4m, without a current passing `board-lint` of the round's board and a current

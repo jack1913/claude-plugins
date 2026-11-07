@@ -3130,22 +3130,37 @@ function inPageMasters([W, H]) {
     if (!r.width || !r.height) continue;
     if (r.left < -0.5 || r.top < -0.5 || r.right > W + 0.5 || r.bottom > H + 0.5) outside.push(desc(e));
   }
-  const texts = [];
+  // a turned, scaled or moved group (transform, rotate, scale, translate): the browser reports the text inside it as straight boxes around the turned
+  // glyphs, larger than the text; two lines of one group are compared with the group's own transform switched off, which keeps whether they overlap
+  const turned = (e) => { const s = getComputedStyle(e); return s.transform !== "none" || s.rotate !== "none" || s.scale !== "none" || s.translate !== "none"; };
+  const groupOf = (e) => { for (let p = e; p && p !== document.body; p = p.parentElement) if (turned(p)) return p; return null; };
+  const textNodes = [];
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   for (let n = walker.nextNode(); n; n = walker.nextNode()) {
     const owner = n.parentElement;
     if (!n.data.trim() || !owner || skip.has(owner.tagName) || !shown(owner)) continue;
-    const range = document.createRange();
-    range.selectNodeContents(n);
-    for (const r of range.getClientRects()) if (r.width > 1 && r.height > 1) texts.push({ owner, r });
+    textNodes.push({ n, owner, group: groupOf(owner) });
+  }
+  const rectsOf = (n) => { const range = document.createRange(); range.selectNodeContents(n); return [...range.getClientRects()].filter((r) => r.width > 1 && r.height > 1); };
+  const texts = textNodes.flatMap(({ n, owner, group }) => rectsOf(n).map((r) => ({ owner, group, r })));
+  const flat = new Map();   // group -> the rects of its texts with the group's transform off
+  for (const g of new Set(textNodes.map((t) => t.group).filter(Boolean))) {
+    const saved = ["transform", "rotate", "scale", "translate"].map((k) => [k, g.style.getPropertyValue(k), g.style.getPropertyPriority(k)]);
+    for (const [k] of saved) g.style.setProperty(k, "none", "important");
+    flat.set(g, textNodes.filter((t) => t.group === g).flatMap(({ n, owner }) => rectsOf(n).map((r) => ({ owner, r }))));
+    for (const [k, v, pr] of saved) { if (v) g.style.setProperty(k, v, pr); else g.style.removeProperty(k); }
   }
   const related = (a, b) => a === b || a.contains(b) || b.contains(a);
+  const overlap = (a, b) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1;
   const pairs = new Map(), covered = new Map();
   for (let i = 0; i < texts.length; i++) for (let j = i + 1; j < texts.length; j++) {
     const a = texts[i], b = texts[j];
-    if (related(a.owner, b.owner)) continue;
-    const w = Math.min(a.r.right, b.r.right) - Math.max(a.r.left, b.r.left), h = Math.min(a.r.bottom, b.r.bottom) - Math.max(a.r.top, b.r.top);
-    if (w > 1 && h > 1) pairs.set(`${desc(a.owner)}|${desc(b.owner)}`, [desc(a.owner), desc(b.owner)]);
+    if (related(a.owner, b.owner) || (a.group && a.group === b.group) || !overlap(a.r, b.r)) continue;   // one turned group: judged below
+    pairs.set(`${desc(a.owner)}|${desc(b.owner)}`, [desc(a.owner), desc(b.owner)]);
+  }
+  for (const list of flat.values()) for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+    const a = list[i], b = list[j];
+    if (!related(a.owner, b.owner) && overlap(a.r, b.r)) pairs.set(`${desc(a.owner)}|${desc(b.owner)}`, [desc(a.owner), desc(b.owner)]);
   }
   const textOwners = new Set(texts.map((t) => t.owner));
   for (const { owner, r } of texts) {
@@ -3181,9 +3196,9 @@ async function cmdMastersMeasure(argv) {
         await withTimeout(page.evaluate(() => document.fonts.ready), timeout, "fonts.ready");
         await withTimeout(waitAnimations(page), timeout, "the animations");
         await page.waitForTimeout(200);
-        const got = await page.evaluate(inPageMasters, [m.width, m.height]);
         const png = path.join(req.png_dir, path.posix.basename(m.file).replace(/\.html?$/i, "") + ".png");
-        fs.writeFileSync(png, await page.screenshot({ clip: { x: 0, y: 0, width: m.width, height: m.height } }));
+        fs.writeFileSync(png, await page.screenshot({ clip: { x: 0, y: 0, width: m.width, height: m.height } }));   // before measuring: the measure switches transforms off and on
+        const got = await page.evaluate(inPageMasters, [m.width, m.height]);
         out[m.file] = { ...got, png: path.basename(png), errors: seen.errors, non_local: seen.nonLocal, failed_local: seen.failedLocal };
       } catch (e) {
         die(EXIT.CANNOT, `masters-measure could not open ${m.file}: ${firstLine(e)}`);

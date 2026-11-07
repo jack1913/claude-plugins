@@ -16,8 +16,8 @@
 masters check opens each HTML ad and slide at its canvas in the plugin's Chromium, after its fonts load and its animations that end have ended
 (the logo reveal), and writes rows: masters:canvas (no element outside the canvas), masters:covered (a text that runs into another text fails; an
 element painted over a text warns unless it is inside data-masters-overlay), masters:overlays (info: each overlay), masters:pdf (the deck PDF: one
-page per slide, the slides' page size, dates fixed by `brand-creator pdf normalise`), masters:pptx (the PowerPoint file read from its XML: every shape
-inside the slide, every font a text names embedded, every picture present) and masters:pptx-render (NOT VERIFIED until the owner opened the deck in
+page per slide, the slides' page size, dates fixed by `brand-creator pdf normalise`), masters:pptx (the PowerPoint file read from its XML: every font
+a text names embedded, every picture present; a shape box past the slide edge is the warning masters:pptx-boxes) and masters:pptx-render (NOT VERIFIED until the owner opened the deck in
 PowerPoint and the answer is in G4m: "PowerPoint: <answer>"). No Office app, LibreOffice or Keynote is driven; Keynote ignores embedded fonts.
 Exit 0 pass, 1 a row failed, 2 usage (no masters board), 3 not verified (the PowerPoint answer, or no browser).
 """
@@ -128,7 +128,10 @@ def pptx_rows(rep: Report, project: Path, root: Path, entry: mastersdata.Entry) 
     except (ValueError, Exception) as e:   # a broken file is a failed row, never a crash
         rep.add("masters:pptx", "fail", "the PowerPoint file", detail=f"{entry.file}: {e}")
         return
-    problems = [f"{x}: outside the slide" for x in info["outside"]]
+    if info["outside"]:   # a text box anchored at its bottom may sit above the slide while its text shows: named for the owner's PowerPoint check, not failed
+        rep.add("masters:pptx-boxes", "warn", "every shape box on its slide", detail=f"{entry.file}: a box past the slide edge: {listed(info['outside'])}; "
+                "look at those slides in PowerPoint: what shows is what counts")
+    problems = []
     unembedded = [f for f in info["fonts_named"] if f not in info["fonts_embedded"]]
     if unembedded:
         problems.append(f"font(s) not embedded: {', '.join(unembedded)} (brand-creator masters embed-fonts {entry.file} --font <file>)")

@@ -55,7 +55,7 @@ Name each on the board, and start from them:
 
 1. `brand-creator masters check` opens each ad and slide at its canvas after its animations end, writes `png/`, and fails
    an element outside the canvas, a text that runs into another text, a deck PDF with the wrong pages or its own dates,
-   and a PowerPoint shape outside the slide or a font not embedded. An element painted over a text warns; mark one drawn
+   and a font not embedded in the PowerPoint file (a shape box past the slide edge warns). An element painted over a text warns; mark one drawn
    there on purpose (a stamp) with `data-masters-overlay`, and the board lists it.
 2. `brand-creator board-lint rounds/r<N>/board.html`.
 3. The PowerPoint render is the owner's check: ask them to open the deck in PowerPoint (preferred; Keynote and Google Slides
@@ -89,6 +89,6 @@ there is no deck). Then run `masters check` again: the PowerPoint row passes onc
 ## Enforcement
 
 `board-lint` (`masters:gate`, `masters:manifest`, `masters:files`, `masters:canvas-size`, `masters:directions`), `masters
-check` (`masters:canvas`, `masters:covered`, `masters:pdf`, `masters:pptx`, `masters:pptx-render`), `masters approve`
+check` (`masters:canvas`, `masters:covered`, `masters:pdf`, `masters:pptx`, `masters:pptx-boxes`, `masters:pptx-render`), `masters approve`
 (refuses without G4m and a current passing `masters` report and lint), `check` (`masters:behind-site`), `kit check`
 (`kit:behind` after new masters).

@@ -2438,7 +2438,7 @@ def test_the_manual_says_standard_and_full_settle_motion_and_shows_no_internal_c
     commands = flat["reference/commands.md"]
     for needle in ("`[style\\|pick\\|refine\\|motion\\|site-refs\\|site] [what this round should answer]`", "in Standard and Full, a motion round)", ": `round`, `motion`",
                    "Records, once, that nothing moves.", "`motion` is a round after you approve the design that tries your logo's move",
-                   "| `style`, `pick`, `refine`, `motion`, `site-refs` or `site` | Which kind of board to build.", "## motion", "This is a `brand-creator` command, not a slash command",
+                   "| `style`, `pick`, `refine`, `motion`, `site-refs`, `site` or `masters` | Which kind of board to build.", "## motion", "This is a `brand-creator` command, not a slash command",
                    "| `--off \"<reason>\"` | Records that nothing moves, with your reason in your own words. It never writes over an earlier answer",
                    "| `--json` | Prints the answer as data. Not together with `--off` |"):
         assert needle in commands, needle

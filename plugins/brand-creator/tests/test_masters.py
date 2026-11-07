@@ -307,10 +307,15 @@ def test_pptx_render_is_verified_once_the_powerpoint_answer_is_recorded(tmp_path
     assert mrows(p)["masters:pptx-render"]["status"] == "pass"
 
 
-def test_a_pptx_shape_outside_the_slide_fails(tmp_path):
+def test_a_pptx_shape_box_past_the_slide_edge_warns_and_names_it(tmp_path):
+    """Calibration on the pilot brand: an approved deck places a quotation mark's text box above the slide, anchored at its bottom, so the mark shows
+    and the box does not. A box past the edge is named for the owner's PowerPoint check, not failed."""
     p = pptx_round(tmp_path, pptx_bytes(shape=(11000000, 0, 2000000, 1000000)))
-    assert check(p).returncode == 1
-    assert "Title 1" in mrows(p)["masters:pptx"]["detail"] and "outside" in mrows(p)["masters:pptx"]["detail"]
+    assert bc("state", "--record", "G4m", "k; PowerPoint: renders", project=p).returncode == 0
+    assert check(p).returncode == 0
+    row = mrows(p)["masters:pptx-boxes"]
+    assert row["status"] == "warn" and "Title 1" in row["detail"] and "past the slide" in row["detail"]
+    assert mrows(p)["masters:pptx"]["status"] == "pass"
 
 
 def test_a_pptx_font_that_is_not_embedded_fails(tmp_path):
@@ -561,3 +566,15 @@ def test_no_row_when_the_masters_are_newer_or_there_is_no_site(tmp_path):
     q = make_project(tmp_path / "other", tier="standard")
     assert bc("state", "--record", "G4m", "kalendarz", project=q).returncode == 0
     assert "masters:behind-site" not in chk_rows(q)
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_two_close_lines_on_a_rotated_sheet_do_not_run_into_each_other(tmp_path):
+    """Calibration on the pilot brand: a sheet turned -2.5deg holds a label and a heading close together; the browser reports turned text as
+    straight, larger boxes, which overlapped although the lines do not. Lines inside the same turned group are compared unturned."""
+    sheet = ('<article style="position:absolute;left:60px;top:60px;width:420px;transform:rotate(-2.5deg);font:28px/1 sans-serif">'
+             '<div id="label">Co miesiąc i więcej tekstu tutaj</div><h3 id="head" style="margin:4px 0 0;font:28px/1 sans-serif">Każdy miesiąc i jeszcze</h3></article>')
+    p = round_with(tmp_path, {"reklama/a.html": ad(600, 400, sheet)}, [ad_entry("a")])
+    assert check(p).returncode == 0, mrows(p)
+    assert mrows(p)["masters:covered"]["status"] == "pass", mrows(p)["masters:covered"]
