@@ -366,7 +366,8 @@ this order:
    needs the network, and when `site/` already holds approved pages (`--replace` moves the old ones to
    `removed-<date>/` first, never deletes).
 6. **List what the approved site leaves behind**, each as a next step for the owner to pick: approved masters in `assets/masters/`
-   whose words or look predate the site (ads, deck), voice lines that place copy on the site, the book's site chapter, the kit
+   whose words or look predate the site (ads, deck: a masters round, [07m-masters-round.md](07m-masters-round.md); `check` shows
+   `masters:behind-site`), voice lines that place copy on the site, the book's site chapter, the kit
    or the applied skill. Before the first push of a project that is mirrored or shared, offer to clean the old rounds
    with `brand-creator cleanup` ([12-history.md](12-history.md), "Method: cleaning old rounds").
 7. **Take the stills again where the pages now live:** `capture site/<id>/index.html` and `page-check

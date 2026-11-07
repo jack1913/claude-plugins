@@ -104,7 +104,7 @@ to it.
 
 | Argument | What it does | Default |
 | --- | --- | --- |
-| `style`, `pick`, `refine`, `motion`, `site-refs` or `site` | Which kind of board to build. `motion` is a round after you approve the design that tries your logo's move. `site-refs` and `site` are the two rounds for your website, below | Worked out from your project |
+| `style`, `pick`, `refine`, `motion`, `site-refs`, `site` or `masters` | Which kind of board to build. `motion` is a round after you approve the design that tries your logo's move. `site-refs` and `site` are the two rounds for your website, below | Worked out from your project |
 | text | The question this round should answer | Worked out from your project |
 
 The two rounds for your website need the Standard or Full tier, a site in your brief, and your OK on your brand's
@@ -123,6 +123,11 @@ ask for them in your own words.
   stays on your computer.
 
 Steps: [Get reference pages for your site](../use/get-reference-pages-for-your-site.md).
+
+- **`masters`** builds your ads and your deck as masters: two or three directions in every size you need, each file
+  checked (nothing past the edge, no text running into another, the deck's PDF and PowerPoint file). After you approve,
+  with your answer on how the deck looks in PowerPoint, Claude copies them into `assets/masters/` with a README. Standard and
+  Full, after your brand's rules. Steps: [Make your ads and decks](../use/make-your-ads-and-decks.md).
 
 ## motion
 

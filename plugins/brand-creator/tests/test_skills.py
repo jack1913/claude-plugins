@@ -172,7 +172,7 @@ def test_long_references_start_with_a_table_of_contents():
 
 
 def test_phase_files_exist_and_stubs_are_short():
-    full = {"00-intake", "01-research", "01s-style-research", "03-strategy-directions", "04-selection", "05-refinement", "06-mark", "07-tokens", "07w-website-references", "07p-site-round",
+    full = {"00-intake", "01-research", "01s-style-research", "03-strategy-directions", "04-selection", "05-refinement", "06-mark", "07-tokens", "07w-website-references", "07p-site-round", "07m-masters-round",
             "09-qa", "10-book", "11-adoption", "12-history", "13-launch"}
     stubs: set = set()
     # the phase's single source is another skill
@@ -1155,7 +1155,7 @@ def test_the_phase_map_points_at_the_website_steps():
 def test_the_round_wrapper_builds_round_0_from_the_style_board_and_checks_the_gate_before_any_pick_board():
     p = SKILLS / "round" / "SKILL.md"
     fm, body = frontmatter(p)
-    assert fm["argument-hint"] == "[style|pick|refine|motion|site-refs|site] [what this round should answer]"
+    assert fm["argument-hint"] == "[style|pick|refine|motion|site-refs|site|masters] [what this round should answer]"
     assert ": " not in fm["description"] and "style board" in fm["description"] and len(fm["description"]) <= 1024
     flat = " ".join(body.split())
     for needle in ("references/phases/01s-style-research.md", "templates/style-board.html", '`data-board="style"`', "round 0", "`rounds/r0/`",
@@ -1614,7 +1614,7 @@ def test_the_cold_review_stops_after_two_reviews_and_has_a_third_verdict_for_the
 
 def test_the_round_wrapper_has_a_site_kind():
     fm, body = frontmatter(SKILLS / "round" / "SKILL.md")
-    assert fm["argument-hint"] == "[style|pick|refine|motion|site-refs|site] [what this round should answer]"
+    assert fm["argument-hint"] == "[style|pick|refine|motion|site-refs|site|masters] [what this round should answer]"
     assert "the site round's reference pages" in fm["description"] and ": " not in fm["description"] and len(fm["description"]) <= 1024
     flat = " ".join(body.split())
     for needle in ("`site` (the site round: the hero in two or three variants, then the other pages; steps below, \"A site round\")",
@@ -2143,7 +2143,7 @@ def test_the_orchestrator_says_standard_and_full_decide_motion_before_g4_and_qui
 
 def test_the_round_wrapper_has_a_motion_kind_whose_variants_are_made_before_the_board():
     fm, body = frontmatter(SKILLS / "round" / "SKILL.md")
-    assert fm["argument-hint"] == "[style|pick|refine|motion|site-refs|site] [what this round should answer]"
+    assert fm["argument-hint"] == "[style|pick|refine|motion|site-refs|site|masters] [what this round should answer]"
     assert "motion board" in fm["description"] and ": " not in fm["description"] and len(fm["description"]) <= 1024
     flat = " ".join(body.split())
     for needle in ("`refine` and `motion` (a round after G3 that tries the signature move as variants; steps below, \"A motion round\")",

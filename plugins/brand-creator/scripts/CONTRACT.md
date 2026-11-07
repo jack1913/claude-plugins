@@ -729,6 +729,46 @@ It is best effort (an interpreter one-liner can still write); the real gate is `
 `check`. Fail-open applies only to input it cannot parse (it prints a warning): a broken guard must not brick unrelated
 sessions. `hooks/hooks.json` sets `onFailure: "block"` on the guard (Claude Code 2.1.295 or later): a missing `python3` (Windows without Python, or the Microsoft Store alias), a crash or a timeout blocks the call with a visible `failed; blocking because onFailure is "block"` notice instead of silently doing nothing; older versions ignore the field.
 
+## Masters (`brand-creator masters`, `brand-creator pdf normalise`)
+
+The approved ads and decks of a brand: a masters round (`data-board="masters"`, `templates/masters-board.html`, a round after G4, and after
+G4p when the brief lists a site; `skills/brand-creator/references/phases/07m-masters-round.md`), gate G4m. Scripts: `scripts/masters.py`,
+`scripts/boardlib/mastersdata.py` (the manifest and the board rows), `scripts/masterslib/pptxlib.py` (a PowerPoint file read from its XML),
+`scripts/masterslib/fontembed.py` (fonts embedded as EOT, `ppt/fonts/*.fntdata`), `render.mjs masters-measure`.
+
+```text
+brand-creator masters check [--round N]                      render and check every master; rounds/rN/png/ and the report `masters`
+brand-creator masters approve [--round N] [--replace]        after G4m: the masters and what they load into assets/masters/, README.md, masters.json
+brand-creator masters embed-fonts <deck.pptx> --font FILE.ttf [--font ...] [--out FILE]
+brand-creator pdf normalise <file.pdf> [--out FILE]
+```
+
+**masters.json** (in the round): `entries` (each `file` inside the round, `kind` one of `ad`, `slide`, `deck-html`, `deck-pdf`, `deck-pptx`,
+`image`, `font`; `canvas` [w, h] for `ad` and `slide` only; `direction`; `note`), `copy_rules`, `builder`. An HTML ad or slide declares
+`<meta name="masters-canvas" content="WxH">`. board-lint rows: `masters:gate` (G4), `masters:manifest`, `masters:files`, `masters:canvas-size`,
+`masters:directions` (two or more on the first masters board of a project).
+
+**masters check** serves the round alone on 127.0.0.1 (a request to another origin is aborted), opens each HTML ad and slide at its canvas
+(device scale 1), waits for its fonts and for its animations that end, and writes `png/<name>.png`. Rows: `masters:canvas` (an element's box
+outside the canvas fails), `masters:covered` (a text box that overlaps another element's text box fails; a non-text element painted over a text,
+sampled every 4 px with `elementFromPoint`, warns unless it is inside `data-masters-overlay`), `masters:overlays` (info), `masters:page-errors`
+(a console error, a request out, a missing file: fail), `masters:pdf` (pages = slide entries, the first page's MediaBox = the slide canvas × 0.75
+pt, `normalise_pdf` leaves it unchanged), `masters:pptx` (every shape inside `p:sldSz`, every typeface a text names in `p:embeddedFontLst`,
+every picture of a slide present) and `masters:pptx-render` (skipped, NOT VERIFIED, until the G4m record holds "PowerPoint"). Exit 0, 1,
+2 (no masters board), 3 (not verified or no browser). The report lists masters.json and every master as inputs.
+
+**masters approve** refuses (exit 1, nothing written) without G4m, without a current passing `board-lint` of the round's board and a current
+passing `masters` report of the round, and when a master's references leave the round (`closure.escapes`). It copies every entry, every file
+the HTML masters reach (`closure.static_closure`) and their `png/` into `assets/masters/` keeping their paths, and writes `masters.json`
+(the manifest with `round` and `approved`, the G4m record) and `README.md`. When `assets/masters/` holds files, `--replace` is needed and moves
+it to `removed-<date>/assets-masters/` first. The kit copies `assets/masters/` (kit.json `sources.masters`); `kit:behind` names
+`recipes/ad.md`, `recipes/presentation.md` and owner files that name `assets/masters/` when only the masters changed. The book: block
+`{{masters}}` and the opt-in chapter `masters` ("Ads and decks"). `check`: `masters:behind-site` (info) when G4p is newer than G4m.
+
+**embed-fonts** takes TrueType fonts only, groups them by name ID 1 (the typeface the slides name) and the style of name ID 2 (Regular, Bold,
+Italic, Bold Italic), refuses a font whose OS/2 fsType forbids embedding and a deck with fonts embedded already, and writes the zip with fixed
+timestamps (the same bytes on every run). **pdf normalise** runs `determinism.normalise_pdf` on a file that starts with `%PDF-` (exit 2 otherwise).
+
 ## Cleanup (`brand-creator cleanup`)
 
 Old round folders leave a project through git, after the owner's yes. Script `scripts/cleanup.py` (standard library only), the rules that read the rounds in `scripts/boardlib/rounds.py`.

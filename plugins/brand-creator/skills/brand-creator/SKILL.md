@@ -328,7 +328,9 @@ Full file contract: `${CLAUDE_PLUGIN_ROOT}/scripts/CONTRACT.md`. Templates: `${C
 | a page built anywhere, against the brand | `page-check <page>`, `page-check --from <dir> <page>`, `page-check --url http://localhost:<port>/<path>` |
 | website references and the site round (S, F; only when BRIEF lists a site) | `capture --url <url> --name <name>`, `capture <page>`, `site approve` ([07w](references/phases/07w-website-references.md), [07p](references/phases/07p-site-round.md)) |
 | name screening (P2, after the owner's privacy OK) | `names <name>... --project <dir> --profile <p> --region <CC> --plan`, then `--yes` |
-| freeze an approved round | `freeze r<N> --name approved-board --project <dir>` |
+| ads and decks (S, F) | `masters check`, `masters embed-fonts <deck.pptx> --font <ttf>`, `pdf normalise <file.pdf>`, `masters approve` ([07m](references/phases/07m-masters-round.md)) |
+| freeze an approved round | `freeze r<N> --name approved-board --project <dir>` (`--whole` keeps every file; by default what its boards show) |
+| slim old frozen rounds | `cleanup --history` (plan), `--record-yes`, `--yes` ([12-history](references/phases/12-history.md)) |
 
 ## References (load when the phase needs them)
 
@@ -339,6 +341,7 @@ Full file contract: `${CLAUDE_PLUGIN_ROOT}/scripts/CONTRACT.md`. Templates: `${C
   [06-mark](references/phases/06-mark.md), [07-tokens](references/phases/07-tokens.md),
   [07w-website-references](references/phases/07w-website-references.md),
   [07p-site-round](references/phases/07p-site-round.md),
+  [07m-masters-round](references/phases/07m-masters-round.md),
   [08-assets](references/phases/08-assets.md), [09-qa](references/phases/09-qa.md),
   [10-book](references/phases/10-book.md), [11-adoption](references/phases/11-adoption.md),
   [12-history](references/phases/12-history.md), [13-launch](references/phases/13-launch.md).

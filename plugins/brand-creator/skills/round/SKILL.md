@@ -1,7 +1,7 @@
 ---
 name: round
 description: Builds the next round of boards for the current brand project, starting with the style board before anything is drawn, then the boards of directions and refinements, and the motion board of a brand's signature move and, when the brief lists a site, the website references board and the site round's reference pages. It checks the board, takes screenshots in four views, publishes the review page and stops for the owner's decision. Runs only when typed as /brand-creator:round.
-argument-hint: "[style|pick|refine|motion|site-refs|site] [what this round should answer]"
+argument-hint: "[style|pick|refine|motion|site-refs|site|masters] [what this round should answer]"
 disable-model-invocation: true
 allowed-tools: Bash(brand-creator *)
 ---
@@ -12,15 +12,16 @@ Thin wrapper over the orchestrator's "Round mechanics". Arguments: `$ARGUMENTS` 
 round answers; infer both from BRAND-STATE.md when empty). Kinds: `style` (round 0, the style research before anything
 is drawn), `pick` (round 1 and after a full rejection), `refine` and `motion` (a round after G3 that tries the signature
 move as variants; steps below, "A motion round"), and `site-refs` (the website references board: a round after G4 in
-Standard and Full, only when the brief lists a site), and `site` (the site round: the hero in two or three variants, then the
-other pages; steps below, "A site round").
+Standard and Full, only when the brief lists a site), `site` (the site round: the hero in two or three variants, then the
+other pages; steps below, "A site round"), and `masters` (the ads and decks: a round after G4, and after G4p when there is a
+site; two or three directions first, in a new, empty folder; `references/phases/07m-masters-round.md`).
 
 1. Read `${CLAUDE_PLUGIN_ROOT}/skills/brand-creator/SKILL.md` (Round mechanics, Gates, Response template) and
    `${CLAUDE_PLUGIN_ROOT}/skills/brand-creator/references/board-contract.md`. Then the phase file for where the
    project is: `references/phases/01s-style-research.md` (round 0, the style board),
    `references/phases/03-strategy-directions.md` (round 1 or a reset), `04-selection.md`, `05-refinement.md`,
-   `07-tokens.md` ("The motion round", for a motion round), `07w-website-references.md` (a website references board) or
-   `07p-site-round.md` (a site board).
+   `07-tokens.md` ("The motion round", for a motion round), `07w-website-references.md` (a website references board),
+   `07p-site-round.md` (a site board) or `07m-masters-round.md` (a masters board).
 2. Find the project: `brand-creator --data "${CLAUDE_PLUGIN_DATA}" state --project-auto`.
    Read BRAND-STATE.md, brief/BRIEF.md and FACTS.md fully. No project → say so and offer to start one (the owner says what the brand is for, in words).
 3. Pick the round number N. The style board is round 0 (`rounds/r0/`): it comes first, while G1s is not recorded, even in
