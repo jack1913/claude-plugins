@@ -1480,3 +1480,16 @@ def test_history_keeps_a_picture_a_frozen_board_adds_with_a_script(tmp_path):
     r = p.run("--history")
     assert r.returncode == 0, r.stderr + r.stdout
     assert '"history/2026-10-21-approved/shots/unseen.png"' in r.stdout and "shots/late.png" not in r.stdout
+
+
+def test_history_refuses_a_folder_freeze_did_not_name_and_never_puts_it_in_a_restore_line(tmp_path):
+    p = frozen(tmp_path)
+    odd = "2026-10-22-x; touch PWNED"
+    p.write(f"history/{odd}/big.png", HPNG)
+    mf = p.dir / "history" / "MANIFEST.sha256"
+    mf.write_text(mf.read_text() + f"{hashlib.sha256(HPNG).hexdigest()}  {odd}/big.png\n")
+    p.commit("odd folder")
+    r = p.run("--history", "--static")
+    assert r.returncode == 1 and "not a frozen round" in r.stderr and json.dumps(f"history/{odd}") in r.stderr
+    assert "touch PWNED" not in r.stdout
+    assert not (p.dir / "qa" / f"{DATE}-cleanup-plan-history.txt").exists()

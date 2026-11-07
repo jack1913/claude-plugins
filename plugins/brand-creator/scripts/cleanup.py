@@ -753,9 +753,20 @@ class HPlan(NamedTuple):
         return self.hash[:12]
 
 
+FREEZE_NAME = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9][a-z0-9-]{0,62}$")   # what freeze names a folder (date and --name): nothing a shell reads specially
+
+
 def freeze_dirs(project: Path) -> list[Path]:
+    """The frozen rounds in history/. A folder freeze did not name is refused, naming it: its name would go into the restore line."""
     h = Path(project) / "history"
-    return sorted(d for d in h.iterdir() if d.is_dir() and not d.name.startswith(".")) if h.is_dir() else []
+    if not h.is_dir():
+        return []
+    dirs = sorted(d for d in h.iterdir() if d.is_dir() and not d.name.startswith("."))
+    odd = [json.dumps(f"history/{d.name}", ensure_ascii=False) for d in dirs if not FREEZE_NAME.fullmatch(d.name)]
+    if odd:
+        raise CliError(EXIT_FAIL, shown(odd, f"refused: {len(odd)} folder(s) in history/ are not a frozen round freeze made (named <date>-<name>, lowercase letters, "
+                                             "digits and hyphens); cleanup --history slims only those:"))
+    return dirs
 
 
 def history_keep(d: Path, static: bool) -> set[Path]:
@@ -883,7 +894,7 @@ def history_main(project: Path, a) -> int:
     if len(entries) <= len(used):
         fail(EXIT_FAIL, f"the yes to plan {plan.code} was used ({used[-1]}): a new removal needs a new plan, or a new yes")
     heading = entries[len(used)]
-    targets = [f"history/{n}" for n in plan.freezes] + ["history/MANIFEST.sha256"]
+    targets = [shlex.quote(f"history/{n}") for n in plan.freezes] + ["history/MANIFEST.sha256"]   # names checked by freeze_dirs; quoted all the same
     restore = f"git -C {shlex.quote(str(project))} --literal-pathspecs checkout {plan.head} -- {' '.join(targets)}"
     paths = [p for _b, _m, p in plan.files]
     staged = 0
