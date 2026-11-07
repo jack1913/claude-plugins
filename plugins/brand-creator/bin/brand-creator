@@ -34,6 +34,8 @@ project
                           fixed, and write site/site.json: each page, its layout and every choice as a brand rule or an example; --round N, --replace
                           (moves an existing site/ to removed-<date>/site/)
   masters check           render and check the ads and decks of the masters round (canvas, covered text, deck PDF, PowerPoint structure)
+  masters embed-fonts <deck.pptx> --font FILE.ttf  embed TrueType fonts in a PowerPoint deck (Regular, Bold, Italic, Bold Italic of a family)
+  pdf normalise <file.pdf> fix a PDF's dates and /ID in place (--out FILE: write a copy), so the same input gives the same bytes
   site review-status <page>  does a page need a cold review? reuse the earlier one when its page and stills are unchanged (read-only; exit 1: review needed)
   cleanup                 take old round folders out through git: a dry run (the default) prints the plan and writes qa/<date>-cleanup-plan.txt; after the owner's yes,
                           --record-yes CODE --said "<their words>" records it in DECISIONS.md and --yes CODE runs git rm (staged, never committed); keeps the latest
@@ -221,7 +223,8 @@ case "$sub" in
   freeze)     py freeze.py "$@" ;;
   motion)     py motion.py "$@" ;;
   site)       py site_pages.py "$@" ;;
-  masters)    py masters.py "$@" ;;   # not site.py: a script of that name would shadow the standard library's site module wherever scripts/ is on sys.path
+  masters)    py masters.py "$@" ;;
+  pdf)        py masters.py pdf "$@" ;;   # not site.py: a script of that name would shadow the standard library's site module wherever scripts/ is on sys.path
   shot)       js render.mjs shot "$@" ;;
   card)       js render.mjs card "$@" ;;
   inline)     py inline_page.py "$@" ;;

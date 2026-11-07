@@ -21,6 +21,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "boardlib"))
 sys.path.insert(0, str(ROOT / "scripts" / "printlib"))
 sys.path.insert(0, str(ROOT / "scripts" / "adaptlib"))
 sys.path.insert(0, str(ROOT / "scripts" / "pagelib"))
+sys.path.insert(0, str(ROOT / "scripts" / "masterslib"))
 
 
 # Off macOS there is no sips: a downscale of a PNG master names the explicit Pillow opt-in, an `emit tauri` its .icns writer.

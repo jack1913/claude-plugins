@@ -98,7 +98,7 @@ def main() -> int:
     pyscripts = python_scripts_with_locks()
 
     print("brand-creator setup will:")
-    print(f"  1. npm ci into {data / 'node_modules'}: playwright-core, style-dictionary, culori, colorjs.io, @google/design.md "
+    print(f"  1. npm ci into {data / 'node_modules'}: playwright-core, style-dictionary, culori, colorjs.io, @google/design.md, pptxgenjs "
           f"(pinned by package-lock.json), about {NODE_MB} MB on disk" + ("   [already done, skipped]" if node_done else ""))
     if existing:
         print(f"  2. Chrome Headless Shell build {rev}: found in {existing}, reused (no download)")

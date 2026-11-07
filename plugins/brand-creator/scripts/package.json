@@ -13,6 +13,7 @@
     "colorjs.io": "0.7.1",
     "culori": "4.0.2",
     "playwright-core": "1.61.1",
+    "pptxgenjs": "4.0.1",
     "style-dictionary": "5.7.0"
   }
 }

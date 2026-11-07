@@ -328,3 +328,110 @@ def test_masters_check_without_a_masters_round_says_so(tmp_path):
     p = make_project(tmp_path, tier="standard")
     r = check(p)
     assert r.returncode == 2 and "masters board" in r.stderr
+
+
+# ---------------------------------------------------------------- Task 7: pdf normalise, masters embed-fonts, pptxgenjs
+
+FONT = Path(__file__).resolve().parent / "fixtures" / "fonts" / "TestFont-subset.ttf"
+
+
+def test_pdf_normalise_makes_two_runs_byte_identical(tmp_path):
+    import determinism
+    f = tmp_path / "deck.pdf"
+    raw = pdf_bytes(2)
+    f.write_bytes(raw)
+    r = bc("pdf", "normalise", str(f))
+    assert r.returncode == 0, r.stderr
+    once = f.read_bytes()
+    assert once == determinism.normalise_pdf(raw) and once != raw
+    assert bc("pdf", "normalise", str(f)).returncode == 0 and f.read_bytes() == once
+    out = tmp_path / "copy.pdf"
+    f.write_bytes(raw)
+    assert bc("pdf", "normalise", str(f), "--out", str(out)).returncode == 0
+    assert out.read_bytes() == once and f.read_bytes() == raw
+
+
+def test_pdf_normalise_refuses_a_file_that_is_no_pdf(tmp_path):
+    f = tmp_path / "x.pdf"
+    f.write_bytes(b"hello")
+    r = bc("pdf", "normalise", str(f))
+    assert r.returncode == 2 and "not a PDF" in r.stderr
+
+
+def full_pptx(typeface: str) -> bytes:
+    import io
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("[Content_Types].xml", '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+                   '<Default Extension="xml" ContentType="application/xml"/></Types>')
+        z.writestr("ppt/_rels/presentation.xml.rels", '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                   '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/></Relationships>')
+        z.writestr("ppt/presentation.xml", '<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" '
+                   'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><p:sldSz cx="12192000" cy="6858000"/>'
+                   '<p:notesSz cx="6858000" cy="9144000"/></p:presentation>')
+        z.writestr("ppt/slides/slide1.xml", '<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+                   '<p:cSld><p:spTree><p:sp><p:nvSpPr><p:cNvPr id="2" name="Title 1"/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="100" cy="100"/></a:xfrm></p:spPr>'
+                   f'<p:txBody><a:p><a:r><a:rPr><a:latin typeface="{typeface}"/></a:rPr><a:t>Hi</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sld>')
+    return buf.getvalue()
+
+
+def test_embed_fonts_adds_the_font_and_masters_check_sees_it_embedded(tmp_path):
+    import fontembed
+    import pptxlib
+    family, _ = fontembed.font_names(FONT.read_bytes())
+    deck = tmp_path / "deck.pptx"
+    deck.write_bytes(full_pptx(family))
+    assert pptxlib.inspect(deck)["fonts_embedded"] == []
+    r = bc("masters", "embed-fonts", str(deck), "--font", str(FONT))
+    assert r.returncode == 0, r.stderr
+    info = pptxlib.inspect(deck)
+    assert info["fonts_embedded"] == [family] and family in info["fonts_named"]
+    with zipfile.ZipFile(deck) as z:
+        assert "ppt/fonts/font1.fntdata" in z.namelist()
+        assert 'Extension="fntdata"' in z.read("[Content_Types].xml").decode()
+        assert 'embedTrueTypeFonts="1"' in z.read("ppt/presentation.xml").decode()
+
+
+def test_embed_fonts_writes_the_same_bytes_every_run(tmp_path):
+    import fontembed
+    family, _ = fontembed.font_names(FONT.read_bytes())
+    a, b = tmp_path / "a.pptx", tmp_path / "b.pptx"
+    for d in (a, b):
+        d.write_bytes(full_pptx(family))
+        assert bc("masters", "embed-fonts", str(d), "--font", str(FONT)).returncode == 0
+    assert a.read_bytes() == b.read_bytes()
+
+
+def test_embed_fonts_refuses_a_restricted_licence_font(tmp_path):
+    import struct
+    import fontembed
+    data = bytearray(FONT.read_bytes())
+    off = fontembed.table_offset(bytes(data), b"OS/2")
+    struct.pack_into(">H", data, off + 8, 0x0002)
+    bad = tmp_path / "Restricted.ttf"
+    bad.write_bytes(bytes(data))
+    deck = tmp_path / "deck.pptx"
+    deck.write_bytes(full_pptx("Whatever"))
+    before = deck.read_bytes()
+    r = bc("masters", "embed-fonts", str(deck), "--font", str(bad))
+    assert r.returncode == 1 and "Restricted.ttf" in r.stderr and "embedding" in r.stderr
+    assert deck.read_bytes() == before
+
+
+def test_embed_fonts_refuses_a_deck_that_has_embedded_fonts_already(tmp_path):
+    import fontembed
+    family, _ = fontembed.font_names(FONT.read_bytes())
+    deck = tmp_path / "deck.pptx"
+    deck.write_bytes(full_pptx(family))
+    assert bc("masters", "embed-fonts", str(deck), "--font", str(FONT)).returncode == 0
+    r = bc("masters", "embed-fonts", str(deck), "--font", str(FONT))
+    assert r.returncode == 1 and "already" in r.stderr
+
+
+def test_setup_installs_pptxgenjs():
+    from helpers import ROOT
+    pkg = json.loads((ROOT / "scripts" / "package.json").read_text())
+    lock = json.loads((ROOT / "scripts" / "package-lock.json").read_text())
+    v = pkg["dependencies"]["pptxgenjs"]
+    assert v[0].isdigit(), "pinned exactly, as every dependency"
+    assert lock["packages"]["node_modules/pptxgenjs"]["version"] == v

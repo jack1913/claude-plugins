@@ -6,6 +6,10 @@
 """brand-creator masters: the ads and decks of a brand (a masters round, rounds/rN/masters.json; see scripts/boardlib/mastersdata.py).
 
   brand-creator masters check [--round N]     render and check every master of the round, write rounds/rN/png/ and the report `masters`
+  brand-creator masters embed-fonts <deck.pptx> --font FILE.ttf [--font ...] [--out FILE]
+                                              embed TrueType fonts in a PowerPoint deck (PowerPoint shows them without installing them)
+  brand-creator pdf normalise <file.pdf> [--out FILE]
+                                              fix a PDF's dates and /ID so the same input gives the same bytes (in place by default)
 
 masters check opens each HTML ad and slide at its canvas in the plugin's Chromium, after its fonts load and its animations that end have ended
 (the logo reveal), and writes rows: masters:canvas (no element outside the canvas), masters:covered (a text that runs into another text fails; an
@@ -30,6 +34,7 @@ from _common import (EXIT_CANNOT, EXIT_FAIL, EXIT_USAGE, Parser, Report, add_pro
 from boardpage import page_kind, read_page  # noqa: E402
 import determinism  # noqa: E402
 import mastersdata  # noqa: E402
+import fontembed  # noqa: E402
 import pptxlib  # noqa: E402
 
 MEASURE_TIMEOUT_S = 900
@@ -159,17 +164,59 @@ def cmd_check(project: Path, n: int | None) -> int:
     return rep.finish()
 
 
+def cmd_embed(deck: Path, fonts: list[str], out: str | None) -> int:
+    if not deck.is_file():
+        fail(EXIT_USAGE, f"{deck} not found")
+    files = []
+    for f in fonts:
+        p = Path(f)
+        if not p.is_file():
+            fail(EXIT_USAGE, f"--font {f}: not found")
+        files.append((p.name, p.read_bytes()))
+    try:
+        data, families = fontembed.embed(deck.read_bytes(), files)
+    except fontembed.EmbedError as e:
+        fail(EXIT_FAIL, f"nothing was embedded: {e}")
+    dest = Path(out) if out else deck
+    dest.write_bytes(data)
+    print(f"{dest}: {len(files)} font file(s) embedded ({', '.join(families)}); PowerPoint shows them without installing them, Keynote and Google Slides do not")
+    return 0
+
+
+def cmd_pdf_normalise(src: Path, out: str | None) -> int:
+    if not src.is_file():
+        fail(EXIT_USAGE, f"{src} not found")
+    data = src.read_bytes()
+    if not data.startswith(b"%PDF-"):
+        fail(EXIT_USAGE, f"{src} is not a PDF (it does not start with %PDF-)")
+    fixed = determinism.normalise_pdf(data)
+    dest = Path(out) if out else src
+    if dest != src or fixed != data:
+        dest.write_bytes(fixed)
+    print(f"{dest}: dates and /ID fixed" + ("" if fixed != data else " (they were already)"))
+    return 0
+
+
 def main() -> int:
     ap = Parser(prog="brand-creator masters", description=__doc__, formatter_class=__import__("argparse").RawDescriptionHelpFormatter)
     subs = ap.add_subparsers(dest="cmd", required=True)
     c = subs.add_parser("check", help="render and check every master of the masters round")
     add_project_arg(c)
     c.add_argument("--round", type=int, help="the masters round (default: the latest masters board)")
+    e = subs.add_parser("embed-fonts", help="embed TrueType fonts in a PowerPoint deck")
+    e.add_argument("deck")
+    e.add_argument("--font", action="append", required=True, metavar="FILE.ttf", help="a font file (repeatable)")
+    e.add_argument("--out", help="write here instead of in place")
+    p = subs.add_parser("pdf", help="brand-creator pdf normalise <file.pdf>")
+    p.add_argument("action", choices=["normalise"])
+    p.add_argument("file")
+    p.add_argument("--out", help="write here instead of in place")
     a = ap.parse_args()
-    project = find_project(a.project)
-    if a.cmd == "check":
-        return cmd_check(project, a.round)
-    return EXIT_USAGE
+    if a.cmd == "embed-fonts":
+        return cmd_embed(Path(a.deck), a.font, a.out)
+    if a.cmd == "pdf":
+        return cmd_pdf_normalise(Path(a.file), a.out)
+    return cmd_check(find_project(a.project), a.round)
 
 
 main_guard(main)

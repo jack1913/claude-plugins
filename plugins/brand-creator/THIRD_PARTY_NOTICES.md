@@ -12,6 +12,7 @@ A test (`tests/test_static.py`) checks that every vendored file under `scripts/v
 | playwright-core (https://github.com/microsoft/playwright) | 1.61.1 | Apache-2.0 | `scripts/render.mjs` (the only Chromium driver) |
 | Chrome Headless Shell (Playwright build 1228) | per playwright-core | BSD-3-Clause and component licences | rendering |
 | style-dictionary (https://github.com/style-dictionary/style-dictionary) | 5.7.0 | Apache-2.0 | `scripts/build_tokens.mjs` |
+| pptxgenjs (https://github.com/gitbrent/PptxGenJS) | 4.0.1 | MIT | installed by `setup` for a masters round's own deck builder (no plugin script imports it) |
 | culori (https://github.com/Evercoder/culori) | 4.0.2 | MIT | gamut mapping check in `scripts/build_tokens.mjs` |
 | colorjs.io (https://github.com/color-js/color.js) | 0.7.1 | MIT | APCA advisory column (computed in `scripts/build_tokens.mjs`) |
 | @google/design.md (https://github.com/google-labs-code/design.md) | 0.4.0 | Apache-2.0 (the LICENSE file in the package; the package.json has no licence field) | `scripts/adapters.py` runs its `lint` on DESIGN.md. Used unmodified from npm, not redistributed. Its pinned dependencies (citty, remark and micromark packages, unified, yaml, zod and others, all in `scripts/package-lock.json`) were read from the lock: MIT or ISC, except `format` 0.2.2, whose package.json carries no `license` field and whose own `licenses` field and Readme say MIT |
