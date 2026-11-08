@@ -32,7 +32,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 for sub in ("lib", "boardlib", "masterslib"):
     sys.path.insert(0, str(HERE / sub))
-from _common import (EXIT_CANNOT, EXIT_FAIL, EXIT_USAGE, Parser, Report, add_project_arg, data_dir, fail, find_project, gate_recorded,  # noqa: E402
+from _common import (EXIT_CANNOT, EXIT_FAIL, EXIT_USAGE, CliError, Parser, Report, add_project_arg, data_dir, fail, find_project, gate_recorded,  # noqa: E402
                      list_rounds, main_guard, plugin_root, scratch_dir, stale_inputs, today)
 import closure  # noqa: E402
 from boardpage import page_kind, read_page  # noqa: E402
@@ -67,8 +67,9 @@ def listed(items: list[str]) -> str:
 
 def measure(project: Path, root: Path, html: list[mastersdata.Entry]) -> dict:
     node = shutil.which("node")
-    if not node:
-        fail(EXIT_CANNOT, "masters check needs node (Node 22 or newer) and a set-up data directory: run brand-creator prereq, then brand-creator setup")
+    if not node or not os.environ.get("BRAND_CREATOR_DATA", "").strip():
+        fail(EXIT_CANNOT, "masters check opens the masters in the plugin's Chromium: it needs node (Node 22 or newer) and a set-up data directory; "
+                          "run brand-creator prereq, then brand-creator setup")
     data_dir()
     work = scratch_dir(project, "masters")
     req, out = work / "request.json", work / "measures.json"
@@ -87,8 +88,10 @@ def measure(project: Path, root: Path, html: list[mastersdata.Entry]) -> dict:
 
 def html_rows(rep: Report, measured: dict) -> None:
     outside = [f"{f}: {', '.join(m['outside'][:4])}" for f, m in measured.items() if m["outside"]]
+    bleeds = [f"{f}: {', '.join(m.get('bleeds', []))}" for f, m in measured.items() if m.get("bleeds")]
+    note = f"; past the edge on purpose (data-masters-bleed): {listed(bleeds)}" if bleeds else ""
     rep.add("masters:canvas", "fail" if outside else "pass", "nothing leaves the canvas",
-            detail=listed(outside) if outside else f"{len(measured)} master(s): every element inside its canvas")
+            detail=(listed(outside) if outside else f"{len(measured)} master(s): every element inside its canvas") + note)
     collide = [f"{f}: {a} runs into {b}" for f, m in measured.items() for a, b in m["collide"]]
     covered = [f"{f}: {by} is painted over the text of {t}" for f, m in measured.items() for t, by in m["covered"]]
     if collide:
@@ -107,6 +110,11 @@ def html_rows(rep: Report, measured: dict) -> None:
 
 def pdf_rows(rep: Report, root: Path, entry: mastersdata.Entry, slides: list[mastersdata.Entry]) -> None:
     data = (root / entry.file).read_bytes()
+    try:
+        determinism.normalise_pdf(data)
+    except ValueError as e:   # object streams: neither its pages nor its dates can be read in place
+        rep.add("masters:pdf", "fail", "the deck PDF", detail=f"{entry.file}: {e}")
+        return
     problems = []
     pages = len(PDF_PAGE.findall(data))
     if slides and pages != len(slides):
@@ -230,6 +238,11 @@ def cmd_approve(project: Path, n: int | None, replace: bool) -> int:
     m = mastersdata.load_manifest(root / mastersdata.MASTERS_FILE)
     html = [root / e.file for e in m.entries if e.file.lower().endswith((".html", ".htm"))]
     reached, _missing = closure.static_closure(root, html)
+    try:
+        seen, _ = closure.browser_closure(root, html)   # a file a master's script loads (a font, a picture) is copied too, as freeze keeps it
+    except CliError as e:
+        fail(e.code, f"{e.message}: masters approve reads what each master loads in the browser")
+    reached |= seen
     out = closure.escapes(root, reached)
     if out:
         fail(EXIT_FAIL, f"a master loads a file outside the round, which a copy into {APPROVED_DIR}/ would break ({'; '.join(out[:5])}): "
@@ -287,7 +300,10 @@ def cmd_pdf_normalise(src: Path, out: str | None) -> int:
     data = src.read_bytes()
     if not data.startswith(b"%PDF-"):
         fail(EXIT_USAGE, f"{src} is not a PDF (it does not start with %PDF-)")
-    fixed = determinism.normalise_pdf(data)
+    try:
+        fixed = determinism.normalise_pdf(data)
+    except ValueError as e:
+        fail(EXIT_FAIL, f"{src}: {e}; nothing was written")
     dest = Path(out) if out else src
     if dest != src or fixed != data:
         dest.write_bytes(fixed)

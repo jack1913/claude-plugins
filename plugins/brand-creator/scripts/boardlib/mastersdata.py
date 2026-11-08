@@ -70,6 +70,13 @@ def load_manifest(path: Path) -> Manifest:
         direction = e.get("direction") if isinstance(e.get("direction"), str) and e["direction"].strip() else None
         note = e.get("note") if isinstance(e.get("note"), str) else None
         entries.append(Entry(f, kind, canvas, direction, note))
+    stems: dict[str, str] = {}
+    for e in entries:   # masters check names each ad's and slide's picture png/<file name>.png, so two of one name would share one picture
+        if e.kind in CANVAS_KINDS and e.file.lower().endswith((".html", ".htm")):
+            stem = Path(e.file).stem
+            if stem in stems:
+                problems.append(f"{stems[stem]} and {e.file} share the file name {stem}: their pictures would both be png/{stem}.png; rename one")
+            stems.setdefault(stem, e.file)
     rules = [r for r in doc.get("copy_rules", []) if isinstance(r, str) and r.strip()] if isinstance(doc.get("copy_rules"), list) else []
     builder = doc.get("builder") if isinstance(doc.get("builder"), str) and doc["builder"].strip() else None
     return Manifest(entries, rules, builder, problems)

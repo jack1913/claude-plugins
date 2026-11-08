@@ -750,16 +750,17 @@ brand-creator pdf normalise <file.pdf> [--out FILE]
 
 **masters check** serves the round alone on 127.0.0.1 (a request to another origin is aborted), opens each HTML ad and slide at its canvas
 (device scale 1), waits for its fonts and for its animations that end, and writes `png/<name>.png`. Rows: `masters:canvas` (an element's box
-outside the canvas fails), `masters:covered` (a text box that overlaps another element's text box fails; a non-text element painted over a text,
+outside the canvas fails, unless it is inside `data-masters-bleed`: listed), `masters:covered` (a text box that overlaps another element's text box fails; a non-text element painted over a text,
 sampled every 4 px with `elementFromPoint`, warns unless it is inside `data-masters-overlay`), `masters:overlays` (info), `masters:page-errors`
 (a console error, a request out, a missing file: fail), `masters:pdf` (pages = slide entries, the first page's MediaBox = the slide canvas × 0.75
-pt, `normalise_pdf` leaves it unchanged), `masters:pptx` (every typeface a text names in `p:embeddedFontLst`, every picture of a slide present;
-a shape box past `p:sldSz` is the warning `masters:pptx-boxes`) and `masters:pptx-render` (skipped, NOT VERIFIED, until the G4m record holds "PowerPoint"). Exit 0, 1,
+pt, `normalise_pdf` leaves it unchanged; a PDF with object streams fails, naming how to write it without them), `masters:pptx` (every typeface a text names in `p:embeddedFontLst`, every picture of a slide present;
+a shape, picture, connector or graphic frame (table, chart) whose box, mapped through its groups'
+transforms, passes `p:sldSz` is the warning `masters:pptx-boxes`) and `masters:pptx-render` (skipped, NOT VERIFIED, until the G4m record holds "PowerPoint"). Exit 0, 1,
 2 (no masters board), 3 (not verified or no browser). The report lists masters.json and every master as inputs.
 
 **masters approve** refuses (exit 1, nothing written) without G4m, without a current passing `board-lint` of the round's board and a current
 passing `masters` report of the round, and when a master's references leave the round (`closure.escapes`). It copies every entry, every file
-the HTML masters reach (`closure.static_closure`) and their `png/` into `assets/masters/` keeping their paths, and writes `masters.json`
+the HTML masters reach (`closure.static_closure`, and in the browser `closure.browser_closure`: what a script loads) and their `png/` into `assets/masters/` keeping their paths (two HTML masters of one file name are a manifest problem: their pictures share `png/<name>.png`), and writes `masters.json`
 (the manifest with `round` and `approved`, the G4m record) and `README.md`. When `assets/masters/` holds files, `--replace` is needed and moves
 it to `removed-<date>/assets-masters/` first. The kit copies `assets/masters/` (kit.json `sources.masters`); `kit:behind` names
 `recipes/ad.md`, `recipes/presentation.md` and owner files that name `assets/masters/` when only the masters changed. The book: block

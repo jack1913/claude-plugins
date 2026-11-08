@@ -3123,12 +3123,16 @@ function inPageMasters([W, H]) {
   const desc = (e) => (e.id ? `#${e.id}` : e.tagName.toLowerCase() + (e.classList.length ? "." + [...e.classList].join(".") : ""));
   const shown = (e) => { const s = getComputedStyle(e); return s.display !== "none" && s.visibility !== "hidden" && parseFloat(s.opacity) > 0; };
   const skip = new Set(["SCRIPT", "STYLE", "META", "LINK", "TITLE", "HEAD", "BR", "NOSCRIPT", "TEMPLATE"]);
-  const outside = [];
+  const outside = [], bleeds = [];   // an element inside data-masters-bleed runs past the edge on purpose (a shape cut by the canvas): listed, not failed
   for (const e of document.body.querySelectorAll("*")) {
     if (skip.has(e.tagName) || !shown(e)) continue;
     const r = e.getBoundingClientRect();
     if (!r.width || !r.height) continue;
-    if (r.left < -0.5 || r.top < -0.5 || r.right > W + 0.5 || r.bottom > H + 0.5) outside.push(desc(e));
+    if (r.left < -0.5 || r.top < -0.5 || r.right > W + 0.5 || r.bottom > H + 0.5) {
+      const bleed = e.closest("[data-masters-bleed]");
+      if (!bleed) outside.push(desc(e));
+      else if (!bleeds.includes(desc(bleed))) bleeds.push(desc(bleed));
+    }
   }
   // a turned, scaled or moved group (transform, rotate, scale, translate): the browser reports the text inside it as straight boxes around the turned
   // glyphs, larger than the text; two lines of one group are compared with the group's own transform switched off, which keeps whether they overlap
@@ -3162,16 +3166,18 @@ function inPageMasters([W, H]) {
     const a = list[i], b = list[j];
     if (!related(a.owner, b.owner) && overlap(a.r, b.r)) pairs.set(`${desc(a.owner)}|${desc(b.owner)}`, [desc(a.owner), desc(b.owner)]);
   }
-  const textOwners = new Set(texts.map((t) => t.owner));
+  const textOwners = [...new Set(texts.map((t) => t.owner))];   // built once: the loop below asks at every 4 px
+  const ownsText = new Map();   // element at a point -> whether it is or holds another text's owner (cached per element)
   for (const { owner, r } of texts) {
     for (let y = r.top + 1; y < r.bottom - 1; y += 4) for (let x = r.left + 1; x < r.right - 1; x += 4) {
       const top = document.elementFromPoint(x, y);
       if (!top || related(top, owner) || top.closest("[data-masters-overlay]")) continue;
-      if ([...textOwners].some((o) => o !== owner && related(o, top))) continue;   // another text: a run-in, counted above
+      if (!ownsText.has(top)) ownsText.set(top, textOwners.filter((o) => related(o, top)));
+      if (ownsText.get(top).some((o) => o !== owner)) continue;   // another text: a run-in, counted above
       covered.set(`${desc(owner)}|${desc(top)}`, [desc(owner), desc(top)]);
     }
   }
-  return { outside, collide: [...pairs.values()], covered: [...covered.values()], overlays: [...document.querySelectorAll("[data-masters-overlay]")].map(desc) };
+  return { outside, bleeds, collide: [...pairs.values()], covered: [...covered.values()], overlays: [...document.querySelectorAll("[data-masters-overlay]")].map(desc) };
 }
 
 async function cmdMastersMeasure(argv) {

@@ -144,3 +144,12 @@ def test_escapes_names_each_reference_that_leaves_the_round(tmp_path):
     w(root, "ok.png")
     kept, _ = closure.static_closure(root, [root / "a.html"])
     assert closure.escapes(root, kept) == ["a.html: ../assets/fonts.css", "a.html: /abs.png"]
+
+
+def test_copy_losses_given_the_source_misses_loads_only_the_copy(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(closure, "browser_closure", lambda root, starts: (calls.append(root.name) or (set(), ["board.html: a.png", "board.html: b.png"])))
+    for d in ("src", "copy"):
+        w(tmp_path / d, "board.html", "<p>x</p>")
+    assert closure.copy_losses(tmp_path / "src", tmp_path / "copy", before=["board.html: a.png"]) == ["board.html: b.png"]
+    assert calls == ["copy"]

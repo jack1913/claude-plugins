@@ -18,6 +18,45 @@ SLIDE = re.compile(r"^ppt/slides/slide(\d+)\.xml$")
 FONT_ATTRS = ("latin", "ea", "cs", "sym")
 
 
+SHAPES = ("sp", "pic", "cxnSp")
+
+
+def _xfrm(el, path: str):
+    x = el.find(path, NS)
+    if x is None:
+        return None
+    off, ext = x.find("a:off", NS), x.find("a:ext", NS)
+    if off is None or ext is None:
+        return None
+    return x, (int(off.get("x")), int(off.get("y")), int(ext.get("cx")), int(ext.get("cy")))
+
+
+def _boxes(tree, to_slide, sx: float, sy: float):
+    """(name, (x, y, w, h) in slide EMU) of every shape, picture, connector and graphic frame (a table, a chart) under `tree`, a shape inside a
+    group mapped through the group's transform (a:chOff and a:chExt are the group's own coordinates of its a:off and a:ext)."""
+    for el in tree:
+        tag = el.tag.rsplit("}", 1)[-1]
+        nv = el.find(".//p:cNvPr", NS)
+        name = nv.get("name") if nv is not None else "a shape"
+        if tag in SHAPES or tag == "graphicFrame":
+            got = _xfrm(el, "p:spPr/a:xfrm" if tag in SHAPES else "p:xfrm")
+            if got:
+                x, y, w, h = got[1]
+                (px, py) = to_slide(x, y)
+                yield name, (px, py, w * sx, h * sy)
+        elif tag == "grpSp":
+            got = _xfrm(el, "p:grpSpPr/a:xfrm")
+            if not got:
+                continue
+            xf, (gx, gy, gw, gh) = got
+            ch_off, ch_ext = xf.find("a:chOff", NS), xf.find("a:chExt", NS)
+            cox, coy = (int(ch_off.get("x")), int(ch_off.get("y"))) if ch_off is not None else (gx, gy)
+            cw, chh = (int(ch_ext.get("cx")), int(ch_ext.get("cy"))) if ch_ext is not None else (gw, gh)
+            kx, ky = (gw / cw if cw else 1.0), (gh / chh if chh else 1.0)
+            ox, oy = to_slide(gx, gy)
+            yield from _boxes(el, lambda px, py, ox=ox, oy=oy, cox=cox, coy=coy, kx=kx, ky=ky: (ox + (px - cox) * kx * sx, oy + (py - coy) * ky * sy), sx * kx, sy * ky)
+
+
 def inspect(path: Path) -> dict:
     try:
         z = zipfile.ZipFile(path)
@@ -38,17 +77,11 @@ def inspect(path: Path) -> dict:
         slides = sorted((int(m.group(1)), n) for n in names if (m := SLIDE.match(n)))
         for k, name in slides:
             root = ET.fromstring(z.read(name))
-            for sp in root.iter():
-                xfrm = sp.find("p:spPr/a:xfrm", NS) if sp.tag.endswith("}sp") or sp.tag.endswith("}pic") or sp.tag.endswith("}cxnSp") else None
-                if xfrm is None:
-                    continue
-                off, ext = xfrm.find("a:off", NS), xfrm.find("a:ext", NS)
-                if off is None or ext is None:
-                    continue
-                x, y, w, h = int(off.get("x")), int(off.get("y")), int(ext.get("cx")), int(ext.get("cy"))
-                if x < 0 or y < 0 or x + w > cx or y + h > cy:
-                    nv = sp.find(".//p:cNvPr", NS)
-                    outside.append(f"slide {k}: {nv.get('name') if nv is not None else 'a shape'}")
+            tree = root.find("p:cSld/p:spTree", NS)
+            if tree is not None:
+                for nm, (x, y, w, h) in _boxes(tree, lambda px, py: (px, py), 1.0, 1.0):
+                    if x < 0 or y < 0 or x + w > cx or y + h > cy:
+                        outside.append(f"slide {k}: {nm}")
             for tag in FONT_ATTRS:
                 for el in root.iter(f"{{{NS['a']}}}{tag}"):
                     t = el.get("typeface", "")

@@ -128,7 +128,7 @@ def main() -> int:
                 d.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(p, d)
         if mode == "closure":
-            lost = closure.copy_losses(src, tmp)
+            lost = closure.copy_losses(src, tmp, before=broken)   # plan_copy loaded the round already: only the copy is loaded here
             if lost:
                 shutil.rmtree(tmp)   # a refused copy leaves nothing in history/: files outside the manifest would block every later freeze and check
                 fail(EXIT_FAIL, f"the frozen copy of rounds/{rnd} would miss files its boards show ({'; '.join(lost[:5])}"

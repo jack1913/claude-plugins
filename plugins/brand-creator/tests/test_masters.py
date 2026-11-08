@@ -588,3 +588,86 @@ def test_a_stylesheet_a_master_loads_changed_after_the_check_makes_the_report_st
     r = approve(p)
     assert r.returncode == 1 and "stale" in r.stderr and "styl.css" in r.stderr
     assert not (p / "assets" / "masters").exists()
+
+
+# ---------------------------------------------------------------- review fixes (0.10.0)
+
+def test_two_masters_with_the_same_file_name_are_one_problem(tmp_path):
+    f = tmp_path / "masters.json"
+    f.write_text(json.dumps({"entries": [{"file": "kalendarz/post-1080x1350.html", "kind": "ad", "canvas": [1080, 1350]},
+                                         {"file": "wiosna/post-1080x1350.html", "kind": "ad", "canvas": [1080, 1350]}]}))
+    m = mastersdata.load_manifest(f)
+    assert len(m.problems) == 1 and "post-1080x1350" in m.problems[0] and "png/" in m.problems[0]
+
+
+def test_a_deck_pdf_with_object_streams_fails_its_row_and_pdf_normalise_says_why(tmp_path):
+    raw = pdf_bytes(3).replace(b"<< /Producer (t)", b"<< /Type /ObjStm /Producer (t)")
+    p = round_with(tmp_path, {"prezentacja/deck.pdf": raw}, [{"file": "prezentacja/deck.pdf", "kind": "deck-pdf"}])
+    r = check(p)
+    assert r.returncode == 1, r.stderr
+    assert mrows(p)["masters:pdf"]["status"] == "fail" and "object streams" in mrows(p)["masters:pdf"]["detail"]
+    f = tmp_path / "x.pdf"
+    f.write_bytes(raw)
+    n = bc("pdf", "normalise", str(f))
+    assert n.returncode == 1 and "object streams" in n.stderr and "Traceback" not in n.stderr
+    assert f.read_bytes() == raw
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_approve_copies_a_file_a_master_loads_from_a_script(tmp_path):
+    loader = STYLED.replace("</body>", '<script>const i = new Image(); i.src = "../wspolne/" + "znak" + ".png"; document.body.append(i);</script></body>')
+    files = {"reklama/k-600x400.html": loader, "reklama/l-600x400.html": STYLED, "wspolne/styl.css": "body{}", "wspolne/tlo.png": PNG, "wspolne/znak.png": PNG}
+    p = round_with(tmp_path, files, [ad_entry("k-600x400", d="k"), ad_entry("l-600x400", d="l")])
+    assert bc("state", "--record", "G4m", "k and l", project=p).returncode == 0
+    assert lint(p).returncode == 0 and check(p).returncode == 0, mrows(p)
+    assert approve(p).returncode == 0
+    assert (p / "assets" / "masters" / "wspolne" / "znak.png").is_file()
+
+
+@pytest.mark.requires_setup
+@pytest.mark.requires_node
+def test_an_element_marked_bleed_may_pass_the_edge_and_is_listed(tmp_path):
+    body = f'<p style="{ABS};left:40px;top:40px">Hi</p><div id="arc" data-masters-bleed style="position:absolute;left:500px;top:40px;width:200px;height:50px;background:#000"></div>'
+    p = round_with(tmp_path, {"reklama/a.html": ad(600, 400, body)}, [ad_entry("a")])
+    assert check(p).returncode == 0, mrows(p)
+    assert mrows(p)["masters:canvas"]["status"] == "pass" and "#arc" in mrows(p)["masters:canvas"]["detail"]
+
+
+def test_without_a_data_directory_masters_check_cannot_run(tmp_path):
+    import os
+    import subprocess
+    from helpers import ROOT
+    p = masters_round(tmp_path)
+    env = {k: v for k, v in os.environ.items() if k != "BRAND_CREATOR_DATA"}
+    r = subprocess.run(["uv", "run", "--script", "--locked", "--quiet", str(ROOT / "scripts" / "masters.py"), "check", "--project", str(p)],
+                       capture_output=True, text=True, env=env)
+    assert r.returncode == 3, r.stderr
+    assert "brand-creator setup" in r.stderr
+
+
+def group_pptx(*, group_off=(0, 0), child=(20000000, 0, 1000000, 1000000), table_off=(11500000, 0)) -> bytes:
+    import io
+    gx, gy = group_off
+    x, y, cx, cy = child
+    tx, ty = table_off
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("ppt/presentation.xml", '<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:sldSz cx="12192000" cy="6858000"/></p:presentation>')
+        z.writestr("ppt/slides/slide1.xml", '<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><p:cSld><p:spTree>'
+                   '<p:grpSp><p:nvGrpSpPr><p:cNvPr id="5" name="Group 1"/></p:nvGrpSpPr><p:grpSpPr><a:xfrm>'
+                   f'<a:off x="{gx}" y="{gy}"/><a:ext cx="4000000" cy="2000000"/><a:chOff x="20000000" y="0"/><a:chExt cx="4000000" cy="2000000"/></a:xfrm></p:grpSpPr>'
+                   f'<p:sp><p:nvSpPr><p:cNvPr id="6" name="In group"/></p:nvSpPr><p:spPr><a:xfrm><a:off x="{x}" y="{y}"/><a:ext cx="{cx}" cy="{cy}"/></a:xfrm></p:spPr></p:sp></p:grpSp>'
+                   f'<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="7" name="Table 1"/></p:nvGraphicFramePr><p:xfrm><a:off x="{tx}" y="{ty}"/><a:ext cx="2000000" cy="1000000"/></p:xfrm></p:graphicFrame>'
+                   '</p:spTree></p:cSld></p:sld>')
+    return buf.getvalue()
+
+
+def test_a_group_maps_its_shapes_to_the_slide_and_a_table_past_the_edge_is_named(tmp_path):
+    import pptxlib
+    f = tmp_path / "d.pptx"
+    f.write_bytes(group_pptx())
+    out = pptxlib.inspect(f)["outside"]
+    assert out == ["slide 1: Table 1"], out                       # the grouped shape sits at the group's place, inside; the table runs past
+    f.write_bytes(group_pptx(group_off=(10000000, 0), child=(22500000, 0, 1000000, 1000000), table_off=(0, 0)))   # the child lands at 12.5M of 12.19M
+    assert pptxlib.inspect(f)["outside"] == ["slide 1: In group"]

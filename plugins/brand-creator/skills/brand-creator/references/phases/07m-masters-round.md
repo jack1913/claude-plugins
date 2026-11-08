@@ -56,7 +56,8 @@ Name each on the board, and start from them:
 1. `brand-creator masters check` opens each ad and slide at its canvas after its animations end, writes `png/`, and fails
    an element outside the canvas, a text that runs into another text, a deck PDF with the wrong pages or its own dates,
    and a font not embedded in the PowerPoint file (a shape box past the slide edge warns). An element painted over a text warns; mark one drawn
-   there on purpose (a stamp) with `data-masters-overlay`, and the board lists it.
+   there on purpose (a stamp) with `data-masters-overlay`, and a shape cut by the edge on purpose with `data-masters-bleed`;
+   the report lists both.
 2. `brand-creator board-lint rounds/r<N>/board.html`.
 3. The PowerPoint render is the owner's check: ask them to open the deck in PowerPoint (preferred; Keynote and Google Slides
    ignore embedded fonts) and say whether it renders with the brand fonts and nothing overlaps. Until their answer is in

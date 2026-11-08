@@ -470,10 +470,16 @@ def record_files(text: str) -> set[str]:
     return {json.loads(m.group(1)) for m in re.finditer(r'^[0-9a-f]+ \d+ ("(?:[^"\\]|\\.)*")$', text, re.M)}
 
 
-def record_order(f: Path) -> tuple[str, int]:
-    """Sort key of a removed record by when it was written: its date, then k (1 for `<date>-cleanup-removed.txt`, N for `-removed-N.txt`). Plain name order is wrong: `-removed-2` sorts before `-removed.`, and `-10` before `-2`."""
-    m = re.match(r"^(.*?)-cleanup-removed(?:-(\d+))?\.txt$", f.name)
-    return (m.group(1), int(m.group(2) or 1)) if m else (f.name, 0)
+def record_order(f: Path) -> tuple[str, int, int]:
+    """Sort key of a removed record by when it was written: its date, then the time it was written (a round record and a history record of
+    one day count apart), then k (1 for `<date>-cleanup-removed[-history].txt`, N for `-N.txt`). Plain name order is wrong: `-removed-2` sorts
+    before `-removed.`, `-10` before `-2`, and every history record of a day after every round record."""
+    m = re.match(r"^(.*?)-cleanup-removed(?:-history)?(?:-(\d+))?\.txt$", f.name)
+    try:
+        written = f.stat().st_mtime_ns
+    except OSError:
+        written = 0
+    return (m.group(1), written, int(m.group(2) or 1)) if m else (f.name, written, 0)
 
 
 def check_no_failed_removal(repo: Repo) -> None:
@@ -788,7 +794,7 @@ def history_keep(d: Path, static: bool) -> set[Path]:
 def history_git_files(repo: Repo, paths: list[str]) -> list[tuple[str, str, str]]:
     """(blob, mode, path) for each path, all committed and unchanged; otherwise refuse, naming them (they could not be restored)."""
     project = repo.project
-    tracked: dict[str, tuple[str, str]] = {}
+    tracked: dict[str, tuple[str, str, str]] = {}   # NFC path -> (mode, blob, the path as git prints it: precomposed on macOS, as stored elsewhere)
     for part in chunks(paths):
         ls = git(project, "ls-files", "-v", "-s", "-z", "--", *part)
         if ls.returncode != 0:
@@ -797,13 +803,13 @@ def history_git_files(repo: Repo, paths: list[str]) -> list[tuple[str, str, str]
             if tok:
                 m = re.match(r"^(\S) (\d+) ([0-9a-f]+) (\d)\t(.*)$", os.fsdecode(tok), re.S)
                 if m and m.group(1) == "H":
-                    tracked[unicodedata.normalize("NFC", m.group(5))] = (m.group(2), m.group(3))   # ls-files prints paths from the project (git -C), not the repository root
+                    tracked[unicodedata.normalize("NFC", m.group(5))] = (m.group(2), m.group(3), m.group(5))   # ls-files prints paths from the project (git -C), not the repository root
     changed = {unicodedata.normalize("NFC", repo.local(e.path)) for e in status_entries(project, "history", untracked=False)}
     problems = [f"not known to git: {json.dumps(p, ensure_ascii=False)}" for p in paths if p not in tracked]
     problems += [f"changed since the last commit: {json.dumps(p, ensure_ascii=False)}" for p in paths if p in changed]
     if problems:
         raise CliError(EXIT_FAIL, shown(problems, f"refused: {len(problems)} file(s) of history/ to remove are not committed as they are, so they could not be restored:"))
-    return sorted(((tracked[p][1], tracked[p][0], p) for p in paths), key=lambda x: x[2].encode("utf-8", "surrogateescape"))
+    return sorted(((tracked[p][1], tracked[p][0], tracked[p][2]) for p in paths), key=lambda x: x[2].encode("utf-8", "surrogateescape"))   # git rm gets git's own spelling
 
 
 def build_history_plan(repo: Repo, static: bool) -> "HPlan | None":
@@ -906,8 +912,11 @@ def history_main(project: Path, a) -> int:
         staged += len(part)
     history = Path(project) / "history"
     entries_now = read_history_manifest(history)
+    by_nfc = {unicodedata.normalize("NFC", k): k for k in entries_now}   # freeze wrote each name as the disk spells it (decomposed on macOS)
     for p in paths:
-        entries_now.pop(p[len("history/"):], None)
+        key = by_nfc.get(unicodedata.normalize("NFC", p[len("history/"):]))
+        if key is not None:
+            entries_now.pop(key)
     write_history_manifest(history, entries_now)
     for n in plan.freezes:   # folders emptied by git rm
         for dirpath, _d, _f in os.walk(history / n, topdown=False):

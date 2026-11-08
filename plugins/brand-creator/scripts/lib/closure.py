@@ -163,10 +163,12 @@ def browser_closure(root: Path, starts: list[Path]) -> tuple[set[Path], list[str
     return seen, missing
 
 
-def copy_losses(src: Path, copy: Path) -> list[str]:
+def copy_losses(src: Path, copy: Path, before: list[str] | None = None) -> list[str]:
     """The requests the copy's pages make that find no file, less those the source's own pages already missed ("<page>: <path>"):
-    what a copy of a round (freeze) lost. Raises CliError(EXIT_CANNOT) as browser_closure does."""
-    _, before = browser_closure(src, starting_pages(src))
+    what a copy of a round (freeze) lost. `before`: the source's misses when the caller has them already (freeze has just loaded the
+    round), so the source is not loaded a second time. Raises CliError(EXIT_CANNOT) as browser_closure does."""
+    if before is None:
+        _, before = browser_closure(src, starting_pages(src))
     _, after = browser_closure(copy, starting_pages(copy))
     return [m for m in after if m not in before]
 

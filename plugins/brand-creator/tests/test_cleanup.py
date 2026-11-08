@@ -1504,3 +1504,29 @@ def test_history_works_for_a_project_in_a_folder_of_a_bigger_repository(tmp_path
     assert r.returncode == 0, r.stderr + r.stdout
     assert not (p.dir / FZ / "_lead").exists() and (p.dir / FZ / "shots" / "a.png").is_file()
     assert "D  placuje/history/2026-10-21-approved/_lead/big.png" in p.git("status", "--porcelain").stdout
+
+
+# ---------------------------------------------------------------- review fixes (0.10.0)
+
+def test_record_order_reads_history_records_and_breaks_a_same_day_tie_by_time(tmp_path):
+    names = ["2026-11-05-cleanup-removed-history.txt", "2026-11-05-cleanup-removed-history-2.txt", "2026-11-05-cleanup-removed.txt", "2026-11-04-cleanup-removed-3.txt"]
+    for i, n in enumerate(names):
+        f = tmp_path / n
+        f.write_text("x")
+        os.utime(f, ns=(10**18 + i * 10**9, 10**18 + i * 10**9))   # written in the order listed
+    got = [f.name for f in sorted(tmp_path.iterdir(), key=cleanup.record_order)]
+    assert got == ["2026-11-04-cleanup-removed-3.txt", "2026-11-05-cleanup-removed-history.txt", "2026-11-05-cleanup-removed-history-2.txt",
+                   "2026-11-05-cleanup-removed.txt"]
+
+
+def test_history_removes_a_decomposed_polish_name_and_its_manifest_entry(tmp_path):
+    import unicodedata
+    nfd = unicodedata.normalize("NFD", "_lead/zdjęcie.png")
+    p = frozen(tmp_path, {"board.html": '<img src="a.png">', "a.png": HPNG, "FROZEN.md": "# Kept as written\n", nfd: HPNG * 50})
+    code = hcode(p)
+    assert p.run("--history", "--static", "--record-yes", code, "--said", "tak").returncode == 0
+    r = p.run("--history", "--static", "--yes", code)
+    assert r.returncode == 0, r.stderr + r.stdout
+    assert manifest_paths(p) == ["2026-10-21-approved/FROZEN.md", "2026-10-21-approved/a.png", "2026-10-21-approved/board.html"]
+    from _common import verify_history
+    assert verify_history(p.dir) == []
