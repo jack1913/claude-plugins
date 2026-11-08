@@ -805,11 +805,12 @@ def history_git_files(repo: Repo, paths: list[str]) -> list[tuple[str, str, str]
                 if m and m.group(1) == "H":
                     tracked[unicodedata.normalize("NFC", m.group(5))] = (m.group(2), m.group(3), m.group(5))   # ls-files prints paths from the project (git -C), not the repository root
     changed = {unicodedata.normalize("NFC", repo.local(e.path)) for e in status_entries(project, "history", untracked=False)}
-    problems = [f"not known to git: {json.dumps(p, ensure_ascii=False)}" for p in paths if p not in tracked]
-    problems += [f"changed since the last commit: {json.dumps(p, ensure_ascii=False)}" for p in paths if p in changed]
+    nfc = lambda s: unicodedata.normalize("NFC", s)   # noqa: E731   compared precomposed: git on macOS prints names so, the disk may hold them decomposed
+    problems = [f"not known to git: {json.dumps(p, ensure_ascii=False)}" for p in paths if nfc(p) not in tracked]
+    problems += [f"changed since the last commit: {json.dumps(p, ensure_ascii=False)}" for p in paths if nfc(p) in changed]
     if problems:
         raise CliError(EXIT_FAIL, shown(problems, f"refused: {len(problems)} file(s) of history/ to remove are not committed as they are, so they could not be restored:"))
-    return sorted(((tracked[p][1], tracked[p][0], tracked[p][2]) for p in paths), key=lambda x: x[2].encode("utf-8", "surrogateescape"))   # git rm gets git's own spelling
+    return sorted(((tracked[nfc(p)][1], tracked[nfc(p)][0], tracked[nfc(p)][2]) for p in paths), key=lambda x: x[2].encode("utf-8", "surrogateescape"))   # git rm gets git's own spelling
 
 
 def build_history_plan(repo: Repo, static: bool) -> "HPlan | None":
@@ -829,7 +830,7 @@ def build_history_plan(repo: Repo, static: bool) -> "HPlan | None":
         stay = [p for p in files if p.resolve() in keep]
         rows.append(f"  {d.name}: stays {len(stay)} files, {mb(sum(p.stat().st_size for p in stay))}; goes {len(gone)} files, "
                     f"{mb(sum(p.stat().st_size for p in gone))}")
-        goes += [unicodedata.normalize("NFC", p.relative_to(project).as_posix()) for p in gone]
+        goes += [p.relative_to(project).as_posix() for p in gone]   # as the disk spells it: git where it does not precompose (Linux) knows only that spelling
     if not goes:
         return None
     files = history_git_files(repo, goes)
