@@ -426,9 +426,10 @@ printed, and each Docker run ends with `LINUX RUN OK`. Record the version, the c
 tagging.
 
 **Last run:** 2026-11-08, brand-creator 0.10.0, macOS 27.3, on the release commit's tree (only this record differs): pytest
-3391 passed, 1 skipped (the denylist), node 249 pass and 0 fail, `SMOKE PASSED` and `QUICK SMOKE PASSED`, on the first run.
-The Linux Docker run of the same tree printed `LINUX RUN OK` for pytest (3340 passed, 52 expected skips), node (249 pass)
-and the smoke. Calibration on a scratch copy of the pilot brand: `cleanup --history` took `history/` from 308 MB to 21 MB
+3400 passed, 1 skipped (the denylist), node 249 pass and 0 fail, `SMOKE PASSED` and `QUICK SMOKE PASSED`. The Linux Docker
+run of the same tree printed `LINUX RUN OK` for pytest (3349 passed, 52 expected skips), node (249 pass) and the smoke. An
+earlier Linux run, after the code review's fixes, failed one test: `cleanup --history` asked git for a decomposed Polish
+file name in its precomposed spelling, which Linux does not store; it now asks with the disk's spelling. Calibration on a scratch copy of the pilot brand: `cleanup --history` took `history/` from 308 MB to 21 MB
 (6124 files), with 0 files lost by any frozen board in the browser; `masters check` on its approved ads, deck PDF and
 PowerPoint deck passed, with one warning (a text box above slide 12) and the PowerPoint render left to the owner.
 
