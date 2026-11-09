@@ -182,3 +182,49 @@ def test_a_copy_stopped_before_kit_json_is_finished_by_the_next_run(tmp_path):
     assert again["copy"] == ["kit.json"] and again["owner_differ"] == [] and again["update_owner"] == [] and again["state"] == kitcopy.NOT_CURRENT
     shutil.copyfile(kit / "kit.json", repo / "kit.json")
     assert kitcopy.compare(kit, repo)["state"] == kitcopy.CURRENT
+
+
+# ---------------------------------------------------------------- a second skill for the same brand
+
+import unicodedata  # noqa: E402
+
+
+def skill(folder, name, description):
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "SKILL.md").write_text(f"---\nname: {name}\ndescription: {description}\n---\n\n# x\n", encoding="utf-8")
+
+
+def test_brand_name_is_read_from_the_kits_heading(tmp_path):
+    kit = tmp_path / "placuje-brand"
+    make_fake_kit(kit, {"SKILL.md": "---\nname: placuje-brand\n---\n\n# Płacuję brand\n".encode()}, {})
+    assert kitcopy.brand_name(kit) == "Płacuję"
+    assert kitcopy.brand_name(tmp_path / "nothing") is None
+
+
+def test_a_hand_made_skill_naming_the_brand_is_found_even_written_decomposed(tmp_path):
+    skills = tmp_path / ".claude" / "skills"
+    skill(skills / "placuje", "placuje", unicodedata.normalize("NFD", "Applies the Płacuję brand to anything made for it."))
+    skill(skills / "placuje-brand", "placuje-brand", "Applies the Płacuję brand (colours, type).")
+    skill(skills / "other", "other", "Writes release notes.")
+    assert kitcopy.other_brand_skills(skills, "placuje-brand", "Płacuję") == ["placuje"]
+
+
+def test_a_link_among_the_skills_and_a_folder_without_skill_md_are_never_read(tmp_path):
+    skills = tmp_path / ".claude" / "skills"
+    skill(tmp_path / "elsewhere", "placuje", "Applies the Płacuję brand.")
+    skills.mkdir(parents=True)
+    (skills / "linked").symlink_to(tmp_path / "elsewhere")
+    (skills / "empty").mkdir()
+    assert kitcopy.other_brand_skills(skills, "placuje-brand", "Płacuję") == []
+    assert kitcopy.other_brand_skills(tmp_path / "no-skills-folder", "placuje-brand", "Płacuję") == []
+
+
+def test_compare_lists_the_other_skill_and_the_status_warns_while_the_copy_stays_current(tmp_path):
+    kit = tmp_path / "acme-brand"
+    make_fake_kit(kit, GEN, {})
+    repo = installed(tmp_path, kit)
+    skill(repo.parent / "acme", "acme", "Applies the Acme brand.")
+    res = kitcopy.compare(kit, repo)
+    assert res["state"] == kitcopy.CURRENT and res["other_skills"] == ["acme"]
+    lines = kitcopy.status_lines({**res, "label": "site", "note": None}, ".claude/skills/acme-brand")
+    assert "  warning: .claude/skills/acme/ is another skill for Acme: Claude may load either; taking it out is yours" in lines

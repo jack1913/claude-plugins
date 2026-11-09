@@ -280,7 +280,7 @@ def compare(kit: Path, installed: Path) -> dict:
     """The kit folder of the project (`kit`) against the folder a product repository holds (`installed`). Reads both, writes nothing, follows no link.
 
     Returns {"state": NOT_INSTALLED | CURRENT | NOT_CURRENT, "installed_version", "project_version", "differ": [(path, why)], "missing": [path], "left_over": [path],
-    "owner_differ": [(path, why)], "copy": [path], "copy_owner": [path], "update_owner": [path], "owner_left_over": [path], "other_skills": [folder]}. The copy list `copy` is the
+    "owner_differ": [(path, why)], "copy": [path], "copy_owner": [path], "update_owner": [path], "owner_left_over": [path], "brand": the name `brand_name` reads or None, "other_skills": [folder] (`other_brand_skills`)}. The copy list `copy` is the
     generated files to copy (all of them when nothing is installed, otherwise those that differ or are missing), then the owner files the repository lacks (`copy_owner`: every
     owner file of the project, `owner_paths`, the five scaffolded ones first, then the others sorted), then the owner files to update (`update_owner`), and kit.json last of all.
     An owner file is judged by `owner_state` against the `owned` record of the repository's own kit.json (`installed_owned`): one the repository never changed since it was
@@ -314,7 +314,7 @@ def compare(kit: Path, installed: Path) -> dict:
                           "(`brand-creator kit build --yes --replace` moves it aside), then run `brand-creator kit check`")
     owner = {rel: data for rel in owner_rels if (data := read_plain(kit, rel)[0]) is not None}   # the project's owner files that can be copied
     out = {"state": NOT_INSTALLED, "installed_version": None, "project_version": doc["version"], "differ": [], "missing": [], "left_over": [], "owner_differ": [],
-           "copy": [], "copy_owner": [], "update_owner": [], "owner_left_over": [], "other_skills": []}
+           "copy": [], "copy_owner": [], "update_owner": [], "owner_left_over": [], "brand": None, "other_skills": []}
     recorded = installed_owned(installed)
     if not os.path.lexists(installed / KIT_FILE):
         out["copy"] = list(wanted)
@@ -347,8 +347,52 @@ def compare(kit: Path, installed: Path) -> dict:
             out["owner_left_over"].append(rel)
     if out["update_owner"] or out["owner_left_over"]:
         out["state"] = NOT_CURRENT
+    brand = out["brand"] = brand_name(kit)
+    out["other_skills"] = other_brand_skills(installed.parent, installed.name, brand) if brand else []
     last = [KIT_FILE] if KIT_FILE in out["copy"] else []                 # kit.json last of all: a copy that stops before it is finished by the next run, never taken for the repository's own edits
     out["copy"] = [rel for rel in out["copy"] if rel != KIT_FILE] + out["copy_owner"] + out["update_owner"] + last
+    return out
+
+
+_BRAND_HEADING = re.compile(r"^# (.+) brand\s*$", re.M)
+
+
+def brand_name(kit: Path) -> str | None:
+    """The brand's name, from the first `# <name> brand` heading of the kit's SKILL.md (as its template writes it), or None when the kit has no such SKILL.md."""
+    data, _ = read_plain(kit, SKILL_FILE)
+    m = _BRAND_HEADING.search(data.decode("utf-8", "replace")) if data is not None else None
+    return m.group(1).strip() if m else None
+
+
+def _folded(text: str) -> str:
+    import unicodedata
+    return unicodedata.normalize("NFC", text).casefold()
+
+
+def other_brand_skills(skills_dir: Path, kit_name: str, brand: str) -> list[str]:
+    """The folders of `skills_dir` (a repository's .claude/skills/), other than the kit's own, whose SKILL.md front matter names the brand in its `name:` or `description:` line:
+    another skill Claude may load for the same brand (a hand-made kit, say). Compared after NFC normalisation and case folding. A link, a folder without a plain SKILL.md
+    and an unreadable one are never read. Sorted folder names."""
+    if not os.path.isdir(skills_dir) or os.path.islink(skills_dir):
+        return []
+    want, out = _folded(brand), []
+    for entry in sorted(os.listdir(skills_dir)):
+        folder = skills_dir / entry
+        if entry == kit_name or folder.is_symlink() or not folder.is_dir():
+            continue
+        data, _ = read_plain(folder, SKILL_FILE)
+        if data is None:
+            continue
+        lines = data.decode("utf-8", "replace").split("\n")
+        if not lines or lines[0].strip() != "---":
+            continue
+        head = []
+        for line in lines[1:]:
+            if line.strip() == "---":
+                break
+            head.append(line)
+        if any(line.split(":", 1)[0].strip() in ("name", "description") and want in _folded(line.split(":", 1)[1]) for line in head if ":" in line):
+            out.append(entry)
     return out
 
 
@@ -431,6 +475,8 @@ def status_lines(res: dict, kd_rel: str) -> list[str]:
                          ("owner files to update (unchanged in the repository since the last copy)", res["update_owner"])):
         if items:
             L += [f"  {title}:", *(f"    {i}" for i in items)]
+    for folder in res.get("other_skills", []):
+        L.append(f"  warning: {posixpath.dirname(kd_rel)}/{folder}/ is another skill for {res.get('brand') or 'this brand'}: Claude may load either; taking it out is yours")
     if res["copy"]:
         L.append(f"  copy list, paths relative to {kd_rel}/ (the generated files, then the owner files to copy or update, kit.json last):")
         L += [f"    {rel} (owner file, the repository has none)" if rel in res["copy_owner"] else f"    {rel} (owner file, an update)" if rel in res["update_owner"]
@@ -442,6 +488,6 @@ def result_json(res: dict, kd_rel: str) -> dict:
     """One repository's entry of `kit status --json`: the keys in their order, `differ` and `owner_differ` as [{"file", "why"}], and `left_over_to` (where the files left over go,
     in the repository) only when there are some. `kd_rel` is the kit folder's path in a repository (`.claude/skills/<name>`)."""
     keys = ("label", "path", "state", "installed_version", "project_version", "differ", "missing", "left_over", "left_over_to", "owner_differ", "update_owner", "owner_left_over",
-            "copy", "copy_owner", "read_only")
+            "other_skills", "copy", "copy_owner", "read_only")
     res = {**res, "left_over_to": left_over_to(kd_rel) if res["left_over"] or res["owner_left_over"] else None}
     return {k: ([{"file": rel, "why": why} for rel, why in res[k]] if k in ("differ", "owner_differ") else res[k]) for k in keys}
