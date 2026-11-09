@@ -201,8 +201,8 @@ run again with --yes to copy
 With `--yes` it ends like this:
 
 ```text
-installed: /Users/you/Dev/shop/.claude/skills/acme-brand (version 1.1)
-next: review and commit it in /Users/you/Dev/shop
+installed: <the shop's folder>/.claude/skills/acme-brand (version 1.1)
+next: review and commit it in <the shop's folder>
 ```
 
 Run the same line again after the brand changes: it updates the copy by the same rules as Claude. It never deletes,
