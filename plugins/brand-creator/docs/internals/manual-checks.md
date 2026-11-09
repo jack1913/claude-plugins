@@ -29,7 +29,7 @@ proven.
 | [E-mail signature in real mail clients](#the-e-mail-signature-in-real-mail-clients) | never run | |
 | [A real Linux desktop session](#a-real-linux-desktop-session) | never run | |
 | [Windows](#windows) | never run | |
-| [Release run](#release-run) | 2026-11-09, 0.11.0, the release commit's tree | passed |
+| [Release run](#release-run) | 2026-11-09, 0.11.1, the release commit's tree (Linux: the touched tests only, the owner's call) | passed |
 | [CI first run](#ci-first-run) | 2026-10-25, runs 40170278108 (push) and 40171295112 (by hand) on commit b621a96 | every job passed, the two macOS smoke halves and the `brand-creator` verdict included |
 
 ## Behaviour evals (`claude plugin eval`)
@@ -425,7 +425,14 @@ skip, when `BRAND_CREATOR_DENYLIST` is not set), node reports `fail 0`, both `SM
 printed, and each Docker run ends with `LINUX RUN OK`. Record the version, the commit, the date and the counts here before
 tagging.
 
-**Last run:** 2026-11-09, brand-creator 0.11.0, macOS 27.3, on the release commit's tree (commit bdde6d0; only this record
+**Last run:** 2026-11-09, brand-creator 0.11.1, macOS 27.3, on the release commit's tree (commit a1fb2fc; only this record
+differs): pytest 3471 passed, 1 skipped (the denylist), node 249 pass and 0 fail, `SMOKE PASSED` and `QUICK SMOKE PASSED`.
+Linux ran only the tests the release touches, by the owner's decision (a full Linux run takes about 20 minutes): in the
+Docker image, after `setup --yes`, `tests/test_kit.py`, `tests/test_kitcopy.py`, `tests/test_site_board.py` and
+`tests/test_static.py` gave 513 passed and 2 expected skips (the denylist, no `claude` CLI). The full Linux run, the
+smoke included, was not run for this release.
+
+The 0.11.0 run: 2026-11-09, brand-creator 0.11.0, macOS 27.3, on the release commit's tree (commit bdde6d0; only this record
 differs): pytest 3463 passed, 1 skipped (the denylist), node 249 pass and 0 fail, `SMOKE PASSED` and `QUICK SMOKE PASSED`.
 The Linux Docker run of the same tree printed `LINUX RUN OK` for pytest (3412 passed, 52 expected skips), node (249 pass)
 and the smoke. That tree carries the final review's fix pass to `install.py`; the run before it (commit 4f472d4: 3454 and
