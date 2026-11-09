@@ -425,16 +425,18 @@ skip, when `BRAND_CREATOR_DENYLIST` is not set), node reports `fail 0`, both `SM
 printed, and each Docker run ends with `LINUX RUN OK`. Record the version, the commit, the date and the counts here before
 tagging.
 
-**Last run:** 2026-11-09, brand-creator 0.11.0, macOS 27.3, on the release commit's tree (commit 4f472d4; only this record
-differs): pytest 3454 passed, 1 skipped (the denylist), node 249 pass and 0 fail, `SMOKE PASSED` and `QUICK SMOKE PASSED`.
-The Linux Docker run of the same tree printed `LINUX RUN OK` for pytest (3403 passed, 52 expected skips), node (249 pass)
-and the smoke. The first Mac run, one commit earlier, failed one test: the manual's `install.py` example showed a personal
+**Last run:** 2026-11-09, brand-creator 0.11.0, macOS 27.3, on the release commit's tree (commit bdde6d0; only this record
+differs): pytest 3463 passed, 1 skipped (the denylist), node 249 pass and 0 fail, `SMOKE PASSED` and `QUICK SMOKE PASSED`.
+The Linux Docker run of the same tree printed `LINUX RUN OK` for pytest (3412 passed, 52 expected skips), node (249 pass)
+and the smoke. That tree carries the final review's fix pass to `install.py`; the run before it (commit 4f472d4: 3454 and
+3403 passed) is replaced by this one. The first Mac run, one commit before that, failed one test: the manual's `install.py` example showed a personal
 path (a home folder on a Mac), which `test_no_personal_paths_or_email_addresses_in_shipped_files` refuses; the example now names
 `<the shop's folder>`. Calibration on a scratch copy of the pilot brand: the kit's `SKILL.md` went from 3,812 words to 1,739
 (`brand.md` 2,114, `checklist.md` 1,430); `kit check` failed only on the e-mail signature master's `{{logo_url}}` placeholder,
 the pilot brand's own fix; `install.py` into a scratch git repository planned, copied and read current, warned about the
 hand-made `placuje` skill, updated an owner file the repository never changed, copied a recipe the owner added, and kept one
-the repository had changed.
+the repository had changed. After the fix pass, the rebuilt kit's `install.py` updated that copy from version 4.5 to 4.6,
+kept the repository's changed file, warned again and read current.
 
 The 0.10.0 run (2026-11-08): pytest 3400 passed and 1 skipped on the Mac, 3349 passed and 52 expected skips on Linux. An
 earlier Linux run, after the code review's fixes, failed one test: `cleanup --history` asked git for a decomposed Polish
