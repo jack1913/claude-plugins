@@ -689,10 +689,25 @@ def scaffold_text(project: Path, rel: str, text: str) -> str:
 
 
 LINK_AMONG_OWNER = "a link among your own files: never read through"   # why the build stops on a link among the owner's files
+MASTER_SCAFFOLDS = {"recipes/ad.md": ("ad",), "recipes/presentation.md": ("slide", "deck-html", "deck-pdf", "deck-pptx")}   # a recipe the build scaffolds once the approved masters hold one of its kinds
+
+
+def scaffolds(project: Path) -> tuple[str, ...]:
+    """The owner files the build scaffolds for this project: the five (`OWNED_FILES`), then each recipe of `MASTER_SCAFFOLDS` whose kinds meet an entry of
+    assets/masters/masters.json (written by `masters approve`). No masters.json: the five. A masters.json with a problem stops the run (exit 1), naming the first."""
+    manifest = project / MASTERS_DIR / "masters.json"
+    if not manifest.is_file():
+        return OWNED_FILES
+    import mastersdata   # scripts/boardlib: on the path of `kit` and `check`; read here only
+    m = mastersdata.load_manifest(manifest)
+    if m.problems:
+        fail(EXIT_FAIL, f"{MASTERS_DIR}/masters.json: {m.problems[0]}; fix it, or run `brand-creator masters approve` again")
+    kinds = {e.kind for e in m.entries}
+    return OWNED_FILES + tuple(rel for rel, wanted in MASTER_SCAFFOLDS.items() if kinds & set(wanted))
 
 
 def owner_plan(project: Path) -> dict:
-    """The owner's files: the five scaffolded ones (`OWNED_FILES`) and every other file of the kit folder that is no generated file, no kit.json and no Finder `.DS_Store` (`owner_paths`).
+    """The owner's files: the scaffolded ones (`scaffolds`: the five of `OWNED_FILES` and the master recipes) and every other file of the kit folder that is no generated file, no kit.json and no Finder `.DS_Store` (`owner_paths`).
     {"files": {path in the kit: the scaffold's bytes} of the five, "write": [paths of the five that are absent and will be scaffolded], "kept": [paths already there], "owned": {path in the kit: sha256},
     "links": [paths that are a link among the owner's files]}. `owned` is kit.json's key: the sha256 of the file as it is on disk, or, for one of the five that is absent, of the scaffold that will be written.
 
@@ -703,24 +718,25 @@ def owner_plan(project: Path) -> dict:
     written once the link is moved."""
     kd_rel, kd, root = kit_rel(project), kit_dir(project), plugin_root() / OWNER_TEMPLATES
     plan = {"files": {}, "write": [], "kept": [], "owned": {}, "links": []}
-    for rel in OWNED_FILES:
+    scaffolded = scaffolds(project)
+    for rel in scaffolded:
         t = root / rel
         if not t.is_file():
             fail(EXIT_CANNOT, f"the scaffold {OWNER_TEMPLATES}/{rel} is missing from the plugin: reinstall the plugin")
         plan["files"][rel] = scaffold_text(project, rel, t.read_text(encoding="utf-8")).encode("utf-8")
-    for rel in OWNED_FILES:
+    for rel in scaffolded:
         for parent in reversed(list(Path(rel).parents)[:-1]):                         # the folders between the kit folder and the file: recipes/ for recipes/web-page.md
             if os.path.lexists(d := kd / parent) and not d.is_symlink() and not os.path.isdir(d):   # a link is its own entry in "links", whatever it points at
                 fail(EXIT_FAIL, f"{kd_rel}/{rel} is not a file the build can write: {kd_rel}/{parent.as_posix()} is not a folder (it is a file). The build never moves or "
                                 f"replaces the owner's paths. Move it away yourself, then build again")
-    others = [rel for rel in owner_paths(kd) if rel not in OWNED_FILES]
-    for rel in [*OWNED_FILES, *others]:
+    others = [rel for rel in owner_paths(kd) if rel not in scaffolded]
+    for rel in [*scaffolded, *others]:
         f = kd / rel
         linked_folder = any((kd / parent).is_symlink() for parent in Path(rel).parents if parent != Path("."))   # recipes/ is a link: its own entry in "links"
         if f.is_symlink() or linked_folder:
             if f.is_symlink():
                 plan["links"].append(rel)
-            if rel in OWNED_FILES:                                                # the link goes aside, then the scaffold is written
+            if rel in scaffolded:                                                 # the link goes aside, then the scaffold is written
                 plan["write"].append(rel)
                 plan["owned"][rel] = sha256_bytes(plan["files"][rel])
             continue
@@ -1852,7 +1868,7 @@ def owned_changes(project: Path, doc: dict) -> list[tuple[str, str]]:
         elif os.path.lexists(kd / rel):
             out.append((rel, OWNED_NOT_FILE))
         else:
-            out.append((rel, OWNED_MISSING if rel in OWNED_FILES else OWNED_REMOVED))
+            out.append((rel, OWNED_MISSING if rel in scaffolds(project) else OWNED_REMOVED))
     return out
 
 

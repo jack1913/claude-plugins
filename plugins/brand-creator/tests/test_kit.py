@@ -5373,3 +5373,63 @@ def test_every_checklist_line_comes_from_rules_json_or_the_fixed_lines(pack):
     sources = [r["id"] for r in rules["g4"]] + [b["drawing"] for b in rules["bands"]] + [p["kind"] for p in rules["pairs"]] + rules["forbidden"]
     items = [line for line in checklist_of(pack).splitlines() if line.startswith("- [ ] ") and line not in CHECKLIST_FIXED]
     assert items and all(any(s in line for s in sources) or "the accent holds a solid" in line for line in items), items
+
+
+# ---------------------------------------------------------------- approved ad and deck masters scaffold their recipes (G8 A3)
+AD_ENTRY = {"file": "ad/index.html", "kind": "ad", "canvas": [1080, 1350]}
+DECK_ENTRY = {"file": "deck/deck.pptx", "kind": "deck-pptx"}
+
+
+def with_manifest(p, *entries):
+    with_masters(p)
+    (p / "assets" / "masters" / "masters.json").write_text(json.dumps({"entries": list(entries)}), encoding="utf-8")
+
+
+def test_ad_masters_scaffold_the_ad_recipe_only(pack):
+    with_manifest(pack, AD_ENTRY)
+    assert build(pack).returncode == 0
+    kd = kit_of(pack)
+    ad = (kd / "recipes" / "ad.md").read_text(encoding="utf-8")
+    assert ad.startswith("# Ads\n") and ad.count("[[fill: ") == 1 and "{{" not in ad and re.findall(r"(?m)^(\d+)\. ", ad) == ["1", "2", "3", "4", "5"]
+    assert not (kd / "recipes" / "presentation.md").exists()
+    assert sorted(kit_json(pack)["owned"]) == sorted([*OWNER_FILES, "recipes/ad.md"]) and owned_row(pack) == "6 owner files scaffolded this run, 0 kept as they are"
+
+
+def test_a_deck_scaffolds_the_presentation_recipe_and_names_powerpoint(pack):
+    with_manifest(pack, DECK_ENTRY)
+    assert build(pack).returncode == 0
+    text = (kit_of(pack) / "recipes" / "presentation.md").read_text(encoding="utf-8")
+    assert text.startswith("# Presentations\n") and "PowerPoint" in text and "Keynote" in text and not (kit_of(pack) / "recipes" / "ad.md").exists()
+
+
+def test_a_master_scaffold_is_never_overwritten_and_comes_back_when_deleted(pack):
+    with_manifest(pack, AD_ENTRY, DECK_ENTRY)
+    assert build(pack).returncode == 0
+    ad = kit_of(pack) / "recipes" / "ad.md"
+    ad.write_text("# Ads\n\nMine.\n", encoding="utf-8")
+    assert build(pack).returncode == 0 and ad.read_text(encoding="utf-8") == "# Ads\n\nMine.\n"
+    ad.unlink()
+    assert build(pack).returncode == 0 and ad.read_text(encoding="utf-8").startswith("# Ads\n\nSteps only.")
+
+
+def test_without_masters_json_no_master_recipe_is_scaffolded(pack):
+    with_masters(pack)                                                                     # masters placed by hand: no masters.json
+    assert build(pack).returncode == 0
+    assert not (kit_of(pack) / "recipes" / "ad.md").exists() and not (kit_of(pack) / "recipes" / "presentation.md").exists()
+    assert sorted(kit_json(pack)["owned"]) == OWNER_FILES
+
+
+def test_a_masters_json_with_a_problem_stops_the_build_naming_it(pack):
+    with_manifest(pack, {"file": "ad/index.html", "kind": "poster"})
+    r = build(pack)
+    assert r.returncode == 1 and "assets/masters/masters.json: ad/index.html: kind 'poster' is not one of" in r.stderr and "masters approve" in r.stderr, r.stdout + r.stderr
+    assert not (kit_of(pack) / "recipes" / "ad.md").exists()
+
+
+def test_the_master_scaffolds_hold_one_fill_marker_each_and_kit_check_names_them(pack):
+    with_manifest(pack, AD_ENTRY, DECK_ENTRY)
+    filled_kit(pack)                                                                       # fills the five, not the two master recipes
+    r = kit_check(pack)
+    assert r.returncode == 1 and statuses(pack) == {**ALL_PASS, "kit:fill": "fail"}, r.stdout + r.stderr
+    detail = check_report_rows(pack)["kit:fill"]["detail"]
+    assert "recipes/ad.md" in detail and "recipes/presentation.md" in detail
