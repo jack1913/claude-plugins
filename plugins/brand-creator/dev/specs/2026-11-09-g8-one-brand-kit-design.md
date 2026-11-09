@@ -214,11 +214,12 @@ either. Read only; taking the old one out is the owner's call.
 ## Part B: Płacuję, in its own session after 0.11.0
 
 1. Update the plugin to 0.11.0, run `check --refresh` (the reports still carry plugin 0.7.0), and build the kit.
-2. Fix the print templates added on 2026-11-08 (`assets/masters/druki/`, not committed yet), which `kit:links` would
-   fail: four load `/assets/fonts/Geist[wght].ttf` by an absolute path (make it `../../fonts/Geist[wght].ttf`, which
-   resolves in the project and in the kit), and `email-signature.html` has the placeholder `src="{{logo_url}}"` (point it
-   at a logo file in the kit; the recipe says a sent signature needs the logo's hosted address). Then commit them with the
-   `assets/masters/README.md` row.
+2. Fix the print templates added on 2026-11-08 (`assets/masters/druki/`, not committed yet). `email-signature.html` has
+   the placeholders `src="{{logo_url}}"` and `{{logo_url_2x}}`, which `kit:links` fails (seen in the calibration on a scratch
+   copy, 2026-11-09): point them at a logo file in the kit, and let the recipe say a sent signature needs the logo's hosted
+   address. Four templates load `/assets/fonts/Geist[wght].ttf` by an absolute path inside a `<style>`, which `kit:links`
+   does not read but which resolves neither in the kit nor in a product: make it `../../fonts/Geist[wght].ttf`. Then commit
+   them with the `assets/masters/README.md` row.
 3. Move the hand-made content into the generated kit's owner files, each line tagged and each value cited:
    - the recipes `ad`, `presentation`, `print`, `email`, `campaign`, `social-post`, `video`, `app-screen`, `blog-cover`,
      and the hand-made `web-page` merged into the generated one;

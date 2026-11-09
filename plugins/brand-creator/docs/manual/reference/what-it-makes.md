@@ -175,9 +175,11 @@ yes. The steps are in [Use your brand kit](../use/use-your-brand-kit.md).
   without contact details;
   ready-made bits of code for your fonts, your logo in light and dark, and text on each background colour you named;
   and your approved reference pages, each with a note on its layout and its choices. A reference page goes in only when
-  it passes its page check and its pictures are up to date.
+  it passes its page check and its pictures are up to date. Also `brand.md` (your colours, type, logo sizes, motion and
+  claims on one page), `checklist.md` (a checklist from your rules) and `install.py` (the kit's installer).
 - **Yours:** `voice.md`, `visual.md` and `golden-rules.md` (how your brand sounds, how it looks beyond the colours, and
-  the few rules every piece keeps), `recipes/web-page.md` (the steps for building a web page in your brand), and
+  the few rules every piece keeps), `recipes/web-page.md` (the steps for building a web page in your brand), once you
+  approved ads or a deck `recipes/ad.md` and `recipes/presentation.md`, and
   `EXTENDING.md` (how to add to the kit). Claude writes each once, never over it, and drafts the first three with you.
   A recipe or file you add yourself is yours too and travels with the kit.
 - **Its version,** such as 1.3: your brand book's edition, then a build number that goes up by one when a made-for-you
@@ -193,6 +195,8 @@ yes. The steps are in [Use your brand kit](../use/use-your-brand-kit.md).
   your computer that holds your website's or app's code) is `current`, `not installed` or `not current`.
 - **In your product:** `/brand-creator:brand-adopt` puts the kit into a product repository, on the Full tier: one
   repository at a time, never into a folder all your projects share. A review checks that the copy is exactly your kit.
+  It runs the kit's own `install.py`, which a developer with a copy of your brand project can run too, without Claude. A
+  file of yours that the product never changed is updated when you change it; one the product changed stays its own.
 
 ## Print, press kit and posts (Standard and Full)
 

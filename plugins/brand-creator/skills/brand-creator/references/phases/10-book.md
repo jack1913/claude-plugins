@@ -162,8 +162,10 @@ decks and other templates) go into `assets/masters/` first, and only approved on
    file edited by hand, or a file put into `brand/`, `snippets/` or `reference-pages/`, stops the build (exit 1); `--replace` moves
    it to `removed-<date>/` and builds. An edit of an owner file moves the kit's version at the next build.
 5. To put the kit in a repository: `adoption add --repo <label> --kit`, then [the brand-adopt skill](../../../brand-adopt/SKILL.md)
-   copies it on the owner's branch and `kit status --repo <path>` must say `current`. The scripts never write outside the project, and
-   the kit is never copied into `~/.claude/skills` or any global folder, and never committed.
+   runs the kit's own `install.py` on the owner's branch and `kit status --repo <path>` must say `current`. The plugin's scripts never
+   write outside the project (`install.py` is a file of the kit, run by a person or the implementer; ADR-0014), and the kit is never
+   copied into `~/.claude/skills` or any global folder, and never committed. A developer with a copy of the brand project can run
+   `python3 .claude/skills/<slug>-brand/install.py <repository folder> [--yes]` without the plugin.
 
 ### Kit test (optional)
 

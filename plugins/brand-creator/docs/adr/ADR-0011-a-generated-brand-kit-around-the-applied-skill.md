@@ -200,3 +200,10 @@ are. Each adds files to what a bullet covers, and says so.
   `reference-pages/` is still foreign and stops the build. A symbolic link among the owner's files, whatever it
   points at (a file or a folder of the project, nothing, or a place outside the project), is refused the way a `kit.json` that is
   a link is: the build stops (exit 1) and `--replace` moves the link itself aside.
+
+## Update 2026-11-09
+
+[ADR-0014](ADR-0014-the-kit-installs-itself-and-updates-unchanged-owner-files.md) replaces two parts of this record, at the
+owner's request: D10 for one file, the `install.py` every kit now carries (the plugin's own scripts still write only inside
+the brand project), and D11's "copies an owner file only where the repository has none" (an owner file the repository never
+changed since it was copied is now updated). Everything else here stands, including "never copied into a global skills folder".

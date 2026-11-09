@@ -3,8 +3,8 @@
   "kit": "acme-brand",
   "version": "1.2",
   "edition": "1",
-  "plugin_version": "0.10.0",
-  "content_sha": "c468752f7d0922e4428b60f315883d8a296b949cd16663dc1e08cfb5a56a944f",
+  "plugin_version": "0.11.0",
+  "content_sha": "eced33e7f6c1c8181b0bd9e563e4e98a6044dbf9ebc0053fd4a18eff30999286",
   "generated": {
     "SKILL.md": "102c559ffd0327ec3c9d3593654c5243eb66ec09566642a373aa2ffb4e6553f9",
     "brand.md": "38e696e2ce13691bc27146c582ca34eab1a3af0366dd383e898c2e270aa85df9",
@@ -25,7 +25,7 @@
     "snippets/logo.html": "71627d0ff922544924c7ba52a8c5cbf1e34acde2429fc1cdb7ae2a12774dcf83"
   },
   "owned": {
-    "EXTENDING.md": "c724f51895879814209a53da4623236c2a237d0230ad55b1954e9733a39037bf",
+    "EXTENDING.md": "ea94421a8fc4080632c6a634b4ae39470cd7618fc3540a1e4956c9ff741dca9a",
     "golden-rules.md": "44f766a99cddcb953f78e7941fe895198887a75392ed4f40a0cc7b6e3fc39a75",
     "recipes/web-page.md": "563dd61f18ec9987cfe6f5691d00af2787a1af32a4b7139e946c92da498274f4",
     "visual.md": "9498f424fa5ffeef9bac272fce456520c5c484db52623895dbbfaa8682a61a95",

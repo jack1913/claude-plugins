@@ -6,6 +6,35 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-09
+
+One brand kit. The generated kit takes over what made the pilot brand's hand-made kit work: a short first page with steps
+and a map, a checklist, recipes for your ads and decks, and an installer it carries, so a product gets the kit and its
+updates without the plugin. On the pilot brand the kit's first page went from 3,812 words to 1,739.
+
+### Added
+
+- `brand.md` in the kit: your colours and their contrast, type, layout, logo sizes, motion and what may be claimed, on one
+  page. The kit's `SKILL.md` keeps how to work, your rules, the "never" list and a map of where everything is.
+- `checklist.md` in the kit: a checklist to go through before anything is handed over, built only from your rules, your
+  logo sizes, your contrast pairs, your forbidden words and your page rules.
+- `install.py` in the kit: `python3 .claude/skills/<brand>-brand/install.py <folder in a product> [--yes]` says what it
+  would copy, or copies it, with no plugin installed. It judges a copy with the same code as `kit status`, never deletes,
+  commits or pushes, never installs globally or into the brand project, and never writes through a link.
+- Starter recipes `recipes/ad.md` and `recipes/presentation.md` once the masters you approved hold an ad or a deck.
+- `kit status` warns when a product also holds another skill for the same brand, such as an older hand-made kit.
+
+### Changed
+
+- A recipe or other file of yours that a product never changed is now updated when you change it in the brand project; one
+  the product changed or added stays its own, as before (ADR-0014).
+- `kit.json` is now the last file of every copy, after your own files, so a copy that stops halfway is finished by the next
+  run.
+- `/brand-creator:brand-adopt` puts the kit into a product with the kit's own `install.py` instead of copying it file by
+  file.
+- The first build on 0.11.0 moves every kit's build number up by one: the kit gains `brand.md`, `checklist.md` and
+  `install.py`, and its `SKILL.md` changes.
+
 ## [0.10.0] - 2026-11-08
 
 Your ads and decks become part of the brand, and frozen rounds shrink to what they show. A masters round builds approved

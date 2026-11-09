@@ -4,7 +4,7 @@ This folder, `.claude/skills/acme-brand/`, is the Acme brand kit. It holds two k
 
 ## What is generated
 
-`SKILL.md`, `kit.json`, `rules.json`, `facts.json` and everything under `brand/`, `snippets/` and `reference-pages/` come from the brand project. `brand-creator kit build --yes` writes them. Never edit one, in this folder or in a copy of the kit in a product repository: the next build stops on a hand edit, and `brand-creator kit check` and `brand-creator check` fail it.
+`SKILL.md`, `brand.md`, `checklist.md`, `install.py`, `kit.json`, `rules.json`, `facts.json` and everything under `brand/`, `snippets/` and `reference-pages/` come from the brand project. `brand-creator kit build --yes` writes them. Never edit one, in this folder or in a copy of the kit in a product repository: the next build stops on a hand edit, and `brand-creator kit check` and `brand-creator check` fail it.
 
 The masters you approved are copied in too: everything in the brand project's `assets/masters/` arrives under `brand/assets/masters/`, byte for byte. Only approved masters belong in that folder, because the kit cannot know which are approved. A font among them is copied only when it is under the SIL Open Font License and its licence text is in `assets/fonts/`; any other is listed in `kit.json` and left out.
 
@@ -12,7 +12,7 @@ To change something generated, change the brand project (the tokens, the logo, t
 
 ## What is yours
 
-`EXTENDING.md` (this file), `voice.md`, `visual.md`, `golden-rules.md` and `recipes/web-page.md`. The build writes each of them once, from a scaffold, only when the file is absent. It never overwrites or moves one. If you delete one, the next build writes the scaffold again.
+`EXTENDING.md` (this file), `voice.md`, `visual.md`, `golden-rules.md` and `recipes/web-page.md`. The build writes each of them once, from a scaffold, only when the file is absent. It never overwrites or moves one. If you delete one, the next build writes the scaffold again. Once the brand's approved masters list an ad or a deck (`brand/assets/masters/masters.json`), `recipes/ad.md` and `recipes/presentation.md` are scaffolded the same way.
 
 Every other file in this folder that the build does not generate is yours too, and it travels with the kit: a recipe you add, a folder of your own, a PDF or a spreadsheet in it. The build only reads these files, to record them. A symbolic link is not a file of yours: the build stops on one and never reads through it.
 
@@ -20,7 +20,7 @@ Every other file in this folder that the build does not generate is yours too, a
 
 ## How to extend
 
-- A new recipe is a new file under `recipes/`, for example `recipes/email.md`. Write numbered steps and no values; take the shape of `recipes/web-page.md`. A file you add travels with the kit: the next build records it, and it is on the copy list a product repository gets, copied only where the repository has none.
+- A new recipe is a new file under `recipes/`, for example `recipes/email.md`. Write numbered steps and no values; take the shape of `recipes/web-page.md`. A file you add travels with the kit: the next build records it, and it is on the copy list a product repository gets, copied where the repository has none and updated where the repository never changed it.
 - A folder of your own sits beside the generated ones, for example `notes/`. Its files travel too. A Markdown file there is read by `brand-creator kit check` like your recipes (a fill marker, a tag on each bullet, a source for each value); a file of another kind is copied and never read for fill markers, tags or values. The links in an `.html` or `.css` file of yours must still lead to a file inside the kit, as in any file of the kit. Do not put a file into `brand/`, `snippets/` or `reference-pages/`: the build treats it as foreign and stops.
 - A link inside the kit points at a file inside the kit, so that it still resolves in a product repository.
 
@@ -43,4 +43,4 @@ The version is `<edition>.<build>`. It lives in `kit.json`, and `SKILL.md` print
 
 ## A product repository's copy
 
-A product repository gets the kit as a byte copy, made on a branch you name with `/brand-creator:brand-adopt`. `brand-creator kit status --repo <folder>` says whether the copy is current and lists what to copy. An update copies the generated files. The owner files in the repository belong to the repository, the ones you added included: an update copies one only where the repository has none, and reports the ones that differ.
+A product repository gets the kit as a byte copy, made by the kit's own installer: `python3 install.py <folder in the repository> --yes` (without `--yes` it only says what it would copy), run by `/brand-creator:brand-adopt` on a branch you name, or by anyone with a copy of the brand project. `brand-creator kit status --repo <folder>` says whether the copy is current and lists what to copy. An update copies the generated files, copies an owner file where the repository has none, and updates one the repository never changed since it was copied. An owner file the repository changed or added is the repository's own: it is kept, and reported.
