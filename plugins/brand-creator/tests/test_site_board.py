@@ -594,6 +594,29 @@ def test_a_failing_field_still_fails_a_page_card_row_whatever_its_idea(tmp_path)
     assert lint3(p).returncode == 1 and rows(p)["site:fields"]["status"] == "fail"
 
 
+
+def test_a_page_card_without_an_idea_line_only_warns_on_a_board_of_an_earlier_round(tmp_path):
+    """A board in an earlier round is read only (the guard keeps it as the owner approved it), so the Idea line, which some boards
+    predate, cannot be added there: it warns and names the card, and the row does not fail. Every other field still fails."""
+    p = pages_project(tmp_path)
+    mutate(board_of(p, 3), 'data-field="idea"', 'data-removed="idea"')
+    (p / "rounds" / "r4").mkdir()                                                         # a later round: r3 is read only now
+    r = lint3(p)
+    row = rows(p)["site:fields"]
+    assert r.returncode == 0 and "site:fields" not in failed(p), r.stdout
+    assert row["status"] == "warn" and "start: Idea is missing or empty" in row["detail"] and "read only" in row["detail"], row
+    mutate(board_of(p, 3), 'data-field="cost"', 'data-removed="cost"')
+    assert lint3(p).returncode == 1 and rows(p)["site:fields"]["status"] == "fail" and "start: Cost is missing or empty" in rows(p)["site:fields"]["detail"]
+
+
+def test_a_hero_card_without_an_idea_line_only_warns_on_a_board_of_an_earlier_round(proj):
+    mutate(board_of(proj), 'data-field="idea"', 'data-removed="idea"')
+    (proj / "rounds" / "r3").mkdir()
+    r = lint(proj)
+    row = rows(proj)["site:fields"]
+    assert r.returncode == 0 and row["status"] == "warn" and "Ledger: Idea is missing or empty" in row["detail"], r.stdout
+
+
 # ---------------------------------------------------------------- page:data-board, page:site-stage
 
 @pytest.mark.parametrize("rnd", [0, 1])

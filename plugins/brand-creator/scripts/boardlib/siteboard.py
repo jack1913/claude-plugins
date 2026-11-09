@@ -892,11 +892,16 @@ def cold_rows(rep: Report, project: Path, variants: list[SiteVariant], required:
 
 def card_rows(rep: Report, project: Path, page_rel: str, rnd: int, variants: list[SiteVariant], noun: str = "variant", count_row: str = "site:variants", optional: tuple[str, ...] = (), idea: bool = False) -> None:
     """site:files, site:layout and site:fields for the cards of a hero board (noun "variant", `idea`: each card also states its one idea) or of a pages board (noun "page"; `optional` names the
-    fields a card may leave out). Each is one result for the whole board and names the cards it fails; without a card they are not verified (`count_row` says why there is none)."""
+    fields a card may leave out). Each is one result for the whole board and names the cards it fails; without a card they are not verified (`count_row` says why there is none). On a board
+    of an earlier round, which the guard keeps read only (`guard.round_is_open`), a missing Idea line only warns: the line is newer than some approved boards and cannot be added there."""
+    from guard import round_is_open   # the hook's own rule for which rounds may still be written
     known = load_layouts()
     layouts = [layout_problems(v, known) for v in variants]
     failures, warnings = [p for f, _ in layouts for p in f], [p for _, w in layouts for p in w]
     ideas = [p for v in variants for p in idea_problems(v)] if idea else []
+    frozen = bool(ideas) and not round_is_open(Path(project), rnd)
+    if frozen:
+        ideas = [f"{x} (rounds/r{rnd}/ is an earlier round and read only, so this only warns)" for x in ideas]
     rows = (("site:files", f"each {noun} has its folder and page, and the page declares its layout and its id", [p for v in variants for p in files_problems(project, v, page_rel, rnd)],
              "folder, index.html, a <body> with data-layout and data-page, the live link of the card"),
             ("site:layout", "each page records a layout reference (or its own), and the card says the same", failures,
@@ -905,6 +910,9 @@ def card_rows(rep: Report, project: Path, page_rel: str, rnd: int, variants: lis
              + (", and states its one idea" if idea else ""), [p for v in variants for p in field_problems(v, optional)],
              ("What it is, Takes from and Cost are filled in on every card" if not optional else "What it is and Cost are filled in on every card (and Takes from where a card has the line)") + (", and every card has its Idea line" if idea else "")))
     for rid, label, found, ok in rows:
+        if rid == "site:fields" and frozen and not found:   # only the Idea line is missing, on a board that can no longer change
+            rep.add(rid, "warn", label, detail=shown(ideas))
+            continue
         if rid == "site:fields":
             found = found + ideas   # the Idea line fails the row like any other field
         if not variants:
