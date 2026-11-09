@@ -612,6 +612,8 @@ def applied_skill_md(project: Path, template: str, *, kit: dict | None = None) -
         "mark": "\n".join([f"- `{up}{p}`" for p in logos] if logos else ["No mark file exists yet under `assets/logo/`."]),
         "tokens": f"{up}assets/tokens/tokens.json",
         "kit": kit["section"] if kit is not None else "",
+        "how": (kit or {}).get("how", ""),                  # the kit's own templates (templates/applied-skill/kit-SKILL.md) take these two; the applied skill's has neither
+        "map": (kit or {}).get("map", ""),
         "small": f"At {ds['accent_rule_max_size']} px and below the accent must hold a solid {ds['accent_min_px']} x {ds['accent_min_px']} px square "
                  f"({'qa/rules.json' if 'downscale.accent_min_px' in rules['_from_file'] else 'the plugin proposal until qa/rules.json sets it'}).\n\n" + ("\n".join(sizes) if sizes else ""),
         "motion": motion,

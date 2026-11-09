@@ -1,8 +1,9 @@
 """The brand kit as data: where it sits, what it holds, which version it is, and what it was made from.
 
 The kit is the per-brand applied skill's folder (`.claude/skills/<slug>-brand/`) with more in it: the brand's own files copied in byte for byte at their
-project paths under `brand/`, and `kit.json`, which records the sha256 of every generated file. SKILL.md is still written by `adapt.applied_skill_md`; here it
-is asked for with the kit's paths and a "## The kit" section. See scripts/CONTRACT.md ("kit").
+project paths under `brand/`, and `kit.json`, which records the sha256 of every generated file. SKILL.md is still written by `adapt.applied_skill_md`, from the kit's
+own template (templates/applied-skill/kit-SKILL.md: the steps of `how_md`, the "## The kit" section, the owner's rules, the "never" list and the `map_md` map), and so is
+brand.md (kit-brand.md: the colour, type, layout, mark, motion and claims sections the applied skill of a project without a kit holds). See scripts/CONTRACT.md ("kit").
 
 Shared by `brand-creator kit` (scripts/kit.py) and `brand-creator check`. It sits beside adapt.py, outside scripts/lib/, for the same reason: a change here must
 not make every pack stale (lib/stale.py hashes scripts/lib/*.py). Standard library only. No clock and no random numbers: the same inputs give the same bytes.
@@ -32,7 +33,7 @@ import unicodedata
 from pathlib import Path
 from urllib.parse import quote
 
-from kitcopy import (ALL_SOURCE_KEYS, CURRENT, FACTS_JSON, FINDER_FILE, FONT_COPIED_KEYS, FONT_KEYS, FONT_NOT_COPIED_KEYS, GENERATED_DIRS, KIT_FILE,  # noqa: E402,F401
+from kitcopy import (ALL_SOURCE_KEYS, BRAND_MD, CURRENT, FACTS_JSON, FINDER_FILE, FONT_COPIED_KEYS, FONT_KEYS, FONT_NOT_COPIED_KEYS, GENERATED_DIRS, KIT_FILE,  # noqa: E402,F401
                      NOT_CURRENT, NOT_INSTALLED, OPTIONAL_SOURCE_KEYS, OWNED_FILES, PAGE_KEYS, PREFIX, ROOT_FILES, RULES_JSON, SCHEMA, SKILL_FILE, SOURCE_KEYS,
                      STATUS_SHOWN, TOP_KEYS, WHY_BYTES, WHY_LINK, WHY_MISSING, _EDITION, _SHA, _VERSION, KitError, folder_state, font_problems,
                      generated_files_in, installed_version, is_owner_path, is_sha, json_object, not_current_text, owned_problems, owner_paths, owner_sorted,
@@ -1328,20 +1329,60 @@ def _drawing(project: Path, drawing: str) -> bytes:
     return f.read_bytes()
 
 
-def section(version: str, rels: list[str], owned: tuple[str, ...] = OWNED_FILES) -> str:
-    """The kit section of SKILL.md (the template's {{kit}}): the version line, then the generated files, then the owner's. `rels` are the paths in the kit of the generated files
-    other than SKILL.md and kit.json, so a task that adds files to the plan needs no edit here. `owned` is the five scaffolded owner files (always the same set, whether the files are on disk
-    yet or not, so that the list of files in SKILL.md does not depend on what the owner has written; a file she adds is named nowhere in SKILL.md, though the version line moves when one is added,
-    changed or taken away)."""
-    L = ["## The kit", "", version_line(version), "",
-         "This folder is a brand kit. This skill is its core. The generated files below sit beside it, copied byte for byte from the brand project and locked by `kit.json`.", "",
-         "It works beside your web-design skill, never instead of it: load both when you build a page. A built site does not serve this folder, so copy the files you use from `brand/` into the product's own public or static folder and link them from there; `recipes/web-page.md` has the steps.", "",
-         "Generated. Never edit these here: change the brand project and run `brand-creator kit build --yes` again.", ""]
-    L += [f"- `{r}`" for r in sorted(rels)]
-    if owned:
-        L += ["", "Yours to extend; how: `EXTENDING.md`. A build writes each of these once and never overwrites or moves it.", ""]
-        L += [f"- `{r}`" for r in owned]
-    return "\n".join(L)
+KIT_TEMPLATES = "templates/applied-skill"                   # the kit's own SKILL.md and brand.md templates (kit-SKILL.md, kit-brand.md), below the plugin folder
+MASTERS_README = PREFIX + "assets/masters/README.md"        # the list of the approved masters, as `masters approve` writes it (MASTERS_DIR is defined further down)
+
+
+def section(version: str) -> str:
+    """The kit section of SKILL.md (the template's {{kit}}): the version line and what the folder is. The files are listed in kit.json, never here."""
+    return "\n".join(["## The kit", "", version_line(version), "",
+                      "This folder is a brand kit and this skill is its core. `kit.json` lists every file with its hash. Never edit a generated file here: change the brand project "
+                      "and run `brand-creator kit build --yes` again. Your own files (`EXTENDING.md` says which) are never overwritten.", "",
+                      "It works beside your web-design skill, never instead of it: load both when you build a page. A built site does not serve this folder, so copy the files you use "
+                      "from `brand/` into the product's own public or static folder and link them from there; `recipes/web-page.md` has the steps."])
+
+
+def _holds(files, prefix: str) -> bool:
+    return any(rel.startswith(prefix) for rel in files)
+
+
+def how_md(files) -> str:
+    """`## How to work`: numbered steps, the same for every brand, each naming only files the kit holds (`files`: the paths the build writes, generated and scaffolded)."""
+    steps = ["Name what you are making and the moment it is for (a page, a post, an ad, a deck; a launch, a reminder, an error).",
+             "Read `golden-rules.md`: the rules every piece keeps.",
+             "Open the recipe for that material in `recipes/`, one file per kind of material. When none fits, work from `brand.md` and say what no recipe covers."]
+    if _holds(files, PREFIX + "assets/masters/"):
+        steps.append("Ads and decks start from an approved master: `" + MASTERS_README + "` lists them." if MASTERS_README in files
+                     else "Ads and decks start from an approved master in `" + PREFIX + "assets/masters/`.")
+    steps.append("Take colours, type, spacing and motion from the tokens (`" + PREFIX + TOKENS_CSS + "`). A value the tokens lack is asked for, never invented.")
+    if _holds(files, PREFIX + "assets/logo/"):
+        steps.append("Take the logo from its files in `" + PREFIX + "assets/logo/` as they are: never redrawn, recoloured or typed out."
+                     + (" `" + LOGO_HTML + "` places it in light and dark." if LOGO_HTML in files else ""))
+    steps += ["Take every claim (a number, a feature, a price, a client, a date) from `facts.json`. When one is missing, leave a visible placeholder and ask the owner.",
+              "Anything the brand has not decided (a layout, a use of colour, an animation, a line of copy) is a proposal: label it and ask the owner."]
+    if "checklist.md" in files:
+        steps.append("Before you hand anything over, go through `checklist.md`.")
+    return "\n".join(["## How to work", "", *(f"{n}. {s}" for n, s in enumerate(steps, 1))])
+
+
+def map_md(files) -> str:
+    """`## Map`: where to look, one row per need, each only when the kit holds what it names (`files` as for `how_md`)."""
+    rows = [("the colours, pairs, type, layout, mark sizes, motion and claims", [BRAND_MD]),
+            ("the token values", [PREFIX + TOKENS_CSS, PREFIX + TOKENS_JSON]),
+            ("the logo files", [PREFIX + "assets/logo/"] + ([LOGO_HTML] if LOGO_HTML in files else []) if _holds(files, PREFIX + "assets/logo/") else []),
+            ("the fonts", [FONTS_CSS] if FONTS_CSS in files else []),
+            ("the colours text may sit on", [ON_GROUND_CSS] if ON_GROUND_CSS in files else []),
+            ("the rules and the facts as data", [RULES_JSON, FACTS_JSON]),
+            ("approved pages to follow", ["reference-pages/"] if _holds(files, "reference-pages/") else []),
+            ("the approved ads and decks", ([MASTERS_README] if MASTERS_README in files else [PREFIX + "assets/masters/"]) if _holds(files, PREFIX + "assets/masters/") else []),
+            ("the signature move", [PREFIX + MOTION_SPEC] if PREFIX + MOTION_SPEC in files else []),
+            ("how to make one kind of material", ["recipes/"]),
+            ("the rules every piece keeps", ["golden-rules.md"]),
+            ("how the brand looks and sounds", ["visual.md", "voice.md"]),
+            ("the check before handing over", ["checklist.md"] if "checklist.md" in files else []),
+            ("how to change or extend this kit", ["EXTENDING.md"]),
+            ("every file and its hash", [KIT_FILE])]
+    return "\n".join(["## Map", "", "| You need | Open |", "| --- | --- |", *(f"| {need} | {', '.join('`' + p + '`' for p in paths)} |" for need, paths in rows if paths)])
 
 
 def plan(project: Path, fonts: dict | None = None, pages: dict | None = None, masters: dict | None = None) -> dict[str, bytes]:
@@ -1372,9 +1413,12 @@ def plan(project: Path, fonts: dict | None = None, pages: dict | None = None, ma
         for rel, data in more["files"].items():
             if files.setdefault(rel, data) != data:   # a file a page loads is a file the kit copies already (the tokens, a logo, a master): the same project file, so the same bytes
                 fail(EXIT_FAIL, f"{rel} is planned twice with different bytes: the kit copies one project file to one place")
-    template = (plugin_root() / "templates" / "applied-skill" / "SKILL.md").read_text(encoding="utf-8")
-    skill = adapt.applied_skill_md(project, template, kit={"prefix": PREFIX, "section": section(VERSION_PLACEHOLDER, sorted(files))})
-    return {SKILL_FILE: skill.encode("utf-8"), **files}
+    held = {*files, SKILL_FILE, KIT_FILE, BRAND_MD, *OWNED_FILES}           # what the kit holds once it is written: the steps and the map name only these
+    kit = {"prefix": PREFIX, "section": section(VERSION_PLACEHOLDER), "how": how_md(held), "map": map_md(held)}
+    root = plugin_root() / KIT_TEMPLATES
+    skill = adapt.applied_skill_md(project, (root / "kit-SKILL.md").read_text(encoding="utf-8"), kit=kit)
+    brand = adapt.applied_skill_md(project, (root / "kit-brand.md").read_text(encoding="utf-8"), kit=kit)
+    return {SKILL_FILE: skill.encode("utf-8"), BRAND_MD: brand.encode("utf-8"), **files}
 
 
 def with_version(files: dict[str, bytes], version: str) -> dict[str, bytes]:

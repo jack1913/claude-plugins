@@ -4,9 +4,10 @@
   "version": "1.2",
   "edition": "1",
   "plugin_version": "0.10.0",
-  "content_sha": "65020d3a31360b066e44c35a8751a018ebedde433e96d99d58b1d2e90b0f42bd",
+  "content_sha": "6b278a2c16574edfdb7bc4796d0b9769a8e5d2475e16ea0ac82407cc0613eae8",
   "generated": {
-    "SKILL.md": "24668d56d2dfa8c6f154348555f5d7bcc7bd59ddc2cd920f3172d30ab99baa74",
+    "SKILL.md": "3b2c23443a78b3d06e8b273ebfd6e513d7fc451fb9e58a02d4e2becc08c72d84",
+    "brand.md": "38e696e2ce13691bc27146c582ca34eab1a3af0366dd383e898c2e270aa85df9",
     "brand/assets/logo/grid-mark-dark.svg": "a4354fc3d461119c54b155018c92d03be7c2bd3b5d87d34c60c2d3adc31d2f21",
     "brand/assets/logo/grid-mark-master.png": "5cc76acd488c20da7a3cda17360ff6db0222f5bd5b44089ab25597c296886654",
     "brand/assets/logo/grid-mark.svg": "435e6815517f458fea97bac5fb777d712032b0bcff32f2ea7e223479e2e56c88",

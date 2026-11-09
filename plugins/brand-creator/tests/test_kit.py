@@ -84,8 +84,9 @@ import re  # noqa: E402
 from helpers import mutate, mutate_json, report  # noqa: E402
 
 KIT_LOGOS = ["grid-mark-dark.svg", "grid-mark-master.png", "grid-mark.svg", "mark-animated.svg", "mark-dark.svg", "mark.svg", "wordmark-dark.svg", "wordmark.svg"]
-KIT_FILES = sorted(["SKILL.md", "kit.json", "rules.json", "facts.json", "snippets/logo.html", "brand/assets/tokens/tokens.css", "brand/assets/tokens/tokens.json",
+KIT_FILES = sorted(["SKILL.md", "brand.md", "kit.json", "rules.json", "facts.json", "snippets/logo.html", "brand/assets/tokens/tokens.css", "brand/assets/tokens/tokens.json",
                     *[f"brand/assets/logo/{n}" for n in KIT_LOGOS]])
+KIT_N = len(KIT_FILES)                                                                   # the generated files of a plain Acme kit
 KIT_REMOVED = "removed-2026-10-17/.claude/skills/acme-brand"
 OWNER_FILES = sorted(["EXTENDING.md", "voice.md", "visual.md", "golden-rules.md", "recipes/web-page.md"])   # the owner's files: scaffolded once, not generated, not in KIT_FILES
 
@@ -129,11 +130,11 @@ def test_the_kit_needs_g5_and_yes_and_writes_nothing_without_them(acme):
     assert bc("state", "--record", "G5", "approved (test)", project=acme).returncode == 0
     r = bc("kit", "build", project=acme)
     assert r.returncode == 2 and "--yes" in r.stderr and not (acme / ".claude").exists() and not (acme / "assets" / "_checks" / "kit.json").exists()
-    assert "would write 15 generated files into .claude/skills/acme-brand/ (version 1.1)" in r.stdout          # the plan goes to stdout, the message to stderr
+    assert f"would write {KIT_N} generated files into .claude/skills/acme-brand/ (version 1.1)" in r.stdout          # the plan goes to stdout, the message to stderr
     r = bc("kit", "build", "--plan", project=acme)
     assert r.returncode == 0 and not (acme / ".claude").exists() and not (acme / "assets" / "_checks" / "kit.json").exists()
     lines = r.stdout.splitlines()
-    assert lines[0] == "would write 15 generated files into .claude/skills/acme-brand/ (version 1.1)"
+    assert lines[0] == f"would write {KIT_N} generated files into .claude/skills/acme-brand/ (version 1.1)"
     kinds = [re.fullmatch(r"(generated|scaffold) (\S+) \((\d+) bytes(?:, written once, never overwritten)?\)", ln) for ln in lines[1:]]
     assert all(kinds), [ln for ln, m in zip(lines[1:], kinds) if not m]                      # every line after the first is a generated line or a scaffold line, nothing else
     assert sorted(m.group(2) for m in kinds if m.group(1) == "generated") == KIT_FILES
@@ -149,7 +150,7 @@ def test_the_kit_core_is_the_applied_skill_with_paths_inside_the_kit(pack):
     r = build(pack)
     assert r.returncode == 0, r.stdout + r.stderr
     assert kit_files(pack) == KIT_FILES
-    skill = (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
+    skill = (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8") + (kit_of(pack) / "brand.md").read_text(encoding="utf-8")
     paths = re.findall(r"`(brand/[^`]+)`", skill)
     assert {"brand/assets/tokens/tokens.json", "brand/assets/logo/mark.svg", "brand/assets/logo/grid-mark.svg"} <= set(paths)
     for path in paths:
@@ -174,7 +175,7 @@ def test_the_kit_core_is_the_applied_skill_with_paths_inside_the_kit(pack):
     assert rep["kit_version"] == "1.1" and rep["version"] == kj["plugin_version"]          # the report's own `version` stays the plugin's
     assert sorted(rep["outputs"]) == KIT_FILES and all(file_sha(kit_of(pack) / rel) == sha for rel, sha in rep["outputs"].items())
     assert rep["adapter_state_sha"] and rep["kit_sources_sha"]
-    assert written_row(pack)["detail"] == "15 generated files: 15 written, 0 unchanged, 0 moved to removed-2026-10-17/; version 1.1"
+    assert written_row(pack)["detail"] == f"{KIT_N} generated files: {KIT_N} written, 0 unchanged, 0 moved to removed-2026-10-17/; version 1.1"
     assert {i["path"] for i in rep["inputs"]} == {"assets/tokens/tokens.css", "assets/tokens/tokens.json", "qa/rules.json", "FACTS.md",
                                                   *[f"assets/logo/{n}" for n in KIT_LOGOS]}
 
@@ -185,7 +186,7 @@ def test_a_second_build_with_nothing_changed_is_byte_identical_and_keeps_the_ver
     r = build(pack)
     assert r.returncode == 0, r.stderr
     assert kit_state(pack) == first                                   # the same bytes, and no file was written again
-    assert written_row(pack)["detail"] == "15 generated files: 0 written, 15 unchanged, 0 moved to removed-2026-10-17/; version 1.1"
+    assert written_row(pack)["detail"] == f"{KIT_N} generated files: 0 written, {KIT_N} unchanged, 0 moved to removed-2026-10-17/; version 1.1"
     assert json.loads((kit_of(pack) / "kit.json").read_text(encoding="utf-8"))["version"] == "1.1"
     assert not list(pack.glob("removed-*"))
 
@@ -225,7 +226,7 @@ def test_a_hand_edited_kit_file_stops_the_build_and_replace_moves_it_aside(pack)
     kept = pack / KIT_REMOVED / "brand/assets/tokens/tokens.css"
     assert kept.is_file() and "#f9f7ef" in kept.read_text(encoding="utf-8")
     assert list(pack.glob("removed-*/**/*")) and [p.relative_to(pack).as_posix() for p in pack.glob("removed-*/**/*") if p.is_file()] == [kept.relative_to(pack).as_posix()]
-    assert written_row(pack)["detail"] == "15 generated files: 1 written, 14 unchanged, 1 moved to removed-2026-10-17/; version 1.1"
+    assert written_row(pack)["detail"] == f"{KIT_N} generated files: 1 written, {KIT_N - 1} unchanged, 1 moved to removed-2026-10-17/; version 1.1"
     assert build(pack).returncode == 0                                # and the next build is quiet again
 
 
@@ -255,7 +256,7 @@ def test_a_file_put_into_a_generated_folder_stops_the_build(pack):
         assert not (kit_of(pack) / rel).exists() and (pack / KIT_REMOVED / rel).read_text(encoding="utf-8") == "mine\n"
     assert (kit_of(pack) / "my-notes.md").is_file() and not (kit_of(pack) / "reference-pages").exists()          # an emptied folder goes ...
     assert sorted(f.name for f in (kit_of(pack) / "snippets").iterdir()) == ["logo.html"]                       # ... one that still holds a generated file stays
-    assert written_row(pack)["detail"] == "15 generated files: 2 written, 13 unchanged, 3 moved to removed-2026-10-17/; version 1.2"      # SKILL.md and kit.json: my-notes.md is an owner file, recorded now
+    assert written_row(pack)["detail"] == f"{KIT_N} generated files: 2 written, {KIT_N - 2} unchanged, 3 moved to removed-2026-10-17/; version 1.2"      # SKILL.md and kit.json: my-notes.md is an owner file, recorded now
     assert sorted(kit_json(pack)["owned"]) == sorted([*OWNER_FILES, "my-notes.md"])
 
 
@@ -269,11 +270,11 @@ def test_a_finder_ds_store_in_a_generated_folder_is_not_a_foreign_file(pack):
         (kd / rel).parent.mkdir(parents=True, exist_ok=True)
         (kd / rel).write_bytes(b"\x00\x00\x00\x01Bud1")
     r = bc("kit", "build", "--plan", project=pack)
-    assert r.returncode == 0 and "DS_Store" not in r.stdout + r.stderr and r.stdout.splitlines()[0].startswith("would write 15 generated files")
+    assert r.returncode == 0 and "DS_Store" not in r.stdout + r.stderr and r.stdout.splitlines()[0].startswith(f"would write {KIT_N} generated files")
     r = build(pack)
     assert r.returncode == 0, r.stdout + r.stderr
     assert "DS_Store" not in r.stdout + r.stderr and not list(pack.glob("removed-*"))
-    assert written_row(pack)["detail"] == "15 generated files: 0 written, 15 unchanged, 0 moved to removed-2026-10-17/; version 1.1"
+    assert written_row(pack)["detail"] == f"{KIT_N} generated files: 0 written, {KIT_N} unchanged, 0 moved to removed-2026-10-17/; version 1.1"
     assert all((kd / rel).read_bytes() == b"\x00\x00\x00\x01Bud1" for rel in finder)                          # left where Finder put them
     assert not [rel for rel in report(pack, "kit")["outputs"] if "DS_Store" in rel] and not [rel for rel in kit_json(pack)["generated"] if "DS_Store" in rel]
     assert kit_json(pack)["version"] == "1.1"
@@ -306,7 +307,7 @@ def test_replace_moves_a_link_in_a_generated_folder_and_never_the_file_it_points
     assert (pack / "FACTS.md").read_bytes() == facts and outside.read_text(encoding="utf-8") == "outside\n"      # what the links pointed at stays where it was
     assert not (kit_of(pack) / "brand" / "notes.md").is_symlink() and not (kit_of(pack) / "snippets" / "far.txt").is_symlink()
     assert (pack / KIT_REMOVED / "brand" / "notes.md").is_symlink() and (pack / KIT_REMOVED / "snippets" / "far.txt").is_symlink()      # the links are in the backup folder
-    assert written_row(pack)["detail"] == "15 generated files: 0 written, 15 unchanged, 2 moved to removed-2026-10-17/; version 1.1"
+    assert written_row(pack)["detail"] == f"{KIT_N} generated files: 0 written, {KIT_N} unchanged, 2 moved to removed-2026-10-17/; version 1.1"
 
 
 def test_a_link_to_a_folder_inside_a_generated_folder_is_a_foreign_file_and_is_never_followed(pack):
@@ -327,7 +328,7 @@ def test_a_link_to_a_folder_inside_a_generated_folder_is_a_foreign_file_and_is_n
     assert (pack / KIT_REMOVED / "brand" / "linked-folder").is_symlink() and (pack / KIT_REMOVED / "brand/assets/tokens/tokens.css").is_symlink()
     assert not (kd / "brand" / "linked-folder").exists() and (kd / "brand/assets/tokens/tokens.css").is_file() and not (kd / "brand/assets/tokens/tokens.css").is_symlink()
     assert before == {f.relative_to(pack).as_posix(): file_sha(f) for f in assets.rglob("*") if f.is_file() and "_checks" not in f.parts}      # the project's own files, all there
-    assert kit_files(pack) == KIT_FILES and written_row(pack)["detail"] == "15 generated files: 1 written, 14 unchanged, 2 moved to removed-2026-10-17/; version 1.1"
+    assert kit_files(pack) == KIT_FILES and written_row(pack)["detail"] == f"{KIT_N} generated files: 1 written, {KIT_N - 1} unchanged, 2 moved to removed-2026-10-17/; version 1.1"
     shutil.rmtree(pack / "removed-2026-10-17")
     stale = {"brand/assets/tokens/stale.txt": "0" * 64}                                                  # recorded by the last build, no longer planned, and seen again through a link:
     (assets / "tokens" / "stale.txt").write_text("mine\n", encoding="utf-8")                              # the project's own file, not the kit's
@@ -463,7 +464,7 @@ def test_a_logo_taken_out_of_the_project_moves_its_kit_copy_to_removed(pack):
     assert "wordmark-dark.svg" in r.stdout and "removed-2026-10-17" in r.stdout          # said, not done quietly
     assert not gone.exists() and (pack / KIT_REMOVED / "brand/assets/logo/wordmark-dark.svg").read_bytes() == bytes_before
     assert kit_files(pack) == [f for f in KIT_FILES if f != "brand/assets/logo/wordmark-dark.svg"]
-    assert written_row(pack)["detail"].startswith("14 generated files: ") and "1 moved to removed-2026-10-17/" in written_row(pack)["detail"]
+    assert written_row(pack)["detail"].startswith(f"{KIT_N - 1} generated files: ") and "1 moved to removed-2026-10-17/" in written_row(pack)["detail"]
     assert json.loads((kit_of(pack) / "kit.json").read_text(encoding="utf-8"))["version"] == "1.2"
 
 
@@ -492,7 +493,7 @@ def test_a_deleted_kit_report_keeps_the_version_and_blames_nobody_for_an_edit(pa
     r = build(pack)                                                                      # no change in the brand
     assert r.returncode == 0, r.stdout + r.stderr
     assert kit_json(pack)["version"] == "1.2" and kit_state(pack) == first and not list(pack.glob("removed-*"))
-    assert report(pack, "kit")["kit_version"] == "1.2" and written_row(pack)["detail"].endswith("0 written, 15 unchanged, 0 moved to removed-2026-10-17/; version 1.2")
+    assert report(pack, "kit")["kit_version"] == "1.2" and written_row(pack)["detail"].endswith(f"0 written, {KIT_N} unchanged, 0 moved to removed-2026-10-17/; version 1.2")
     report_file.unlink()
     mutate(pack / "FACTS.md", "tools are made in batches of 250", "tools are made in batches of 300")
     r = build(pack)                                                                      # a change in the brand: the build number goes up by 1
@@ -593,7 +594,7 @@ def kit_json(p) -> dict:
 def test_an_ofl_font_is_copied_with_its_licence_and_gets_a_font_face(pack):
     with_font(pack)
     r = bc("kit", "build", "--plan", project=pack)
-    assert r.returncode == 0 and r.stdout.splitlines()[0] == "would write 18 generated files into .claude/skills/acme-brand/ (version 1.1)", r.stdout + r.stderr
+    assert r.returncode == 0 and r.stdout.splitlines()[0] == f"would write {KIT_N + 3} generated files into .claude/skills/acme-brand/ (version 1.1)", r.stdout + r.stderr
     r = build(pack)
     assert r.returncode == 0, r.stdout + r.stderr
     assert kit_files(pack) == sorted([*KIT_FILES, *FONT_KIT])
@@ -604,7 +605,7 @@ def test_an_ofl_font_is_copied_with_its_licence_and_gets_a_font_face(pack):
                                                    "licence_files": ["brand/assets/fonts/OFL.txt"]}], "not_copied": []}
     assert all(file_sha(kit_of(pack) / rel) == sha for rel, sha in kit_json(pack)["generated"].items()) and set(FONT_KIT) <= set(kit_json(pack)["generated"])
     skill = (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
-    assert all(f"- `{rel}`" in skill for rel in FONT_KIT)
+    assert "| the fonts | `snippets/fonts.css` |" in skill                                  # the map names the snippet; kit.json lists every font file
     row = fonts_row(pack)
     assert row["status"] == "pass" and row["detail"] == "1 font copied with its licence text; snippets/fonts.css written"
     rep = report(pack, "kit")
@@ -936,7 +937,7 @@ def test_the_kit_is_searched_by_the_cascade(pack):
     cas = next(x for x in report(pack, "check")["results"] if x["id"] == "cascade:#4cd7c8")
     kit_hits = [h for h in cas["hits"] if h.startswith(".claude/skills/acme-brand/brand/")]
     assert cas["status"] == "fail" and any(h.startswith(".claude/skills/acme-brand/brand/assets/tokens/tokens.css:") for h in kit_hits), cas["hits"]
-    assert any(h.startswith(".claude/skills/acme-brand/SKILL.md:") for h in cas["hits"])
+    assert any(h.startswith(".claude/skills/acme-brand/brand.md:") for h in cas["hits"])                             # the colour table moved there from SKILL.md
 
 
 # ---------------------------------------------------------------- motion: the spec, its hand-off text and the demo page
@@ -964,7 +965,7 @@ def motion_hash(p, rels) -> str:
 def test_a_brand_that_moves_gets_its_motion_spec_and_demo_page_in_the_kit(pack):
     moving(pack)
     r = bc("kit", "build", "--plan", project=pack)
-    assert r.returncode == 0 and r.stdout.splitlines()[0] == "would write 18 generated files into .claude/skills/acme-brand/ (version 1.1)", r.stdout + r.stderr
+    assert r.returncode == 0 and r.stdout.splitlines()[0] == f"would write {KIT_N + 3} generated files into .claude/skills/acme-brand/ (version 1.1)", r.stdout + r.stderr
     r = build(pack)
     assert r.returncode == 0, r.stdout + r.stderr
     assert kit_files(pack) == sorted([*KIT_FILES, *MOTION_KIT])                    # the proof itself (motion/proof.json) is a test file, not the brand's
@@ -974,13 +975,13 @@ def test_a_brand_that_moves_gets_its_motion_spec_and_demo_page_in_the_kit(pack):
     assert json.loads((kit_of(pack) / "brand/motion/motion.json").read_text(encoding="utf-8"))["signature"]["name"] == " Settle "      # the bytes, not a tidied copy
     assert set(MOTION_KIT) <= set(kit_json(pack)["generated"]) and all(file_sha(kit_of(pack) / rel) == sha for rel, sha in kit_json(pack)["generated"].items())
     skill = (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
-    assert all(f"- `{rel}`" in skill for rel in MOTION_KIT)
+    assert "| the signature move | `brand/motion/SPEC.md` |" in skill                     # the map names the spec; kit.json lists every motion file
     assert kit_json(pack)["sources"]["motion"] == motion_hash(pack, ["motion/motion.json", "motion/SPEC.md", "motion/demo.html"])
     assert kit_json(pack)["sources"]["motion"] != file_sha(pack / "motion" / "motion.json")
     rep = report(pack, "kit")
     assert rep["status"] == "pass" and sorted(rep["outputs"]) == sorted([*KIT_FILES, *MOTION_KIT])
     assert {"motion/motion.json", "motion/SPEC.md", "motion/demo.html"} <= {i["path"] for i in rep["inputs"]}
-    assert written_row(pack)["detail"] == "18 generated files: 18 written, 0 unchanged, 0 moved to removed-2026-10-17/; version 1.1"
+    assert written_row(pack)["detail"] == f"{KIT_N + 3} generated files: {KIT_N + 3} written, 0 unchanged, 0 moved to removed-2026-10-17/; version 1.1"
     first = kit_state(pack)
     assert build(pack).returncode == 0 and kit_state(pack) == first and kit_json(pack)["version"] == "1.1"       # a second build writes nothing
 
@@ -1194,7 +1195,7 @@ def test_rules_json_lists_the_g4_rules_with_ids_and_the_pairs_with_their_ratios(
     assert {"rules.json", "facts.json"} <= set(kj["generated"]) and kj["generated"]["rules.json"] == file_sha(kit_of(pack) / "rules.json")
     assert "rules.json" in report(pack, "kit")["outputs"] and "facts.json" in report(pack, "kit")["outputs"]
     skill = (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
-    assert "- `rules.json`" in skill and "- `facts.json`" in skill                                                    # both are listed in the kit section
+    assert "| the rules and the facts as data | `rules.json`, `facts.json` |" in skill                                # both are on the map
     first = kit_state(pack)
     assert build(pack).returncode == 0 and kit_state(pack) == first                                                   # a second build writes nothing
 
@@ -1428,7 +1429,7 @@ def test_each_named_ground_gets_a_scope_that_maps_the_page_roles_to_its_own(pack
     build_tokens(pack)
     assert (json.loads((pack / "assets/tokens/tokens.json").read_text(encoding="utf-8"))["grounds"]["named_by_owner"]) == NAMED
     r = bc("kit", "build", "--plan", project=pack)
-    assert r.returncode == 0 and r.stdout.splitlines()[0] == "would write 16 generated files into .claude/skills/acme-brand/ (version 1.2)", r.stdout + r.stderr
+    assert r.returncode == 0 and r.stdout.splitlines()[0] == f"would write {KIT_N + 1} generated files into .claude/skills/acme-brand/ (version 1.2)", r.stdout + r.stderr
     r = build(pack)
     assert r.returncode == 0, r.stdout + r.stderr
     assert kit_files(pack) == sorted([*KIT_FILES, ON_GROUND])
@@ -1438,7 +1439,7 @@ def test_each_named_ground_gets_a_scope_that_maps_the_page_roles_to_its_own(pack
     assert used and all(re.search(rf"^\s*{re.escape(v)}:", css, re.M) for v in used), sorted(v for v in used if f"{v}:" not in css)      # every name is one tokens.css declares
     assert {"--color-text", "--color-accent", "--color-on-accent", "--color-focus", "--color-border", "--color-panel", "--color-on-dusk-action"} <= used
     assert ON_GROUND in kit_json(pack)["generated"] and file_sha(kit_of(pack) / ON_GROUND) == kit_json(pack)["generated"][ON_GROUND]
-    assert f"- `{ON_GROUND}`" in (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
+    assert f"| the colours text may sit on | `{ON_GROUND}` |" in (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
     row = grounds_row(pack)
     assert row["status"] == "pass" and row["detail"] == "2 grounds scoped in snippets/on-ground.css; the page ground is color.bg"
     assert report(pack, "kit")["status"] == "pass" and ON_GROUND in report(pack, "kit")["outputs"]
@@ -1659,7 +1660,7 @@ def test_the_logo_snippet_pairs_each_mark_with_its_dark_twin_and_switches_like_t
         assert (kit_of(pack) / "snippets" / src).resolve().is_file(), src
         assert filecmp.cmp(pack / "assets" / "logo" / src.rsplit("/", 1)[1], kit_of(pack) / "snippets" / src, shallow=False)
     assert "snippets/logo.html" in kit_json(pack)["generated"] and file_sha(kit_of(pack) / "snippets" / "logo.html") == kit_json(pack)["generated"]["snippets/logo.html"]
-    assert "- `snippets/logo.html`" in (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
+    assert "`snippets/logo.html`" in (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
     assert "snippets/logo.html" in report(pack, "kit")["outputs"]
     first = kit_state(pack)
     assert build(pack).returncode == 0 and kit_state(pack) == first and kit_json(pack)["version"] == "1.1"       # a second build writes nothing
@@ -1737,9 +1738,9 @@ def test_the_first_build_scaffolds_the_owner_files_once(pack):
     assert not set(OWNER_FILES) & set(kj["generated"]) and not set(OWNER_FILES) & set(report(pack, "kit")["outputs"])    # not generated: check's kit:file never reads them
     assert owned_row(pack) == "5 owner files scaffolded this run, 0 kept as they are"
     skill = (kd / "SKILL.md").read_text(encoding="utf-8")
-    assert "Yours to extend; how: `EXTENDING.md`. A build writes each of these once and never overwrites or moves it." in skill
-    assert all(f"- `{rel}`" in skill for rel in OWNER_FILES)
-    assert skill.index("- `brand/assets/tokens/tokens.css`") < skill.index("Yours to extend") < skill.index("## Colour")
+    assert "Your own files (`EXTENDING.md` says which) are never overwritten." in skill
+    assert all(f"`{rel}`" in skill for rel in ("EXTENDING.md", "voice.md", "visual.md", "golden-rules.md", "recipes/"))      # the map names the owner's files (recipes/ as its folder)
+    assert skill.index("## How to work") < skill.index("Your own files") < skill.index("## Map")
     # a second build has nothing to scaffold: the plan names none, and nothing is touched
     owner_before, kit_before = owner_state(pack), kit_state(pack)
     r = bc("kit", "build", "--plan", project=pack)
@@ -1757,7 +1758,7 @@ def test_the_kit_skill_works_beside_the_web_skill_and_the_recipe_arrives_whole(p
     skill = (kd / "SKILL.md").read_text(encoding="utf-8")
     line = ("It works beside your web-design skill, never instead of it: load both when you build a page. A built site does not serve this folder, so copy the files you use from `brand/` "
             "into the product's own public or static folder and link them from there; `recipes/web-page.md` has the steps.")
-    assert skill.count(line) == 1 and skill.index("This folder is a brand kit.") < skill.index(line) < skill.index("Generated. Never edit these here")
+    assert skill.count(line) == 1 and skill.index("This folder is a brand kit") < skill.index(line) < skill.index("## Rules the owner decided")
     recipe = (kd / "recipes" / "web-page.md").read_text(encoding="utf-8")
     assert re.findall(r"(?m)^(\d+)\. ", recipe) == ["1", "2", "3", "4", "5", "6", "7"] and "[[fill" not in recipe and "{{" not in recipe
     assert "into the product's own public or static folder and link them from there" in recipe and "`[data-sample]`" in recipe and "page-check" in recipe
@@ -1926,7 +1927,7 @@ def test_kit_json_must_list_the_five_scaffolded_owner_files(pack):
 ALL_PASS = {"kit:files": "pass", "kit:links": "pass", "kit:fill": "pass", "kit:versions": "pass", "kit:plugin": "pass", "kit:sources": "pass", "kit:owned": "pass",
             "kit:tags": "pass", "kit:numbers": "pass"}
 FRESH_LINKS = 7
-FRESH_FILES = 8
+FRESH_FILES = 9
 OUTSIDE_KIT = "points outside the kit: it will not resolve in a product repository"
 
 
@@ -2645,7 +2646,7 @@ def test_a_copy_becomes_current_again_after_a_brand_change_removed_a_generated_f
     assert ("  left over from an older kit (not in this kit, so not on the copy list; move each to removed-<date>/.claude/skills/acme-brand/ in the repository, "
             "keeping its path; nothing is deleted):") in r.stdout.splitlines()
     copy = paths_of(listed(r.stdout, "copy list"))
-    assert gone not in copy and copy == ["SKILL.md", "snippets/logo.html", "kit.json"]            # the files that changed, kit.json last: the old file is not among them
+    assert gone not in copy and copy == ["SKILL.md", "brand.md", "snippets/logo.html", "kit.json"]   # the files that changed, kit.json last: the old file is not among them
     shown = json.loads(kit_status(pack, repo, extra=("--json",)).stdout)["repos"][0]
     assert shown["left_over"] == [gone] and shown["left_over_to"] == "removed-<date>/.claude/skills/acme-brand/" and shown["copy"] == copy
     for rel in copy:                                                                       # exactly the copy list
@@ -3557,7 +3558,7 @@ def pages_pass(*ids) -> dict:
 def test_an_approved_reference_page_and_what_it_loads_are_copied_with_notes(pack):
     with_site(pack)
     r = bc("kit", "build", "--plan", project=pack)
-    assert r.returncode == 0 and r.stdout.splitlines()[0] == "would write 27 generated files into .claude/skills/acme-brand/ (version 1.1)", r.stdout + r.stderr
+    assert r.returncode == 0 and r.stdout.splitlines()[0] == f"would write {KIT_N + 12} generated files into .claude/skills/acme-brand/ (version 1.1)", r.stdout + r.stderr
     untouched(pack)
     r = build(pack)
     assert r.returncode == 0, r.stdout + r.stderr
@@ -3577,7 +3578,7 @@ def test_an_approved_reference_page_and_what_it_loads_are_copied_with_notes(pack
     folder = [rel.removeprefix("brand/") for rel in PAGE_KIT if rel.startswith("brand/site/")]
     assert kit_json(pack)["sources"]["pages"] == motion_hash(pack, ["site/site.json", *folder, *loaded])
     skill = (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
-    assert all(f"- `{rel}`" in skill for rel in PAGE_KIT)
+    assert "| approved pages to follow | `reference-pages/` |" in skill                    # the map names the folder; kit.json lists every page file
     row = pages_row(pack)
     assert row["status"] == "pass" and row["detail"] == ("1 approved reference page copied with its stills and the files it loads (start); "
                                                          "notes in reference-pages/<id>/notes.md"), row
@@ -4587,7 +4588,7 @@ def masters_row(p) -> dict:
 def test_a_master_and_its_picture_are_copied_byte_for_byte_and_listed(pack):
     with_masters(pack)
     r = bc("kit", "build", "--plan", project=pack)
-    assert r.returncode == 0 and r.stdout.splitlines()[0] == "would write 20 generated files into .claude/skills/acme-brand/ (version 1.1)", r.stdout + r.stderr
+    assert r.returncode == 0 and r.stdout.splitlines()[0] == f"would write {KIT_N + 5} generated files into .claude/skills/acme-brand/ (version 1.1)", r.stdout + r.stderr
     assert f"generated brand/assets/masters/ad/ad.png ({len(MASTER_PNG)} bytes)" in r.stdout.splitlines()
     assert not (pack / ".claude").exists()
     r = build(pack)
@@ -4602,13 +4603,13 @@ def test_a_master_and_its_picture_are_copied_byte_for_byte_and_listed(pack):
     assert kj["sources"]["masters"] == expected                                          # one sha256 over the sorted pairs `<project path>\0<sha256>\n`, as the other sources are made
     assert kj["fonts"] == {"copied": [], "not_copied": []} and kj["version"] == "1.1"
     skill = (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
-    assert all(f"- `{rel}`" in skill for rel in MASTERS_KIT)
+    assert "| the approved ads and decks | `brand/assets/masters/` |" in skill             # the map names the folder; kit.json lists every master
     rep = report(pack, "kit")
     assert rep["status"] == "pass" and sorted(rep["outputs"]) == sorted([*KIT_FILES, *MASTERS_KIT])
     assert set(MASTERS) <= {i["path"] for i in rep["inputs"]}                            # a changed master makes the `kit` report stale
     assert masters_row(pack)["status"] == "pass"
     assert masters_row(pack)["detail"] == "5 master files copied byte for byte from assets/masters/ to brand/assets/masters/"
-    assert written_row(pack)["detail"] == "20 generated files: 20 written, 0 unchanged, 0 moved to removed-2026-10-17/; version 1.1"
+    assert written_row(pack)["detail"] == f"{KIT_N + 5} generated files: {KIT_N + 5} written, 0 unchanged, 0 moved to removed-2026-10-17/; version 1.1"
     first = kit_state(pack)
     assert build(pack).returncode == 0 and kit_state(pack) == first and kit_json(pack)["version"] == "1.1"       # a second build writes nothing
     mutate(pack / "assets/masters/ad/index.html", "<body>", "<body class=\"changed\">")                       # a deliberate break: one master changes, and its copy, its hash and the version follow
@@ -4812,7 +4813,7 @@ def test_a_project_without_the_masters_folder_builds_the_same_bytes_as_before(pa
     (pack / "assets" / "masters" / ".DS_Store").write_bytes(b"Finder")
     (pack / "assets" / "masters" / "ad" / ".DS_Store").write_bytes(b"Finder")
     r = bc("kit", "build", "--plan", project=pack)
-    assert r.returncode == 0 and r.stdout.splitlines()[0] == "would write 15 generated files into .claude/skills/acme-brand/ (version 1.2)", r.stdout
+    assert r.returncode == 0 and r.stdout.splitlines()[0] == f"would write {KIT_N} generated files into .claude/skills/acme-brand/ (version 1.2)", r.stdout
     assert build(pack).returncode == 0
     assert (kit_of(pack) / "kit.json").read_bytes() == plain and kit_json(pack)["version"] == "1.2"
     assert not any(r["id"] == "kit:masters" for r in report(pack, "kit")["results"]) and report(pack, "kit")["kit_sources_sha"] == rep_before["kit_sources_sha"]
@@ -5235,3 +5236,78 @@ def test_kit_status_names_the_owner_files_to_update(pack, tmp_path):
     for rel in res["copy"]:
         shutil.copy2(kit_of(pack) / rel, installed_of(repo) / rel)
     assert kit_status(pack, repo).returncode == 0
+
+
+# ---------------------------------------------------------------- the kit's entry page: steps, the rules and a map; the values and facts in brand.md (G8 A1)
+import re  # noqa: E402
+
+BRAND_MD = "brand.md"
+APPLIED_GOLDEN = ROOT / "tests" / "fixtures" / "applied-skill-acme.md"   # the applied skill of a project without a kit, as 0.10.0 wrote it for this fixture
+
+
+def headings(text: str) -> list[str]:
+    return [line for line in text.splitlines() if line.startswith("## ")]
+
+
+def section_text(text: str, heading: str) -> str:
+    return text.split(heading + "\n", 1)[1].split("\n## ", 1)[0]
+
+
+def test_the_kits_skill_has_steps_rules_never_and_a_map_and_no_file_list(pack):
+    assert build(pack).returncode == 0
+    text = (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
+    assert headings(text) == ["## How to work", "## The kit", "## Rules the owner decided", "## Never", "## Map"]
+    assert "\n# Acme brand\n" in text and text.startswith("---\nname: acme-brand\n")
+    assert "## Colour" not in text and not any(line.startswith("- `brand/") for line in text.splitlines())
+    assert "Kit version 1.1 (kit.json)." in text and "{{" not in text
+    assert "1. Name what you are making and the moment it is for" in section_text(text, "## How to work")
+
+
+def test_brand_md_holds_colour_type_mark_and_claims_with_kit_paths(pack):
+    assert build(pack).returncode == 0
+    text = (kit_of(pack) / BRAND_MD).read_text(encoding="utf-8")
+    assert text.startswith("# Acme brand: values and facts\n") and "{{" not in text
+    assert [h for h in headings(text) if h in ("## Colour", "## Type", "## Mark", "## What may be claimed")] == ["## Colour", "## Type", "## Mark", "## What may be claimed"]
+    assert "`brand/assets/tokens/tokens.json`" in text and "../../../" not in text and "- `brand/assets/logo/mark.svg`" in text
+    assert kit_json(pack)["generated"][BRAND_MD] == file_sha(kit_of(pack) / BRAND_MD)
+
+
+def test_every_path_the_steps_and_the_map_name_is_in_the_kit(pack):
+    with_masters(pack)
+    assert build(pack).returncode == 0, "build"
+    kd = kit_of(pack)
+    text = (kd / "SKILL.md").read_text(encoding="utf-8")
+    named = re.findall(r"`([^`\s]+)`", section_text(text, "## How to work") + section_text(text, "## Map"))
+    paths = [n for n in named if "/" in n or "." in n]
+    assert "brand.md" in paths and "brand/assets/masters/" in paths and "snippets/logo.html" in paths
+    for rel in paths:
+        assert (kd / rel).is_dir() if rel.endswith("/") else (kd / rel).is_file(), rel
+
+
+def test_the_map_and_the_steps_name_masters_only_when_the_kit_has_them(pack):
+    assert build(pack).returncode == 0
+    text = (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
+    assert "masters" not in text and "reference-pages/" not in text
+    with_masters(pack)
+    assert build(pack).returncode == 0
+    text = (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
+    assert "Ads and decks start from an approved master in `brand/assets/masters/`." in section_text(text, "## How to work")
+    assert "| the approved ads and decks | `brand/assets/masters/` |" in section_text(text, "## Map")
+
+
+def test_without_a_kit_the_applied_skill_keeps_its_bytes(pack):
+    r = bc("applied-skill", "--yes", project=pack)
+    assert r.returncode == 0, r.stderr
+    assert (pack / ".claude" / "skills" / "acme-brand" / "SKILL.md").read_bytes() == APPLIED_GOLDEN.read_bytes()
+
+
+def test_an_owner_file_where_brand_md_now_goes_stops_the_build_and_replace_moves_it(pack):
+    assert build(pack).returncode == 0
+    (kit_of(pack) / BRAND_MD).write_text("my own notes\n", encoding="utf-8")
+    r = build(pack)
+    assert r.returncode == 1 and "brand.md (edited by hand)" in r.stderr, r.stdout + r.stderr
+    assert (kit_of(pack) / BRAND_MD).read_text(encoding="utf-8") == "my own notes\n"
+    r = build(pack, "--replace")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (pack / KIT_REMOVED / BRAND_MD).read_text(encoding="utf-8") == "my own notes\n"
+    assert (kit_of(pack) / BRAND_MD).read_text(encoding="utf-8").startswith("# Acme brand: values and facts\n")

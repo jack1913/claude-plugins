@@ -10,93 +10,27 @@ Edition 1: approved on 2026-10-17. Written by brand-creator at the owner's expli
 Use this whenever you make or review material for Acme. If something here does not cover a choice, ask the owner: do not invent a
 colour, a claim or a rule.
 
+## How to work
+
+1. Name what you are making and the moment it is for (a page, a post, an ad, a deck; a launch, a reminder, an error).
+2. Read `golden-rules.md`: the rules every piece keeps.
+3. Open the recipe for that material in `recipes/`, one file per kind of material. When none fits, work from `brand.md` and say what no recipe covers.
+4. Take colours, type, spacing and motion from the tokens (`brand/assets/tokens/tokens.css`). A value the tokens lack is asked for, never invented.
+5. Take the logo from its files in `brand/assets/logo/` as they are: never redrawn, recoloured or typed out. `snippets/logo.html` places it in light and dark.
+6. Take every claim (a number, a feature, a price, a client, a date) from `facts.json`. When one is missing, leave a visible placeholder and ask the owner.
+7. Anything the brand has not decided (a layout, a use of colour, an animation, a line of copy) is a proposal: label it and ask the owner.
+
 ## The kit
 
 Kit version 1.2 (kit.json).
 
-This folder is a brand kit. This skill is its core. The generated files below sit beside it, copied byte for byte from the brand project and locked by `kit.json`.
+This folder is a brand kit and this skill is its core. `kit.json` lists every file with its hash. Never edit a generated file here: change the brand project and run `brand-creator kit build --yes` again. Your own files (`EXTENDING.md` says which) are never overwritten.
 
 It works beside your web-design skill, never instead of it: load both when you build a page. A built site does not serve this folder, so copy the files you use from `brand/` into the product's own public or static folder and link them from there; `recipes/web-page.md` has the steps.
 
-Generated. Never edit these here: change the brand project and run `brand-creator kit build --yes` again.
+## Rules the owner decided
 
-- `brand/assets/logo/grid-mark-dark.svg`
-- `brand/assets/logo/grid-mark-master.png`
-- `brand/assets/logo/grid-mark.svg`
-- `brand/assets/logo/mark-animated.svg`
-- `brand/assets/logo/mark-dark.svg`
-- `brand/assets/logo/mark.svg`
-- `brand/assets/logo/wordmark-dark.svg`
-- `brand/assets/logo/wordmark.svg`
-- `brand/assets/tokens/tokens.css`
-- `brand/assets/tokens/tokens.json`
-- `facts.json`
-- `rules.json`
-- `snippets/logo.html`
-
-Yours to extend; how: `EXTENDING.md`. A build writes each of these once and never overwrites or moves it.
-
-- `EXTENDING.md`
-- `voice.md`
-- `visual.md`
-- `golden-rules.md`
-- `recipes/web-page.md`
-
-## Colour
-
-Light and dark values of every role, from the built design tokens (`brand/assets/tokens/tokens.json`).
-
-| role | light | dark |
-|---|---|---|
-| accent | #007d71 | #4cd7c8 |
-| bg | #f9f7ee | #0e141d |
-| border | #4b596c | #a7b2c1 |
-| line | #e0ded7 | #4b596c |
-| mark | #0d1b2d | #f0eee7 |
-| muted | #4b596c | #a7b2c1 |
-| text | #0d1b2d | #f0eee7 |
-
-Text and component pairs, with the ratio each reaches (WCAG 2.2 AA; logos are exempt):
-
-| text or shape | on | kind | target | light | dark |
-|---|---|---|---|---|---|
-| text | bg | ui-text | 4.5:1 | 16.15:1 | 15.92:1 |
-| muted | bg | ui-text | 4.5:1 | 6.64:1 | 8.61:1 |
-| accent | bg | ui-text-large | 3:1 | 4.69:1 | 10.44:1 |
-| border | bg | ui-component | 3:1 | 6.64:1 | 8.61:1 |
-| mark | bg | brand-rule | 3:1 | 16.15:1 | 15.92:1 |
-| accent | bg | brand-rule | 2:1 | 4.69:1 | 10.44:1 |
-
-## Type
-
-- sans: `ui-sans-serif, system-ui, sans-serif`
-
-## Layout
-
-Spacing, corner radius and layout values from the built design tokens. A value that is not listed is not defined: ask the owner.
-
-- dimension.space-1: `4px`
-- dimension.space-2: `8px`
-
-## Mark
-
-- `brand/assets/logo/grid-mark-dark.svg`
-- `brand/assets/logo/grid-mark-master.png`
-- `brand/assets/logo/grid-mark.svg`
-- `brand/assets/logo/mark-animated.svg`
-- `brand/assets/logo/mark-dark.svg`
-- `brand/assets/logo/mark.svg`
-- `brand/assets/logo/wordmark-dark.svg`
-- `brand/assets/logo/wordmark.svg`
-
-At 32 px and below the accent must hold a solid 4 x 4 px square (qa/rules.json).
-
-- small: up to 32 px uses `brand/assets/logo/grid-mark.svg`
-- large: larger sizes uses `brand/assets/logo/mark.svg`
-
-## Motion
-
-- duration.fast: 150ms
+No G4 rules are recorded yet.
 
 ## Never
 
@@ -104,22 +38,16 @@ At 32 px and below the accent must hold a solid 4 x 4 px square (qa/rules.json).
 - Do not recolour the mark outside the palette's roles, or put it on its own colour.
 - Do not crowd the mark: keep its clear space free.
 
-## Rules the owner decided
+## Map
 
-No G4 rules are recorded yet.
-
-## What may be claimed
-
-Only the facts below, in these words or a plain restatement. A status word (available, launching, in development) needs a row that says so.
-
-| fact | value | source | confirmed |
-|---|---|---|---|
-| spare parts | every tool has a published spare-parts list | owner, intake | 2026-10-17 |
-| batch size | tools are made in batches of 200 | owner, intake | 2026-10-17 |
-| repair guide | a repair guide is in every box | owner, intake | 2026-10-17 |
-| status | the online shop is in development | owner, intake | 2026-10-17 |
-| AppStream summary | Hand tools with a published spare-parts list | owner, intake | 2026-10-17 |
-| AppStream description | Acme makes small-batch hand tools. Every tool has a published spare-parts list and a repair guide in the box. | owner, intake | 2026-10-17 |
-| project license | MIT | owner, intake | 2026-10-17 |
-| metadata license | CC0-1.0 | owner, intake | 2026-10-17 |
-| website | https://example.com | owner, intake | 2026-10-17 |
+| You need | Open |
+| --- | --- |
+| the colours, pairs, type, layout, mark sizes, motion and claims | `brand.md` |
+| the token values | `brand/assets/tokens/tokens.css`, `brand/assets/tokens/tokens.json` |
+| the logo files | `brand/assets/logo/`, `snippets/logo.html` |
+| the rules and the facts as data | `rules.json`, `facts.json` |
+| how to make one kind of material | `recipes/` |
+| the rules every piece keeps | `golden-rules.md` |
+| how the brand looks and sounds | `visual.md`, `voice.md` |
+| how to change or extend this kit | `EXTENDING.md` |
+| every file and its hash | `kit.json` |

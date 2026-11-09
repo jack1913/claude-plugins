@@ -42,7 +42,8 @@ FINDER_FILE = ".DS_Store"                                   # what Finder puts i
 PREFIX = "brand/"                                           # where the project's files sit inside the kit: project path = PREFIX + path
 RULES_JSON = "rules.json"                                   # the G4 rules with ids, the size rule and bands, the contrast pairs, the forbidden words, the page block
 FACTS_JSON = "facts.json"                                   # the public FACTS.md rows
-ROOT_FILES = (SKILL_FILE, KIT_FILE, RULES_JSON, FACTS_JSON)  # the generated files that sit at the top of the kit folder, outside the generated folders
+BRAND_MD = "brand.md"                                       # the values and facts behind SKILL.md: colour, type, layout, mark, motion, what may be claimed
+ROOT_FILES = (SKILL_FILE, KIT_FILE, RULES_JSON, FACTS_JSON, BRAND_MD)  # the generated files that sit at the top of the kit folder, outside the generated folders
 OWNED_FILES = ("EXTENDING.md", "voice.md", "visual.md", "golden-rules.md", "recipes/web-page.md")   # the five owner files the build scaffolds once from templates/kit/ (kit.json `owned` always lists them); any other file of the owner's travels too
 TOP_KEYS = ("schema", "kit", "version", "edition", "plugin_version", "content_sha", "generated", "owned", "fonts", "sources", "reference_pages")
 SOURCE_KEYS = ("state_sha", "tokens", "tokens_css", "rules", "facts", "motion", "logos", "fonts", "pages")
