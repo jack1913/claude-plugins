@@ -2915,7 +2915,8 @@ report is a failing or not verified `check`. The row `kit:checked` says not veri
 ### kit status
 
 `kit status [--repo DIR[=LABEL]]... [--json]` (`scripts/kit.py`; the comparison is `kitlib.compare(kit_dir, installed_dir)`) says whether the copy of the kit in each product repository is current. It reads
-`<DIR>/.claude/skills/<slug>-brand/` and writes nothing: no file in the repository, none in the project, no report (it has no report row and `check` does not gate it). The copy itself is made by the
+`<root>/.claude/skills/<slug>-brand/`, `<root>` being the root of the git work tree `DIR` is in (`kitcopy.repo_root`: the nearest folder at or above it holding `.git`, where `install.py` copies the kit), or `DIR` itself
+when it is in none, and writes nothing: no file in the repository, none in the project, no report (it has no report row and `check` does not gate it). The copy itself is made by the
 kit's own installer, `install.py`, which judges by this very comparison (`kitcopy.compare`; see kit: install.py below,
 [ADR-0014](../docs/adr/ADR-0014-the-kit-installs-itself-and-updates-unchanged-owner-files.md)); the plugin's own scripts never write outside the project. `DIR` is read as `survey --repo` reads it
 (a label after the last `=`, the folder's name when there is none; a relative `DIR` is relative to the working folder). Without `--repo`, every repository that has a `kit` row in `adoption.json` is read, each once, at the
@@ -2954,22 +2955,27 @@ Exit 0 when every repository is current (and unchanged while read). Exit 1 when 
 `kit.json` that is a link, or one `kitlib.load()` refuses); no `--repo` and no kit row; a folder that does not exist; the project itself or a folder inside it; the user's home folder (`Path.home()`) or any path inside
 `~/.claude` ("the kit goes into one product repository at a time, never into a global skills folder"), also when the repository's kit folder leads there through a link; a repository whose kit folder is a link. Exit 3: the kit
 in the project is not whole (a generated file `kit.json` lists is missing there, is no plain file, or is not the sha256 `kit.json` records, or a link sits among the owner's files), because a copy cannot be judged against a kit that is not what it says: run
-`kit check`, then `kit build --yes`.
+`kit check`, then `kit build --yes`; and an owner file `kit.json` `owned` does not record with its bytes ("changed since the last build", "was added since the last build"), because the copy's `kit.json` would not record it
+as copied and a later update would take it for the repository's own: run `kit build --yes` first.
 
 ### kit: install.py
 
 `python3 <kit folder>/install.py REPO [--yes] [--json]` is `scripts/adaptlib/kitcopy.py`, copied into every kit by the build: the Python standard library only (no plugin module, which a test checks), so a copy of the kit, or a
-clone of a brand project's mirror, installs with no plugin present. REPO is any folder inside a local git clone (the nearest folder at or above it holding `.git`); the kit goes to `<repository root>/.claude/skills/<kit folder name>/`.
+clone of a brand project's mirror, installs with no plugin present. REPO is any folder inside a local git clone (the nearest folder at or above it holding `.git`); the kit goes to `<repository root>/.claude/skills/<kit>/`, `<kit>` being the name its `kit.json` states
+(`kitcopy.kit_name`), whatever the folder the kit was copied into is called.
 Without `--yes` it prints what `kit status --repo` prints for that repository and "run again with --yes to copy" (exit 0 when current, 1 otherwise). With `--yes` it copies by the copy list, in its order, each file written to a
 temporary name beside it and then moved into place, `kit.json` last; it first moves aside, into `removed-<date>/` of the repository (the first of `removed-<date>-2/`, `-3/` in which none of the paths is taken), keeping each path
-below the kit folder: the files left over (`left_over`, `owner_left_over`), a file the repository's own `kit.json` records as an owner file where this kit now writes a generated one, and a folder or link where a file goes. Nothing is
-deleted. It then compares again: current with nothing left to copy prints `installed: <kit folder> (version V)` and `next: review and commit it in <repository>` (exit 0); otherwise what is left (exit 1). `--json` prints one
+below the kit folder: the files left over (`left_over`, `owner_left_over`), a file the repository's own `kit.json` records as an owner file where this kit now writes a generated one, a file other than `kit.json` where this
+kit writes a generated one that the repository's `kit.json` does not record as generated (every such file when that `kit.json` cannot be read) and whose bytes are not the kit's (the repository's own), and a folder or
+link where a file goes. Nothing is deleted. It then compares again: current with nothing left to copy prints `installed: <kit folder> (version V)` and `next: review and commit it in <repository>` (exit 0); otherwise what is left (exit 1). `--json` prints one
 repository's entry of `kit status --json` with `applied` and `moved` added. The date is `BRAND_CREATOR_TODAY` when set, else today's. It never commits, never makes a branch and never pushes.
 
-Exit 2, with nothing written: a URL (clone it first), a REPO that is no folder, one inside the folder the kit's own project is (the kit sits in `<project>/.claude/skills/<name>/`, so a kit never installs into the brand project or into the
-repository a copy of it sits in), one outside any git work tree, the home folder or a path inside `~/.claude` (never a global skills folder), a kit folder in the repository that is a link, and, with `--yes`, a kit folder that is there but
-holds no `kit.json`, or a link anywhere on the way of a file it would write or move (`.claude`, `.claude/skills`, the kit folder or a folder in it, the `removed-<date>/` folder): every path is checked before the first file
-is moved or written, and nothing is written or moved through a link. Each file is written through a new temporary file of its own (`tempfile.mkstemp`), never a name that was there before. Exit 3: no `kit.json` beside it, or a kit that is not whole. `/brand-creator:brand-adopt` runs it for a Brand kit row ([ADR-0014](../docs/adr/ADR-0014-the-kit-installs-itself-and-updates-unchanged-owner-files.md)).
+Exit 2, with nothing written: a URL (clone it first), a REPO that is no folder, the kit's own folder or a folder in it, for a kit that sits in `<project>/.claude/skills/<name>/` that project or a folder in it,
+the git repository the kit sits in ("is the repository this kit sits in", a brand project inside a larger repository included), a kit whose `kit.json` states no kit name, one outside any git work tree, the home folder or a path inside
+`~/.claude` (never a global skills folder), a kit folder in the repository that is a link, and, with `--yes`: a kit folder that is there but holds no `kit.json` and is no first copy of this kit that stopped before
+`kit.json` (`kitcopy.partial_copy`: nothing but folders and this kit's files with its bytes; that one is finished), a repository whose `kit.json` states a newer version than this kit's ("holds version A, newer than
+this kit's B: update this clone of the brand project first (git pull)"; to go back on purpose, the owner moves the kit folder away; without `--yes` the plan says it), or a link anywhere on the way of a file it would write or move (`.claude`, `.claude/skills`, the kit folder or a folder in it, the `removed-<date>/` folder): every path is checked before the first file
+is moved or written, and nothing is written or moved through a link. Each file is written through a new temporary file of its own (`tempfile.mkstemp`), never a name that was there before. Exit 3: no `kit.json` beside it, or a kit that is not whole or whose owner files changed since its last build (as for `kit status`). `/brand-creator:brand-adopt` runs it for a Brand kit row ([ADR-0014](../docs/adr/ADR-0014-the-kit-installs-itself-and-updates-unchanged-owner-files.md)).
 
 ### launch-todo
 

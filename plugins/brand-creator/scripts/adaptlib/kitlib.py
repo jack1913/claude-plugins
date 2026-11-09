@@ -34,7 +34,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 from kitcopy import (ALL_SOURCE_KEYS, BRAND_MD, CHECKLIST_MD, CURRENT, INSTALL_PY, FACTS_JSON, FINDER_FILE, FONT_COPIED_KEYS, FONT_KEYS, FONT_NOT_COPIED_KEYS, GENERATED_DIRS, KIT_FILE,  # noqa: E402,F401
-                     NOT_CURRENT, NOT_INSTALLED, OPTIONAL_SOURCE_KEYS, OWNED_FILES, PAGE_KEYS, PREFIX, ROOT_FILES, RULES_JSON, SCHEMA, SKILL_FILE, SOURCE_KEYS,
+                     NOT_CURRENT, NOT_INSTALLED, OPTIONAL_SOURCE_KEYS, OWNED_ADDED, OWNED_CHANGED, OWNED_FILES, PAGE_KEYS, PREFIX, ROOT_FILES, RULES_JSON, SCHEMA, SKILL_FILE, SOURCE_KEYS,
                      STATUS_SHOWN, TOP_KEYS, WHY_BYTES, WHY_LINK, WHY_MISSING, _EDITION, _SHA, _VERSION, KitError, folder_state, font_problems,
                      generated_files_in, installed_version, is_owner_path, is_sha, json_object, not_current_text, owned_problems, owner_paths, owner_sorted,
                      paths_in, plain_file, problems, read_plain, recorded_path, reference_page_problems)
@@ -1553,10 +1553,8 @@ CHECK_TOOL = "kit-check"                                    # the report of `kit
 LINK_KINDS = {".md": "md", ".html": "html", ".htm": "html", ".css": "css"}   # the files whose relative links are checked, by their extension
 FILL_MARKER = "[[fill"                                      # the note a scaffold leaves where the owner writes, any case
 SITE_RECORD = "site/site.json"                              # the record of the approved reference pages: its choices tagged `rule` are rule ids (sitedata.SITE_FILE)
-OWNED_CHANGED = "changed since the last build"              # why an owner file is not what the last build recorded ...
 OWNED_MISSING = "is missing"                                # a scaffolded file the owner took away: the build writes the scaffold again
 OWNED_REMOVED = "was removed since the last build"          # any other owner file the owner took away: the build forgets it
-OWNED_ADDED = "was added since the last build"              # an owner file the last build did not record
 OWNED_NOT_FILE = "is no file the kit can read (a folder, or a link)"
 _VERSION_LINE = re.compile(r"Kit version (\S+) \(kit\.json\)\.")
 _FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")

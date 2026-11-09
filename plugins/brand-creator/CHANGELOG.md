@@ -20,7 +20,9 @@ updates without the plugin. On the pilot brand the kit's first page went from 3,
   logo sizes, your contrast pairs, your forbidden words and your page rules.
 - `install.py` in the kit: `python3 .claude/skills/<brand>-brand/install.py <folder in a product> [--yes]` says what it
   would copy, or copies it, with no plugin installed. It judges a copy with the same code as `kit status`, never deletes,
-  commits or pushes, never installs globally or into the brand project, and never writes through a link.
+  commits or pushes, never installs globally or into the brand project, and never writes through a link. It never puts an
+  older kit over a newer one (update your copy of the brand project first), and a file of the product's own where the kit
+  now writes one of its files is moved to a `removed-` folder first.
 - Starter recipes `recipes/ad.md` and `recipes/presentation.md` once the masters you approved hold an ad or a deck.
 - `kit status` warns when a product also holds another skill for the same brand, such as an older hand-made kit.
 
@@ -28,8 +30,11 @@ updates without the plugin. On the pilot brand the kit's first page went from 3,
 
 - A recipe or other file of yours that a product never changed is now updated when you change it in the brand project; one
   the product changed or added stays its own, as before (ADR-0014).
-- `kit.json` is now the last file of every copy, after your own files, so a copy that stops halfway is finished by the next
-  run.
+- `kit.json` is now the last file of every copy, after your own files, so a copy that stops halfway, a first one too, is
+  finished by the next run.
+- `kit status` and `install.py` stop when one of your own files in the kit changed since the last build: build the kit
+  first, so the copy records it.
+- `kit status --repo <folder>` reads the kit at the root of the repository the folder is in, where `install.py` puts it.
 - `/brand-creator:brand-adopt` puts the kit into a product with the kit's own `install.py` instead of copying it file by
   file.
 - The first build on 0.11.0 moves every kit's build number up by one: the kit gains `brand.md`, `checklist.md` and

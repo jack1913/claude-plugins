@@ -270,6 +270,8 @@ shows as "not verified", with what to run again.
 | Claude refuses a folder when it checks a copy | It refuses your home folder, Claude's settings folder and your brand project. Give it one website's or app's folder |
 | `install.py` says the folder is not inside a git work tree | Give it a folder inside a local copy (a clone) of the product's code |
 | `install.py` stops on a link (a shortcut) | It never writes through one. Look at where it leads, replace it with a real folder, then run it again |
+| `install.py` says the product holds a newer version | Your copy of the brand project is out of date. Update it (`git pull`), then run it again |
+| `install.py` or Claude says your own files changed since the last build | Ask Claude to build the kit again, then run it again |
 
 More: [Troubleshooting](../reference/troubleshooting.md).
 

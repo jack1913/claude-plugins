@@ -33,7 +33,7 @@ ADR-0011 names both as defaults the owner may change in a new record.
   would copy; `--yes` copies into `<repository root>/.claude/skills/<kit>/`, `kit.json` last, and moves files left over from an
   older kit to `removed-<date>/` in the repository. It never deletes, commits, makes a branch or pushes. It refuses the brand
   project, the repository its own copy sits in, a folder outside a git work tree, the home folder and `~/.claude`: the kit is
-  installed per repository, never globally (the owner, 2026-10-26). This replaces D10 for this one file only: the plugin's own
+  installed per repository, never globally (the owner, 2026-10-26). It never puts an older kit over a newer one. This replaces D10 for this one file only: the plugin's own
   scripts still write only inside the brand project. `/brand-creator:brand-adopt` runs it for a Brand kit row, on the owner's
   branch, after G6, as before.
 - **An owner file the repository never changed is updated.** Each owner file is judged against the `owned` record of the

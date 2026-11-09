@@ -82,7 +82,7 @@ Writes the report `kit` (rows kit:written and kit:owned; outputs lists every gen
 edition, a band drawing the project does not have, or a hand edit or foreign file without --replace. Exit 2: no --yes (the plan is printed first); a path that leaves the
 project; a band drawing that is not written as a plain path; a scaffold with a placeholder this version does not know. Exit 1 also: an owner file's path that holds a folder, or a folder an owner file belongs in (recipes/) that is a file; a link among the owner's files, whatever it points at (--replace moves it); assets/masters that is no folder, a link to a folder in it. Exit 2 also: a master that is a link leading out of the project. Exit 3: the tokens are not built; a scaffold the plugin lacks; fonts are in assets/fonts/ and there is no current fontcheck report (the kit is written without them).
 
-`kit status` reads <DIR>/.claude/skills/<slug>-brand/ of each repository and writes nothing, in the repository or in the project (no report either). Per repository it says `not installed`
+`kit status` reads .claude/skills/<slug>-brand/ at the root of the git work tree each DIR is in (where install.py copies the kit; DIR itself when it is in none) and writes nothing, in the repository or in the project (no report either). Per repository it says `not installed`
 (no kit.json there), `current (version V)` (every generated file and kit.json are the project's bytes) or `not current` (the installed and the project version, then the generated files that
 differ, are missing, or are left over from an older kit; when both versions are the same it says so and counts what differs). A file left over is not on the copy list: the kit's install.py
 moves it to removed-<date>/<kit folder>/ in the repository, keeping its path, and deletes nothing (--json: `left_over` lists them, `left_over_to` says where they go). It also lists the owner files that
@@ -91,7 +91,8 @@ skill for the same brand in the repository's .claude/skills/ (a warning), and th
 added too), then the owner files to update, kit.json last, as paths relative to the kit folder. The comparison is scripts/adaptlib/kitcopy.py, which the kit carries as install.py. Without --repo it reads each repository that has a `kit` row in adoption.json (none: exit 2).
 Exit 0 when every copy is current, 1 when one is not installed or not current, or when a repository's kit folder changed while it was read (its files, sizes and times are listed before
 and after). Exit 2: no kit in the project; a folder that does not exist; the project itself or a folder inside it; your home folder or any path inside ~/.claude (the kit goes into one product
-repository at a time, never into a global skills folder); a kit folder that is a link. Exit 3: the kit in the project is not whole (`kit check` says what).
+repository at a time, never into a global skills folder); a kit folder that is a link. Exit 3: the kit in the project is not whole (`kit check` says what), or an owner file changed or was added
+since the last build (build first, so that the copy records it).
 """
 import argparse
 import functools
@@ -562,6 +563,10 @@ def status(project: Path, a) -> int:
         why = kitcopy.refusal(project, real)
         if why:
             fail(EXIT_USAGE, f"--repo {given} {why}")
+        real = kitcopy.repo_root(real) or real            # the root of the git work tree DIR is in, where install.py copies the kit; a folder in none is read as it is
+        why = kitcopy.refusal(project, real)
+        if why:
+            fail(EXIT_USAGE, f"--repo {given}: the repository {real} {why}")
         installed = real / adapt.SKILL_DIR / name
         if installed.is_symlink():
             fail(EXIT_USAGE, f"--repo {given}: {kd_rel}/ is a link, and a link is never read through: look at where it leads and replace it with a folder")

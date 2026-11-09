@@ -5585,3 +5585,116 @@ def test_install_runs_from_a_copy_of_the_kit_with_no_plugin(pack, tmp_path):
     r = run_install(elsewhere / INSTALL, repo, "--yes", cwd=tmp_path)
     assert r.returncode == 0, r.stdout + r.stderr
     assert kit_status(pack, repo).returncode == 0
+
+
+# ---------------------------------------------------------------- the final review's findings (0.11.0)
+
+def test_install_moves_aside_a_repository_file_where_a_newer_kit_first_writes_a_generated_one(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = git_repo(tmp_path)
+    assert run_install(kit_of(pack) / INSTALL, repo, "--yes").returncode == 0
+    kd = installed_of(repo)
+    (kd / "brand.md").write_text("the shop's own brand notes\n", encoding="utf-8")       # an older kit that did not write brand.md, and a file the shop added there
+    mutate_json(kd / "kit.json", lambda d: d["generated"].pop("brand.md"))
+    r = run_install(kit_of(pack) / INSTALL, repo, "--yes")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (repo / "removed-2026-10-17" / ".claude/skills/acme-brand/brand.md").read_text(encoding="utf-8") == "the shop's own brand notes\n"
+    assert (kd / "brand.md").read_bytes() == (kit_of(pack) / "brand.md").read_bytes()
+
+
+def test_install_moves_aside_a_differing_file_when_the_repositorys_kit_json_cannot_be_read(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = git_repo(tmp_path)
+    assert run_install(kit_of(pack) / INSTALL, repo, "--yes").returncode == 0
+    kd = installed_of(repo)
+    (kd / "checklist.md").write_text("the shop's own checklist\n", encoding="utf-8")
+    (kd / "kit.json").write_text("{not json", encoding="utf-8")
+    r = run_install(kit_of(pack) / INSTALL, repo, "--yes")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (repo / "removed-2026-10-17" / ".claude/skills/acme-brand/checklist.md").read_text(encoding="utf-8") == "the shop's own checklist\n"
+    assert not (repo / "removed-2026-10-17" / ".claude/skills/acme-brand/SKILL.md").exists()     # a file with the kit's own bytes stays where it is
+    assert kit_status(pack, repo).returncode == 0
+
+
+def test_a_first_install_stopped_before_kit_json_is_finished_by_the_next_run(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = git_repo(tmp_path)
+    plan = json.loads(run_install(kit_of(pack) / INSTALL, repo, "--json").stdout)
+    for rel in plan["copy"][:-1]:                                                            # the first copy stops just before kit.json
+        dest = installed_of(repo) / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(kit_of(pack) / rel, dest)
+    r = run_install(kit_of(pack) / INSTALL, repo, "--yes")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert kit_status(pack, repo).returncode == 0
+
+
+def test_a_kit_folder_with_a_file_of_its_own_and_no_kit_json_is_still_refused(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = git_repo(tmp_path)
+    (installed_of(repo)).mkdir(parents=True)
+    shutil.copyfile(kit_of(pack) / "SKILL.md", installed_of(repo) / "SKILL.md")
+    (installed_of(repo) / "notes.md").write_text("a hand-made skill's notes\n", encoding="utf-8")
+    before = kitlib.folder_state(repo)
+    r = run_install(kit_of(pack) / INSTALL, repo, "--yes")
+    assert r.returncode == 2 and "holds no kit.json" in r.stderr and kitlib.folder_state(repo) == before, r.stdout + r.stderr
+
+
+def test_an_owner_file_edited_since_the_last_build_stops_the_copy_until_the_kit_is_built(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = git_repo(tmp_path)
+    mutate(kit_of(pack) / "voice.md", "\n", "\nOne more line, not built yet.\n", count=1)
+    r = run_install(kit_of(pack) / INSTALL, repo, "--yes")
+    assert r.returncode == 3 and "voice.md (changed since the last build)" in r.stderr and "kit build --yes" in r.stderr, r.stdout + r.stderr
+    assert not (repo / ".claude").exists()
+    assert kit_status(pack, repo).returncode == 3
+    (kit_of(pack) / "recipes" / "email.md").write_text("# E-mail\n", encoding="utf-8")
+    assert build(pack).returncode == 0
+    assert run_install(kit_of(pack) / INSTALL, repo, "--yes").returncode == 0
+    (kit_of(pack) / "recipes" / "social.md").write_text("# Social\n", encoding="utf-8")   # added since the last build: not recorded either
+    r = run_install(kit_of(pack) / INSTALL, repo, "--yes")
+    assert r.returncode == 3 and "recipes/social.md (was added since the last build)" in r.stderr, r.stdout + r.stderr
+
+
+def test_install_refuses_to_put_an_older_kit_over_a_newer_one(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = git_repo(tmp_path)
+    assert run_install(kit_of(pack) / INSTALL, repo, "--yes").returncode == 0
+    mutate_json(installed_of(repo) / "kit.json", lambda d: d.__setitem__("version", "1.10"))
+    before = kitlib.folder_state(repo)
+    r = run_install(kit_of(pack) / INSTALL, repo)
+    assert r.returncode == 1 and "holds version 1.10, newer than this kit's 1.1" in r.stdout, r.stdout + r.stderr
+    r = run_install(kit_of(pack) / INSTALL, repo, "--yes")
+    assert r.returncode == 2 and "holds version 1.10, newer than this kit's 1.1" in r.stderr and "git pull" in r.stderr, r.stdout + r.stderr
+    assert kitlib.folder_state(repo) == before
+
+
+def test_install_runs_from_a_kit_copied_out_of_its_project_and_renamed(pack, tmp_path):
+    assert build(pack).returncode == 0
+    elsewhere = tmp_path / "Downloads" / "acme-brand-main"
+    shutil.copytree(kit_of(pack), elsewhere)
+    (tmp_path / "work").mkdir()
+    repo = git_repo(tmp_path / "work")
+    r = run_install(elsewhere / INSTALL, repo, "--yes")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert not (repo / ".claude" / "skills" / "acme-brand-main").exists()                    # the name is the kit's, from its kit.json
+    assert kit_status(pack, repo).returncode == 0
+
+
+def test_install_refuses_the_repository_its_kit_sits_in_when_the_project_is_a_folder_of_it(pack, tmp_path):
+    assert build(pack).returncode == 0
+    brands = git_repo(tmp_path, "brands")
+    kit = brands / "acme" / ".claude" / "skills" / "acme-brand"
+    shutil.copytree(kit_of(pack), kit)
+    before = kitlib.folder_state(brands)
+    r = run_install(kit / INSTALL, brands, "--yes")
+    assert r.returncode == 2 and "is the repository this kit sits in" in r.stderr and kitlib.folder_state(brands) == before, r.stdout + r.stderr
+
+
+def test_kit_status_reads_the_repository_root_as_install_does(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = git_repo(tmp_path)
+    (repo / "apps" / "web").mkdir(parents=True)
+    assert run_install(kit_of(pack) / INSTALL, repo / "apps" / "web", "--yes").returncode == 0
+    r = kit_status(pack, repo / "apps" / "web")
+    assert r.returncode == 0 and "current (version 1.1)" in r.stdout, r.stdout + r.stderr

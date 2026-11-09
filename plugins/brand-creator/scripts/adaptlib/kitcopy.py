@@ -66,6 +66,9 @@ WHY_MISSING = "missing"
 WHY_LINK = "is a link or a folder, not a file"
 WHY_BYTES = "not the same bytes"
 STATUS_SHOWN = 6                                            # paths named in a message before "and N more"
+OWNED_CHANGED = "changed since the last build"              # why an owner file in the project is not what the last build recorded in kit.json `owned` ...
+OWNED_ADDED = "was added since the last build"              # ... and an owner file that build did not record
+_KIT_NAME = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*")            # a kit's name (kit.json `kit`), as the build makes it: the one folder name it is installed under
 
 
 def is_sha(value) -> bool:
@@ -293,7 +296,8 @@ def compare(kit: Path, installed: Path) -> dict:
     folder holds no kit.json; CURRENT when every generated file and kit.json are byte for byte the project's and no owner file is to be updated or moved; NOT_CURRENT otherwise,
     which includes a file in brand/, snippets/ or reference-pages/ that the project's kit does not have (`left_over`: a file of an older kit). The project's kit must be whole:
     a generated file kit.json lists that is missing there, no plain file, or not the sha256 kit.json records raises KitError (exit 3), because a copy cannot be judged against a
-    kit that is not itself what it says."""
+    kit that is not itself what it says; so does an owner file kit.json `owned` does not record with its bytes (changed or added since the last build), because the copy's kit.json
+    would not record it as copied."""
     doc = json_object(kit / KIT_FILE)
     if doc is None or (bad := problems(doc)):
         raise KitError(EXIT_USAGE, f"{kit / KIT_FILE} is no kit.json this version reads" + (f": {bad[0]}" if doc is not None else ""))
@@ -317,6 +321,10 @@ def compare(kit: Path, installed: Path) -> dict:
         raise KitError(EXIT_CANNOT, f"the kit in the project holds a link among the owner's files ({shown}): a link is never read through, so no copy can be judged against it. Move it away yourself "
                           "(`brand-creator kit build --yes --replace` moves it aside), then run `brand-creator kit check`")
     owner = {rel: data for rel in owner_rels if (data := read_plain(kit, rel)[0]) is not None}   # the project's owner files that can be copied
+    unbuilt = [f"{rel} ({OWNED_CHANGED if rel in doc['owned'] else OWNED_ADDED})" for rel in owner_rels if rel in owner and doc["owned"].get(rel) != _sha256(owner[rel])]
+    if unbuilt:                                                          # the copy's kit.json must record each owner file as copied, or a later update takes it for the repository's own edit
+        shown = ", ".join(unbuilt[:STATUS_SHOWN]) + (f", and {len(unbuilt) - STATUS_SHOWN} more" if len(unbuilt) > STATUS_SHOWN else "")
+        raise KitError(EXIT_CANNOT, f"the owner's files in the project are not what kit.json records ({shown}), so a copy would not record them: run `brand-creator kit build --yes` first")
     out = {"state": NOT_INSTALLED, "installed_version": None, "project_version": doc["version"], "differ": [], "missing": [], "left_over": [], "owner_differ": [],
            "copy": [], "copy_owner": [], "update_owner": [], "owner_left_over": [], "brand": None, "other_skills": []}
     recorded = installed_owned(installed)
@@ -411,16 +419,53 @@ def owner_state(repo: bytes | None, project: bytes, recorded: str | None) -> str
     return "update" if recorded is not None and _sha256(repo) == recorded else "own"
 
 
-def installed_owned(installed: Path) -> dict[str, str]:
-    """The `owned` record of the kit.json a repository holds: {path: sha256 when it was copied}, every entry whose value is a sha256 (a path an older kit counted as the owner's
-    and this one generates included: `apply` moves the repository's file aside before it writes there). {} when that kit.json is no plain file, no JSON object, of another
-    schema, or has no `owned` object: then no owner file counts as unchanged, and none is updated or moved."""
+def installed_record(installed: Path, key: str) -> dict[str, str]:
+    """The `owned` or `generated` record (`key`) of the kit.json a repository holds: {path: sha256 when it was copied}, every entry whose value is a sha256. {} when that kit.json
+    is no plain file, no JSON object, of another schema, or has no such object."""
     if not plain_file(installed, KIT_FILE):
         return {}
     doc = json_object(installed / KIT_FILE)
-    if doc is None or doc.get("schema") != SCHEMA or not isinstance(doc.get("owned"), dict):
+    if doc is None or doc.get("schema") != SCHEMA or not isinstance(doc.get(key), dict):
         return {}
-    return {rel: sha for rel, sha in doc["owned"].items() if isinstance(rel, str) and is_sha(sha)}
+    return {rel: sha for rel, sha in doc[key].items() if isinstance(rel, str) and is_sha(sha)}
+
+
+def installed_owned(installed: Path) -> dict[str, str]:
+    """The `owned` record of the kit.json a repository holds (`installed_record`), a path an older kit counted as the owner's and this one generates included: `apply` moves the
+    repository's file aside before it writes there. {} when it cannot be read: then no owner file counts as unchanged, and none is updated or moved."""
+    return installed_record(installed, "owned")
+
+
+def version_key(version) -> tuple[int, int] | None:
+    """A kit version ("1.10") as numbers to compare ((1, 10)), or None when it is no version a kit.json writes."""
+    return tuple(int(n) for n in version.split(".")) if isinstance(version, str) and _VERSION.fullmatch(version) else None
+
+
+def kit_name(kit: Path) -> str:
+    """The kit's name, from its kit.json `kit`: the folder it is installed under, whatever the folder it was copied into is called. KitError (exit 2) when it is no such name."""
+    name = (json_object(kit / KIT_FILE) or {}).get("kit")
+    if not (isinstance(name, str) and _KIT_NAME.fullmatch(name) and len(name) <= 64):
+        raise KitError(EXIT_USAGE, f"{kit / KIT_FILE}: kit {json.dumps(name)} is no kit name (lower-case letters, digits and single hyphens)")
+    return name
+
+
+def partial_copy(kit: Path, folder: Path) -> bool:
+    """True when `folder`, a repository's kit folder with no kit.json, holds nothing but folders and files of this kit with the kit's bytes (and Finder's .DS_Store): a first
+    copy that stopped before kit.json, which the next run finishes. A link, or any other file, makes it no copy of this kit."""
+    if folder.is_symlink() or not folder.is_dir():
+        return False
+    for root, dirs, names in os.walk(folder):
+        base = Path(root)
+        if any((base / d).is_symlink() for d in dirs):
+            return False
+        for n in names:
+            rel = (base / n).relative_to(folder).as_posix()
+            if n == FINDER_FILE:
+                continue
+            mine = read_plain(folder, rel)[0]
+            if rel == KIT_FILE or mine is None or mine != read_plain(kit, rel)[0]:
+                return False
+    return True
 
 
 def not_current_text(installed_version: str | None, project_version: str, differ, missing, left_over) -> str:
@@ -536,15 +581,20 @@ def link_on_the_way(base: Path, rel: str) -> Path | None:
 
 
 def apply(kit: Path, root: Path, res: dict, today: str) -> list[str]:
-    """Copy the kit into `root`'s SKILLS_DIR/<kit folder name>/ by the comparison `res` (`compare`): first move aside what must not be overwritten or is left over, then write
+    """Copy the kit into `root`'s SKILLS_DIR/<kit name>/ (`kit_name`) by the comparison `res` (`compare`): first move aside what must not be overwritten or is left over, then write
     every file of `res["copy"]` in its order (kit.json last), each to a temporary name beside it and then into place. Moved aside, into removed-<today>/ of the repository and
-    keeping its path below the kit folder: the files left over (`left_over`, `owner_left_over`), and a file the repository's own kit.json records as an owner file where this kit
-    now writes a generated one, or a folder or link where a file goes. Nothing is deleted. Returns the paths moved, in the kit folder."""
+    keeping its path below the kit folder: the files left over (`left_over`, `owner_left_over`); a file the repository's own kit.json records as an owner file where this kit
+    now writes a generated one; a file, other than kit.json, where this kit writes a generated one that the repository's kit.json does not record as generated (all of them when
+    that kit.json cannot be read) and whose bytes are not the kit's: the repository's own; and a folder or link where a file goes. Nothing is deleted. Returns the paths moved,
+    in the kit folder."""
     import shutil
-    kd_rel = f"{SKILLS_DIR}/{kit.name}"
+    kd_rel = f"{SKILLS_DIR}/{kit_name(kit)}"
     kd = root / kd_rel
-    recorded = installed_owned(kd)
-    aside = [rel for rel in res["copy"] if os.path.lexists(kd / rel) and (rel in recorded and not is_owner_path(rel) or not plain_file(kd, rel))]
+    recorded, generated = installed_owned(kd), installed_record(kd, "generated")
+
+    def theirs(rel: str) -> bool:                                       # a file at a generated path that no kit of the repository's wrote
+        return rel != KIT_FILE and rel not in generated and rel not in res["update_owner"] and read_plain(kd, rel)[0] != read_plain(kit, rel)[0]
+    aside = [rel for rel in res["copy"] if os.path.lexists(kd / rel) and (not plain_file(kd, rel) or rel in recorded and not is_owner_path(rel) or theirs(rel))]
     moving = list(dict.fromkeys([*res["left_over"], *res["owner_left_over"], *aside]))
     base = _removed_root(root, today, moving, kd_rel) if moving else None
     ways = [f"{kd_rel}/{rel}" for rel in [*res["copy"], *moving]] + [f"{base.name}/{kd_rel}/{rel}" for rel in moving]   # checked before anything is moved or written
@@ -586,18 +636,25 @@ def _install(kit: Path, given: str, yes: bool, as_json: bool, today: str) -> int
         raise KitError(EXIT_USAGE, f"{kit / KIT_FILE} is no kit.json this version reads: {bad[0]}")
     if _URL.match(given):
         raise KitError(EXIT_USAGE, f"{given} is a URL: clone it first (git clone {given}), then name the clone's folder")
+    name = kit_name(kit)
     folder = Path(given).expanduser()
     if not folder.is_dir():
         raise KitError(EXIT_USAGE, f"{given} is not a folder")
-    project = Path(os.path.realpath(kit)).parents[2]          # the kit sits in <project>/.claude/skills/<name>/: never install into the folder it sits in
-    if why := refusal(project, Path(os.path.realpath(folder))):
+    real_kit, real = Path(os.path.realpath(kit)), Path(os.path.realpath(folder))
+    if real == real_kit or real_kit in real.parents:
+        raise KitError(EXIT_USAGE, f"{given} is this kit's own folder or a folder inside it: name a product repository")
+    in_project = real_kit.parent.name == "skills" and real_kit.parent.parent.name == ".claude"
+    project = real_kit.parents[2] if in_project else real_kit  # a kit in <project>/.claude/skills/<name>/ never installs into that project; a kit copied anywhere else, never into its own folder
+    if why := refusal(project, real):
         raise KitError(EXIT_USAGE, f"{given} {why}")
     root = repo_root(folder)
     if root is None:
         raise KitError(EXIT_USAGE, f"{given} is not inside a git work tree: name a folder in a clone of the product repository")
     if why := refusal(project, root):
         raise KitError(EXIT_USAGE, f"{given}: the repository {root} {why}")
-    kd_rel = f"{SKILLS_DIR}/{kit.name}"
+    if root == repo_root(real_kit):
+        raise KitError(EXIT_USAGE, f"{given}: the repository {root} is the repository this kit sits in: name a product repository")
+    kd_rel = f"{SKILLS_DIR}/{name}"
     target = root / kd_rel
     if target.is_symlink():
         raise KitError(EXIT_USAGE, f"{target} is a link, and a link is never written through: look at where it leads and replace it with a folder")
@@ -606,12 +663,17 @@ def _install(kit: Path, given: str, yes: bool, as_json: bool, today: str) -> int
     before = folder_state(target)
     res = compare(kit, target)
     res.update({"label": root.name, "path": str(root), "note": None, "read_only": folder_state(target) == before})
-    if res["state"] == NOT_INSTALLED and os.path.lexists(target):
+    refuse = None
+    if res["state"] == NOT_INSTALLED and os.path.lexists(target) and not partial_copy(kit, target):   # a first copy that stopped before kit.json is finished; anything else is looked at first
         res["note"] = f"{kd_rel}/ is there but holds no {KIT_FILE}: it is not a kit, so look at it before you copy over it"
+        refuse = f"{res['note']}; move it away yourself, then run it again"
+    elif (have := version_key(res["installed_version"])) and have > version_key(doc["version"]):
+        res["note"] = refuse = (f"{kd_rel}/ holds version {res['installed_version']}, newer than this kit's {doc['version']}: update this clone of the brand project first (git pull); "
+                                f"to go back to {doc['version']} on purpose, move {kd_rel}/ away yourself, then run it again")
     moved: list[str] = []
     if yes and res["copy"] + res["left_over"] + res["owner_left_over"]:
-        if res["note"]:
-            raise KitError(EXIT_USAGE, f"{res['note']}; move it away yourself, then run it again")
+        if refuse:
+            raise KitError(EXIT_USAGE, refuse)
         moved = apply(kit, root, res, today)
         res = compare(kit, target)
         res.update({"label": root.name, "path": str(root), "note": None, "read_only": False})
@@ -619,7 +681,7 @@ def _install(kit: Path, given: str, yes: bool, as_json: bool, today: str) -> int
     if as_json:
         print(json.dumps({**result_json(res, kd_rel), "applied": yes, "moved": moved}, indent=2, ensure_ascii=False))
         return 0 if done else EXIT_FAIL
-    print(f"kit {doc['kit']}, version {doc['version']}")
+    print(f"kit {name}, version {doc['version']}")
     print("\n".join(status_lines(res, kd_rel)))
     if moved:
         print(f"moved to removed-{today}/ (or the first free removed-{today}-<n>/) in {root}, keeping their paths: {', '.join(moved)}")
