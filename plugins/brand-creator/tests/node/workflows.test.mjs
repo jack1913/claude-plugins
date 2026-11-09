@@ -204,7 +204,7 @@ test("adopt tells the implementer how a kit row is copied and the reviewer how i
     const implLines = r.calls.find((c) => c.label === `apply ${label}`).prompt.split("\n");
     const kitCopy = implLines.filter((l) => l.startsWith("A Brand kit row"));
     assert.deepEqual(kitCopy, [
-      `A Brand kit row (its file is a .claude/skills/<slug>-brand/ folder, Find kit.json) is copied by the list brand-creator --data "/DATA" kit status --repo "${path}" --project "/PROJECT" prints: mkdir -p, then cp one file at a time, exactly those files; an owner file the repository already has is never overwritten; never into ~/.claude/skills or any global skills folder; files kit status names as left over from an older kit are not on that list: move each to removed-<date>/ in the repository, keeping its path inside that folder (removed-<date>-2/ when a file is already there; never delete one), and list them in moved_to_removed; the kit is not committed; run kit status --repo again, it must then say current.`,
+      `A Brand kit row (its file is a .claude/skills/<slug>-brand/ folder, Find kit.json) is copied by the kit's own installer: python3 "/PROJECT/.claude/skills/<slug>-brand/install.py" "${path}" --yes. It copies exactly the files of the list brand-creator --data "/DATA" kit status --repo "${path}" --project "/PROJECT" prints (an owner file only where the repository has none or never changed it; kit.json last), never into ~/.claude/skills or any global skills folder, and moves files left over from an older kit to removed-<date>/ in the repository, keeping their paths inside that folder (removed-<date>-2/ when a file is already there; it never deletes one): list them in moved_to_removed; the kit is not committed; run kit status --repo again, it must then say current.`,
     ], label);
     assert.ok(implLines.indexOf(kitCopy[0]) < implLines.indexOf(RULES), "the kit line sits before RULES, and RULES stays verbatim");
     const revLines = r.calls.find((c) => c.label === `review ${label}`).prompt.split("\n");
@@ -216,13 +216,14 @@ test("adopt tells the implementer how a kit row is copied and the reviewer how i
   }
   const fix = await run("adopt", { ...base, mode: "fix", repos: [{ ...base.repos[0], findings: ["1 header logo still points at the old file"] }] });
   assert.equal(fix.error, null);
-  assert.match(fix.calls.find((c) => c.label === "apply shop").prompt, /kit status --repo "\/REPOS\/shop" --project "\/PROJECT" prints: mkdir -p, then cp one file at a time/);
-  assert.match(agents["brand-implementer"].body, /A Brand kit row is copied by the list `brand-creator kit status --repo <path>` prints/);
+  assert.match(fix.calls.find((c) => c.label === "apply shop").prompt, /copied by the kit's own installer: python3 "\/PROJECT\/\.claude\/skills\/<slug>-brand\/install\.py" "\/REPOS\/shop" --yes\. It copies exactly the files of the list .*kit status --repo "\/REPOS\/shop" --project "\/PROJECT" prints/);
+  assert.match(agents["brand-implementer"].body, /A Brand kit row is copied by the kit's own installer/);
+  assert.match(agents["brand-implementer"].body.replace(/\s+/g, " "), /It copies exactly the files of the list `brand-creator kit status --repo <path>` prints/);
   assert.match(agents["brand-implementer"].body, /nothing goes into\s+`~\/\.claude\/skills` or any global folder/);
   assert.match(agents["brand-reviewer"].body, /`brand-creator --data "<data>" kit status --repo <path> --project "<project>"` must exit 0/);
   // a brand change that drops a generated file leaves files behind: every place that tells the copy says how they go (moved, never deleted), then kit status again
   const flatOf = (t) => t.replace(/\s+/g, " ");
-  const leftOver = /names\s+files left over from the older kit; they are not on the copy list: move each to `removed-<date>\/` in (that|the) repository, keeping its path inside that folder \(`removed-<date>-2\/` when a file is already there; never delete one\)/;
+  const leftOver = /it moves files left over from the older kit to `removed-<date>\/` in (that|the) repository, keeping their paths inside that folder \(`removed-<date>-2\/` when a file is already there; it never deletes one\)/;
   assert.match(flatOf(agents["brand-implementer"].body), leftOver);
   assert.match(flatOf(agents["brand-implementer"].body), /Then run `kit status --repo <path>` again; it must say current/);
   assert.match(flatOf(fs.readFileSync(path.join(ROOT, "skills/brand-adopt/SKILL.md"), "utf8")), leftOver);

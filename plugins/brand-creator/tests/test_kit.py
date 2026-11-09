@@ -84,7 +84,7 @@ import re  # noqa: E402
 from helpers import mutate, mutate_json, report  # noqa: E402
 
 KIT_LOGOS = ["grid-mark-dark.svg", "grid-mark-master.png", "grid-mark.svg", "mark-animated.svg", "mark-dark.svg", "mark.svg", "wordmark-dark.svg", "wordmark.svg"]
-KIT_FILES = sorted(["SKILL.md", "brand.md", "checklist.md", "kit.json", "rules.json", "facts.json", "snippets/logo.html", "brand/assets/tokens/tokens.css", "brand/assets/tokens/tokens.json",
+KIT_FILES = sorted(["SKILL.md", "brand.md", "checklist.md", "install.py", "kit.json", "rules.json", "facts.json", "snippets/logo.html", "brand/assets/tokens/tokens.css", "brand/assets/tokens/tokens.json",
                     *[f"brand/assets/logo/{n}" for n in KIT_LOGOS]])
 KIT_N = len(KIT_FILES)                                                                   # the generated files of a plain Acme kit
 KIT_REMOVED = "removed-2026-10-17/.claude/skills/acme-brand"
@@ -5433,3 +5433,155 @@ def test_the_master_scaffolds_hold_one_fill_marker_each_and_kit_check_names_them
     assert r.returncode == 1 and statuses(pack) == {**ALL_PASS, "kit:fill": "fail"}, r.stdout + r.stderr
     detail = check_report_rows(pack)["kit:fill"]["detail"]
     assert "recipes/ad.md" in detail and "recipes/presentation.md" in detail
+
+
+# ---------------------------------------------------------------- install.py: the installer the kit carries (G8 A5, ADR-0014)
+import subprocess  # noqa: E402
+import sys  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+import kitlib  # noqa: E402
+
+INSTALL = "install.py"
+
+
+def git_repo(tmp_path, name="shop"):
+    repo = tmp_path / name
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    return repo
+
+
+def run_install(script, repo, *args, cwd=None):
+    env = {k: v for k, v in os.environ.items() if k not in ("PYTHONPATH",)}
+    env["BRAND_CREATOR_TODAY"] = "2026-10-17"
+    return subprocess.run([sys.executable, "-I", str(script), str(repo), *args], capture_output=True, text=True, cwd=cwd, env=env)
+
+
+def test_the_kits_install_py_is_kitcopy_byte_for_byte(pack):
+    assert build(pack).returncode == 0
+    assert (kit_of(pack) / INSTALL).read_bytes() == (ROOT / "scripts" / "adaptlib" / "kitcopy.py").read_bytes()
+    assert kit_json(pack)["generated"][INSTALL] == file_sha(kit_of(pack) / INSTALL)
+
+
+def test_install_plans_then_copies_then_says_current(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = git_repo(tmp_path)
+    r = run_install(kit_of(pack) / INSTALL, repo)
+    assert r.returncode == 1 and "shop: not installed" in r.stdout and "run again with --yes to copy" in r.stdout, r.stdout + r.stderr
+    assert not (repo / ".claude").exists()
+    (repo / "sub").mkdir()
+    r = run_install(kit_of(pack) / INSTALL, repo / "sub", "--yes")                         # any folder inside the clone: the kit goes to the repository's root
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert f"installed: {os.path.realpath(installed_of(repo))} (version 1.1)" in r.stdout and f"next: review and commit it in {os.path.realpath(repo)}" in r.stdout
+    assert kit_status(pack, repo).returncode == 0
+    r = run_install(kit_of(pack) / INSTALL, repo)
+    assert r.returncode == 0 and "shop: current (version 1.1)" in r.stdout
+
+
+def test_install_and_kit_status_give_the_same_answer(pack, tmp_path):
+    assert build(pack).returncode == 0
+    fresh, same = git_repo(tmp_path, "fresh"), git_repo(tmp_path, "same")
+    assert run_install(kit_of(pack) / INSTALL, same, "--yes").returncode == 0
+    older = git_repo(tmp_path, "older")
+    assert run_install(kit_of(pack) / INSTALL, older, "--yes").returncode == 0
+    mutate(kit_of(pack) / "voice.md", "\n", "\nOne more line of the owner's.\n", count=1)
+    assert build(pack).returncode == 0
+    for repo in (fresh, same, older):
+        mine = json.loads(run_install(kit_of(pack) / INSTALL, repo, "--json").stdout)
+        theirs = json.loads(kit_status(pack, repo, extra=("--json",)).stdout)["repos"][0]
+        assert mine.pop("applied") is False and mine.pop("moved") == []
+        for key in ("label", "path"):
+            mine.pop(key), theirs.pop(key)
+        assert mine == theirs, repo.name
+    assert json.loads(run_install(kit_of(pack) / INSTALL, older, "--json").stdout)["update_owner"] == ["voice.md"]
+
+
+def test_install_updates_an_unchanged_owner_file_and_keeps_a_changed_one(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = git_repo(tmp_path)
+    assert run_install(kit_of(pack) / INSTALL, repo, "--yes").returncode == 0
+    (installed_of(repo) / "visual.md").write_text("the shop's own visual notes\n", encoding="utf-8")
+    mutate(kit_of(pack) / "voice.md", "\n", "\nOne more line of the owner's.\n", count=1)
+    mutate(kit_of(pack) / "visual.md", "\n", "\nAnother line of the owner's.\n", count=1)
+    assert build(pack).returncode == 0
+    r = run_install(kit_of(pack) / INSTALL, repo, "--yes")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (installed_of(repo) / "voice.md").read_bytes() == (kit_of(pack) / "voice.md").read_bytes()
+    assert (installed_of(repo) / "visual.md").read_text(encoding="utf-8") == "the shop's own visual notes\n"
+    assert listed(r.stdout, "owner files that differ (kept on update)") == ["visual.md"]
+
+
+def test_install_moves_left_over_files_to_removed_and_deletes_nothing(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = git_repo(tmp_path)
+    assert run_install(kit_of(pack) / INSTALL, repo, "--yes").returncode == 0
+    (pack / "assets" / "logo" / "wordmark-dark.svg").unlink()
+    assert build(pack).returncode == 0
+    r = run_install(kit_of(pack) / INSTALL, repo, "--yes")
+    assert r.returncode == 0, r.stdout + r.stderr
+    gone = "brand/assets/logo/wordmark-dark.svg"
+    assert not (installed_of(repo) / gone).exists() and (repo / "removed-2026-10-17" / ".claude/skills/acme-brand" / gone).is_file()
+    assert kit_status(pack, repo).returncode == 0
+
+
+def test_install_moves_a_repository_owner_file_aside_before_a_generated_file_takes_its_path(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = git_repo(tmp_path)
+    assert run_install(kit_of(pack) / INSTALL, repo, "--yes").returncode == 0
+    kd = installed_of(repo)
+    (kd / "checklist.md").write_text("the shop's own checklist, from an older kit\n", encoding="utf-8")   # a 0.10-era kit: checklist.md was an owner file
+    mutate_json(kd / "kit.json", lambda d: (d["generated"].pop("checklist.md"), d["owned"].__setitem__("checklist.md", file_sha(kd / "checklist.md"))))
+    r = run_install(kit_of(pack) / INSTALL, repo, "--yes")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (repo / "removed-2026-10-17" / ".claude/skills/acme-brand/checklist.md").read_text(encoding="utf-8") == "the shop's own checklist, from an older kit\n"
+    assert (kd / "checklist.md").read_bytes() == (kit_of(pack) / "checklist.md").read_bytes()
+
+
+def test_install_is_refused_for_its_own_repository_the_project_home_dot_claude_and_no_git(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = git_repo(tmp_path)
+    assert run_install(kit_of(pack) / INSTALL, repo, "--yes").returncode == 0
+    no_git = tmp_path / "plain"
+    no_git.mkdir()
+    cases = {installed_of(repo) / INSTALL: (repo, "is the brand project itself or a folder inside it"),        # the copy in the shop, pointed at the shop
+             kit_of(pack) / INSTALL: (pack, "is the brand project itself or a folder inside it")}
+    for script, (target, why) in cases.items():
+        before = kitlib.folder_state(target)
+        r = run_install(script, target, "--yes")
+        assert r.returncode == 2 and why in r.stderr and kitlib.folder_state(target) == before, r.stdout + r.stderr
+    r = run_install(kit_of(pack) / INSTALL, no_git, "--yes")
+    assert r.returncode == 2 and "is not inside a git work tree" in r.stderr and not (no_git / ".claude").exists()
+    r = run_install(kit_of(pack) / INSTALL, "https://github.com/example/shop.git")
+    assert r.returncode == 2 and "is a URL: clone it first" in r.stderr
+    assert kitcopy_refuses_home()
+
+
+def kitcopy_refuses_home() -> bool:
+    import kitcopy
+    home = Path(os.path.realpath(Path.home()))
+    return "home folder" in kitcopy.refusal(Path("/nowhere"), home) and "inside ~/.claude" in kitcopy.refusal(Path("/nowhere"), home / ".claude")
+
+
+def test_an_install_stopped_before_kit_json_is_finished_by_the_next_run(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = git_repo(tmp_path)
+    assert run_install(kit_of(pack) / INSTALL, repo, "--yes").returncode == 0
+    mutate(kit_of(pack) / "voice.md", "\n", "\nOne more line of the owner's.\n", count=1)
+    assert build(pack).returncode == 0
+    plan = json.loads(run_install(kit_of(pack) / INSTALL, repo, "--json").stdout)
+    for rel in plan["copy"][:-1]:                                                            # the copy stops just before kit.json
+        shutil.copyfile(kit_of(pack) / rel, installed_of(repo) / rel)
+    again = json.loads(run_install(kit_of(pack) / INSTALL, repo, "--json").stdout)
+    assert again["copy"] == ["kit.json"] and again["owner_differ"] == []
+    assert run_install(kit_of(pack) / INSTALL, repo, "--yes").returncode == 0 and kit_status(pack, repo).returncode == 0
+
+
+def test_install_runs_from_a_copy_of_the_kit_with_no_plugin(pack, tmp_path):
+    assert build(pack).returncode == 0
+    elsewhere = tmp_path / "mirror" / ".claude" / "skills" / "acme-brand"
+    shutil.copytree(kit_of(pack), elsewhere)
+    repo = git_repo(tmp_path)
+    r = run_install(elsewhere / INSTALL, repo, "--yes", cwd=tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert kit_status(pack, repo).returncode == 0

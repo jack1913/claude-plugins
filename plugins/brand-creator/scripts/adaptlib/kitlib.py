@@ -33,7 +33,7 @@ import unicodedata
 from pathlib import Path
 from urllib.parse import quote
 
-from kitcopy import (ALL_SOURCE_KEYS, BRAND_MD, CHECKLIST_MD, CURRENT, FACTS_JSON, FINDER_FILE, FONT_COPIED_KEYS, FONT_KEYS, FONT_NOT_COPIED_KEYS, GENERATED_DIRS, KIT_FILE,  # noqa: E402,F401
+from kitcopy import (ALL_SOURCE_KEYS, BRAND_MD, CHECKLIST_MD, CURRENT, INSTALL_PY, FACTS_JSON, FINDER_FILE, FONT_COPIED_KEYS, FONT_KEYS, FONT_NOT_COPIED_KEYS, GENERATED_DIRS, KIT_FILE,  # noqa: E402,F401
                      NOT_CURRENT, NOT_INSTALLED, OPTIONAL_SOURCE_KEYS, OWNED_FILES, PAGE_KEYS, PREFIX, ROOT_FILES, RULES_JSON, SCHEMA, SKILL_FILE, SOURCE_KEYS,
                      STATUS_SHOWN, TOP_KEYS, WHY_BYTES, WHY_LINK, WHY_MISSING, _EDITION, _SHA, _VERSION, KitError, folder_state, font_problems,
                      generated_files_in, installed_version, is_owner_path, is_sha, json_object, not_current_text, owned_problems, owner_paths, owner_sorted,
@@ -1453,6 +1453,7 @@ def plan(project: Path, fonts: dict | None = None, pages: dict | None = None, ma
     rules_data = rules_doc(project)
     files[RULES_JSON] = json_bytes(rules_data)
     files[CHECKLIST_MD] = checklist_md(project, rules_data)
+    files[INSTALL_PY] = (plugin_root() / "scripts" / "adaptlib" / "kitcopy.py").read_bytes()   # the installer the kit carries: the copy judge itself, byte for byte
     files[FACTS_JSON] = json_bytes(facts_doc(project))
     files.update(ground_plan(project)["files"])
     for more in (pages if pages is not None else reference_plan(project, fonts), masters if masters is not None else masters_plan(project)):
