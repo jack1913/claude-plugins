@@ -2506,8 +2506,8 @@ import os  # noqa: E402
 import subprocess  # noqa: E402
 import sys  # noqa: E402
 
-COPY_ORDER = sorted(r for r in KIT_FILES if r != "kit.json") + ["kit.json"]                      # the copy list: the generated files, kit.json last (as the build writes it) ...
-OWNER_ORDER = ["EXTENDING.md", "voice.md", "visual.md", "golden-rules.md", "recipes/web-page.md"]   # ... then the owner files the repository lacks
+COPY_ORDER = sorted(r for r in KIT_FILES if r != "kit.json")                                       # the copy list: the generated files ...
+OWNER_ORDER = ["EXTENDING.md", "voice.md", "visual.md", "golden-rules.md", "recipes/web-page.md"]   # ... then the owner files the repository lacks, then kit.json last
 READ_ONLY_LINE = "read only: nothing in the installed kit folders changed while they were read"
 
 
@@ -2564,8 +2564,8 @@ def test_kit_status_says_not_installed_and_lists_what_to_copy(pack, tmp_path):
     lines = r.stdout.splitlines()
     assert lines[0] == "kit acme-brand, version 1.1" and "site: not installed" in lines and lines[-1] == READ_ONLY_LINE
     items = listed(r.stdout, "copy list")
-    assert paths_of(items) == COPY_ORDER + OWNER_ORDER                                  # fifteen generated files, kit.json last, then the five owner files
-    assert not any("owner file" in i for i in items[:len(COPY_ORDER)]) and all("owner file" in i for i in items[len(COPY_ORDER):])
+    assert paths_of(items) == COPY_ORDER + OWNER_ORDER + ["kit.json"]                   # the generated files, the five owner files, kit.json last
+    assert not any("owner file" in i for i in items[:len(COPY_ORDER)]) and all("owner file" in i for i in items[len(COPY_ORDER):-1]) and items[-1] == "kit.json"
     assert tree_of(pack) == project_before and tree_of(repo) == repo_before             # nothing written, in the project or in the repository
     assert not list((pack / "assets" / "_checks").glob("*status*"))                      # and no report
 
@@ -2579,7 +2579,7 @@ def test_kit_status_says_when_the_kit_folder_is_there_but_holds_no_kit(pack, tmp
     assert r.returncode == 1, r.stdout + r.stderr
     assert "site: not installed" in r.stdout.splitlines()
     assert ".claude/skills/acme-brand/ is there but holds no kit.json: it is not a kit, so look at it before you copy over it" in r.stdout
-    assert paths_of(listed(r.stdout, "copy list")) == COPY_ORDER + OWNER_ORDER
+    assert paths_of(listed(r.stdout, "copy list")) == COPY_ORDER + OWNER_ORDER + ["kit.json"]
 
 
 def test_a_byte_copy_of_the_kit_is_current(pack, tmp_path):
@@ -2863,7 +2863,7 @@ def test_kit_status_json_holds_the_same_facts_as_the_text(pack, tmp_path):
     assert [k for k in doc] == ["kit", "version", "repos", "current"] and doc["kit"] == "acme-brand" and doc["version"] == "1.1" and doc["current"] is False
     a, b = doc["repos"]
     assert (a["label"], a["state"], a["installed_version"], a["project_version"]) == ("fresh", "not installed", None, "1.1")
-    assert a["copy"] == COPY_ORDER + OWNER_ORDER and a["copy_owner"] == OWNER_ORDER and a["read_only"] is True
+    assert a["copy"] == COPY_ORDER + OWNER_ORDER + ["kit.json"] and a["copy_owner"] == OWNER_ORDER and a["read_only"] is True
     assert (b["label"], b["state"], b["installed_version"], b["project_version"]) == ("stale", "not current", "1.1", "1.1")
     assert b["differ"] == [{"file": "brand/assets/tokens/tokens.css", "why": "not the same bytes"}] and b["missing"] == ["snippets/logo.html"]
     assert b["left_over"] == ["brand/old.svg"] and b["owner_differ"] == [{"file": "voice.md", "why": "not the same bytes"}]
@@ -4934,13 +4934,13 @@ def test_a_recipe_the_owner_adds_is_hashed_moves_the_version_is_on_the_copy_list
     assert build(pack).returncode == 0 and kit_json(pack)["version"] == "1.3"             # recorded: the same content keeps the version
     assert kit_check(pack).returncode == 0 and statuses(pack) == ALL_PASS
     assert check_report_rows(pack)["kit:owned"]["detail"] == "the 6 owner files are as the last build recorded them"
-    # the copy list: the generated files that changed (SKILL.md carries the version, kit.json last), then the owner file the repository lacks
+    # the copy list: the generated files that changed (SKILL.md carries the version), then the owner file the repository lacks, kit.json last
     r = kit_status(pack, repo)
     assert r.returncode == 1, r.stdout + r.stderr
     items = listed(r.stdout, "copy list")
-    assert paths_of(items) == ["SKILL.md", "kit.json", EMAIL_KIT] and items[-1] == f"{EMAIL_KIT} (owner file, the repository has none)"
+    assert paths_of(items) == ["SKILL.md", EMAIL_KIT, "kit.json"] and items[1] == f"{EMAIL_KIT} (owner file, the repository has none)"
     res = json.loads(kit_status(pack, repo, extra=("--json",)).stdout)["repos"][0]
-    assert res["copy"] == ["SKILL.md", "kit.json", EMAIL_KIT] and res["copy_owner"] == [EMAIL_KIT]
+    assert res["copy"] == ["SKILL.md", EMAIL_KIT, "kit.json"] and res["copy_owner"] == [EMAIL_KIT]
     for rel in ("SKILL.md", "kit.json", EMAIL_KIT):                                       # the copy the list asks for
         (installed_of(repo) / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(kd / rel, installed_of(repo) / rel)
@@ -4996,8 +4996,8 @@ def test_a_file_the_owner_adds_that_is_not_markdown_travels_and_is_never_judged(
     repo = tmp_path / "site"
     repo.mkdir()
     r = kit_status(pack, repo)
-    assert paths_of(listed(r.stdout, "copy list")) == COPY_ORDER + OWNER_ORDER + wanted
-    assert all(i.endswith("(owner file, the repository has none)") for i in listed(r.stdout, "copy list")[len(COPY_ORDER):])
+    assert paths_of(listed(r.stdout, "copy list")) == COPY_ORDER + OWNER_ORDER + wanted + ["kit.json"]
+    assert all(i.endswith("(owner file, the repository has none)") for i in listed(r.stdout, "copy list")[len(COPY_ORDER):-1])
     # a changed one is a changed owner file: kit:owned warns, the next build records it and moves the version
     mutate(kd / "notes" / "palette.txt", "16px", "17px")
     assert kit_check(pack).returncode == 0 and check_report_rows(pack)["kit:owned"]["detail"].startswith("notes/palette.txt changed since the last build")
@@ -5216,3 +5216,22 @@ def test_kit_behind_names_the_ad_and_deck_recipes_after_new_masters_and_not_the_
     detail = check_report_rows(pack)["kit:behind"]["detail"]
     assert "recipes/ad.md" in detail and "recipes/presentation.md" in detail and "assets/masters/ changed after it" in detail
     assert "voice.md" not in detail and "recipes/web-page.md" not in detail
+
+
+# ---------------------------------------------------------------- owner files a repository never changed are updated (ADR-0014)
+
+def test_kit_status_names_the_owner_files_to_update(pack, tmp_path):
+    assert build(pack).returncode == 0
+    repo = install(pack, tmp_path)
+    mutate(kit_of(pack) / "voice.md", "\n", "\nOne more line of the owner's.\n", count=1)
+    assert build(pack).returncode == 0
+    r = kit_status(pack, repo)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert listed(r.stdout, "owner files to update (unchanged in the repository since the last copy)") == ["voice.md"]
+    items = listed(r.stdout, "copy list")
+    assert items[-2:] == ["voice.md (owner file, an update)", "kit.json"]
+    res = json.loads(kit_status(pack, repo, extra=("--json",)).stdout)["repos"][0]
+    assert res["update_owner"] == ["voice.md"] and res["owner_differ"] == [] and res["owner_left_over"] == []
+    for rel in res["copy"]:
+        shutil.copy2(kit_of(pack) / rel, installed_of(repo) / rel)
+    assert kit_status(pack, repo).returncode == 0

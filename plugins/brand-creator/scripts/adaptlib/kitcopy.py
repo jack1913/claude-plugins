@@ -280,13 +280,16 @@ def compare(kit: Path, installed: Path) -> dict:
     """The kit folder of the project (`kit`) against the folder a product repository holds (`installed`). Reads both, writes nothing, follows no link.
 
     Returns {"state": NOT_INSTALLED | CURRENT | NOT_CURRENT, "installed_version", "project_version", "differ": [(path, why)], "missing": [path], "left_over": [path],
-    "owner_differ": [(path, why)], "copy": [path], "copy_owner": [path]}. The copy list `copy` is the generated files to copy (all of them when nothing is installed, otherwise
-    those that differ or are missing; kit.json last, as the build writes it), then the owner files the repository lacks (every owner file of the project, `owner_paths`: the five scaffolded ones first, then
-    the others sorted); `copy_owner` names those. A link among the owner's files is never read through: it raises KitError (exit 3). A kit is NOT_INSTALLED when its
-    folder holds no kit.json; CURRENT when every generated file and kit.json are byte for byte the project's; NOT_CURRENT otherwise, which includes a file in brand/, snippets/ or
-    reference-pages/ that the project's kit does not have (`left_over`: a file of an older kit). An owner file that differs is the repository's own and is only reported
-    (`owner_differ`); one the repository lacks is on the copy list. The project's kit must be whole: a generated file kit.json lists that is missing there, no plain file, or not the
-    sha256 kit.json records raises KitError (exit 3), because a copy cannot be judged against a kit that is not itself what it says."""
+    "owner_differ": [(path, why)], "copy": [path], "copy_owner": [path], "update_owner": [path], "owner_left_over": [path], "other_skills": [folder]}. The copy list `copy` is the
+    generated files to copy (all of them when nothing is installed, otherwise those that differ or are missing), then the owner files the repository lacks (`copy_owner`: every
+    owner file of the project, `owner_paths`, the five scaffolded ones first, then the others sorted), then the owner files to update (`update_owner`), and kit.json last of all.
+    An owner file is judged by `owner_state` against the `owned` record of the repository's own kit.json (`installed_owned`): one the repository never changed since it was
+    copied is updated; one it changed or added is its own, only reported (`owner_differ`), never copied. An owner file the repository's kit.json records, unchanged there, that
+    the project's kit no longer has is `owner_left_over`. A link among the owner's files is never read through: it raises KitError (exit 3). A kit is NOT_INSTALLED when its
+    folder holds no kit.json; CURRENT when every generated file and kit.json are byte for byte the project's and no owner file is to be updated or moved; NOT_CURRENT otherwise,
+    which includes a file in brand/, snippets/ or reference-pages/ that the project's kit does not have (`left_over`: a file of an older kit). The project's kit must be whole:
+    a generated file kit.json lists that is missing there, no plain file, or not the sha256 kit.json records raises KitError (exit 3), because a copy cannot be judged against a
+    kit that is not itself what it says."""
     doc = json_object(kit / KIT_FILE)
     if doc is None or (bad := problems(doc)):
         raise KitError(EXIT_USAGE, f"{kit / KIT_FILE} is no kit.json this version reads" + (f": {bad[0]}" if doc is not None else ""))
@@ -311,7 +314,8 @@ def compare(kit: Path, installed: Path) -> dict:
                           "(`brand-creator kit build --yes --replace` moves it aside), then run `brand-creator kit check`")
     owner = {rel: data for rel in owner_rels if (data := read_plain(kit, rel)[0]) is not None}   # the project's owner files that can be copied
     out = {"state": NOT_INSTALLED, "installed_version": None, "project_version": doc["version"], "differ": [], "missing": [], "left_over": [], "owner_differ": [],
-           "copy": [], "copy_owner": []}
+           "copy": [], "copy_owner": [], "update_owner": [], "owner_left_over": [], "other_skills": []}
+    recorded = installed_owned(installed)
     if not os.path.lexists(installed / KIT_FILE):
         out["copy"] = list(wanted)
     else:
@@ -331,12 +335,41 @@ def compare(kit: Path, installed: Path) -> dict:
         if rel not in owner:
             continue
         data, why = read_plain(installed, rel)
-        if why == WHY_MISSING:
+        state = owner_state(data, owner[rel], recorded.get(rel)) if why in (None, WHY_MISSING) else "own"
+        if state == "copy":
             out["copy_owner"].append(rel)
-        elif data != owner[rel]:
+        elif state == "update":
+            out["update_owner"].append(rel)
+        elif state == "own":
             out["owner_differ"].append((rel, WHY_BYTES if data is not None else why))
-    out["copy"] += out["copy_owner"]
+    for rel in owner_sorted(recorded):                                   # an owner file of the installed kit that the project's kit no longer has, unchanged since it was copied
+        if rel not in owner and is_owner_path(rel) and (data := read_plain(installed, rel)[0]) is not None and _sha256(data) == recorded[rel]:
+            out["owner_left_over"].append(rel)
+    if out["update_owner"] or out["owner_left_over"]:
+        out["state"] = NOT_CURRENT
+    last = [KIT_FILE] if KIT_FILE in out["copy"] else []                 # kit.json last of all: a copy that stops before it is finished by the next run, never taken for the repository's own edits
+    out["copy"] = [rel for rel in out["copy"] if rel != KIT_FILE] + out["copy_owner"] + out["update_owner"] + last
     return out
+
+
+def owner_state(repo: bytes | None, project: bytes, recorded: str | None) -> str:
+    """What happens to one owner file of the project's kit in a repository: "copy" (the repository has none), "same" (the same bytes), "update" (the repository's bytes are the ones
+    its own kit.json recorded when it was copied, so the repository never changed it, and the project's differ), or "own" (the repository changed it, or added it: kept, and reported).
+    `recorded` is the sha256 the repository's kit.json `owned` holds for the file, or None."""
+    if repo is None:
+        return "copy"
+    if repo == project:
+        return "same"
+    return "update" if recorded is not None and _sha256(repo) == recorded else "own"
+
+
+def installed_owned(installed: Path) -> dict[str, str]:
+    """The `owned` record of the kit.json a repository holds: {owner file: sha256 when it was copied}. {} when that kit.json is no plain file or not one this version reads (another
+    schema, broken JSON): then no owner file counts as unchanged, and none is updated or moved."""
+    if not plain_file(installed, KIT_FILE):
+        return {}
+    doc = json_object(installed / KIT_FILE)
+    return dict(doc["owned"]) if doc is not None and not problems(doc) else {}
 
 
 def not_current_text(installed_version: str | None, project_version: str, differ, missing, left_over) -> str:
@@ -393,18 +426,22 @@ def status_lines(res: dict, kd_rel: str) -> list[str]:
                          ("generated files that are missing", res["missing"]),
                          (f"left over from an older kit (not in this kit, so not on the copy list; move each to {left_over_to(kd_rel)} in the repository, keeping its path; nothing is deleted)",
                           res["left_over"]),
-                         ("owner files that differ (kept on update)", [rel for rel, _why in res["owner_differ"]])):
+                         (f"owner files left over from an older kit, unchanged in the repository (move each to {left_over_to(kd_rel)} too)", res["owner_left_over"]),
+                         ("owner files that differ (kept on update)", [rel for rel, _why in res["owner_differ"]]),
+                         ("owner files to update (unchanged in the repository since the last copy)", res["update_owner"])):
         if items:
             L += [f"  {title}:", *(f"    {i}" for i in items)]
     if res["copy"]:
-        L.append(f"  copy list, paths relative to {kd_rel}/ (the generated files, kit.json last, then the owner files the repository lacks):")
-        L += [f"    {rel} (owner file, the repository has none)" if rel in res["copy_owner"] else f"    {rel}" for rel in res["copy"]]
+        L.append(f"  copy list, paths relative to {kd_rel}/ (the generated files, then the owner files to copy or update, kit.json last):")
+        L += [f"    {rel} (owner file, the repository has none)" if rel in res["copy_owner"] else f"    {rel} (owner file, an update)" if rel in res["update_owner"]
+              else f"    {rel}" for rel in res["copy"]]
     return L
 
 
 def result_json(res: dict, kd_rel: str) -> dict:
     """One repository's entry of `kit status --json`: the keys in their order, `differ` and `owner_differ` as [{"file", "why"}], and `left_over_to` (where the files left over go,
     in the repository) only when there are some. `kd_rel` is the kit folder's path in a repository (`.claude/skills/<name>`)."""
-    keys = ("label", "path", "state", "installed_version", "project_version", "differ", "missing", "left_over", "left_over_to", "owner_differ", "copy", "copy_owner", "read_only")
-    res = {**res, "left_over_to": left_over_to(kd_rel) if res["left_over"] else None}
+    keys = ("label", "path", "state", "installed_version", "project_version", "differ", "missing", "left_over", "left_over_to", "owner_differ", "update_owner", "owner_left_over",
+            "copy", "copy_owner", "read_only")
+    res = {**res, "left_over_to": left_over_to(kd_rel) if res["left_over"] or res["owner_left_over"] else None}
     return {k: ([{"file": rel, "why": why} for rel, why in res[k]] if k in ("differ", "owner_differ") else res[k]) for k in keys}

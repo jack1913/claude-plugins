@@ -2,6 +2,7 @@
 
 Kits here are made by tests/helpers.make_fake_kit, with no brand project behind them; expected values are written out by hand."""
 import ast
+import json
 import sys
 
 import pytest
@@ -73,3 +74,111 @@ def test_refusal_names_the_project_home_and_dot_claude(tmp_path):
 def test_the_page_id_rule_is_sitedatas():
     import sitedata
     assert kitcopy.PAGE_ID.pattern == sitedata.SITE_PAGE_ID.pattern
+
+
+# ---------------------------------------------------------------- owner files a repository never changed are updated (ADR-0014)
+
+import hashlib  # noqa: E402
+import shutil  # noqa: E402
+
+
+def sha(b: bytes) -> str:
+    return hashlib.sha256(b).hexdigest()
+
+
+def installed(tmp_path, kit):
+    """A repository's copy of `kit`, byte for byte, as `kit status`'s copy list makes it."""
+    dest = tmp_path / "repo" / ".claude" / "skills" / kit.name
+    shutil.copytree(kit, dest)
+    return dest
+
+
+def two_versions(tmp_path, v1_owner: dict, v2_owner: dict):
+    """The project's kit at version 1.2 (owner files `v2_owner`) and a repository holding version 1.1 (owner files `v1_owner`)."""
+    old = tmp_path / "old" / "acme-brand"
+    make_fake_kit(old, GEN, v1_owner, version="1.1")
+    repo = installed(tmp_path, old)
+    kit = tmp_path / "acme-brand"
+    make_fake_kit(kit, GEN, v2_owner, version="1.2")
+    return kit, repo
+
+
+def test_owner_state_table():
+    p, r = b"new", b"old"
+    assert kitcopy.owner_state(None, p, None) == "copy"
+    assert kitcopy.owner_state(None, p, sha(r)) == "copy"
+    assert kitcopy.owner_state(p, p, sha(r)) == "same"
+    assert kitcopy.owner_state(p, p, None) == "same"
+    assert kitcopy.owner_state(r, p, sha(r)) == "update"
+    assert kitcopy.owner_state(b"mine", p, sha(r)) == "own"
+    assert kitcopy.owner_state(r, p, None) == "own"
+
+
+def test_an_owner_file_the_repository_never_changed_is_updated(tmp_path):
+    kit, repo = two_versions(tmp_path, {"recipes/ad.md": b"v1"}, {"recipes/ad.md": b"v2"})
+    res = kitcopy.compare(kit, repo)
+    assert res["update_owner"] == ["recipes/ad.md"] and res["owner_differ"] == [] and res["state"] == kitcopy.NOT_CURRENT
+    assert res["copy"] == ["recipes/ad.md", "kit.json"]
+
+
+def test_an_owner_file_the_repository_changed_is_kept_and_reported(tmp_path):
+    kit, repo = two_versions(tmp_path, {"recipes/ad.md": b"v1"}, {"recipes/ad.md": b"v2"})
+    (repo / "recipes" / "ad.md").write_bytes(b"mine")
+    res = kitcopy.compare(kit, repo)
+    assert res["update_owner"] == [] and res["owner_differ"] == [("recipes/ad.md", kitcopy.WHY_BYTES)] and "recipes/ad.md" not in res["copy"]
+
+
+def test_an_owner_file_the_repository_added_is_its_own(tmp_path):
+    kit, repo = two_versions(tmp_path, {}, {"recipes/ad.md": b"v2"})
+    (repo / "recipes" / "ad.md").write_bytes(b"the repository's own")
+    res = kitcopy.compare(kit, repo)
+    assert res["update_owner"] == [] and res["owner_differ"] == [("recipes/ad.md", kitcopy.WHY_BYTES)]
+
+
+def test_an_owner_file_gone_from_the_kit_and_unchanged_is_left_over(tmp_path):
+    kit, repo = two_versions(tmp_path, {"recipes/old.md": b"old", "recipes/kept.md": b"kept"}, {})
+    (repo / "recipes" / "kept.md").write_bytes(b"changed in the repository")
+    res = kitcopy.compare(kit, repo)
+    assert res["owner_left_over"] == ["recipes/old.md"] and res["state"] == kitcopy.NOT_CURRENT
+    assert "recipes/old.md" not in res["copy"]
+
+
+@pytest.mark.parametrize("damage", ["broken", "other schema", "link"])
+def test_an_unreadable_installed_kit_json_makes_every_differing_owner_file_the_repositorys_own(tmp_path, damage):
+    kit, repo = two_versions(tmp_path, {"recipes/ad.md": b"v1"}, {"recipes/ad.md": b"v2"})
+    kj = repo / "kit.json"
+    if damage == "broken":
+        kj.write_text("{", encoding="utf-8")
+    elif damage == "other schema":
+        doc = json.loads(kj.read_text(encoding="utf-8"))
+        kj.write_text(json.dumps({**doc, "schema": 2}), encoding="utf-8")
+    else:
+        target = tmp_path / "elsewhere.json"
+        shutil.move(kj, target)
+        kj.symlink_to(target)
+    res = kitcopy.compare(kit, repo)
+    assert res["update_owner"] == [] and ("recipes/ad.md", kitcopy.WHY_BYTES) in res["owner_differ"] and res["owner_left_over"] == []
+
+
+def test_kit_json_is_the_last_file_of_every_copy_list(tmp_path):
+    kit = tmp_path / "acme-brand"
+    make_fake_kit(kit, GEN, {"recipes/ad.md": b"v2"})
+    fresh = kitcopy.compare(kit, tmp_path / "fresh" / "acme-brand")
+    assert fresh["copy"][-1] == "kit.json" and fresh["copy"].index("recipes/ad.md") < fresh["copy"].index("kit.json")
+    kit2, repo = two_versions(tmp_path / "b", {"recipes/ad.md": b"v1", "voice.md": b"v1"}, {"recipes/ad.md": b"v2", "recipes/new.md": b"new"})
+    (repo / "voice.md").unlink()
+    res = kitcopy.compare(kit2, repo)
+    assert res["copy"] == ["voice.md", "recipes/new.md", "recipes/ad.md", "kit.json"]
+    assert res["copy_owner"] == ["voice.md", "recipes/new.md"] and res["update_owner"] == ["recipes/ad.md"]
+
+
+def test_a_copy_stopped_before_kit_json_is_finished_by_the_next_run(tmp_path):
+    kit, repo = two_versions(tmp_path, {"recipes/ad.md": b"v1"}, {"recipes/ad.md": b"v2", "recipes/new.md": b"new"})
+    res = kitcopy.compare(kit, repo)
+    for rel in res["copy"][:-1]:                                           # the copy stops just before kit.json
+        (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(kit / rel, repo / rel)
+    again = kitcopy.compare(kit, repo)
+    assert again["copy"] == ["kit.json"] and again["owner_differ"] == [] and again["update_owner"] == [] and again["state"] == kitcopy.NOT_CURRENT
+    shutil.copyfile(kit / "kit.json", repo / "kit.json")
+    assert kitcopy.compare(kit, repo)["state"] == kitcopy.CURRENT
