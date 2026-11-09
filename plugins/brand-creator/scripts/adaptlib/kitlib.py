@@ -1409,8 +1409,17 @@ def how_md(files) -> str:
     return "\n".join(["## How to work", "", *(f"{n}. {s}" for n, s in enumerate(steps, 1))])
 
 
-def map_md(files) -> str:
-    """`## Map`: where to look, one row per need, each only when the kit holds what it names (`files` as for `how_md`)."""
+def own_entries(kd: Path) -> list[str]:
+    """The owner's files of the kit folder `kd` that no other row of the map names, as the map lists them: a folder at the top as `<folder>/` (`guides/`, `code/`), a file at the top as its name;
+    `recipes/` and the scaffolded files at the top have rows of their own. A link is no owner file (the build stops on it, or `--replace` moves it aside), so it is never named. Sorted."""
+    named = {"recipes", *(rel for rel in OWNED_FILES if "/" not in rel)}
+    tops = {rel.split("/")[0] + ("/" if "/" in rel else "") for rel in owner_paths(kd) if plain_file(kd, rel)}
+    return sorted(t for t in tops if t.rstrip("/") not in named)
+
+
+def map_md(files, own=()) -> str:
+    """`## Map`: where to look, one row per need, each only when the kit holds what it names (`files` as for `how_md`); `own` (`own_entries`) are the owner's other folders and files, one row
+    when there are any, so that what the owner adds (a folder of guides, of code) is found from SKILL.md."""
     rows = [("the colours, pairs, type, layout, mark sizes, motion and claims", [BRAND_MD]),
             ("the token values", [PREFIX + TOKENS_CSS, PREFIX + TOKENS_JSON]),
             ("the logo files", [PREFIX + "assets/logo/"] + ([LOGO_HTML] if LOGO_HTML in files else []) if _holds(files, PREFIX + "assets/logo/") else []),
@@ -1423,6 +1432,7 @@ def map_md(files) -> str:
             ("how to make one kind of material", ["recipes/"]),
             ("the rules every piece keeps", ["golden-rules.md"]),
             ("how the brand looks and sounds", ["visual.md", "voice.md"]),
+            ("the owner's own folders and files", list(own)),
             ("the check before handing over", ["checklist.md"] if "checklist.md" in files else []),
             ("how to change or extend this kit", ["EXTENDING.md"]),
             ("every file and its hash", [KIT_FILE])]
@@ -1461,7 +1471,7 @@ def plan(project: Path, fonts: dict | None = None, pages: dict | None = None, ma
             if files.setdefault(rel, data) != data:   # a file a page loads is a file the kit copies already (the tokens, a logo, a master): the same project file, so the same bytes
                 fail(EXIT_FAIL, f"{rel} is planned twice with different bytes: the kit copies one project file to one place")
     held = {*files, SKILL_FILE, KIT_FILE, BRAND_MD, *OWNED_FILES}           # what the kit holds once it is written: the steps and the map name only these
-    kit = {"prefix": PREFIX, "section": section(VERSION_PLACEHOLDER), "how": how_md(held), "map": map_md(held)}
+    kit = {"prefix": PREFIX, "section": section(VERSION_PLACEHOLDER), "how": how_md(held), "map": map_md(held, own_entries(kit_dir(project)))}
     root = plugin_root() / KIT_TEMPLATES
     skill = adapt.applied_skill_md(project, (root / "kit-SKILL.md").read_text(encoding="utf-8"), kit=kit)
     brand = adapt.applied_skill_md(project, (root / "kit-brand.md").read_text(encoding="utf-8"), kit=kit)

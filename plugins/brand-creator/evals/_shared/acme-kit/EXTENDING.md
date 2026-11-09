@@ -21,7 +21,7 @@ Every other file in this folder that the build does not generate is yours too, a
 ## How to extend
 
 - A new recipe is a new file under `recipes/`, for example `recipes/email.md`. Write numbered steps and no values; take the shape of `recipes/web-page.md`. A file you add travels with the kit: the next build records it, and it is on the copy list a product repository gets, copied where the repository has none and updated where the repository never changed it.
-- A folder of your own sits beside the generated ones, for example `notes/`. Its files travel too. A Markdown file there is read by `brand-creator kit check` like your recipes (a fill marker, a tag on each bullet, a source for each value); a file of another kind is copied and never read for fill markers, tags or values. The links in an `.html` or `.css` file of yours must still lead to a file inside the kit, as in any file of the kit. Do not put a file into `brand/`, `snippets/` or `reference-pages/`: the build treats it as foreign and stops.
+- A folder of your own sits beside the generated ones, for example `notes/`. Its files travel too, and the map of `SKILL.md` names the folder after the next build. A Markdown file there is read by `brand-creator kit check` like your recipes (a fill marker, a tag on each bullet, a source for each value); a file of another kind is copied and never read for fill markers, tags or values. The links in an `.html` or `.css` file of yours must still lead to a file inside the kit, as in any file of the kit. Do not put a file into `brand/`, `snippets/` or `reference-pages/`: the build treats it as foreign and stops.
 - A link inside the kit points at a file inside the kit, so that it still resolves in a product repository.
 
 ## Test the kit

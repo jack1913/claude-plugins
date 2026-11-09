@@ -5295,6 +5295,21 @@ def test_the_map_and_the_steps_name_masters_only_when_the_kit_has_them(pack):
     assert "| the approved ads and decks | `brand/assets/masters/` |" in section_text(text, "## Map")
 
 
+
+def test_the_map_names_the_owners_own_folders_and_files(pack):
+    assert build(pack).returncode == 0
+    assert "the owner's own folders and files" not in (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")   # only the scaffolded ones: no row
+    kd = kit_of(pack)
+    for rel, text in (("guides/components.md", "# Components\n"), ("guides/motion.md", "# Motion\n"), ("code/status.html", "<p>status</p>\n"),
+                      ("notes.md", "# Notes\n"), ("recipes/email.md", "# E-mail\n")):
+        (kd / rel).parent.mkdir(parents=True, exist_ok=True)
+        (kd / rel).write_text(text, encoding="utf-8")
+    assert build(pack).returncode == 0
+    text = (kd / "SKILL.md").read_text(encoding="utf-8")
+    assert "| the owner's own folders and files | `code/`, `guides/`, `notes.md` |" in section_text(text, "## Map")   # recipes/ has its own row
+    assert kit_json(pack)["generated"]["SKILL.md"] == file_sha(kd / "SKILL.md")
+
+
 def test_without_a_kit_the_applied_skill_keeps_its_bytes(pack):
     r = bc("applied-skill", "--yes", project=pack)
     assert r.returncode == 0, r.stderr

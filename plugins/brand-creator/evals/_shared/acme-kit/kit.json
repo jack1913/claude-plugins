@@ -4,7 +4,7 @@
   "version": "1.2",
   "edition": "1",
   "plugin_version": "0.11.0",
-  "content_sha": "eb2958f9477dfdb383c43fed8c83e193320c9d1647fc254790de1c639ac6b4d1",
+  "content_sha": "fb56345e87e550de5de01038b16f10fdeb08d6bd94f0b20922331da1010bd2c4",
   "generated": {
     "SKILL.md": "102c559ffd0327ec3c9d3593654c5243eb66ec09566642a373aa2ffb4e6553f9",
     "brand.md": "38e696e2ce13691bc27146c582ca34eab1a3af0366dd383e898c2e270aa85df9",
@@ -25,7 +25,7 @@
     "snippets/logo.html": "71627d0ff922544924c7ba52a8c5cbf1e34acde2429fc1cdb7ae2a12774dcf83"
   },
   "owned": {
-    "EXTENDING.md": "ea94421a8fc4080632c6a634b4ae39470cd7618fc3540a1e4956c9ff741dca9a",
+    "EXTENDING.md": "8069092c281f51ea01d1d3bb95bfd3a3b891532d5317489e133a030738b2ece1",
     "golden-rules.md": "44f766a99cddcb953f78e7941fe895198887a75392ed4f40a0cc7b6e3fc39a75",
     "recipes/web-page.md": "563dd61f18ec9987cfe6f5691d00af2787a1af32a4b7139e946c92da498274f4",
     "visual.md": "9498f424fa5ffeef9bac272fce456520c5c484db52623895dbbfaa8682a61a95",
