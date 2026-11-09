@@ -80,4 +80,10 @@ Installed for the team? `claude plugin uninstall swift@jack1913 --scope project`
 press **y** to turn it off just for you, or **u** to remove it for everyone. Installed just for you in one repository? Add
 `--scope local`.
 
+> [!WARNING]
+> A plugin installed for a project whose folder is your home folder (`claude plugin list --json` shows the copy's
+> `projectPath`) shares your own settings file, `~/.claude/settings.json`. Uninstalling that copy with `--scope project`
+> turns off your user-scope install too. If that happened, run
+> `claude plugin enable <plugin>@jack1913 --scope user`, then restart Claude Code.
+
 Something not working? See [Troubleshooting](../reference/troubleshooting.md).
