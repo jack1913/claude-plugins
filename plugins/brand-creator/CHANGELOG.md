@@ -6,6 +6,32 @@ stage, and why, is in the [archive](docs/archive/README.md).
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-11-09
+
+Fixes from moving the pilot brand onto the generated kit.
+
+### Added
+
+- `kit check --all` lists every line that lacks a tag and every value without a source, not only the first six: useful
+  when you move a large hand-made kit into your own files.
+- `install.py` and `kit status` warn when Claude's global skills folder (`~/.claude/skills`) holds a skill for your
+  brand, which Claude loads in every project.
+
+### Changed
+
+- The kit's `SKILL.md` map names the folders and files you add to the kit, such as `guides/` or `code/`, so Claude finds
+  them.
+- A file of yours that a product took out stays out: `install.py` no longer copies it back, and reports it as deleted in
+  the repository.
+
+### Fixed
+
+- A board you approved in an earlier round no longer fails the check for a missing Idea line: the round is read only,
+  so the line only warns there.
+- The kit check no longer fails a `{{...}}` field in a template, such as `{{logo_url}}` in a print template: it is no
+  link.
+- When `--yes` would refuse, the plan of `install.py` says why instead of "run again with --yes to copy".
+
 ## [0.11.0] - 2026-11-09
 
 One brand kit. The generated kit takes over what made the pilot brand's hand-made kit work: a short first page with steps
