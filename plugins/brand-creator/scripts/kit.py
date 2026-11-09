@@ -108,6 +108,7 @@ sys.path.insert(0, str(HERE / "boardlib"))   # kitlib.known_rule_ids reads the c
 sys.path.insert(0, str(HERE / "pagelib"))    # kitlib names the page-check report of an approved reference page with pagelib/pagecheck.py (pagecheck.report_tool)
 import adapt  # noqa: E402
 import adoptdata  # noqa: E402
+import kitcopy  # noqa: E402
 import kitlib  # noqa: E402
 from _common import (EXIT_FAIL, EXIT_USAGE, CliError, Parser, Report, add_project_arg, confine, fail, find_project, main_guard, plugin_version,  # noqa: E402
                      require_gate, sha256_bytes, today, write_bytes_if_changed)
@@ -521,21 +522,6 @@ def parse_repo(spec: str) -> tuple[str, str, Path]:
     return label.strip() or re.sub(r"[^A-Za-z0-9._-]+", "-", real.name) or "repo", p, real
 
 
-def refusal(project: Path, real: Path) -> str | None:
-    """Why a folder cannot be read as a product repository, or None: the brand project itself or a folder inside it, your home folder, or a path inside ~/.claude (a global skills folder).
-    `real` has its links resolved. The text starts with "is" and goes after the name of the folder."""
-    root = Path(os.path.realpath(project))
-    if real == root or root in real.parents:
-        return "is the brand project itself or a folder inside it: name a product repository"
-    home = Path(os.path.realpath(Path.home()))
-    if real == home:
-        return "is your home folder: the kit goes into one product repository at a time, never into a global skills folder"
-    for claude in {home / ".claude", Path(os.path.realpath(Path.home() / ".claude"))}:
-        if real == claude or claude in real.parents:
-            return "is inside ~/.claude: the kit goes into one product repository at a time, never into a global skills folder"
-    return None
-
-
 def adoption_repos(project: Path) -> list[str]:
     """`DIR=LABEL` of every repository that has a `kit` row in adoption.json, in the order of its rows, each once. The path is the one the adoption list stores (relative to the project)."""
     try:
@@ -558,41 +544,6 @@ def adoption_repos(project: Path) -> list[str]:
     return out
 
 
-def left_over_to(kd_rel: str) -> str:
-    """Where a file left over from an older kit goes in the repository (the implementer moves it there; nothing is deleted): removed-<date>/, then the kit folder, then its path in the kit."""
-    return f"removed-<date>/{kd_rel}/"
-
-
-def not_current_line(res: dict) -> str:
-    """The first line of a copy that is not current. With two versions that differ it names both. With the same version on both sides it says so and what differs, so that it does
-    not read as a contradiction: the version is the same, the files are not."""
-    return f"{res['label']}: " + kitlib.not_current_text(res["installed_version"], res["project_version"], res["differ"], res["missing"], res["left_over"])
-
-
-def status_lines(res: dict, kd_rel: str) -> list[str]:
-    """The text of one repository: its state, what differs, and the copy list."""
-    v, label = res["project_version"], res["label"]
-    if res["state"] == kitlib.NOT_INSTALLED:
-        L = [f"{label}: not installed"]
-    elif res["state"] == kitlib.CURRENT:
-        L = [f"{label}: current (version {v})"]
-    else:
-        L = [not_current_line(res)]
-    if res["note"]:
-        L.append(f"  {res['note']}")
-    for title, items in (("generated files that differ", [f"{rel} ({why})" for rel, why in res["differ"]]),
-                         ("generated files that are missing", res["missing"]),
-                         (f"left over from an older kit (not in this kit, so not on the copy list; move each to {left_over_to(kd_rel)} in the repository, keeping its path; nothing is deleted)",
-                          res["left_over"]),
-                         ("owner files that differ (kept on update)", [rel for rel, _why in res["owner_differ"]])):
-        if items:
-            L += [f"  {title}:", *(f"    {i}" for i in items)]
-    if res["copy"]:
-        L.append(f"  copy list, paths relative to {kd_rel}/ (the generated files, kit.json last, then the owner files the repository lacks):")
-        L += [f"    {rel} (owner file, the repository has none)" if rel in res["copy_owner"] else f"    {rel}" for rel in res["copy"]]
-    return L
-
-
 def status(project: Path, a) -> int:
     if not kitlib.exists(project):
         fail(EXIT_USAGE, "no kit in this project: `brand-creator kit build --yes` (opt-in at G5)")
@@ -606,14 +557,14 @@ def status(project: Path, a) -> int:
     planned = []
     for spec in specs:                                    # every folder is judged before one is read: a bad one stops the run with nothing printed
         label, given, real = parse_repo(spec)
-        why = refusal(project, real)
+        why = kitcopy.refusal(project, real)
         if why:
             fail(EXIT_USAGE, f"--repo {given} {why}")
         installed = real / adapt.SKILL_DIR / name
         if installed.is_symlink():
             fail(EXIT_USAGE, f"--repo {given}: {kd_rel}/ is a link, and a link is never read through: look at where it leads and replace it with a folder")
         target = Path(os.path.realpath(installed))
-        why = refusal(project, target)
+        why = kitcopy.refusal(project, target)
         if why:
             fail(EXIT_USAGE, f"--repo {given}: {kd_rel} leads to {target}, which {why}")
         planned.append((label, real, installed))
@@ -628,15 +579,12 @@ def status(project: Path, a) -> int:
     kept = all(r["read_only"] for r in results)
     ok = kept and all(r["state"] == kitlib.CURRENT for r in results)
     if a.json:
-        keys = ("label", "path", "state", "installed_version", "project_version", "differ", "missing", "left_over", "left_over_to", "owner_differ", "copy", "copy_owner", "read_only")
-        for r in results:   # where the files left over go, in the repository: only said when there are some
-            r["left_over_to"] = left_over_to(kd_rel) if r["left_over"] else None
-        shown = [{k: ([{"file": rel, "why": why} for rel, why in r[k]] if k in ("differ", "owner_differ") else r[k]) for k in keys} for r in results]
+        shown = [kitcopy.result_json(r, kd_rel) for r in results]
         print(json.dumps({"kit": name, "version": doc["version"], "repos": shown, "current": ok}, indent=2, ensure_ascii=False))
     else:
         print(f"kit {name}, version {doc['version']}")
         for r in results:
-            print("\n".join(status_lines(r, kd_rel)))
+            print("\n".join(kitcopy.status_lines(r, kd_rel)))
         if kept:
             print("read only: nothing in the installed kit folders changed while they were read")
     for r in results:
