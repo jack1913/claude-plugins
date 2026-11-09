@@ -84,7 +84,7 @@ import re  # noqa: E402
 from helpers import mutate, mutate_json, report  # noqa: E402
 
 KIT_LOGOS = ["grid-mark-dark.svg", "grid-mark-master.png", "grid-mark.svg", "mark-animated.svg", "mark-dark.svg", "mark.svg", "wordmark-dark.svg", "wordmark.svg"]
-KIT_FILES = sorted(["SKILL.md", "brand.md", "kit.json", "rules.json", "facts.json", "snippets/logo.html", "brand/assets/tokens/tokens.css", "brand/assets/tokens/tokens.json",
+KIT_FILES = sorted(["SKILL.md", "brand.md", "checklist.md", "kit.json", "rules.json", "facts.json", "snippets/logo.html", "brand/assets/tokens/tokens.css", "brand/assets/tokens/tokens.json",
                     *[f"brand/assets/logo/{n}" for n in KIT_LOGOS]])
 KIT_N = len(KIT_FILES)                                                                   # the generated files of a plain Acme kit
 KIT_REMOVED = "removed-2026-10-17/.claude/skills/acme-brand"
@@ -1927,7 +1927,7 @@ def test_kit_json_must_list_the_five_scaffolded_owner_files(pack):
 ALL_PASS = {"kit:files": "pass", "kit:links": "pass", "kit:fill": "pass", "kit:versions": "pass", "kit:plugin": "pass", "kit:sources": "pass", "kit:owned": "pass",
             "kit:tags": "pass", "kit:numbers": "pass"}
 FRESH_LINKS = 7
-FRESH_FILES = 9
+FRESH_FILES = 10
 OUTSIDE_KIT = "points outside the kit: it will not resolve in a product repository"
 
 
@@ -5311,3 +5311,65 @@ def test_an_owner_file_where_brand_md_now_goes_stops_the_build_and_replace_moves
     assert r.returncode == 0, r.stdout + r.stderr
     assert (pack / KIT_REMOVED / BRAND_MD).read_text(encoding="utf-8") == "my own notes\n"
     assert (kit_of(pack) / BRAND_MD).read_text(encoding="utf-8").startswith("# Acme brand: values and facts\n")
+
+
+# ---------------------------------------------------------------- the review checklist, built from rules.json (G8 A2)
+CHECKLIST = "checklist.md"
+CHECKLIST_FIXED = ["- [ ] The logo comes from its files in `brand/assets/logo/`, used as they are.",
+                   "- [ ] Every colour is a token role from `brand/assets/tokens/tokens.css`, in both themes where the material has them.",
+                   "- [ ] Every number, feature, price, client and date is in `facts.json`; a missing one is a visible placeholder.",
+                   "- [ ] Sample data is labelled as sample data.",
+                   "- [ ] Anything the brand has not decided is labelled a proposal and shown to the owner.",
+                   "- [ ] Every rule in `golden-rules.md` holds."]
+
+
+def checklist_of(p) -> str:
+    return (kit_of(p) / CHECKLIST).read_text(encoding="utf-8")
+
+
+def test_the_checklist_lists_every_rule_with_its_id_every_band_and_every_pair_floor(pack):
+    record_rules(pack, "The mark keeps its clear space", "A button says at most three words, always")
+    mutate(pack / "brief" / "BRIEF.md", "FORBIDDEN count in every page shot. -->", "FORBIDDEN count in every page shot. -->\n\n- synergy\n- `leverage`")
+    assert build(pack).returncode == 0
+    text = checklist_of(pack)
+    assert text.startswith("# Acme checklist\n\nGo through it before you hand anything over.")
+    assert headings(text) == ["## Logo", "## Colour", "## The owner's rules", "## Words", "## Claims", "## New things"]
+    lines = text.splitlines()
+    assert "- [ ] The mark keeps its clear space (`the-mark-keeps-its-clear-space`)." in lines
+    assert "- [ ] A button says at most three words, always (`a-button-says-at-most-three`)." in lines
+    assert "- [ ] Up to 32 px the small mark uses `brand/assets/logo/grid-mark.svg`." in lines
+    assert "- [ ] At larger sizes the large mark uses `brand/assets/logo/mark.svg`." in lines
+    assert "- [ ] At 32 px and below the accent holds a solid 4 x 4 px square." in lines
+    assert "- [ ] Every ui-text pair reaches at least 4.5:1 (`brand.md` lists the pairs and their ratios)." in lines
+    assert "- [ ] None of these: synergy, leverage." in lines
+    assert all(line in lines for line in CHECKLIST_FIXED)
+
+
+def test_the_checklist_has_no_rules_words_or_page_section_without_them_and_one_with_a_page_block(pack):
+    assert build(pack).returncode == 0
+    assert headings(checklist_of(pack)) == ["## Logo", "## Colour", "## Claims", "## New things"]
+    record_rules(pack, "One mark per screen")
+    block = {"rules": [{"id": "one-mark", "kind": "max-marks-per-view", "max": 1, "g4": "one mark per screen"}]}
+    mutate_json(pack / "qa" / "rules.json", lambda d: d.__setitem__("page", block))
+    assert build(pack).returncode == 0
+    assert headings(checklist_of(pack)) == ["## Logo", "## Colour", "## The owner's rules", "## Page rules", "## Claims", "## New things"]
+    assert "- [ ] `one-mark`: one mark per screen." in checklist_of(pack).splitlines()
+
+
+def test_the_checklist_is_generated_hashed_named_in_the_steps_and_the_map_and_its_links_resolve(pack):
+    filled_kit(pack)
+    kj = kit_json(pack)
+    assert kj["generated"][CHECKLIST] == file_sha(kit_of(pack) / CHECKLIST) and CHECKLIST in report(pack, "kit")["outputs"]
+    skill = (kit_of(pack) / "SKILL.md").read_text(encoding="utf-8")
+    assert "Before you hand anything over, go through `checklist.md`." in section_text(skill, "## How to work")
+    assert "| the check before handing over | `checklist.md` |" in skill
+    assert kit_check(pack).returncode == 0 and statuses(pack) == ALL_PASS
+
+
+def test_every_checklist_line_comes_from_rules_json_or_the_fixed_lines(pack):
+    record_rules(pack, "The mark keeps its clear space")
+    assert build(pack).returncode == 0
+    rules = rules_of(pack)
+    sources = [r["id"] for r in rules["g4"]] + [b["drawing"] for b in rules["bands"]] + [p["kind"] for p in rules["pairs"]] + rules["forbidden"]
+    items = [line for line in checklist_of(pack).splitlines() if line.startswith("- [ ] ") and line not in CHECKLIST_FIXED]
+    assert items and all(any(s in line for s in sources) or "the accent holds a solid" in line for line in items), items

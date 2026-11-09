@@ -33,7 +33,7 @@ import unicodedata
 from pathlib import Path
 from urllib.parse import quote
 
-from kitcopy import (ALL_SOURCE_KEYS, BRAND_MD, CURRENT, FACTS_JSON, FINDER_FILE, FONT_COPIED_KEYS, FONT_KEYS, FONT_NOT_COPIED_KEYS, GENERATED_DIRS, KIT_FILE,  # noqa: E402,F401
+from kitcopy import (ALL_SOURCE_KEYS, BRAND_MD, CHECKLIST_MD, CURRENT, FACTS_JSON, FINDER_FILE, FONT_COPIED_KEYS, FONT_KEYS, FONT_NOT_COPIED_KEYS, GENERATED_DIRS, KIT_FILE,  # noqa: E402,F401
                      NOT_CURRENT, NOT_INSTALLED, OPTIONAL_SOURCE_KEYS, OWNED_FILES, PAGE_KEYS, PREFIX, ROOT_FILES, RULES_JSON, SCHEMA, SKILL_FILE, SOURCE_KEYS,
                      STATUS_SHOWN, TOP_KEYS, WHY_BYTES, WHY_LINK, WHY_MISSING, _EDITION, _SHA, _VERSION, KitError, folder_state, font_problems,
                      generated_files_in, installed_version, is_owner_path, is_sha, json_object, not_current_text, owned_problems, owner_paths, owner_sorted,
@@ -1342,6 +1342,34 @@ def section(version: str) -> str:
                       "from `brand/` into the product's own public or static folder and link them from there; `recipes/web-page.md` has the steps."])
 
 
+def checklist_md(project: Path, rules: dict) -> bytes:
+    """checklist.md: the check before handing anything over, every item a `- [ ]` line, built only from `rules` (`rules_doc(project)`) and a few fixed lines the plugin
+    holds for every brand (the logo from its files, colours from the tokens, claims from facts.json, proposals to the owner, golden-rules.md). A section with nothing in it
+    is left out."""
+    ds = rules["downscale"]
+    logo = ["The logo comes from its files in `" + PREFIX + "assets/logo/`, used as they are."]
+    for b in rules["bands"]:
+        who = f"the {b['name']} mark" if b["mark"] is None else f"{b['mark']} ({b['name']})"
+        logo.append(f"Up to {b['max_px']} px {who} uses `{b['drawing']}`." if b["max_px"] else f"At larger sizes {who} uses `{b['drawing']}`.")
+    logo.append(f"At {ds['accent_rule_max_size']} px and below the accent holds a solid {ds['accent_min_px']} x {ds['accent_min_px']} px square.")
+    colour = ["Every colour is a token role from `" + PREFIX + TOKENS_CSS + "`, in both themes where the material has them."]
+    for kind, floor in dict.fromkeys((p["kind"], p["min"]) for p in rules["pairs"]):
+        colour.append(f"Every {kind} pair reaches at least {floor:g}:1 (`{BRAND_MD}` lists the pairs and their ratios).")
+    page_rules = (rules.get("page") or {}).get("rules") or []
+    sections = [("Logo", logo), ("Colour", colour),
+                ("The owner's rules", [f"{r['text'].rstrip('.')} (`{r['id']}`)." for r in rules["g4"]]),
+                ("Words", [f"None of these: {', '.join(rules['forbidden'])}."] if rules["forbidden"] else []),
+                ("Page rules", [f"`{r['id']}`: {str(r['g4']).rstrip('.')}." for r in page_rules]),
+                ("Claims", ["Every number, feature, price, client and date is in `facts.json`; a missing one is a visible placeholder.", "Sample data is labelled as sample data."]),
+                ("New things", ["Anything the brand has not decided is labelled a proposal and shown to the owner.", "Every rule in `golden-rules.md` holds."])]
+    L = [f"# {adapt.view(project)['name']} checklist", "",
+         "Go through it before you hand anything over. A \"no\" is fixed, or shown to the owner; never waved through. Generated from `rules.json`: never edit it here."]
+    for title, items in sections:
+        if items:
+            L += ["", f"## {title}", "", *(f"- [ ] {i}" for i in items)]
+    return ("\n".join(L) + "\n").encode("utf-8")
+
+
 def _holds(files, prefix: str) -> bool:
     return any(rel.startswith(prefix) for rel in files)
 
@@ -1406,7 +1434,9 @@ def plan(project: Path, fonts: dict | None = None, pages: dict | None = None, ma
     if logo:
         files[LOGO_HTML] = logo
     files.update(motion_files(project))
-    files[RULES_JSON] = json_bytes(rules_doc(project))
+    rules_data = rules_doc(project)
+    files[RULES_JSON] = json_bytes(rules_data)
+    files[CHECKLIST_MD] = checklist_md(project, rules_data)
     files[FACTS_JSON] = json_bytes(facts_doc(project))
     files.update(ground_plan(project)["files"])
     for more in (pages if pages is not None else reference_plan(project, fonts), masters if masters is not None else masters_plan(project)):

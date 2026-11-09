@@ -4,9 +4,9 @@
   "version": "1.2",
   "edition": "1",
   "plugin_version": "0.10.0",
-  "content_sha": "6b278a2c16574edfdb7bc4796d0b9769a8e5d2475e16ea0ac82407cc0613eae8",
+  "content_sha": "46067f73c10f36572365fb9927937c215e0c4f68dce1e4ad4fb88e2d7399f3f9",
   "generated": {
-    "SKILL.md": "3b2c23443a78b3d06e8b273ebfd6e513d7fc451fb9e58a02d4e2becc08c72d84",
+    "SKILL.md": "102c559ffd0327ec3c9d3593654c5243eb66ec09566642a373aa2ffb4e6553f9",
     "brand.md": "38e696e2ce13691bc27146c582ca34eab1a3af0366dd383e898c2e270aa85df9",
     "brand/assets/logo/grid-mark-dark.svg": "a4354fc3d461119c54b155018c92d03be7c2bd3b5d87d34c60c2d3adc31d2f21",
     "brand/assets/logo/grid-mark-master.png": "5cc76acd488c20da7a3cda17360ff6db0222f5bd5b44089ab25597c296886654",
@@ -18,6 +18,7 @@
     "brand/assets/logo/wordmark.svg": "161dedabf56299cdacc9021d46f10a8931177f50690c79a6a68c03f62d147151",
     "brand/assets/tokens/tokens.css": "601623035d6fe68e7d7146fe93b0f2bf59a3f635b6747cd87db6ea84aef2e587",
     "brand/assets/tokens/tokens.json": "8bbe3d894895363dcb5ce47c6f035b36d3ff6baa9419c82f8be528cbb41e9c43",
+    "checklist.md": "c68eebe817da87c1c5c088f65119b9d907d123174b71d5a4f9bbdfc3ecb9b4a3",
     "facts.json": "15ab8ad3e2caa901c0b2bd94e9106fcbe2caa4f1097ada18ce35f1294b8ae924",
     "rules.json": "8d05bfc7947b843ace2544184d8864a77f65744fb054837ee7b5bd8e6537678a",
     "snippets/logo.html": "71627d0ff922544924c7ba52a8c5cbf1e34acde2429fc1cdb7ae2a12774dcf83"

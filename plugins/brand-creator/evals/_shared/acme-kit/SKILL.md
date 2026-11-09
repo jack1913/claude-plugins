@@ -19,6 +19,7 @@ colour, a claim or a rule.
 5. Take the logo from its files in `brand/assets/logo/` as they are: never redrawn, recoloured or typed out. `snippets/logo.html` places it in light and dark.
 6. Take every claim (a number, a feature, a price, a client, a date) from `facts.json`. When one is missing, leave a visible placeholder and ask the owner.
 7. Anything the brand has not decided (a layout, a use of colour, an animation, a line of copy) is a proposal: label it and ask the owner.
+8. Before you hand anything over, go through `checklist.md`.
 
 ## The kit
 
@@ -49,5 +50,6 @@ No G4 rules are recorded yet.
 | how to make one kind of material | `recipes/` |
 | the rules every piece keeps | `golden-rules.md` |
 | how the brand looks and sounds | `visual.md`, `voice.md` |
+| the check before handing over | `checklist.md` |
 | how to change or extend this kit | `EXTENDING.md` |
 | every file and its hash | `kit.json` |
