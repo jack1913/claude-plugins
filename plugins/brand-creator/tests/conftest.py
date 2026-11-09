@@ -12,6 +12,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from helpers import FIXTURES, ROOT, android_sdk, bc, data_dir, install_fixture, make_project, own_data  # noqa: E402
+import tiering  # noqa: E402
 
 NOT_VERIFIED: list[tuple[str, str]] = []
 REQUIRE_ALL = os.environ.get("BRAND_CREATOR_REQUIRE_ALL") == "1"
@@ -54,6 +55,12 @@ PAID_HOSTS = ("openrouter.ai",)
 PAID_ENV = re.compile(r"^(OPENROUTER_|USE_LLM_DESIGN_)")
 DESELECTED_PAID: list[str] = []
 
+# The fast tier (tests/tiering.py): `tests/run-all.sh --fast` sets BRAND_CREATOR_FAST=1 and every test tests/durations.json measured at a second or
+# more is deselected, loudly.
+FAST = os.environ.get("BRAND_CREATOR_FAST") == "1"
+DURATIONS = tiering.load()
+DESELECTED_SLOW: list[str] = []
+
 
 class PaidServiceBlocked(OSError):
     pass
@@ -86,6 +93,8 @@ def pytest_collection_modifyitems(config, items):
             DESELECTED_PAID.append(it.nodeid)
         elif not LIVE and it.get_closest_marker("requires_network"):
             DESELECTED_LIVE.append(it.nodeid)
+        elif FAST and tiering.is_slow(it.nodeid, DURATIONS):
+            DESELECTED_SLOW.append(it.nodeid)
         else:
             keep.append(it)
     if len(keep) != len(items):
@@ -137,6 +146,7 @@ def pytest_sessionfinish(session):
         out["bc_not_verified"] = NOT_VERIFIED
         out["bc_deselected_live"] = DESELECTED_LIVE
         out["bc_deselected_paid"] = DESELECTED_PAID
+        out["bc_deselected_slow"] = DESELECTED_SLOW
 
 
 @pytest.hookimpl(optionalhook=True)
@@ -150,9 +160,16 @@ def pytest_testnodedown(node, error):
     for nid in out.get("bc_deselected_paid", []):
         if nid not in DESELECTED_PAID:
             DESELECTED_PAID.append(nid)
+    for nid in out.get("bc_deselected_slow", []):
+        if nid not in DESELECTED_SLOW:
+            DESELECTED_SLOW.append(nid)
 
 
 def pytest_terminal_summary(terminalreporter):
+    if DESELECTED_SLOW:
+        terminalreporter.write_sep("!", f"FAST TIER: {len(DESELECTED_SLOW)} slow test(s) were not run", yellow=True, bold=True)
+        terminalreporter.write_line(f"  each took {tiering.LIMIT:g} s or more in the last measured run (tests/durations.json); "
+                                    "a release runs them all: tests/run-all.sh without --fast.")
     if DESELECTED_PAID:
         terminalreporter.write_line(f"{len(DESELECTED_PAID)} paid test(s) deselected on purpose (they spend money; run with BRAND_CREATOR_PAID=1).")
     if DESELECTED_LIVE:

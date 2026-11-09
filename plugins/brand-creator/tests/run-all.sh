@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # Run the whole suite: pytest, node:test and (with --smoke) the Acme end-to-end path and the Quick-tier smoke (no Apple tools, no git).
 #
-#   BRAND_CREATOR_DATA=<set-up data dir> BRAND_CREATOR_DENYLIST=<denylist.json> tests/run-all.sh [--smoke]
+#   BRAND_CREATOR_DATA=<set-up data dir> BRAND_CREATOR_DENYLIST=<denylist.json> tests/run-all.sh [--smoke | --fast]
+#
+# --fast is the daily run, a minute or two: pytest leaves out every test tests/durations.json measured at a second or more (it says how many),
+# node:test runs whole, and there is no smoke. A release runs everything: no --fast, with --smoke.
+# BRAND_CREATOR_TEST_FILES="tests/test_a.py tests/test_b.py" runs only those pytest files (the tests a change touches).
 #
 # Tests that need the set-up data directory (npm packages, Chromium) or the anonymisation denylist are skipped with a
 # loud "NOT VERIFIED" banner when those are missing. A skip is not a pass. BRAND_CREATOR_REQUIRE_ALL=1 (used in CI)
@@ -12,7 +16,20 @@
 set -euo pipefail
 cd "$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.."
 smoke=0
-[ "${1:-}" = "--smoke" ] && smoke=1
+fast=0
+for a in "$@"; do
+  case "$a" in --smoke) smoke=1 ;; --fast) fast=1 ;; *) echo "run-all.sh: unknown option '$a' (--smoke, --fast)" >&2; exit 2 ;; esac
+done
+if [ "$fast" = 1 ] && [ "$smoke" = 1 ]; then echo "run-all.sh: --fast runs no smoke: a release runs the smoke, with every test" >&2; exit 2; fi
+[ "$fast" = 1 ] && export BRAND_CREATOR_FAST=1
+files=()
+if [ -n "${BRAND_CREATOR_TEST_FILES:-}" ]; then
+  read -r -a files <<< "$BRAND_CREATOR_TEST_FILES"
+  for f in "${files[@]}"; do
+    case "$f" in tests/test_*.py) [ -f "$f" ] || { echo "run-all.sh: $f in BRAND_CREATOR_TEST_FILES is not a test file" >&2; exit 2; } ;;
+                 *) echo "run-all.sh: $f in BRAND_CREATOR_TEST_FILES is not a test file (tests/test_<name>.py)" >&2; exit 2 ;; esac
+  done
+fi
 parts=","   # the parts asked for, as ",name,name,": spaces around a name and empty items are ignored (tests/docker/verify_log.py reads it the same way)
 IFS="," read -r -a items <<< "${BRAND_CREATOR_TEST_PARTS:-pytest,node,smoke}"
 for p in ${items[@]+"${items[@]}"}; do
@@ -29,13 +46,23 @@ has() { case "$parts" in *",$1,"*) return 0 ;; *) return 1 ;; esac; }
 rc=0
 ran=0
 if has pytest; then
-  # pytest-xdist spreads the tests over worker processes (BRAND_CREATOR_TEST_WORKERS, default 8; 0 runs them in one process);
+  # pytest-xdist spreads the tests over worker processes (BRAND_CREATOR_TEST_WORKERS, default auto: one per CPU core; 0 runs them in one process);
   # worksteal moves waiting tests to idle workers, so a block of long tests never ends up queued on one worker
-  uv run --no-project --with-requirements tests/requirements.txt python -m pytest tests -q -n "${BRAND_CREATOR_TEST_WORKERS:-8}" --dist worksteal || rc=1
+  uv run --no-project --with-requirements tests/requirements.txt python -m pytest ${files[@]+"${files[@]}"} $([ ${#files[@]} = 0 ] && echo tests) -q -n "${BRAND_CREATOR_TEST_WORKERS:-auto}" --dist worksteal || rc=1
   ran=1
 fi
 if has node; then
-  node --test --test-timeout=180000 "tests/node/*.test.mjs" || rc=1   # a test still running after 3 minutes is hung: it fails by name
+  if [ "$fast" = 1 ]; then   # the node:test files under a second a test (tests/tiering.py): the others drive Chromium
+    nodefiles=()
+    while IFS= read -r f; do [ -n "$f" ] && nodefiles+=("$f"); done < <(python3 tests/tiering.py fast-node-files)   # no mapfile: macOS ships bash 3.2
+    all=(tests/node/*.test.mjs)
+    skipped=()
+    for f in "${all[@]}"; do case " ${nodefiles[*]} " in *" $f "*) ;; *) skipped+=("${f##*/}") ;; esac; done
+    echo "FAST TIER: node runs ${#nodefiles[@]} of ${#all[@]} files; not run: ${skipped[*]:-none} (tests/durations.json; a release runs them all)"
+    [ ${#nodefiles[@]} = 0 ] || node --test --test-timeout=180000 ${nodefiles[@]+"${nodefiles[@]}"} || rc=1
+  else
+    node --test --test-timeout=180000 "tests/node/*.test.mjs" || rc=1   # a test still running after 3 minutes is hung: it fails by name
+  fi
   ran=1
 fi
 if [ "$smoke" = 1 ] && has smoke; then

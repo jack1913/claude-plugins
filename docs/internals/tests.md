@@ -64,6 +64,9 @@ bin/brand-creator --data <dir> setup --yes
 BRAND_CREATOR_DATA=<dir> tests/run-all.sh --smoke
 ```
 
+For daily work, `tests/run-all.sh --fast` leaves out the slow tests (those that took a second or more in the last measured
+run, `tests/durations.json`) and the smoke, and says how many it left out: under 2 minutes on a 12-core Mac.
+
 CI runs only quick checks (`.github/workflows/brand-creator.yml`): `claude plugin validate --strict` and the static tests,
 about a minute, where any skip fails. Its verdict, the `brand-creator` check, passes only when every job passed. The full
 suite runs before each release tag, on a Mac and in the Linux container (`tests/docker/run.sh`)

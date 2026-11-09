@@ -19,6 +19,15 @@ Run from `plugins/brand-creator/`:
 BRAND_CREATOR_DATA=<set-up data dir> tests/run-all.sh
 ```
 
+- `tests/run-all.sh --fast` is the daily run, under 2 minutes on a 12-core Mac: pytest leaves out every test that took a
+  second or more in the last measured run, node:test runs only its files under a second a test (the others drive Chromium),
+  and there is no smoke. It says what it left out ("FAST TIER: ..."). It never replaces the release run.
+- `BRAND_CREATOR_TEST_FILES="tests/test_kit.py tests/test_kitcopy.py"` runs only those pytest files: the tests a change
+  touches. With `BRAND_CREATOR_TEST_PARTS=pytest` it works in `tests/docker/run.sh` too.
+- `tests/durations.json` holds what the fast tier and the order of every run read: each pytest test of a second or more,
+  and each node:test file's tests and seconds. After adding or slowing tests,
+  measure again with a full run and write it with `tests/tools/durations.py` (its docstring has the commands); a test
+  missing from the file always runs, so a stale file only makes `--fast` slower.
 - `tests/run-all.sh` runs pytest and `node --test`. `--smoke` adds two end-to-end runs: the Acme smoke
   (`tests/smoke/acme.sh`, a synthetic brand through every pack) and the Quick-tier smoke (`tests/smoke/quick.sh`, a
   made-up bakery on a PATH with no Apple tools and no git, ending with the short guide).
@@ -26,8 +35,8 @@ BRAND_CREATOR_DATA=<set-up data dir> tests/run-all.sh
   unknown part, or a choice that runs nothing, is a usage error (exit 2).
 - `ACME_SMOKE_PART=finish` (or `rest`) runs one half of the Acme smoke, as each macOS smoke job does: the build up to the
   frozen round, then `tools/finish.sh` alone, or every section after it. The default, `all`, runs both.
-- pytest runs with `--dist worksteal`, so a block of long tests never waits on one worker (the suite takes under half the
-  time it took with the default `load`). Every test has a time limit: 300 s, or 1200 s in `test_finish_chain.py`
+- pytest runs on one worker per CPU core (`BRAND_CREATOR_TEST_WORKERS` sets another number) with `--dist worksteal`, so a
+  block of long tests never waits on one worker (the suite takes under half the time it took with the default `load`). Every test has a time limit: 300 s, or 1200 s in `test_finish_chain.py`
   (pytest-timeout from `tests/requirements.txt`); a node test has 180 s. A hung test fails by name.
 - The test tools are pinned, with every package they need, in `tests/requirements.txt`, compiled by uv from
   `tests/requirements.in` (the command is in both files).
@@ -66,7 +75,8 @@ uv run --no-project --with-requirements tests/requirements.txt python -m pytest 
 ## Run Linux in Docker
 
 `tests/docker/run.sh` builds the Debian 13 image, copies the plugin in read-only, runs `setup`, pytest, node:test and the
-Acme smoke, and accepts only the macOS-only NOT VERIFIED skips. `BRAND_CREATOR_TEST_PARTS` picks the parts, and
+Acme smoke, and accepts only the macOS-only NOT VERIFIED skips. `BRAND_CREATOR_TEST_PARTS` picks the parts,
+`BRAND_CREATOR_TEST_FILES` the pytest files (when a release may limit Linux to the files it touches: ADR-0008's update), and
 `BRAND_CREATOR_SUITE_MINUTES` (default 45) is the deadline inside the container: past it the suite is stopped and the log is
 still checked. `BRAND_CREATOR_TEST_OUT=<dir>` keeps the run log and pytest's JUnit file in a new `linux-run.*` folder inside it.
 
