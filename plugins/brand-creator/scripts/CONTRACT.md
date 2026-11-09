@@ -2823,7 +2823,8 @@ path with its sha256, `kit.json` included), `kit_version` (the report's own `ver
 ### kit check
 
 `kit check` (`scripts/kit.py`; the checks are `scripts/adaptlib/kitlib.py`: `files_check`, `link_check`, `fill_markers`, `version_problems`, `source_changes`, `owned_changes`) proves that the kit in the project is whole,
-and writes the report `kit-check` (`assets/_checks/kit-check.json`), renderer `n/a (generated files)`. It reads the kit and the brand and writes nothing but that report. Exit 0 pass, 1 a row failed, 3 a row is not verified
+and writes the report `kit-check` (`assets/_checks/kit-check.json`), renderer `n/a (generated files)`. It reads the kit and the brand and writes nothing but that report. With `--all` (since 0.11.1), after the rows it also prints every
+line `kit:tags` and `kit:numbers` fail, one per line under "every line kit:tags fails (N):" and "every line kit:numbers fails (N):" (or "--all: no tag or value problem to list"); the rows themselves name the first six, and the report is the same with or without it. Exit 0 pass, 1 a row failed, 3 a row is not verified
 (skipped). Exit 2: no kit in the project, "no kit in this project: `brand-creator kit build --yes` (opt-in at G5)"; a `kit.json` that `kitlib.load()` refuses (a key it does not know or a key that is missing, named); a `kit.json`
 that is a link (a link is never read through; `kit build --yes --replace` moves it aside). Both stop the run before the report is created, so the earlier report is not rewritten and stands. What `check`
 then says of it depends on the file. A `kit.json` that `kitlib.load()` refuses has other bytes than the report read, so the report is stale. A `kit.json` that is a link leading to the same bytes leaves the report

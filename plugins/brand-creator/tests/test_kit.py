@@ -3100,6 +3100,25 @@ def test_an_untagged_rule_in_golden_rules_fails_and_a_tagged_one_passes(pack):
     assert build(pack).returncode == 0 and kit_check(pack).returncode == 0 and statuses(pack) == ALL_PASS      # the build records the owner's words; the tags stay
 
 
+
+def test_kit_check_all_lists_every_untagged_line_and_every_uncited_value(pack):
+    filled_kit(pack)
+    rules = kit_of(pack) / "golden-rules.md"
+    mutate(rules, KEPT, KEPT + "\n\n" + "\n".join(f"- Rule number {n}." for n in range(1, 9)) + "\n\nThe gap is 12px.\n")
+    r = kit_check(pack)
+    assert r.returncode == 1 and "and 2 more" in check_report_rows(pack)["kit:tags"]["detail"] and "golden-rules.md:14 untagged" not in r.stdout, r.stdout
+    detail_before = check_report_rows(pack)["kit:tags"]["detail"]
+    r = bc("kit", "check", "--all", project=pack)
+    assert r.returncode == 1, r.stdout + r.stderr
+    every = r.stdout.split("every line kit:tags fails (8):\n", 1)[1]
+    assert [ln.strip() for ln in every.splitlines()[:8]] == [f"golden-rules.md:{n} untagged" for n in range(7, 15)], r.stdout
+    assert "every line kit:numbers fails (1):\n  golden-rules.md:16 (" in r.stdout
+    assert check_report_rows(pack)["kit:tags"]["detail"] == detail_before                     # the report is the same with --all: only the printout lists more
+    mutate(rules, "\n".join(f"- Rule number {n}." for n in range(1, 9)) + "\n\nThe gap is 12px.\n", "")
+    r = bc("kit", "check", "--all", project=pack)
+    assert "every line kit:tags fails" not in r.stdout and "--all: no tag or value problem to list" in r.stdout, r.stdout
+
+
 def test_which_lines_need_a_tag_and_which_do_not(pack):
     filled_kit(pack)
     rules = kit_of(pack) / "golden-rules.md"

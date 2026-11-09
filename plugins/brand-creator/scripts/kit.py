@@ -8,7 +8,7 @@
     brand-creator kit build --yes               write the kit (needs G5 recorded and the owner's explicit OK, which is --yes)
     brand-creator kit build --plan              print what would be written and exit 0
     brand-creator kit build --yes --replace     a file of the kit that was edited by hand, or one put into a generated folder, stops the build; --replace moves it aside
-    brand-creator kit check                     prove the kit is whole, current and filled in (writes the report kit-check; read only otherwise)
+    brand-creator kit check [--all]             prove the kit is whole, current and filled in (writes the report kit-check; read only otherwise); --all also lists every tag and value problem
     brand-creator kit status --repo DIR[=LABEL] [--repo ...] [--json]   is the copy of the kit in a product repository current, and what to copy (writes nothing)
 
 The kit holds the brand's own files copied byte for byte at their project paths under brand/ (the token files, the logo files and the drawings qa/rules.json names
@@ -375,14 +375,14 @@ def unjudged_note(got: dict) -> str:
     return f"; {got['unjudged']} line(s) that name a rule were not judged, because the rule ids cannot be read ({got['unread'].message}); {IDS_HINT}"
 
 
-def tags_row(rep, project: Path, known) -> None:
+def tags_row(rep, project: Path, known) -> list[str]:
     """Row kit:tags: every bullet of a recipe and of the reference-page notes, and every bullet or numbered line of golden-rules.md and visual.md, carries `[example]` or a `[rule: <id>]`, and every rule id
     named on any line of those files (a numbered step, a sentence, a heading, a code fence too) is one the kit knows. An untagged line fails whether or not the rule ids can be read; with only lines that
     name a rule left, an unreadable site record is not verified."""
     label = "every rule line in the owner's files says what it is: an example or a rule the kit knows"
     got = kitlib.tag_check(project, known)
+    listed = [f"{f}:{line} {why}" for f, line, why in got["bad"]]                 # every one, returned for `kit check --all`
     if got["bad"]:
-        listed = [f"{f}:{line} {why}" for f, line, why in got["bad"]]
         rep.add("kit:tags", "fail", label, detail=f"{len(listed)} of {got['lines']} line(s) lack a valid tag: {named(listed)}; {kitlib.TAG_HINT}{unjudged_note(got)}")
     elif got["unread"] is not None:
         unreadable_ids_row(rep, "kit:tags", label, got["unread"])
@@ -390,15 +390,16 @@ def tags_row(rep, project: Path, known) -> None:
         rep.add("kit:tags", "pass", label, detail=f"{got['lines']} line(s) carry `{kitlib.TAG_EXAMPLE}` or a rule id the kit knows")
     else:
         rep.add("kit:tags", "pass", label, detail="no bullet or numbered line needs a tag")
+    return listed
 
 
-def numbers_row(rep, project: Path, known) -> None:
+def numbers_row(rep, project: Path, known) -> list[str]:
     """Row kit:numbers: every value in the owner's files (code fences too) cites a token, a known rule or `[example]` on its own line, and a token reference exists (outside a code fence on any line, inside one on a line with a value).
     A failure that needs no rule id is found whether or not the rule ids can be read; with none, an unreadable site record is not verified."""
     label = "every value in the owner's files cites a token or a rule, or says it is an example"
     got = kitlib.number_check(project, known)
+    listed = [f"{f}:{line} ({why})" for f, line, why in got["bad"]]               # every one, returned for `kit check --all`
     if got["bad"]:
-        listed = [f"{f}:{line} ({why})" for f, line, why in got["bad"]]
         rep.add("kit:numbers", "fail", label, detail=f"{len(listed)} line(s) hold a value with no citation or a token that does not exist: {named(listed)}; {kitlib.VALUE_HINT}{unjudged_note(got)}")
     elif got["unread"] is not None:
         unreadable_ids_row(rep, "kit:numbers", label, got["unread"])
@@ -406,6 +407,7 @@ def numbers_row(rep, project: Path, known) -> None:
         rep.add("kit:numbers", "pass", label, detail=f"{got['values']} value(s) on {got['lines']} line(s) cite a token, a known rule or `{kitlib.TAG_EXAMPLE}`")
     else:
         rep.add("kit:numbers", "pass", label, detail="no value (a number with a unit, a ratio or a colour) needs a citation")
+    return listed
 
 
 def reference_page_rows(rep, project: Path, doc: dict) -> None:
@@ -433,11 +435,18 @@ def check(project: Path, a) -> int:
     owned_check_row(rep, project, doc)
     behind_row(rep, project, doc)
     known = functools.cache(lambda: frozenset(kitlib.known_rule_ids(project)))   # read at the first tag that names a rule, once
-    tags_row(rep, project, known)
-    numbers_row(rep, project, known)
+    every = {"kit:tags": tags_row(rep, project, known), "kit:numbers": numbers_row(rep, project, known)}
     reference_page_rows(rep, project, doc)
     rep.extra.update({"kit_version": doc["version"], "kit_tree_sha": kitlib.tree_sha(project)})
-    return rep.finish()
+    code = rep.finish()
+    if a.all:                                     # the rows name the first few; --all prints every line, one per line, and the report stays as it is
+        for row, lines in every.items():
+            if lines:
+                print(f"every line {row} fails ({len(lines)}):")
+                print("\n".join(f"  {ln}" for ln in lines))
+        if not any(every.values()):
+            print("--all: no tag or value problem to list")
+    return code
 
 
 def build(project: Path, a) -> int:
@@ -612,6 +621,7 @@ def main() -> int:
     b.add_argument("--project", default=argparse.SUPPRESS, help="brand project folder")   # also after the subcommand
     c = sub.add_parser("check", help="prove the kit is whole: files, links, fill markers, versions, sources, the owner's files, their tags and values (writes the report kit-check)")
     c.add_argument("--project", default=argparse.SUPPRESS, help="brand project folder")
+    c.add_argument("--all", action="store_true", help="after the rows, print every line kit:tags and kit:numbers fail, one per line (the rows name the first few)")
     st = sub.add_parser("status", help="is the copy of the kit in a product repository current, and what to copy (reads only; writes nothing)")
     st.add_argument("--repo", action="append", default=[], metavar="DIR[=LABEL]",
                     help="a product repository (repeatable; read only). Without it, every repository that has a kit row in adoption.json")
